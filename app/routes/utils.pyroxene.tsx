@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { MetaFunction, redirect, useFetcher, useLoaderData, useRevalidator, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
-import { ChartBarIcon, HeartIcon, PlusIcon } from "@heroicons/react/24/outline";
+import { MetaFunction, useFetcher, useLoaderData, useRevalidator, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
+import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { LockClosedIcon } from "@heroicons/react/24/solid";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { PyroxenePlannerInputPanel, PyroxenePlannerOptionsPanel, PyroxeneSchedule } from "~/components/futures";
@@ -329,9 +329,9 @@ export default function PyroxenePlanner() {
       description="현재 보유 재화, 각종 수급 계획을 바탕으로 관심 학생 모집 시점의 재화 수량을 예상해보세요"
       links={[
         {
-          Icon: HeartIcon,
-          title: "관심학생 등록",
-          description: "미래시 페이지에서 등록할 수 있어요",
+          Icon: CalendarIcon,
+          title: "미래시",
+          description: "관심 학생의 모집 일정을 확인할 수 있어요",
           to: "/futures",
         },
       ]}

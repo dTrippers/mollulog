@@ -1,5 +1,31 @@
+import { graphql } from "~/graphql";
+import { fetchCached } from "./base";
+import { runQuery } from "~/lib/baql";
+
 export type Difficulty = "normal" | "hard" | "veryhard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
 export type Boss = "binah" | "chesed" | "hod" | "shirokuro" | "perorozilla" | "goz" | "hieronymus" | "kaiten-fx-mk0" | "gregorius" | "hovercraft" | "myouki-kurokage" | "geburah" | "yesod";
+
+
+const allRaidQuery = graphql(`
+  query AllRaid {
+    raids {
+      nodes {
+        uid type name boss since until terrain attackType rankVisible
+        defenseTypes { defenseType difficulty }
+      }
+    }
+  }
+`);
+
+export function getAllRaids(env: Env, forceRefresh = false) {
+  return fetchCached(env, "all-raids", async () => {
+    const { data, error } = await runQuery(allRaidQuery, {});
+    if (error || !data) {
+      throw error ?? "failed to fetch raids";
+    }
+    return data.raids.nodes;
+  }, 60 * 10, forceRefresh);
+}
 
 export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [
   "binah",

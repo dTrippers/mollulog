@@ -26,7 +26,7 @@ export default function Input({
         name={name}
         placeholder={placeholder}
         className={sanitizeClassName(`
-          w-full max-w-96 p-2 border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-900 rounded-lg shadow transition
+          w-full max-w-96 p-2 border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-900 rounded-lg transition
           ${error ? "border-red-300 shadow-red-300 dark:border-red-700 dark:shadow-red-700" : ""}
           ${type === "number" && "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"}
           ${className ?? ""}

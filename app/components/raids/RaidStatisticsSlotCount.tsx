@@ -12,7 +12,7 @@ import { raidTypeLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { DefenseType, RaidType, Terrain } from "~/models/content.d";
 
-type SlotCountInfoProps = {
+type RaidStatisticsSlotCountProps = {
   student?: { uid: string; name: string };
   raid?: {
     uid: string;
@@ -35,7 +35,7 @@ type SlotCountInfoProps = {
 
 type SlotMode = "total" | "own" | "assist";
 
-export default function SlotCountInfo({ student, raid, slotsCount, assistsCount, slotsByTier, assistsByTier, maxTier = 8 }: SlotCountInfoProps) {
+export default function RaidStatisticsSlotCount({ student, raid, slotsCount, assistsCount, slotsByTier, assistsByTier, maxTier = 8 }: RaidStatisticsSlotCountProps) {
   const ownedByTierMap = slotsByTier.reduce((acc, { tier, count }) => {
     acc[tier] = count;
     return acc;

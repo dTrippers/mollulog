@@ -1,6 +1,6 @@
 import { createRequestHandler } from "react-router";
 import { Env } from "~/env.server";
-import { getFutureContents } from "~/models/content";
+import { getFutureContents, getIndexContents } from "~/models/content";
 import { syncRawStudents } from "~/models/student";
 
 declare module "react-router" {
@@ -31,6 +31,7 @@ export default {
     } else if (event.cron === "* * * * *") {
       // every minute
       await getFutureContents(env, true);
+      await getIndexContents(env, true);
     }
   },
 } satisfies ExportedHandler<Env>;

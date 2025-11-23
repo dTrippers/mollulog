@@ -1,9 +1,11 @@
+import { useMemo, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useNavigate } from "react-router";
-import { Title } from "~/components/atoms/typography";
+import { FunnelIcon } from "@heroicons/react/24/outline";
 import { StudentCards } from "~/components/molecules/student";
 import { getAllStudents } from "~/models/student";
-import { useStateFilter } from "~/components/organisms/student";
+import { Page } from "~/components/navigation";
+import { applyStudentFilter, StudentFilter, StudentFilterState } from "~/components/students";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -29,23 +31,39 @@ export const meta: MetaFunction = () => {
 export default function Students() {
   const { students } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
-  const [StateFilter, filteredStates] = useStateFilter(
-    students,
-    { useFilter: true, useSort: { by: ["name", "recent"] }, useSearch: true },
-    { sort: { by: "recent" } },
-  );
+
+  const [filterState, setFilterState] = useState<StudentFilterState>({
+    attackTypes: [],
+    defenseTypes: [],
+    roles: [],
+    sort: "recent",
+  });
+  const filteredStudents = useMemo(() => {
+    return applyStudentFilter(students, filterState);
+  }, [students, filterState]);
 
   return (
-    <>
-      <Title text="학생부" />
-      <p className="text-neutral-500 dark:text-neutral-400 -mt-2 mb-4">
-        학생들의 프로필과 통계 정보를 확인할 수 있어요.
-      </p>
-      {StateFilter}
+    <Page
+      title="학생부"
+      description="학생들의 프로필과 총력전/대결전 통계, 평가 정보를 확인해보세요"
+      panels={[
+        {
+          title: "필터 및 정렬",
+          Icon: FunnelIcon,
+          children: (
+            <StudentFilter
+              state={filterState} onStateChange={setFilterState}
+              sortBy={["recent", "old", "name"]}
+              useFilter useSearch
+            />
+          ),
+        }
+      ]}
+    >
       <StudentCards
-        students={filteredStates}
+        students={filteredStudents}
         onSelect={(uid) => navigate(`/students/${uid}`)}
       />
-    </>
+    </Page>
   );
 }

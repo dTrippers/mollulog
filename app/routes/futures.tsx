@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { LoaderFunctionArgs, MetaFunction, useFetcher, useLoaderData } from "react-router";
-import { FunnelIcon } from "@heroicons/react/24/outline";
+import { FunnelIcon, WalletIcon } from "@heroicons/react/24/outline";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { ContentFilter, ContentTimeline } from "~/components/contents";
+import { ContentTimeline } from "~/components/contents";
 import type { ContentFilterState, ContentTimelineProps } from "~/components/contents";
+import { ContentFilterPanel } from "~/components/futures";
 import { getUserMemos, getContentsMemos, getFutureContents } from "~/models/content";
 import { getUserFavoritedStudents, getFavoritedCounts } from "~/models/favorite-students";
 import { ActionData as ContentsActionData } from "./api.contents";
@@ -140,13 +141,19 @@ export default function FutureContents() {
   return (
     <Page
       title="미래시" description="컨텐츠 일정을 확인하고 계획을 세워보세요"
+      links={signedIn ? [
+        {
+          Icon: WalletIcon,
+          title: "청휘석 플래너",
+          description: "학생 모집 시점의 재화 수량을 계산해보세요",
+          to: "/utils/pyroxene",
+        }
+      ] : []}
       panels={[
         {
-          title: "필터",
+          title: "컨텐츠 필터",
           Icon: FunnelIcon,
-          description: "컨텐츠 필터를 선택해주세요",
-          foldable: false,
-          children: <ContentFilter initialFilter={filter} onFilterChange={setFilter} />,
+          children: <ContentFilterPanel filter={filter} onFilterChange={setFilter} />,
         },
       ]}
     >

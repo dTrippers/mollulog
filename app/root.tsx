@@ -72,7 +72,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 const wideLayout = ["/utils/relationship"];
-const fullLayout = ["/raids", "/futures", "/utils/pyroxene"];
+const fullLayout = ["/raids", "/futures", "/utils/pyroxene", "^/students$", "^/@"];
 
 type Banner = {
   message: string;
@@ -101,7 +101,7 @@ export default function App() {
 
   const location = useLocation();
   let widthClass = "max-w-3xl";
-  if (fullLayout.find((path) => location.pathname.startsWith(path))) {
+  if (fullLayout.find((path) => location.pathname.match(path))) {
     widthClass = "w-full";
   } else if (wideLayout.find((path) => location.pathname.startsWith(path))) {
     widthClass = "max-w-6xl";

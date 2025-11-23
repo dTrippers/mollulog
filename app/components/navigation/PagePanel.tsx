@@ -24,7 +24,7 @@ export default function PagePanel({ Icon, title, description, foldable, disabled
           <Icon className="size-5 text-neutral-600 dark:text-neutral-400" strokeWidth={2} />
         </div>
         <div className="grow">
-          <p className="font-semibold">{title}</p>
+          <p className="font-bold">{title}</p>
           {description && <p className="text-sm text-neutral-500 dark:text-neutral-400">{description}</p>}
         </div>
         {foldable && (
