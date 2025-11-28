@@ -2,7 +2,6 @@ import dayjs from "dayjs";
 import "dayjs/locale/ko";
 import { MultilineText, SubTitle } from "~/components/atoms/typography";
 import { ResourceCard } from "~/components/atoms/item";
-import { NumberInput } from "~/components/atoms/form";
 import { ActionCard, type ActionCardAction } from "~/components/molecules/editor";
 import { StudentCards } from "~/components/molecules/student";
 import { PickupType, RaidType } from "~/models/content.d";
@@ -11,6 +10,7 @@ import { ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";
 import { Transition } from "@headlessui/react";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
+import { NumberInput } from "~/components/atoms/form";
 
 dayjs.locale("ko");
 
@@ -66,19 +66,20 @@ export type PyroxeneScheduleItem = ({
 type PyroxeneScheduleProps = {
   initialDate: Date | null;
   initialResources: PickupResources;
-  latestEventUid: string | null;
+  eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>;
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxenePlannerOptions;
 
   onPickupComplete: (eventUid: string | null, resources: PickupResources) => void;
   onDeletePickupComplete: (eventUid: string) => void;
   onDeleteItem: (itemUid: string) => void;
+  onUpdateEventData: (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => void;
 };
 
-export default function PyroxeneSchedule({ initialDate, initialResources, latestEventUid, scheduleItems, options, onPickupComplete, onDeletePickupComplete, onDeleteItem }: PyroxeneScheduleProps) {
+export default function PyroxeneSchedule({ initialDate, initialResources, eventDataMap, scheduleItems, options, onPickupComplete, onDeletePickupComplete, onDeleteItem, onUpdateEventData }: PyroxeneScheduleProps) {
   const timeline = useMemo(() => {
-    return buildTimeline(initialResources, initialDate ?? new Date(), latestEventUid, scheduleItems, options);
-  }, [initialDate, initialResources, latestEventUid, scheduleItems, options]);
+    return buildTimeline(initialResources, initialDate ?? new Date(), eventDataMap, scheduleItems, options);
+  }, [initialDate, initialResources, eventDataMap, scheduleItems, options]);
 
   return (
     <>
@@ -86,6 +87,11 @@ export default function PyroxeneSchedule({ initialDate, initialResources, latest
         text="현재 보유 재화" 
         description={initialDate ? `마지막 입력 : ${dayjs(initialDate).format('YYYY-MM-DD HH:mm')}` : "현재 보유중인 재화 수량을 입력해주세요"}
       />
+      {!initialDate && (
+        <div className="my-4 p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/30 dark:to-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+          <p className="text-green-800 dark:text-green-200">현재 보유중인 재화 수량을 입력해주세요</p>
+        </div>
+      )}
       <InitialResources
         resources={initialResources}
         onUpdateResources={(resources) => onPickupComplete(null, resources)}
@@ -99,15 +105,19 @@ export default function PyroxeneSchedule({ initialDate, initialResources, latest
 
         if (source.event) {
           const { event } = source;
+          const eventData = eventDataMap.get(event.uid);
           return (
             <TimelineEvent
               key={`event-${event.uid}`}
               event={event}
-              completed={latestEventUid === event.uid}
+              completed={eventData?.completed ?? false}
+              expectedTrials={eventData?.expectedTrials ?? null}
+              pickupChance={options.event.pickupChance}
               accumulatedResources={accumulatedResources}
               resourceDelta={resourceDelta}
               onDeletePickupComplete={onDeletePickupComplete}
               onPickupComplete={onPickupComplete}
+              onUpdateEventData={onUpdateEventData}
             />
           );
         } else if (source.description) {
@@ -133,13 +143,23 @@ type TimelineEventProps = {
   accumulatedResources: PickupResources;
   resourceDelta: PickupResources;
   completed: boolean;
+  expectedTrials: number | null;
+  pickupChance: "ceil" | "average";
 
   onDeletePickupComplete: (eventUid: string) => void;
   onPickupComplete: (eventUid: string, resources: PickupResources) => void;
+  onUpdateEventData: (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => void;
 };
 
-function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, onDeletePickupComplete, onPickupComplete }: TimelineEventProps) {
+function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, expectedTrials, pickupChance, onDeletePickupComplete, onPickupComplete, onUpdateEventData }: TimelineEventProps) {
   const [showCompleteAction, setShowCompleteAction] = useState(false);
+  const [showExpectedTrialsAction, setShowExpectedTrialsAction] = useState(false);
+  const [expectedTrialsValue, setExpectedTrialsValue] = useState<number | null>(expectedTrials);
+  
+  useEffect(() => {
+    setExpectedTrialsValue(expectedTrials);
+  }, [expectedTrials]);
+
   if (!event) {
     return null;
   }
@@ -159,43 +179,57 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
     });
   }
 
+  // Add action to set expected trials
+  if (!completed) {
+    actions.push({
+      text: "모집 목표 횟수 설정",
+      onClick: () => setShowExpectedTrialsAction((prev) => !prev),
+    });
+  }
+
   return (
     <div className="relative">
       <ActionCard actions={actions}>
-        <div className="flex flex-col md:flex-row gap-2">
-          <div className="flex-1">
-            <MultilineText texts={event.name.split("\n")} className="font-semibold text-lg" />
-            <p className="mb-2 text-xs text-neutral-500">
-              {dayjs(event.since).format("YYYY-MM-DD")} ~ {dayjs(event.until).format("YYYY-MM-DD")}
-            </p>
-            <StudentCards
-              students={event.pickups.filter(({ favorited }) => favorited).map(({ student }) => ({ uid: student!.uid, tier: student!.initialTier }))}
-              pcGrid={8}
-            />
-          </div>
-          <div className="w-full md:w-1/4 bg-white dark:bg-black rounded-lg md:-m-2 p-3 md:p-4">
-            {completed ? (
-              <div className="h-full flex items-center justify-center">
-                <p className="text-center text-neutral-500 text-sm">모집 완료</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-1 gap-2">
-                <div className="flex items-center gap-2">
-                  <ResourceCard resourceType={ResourceTypeEnum.Currency} itemUid="2" />
-                  <p>{remainingResourceValue(accumulatedResources.pyroxene, resourceDelta.pyroxene)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6999" />
-                  <p>{remainingResourceValue(accumulatedResources.tenTimeTicket, resourceDelta.tenTimeTicket)}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6998" />
-                  <p>{remainingResourceValue(accumulatedResources.oneTimeTicket, resourceDelta.oneTimeTicket)}</p>
-                </div>
-              </div>
-            )}
-          </div>
+        <div>
+          <p className="font-semibold text-lg">{event.name}</p>
+          <p className="mb-2 text-xs text-neutral-500">
+            {dayjs(event.since).format("YYYY-MM-DD")} ~ {dayjs(event.until).format("YYYY-MM-DD")}
+          </p>
         </div>
+        <div className="flex-1">
+          <StudentCards
+            students={event.pickups.filter(({ favorited }) => favorited).map(({ student }) => ({ uid: student!.uid, tier: student!.initialTier }))}
+            pcGrid={10}
+          />
+        </div>
+        {!completed && (
+          <div className="my-2">
+            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집 목표 횟수</p>
+            <p className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">{expectedTrials ? `총 ${expectedTrials}회` : pickupChance === "ceil" ? "★3 학생 당 200회(천장)" : "★3 학생 당 140회(평균)"}</p>
+            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집 후 남는 재화</p>
+          </div>
+        )}
+
+        {completed ? (
+          <p className="mt-4 text-center text-neutral-500 text-sm">모집 완료</p>
+        ) : (
+          <div className="w-full bg-white dark:bg-black rounded-lg p-3">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              <div className="flex items-center gap-2">
+                <ResourceCard resourceType={ResourceTypeEnum.Currency} itemUid="2" />
+                <p>{remainingResourceValue(accumulatedResources.pyroxene, resourceDelta.pyroxene)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6999" />
+                <p>{remainingResourceValue(accumulatedResources.tenTimeTicket, resourceDelta.tenTimeTicket)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6998" />
+                <p>{remainingResourceValue(accumulatedResources.oneTimeTicket, resourceDelta.oneTimeTicket)}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </ActionCard>
 
       <Transition
@@ -217,6 +251,61 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
               setShowCompleteAction(false);
             }}
           />
+        </div>
+      </Transition>
+
+      <Transition
+        show={showExpectedTrialsAction}
+        as="div"
+        enter="transition duration-200 ease-out"
+        enterFrom="opacity-0 scale-95"
+        enterTo="opacity-100 scale-100"
+        leave="transition duration-100 ease-in"
+        leaveFrom="opacity-100 scale-100"
+        leaveTo="opacity-0 scale-95"
+        className="absolute top-full right-0 mt-2 z-10"
+      >
+        <div className="bg-white/90 dark:bg-black/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-4">
+          <p className="mb-2 text-sm text-neutral-500">이 이벤트의 목표 모집 횟수를 입력해주세요</p>
+          <div className="mb-4">
+            <NumberInput
+              value={expectedTrialsValue ?? undefined}
+              onChange={(value) => setExpectedTrialsValue(value)}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              className="px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition"
+              onClick={() => {
+                setExpectedTrialsValue(null);
+                onUpdateEventData(event.uid, { expectedTrials: null });
+                setShowExpectedTrialsAction(false);
+              }}
+            >
+              초기화
+            </button>
+            <button
+              type="button"
+              className="px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition"
+              onClick={() => {
+                setExpectedTrialsValue(expectedTrials);
+                setShowExpectedTrialsAction(false);
+              }}
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              className="px-4 py-2 text-sm text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+              onClick={() => {
+                onUpdateEventData(event.uid, { expectedTrials: expectedTrialsValue });
+                setShowExpectedTrialsAction(false);
+              }}
+            >
+              저장
+            </button>
+          </div>
         </div>
       </Transition>
     </div>
@@ -340,7 +429,7 @@ function remainingResourceValue(count: number, diff: number): React.ReactNode {
         {count.toLocaleString()}
       </p>
       <p className="-mt-1 text-neutral-500 dark:text-neutral-400 text-xs">
-        ({diff === 0 ? "-" :diff.toLocaleString()})
+        ({diff === 0 ? "-" : `${Math.abs(diff).toLocaleString()}개 사용`})
       </p>
     </>
   )
@@ -373,7 +462,7 @@ const MAX_REPEATED_ENTRIES = 365;
 function buildTimeline(
   initialResources: PickupResources,
   initialDate: Date,
-  latestEventUid: string | null,
+  eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>,
   scheduleItems: PyroxeneScheduleItem[],
   options: PyroxenePlannerOptions,
 ): Timeline {
@@ -384,7 +473,8 @@ function buildTimeline(
     if (scheduleItem.event) {
       // 픽업 일정
       const { event } = scheduleItem;
-      if (latestEventUid === event.uid) {
+      const eventData = eventDataMap.get(event.uid);
+      if (eventData?.completed) {
         // 이미 픽업을 완료한 일정은 계산하지 않음
         timelineDeltas.push({
           date: dayjs(event.since),
@@ -394,12 +484,18 @@ function buildTimeline(
         return;
       }
 
-      const pickupCount = event.pickups.filter(({ student, favorited }) => favorited && student?.initialTier === 3).length;
-      if (pickupCount === 0) {
-        return;
+      // Use expectedTrials if set, otherwise calculate from pickupCount
+      let pickupTrial: number;
+      if (eventData?.expectedTrials !== null && eventData?.expectedTrials !== undefined) {
+        pickupTrial = eventData.expectedTrials;
+      } else {
+        const pickupCount = event.pickups.filter(({ student, favorited }) => favorited && student?.initialTier === 3).length;
+        if (pickupCount === 0) {
+          return;
+        }
+        pickupTrial = pickupCount * (options.event.pickupChance === "ceil" ? 200 : 140);
       }
 
-      const pickupTrial = pickupCount * (options.event.pickupChance === "ceil" ? 200 : 140);
       timelineDeltas.push({
         date: dayjs(event.since),
         source: { type: "event", event },

@@ -11,10 +11,8 @@ import { getUserFavoritedStudents } from "~/models/favorite-students";
 import {
   createPyroxeneOwnedResource,
   createBuyPyroxene,
-  deletePyroxeneOwnedResourceByEventUid,
   deletePyroxeneTimelineItem,
   getLatestPyroxeneOwnedResource,
-  getLatestPyroxeneOwnedResourceWithEventUid,
   getPyroxeneTimelineItems,
   createPyroxenePackage,
   createAttendance,
@@ -22,6 +20,9 @@ import {
   getPyroxenePlannerOptions,
   upsertPyroxenePlannerOptions,
   getPyroxenePlannerContents,
+  getAllPyroxeneEventData,
+  upsertPyroxeneEventData,
+  deletePyroxeneEventData,
 } from "~/models/pyroxene-planner";
 import { ErrorPage } from "~/components/organisms/error";
 
@@ -41,22 +42,16 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
         tenTimeTicket: 0,
         inputAt: null,
       },
-      latestResourceAfterPickup: {
-        uid: null,
-        pyroxene: 0,
-        oneTimeTicket: 0,
-        tenTimeTicket: 0,
-        eventUid: null,
-      },
       timelineItems: [],
       calcOptions: null,
+      eventData: [],
     };
   }
 
   const favoritedStudents = await getUserFavoritedStudents(env, currentUser.id);
   const latestResources = await getLatestPyroxeneOwnedResource(env, currentUser.id);
-  const latestResourceAfterPickup = await getLatestPyroxeneOwnedResourceWithEventUid(env, currentUser.id);
   const savedOptions = await getPyroxenePlannerOptions(env, currentUser.id);
+  const eventData = await getAllPyroxeneEventData(env, currentUser.id);
   return {
     signedIn: currentUser !== null,
     contents,
@@ -67,22 +62,16 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       tenTimeTicket: latestResources?.tenTimeTicket ?? 0,
       inputAt: latestResources?.inputAt ?? null,
     },
-    latestResourceAfterPickup: {
-      uid: latestResourceAfterPickup?.uid ?? null,
-      pyroxene: latestResourceAfterPickup?.pyroxene ?? 0,
-      oneTimeTicket: latestResourceAfterPickup?.oneTimeTicket ?? 0,
-      tenTimeTicket: latestResourceAfterPickup?.tenTimeTicket ?? 0,
-      eventUid: latestResourceAfterPickup?.eventUid ?? null,
-    },
     timelineItems: await getPyroxeneTimelineItems(env, currentUser.id),
     calcOptions: savedOptions,
+    eventData,
   };
 };
 
 export type ActionData = {
   createData: {
     ownedResources?: {
-      eventUid: string | null;
+      eventUid?: string | null;
       pyroxene: number;
       oneTimeTicket: number;
       tenTimeTicket: number;
@@ -106,8 +95,14 @@ export type ActionData = {
   };
 
   deleteData: {
-    ownedResourceEventUid?: string | null;
+    eventUid?: string | null;
     itemUid?: string;
+  };
+
+  eventData?: {
+    eventUid: string;
+    completed?: boolean;
+    expectedTrials?: number | null;
   };
 
   calcOptions?: PyroxenePlannerOptions;
@@ -120,10 +115,15 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     return { success: false };
   }
 
-  const { createData, deleteData, calcOptions } = await request.json<ActionData>();
+  const { createData, deleteData, eventData, calcOptions } = await request.json<ActionData>();
   if (request.method === "POST" && createData) {
     if (createData.ownedResources !== undefined) {
-      await createPyroxeneOwnedResource(env, currentUser.id, createData.ownedResources.eventUid, createData.ownedResources);
+      const { eventUid, pyroxene, oneTimeTicket, tenTimeTicket } = createData.ownedResources;
+      await createPyroxeneOwnedResource(env, currentUser.id, { pyroxene, oneTimeTicket, tenTimeTicket });
+      // When completing a pickup, also mark the event as completed
+      if (eventUid) {
+        await upsertPyroxeneEventData(env, currentUser.id, eventUid, { completed: true });
+      }
     }
     if (createData.buy?.quantity !== undefined) {
       await createBuyPyroxene(env, currentUser.id, createData.buy.date, createData.buy.quantity);
@@ -138,11 +138,16 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       const { pyroxene, oneTimeTicket, tenTimeTicket } = createData.other.resources;
       await createOtherPyroxeneGain(env, currentUser.id, createData.other.date, pyroxene, oneTimeTicket, tenTimeTicket, createData.other.description);
     }
+  } else if (request.method === "POST" && eventData) {
+    await upsertPyroxeneEventData(env, currentUser.id, eventData.eventUid, {
+      completed: eventData.completed,
+      expectedTrials: eventData.expectedTrials,
+    });
   } else if (request.method === "POST" && calcOptions) {
     await upsertPyroxenePlannerOptions(env, currentUser.id, calcOptions);
   } else if (request.method === "DELETE" && deleteData) {
-    if (deleteData.ownedResourceEventUid) {
-      await deletePyroxeneOwnedResourceByEventUid(env, currentUser.id, deleteData.ownedResourceEventUid);
+    if (deleteData.eventUid) {
+      await deletePyroxeneEventData(env, currentUser.id, deleteData.eventUid);
     }
     if (deleteData.itemUid) {
       await deletePyroxeneTimelineItem(env, currentUser.id, deleteData.itemUid);
@@ -166,7 +171,7 @@ export const meta: MetaFunction = () => {
 
 export default function PyroxenePlanner() {
   const loaderData = useLoaderData<typeof loader>();
-  const { signedIn, contents, favoritedStudents, timelineItems } = loaderData;
+  const { signedIn, contents, favoritedStudents, timelineItems, eventData } = loaderData;
 
   const [initialDate, setInitialDate] = useState<Date | null>(loaderData.latestResources.inputAt ? new Date(loaderData.latestResources.inputAt) : null);
   const [initialResources, setInitialResources] = useState<PickupResources>(loaderData.latestResources);
@@ -183,10 +188,18 @@ export default function PyroxenePlanner() {
     );
   };
 
+  const handleUpdateEventData = (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => {
+    setRevalidated(false);
+    fetcher.submit(
+      { eventData: { eventUid, ...data } },
+      { method: "POST", encType: "application/json" },
+    );
+  };
+
   const handleDeletePickupComplete = (eventUid: string) => {
     setRevalidated(false);
     fetcher.submit(
-      { deleteData: { ownedResourceEventUid: eventUid } },
+      { deleteData: { eventUid } },
       { method: "DELETE", encType: "application/json" },
     );
   };
@@ -252,7 +265,7 @@ export default function PyroxenePlanner() {
 
   const defaultOptions: PyroxenePlannerOptions = {
     event: {
-      pickupChance: "ceil",
+      pickupChance: "average",
     },
     raid: {
       tier: "platinum",
@@ -268,6 +281,17 @@ export default function PyroxenePlanner() {
   const [options, setOptions] = useState<PyroxenePlannerOptions>(
     loaderData.calcOptions ?? defaultOptions
   );
+
+  const eventDataMap = useMemo(() => {
+    const map = new Map<string, { completed: boolean; expectedTrials: number | null }>();
+    eventData.forEach((data) => {
+      map.set(data.eventUid, {
+        completed: data.completed,
+        expectedTrials: data.expectedTrials,
+      });
+    });
+    return map;
+  }, [eventData]);
 
   const scheduleItems = useMemo(() => {
     const items: PyroxeneScheduleItem[] = [];
@@ -325,7 +349,7 @@ export default function PyroxenePlanner() {
 
   return (
     <Page
-      title="청휘석 플래너"
+      title="청휘석 플래너 (β)"
       description="현재 보유 재화, 각종 수급 계획을 바탕으로 관심 학생 모집 시점의 재화 수량을 예상해보세요"
       links={[
         {
@@ -337,9 +361,21 @@ export default function PyroxenePlanner() {
       ]}
       panels={[
         {
+          title: "재화 수급 계획",
+          Icon: PlusIcon,
+          description: "획득 일정과 수량을 입력해주세요",
+          disabled: !signedIn,
+          children: <PyroxenePlannerInputPanel
+            onSaveBuy={(quantity, date) => handleSaveBuy(quantity, date)}
+            onSavePackage={(startDate, packageType) => handleSavePackage(startDate, packageType)}
+            onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
+            onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
+          />,
+        },
+        {
           title: "플래너 설정",
           Icon: ChartBarIcon,
-          description: "획득/소비 계산 조건을 선택해주세요",
+          description: "계산 조건을 선택해주세요",
           foldable: signedIn,
           children: <PyroxenePlannerOptionsPanel options={options} onOptionsChange={(newOptions) => {
             setOptions(newOptions);
@@ -349,31 +385,19 @@ export default function PyroxenePlanner() {
             );
           }} />,
         },
-        {
-          title: "재화 수급처",
-          Icon: PlusIcon,
-          description: "재화 획득 날짜와 수량을 입력해주세요",
-          foldable: true,
-          disabled: !signedIn,
-          children: <PyroxenePlannerInputPanel
-            onSaveBuy={(quantity, date) => handleSaveBuy(quantity, date)}
-            onSavePackage={(startDate, packageType) => handleSavePackage(startDate, packageType)}
-            onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
-            onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
-          />,
-        },
       ]}
     >
       {signedIn ? (
         <PyroxeneSchedule
           initialDate={initialDate}
           initialResources={initialResources}
-          latestEventUid={loaderData.latestResourceAfterPickup.eventUid}
+          eventDataMap={eventDataMap}
           scheduleItems={scheduleItems}
           options={options}
           onPickupComplete={(eventUid, resources) => handleSaveOwnedResources(eventUid, resources)}
           onDeletePickupComplete={(eventUid) => handleDeletePickupComplete(eventUid)}
           onDeleteItem={(itemUid) => handleDeleteItem(itemUid)}
+          onUpdateEventData={handleUpdateEventData}
         />
       ) : (
         <ErrorPage Icon={LockClosedIcon} message="로그인 후 이용할 수 있어요" showButtons={false} />
