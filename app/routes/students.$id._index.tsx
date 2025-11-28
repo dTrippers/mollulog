@@ -7,9 +7,9 @@ import { runQuery } from "~/lib/baql";
 import { EmptyView, SubTitle, Title } from "~/components/atoms/typography";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
 import { ErrorPage } from "~/components/organisms/error";
-import { SlotCountInfo } from "~/components/organisms/raid";
 import { PickupHistories } from "~/components/organisms/student";
 import { StudentInfo, StudentGradingComments } from "~/components/molecules/student";
+import { RaidStatisticsSlotCount } from "~/components/raids";
 import { getMaxTierAt } from "~/models/student";
 import { FilterButtons } from "~/components/molecules/content";
 import { BarsArrowDownIcon } from "@heroicons/react/24/outline";
@@ -151,7 +151,7 @@ export default function StudentDetail() {
         }
         {filteredStatistics.map(({ raid, defenseType, difficulty, slotsByTier, slotsCount, assistsCount, assistsByTier }) => {
           return (
-            <SlotCountInfo
+            <RaidStatisticsSlotCount
               key={`${raid.uid}-${defenseType}`}
               raid={{
                 ...raid,

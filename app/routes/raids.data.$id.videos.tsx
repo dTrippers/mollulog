@@ -33,6 +33,7 @@ export type RaidVideosData = {
   };
 } | null;
 
+// @deprecated Use the loader from ./raids.$id.videos.tsx instead
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   const uid = params.id;
   if (!uid) {

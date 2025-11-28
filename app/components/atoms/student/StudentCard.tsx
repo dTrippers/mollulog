@@ -26,7 +26,6 @@ type StudentCardProps = {
   favorited?: boolean;
   favoritedCount?: number;
   grayscale?: boolean;
-  border?: "gray" | "blue";
   checked?: boolean;
 
   onSelect?: (id: string) => void;
@@ -44,20 +43,12 @@ function visibileTier(tier: number): [number, boolean] {
 
 export default function StudentCard({
   uid, name, nameSize, tier, level, label, isAssist, attackType, defenseType, role,
-  favorited, favoritedCount, grayscale, border, checked, onSelect, popups, popupId = uid,
+  favorited, favoritedCount, grayscale, checked, onSelect, popups, popupId = uid,
 }: StudentCardProps) {
   const { activePopupId, setActivePopupId } = useStudentCardPopup();
   const showPopup = popupId === activePopupId;
 
   const visibleNames = parseVisibleNames(name ?? "");
-
-  let borderClass = "";
-  if (border === "gray") {
-    borderClass = "border-4 border-gray-400 dark:border-gray-500";
-  } else if (border === "blue") {
-    borderClass = "border-4 border-blue-500";
-  }
-
   return (
     <div className="relative">
       <div
@@ -72,7 +63,7 @@ export default function StudentCard({
       >
         <div className="my-1">
           <div className="relative">
-            <div className={`relative rounded-lg overflow-hidden ${borderClass}`}>
+            <div className="relative rounded-lg overflow-hidden">
               <img
                 className={`w-full h-full ${grayscale ? "grayscale opacity-75" : ""} transition`}
                 src={studentImageUrl(uid ?? "unlisted")}
@@ -91,8 +82,8 @@ export default function StudentCard({
               )}
 
               {checked && (
-                <div className="absolute top-0.5 right-0.5 size-5 text-white border rounded-full flex items-center justify-center bg-blue-500/90">
-                  <CheckIcon className="size-3.5" />
+                <div className="absolute top-0.5 right-0.5 w-3/10 aspect-square text-white border rounded-full flex items-center justify-center bg-blue-500/90">
+                  <CheckIcon className="w-full p-0.5" />
                 </div>
               )}
 
@@ -133,7 +124,7 @@ export default function StudentCard({
           leave="transition duration-100 ease-in"
           leaveFrom="scale-100"
           leaveTo="opacity-0 scale-95"
-          className="fixed md:absolute left-0 bottom-4 md:top-full md:bottom-auto w-full md:w-auto min-w-72 md:mt-2 z-10 whitespace-nowrap"
+          className="fixed md:absolute left-0 bottom-4 md:top-full md:bottom-auto w-full md:w-auto min-w-72 md:mt-2 z-50 whitespace-nowrap"
         >
           <StudentCardPopup
             student={{ uid, name, attackType, defenseType, role }}

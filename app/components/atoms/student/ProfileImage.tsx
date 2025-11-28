@@ -13,7 +13,7 @@ export default function ProfileImage({ studentUid, imageSize }: ProfileImageProp
       [imageSizeClass, iconSizeClass] = ["size-16", "size-12"];
       break;
     case 12:
-      [imageSizeClass, iconSizeClass] = ["size-12", "size-8"];
+      [imageSizeClass, iconSizeClass] = ["size-10 md:size-12", "size-8 md:size-10"];
       break;
     case 6:
       [imageSizeClass, iconSizeClass] = ["size-6", "size-4"];

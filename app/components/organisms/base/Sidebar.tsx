@@ -131,8 +131,8 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
         />
       )}
 
-      <div className="my-2 grid grid-cols-2 gap-2">
-        <UtilItem name={"청휘석 플래너"} to="/utils/pyroxene" OutlineIcon={WalletIconOutline} SolidIcon={WalletIconSolid} isActive={pathname.startsWith("/utils/pyroxene")} onItemClick={onMenuClose} />
+      <div className="my-4 grid grid-cols-2 gap-2">
+        <UtilItem name={"청휘석 플래너 (β)"} to="/utils/pyroxene" OutlineIcon={WalletIconOutline} SolidIcon={WalletIconSolid} isActive={pathname.startsWith("/utils/pyroxene")} onItemClick={onMenuClose} showRedDot />
         <UtilItem name={"이벤트 소탕 계산기"} to="/events/hyakuyori-izuru-ichirinnno?page=shop" OutlineIcon={BoltIconOutline} SolidIcon={BoltIconSolid} isActive={false} onItemClick={onMenuClose} />
         <UtilItem name={"인연 랭크 계산기"} to="/utils/relationship" OutlineIcon={HeartIconOutline} SolidIcon={HeartIconSolid} isActive={pathname.startsWith("/utils/relationship")} onItemClick={onMenuClose} />
         <UtilItem name={"총력전 점수 계산기"} to="/utils/raidscore" OutlineIcon={ClockIconOutline} SolidIcon={ClockIconSolid} isActive={pathname.startsWith("/utils/raidscore")} onItemClick={onMenuClose} />
@@ -257,7 +257,7 @@ export default function Sidebar({ currentUsername, darkMode, setDarkMode, hasRec
           leave="transition duration-100 ease-in"
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
-          className="p-4 block xl:hidden"
+          className="px-4 pb-4"
         >
           <MenuContent
             currentUsername={currentUsername}

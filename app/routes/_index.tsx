@@ -1,14 +1,12 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
-import { HeartIcon as EmptyHeartIcon, CalendarDaysIcon } from "@heroicons/react/24/outline";
+import { CalendarIcon, IdentificationIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { ChevronDownIcon, ChevronUpIcon, ArrowRightIcon } from "@heroicons/react/16/solid";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { SubTitle, Title } from "~/components/atoms/typography";
-import { graphql } from "~/graphql";
 import type { IndexQuery } from "~/graphql/graphql";
-import { runQuery } from "~/lib/baql";
-import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
+import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, eventTypeLocale, pickupLabelLocale, raidTypeLocale, relativeTime } from "~/locales/ko";
 import dayjs from "dayjs";
 import { OptionBadge, ProfileImage } from "~/components/atoms/student";
@@ -16,26 +14,7 @@ import { useState } from "react";
 import { EventHeader } from "~/components/event";
 import type { DefenseType, EventType, RaidType } from "~/models/content.d";
 import { bossImageUrl } from "~/models/assets";
-
-const indexQuery = graphql(`
-  query Index($now: ISO8601DateTime!) {
-    events(untilAfter: $now, first: 20) {
-      nodes {
-        __typename name since until endless uid type rerun imageUrl
-        pickups {
-          type rerun since until
-          student { uid name }
-        }
-      }
-    }
-    raids(untilAfter: $now, first: 3) {
-      nodes {
-        name since until uid type boss attackType terrain
-        defenseTypes { defenseType difficulty }
-      }
-    }
-  }
-`);
+import { getIndexContents } from "~/models/content";
 
 export const meta: MetaFunction = () => {
   return [
@@ -45,75 +24,20 @@ export const meta: MetaFunction = () => {
 };
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const now = dayjs();
-  const truncatedNow = now.set("minute", 0).set("second", 0).set("millisecond", 0);
-
-  const { data, error } = await runQuery<IndexQuery, { now: Date }>(indexQuery, { now: truncatedNow.toDate() });
-  if (error || !data) {
-    throw error ?? "failed to fetch events";
-  }
-
-  // ========== Events ==========
-  const mainEventTypes = ["event", "main_story", "collab", "fes", "immortal_event"];
-  const mainEvents = data.events.nodes.filter((event) => mainEventTypes.includes(event.type));
-
-  // Priority 1: Find currently ongoing events (since <= now <= until)
-  const ongoingEvents = mainEvents.filter((event) => {
-    const since = dayjs(event.since);
-    const until = dayjs(event.until);
-    return !since.isAfter(now) && until.isAfter(now);
-  });
-
-  let mainEvent = null;
-  if (ongoingEvents.length > 0) {
-    // If there are ongoing events, prioritize by event type order
-    mainEvent = ongoingEvents.sort((a, b) => {
-      const aTypeIndex = mainEventTypes.indexOf(a.type);
-      const bTypeIndex = mainEventTypes.indexOf(b.type);
-      return aTypeIndex - bTypeIndex;
-    })[0];
-  } else {
-    // Priority 2: Find the nearest starting event
-    const futureEvents = mainEvents.filter((event) => dayjs(event.since).isAfter(now));
-    if (futureEvents.length > 0) {
-      // Sort by start date, then by event type priority for same date
-      mainEvent = futureEvents.sort((a, b) => {
-        const aSince = dayjs(a.since);
-        const bSince = dayjs(b.since);
-        const dateDiff = aSince.diff(bSince, "day");
-        if (dateDiff !== 0) {
-          return dateDiff;
-        }
-
-        // If same date, prioritize by event type order
-        const aTypeIndex = mainEventTypes.indexOf(a.type);
-        const bTypeIndex = mainEventTypes.indexOf(b.type);
-        return aTypeIndex - bTypeIndex;
-      })[0];
-    }
-  }
-
-  // ========== Pickups ==========
-  const currentPickups: { eventUid: string, pickup: IndexQuery["events"]["nodes"][0]["pickups"][0] }[] = data.events.nodes
-    .filter((event) => event.type !== "archive_pickup")
-    .flatMap((event) => event.pickups.filter((pickup) => pickup.student !== null).map((pickup) => ({ eventUid: event.uid, pickup })))
-    .filter(({ pickup }) => !dayjs(pickup.since).isAfter(now) && dayjs(pickup.until).isAfter(now));
-
   const { env } = context.cloudflare;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
-  const favoritedStudentUids = currentUser ? (await getUserFavoritedStudents(env, currentUser.id)).filter((favorited) => currentPickups.some((pickup) => pickup.eventUid === favorited.contentId)).map((favorited) => favorited.studentId) : [];
 
-  // Get favorite counts for all students in current pickups (not just user's favorites)
-  const allStudentUids = currentPickups.map(({ pickup }) => pickup.student?.uid).filter((uid) => uid !== null) as string[];
-  const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) => currentPickups.some((pickup) => pickup.eventUid === favorited.contentId));
+  const { mainEvent, currentRaids, currentEvents, currentPickups, favoritedCounts } = await getIndexContents(env);
+  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const favoritedStudentUids = currentUser ?
+    (await getUserFavoritedStudents(env, currentUser.id)).filter((favorited) => currentPickups.some((pickup) => pickup.eventUid === favorited.contentId)).map((favorited) => favorited.studentId) :
+    [];
 
   // ========== Raids ==========
-  const currentTotalAssualt = data.raids.nodes.find((raid) => raid.type === "total_assault" || raid.type === "elimination");
-  const currentUnlimit = data.raids.nodes.find((raid) => raid.type === "unlimit");
-
+  const currentTotalAssualt = currentRaids.find((raid) => raid.type === "total_assault" || raid.type === "elimination");
+  const currentUnlimit = currentRaids.find((raid) => raid.type === "unlimit");
   return {
     mainEvent,
-    currentEvents: data.events.nodes.filter((event) => (event.uid !== mainEvent?.uid) && !dayjs(event.since).isAfter(now)),
+    currentEvents: currentEvents.filter((event) => (event.uid !== mainEvent?.uid)),
     currentPickups,
     favoritedCounts,
     favoritedStudentUids,
@@ -131,6 +55,10 @@ export default function Index() {
 
       <MainEvent event={mainEvent} />
       <CurrentEvents events={currentEvents} />
+      <div className="grid grid-cols-2 gap-2">
+        <LinkCard Icon={CalendarIcon} title="미래시" description="컨텐츠 및 픽업 일정" to="/futures" />
+        <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가 정보" to="/students" />
+      </div>
 
       {CurrentPickups.length > 0 && (
         <CurrentPickups
@@ -143,11 +71,6 @@ export default function Index() {
       <SubTitle text="레이드" />
       {currentTotalAssualt && <CurrentRaid {...currentTotalAssualt} />}
       {currentUnlimit && <CurrentRaid {...currentUnlimit} />}
-
-      <div className="my-16">
-        <LinkCard Icon={CalendarDaysIcon} title="미래시 타임라인" description="컨텐츠 일정을 확인하고 계획을 세워보세요" to="/futures" />
-        <LinkCard Icon={EmptyHeartIcon} title="인연 랭크 계산기" description="목표 랭크까지 필요한 선물을 계산해보세요" to="/utils/relationship" />
-      </div>
     </>
   );
 }
@@ -163,7 +86,7 @@ function MainEvent({ event }: { event: Exclude<IndexQuery["events"]["nodes"][0],
 
   return (
     <div className="my-8">
-      <Link to={`/events/${event.uid}`} className="block hover:opacity-50 dark:hover:opacity-50 transition-opacity">
+      <Link to={`/events/${event.uid}`} className="block hover:opacity-75 transition-opacity">
         <EventHeader {...event} />
       </Link>
     </div>
@@ -186,16 +109,16 @@ function CurrentEvents({ events }: CurrentEventsProps) {
   }
 
   return (
-    <div className="my-8">
+    <div className="mt-8">
       <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden">
         {events.map((event) => (
           <Link to={`/events/${event.uid}`} key={event.uid} className="block group">
-            <div className="p-3 flex items-center justify-between">
-              <div className="hover:opacity-50 dark:hover:opacity-50 transition-opacity">
+            <div className="p-3 flex items-center justify-between hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors rounded-lg">
+              <div className="transition-opacity">
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{eventTypeLocale[event.type]}</p>
                 <p className="font-semibold text-neutral-900 dark:text-neutral-100">{event.name}</p>
               </div>
-              <ArrowRightIcon className="size-4 text-neutral-400 group-hover:translate-x-1 transition-transform duration-200" />
+              <ArrowRightIcon className="size-4 text-neutral-500 dark:text-neutral-400 group-hover:translate-x-1 transition-transform duration-200" strokeWidth={2} />
             </div>
           </Link>
         ))}
@@ -213,12 +136,12 @@ type CurrentPickupsProps = {
 function CurrentPickups({ pickups, favoritedStudentUids, favoritedCounts }: CurrentPickupsProps) {
   const [showAll, setShowAll] = useState(false);
 
-  const displayedPickups = showAll ? pickups : pickups.slice(0, 4);
+  const displayedPickups = showAll ? pickups : pickups.slice(0, 6);
 
   return (
     <div className="my-8">
       <SubTitle text="픽업 모집" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         {displayedPickups.map(({ pickup }) => {
           const student = pickup.student;
           if (!student) {
@@ -229,23 +152,27 @@ function CurrentPickups({ pickups, favoritedStudentUids, favoritedCounts }: Curr
           return (
             <Link to={`/students/${student.uid}`} key={student.uid} className="block">
               <div className="p-3 flex items-center gap-3 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors rounded-lg">
-                <ProfileImage imageSize={12} studentUid={student.uid} />
+                <div className="relative">
+                  <ProfileImage imageSize={12} studentUid={student.uid} />
+                  <div className="absolute -bottom-1 -right-1">
+                    <div className={`text-xs relative flex items-center gap-0.5 ${favorited ? "bg-red-500/90" : "bg-neutral-900/90"} text-white rounded-lg px-1.5 border border-white dark:border-transparent`}>
+                      <FilledHeartIcon className="size-3" />
+                      <span className="font-semibold">
+                        {favoritedCounts.find((favorited) => favorited.studentId === student.uid)?.count ?? 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
                 <div className="grow">
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">{pickupLabelLocale(pickup)}</p>
-                  <p className="font-semibold">{student.name}</p>
-                </div>
-                <div className={`flex items-center gap-x-1 ${favorited ? "text-red-500" : ""}`}>
-                  {favorited ? <FilledHeartIcon className="size-4" /> : <EmptyHeartIcon strokeWidth={2} className="size-4" />}
-                  <span className="text-sm font-semibold">
-                    {favoritedCounts.find((favorited) => favorited.studentId === student.uid)?.count ?? 0}
-                  </span>
+                  <p className="text-sm md:text-base font-semibold">{student.name}</p>
                 </div>
               </div>
             </Link>
           );
         })}
       </div>
-      {pickups.length > 4 && (
+      {pickups.length > 6 && (
         <div
           className="w-full my-4 py-2 flex items-center justify-center bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors rounded-lg text-neutral-500 dark:text-neutral-400 cursor-pointer"
           onClick={() => setShowAll(!showAll)}
@@ -321,17 +248,17 @@ type LinkCardProps = {
 function LinkCard({ Icon, title, description, to }: LinkCardProps) {
   return (
     <Link to={to} className="my-4 block group">
-      <div className="flex items-center justify-between p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:shadow-md transition-all duration-200">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-500 text-white rounded-lg">
+      <div className="flex items-center justify-between p-3 xl:p-4 bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors rounded-lg">
+        <div className="flex items-center gap-2 md:gap-3">
+          <div className="p-2 bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg">
             <Icon className="size-5" strokeWidth={2} />
           </div>
           <div>
-            <p className="text-lg font-semibold text-blue-900 dark:text-blue-100">{title}</p>
-            <p className="text-sm text-blue-600 dark:text-blue-300">{description}</p>
+            <p className="text-sm md:text-base font-bold">{title}</p>
+            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">{description}</p>
           </div>
         </div>
-        <ArrowRightIcon className="size-4 text-blue-500 group-hover:translate-x-1 transition-transform duration-200" />
+        <ArrowRightIcon className="hidden md:block size-4 text-neutral-500 dark:text-neutral-400 group-hover:translate-x-1 transition-transform duration-200" strokeWidth={2} />
       </div>
     </Link>
   );

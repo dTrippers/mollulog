@@ -29,19 +29,19 @@ export default function PyroxenePlannerOptionsPanel({ options, onOptionsChange }
 
   return (
     <>
-      <PanelLabel title="★3 학생 모집 횟수" />
+      <PanelLabel title="★3 학생 모집 목표" description="학생 한 명당 목표 모집 횟수 (이벤트 별 설정 가능)" />
       <FilterButtons
         exclusive atLeastOne
         buttonProps={[
           {
-            text: "천장 (200회)",
-            active: options.event.pickupChance === "ceil",
-            onToggle: (activated) => onOptionsChange({ ...options, event: { ...options.event, pickupChance: activated ? "ceil" : "average" } }),
-          },
-          {
             text: "평균 (140회)",
             active: options.event.pickupChance === "average",
             onToggle: (activated) => onOptionsChange({ ...options, event: { ...options.event, pickupChance: activated ? "average" : "ceil" } }),
+          },
+          {
+            text: "천장 (200회)",
+            active: options.event.pickupChance === "ceil",
+            onToggle: (activated) => onOptionsChange({ ...options, event: { ...options.event, pickupChance: activated ? "ceil" : "average" } }),
           },
         ]}
       />
@@ -73,34 +73,34 @@ export default function PyroxenePlannerOptionsPanel({ options, onOptionsChange }
         ]}
       />
 
-      <PanelLabel title="전술대회 순위" />
+      <PanelLabel title="전술대회 순위" description="매일 보상 수령 시점의 대략적인 순위" />
       <FilterButtons
         exclusive atLeastOne
         buttonProps={[
           {
-            text: "10위권",
+            text: "10위 내",
             active: options.tactical.level === "in10",
             onToggle: () => onToggleTacticalLevel("in10"),
           },
           {
-            text: "100위권",
+            text: "100위 내",
             active: options.tactical.level === "in100",
             onToggle: () => onToggleTacticalLevel("in100"),
           },
           {
-            text: "200위권",
+            text: "200위 내",
             active: options.tactical.level === "in200",
             onToggle: () => onToggleTacticalLevel("in200"),
           },
           {
-            text: "200위 이하",
+            text: "200위 밖",
             active: options.tactical.level === "over200",
             onToggle: () => onToggleTacticalLevel("over200"),
           },
         ]}
       />
 
-      <PanelLabel title="재화 수급처 표시" description="표시하지 않은 수급처도 계산에 반영돼요" />
+      <PanelLabel title="타임라인에 표시할 항목" description="타임라인에서 숨겨도 계산에는 반영돼요" />
       <FilterButtons
         buttonProps={[
           {

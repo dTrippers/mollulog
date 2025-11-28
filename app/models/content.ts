@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { and, eq, inArray, not, or, sql, type SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
@@ -5,9 +6,10 @@ import type { Env } from "~/env.server";
 import { nanoid } from "nanoid/non-secure";
 import { senseisTable } from "./sensei";
 import { graphql } from "~/graphql";
-import { FutureContentsQuery } from "~/graphql/graphql";
+import { FutureContentsQuery, IndexQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
+import { getFavoritedCounts } from "./favorite-students";
 
 
 type ContentMemo = {
@@ -105,6 +107,103 @@ function visibilityFilter(userId?: number): SQLWrapper[] {
   return filters;
 }
 
+
+/**
+ * Index Contents
+ */
+
+const indexQuery = graphql(`
+  query Index($now: ISO8601DateTime!) {
+    events(untilAfter: $now, first: 20) {
+      nodes {
+        __typename name since until endless uid type rerun imageUrl
+        pickups {
+          type rerun since until
+          student { uid name }
+        }
+      }
+    }
+    raids(untilAfter: $now, first: 3) {
+      nodes {
+        name since until uid type boss attackType terrain
+        defenseTypes { defenseType difficulty }
+      }
+    }
+  }
+`);
+
+export async function getIndexContents(env: Env, forceRefresh = false) {
+  return fetchCached(env, "index-contents", async () => {
+    const now = dayjs();
+    const { data, error } = await runQuery<IndexQuery, { now: Date }>(indexQuery, { now: now.toDate() });
+    if (error || !data) {
+      throw error ?? "failed to fetch events";
+    }
+
+    // ========== Events ==========
+    const mainEventTypes = ["event", "main_story", "collab", "fes", "immortal_event"];
+    const mainEvents = data.events.nodes.filter((event) => mainEventTypes.includes(event.type));
+
+    // Priority 1: Find currently ongoing events (since <= now <= until)
+    const ongoingEvents = mainEvents.filter((event) => {
+      const since = dayjs(event.since);
+      const until = dayjs(event.until);
+      return !since.isAfter(now) && until.isAfter(now);
+    });
+
+    let mainEvent = null;
+    if (ongoingEvents.length > 0) {
+      // If there are ongoing events, prioritize by event type order
+      mainEvent = ongoingEvents.sort((a, b) => {
+        const aTypeIndex = mainEventTypes.indexOf(a.type);
+        const bTypeIndex = mainEventTypes.indexOf(b.type);
+        return aTypeIndex - bTypeIndex;
+      })[0];
+    } else {
+      // Priority 2: Find the nearest starting event
+      const futureEvents = mainEvents.filter((event) => dayjs(event.since).isAfter(now));
+      if (futureEvents.length > 0) {
+        // Sort by start date, then by event type priority for same date
+        mainEvent = futureEvents.sort((a, b) => {
+          const aSince = dayjs(a.since);
+          const bSince = dayjs(b.since);
+          const dateDiff = aSince.diff(bSince, "day");
+          if (dateDiff !== 0) {
+            return dateDiff;
+          }
+
+          // If same date, prioritize by event type order
+          const aTypeIndex = mainEventTypes.indexOf(a.type);
+          const bTypeIndex = mainEventTypes.indexOf(b.type);
+          return aTypeIndex - bTypeIndex;
+        })[0];
+      }
+    }
+
+    // ========== Pickups ==========
+    const currentPickups: { eventUid: string, pickup: IndexQuery["events"]["nodes"][0]["pickups"][0] }[] = data.events.nodes
+      .filter((event) => event.type !== "archive_pickup")
+      .flatMap((event) => event.pickups.filter((pickup) => pickup.student !== null).map((pickup) => ({ eventUid: event.uid, pickup })))
+      .filter(({ pickup }) => !dayjs(pickup.since).isAfter(now) && dayjs(pickup.until).isAfter(now));
+
+    // Get favorite counts for all students in current pickups (not just user's favorites)
+    const allStudentUids = currentPickups.map(({ pickup }) => pickup.student?.uid).filter((uid) => uid !== null) as string[];
+    const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) => currentPickups.some((pickup) => pickup.eventUid === favorited.contentId));
+
+    return {
+      mainEvent,
+      currentRaids: data.raids.nodes,
+      currentEvents: data.events.nodes.filter((event) => !dayjs(event.since).isAfter(now)),
+      currentPickups,
+      favoritedCounts,
+    };
+  }, 60 * 10, forceRefresh);
+}
+
+
+/**
+ * Future Contents
+ */
 const futureContentsQuery = graphql(`
   query FutureContents($now: ISO8601DateTime!) {
     contents(untilAfter: $now, first: 9999) {

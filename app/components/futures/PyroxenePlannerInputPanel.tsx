@@ -36,7 +36,7 @@ export default function PyroxenePlannerInputPanel({ onSaveBuy, onSavePackage, on
               onToggle: (activated) => toggle("buy", activated),
             },
             {
-              text: "월간 패키지",
+              text: "월정액 구매",
               active: inputMode === "package",
               onToggle: (activated) => toggle("package", activated),
             },

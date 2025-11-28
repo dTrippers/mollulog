@@ -3,26 +3,26 @@ import { useState } from "react";
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import { Transition } from "@headlessui/react";
 
-export type ScreenSelectorProps = {
-  screens: ScreenSelectorItemProps[];
+export type PageScreenSelectorProps = {
+  screens: PageScreenSelectorItemProps[];
 }
 
-export default function ScreenSelector({ screens }: ScreenSelectorProps) {
+export default function PageScreenSelector({ screens }: PageScreenSelectorProps) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const activeScreen = screens.find((screen) => screen.active);
 
   return (
-    <div className="relative">
+    <div className="relative my-4">
       {/* Desktop: Show all screens */}
       <div className="hidden xl:block">
-        {screens.map((screen, index) => <ScreenSelectorItem key={index} {...screen} />)}
+        {screens.map((screen, index) => <PageScreenSelectorItem key={index} {...screen} />)}
       </div>
 
       {/* Mobile: Show only active screen, click to show dropdown */}
       <div className="xl:hidden">
         {activeScreen && (
           <div className="cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
-            <ScreenSelectorItem {...activeScreen} showChevron rotateChevron={isDropdownOpen} />
+            <PageScreenSelectorItem {...activeScreen} showChevron rotateChevron={isDropdownOpen} />
           </div>
         )}
 
@@ -43,6 +43,7 @@ export default function ScreenSelector({ screens }: ScreenSelectorProps) {
               <DropdownItem
                 key={index}
                 text={screen.text}
+                Icon={screen.Icon}
                 description={screen.description}
                 active={screen.active}
                 disabled={screen.disabled}
@@ -60,10 +61,11 @@ export default function ScreenSelector({ screens }: ScreenSelectorProps) {
   );
 }
 
-type ScreenSelectorItemProps = {
+type PageScreenSelectorItemProps = {
   text: string;
-  description: string;
-  active: boolean;
+  description?: string;
+  Icon?: React.ElementType;
+  active?: boolean;
   disabled?: boolean;
 
   onClick?: () => void;
@@ -73,25 +75,28 @@ type ScreenSelectorItemProps = {
   rotateChevron?: boolean;
 }
 
-function ScreenSelectorItem({ text, description, active, disabled, onClick, link, showChevron, rotateChevron }: ScreenSelectorItemProps) {
-  const classNames = ["flex items-center justify-between gap-x-2 my-2 w-full py-3 px-4 rounded-lg transition-all duration-200 border"];
+function PageScreenSelectorItem({ text, description, Icon, active, disabled, onClick, link, showChevron, rotateChevron }: PageScreenSelectorItemProps) {
+  const classNames = ["flex items-center justify-between gap-x-3 my-2 w-full py-3 px-4 rounded-lg transition-all duration-200 border"];
   if (disabled) {
     classNames.push("bg-neutral-100 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-700 cursor-not-allowed opacity-60");
   } else if (active) {
-    classNames.push("bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 cursor-pointer");
+    classNames.push("bg-white xl:bg-blue-50 dark:bg-neutral-900 xl:dark:bg-blue-900/20 border-neutral-200 xl:border-blue-200 dark:border-neutral-700 xl:dark:border-blue-700 cursor-pointer");
   } else {
     classNames.push("bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer");
   }
 
   const Inner = (
     <div className={classNames.join(" ")} onClick={disabled ? undefined : onClick}>
+      {Icon && <Icon className={`size-5 shrink-0 ${active ? "xl:text-blue-500 xl:dark:text-blue-400" : "text-neutral-500 dark:text-neutral-400"}`} strokeWidth={2} />}
       <div className="grow">
-        <p className={`font-bold transition-colors ${disabled ? "text-neutral-400 dark:text-neutral-500" : active ? "text-blue-700 dark:text-blue-300" : "text-neutral-700 dark:text-neutral-300"}`}>
+        <p className={`font-semibold transition-colors ${disabled ? "text-neutral-400 dark:text-neutral-500" : active ? "xl:text-blue-700 xl:dark:text-blue-300" : "text-neutral-700 dark:text-neutral-300"}`}>
           {text}
         </p>
-        <p className={`text-sm ${disabled ? "text-neutral-400 dark:text-neutral-500" : active ? "text-blue-500 dark:text-blue-400" : "text-neutral-500 dark:text-neutral-400"}`}>
-          {description}
-        </p>
+        {description && (
+          <p className={`text-sm ${disabled ? "text-neutral-400 dark:text-neutral-500" : active ? "xl:text-blue-500 xl:dark:text-blue-400" : "text-neutral-500 dark:text-neutral-400"}`}>
+            {description}
+          </p>
+        )}
       </div>
       {showChevron && (
         <ChevronDownIcon className={`size-5 shrink-0 transition-transform duration-200 ${rotateChevron ? "rotate-180" : ""}`} />
@@ -104,15 +109,16 @@ function ScreenSelectorItem({ text, description, active, disabled, onClick, link
 
 type DropdownItemProps = {
   text: string;
-  description: string;
-  active: boolean;
+  description?: string;
+  Icon?: React.ElementType;
+  active?: boolean;
   disabled?: boolean;
   onClick?: () => void;
   link?: string;
 };
 
-function DropdownItem({ text, description, active, disabled, onClick, link }: DropdownItemProps) {
-  const classNames = ["px-4 py-3 cursor-pointer transition-colors duration-100"];
+function DropdownItem({ text, description, Icon, active, disabled, onClick, link }: DropdownItemProps) {
+  const classNames = ["flex items-center gap-x-3 px-4 py-3 cursor-pointer transition-colors duration-100"];
   if (disabled) {
     classNames.push("text-neutral-400 dark:text-neutral-500 cursor-not-allowed opacity-60");
   } else if (active) {
@@ -123,12 +129,18 @@ function DropdownItem({ text, description, active, disabled, onClick, link }: Dr
 
   const content = (
     <div className={classNames.join(" ")} onClick={disabled ? undefined : onClick}>
-      <p className="font-bold transition-colors">{text}</p>
-      <p className={`text-sm ${disabled ? "text-neutral-400 dark:text-neutral-500" : active ? "text-blue-500 dark:text-blue-400" : "text-neutral-500 dark:text-neutral-400"}`}>
-        {description}
-      </p>
+      {Icon && <Icon className={`size-5 shrink-0 ${active ? "text-blue-500 dark:text-blue-400" : "text-neutral-500 dark:text-neutral-400"}`} strokeWidth={2} />}
+      <div>
+        <p className="font-bold transition-colors">{text}</p>
+        {description && (
+          <p className={`text-sm ${disabled ? "text-neutral-400 dark:text-neutral-500" : active ? "text-blue-500 dark:text-blue-400" : "text-neutral-500 dark:text-neutral-400"}`}>
+            {description}
+          </p>
+        )}
+      </div>
     </div>
   );
 
   return link ? <Link to={link}>{content}</Link> : content;
 }
+

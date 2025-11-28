@@ -69,7 +69,7 @@ export default function EventHeader({ imageUrl, name, type, rerun, since, until,
 
   return (
     <>
-      <div className={`relative overflow-hidden -mx-4 md:mx-0 md:rounded-xl shadow-lg ${aspectRatioClass}`}>
+      <div className={`relative overflow-hidden rounded-xl shadow-lg ${aspectRatioClass}`}>
         {/* Videos */}
         {currentVideo && (
           <Suspense>

@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid/non-secure";
 import dayjs from "dayjs";
-import { and, eq, isNotNull, like, or, sql } from "drizzle-orm";
+import { and, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
 import type { Env } from "~/env.server";
@@ -51,7 +51,6 @@ export const pyroxeneOwnedResourcesTable = sqliteTable("pyroxene_owned_resources
   id: int().primaryKey({ autoIncrement: true }),
   uid: text().notNull(),
   userId: int().notNull(),
-  eventUid: text(),
   inputAt: text().notNull(),
   pyroxene: int().notNull(),
   oneTimeTicket: int().notNull(),
@@ -63,7 +62,6 @@ export const pyroxeneOwnedResourcesTable = sqliteTable("pyroxene_owned_resources
 export type PyroxeneOwnedResource = {
   uid: string;
   userId: number;
-  eventUid: string | null;
   inputAt: string;
   pyroxene: number;
   oneTimeTicket: number;
@@ -74,7 +72,6 @@ function toOwnedResourceModel(resource: typeof pyroxeneOwnedResourcesTable.$infe
   return {
     uid: resource.uid,
     userId: resource.userId,
-    eventUid: resource.eventUid,
     inputAt: resource.inputAt,
     pyroxene: resource.pyroxene,
     oneTimeTicket: resource.oneTimeTicket,
@@ -94,33 +91,21 @@ export async function getLatestPyroxeneOwnedResource(env: Env, userId: number): 
   return resource ? toOwnedResourceModel(resource) : null;
 }
 
-export async function getLatestPyroxeneOwnedResourceWithEventUid(env: Env, userId: number): Promise<PyroxeneOwnedResource | null> {
-  const db = drizzle(env.DB);
-  const [resource] = await db
-    .select()
-    .from(pyroxeneOwnedResourcesTable)
-    .where(and(eq(pyroxeneOwnedResourcesTable.userId, userId), isNotNull(pyroxeneOwnedResourcesTable.eventUid)))
-    .orderBy(sql`inputAt DESC`)
-    .limit(1);
-
-  return resource ? toOwnedResourceModel(resource) : null;
-}
-
 export async function createPyroxeneOwnedResource(
-  env: Env, userId: number, eventUid: string | null, resources: { pyroxene: number, oneTimeTicket: number, tenTimeTicket: number },
+  env: Env, userId: number, resources: { pyroxene: number, oneTimeTicket: number, tenTimeTicket: number },
 ): Promise<void> {
   const db = drizzle(env.DB);
   const uid = nanoid(8);
   const inputAt = new Date().toISOString();
   const { pyroxene, oneTimeTicket, tenTimeTicket } = resources;
   await db.insert(pyroxeneOwnedResourcesTable)
-    .values({ uid, userId, eventUid, inputAt, pyroxene, oneTimeTicket, tenTimeTicket });
+    .values({ uid, userId, inputAt, pyroxene, oneTimeTicket, tenTimeTicket });
 }
 
-export async function deletePyroxeneOwnedResourceByEventUid(env: Env, userId: number, eventUid: string): Promise<void> {
+export async function deletePyroxeneOwnedResourceByUid(env: Env, userId: number, uid: string): Promise<void> {
   const db = drizzle(env.DB);
   await db.delete(pyroxeneOwnedResourcesTable)
-    .where(and(eq(pyroxeneOwnedResourcesTable.userId, userId), eq(pyroxeneOwnedResourcesTable.eventUid, eventUid)));
+    .where(and(eq(pyroxeneOwnedResourcesTable.userId, userId), eq(pyroxeneOwnedResourcesTable.uid, uid)));
 }
 
 /**
@@ -352,4 +337,97 @@ export async function upsertPyroxenePlannerOptions(env: Env, userId: number, opt
       target: pyroxenePlannerOptionsTable.userId,
       set: { options: optionsJson, updatedAt },
     });
+}
+
+/**
+ * Pyroxene Event Data
+ */
+export const pyroxeneEventDataTable = sqliteTable("pyroxene_event_data", {
+  id: int().primaryKey({ autoIncrement: true }),
+  uid: text().notNull(),
+  userId: int().notNull(),
+  eventUid: text().notNull(),
+  completed: int().notNull().default(0), // boolean (0 or 1)
+  expectedTrials: int(),
+  createdAt: text().notNull().default(sql`current_timestamp`),
+  updatedAt: text().notNull().default(sql`current_timestamp`),
+});
+
+export type PyroxeneEventData = {
+  uid: string;
+  userId: number;
+  eventUid: string;
+  completed: boolean;
+  expectedTrials: number | null;
+};
+
+function toEventDataModel(data: typeof pyroxeneEventDataTable.$inferSelect): PyroxeneEventData {
+  return {
+    uid: data.uid,
+    userId: data.userId,
+    eventUid: data.eventUid,
+    completed: data.completed === 1,
+    expectedTrials: data.expectedTrials,
+  };
+}
+
+export async function getPyroxeneEventData(env: Env, userId: number, eventUid: string): Promise<PyroxeneEventData | null> {
+  const db = drizzle(env.DB);
+  const [data] = await db
+    .select()
+    .from(pyroxeneEventDataTable)
+    .where(and(eq(pyroxeneEventDataTable.userId, userId), eq(pyroxeneEventDataTable.eventUid, eventUid)))
+    .limit(1);
+
+  return data ? toEventDataModel(data) : null;
+}
+
+export async function getAllPyroxeneEventData(env: Env, userId: number): Promise<PyroxeneEventData[]> {
+  const db = drizzle(env.DB);
+  const data = await db
+    .select()
+    .from(pyroxeneEventDataTable)
+    .where(eq(pyroxeneEventDataTable.userId, userId));
+
+  return data.map(toEventDataModel);
+}
+
+export async function upsertPyroxeneEventData(
+  env: Env,
+  userId: number,
+  eventUid: string,
+  data: { completed?: boolean; expectedTrials?: number | null },
+): Promise<void> {
+  const db = drizzle(env.DB);
+  const updatedAt = new Date().toISOString();
+
+  const existing = await getPyroxeneEventData(env, userId, eventUid);
+
+  if (existing) {
+    await db
+      .update(pyroxeneEventDataTable)
+      .set({
+        completed: data.completed !== undefined ? (data.completed ? 1 : 0) : existing.completed ? 1 : 0,
+        expectedTrials: data.expectedTrials !== undefined ? data.expectedTrials : existing.expectedTrials,
+        updatedAt,
+      })
+      .where(and(eq(pyroxeneEventDataTable.userId, userId), eq(pyroxeneEventDataTable.eventUid, eventUid)));
+  } else {
+    const uid = nanoid(8);
+    await db.insert(pyroxeneEventDataTable).values({
+      uid,
+      userId,
+      eventUid,
+      completed: data.completed !== undefined ? (data.completed ? 1 : 0) : 0,
+      expectedTrials: data.expectedTrials !== undefined ? data.expectedTrials : null,
+      updatedAt,
+    });
+  }
+}
+
+export async function deletePyroxeneEventData(env: Env, userId: number, eventUid: string): Promise<void> {
+  const db = drizzle(env.DB);
+  await db
+    .delete(pyroxeneEventDataTable)
+    .where(and(eq(pyroxeneEventDataTable.userId, userId), eq(pyroxeneEventDataTable.eventUid, eventUid)));
 }

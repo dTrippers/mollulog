@@ -1,22 +1,23 @@
 import type { LoaderFunctionArgs, MetaFunction, ActionFunctionArgs } from "react-router";
-import { useLoaderData, data, useFetcher } from "react-router";
-import { useStateFilter } from "~/components/organisms/student";
+import { useLoaderData, data, useFetcher, useOutletContext } from "react-router";
 import { StudentCards, TierSelector } from "~/components/molecules/student";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { SubTitle, Description } from "~/components/atoms/typography";
 import { getRouteSensei } from "./$username";
 import { getAllStudents } from "~/models/student";
 import { getRecruitedStudents, upsertRecruitedStudent, removeRecruitedStudent } from "~/models/recruited-student";
-import { MinusCircleIcon, IdentificationIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
-import { useRef, useEffect, useState } from "react";
+import { MinusCircleIcon, IdentificationIcon, PlusCircleIcon, FunnelIcon } from "@heroicons/react/24/outline";
+import { useRef, useEffect, useState, useMemo } from "react";
 import { Button, Toggle } from "~/components/atoms/form";
+import { applyStudentFilter, StudentFilter, StudentFilterState } from "~/components/students";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
 
-  const sensei = await getRouteSensei(env, params);
+  const allStudents = await getAllStudents(env);
 
+  const sensei = await getRouteSensei(env, params);
   const recruitedStudents = await getRecruitedStudents(env, sensei.id);
   const recruitedStudentTiers = recruitedStudents.reduce((acc, { studentUid, tier }) => {
     acc[studentUid] = tier;
@@ -25,8 +26,17 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   return {
     me: currentUser?.username === sensei.username,
-    allStudents: await getAllStudents(env),
-    recruitedStudentTiers,
+    noRecruited: recruitedStudents.length === 0,
+    students: allStudents.map((student) => ({
+      uid: student.uid,
+      name: student.name,
+      attackType: student.attackType,
+      defenseType: student.defenseType,
+      role: student.role,
+      order: student.order,
+      initialTier: student.initialTier,
+      tier: recruitedStudentTiers[student.uid] ?? null,
+    })),
   };
 };
 
@@ -74,22 +84,43 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 export default function UserPage() {
   const loaderData = useLoaderData<typeof loader>();
-  const { me, allStudents, recruitedStudentTiers } = loaderData;
-  const fetcher = useFetcher();
+  const { me, noRecruited, students } = loaderData;
+
+  const [filterState, setFilterState] = useState<StudentFilterState>({
+    attackTypes: [],
+    defenseTypes: [],
+    roles: [],
+    sort: "recent",
+  });
+  const [recruitedStudents, unrecruitedStudents] = useMemo(() => {
+    const filteredStudents = applyStudentFilter(students, filterState);
+    return [filteredStudents.filter(({ tier }) => tier), filteredStudents.filter(({ tier }) => !tier)];
+  }, [students, filterState]);
+
+  const { setPanel } = useOutletContext<{ setPanel: (panel: { title: string; description: string; Icon: React.ElementType; children: React.ReactNode }) => void }>();
+  useEffect(() => {
+    setPanel({
+      title: "필터 및 정렬",
+      description: "학생을 필터링하고 정렬할 수 있어요.",
+      Icon: FunnelIcon,
+      children: (
+        <StudentFilter
+          state={filterState} onStateChange={setFilterState}
+          useFilter useSearch
+          sortBy={["recent", "old", "name", "tier"]}
+        />
+      ),
+    });
+  }, [filterState, setPanel]);
+
 
   const studentRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const lastAddedStudentUid = useRef<string | null>(null);
 
   const [batchAddMode, setBatchAddMode] = useState(false);
-  const [batchAddStudents, setBatchAddStudents] = useState<string[]>([]);
+  const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);
 
-  const [StateFilter, filteredStudents] = useStateFilter(
-    allStudents.map((student) => ({ ...student, tier: recruitedStudentTiers[student.uid] ?? student.initialTier, })),
-    { useFilter: true, useSort: { by: ["name", "tier"] }, useSearch: true },
-  );
-
-  const noOwned = Object.values(recruitedStudentTiers).length === 0;
-
+  const fetcher = useFetcher();
   const handleAddStudent = (studentUid: string, tier: number, scrollTo: boolean = false) => {
     const formData = new FormData();
     formData.append("studentUid", studentUid);
@@ -120,26 +151,23 @@ export default function UserPage() {
 
   return (
     <>
-      {StateFilter}
-
       <div className="my-8">
         <SubTitle text="모집한 학생" />
-        {me && !noOwned && <Description text="학생을 선택해 성장 등급을 수정할 수 있어요." />}
-        {noOwned ?
+        {me && !noRecruited && <Description text="학생을 선택해 성장 등급을 수정할 수 있어요." />}
+        {noRecruited ?
           <div className="my-16 text-center">
             아직 모집한 학생이 없어요
           </div> :
           <StudentCards
-            students={filteredStudents.filter(({ uid }) => recruitedStudentTiers[uid]).map(({ uid, name, attackType, defenseType, role, initialTier }) => ({
-              uid, name, attackType, defenseType, role, initialTier,
-              tier: recruitedStudentTiers[uid],
+            students={recruitedStudents.map(({ uid, name, attackType, defenseType, role, initialTier, tier }) => ({
+              uid, name, attackType, defenseType, role, initialTier, tier,
               popups: [
                 ...(me ? [
                   {
                     children: (
                       <TierSelector
                         initialTier={initialTier}
-                        currentTier={recruitedStudentTiers[uid]}
+                        currentTier={tier}
                         onTierChange={(tier) => handleAddStudent(uid, tier)}
                       />
                     ),
@@ -171,8 +199,8 @@ export default function UserPage() {
             {batchAddMode && (
               <div className="mb-2">
                 <Button color="primary" onClick={() => {
-                  batchAddStudents.forEach((uid) => handleAddStudent(uid, allStudents.find((student) => student.uid === uid)!.initialTier));
-                  setBatchAddStudents([]);
+                  batchAddStudentUids.forEach((uid) => handleAddStudent(uid, unrecruitedStudents.find((student) => student.uid === uid)!.initialTier));
+                  setBatchAddStudentUids([]);
                   setBatchAddMode(false);
                 }}>선택한 학생 등록</Button>
               </div>
@@ -180,10 +208,10 @@ export default function UserPage() {
           </>
         )}
         <StudentCards
-          students={filteredStudents.filter(({ uid }) => !recruitedStudentTiers[uid]).map(({ uid, name, attackType, defenseType, role, initialTier }) => ({
+          students={unrecruitedStudents.map(({ uid, name, attackType, defenseType, role, initialTier }) => ({
             uid, name, attackType, defenseType, role,
             grayscale: true,
-            border: batchAddMode ? (batchAddStudents.includes(uid) ? "blue" : "gray") : undefined,
+            checked: batchAddMode ? batchAddStudentUids.includes(uid) : undefined,
             popups: batchAddMode ? [] : [
               ...(me ? [
                 {
@@ -201,7 +229,7 @@ export default function UserPage() {
           }))}
           onRef={(uid, ref) => studentRefs.current[uid] = ref}
           onSelect={batchAddMode ? (uid: string) => {
-            setBatchAddStudents((prev) => {
+            setBatchAddStudentUids((prev) => {
               if (prev.includes(uid)) {
                 return prev.filter((each) => each !== uid);
               }
