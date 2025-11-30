@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { MetaFunction, useFetcher, useLoaderData, useRevalidator, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
-import { LockClosedIcon } from "@heroicons/react/24/solid";
+import { LockClosedIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { PyroxenePlannerInputPanel, PyroxenePlannerOptionsPanel, PyroxeneSchedule } from "~/components/futures";
 import type { PickupResources, PyroxeneScheduleItem } from "~/components/futures";
@@ -189,6 +189,7 @@ export default function PyroxenePlanner() {
   };
 
   const handleUpdateEventData = (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => {
+    console.log("data", data);
     setRevalidated(false);
     fetcher.submit(
       { eventData: { eventUid, ...data } },
@@ -347,61 +348,73 @@ export default function PyroxenePlanner() {
     return items;
   }, [contents, favoritedStudents, timelineItems]);
 
+  const isSaving = fetcher.state === "submitting" || fetcher.state === "loading";
+
   return (
-    <Page
-      title="청휘석 플래너 (β)"
-      description="현재 보유 재화, 각종 수급 계획을 바탕으로 관심 학생 모집 시점의 재화 수량을 예상해보세요"
-      links={[
-        {
-          Icon: CalendarIcon,
-          title: "미래시",
-          description: "관심 학생의 모집 일정을 확인할 수 있어요",
-          to: "/futures",
-        },
-      ]}
-      panels={[
-        {
-          title: "재화 수급 계획",
-          Icon: PlusIcon,
-          description: "획득 일정과 수량을 입력해주세요",
-          disabled: !signedIn,
-          children: <PyroxenePlannerInputPanel
-            onSaveBuy={(quantity, date) => handleSaveBuy(quantity, date)}
-            onSavePackage={(startDate, packageType) => handleSavePackage(startDate, packageType)}
-            onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
-            onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
-          />,
-        },
-        {
-          title: "플래너 설정",
-          Icon: ChartBarIcon,
-          description: "계산 조건을 선택해주세요",
-          foldable: signedIn,
-          children: <PyroxenePlannerOptionsPanel options={options} onOptionsChange={(newOptions) => {
-            setOptions(newOptions);
-            fetcher.submit(
-              { calcOptions: newOptions },
-              { method: "POST", encType: "application/json" },
-            );
-          }} />,
-        },
-      ]}
-    >
-      {signedIn ? (
-        <PyroxeneSchedule
-          initialDate={initialDate}
-          initialResources={initialResources}
-          eventDataMap={eventDataMap}
-          scheduleItems={scheduleItems}
-          options={options}
-          onPickupComplete={(eventUid, resources) => handleSaveOwnedResources(eventUid, resources)}
-          onDeletePickupComplete={(eventUid) => handleDeletePickupComplete(eventUid)}
-          onDeleteItem={(itemUid) => handleDeleteItem(itemUid)}
-          onUpdateEventData={handleUpdateEventData}
-        />
-      ) : (
-        <ErrorPage Icon={LockClosedIcon} message="로그인 후 이용할 수 있어요" showButtons={false} />
+    <>
+      {/* Saving indicator */}
+      {isSaving && (
+        <div className="fixed bottom-4 right-8 z-50 flex items-center gap-2 px-4 py-2 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 rounded-lg shadow-lg">
+          <ArrowPathIcon className="size-4 animate-spin" />
+          <span className="text-sm font-medium">저장중...</span>
+        </div>
       )}
-    </Page>
+
+      <Page
+        title="청휘석 플래너 (β)"
+        description="현재 보유 재화, 각종 수급 계획을 바탕으로 관심 학생 모집 시점의 재화 수량을 예상해보세요"
+        links={[
+          {
+            Icon: CalendarIcon,
+            title: "미래시",
+            description: "관심 학생의 모집 일정을 확인할 수 있어요",
+            to: "/futures",
+          },
+        ]}
+        panels={[
+          {
+            title: "재화 수급 계획",
+            Icon: PlusIcon,
+            description: "획득 일정과 수량을 입력해주세요",
+            disabled: !signedIn,
+            children: <PyroxenePlannerInputPanel
+              onSaveBuy={(quantity, date) => handleSaveBuy(quantity, date)}
+              onSavePackage={(startDate, packageType) => handleSavePackage(startDate, packageType)}
+              onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
+              onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
+            />,
+          },
+          {
+            title: "플래너 설정",
+            Icon: ChartBarIcon,
+            description: "계산 조건을 선택해주세요",
+            foldable: signedIn,
+            children: <PyroxenePlannerOptionsPanel options={options} onOptionsChange={(newOptions) => {
+              setOptions(newOptions);
+              fetcher.submit(
+                { calcOptions: newOptions },
+                { method: "POST", encType: "application/json" },
+              );
+            }} />,
+          },
+        ]}
+      >
+        {signedIn ? (
+          <PyroxeneSchedule
+            initialDate={initialDate}
+            initialResources={initialResources}
+            eventDataMap={eventDataMap}
+            scheduleItems={scheduleItems}
+            options={options}
+            onPickupComplete={(eventUid, resources) => handleSaveOwnedResources(eventUid, resources)}
+            onDeletePickupComplete={(eventUid) => handleDeletePickupComplete(eventUid)}
+            onDeleteItem={(itemUid) => handleDeleteItem(itemUid)}
+            onUpdateEventData={handleUpdateEventData}
+          />
+        ) : (
+          <ErrorPage Icon={LockClosedIcon} message="로그인 후 이용할 수 있어요" showButtons={false} />
+        )}
+      </Page>
+    </>
   )
 }

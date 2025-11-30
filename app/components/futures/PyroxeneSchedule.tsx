@@ -152,18 +152,13 @@ type TimelineEventProps = {
 };
 
 function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, expectedTrials, pickupChance, onDeletePickupComplete, onPickupComplete, onUpdateEventData }: TimelineEventProps) {
-  const [showCompleteAction, setShowCompleteAction] = useState(false);
-  const [showExpectedTrialsAction, setShowExpectedTrialsAction] = useState(false);
-  const [expectedTrialsValue, setExpectedTrialsValue] = useState<number | null>(expectedTrials);
-  
-  useEffect(() => {
-    setExpectedTrialsValue(expectedTrials);
-  }, [expectedTrials]);
-
   if (!event) {
     return null;
   }
 
+  const [showCompleteAction, setShowCompleteAction] = useState(false);
+  const [showExpectedTrialsAction, setShowExpectedTrialsAction] = useState(false);
+  const [expectedTrialsInputValue, setExpectedTrialsInputValue] = useState<number>(expectedTrials ?? 0);
   const actions: ActionCardAction[] = [];
   if (completed) {
     actions.push({
@@ -179,22 +174,14 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
     });
   }
 
-  // Add action to set expected trials
-  if (!completed) {
-    actions.push({
-      text: "모집 목표 횟수 설정",
-      onClick: () => setShowExpectedTrialsAction((prev) => !prev),
-    });
-  }
-
   return (
     <div className="relative">
       <ActionCard actions={actions}>
-        <div>
-          <p className="font-semibold text-lg">{event.name}</p>
-          <p className="mb-2 text-xs text-neutral-500">
+        <div className="mb-2">
+          <p className="mb-1 text-xs text-neutral-500">
             {dayjs(event.since).format("YYYY-MM-DD")} ~ {dayjs(event.until).format("YYYY-MM-DD")}
           </p>
+          <MultilineText texts={event.name.split("\n")} className="font-semibold text-lg" />
         </div>
         <div className="flex-1">
           <StudentCards
@@ -203,32 +190,98 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
           />
         </div>
         {!completed && (
-          <div className="my-2">
-            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집 목표 횟수</p>
-            <p className="mb-3 text-sm text-neutral-500 dark:text-neutral-400">{expectedTrials ? `총 ${expectedTrials}회` : pickupChance === "ceil" ? "★3 학생 당 200회(천장)" : "★3 학생 당 140회(평균)"}</p>
-            <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집 후 남는 재화</p>
-          </div>
-        )}
-
-        {completed ? (
-          <p className="mt-4 text-center text-neutral-500 text-sm">모집 완료</p>
-        ) : (
-          <div className="w-full bg-white dark:bg-black rounded-lg p-3">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              <div className="flex items-center gap-2">
-                <ResourceCard resourceType={ResourceTypeEnum.Currency} itemUid="2" />
-                <p>{remainingResourceValue(accumulatedResources.pyroxene, resourceDelta.pyroxene)}</p>
+          <div className="my-4 space-y-4">
+            <div className="relative flex items-end gap-x-2">
+              <div className="flex-1">
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1">모집 목표 횟수</p>
+                <p className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
+                  {expectedTrials !== null ? `총 ${expectedTrials}회` : pickupChance === "ceil" ? "★3 학생 당 200회(천장)" : "★3 학생 당 140회(평균)"}
+                </p>
               </div>
-              <div className="flex items-center gap-2">
-                <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6999" />
-                <p>{remainingResourceValue(accumulatedResources.tenTimeTicket, resourceDelta.tenTimeTicket)}</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6998" />
-                <p>{remainingResourceValue(accumulatedResources.oneTimeTicket, resourceDelta.oneTimeTicket)}</p>
+              {expectedTrials !== null && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpectedTrialsInputValue(0);
+                    onUpdateEventData(event.uid, { expectedTrials: null });
+                  }}
+                  className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-md transition whitespace-nowrap"
+                >
+                  초기화
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowExpectedTrialsAction((prev) => !prev)}
+                className="px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md transition whitespace-nowrap"
+              >
+                {showExpectedTrialsAction ? "변경 취소" : "목표 변경"}
+              </button>
+              <Transition
+                show={showExpectedTrialsAction}
+                as="div"
+                enter="transition duration-200 ease-out"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="transition duration-100 ease-in"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
+                className="absolute top-full right-0 mt-2 z-10"
+              >
+                <div className="bg-white/90 dark:bg-black/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-4 min-w-[280px]">
+                  <p className="mb-2 text-sm text-neutral-500">이 이벤트의 목표 모집 횟수를 입력해주세요</p>
+                  <div className="mb-4">
+                    <NumberInput
+                      defaultValue={expectedTrialsInputValue ?? 0}
+                      onChange={(value) => setExpectedTrialsInputValue(value)}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      className="px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition"
+                      onClick={() => setShowExpectedTrialsAction(false)}
+                    >
+                      취소
+                    </button>
+                    <button
+                      type="button"
+                      className="px-4 py-2 text-sm text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+                      onClick={() => {
+                        onUpdateEventData(event.uid, { expectedTrials: expectedTrialsInputValue });
+                        setShowExpectedTrialsAction(false);
+                      }}
+                    >
+                      저장
+                    </button>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-2">모집 후 남는 재화</p>
+              <div className="w-full bg-neutral-50 dark:bg-neutral-900/50 rounded-lg p-3 border border-neutral-200 dark:border-neutral-700">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="flex items-center gap-2">
+                    <ResourceCard resourceType={ResourceTypeEnum.Currency} itemUid="2" />
+                    <p>{remainingResourceValue(accumulatedResources.pyroxene, resourceDelta.pyroxene)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6999" />
+                    <p>{remainingResourceValue(accumulatedResources.tenTimeTicket, resourceDelta.tenTimeTicket)}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6998" />
+                    <p>{remainingResourceValue(accumulatedResources.oneTimeTicket, resourceDelta.oneTimeTicket)}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+        )}
+
+        {completed && (
+          <p className="mt-4 text-center text-neutral-500 text-sm">모집 완료</p>
         )}
       </ActionCard>
 
@@ -251,61 +304,6 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
               setShowCompleteAction(false);
             }}
           />
-        </div>
-      </Transition>
-
-      <Transition
-        show={showExpectedTrialsAction}
-        as="div"
-        enter="transition duration-200 ease-out"
-        enterFrom="opacity-0 scale-95"
-        enterTo="opacity-100 scale-100"
-        leave="transition duration-100 ease-in"
-        leaveFrom="opacity-100 scale-100"
-        leaveTo="opacity-0 scale-95"
-        className="absolute top-full right-0 mt-2 z-10"
-      >
-        <div className="bg-white/90 dark:bg-black/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-4">
-          <p className="mb-2 text-sm text-neutral-500">이 이벤트의 목표 모집 횟수를 입력해주세요</p>
-          <div className="mb-4">
-            <NumberInput
-              value={expectedTrialsValue ?? undefined}
-              onChange={(value) => setExpectedTrialsValue(value)}
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              className="px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition"
-              onClick={() => {
-                setExpectedTrialsValue(null);
-                onUpdateEventData(event.uid, { expectedTrials: null });
-                setShowExpectedTrialsAction(false);
-              }}
-            >
-              초기화
-            </button>
-            <button
-              type="button"
-              className="px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition"
-              onClick={() => {
-                setExpectedTrialsValue(expectedTrials);
-                setShowExpectedTrialsAction(false);
-              }}
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              className="px-4 py-2 text-sm text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
-              onClick={() => {
-                onUpdateEventData(event.uid, { expectedTrials: expectedTrialsValue });
-                setShowExpectedTrialsAction(false);
-              }}
-            >
-              저장
-            </button>
-          </div>
         </div>
       </Transition>
     </div>
@@ -591,18 +589,23 @@ function buildTimeline(
   let currentResources: PickupResources = initialResources;
   timelineDeltas.sort((a, b) => a.date.diff(b.date)).forEach((delta) => {
     let resourceDelta = delta.resourceDelta;
-    if (!resourceDelta && delta.pickupTrial && delta.pickupTrial > 0) {
-      resourceDelta = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
-      let remainingTrial = delta.pickupTrial;
-      if (remainingTrial > 10) {
-        resourceDelta.tenTimeTicket = -1 * Math.min(Math.floor(remainingTrial / 10), currentResources.tenTimeTicket);
-        remainingTrial += resourceDelta.tenTimeTicket * 10;
+    if (!resourceDelta && delta.pickupTrial !== undefined) {
+      if (delta.pickupTrial > 0) {
+        resourceDelta = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
+        let remainingTrial = delta.pickupTrial;
+        if (remainingTrial > 10) {
+          resourceDelta.tenTimeTicket = -1 * Math.min(Math.floor(remainingTrial / 10), currentResources.tenTimeTicket);
+          remainingTrial += resourceDelta.tenTimeTicket * 10;
+        }
+        if (remainingTrial > 1) {
+          resourceDelta.oneTimeTicket = -1 * Math.min(remainingTrial, currentResources.oneTimeTicket);
+          remainingTrial += resourceDelta.oneTimeTicket;
+        }
+        resourceDelta.pyroxene = -1 * remainingTrial * 120;
+      } else if (delta.pickupTrial === 0) {
+        // When expectedTrials is 0, still show the event with zero resource consumption
+        resourceDelta = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
       }
-      if (remainingTrial > 1) {
-        resourceDelta.oneTimeTicket = -1 * Math.min(remainingTrial, currentResources.oneTimeTicket);
-        remainingTrial += resourceDelta.oneTimeTicket;
-      }
-      resourceDelta.pyroxene = -1 * remainingTrial * 120;
     }
 
     if (!resourceDelta) {
