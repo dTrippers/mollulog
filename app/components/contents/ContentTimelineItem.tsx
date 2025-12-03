@@ -33,6 +33,7 @@ export type ContentTimelineItemProps = {
     sensei: {
       username: string;
       profileStudentId: string | null;
+      me: boolean;
     };
     subcomments?: {
       uid: string;
@@ -42,6 +43,7 @@ export type ContentTimelineItemProps = {
       sensei: {
         username: string;
         profileStudentId: string | null;
+        me: boolean;
       };
     }[];
   }[];
@@ -245,7 +247,7 @@ export function ContentTimelineItem({
           />
 
           {commentEditing && (
-            <BottomSheet Icon={ChatBubbleOvalLeftEllipsisIcon} title="이벤트 댓글" onClose={() => setCommentEditing(false)}>
+            <BottomSheet Icon={ChatBubbleOvalLeftEllipsisIcon} title="이벤트 의견" onClose={() => setCommentEditing(false)}>
               <ContentCommentEditor
                 comments={allComments ?? []}
                 onCreateComment={onCommentCreate}

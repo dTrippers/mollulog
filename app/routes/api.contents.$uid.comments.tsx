@@ -1,8 +1,6 @@
 import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { getContentComments, createComment, createSubcomment, updateComment, deleteComment, contentComments } from "~/models/content";
+import { createComment, createSubcomment, updateComment, deleteComment, getNestedContentComments, getCommentIdByUid, nestComments, getContentComments } from "~/models/content";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const contentUid = params.uid;
@@ -12,40 +10,7 @@ export const loader = async ({ request, params, context }: LoaderFunctionArgs) =
 
   const env = context.cloudflare.env;
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
-  const comments = await getContentComments(env, contentUid, currentUser?.id);
-  
-  // Separate top-level comments and subcomments
-  const topLevelComments = comments.filter(c => !c.parentCommentId);
-  const subcomments = comments.filter(c => c.parentCommentId);
-  
-  // Build nested structure - match subcomments to parents by parent's database ID
-  const nestedComments = topLevelComments.map(comment => {
-    const commentSubcomments = subcomments.filter(sc => sc.parentCommentId === comment.id);
-    return {
-      uid: comment.uid,
-      body: comment.body,
-      visibility: comment.visibility,
-      createdAt: comment.createdAt,
-      sensei: {
-        me: currentUser?.username === comment.sensei.username,
-        username: comment.sensei.username,
-        profileStudentId: comment.sensei.profileStudentId,
-      },
-      subcomments: commentSubcomments.map(sc => ({
-        uid: sc.uid,
-        body: sc.body,
-        visibility: sc.visibility,
-        createdAt: sc.createdAt,
-        sensei: {
-          me: currentUser?.username === sc.sensei.username,
-          username: sc.sensei.username,
-          profileStudentId: sc.sensei.profileStudentId,
-        },
-      })),
-    };
-  });
-  
-  return nestedComments;
+  return nestComments(await getContentComments(env, contentUid, currentUser?.id), currentUser);
 };
 
 export type ActionData = {
@@ -69,7 +34,6 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   }
 
   const actionData = await request.json<ActionData>();
-  
   if (actionData.action === "create") {
     if (!actionData.body) {
       throw new Response("Body is required", { status: 400 });
@@ -79,18 +43,12 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     if (!actionData.body || !actionData.parentCommentId) {
       throw new Response("Body and parentCommentId are required", { status: 400 });
     }
-    // Get parent comment ID from UID
-    const db = drizzle(env.DB);
-    const parent = await db.select({ id: contentComments.id })
-      .from(contentComments)
-      .where(eq(contentComments.uid, actionData.parentCommentId))
-      .get();
-    
-    if (!parent) {
+
+    const parentId = await getCommentIdByUid(env, actionData.parentCommentId);
+    if (!parentId) {
       throw new Response("Parent comment not found", { status: 404 });
     }
-    
-    await createSubcomment(env, currentUser.id, contentUid, parent.id, actionData.body, actionData.visibility ?? "private");
+    await createSubcomment(env, currentUser.id, contentUid, parentId, actionData.body, actionData.visibility ?? "private");
   } else if (actionData.action === "update") {
     if (!actionData.commentUid || !actionData.body) {
       throw new Response("CommentUid and body are required", { status: 400 });
@@ -104,7 +62,8 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   } else {
     throw new Response("Invalid action", { status: 400 });
   }
-  
-  return {};
+
+  // Return updated comments
+  return getNestedContentComments(env, contentUid, currentUser);
 };
 

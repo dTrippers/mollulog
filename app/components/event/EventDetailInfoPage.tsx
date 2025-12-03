@@ -1,6 +1,6 @@
 import { ClockIcon, ExclamationTriangleIcon, StarIcon, XCircleIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useFetcher } from "react-router";
 import type { PickupType, AttackType, DefenseType, Role, EventType } from "~/models/content.d";
 import EventPickup from "./EventPickup";
@@ -220,9 +220,35 @@ type EventCommentProps = {
   eventUid: string;
 };
 
-function EventComment({ allComments, me, eventUid }: EventCommentProps) {
+function EventComment({ allComments: initialComments, me, eventUid }: EventCommentProps) {
+  const [allComments, setAllComments] = useState(initialComments);
+  const [hasPendingUpdate, setHasPendingUpdate] = useState(false);
+  const justUpdatedRef = useRef(false);
+
   const fetcher = useFetcher();
-  const submit = (data: CommentActionData) => fetcher.submit(data, { action: `/api/contents/${eventUid}/comments`, method: "post", encType: "application/json" });
+  const submit = (data: CommentActionData) => {
+    setHasPendingUpdate(true);
+    justUpdatedRef.current = false;
+    fetcher.submit(data, { action: `/api/contents/${eventUid}/comments`, method: "post", encType: "application/json" });
+  };
+
+  // Update comments state when action completes and returns updated comments
+  useEffect(() => {
+    if ((fetcher.state === "loading" || fetcher.state === "idle") && hasPendingUpdate && fetcher.data && Array.isArray(fetcher.data)) {
+      setAllComments(fetcher.data);
+      justUpdatedRef.current = true;
+      setHasPendingUpdate(false);
+    }
+  }, [fetcher.state, fetcher.data, hasPendingUpdate]);
+
+  // Sync with initial comments when they change (but not if we just updated from action)
+  useEffect(() => {
+    if (!hasPendingUpdate && !justUpdatedRef.current) {
+      setAllComments(initialComments);
+    }
+    // Reset the flag after checking
+    justUpdatedRef.current = false;
+  }, [initialComments, hasPendingUpdate]);
 
   return (
     <>

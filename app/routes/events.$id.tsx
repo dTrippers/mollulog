@@ -97,11 +97,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const savedShopState = currentUser ? await getEventShopState(env, currentUser.id, eventUid) : null;
 
   const allComments = await getContentComments(env, eventUid, currentUser?.id);
-  
+
   // Separate top-level comments and subcomments
   const topLevelComments = allComments.filter(c => !c.parentCommentId);
   const subcomments = allComments.filter(c => c.parentCommentId);
-  
+
   // Build nested structure
   const nestedComments = topLevelComments.map(comment => {
     const commentSubcomments = subcomments.filter(sc => sc.parentCommentId === comment.id);

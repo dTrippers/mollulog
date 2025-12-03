@@ -29,179 +29,7 @@ type ContentCommentEditorProps = {
   isSubmitting?: boolean;
 };
 
-type VisibilityToggleButtonProps = {
-  visibility: "private" | "public";
-  onToggle: () => void;
-  isSubmitting: boolean;
-};
-
-function VisibilityToggleButton({ visibility, onToggle, isSubmitting }: VisibilityToggleButtonProps) {
-  return (
-    <button
-      type="button"
-      className={sanitizeClassName(`
-        flex items-center gap-1 px-2 py-1.5 rounded-lg transition text-sm border shrink-0
-        ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700"}
-        ${visibility === "public" 
-          ? "text-blue-500 dark:text-blue-400 border-blue-300 dark:border-blue-600" 
-          : "text-neutral-500 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700"
-        }
-      `)}
-      onClick={onToggle}
-      disabled={isSubmitting}
-    >
-      {visibility === "private" ? <LockClosedIcon className="size-4 shrink-0" /> : <LockOpenIcon className="size-4 shrink-0" />}
-      <span className="hidden sm:inline">{visibility === "private" ? "나만 보기" : "전체 공개"}</span>
-    </button>
-  );
-}
-
-type SubmitButtonProps = {
-  onSubmit: () => void;
-  isSubmitting: boolean;
-  disabled: boolean;
-};
-
-function SubmitButton({ onSubmit, isSubmitting, disabled }: SubmitButtonProps) {
-  return (
-    <button
-      type="button"
-      className={sanitizeClassName(`
-        p-2 rounded-lg transition
-        ${disabled || isSubmitting
-          ? "opacity-50 cursor-not-allowed bg-neutral-400 dark:bg-neutral-500"
-          : "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 cursor-pointer"
-        }
-      `)}
-      onClick={onSubmit}
-      disabled={disabled}
-    >
-      <ArrowUpIcon className="size-4 text-white" />
-    </button>
-  );
-}
-
-type CommentFormProps = {
-  body: string;
-  onBodyChange: (value: string) => void;
-  visibility: "private" | "public";
-  onVisibilityChange: (visibility: "private" | "public") => void;
-  onSubmit: () => void;
-  isSubmitting: boolean;
-  placeholder: string;
-};
-
-function CommentForm({ body, onBodyChange, visibility, onVisibilityChange, onSubmit, isSubmitting, placeholder }: CommentFormProps) {
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !isSubmitting && body.trim()) {
-      e.preventDefault();
-      onSubmit();
-    }
-  };
-
-  return (
-    <div className="pl-4 pr-2 py-1 border border-neutral-200 dark:border-neutral-700 text-sm rounded-xl bg-white dark:bg-neutral-800">
-      <div className="flex items-center gap-2 min-w-0">
-        <input
-          className="flex-1 min-w-0 bg-transparent text-sm xl:text-base text-neutral-700 dark:text-neutral-300 focus:outline-none"
-          placeholder={placeholder}
-          value={body}
-          onChange={(e) => onBodyChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isSubmitting}
-        />
-        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          <VisibilityToggleButton
-            visibility={visibility}
-            onToggle={() => onVisibilityChange(visibility === "private" ? "public" : "private")}
-            isSubmitting={isSubmitting}
-          />
-          <SubmitButton
-            onSubmit={onSubmit}
-            isSubmitting={isSubmitting}
-            disabled={isSubmitting || !body.trim()}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-type CommentDisplayProps = {
-  comment: CommentData;
-  signedIn: boolean;
-  isSubmitting: boolean;
-  isEditing: boolean;
-  isReplying: boolean;
-  onReply?: () => void;
-  onEdit: () => void;
-  onDelete: () => void;
-  onUpdateComment?: (commentUid: string, body: string, visibility: "private" | "public") => void;
-  onDeleteComment?: (commentUid: string) => void;
-  onCancelEdit: () => void;
-  onCancelReply?: () => void;
-};
-
-function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying, onReply, onEdit, onDelete, onUpdateComment, onDeleteComment, onCancelEdit, onCancelReply }: CommentDisplayProps) {
-  const isSubcomment = (onReply === undefined);
-  const showActions = comment.sensei.me && onUpdateComment && onDeleteComment;
-  return (
-    <div className="flex items-start gap-x-2">
-      <div className="flex-1">
-        <CommentComponent
-          body={comment.body}
-          visibility={comment.visibility}
-          createdAt={comment.createdAt}
-          sensei={comment.sensei}
-        />
-      </div>
-      <div className={`flex gap-x-1 shrink-0 ${!isSubcomment ? "text-neutral-500 dark:text-neutral-400" : ""}`}>
-        {signedIn && !isSubcomment && (
-          <button
-            className="p-1 rounded transition cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"
-            onClick={isReplying ? onCancelReply : onReply}
-            disabled={isSubmitting}
-          >
-            {isReplying ? <XMarkIcon className="size-4" /> : <ArrowUturnLeftIcon className="size-4" />}
-          </button>
-        )}
-        {showActions && (
-          <>
-            {isEditing ? (
-              <button
-                className={`p-1 rounded transition ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}`}
-                onClick={onCancelEdit}
-                disabled={isSubmitting}
-              >
-                <XMarkIcon className="size-4" />
-              </button>
-            ) : (
-              <button
-                className = {`p-1 rounded transition ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}`}
-                onClick={onEdit}
-                disabled={isSubmitting}
-              >
-                <PencilSquareIcon className={`size-4 ${isSubcomment ? "text-neutral-500 dark:text-neutral-400" : ""}`} />
-              </button>
-            )}
-            <button
-              className={sanitizeClassName(`
-                p-1 rounded transition
-                ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}
-              `)}
-              onClick={onDelete}
-              disabled={isSubmitting}
-            >
-              <TrashIcon className="size-4 text-neutral-500 dark:text-neutral-400" />
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export default function ContentCommentEditor({ comments,  signedIn,  placeholder,  onCreateComment, onCreateSubcomment, onUpdateComment, onDeleteComment, isSubmitting = false }: ContentCommentEditorProps) {
+export default function ContentCommentEditor({ comments, signedIn, placeholder, onCreateComment, onCreateSubcomment, onUpdateComment, onDeleteComment, isSubmitting = false }: ContentCommentEditorProps) {
   const { showSignIn } = useSignIn();
   const [newCommentBody, setNewCommentBody] = useState<string>("");
   const [newCommentVisibility, setNewCommentVisibility] = useState<"private" | "public">("private");
@@ -265,11 +93,27 @@ export default function ContentCommentEditor({ comments,  signedIn,  placeholder
   return (
     <>
       <div className="flex-1 overflow-y-auto no-scrollbar">
-        <div className="space-y-1 mb-4">
+        <div className="space-y-1 -mt-3 mb-4">
           {comments.length > 0 ?
             comments.map((comment) => (
-              <div key={comment.uid} className="space-y-1">
-                {editingComment === comment.uid ? (
+              <div key={comment.uid} className="mb-3">
+                <div className={editingComment === comment.uid ? "opacity-50" : ""}>
+                  <CommentDisplay
+                    comment={comment}
+                    signedIn={signedIn}
+                    isSubmitting={isSubmitting}
+                    isEditing={editingComment === comment.uid}
+                    isReplying={replyingTo === comment.uid}
+                    onReply={() => setReplyingTo(comment.uid)}
+                    onEdit={() => handleStartEdit(comment)}
+                    onDelete={() => handleDeleteComment(comment.uid)}
+                    onUpdateComment={onUpdateComment}
+                    onDeleteComment={onDeleteComment}
+                    onCancelEdit={handleCancelEdit}
+                    onCancelReply={handleCancelReply}
+                  />
+                </div>
+                {editingComment === comment.uid && (
                   <CommentForm
                     body={editBody}
                     onBodyChange={setEditBody}
@@ -279,71 +123,53 @@ export default function ContentCommentEditor({ comments,  signedIn,  placeholder
                     isSubmitting={isSubmitting}
                     placeholder={placeholder ?? "의견을 남겨보세요"}
                   />
-                ) : (
-                  <>
-                    <CommentDisplay
-                      comment={comment}
-                      signedIn={signedIn}
+                )}
+                {signedIn && (replyingTo === comment.uid) && (
+                  <div className="my-2 ml-2">
+                    <CommentForm
+                      body={replyBody}
+                      onBodyChange={setReplyBody}
+                      visibility={replyVisibility}
+                      onVisibilityChange={setReplyVisibility}
+                      onSubmit={() => handleCreateSubcomment(comment.uid)}
                       isSubmitting={isSubmitting}
-                      isEditing={editingComment === comment.uid}
-                      isReplying={replyingTo === comment.uid}
-                      onReply={() => setReplyingTo(comment.uid)}
-                      onEdit={() => handleStartEdit(comment)}
-                      onDelete={() => handleDeleteComment(comment.uid)}
-                      onUpdateComment={onUpdateComment}
-                      onDeleteComment={onDeleteComment}
-                      onCancelEdit={handleCancelEdit}
-                      onCancelReply={handleCancelReply}
+                      placeholder="답글을 남겨보세요"
                     />
-                    {signedIn && (
-                      <div className="ml-4 mt-2">
-                        {replyingTo === comment.uid && (
-                          <CommentForm
-                            body={replyBody}
-                            onBodyChange={setReplyBody}
-                            visibility={replyVisibility}
-                            onVisibilityChange={setReplyVisibility}
-                            onSubmit={() => handleCreateSubcomment(comment.uid)}
+                  </div>
+                )}
+                {comment.subcomments && comment.subcomments.length > 0 && (
+                  <div className="ml-2 my-1 space-y-1 border-l-2 border-neutral-200 dark:border-neutral-700 pl-4">
+                    {comment.subcomments.map((subcomment) => (
+                      <div key={subcomment.uid}>
+                        <div className={editingComment === subcomment.uid ? "opacity-50" : ""}>
+                          <CommentDisplay
+                            comment={subcomment}
+                            signedIn={signedIn}
                             isSubmitting={isSubmitting}
-                            placeholder="답글을 남겨보세요"
+                            isEditing={editingComment === subcomment.uid}
+                            isReplying={replyingTo === subcomment.uid}
+                            onEdit={() => handleStartEdit(subcomment)}
+                            onDelete={() => handleDeleteComment(subcomment.uid)}
+                            onUpdateComment={onUpdateComment}
+                            onDeleteComment={onDeleteComment}
+                            onCancelEdit={handleCancelEdit}
+                            onCancelReply={handleCancelReply}
+                          />
+                        </div>
+                        {editingComment === subcomment.uid && (
+                          <CommentForm
+                            body={editBody}
+                            onBodyChange={setEditBody}
+                            visibility={editVisibility}
+                            onVisibilityChange={setEditVisibility}
+                            onSubmit={() => handleUpdateComment(subcomment.uid)}
+                            isSubmitting={isSubmitting}
+                            placeholder="의견을 남겨보세요"
                           />
                         )}
                       </div>
-                    )}
-                    {comment.subcomments && comment.subcomments.length > 0 && (
-                      <div className="ml-4 space-y-2 border-l-2 border-neutral-200 dark:border-neutral-700 pl-4">
-                        {comment.subcomments.map((subcomment) => (
-                          <div key={subcomment.uid}>
-                            {editingComment === subcomment.uid ? (
-                              <CommentForm
-                                body={editBody}
-                                onBodyChange={setEditBody}
-                                visibility={editVisibility}
-                                onVisibilityChange={setEditVisibility}
-                                onSubmit={() => handleUpdateComment(subcomment.uid)}
-                                isSubmitting={isSubmitting}
-                                placeholder="의견을 남겨보세요"
-                              />
-                            ) : (
-                              <CommentDisplay
-                                comment={subcomment}
-                                signedIn={signedIn}
-                                isSubmitting={isSubmitting}
-                                isEditing={editingComment === subcomment.uid}
-                                isReplying={replyingTo === subcomment.uid}
-                                onEdit={() => handleStartEdit(subcomment)}
-                                onDelete={() => handleDeleteComment(subcomment.uid)}
-                                onUpdateComment={onUpdateComment}
-                                onDeleteComment={onDeleteComment}
-                                onCancelEdit={handleCancelEdit}
-                                onCancelReply={handleCancelReply}
-                              />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                    ))}
+                  </div>
                 )}
               </div>
             )) :
@@ -374,3 +200,145 @@ export default function ContentCommentEditor({ comments,  signedIn,  placeholder
   );
 }
 
+type CommentFormProps = {
+  body: string;
+  onBodyChange: (value: string) => void;
+  visibility: "private" | "public";
+  onVisibilityChange: (visibility: "private" | "public") => void;
+  onSubmit: () => void;
+  isSubmitting: boolean;
+  placeholder: string;
+};
+
+function CommentForm({ body, onBodyChange, visibility, onVisibilityChange, onSubmit, isSubmitting, placeholder }: CommentFormProps) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && !isSubmitting && body.trim()) {
+      e.preventDefault();
+      onSubmit();
+    }
+  };
+
+  return (
+    <div className="pl-4 pr-2 py-1 my-2 border border-neutral-200 dark:border-neutral-700 text-sm rounded-xl bg-white dark:bg-neutral-800">
+      <div className="flex items-center gap-2 min-w-0">
+        <input
+          className="flex-1 min-w-0 bg-transparent text-sm xl:text-base text-neutral-700 dark:text-neutral-300 focus:outline-none"
+          placeholder={placeholder}
+          value={body}
+          onChange={(e) => onBodyChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={isSubmitting}
+        />
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* Visibility Toggle Button */}
+          <button
+            type="button"
+            className={sanitizeClassName(`
+              flex items-center gap-1 px-2 py-1.5 rounded-lg transition text-sm border shrink-0
+              ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700"}
+              ${visibility === "public"
+                ? "text-blue-500 dark:text-blue-400 border-blue-300 dark:border-blue-600" 
+                : "text-neutral-500 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700"
+              }
+            `)}
+            onClick={() => onVisibilityChange(visibility === "private" ? "public" : "private")}
+            disabled={isSubmitting}
+          >
+            {visibility === "private" ? <LockClosedIcon className="size-4 shrink-0" /> : <LockOpenIcon className="size-4 shrink-0" />}
+            <span className="hidden sm:inline">{visibility === "private" ? "나만 보기" : "전체 공개"}</span>
+          </button>
+
+          {/* Submit Button */}
+          <button
+            type="button"
+            className={sanitizeClassName(`
+              p-2 rounded-lg transition
+              ${(isSubmitting || !body.trim()) ?
+                "bg-neutral-400 dark:bg-neutral-500 cursor-not-allowed" :
+                "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 cursor-pointer"
+              }
+            `)}
+            onClick={onSubmit}
+            disabled={isSubmitting || !body.trim()}
+          >
+            <ArrowUpIcon className="size-4 text-white" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type CommentDisplayProps = {
+  comment: CommentData;
+  signedIn: boolean;
+  isSubmitting: boolean;
+  isEditing: boolean;
+  isReplying: boolean;
+  onReply?: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onUpdateComment?: (commentUid: string, body: string, visibility: "private" | "public") => void;
+  onDeleteComment?: (commentUid: string) => void;
+  onCancelEdit: () => void;
+  onCancelReply?: () => void;
+};
+
+function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying, onReply, onEdit, onDelete, onUpdateComment, onDeleteComment, onCancelEdit, onCancelReply }: CommentDisplayProps) {
+  const isSubcomment = (onReply === undefined);
+  const showActions = comment.sensei.me && onUpdateComment && onDeleteComment;
+  return (
+    <div className="my-3 flex items-start gap-x-2">
+      <div className="flex-1">
+        <CommentComponent
+          body={comment.body}
+          visibility={comment.visibility}
+          createdAt={comment.createdAt}
+          sensei={comment.sensei}
+        />
+      </div>
+      <div className={`flex gap-x-1 shrink-0 ${!isSubcomment ? "text-neutral-500 dark:text-neutral-400" : ""}`}>
+        {signedIn && !isSubcomment && comment.visibility === "public" && (
+          <button
+            className="p-1 rounded transition cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            onClick={isReplying ? onCancelReply : onReply}
+            disabled={isSubmitting}
+          >
+            {isReplying ? <XMarkIcon className="size-4" /> : <ArrowUturnLeftIcon className="size-4" />}
+          </button>
+        )}
+        {showActions && (
+          <>
+            {isEditing ? (
+              <button
+                className={`p-1 rounded transition ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}`}
+                onClick={onCancelEdit}
+                disabled={isSubmitting}
+              >
+                <XMarkIcon className="size-4" />
+              </button>
+            ) : (
+              <button
+                className = {`p-1 rounded transition ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}`}
+                onClick={onEdit}
+                disabled={isSubmitting}
+              >
+                <PencilSquareIcon className={`size-4 ${isSubcomment ? "text-neutral-500 dark:text-neutral-400" : ""}`} />
+              </button>
+            )}
+            <button
+              className={sanitizeClassName(`
+                p-1 rounded transition text-neutral-500 dark:text-neutral-400 hover:text-red-500 dark:hover:text-red-400 transition-colors
+                ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}
+              `)}
+              onClick={onDelete}
+              disabled={isSubmitting}
+            >
+              <TrashIcon className="size-4" />
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
