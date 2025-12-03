@@ -333,14 +333,6 @@ function visibilityFilter(userId?: number): SQLWrapper[] {
   return filters;
 }
 
-// Legacy exports for backward compatibility during migration
-export const getUserMemos = getUserComments;
-export const getContentMemos = getContentComments;
-export const getContentsMemos = getContentsComments;
-export async function setMemo(env: Env, userId: number, contentId: string, body: string, visibility: ContentCommentVisibility = "private"): Promise<void> {
-  await createComment(env, userId, contentId, body, visibility);
-}
-
 
 /**
  * Index Contents

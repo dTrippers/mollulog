@@ -3,7 +3,7 @@ import { runQuery } from "~/lib/baql";
 import { Link, useLoaderData } from "react-router";
 import { graphql } from "~/graphql";
 import { SubTitle } from "~/components/atoms/typography";
-import { getContentsComments } from "~/models/content";
+import { getContentsComments, nestComments } from "~/models/content";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRouteSensei } from "./$username";
 import { FuturePlan } from "~/components/organisms/future";
@@ -37,6 +37,19 @@ export const meta: MetaFunction = ({ params }) => {
   ];
 };
 
+type LoaderComment = {
+  uid: string;
+  body: string;
+  visibility: "private" | "public";
+  createdAt: string;
+  sensei: {
+    me: boolean;
+    username: string;
+    profileStudentId: string | null;
+  };
+  subcomments?: LoaderComment[];
+};
+
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const truncatedNow = new Date();
   truncatedNow.setMinutes(0, 0, 0);
@@ -54,19 +67,23 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   const plannedContentIds = favoritedStudents.map(({ contentId }) => contentId);
 
   const events = data.events.nodes.filter((event) => plannedContentIds.includes(event.uid));
-  const allComments = await getContentsComments(env, plannedContentIds, currentUser?.id);
+
+  const allComments: Record<string, LoaderComment[]> = {};
+  const contentComments = await getContentsComments(env, plannedContentIds, currentUser?.id);
+  for (const contentId of plannedContentIds) {
+    allComments[contentId] = nestComments(contentComments[contentId] ?? [], currentUser);
+  }
 
   return {
     events,
     favoritedStudents,
     allComments,
     isMe: currentUser?.id === sensei.id,
-    currentUsername: currentUser?.username ?? null,
   };
 }
 
 export default function UserFutures() {
-  const { events, favoritedStudents, allComments, isMe, currentUsername } = useLoaderData<typeof loader>();
+  const { events, favoritedStudents, allComments, isMe } = useLoaderData<typeof loader>();
 
   if (events.length === 0) {
     return (
@@ -83,44 +100,12 @@ export default function UserFutures() {
     <div className="my-8">
       <SubTitle text="관심 학생 목록" />
       {events.map((event) => {
-        const eventComments = allComments[event.uid] ?? [];
-        // Separate top-level comments and subcomments
-        const topLevelComments = eventComments.filter(c => !c.parentCommentId);
-        const subcomments = eventComments.filter(c => c.parentCommentId);
-        
-        // Build nested structure
-        const nestedComments = topLevelComments.map(comment => {
-          const commentSubcomments = subcomments.filter(sc => sc.parentCommentId === comment.id);
-          return {
-            uid: comment.uid,
-            body: comment.body,
-            visibility: comment.visibility,
-            createdAt: comment.createdAt,
-            sensei: {
-              me: currentUsername === comment.sensei.username,
-              username: comment.sensei.username,
-              profileStudentId: comment.sensei.profileStudentId,
-            },
-            subcomments: commentSubcomments.map(sc => ({
-              uid: sc.uid,
-              body: sc.body,
-              visibility: sc.visibility,
-              createdAt: sc.createdAt,
-              sensei: {
-                me: currentUsername === sc.sensei.username,
-                username: sc.sensei.username,
-                profileStudentId: sc.sensei.profileStudentId,
-              },
-            })),
-          };
-        });
-        
         return (
           <FuturePlan
             key={event.uid}
             event={event}
             favoritedStudents={favoritedStudents.filter(({ contentId }) => contentId === event.uid)}
-            comments={nestedComments}
+            comments={allComments[event.uid] ?? []}
             isMe={isMe}
           />
         );

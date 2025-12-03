@@ -1,9 +1,9 @@
 import { LockClosedIcon, LockOpenIcon, ArrowUturnLeftIcon, TrashIcon, PencilSquareIcon, ArrowUpIcon, XMarkIcon, BookmarkIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
-import { Comment as CommentComponent } from "~/components/atoms/content";
 import { Callout } from "~/components/atoms/typography";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { sanitizeClassName } from "~/prophandlers";
+import CommentView from "./CommentView";
 
 type CommentData = {
   uid: string;
@@ -298,7 +298,7 @@ function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying
   return (
     <div className="my-3 flex items-start gap-x-2">
       <div className="flex-1">
-        <CommentComponent
+        <CommentView
           body={comment.body}
           visibility={comment.visibility}
           createdAt={comment.createdAt}

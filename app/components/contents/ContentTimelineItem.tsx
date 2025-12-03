@@ -110,13 +110,11 @@ function ContentTitles({ name, showLink }: { name: string, showLink: boolean }):
   )
 }
 
-const MEMO_CONTENT_TYPES = ["event", "pickup", "fes", "immortal_event", "main_story"];
-
 export function ContentTimelineItem({
   name, contentType, rerun, endless, since, until, link, confirmed, hasShopData, raidInfo, pickups,
   allComments, pinnedCommentUid, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
 }: ContentTimelineItemProps) {
-  const showComments = MEMO_CONTENT_TYPES.includes(contentType) && (pickups && pickups.length > 0);
+  const showComments = pickups && pickups.length > 0;
   const [commentEditing, setCommentEditing] = useState(false);
 
   let daysLabel = null;
