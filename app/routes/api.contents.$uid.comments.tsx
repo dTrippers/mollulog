@@ -1,6 +1,6 @@
 import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { createComment, createSubcomment, updateComment, deleteComment, getNestedContentComments, getCommentIdByUid, nestComments, getContentComments } from "~/models/content";
+import { createComment, createSubcomment, updateComment, deleteComment, getNestedContentComments, getCommentIdByUid, nestComments, getContentComments, pinComment, unpinComment } from "~/models/content";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const contentUid = params.uid;
@@ -14,7 +14,7 @@ export const loader = async ({ request, params, context }: LoaderFunctionArgs) =
 };
 
 export type ActionData = {
-  action: "create" | "createSubcomment" | "update" | "delete";
+  action: "create" | "createSubcomment" | "update" | "delete" | "pin" | "unpin";
   body?: string;
   visibility?: "private" | "public";
   parentCommentId?: string;
@@ -59,6 +59,13 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
       throw new Response("CommentUid is required", { status: 400 });
     }
     await deleteComment(env, currentUser.id, actionData.commentUid);
+  } else if (actionData.action === "pin") {
+    if (!actionData.commentUid) {
+      throw new Response("CommentUid is required", { status: 400 });
+    }
+    await pinComment(env, currentUser.id, contentUid, actionData.commentUid);
+  } else if (actionData.action === "unpin") {
+    await unpinComment(env, currentUser.id, contentUid);
   } else {
     throw new Response("Invalid action", { status: 400 });
   }

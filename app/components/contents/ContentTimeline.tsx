@@ -19,6 +19,7 @@ export type ContentTimelineProps = {
     raidInfo?: ContentTimelineItemProps["raidInfo"];
 
     allComments?: ContentTimelineItemProps["allComments"];
+    pinnedCommentUid?: ContentTimelineItemProps["pinnedCommentUid"];
   }[];
 
   favoritedStudents?: { contentUid: string, studentUid: string }[];
@@ -29,6 +30,8 @@ export type ContentTimelineProps = {
   onCommentCreateSubcomment?: (contentUid: string, parentCommentId: string, body: string, visibility: "private" | "public") => void;
   onCommentUpdate?: (contentUid: string, commentUid: string, body: string, visibility: "private" | "public") => void;
   onCommentDelete?: (contentUid: string, commentUid: string) => void;
+  onCommentPin?: (contentUid: string, commentUid: string) => void;
+  onCommentUnpin?: (contentUid: string) => void;
   isSubmittingComment?: boolean;
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void;
 };
@@ -79,7 +82,7 @@ function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup
   }));
 }
 
-export default function ContentTimeline({ contents, favoritedStudents, favoritedCounts, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onFavorite, isSubmittingComment, signedIn }: ContentTimelineProps) {
+export default function ContentTimeline({ contents, favoritedStudents, favoritedCounts, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, onFavorite, isSubmittingComment, signedIn }: ContentTimelineProps) {
   const [contentGroups, setContentGroups] = useState<ContentGroup[]>(groupContents(contents));
 
   // Update content groups when contents change
@@ -142,10 +145,13 @@ export default function ContentTimeline({ contents, favoritedStudents, favorited
                       {...content}
 
                       allComments={content.allComments}
+                      pinnedCommentUid={content.pinnedCommentUid}
                       onCommentCreate={showComments ? (body, visibility) => onCommentCreate?.(content.uid, body, visibility) : undefined}
                       onCommentCreateSubcomment={showComments ? (parentCommentId, body, visibility) => onCommentCreateSubcomment?.(content.uid, parentCommentId, body, visibility) : undefined}
                       onCommentUpdate={showComments ? (commentUid, body, visibility) => onCommentUpdate?.(content.uid, commentUid, body, visibility) : undefined}
                       onCommentDelete={showComments ? (commentUid) => onCommentDelete?.(content.uid, commentUid) : undefined}
+                      onCommentPin={showComments ? (commentUid) => onCommentPin?.(content.uid, commentUid) : undefined}
+                      onCommentUnpin={showComments ? () => onCommentUnpin?.(content.uid) : undefined}
 
                       favoritedStudents={favoritedStudents?.filter(({ contentUid }) => contentUid === content.uid).map(({ studentUid }) => studentUid)}
                       favoritedCounts={favoriteStudentIdsByContents[content.uid]}

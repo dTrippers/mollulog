@@ -12,7 +12,7 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { favoriteStudent, getFavoritedCounts, getUserFavoritedStudents, unfavoriteStudent } from "~/models/favorite-students";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getEventShopState } from "~/models/event-shop-state";
-import { getContentComments } from "~/models/content";
+import { getNestedContentComments } from "~/models/content";
 
 const eventDetailQuery = graphql(`
   query EventDetail($eventUid: String!) {
@@ -95,39 +95,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const eventRewardBonus = eventRewardBonusData?.items ?? [];
 
   const savedShopState = currentUser ? await getEventShopState(env, currentUser.id, eventUid) : null;
-
-  const allComments = await getContentComments(env, eventUid, currentUser?.id);
-
-  // Separate top-level comments and subcomments
-  const topLevelComments = allComments.filter(c => !c.parentCommentId);
-  const subcomments = allComments.filter(c => c.parentCommentId);
-
-  // Build nested structure
-  const nestedComments = topLevelComments.map(comment => {
-    const commentSubcomments = subcomments.filter(sc => sc.parentCommentId === comment.id);
-    return {
-      uid: comment.uid,
-      body: comment.body,
-      visibility: comment.visibility,
-      createdAt: comment.createdAt,
-      sensei: {
-        me: currentUser?.username === comment.sensei.username,
-        username: comment.sensei.username,
-        profileStudentId: comment.sensei.profileStudentId,
-      },
-      subcomments: commentSubcomments.map(sc => ({
-        uid: sc.uid,
-        body: sc.body,
-        visibility: sc.visibility,
-        createdAt: sc.createdAt,
-        sensei: {
-          me: currentUser?.username === sc.sensei.username,
-          username: sc.sensei.username,
-          profileStudentId: sc.sensei.profileStudentId,
-        },
-      })),
-    };
-  });
+  const nestedComments = await getNestedContentComments(env, eventUid, currentUser);
 
   return {
     event: data!.event!,

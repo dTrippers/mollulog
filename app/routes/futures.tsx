@@ -64,9 +64,19 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     }[];
   }[]> = {};
 
+  const pinnedCommentUids: Record<string, string | null> = {};
+
   contents.forEach((content) => {
     const contentComments = flatComments[content.uid] ?? [];
-    allComments[content.uid] = nestComments(contentComments, currentUser);
+    const nested = nestComments(contentComments, currentUser);
+    allComments[content.uid] = nested;
+
+    if (currentUser) {
+      const pinned = nested.find((comment) => comment.pinned);
+      pinnedCommentUids[content.uid] = pinned?.uid ?? null;
+    } else {
+      pinnedCommentUids[content.uid] = null;
+    }
   });
 
   return {
@@ -75,6 +85,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     favoritedStudents: signedIn ? await getUserFavoritedStudents(env, currentUser.id) : null,
     favoritedCounts: await getFavoritedCounts(env, allStudentUids),
     allComments,
+    pinnedCommentUids,
   };
 };
 
@@ -110,7 +121,7 @@ export default function FutureContents() {
   }, [filter, isHydrated]);
 
   const loaderData = useLoaderData<typeof loader>();
-  const { contents, allComments: initialComments, signedIn } = loaderData;
+  const { contents, allComments: initialComments, pinnedCommentUids, signedIn } = loaderData;
 
   const [favoritedStudents, setFavoritedStudents] = useState<{ contentUid: string, studentUid: string }[] | undefined>(
     loaderData.favoritedStudents?.map((f) => ({ contentUid: f.contentId, studentUid: f.studentId })) ?? undefined
@@ -216,6 +227,7 @@ export default function FutureContents() {
             since: new Date(content.since),
             until: new Date(content.until),
             allComments: allComments[content.uid] ?? [],
+            pinnedCommentUid: pinnedCommentUids[content.uid] ?? null,
           };
 
           if (content.__typename === "Event") {
@@ -251,6 +263,14 @@ export default function FutureContents() {
         onCommentDelete={(contentUid, commentUid) => {
           setPendingContentUid(contentUid);
           submitComment(contentUid, { action: "delete", commentUid });
+        }}
+        onCommentPin={(contentUid, commentUid) => {
+          setPendingContentUid(contentUid);
+          submitComment(contentUid, { action: "pin", commentUid });
+        }}
+        onCommentUnpin={(contentUid) => {
+          setPendingContentUid(contentUid);
+          submitComment(contentUid, { action: "unpin" });
         }}
         onFavorite={toggleFavorite}
         isSubmittingComment={commentFetcher.state === "submitting"}

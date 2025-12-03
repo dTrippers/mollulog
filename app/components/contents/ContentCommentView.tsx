@@ -5,6 +5,7 @@ type ContentCommentViewProps = {
     uid: string;
     body: string;
     visibility: "private" | "public";
+    pinned?: boolean;
     createdAt: string;
     sensei: {
       username: string;
@@ -21,12 +22,16 @@ type ContentCommentViewProps = {
       };
     }[];
   }[];
+  pinnedCommentUid?: string | null;
 
   onClick?: () => void;
 }
 
-export default function ContentCommentView({ comments, onClick }: ContentCommentViewProps) {
+export default function ContentCommentView({ comments, pinnedCommentUid, onClick }: ContentCommentViewProps) {
   const commentCount = comments ? comments.reduce((acc, comment) => acc + 1 + (comment.subcomments?.length ?? 0), 0) : 0;
+
+  const pinnedComment = comments?.find((comment) => comment.uid === pinnedCommentUid);
+  const displayBody = pinnedComment ? (pinnedComment.body.length > 50 ? `${pinnedComment.body.slice(0, 50)}...` : pinnedComment.body) : null;
   
   return (
     <div
@@ -35,9 +40,15 @@ export default function ContentCommentView({ comments, onClick }: ContentComment
     >
       <ChatBubbleOvalLeftEllipsisIcon className="shrink-0 size-4 text-neutral-500 dark:text-neutral-400" />
       {comments && <span className="text-neutral-500 dark:text-neutral-400">{commentCount}</span>}
-      <p className="ml-1 pl-2 border-l border-neutral-200 dark:border-neutral-700 grow text-neutral-400 dark:text-neutral-600">
-        의견을 남겨보세요
-      </p>
+      {pinnedComment ? (
+        <p className="ml-1 pl-2 border-l border-neutral-200 dark:border-neutral-700 grow text-neutral-700 dark:text-neutral-300">
+          {displayBody}
+        </p>
+      ) : (
+        <p className="ml-1 pl-2 border-l border-neutral-200 dark:border-neutral-700 grow text-neutral-400 dark:text-neutral-600">
+          의견을 남겨보세요
+        </p>
+      )}
     </div>
   );
 }

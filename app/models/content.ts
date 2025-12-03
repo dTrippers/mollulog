@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { and, eq, inArray, not, or, sql, type SQLWrapper } from "drizzle-orm";
+import { and, eq, inArray, isNull, not, or, sql, type SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { Env } from "~/env.server";
@@ -19,6 +19,7 @@ type ContentComment = {
   body: string;
   visibility: ContentCommentVisibility;
   parentCommentId?: number | null;
+  pinned: boolean;
   createdAt: string;
 };
 
@@ -39,6 +40,7 @@ export const contentComments = sqliteTable("content_comments", {
   parentCommentId: int(),
   body: text().notNull(),
   visibility: text().notNull().default("private"),
+  pinned: int().notNull().default(0),
   createdAt: text().notNull().default(sql`current_timestamp`),
   updatedAt: text().notNull().default(sql`current_timestamp`),
 });
@@ -50,6 +52,7 @@ const SELECT_USER_COMMENTS_COLUMNS = {
   body: contentComments.body,
   visibility: contentComments.visibility,
   parentCommentId: contentComments.parentCommentId,
+  pinned: contentComments.pinned,
   createdAt: contentComments.createdAt,
 };
 
@@ -94,17 +97,31 @@ export async function getContentsComments(env: Env, contentIds: string[], userId
   }, {} as Record<string, ContentCommentWithSensei[]>);
 }
 
-function toModel<T extends { visibility: string; parentCommentId: number | null; createdAt: string; id: number }>(rows: T): (T & { visibility: ContentCommentVisibility; parentCommentId?: number | null }) {
+function toModel<T extends { visibility: string; parentCommentId: number | null; pinned: number; createdAt: string; id: number }>(rows: T): (T & { visibility: ContentCommentVisibility; parentCommentId?: number | null; pinned: boolean }) {
   return { 
     ...rows, 
     visibility: rows.visibility as ContentCommentVisibility,
+    pinned: rows.pinned === 1,
   };
 }
 
 export async function createComment(env: Env, userId: number, contentId: string, body: string, visibility: ContentCommentVisibility = "private"): Promise<string> {
   const db = drizzle(env.DB);
+
+  // Check if this is the user's first comment for this content
+  const existingComment = await db.select({ id: contentComments.id })
+    .from(contentComments)
+    .where(and(
+      eq(contentComments.userId, userId),
+      eq(contentComments.contentId, contentId),
+      isNull(contentComments.parentCommentId),
+    ))
+    .limit(1)
+    .get();
+  const isFirstComment = existingComment === undefined;
+
   const uid = nanoid(8);
-  await db.insert(contentComments).values({ uid, userId, contentId, body, visibility, parentCommentId: null });
+  await db.insert(contentComments).values({ uid, userId, contentId, body, visibility, parentCommentId: null, pinned: isFirstComment ? 1 : 0 });
   return uid;
 }
 
@@ -161,10 +178,72 @@ export async function getCommentIdByUid(env: Env, commentUid: string): Promise<n
   return comment?.id ?? null;
 }
 
+export async function pinComment(env: Env, userId: number, contentId: string, commentUid: string): Promise<void> {
+  const db = drizzle(env.DB);
+
+  // First, unpin any existing pinned comment for this user/content
+  await db.update(contentComments)
+    .set({ pinned: 0, updatedAt: sql`current_timestamp` })
+    .where(and(
+      eq(contentComments.userId, userId),
+      eq(contentComments.contentId, contentId),
+      eq(contentComments.pinned, 1),
+    ));
+
+  // Then, pin the specified comment (only if it belongs to the user and is a top-level comment)
+  const comment = await db.select({ id: contentComments.id, parentCommentId: contentComments.parentCommentId })
+    .from(contentComments)
+    .where(and(
+      eq(contentComments.uid, commentUid),
+      eq(contentComments.userId, userId),
+      eq(contentComments.contentId, contentId),
+    ))
+    .get();
+
+  if (!comment) {
+    throw new Error("Comment not found or does not belong to user");
+  }
+  if (comment.parentCommentId !== null) {
+    throw new Error("Cannot pin subcomments");
+  }
+
+  await db.update(contentComments)
+    .set({ pinned: 1, updatedAt: sql`current_timestamp` })
+    .where(eq(contentComments.uid, commentUid));
+}
+
+export async function unpinComment(env: Env, userId: number, contentId: string): Promise<void> {
+  const db = drizzle(env.DB);
+  await db.update(contentComments)
+    .set({ pinned: 0, updatedAt: sql`current_timestamp` })
+    .where(and(
+      eq(contentComments.userId, userId),
+      eq(contentComments.contentId, contentId),
+      eq(contentComments.pinned, 1),
+    ));
+}
+
+export async function getPinnedComment(env: Env, contentId: string, userId: number): Promise<ContentCommentWithSensei | null> {
+  const db = drizzle(env.DB);
+  const result = await db.select(SELECT_CONTENT_COMMENTS_COLUMNS)
+    .from(contentComments)
+    .where(and(
+      eq(contentComments.contentId, contentId),
+      eq(contentComments.userId, userId),
+      eq(contentComments.pinned, 1),
+      isNull(contentComments.parentCommentId),
+    ))
+    .innerJoin(senseisTable, eq(contentComments.userId, senseisTable.id))
+    .get();
+  
+  return result ? toModel(result) : null;
+}
+
 export type NestedComment = {
   uid: string;
   body: string;
   visibility: "private" | "public";
+  pinned: boolean;
   createdAt: string;
   sensei: {
     me: boolean;
@@ -188,6 +267,7 @@ export async function getNestedContentComments(env: Env, contentUid: string, cur
       uid: comment.uid,
       body: comment.body,
       visibility: comment.visibility,
+      pinned: comment.pinned,
       createdAt: comment.createdAt,
       sensei: {
         me: currentUser?.username === comment.sensei.username,
@@ -198,6 +278,7 @@ export async function getNestedContentComments(env: Env, contentUid: string, cur
         uid: subComment.uid,
         body: subComment.body,
         visibility: subComment.visibility,
+        pinned: false,
         createdAt: subComment.createdAt,
         sensei: {
           me: currentUser?.username === subComment.sensei.username,
@@ -220,6 +301,7 @@ export function nestComments(flatComments: ContentCommentWithSensei[], currentUs
       uid: comment.uid,
       body: comment.body,
       visibility: comment.visibility,
+      pinned: comment.pinned,
       createdAt: comment.createdAt,
       sensei: {
         me: currentUser?.username === comment.sensei.username,
@@ -230,6 +312,7 @@ export function nestComments(flatComments: ContentCommentWithSensei[], currentUs
         uid: subComment.uid,
         body: subComment.body,
         visibility: subComment.visibility,
+        pinned: false,
         createdAt: subComment.createdAt,
         sensei: {
           me: currentUser?.username === subComment.sensei.username,

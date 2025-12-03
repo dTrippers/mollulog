@@ -29,6 +29,7 @@ export type ContentTimelineItemProps = {
     uid: string;
     body: string;
     visibility: "private" | "public";
+    pinned?: boolean;
     createdAt: string;
     sensei: {
       username: string;
@@ -47,10 +48,14 @@ export type ContentTimelineItemProps = {
       };
     }[];
   }[];
+
+  pinnedCommentUid?: string | null;
   onCommentCreate?: (body: string, visibility: "private" | "public") => void;
   onCommentCreateSubcomment?: (parentCommentId: string, body: string, visibility: "private" | "public") => void;
   onCommentUpdate?: (commentUid: string, body: string, visibility: "private" | "public") => void;
   onCommentDelete?: (commentUid: string) => void;
+  onCommentPin?: (commentUid: string) => void;
+  onCommentUnpin?: () => void;
   isSubmittingComment?: boolean;
 
   favoritedStudents?: string[];
@@ -109,7 +114,7 @@ const MEMO_CONTENT_TYPES = ["event", "pickup", "fes", "immortal_event", "main_st
 
 export function ContentTimelineItem({
   name, contentType, rerun, endless, since, until, link, confirmed, hasShopData, raidInfo, pickups,
-  allComments, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
+  allComments, pinnedCommentUid, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
 }: ContentTimelineItemProps) {
   const showComments = MEMO_CONTENT_TYPES.includes(contentType) && (pickups && pickups.length > 0);
   const [commentEditing, setCommentEditing] = useState(false);
@@ -243,6 +248,7 @@ export function ContentTimelineItem({
         <>
           <ContentCommentView
             comments={allComments}
+            pinnedCommentUid={pinnedCommentUid ?? undefined}
             onClick={() => setCommentEditing(true)}
           />
 
@@ -254,6 +260,8 @@ export function ContentTimelineItem({
                 onCreateSubcomment={onCommentCreateSubcomment ?? (() => {})}
                 onUpdateComment={onCommentUpdate}
                 onDeleteComment={onCommentDelete}
+                onPinComment={onCommentPin}
+                onUnpinComment={onCommentUnpin}
                 isSubmitting={isSubmittingComment}
                 signedIn={signedIn}
               />

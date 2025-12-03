@@ -1,4 +1,4 @@
-import { LockClosedIcon, LockOpenIcon, ArrowUturnLeftIcon, TrashIcon, PencilSquareIcon, ArrowUpIcon, XMarkIcon } from "@heroicons/react/16/solid";
+import { LockClosedIcon, LockOpenIcon, ArrowUturnLeftIcon, TrashIcon, PencilSquareIcon, ArrowUpIcon, XMarkIcon, BookmarkIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
 import { Comment as CommentComponent } from "~/components/atoms/content";
 import { Callout } from "~/components/atoms/typography";
@@ -9,6 +9,7 @@ type CommentData = {
   uid: string;
   body: string;
   visibility: "private" | "public";
+  pinned?: boolean;
   createdAt: string;
   sensei: {
     me: boolean;
@@ -26,10 +27,12 @@ type ContentCommentEditorProps = {
   onCreateSubcomment: (parentCommentId: string, body: string, visibility: "private" | "public") => void;
   onUpdateComment?: (commentUid: string, body: string, visibility: "private" | "public") => void;
   onDeleteComment?: (commentUid: string) => void;
+  onPinComment?: (commentUid: string) => void;
+  onUnpinComment?: () => void;
   isSubmitting?: boolean;
 };
 
-export default function ContentCommentEditor({ comments, signedIn, placeholder, onCreateComment, onCreateSubcomment, onUpdateComment, onDeleteComment, isSubmitting = false }: ContentCommentEditorProps) {
+export default function ContentCommentEditor({ comments, signedIn, placeholder, onCreateComment, onCreateSubcomment, onUpdateComment, onDeleteComment, onPinComment, onUnpinComment, isSubmitting = false }: ContentCommentEditorProps) {
   const { showSignIn } = useSignIn();
   const [newCommentBody, setNewCommentBody] = useState<string>("");
   const [newCommentVisibility, setNewCommentVisibility] = useState<"private" | "public">("private");
@@ -107,6 +110,8 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
                     onReply={() => setReplyingTo(comment.uid)}
                     onEdit={() => handleStartEdit(comment)}
                     onDelete={() => handleDeleteComment(comment.uid)}
+                    onPin={onPinComment ? () => onPinComment(comment.uid) : undefined}
+                    onUnpin={onUnpinComment}
                     onUpdateComment={onUpdateComment}
                     onDeleteComment={onDeleteComment}
                     onCancelEdit={handleCancelEdit}
@@ -278,15 +283,18 @@ type CommentDisplayProps = {
   onReply?: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onPin?: () => void;
+  onUnpin?: () => void;
   onUpdateComment?: (commentUid: string, body: string, visibility: "private" | "public") => void;
   onDeleteComment?: (commentUid: string) => void;
   onCancelEdit: () => void;
   onCancelReply?: () => void;
 };
 
-function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying, onReply, onEdit, onDelete, onUpdateComment, onDeleteComment, onCancelEdit, onCancelReply }: CommentDisplayProps) {
+function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying, onReply, onEdit, onDelete, onPin, onUnpin, onUpdateComment, onDeleteComment, onCancelEdit, onCancelReply }: CommentDisplayProps) {
   const isSubcomment = (onReply === undefined);
   const showActions = comment.sensei.me && onUpdateComment && onDeleteComment;
+  const showPinActions = !isSubcomment && comment.sensei.me && (onPin || onUnpin);
   return (
     <div className="my-3 flex items-start gap-x-2">
       <div className="flex-1">
@@ -305,6 +313,20 @@ function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying
             disabled={isSubmitting}
           >
             {isReplying ? <XMarkIcon className="size-4" /> : <ArrowUturnLeftIcon className="size-4" />}
+          </button>
+        )}
+        {showPinActions && (
+          <button
+            className={sanitizeClassName(`
+              p-1 rounded transition
+              ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}
+              ${comment.pinned ? "text-blue-500 dark:text-blue-400" : "text-neutral-500 dark:text-neutral-400"}
+            `)}
+            onClick={comment.pinned ? onUnpin : onPin}
+            disabled={isSubmitting}
+            title={comment.pinned ? "고정 해제" : "고정하기"}
+          >
+            <BookmarkIcon className="size-4" />
           </button>
         )}
         {showActions && (

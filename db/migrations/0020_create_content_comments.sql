@@ -6,6 +6,7 @@ create table if not exists content_comments (
   parentCommentId integer,
   body text not null,
   visibility text not null default 'private',
+  pinned integer not null default 0,
   createdAt timestamp not null default current_timestamp,
   updatedAt timestamp not null default current_timestamp,
   foreign key (parentCommentId) references content_comments(id)
@@ -17,5 +18,5 @@ create index if not exists content_comments_parentCommentId on content_comments 
 create index if not exists content_comments_userId_contentId on content_comments (userId, contentId);
 
 
-insert into content_comments (uid, userId, contentId, parentCommentId, body, visibility, createdAt, updatedAt)
-  select uid, userId, contentId, null, body, visibility, createdAt, updatedAt from content_memos;
+insert into content_comments (uid, userId, contentId, parentCommentId, body, visibility, pinned, createdAt, updatedAt)
+  select uid, userId, contentId, null, body, visibility, 1, createdAt, updatedAt from content_memos;

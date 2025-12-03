@@ -252,7 +252,7 @@ function EventComment({ allComments: initialComments, me, eventUid }: EventComme
 
   return (
     <>
-      <SubTitle text="이벤트 댓글" />
+      <SubTitle text="이벤트 의견" />
       <ContentCommentEditor
         comments={allComments}
         onCreateComment={(body, visibility) => submit({ action: "create", body, visibility })}
