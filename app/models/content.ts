@@ -12,99 +12,155 @@ import { fetchCached } from "./base";
 import { getFavoritedCounts } from "./favorite-students";
 
 
-type ContentMemo = {
+type ContentComment = {
+  id: number;
   uid: string;
   contentId: string;
   body: string;
-  visibility: ContentMemoVisibility;
+  visibility: ContentCommentVisibility;
+  parentCommentId?: number | null;
+  createdAt: string;
 };
 
-type ContentMemoWithSensei = ContentMemo & {
+type ContentCommentWithSensei = ContentComment & {
   sensei: {
     username: string;
     profileStudentId: string | null;
   };
 };
 
-type ContentMemoVisibility = "private" | "public";
+type ContentCommentVisibility = "private" | "public";
 
-export const futureContentMemo = sqliteTable("content_memos", {
+export const contentComments = sqliteTable("content_comments", {
   id: int().primaryKey({ autoIncrement: true }),
   uid: text().notNull(),
   userId: int().notNull(),
   contentId: text().notNull(),
+  parentCommentId: int(),
   body: text().notNull(),
   visibility: text().notNull().default("private"),
   createdAt: text().notNull().default(sql`current_timestamp`),
   updatedAt: text().notNull().default(sql`current_timestamp`),
 });
 
-const SELECT_USER_MEMOS_COLUMNS = {
-  uid: futureContentMemo.uid,
-  contentId: futureContentMemo.contentId,
-  body: futureContentMemo.body,
-  visibility: futureContentMemo.visibility,
+const SELECT_USER_COMMENTS_COLUMNS = {
+  id: contentComments.id,
+  uid: contentComments.uid,
+  contentId: contentComments.contentId,
+  body: contentComments.body,
+  visibility: contentComments.visibility,
+  parentCommentId: contentComments.parentCommentId,
+  createdAt: contentComments.createdAt,
 };
 
-export async function getUserMemos(env: Env, userId: number): Promise<ContentMemo[]> {
+export async function getUserComments(env: Env, userId: number): Promise<ContentComment[]> {
   const db = drizzle(env.DB);
-  const results = await db.select(SELECT_USER_MEMOS_COLUMNS)
-    .from(futureContentMemo)
-    .where(eq(futureContentMemo.userId, userId))
+  const results = await db.select(SELECT_USER_COMMENTS_COLUMNS)
+    .from(contentComments)
+    .where(eq(contentComments.userId, userId))
     .all()
 
   return results.map(toModel);
 }
 
-const SELECT_CONTENT_MEMOS_COLUMNS = {
-  ...SELECT_USER_MEMOS_COLUMNS,
+const SELECT_CONTENT_COMMENTS_COLUMNS = {
+  ...SELECT_USER_COMMENTS_COLUMNS,
   sensei: {
     username: senseisTable.username,
     profileStudentId: senseisTable.profileStudentId,
   },
 };
 
-export async function getContentMemos(env: Env, contentId: string, userId?: number): Promise<ContentMemoWithSensei[]> {
-  return (await getContentsMemos(env, [contentId], userId))[contentId] ?? [];
+export async function getContentComments(env: Env, contentId: string, userId?: number): Promise<ContentCommentWithSensei[]> {
+  return (await getContentsComments(env, [contentId], userId))[contentId] ?? [];
 }
 
-export async function getContentsMemos(env: Env, contentIds: string[], userId?: number): Promise<Record<string, ContentMemoWithSensei[]>> {
+export async function getContentsComments(env: Env, contentIds: string[], userId?: number): Promise<Record<string, ContentCommentWithSensei[]>> {
   const db = drizzle(env.DB);
-  const results = await db.select(SELECT_CONTENT_MEMOS_COLUMNS)
-    .from(futureContentMemo)
+  const results = await db.select(SELECT_CONTENT_COMMENTS_COLUMNS)
+    .from(contentComments)
     .where(and(
-      not(eq(futureContentMemo.body, "")),
-      inArray(futureContentMemo.contentId, contentIds),
+      not(eq(contentComments.body, "")),
+      inArray(contentComments.contentId, contentIds),
       or(...visibilityFilter(userId)),
     ))
-    .innerJoin(senseisTable, eq(futureContentMemo.userId, senseisTable.id))
+    .innerJoin(senseisTable, eq(contentComments.userId, senseisTable.id))
     .all();
 
   return results.reduce((acc, result) => {
     acc[result.contentId] = [...(acc[result.contentId] ?? []), toModel(result)];
     return acc;
-  }, {} as Record<string, ContentMemoWithSensei[]>);
+  }, {} as Record<string, ContentCommentWithSensei[]>);
 }
 
-function toModel<T extends { visibility: string }>(rows: T): (T & { visibility: ContentMemoVisibility }) {
-  return { ...rows, visibility: rows.visibility as ContentMemoVisibility };
+function toModel<T extends { visibility: string; parentCommentId: number | null; createdAt: string; id: number }>(rows: T): (T & { visibility: ContentCommentVisibility; parentCommentId?: number | null }) {
+  return { 
+    ...rows, 
+    visibility: rows.visibility as ContentCommentVisibility,
+  };
 }
 
-export async function setMemo(env: Env, userId: number, contentId: string, body: string, visibility: ContentMemoVisibility = "private"): Promise<void> {
+export async function createComment(env: Env, userId: number, contentId: string, body: string, visibility: ContentCommentVisibility = "private"): Promise<string> {
   const db = drizzle(env.DB);
-  await db.insert(futureContentMemo).values({ uid: nanoid(8), userId, contentId, body, visibility })
-    .onConflictDoUpdate({
-      target: [futureContentMemo.userId, futureContentMemo.contentId],
-      set: { body, visibility, updatedAt: sql`current_timestamp` }
-    });
+  const uid = nanoid(8);
+  await db.insert(contentComments).values({ uid, userId, contentId, body, visibility, parentCommentId: null });
+  return uid;
+}
+
+export async function createSubcomment(env: Env, userId: number, contentId: string, parentCommentId: number, body: string, visibility: ContentCommentVisibility = "private"): Promise<string> {
+  const db = drizzle(env.DB);
+
+  // Validate that parent comment exists and is a top-level comment (not a subcomment)
+  const parent = await db.select({ parentCommentId: contentComments.parentCommentId })
+    .from(contentComments)
+    .where(eq(contentComments.id, parentCommentId))
+    .get();
+
+  if (!parent) {
+    throw new Error("Parent comment not found");
+  }
+  if (parent.parentCommentId !== null) {
+    throw new Error("Cannot reply to a subcomment (max depth is 1)");
+  }
+
+  const uid = nanoid(8);
+  await db.insert(contentComments).values({ uid, userId, contentId, parentCommentId, body, visibility });
+  return uid;
+}
+
+export async function updateComment(env: Env, userId: number, commentUid: string, body: string, visibility: ContentCommentVisibility): Promise<void> {
+  const db = drizzle(env.DB);
+  await db.update(contentComments)
+    .set({ body, visibility, updatedAt: sql`current_timestamp` })
+    .where(and(
+      eq(contentComments.uid, commentUid),
+      eq(contentComments.userId, userId)
+    ));
+}
+
+export async function deleteComment(env: Env, userId: number, commentUid: string): Promise<void> {
+  const db = drizzle(env.DB);
+  await db.delete(contentComments)
+    .where(and(
+      eq(contentComments.uid, commentUid),
+      eq(contentComments.userId, userId)
+    ));
 }
 
 function visibilityFilter(userId?: number): SQLWrapper[] {
-  const filters: SQLWrapper[] = [eq(futureContentMemo.visibility, "public")];
+  const filters: SQLWrapper[] = [eq(contentComments.visibility, "public")];
   if (userId) {
-    filters.push(eq(futureContentMemo.userId, userId));
+    filters.push(eq(contentComments.userId, userId));
   }
   return filters;
+}
+
+// Legacy exports for backward compatibility during migration
+export const getUserMemos = getUserComments;
+export const getContentMemos = getContentComments;
+export const getContentsMemos = getContentsComments;
+export async function setMemo(env: Env, userId: number, contentId: string, body: string, visibility: ContentCommentVisibility = "private"): Promise<void> {
+  await createComment(env, userId, contentId, body, visibility);
 }
 
 

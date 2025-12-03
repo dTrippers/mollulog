@@ -1,3 +1,4 @@
+import Comment from "./Comment";
 import Memo from "./Memo";
 
-export { Memo };
+export { Comment, Memo };

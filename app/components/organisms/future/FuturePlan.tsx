@@ -41,16 +41,35 @@ type FuturePlanProps = {
   favoritedStudents: {
     studentId: string;
   }[];
-  memo?: {
+  comments?: {
+    uid: string;
     body: string;
     visibility: "private" | "public";
-  };
+    createdAt: string;
+    sensei: {
+      me: boolean;
+      username: string;
+      profileStudentId: string | null;
+    };
+    subcomments?: {
+      uid: string;
+      body: string;
+      visibility: "private" | "public";
+      createdAt: string;
+      sensei: {
+        me: boolean;
+        username: string;
+        profileStudentId: string | null;
+      };
+    }[];
+  }[];
   isMe: boolean;
 };
 
-export default function FuturePlan({ event, favoritedStudents, memo, isMe }: FuturePlanProps) {
-  const [body, setBody] = useState(memo?.body || "");
-  const [visibility, setVisibility] = useState<"private" | "public">(memo?.visibility || "private");
+export default function FuturePlan({ event, favoritedStudents, comments, isMe }: FuturePlanProps) {
+  const myComment = comments?.find(c => c.sensei.me);
+  const [body, setBody] = useState(myComment?.body || "");
+  const [visibility, setVisibility] = useState<"private" | "public">(myComment?.visibility || "private");
   const [isSaving, setIsSaving] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout>();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -62,16 +81,26 @@ export default function FuturePlan({ event, favoritedStudents, memo, isMe }: Fut
     }
 
     timeoutRef.current = setTimeout(async () => {
-      if (body !== (memo?.body || "") || visibility !== (memo?.visibility || "private")) {
+      if (body !== (myComment?.body || "") || visibility !== (myComment?.visibility || "private")) {
         setIsSaving(true);
         try {
-          await fetch(`/api/contents/${event.uid}/memos`, {
-            method: "POST",
-            body: JSON.stringify({ body, visibility }),
-            headers: { "Content-Type": "application/json" },
-          });
+          if (myComment) {
+            // Update existing comment
+            await fetch(`/api/contents/${event.uid}/comments`, {
+              method: "POST",
+              body: JSON.stringify({ action: "update", commentUid: myComment.uid, body, visibility }),
+              headers: { "Content-Type": "application/json" },
+            });
+          } else if (body.trim()) {
+            // Create new comment
+            await fetch(`/api/contents/${event.uid}/comments`, {
+              method: "POST",
+              body: JSON.stringify({ action: "create", body, visibility }),
+              headers: { "Content-Type": "application/json" },
+            });
+          }
         } catch (error) {
-          console.error("Failed to save memo:", error);
+          console.error("Failed to save comment:", error);
         } finally {
           setIsSaving(false);
         }
@@ -83,7 +112,7 @@ export default function FuturePlan({ event, favoritedStudents, memo, isMe }: Fut
         clearTimeout(timeoutRef.current);
       }
     };
-  }, [body, visibility, event.uid, memo?.body, memo?.visibility]);
+  }, [body, visibility, event.uid, myComment?.body, myComment?.visibility, myComment?.uid]);
 
   // Resize textarea on initial load
   useEffect(() => {
@@ -227,10 +256,10 @@ export default function FuturePlan({ event, favoritedStudents, memo, isMe }: Fut
         })}
       </div>
 
-      {/* Memo */}
+      {/* Comment */}
       {isMe && (
         <div className="px-1 mt-4 -mb-2 flex items-center justify-between">
-          <p className="text-lg font-bold">이벤트 메모</p>
+          <p className="text-lg font-bold">이벤트 댓글</p>
           {body && (
             <div
               className="flex items-center px-2 py-1 border border-neutral-300 dark:border-neutral-600 rounded text-neutral-600 dark:text-neutral-300 transition cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700"
@@ -244,7 +273,7 @@ export default function FuturePlan({ event, favoritedStudents, memo, isMe }: Fut
           )}
         </div>
       )}
-      {(memo?.body || isMe) && (
+      {(myComment?.body || isMe) && (
         <div className="mt-4 px-3 md:px-4 py-2 md:py-3 flex items-center gap-x-2 bg-white dark:bg-neutral-800 rounded-lg">
           <ChatBubbleOvalLeftEllipsisIcon className="size-4 shrink-0 text-neutral-500 dark:text-neutral-400" />
           {isMe ?
@@ -258,11 +287,11 @@ export default function FuturePlan({ event, favoritedStudents, memo, isMe }: Fut
                 e.target.style.height = "auto";
                 e.target.style.height = Math.min(e.target.scrollHeight, 128) + "px";
               }}
-              placeholder="메모를 남겨보세요"
+              placeholder="의견을 남겨보세요"
               rows={1}
               style={{ wordWrap: "break-word", whiteSpace: "pre-wrap", overflowWrap: "break-word" }}
             /> :
-            <p className="text-sm xl:text-base text-neutral-500 dark:text-neutral-400">{body}</p>
+            <p className="text-sm xl:text-base text-neutral-500 dark:text-neutral-400">{myComment?.body}</p>
           }
           {isSaving && (
             <div className="size-3 border border-neutral-400 border-t-transparent rounded-full animate-spin shrink-0" />

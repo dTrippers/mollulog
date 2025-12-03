@@ -10,8 +10,8 @@ import { bossImageUrl } from "~/models/assets";
 import { StudentCards } from "~/components/molecules/student";
 import { OptionBadge } from "~/components/atoms/student";
 import { BottomSheet } from "~/components/atoms/layout";
-import ContentMemoEditor from "./ContentMemoEditor";
-import ContentMemoView from "./ContentMemoView";
+import ContentCommentEditor from "./ContentCommentEditor";
+import ContentCommentView from "./ContentCommentView";
 
 export type ContentTimelineItemProps = {
   uid: string;
@@ -25,21 +25,31 @@ export type ContentTimelineItemProps = {
   confirmed?: boolean;
   hasShopData?: boolean;
 
-  allMemos?: {
+  allComments?: {
     uid: string;
     body: string;
     visibility: "private" | "public";
+    createdAt: string;
     sensei: {
       username: string;
       profileStudentId: string | null;
     };
+    subcomments?: {
+      uid: string;
+      body: string;
+      visibility: "private" | "public";
+      createdAt: string;
+      sensei: {
+        username: string;
+        profileStudentId: string | null;
+      };
+    }[];
   }[];
-  myMemo?: {
-    body: string;
-    visibility: "private" | "public";
-  };
-  onUpdateMemo?: ({ body, visibility }: { body: string, visibility: "private" | "public" }) => void;
-  isSubmittingMemo?: boolean;
+  onCommentCreate?: (body: string, visibility: "private" | "public") => void;
+  onCommentCreateSubcomment?: (parentCommentId: string, body: string, visibility: "private" | "public") => void;
+  onCommentUpdate?: (commentUid: string, body: string, visibility: "private" | "public") => void;
+  onCommentDelete?: (commentUid: string) => void;
+  isSubmittingComment?: boolean;
 
   favoritedStudents?: string[];
   favoritedCounts?: Record<string, number>;
@@ -97,10 +107,10 @@ const MEMO_CONTENT_TYPES = ["event", "pickup", "fes", "immortal_event", "main_st
 
 export function ContentTimelineItem({
   name, contentType, rerun, endless, since, until, link, confirmed, hasShopData, raidInfo, pickups,
-  allMemos, myMemo, onUpdateMemo, isSubmittingMemo, favoritedStudents, favoritedCounts, onFavorite, signedIn,
+  allComments, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
 }: ContentTimelineItemProps) {
-  const showMemo = MEMO_CONTENT_TYPES.includes(contentType) && (pickups && pickups.length > 0);
-  const [memoEditing, setMemoEditing] = useState(false);
+  const showComments = MEMO_CONTENT_TYPES.includes(contentType) && (pickups && pickups.length > 0);
+  const [commentEditing, setCommentEditing] = useState(false);
 
   let daysLabel = null;
   const now = dayjs();
@@ -226,22 +236,23 @@ export function ContentTimelineItem({
         </div>
       )}
 
-      {/* 메모 */}
-      {showMemo && onUpdateMemo && (
+      {/* 댓글 */}
+      {showComments && onCommentCreate && (
         <>
-          <ContentMemoView
-            allMemos={allMemos}
-            myMemo={myMemo}
-            onClick={() => setMemoEditing(true)}
+          <ContentCommentView
+            comments={allComments}
+            onClick={() => setCommentEditing(true)}
           />
 
-          {memoEditing && (
-            <BottomSheet Icon={ChatBubbleOvalLeftEllipsisIcon} title="이벤트 메모" onClose={() => setMemoEditing(false)}>
-              <ContentMemoEditor
-                allMemos={allMemos ?? []}
-                myMemo={myMemo}
-                onUpdate={onUpdateMemo}
-                isSubmitting={isSubmittingMemo}
+          {commentEditing && (
+            <BottomSheet Icon={ChatBubbleOvalLeftEllipsisIcon} title="이벤트 댓글" onClose={() => setCommentEditing(false)}>
+              <ContentCommentEditor
+                comments={allComments ?? []}
+                onCreateComment={onCommentCreate}
+                onCreateSubcomment={onCommentCreateSubcomment ?? (() => {})}
+                onUpdateComment={onCommentUpdate}
+                onDeleteComment={onCommentDelete}
+                isSubmitting={isSubmittingComment}
                 signedIn={signedIn}
               />
             </BottomSheet>

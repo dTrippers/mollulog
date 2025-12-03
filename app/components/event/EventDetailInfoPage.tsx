@@ -5,7 +5,8 @@ import { useFetcher } from "react-router";
 import type { PickupType, AttackType, DefenseType, Role, EventType } from "~/models/content.d";
 import EventPickup from "./EventPickup";
 import { SubTitle } from "../atoms/typography";
-import ContentMemoEditor from "../contents/ContentMemoEditor";
+import ContentCommentEditor from "../contents/ContentCommentEditor";
+import { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 import EventInfoCard from "./EventInfoCard";
 
 type EventDetailInfoPageProps = {
@@ -32,14 +33,27 @@ type EventDetailInfoPageProps = {
     favorited: boolean;
   }[];
 
-  allMemos: {
+  allComments: {
     uid: string;
     body: string;
     visibility: "private" | "public";
+    createdAt: string;
     sensei: {
+      me: boolean;
       username: string;
       profileStudentId: string | null;
     };
+    subcomments?: {
+      uid: string;
+      body: string;
+      visibility: "private" | "public";
+      createdAt: string;
+      sensei: {
+        me: boolean;
+        username: string;
+        profileStudentId: string | null;
+      };
+    }[];
   }[];
 
   me: {
@@ -58,7 +72,7 @@ export type ActionData = {
   };
 };
 
-export default function EventDetailInfoPage({ event, pickups, allMemos, me }: EventDetailInfoPageProps) {
+export default function EventDetailInfoPage({ event, pickups, allComments, me }: EventDetailInfoPageProps) {
   return (
     <div>
       {event.type === "fes" && (
@@ -82,7 +96,7 @@ export default function EventDetailInfoPage({ event, pickups, allMemos, me }: Ev
       )}
 
       {pickups.length > 0 && <Pickups pickups={pickups} signedIn={me !== null} event={event} />}
-      <EventMemo allMemos={allMemos} me={me} />
+      <EventComment allComments={allComments} me={me} eventUid={event.uid} />
     </div>
   )
 }
@@ -200,22 +214,25 @@ function EventPickupWithFavoriteState({ pickup, signedIn }: EventPickupWithFavor
   );
 }
 
-type EventMemoProps = {
-  allMemos: EventDetailInfoPageProps["allMemos"];
+type EventCommentProps = {
+  allComments: EventDetailInfoPageProps["allComments"];
   me: EventDetailInfoPageProps["me"];
+  eventUid: string;
 };
 
-function EventMemo({ allMemos, me }: EventMemoProps) {
+function EventComment({ allComments, me, eventUid }: EventCommentProps) {
   const fetcher = useFetcher();
-  const submit = (data: ActionData) => fetcher.submit(data, { method: "post", encType: "application/json" });
+  const submit = (data: CommentActionData) => fetcher.submit(data, { action: `/api/contents/${eventUid}/comments`, method: "post", encType: "application/json" });
 
   return (
     <>
-      <SubTitle text="이벤트 메모" />
-      <ContentMemoEditor
-        allMemos={allMemos}
-        myMemo={me?.username ? allMemos.find(memo => memo.sensei.username === me.username) : undefined}
-        onUpdate={({ body, visibility }) => submit({ memo: { body, visibility } })}
+      <SubTitle text="이벤트 댓글" />
+      <ContentCommentEditor
+        comments={allComments}
+        onCreateComment={(body, visibility) => submit({ action: "create", body, visibility })}
+        onCreateSubcomment={(parentCommentId, body, visibility) => submit({ action: "createSubcomment", parentCommentId, body, visibility })}
+        onUpdateComment={(commentUid, body, visibility) => submit({ action: "update", commentUid, body, visibility })}
+        onDeleteComment={(commentUid) => submit({ action: "delete", commentUid })}
         signedIn={me !== null}
         isSubmitting={fetcher.state === "submitting"}
       />

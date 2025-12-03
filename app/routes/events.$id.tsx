@@ -12,7 +12,7 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { favoriteStudent, getFavoritedCounts, getUserFavoritedStudents, unfavoriteStudent } from "~/models/favorite-students";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getEventShopState } from "~/models/event-shop-state";
-import { getContentMemos, setMemo } from "~/models/content";
+import { getContentComments } from "~/models/content";
 
 const eventDetailQuery = graphql(`
   query EventDetail($eventUid: String!) {
@@ -96,7 +96,38 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const savedShopState = currentUser ? await getEventShopState(env, currentUser.id, eventUid) : null;
 
-  const allMemos = await getContentMemos(env, eventUid, currentUser?.id);
+  const allComments = await getContentComments(env, eventUid, currentUser?.id);
+  
+  // Separate top-level comments and subcomments
+  const topLevelComments = allComments.filter(c => !c.parentCommentId);
+  const subcomments = allComments.filter(c => c.parentCommentId);
+  
+  // Build nested structure
+  const nestedComments = topLevelComments.map(comment => {
+    const commentSubcomments = subcomments.filter(sc => sc.parentCommentId === comment.id);
+    return {
+      uid: comment.uid,
+      body: comment.body,
+      visibility: comment.visibility,
+      createdAt: comment.createdAt,
+      sensei: {
+        me: currentUser?.username === comment.sensei.username,
+        username: comment.sensei.username,
+        profileStudentId: comment.sensei.profileStudentId,
+      },
+      subcomments: commentSubcomments.map(sc => ({
+        uid: sc.uid,
+        body: sc.body,
+        visibility: sc.visibility,
+        createdAt: sc.createdAt,
+        sensei: {
+          me: currentUser?.username === sc.sensei.username,
+          username: sc.sensei.username,
+          profileStudentId: sc.sensei.profileStudentId,
+        },
+      })),
+    };
+  });
 
   return {
     event: data!.event!,
@@ -104,7 +135,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitedStudentUids,
     eventRewardBonus,
     savedShopState,
-    allMemos,
+    allComments: nestedComments,
     me: currentUser ? { username: currentUser.username } : null,
   };
 };
@@ -125,10 +156,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     const run = favorited ? favoriteStudent : unfavoriteStudent;
     await run(env, currentUser.id, studentUid, eventUid);
   }
-  if (actionData.memo) {
-    const { body, visibility } = actionData.memo;
-    await setMemo(env, currentUser.id, eventUid, body, visibility);
-  }
+  // Comment actions are handled by the comments API route
 
   return {};
 };
@@ -177,7 +205,7 @@ export function ErrorBoundary() {
 type EventDetailPage = "info" | "stages" | "shop";
 
 export default function EventDetail() {
-  const { event, pickups, recruitedStudentUids, eventRewardBonus, savedShopState, allMemos, me } = useLoaderData<typeof loader>();
+  const { event, pickups, recruitedStudentUids, eventRewardBonus, savedShopState, allComments, me } = useLoaderData<typeof loader>();
 
   const [searchParams] = useSearchParams();
 
@@ -208,7 +236,7 @@ export default function EventDetail() {
         <EventDetailInfoPage
           event={event}
           pickups={pickups}
-          allMemos={allMemos}
+          allComments={allComments}
           me={me}
         />
       )}
