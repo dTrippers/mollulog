@@ -3,11 +3,12 @@ import { runQuery } from "~/lib/baql";
 import { Link, useLoaderData } from "react-router";
 import { graphql } from "~/graphql";
 import { SubTitle } from "~/components/atoms/typography";
-import { getUserMemos } from "~/models/content";
+import { getContentsComments, nestComments } from "~/models/content";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRouteSensei } from "./$username";
 import { FuturePlan } from "~/components/organisms/future";
 import { getAuthenticator } from "~/auth/authenticator.server";
+import type { NestedComment } from "~/models/content";
 
 const userFuturesQuery = graphql(`
   query UserFutures($now: ISO8601DateTime!) {
@@ -54,20 +55,23 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   const plannedContentIds = favoritedStudents.map(({ contentId }) => contentId);
 
   const events = data.events.nodes.filter((event) => plannedContentIds.includes(event.uid));
-  const memos = (await getUserMemos(env, sensei.id)).filter((memo) => {
-    return plannedContentIds.includes(memo.contentId) && (memo.visibility === "public" || (currentUser?.id === sensei.id));
-  });
+
+  const allComments: Record<string, NestedComment[]> = {};
+  const contentComments = await getContentsComments(env, plannedContentIds, currentUser?.id);
+  for (const contentId of plannedContentIds) {
+    allComments[contentId] = nestComments(contentComments[contentId] ?? [], sensei);
+  }
 
   return {
     events,
     favoritedStudents,
-    memos,
+    allComments,
     isMe: currentUser?.id === sensei.id,
   };
 }
 
 export default function UserFutures() {
-  const { events, favoritedStudents, memos, isMe } = useLoaderData<typeof loader>();
+  const { events, favoritedStudents, allComments } = useLoaderData<typeof loader>();
 
   if (events.length === 0) {
     return (
@@ -83,15 +87,16 @@ export default function UserFutures() {
   return (
     <div className="my-8">
       <SubTitle text="관심 학생 목록" />
-      {events.map((event) =>
-        <FuturePlan
-          key={event.uid}
-          event={event}
-          favoritedStudents={favoritedStudents.filter(({ contentId }) => contentId === event.uid)}
-          memo={memos.find((memo) => memo.contentId === event.uid)}
-          isMe={isMe}
-        />
-      )}
+      {events.map((event) => {
+        return (
+          <FuturePlan
+            key={event.uid}
+            event={event}
+            favoritedStudents={favoritedStudents.filter(({ contentId }) => contentId === event.uid)}
+            comments={allComments[event.uid] ?? []}
+          />
+        );
+      })}
     </div>
   );
 }

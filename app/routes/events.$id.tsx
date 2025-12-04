@@ -12,7 +12,7 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { favoriteStudent, getFavoritedCounts, getUserFavoritedStudents, unfavoriteStudent } from "~/models/favorite-students";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getEventShopState } from "~/models/event-shop-state";
-import { getContentMemos, setMemo } from "~/models/content";
+import { getNestedContentComments } from "~/models/content";
 
 const eventDetailQuery = graphql(`
   query EventDetail($eventUid: String!) {
@@ -95,8 +95,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const eventRewardBonus = eventRewardBonusData?.items ?? [];
 
   const savedShopState = currentUser ? await getEventShopState(env, currentUser.id, eventUid) : null;
-
-  const allMemos = await getContentMemos(env, eventUid, currentUser?.id);
+  const nestedComments = await getNestedContentComments(env, eventUid, currentUser);
 
   return {
     event: data!.event!,
@@ -104,7 +103,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitedStudentUids,
     eventRewardBonus,
     savedShopState,
-    allMemos,
+    allComments: nestedComments,
     me: currentUser ? { username: currentUser.username } : null,
   };
 };
@@ -125,10 +124,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     const run = favorited ? favoriteStudent : unfavoriteStudent;
     await run(env, currentUser.id, studentUid, eventUid);
   }
-  if (actionData.memo) {
-    const { body, visibility } = actionData.memo;
-    await setMemo(env, currentUser.id, eventUid, body, visibility);
-  }
+  // Comment actions are handled by the comments API route
 
   return {};
 };
@@ -177,7 +173,7 @@ export function ErrorBoundary() {
 type EventDetailPage = "info" | "stages" | "shop";
 
 export default function EventDetail() {
-  const { event, pickups, recruitedStudentUids, eventRewardBonus, savedShopState, allMemos, me } = useLoaderData<typeof loader>();
+  const { event, pickups, recruitedStudentUids, eventRewardBonus, savedShopState, allComments, me } = useLoaderData<typeof loader>();
 
   const [searchParams] = useSearchParams();
 
@@ -208,7 +204,7 @@ export default function EventDetail() {
         <EventDetailInfoPage
           event={event}
           pickups={pickups}
-          allMemos={allMemos}
+          allComments={allComments}
           me={me}
         />
       )}

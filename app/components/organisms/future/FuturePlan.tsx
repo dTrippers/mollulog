@@ -1,12 +1,16 @@
+import { useState, useEffect } from "react";
+import { useFetcher } from "react-router";
 import { Link } from "react-router";
 import dayjs from "dayjs";
-import { ChatBubbleOvalLeftEllipsisIcon, ChevronRightIcon, LockClosedIcon, LockOpenIcon } from "@heroicons/react/16/solid";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { MultilineText } from "~/components/atoms/typography";
 import { OptionBadge, StudentCard } from "~/components/atoms/student";
 import { ResourceCards } from "~/components/molecules/student";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, pickupLabelLocale, roleColor, roleLocale, schoolNameLocale } from "~/locales/ko";
 import type { AttackType, DefenseType, PickupType, Role } from "~/models/content.d";
-import { useState, useEffect, useRef } from "react";
+import ContentCommentView from "~/components/contents/ContentCommentView";
+import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
+import type { NestedComment } from "~/models/content";
 
 type FuturePlanStudents = {
   uid: string;
@@ -41,57 +45,33 @@ type FuturePlanProps = {
   favoritedStudents: {
     studentId: string;
   }[];
-  memo?: {
-    body: string;
-    visibility: "private" | "public";
-  };
-  isMe: boolean;
+  comments?: NestedComment[];
 };
 
-export default function FuturePlan({ event, favoritedStudents, memo, isMe }: FuturePlanProps) {
-  const [body, setBody] = useState(memo?.body || "");
-  const [visibility, setVisibility] = useState<"private" | "public">(memo?.visibility || "private");
-  const [isSaving, setIsSaving] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout>();
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+export default function FuturePlan({ event, favoritedStudents, comments }: FuturePlanProps) {
+  const [allComments, setAllComments] = useState(comments ?? []);
+  const fetcher = useFetcher();
 
-  // Auto-save with debounce
+  // Update comments when fetcher returns data
   useEffect(() => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
+    if (fetcher.state === "idle" && fetcher.data && Array.isArray(fetcher.data)) {
+      setAllComments(fetcher.data);
     }
+  }, [fetcher.state, fetcher.data]);
 
-    timeoutRef.current = setTimeout(async () => {
-      if (body !== (memo?.body || "") || visibility !== (memo?.visibility || "private")) {
-        setIsSaving(true);
-        try {
-          await fetch(`/api/contents/${event.uid}/memos`, {
-            method: "POST",
-            body: JSON.stringify({ body, visibility }),
-            headers: { "Content-Type": "application/json" },
-          });
-        } catch (error) {
-          console.error("Failed to save memo:", error);
-        } finally {
-          setIsSaving(false);
-        }
-      }
-    }, 500);
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
-  }, [body, visibility, event.uid, memo?.body, memo?.visibility]);
-
-  // Resize textarea on initial load
+  // Sync with initial comments when they change
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 128) + "px";
+    if (fetcher.state === "idle") {
+      setAllComments(comments ?? []);
     }
-  }, []);
+  }, [comments, fetcher.state]);
+
+  const submit = (data: CommentActionData) => {
+    fetcher.submit(data, { action: `/api/contents/${event.uid}/comments`, method: "post", encType: "application/json" });
+  };
+
+  // Find pinned comment UID
+  const pinnedCommentUid = allComments.find((c) => c.pinned)?.uid ?? null;
 
   if (favoritedStudents.length === 0) {
     return null;
@@ -227,48 +207,13 @@ export default function FuturePlan({ event, favoritedStudents, memo, isMe }: Fut
         })}
       </div>
 
-      {/* Memo */}
-      {isMe && (
-        <div className="px-1 mt-4 -mb-2 flex items-center justify-between">
-          <p className="text-lg font-bold">이벤트 메모</p>
-          {body && (
-            <div
-              className="flex items-center px-2 py-1 border border-neutral-300 dark:border-neutral-600 rounded text-neutral-600 dark:text-neutral-300 transition cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-700"
-              onClick={() => setVisibility(visibility === "private" ? "public" : "private")}
-            >
-              {visibility === "private" ? <LockClosedIcon className="size-3" /> : <LockOpenIcon className="size-3" />}
-              <span className="ml-1 text-xs">
-                {visibility === "private" ? "나만 보기" : "전체 공개"}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-      {(memo?.body || isMe) && (
-        <div className="mt-4 px-3 md:px-4 py-2 md:py-3 flex items-center gap-x-2 bg-white dark:bg-neutral-800 rounded-lg">
-          <ChatBubbleOvalLeftEllipsisIcon className="size-4 shrink-0 text-neutral-500 dark:text-neutral-400" />
-          {isMe ?
-            <textarea
-              ref={textareaRef}
-              className="grow text-sm xl:text-base bg-transparent text-neutral-700 dark:text-neutral-300 placeholder:text-neutral-500 dark:placeholder:text-neutral-400 resize-none min-h-[1.5rem] max-h-32 overflow-y-auto"
-              value={body}
-              onChange={(e) => {
-                setBody(e.target.value);
-                // Auto-resize textarea
-                e.target.style.height = "auto";
-                e.target.style.height = Math.min(e.target.scrollHeight, 128) + "px";
-              }}
-              placeholder="메모를 남겨보세요"
-              rows={1}
-              style={{ wordWrap: "break-word", whiteSpace: "pre-wrap", overflowWrap: "break-word" }}
-            /> :
-            <p className="text-sm xl:text-base text-neutral-500 dark:text-neutral-400">{body}</p>
-          }
-          {isSaving && (
-            <div className="size-3 border border-neutral-400 border-t-transparent rounded-full animate-spin shrink-0" />
-          )}
-        </div>
-      )}
+      {/* Comment */}
+      <div className="mt-2">
+        <ContentCommentView
+          comments={allComments}
+          placeholder="남긴 의견이 없어요"
+        />
+      </div>
     </div>
   ); 
 }

@@ -3,13 +3,14 @@ import { LoaderFunctionArgs, MetaFunction, useFetcher, useLoaderData } from "rea
 import { FunnelIcon } from "@heroicons/react/24/outline";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { ContentTimeline } from "~/components/contents";
-import type { ContentFilterState, ContentTimelineProps } from "~/components/contents";
+import type { ContentTimelineProps } from "~/components/contents";
 import { ContentFilterPanel } from "~/components/futures";
-import { getUserMemos, getContentsMemos, getFutureContents } from "~/models/content";
+import { getContentsComments, getFutureContents, nestComments, NestedComment } from "~/models/content";
 import { getUserFavoritedStudents, getFavoritedCounts } from "~/models/favorite-students";
 import { ActionData as ContentsActionData } from "./api.contents";
-import { ActionData as MemoActionData } from "./api.contents.$uid.memos";
+import { ActionData as CommentActionData } from "./api.contents.$uid.comments";
 import { Page } from "~/components/navigation";
+import type { ContentFilterState } from "~/components/futures/ContentFilterPanel";
 
 export const meta: MetaFunction = () => {
   const title = "블루 아카이브 이벤트, 픽업 미래시";
@@ -37,13 +38,22 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   const signedIn = currentUser !== null;
+  const flatComments = await getContentsComments(env, contents.map((content) => content.uid), currentUser?.id);
+
+  // Transform flat comments to nested structure with sensei.me property
+  const allComments: Record<string, NestedComment[]> = {};
+  contents.forEach((content) => {
+    const contentComments = flatComments[content.uid] ?? [];
+    const nested = nestComments(contentComments, currentUser);
+    allComments[content.uid] = nested;
+  });
+
   return {
     signedIn,
     contents,
     favoritedStudents: signedIn ? await getUserFavoritedStudents(env, currentUser.id) : null,
     favoritedCounts: await getFavoritedCounts(env, allStudentUids),
-    myMemos: signedIn ? await getUserMemos(env, currentUser.id) : [],
-    allMemos: await getContentsMemos(env, contents.map((content) => content.uid), currentUser?.id),
+    allComments,
   };
 };
 
@@ -79,7 +89,7 @@ export default function FutureContents() {
   }, [filter, isHydrated]);
 
   const loaderData = useLoaderData<typeof loader>();
-  const { contents, myMemos, allMemos, signedIn } = loaderData;
+  const { contents, allComments: initialComments, signedIn } = loaderData;
 
   const [favoritedStudents, setFavoritedStudents] = useState<{ contentUid: string, studentUid: string }[] | undefined>(
     loaderData.favoritedStudents?.map((f) => ({ contentUid: f.contentId, studentUid: f.studentId })) ?? undefined
@@ -87,12 +97,35 @@ export default function FutureContents() {
   const [favoritedCounts, setFavoritedCounts] = useState(
     loaderData.favoritedCounts.map((f) => ({ contentUid: f.contentId, studentUid: f.studentId, count: f.count }))
   );
+  const [allComments, setAllComments] = useState(initialComments);
 
-  const fetcher = useFetcher();
-  const submit = (data: ContentsActionData) => fetcher.submit(data, { action: "/api/contents", method: "post", encType: "application/json" });
+  const favoriteFetcher = useFetcher();
+  const submitFavorite = (data: ContentsActionData) => favoriteFetcher.submit(data, { action: "/api/contents", method: "post", encType: "application/json" });
+
+  const commentFetcher = useFetcher();
+  const submitComment = (contentUid: string, data: CommentActionData) => commentFetcher.submit(data, { action: `/api/contents/${contentUid}/comments`, method: "post", encType: "application/json" });
+
+  // Track which contentUid we're updating comments for
+  const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
+
+  // Update comments state when comment action completes and returns updated comments
+  useEffect(() => {
+    if ((commentFetcher.state === "idle" || commentFetcher.state === "loading") && commentFetcher.data && Array.isArray(commentFetcher.data) && pendingContentUid) {
+      setAllComments((prev) => ({
+        ...prev,
+        [pendingContentUid]: commentFetcher.data as typeof initialComments[string],
+      }));
+      setPendingContentUid(null);
+    }
+  }, [commentFetcher.state, commentFetcher.data, commentFetcher.formAction, pendingContentUid, initialComments]);
+
+  // Sync with loader data when it changes
+  useEffect(() => {
+    setAllComments(initialComments);
+  }, [initialComments]);
 
   const toggleFavorite = (contentUid: string, studentUid: string, favorited: boolean) => {
-    submit({ favorite: { contentUid, studentUid, favorited } });
+    submitFavorite({ favorite: { contentUid, studentUid, favorited } });
 
     setFavoritedStudents((prev) => {
       const alreadyFavorited = prev && prev.some((favorite) => equalFavorites(favorite, { contentUid, studentUid }));
@@ -155,8 +188,7 @@ export default function FutureContents() {
             ...content,
             since: new Date(content.since),
             until: new Date(content.until),
-            myMemo: myMemos.find((memo) => memo.contentId === content.uid) ?? undefined,
-            allMemos: allMemos[content.uid] ?? [],
+            allComments: allComments[content.uid] ?? [],
           };
 
           if (content.__typename === "Event") {
@@ -177,12 +209,32 @@ export default function FutureContents() {
         favoritedStudents={favoritedStudents ?? []}
         favoritedCounts={favoritedCounts}
         signedIn={signedIn}
-        onMemoUpdate={(contentUid, body, visibility) => {
-          const actionData: MemoActionData = { body, visibility };
-          fetcher.submit(actionData, { action: `/api/contents/${contentUid}/memos`, method: "post", encType: "application/json" });
+        onCommentCreate={(contentUid, body, visibility) => {
+          setPendingContentUid(contentUid);
+          submitComment(contentUid, { action: "create", body, visibility });
+        }}
+        onCommentCreateSubcomment={(contentUid, parentCommentId, body, visibility) => {
+          setPendingContentUid(contentUid);
+          submitComment(contentUid, { action: "createSubcomment", parentCommentId, body, visibility });
+        }}
+        onCommentUpdate={(contentUid, commentUid, body, visibility) => {
+          setPendingContentUid(contentUid);
+          submitComment(contentUid, { action: "update", commentUid, body, visibility });
+        }}
+        onCommentDelete={(contentUid, commentUid) => {
+          setPendingContentUid(contentUid);
+          submitComment(contentUid, { action: "delete", commentUid });
+        }}
+        onCommentPin={(contentUid, commentUid) => {
+          setPendingContentUid(contentUid);
+          submitComment(contentUid, { action: "pin", commentUid });
+        }}
+        onCommentUnpin={(contentUid) => {
+          setPendingContentUid(contentUid);
+          submitComment(contentUid, { action: "unpin" });
         }}
         onFavorite={toggleFavorite}
-        isSubmittingMemo={false}
+        isSubmittingComment={commentFetcher.state === "submitting"}
       />
     </Page>
   );
