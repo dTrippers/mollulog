@@ -35,10 +35,10 @@ type ContentCommentEditorProps = {
 export default function ContentCommentEditor({ comments, signedIn, placeholder, onCreateComment, onCreateSubcomment, onUpdateComment, onDeleteComment, onPinComment, onUnpinComment, isSubmitting = false }: ContentCommentEditorProps) {
   const { showSignIn } = useSignIn();
   const [newCommentBody, setNewCommentBody] = useState<string>("");
-  const [newCommentVisibility, setNewCommentVisibility] = useState<"private" | "public">("private");
+  const [newCommentVisibility, setNewCommentVisibility] = useState<"private" | "public">("public");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState<string>("");
-  const [replyVisibility, setReplyVisibility] = useState<"private" | "public">("private");
+  const [replyVisibility, setReplyVisibility] = useState<"private" | "public">("public");
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [editBody, setEditBody] = useState<string>("");
   const [editVisibility, setEditVisibility] = useState<"private" | "public">("private");
@@ -312,7 +312,7 @@ function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying
             onClick={isReplying ? onCancelReply : onReply}
             disabled={isSubmitting}
           >
-            {isReplying ? <XMarkIcon className="size-4" /> : <ArrowUturnLeftIcon className="size-4" />}
+            {isReplying ? <XMarkIcon className="size-4" /> : <ArrowUturnLeftIcon className="size-4 transform scale-y-[-1]" />}
           </button>
         )}
         {showPinActions && (
