@@ -6,7 +6,7 @@ type ContentCommentViewProps = {
     uid: string;
     body: string;
     visibility: "private" | "public";
-    pinned?: boolean;
+    pinned: boolean;
     createdAt: string;
     sensei: {
       username: string;
@@ -23,16 +23,15 @@ type ContentCommentViewProps = {
       };
     }[];
   }[];
-  pinnedCommentUid?: string | null;
   placeholder?: string;
 
   onClick?: () => void;
 }
 
-export default function ContentCommentView({ comments, pinnedCommentUid, placeholder, onClick }: ContentCommentViewProps) {
+export default function ContentCommentView({ comments, placeholder, onClick }: ContentCommentViewProps) {
   const commentCount = comments ? comments.reduce((acc, comment) => acc + 1 + (comment.subcomments?.length ?? 0), 0) : 0;
 
-  const pinnedComment = comments?.find((comment) => comment.uid === pinnedCommentUid);
+  const pinnedComment = comments?.find((comment) => comment.pinned);
   const displayBody = pinnedComment ? (pinnedComment.body.length > 50 ? `${pinnedComment.body.slice(0, 50)}...` : pinnedComment.body) : null;
   return (
     <div

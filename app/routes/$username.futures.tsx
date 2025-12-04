@@ -8,6 +8,7 @@ import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRouteSensei } from "./$username";
 import { FuturePlan } from "~/components/organisms/future";
 import { getAuthenticator } from "~/auth/authenticator.server";
+import type { NestedComment } from "~/models/content";
 
 const userFuturesQuery = graphql(`
   query UserFutures($now: ISO8601DateTime!) {
@@ -37,19 +38,6 @@ export const meta: MetaFunction = ({ params }) => {
   ];
 };
 
-type LoaderComment = {
-  uid: string;
-  body: string;
-  visibility: "private" | "public";
-  createdAt: string;
-  sensei: {
-    me: boolean;
-    username: string;
-    profileStudentId: string | null;
-  };
-  subcomments?: LoaderComment[];
-};
-
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const truncatedNow = new Date();
   truncatedNow.setMinutes(0, 0, 0);
@@ -68,10 +56,10 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
 
   const events = data.events.nodes.filter((event) => plannedContentIds.includes(event.uid));
 
-  const allComments: Record<string, LoaderComment[]> = {};
+  const allComments: Record<string, NestedComment[]> = {};
   const contentComments = await getContentsComments(env, plannedContentIds, currentUser?.id);
   for (const contentId of plannedContentIds) {
-    allComments[contentId] = nestComments(contentComments[contentId] ?? [], currentUser);
+    allComments[contentId] = nestComments(contentComments[contentId] ?? [], sensei);
   }
 
   return {
@@ -83,7 +71,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
 }
 
 export default function UserFutures() {
-  const { events, favoritedStudents, allComments, isMe } = useLoaderData<typeof loader>();
+  const { events, favoritedStudents, allComments } = useLoaderData<typeof loader>();
 
   if (events.length === 0) {
     return (
@@ -106,7 +94,6 @@ export default function UserFutures() {
             event={event}
             favoritedStudents={favoritedStudents.filter(({ contentId }) => contentId === event.uid)}
             comments={allComments[event.uid] ?? []}
-            isMe={isMe}
           />
         );
       })}

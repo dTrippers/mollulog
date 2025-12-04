@@ -29,7 +29,7 @@ export type ContentTimelineItemProps = {
     uid: string;
     body: string;
     visibility: "private" | "public";
-    pinned?: boolean;
+    pinned: boolean;
     createdAt: string;
     sensei: {
       username: string;
@@ -49,7 +49,6 @@ export type ContentTimelineItemProps = {
     }[];
   }[];
 
-  pinnedCommentUid?: string | null;
   onCommentCreate?: (body: string, visibility: "private" | "public") => void;
   onCommentCreateSubcomment?: (parentCommentId: string, body: string, visibility: "private" | "public") => void;
   onCommentUpdate?: (commentUid: string, body: string, visibility: "private" | "public") => void;
@@ -112,7 +111,7 @@ function ContentTitles({ name, showLink }: { name: string, showLink: boolean }):
 
 export function ContentTimelineItem({
   name, contentType, rerun, endless, since, until, link, confirmed, hasShopData, raidInfo, pickups,
-  allComments, pinnedCommentUid, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
+  allComments, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
 }: ContentTimelineItemProps) {
   const showComments = pickups && pickups.length > 0;
   const [commentEditing, setCommentEditing] = useState(false);
@@ -246,7 +245,6 @@ export function ContentTimelineItem({
         <>
           <ContentCommentView
             comments={allComments}
-            pinnedCommentUid={pinnedCommentUid ?? undefined}
             onClick={() => setCommentEditing(true)}
           />
 

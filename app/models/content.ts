@@ -267,7 +267,7 @@ export function nestComments(flatComments: ContentCommentWithSensei[], currentUs
       uid: comment.uid,
       body: comment.body,
       visibility: comment.visibility,
-      pinned: comment.pinned,
+      pinned: comment.pinned && comment.sensei.username === currentUser?.username,
       createdAt: comment.createdAt,
       sensei: {
         me: currentUser?.username === comment.sensei.username,

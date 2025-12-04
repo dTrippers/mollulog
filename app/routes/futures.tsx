@@ -5,7 +5,7 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { ContentTimeline } from "~/components/contents";
 import type { ContentTimelineProps } from "~/components/contents";
 import { ContentFilterPanel } from "~/components/futures";
-import { getContentsComments, getFutureContents, nestComments } from "~/models/content";
+import { getContentsComments, getFutureContents, nestComments, NestedComment } from "~/models/content";
 import { getUserFavoritedStudents, getFavoritedCounts } from "~/models/favorite-students";
 import { ActionData as ContentsActionData } from "./api.contents";
 import { ActionData as CommentActionData } from "./api.contents.$uid.comments";
@@ -41,38 +41,11 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const flatComments = await getContentsComments(env, contents.map((content) => content.uid), currentUser?.id);
 
   // Transform flat comments to nested structure with sensei.me property
-  const allComments: Record<string, {
-    uid: string;
-    body: string;
-    visibility: "private" | "public";
-    createdAt: string;
-    sensei: {
-      me: boolean;
-      username: string;
-      profileStudentId: string | null;
-    };
-    subcomments?: {
-      uid: string;
-      body: string;
-      visibility: "private" | "public";
-      createdAt: string;
-      sensei: {
-        me: boolean;
-        username: string;
-        profileStudentId: string | null;
-      };
-    }[];
-  }[]> = {};
-
-  const pinnedCommentUids: Record<string, string | null> = {};
-
+  const allComments: Record<string, NestedComment[]> = {};
   contents.forEach((content) => {
     const contentComments = flatComments[content.uid] ?? [];
     const nested = nestComments(contentComments, currentUser);
     allComments[content.uid] = nested;
-
-    const pinned = nested.find((comment) => comment.pinned);
-    pinnedCommentUids[content.uid] = pinned?.uid ?? null;
   });
 
   return {
@@ -81,7 +54,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     favoritedStudents: signedIn ? await getUserFavoritedStudents(env, currentUser.id) : null,
     favoritedCounts: await getFavoritedCounts(env, allStudentUids),
     allComments,
-    pinnedCommentUids,
   };
 };
 
@@ -117,7 +89,7 @@ export default function FutureContents() {
   }, [filter, isHydrated]);
 
   const loaderData = useLoaderData<typeof loader>();
-  const { contents, allComments: initialComments, pinnedCommentUids, signedIn } = loaderData;
+  const { contents, allComments: initialComments, signedIn } = loaderData;
 
   const [favoritedStudents, setFavoritedStudents] = useState<{ contentUid: string, studentUid: string }[] | undefined>(
     loaderData.favoritedStudents?.map((f) => ({ contentUid: f.contentId, studentUid: f.studentId })) ?? undefined
@@ -217,7 +189,6 @@ export default function FutureContents() {
             since: new Date(content.since),
             until: new Date(content.until),
             allComments: allComments[content.uid] ?? [],
-            pinnedCommentUid: pinnedCommentUids[content.uid] ?? null,
           };
 
           if (content.__typename === "Event") {

@@ -19,7 +19,6 @@ export type ContentTimelineProps = {
     raidInfo?: ContentTimelineItemProps["raidInfo"];
 
     allComments?: ContentTimelineItemProps["allComments"];
-    pinnedCommentUid?: ContentTimelineItemProps["pinnedCommentUid"];
   }[];
 
   favoritedStudents?: { contentUid: string, studentUid: string }[];
@@ -145,7 +144,6 @@ export default function ContentTimeline({ contents, favoritedStudents, favorited
                       {...content}
 
                       allComments={content.allComments}
-                      pinnedCommentUid={content.pinnedCommentUid}
                       onCommentCreate={showComments ? (body, visibility) => onCommentCreate?.(content.uid, body, visibility) : undefined}
                       onCommentCreateSubcomment={showComments ? (parentCommentId, body, visibility) => onCommentCreateSubcomment?.(content.uid, parentCommentId, body, visibility) : undefined}
                       onCommentUpdate={showComments ? (commentUid, body, visibility) => onCommentUpdate?.(content.uid, commentUid, body, visibility) : undefined}

@@ -10,6 +10,7 @@ import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale,
 import type { AttackType, DefenseType, PickupType, Role } from "~/models/content.d";
 import ContentCommentView from "~/components/contents/ContentCommentView";
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
+import type { NestedComment } from "~/models/content";
 
 type FuturePlanStudents = {
   uid: string;
@@ -44,35 +45,11 @@ type FuturePlanProps = {
   favoritedStudents: {
     studentId: string;
   }[];
-  comments?: {
-    uid: string;
-    body: string;
-    visibility: "private" | "public";
-    pinned?: boolean;
-    createdAt: string;
-    sensei: {
-      me: boolean;
-      username: string;
-      profileStudentId: string | null;
-    };
-    subcomments?: {
-      uid: string;
-      body: string;
-      visibility: "private" | "public";
-      createdAt: string;
-      sensei: {
-        me: boolean;
-        username: string;
-        profileStudentId: string | null;
-      };
-    }[];
-  }[];
-  isMe: boolean;
+  comments?: NestedComment[];
 };
 
-export default function FuturePlan({ event, favoritedStudents, comments, isMe }: FuturePlanProps) {
+export default function FuturePlan({ event, favoritedStudents, comments }: FuturePlanProps) {
   const [allComments, setAllComments] = useState(comments ?? []);
-  const [commentEditing, setCommentEditing] = useState(false);
   const fetcher = useFetcher();
 
   // Update comments when fetcher returns data
@@ -234,7 +211,6 @@ export default function FuturePlan({ event, favoritedStudents, comments, isMe }:
       <div className="mt-2">
         <ContentCommentView
           comments={allComments}
-          pinnedCommentUid={pinnedCommentUid}
           placeholder="남긴 의견이 없어요"
         />
       </div>
