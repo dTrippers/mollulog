@@ -165,13 +165,13 @@ export async function deleteComment(env: Env, userId: number, commentUid: string
     ));
 }
 
-export async function getCommentIdByUid(env: Env, commentUid: string): Promise<number | null> {
+export async function getCommentIdByUid(env: Env, commentUid: string, userId?: number): Promise<number | null> {
   const db = drizzle(env.DB);
   const comment = await db.select({ id: contentComments.id })
     .from(contentComments)
     .where(and(
       eq(contentComments.uid, commentUid),
-      eq(contentComments.visibility, "public"),
+      or(...visibilityFilter(userId)),
     ))
     .get();
 
@@ -255,41 +255,7 @@ export type NestedComment = {
 
 export async function getNestedContentComments(env: Env, contentUid: string, currentUser: { id: number; username: string } | null): Promise<NestedComment[]> {
   const comments = await getContentComments(env, contentUid, currentUser?.id);
-
-  // Separate top-level comments and subcomments
-  const topLevelComments = comments.filter((comment) => !comment.parentCommentId);
-  const subcomments = comments.filter((comment) => comment.parentCommentId);
-
-  // Build nested structure - match subcomments to parents by parent's database ID
-  const nestedComments = topLevelComments.map((comment) => {
-    const commentSubcomments = subcomments.filter((subComment) => subComment.parentCommentId === comment.id);
-    return {
-      uid: comment.uid,
-      body: comment.body,
-      visibility: comment.visibility,
-      pinned: comment.pinned,
-      createdAt: comment.createdAt,
-      sensei: {
-        me: currentUser?.username === comment.sensei.username,
-        username: comment.sensei.username,
-        profileStudentId: comment.sensei.profileStudentId,
-      },
-      subcomments: commentSubcomments.map((subComment) => ({
-        uid: subComment.uid,
-        body: subComment.body,
-        visibility: subComment.visibility,
-        pinned: false,
-        createdAt: subComment.createdAt,
-        sensei: {
-          me: currentUser?.username === subComment.sensei.username,
-          username: subComment.sensei.username,
-          profileStudentId: subComment.sensei.profileStudentId,
-        },
-      })),
-    };
-  });
-
-  return nestedComments;
+  return nestComments(comments, currentUser);
 }
 
 export function nestComments(flatComments: ContentCommentWithSensei[], currentUser: { id: number; username: string } | null): NestedComment[] {

@@ -71,12 +71,8 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     const nested = nestComments(contentComments, currentUser);
     allComments[content.uid] = nested;
 
-    if (currentUser) {
-      const pinned = nested.find((comment) => comment.pinned);
-      pinnedCommentUids[content.uid] = pinned?.uid ?? null;
-    } else {
-      pinnedCommentUids[content.uid] = null;
-    }
+    const pinned = nested.find((comment) => comment.pinned);
+    pinnedCommentUids[content.uid] = pinned?.uid ?? null;
   });
 
   return {
@@ -142,18 +138,12 @@ export default function FutureContents() {
 
   // Update comments state when comment action completes and returns updated comments
   useEffect(() => {
-    if (commentFetcher.state === "idle" && commentFetcher.data && Array.isArray(commentFetcher.data) && pendingContentUid) {
-      // Extract contentUid from the URL
-      const url = commentFetcher.formAction || "";
-      const match = url.match(/\/api\/contents\/([^/]+)\/comments/);
-      const contentUid = match?.[1] || pendingContentUid;
-      if (contentUid) {
-        setAllComments((prev) => ({
-          ...prev,
-          [contentUid]: commentFetcher.data as typeof initialComments[string],
-        }));
-        setPendingContentUid(null);
-      }
+    if ((commentFetcher.state === "idle" || commentFetcher.state === "loading") && commentFetcher.data && Array.isArray(commentFetcher.data) && pendingContentUid) {
+      setAllComments((prev) => ({
+        ...prev,
+        [pendingContentUid]: commentFetcher.data as typeof initialComments[string],
+      }));
+      setPendingContentUid(null);
     }
   }, [commentFetcher.state, commentFetcher.data, commentFetcher.formAction, pendingContentUid, initialComments]);
 

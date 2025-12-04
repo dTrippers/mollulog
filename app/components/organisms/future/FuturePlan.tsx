@@ -2,15 +2,13 @@ import { useState, useEffect } from "react";
 import { useFetcher } from "react-router";
 import { Link } from "react-router";
 import dayjs from "dayjs";
-import { ChatBubbleOvalLeftEllipsisIcon, ChevronRightIcon } from "@heroicons/react/16/solid";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { MultilineText } from "~/components/atoms/typography";
 import { OptionBadge, StudentCard } from "~/components/atoms/student";
 import { ResourceCards } from "~/components/molecules/student";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, pickupLabelLocale, roleColor, roleLocale, schoolNameLocale } from "~/locales/ko";
 import type { AttackType, DefenseType, PickupType, Role } from "~/models/content.d";
 import ContentCommentView from "~/components/contents/ContentCommentView";
-import ContentCommentEditor from "~/components/contents/ContentCommentEditor";
-import { BottomSheet } from "~/components/atoms/layout";
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 
 type FuturePlanStudents = {
@@ -236,7 +234,7 @@ export default function FuturePlan({ event, favoritedStudents, comments, isMe }:
       <div className="mt-2">
         <ContentCommentView
           comments={allComments}
-          pinnedCommentUid={pinnedCommentUid ?? undefined}
+          pinnedCommentUid={pinnedCommentUid}
           placeholder="남긴 의견이 없어요"
         />
       </div>

@@ -44,7 +44,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
       throw new Response("Body and parentCommentId are required", { status: 400 });
     }
 
-    const parentId = await getCommentIdByUid(env, actionData.parentCommentId);
+    const parentId = await getCommentIdByUid(env, actionData.parentCommentId, currentUser.id);
     if (!parentId) {
       throw new Response("Parent comment not found", { status: 404 });
     }

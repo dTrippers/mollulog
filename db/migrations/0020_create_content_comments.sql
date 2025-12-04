@@ -19,4 +19,5 @@ create index if not exists content_comments_userId_contentId on content_comments
 
 
 insert into content_comments (uid, userId, contentId, parentCommentId, body, visibility, pinned, createdAt, updatedAt)
-  select uid, userId, contentId, null, body, visibility, 1, createdAt, updatedAt from content_memos;
+  select uid, userId, contentId, null, body, visibility, 1, createdAt, updatedAt from content_memos
+  where body != '';
