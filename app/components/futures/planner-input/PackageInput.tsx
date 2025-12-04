@@ -1,7 +1,9 @@
 import { useState } from "react";
 import dayjs from "dayjs";
-import { ButtonForm, InputForm, SelectForm } from "~/components/molecules/form";
-import { FormGroup } from "~/components/organisms/form";
+import PlannerButtonForm from "./PlannerButtonForm";
+import PlannerInputForm from "./PlannerInputForm";
+import PlannerSelectForm from "./PlannerSelectForm";
+import PlannerFormGroup from "./PlannerFormGroup";
 
 type PackageInputProps = {
   onSavePackage: (startDate: Date, packageType: "half" | "full") => void;
@@ -14,8 +16,8 @@ export default function PackageInput({ onSavePackage }: PackageInputProps) {
   return (
     <>
       <p className="mb-2 text-sm text-neutral-500">월간 패키지의 구매 정보를 입력해주세요</p>
-      <FormGroup>
-        <SelectForm
+      <PlannerFormGroup>
+        <PlannerSelectForm
           label="패키지 종류"
           options={[
             { label: "월간", value: "full" },
@@ -24,18 +26,18 @@ export default function PackageInput({ onSavePackage }: PackageInputProps) {
           initialValue={packageType}
           onSelect={(value) => setPackageType(value as "half" | "full")}
         />
-        <InputForm
+        <PlannerInputForm
           label="패키지 시작 날짜"
           type="date"
           defaultValue={dayjs().format("YYYY-MM-DD")}
           onChange={(value) => setStartDate(new Date(value))}
         />
-        <ButtonForm
+        <PlannerButtonForm
           label="저장"
           color="blue"
           onClick={() => onSavePackage(startDate, packageType)}
         />
-      </FormGroup>
+      </PlannerFormGroup>
     </>
   );
 }

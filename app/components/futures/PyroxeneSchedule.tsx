@@ -205,7 +205,7 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
                     setExpectedTrialsInputValue(0);
                     onUpdateEventData(event.uid, { expectedTrials: null });
                   }}
-                  className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/30 hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 rounded-md transition whitespace-nowrap"
+                  className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap"
                 >
                   초기화
                 </button>
@@ -239,14 +239,14 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
                   <div className="flex justify-end gap-2">
                     <button
                       type="button"
-                      className="px-4 py-2 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition"
+                      className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap"
                       onClick={() => setShowExpectedTrialsAction(false)}
                     >
                       취소
                     </button>
                     <button
                       type="button"
-                      className="px-4 py-2 text-sm text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+                      className="px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md transition whitespace-nowrap"
                       onClick={() => {
                         onUpdateEventData(event.uid, { expectedTrials: expectedTrialsInputValue });
                         setShowExpectedTrialsAction(false);
@@ -353,12 +353,12 @@ function InitialResources({ resources, onUpdateResources }: { resources: PickupR
           ))}
           <div className="flex items-center justify-end gap-2 mt-2">
             {isEditing ? (
-              <button className="px-3 py-1 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition" onClick={handleCancel}>
+              <button className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap" onClick={handleCancel}>
                 취소
               </button>
             ) : (
               <button
-                className="px-3 py-1 text-sm text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition"
+                className="px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md transition whitespace-nowrap"
                 onClick={() => setIsEditing(true)}
               >
                 수정
@@ -381,6 +381,7 @@ function InitialResources({ resources, onUpdateResources }: { resources: PickupR
         <div className="bg-white/90 dark:bg-black/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-4">
           <ResourcesInput
             description="현재 보유한 재화 수량을 입력해주세요."
+            initialResources={resources}
             onSaveResources={(resources) => {
               onUpdateResources(resources);
               setIsEditing(false);
@@ -411,7 +412,7 @@ function TimelineResources({ date, description, resources, itemUid, onDeleteItem
       {itemUid && onDeleteItem && (
         <button
           onClick={() => onDeleteItem(itemUid)}
-          className="ml-2 px-2 py-1 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+          className="ml-2 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md transition whitespace-nowrap"
         >
           삭제
         </button>
@@ -585,9 +586,23 @@ function buildTimeline(
     });
   }
 
+  const initialDateDayjs = dayjs(initialDate);
+  const filteredDeltas = timelineDeltas.filter((delta) => {
+    // Include deltas after initialDate
+    if (delta.date.isAfter(initialDateDayjs)) {
+      return true;
+    }
+    // Include events that haven't ended yet (even if they start on/before initialDate)
+    if (delta.source.event) {
+      return dayjs(delta.source.event.until).isAfter(initialDateDayjs);
+    }
+    // Exclude all other deltas on or before initialDate
+    return false;
+  });
+
   const timeline: Timeline = [];
   let currentResources: PickupResources = initialResources;
-  timelineDeltas.sort((a, b) => a.date.diff(b.date)).forEach((delta) => {
+  filteredDeltas.sort((a, b) => a.date.diff(b.date)).forEach((delta) => {
     let resourceDelta = delta.resourceDelta;
     if (!resourceDelta && delta.pickupTrial !== undefined) {
       if (delta.pickupTrial > 0) {
