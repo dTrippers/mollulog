@@ -87,11 +87,7 @@ export default function EventDetailInfoPage({ event, pickups, allComments, me }:
             title="기간 한정 모집"
             description={"\"페스 신규/복각\" 학생은 페스 기간에만 모집할 수 있어요"}
           />
-          <EventInfoCard
-            Icon={XCircleIcon}
-            title="모집 포인트 교환 불가"
-            description={"\"페스 복각\" 학생은 모집 포인트(천장)로는 교환할 수 없어요"}
-          />
+          
         </>
       )}
 
@@ -106,6 +102,7 @@ type PickupsProps = {
   signedIn: boolean;
   event: {
     uid: string;
+    type: EventType;
     since: Date;
     until: Date;
   };
@@ -137,9 +134,26 @@ function Pickups({ pickups, signedIn, event }: PickupsProps) {
     return group.until !== null && (isSinceDifferent || isUntilDifferent);
   });
 
+  const [filteredPickups, nonPickups] = useMemo(() => {
+    if (event.type !== "fes") {
+      return [pickups, []];
+    }
+
+    const filteredPickups: typeof pickups = [];
+    const nonPickups: typeof pickups = [];
+    pickups.forEach((pickup) => {
+      if ((pickup.type === "fes" && !pickup.rerun) || (pickup.type === "limited" && pickup.rerun)) {
+        filteredPickups.push(pickup);
+      } else {
+        nonPickups.push(pickup);
+      }
+    });
+    return [filteredPickups, nonPickups];
+  }, [pickups]);
+
   return (
     <>
-      <SubTitle text="픽업 모집 정보" />
+      <SubTitle text="픽업 모집 학생" />
       {shouldNotifyPickupPeriod && (
         <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700 rounded-xl">
           <div className="flex items-center gap-3">
@@ -181,7 +195,19 @@ function Pickups({ pickups, signedIn, event }: PickupsProps) {
           </div>
         </div>
       )}
-      {pickups.map((pickup) => <EventPickupWithFavoriteState key={pickup.student?.uid} pickup={pickup} signedIn={signedIn} />)}
+      {filteredPickups.map((pickup) => <EventPickupWithFavoriteState key={pickup.student?.uid} pickup={pickup} signedIn={signedIn} />)}
+
+      {nonPickups.length > 0 && (
+        <>
+          <SubTitle text="기간 한정 모집 학생" />
+          <EventInfoCard
+            Icon={XCircleIcon}
+            title="모집 포인트(천장) 교환 불가"
+            description="아래 학생들은 모집 포인트(천장)로는 교환할 수 없어요"
+          />
+          {nonPickups.map((pickup) => <EventPickupWithFavoriteState key={pickup.student?.uid} pickup={pickup} signedIn={signedIn} />)}
+        </>
+      )}
     </>
   );
 }

@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import dayjs from "dayjs";
-import { ChevronRightIcon, ChartBarIcon, ClockIcon, CheckCircleIcon, ExclamationTriangleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon } from "@heroicons/react/16/solid";
+import { ChevronRightIcon, ChartBarIcon, ClockIcon, CheckCircleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon } from "@heroicons/react/16/solid";
 import { ArrowTopRightOnSquareIcon, IdentificationIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import type { AttackType, DefenseType, EventType, PickupType, RaidType, Role, Terrain } from "~/models/content.d";
@@ -12,6 +12,7 @@ import { OptionBadge } from "~/components/atoms/student";
 import { BottomSheet } from "~/components/atoms/layout";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
+import { TimelineItemBanner } from "./TimelineItemBanner";
 
 export type ContentTimelineItemProps = {
   uid: string;
@@ -167,11 +168,6 @@ export function ContentTimelineItem({
     </div>
   ) : null;
 
-  const pickupSince = pickups?.[0]?.since;
-  const pickupUntil = pickups?.[0]?.until;
-  const isPickupDayDifferent = pickupSince && pickupUntil &&
-    (!dayjs(pickupSince).isSame(dayjs(since), "day") || !dayjs(pickupUntil).isSame(dayjs(until), "day"));
-
   return (
     <div className="my-4 md:my-6">
       {/* 컨텐츠 분류 */}
@@ -215,29 +211,16 @@ export function ContentTimelineItem({
 
       {/* 픽업 정보 */}
       {pickups && pickups.length > 0 && (
-        <div className="my-2">
-          <PickupStudents
-            pickups={pickups}
-            favoritedStudents={favoritedStudents ?? []}
-            favoritedCounts={favoritedCounts ?? {}}
-            onFavorite={onFavorite}
-            showToggle={contentType === "archive_pickup"}
-          />
-
-          {isPickupDayDifferent && (
-            <div className="mb-2 px-2 py-2 flex items-center gap-x-2 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl text-sm">
-              <ExclamationTriangleIcon className="shrink-0 size-5 text-amber-600 dark:text-amber-400" />
-              <div className="flex flex-wrap gap-x-1">
-                <p className="shrink-0 text-amber-700 dark:text-amber-300">
-                  {dayjs(pickupUntil).isBefore(dayjs()) ? "픽업 모집은 종료되었어요." : "이벤트 개최 기간과 픽업 모집 기간이 달라요."}
-                </p>
-                <Link to={link} className="flex-shrink-0 text-amber-600 dark:text-amber-400 underline cursor-pointer hover:text-amber-700 dark:hover:text-amber-300">
-                  자세히 보기
-                </Link>
-              </div>
-            </div>
-          )}
-        </div>
+        <Pickup
+          contentType={contentType}
+          pickups={pickups}
+          favoritedStudents={favoritedStudents ?? []}
+          favoritedCounts={favoritedCounts ?? {}}
+          onFavorite={onFavorite}
+          link={link}
+          eventSince={since ?? null}
+          eventUntil={until ?? null}
+        />
       )}
 
       {/* 댓글 */}
@@ -269,7 +252,8 @@ export function ContentTimelineItem({
   );
 }
 
-type PickupStudentsProps = {
+type PickupProps = {
+  contentType: EventType | RaidType;
   pickups: {
     type: PickupType;
     rerun: boolean;
@@ -278,56 +262,170 @@ type PickupStudentsProps = {
       uid: string;
       schaleDbId?: string | null;
     } | null;
+    since: Date;
+    until: Date | null;
   }[];
+
+  favoritedStudents: string[];
+  favoritedCounts: Record<string, number>;
+  onFavorite?: (studentUid: string, favorited: boolean) => void;
+  link: string;
+
+  eventSince: Date | null;
+  eventUntil: Date | null;
+};
+
+function Pickup({ contentType, pickups, favoritedStudents, favoritedCounts, onFavorite, link, eventSince, eventUntil }: PickupProps) {
+  // Group pickups by period (since/until dates)
+  const pickupDateGroups = useMemo(() => {
+    return pickups.reduce((groups, pickup) => {
+      const sinceKey = dayjs(pickup.since).format("YYYY-MM-DD");
+      const untilKey = pickup.until ? dayjs(pickup.until).format("YYYY-MM-DD") : "null";
+      const key = `${sinceKey}-${untilKey}`;
+      if (!groups[key]) {
+        groups[key] = {
+          since: pickup.since,
+          until: pickup.until,
+          pickups: []
+        };
+      }
+      groups[key].pickups.push(pickup);
+      return groups;
+    }, {} as Record<string, { since: Date; until: Date | null; pickups: PickupProps["pickups"] }>)
+  }, [pickups]);
+
+  const pickupDateGroupsArray = Object.values(pickupDateGroups);
+  const hasMultiplePeriods = pickupDateGroupsArray.length >= 2;
+
+  const pickupSince = pickups[0].since;
+  const pickupUntil = pickups[0].until;
+  const isPickupDayDifferent = pickupSince && pickupUntil &&
+    (!dayjs(pickupSince).isSame(dayjs(eventSince), "day") || !dayjs(pickupUntil).isSame(dayjs(eventUntil), "day"));
+
+  console.log(pickupDateGroupsArray);
+
+  if (contentType === "fes") {
+    return (
+      <>
+        <PickupStudents
+          title="픽업 학생"
+          pickups={pickups.filter((pickup) => ((pickup.type === "fes" && !pickup.rerun) || (pickup.type === "limited" && pickup.rerun)))}
+          favoritedStudents={favoritedStudents ?? []}
+          favoritedCounts={favoritedCounts ?? {}}
+          onFavorite={onFavorite}
+        />
+
+        <PickupStudents
+          title="기간 한정 모집 학생"
+          pickups={pickups.filter((pickup) => !((pickup.type === "fes" && !pickup.rerun) || (pickup.type === "limited" && pickup.rerun)))}
+          favoritedStudents={favoritedStudents ?? []}
+          favoritedCounts={favoritedCounts ?? {}}
+          onFavorite={onFavorite}
+        />
+
+        <TimelineItemBanner
+          message="픽업 외 학생은 모집 포인트(천장)로 교환할 수 없어요."
+          link={link}
+        />
+      </>
+    )
+  }
+
+  if (hasMultiplePeriods) {
+    return (
+      <>
+        {pickupDateGroupsArray.map((group) => {
+          return (
+            <PickupStudents
+              key={`${dayjs(group.since).format("YYYY-MM-DD")}-${dayjs(group.until).format("YYYY-MM-DD")}`}
+              title={`${dayjs(group.since).format("MM/DD")} ~ ${dayjs(group.until).format("MM/DD")}`}
+              pickups={group.pickups}
+              favoritedStudents={favoritedStudents ?? []}
+              favoritedCounts={favoritedCounts ?? {}}
+              onFavorite={onFavorite}
+            />
+          );
+        })}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <PickupStudents
+        pickups={pickups}
+        favoritedStudents={favoritedStudents ?? []}
+        favoritedCounts={favoritedCounts ?? {}}
+        onFavorite={onFavorite}
+        showToggle={contentType === "archive_pickup"}
+      />
+
+      {isPickupDayDifferent && (
+        <TimelineItemBanner
+          message={dayjs(pickupUntil).isBefore(dayjs()) ? "픽업 모집은 종료되었어요." : "이벤트 개최 기간과 픽업 모집 기간이 달라요."}
+          link={link}
+        />
+      )}
+    </>
+  )
+}
+
+type PickupStudentsProps = {
+  title?: string;
+  pickups: PickupProps["pickups"];
   favoritedStudents: string[];
   favoritedCounts: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
   showToggle?: boolean;
 };
 
-function PickupStudents({ pickups, favoritedStudents, favoritedCounts, onFavorite, showToggle = false }: PickupStudentsProps) {
+function PickupStudents({ title, pickups, favoritedStudents, favoritedCounts, onFavorite, showToggle = false }: PickupStudentsProps) {
   const [showCards, setShowCards] = useState(!showToggle);
 
   if (!showToggle) {
     return (
-      <StudentCards
-        mobileGrid={5}
-        students={pickups.map((pickup) => {
-          const student = pickup.student;
-          const colorClass = (pickup.rerun || pickup.type === "archive") ? "text-white" : "text-yellow-500";
-          return {
-            ...student,
-            uid: student?.uid ?? null,
-            name: pickup.studentName,
-            label: <span className={`${colorClass}`}>{pickupLabelLocale(pickup)}</span>,
-            state: student?.uid ? {
-              favorited: favoritedStudents?.includes(student.uid),
-              favoritedCount: favoritedCounts?.[student.uid],
-            } : undefined,
-            popups: (student?.uid && student?.schaleDbId) ? [
-              favoritedStudents?.includes(student.uid) ? {
-                Icon: FilledHeartIcon,
-                text: "관심 학생에서 해제",
-                onClick: () => onFavorite?.(student.uid, false),
-              } : {
-                Icon: EmptyHeartIcon,
-                text: "관심 학생에 등록",
-                onClick: () => onFavorite?.(student.uid, true),
-              },
-              {
-                Icon: IdentificationIcon,
-                text: "학생부 보기 (평가/통계)",
-                link: `/students/${student?.uid}`,
-              },
-              {
-                Icon: ArrowTopRightOnSquareIcon,
-                text: "샬레DB 정보 보기",
-                link: `https://schaledb.com/student/${student?.schaleDbId}`,
-              },
-            ] : undefined,
-          };
-        })}
-      />
+      <div className="my-2">
+        {title && <p className="mt-4 mb-1 font-semibold">{title}</p>}
+        <StudentCards
+          mobileGrid={5}
+          pcGrid={10}
+          students={pickups.map((pickup) => {
+            const student = pickup.student;
+            const colorClass = (pickup.rerun || pickup.type === "archive") ? "text-white" : "text-yellow-500";
+            return {
+              ...student,
+              uid: student?.uid ?? null,
+              name: pickup.studentName,
+              label: <span className={`${colorClass}`}>{pickupLabelLocale(pickup)}</span>,
+              state: student?.uid ? {
+                favorited: favoritedStudents?.includes(student.uid),
+                favoritedCount: favoritedCounts?.[student.uid],
+              } : undefined,
+              popups: (student?.uid && student?.schaleDbId) ? [
+                favoritedStudents?.includes(student.uid) ? {
+                  Icon: FilledHeartIcon,
+                  text: "관심 학생에서 해제",
+                  onClick: () => onFavorite?.(student.uid, false),
+                } : {
+                  Icon: EmptyHeartIcon,
+                  text: "관심 학생에 등록",
+                  onClick: () => onFavorite?.(student.uid, true),
+                },
+                {
+                  Icon: IdentificationIcon,
+                  text: "학생부 보기 (평가/통계)",
+                  link: `/students/${student?.uid}`,
+                },
+                {
+                  Icon: ArrowTopRightOnSquareIcon,
+                  text: "샬레DB 정보 보기",
+                  link: `https://schaledb.com/student/${student?.schaleDbId}`,
+                },
+              ] : undefined,
+            };
+          })}
+        />
+      </div>
     );
   }
 
