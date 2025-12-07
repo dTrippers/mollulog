@@ -82,9 +82,7 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
     setCurrentPageRanks([]);
 
     let cancelled = false;
-    let subscription: any = null;
     let currentDb: RxDatabase | null = null;
-
     getRaidRankDatabase().then((db) => {
       if (cancelled) {
         return;
@@ -103,9 +101,6 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
 
     return () => {
       cancelled = true;
-      if (subscription) {
-        subscription.unsubscribe();
-      }
       if (currentDb?.collections[collectionName]) {
         currentDb.collections[collectionName].remove();
       }
