@@ -1,15 +1,15 @@
-import type { DefenseType } from "~/models/content.d";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { Toggle } from "~/components/atoms/form";
 import RaidRankFilterStudentSearch from "./RaidRankFilterStudentSearch";
+import { FilterButtons } from "~/components/navigation";
+import { Difficulty } from "~/models/raid";
+import { difficultyLocale } from "~/locales/ko";
 
 export type RaidRankFilterState = {
-  defenseType: DefenseType | null;
   filterNotOwned: boolean;
   includeStudents: { uid: string; tiers: number[] }[];
   excludeStudents: { uid: string; tiers: number[] }[];
-  rankAfter: number | null;
-  rankBefore: number | null;
+  difficulty: Difficulty | null;
 };
 
 type RaidRankFilterProps = {
@@ -21,6 +21,7 @@ type RaidRankFilterProps = {
     name: string;
     tiers: number[];
   }[];
+  filterableDifficulties: Difficulty[];
   signedIn: boolean;
 };
 
@@ -39,11 +40,23 @@ export function mergeFilteredStudents(prev: { uid: string; tiers: number[] }[], 
   return results;
 }
 
-export default function RaidRankFilter({ state, setState, signedIn, filterableStudents }: RaidRankFilterProps) {
+export default function RaidRankFilter({ state, setState, signedIn, filterableStudents, filterableDifficulties }: RaidRankFilterProps) {
   const { showSignIn } = useSignIn();
 
   return (
     <>
+      <div className="mb-6">
+        <p className="font-bold">난이도</p>
+        <FilterButtons
+          buttonProps={filterableDifficulties.map((difficulty) => ({
+            text: difficultyLocale[difficulty],
+            active: state.difficulty === difficulty,
+            onToggle: (activated) => setState((prev) => ({ ...prev, difficulty: activated ? difficulty : null })),
+          }))}
+          exclusive
+        />
+      </div>
+
       <div className="mb-4">
         <p className="font-bold">포함할 학생</p>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">선택한 학생을 모두 포함</p>

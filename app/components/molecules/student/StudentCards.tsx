@@ -15,6 +15,7 @@ type StudentCardsProps = {
     level?: number | null;
     label?: ReactNode;
     grayscale?: boolean;
+    hideName?: boolean;
 
     state?: {
       favorited?: boolean;
