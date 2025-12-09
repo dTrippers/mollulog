@@ -1,9 +1,38 @@
 import { graphql } from "~/graphql";
 import { fetchCached } from "./base";
 import { runQuery } from "~/lib/baql";
+import type { Env } from "~/env.server";
 
 export type Difficulty = "normal" | "hard" | "veryhard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
 export type Boss = "binah" | "chesed" | "hod" | "shirokuro" | "perorozilla" | "goz" | "hieronymus" | "kaiten-fx-mk0" | "gregorius" | "hovercraft" | "myouki-kurokage" | "geburah" | "yesod";
+
+
+const raidDetailQuery = graphql(`
+  query RaidDetail($uid: String!) {
+    raid(uid: $uid) {
+      uid type name boss since until terrain attackType rankVisible raidIndexJp
+      defenseTypes { defenseType difficulty }
+      videos(first: 1) {
+        pageInfo { hasNextPage }
+      }
+      statistics {
+        student { uid name }
+        slotsByTier { tier }
+        assistsByTier { tier }
+      }
+    }
+  }
+`);
+
+export function getRaidDetail(env: Env, uid: string, forceRefresh = false) {
+  return fetchCached(env, `raid-detail-${uid}`, async () => {
+    const { data, error } = await runQuery(raidDetailQuery, { uid });
+    if (error) {
+      throw "failed to fetch raid detail";
+    }
+    return data?.raid ?? null;
+  }, 60 * 90, forceRefresh);
+}
 
 
 const allRaidQuery = graphql(`
@@ -24,7 +53,7 @@ export function getAllRaids(env: Env, forceRefresh = false) {
       throw error ?? "failed to fetch raids";
     }
     return data.raids.nodes;
-  }, 60 * 10, forceRefresh);
+  }, 60 * 90, forceRefresh);
 }
 
 export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [

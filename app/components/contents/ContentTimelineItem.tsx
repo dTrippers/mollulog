@@ -302,8 +302,6 @@ function Pickup({ contentType, pickups, favoritedStudents, favoritedCounts, onFa
   const isPickupDayDifferent = pickupSince && pickupUntil &&
     (!dayjs(pickupSince).isSame(dayjs(eventSince), "day") || !dayjs(pickupUntil).isSame(dayjs(eventUntil), "day"));
 
-  console.log(pickupDateGroupsArray);
-
   if (contentType === "fes") {
     return (
       <>

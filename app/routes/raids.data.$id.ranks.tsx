@@ -32,6 +32,7 @@ export type RaidRanksData = {
   hasMore: boolean;
 };
 
+// @deprecated
 export const action = async ({ request, context, params }: ActionFunctionArgs) => {
   const raidUid = params.id;
   if (!raidUid) {

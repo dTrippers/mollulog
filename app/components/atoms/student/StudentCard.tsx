@@ -27,6 +27,7 @@ type StudentCardProps = {
   favoritedCount?: number;
   grayscale?: boolean;
   checked?: boolean;
+  hideName?: boolean;
 
   onSelect?: (id: string) => void;
   popups?: StudentCardPopupProps["popups"];
@@ -43,7 +44,7 @@ function visibileTier(tier: number): [number, boolean] {
 
 export default function StudentCard({
   uid, name, nameSize, tier, level, label, isAssist, attackType, defenseType, role,
-  favorited, favoritedCount, grayscale, checked, onSelect, popups, popupId = uid,
+  favorited, favoritedCount, grayscale, checked, hideName, onSelect, popups, popupId = uid,
 }: StudentCardProps) {
   const { activePopupId, setActivePopupId } = useStudentCardPopup();
   const showPopup = popupId === activePopupId;
@@ -104,7 +105,7 @@ export default function StudentCard({
                 )}
               </div>
             </div>
-            {name && (
+            {name && !hideName && (
               <div className="mt-1 text-center leading-tight tracking-tighter">
                 <p className={nameSize === "small" ? "text-xs" : "text-sm"}>{visibleNames[0]}</p>
                 {(visibleNames.length === 2) && <p className="text-xs">{visibleNames[1]}</p>}

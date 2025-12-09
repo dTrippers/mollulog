@@ -6,44 +6,25 @@ import { ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { ErrorPage } from "~/components/organisms/error";
 import { FilterButtons, Page, PagePanelProps } from "~/components/navigation";
 import { RaidSelector } from "~/components/raids";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { getAllRaids } from "~/models/raid";
+import { getAllRaids, getRaidDetail } from "~/models/raid";
 import type { DefenseType } from "~/models/content.d";
 
-const raidDetailQuery = graphql(`
-  query RaidDetail($uid: String!) {
-    raid(uid: $uid) {
-      uid type name boss since until terrain attackType rankVisible
-      defenseTypes { defenseType difficulty }
-      videos(first: 1) {
-        pageInfo { hasNextPage }
-      }
-      statistics {
-        student { uid name }
-        slotsByTier { tier }
-        assistsByTier { tier }
-      }
-    }
-  }
-`);
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
-
-  const { data, error } = await runQuery(raidDetailQuery, { uid: params.id! });
-  if (error || !data?.raid) {
+  const raidDetail = await getRaidDetail(env, params.id!);
+  if (!raidDetail) {
     throw new Response(
       JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
       { status: 404, headers: { "Content-Type": "application/json" } },
     );
   }
 
+  const sensei = await getAuthenticator(env).isAuthenticated(request);
   return {
-    currentRaid: data.raid,
+    currentRaid: raidDetail,
     allRaids: await getAllRaids(env),
     signedIn: sensei !== null,
   };
@@ -79,7 +60,7 @@ export const ErrorBoundary = () => {
 
 export type RaidPageContext = {
   currentRaid: Awaited<ReturnType<typeof loader>>["currentRaid"];
-  defenseType: DefenseType | null;
+  defenseType: DefenseType;
   setPanel: (panel: PagePanelProps) => void;
   signedIn: boolean;
 };
@@ -96,11 +77,9 @@ export default function RaidPage() {
     }
   }, [pathname, setPanel]);
 
-  const [selectedDefenseType, setDefenseType] = useState<DefenseType | null>(
-    currentRaid.defenseTypes.length > 0 ? currentRaid.defenseTypes[0].defenseType : null,
-  );
+  const [selectedDefenseType, setDefenseType] = useState<DefenseType>(currentRaid.defenseTypes[0].defenseType);
   useEffect(() => {
-    if (currentRaid.defenseTypes.length > 0 && (selectedDefenseType === null || !currentRaid.defenseTypes.some(({ defenseType }) => defenseType === selectedDefenseType))) {
+    if (!currentRaid.defenseTypes.some(({ defenseType }) => defenseType === selectedDefenseType)) {
       setDefenseType(currentRaid.defenseTypes[0].defenseType);
     }
   }, [currentRaid.defenseTypes]);

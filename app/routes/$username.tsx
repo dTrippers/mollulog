@@ -7,7 +7,6 @@ import { ErrorPage } from "~/components/organisms/error";
 import type { Env } from "~/env.server";
 import { getSenseiByUsername, type Sensei } from "~/models/sensei";
 import { useEffect, useState } from "react";
-import { PagePanelProps } from "~/components/navigation/PagePanel";
 
 export async function getRouteSensei(env: Env, params: Params<string>): Promise<Sensei> {
   const usernameParam = params.username;

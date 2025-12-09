@@ -22,7 +22,7 @@ export default function PageScreenSelector({ screens }: PageScreenSelectorProps)
       <div className="xl:hidden">
         {activeScreen && (
           <div className="cursor-pointer" onClick={() => setIsDropdownOpen(!isDropdownOpen)}>
-            <PageScreenSelectorItem {...activeScreen} showChevron rotateChevron={isDropdownOpen} />
+            <PageScreenSelectorItem {...activeScreen} showChevron rotateChevron={isDropdownOpen} link={undefined} />
           </div>
         )}
 
