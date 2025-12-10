@@ -189,7 +189,6 @@ export default function PyroxenePlanner() {
   };
 
   const handleUpdateEventData = (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => {
-    console.log("data", data);
     setRevalidated(false);
     fetcher.submit(
       { eventData: { eventUid, ...data } },

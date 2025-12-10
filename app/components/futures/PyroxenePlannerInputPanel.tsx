@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import dayjs from "dayjs";
 import FilterButtons from "~/components/navigation/FilterButtons";
 import type { PickupResources } from ".";
 import ResourcesInput from "./planner-input/ResourcesInput";
@@ -36,7 +37,7 @@ export default function PyroxenePlannerInputPanel({ onSaveBuy, onSavePackage, on
               onToggle: (activated) => toggle("buy", activated),
             },
             {
-              text: "월정액 구매",
+              text: "월간 패키지",
               active: inputMode === "package",
               onToggle: (activated) => toggle("package", activated),
             },

@@ -11,6 +11,7 @@ import ResourcesInput from "./planner-input/ResourcesInput";
 import { Transition } from "@headlessui/react";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import { NumberInput } from "~/components/atoms/form";
+import { ChevronDownIcon } from "@heroicons/react/16/solid";
 
 dayjs.locale("ko");
 
@@ -81,10 +82,28 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
     return buildTimeline(initialResources, initialDate ?? new Date(), eventDataMap, scheduleItems, options);
   }, [initialDate, initialResources, eventDataMap, scheduleItems, options]);
 
+  // 30일 이내의 월간 패키지는 삭제가 가능하도록 별도 레이아웃에서 표시
+  const availableOneTimePackages = useMemo(() => {
+    const since = dayjs().subtract(30, "day");
+    return scheduleItems.filter((item) => {
+      if (item.onetimeGain?.source !== "package_onetime") {
+        return false;
+      }
+
+      const packageDate = dayjs(item.onetimeGain.date);
+      return packageDate.isAfter(since) && packageDate.isBefore(initialDate ? dayjs(initialDate) : dayjs());
+    }).map((item) => ({
+      uid: item.onetimeGain!.uid!,
+      date: item.onetimeGain!.date,
+      description: item.onetimeGain!.description,
+      pyroxeneDelta: item.onetimeGain!.pyroxeneDelta!,
+    }));
+  }, [scheduleItems]);
+
   return (
     <>
-      <SubTitle 
-        text="현재 보유 재화" 
+      <SubTitle
+        text="현재 보유 재화"
         description={initialDate ? `마지막 입력 : ${dayjs(initialDate).format('YYYY-MM-DD HH:mm')}` : "현재 보유중인 재화 수량을 입력해주세요"}
       />
       {!initialDate && (
@@ -96,6 +115,9 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
         resources={initialResources}
         onUpdateResources={(resources) => onPickupComplete(null, resources)}
       />
+      {availableOneTimePackages.length > 0 && (
+        <AvailableOneTimePackages packages={availableOneTimePackages} onDeleteItem={onDeleteItem} />
+      )}
 
       <SubTitle text="재화 획득/소비 계획" />
       {timeline.map(({ date, accumulatedResources, resourceDelta, source }) => {
@@ -134,6 +156,43 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
         }
         return null;
       })}
+    </>
+  );
+}
+
+type AvailableOneTimePackageProps = {
+  packages: {
+    uid: string;
+    date: Date;
+    description: string;
+    pyroxeneDelta: number;
+  }[];
+  onDeleteItem: (itemUid: string) => void;
+};
+
+function AvailableOneTimePackages({ packages, onDeleteItem }: AvailableOneTimePackageProps) {
+  const [show, setShow] = useState(false);
+
+  return (
+    <>
+      <div
+        className="p-4 flex items-center justify-center bg-neutral-100 dark:bg-neutral-900 rounded-lg cursor-pointer"
+        onClick={() => setShow((prev) => !prev)}
+      >
+        <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">적용중인 월간 패키지</p>
+        <ChevronDownIcon className={`size-4 text-neutral-500 dark:text-neutral-400 transition-transform duration-200 ease-in-out ${show ? "rotate-180" : ""}`} />
+      </div>
+
+      {show && (packages.map(({ uid, date, description, pyroxeneDelta }) => (
+        <TimelineResources
+          key={uid}
+          date={dayjs(date)}
+          description={description}
+          resources={{ pyroxene: pyroxeneDelta ?? 0, oneTimeTicket: 0, tenTimeTicket: 0 }}
+          itemUid={uid}
+          onDeleteItem={onDeleteItem}
+        />
+      )))}
     </>
   );
 }
@@ -537,7 +596,7 @@ function buildTimeline(
     } else if (scheduleItem.repeatedGain) {
       const { repeatedGain } = scheduleItem;
       let repeatedGainCount = 0;
-      for (let date = dayjs(repeatedGain.date); date.isBefore(maxDate) && repeatedGainCount < MAX_REPEATED_ENTRIES; date = date.add(repeatedGain.repeatIntervalDays, "day")) {
+      for (let date = dayjs(repeatedGain.date); date.isBefore(maxDate) && repeatedGainCount < (repeatedGain.repeatCount ?? MAX_REPEATED_ENTRIES); date = date.add(repeatedGain.repeatIntervalDays, "day")) {
         timelineDeltas.push({
           date,
           source: { type: repeatedGain.source, uid: repeatedGain.uid, description: repeatedGain.description },
