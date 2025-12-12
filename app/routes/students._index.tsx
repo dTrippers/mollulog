@@ -5,13 +5,13 @@ import { FunnelIcon } from "@heroicons/react/24/outline";
 import { StudentCards } from "~/components/molecules/student";
 import { getAllStudents } from "~/models/student";
 import { Page } from "~/components/navigation";
-import { applyStudentFilter, StudentFilter, StudentFilterState } from "~/components/students";
+import { StudentFilter } from "~/components/students";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const students = await getAllStudents(env, true);
+  const allStudents = await getAllStudents(env, true);
   return {
-    students: students.sort((a, b) => a.order - b.order),
+    students: allStudents.sort((a, b) => b.order - a.order),
   };
 };
 
@@ -32,15 +32,11 @@ export default function Students() {
   const { students } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  const [filterState, setFilterState] = useState<StudentFilterState>({
-    attackTypes: [],
-    defenseTypes: [],
-    roles: [],
-    sort: "recent",
-  });
+  const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
+  const [filteredUids, setFilteredUids] = useState<string[]>(students.map((student) => student.uid));
   const filteredStudents = useMemo(() => {
-    return applyStudentFilter(students, filterState);
-  }, [students, filterState]);
+    return filteredUids.map((uid) => studentMap.get(uid)!);
+  }, [studentMap, filteredUids]);
 
   return (
     <Page
@@ -52,7 +48,8 @@ export default function Students() {
           Icon: FunnelIcon,
           children: (
             <StudentFilter
-              state={filterState} onStateChange={setFilterState}
+              students={students}
+              onFilterChange={setFilteredUids}
               sortBy={["recent", "old", "name"]}
               useFilter useSearch
             />

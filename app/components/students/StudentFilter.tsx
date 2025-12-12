@@ -1,10 +1,11 @@
 import { ArrowsUpDownIcon, BarsArrowDownIcon, FireIcon, MagnifyingGlassIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { useState, useEffect } from "react";
 import hangul from "hangul-js";
 import type { AttackType, DefenseType, Role } from "~/models/content.d";
 import { FilterButtons } from "~/components/navigation";
 import { Input } from "../atoms/form";
 
-export type StudentFilterState = {
+type StudentFilterState = {
   attackTypes: AttackType[];
   defenseTypes: DefenseType[];
   roles: Role[];
@@ -16,38 +17,60 @@ export type StudentFilterState = {
 type SortBy = "recent" | "old" | "name" | "tier";
 
 type StudentFilterProps = {
-  state: StudentFilterState;
-  onStateChange: React.Dispatch<React.SetStateAction<StudentFilterState>>;
+  students: (FilterableStudent & { uid: string })[];
+  onFilterChange: (uids: string[]) => void;
 
   useFilter?: boolean;
   sortBy?: SortBy[];
   useSearch?: boolean;
 }
 
-export default function StudentFilter({ state, onStateChange, useFilter, sortBy, useSearch }: StudentFilterProps) {
+export default function StudentFilter({ students, onFilterChange, useFilter, sortBy, useSearch }: StudentFilterProps) {
+  const [state, setState] = useState<StudentFilterState>({
+    attackTypes: [],
+    defenseTypes: [],
+    roles: [],
+    sort: sortBy?.[0] || "recent",
+  });
+
+  const [localSearch, setLocalSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setState((prev) => ({ ...prev, search: localSearch }));
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [localSearch]);
+
+  useEffect(() => {
+    const filtered = applyStudentFilter(students, state);
+    onFilterChange(filtered.map((student) => student.uid));
+  }, [students, state, onFilterChange]);
+
   const toggleAttackType = (attackType: AttackType, activated: boolean) => {
-    onStateChange((prev) => ({
+    setState((prev) => ({
       ...prev,
       attackTypes: activated ? [...prev.attackTypes, attackType] : prev.attackTypes.filter((type) => type !== attackType),
     }));
   };
 
   const toggleDefenseType = (defenseType: DefenseType, activated: boolean) => {
-    onStateChange((prev) => ({
+    setState((prev) => ({
       ...prev,
       defenseTypes: activated ? [...prev.defenseTypes, defenseType] : prev.defenseTypes.filter((type) => type !== defenseType),
     }));
   };
 
   const toggleRole = (role: Role, activated: boolean) => {
-    onStateChange((prev) => ({
+    setState((prev) => ({
       ...prev,
       roles: activated ? [...prev.roles, role] : prev.roles.filter((r) => r !== role),
     }));
   };
 
   const toggleSort = (sort: SortBy) => {
-    onStateChange((prev) => ({ ...prev, sort }));
+    setState((prev) => ({ ...prev, sort }));
   };
 
   return (
@@ -99,8 +122,8 @@ export default function StudentFilter({ state, onStateChange, useFilter, sortBy,
           <MagnifyingGlassIcon className="size-5 mr-2" strokeWidth={2} />
           <Input
             placeholder="이름으로 찾기" className="-my-4 text-sm"
-            value={state.search}
-            onChange={(value) => onStateChange((prev) => ({ ...prev, search: value }))}
+            value={localSearch}
+            onChange={(value) => setLocalSearch(value)}
           />
         </div>
       )}

@@ -9,13 +9,11 @@ import { getRecruitedStudents, upsertRecruitedStudent, removeRecruitedStudent } 
 import { MinusCircleIcon, IdentificationIcon, PlusCircleIcon, FunnelIcon } from "@heroicons/react/24/outline";
 import { useRef, useEffect, useState, useMemo } from "react";
 import { Button, Toggle } from "~/components/atoms/form";
-import { applyStudentFilter, StudentFilter, StudentFilterState } from "~/components/students";
+import { StudentFilter } from "~/components/students";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
-
-  const allStudents = await getAllStudents(env);
 
   const sensei = await getRouteSensei(env, params);
   const recruitedStudents = await getRecruitedStudents(env, sensei.id);
@@ -24,6 +22,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     return acc;
   }, {} as Record<string, number>);
 
+  const allStudents = await getAllStudents(env);
   return {
     me: currentUser?.username === sensei.username,
     noRecruited: recruitedStudents.length === 0,
@@ -86,16 +85,12 @@ export default function UserPage() {
   const loaderData = useLoaderData<typeof loader>();
   const { me, noRecruited, students } = loaderData;
 
-  const [filterState, setFilterState] = useState<StudentFilterState>({
-    attackTypes: [],
-    defenseTypes: [],
-    roles: [],
-    sort: "recent",
-  });
+  const [filteredUids, setFilteredUids] = useState<string[]>(Object.values(students).sort((a, b) => b.order - a.order).map((student) => student.uid));
+  const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [recruitedStudents, unrecruitedStudents] = useMemo(() => {
-    const filteredStudents = applyStudentFilter(students, filterState);
+    const filteredStudents = filteredUids.map((uid) => studentMap.get(uid)!);
     return [filteredStudents.filter(({ tier }) => tier), filteredStudents.filter(({ tier }) => !tier)];
-  }, [students, filterState]);
+  }, [studentMap, filteredUids]);
 
   const { setPanel } = useOutletContext<{ setPanel: (panel: { title: string; description: string; Icon: React.ElementType; children: React.ReactNode }) => void }>();
   useEffect(() => {
@@ -105,13 +100,14 @@ export default function UserPage() {
       Icon: FunnelIcon,
       children: (
         <StudentFilter
-          state={filterState} onStateChange={setFilterState}
+          students={students}
+          onFilterChange={setFilteredUids}
           useFilter useSearch
           sortBy={["recent", "old", "name", "tier"]}
         />
       ),
     });
-  }, [filterState, setPanel]);
+  }, [students, setPanel]);
 
 
   const studentRefs = useRef<Record<string, HTMLDivElement | null>>({});
