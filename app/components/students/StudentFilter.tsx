@@ -1,7 +1,7 @@
-import { ArrowsUpDownIcon, BarsArrowDownIcon, FireIcon, MagnifyingGlassIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { ArrowsRightLeftIcon, ArrowsUpDownIcon, BarsArrowDownIcon, FireIcon, MagnifyingGlassIcon, ShieldCheckIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { useState, useEffect } from "react";
 import hangul from "hangul-js";
-import type { AttackType, DefenseType, Role } from "~/models/content.d";
+import type { AttackType, DefenseType, Position, Role, TacticRole } from "~/models/content.d";
 import { FilterButtons } from "~/components/navigation";
 import { Input } from "../atoms/form";
 
@@ -9,6 +9,8 @@ type StudentFilterState = {
   attackTypes: AttackType[];
   defenseTypes: DefenseType[];
   roles: Role[];
+  tacticRoles: TacticRole[];
+  positions: Position[];
 
   sort?: SortBy;
   search?: string;
@@ -30,6 +32,8 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
     attackTypes: [],
     defenseTypes: [],
     roles: [],
+    tacticRoles: [],
+    positions: [],
     sort: sortBy?.[0] || "recent",
   });
 
@@ -73,6 +77,20 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
     setState((prev) => ({ ...prev, sort }));
   };
 
+  const togglePosition = (position: Position, activated: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      positions: activated ? [...prev.positions, position] : prev.positions.filter((p) => p !== position),
+    }));
+  };
+
+  const toggleTacticRole = (tacticRole: TacticRole, activated: boolean) => {
+    setState((prev) => ({
+      ...prev,
+      tacticRoles: activated ? [...prev.tacticRoles, tacticRole] : prev.tacticRoles.filter((r) => r !== tacticRole),
+    }));
+  };
+
   return (
     <>
       {useFilter && (
@@ -100,6 +118,24 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
             buttonProps={[
               { text: "스트라이커", color: "red", active: state.roles.includes("striker"), onToggle: (activated) => toggleRole("striker", activated) },
               { text: "스페셜", color: "blue", active: state.roles.includes("special"), onToggle: (activated) => toggleRole("special", activated) },
+            ]}
+          />
+          <FilterButtons
+            Icon={ArrowsRightLeftIcon}
+            buttonProps={[
+              { text: "FRONT", active: state.positions.includes("front"), onToggle: (activated) => togglePosition("front", activated) },
+              { text: "MIDDLE", active: state.positions.includes("middle"), onToggle: (activated) => togglePosition("middle", activated) },
+              { text: "BACK", active: state.positions.includes("back"), onToggle: (activated) => togglePosition("back", activated) },
+            ]}
+          />
+          <FilterButtons
+            Icon={UserGroupIcon}
+            buttonProps={[
+              { text: "딜러", active: state.tacticRoles.includes("attacker"), onToggle: (activated) => toggleTacticRole("attacker", activated) },
+              { text: "탱커", active: state.tacticRoles.includes("tank"), onToggle: (activated) => toggleTacticRole("tank", activated) },
+              { text: "힐러", active: state.tacticRoles.includes("healer"), onToggle: (activated) => toggleTacticRole("healer", activated) },
+              { text: "서포터", active: state.tacticRoles.includes("support"), onToggle: (activated) => toggleTacticRole("support", activated) },
+              { text: "T.S.", active: state.tacticRoles.includes("tactical_support"), onToggle: (activated) => toggleTacticRole("tactical_support", activated) },
             ]}
           />
         </>
@@ -135,6 +171,8 @@ type FilterableStudent = {
   attackType: AttackType;
   defenseType: DefenseType;
   role: Role;
+  position: Position;
+  tacticRole: TacticRole;
   name: string;
   tier?: number;
   initialTier?: number;
@@ -153,7 +191,12 @@ export function applyStudentFilter<T extends FilterableStudent>(students: T[], s
     if (state.roles.length > 0 && !state.roles.includes(student.role)) {
       return false;
     }
-
+    if (state.positions.length > 0 && !state.positions.includes(student.position)) {
+      return false;
+    }
+    if (state.tacticRoles.length > 0 && !state.tacticRoles.includes(student.tacticRole)) {
+      return false;
+    }
     if (state.search && hangul.search(student.name, state.search) < 0) {
       return false;
     }

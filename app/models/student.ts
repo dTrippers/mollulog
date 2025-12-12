@@ -1,17 +1,21 @@
 import type { Env } from "~/env.server";
 import { runQuery } from "~/lib/baql";
 import { graphql } from "~/graphql";
-import type { AttackType, DefenseType } from "./content.d";
+import type { AttackType, DefenseType, Position, TacticRole } from "./content.d";
 
 export type Role = "striker" | "special";
 export type Student = {
   uid: string;
   name: string;
+  altNames: string[];
   school: string;
   initialTier: number;
   order: number;
   attackType: AttackType;
   defenseType: DefenseType;
+  position: Position;
+  tacticRole: TacticRole;
+  birthday: Date;
   role: Role;
   equipments: string[];
   released: boolean;
@@ -22,16 +26,7 @@ export type StudentMap = { [id: string]: Student };
 const allStudentsQuery = graphql(`
   query AllStudents {
     students {
-      uid
-      name
-      school
-      initialTier
-      order
-      attackType
-      defenseType
-      role
-      equipments
-      released
+      uid name altNames school initialTier order attackType defenseType position tacticRole birthday role equipments released
     }
   }
 `);
@@ -53,7 +48,7 @@ export async function getAllStudentsMap(env: Env, includeUnreleased = false): Pr
   }, {} as StudentMap);
 }
 
-const rawStudentsKey = "students::v3";
+const rawStudentsKey = "students::v4";
 
 export async function syncRawStudents(env: Env): Promise<Student[]> {
   const { data } = await runQuery(allStudentsQuery, {});

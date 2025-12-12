@@ -32,6 +32,8 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       attackType: student.attackType,
       defenseType: student.defenseType,
       role: student.role,
+      position: student.position,
+      tacticRole: student.tacticRole,
       order: student.order,
       initialTier: student.initialTier,
       tier: recruitedStudentTiers[student.uid] ?? null,
