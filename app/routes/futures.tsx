@@ -196,12 +196,13 @@ export default function FutureContents() {
             contentAttrs.rerun = content.rerun;
             contentAttrs.pickups = content.pickups ?? undefined;
             contentAttrs.link = `/events/${content.uid}`;
-            contentAttrs.hasShopData = content.shopResources?.length > 0;
+            contentAttrs.tags = content.tags ?? [];
           } else if (content.__typename === "Raid") {
             contentAttrs.contentType = content.raidType;
             contentAttrs.rerun = false;
             contentAttrs.link = `/raids/${content.uid}`;
             contentAttrs.raidInfo = content;
+            contentAttrs.tags = [];
           }
 
           return contentAttrs as ContentTimelineProps["contents"][number];

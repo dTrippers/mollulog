@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { ContentTimelineItemProps } from "./ContentTimelineItem";
 import { ContentTimelineItem } from "./ContentTimelineItem";
 import type { EventType, RaidType } from "~/models/content.d";
+import { CONTENT_ORDER } from "~/models/content";
 
 export type ContentTimelineProps = {
   contents: {
@@ -14,7 +15,7 @@ export type ContentTimelineProps = {
     uid: string;
     link: string;
     contentType: EventType | RaidType;
-    hasShopData?: boolean;
+    tags: string[];
     pickups?: ContentTimelineItemProps["pickups"];
     raidInfo?: ContentTimelineItemProps["raidInfo"];
 
@@ -40,25 +41,6 @@ type ContentGroup = {
   contents: ContentTimelineProps["contents"];
 };
 
-export const contentOrders: (EventType | RaidType)[] = [
-  "update",
-  "fes",
-  "event",
-  "immortal_event",
-  "main_story",
-  "pickup",
-  "archive_pickup",
-  "collab",
-  "total_assault",
-  "elimination",
-  "unlimit",
-  "campaign",
-  "exercise",
-  "mini_event",
-  "guide_mission",
-  "battle_pass",
-];
-
 function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup[] {
   const groups: { groupDate: dayjs.Dayjs | null, contents: ContentTimelineProps["contents"] }[] = [];
 
@@ -79,7 +61,7 @@ function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup
 
   return groups.map(({ groupDate, contents }) => ({
     groupDate: groupDate?.toDate() ?? null,
-    contents: contents.sort((a, b) => contentOrders.indexOf(a.contentType) - contentOrders.indexOf(b.contentType)),
+    contents: contents.sort((a, b) => CONTENT_ORDER.indexOf(a.contentType) - CONTENT_ORDER.indexOf(b.contentType)),
   }));
 }
 

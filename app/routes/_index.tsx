@@ -10,11 +10,11 @@ import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, eventTypeLocale, pickupLabelLocale, raidTypeLocale, relativeTime } from "~/locales/ko";
 import dayjs from "dayjs";
 import { OptionBadge, ProfileImage } from "~/components/atoms/student";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { EventHeader } from "~/components/event";
 import type { DefenseType, EventType, RaidType } from "~/models/content.d";
 import { bossImageUrl } from "~/models/assets";
-import { getIndexContents } from "~/models/content";
+import { CONTENT_ORDER, getIndexContents, SHOW_LINK_CONTENT_TYPES } from "~/models/content";
 
 export const meta: MetaFunction = () => {
   return [
@@ -108,17 +108,23 @@ function CurrentEvents({ events }: CurrentEventsProps) {
     return null;
   }
 
+  const sortedEvents = useMemo(() => events.sort((a, b) => {
+    return CONTENT_ORDER.indexOf(a.type) - CONTENT_ORDER.indexOf(b.type);
+  }), [events]);
+
   return (
     <div className="mt-8">
       <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden">
-        {events.map((event) => (
+        {sortedEvents.map((event) => (
           <Link to={`/events/${event.uid}`} key={event.uid} className="block group">
             <div className="p-3 flex items-center justify-between hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors rounded-lg">
               <div className="transition-opacity">
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{eventTypeLocale[event.type]}</p>
                 <p className="font-semibold text-neutral-900 dark:text-neutral-100">{event.name}</p>
               </div>
-              <ArrowRightIcon className="size-4 text-neutral-500 dark:text-neutral-400 group-hover:translate-x-1 transition-transform duration-200" strokeWidth={2} />
+              {SHOW_LINK_CONTENT_TYPES.includes(event.type) && (
+                <ArrowRightIcon className="size-4 text-neutral-500 dark:text-neutral-400 group-hover:translate-x-1 transition-transform duration-200" strokeWidth={2} />
+              )}
             </div>
           </Link>
         ))}

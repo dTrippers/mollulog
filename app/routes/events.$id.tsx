@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { isRouteErrorResponse, type MetaFunction, redirect, useLoaderData, useRouteError, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import { isRouteErrorResponse, type MetaFunction, redirect, useLoaderData, useLocation, useRouteError, useSearchParams } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 import { EventHeader, EventDetailShopPage, EventDetailInfoPage, EventDetailStagePage } from "~/components/event";
@@ -18,7 +18,7 @@ import { getBattlePassRewards } from "~/models/battle-pass";
 const eventDetailQuery = graphql(`
   query EventDetail($eventUid: String!) {
     event(uid: $eventUid) {
-      uid name type since until endless imageUrl rerun
+      uid name type since until endless imageUrl rerun tags
       stages {
         uid name entryAp index difficulty
         rewards(rewardType: "item") {
@@ -131,12 +131,12 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
   return {};
 };
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   if (!data) {
     return [{ title: "이벤트 정보 | 몰루로그" }];
   }
 
-  const [searchParams] = useSearchParams();
+  const searchParams = new URLSearchParams(location.search);
   const page = searchParams.get("page") as EventDetailPage | null ?? "info";
 
   const { event } = data;
@@ -176,6 +176,7 @@ type EventDetailPage = "info" | "stages" | "shop";
 
 export default function EventDetail() {
   const { event, pickups, recruitedStudentUids, eventRewardBonus, savedShopState, allComments, me, battlePassRewards } = useLoaderData<typeof loader>();
+  const location = useLocation();
 
   const [searchParams] = useSearchParams();
 
@@ -183,6 +184,13 @@ export default function EventDetail() {
   const showStagesPage = event.stages.length > 0;
   const showShopPage = event.shopResources.length > 0;
   const [page, setPage] = useState<EventDetailPage>(searchParams.get("page") as EventDetailPage | null ?? "info");
+
+  useEffect(() => {
+    const scrollableContainer = document.querySelector('.mllg-content-area') as HTMLElement;
+    if (scrollableContainer) {
+      scrollableContainer.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [location.pathname]);
 
   return (
     <>

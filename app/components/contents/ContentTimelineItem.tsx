@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import dayjs from "dayjs";
-import { ChevronRightIcon, ChartBarIcon, ClockIcon, CheckCircleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon } from "@heroicons/react/16/solid";
+import { ChevronRightIcon, ChartBarIcon, ClockIcon, CheckCircleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon, StarIcon } from "@heroicons/react/16/solid";
 import { IdentificationIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import type { AttackType, DefenseType, EventType, PickupType, RaidType, Role, Terrain } from "~/models/content.d";
@@ -13,6 +13,7 @@ import { BottomSheet } from "~/components/atoms/layout";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";
+import { SHOW_LINK_CONTENT_TYPES } from "~/models/content";
 
 export type ContentTimelineItemProps = {
   uid: string;
@@ -24,7 +25,7 @@ export type ContentTimelineItemProps = {
   until: Date | null;
   link: string;
   confirmed?: boolean;
-  hasShopData?: boolean;
+  tags: string[];
 
   allComments?: {
     uid: string;
@@ -91,27 +92,8 @@ export type ContentTimelineItemProps = {
   signedIn: boolean;
 };
 
-function ContentTitles({ name, showLink }: { name: string, showLink: boolean }): ReactNode {
-  const titles = name.split("\n");
-  return (
-    titles.map((titleLine, index) => {
-      const key = `${name}-${index}`;
-      if (index < titles.length - 1) {
-        return <p key={key} className="text-lg md:text-xl font-semibold">{titleLine}</p>;
-      } else {
-        return (
-          <div key={key} className="text-lg md:text-xl font-semibold flex items-center">
-            <span className="inline">{titleLine}</span>
-            {showLink && <ChevronRightIcon className="inline size-4" strokeWidth={2} />}
-          </div>
-        );
-      }
-    })
-  )
-}
-
 export function ContentTimelineItem({
-  name, contentType, rerun, endless, since, until, link, confirmed, hasShopData, raidInfo, pickups,
+  name, contentType, rerun, endless, since, until, link, confirmed, tags, raidInfo, pickups,
   allComments, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
 }: ContentTimelineItemProps) {
   const showComments = pickups && pickups.length > 0;
@@ -129,10 +111,10 @@ export function ContentTimelineItem({
       daysLabel = `${remainingDays}일`;
     } else {
       const remainingHours = untilDayjs.startOf("hour").diff(now.startOf("hour"), "hour");
-      finishSoon = true;
       if (remainingHours > 24) {
         daysLabel = `내일 종료`;
       } else {
+        finishSoon = true;
         daysLabel = `${remainingHours}시간 남음`;
       }
     }
@@ -146,38 +128,29 @@ export function ContentTimelineItem({
           <span className="pr-1 py-0.5 text-neutral-500 dark:text-neutral-400">
             {(contentType === "event" || contentType === "pickup") && rerun && "복각 "}{contentTypeLocale[contentType]}
           </span>
-          {!endless && daysLabel && (
-            <span className={`flex items-center px-2 py-0.5 rounded-full ${finishSoon ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" : "bg-neutral-100 dark:bg-neutral-700"}`}>
-              <ClockIcon className="inline size-4 mr-1" />
-              {daysLabel}
-            </span>
+          {!endless && daysLabel && <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />}
+          {confirmed && (since && sinceDayjs.isAfter(now)) && <ContentTag Icon={CheckCircleIcon} text="확정" color="green" />}
+          {raidInfo && raidInfo.rankVisible && <ContentTag Icon={ChartBarIcon} text="순위/통계" color="default" />}
+          {tags.includes("recruit_free_100") && pickups?.every(({ until }) => until !== null && dayjs(until).isAfter(now)) && (
+            <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
           )}
-          {confirmed && (since && sinceDayjs.isAfter(now)) && (
-            <span className="flex items-center px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
-              <CheckCircleIcon className="inline size-4 mr-1" />
-              확정
-            </span>
-          )}
-          {raidInfo && raidInfo.rankVisible && (
-            <span className="flex items-center px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200">
-              <ChartBarIcon className="inline size-4 mr-1" />
-              순위 정보
-            </span>
-          )}
-          {hasShopData && (
-            <span className="flex items-center px-2 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200">
-              <CalculatorIcon className="inline size-4 mr-1" />
-              소탕 계산기
-            </span>
-          )}
+          {tags.includes("shop") && <ContentTag Icon={CalculatorIcon} text="소탕 계산기" color="default" />}
         </div>
       </div>
 
       {/* 컨텐츠 이름 */}
-      <Link to={link} className="cursor-pointer hover:underline tracking-tight">
-        <ContentTitles name={name} showLink={true} />
-        {raidInfo && <RaidInfo raid={raidInfo} />}
-      </Link>
+      {SHOW_LINK_CONTENT_TYPES.includes(contentType) ? (
+        <Link to={link} className="cursor-pointer hover:underline tracking-tight">
+          <ContentTitles name={name} showLink={true} />
+          {raidInfo && <RaidInfo raid={raidInfo} />}
+        </Link> 
+      ) : (
+        <>
+          <ContentTitles name={name} showLink={false} />
+          {raidInfo && <RaidInfo raid={raidInfo} />}
+        </>
+      )}
+      
 
       {/* 픽업 정보 */}
       {pickups && pickups.length > 0 && (
@@ -219,6 +192,49 @@ export function ContentTimelineItem({
         </>
       )}
     </div>
+  );
+}
+
+function ContentTitles({ name, showLink }: { name: string, showLink: boolean }): ReactNode {
+  const titles = name.split("\n");
+  return (
+    titles.map((titleLine, index) => {
+      const key = `${name}-${index}`;
+      if (index < titles.length - 1) {
+        return <p key={key} className="text-lg md:text-xl font-semibold">{titleLine}</p>;
+      } else {
+        return (
+          <div key={key} className="text-lg md:text-xl font-semibold flex items-center">
+            <span className="inline">{titleLine}</span>
+            {showLink && <ChevronRightIcon className="inline size-4" strokeWidth={2} />}
+          </div>
+        );
+      }
+    })
+  )
+}
+
+type ContentTagProps = {
+  Icon: React.ElementType;
+  text: string;
+  color: "default" | "green" | "red" | "yellow";
+};
+
+function ContentTag({ Icon, text, color }: ContentTagProps) {
+  let colorClass = "bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200";
+  if (color === "green") {
+    colorClass = "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200";
+  } else if (color === "red") {
+    colorClass = "bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200";
+  } else if (color === "yellow") {
+    colorClass = "bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200";
+  }
+
+  return (
+    <span className={`flex items-center px-2 py-0.5 rounded-full ${colorClass}`}>
+      <Icon className="inline size-4 mr-1" />
+      {text}
+    </span>
   );
 }
 

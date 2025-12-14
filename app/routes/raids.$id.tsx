@@ -77,6 +77,13 @@ export default function RaidPage() {
     }
   }, [pathname, setPanel]);
 
+  useEffect(() => {
+    const scrollableContainer = document.querySelector('.mllg-content-area') as HTMLElement;
+    if (scrollableContainer) {
+      scrollableContainer.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [pathname]);
+
   const [selectedDefenseType, setDefenseType] = useState<DefenseType>(currentRaid.defenseTypes[0].defenseType);
   useEffect(() => {
     if (!currentRaid.defenseTypes.some(({ defenseType }) => defenseType === selectedDefenseType)) {
