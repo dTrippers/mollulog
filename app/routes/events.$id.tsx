@@ -13,6 +13,7 @@ import { favoriteStudent, getFavoritedCounts, getUserFavoritedStudents, unfavori
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getEventShopState } from "~/models/event-shop-state";
 import { getNestedContentComments } from "~/models/content";
+import { getBattlePassRewards } from "~/models/battle-pass";
 
 const eventDetailQuery = graphql(`
   query EventDetail($eventUid: String!) {
@@ -96,7 +97,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const savedShopState = currentUser ? await getEventShopState(env, currentUser.id, eventUid) : null;
   const nestedComments = await getNestedContentComments(env, eventUid, currentUser);
-
+  const battlePassRewards = data!.event!.type === "battle_pass" ? await getBattlePassRewards(env, eventUid) : null;
   return {
     event: data!.event!,
     pickups,
@@ -104,6 +105,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     eventRewardBonus,
     savedShopState,
     allComments: nestedComments,
+    battlePassRewards,
     me: currentUser ? { username: currentUser.username } : null,
   };
 };
@@ -173,7 +175,7 @@ export function ErrorBoundary() {
 type EventDetailPage = "info" | "stages" | "shop";
 
 export default function EventDetail() {
-  const { event, pickups, recruitedStudentUids, eventRewardBonus, savedShopState, allComments, me } = useLoaderData<typeof loader>();
+  const { event, pickups, recruitedStudentUids, eventRewardBonus, savedShopState, allComments, me, battlePassRewards } = useLoaderData<typeof loader>();
 
   const [searchParams] = useSearchParams();
 
@@ -206,6 +208,7 @@ export default function EventDetail() {
           pickups={pickups}
           allComments={allComments}
           me={me}
+          battlePassRewards={battlePassRewards ?? undefined}
         />
       )}
       {page === "stages" && (

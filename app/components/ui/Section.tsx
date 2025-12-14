@@ -1,19 +1,20 @@
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { useEffect, useState } from "react";
 
-type EventShopSectionProps = {
+type SectionProps = {
   title: string;
   description?: string;
-  foldable: boolean;
+  foldable?: boolean;
   foldStateKey?: string;
+  defaultExpanded?: boolean;
   children: React.ReactNode;
 };
 
-export function EventShopSection({ title, description, foldable, foldStateKey, children }: EventShopSectionProps) {
+export function Section({ title,  description,  foldable = false,  foldStateKey,  defaultExpanded = true, children }: SectionProps) {
   const [visible, setVisible] = useState(() => {
     if (foldStateKey && typeof window !== "undefined") {
       try {
-        const saved = localStorage.getItem(`event-shop-section::${foldStateKey}`);
+        const saved = localStorage.getItem(`section::${foldStateKey}`);
         if (saved !== null) {
           return JSON.parse(saved);
         }
@@ -21,13 +22,13 @@ export function EventShopSection({ title, description, foldable, foldStateKey, c
         // Ignore localStorage errors
       }
     }
-    return true;
+    return defaultExpanded;
   });
 
   useEffect(() => {
     if (foldStateKey && typeof window !== "undefined") {
       try {
-        localStorage.setItem(`event-shop-section::${foldStateKey}`, JSON.stringify(visible));
+        localStorage.setItem(`section::${foldStateKey}`, JSON.stringify(visible));
       } catch (error) {
         // Ignore localStorage errors
       }
@@ -35,24 +36,24 @@ export function EventShopSection({ title, description, foldable, foldStateKey, c
   }, [visible, foldStateKey]);
 
   return (
-    <div className={`pb-4 ${foldable && !visible ? "border-b border-neutral-200 dark:border-neutral-700" : ""} ${visible ? "mb-4 md:mb-12" : "mb-4"}`}>
+    <div className={`pb-4 mb-4 ${visible ? "" : "border-b border-neutral-200 dark:border-neutral-700"}`}>
       <div
         className={`flex items-center gap-3 ${foldable ? "cursor-pointer" : ""}`}
         onClick={foldable ? () => setVisible((prev: boolean) => !prev) : undefined}
       >
         <div className="grow min-w-0">
-          <h2 className="font-semibold text-base text-neutral-900 dark:text-neutral-100">{title}</h2>
+          <h2 className="font-semibold text-lg text-neutral-900 dark:text-neutral-100">{title}</h2>
           {description && (
             <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{description}</p>
           )}
         </div>
         {foldable && (
           <ChevronDownIcon
-            className={`size-5 shrink-0 mt-0.5 text-neutral-400 dark:text-neutral-500 transition-transform duration-200 ease-in-out ${visible ? "rotate-180" : ""}`}
+            className={`size-5 shrink-0 text-neutral-400 dark:text-neutral-500 transition-transform duration-200 ease-in-out ${visible ? "rotate-180" : ""}`}
           />
         )}
       </div>
-      {visible && <div className="mt-4">{children}</div>}
+      {visible && <div className={title && typeof title === "string" ? "mt-4" : ""}>{children}</div>}
     </div>
   );
 }

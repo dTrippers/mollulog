@@ -138,36 +138,6 @@ export function ContentTimelineItem({
     }
   }
 
-  const RaidInfo = () => raidInfo ? (
-    <div className="mt-2 mb-6 relative md:w-96">
-      <img
-        className="md:w-96 rounded-lg bg-linear-to-br from-neutral-50 to-neutral-300 dark:from-neutral-600 dark:to-neutral-800"
-        src={bossImageUrl(raidInfo.boss)} alt={`총력전 보스 ${name}`} loading="lazy"
-      />
-      <div className="absolute bottom-0 right-0 flex flex-col items-end gap-y-1 p-1 text-white text-sm">
-        <div className="flex gap-x-1">
-          <OptionBadge text={terrainLocale[raidInfo.terrain]} bgColor="dark" />
-          <OptionBadge text={attackTypeLocale[raidInfo.attackType]} color={attackTypeColor[raidInfo.attackType]} bgColor="dark" />
-          {raidInfo.defenseTypes.length === 1 && (
-            <OptionBadge
-              text={defenseTypeLocale[raidInfo.defenseTypes[0].defenseType]}
-              color={defenseTypeColor[raidInfo.defenseTypes[0].defenseType]}
-              bgColor="dark"
-            />
-          )}
-        </div>
-        {raidInfo.defenseTypes.length > 1 && (
-          <div className="flex gap-x-1">
-            {raidInfo.defenseTypes.map(({ defenseType }) => (
-              <OptionBadge key={defenseType} text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} bgColor="dark" />
-            ))}
-          </div>
-        )}
-      </div>
-      
-    </div>
-  ) : null;
-
   return (
     <div className="my-4 md:my-6">
       {/* 컨텐츠 분류 */}
@@ -206,8 +176,8 @@ export function ContentTimelineItem({
       {/* 컨텐츠 이름 */}
       <Link to={link} className="cursor-pointer hover:underline tracking-tight">
         <ContentTitles name={name} showLink={true} />
-        <RaidInfo />
-      </Link> 
+        {raidInfo && <RaidInfo raid={raidInfo} />}
+      </Link>
 
       {/* 픽업 정보 */}
       {pickups && pickups.length > 0 && (
@@ -274,6 +244,49 @@ type PickupProps = {
   eventSince: Date | null;
   eventUntil: Date | null;
 };
+
+type RaidInfoProps = {
+  raid: {
+    boss: string;
+    terrain: Terrain;
+    attackType: AttackType;
+    defenseTypes: {
+      defenseType: DefenseType;
+      difficulty: string | null;
+    }[];
+  };
+};
+
+function RaidInfo({ raid }: RaidInfoProps) {
+  return (
+    <div className="mt-2 mb-6 relative md:w-96">
+      <img
+        className="md:w-96 rounded-lg bg-linear-to-br from-neutral-50 to-neutral-300 dark:from-neutral-600 dark:to-neutral-800"
+        src={bossImageUrl(raid.boss)} alt={`총력전 보스 ${raid.boss}`} loading="lazy"
+      />
+      <div className="absolute bottom-0 right-0 flex flex-col items-end gap-y-1 p-1 text-white text-sm">
+        <div className="flex gap-x-1">
+          <OptionBadge text={terrainLocale[raid.terrain]} bgColor="dark" />
+          <OptionBadge text={attackTypeLocale[raid.attackType]} color={attackTypeColor[raid.attackType]} bgColor="dark" />
+          {raid.defenseTypes.length === 1 && (
+            <OptionBadge
+              text={defenseTypeLocale[raid.defenseTypes[0].defenseType]}
+              color={defenseTypeColor[raid.defenseTypes[0].defenseType]}
+              bgColor="dark"
+            />
+          )}
+        </div>
+        {raid.defenseTypes.length > 1 && (
+          <div className="flex gap-x-1">
+            {raid.defenseTypes.map(({ defenseType }) => (
+              <OptionBadge key={defenseType} text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} bgColor="dark" />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function Pickup({ contentType, pickups, favoritedStudents, favoritedCounts, onFavorite, link, eventSince, eventUntil }: PickupProps) {
   // Group pickups by period (since/until dates)

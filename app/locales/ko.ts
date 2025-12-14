@@ -85,6 +85,8 @@ export const eventTypeLocale: Record<EventType, string> = {
   exercise: "종합전술시험",
   main_story: "메인 스토리",
   archive_pickup: "픽업 모집",
+  battle_pass: "배틀 패스",
+  update: "점검/업데이트",
 };
 
 export const raidTypeLocale: Record<RaidType, string> = {

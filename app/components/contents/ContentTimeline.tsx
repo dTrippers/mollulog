@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import type { ContentTimelineItemProps } from "./ContentTimelineItem";
 import { ContentTimelineItem } from "./ContentTimelineItem";
 import type { EventType, RaidType } from "~/models/content.d";
@@ -41,6 +41,7 @@ type ContentGroup = {
 };
 
 export const contentOrders: (EventType | RaidType)[] = [
+  "update",
   "fes",
   "event",
   "immortal_event",
@@ -55,6 +56,7 @@ export const contentOrders: (EventType | RaidType)[] = [
   "exercise",
   "mini_event",
   "guide_mission",
+  "battle_pass",
 ];
 
 function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup[] {
@@ -82,20 +84,17 @@ function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup
 }
 
 export default function ContentTimeline({ contents, favoritedStudents, favoritedCounts, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, onFavorite, isSubmittingComment, signedIn }: ContentTimelineProps) {
-  const [contentGroups, setContentGroups] = useState<ContentGroup[]>(groupContents(contents));
-
-  // Update content groups when contents change
-  useEffect(() => {
-    setContentGroups(groupContents(contents));
-  }, [contents]);
-
-  const favoriteStudentIdsByContents: Record<string, Record<string, number>> = {};
-  favoritedCounts.forEach(({ contentUid, studentUid, count }) => {
-    if (!favoriteStudentIdsByContents[contentUid]) {
-      favoriteStudentIdsByContents[contentUid] = {};
-    }
-    favoriteStudentIdsByContents[contentUid][studentUid] = count;
-  });
+  const contentGroups = useMemo(() => groupContents(contents), [contents]);
+  const favoriteStudentIdsByContents = useMemo(() => {
+    const aggregatedResult: Record<string, Record<string, number>> = {};
+    favoritedCounts.forEach(({ contentUid, studentUid, count }) => {
+      if (!aggregatedResult[contentUid]) {
+        aggregatedResult[contentUid] = {};
+      }
+      aggregatedResult[contentUid][studentUid] = count;
+    });
+    return aggregatedResult;
+  }, [favoritedCounts]);
 
   if (contents.length === 0) {
     return (

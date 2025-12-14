@@ -5,7 +5,7 @@ import { Button, NumberInput } from "~/components/atoms/form";
 import { formatResourceAmount } from "~/locales/ko";
 import { Tabs } from "./Tabs";
 import type { ShopResource, CollectableResource } from "./types";
-import { EventShopSection } from "./EventShopSection";
+import { Section } from "~/components/ui";
 
 type ShopResourceSelectorProps = {
   shopResources: ShopResource[];
@@ -63,7 +63,13 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
   };
 
   return (
-    <EventShopSection title="상점 아이템" description="구매할 아이템의 개수를 선택하세요" foldable foldStateKey="shop-resource-selector">
+    <Section
+      title="상점 아이템"
+      description="구매할 아이템의 개수를 선택하세요"
+      foldable
+      foldStateKey="event-shop-section::shop-resource-selector"
+      defaultExpanded={true}
+    >
       <Tabs
         tabs={collectableResources.filter(({ forPayment }) => forPayment).map(({ uid, name }) => ({ tabId: uid, name, imageUrl: `https://baql-assets.mollulog.net/images/items/${uid}` }))}
         activeTabId={selectedPaymentResourceUid}
@@ -153,7 +159,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
           })}
         </div>
       </div>
-    </EventShopSection>
+    </Section>
   );
 });
 

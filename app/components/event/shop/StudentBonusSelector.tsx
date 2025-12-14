@@ -8,7 +8,7 @@ import { StudentCards } from "~/components/students";
 import EventItemBonus from "../EventItemBonus";
 import { Tabs } from "./Tabs";
 import type { EventRewardBonus } from "./types";
-import { EventShopSection } from "./EventShopSection";
+import { Section } from "~/components/ui";
 
 type StudentBonusSelectorProps = {
   eventRewardBonus: EventRewardBonus[];
@@ -124,11 +124,12 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
 
   const [tab, setTab] = useState<"student" | "item">("student");
   return (
-    <EventShopSection
+    <Section
       title="학생 보너스"
       description={recruitedStudentUids.length === 0 ? "로그인 후 모집한 학생 정보를 등록하면 편리하게 이용할 수 있어요" : "편성 보너스를 적용할 학생을 선택하세요"}
       foldable
-      foldStateKey="student-bonus-selector"
+      foldStateKey="event-shop-section::student-bonus-selector"
+      defaultExpanded={true}
     >
       <Toggle
         label="모집한 학생 일괄 반영"
@@ -187,7 +188,7 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
         <Button text="모두 선택" color="primary" onClick={handleSelectAll} />
         <Button text="초기화" onClick={handleResetAll} />
       </div>
-    </EventShopSection>
+    </Section>
   );
 });
 

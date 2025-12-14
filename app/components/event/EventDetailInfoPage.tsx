@@ -8,6 +8,20 @@ import { SubTitle } from "../atoms/typography";
 import ContentCommentEditor from "../contents/ContentCommentEditor";
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 import EventInfoCard from "./EventInfoCard";
+import BattlePassInfo from "./BattlePassInfo";
+
+type BattlePassReward = {
+  normal: {
+    resourceType: string;
+    resourceUid: string;
+    quantity: number;
+  };
+  growth: {
+    resourceType: string;
+    resourceUid: string;
+    quantity: number;
+  };
+};
 
 type EventDetailInfoPageProps = {
   event: {
@@ -56,6 +70,8 @@ type EventDetailInfoPageProps = {
     }[];
   }[];
 
+  battlePassRewards?: BattlePassReward[];
+
   me: {
     username: string;
   } | null;
@@ -72,7 +88,7 @@ export type ActionData = {
   };
 };
 
-export default function EventDetailInfoPage({ event, pickups, allComments, me }: EventDetailInfoPageProps) {
+export default function EventDetailInfoPage({ event, pickups, allComments, me, battlePassRewards }: EventDetailInfoPageProps) {
   return (
     <div>
       {event.type === "fes" && (
@@ -91,6 +107,7 @@ export default function EventDetailInfoPage({ event, pickups, allComments, me }:
         </>
       )}
 
+      {event.type === "battle_pass" && battlePassRewards && <BattlePassInfo rewards={battlePassRewards} />}
       {pickups.length > 0 && <Pickups pickups={pickups} signedIn={me !== null} event={event} />}
       <EventComment allComments={allComments} me={me} eventUid={event.uid} />
     </div>
