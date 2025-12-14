@@ -1,5 +1,4 @@
 import { nanoid } from "nanoid/non-secure";
-import type { Env } from "~/env.server";
 import { isUniqueConstraintError } from "./base";
 import { sqliteTable, int, text } from "drizzle-orm/sqlite-core";
 import { eq, inArray } from "drizzle-orm";

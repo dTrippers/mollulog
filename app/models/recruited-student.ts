@@ -1,7 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
-import type { Env } from "~/env.server";
 import { nanoid } from "nanoid/non-secure";
 
 export const recruitedStudentsTable = sqliteTable("recruited_students", {

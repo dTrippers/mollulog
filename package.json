@@ -5,6 +5,7 @@
   "scripts": {
     "codegen": "graphql-codegen",
     "dev": "react-router dev --host",
+    "cf-typegen": "wrangler types",
     "start": "wrangler dev",
     "staging:build": "CLOUDFLARE_ENV=staging react-router build --mode staging",
     "staging:deploy": "pnpm run staging:build && wrangler deploy",

@@ -1,4 +1,3 @@
-import type { Env } from "~/env.server";
 import type { Sensei } from "./sensei";
 import { getSenseisById } from "./sensei";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";

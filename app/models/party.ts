@@ -1,5 +1,4 @@
 import { nanoid } from "nanoid/non-secure";
-import type { Env } from "~/env.server";
 import { getSenseisById, type Sensei } from "./sensei";
 
 export type DBParty = {

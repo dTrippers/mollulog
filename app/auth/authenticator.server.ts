@@ -2,7 +2,6 @@ import type { SessionStorage } from "react-router";
 import { createCookieSessionStorage } from "react-router";
 import { Authenticator, AuthorizationError } from "remix-auth";
 import { GoogleStrategy } from "remix-auth-google";
-import type { Env } from "~/env.server";
 import type { Sensei } from "~/models/sensei";
 import { getOrCreateSenseiByGoogleId } from "~/models/sensei";
 import { PasskeyStrategy } from "./passkey-strategy.server";

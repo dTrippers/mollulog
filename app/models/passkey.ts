@@ -6,7 +6,6 @@ import type {
   // @ts-ignore
 } from "@simplewebauthn/server/script/deps";
 import { nanoid } from "nanoid/non-secure";
-import type { Env } from "~/env.server";
 import { getSenseiById, type Sensei } from "./sensei";
 import { verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
 

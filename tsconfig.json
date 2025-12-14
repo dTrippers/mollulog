@@ -4,6 +4,7 @@
     "**/*.ts",
     "**/*.tsx",
     ".react-router/types/**/*",
+    "worker-configuration.d.ts"
   ],
   "compilerOptions": {
     "types": ["@react-router/cloudflare", "vite/client"],

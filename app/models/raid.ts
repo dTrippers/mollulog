@@ -1,7 +1,6 @@
 import { graphql } from "~/graphql";
 import { fetchCached } from "./base";
 import { runQuery } from "~/lib/baql";
-import type { Env } from "~/env.server";
 
 export type Difficulty = "normal" | "hard" | "veryhard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
 export type Boss = "binah" | "chesed" | "hod" | "shirokuro" | "perorozilla" | "goz" | "hieronymus" | "kaiten-fx-mk0" | "gregorius" | "hovercraft" | "myouki-kurokage" | "geburah" | "yesod";

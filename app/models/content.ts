@@ -2,7 +2,6 @@ import dayjs from "dayjs";
 import { and, eq, inArray, isNull, not, or, sql, type SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import type { Env } from "~/env.server";
 import { nanoid } from "nanoid/non-secure";
 import { senseisTable } from "./sensei";
 import { graphql } from "~/graphql";

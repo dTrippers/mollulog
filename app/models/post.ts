@@ -2,7 +2,6 @@ import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
-import type { Env } from "~/env.server";
 import { eq } from "drizzle-orm";
 
 export const postsTable = sqliteTable("posts", {

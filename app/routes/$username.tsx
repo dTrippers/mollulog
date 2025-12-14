@@ -4,7 +4,6 @@ import { ChartBarIcon, DocumentTextIcon, HeartIcon, IdentificationIcon, UserIcon
 import { Title } from "~/components/atoms/typography";
 import { Page } from "~/components/navigation";
 import { ErrorPage } from "~/components/organisms/error";
-import type { Env } from "~/env.server";
 import { getSenseiByUsername, type Sensei } from "~/models/sensei";
 import { useEffect, useState } from "react";
 

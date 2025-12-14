@@ -3,7 +3,6 @@ import dayjs from "dayjs";
 import { and, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
-import type { Env } from "~/env.server";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import type { PyroxenePlannerContentsQuery } from "~/graphql/graphql";
