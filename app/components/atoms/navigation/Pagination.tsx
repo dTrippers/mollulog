@@ -55,7 +55,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
   const pageNumbers = getPageNumbers(currentPage, totalPages);
 
   const handleJumpToPage = () => {
-    const page = parseInt(jumpPage, 10);
+    const page = Number.parseInt(jumpPage, 10);
     if (!Number.isNaN(page) && page >= 1 && page <= totalPages) {
       onPageChange(page);
       setJumpPage("");
@@ -131,7 +131,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
         />
         <button
           onClick={handleJumpToPage}
-          disabled={!jumpPage || Number.isNaN(parseInt(jumpPage, 10))}
+          disabled={!jumpPage || Number.isNaN(Number.parseInt(jumpPage, 10))}
           className="px-3 py-1 text-sm rounded transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
         >
           이동

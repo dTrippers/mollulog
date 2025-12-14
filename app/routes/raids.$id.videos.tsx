@@ -82,7 +82,7 @@ export default function RaidVideos() {
   const [isLoading, setIsLoading] = useState(false);
 
   const observerRef = useRef<IntersectionObserver | null>(null);
-  const loadingRef = useRef<HTMLDivElement>(null);
+  const loadingRef = useRef<HTMLDivElement | null>(null);
   const prevSortRef = useRef<VideoSortEnum>(sort);
   const isResettingRef = useRef(false);
   const lastInitialDataSortRef = useRef<string | null>(null);

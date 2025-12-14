@@ -1,4 +1,3 @@
-import type { Env } from "~/env.server";
 
 const cachePrefix = "cache::";
 

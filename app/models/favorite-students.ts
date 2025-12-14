@@ -1,7 +1,6 @@
 import { and, count, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import type { Env } from "~/env.server";
 import { nanoid } from "nanoid/non-secure";
 
 

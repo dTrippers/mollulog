@@ -58,7 +58,7 @@ export default function NumberInput({ label, defaultValue, value, maxValue, onCh
         <button
           type="button"
           onClick={() => {
-            const newValue = Math.min(internalValue + 1, maxValue ?? Infinity);
+            const newValue = Math.min(internalValue + 1, maxValue ?? Number.POSITIVE_INFINITY);
             setInternalValue(newValue);
             onChange(newValue);
           }}

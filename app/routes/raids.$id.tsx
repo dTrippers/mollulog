@@ -4,7 +4,7 @@ import { isRouteErrorResponse, Outlet, useLoaderData, useLocation, useRouteError
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { ErrorPage } from "~/components/organisms/error";
-import { FilterButtons, Page, PagePanelProps } from "~/components/navigation";
+import { FilterButtons, Page, type PagePanelProps } from "~/components/navigation";
 import { RaidSelector } from "~/components/raids";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import { getAuthenticator } from "~/auth/authenticator.server";

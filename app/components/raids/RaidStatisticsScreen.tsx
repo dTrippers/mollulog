@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
-import { RaidStatisticsData } from "~/routes/raids.data.$id.statistics";
+import type { RaidStatisticsData } from "~/routes/raids.data.$id.statistics";
 import RaidStatisticsSlotCount from "./RaidStatisticsSlotCount";
 
 type RaidStatisticsScreenProps = {

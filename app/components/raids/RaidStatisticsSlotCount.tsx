@@ -49,7 +49,7 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
   // Sum the two tier maps for total slot mode
   const totalByTierMap = { ...ownedByTierMap };
   Object.entries(assistsByTierMap).forEach(([tier, count]) => {
-    const tierNum = parseInt(tier);
+    const tierNum = Number.parseInt(tier);
     totalByTierMap[tierNum] = (totalByTierMap[tierNum] || 0) + count;
   });
 

@@ -2,7 +2,7 @@ import { useSignIn } from "~/contexts/SignInProvider";
 import { Toggle } from "~/components/atoms/form";
 import RaidRankFilterStudentSearch from "./RaidRankFilterStudentSearch";
 import { FilterButtons } from "~/components/navigation";
-import { Difficulty } from "~/models/raid";
+import type { Difficulty } from "~/models/raid";
 import { difficultyLocale } from "~/locales/ko";
 
 export type RaidRankFilterState = {

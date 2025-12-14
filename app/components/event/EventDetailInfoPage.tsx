@@ -6,7 +6,7 @@ import type { PickupType, AttackType, DefenseType, Role, EventType } from "~/mod
 import EventPickup from "./EventPickup";
 import { SubTitle } from "../atoms/typography";
 import ContentCommentEditor from "../contents/ContentCommentEditor";
-import { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
+import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 import EventInfoCard from "./EventInfoCard";
 
 type EventDetailInfoPageProps = {

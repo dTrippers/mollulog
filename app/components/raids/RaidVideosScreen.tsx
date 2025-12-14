@@ -25,7 +25,7 @@ export type RaidVideosScreenProps = {
   sort: VideoSortEnum;
   setSort: (sort: VideoSortEnum) => void;
   isLoading: boolean;
-  loadingRef: RefObject<HTMLDivElement>;
+  loadingRef: RefObject<HTMLDivElement | null>;
 };
 
 export default function RaidVideosScreen({ videos, pageInfo, sort, setSort, isLoading, loadingRef }: RaidVideosScreenProps) {

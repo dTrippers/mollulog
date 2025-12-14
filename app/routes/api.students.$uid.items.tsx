@@ -1,4 +1,4 @@
-import { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 

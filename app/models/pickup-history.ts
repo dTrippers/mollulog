@@ -2,7 +2,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, int, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
-import type { Env } from "~/env.server";
 
 export type PickupHistory = {
   uid: string;

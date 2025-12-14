@@ -151,7 +151,7 @@ export default function App() {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = error instanceof Error ? error.message : "알 수 없는 오류";
+  const message = error instanceof Error ? error.message : "알 수 없는 오류";
 
   return (
     <div className="bg-neutral-900 text-neutral-200 min-h-dvh w-screen flex flex-col items-center justify-center">

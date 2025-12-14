@@ -1,5 +1,5 @@
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
-import { createContext, ReactNode, useCallback, useContext, useRef } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useRef } from "react";
 import { Form, useNavigation, useSubmit } from "react-router";
 
 type FormGroupProps = {
@@ -22,7 +22,7 @@ export default function FormGroup({ method, children, submitOnChange, showSaving
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const formRef = useRef<HTMLFormElement>(null);
 
   const submit = useSubmit();

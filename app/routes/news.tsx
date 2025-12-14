@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { LoaderFunctionArgs, useLoaderData, type MetaFunction } from "react-router";
+import { type LoaderFunctionArgs, useLoaderData, type MetaFunction } from "react-router";
 import { MarkdownText, Title } from "~/components/atoms/typography";
 import { ActionCard } from "~/components/molecules/editor";
 import { getAllPosts } from "~/models/post";

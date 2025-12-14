@@ -5,7 +5,7 @@ import { EmptyView } from "~/components/atoms/typography";
 import RaidStatisticsScreen from "~/components/raids/RaidStatisticsScreen";
 import { getMaxTierAt } from "~/models/student";
 import type { RaidPageContext } from "./raids.$id";
-import { RaidStatisticsData } from "./raids.data.$id.statistics";
+import type { RaidStatisticsData } from "./raids.data.$id.statistics";
 
 export default function RaidStatistics() {
   const { currentRaid, defenseType } = useOutletContext<RaidPageContext>();

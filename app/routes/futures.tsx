@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { LoaderFunctionArgs, MetaFunction, useFetcher, useLoaderData } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
 import { FunnelIcon } from "@heroicons/react/24/outline";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { ContentTimeline } from "~/components/contents";
 import type { ContentTimelineProps } from "~/components/contents";
 import { ContentFilterPanel } from "~/components/futures";
-import { getContentsComments, getFutureContents, nestComments, NestedComment } from "~/models/content";
+import { getContentsComments, getFutureContents, nestComments, type NestedComment } from "~/models/content";
 import { getUserFavoritedStudents, getFavoritedCounts } from "~/models/favorite-students";
-import { ActionData as ContentsActionData } from "./api.contents";
-import { ActionData as CommentActionData } from "./api.contents.$uid.comments";
+import type { ActionData as ContentsActionData } from "./api.contents";
+import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
 import { Page } from "~/components/navigation";
 import type { ContentFilterState } from "~/components/futures/ContentFilterPanel";
 

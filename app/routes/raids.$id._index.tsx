@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { ClockIcon } from "@heroicons/react/24/solid";
-import RaidRankFilter, { mergeFilteredStudents, RaidRankFilterState } from "~/components/raids/RaidRankFilter";
+import RaidRankFilter, { mergeFilteredStudents, type RaidRankFilterState } from "~/components/raids/RaidRankFilter";
 import { RaidRankScreen } from "~/components/raids";
 import type { RaidPageContext } from "./raids.$id";
 import { raidTypeLocale } from "~/locales/ko";

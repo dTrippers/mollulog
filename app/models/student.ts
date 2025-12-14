@@ -1,4 +1,3 @@
-import type { Env } from "~/env.server";
 import { runQuery } from "~/lib/baql";
 import { graphql } from "~/graphql";
 import type { AttackType, DefenseType, Position, TacticRole } from "./content.d";
