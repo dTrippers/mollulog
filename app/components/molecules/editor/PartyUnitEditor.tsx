@@ -1,8 +1,7 @@
 import { ChatBubbleOvalLeftEllipsisIcon, MagnifyingGlassIcon, UserPlusIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { Label, Toggle } from "~/components/atoms/form";
-import { StudentCard } from "~/components/atoms/student";
-import { StudentCards } from "~/components/molecules/student";
+import { StudentCard, StudentCards } from "~/components/students";
 import { filterStudentByName } from "~/filters/student";
 import type { Role } from "~/models/content.d";
 

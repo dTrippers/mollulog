@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { AttackType, DefenseType, Role } from "~/models/content.d";
-import { StudentCard } from "~/components/atoms/student";
+import StudentCard from "./StudentCard";
 
 type StudentCardsProps = {
   students?: {
@@ -75,3 +75,4 @@ export default function StudentCards({ students, mobileGrid, pcGrid, onSelect, o
     </div>
   );
 }
+

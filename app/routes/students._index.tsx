@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useNavigate } from "react-router";
 import { FunnelIcon } from "@heroicons/react/24/outline";
-import { StudentCards } from "~/components/molecules/student";
+import { StudentCards } from "~/components/students";
 import { getAllStudents } from "~/models/student";
 import { Page } from "~/components/navigation";
 import { StudentFilter } from "~/components/students";

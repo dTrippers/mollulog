@@ -9,7 +9,7 @@ import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router";
 import { ProfileImage } from "~/components/atoms/student";
 import { bossImageUrl } from "~/models/assets";
-import StudentCards from "~/components/molecules/student/StudentCards";
+import { StudentCards } from "~/components/students";
 
 type PartyViewProps = {
   party: Party;

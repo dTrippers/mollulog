@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Input } from "~/components/atoms/form";
-import StudentCards from "./StudentCards";
+import { StudentCards } from "~/components/students";
 import { filterStudentByName } from "~/filters/student";
 
 type SearchableStudent = {

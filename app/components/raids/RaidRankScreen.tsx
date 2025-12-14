@@ -7,7 +7,7 @@ import { EmptyView } from "~/components/atoms/typography";
 import { Pagination } from "~/components/atoms/navigation";
 import type { RaidType, DefenseType, AttackType, Role } from "~/models/content.d";
 import type { RaidRankFilterState } from "./RaidRankFilter";
-import { StudentCards } from "~/components/molecules/student";
+import { StudentCards } from "~/components/students";
 import { ActionCard } from "~/components/molecules/editor";
 import { type Boss, scoreToDifficultyAndTime } from "~/models/raid";
 

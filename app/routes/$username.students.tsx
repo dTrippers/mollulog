@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction, ActionFunctionArgs } from "react-router";
 import { useLoaderData, data, useFetcher, useOutletContext } from "react-router";
-import { StudentCards, TierSelector } from "~/components/molecules/student";
+import { StudentCards } from "~/components/students";
+import { TierSelector } from "~/components/molecules/student";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { SubTitle, Description } from "~/components/atoms/typography";
 import { getRouteSensei } from "./$username";

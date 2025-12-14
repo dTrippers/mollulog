@@ -4,7 +4,7 @@ import Decimal from "decimal.js";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { ResourceCard } from "~/components/atoms/item";
 import { Button, Toggle } from "~/components/atoms/form";
-import { StudentCards } from "~/components/molecules/student";
+import { StudentCards } from "~/components/students";
 import EventItemBonus from "../EventItemBonus";
 import { Tabs } from "./Tabs";
 import type { EventRewardBonus } from "./types";

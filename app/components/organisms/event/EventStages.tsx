@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import { ItemCard } from "~/components/atoms/item";
 import { SubTitle, Callout } from "~/components/atoms/typography";
 import { ItemCards } from "~/components/molecules/item";
-import { StudentCards } from "~/components/molecules/student";
+import { StudentCards } from "~/components/students";
 import { useSignIn } from "~/contexts/SignInProvider";
 import type { Role } from "~/models/student";
 

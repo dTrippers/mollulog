@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Button, Label } from "~/components/atoms/form";
 import { SubTitle } from "~/components/atoms/typography";
 import { AddContentButton, PartyUnitEditor } from "~/components/molecules/editor";
-import { StudentCards } from "~/components/molecules/student";
+import { StudentCards } from "~/components/students";
 import type { RaidType, Role, Terrain } from "~/models/content.d";
 import type { Party } from "~/models/party";
 import { ContentSelectForm, InputForm, TextareaForm } from "~/components/molecules/form";

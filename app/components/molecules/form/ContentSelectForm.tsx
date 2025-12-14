@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import SelectForm, { type SelectFormProps } from "./SelectForm";
-import { StudentCards } from "../student";
+import { StudentCards } from "~/components/students";
 import { bossImageUrl } from "~/models/assets";
 
 type ContentSelectFormProps = Omit<SelectFormProps, "options"> & {

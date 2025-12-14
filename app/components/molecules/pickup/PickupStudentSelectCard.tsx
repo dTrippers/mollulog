@@ -1,8 +1,7 @@
 import { PencilSquareIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
-import { StudentCard } from "~/components/atoms/student";
+import { StudentCard, StudentCards } from "~/components/students";
 import { filterStudentByName } from "~/filters/student";
-import { StudentCards } from "../student";
 import { Input } from "~/components/atoms/form";
 import { sanitizeClassName } from "~/prophandlers";
 

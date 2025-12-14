@@ -4,7 +4,7 @@ import { Transition } from "@headlessui/react";
 import { studentImageUrl } from "~/models/assets";
 import type { AttackType, DefenseType, Role } from "~/models/content.d";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, roleColor, roleLocale } from "~/locales/ko";
-import OptionBadge from "./OptionBadge";
+import OptionBadge from "~/components/atoms/student/OptionBadge";
 import { Link } from "react-router";
 import { sanitizeClassName } from "~/prophandlers";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
@@ -209,3 +209,4 @@ export function StudentCardPopup({ student, popups, onClose }: StudentCardPopupP
     </div>
   );
 }
+

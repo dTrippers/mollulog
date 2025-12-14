@@ -2,12 +2,12 @@ import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import dayjs from "dayjs";
 import { ChevronRightIcon, ChartBarIcon, ClockIcon, CheckCircleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon } from "@heroicons/react/16/solid";
-import { ArrowTopRightOnSquareIcon, IdentificationIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
+import { IdentificationIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import type { AttackType, DefenseType, EventType, PickupType, RaidType, Role, Terrain } from "~/models/content.d";
 import { attackTypeColor, attackTypeLocale, contentTypeLocale, defenseTypeColor, defenseTypeLocale, pickupLabelLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
-import { StudentCards } from "~/components/molecules/student";
+import { StudentCards } from "~/components/students";
 import { OptionBadge } from "~/components/atoms/student";
 import { BottomSheet } from "~/components/atoms/layout";
 import ContentCommentEditor from "./ContentCommentEditor";
@@ -414,11 +414,6 @@ function PickupStudents({ title, pickups, favoritedStudents, favoritedCounts, on
                   text: "학생부 보기 (평가/통계)",
                   link: `/students/${student?.uid}`,
                 },
-                {
-                  Icon: ArrowTopRightOnSquareIcon,
-                  text: "샬레DB 정보 보기",
-                  link: `https://schaledb.com/student/${student?.schaleDbId}`,
-                },
               ] : undefined,
             };
           })}
@@ -477,11 +472,6 @@ function PickupStudents({ title, pickups, favoritedStudents, favoritedCounts, on
                   Icon: IdentificationIcon,
                   text: "학생부 보기",
                   link: `/students/${student?.uid}`,
-                },
-                {
-                  Icon: ArrowTopRightOnSquareIcon,
-                  text: "샬레DB에서 학생 정보 보기",
-                  link: `https://schaledb.com/student/${student?.schaleDbId}`,
                 },
               ] : undefined,
             };
