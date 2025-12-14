@@ -64,7 +64,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
   const formData = await request.formData();
   const studentUid = formData.get("studentUid") as string;
-  const tier = parseInt(formData.get("tier") as string);
+  const tier = Number.parseInt(formData.get("tier") as string);
 
   if (!studentUid) {
     return data({ error: "Student UID is required" }, { status: 400 });
@@ -119,7 +119,7 @@ export default function UserPage() {
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);
 
   const fetcher = useFetcher();
-  const handleAddStudent = (studentUid: string, tier: number, scrollTo: boolean = false) => {
+  const handleAddStudent = (studentUid: string, tier: number, scrollTo = false) => {
     const formData = new FormData();
     formData.append("studentUid", studentUid);
     formData.append("tier", tier.toString());

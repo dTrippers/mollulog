@@ -1,14 +1,14 @@
 import { Bars3Icon, ExclamationCircleIcon } from "@heroicons/react/16/solid";
 import { CalculatorIcon, ClockIcon } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
-import { MetaFunction } from "react-router";
+import type { MetaFunction } from "react-router";
 import { Title } from "~/components/atoms/typography";
 import { FilterButtons } from "~/components/molecules/content";
 import { InputForm, SelectForm } from "~/components/molecules/form";
 import ContentSelectForm from "~/components/molecules/form/ContentSelectForm";
 import { FormGroup } from "~/components/organisms/form";
 import { bossName, difficultyLocale } from "~/locales/ko";
-import { ALL_TOTAL_ASSUALT_BOSS, Boss, Difficulty, scoreToDifficultyAndTime, timeToScore } from "~/models/raid";
+import { ALL_TOTAL_ASSUALT_BOSS, type Boss, type Difficulty, scoreToDifficultyAndTime, timeToScore } from "~/models/raid";
 
 const STORAGE_KEY_TIME_TO_SCORE = "raid-score-util-timeToScore";
 const STORAGE_KEY_SCORE_TO_TIME = "raid-score-util-scoreToTime";
@@ -92,9 +92,9 @@ function TimeToScore() {
       return;
     }
 
-    const minutes = parseInt(time[1]);
-    const seconds = parseInt(time[2]);
-    const milliseconds = time[3] ? parseInt(time[3].slice(1)) : 0;
+    const minutes = Number.parseInt(time[1]);
+    const seconds = Number.parseInt(time[2]);
+    const milliseconds = time[3] ? Number.parseInt(time[3].slice(1)) : 0;
     try {
       const score = timeToScore(boss, difficulty, minutes * 60000 + seconds * 1000 + milliseconds);
       setCalculatedScore(score);
@@ -204,7 +204,7 @@ function ScoreToTime() {
   useEffect(() => {
     if (!boss || !scoreString) return;
 
-    const score = parseInt(scoreString.replace(/,/g, ""));
+    const score = Number.parseInt(scoreString.replace(/,/g, ""));
     if (isNaN(score)) {
       setCalculatedDifficulty(null);
       setCalculatedTimeString(null);

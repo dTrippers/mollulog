@@ -35,8 +35,8 @@ export function decodeSlotString(encodedSlot: string, slotIndex: number): {
   const tierHex = encodedSlot.substring(7, 8);
   const isAssistStr = encodedSlot.substring(8, 9);
 
-  const level = parseInt(levelHex, 16);
-  const tier = parseInt(tierHex, 16);
+  const level = Number.parseInt(levelHex, 16);
+  const tier = Number.parseInt(tierHex, 16);
   const isAssist = isAssistStr === "1";
   return {
     slotIndex,

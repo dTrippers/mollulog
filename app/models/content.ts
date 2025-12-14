@@ -6,7 +6,7 @@ import type { Env } from "~/env.server";
 import { nanoid } from "nanoid/non-secure";
 import { senseisTable } from "./sensei";
 import { graphql } from "~/graphql";
-import { FutureContentsQuery, IndexQuery } from "~/graphql/graphql";
+import type { FutureContentsQuery, IndexQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
 import { getFavoritedCounts } from "./favorite-students";

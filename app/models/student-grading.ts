@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
-import { Env } from "~/env.server";
+import type { Env } from "~/env.server";
 import { nanoid } from "nanoid/non-secure";
 import type { StudentGradingTagValue } from "./student-grading-tag";
 import { getGradingTags, updateGradingTags, getGradingTagsByGradingUids } from "./student-grading-tag";

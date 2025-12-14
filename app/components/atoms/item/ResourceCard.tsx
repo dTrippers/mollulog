@@ -1,4 +1,4 @@
-import { ResourceTypeEnum } from "~/graphql/graphql";
+import type { ResourceTypeEnum } from "~/graphql/graphql";
 
 type ResourceCardProps = {
   resourceType?: ResourceTypeEnum;

@@ -1,6 +1,6 @@
 import { useFetcher } from "react-router";
 import { useMemo, useState, useEffect, useRef } from "react";
-import Decimal from "decimal.js";
+import type Decimal from "decimal.js";
 import { ExclamationCircleIcon, UserIcon, ArrowPathIcon } from "@heroicons/react/16/solid";
 import EventInfoCard from "./EventInfoCard";
 import { useSignIn } from "~/contexts/SignInProvider";
@@ -41,7 +41,7 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
   const { showSignIn } = useSignIn();
 
   const fetcher = useFetcher();
-  const saveIntervalRef = useRef<NodeJS.Timeout>();
+  const saveIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const lastSavedStateRef = useRef<EventShopState | null>(null);
 
@@ -56,7 +56,7 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
     savedShopState?.includeRecruitedStudents ?? true
   );
   const [enabledStages, setEnabledStages] = useState<Record<string, boolean>>(
-    savedShopState?.enabledStages ?? stages.reduce((acc, stage) => ({ ...acc, [stage.uid]: parseInt(stage.index) >= 9 }), {})
+    savedShopState?.enabledStages ?? stages.reduce((acc, stage) => ({ ...acc, [stage.uid]: Number.parseInt(stage.index) >= 9 }), {})
   );
   const [existingPaymentItemQuantities, setExistingPaymentItemQuantities] = useState<Record<string, number>>(
     savedShopState?.existingPaymentItemQuantities ?? {}

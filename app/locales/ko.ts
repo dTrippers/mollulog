@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import type { AttackType, DefenseType, EventType, PickupType, RaidType, Role, Terrain } from "~/models/content.d";
-import { Boss } from "~/models/raid";
+import type { Boss } from "~/models/raid";
 
 export const attackTypeLocale: Record<AttackType, string> = {
   explosive: "폭발",

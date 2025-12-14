@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PickupResources } from "..";
+import type { PickupResources } from "..";
 import { ResourceCard } from "../../atoms/item";
 import { NumberInput } from "../../atoms/form";
 import PlannerButtonForm from "./PlannerButtonForm";

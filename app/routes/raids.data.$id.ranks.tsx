@@ -5,7 +5,7 @@ import type { Defense, RaidRank } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
-import { RaidRankFilterState } from "~/components/raids/RaidRankFilter";
+import type { RaidRankFilterState } from "~/components/raids/RaidRankFilter";
 
 const raidRanksQuery = graphql(`
   query RaidRanks($defenseType: Defense, $raidUid: String!, $includeStudents: [RaidRankFilter!], $excludeStudents: [RaidRankFilter!], $rankAfter: Int, $rankBefore: Int) {

@@ -1,4 +1,4 @@
-import { HTMLInputTypeAttribute, useEffect, useRef } from "react";
+import { type HTMLInputTypeAttribute, useEffect, useRef } from "react";
 
 type InputFormProps = {
   label: string;

@@ -4,7 +4,7 @@ import { MultilineText, SubTitle } from "~/components/atoms/typography";
 import { ResourceCard } from "~/components/atoms/item";
 import { ActionCard, type ActionCardAction } from "~/components/molecules/editor";
 import { StudentCards } from "~/components/molecules/student";
-import { PickupType, RaidType } from "~/models/content.d";
+import type { PickupType, RaidType } from "~/models/content.d";
 import { useEffect, useMemo, useState } from "react";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";

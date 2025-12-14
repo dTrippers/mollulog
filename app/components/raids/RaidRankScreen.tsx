@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { type RxDatabase } from "rxdb";
+import type { RxDatabase } from "rxdb";
 import { IdentificationIcon, MinusCircleIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
-import { getRaidRankDatabase, RaidRankDocument, syncRaidRank, parseRaidRankDocument, type ParsedRaidRankDocument, initCollection } from "~/models/raid-rank.client";
+import { getRaidRankDatabase, type RaidRankDocument, syncRaidRank, parseRaidRankDocument, type ParsedRaidRankDocument, initCollection } from "~/models/raid-rank.client";
 import { raidRankIdPrefix } from "~/models/raid-rank";
 import { EmptyView } from "~/components/atoms/typography";
 import { Pagination } from "~/components/atoms/navigation";
 import type { RaidType, DefenseType, AttackType, Role } from "~/models/content.d";
-import { RaidRankFilterState } from "./RaidRankFilter";
+import type { RaidRankFilterState } from "./RaidRankFilter";
 import { StudentCards } from "~/components/molecules/student";
 import { ActionCard } from "~/components/molecules/editor";
-import { Boss, scoreToDifficultyAndTime } from "~/models/raid";
+import { type Boss, scoreToDifficultyAndTime } from "~/models/raid";
 
 type RaidRankScreenProps = {
   currentRaid: {

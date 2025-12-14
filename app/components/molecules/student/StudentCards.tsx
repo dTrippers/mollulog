@@ -56,7 +56,11 @@ export default function StudentCards({ students, mobileGrid, pcGrid, onSelect, o
         return (
           <div
             key={`student-card-${student.name ?? uid}-${index}`}
-            ref={(ref) => uid && onRef?.(uid, ref)}
+            ref={(ref) => {
+              if (uid) {
+                onRef?.(uid, ref);
+              }
+            }}
             className="scroll-mt-20 md:scroll-mt-4"
           >
             <StudentCard

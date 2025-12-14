@@ -27,7 +27,7 @@ export default function RaidRankFilterStudentSearch({ selectedStudents, searchab
       return [];
     }
 
-    let results = [];
+    const results = [];
     for (const student of searchableStudents) {
       if (hangul.search(student.name, searchValue) >= 0) {
         results.push(student);

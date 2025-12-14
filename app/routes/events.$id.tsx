@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { isRouteErrorResponse, MetaFunction, redirect, useLoaderData, useRouteError, useSearchParams } from "react-router";
+import { isRouteErrorResponse, type MetaFunction, redirect, useLoaderData, useRouteError, useSearchParams } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 import { EventHeader, EventDetailShopPage, EventDetailInfoPage, EventDetailStagePage } from "~/components/event";

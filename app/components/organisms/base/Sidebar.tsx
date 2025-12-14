@@ -28,7 +28,6 @@ import { useState } from "react";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { sanitizeClassName } from "~/prophandlers";
 import { submitPreference } from "~/routes/api.preference";
-import { Banner } from "~/components/atoms/notification";
 
 interface MenuItemProps {
   to: string;
@@ -215,13 +214,6 @@ export default function Sidebar({ currentUsername, darkMode, setDarkMode, hasRec
 
   return (
     <div>
-      {/* Desktop Banner - Top */}
-      {banner && (
-        <div className="hidden xl:block mb-4">
-          <Banner message={banner.message} linkText={banner.linkText} linkTo={banner.linkTo} storageKey={banner.storageKey} />
-        </div>
-      )}
-
       <div className="px-4 py-4">
         <div className="flex items-center">
           <Bars3Icon className="p-2 -m-2 block xl:hidden size-10" strokeWidth={2} onClick={() => setIsMenuOpen(!isMenuOpen)} />
@@ -242,12 +234,6 @@ export default function Sidebar({ currentUsername, darkMode, setDarkMode, hasRec
         </div>
       </div>
       <div>
-        {/* Mobile Banner - Bottom */}
-        {banner && (
-          <div className="block xl:hidden">
-            <Banner message={banner.message} linkText={banner.linkText} linkTo={banner.linkTo} storageKey={banner.storageKey} />
-          </div>
-        )}
         <Transition
           show={isMenuOpen}
           as="div"

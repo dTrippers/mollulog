@@ -6,7 +6,7 @@ import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
 import type { Env } from "~/env.server";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { PyroxenePlannerContentsQuery } from "~/graphql/graphql";
+import type { PyroxenePlannerContentsQuery } from "~/graphql/graphql";
 import { fetchCached } from "./base";
 
 

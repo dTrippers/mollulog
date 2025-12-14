@@ -4,7 +4,7 @@ import { NumberInput, Toggle } from "~/components/atoms/form";
 import { ResourceCard } from "~/components/atoms/item";
 import { LoadingSkeleton } from "~/components/atoms/layout";
 import { SubTitle } from "~/components/atoms/typography";
-import { loader as favoriteItemsLoader } from "~/routes/api.students.$uid.items";
+import type { loader as favoriteItemsLoader } from "~/routes/api.students.$uid.items";
 
 type FavoriteItemSelectorProps = {
   studentUid: string;
