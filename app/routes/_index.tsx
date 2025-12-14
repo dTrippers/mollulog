@@ -7,14 +7,15 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { SubTitle, Title } from "~/components/atoms/typography";
 import type { IndexQuery } from "~/graphql/graphql";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { defenseTypeColor, defenseTypeLocale, difficultyLocale, eventTypeLocale, pickupLabelLocale, raidTypeLocale, relativeTime } from "~/locales/ko";
+import { defenseTypeColor, defenseTypeLocale, difficultyLocale, pickupLabelLocale, raidTypeLocale, relativeTime } from "~/locales/ko";
 import dayjs from "dayjs";
 import { OptionBadge, ProfileImage } from "~/components/atoms/student";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { EventHeader } from "~/components/event";
-import type { DefenseType, EventType, RaidType } from "~/models/content.d";
+import type { DefenseType, RaidType } from "~/models/content.d";
 import { bossImageUrl } from "~/models/assets";
-import { CONTENT_ORDER, getIndexContents, SHOW_LINK_CONTENT_TYPES } from "~/models/content";
+import { getIndexContents } from "~/models/content";
+import EventList from "~/components/event/EventList";
 
 export const meta: MetaFunction = () => {
   return [
@@ -54,7 +55,7 @@ export default function Index() {
       <Title text="진행중인 컨텐츠" />
 
       <MainEvent event={mainEvent} />
-      <CurrentEvents events={currentEvents} />
+      <EventList events={currentEvents} />
       <div className="grid grid-cols-2 gap-2">
         <LinkCard Icon={CalendarIcon} title="미래시" description="컨텐츠 및 픽업 일정" to="/futures" />
         <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가 정보" to="/students" />
@@ -89,46 +90,6 @@ function MainEvent({ event }: { event: Exclude<IndexQuery["events"]["nodes"][0],
       <Link to={`/events/${event.uid}`} className="block hover:opacity-75 transition-opacity">
         <EventHeader {...event} />
       </Link>
-    </div>
-  );
-}
-
-type CurrentEventsProps = {
-  events: {
-    uid: string;
-    name: string;
-    type: EventType;
-    since: Date;
-    until: Date;
-  }[];
-};
-
-function CurrentEvents({ events }: CurrentEventsProps) {
-  if (events.length === 0) {
-    return null;
-  }
-
-  const sortedEvents = useMemo(() => events.sort((a, b) => {
-    return CONTENT_ORDER.indexOf(a.type) - CONTENT_ORDER.indexOf(b.type);
-  }), [events]);
-
-  return (
-    <div className="mt-8">
-      <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden">
-        {sortedEvents.map((event) => (
-          <Link to={`/events/${event.uid}`} key={event.uid} className="block group">
-            <div className="p-3 flex items-center justify-between hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors rounded-lg">
-              <div className="transition-opacity">
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{eventTypeLocale[event.type]}</p>
-                <p className="font-semibold text-neutral-900 dark:text-neutral-100">{event.name}</p>
-              </div>
-              {SHOW_LINK_CONTENT_TYPES.includes(event.type) && (
-                <ArrowRightIcon className="size-4 text-neutral-500 dark:text-neutral-400 group-hover:translate-x-1 transition-transform duration-200" strokeWidth={2} />
-              )}
-            </div>
-          </Link>
-        ))}
-      </div>
     </div>
   );
 }

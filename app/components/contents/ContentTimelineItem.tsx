@@ -150,7 +150,6 @@ export function ContentTimelineItem({
           {raidInfo && <RaidInfo raid={raidInfo} />}
         </>
       )}
-      
 
       {/* 픽업 정보 */}
       {pickups && pickups.length > 0 && (

@@ -13,10 +13,10 @@ import type { EventType, RaidType } from "./content.d";
 
 export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "update",
-  "fes",
   "event",
   "immortal_event",
   "main_story",
+  "fes",
   "pickup",
   "archive_pickup",
   "collab",

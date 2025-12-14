@@ -175,15 +175,15 @@ function Pickups({ pickups, signedIn, event, free100 }: PickupsProps) {
       {free100 && (
         <EventInfoCard
           Icon={StarIcon}
-          title="100회 모집 무료"
-          description="픽업 기간 내 총 100회 무료로 학생을 모집할 수 있어요."
+          title="총 100회 모집 무료"
+          description="하루에 10~20회 씩 총 100회 무료로 학생을 모집할 수 있어요. 픽업 기간이 지나면 이용할 수 없어요."
         />
       )}
       {shouldNotifyPickupPeriod && (
         <EventInfoCard
           Icon={ExclamationTriangleIcon}
           title="이벤트 개최 기간과 픽업 모집 기간이 달라요"
-          description="모집 포인트(천장)는 각 픽업 기간이 지나면 초기화돼요."
+          description="모집 포인트(천장)는 각 픽업 기간이 지나면 초기화돼요. 아래 일정을 확인해주세요."
           color="yellow"
         />
       )}
