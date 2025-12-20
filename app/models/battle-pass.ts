@@ -16,7 +16,6 @@ export type BattlePassReward = {
 export async function getBattlePassRewards(env: Env, eventUid: string): Promise<BattlePassReward[]> {
   const key = battlePassRewardsKey(eventUid);
   const rawData = await env.KV_USERDATA.get(key);
-  console.log(key);
   if (rawData) {
     return JSON.parse(rawData) as BattlePassReward[];
   }

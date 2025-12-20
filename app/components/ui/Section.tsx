@@ -53,7 +53,7 @@ export function Section({ title,  description,  foldable = false,  foldStateKey,
           />
         )}
       </div>
-      {visible && <div className={title && typeof title === "string" ? "mt-4" : ""}>{children}</div>}
+      {visible && <div className={title ? "mt-4" : ""}>{children}</div>}
     </div>
   );
 }
