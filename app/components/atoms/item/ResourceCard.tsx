@@ -42,7 +42,7 @@ export default function ResourceCard({ resourceType, rarity = 1, favoriteLevel, 
           loading="lazy"
         />
         {label && (
-          <div className="px-1.5 absolute -right-1 -bottom-0.5 bg-neutral-900/80 backdrop-blur-sm text-white text-xs rounded-full">
+          <div className="px-1 absolute -right-1 -bottom-0.5 bg-neutral-900/80 backdrop-blur-sm text-white text-xs rounded-sm">
             <span className={`${labelColorClass} text-xs font-medium`}>{label}</span>
           </div>
         )}

@@ -85,6 +85,7 @@ export default function EventHeader({ imageUrl, name, type, rerun, since, until,
                 onReady={(ytEvent: any) => {
                   playerRef.current = ytEvent.target;
                   setMuted(true);
+                  ytEvent.target.setVolume(30);
                 }}
                 // @ts-ignore
                 onPlay={(ytEvent: any) => {
@@ -137,7 +138,7 @@ export default function EventHeader({ imageUrl, name, type, rerun, since, until,
 
           <div className="flex items-end gap-1">
             <p className="grow text-xs md:text-sm text-neutral-300">
-              {`${sinceDayjs.format("YYYY-MM-DD")} ~ ${untilDayjs.format("YYYY-MM-DD")}`}
+              {endless ? sinceDayjs.format("YYYY-MM-DD") : `${sinceDayjs.format("YYYY-MM-DD")} ~ ${untilDayjs.format("YYYY-MM-DD")}`}
             </p>
             {rerun && <Label text="복각" />}
             {timeLabel && <Label text={timeLabel} showRedDot={sinceDayjs.isBefore(now)} />}

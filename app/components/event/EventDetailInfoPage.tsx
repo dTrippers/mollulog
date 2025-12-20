@@ -8,6 +8,20 @@ import { SubTitle } from "../atoms/typography";
 import ContentCommentEditor from "../contents/ContentCommentEditor";
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 import EventInfoCard from "./EventInfoCard";
+import BattlePassInfo from "./BattlePassInfo";
+
+type BattlePassReward = {
+  normal: {
+    resourceType: string;
+    resourceUid: string;
+    quantity: number;
+  };
+  growth: {
+    resourceType: string;
+    resourceUid: string;
+    quantity: number;
+  };
+};
 
 type EventDetailInfoPageProps = {
   event: {
@@ -15,6 +29,7 @@ type EventDetailInfoPageProps = {
     type: EventType;
     since: Date;
     until: Date;
+    tags: string[];
   }
   pickups: {
     type: PickupType;
@@ -56,6 +71,8 @@ type EventDetailInfoPageProps = {
     }[];
   }[];
 
+  battlePassRewards?: BattlePassReward[];
+
   me: {
     username: string;
   } | null;
@@ -72,7 +89,7 @@ export type ActionData = {
   };
 };
 
-export default function EventDetailInfoPage({ event, pickups, allComments, me }: EventDetailInfoPageProps) {
+export default function EventDetailInfoPage({ event, pickups, allComments, me, battlePassRewards }: EventDetailInfoPageProps) {
   return (
     <div>
       {event.type === "fes" && (
@@ -80,18 +97,19 @@ export default function EventDetailInfoPage({ event, pickups, allComments, me }:
           <EventInfoCard
             Icon={StarIcon}
             title="모집 확률 상승"
-            description="★3 학생 모집 확률이 6%로 상승해요"
+            description="★3 학생 모집 확률이 6%로 상승해요. 단, 픽업 학생 모집 확률은 유지돼요."
           />
           <EventInfoCard
             Icon={ClockIcon}
             title="기간 한정 모집"
             description={"\"페스 신규/복각\" 학생은 페스 기간에만 모집할 수 있어요"}
           />
-          
         </>
       )}
-
-      {pickups.length > 0 && <Pickups pickups={pickups} signedIn={me !== null} event={event} />}
+      {event.type === "battle_pass" && battlePassRewards && <BattlePassInfo rewards={battlePassRewards} />}
+      {pickups.length > 0 && (
+        <Pickups pickups={pickups} signedIn={me !== null} event={event} free100={event.tags.includes("recruit_free_100")} />
+      )}
       <EventComment allComments={allComments} me={me} eventUid={event.uid} />
     </div>
   )
@@ -106,33 +124,16 @@ type PickupsProps = {
     since: Date;
     until: Date;
   };
+  free100: boolean;
 };
 
-function Pickups({ pickups, signedIn, event }: PickupsProps) {
-  const pickupDateGroupsArray = useMemo(() => {
-    const pickupDateGroups = pickups.reduce((groups, pickup) => {
-      const key = `${pickup.since}-${pickup.until}`;
-      if (!groups[key]) {
-        groups[key] = {
-          since: pickup.since,
-          until: pickup.until,
-          pickups: []
-        };
-      }
-      groups[key].pickups.push(pickup);
-      return groups;
-    }, {} as Record<string, { since: Date; until: Date | null; pickups: typeof pickups }>);
-
-    return Object.values(pickupDateGroups);
-  }, [event.uid]);
-
-  const hasMultipleDateRanges = pickupDateGroupsArray.length > 1;
-  // Check if any pickup group has different dates from event
-  const shouldNotifyPickupPeriod = pickups.length > 0 && pickupDateGroupsArray.some(group => {
-    const isSinceDifferent = !dayjs(group.since).isSame(dayjs(event.since), "day");
-    const isUntilDifferent = !dayjs(group.until).isSame(dayjs(event.until), "day");
-    return group.until !== null && (isSinceDifferent || isUntilDifferent);
-  });
+function Pickups({ pickups, signedIn, event, free100 }: PickupsProps) {
+  const shouldNotifyPickupPeriod = useMemo(() => {
+    const allPickupsMatchEvent = pickups.every((pickup) => {
+      return dayjs(pickup.since).isSame(dayjs(event.since), "day") && dayjs(pickup.until).isSame(dayjs(event.until), "day");
+    });
+    return !allPickupsMatchEvent;
+  }, [pickups, event.since, event.until]);
 
   const [filteredPickups, nonPickups] = useMemo(() => {
     if (event.type !== "fes") {
@@ -151,51 +152,51 @@ function Pickups({ pickups, signedIn, event }: PickupsProps) {
     return [filteredPickups, nonPickups];
   }, [pickups]);
 
+  const filteredPickupDateGroupsArray = useMemo(() => {
+    const pickupDateGroups = filteredPickups.reduce((groups, pickup) => {
+      const key = `${pickup.since}-${pickup.until}`;
+      if (!groups[key]) {
+        groups[key] = {
+          since: pickup.since,
+          until: pickup.until,
+          pickups: []
+        };
+      }
+      groups[key].pickups.push(pickup);
+      return groups;
+    }, {} as Record<string, { since: Date; until: Date | null; pickups: typeof filteredPickups }>);
+
+    return Object.values(pickupDateGroups);
+  }, [filteredPickups]);
+
   return (
     <>
       <SubTitle text="픽업 모집 학생" />
+      {free100 && (
+        <EventInfoCard
+          Icon={StarIcon}
+          title="총 100회 모집 무료"
+          description="하루에 10~20회 씩 총 100회 무료로 학생을 모집할 수 있어요. 픽업 기간이 지나면 이용할 수 없어요."
+        />
+      )}
       {shouldNotifyPickupPeriod && (
-        <div className="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700 rounded-xl">
-          <div className="flex items-center gap-3">
-            <div className="flex-shrink-0">
-              <ExclamationTriangleIcon className="size-5 text-amber-600 dark:text-amber-400" />
-            </div>
-            <div className="flex-1">
-              <p className="text-amber-700 dark:text-amber-300 mb-1">
-                이벤트 개최 기간과 픽업 모집 기간이 달라요
-              </p>
-              <div className="text-sm text-amber-600 dark:text-amber-400">
-                {hasMultipleDateRanges ? (
-                  <>
-                    {pickupDateGroupsArray.map((group, index) => {
-                      const studentNames = group.pickups.map(pickup => pickup.studentName).join(", ");
-                      const isSinceDifferent = !dayjs(group.since).isSame(dayjs(event.since), "day");
-                      const isUntilDifferent = !dayjs(group.until).isSame(dayjs(event.until), "day");
-
-                      return (
-                        <span key={`group-${index}`}>
-                          {studentNames}의 픽업은&nbsp;
-                          <span className={isSinceDifferent ? "font-semibold" : ""}>{dayjs(group.since).format("M월 D일")}</span>부터&nbsp;
-                          <span className={isUntilDifferent ? "font-semibold" : ""}>{dayjs(group.until).format("M월 D일")}</span>까지
-                          {index < pickupDateGroupsArray.length - 1 ? ", " : " "}
-                        </span>
-                      );
-                    })}
-                    진행해요.
-                  </>
-                ) : (
-                  <>
-                    픽업 모집은&nbsp;
-                    <span className={!dayjs(pickupDateGroupsArray[0].since).isSame(dayjs(event.since), "day") ? "font-semibold" : ""}>{dayjs(pickupDateGroupsArray[0].since).format("M월 D일")}</span>부터&nbsp;
-                    <span className={!dayjs(pickupDateGroupsArray[0].until).isSame(dayjs(event.until), "day") ? "font-semibold" : ""}>{dayjs(pickupDateGroupsArray[0].until).format("M월 D일")}</span>까지 진행해요.
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+        <EventInfoCard
+          Icon={ExclamationTriangleIcon}
+          title="이벤트 개최 기간과 픽업 모집 기간이 달라요"
+          description="모집 포인트(천장)는 각 픽업 기간이 지나면 초기화돼요. 아래 일정을 확인해주세요."
+          color="yellow"
+        />
+      )}
+      {filteredPickupDateGroupsArray.map((group) => 
+        <div key={`${dayjs(group.since).format("YYYY-MM-DD")}-${dayjs(group.until).format("YYYY-MM-DD")}`}>
+          {(filteredPickupDateGroupsArray.length > 1 || shouldNotifyPickupPeriod) && (
+            <p className="mt-6 -mb-2 font-semibold">
+              {dayjs(group.since).format("M월 D일")} ~ {dayjs(group.until).format("M월 D일")}
+            </p>
+          )}
+          {group.pickups.map((pickup) => <EventPickupWithFavoriteState key={pickup.student?.uid} pickup={pickup} signedIn={signedIn} />)}
         </div>
       )}
-      {filteredPickups.map((pickup) => <EventPickupWithFavoriteState key={pickup.student?.uid} pickup={pickup} signedIn={signedIn} />)}
 
       {nonPickups.length > 0 && (
         <>

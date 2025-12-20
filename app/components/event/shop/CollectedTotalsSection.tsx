@@ -3,7 +3,7 @@ import { ResourceTypeEnum } from "~/graphql/graphql";
 import { ResourceCard } from "~/components/atoms/item";
 import { formatResourceAmount } from "~/locales/ko";
 import type { ShopResource } from "./types";
-import { EventShopSection } from "./EventShopSection";
+import { Section } from "~/components/ui";
 
 type CollectedTotalsSectionProps = {
   breakdown: {
@@ -64,7 +64,12 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({ bre
 
   return (
     <>
-      <EventShopSection title="최종 결과" description="필요한 AP와 아이템 수량을 확인할 수 있어요" foldable={false}>
+      <Section
+        title="최종 결과"
+        description="필요한 AP와 아이템 수량을 확인할 수 있어요"
+        foldable={false}
+        defaultExpanded={true}
+      >
         {totalApWithExtras > 0 && (
           <div className="my-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-teal-950 border border-green-200 dark:border-green-800 rounded-lg">
             <div className="flex justify-between items-center mb-3 pb-1.5 border-b border-green-200 dark:border-green-800">
@@ -154,7 +159,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({ bre
             ))}
           </div>
         )}
-      </EventShopSection>
+      </Section>
     </>
   );
 });

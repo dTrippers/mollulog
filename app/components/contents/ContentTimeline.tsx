@@ -1,8 +1,9 @@
 import dayjs from "dayjs";
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import type { ContentTimelineItemProps } from "./ContentTimelineItem";
 import { ContentTimelineItem } from "./ContentTimelineItem";
 import type { EventType, RaidType } from "~/models/content.d";
+import { CONTENT_ORDER } from "~/models/content";
 
 export type ContentTimelineProps = {
   contents: {
@@ -14,7 +15,7 @@ export type ContentTimelineProps = {
     uid: string;
     link: string;
     contentType: EventType | RaidType;
-    hasShopData?: boolean;
+    tags: string[];
     pickups?: ContentTimelineItemProps["pickups"];
     raidInfo?: ContentTimelineItemProps["raidInfo"];
 
@@ -40,23 +41,6 @@ type ContentGroup = {
   contents: ContentTimelineProps["contents"];
 };
 
-export const contentOrders: (EventType | RaidType)[] = [
-  "fes",
-  "event",
-  "immortal_event",
-  "main_story",
-  "pickup",
-  "archive_pickup",
-  "collab",
-  "total_assault",
-  "elimination",
-  "unlimit",
-  "campaign",
-  "exercise",
-  "mini_event",
-  "guide_mission",
-];
-
 function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup[] {
   const groups: { groupDate: dayjs.Dayjs | null, contents: ContentTimelineProps["contents"] }[] = [];
 
@@ -77,25 +61,22 @@ function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup
 
   return groups.map(({ groupDate, contents }) => ({
     groupDate: groupDate?.toDate() ?? null,
-    contents: contents.sort((a, b) => contentOrders.indexOf(a.contentType) - contentOrders.indexOf(b.contentType)),
+    contents: contents.sort((a, b) => CONTENT_ORDER.indexOf(a.contentType) - CONTENT_ORDER.indexOf(b.contentType)),
   }));
 }
 
 export default function ContentTimeline({ contents, favoritedStudents, favoritedCounts, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, onFavorite, isSubmittingComment, signedIn }: ContentTimelineProps) {
-  const [contentGroups, setContentGroups] = useState<ContentGroup[]>(groupContents(contents));
-
-  // Update content groups when contents change
-  useEffect(() => {
-    setContentGroups(groupContents(contents));
-  }, [contents]);
-
-  const favoriteStudentIdsByContents: Record<string, Record<string, number>> = {};
-  favoritedCounts.forEach(({ contentUid, studentUid, count }) => {
-    if (!favoriteStudentIdsByContents[contentUid]) {
-      favoriteStudentIdsByContents[contentUid] = {};
-    }
-    favoriteStudentIdsByContents[contentUid][studentUid] = count;
-  });
+  const contentGroups = useMemo(() => groupContents(contents), [contents]);
+  const favoriteStudentIdsByContents = useMemo(() => {
+    const aggregatedResult: Record<string, Record<string, number>> = {};
+    favoritedCounts.forEach(({ contentUid, studentUid, count }) => {
+      if (!aggregatedResult[contentUid]) {
+        aggregatedResult[contentUid] = {};
+      }
+      aggregatedResult[contentUid][studentUid] = count;
+    });
+    return aggregatedResult;
+  }, [favoritedCounts]);
 
   if (contents.length === 0) {
     return (

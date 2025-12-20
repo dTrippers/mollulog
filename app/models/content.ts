@@ -9,7 +9,40 @@ import type { FutureContentsQuery, IndexQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
 import { getFavoritedCounts } from "./favorite-students";
+import type { EventType, RaidType } from "./content.d";
 
+export const CONTENT_ORDER: (EventType | RaidType)[] = [
+  "update",
+  "event",
+  "immortal_event",
+  "main_story",
+  "fes",
+  "pickup",
+  "archive_pickup",
+  "collab",
+  "total_assault",
+  "elimination",
+  "unlimit",
+  "campaign",
+  "exercise",
+  "mini_event",
+  "guide_mission",
+  "battle_pass",
+];
+
+export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
+  "update",
+  "fes",
+  "event",
+  "immortal_event",
+  "main_story",
+  "pickup",
+  "archive_pickup",
+  "collab",
+  "total_assault",
+  "elimination",
+  "battle_pass",
+];
 
 type ContentComment = {
   id: number;
@@ -402,8 +435,7 @@ const futureContentsQuery = graphql(`
         __typename uid name since until confirmed
         ... on Event {
           eventType: type
-          rerun endless
-          shopResources { uid }
+          rerun endless tags
           pickups {
             type rerun since until studentName
             student { uid attackType defenseType role schaleDbId }

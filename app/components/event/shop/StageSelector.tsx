@@ -4,7 +4,7 @@ import { Toggle } from "~/components/atoms/form";
 import { StageCard } from "./StageCard";
 import { CollectedTotalsSection } from "./CollectedTotalsSection";
 import type { Stage, ShopResource } from "./types";
-import { EventShopSection } from "./EventShopSection";
+import { Section } from "~/components/ui";
 
 type StagesProps = {
   stages: Stage[];
@@ -257,7 +257,13 @@ export function StageSelector({
 
   return (
     <>
-      <EventShopSection title="스테이지 소탕 계획" description="스테이지를 선택하고 최적화된 소탕 계획을 세워보세요" foldable foldStateKey="stage-selector">
+      <Section
+        title="스테이지 소탕 계획"
+        description="스테이지를 선택하고 최적화된 소탕 계획을 세워보세요"
+        foldable
+        foldStateKey="event-shop-section::stage-selector"
+        defaultExpanded={true}
+      >
         <Toggle label="스토리/퀘스트 1회 씩 클리어 (초회 보상 반영)" initialState={includeFirstClear} onChange={setIncludeFirstClear} />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -274,7 +280,7 @@ export function StageSelector({
             />
           ))}
         </div>
-      </EventShopSection>
+      </Section>
 
       <CollectedTotalsSection 
         breakdown={stageCalculations.itemBreakdown} 
