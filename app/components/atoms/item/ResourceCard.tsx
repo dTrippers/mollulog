@@ -6,6 +6,7 @@ type ResourceCardProps = {
   favoriteLevel?: number;
   label?: number | string;
   labelColor?: "white" | "yellow";
+  name?: string;
 } & (
   {
     itemUid: string;
@@ -16,7 +17,7 @@ type ResourceCardProps = {
   }
 );
 
-export default function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageUrl: imageUrlProp, label, labelColor = "white" }: ResourceCardProps) {
+export default function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageUrl: imageUrlProp, label, labelColor = "white", name }: ResourceCardProps) {
   const labelColorClass = labelColor === "white" ? "text-white" : "text-orange-300";
 
   let imageUrl = imageUrlProp;
@@ -33,7 +34,7 @@ export default function ResourceCard({ resourceType, rarity = 1, favoriteLevel, 
   }
 
   return (
-    <div className="relative">
+    <div className="relative group">
       <div className={`shrink-0 size-10 rounded-lg border border-neutral-200 dark:border-neutral-700 ${rarityBgClass(rarity)} flex items-center justify-center overflow-hidden`}>
         <img
           alt="아이템 이미지"
@@ -43,11 +44,18 @@ export default function ResourceCard({ resourceType, rarity = 1, favoriteLevel, 
         />
         {label && (
           <div className="px-1 absolute -right-1 -bottom-0.5 bg-neutral-900/80 backdrop-blur-sm text-white text-xs rounded-sm">
-            <span className={`${labelColorClass} text-xs font-medium`}>{label}</span>
+            <span className={`${labelColorClass} text-xs font-medium tracking-tighter`}>{label}</span>
           </div>
         )}
       </div>
       {favoriteLevel && <img src={favoriteLevelImageUrl(favoriteLevel)} alt={`호감 레벨 ${favoriteLevel}`} className="absolute -bottom-1 -right-1 w-6 h-6 object-contain" loading="lazy" />}
+      {name && (
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-800 text-white text-xs rounded border border-neutral-700 dark:border-neutral-600 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
+          {name}
+          <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-neutral-900 dark:border-t-neutral-800" />
+          <div className="absolute left-1/2 -translate-x-1/2 top-full -mt-[1px] border-4 border-transparent border-t-neutral-700 dark:border-t-neutral-600" />
+        </div>
+      )}
     </div>
   );
 }

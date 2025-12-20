@@ -1,12 +1,12 @@
-import { useFetcher } from "react-router";
-import { useMemo, useState, useEffect, useRef } from "react";
-import type Decimal from "decimal.js";
+import { useMemo, useState, useEffect } from "react";
 import { ExclamationCircleIcon, UserIcon, ArrowPathIcon } from "@heroicons/react/16/solid";
 import EventInfoCard from "./EventInfoCard";
 import { useSignIn } from "~/contexts/SignInProvider";
 import type { EventShopState } from "~/models/event-shop-state";
-import { StudentBonusSelector, ShopResourceSelector, StageSelector } from "./shop";
+import { StudentBonusSelector, ShopResourceSelector, StageSelector, MiniGameSection, CollectedTotalsSection } from "./shop";
 import type { Stage, ShopResource, EventRewardBonus, CollectableResource } from "./shop";
+import { MINIGAME_CONFIG } from "./shop/constants";
+import { useShopState, useBonusCalculation, useAutoSave, useShopCalculations } from "./shop/hooks";
 
 type EventDetailShopPageProps = {
   stages: Stage[];
@@ -19,65 +19,38 @@ type EventDetailShopPageProps = {
 };
 
 export default function EventDetailShopPage({ stages, shopResources, eventRewardBonus, recruitedStudentUids, eventUid, savedShopState, signedIn }: EventDetailShopPageProps) {
+  const minigameConfig = MINIGAME_CONFIG[eventUid];
+
   const collectableResources = useMemo<CollectableResource[]>(() => {
     const items: CollectableResource[] = [];
-    shopResources.forEach(({ paymentResource }) => {
+    for (const { paymentResource } of shopResources) {
       if (!items.some(({ uid }) => uid === paymentResource.uid)) {
         items.push({ uid: paymentResource.uid, name: paymentResource.name, forPayment: true });
       }
-    });
+    }
 
-    stages.forEach((stage) => {
-      stage.rewards.forEach(({ item }) => {
+    for (const stage of stages) {
+      for (const { item } of stage.rewards) {
         if (item && item.category === "coin" && !items.some(({ uid }) => uid === item.uid)) {
           items.push({ uid: item.uid, name: item.name, forPayment: false });
         }
-      });
-    });
+      }
+    }
 
     return items.sort((a, b) => a.uid.localeCompare(b.uid));
   }, [stages, shopResources]);
 
   const { showSignIn } = useSignIn();
 
-  const fetcher = useFetcher();
-  const saveIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  // Unified state management
+  const { state, actions } = useShopState({ savedShopState, recruitedStudentUids, stages });
+
+  // Track initial load for auto-save
   const [isInitialLoad, setIsInitialLoad] = useState(true);
-  const lastSavedStateRef = useRef<EventShopState | null>(null);
-
-  // Initialize state from saved state or defaults
-  const [itemQuantities, setItemQuantities] = useState<Record<string, number>>(
-    savedShopState?.itemQuantities ?? {}
-  );
-  const [selectedBonusStudentUids, setSelectedBonusStudentUids] = useState<string[]>(
-    savedShopState?.selectedBonusStudentUids ?? recruitedStudentUids
-  );
-  const [includeRecruitedStudents, setIncludeRecruitedStudents] = useState<boolean>(
-    savedShopState?.includeRecruitedStudents ?? true
-  );
-  const [enabledStages, setEnabledStages] = useState<Record<string, boolean>>(
-    savedShopState?.enabledStages ?? stages.reduce((acc, stage) => ({ ...acc, [stage.uid]: Number.parseInt(stage.index) >= 9 }), {})
-  );
-  const [existingPaymentItemQuantities, setExistingPaymentItemQuantities] = useState<Record<string, number>>(
-    savedShopState?.existingPaymentItemQuantities ?? {}
-  );
-  const [includeFirstClear, setIncludeFirstClear] = useState<boolean>(
-    savedShopState?.includeFirstClear ?? false
-  );
-  const [extraStageRuns, setExtraStageRuns] = useState<Record<string, number>>(
-    savedShopState?.extraStageRuns ?? {}
-  );
-
-  const [appliedBonusRatio, setAppliedBonusRatio] = useState<Record<string, Decimal>>({});
-
-  // Initialize lastSavedStateRef on mount with the initial saved state
   useEffect(() => {
-    if (savedShopState && lastSavedStateRef.current === null) {
-      lastSavedStateRef.current = savedShopState;
+    if (savedShopState) {
       setIsInitialLoad(false);
-    } else if (!savedShopState) {
-      // No saved state - mark initialization as complete after a brief delay
-      // This ensures state is fully initialized before starting auto-save
+    } else {
       const timer = setTimeout(() => {
         setIsInitialLoad(false);
       }, 100);
@@ -85,112 +58,29 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
     }
   }, []); // Only run on mount
 
-  // Prevent re-render from revalidation: ignore savedShopState changes if they match what we last saved
-  const prevSavedShopStateRef = useRef(savedShopState);
-  useEffect(() => {
-    if (savedShopState && savedShopState !== prevSavedShopStateRef.current) {
-      const newState = savedShopState;
-      prevSavedShopStateRef.current = newState;
+  // Bonus calculation
+  const { appliedBonusRatios } = useBonusCalculation({
+    eventRewardBonus,
+    selectedStudentUids: state.selectedBonusStudentUids,
+  });
 
-      // Only update state if it matches what we last saved (confirmation from server)
-      // or if we haven't saved anything yet (initial load)
-      // This prevents re-render from revalidation when we save
-      if (lastSavedStateRef.current === null) {
-        // Initial load - apply saved state
-        setItemQuantities(newState.itemQuantities);
-        setSelectedBonusStudentUids(newState.selectedBonusStudentUids);
-        setIncludeRecruitedStudents(newState.includeRecruitedStudents);
-        setEnabledStages(newState.enabledStages);
-        setExistingPaymentItemQuantities(newState.existingPaymentItemQuantities || {});
-        setIncludeFirstClear(newState.includeFirstClear ?? false);
-        setExtraStageRuns(newState.extraStageRuns || {});
-        lastSavedStateRef.current = newState;
-        setIsInitialLoad(false);
-      } else {
-        // Check if this matches what we last saved
-        const stateMatches = JSON.stringify(lastSavedStateRef.current) === JSON.stringify(newState);
-        if (stateMatches) {
-          // This is a revalidation from our own save - ignore it to prevent re-render
-          // Update the ref to the new state object reference
-          lastSavedStateRef.current = newState;
-        }
-        // If it doesn't match, user might have changed data in another tab/session
-        // But we don't apply it to avoid overwriting current user's changes
-      }
-    } else if (!savedShopState) {
-      prevSavedShopStateRef.current = null;
-      lastSavedStateRef.current = null;
-    }
-  }, [savedShopState]);
+  // Auto-save
+  const { isSaving } = useAutoSave({ state, signedIn, eventUid, savedShopState, isInitialLoad });
 
-  // Periodic save check: every 3 seconds, check if state changed and save if needed
-  useEffect(() => {
-    if (!signedIn || isInitialLoad) {
-      return;
-    }
-
-    // Clear any existing interval
-    if (saveIntervalRef.current) {
-      clearInterval(saveIntervalRef.current);
-    }
-
-    // Set up interval to check for changes every 3 seconds
-    saveIntervalRef.current = setInterval(() => {
-      // Build current state
-      const currentState: EventShopState = {
-        itemQuantities,
-        selectedBonusStudentUids,
-        enabledStages,
-        includeRecruitedStudents,
-        existingPaymentItemQuantities,
-        includeFirstClear,
-        extraStageRuns,
-      };
-
-      // Check if state has changed compared to what we last saved
-      const hasChanged = lastSavedStateRef.current === null ||
-        JSON.stringify(lastSavedStateRef.current) !== JSON.stringify(currentState);
-
-      // Only save if there are changes and we're not already saving
-      if (hasChanged && fetcher.state === "idle") {
-        // Track what we're saving
-        lastSavedStateRef.current = currentState;
-
-        // Submit the save
-        fetcher.submit(
-          { save: currentState },
-          { method: "post", action: `/api/events/${eventUid}/shop-state`, encType: "application/json" }
-        );
-      }
-    }, 1500);
-
-    return () => {
-      if (saveIntervalRef.current) {
-        clearInterval(saveIntervalRef.current);
-      }
-    };
-  }, [itemQuantities, selectedBonusStudentUids, enabledStages, includeRecruitedStudents, existingPaymentItemQuantities, includeFirstClear, extraStageRuns, signedIn, eventUid, fetcher, isInitialLoad]);
-
-  const paymentItemQuantities = useMemo(() => {
-    const quantities: Record<string, number> = {};
-    collectableResources.forEach(({ uid, forPayment }) => {
-      if (!forPayment) {
-        return;
-      }
-
-      const required = shopResources.reduce((total, { uid: shopResourceUid, paymentResourceAmount, paymentResource }) => {
-        if (paymentResource.uid !== uid) {
-          return total;
-        }
-        return total + ((itemQuantities[shopResourceUid] || 0) * paymentResourceAmount);
-      }, 0);
-      const existing = existingPaymentItemQuantities[uid] || 0;
-      quantities[uid] = Math.max(0, required - existing);
-    });
-    return quantities;
-  }, [collectableResources, itemQuantities, shopResources, existingPaymentItemQuantities]);
-
-  const isSaving = fetcher.state === "submitting" || fetcher.state === "loading";
+  // Shop calculations
+  const stageCalculations = useShopCalculations({
+    state,
+    stages,
+    shopResources,
+    collectableResources,
+    appliedBonusRatio: appliedBonusRatios,
+    minigamePaymentResource: minigameConfig ? {
+      resourceUid: minigameConfig.payment.resourceUid,
+      quantity: minigameConfig.payment.quantity,
+    } : undefined,
+    minigameRewards: minigameConfig?.rewards,
+    eventUid,
+  });
 
   return (
     <>
@@ -223,11 +113,8 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
         <StudentBonusSelector
           eventRewardBonus={eventRewardBonus}
           recruitedStudentUids={recruitedStudentUids}
-          selectedBonusStudentUids={selectedBonusStudentUids}
-          setSelectedBonusStudentUids={setSelectedBonusStudentUids}
-          setAppliedBonusRatio={setAppliedBonusRatio}
-          includeRecruitedStudents={includeRecruitedStudents}
-          setIncludeRecruitedStudents={setIncludeRecruitedStudents}
+          state={state}
+          actions={actions}
           signedIn={signedIn}
         />
 
@@ -235,27 +122,38 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
           <ShopResourceSelector
             shopResources={shopResources}
             collectableResources={collectableResources}
-            itemQuantities={itemQuantities}
-            setItemQuantities={setItemQuantities}
-            paymentItemQuantities={paymentItemQuantities}
-            existingPaymentItemQuantities={existingPaymentItemQuantities}
-            setExistingPaymentItemQuantities={setExistingPaymentItemQuantities}
+            state={state}
+            actions={actions}
+          />
+        )}
+
+        {minigameConfig && (
+          <MiniGameSection
+            rewards={minigameConfig.rewards}
+            state={state}
+            actions={actions}
           />
         )}
 
         <StageSelector
           stages={stages}
-          appliedBonusRatio={appliedBonusRatio}
-          paymentItemQuantities={paymentItemQuantities}
-          enabledStages={enabledStages}
-          setEnabledStages={setEnabledStages}
-          includeFirstClear={includeFirstClear}
-          setIncludeFirstClear={setIncludeFirstClear}
-          extraStageRuns={extraStageRuns}
-          setExtraStageRuns={setExtraStageRuns}
-          existingPaymentItemQuantities={existingPaymentItemQuantities}
-          itemQuantities={itemQuantities}
+          appliedBonusRatio={appliedBonusRatios}
+          stageRuns={stageCalculations.stageRuns}
+          state={state}
+          actions={actions}
+        />
+
+        <CollectedTotalsSection
+          breakdown={stageCalculations.itemBreakdown}
+          collectableResources={collectableResources}
           shopResources={shopResources}
+          totalApWithExtras={stageCalculations.totalApWithExtras}
+          firstClearAp={stageCalculations.firstClearAp}
+          questSweepAp={stageCalculations.questSweepAp}
+          extraSweepAp={stageCalculations.extraSweepAp}
+          minigameRewards={minigameConfig?.rewards}
+          state={state}
+          actions={actions}
         />
       </div>
     </>

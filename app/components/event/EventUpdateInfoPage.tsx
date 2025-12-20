@@ -23,8 +23,8 @@ export default function EventUpdateInfoPage({ nearbyEvents, description }: Event
       <Link to="https://forum.nexon.com/bluearchive/board_list?board=1076" target="_blank" rel="noopener noreferrer">
         <EventInfoCard
           Icon={InformationCircleIcon}
-          title="업데이트 내용 변경될 수 있어요"
-          description="정확한 내용과 일정은 공식 커뮤니티에서 확인해주세요."
+          title="업데이트 내용은 변경될 수 있어요"
+          description="정확한 내용과 일정은 블루 아카이브 공식 커뮤니티에서 확인해주세요."
           onClick={() => { }}
           showArrow
         />

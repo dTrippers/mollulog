@@ -100,6 +100,13 @@ export default function App() {
   }, [navigate.state]);
 
   const location = useLocation();
+  useEffect(() => {
+    const scrollableContainer = document.querySelector('.mllg-content-area') as HTMLElement;
+    if (scrollableContainer) {
+      scrollableContainer.scrollTo({ top: 0, behavior: 'instant' });
+    }
+  }, [location.pathname]);
+
   let widthClass = "max-w-3xl";
   if (fullLayout.find((path) => location.pathname.match(path))) {
     widthClass = "w-full";

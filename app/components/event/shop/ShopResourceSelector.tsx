@@ -1,25 +1,24 @@
 import { useMemo, useState, memo } from "react";
-import { ResourceTypeEnum } from "~/graphql/graphql";
 import { ResourceCard } from "~/components/atoms/item";
 import { Button, NumberInput } from "~/components/atoms/form";
 import { formatResourceAmount } from "~/locales/ko";
 import { Tabs } from "./Tabs";
 import type { ShopResource, CollectableResource } from "./types";
+import type { ShopState, ShopActions } from "./hooks";
 import { Section } from "~/components/ui";
 
 type ShopResourceSelectorProps = {
   shopResources: ShopResource[];
   collectableResources: CollectableResource[];
-  itemQuantities: Record<string, number>;
-  setItemQuantities: (updater: (prev: Record<string, number>) => Record<string, number>) => void;
-  paymentItemQuantities: Record<string, number>;
-  existingPaymentItemQuantities: Record<string, number>;
-  setExistingPaymentItemQuantities: (updater: (prev: Record<string, number>) => Record<string, number>) => void;
+  state: ShopState;
+  actions: ShopActions;
 };
 
 export const ShopResourceSelector = memo(function ShopResourceSelector({
-  shopResources, collectableResources, itemQuantities, setItemQuantities, paymentItemQuantities,
-  existingPaymentItemQuantities, setExistingPaymentItemQuantities,
+  shopResources,
+  collectableResources,
+  state,
+  actions,
 }: ShopResourceSelectorProps) {
   const [selectedPaymentResourceUid, setSelectedPaymentResourceUid] = useState<string>(collectableResources.find(({ forPayment }) => forPayment)?.uid ?? "");
   const selectedShopResources = useMemo(() => {
@@ -27,37 +26,33 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
   }, [shopResources, selectedPaymentResourceUid]);
 
   const handleSetMinQuantity = (uid: string) => {
-    setItemQuantities(prev => ({ ...prev, [uid]: 0 }));
+    actions.updateItemQuantity(uid, 0);
   };
 
   const handleSetMaxQuantity = (uid: string, shopAmount: number | null) => {
     if (shopAmount) {
-      setItemQuantities(prev => ({ ...prev, [uid]: shopAmount }));
+      actions.updateItemQuantity(uid, shopAmount);
     }
   };
 
-  const handleQuantityChange = (uid: string, value: number) => {
-    setItemQuantities(prev => ({ ...prev, [uid]: value }));
-  };
-
   const handleSelectAll = () => {
-    setItemQuantities((prev) => {
+    actions.updateItemQuantities((prev) => {
       const newQuantities = { ...prev };
-      selectedShopResources.forEach(({ uid, shopAmount }) => {
+      for (const { uid, shopAmount } of selectedShopResources) {
         if (shopAmount !== null) {
           newQuantities[uid] = shopAmount;
         }
-      });
+      }
       return newQuantities;
     });
   };
 
   const handleResetAll = () => {
-    setItemQuantities((prev) => {
+    actions.updateItemQuantities((prev) => {
       const newQuantities = { ...prev };
-      selectedShopResources.forEach(({ uid }) => {
+      for (const { uid } of selectedShopResources) {
         newQuantities[uid] = 0;
-      });
+      }
       return newQuantities;
     });
   };
@@ -78,13 +73,13 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 md:gap-2">
         {selectedShopResources.map(({ uid, resource, resourceAmount, paymentResource, paymentResourceAmount, shopAmount }) => {
-          const quantity = itemQuantities[uid] || 0;
+          const quantity = state.itemQuantities[uid] || 0;
 
           const formattedResourceAmount = formatResourceAmount(resourceAmount);
           return (
             <div key={uid} className="px-2 py-3 flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
               <div className="flex items-center justify-center gap-x-1">
-                <ResourceCard itemUid={resource.uid} resourceType={resource.type} rarity={resource.rarity} label={resourceAmount === 1 ? undefined : formattedResourceAmount} />
+                <ResourceCard itemUid={resource.uid} resourceType={resource.type} rarity={resource.rarity} label={resourceAmount === 1 ? undefined : formattedResourceAmount} name={resource.name} />
                 <div className="grow">
                   <div className="flex items-center justify-center gap-1">
                     <img
@@ -112,7 +107,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                   최소
                 </button>
                 <div className="grow">
-                  <NumberInput value={quantity} maxValue={shopAmount ?? undefined} onChange={(value) => handleQuantityChange(uid, value)} />
+                  <NumberInput value={quantity} maxValue={shopAmount ?? undefined} onChange={(value) => actions.updateItemQuantity(uid, value)} />
                 </div>
                 {shopAmount && (
                   <button
@@ -133,33 +128,6 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
         <Button text="모두 선택" color="primary" onClick={handleSelectAll} />
         <Button text="초기화" onClick={handleResetAll} />
       </div>
-
-      <div className="my-4">
-        <div className="p-3 w-full border border-neutral-200 dark:border-neutral-700 rounded-lg grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
-          {collectableResources.map(({ uid }) => {
-            const existing = existingPaymentItemQuantities[uid] || 0;
-            const required = paymentItemQuantities[uid] || 0;
-            return (
-              <div key={uid} className="flex flex-col gap-2">
-                <div className="flex flex-row items-center gap-2">
-                  <ResourceCard itemUid={uid} resourceType={ResourceTypeEnum.Item} rarity={1} />
-                  <div className="grow">
-                    <p className="mb-2 text-xs text-center text-neutral-600 dark:text-neutral-400">이미 보유한 수량</p>
-                    <NumberInput
-                      value={existing}
-                      onChange={(value) => setExistingPaymentItemQuantities(prev => ({ ...prev, [uid]: value }))}
-                    />
-                    <p className="mt-2 text-center text-sm text-neutral-600 dark:text-neutral-400">
-                      {required.toLocaleString()} 개 필요
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </Section>
   );
 });
-

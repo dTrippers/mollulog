@@ -15,6 +15,8 @@ export const eventShopStatesTable = sqliteTable("event_shop_states", {
   existingPaymentItemQuantities: text().notNull().default("{}"),
   includeFirstClear: int().notNull().default(0),
   extraStageRuns: text().notNull().default("{}"),
+  minigamePlayCount: int().notNull().default(0),
+  overriddenRequiredQuantities: text().notNull().default("{}"),
   createdAt: text().notNull().default(sql`current_timestamp`),
   updatedAt: text().notNull().default(sql`current_timestamp`),
 });
@@ -27,6 +29,8 @@ export type EventShopState = {
   existingPaymentItemQuantities: Record<string, number>;
   includeFirstClear: boolean;
   extraStageRuns: Record<string, number>;
+  minigamePlayCount: number;
+  overriddenRequiredQuantities: Record<string, number>;
 };
 
 function toModel(state: typeof eventShopStatesTable.$inferSelect): EventShopState {
@@ -38,6 +42,8 @@ function toModel(state: typeof eventShopStatesTable.$inferSelect): EventShopStat
     existingPaymentItemQuantities: JSON.parse(state.existingPaymentItemQuantities || "{}"),
     includeFirstClear: state.includeFirstClear === 1,
     extraStageRuns: JSON.parse(state.extraStageRuns || "{}"),
+    minigamePlayCount: state.minigamePlayCount ?? 0,
+    overriddenRequiredQuantities: JSON.parse(state.overriddenRequiredQuantities || "{}"),
   };
 }
 
@@ -69,6 +75,7 @@ export async function upsertEventShopState(
   const enabledStagesJson = JSON.stringify(state.enabledStages);
   const existingPaymentItemQuantitiesJson = JSON.stringify(state.existingPaymentItemQuantities || {});
   const extraStageRunsJson = JSON.stringify(state.extraStageRuns || {});
+  const overriddenRequiredQuantitiesJson = JSON.stringify(state.overriddenRequiredQuantities || {});
 
   await db
     .insert(eventShopStatesTable)
@@ -83,6 +90,8 @@ export async function upsertEventShopState(
       existingPaymentItemQuantities: existingPaymentItemQuantitiesJson,
       includeFirstClear: state.includeFirstClear ? 1 : 0,
       extraStageRuns: extraStageRunsJson,
+      minigamePlayCount: state.minigamePlayCount ?? 0,
+      overriddenRequiredQuantities: overriddenRequiredQuantitiesJson,
     })
     .onConflictDoUpdate({
       target: [eventShopStatesTable.userId, eventShopStatesTable.eventUid],
@@ -94,6 +103,8 @@ export async function upsertEventShopState(
         existingPaymentItemQuantities: existingPaymentItemQuantitiesJson,
         includeFirstClear: state.includeFirstClear ? 1 : 0,
         extraStageRuns: extraStageRunsJson,
+        minigamePlayCount: state.minigamePlayCount ?? 0,
+        overriddenRequiredQuantities: overriddenRequiredQuantitiesJson,
         updatedAt: sql`current_timestamp`,
       },
     });

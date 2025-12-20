@@ -5,12 +5,13 @@ type SectionProps = {
   title: string;
   description?: string;
   foldable?: boolean;
+  border?: boolean;
   foldStateKey?: string;
   defaultExpanded?: boolean;
   children: React.ReactNode;
 };
 
-export function Section({ title,  description,  foldable = false,  foldStateKey,  defaultExpanded = true, children }: SectionProps) {
+export function Section({ title, description, foldable = false, border = true, foldStateKey, defaultExpanded = true, children }: SectionProps) {
   const [visible, setVisible] = useState(() => {
     if (foldStateKey && typeof window !== "undefined") {
       try {
@@ -36,7 +37,7 @@ export function Section({ title,  description,  foldable = false,  foldStateKey,
   }, [visible, foldStateKey]);
 
   return (
-    <div className={`pb-4 mb-4 ${visible ? "" : "border-b border-neutral-200 dark:border-neutral-700"}`}>
+    <div className={`pb-4 mb-4 ${visible ? "pb-16" : ""} ${border && foldable ? "border-b border-neutral-200 dark:border-neutral-700" : ""}`}>
       <div
         className={`flex items-center gap-3 ${foldable ? "cursor-pointer" : ""}`}
         onClick={foldable ? () => setVisible((prev: boolean) => !prev) : undefined}

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { isRouteErrorResponse, type MetaFunction, redirect, useLoaderData, useLocation, useRouteError, useSearchParams } from "react-router";
+import { useState } from "react";
+import { isRouteErrorResponse, type MetaFunction, redirect, useLoaderData, useRouteError, useSearchParams } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import dayjs from "dayjs";
 import { Bars3Icon } from "@heroicons/react/24/outline";
@@ -199,7 +199,6 @@ type EventDetailPage = "info" | "stages" | "shop";
 
 export default function EventDetail() {
   const { event, pickups, recruitedStudentUids, eventRewardBonus, savedShopState, allComments, me, battlePassRewards, nearbyEvents } = useLoaderData<typeof loader>();
-  const location = useLocation();
 
   const [searchParams] = useSearchParams();
 
@@ -208,12 +207,6 @@ export default function EventDetail() {
   const showShopPage = event.shopResources.length > 0;
   const [page, setPage] = useState<EventDetailPage>(searchParams.get("page") as EventDetailPage | null ?? "info");
 
-  useEffect(() => {
-    const scrollableContainer = document.querySelector('.mllg-content-area') as HTMLElement;
-    if (scrollableContainer) {
-      scrollableContainer.scrollTo({ top: 0, behavior: 'instant' });
-    }
-  }, [location.pathname]);
 
   const showFilterButtons = (showInfoPage ? 1 : 0) + (showStagesPage ? 1 : 0) + (showShopPage ? 1 : 0) > 1;
   return (

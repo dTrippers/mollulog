@@ -1,9 +1,9 @@
-import { useMemo } from "react";
-import Decimal from "decimal.js";
 import { BoltIcon } from "@heroicons/react/16/solid";
 import ResourceCard from "~/components/atoms/item/ResourceCard";
 import { SubTitle } from "~/components/atoms/typography";
 import EventItemBonus from "./EventItemBonus";
+import { useBonusCalculation } from "./shop/hooks";
+import type { EventRewardBonus } from "./shop/types";
 
 type EventDetailStagePageProps = {
   stages: {
@@ -23,75 +23,31 @@ type EventDetailStagePageProps = {
     }[];
   }[];
 
-  eventRewardBonus: {
-    uid: string;
-    name: string;
-    rewardBonuses: {
-      student: {
-        uid: string;
-        role: string;
-      };
-      ratio: string;  // decimal string
-    }[];
-  }[];
+  eventRewardBonus: EventRewardBonus[];
 
   recruitedStudentUids: string[];
   signedIn: boolean;
 };
 
 export default function EventDetailStagePage({ stages, eventRewardBonus, recruitedStudentUids, signedIn }: EventDetailStagePageProps) {
-  const appliedEventRewardBonus = useMemo(() => {
-    return eventRewardBonus.map(({ uid, name, rewardBonuses }) => {
-      let appliedStrikerRatio = new Decimal(0), appliedStrikerCount = 0, maxStrikerRatio = new Decimal(0), maxStrikerCount = 0;
-      let appliedSpecialRatio = new Decimal(0), appliedSpecialCount = 0, maxSpecialRatio = new Decimal(0), maxSpecialCount = 0;
-      const sortedRewardBonuses = [...rewardBonuses].sort((a, b) => Number(b.ratio) - Number(a.ratio));
-      if (sortedRewardBonuses.length === 0 || Number(sortedRewardBonuses[0].ratio) === 0) {
-        return null;
-      }
-
-      sortedRewardBonuses.forEach(({ student, ratio }) => {
-        const selected = recruitedStudentUids.includes(student.uid);
-        if (student.role === "striker") {
-          if (maxStrikerCount < 4) {
-            maxStrikerRatio = maxStrikerRatio.plus(ratio);
-            maxStrikerCount += 1;
-          }
-          if (selected && appliedStrikerCount < 4) {
-            appliedStrikerRatio = appliedStrikerRatio.plus(ratio);
-            appliedStrikerCount += 1;
-          }
-        } else if (student.role === "special") {
-          if (maxSpecialCount < 2) {
-            maxSpecialRatio = maxSpecialRatio.plus(ratio);
-            maxSpecialCount += 1;
-          }
-          if (selected && appliedSpecialCount < 2) {
-            appliedSpecialRatio = appliedSpecialRatio.plus(ratio);
-            appliedSpecialCount += 1;
-          }
-        }
-
-        if (appliedStrikerCount === 4 && appliedSpecialCount === 2) {
-          return;
-        }
-      });
-
-      return { uid, name, appliedStrikerRatio, appliedSpecialRatio, maxStrikerRatio, maxSpecialRatio }
-    }).filter((bonus) => bonus !== null);
-  }, [eventRewardBonus, recruitedStudentUids]);
+  const { bonusSummary } = useBonusCalculation({
+    eventRewardBonus,
+    selectedStudentUids: recruitedStudentUids,
+  });
 
   return (
     <div>
       <SubTitle text="이벤트 아이템" />
-      {appliedEventRewardBonus.map(({ uid, name, appliedStrikerRatio, appliedSpecialRatio, maxStrikerRatio, maxSpecialRatio }) => {
+      {bonusSummary.map(({ uid, appliedStrikerRatio, appliedSpecialRatio, maxStrikerRatio, maxSpecialRatio }) => {
+        const itemBonus = eventRewardBonus.find(({ uid: appliedUid }) => appliedUid === uid);
         return (
           <EventItemBonus
             key={uid}
             itemUid={uid}
-            itemName={name}
+            itemName={itemBonus?.name ?? ""}
             appliedRatio={appliedStrikerRatio.plus(appliedSpecialRatio)}
             maxRatio={maxStrikerRatio.plus(maxSpecialRatio)}
-            rewardBonuses={eventRewardBonus.find(({ uid: appliedUid }) => appliedUid === uid)?.rewardBonuses ?? []}
+            rewardBonuses={itemBonus?.rewardBonuses ?? []}
             selectedBonusStudentUids={recruitedStudentUids}
             signedIn={signedIn}
           />
@@ -156,14 +112,14 @@ export default function EventDetailStagePage({ stages, eventRewardBonus, recruit
   );
 }
 
-function itemLabel({ rewardRequirement, chance }: { rewardRequirement: string | null, chance: string | null }): string {
+function itemLabel({ rewardRequirement, chance }: { rewardRequirement: string | null; chance: string | null }): string {
   const labels = [];
   if (rewardRequirement === "first_clear") {
     labels.push("초회");
   }
   if (chance) {
-    const percentage = new Decimal(chance).mul(100).toFixed(2).replace(/\.?0+$/, "");
-    labels.push(percentage + "%");
+    const percentage = (Number(chance) * 100).toFixed(2).replace(/\.?0+$/, "");
+    labels.push(`${percentage}%`);
   }
 
   return labels.join("·");

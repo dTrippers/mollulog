@@ -19,6 +19,7 @@ type StageCardProps = {
 export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedRuns, extraRuns, appliedBonusRatio, onToggleStage, onChangeExtraRuns }: StageCardProps) {
   const { uid, name, entryAp, index, rewards } = stage;
   const coinRewards = rewards.filter(({ item, rewardRequirement }) => item?.category === "coin" && rewardRequirement === null);
+  const nonCoinRewards = rewards.filter(({ item, rewardRequirement }) => item?.category !== "coin" && rewardRequirement === null);
 
   return (
     <div className="relative px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-700">
@@ -45,15 +46,6 @@ export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedR
         </div>
       </div>
 
-      {isEnabled && (
-        <div className="mt-3 flex items-center gap-2">
-          <label className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">추가 소탕</label>
-          <div className="grow">
-            <NumberInput value={extraRuns} onChange={(value) => onChangeExtraRuns(uid, value)} />
-          </div>
-        </div>
-      )}
-
       {coinRewards.length > 0 && (
         <div className="mt-4 space-y-2">
           <div className="flex flex-wrap gap-1">
@@ -62,7 +54,7 @@ export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedR
                 return null;
               }
               return (
-                <ResourceCard key={`${item.uid}-${idx}`} itemUid={item.uid} resourceType={ResourceTypeEnum.Item} label={amount} />
+                <ResourceCard key={`${item.uid}-${idx}`} itemUid={item.uid} resourceType={ResourceTypeEnum.Item} label={amount} name={item.name} />
               );
             })}
             {coinRewards.map(({ amount, item }, idx) => {
@@ -72,9 +64,26 @@ export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedR
               const bonusRatio = appliedBonusRatio[item.uid] ?? new Decimal(0);
               const amountLabel = bonusRatio.mul(amount).ceil().toString();
               return (
-                <ResourceCard key={`${item.uid}-${idx}-bonus`} itemUid={item.uid} resourceType={ResourceTypeEnum.Item} label={amountLabel} labelColor="yellow" />
+                <ResourceCard key={`${item.uid}-${idx}-bonus`} itemUid={item.uid} resourceType={ResourceTypeEnum.Item} label={amountLabel} labelColor="yellow" name={item.name} />
               );
             })}
+            {nonCoinRewards.map(({ amount, item }, idx) => {
+              if (!item || amount === 0) {
+                return null;
+              }
+              return (
+                <ResourceCard key={`${item.uid}-${idx}`} itemUid={item.uid} resourceType={ResourceTypeEnum.Item} label={amount} rarity={item.rarity} name={item.name} />
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {isEnabled && (
+        <div className="mt-3 flex items-center gap-2">
+          <label className="text-xs text-neutral-600 dark:text-neutral-400 whitespace-nowrap">추가 소탕</label>
+          <div className="grow">
+            <NumberInput value={extraRuns} onChange={(value) => onChangeExtraRuns(uid, value)} />
           </div>
         </div>
       )}
