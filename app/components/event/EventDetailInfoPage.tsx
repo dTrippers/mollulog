@@ -30,6 +30,7 @@ type EventDetailInfoPageProps = {
     since: Date;
     until: Date;
     tags: string[];
+    endless: boolean;
   }
   pickups: {
     type: PickupType;
@@ -106,6 +107,27 @@ export default function EventDetailInfoPage({ event, pickups, allComments, me, b
           />
         </>
       )}
+      {pickups.some(({ type }) => type === "archive") && (
+        <>
+          <EventInfoCard
+            Icon={StarIcon}
+            title="아카이브 모집"
+            description="아래 학생 중 한 명을 지정하여 픽업 모집할 수 있어요. 대상 학생들은 이후 모집에서 등장하지 않아요."
+          />
+          <EventInfoCard
+            Icon={ClockIcon}
+            title="모집 포인트 유지"
+            description="모집 포인트(천장)은 만료되지 않고 무기한 유지돼요."
+          />
+        </>
+      )}
+      {pickups.some(({ type }) => type === "recollect") && (
+        <EventInfoCard
+          Icon={StarIcon}
+          title="리콜렉트 모집"
+          description="아래 학생 중 한 명을 지정하여 픽업 모집할 수 있어요. 대상 학생들은 이후 페스 모집에서 등장하지 않아요."
+        />
+      )}
       {event.type === "battle_pass" && battlePassRewards && <BattlePassInfo rewards={battlePassRewards} />}
       {pickups.length > 0 && (
         <Pickups pickups={pickups} signedIn={me !== null} event={event} free100={event.tags.includes("recruit_free_100")} />
@@ -123,12 +145,16 @@ type PickupsProps = {
     type: EventType;
     since: Date;
     until: Date;
+    endless: boolean;
   };
   free100: boolean;
 };
 
 function Pickups({ pickups, signedIn, event, free100 }: PickupsProps) {
   const shouldNotifyPickupPeriod = useMemo(() => {
+    if (event.endless) {
+      return false;
+    }
     const allPickupsMatchEvent = pickups.every((pickup) => {
       return dayjs(pickup.since).isSame(dayjs(event.since), "day") && dayjs(pickup.until).isSame(dayjs(event.until), "day");
     });

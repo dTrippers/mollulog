@@ -7,9 +7,9 @@ export type Position = "front" | "middle" | "back";
 export type TacticRole = "attacker" | "tank" | "support" | "healer" | "tactical_support";
 
 // 컨텐츠 관련
-export type EventType = "event" | "mini_event" | "guide_mission" | "immortal_event" | "pickup" | "fes" | "campaign" | "exercise" | "main_story" | "collab" | "archive_pickup" | "battle_pass" | "update";
+export type EventType = "event" | "mini_event" | "guide_mission" | "immortal_event" | "pickup" | "fes" | "campaign" | "exercise" | "main_story" | "collab" | "battle_pass" | "update";
 export type RaidType = "total_assault" | "elimination" | "unlimit";
-export type PickupType = "usual" | "limited" | "given" | "fes" | "archive";
+export type PickupType = "usual" | "limited" | "given" | "fes" | "archive" | "recollect";
 
 export const attackTypeColorMap: Record<AttackType, "red" | "yellow" | "blue" | "purple"> = {
   explosive: "red",

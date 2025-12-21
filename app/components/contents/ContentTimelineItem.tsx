@@ -383,7 +383,7 @@ function Pickup({ contentType, pickups, favoritedStudents, favoritedCounts, onFa
         favoritedStudents={favoritedStudents ?? []}
         favoritedCounts={favoritedCounts ?? {}}
         onFavorite={onFavorite}
-        showToggle={contentType === "archive_pickup"}
+        showToggle={pickups.some((pickup) => pickup.type === "archive")}
       />
 
       {isPickupDayDifferent && (
@@ -414,10 +414,10 @@ function PickupStudents({ title, pickups, favoritedStudents, favoritedCounts, on
         {title && <p className="mt-4 mb-1 font-semibold">{title}</p>}
         <StudentCards
           mobileGrid={5}
-          pcGrid={10}
+          pcGrid={8}
           students={pickups.map((pickup) => {
             const student = pickup.student;
-            const colorClass = (pickup.rerun || pickup.type === "archive") ? "text-white" : "text-yellow-500";
+            const colorClass = (pickup.rerun || pickup.type === "archive" || pickup.type === "recollect") ? "text-white" : "text-yellow-500";
             return {
               ...student,
               uid: student?.uid ?? null,

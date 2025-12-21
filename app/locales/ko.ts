@@ -84,7 +84,6 @@ export const eventTypeLocale: Record<EventType, string> = {
   campaign: "캠페인",
   exercise: "종합전술시험",
   main_story: "메인 스토리",
-  archive_pickup: "픽업 모집",
   battle_pass: "배틀 패스",
   update: "점검/업데이트",
 };
@@ -106,11 +105,14 @@ export const pickupTypeLocale: Record<PickupType, string> = {
   given: "배포",
   fes: "페스",
   archive: "아카이브",
+  recollect: "리콜렉트",
 };
 
 export function pickupLabelLocale({ type, rerun }: { type: PickupType, rerun: boolean }): string {
   if (type === "archive") {
     return "아카이브";
+  } else if (type === "recollect") {
+    return "리콜렉트";
   } else if (type === "usual") {
     return rerun ? "복각" : "신규";
   } else if (type === "limited") {

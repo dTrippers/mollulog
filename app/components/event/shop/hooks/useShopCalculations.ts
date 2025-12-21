@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type Decimal from "decimal.js";
-import { ResourceTypeEnum } from "~/graphql/graphql";
+import type { ResourceTypeEnum } from "~/graphql/graphql";
 import type { Stage, ShopResource, CollectableResource } from "../types";
 import type { ShopState } from "./useShopState";
 import { calculateStageInfos, optimizeStageRuns, calculateItemBreakdowns, calculateRequiredQuantities } from "../calculations";

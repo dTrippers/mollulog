@@ -31,7 +31,7 @@ export default function ContentFilterPanel({ filter, onFilterChange }: ContentFi
     { text: "스토리", active: filter.types.includes("main_story"), onToggle: (activated: boolean) => onToggleType(activated, ["main_story"]) },
     { text: "캠페인", active: filter.types.includes("campaign"), onToggle: (activated: boolean) => onToggleType(activated, ["campaign"]) },
     { text: "종합전술시험", active: filter.types.includes("exercise"), onToggle: (activated: boolean) => onToggleType(activated, ["exercise"]) },
-    { text: "픽업 모집", active: filter.types.includes("pickup"), onToggle: (activated: boolean) => onToggleType(activated, ["pickup", "archive_pickup"]) },
+    { text: "픽업 모집", active: filter.types.includes("pickup"), onToggle: (activated: boolean) => onToggleType(activated, ["pickup"]) },
     { text: "배틀 패스", active: filter.types.includes("battle_pass"), onToggle: (activated: boolean) => onToggleType(activated, ["battle_pass"]) },
   ];
 

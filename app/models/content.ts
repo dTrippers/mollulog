@@ -18,7 +18,6 @@ export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "main_story",
   "fes",
   "pickup",
-  "archive_pickup",
   "collab",
   "total_assault",
   "elimination",
@@ -37,7 +36,6 @@ export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
   "immortal_event",
   "main_story",
   "pickup",
-  "archive_pickup",
   "collab",
   "total_assault",
   "elimination",
@@ -406,8 +404,7 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
 
     // ========== Pickups ==========
     const currentPickups: { eventUid: string, pickup: IndexQuery["events"]["nodes"][0]["pickups"][0] }[] = data.events.nodes
-      .filter((event) => event.type !== "archive_pickup")
-      .flatMap((event) => event.pickups.filter((pickup) => pickup.student !== null).map((pickup) => ({ eventUid: event.uid, pickup })))
+      .flatMap((event) => event.pickups.filter((pickup) => pickup.student !== null && pickup.type !== "recollect" && pickup.type !== "archive").map((pickup) => ({ eventUid: event.uid, pickup })))
       .filter(({ pickup }) => !dayjs(pickup.since).isAfter(now) && dayjs(pickup.until).isAfter(now));
 
     // Get favorite counts for all students in current pickups (not just user's favorites)

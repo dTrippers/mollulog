@@ -21,7 +21,7 @@ const pickupEventsQuery = graphql(`
         uid name since until type rerun
         pickups {
           student { uid }
-          studentName
+          studentName type
         }
       }
     }
@@ -53,7 +53,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const now = dayjs();
   return {
     events: data.events.nodes.filter((event) => {
-      return event.type !== "archive_pickup" && event.pickups.length > 0 && dayjs(event.since).isBefore(now);
+      return event.pickups.length > 0
+        && !event.pickups.some((pickup) => pickup.type === "recollect" || pickup.type === "archive")
+        && dayjs(event.since).isBefore(now);
     }).reverse(),
     tier3Students: (await getAllStudents(env))
       .filter((student) => student.initialTier === 3)
