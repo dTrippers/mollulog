@@ -9,9 +9,12 @@ type ContentSelectFormProps = Omit<SelectFormProps, "options"> & {
     name: string;
     since?: Date;
     until?: Date;
-    pickups?: {
-      student: { uid: string;} | null;
-      studentName: string;
+    recruitments?: {
+      student: {
+        uid: string;
+        name: string;
+      } | null;
+      pickup: boolean;
     }[];
     boss?: string;
   }[];
@@ -26,7 +29,7 @@ export default function ContentSelectForm(props: ContentSelectFormProps) {
       options={props.contents.map((content) => ({
         label: content.name,
         value: content.uid,
-        searchLabel: `${content.name} ${content.pickups?.map((pickup) => pickup.studentName).join(" ")}`,
+        searchLabel: `${content.name} ${content.recruitments?.map((recruitment) => recruitment.student?.name).join(" ")}`,
         element: (
           <div className="w-full px-4 py-2 relative">
             <p className="font-semibold">{content.name}</p>
@@ -35,10 +38,10 @@ export default function ContentSelectForm(props: ContentSelectFormProps) {
                 {dayjs(content.since).format("YYYY.MM.DD")} ~ {dayjs(content.until).format("YYYY.MM.DD")}
               </p>
             )}
-            {content.pickups && (
+            {content.recruitments && (
               <div className="mt-2">
                 <StudentCards
-                  students={content.pickups.filter((pickup) => pickup.student).map((pickup) => pickup.student!)}
+                  students={content.recruitments.filter(({ pickup }) => pickup).slice(0, 8).map(({ student }) => ({ uid: student?.uid ?? null }))}
                   pcGrid={12} mobileGrid={8}
                 />
               </div>
