@@ -1,5 +1,7 @@
 import Decimal from "decimal.js";
 import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
+import { MINIGAME_CONFIG } from "../constants";
+import { calculateMinigameRewards } from "../utils";
 
 /**
  * Calculates the final breakdown of items and AP costs.
@@ -135,11 +137,12 @@ export function calculateItemBreakdowns({
   }
 
   // Add minigame rewards
-  if (minigameRewards && minigameRewards[eventUid] && minigamePlayCount > 0) {
-    for (const { resourceUid, quantity } of minigameRewards[eventUid]) {
-      const amount = quantity * minigamePlayCount;
-      totalCollected[resourceUid] = (totalCollected[resourceUid] || 0) + amount;
-      fromMinigame[resourceUid] = (fromMinigame[resourceUid] || 0) + amount;
+  const minigameConfig = MINIGAME_CONFIG[eventUid];
+  if (minigameConfig && minigamePlayCount > 0) {
+    const rewards = calculateMinigameRewards(minigameConfig, minigamePlayCount);
+    for (const { resourceUid, quantity } of rewards) {
+      totalCollected[resourceUid] = (totalCollected[resourceUid] || 0) + quantity;
+      fromMinigame[resourceUid] = (fromMinigame[resourceUid] || 0) + quantity;
     }
   }
 

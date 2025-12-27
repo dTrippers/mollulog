@@ -1,6 +1,8 @@
 import Decimal from "decimal.js";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { RequiredQuantitiesInput } from "./types";
+import { MINIGAME_CONFIG } from "../constants";
+import { calculateMinigameRewards } from "../utils";
 
 /**
  * Calculates the required quantities of payment items, resolving recursive dependencies (items buying items).
@@ -19,6 +21,7 @@ export function calculateRequiredQuantities({
   enabledStages,
   appliedBonusRatio,
   overriddenRequiredQuantities,
+  eventUid,
 }: RequiredQuantitiesInput): Record<string, number> {
   // Find which items can be farmed from stages (to avoid converting them)
   const farmableItems = new Set<string>();
@@ -100,11 +103,13 @@ export function calculateRequiredQuantities({
   }
 
   // Minigame Rewards (as source of payment items)
-  if (minigameRewards && minigamePlayCount > 0) {
-    for (const { resourceType, resourceUid, quantity } of minigameRewards) {
+  const minigameConfig = MINIGAME_CONFIG[eventUid];
+  if (minigameConfig && minigamePlayCount > 0) {
+    const rewards = calculateMinigameRewards(minigameConfig, minigamePlayCount);
+    for (const { resourceUid, quantity } of rewards) {
       // Check if this resource is a payment item
       if (collectableResources.some((r) => r.uid === resourceUid && r.forPayment)) {
-        collected[resourceUid] = (collected[resourceUid] || new Decimal(0)).plus(quantity * minigamePlayCount);
+        collected[resourceUid] = (collected[resourceUid] || new Decimal(0)).plus(quantity);
       }
     }
   }

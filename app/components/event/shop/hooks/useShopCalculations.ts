@@ -49,6 +49,7 @@ export function useShopCalculations({
       enabledStages: state.enabledStages,
       appliedBonusRatio,
       overriddenRequiredQuantities: state.overriddenRequiredQuantities,
+      eventUid,
     });
 
     const targets = Object.entries(targetRequirements).filter(([, qty]) => (qty || 0) > 0);

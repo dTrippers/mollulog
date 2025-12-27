@@ -136,7 +136,7 @@ export function ContentTimelineItem({
           {tags.includes("recruit_free_100") && recruitments?.every(({ until }) => until !== null && dayjs(until).isAfter(now)) && (
             <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
           )}
-          {tags.includes("shop") && <ContentTag Icon={CalculatorIcon} text="소탕 계산기" color="default" />}
+          {tags.includes("shop") && <ContentTag Icon={CalculatorIcon} text="이벤트 상점" color="default" />}
         </div>
       </div>
 

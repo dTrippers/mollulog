@@ -78,7 +78,7 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
       resourceUid: minigameConfig.payment.resourceUid,
       quantity: minigameConfig.payment.quantity,
     } : undefined,
-    minigameRewards: minigameConfig?.rewards,
+    minigameRewards: undefined,
     eventUid,
   });
 
@@ -129,7 +129,8 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
 
         {minigameConfig && (
           <MiniGameSection
-            rewards={minigameConfig.rewards}
+            title={minigameConfig.title}
+            config={minigameConfig}
             state={state}
             actions={actions}
           />
@@ -151,7 +152,8 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
           firstClearAp={stageCalculations.firstClearAp}
           questSweepAp={stageCalculations.questSweepAp}
           extraSweepAp={stageCalculations.extraSweepAp}
-          minigameRewards={minigameConfig?.rewards}
+          minigameRewards={undefined}
+          eventUid={eventUid}
           state={state}
           actions={actions}
         />

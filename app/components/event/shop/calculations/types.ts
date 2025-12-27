@@ -64,5 +64,6 @@ export type RequiredQuantitiesInput = {
   enabledStages?: Record<string, boolean>;
   appliedBonusRatio?: Record<string, Decimal>;
   overriddenRequiredQuantities?: Record<string, number>;
+  eventUid: string;
 };
 

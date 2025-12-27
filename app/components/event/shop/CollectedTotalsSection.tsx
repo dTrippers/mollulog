@@ -3,7 +3,8 @@ import { ResourceTypeEnum } from "~/graphql/graphql";
 import { ResourceCard } from "~/components/atoms/item";
 import type { CollectableResource, ShopResource } from "./types";
 import type { ShopState, ShopActions } from "./hooks";
-import { resourceCountLabel } from "./utils";
+import { resourceCountLabel, calculateMinigameRewards } from "./utils";
+import { MINIGAME_CONFIG } from "./constants";
 import { Section } from "~/components/ui";
 import { Transition } from "@headlessui/react";
 import { NumberInput } from "~/components/atoms/form";
@@ -24,6 +25,7 @@ type CollectedTotalsSectionProps = {
   questSweepAp: number;
   extraSweepAp: number;
   minigameRewards?: { resourceType: ResourceTypeEnum; resourceUid: string; quantity: number; rarity?: number }[];
+  eventUid: string;
   state: ShopState;
   actions: ShopActions;
 };
@@ -125,6 +127,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
   questSweepAp,
   extraSweepAp,
   minigameRewards,
+  eventUid,
   state,
   actions,
 }: CollectedTotalsSectionProps) {
@@ -185,14 +188,16 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     }
 
     // Add minigame rewards
-    if (minigameRewards && state.minigamePlayCount > 0) {
-      for (const { resourceType, resourceUid, quantity, rarity } of minigameRewards) {
-        addResource(resourceType, resourceUid, quantity * state.minigamePlayCount, rarity ?? 1, resourceUid);
+    const minigameConfig = MINIGAME_CONFIG[eventUid];
+    if (minigameConfig && state.minigamePlayCount > 0) {
+      const rewards = calculateMinigameRewards(minigameConfig, state.minigamePlayCount);
+      for (const { resourceType, resourceUid, quantity, rarity } of rewards) {
+        addResource(resourceType, resourceUid, quantity, rarity ?? 1, resourceUid);
       }
     }
 
     return Array.from(resourceMap.values());
-  }, [shopResources, state.itemQuantities, minigameRewards, state.minigamePlayCount]);
+  }, [shopResources, state.itemQuantities, eventUid, state.minigamePlayCount]);
 
   const apBreakdown = useMemo(
     () => [
@@ -377,7 +382,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
 
         {mergedBoughtResources.length > 0 && (
           <div className="my-4 p-3 border border-neutral-200 dark:border-neutral-700 rounded-lg">
-            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">획득 아이템</p>
+            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">획득 보상</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {mergedBoughtResources.map(({ resource, totalQuantity }) => (
                 <ResourceCard
