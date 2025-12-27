@@ -88,9 +88,9 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const event = data!.event!;
   const pickupEvent = data!.pickupEvent!;
 
-  const recuritStudentUids = pickupEvent.recruitments.map((recruitment) => recruitment.student?.uid).filter((uid) => uid !== undefined);
+  const studentUids = pickupEvent.recruitments.map((recruitment) => recruitment.student?.uid).filter((uid) => uid !== undefined);
   const favoritedStudents = currentUser ? await getUserFavoritedStudents(env, currentUser.id, eventUid) : [];
-  const favoritedCounts = (await getFavoritedCounts(env, recuritStudentUids)).filter((favorited) => favorited.contentId === eventUid);
+  const favoritedCounts = (await getFavoritedCounts(env, studentUids)).filter((favorited) => favorited.contentId === eventUid);
   const recruitments = pickupEvent.recruitments.map((recruitment) => {
     return {
       ...recruitment,

@@ -59,11 +59,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const env = context.cloudflare.env;
   const sensei = await getRouteSensei(env, params);
 
-  const [recrutmentHistories, allStudentsMap] = await Promise.all([
+  const [recruitmentHistories, allStudentsMap] = await Promise.all([
     getPickupHistories(env, sensei.id),
     getAllStudentsMap(env),
   ]);
-  const eventUids = recrutmentHistories.map((history) => history.eventId);
+  const eventUids = recruitmentHistories.map((history) => history.eventId);
   const { data, error } = await runQuery(userRecruitmentEventsQuery, { eventUids });
   if (!data) {
     console.error(error);
@@ -78,7 +78,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let pickupRateCount = 0;
   let totalTrial = 0;
 
-  const aggregatedHistories = recrutmentHistories.map((history) => {
+  const aggregatedHistories = recruitmentHistories.map((history) => {
     const event = eventMap.get(history.eventId)!;
     const pickupStudentUids = getPickupStudentUids(event);
     const allTier3StudentIds = history.result.flatMap((trial) => trial.tier3StudentIds);
