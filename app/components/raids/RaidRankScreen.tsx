@@ -32,6 +32,7 @@ type RaidRankScreenProps = {
       role: Role;
     };
   };
+  recruitedStudentTiers: Record<string, number>;
 };
 
 const maximumLevels: Record<string, number> = {
@@ -58,7 +59,7 @@ function getMaxLevelAt(date: Date): number {
 
 const ITEMS_PER_PAGE = 10;
 
-export default function RaidRankScreen({ currentRaid, filterState, onIncludeStudent, onExcludeStudent, allStudents }: RaidRankScreenProps) {
+export default function RaidRankScreen({ currentRaid, filterState, onIncludeStudent, onExcludeStudent, allStudents, recruitedStudentTiers }: RaidRankScreenProps) {
   const [db, setDb] = useState<RxDatabase | null>(null);
 
   const [collectionLoaded, setCollectionLoaded] = useState(false);
@@ -161,6 +162,19 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
           }
         }
 
+        if (filterState.filterNotOwned) {
+          const hasUnrecruitedStudent = allStudentSlots.some((slot) => {
+            if (!slot.studentUid) {
+              return false;
+            }
+            return !recruitedStudentTiers[slot.studentUid];
+          });
+
+          if (hasUnrecruitedStudent) {
+            continue;
+          }
+        }
+
         if (filterByInclusion) {
           const allIncluded = filterState.includeStudents.every((includeStudent) => {
             return allStudentSlots.some((slot) => {
@@ -190,7 +204,7 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
         subscription.unsubscribe();
       }
     };
-  }, [db, collectionLoaded, collectionName, raidIdRange, filterState]);
+  }, [db, collectionLoaded, collectionName, raidIdRange, filterState, recruitedStudentTiers]);
 
   useEffect(() => {
     if (!db || !collectionLoaded || !db.collections[collectionName] || filteredRankIds.length === 0) {

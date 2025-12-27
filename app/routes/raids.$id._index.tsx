@@ -7,10 +7,12 @@ import { RaidRankScreen } from "~/components/raids";
 import type { RaidPageContext } from "./raids.$id";
 import { raidTypeLocale } from "~/locales/ko";
 import { getAllStudentsMap } from "~/models/student";
+import { getAuthenticator } from "~/auth/authenticator.server";
+import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { Difficulty } from "~/graphql/graphql";
 import type { Difficulty as DifficultyType } from "~/models/raid";
 
-export const loader = async ({ context }: LoaderFunctionArgs) => {
+export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const rawAllStudents = await getAllStudentsMap(env, true);
   const allStudents = Object.fromEntries(Object.entries(rawAllStudents).map(([uid, student]) => [uid, {
@@ -19,14 +21,19 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
     defenseType: student.defenseType,
     role: student.role,
   }]));
+
+  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
+
   return {
     allStudents,
+    recruitedStudentTiers,
   };
 };
 
 export default function RaidDetail() {
   const { currentRaid, defenseType, setPanel, signedIn } = useOutletContext<RaidPageContext>();
-  const { allStudents } = useLoaderData<typeof loader>();
+  const { allStudents, recruitedStudentTiers } = useLoaderData<typeof loader>();
 
   if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
     return (
@@ -107,6 +114,7 @@ export default function RaidDetail() {
         currentRaid={{ boss: currentRaid.boss, since: currentRaid.since, raidType: currentRaid.type, seasonIndex: currentRaid.raidIndexJp, defenseType }}
         filterState={rankFilterState}
         allStudents={allStudents}
+        recruitedStudentTiers={recruitedStudentTiers}
 
         onIncludeStudent={({ uid, tier }) => {
           setRankFilterState((prev) => ({

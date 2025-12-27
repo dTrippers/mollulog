@@ -112,23 +112,15 @@ export default function UserPage() {
     });
   }, [students, setPanel]);
 
-
-  const studentRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const lastAddedStudentUid = useRef<string | null>(null);
-
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);
 
   const fetcher = useFetcher();
-  const handleAddStudent = (studentUid: string, tier: number, scrollTo = false) => {
+  const handleAddStudent = (studentUid: string, tier: number) => {
     const formData = new FormData();
     formData.append("studentUid", studentUid);
     formData.append("tier", tier.toString());
     fetcher.submit(formData, { method: "post" });
-
-    if (scrollTo) {
-      lastAddedStudentUid.current = studentUid;
-    }
   };
 
   const handleRemoveStudent = (studentUid: string) => {
@@ -136,17 +128,6 @@ export default function UserPage() {
     formData.append("studentUid", studentUid);
     fetcher.submit(formData, { method: "delete" });
   };
-
-  // Scroll to the specific student card when a student is added
-  useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data?.success && lastAddedStudentUid.current) {
-      const studentRef = studentRefs.current[lastAddedStudentUid.current];
-      if (studentRef) {
-        studentRef.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-      lastAddedStudentUid.current = null;
-    }
-  }, [fetcher.state, fetcher.data]);
 
   return (
     <>
@@ -184,7 +165,6 @@ export default function UserPage() {
                 },
               ],
             }))}
-            onRef={(uid, ref) => studentRefs.current[uid] = ref}
           />
         }
       </div>
@@ -196,12 +176,16 @@ export default function UserPage() {
             <Description text="학생을 선택해 모집 정보를 등록할 수 있어요." />
             <Toggle label="모집한 학생 일괄 등록" initialState={batchAddMode} onChange={setBatchAddMode} />
             {batchAddMode && (
-              <div className="mb-2">
+              <div className="mb-2 flex gap-x-1">
                 <Button color="primary" onClick={() => {
                   batchAddStudentUids.forEach((uid) => handleAddStudent(uid, unrecruitedStudents.find((student) => student.uid === uid)!.initialTier));
                   setBatchAddStudentUids([]);
                   setBatchAddMode(false);
                 }}>선택한 학생 등록</Button>
+                {batchAddStudentUids.length > 0 ?
+                  <Button onClick={() => setBatchAddStudentUids([])}>모두 해제</Button> :
+                  <Button onClick={() => setBatchAddStudentUids(unrecruitedStudents.map((student) => student.uid))}>모두 선택</Button>
+                }
               </div>
             )}
           </>
@@ -216,7 +200,7 @@ export default function UserPage() {
                 {
                   Icon: PlusCircleIcon,
                   text: "모집한 학생에 추가",
-                  onClick: () => handleAddStudent(uid, initialTier, true),
+                  onClick: () => handleAddStudent(uid, initialTier),
                 },
               ] : []),
               {
@@ -226,7 +210,6 @@ export default function UserPage() {
               },
             ],
           }))}
-          onRef={(uid, ref) => studentRefs.current[uid] = ref}
           onSelect={batchAddMode ? (uid: string) => {
             setBatchAddStudentUids((prev) => {
               if (prev.includes(uid)) {
