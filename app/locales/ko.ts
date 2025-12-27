@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { AttackType, DefenseType, EventType, PickupType, RaidType, Role, Terrain } from "~/models/content.d";
 import type { Boss } from "~/models/raid";
 
@@ -123,6 +124,23 @@ export function pickupLabelLocale({ type, rerun }: { type: PickupType, rerun: bo
     return "배포";
   }
   return "-";
+}
+
+export function recruitmentLabelLocale({ recruitmentType: type, rerun }: { recruitmentType: RecruitmentTypeEnum, rerun: boolean }): string {
+  if (type === "archive") {
+    return "아카이브";
+  } else if (type === "recollect") {
+    return "리콜렉트";
+  } else if (type === "usual") {
+    return rerun ? "복각" : "신규";
+  } else if (type === "limited") {
+    return rerun ? "한정 복각" : "한정 신규";
+  } else if (type === "fes") {
+    return rerun ? "페스 복각" : "페스 신규";
+  } else if (type === "given") {
+    return "배포";
+  }
+  return "-"; 
 }
 
 export const schoolNameLocale: Record<string, string> = {

@@ -4,8 +4,8 @@ import dayjs from "dayjs";
 import { ChevronRightIcon, ChartBarIcon, ClockIcon, CheckCircleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon, StarIcon } from "@heroicons/react/16/solid";
 import { IdentificationIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
-import type { AttackType, DefenseType, EventType, PickupType, RaidType, Role, Terrain } from "~/models/content.d";
-import { attackTypeColor, attackTypeLocale, contentTypeLocale, defenseTypeColor, defenseTypeLocale, pickupLabelLocale, terrainLocale } from "~/locales/ko";
+import type { AttackType, DefenseType, EventType, RaidType, Role, Terrain } from "~/models/content.d";
+import { attackTypeColor, attackTypeLocale, contentTypeLocale, defenseTypeColor, defenseTypeLocale, recruitmentLabelLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import { StudentCards } from "~/components/students";
 import { OptionBadge } from "~/components/atoms/student";
@@ -14,6 +14,7 @@ import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";
 import { SHOW_LINK_CONTENT_TYPES } from "~/models/content";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
 
 export type ContentTimelineItemProps = {
   uid: string;
@@ -63,8 +64,9 @@ export type ContentTimelineItemProps = {
   favoritedCounts?: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
 
-  pickups?: {
-    type: PickupType;
+  recruitments?: {
+    recruitmentType: RecruitmentTypeEnum;
+    pickup: boolean;
     rerun: boolean;
     student: {
       uid: string;
@@ -93,10 +95,10 @@ export type ContentTimelineItemProps = {
 };
 
 export function ContentTimelineItem({
-  name, contentType, rerun, endless, since, until, link, confirmed, tags, raidInfo, pickups,
+  name, contentType, rerun, endless, since, until, link, confirmed, tags, raidInfo, recruitments,
   allComments, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
 }: ContentTimelineItemProps) {
-  const showComments = pickups && pickups.length > 0;
+  const showComments = recruitments && recruitments.length > 0;
   const [commentEditing, setCommentEditing] = useState(false);
 
   let daysLabel = null;
@@ -131,7 +133,7 @@ export function ContentTimelineItem({
           {!endless && daysLabel && <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />}
           {confirmed && (since && sinceDayjs.isAfter(now)) && <ContentTag Icon={CheckCircleIcon} text="확정" color="green" />}
           {raidInfo && raidInfo.rankVisible && <ContentTag Icon={ChartBarIcon} text="순위/통계" color="default" />}
-          {tags.includes("recruit_free_100") && pickups?.every(({ until }) => until !== null && dayjs(until).isAfter(now)) && (
+          {tags.includes("recruit_free_100") && recruitments?.every(({ until }) => until !== null && dayjs(until).isAfter(now)) && (
             <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
           )}
           {tags.includes("shop") && <ContentTag Icon={CalculatorIcon} text="소탕 계산기" color="default" />}
@@ -151,11 +153,11 @@ export function ContentTimelineItem({
         </>
       )}
 
-      {/* 픽업 정보 */}
-      {pickups && pickups.length > 0 && (
-        <Pickup
+      {/* 모집 정보 */}
+      {recruitments && recruitments.length > 0 && (
+        <Recruitments
           contentType={contentType}
-          pickups={pickups}
+          recruitments={recruitments}
           favoritedStudents={favoritedStudents ?? []}
           favoritedCounts={favoritedCounts ?? {}}
           onFavorite={onFavorite}
@@ -237,29 +239,6 @@ function ContentTag({ Icon, text, color }: ContentTagProps) {
   );
 }
 
-type PickupProps = {
-  contentType: EventType | RaidType;
-  pickups: {
-    type: PickupType;
-    rerun: boolean;
-    studentName: string;
-    student: {
-      uid: string;
-      schaleDbId?: string | null;
-    } | null;
-    since: Date;
-    until: Date | null;
-  }[];
-
-  favoritedStudents: string[];
-  favoritedCounts: Record<string, number>;
-  onFavorite?: (studentUid: string, favorited: boolean) => void;
-  link: string;
-
-  eventSince: Date | null;
-  eventUntil: Date | null;
-};
-
 type RaidInfoProps = {
   raid: {
     boss: string;
@@ -303,47 +282,76 @@ function RaidInfo({ raid }: RaidInfoProps) {
   );
 }
 
-function Pickup({ contentType, pickups, favoritedStudents, favoritedCounts, onFavorite, link, eventSince, eventUntil }: PickupProps) {
+type RecruitmentsProps = {
+  contentType: EventType | RaidType;
+  recruitments: {
+    recruitmentType: RecruitmentTypeEnum;
+    pickup: boolean;
+    rerun: boolean;
+    studentName: string;
+    student: {
+      uid: string;
+      schaleDbId?: string | null;
+      attackType?: AttackType;
+      defenseType?: DefenseType;
+      role?: Role;
+    } | null;
+    since: Date;
+    until: Date | null;
+  }[];
+
+  favoritedStudents: string[];
+  favoritedCounts: Record<string, number>;
+  onFavorite?: (studentUid: string, favorited: boolean) => void;
+  link: string;
+
+  eventSince: Date | null;
+  eventUntil: Date | null;
+};
+
+function Recruitments({ contentType, recruitments, favoritedStudents, favoritedCounts, onFavorite, link, eventSince, eventUntil }: RecruitmentsProps) {
   // Group pickups by period (since/until dates)
-  const pickupDateGroups = useMemo(() => {
-    return pickups.reduce((groups, pickup) => {
-      const sinceKey = dayjs(pickup.since).format("YYYY-MM-DD");
-      const untilKey = pickup.until ? dayjs(pickup.until).format("YYYY-MM-DD") : "null";
+  const recruitmentDateGroups = useMemo(() => {
+    return recruitments.reduce((groups, recruitment) => {
+      const sinceKey = dayjs(recruitment.since).format("YYYY-MM-DD");
+      const untilKey = recruitment.until ? dayjs(recruitment.until).format("YYYY-MM-DD") : "null";
       const key = `${sinceKey}-${untilKey}`;
       if (!groups[key]) {
         groups[key] = {
-          since: pickup.since,
-          until: pickup.until,
-          pickups: []
+          since: recruitment.since,
+          until: recruitment.until,
+          recruitments: []
         };
       }
-      groups[key].pickups.push(pickup);
+      groups[key].recruitments.push(recruitment);
       return groups;
-    }, {} as Record<string, { since: Date; until: Date | null; pickups: PickupProps["pickups"] }>)
-  }, [pickups]);
+    }, {} as Record<string, { since: Date; until: Date | null; recruitments: RecruitmentsProps["recruitments"] }>)
+  }, [recruitments]);
 
-  const pickupDateGroupsArray = Object.values(pickupDateGroups);
-  const hasMultiplePeriods = pickupDateGroupsArray.length >= 2;
+  const recruitDateGroupsArray = Object.values(recruitmentDateGroups);
+  const hasMultiplePeriods = recruitDateGroupsArray.length >= 2;
 
-  const pickupSince = pickups[0].since;
-  const pickupUntil = pickups[0].until;
-  const isPickupDayDifferent = pickupSince && pickupUntil &&
-    (!dayjs(pickupSince).isSame(dayjs(eventSince), "day") || !dayjs(pickupUntil).isSame(dayjs(eventUntil), "day"));
+  const firstSince = recruitments[0].since;
+  const firstUntil = recruitments[0].until;
+  const isPickupDayDifferent = firstSince && firstUntil &&
+    (!dayjs(firstSince).isSame(dayjs(eventSince), "day") || !dayjs(firstUntil).isSame(dayjs(eventUntil), "day"));
+
+  const lastUntil = recruitments[recruitments.length - 1].until;
 
   if (contentType === "fes") {
     return (
       <>
-        <PickupStudents
+        <RecruitmentStudents
           title="픽업 학생"
-          pickups={pickups.filter((pickup) => ((pickup.type === "fes" && !pickup.rerun) || (pickup.type === "limited" && pickup.rerun)))}
+          recruitments={recruitments.filter(({ pickup }) => pickup)}
           favoritedStudents={favoritedStudents ?? []}
           favoritedCounts={favoritedCounts ?? {}}
           onFavorite={onFavorite}
         />
 
-        <PickupStudents
-          title="기간 한정 모집 학생"
-          pickups={pickups.filter((pickup) => !((pickup.type === "fes" && !pickup.rerun) || (pickup.type === "limited" && pickup.rerun)))}
+        <RecruitmentStudents
+          title="기간 한정 모집 가능 학생"
+          recruitments={recruitments.filter(({ pickup }) => !pickup)}
           favoritedStudents={favoritedStudents ?? []}
           favoritedCounts={favoritedCounts ?? {}}
           onFavorite={onFavorite}
@@ -360,12 +368,12 @@ function Pickup({ contentType, pickups, favoritedStudents, favoritedCounts, onFa
   if (hasMultiplePeriods) {
     return (
       <>
-        {pickupDateGroupsArray.map((group) => {
+        {recruitDateGroupsArray.map((group) => {
           return (
-            <PickupStudents
+            <RecruitmentStudents
               key={`${dayjs(group.since).format("YYYY-MM-DD")}-${dayjs(group.until).format("YYYY-MM-DD")}`}
               title={`${dayjs(group.since).format("MM/DD")} ~ ${dayjs(group.until).format("MM/DD")}`}
-              pickups={group.pickups}
+              recruitments={group.recruitments}
               favoritedStudents={favoritedStudents ?? []}
               favoritedCounts={favoritedCounts ?? {}}
               onFavorite={onFavorite}
@@ -378,17 +386,17 @@ function Pickup({ contentType, pickups, favoritedStudents, favoritedCounts, onFa
 
   return (
     <>
-      <PickupStudents
-        pickups={pickups}
+      <RecruitmentStudents
+        recruitments={recruitments}
         favoritedStudents={favoritedStudents ?? []}
         favoritedCounts={favoritedCounts ?? {}}
         onFavorite={onFavorite}
-        showToggle={pickups.some((pickup) => pickup.type === "archive")}
+        showToggle={recruitments.some((recruitment) => recruitment.recruitmentType === "archive")}
       />
 
       {isPickupDayDifferent && (
         <TimelineItemBanner
-          message={dayjs(pickupUntil).isBefore(dayjs()) ? "픽업 모집은 종료되었어요." : "이벤트 개최 기간과 픽업 모집 기간이 달라요."}
+          message={dayjs(lastUntil).isBefore(dayjs()) ? "학생 모집이 종료되었어요." : "이벤트 개최 기간과 모집 기간이 달라요."}
           link={link}
         />
       )}
@@ -396,16 +404,16 @@ function Pickup({ contentType, pickups, favoritedStudents, favoritedCounts, onFa
   )
 }
 
-type PickupStudentsProps = {
+type RecruitmentStudentsProps = {
   title?: string;
-  pickups: PickupProps["pickups"];
+  recruitments: RecruitmentsProps["recruitments"];
   favoritedStudents: string[];
   favoritedCounts: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
   showToggle?: boolean;
 };
 
-function PickupStudents({ title, pickups, favoritedStudents, favoritedCounts, onFavorite, showToggle = false }: PickupStudentsProps) {
+function RecruitmentStudents({ title, recruitments, favoritedStudents, favoritedCounts, onFavorite, showToggle = false }: RecruitmentStudentsProps) {
   const [showCards, setShowCards] = useState(!showToggle);
 
   if (!showToggle) {
@@ -415,14 +423,14 @@ function PickupStudents({ title, pickups, favoritedStudents, favoritedCounts, on
         <StudentCards
           mobileGrid={5}
           pcGrid={8}
-          students={pickups.map((pickup) => {
-            const student = pickup.student;
-            const colorClass = (pickup.rerun || pickup.type === "archive" || pickup.type === "recollect") ? "text-white" : "text-yellow-500";
+          students={recruitments.map((recruitment) => {
+            const student = recruitment.student;
+            const colorClass = (recruitment.rerun || recruitment.recruitmentType === "archive" || recruitment.recruitmentType === "recollect") ? "text-white" : "text-yellow-500";
             return {
               ...student,
               uid: student?.uid ?? null,
-              name: pickup.studentName,
-              label: <span className={`${colorClass}`}>{pickupLabelLocale(pickup)}</span>,
+              name: recruitment.studentName,
+              label: <span className={`${colorClass}`}>{recruitmentLabelLocale(recruitment)}</span>,
               state: student?.uid ? {
                 favorited: favoritedStudents?.includes(student.uid),
                 favoritedCount: favoritedCounts?.[student.uid],
@@ -474,14 +482,14 @@ function PickupStudents({ title, pickups, favoritedStudents, favoritedCounts, on
       {showCards && (
         <StudentCards
           mobileGrid={5}
-          students={pickups.map((pickup) => {
-            const student = pickup.student;
-            const colorClass = (pickup.rerun || pickup.type === "archive") ? "text-white" : "text-yellow-500";
+          students={recruitments.map((recruitment) => {
+            const student = recruitment.student;
+            const colorClass = (recruitment.rerun || recruitment.recruitmentType === "archive") ? "text-white" : "text-yellow-500";
             return {
               ...student,
               uid: student?.uid ?? null,
-              name: pickup.studentName,
-              label: <span className={`${colorClass}`}>{pickupLabelLocale(pickup)}</span>,
+              name: recruitment.studentName,
+              label: <span className={`${colorClass}`}>{recruitmentLabelLocale(recruitment)}</span>,
               state: student?.uid ? {
                 favorited: favoritedStudents?.includes(student.uid),
                 favoritedCount: favoritedCounts?.[student.uid],

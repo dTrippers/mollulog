@@ -433,8 +433,8 @@ const futureContentsQuery = graphql(`
         ... on Event {
           eventType: type
           rerun endless tags
-          pickups {
-            type rerun since until studentName
+          recruitments {
+            recruitmentType pickup rerun since until studentName
             student { uid attackType defenseType role schaleDbId }
           }
         }
@@ -452,7 +452,7 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
   const truncatedNow = new Date();
   truncatedNow.setMinutes(0, 0, 0);
 
-  return fetchCached(env, "future-contents", async () => {
+  return fetchCached(env, "future-contents::v2", async () => {
     const { data, error } = await runQuery(futureContentsQuery, { now: truncatedNow });
     if (error || !data) {
       throw error ?? "failed to fetch events";

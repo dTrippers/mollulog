@@ -31,7 +31,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
   const allStudentUids = contents.flatMap((content) => {
     if (content.__typename === "Event") {
-      return content.pickups?.map((pickup) => pickup.student?.uid ?? null) ?? [];
+      return content.recruitments?.map((recruitment) => recruitment.student?.uid ?? null) ?? [];
     }
     return [];
   }).filter((studentUid) => studentUid !== null);
@@ -156,7 +156,7 @@ export default function FutureContents() {
     if (content.__typename === "Event") {
       if (filter.types.length > 0 && !filter.types.includes(content.eventType)) {
         return false;
-      } else if (filter.onlyPickups && content.pickups?.length === 0) {
+      } else if (filter.onlyPickups && content.recruitments?.filter((recruitment) => recruitment.pickup).length === 0) {
         return false;
       }
       return true;
@@ -194,7 +194,7 @@ export default function FutureContents() {
           if (content.__typename === "Event") {
             contentAttrs.contentType = content.eventType;
             contentAttrs.rerun = content.rerun;
-            contentAttrs.pickups = content.pickups ?? undefined;
+            contentAttrs.recruitments = content.recruitments ?? undefined;
             contentAttrs.link = `/events/${content.uid}`;
             contentAttrs.tags = content.tags ?? [];
           } else if (content.__typename === "Raid") {
