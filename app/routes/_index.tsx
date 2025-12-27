@@ -7,7 +7,7 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { SubTitle, Title } from "~/components/atoms/typography";
 import type { IndexQuery } from "~/graphql/graphql";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { defenseTypeColor, defenseTypeLocale, difficultyLocale, pickupLabelLocale, raidTypeLocale, relativeTime } from "~/locales/ko";
+import { defenseTypeColor, defenseTypeLocale, difficultyLocale, recruitmentLabelLocale, raidTypeLocale, relativeTime } from "~/locales/ko";
 import dayjs from "dayjs";
 import { OptionBadge, ProfileImage } from "~/components/atoms/student";
 import { useState } from "react";
@@ -27,10 +27,10 @@ export const meta: MetaFunction = () => {
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
 
-  const { mainEvent, currentRaids, currentEvents, currentPickups, favoritedCounts } = await getIndexContents(env);
+  const { mainEvent, currentRaids, currentEvents, currentRecruitments, favoritedCounts } = await getIndexContents(env);
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   const favoritedStudentUids = currentUser ?
-    (await getUserFavoritedStudents(env, currentUser.id)).filter((favorited) => currentPickups.some((pickup) => pickup.eventUid === favorited.contentId)).map((favorited) => favorited.studentId) :
+    (await getUserFavoritedStudents(env, currentUser.id)).filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId)).map((favorited) => favorited.studentId) :
     [];
 
   // ========== Raids ==========
@@ -39,7 +39,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   return {
     mainEvent,
     currentEvents: currentEvents.filter((event) => (event.uid !== mainEvent?.uid)),
-    currentPickups,
+    currentRecruitments,
     favoritedCounts,
     favoritedStudentUids,
     currentTotalAssualt,
@@ -48,7 +48,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 }
 
 export default function Index() {
-  const { mainEvent, currentEvents, currentPickups, favoritedCounts, favoritedStudentUids, currentTotalAssualt, currentUnlimit } = useLoaderData<typeof loader>();
+  const { mainEvent, currentEvents, currentRecruitments, favoritedCounts, favoritedStudentUids, currentTotalAssualt, currentUnlimit } = useLoaderData<typeof loader>();
 
   return (
     <>
@@ -61,9 +61,9 @@ export default function Index() {
         <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가 정보" to="/students" />
       </div>
 
-      {CurrentPickups.length > 0 && (
-        <CurrentPickups
-          pickups={currentPickups}
+      {CurrentRecruitments.length > 0 && (
+        <CurrentRecruitments
+          recruitments={currentRecruitments}
           favoritedStudentUids={favoritedStudentUids}
           favoritedCounts={favoritedCounts}
         />
@@ -94,23 +94,23 @@ function MainEvent({ event }: { event: Exclude<IndexQuery["events"]["nodes"][0],
   );
 }
 
-type CurrentPickupsProps = {
-  pickups: { eventUid: string, pickup: IndexQuery["events"]["nodes"][0]["pickups"][0] }[];
+type CurrentRecruitmentsProps = {
+  recruitments: { eventUid: string, recruitment: IndexQuery["events"]["nodes"][0]["recruitments"][0] }[];
   favoritedStudentUids: string[];
   favoritedCounts: { studentId: string, count: number }[];
 };
 
-function CurrentPickups({ pickups, favoritedStudentUids, favoritedCounts }: CurrentPickupsProps) {
+function CurrentRecruitments({ recruitments, favoritedStudentUids, favoritedCounts }: CurrentRecruitmentsProps) {
   const [showAll, setShowAll] = useState(false);
 
-  const displayedPickups = showAll ? pickups : pickups.slice(0, 6);
+  const displayedRecruitments = showAll ? recruitments : recruitments.slice(0, 6);
 
   return (
     <div className="my-8">
-      <SubTitle text="픽업 모집" />
+      <SubTitle text="모집중인 학생" />
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        {displayedPickups.map(({ pickup }) => {
-          const student = pickup.student;
+        {displayedRecruitments.map(({ recruitment }) => {
+          const student = recruitment.student;
           if (!student) {
             return null;
           }
@@ -131,7 +131,7 @@ function CurrentPickups({ pickups, favoritedStudentUids, favoritedCounts }: Curr
                   </div>
                 </div>
                 <div className="grow">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">{pickupLabelLocale(pickup)}</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">{recruitmentLabelLocale(recruitment)}{recruitment.pickup ? " • 픽업" : ""}</p>
                   <p className="text-sm md:text-base font-semibold">{student.name}</p>
                 </div>
               </div>
@@ -139,12 +139,12 @@ function CurrentPickups({ pickups, favoritedStudentUids, favoritedCounts }: Curr
           );
         })}
       </div>
-      {pickups.length > 6 && (
+      {recruitments.length > 6 && (
         <div
           className="w-full my-4 py-2 flex items-center justify-center bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors rounded-lg text-neutral-500 dark:text-neutral-400 cursor-pointer"
           onClick={() => setShowAll(!showAll)}
         >
-          <span className="text-sm mr-1">{showAll ? "접기" : `픽업 학생 ${pickups.length}명 모두 보기`}</span>
+          <span className="text-sm mr-1">{showAll ? "접기" : `학생 ${recruitments.length}명 모두 보기`}</span>
           {showAll ? <ChevronUpIcon className="size-4 inline" /> : <ChevronDownIcon className="size-4 inline" />}
         </div>
       )}

@@ -15,8 +15,8 @@ const userFuturesQuery = graphql(`
     events(first: 999, untilAfter: $now) {
       nodes {
         uid name since until
-        pickups {
-          type rerun
+        recruitments {
+          recruitmentType rerun
           student {
             uid attackType defenseType role schaleDbId name school equipments
             skillItems(skillType: ex, skillLevel: 5) {

@@ -2,13 +2,12 @@ import dayjs from "dayjs";
 import { Link } from "react-router";
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { MultilineText } from "~/components/atoms/typography";
 import { eventTypeLocale } from "~/locales/ko";
 import type { EventType } from "~/models/content.d";
 import { sanitizeClassName } from "~/prophandlers";
 
-type PickupHistoriesProps = {
-  pickups: {
+type RecruitmentHistoriesProps = {
+  recruitments: {
     event: {
       uid: string;
       name: string;
@@ -20,13 +19,13 @@ type PickupHistoriesProps = {
   }[];
 }
 
-export default function PickupHistories({ pickups }: PickupHistoriesProps) {
+export default function RecruitmentHistories({ recruitments }: RecruitmentHistoriesProps) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showLeftBlur, setShowLeftBlur] = useState(false);
   const [showRightBlur, setShowRightBlur] = useState(false);
 
-  const sortedPickups = pickups.sort((a, b) => dayjs(b.since).diff(dayjs(a.since)));
+  const sortedRecruitments = recruitments.sort((a, b) => dayjs(b.since).diff(dayjs(a.since)));
 
   const updateBlur = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -60,7 +59,7 @@ export default function PickupHistories({ pickups }: PickupHistoriesProps) {
   };
 
   const selectPickup = (indexDiff: 1 | -1) => {
-    const newIndex = (currentIndex + indexDiff + sortedPickups.length) % sortedPickups.length;
+    const newIndex = (currentIndex + indexDiff + sortedRecruitments.length) % sortedRecruitments.length;
     setCurrentIndex(newIndex);
     scrollToIndex(newIndex);
   };
@@ -88,7 +87,7 @@ export default function PickupHistories({ pickups }: PickupHistoriesProps) {
   return (
     <div className="relative md:flex md:items-center md:justify-center">
       {/* Left Arrow (desktop only) */}
-      {sortedPickups.length > 2 && (
+      {sortedRecruitments.length > 2 && (
         <div className="hidden md:flex pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full z-10 w-10 items-center justify-center">
           <ChevronDoubleLeftIcon
             className="pointer-events-auto p-1 size-6 hover:bg-black hover:text-white rounded-full transition cursor-pointer"
@@ -108,7 +107,7 @@ export default function PickupHistories({ pickups }: PickupHistoriesProps) {
 
       {/* Scrollable container */}
       <div className="flex overflow-x-auto gap-2 md:gap-4 no-scrollbar w-full" ref={scrollContainerRef}>
-        {sortedPickups.map(({ event, since }) => (
+        {sortedRecruitments.map(({ event, since }) => (
           <div key={event.uid} className="w-3/4 md:w-2/5 aspect-video rounded-lg relative shrink-0">
             {event.imageUrl && (
               <img
@@ -124,8 +123,8 @@ export default function PickupHistories({ pickups }: PickupHistoriesProps) {
                   ${event.imageUrl ? "bg-black/65 hover:bg-black/80 text-white" : "bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700"}
                 `)}
             >
-              <MultilineText texts={event.name.split("\n")} className="font-bold text-lg" />
-              <p className="text-sm mt-1">
+              <p className="font-bold text-semibold">{event.name}</p>
+              <p className="text-xs mt-1">
                 {`${event.rerun ? "복각 " : ""}${eventTypeLocale[event.type]} • ${dayjs(since).format("YYYY-MM-DD")}`}
               </p>
             </Link>
@@ -134,7 +133,7 @@ export default function PickupHistories({ pickups }: PickupHistoriesProps) {
       </div>
 
       {/* Right Arrow (desktop only) */}
-      {sortedPickups.length > 2 && (
+      {sortedRecruitments.length > 2 && (
         <div className="hidden md:flex pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-10 w-10 items-center justify-center">
           <ChevronDoubleRightIcon
             className="pointer-events-auto p-1 size-6 hover:bg-black hover:text-white rounded-full transition cursor-pointer"

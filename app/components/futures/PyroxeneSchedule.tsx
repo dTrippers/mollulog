@@ -4,9 +4,9 @@ import { MultilineText, SubTitle } from "~/components/atoms/typography";
 import { ResourceCard } from "~/components/atoms/item";
 import { ActionCard, type ActionCardAction } from "~/components/molecules/editor";
 import { StudentCards } from "~/components/students";
-import type { PickupType, RaidType } from "~/models/content.d";
+import type { RaidType } from "~/models/content.d";
 import { useEffect, useMemo, useState } from "react";
-import { ResourceTypeEnum } from "~/graphql/graphql";
+import { RecruitmentTypeEnum, ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";
 import { Transition } from "@headlessui/react";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
@@ -27,10 +27,11 @@ export type PyroxeneScheduleItem = ({
     name: string;
     since: Date;
     until: Date;
-    pickups: {
-      type: PickupType;
+    recruitments: {
+      recruitmentType: RecruitmentTypeEnum;
+      pickup: boolean;
       rerun: boolean;
-      student: { uid: string, initialTier: number } | null;
+      student: { uid: string; initialTier: number } | null;
       favorited: boolean;
     }[];
   };
@@ -244,7 +245,7 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
         </div>
         <div className="flex-1">
           <StudentCards
-            students={event.pickups.filter(({ favorited }) => favorited).map(({ student }) => ({ uid: student!.uid, tier: student!.initialTier }))}
+            students={event.recruitments.filter(({ favorited }) => favorited).map(({ student }) => ({ uid: student!.uid, tier: student!.initialTier }))}
             pcGrid={10}
           />
         </div>
@@ -547,7 +548,7 @@ function buildTimeline(
       if (eventData?.expectedTrials !== null && eventData?.expectedTrials !== undefined) {
         pickupTrial = eventData.expectedTrials;
       } else {
-        const pickupCount = event.pickups.filter(({ student, favorited }) => favorited && student?.initialTier === 3).length;
+        const pickupCount = event.recruitments.filter(({ pickup, favorited, recruitmentType }) => pickup && favorited && recruitmentType !== "given").length;
         if (pickupCount === 0) {
           return;
         }
