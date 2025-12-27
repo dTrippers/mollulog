@@ -7,11 +7,12 @@ import { MultilineText } from "~/components/atoms/typography";
 import { OptionBadge } from "~/components/atoms/student";
 import { StudentCard } from "~/components/students";
 import { ResourceCards } from "~/components/molecules/student";
-import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, pickupLabelLocale, roleColor, roleLocale, schoolNameLocale } from "~/locales/ko";
-import type { AttackType, DefenseType, PickupType, Role } from "~/models/content.d";
+import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, recruitmentLabelLocale, roleColor, roleLocale, schoolNameLocale } from "~/locales/ko";
+import type { AttackType, DefenseType, Role } from "~/models/content.d";
 import ContentCommentView from "~/components/contents/ContentCommentView";
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 import type { NestedComment } from "~/models/content";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
 
 type FuturePlanStudents = {
   uid: string;
@@ -37,8 +38,8 @@ type FuturePlanProps = {
     name: string;
     since: Date;
     until: Date;
-    pickups: {
-      type: PickupType;
+    recruitments: {
+      recruitmentType: RecruitmentTypeEnum;
       rerun: boolean;
       student: FuturePlanStudents | null;
     }[];
@@ -79,11 +80,11 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
   }
 
   // Assert non-null for `student`
-  const favoritedPickups: {
+  const favoritedRecruitments: {
     student: FuturePlanStudents;
-    type: PickupType;
+    recruitmentType: RecruitmentTypeEnum;
     rerun: boolean;
-  }[] = event.pickups.filter(({ student }) => favoritedStudents.some(({ studentId }) => studentId === student?.uid)).map(({ student, ...rest }) => ({
+  }[] = event.recruitments.filter(({ student }) => favoritedStudents.some(({ studentId }) => studentId === student?.uid)).map(({ student, ...rest }) => ({
     student: student!,
     ...rest,
   }));
@@ -99,7 +100,7 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
     subSkillItems: string[];
   }> = {};
 
-  favoritedPickups.forEach(({ student }) => {
+  favoritedRecruitments.forEach(({ student }) => {
     if (!studentResources[student.uid]) {
       studentResources[student.uid] = {
         equipments: [],
@@ -145,7 +146,7 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
       {/* Students */}
       <div className="px-3 md:px-4 py-4 grow bg-white dark:bg-neutral-800 rounded-lg">
         {/* Display each student with their info and resources */}
-        {favoritedPickups.map(({ student, type, rerun }) => {
+        {favoritedRecruitments.map(({ student, recruitmentType, rerun }) => {
           const resources = studentResources[student.uid];
           const hasEquipments = resources?.equipments.length > 0;
           const hasOoparts = resources?.mainSkillItems.length > 0 || resources?.subSkillItems.length > 0;
@@ -171,7 +172,7 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
 
                   <div className="mb-2">
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                      {pickupLabelLocale({ type, rerun })} &middot; {schoolNameLocale[student.school]}
+                      {recruitmentLabelLocale({ recruitmentType, rerun })} &middot; {schoolNameLocale[student.school]}
                     </p>
                     <div className="py-2 flex text-sm gap-x-1">
                       <OptionBadge text={attackTypeLocale[student.attackType]} color={attackTypeColor[student.attackType]} bgColor="light" />

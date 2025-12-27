@@ -16,7 +16,7 @@ export type ContentTimelineProps = {
     link: string;
     contentType: EventType | RaidType;
     tags: string[];
-    pickups?: ContentTimelineItemProps["pickups"];
+    recruitments?: ContentTimelineItemProps["recruitments"];
     raidInfo?: ContentTimelineItemProps["raidInfo"];
 
     allComments?: ContentTimelineItemProps["allComments"];
@@ -118,7 +118,7 @@ export default function ContentTimeline({ contents, favoritedStudents, favorited
               </div>
               <div className="pl-3 md:pl-5 pb-4 md:pb-8">
                 {group.contents.map((content) => {
-                  const showComments = !!onCommentCreate && !!content.pickups && content.pickups.length > 0;
+                  const showComments = !!onCommentCreate && !!content.recruitments && content.recruitments.length > 0;
                   return (
                     <ContentTimelineItem
                       key={content.uid}

@@ -2,6 +2,7 @@ import StudentFilter, { applyStudentFilter } from "./StudentFilter";
 import type { StudentFilterState } from "./StudentFilter";
 import StudentCard, { StudentCardPopup } from "./StudentCard";
 import StudentCards from "./StudentCards";
+import RecruitmentHistories from "./RecruitmentHistories";
 
 export {
   StudentFilter,
@@ -9,6 +10,7 @@ export {
   StudentCard,
   StudentCardPopup,
   StudentCards,
+  RecruitmentHistories,
 };
 
 export type {

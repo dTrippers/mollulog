@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
-import type { AttackType, DefenseType, EventType, PickupType, RaidType, Role, Terrain } from "~/models/content.d";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
+import type { AttackType, DefenseType, EventType, RaidType, Role, Terrain } from "~/models/content.d";
 import type { Boss } from "~/models/raid";
 
 export const attackTypeLocale: Record<AttackType, string> = {
@@ -99,16 +100,7 @@ export const contentTypeLocale: Record<EventType | RaidType, string> = {
   ...raidTypeLocale,
 };
 
-export const pickupTypeLocale: Record<PickupType, string> = {
-  usual: "일반",
-  limited: "한정",
-  given: "배포",
-  fes: "페스",
-  archive: "아카이브",
-  recollect: "리콜렉트",
-};
-
-export function pickupLabelLocale({ type, rerun }: { type: PickupType, rerun: boolean }): string {
+export function recruitmentLabelLocale({ recruitmentType: type, rerun }: { recruitmentType: RecruitmentTypeEnum, rerun: boolean }): string {
   if (type === "archive") {
     return "아카이브";
   } else if (type === "recollect") {
@@ -122,7 +114,7 @@ export function pickupLabelLocale({ type, rerun }: { type: PickupType, rerun: bo
   } else if (type === "given") {
     return "배포";
   }
-  return "-";
+  return "-"; 
 }
 
 export const schoolNameLocale: Record<string, string> = {

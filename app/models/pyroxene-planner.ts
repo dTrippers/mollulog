@@ -18,8 +18,8 @@ export const pyroxenePlannerContentsQuery = graphql(`
       nodes {
         __typename uid name since until
         ... on Event {
-          pickups {
-            type rerun
+          recruitments {
+            recruitmentType pickup rerun
             student { uid initialTier }
           }
         }
@@ -33,7 +33,7 @@ export const pyroxenePlannerContentsQuery = graphql(`
 
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContentsQuery["contents"]["nodes"]> {
   const now = new Date();
-  return fetchCached(env, "pyroxene-planner-contents", async () => {
+  return fetchCached(env, "pyroxene-planner-contents::v2", async () => {
     const { data, error } = await runQuery(pyroxenePlannerContentsQuery, { now });
     if (error || !data) {
       throw error ?? "failed to fetch pyroxene planner contents";

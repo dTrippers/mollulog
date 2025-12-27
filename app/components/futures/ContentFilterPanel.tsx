@@ -51,7 +51,7 @@ export default function ContentFilterPanel({ filter, onFilterChange }: ContentFi
         <p className="mb-2 font-bold">레이드</p>
         <FilterButtons buttonProps={contentFilterProps} />
       </div>
-      <Toggle label="픽업 진행 컨텐츠만 보기" initialState={filter.onlyPickups} onChange={onToggleOnlyPickups} />
+      <Toggle label="학생 모집 컨텐츠만 보기" initialState={filter.onlyPickups} onChange={onToggleOnlyPickups} />
     </>
   );
 }

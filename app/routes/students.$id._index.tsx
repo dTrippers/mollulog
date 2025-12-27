@@ -7,7 +7,6 @@ import { runQuery } from "~/lib/baql";
 import { EmptyView, SubTitle, Title } from "~/components/atoms/typography";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
 import { ErrorPage } from "~/components/organisms/error";
-import { PickupHistories } from "~/components/organisms/student";
 import { StudentInfo, StudentGradingComments } from "~/components/molecules/student";
 import { RaidStatisticsSlotCount } from "~/components/raids";
 import { getMaxTierAt } from "~/models/student";
@@ -18,12 +17,13 @@ import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import TagIcon from "~/components/atoms/student/TagIcon";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { RecruitmentHistories } from "~/components/students";
 
 const studentDetailQuery = graphql(`
   query StudentDetail($uid: String!, $raidSince: ISO8601DateTime!) {
     student(uid: $uid) {
       name uid attackType defenseType role school schaleDbId
-      pickups {
+      recruitments {
         since until
         event { type uid name rerun imageUrl }
       }
@@ -179,10 +179,10 @@ export default function StudentDetail() {
         )}
       </div>
 
-      {student.pickups.length > 0 && (
+      {student.recruitments.length > 0 && (
         <>
-          <SubTitle text="픽업 일정 정보" />
-          <PickupHistories pickups={student.pickups} />
+          <SubTitle text="모집 일정" />
+          <RecruitmentHistories recruitments={student.recruitments} />
         </>
       )}
     </>

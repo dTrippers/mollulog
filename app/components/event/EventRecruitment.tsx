@@ -4,14 +4,15 @@ import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import { OptionBadge } from "~/components/atoms/student";
 import { StudentCard } from "~/components/students";
-import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, pickupLabelLocale, roleColor, roleLocale } from "~/locales/ko";
-import type { AttackType, DefenseType, PickupType, Role } from "~/models/content.d";
+import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, recruitmentLabelLocale, roleColor, roleLocale } from "~/locales/ko";
+import type { AttackType, DefenseType, Role } from "~/models/content.d";
 import { sanitizeClassName } from "~/prophandlers";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
 
-type EventPickupProps = {
-  pickup: {
-    type: PickupType;
+type EventRecruitmentProps = {
+  recruitment: {
+    recruitmentType: RecruitmentTypeEnum;
     rerun: boolean;
     since: Date | null;
     until: Date | null;
@@ -31,9 +32,9 @@ type EventPickupProps = {
   signedIn: boolean;
 };
 
-export default function EventPickup({ pickup, favoritedCount, favorited, onFavorite, signedIn }: EventPickupProps) {
-  const studentUid = pickup.student?.uid ?? null;
-  const { attackType, defenseType, role } = pickup.student ?? {};
+export default function EventRecruitment({ recruitment, favoritedCount, favorited, onFavorite, signedIn }: EventRecruitmentProps) {
+  const studentUid = recruitment.student?.uid ?? null;
+  const { attackType, defenseType, role } = recruitment.student ?? {};
 
   const { showSignIn } = useSignIn();
 
@@ -45,9 +46,9 @@ export default function EventPickup({ pickup, favoritedCount, favorited, onFavor
         </div>
         <div className="px-2 grow">
           <div className="pt-2">
-            <p className="text-xs text-neutral-500">{pickupLabelLocale(pickup)}</p>
+            <p className="text-xs text-neutral-500">{recruitmentLabelLocale(recruitment)}</p>
             <Link to={`/students/${studentUid}`} className="flex items-center hover:underline">
-              <span className="font-semibold">{pickup.studentName}</span>
+              <span className="font-semibold">{recruitment.studentName}</span>
               {studentUid && <ChevronRightIcon className="ml-1 size-4 inline" />}
             </Link>
           </div>

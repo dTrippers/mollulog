@@ -31,16 +31,16 @@ const eventDetailQuery = graphql(`
       }
       videos { title youtube start }
       shopResources {
-        uid
+        uid resourceAmount paymentResourceAmount shopAmount
         resource { type uid name rarity }
-        resourceAmount
         paymentResource { uid name }
-        paymentResourceAmount
-        shopAmount
       }
     }
     pickupEvent: event(uid: $eventUid) {
-      pickups { type rerun since until student { uid attackType defenseType role } studentName }
+      recruitments {
+        recruitmentType pickup rerun since until studentName
+        student { uid attackType defenseType role }
+      }
     }
   }
 `);
@@ -88,14 +88,14 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const event = data!.event!;
   const pickupEvent = data!.pickupEvent!;
 
-  const pickupStudentUids = pickupEvent.pickups.map((pickup) => pickup.student?.uid).filter((uid) => uid !== undefined);
+  const studentUids = pickupEvent.recruitments.map((recruitment) => recruitment.student?.uid).filter((uid) => uid !== undefined);
   const favoritedStudents = currentUser ? await getUserFavoritedStudents(env, currentUser.id, eventUid) : [];
-  const favoritedCounts = (await getFavoritedCounts(env, pickupStudentUids)).filter((favorited) => favorited.contentId === eventUid);
-  const pickups = pickupEvent.pickups.map((pickup) => {
+  const favoritedCounts = (await getFavoritedCounts(env, studentUids)).filter((favorited) => favorited.contentId === eventUid);
+  const recruitments = pickupEvent.recruitments.map((recruitment) => {
     return {
-      ...pickup,
-      favoritedCount: favoritedCounts.find((favorited) => favorited.studentId === pickup.student?.uid)?.count ?? 0,
-      favorited: favoritedStudents.some((favorited) => favorited.studentId === pickup.student?.uid),
+      ...recruitment,
+      favoritedCount: favoritedCounts.find((favorited) => favorited.studentId === recruitment.student?.uid)?.count ?? 0,
+      favorited: favoritedStudents.some((favorited) => favorited.studentId === recruitment.student?.uid),
     };
   });
 
@@ -122,7 +122,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   return {
     event,
-    pickups,
+    recruitments,
     recruitedStudentUids,
     eventRewardBonus,
     savedShopState,
@@ -198,7 +198,7 @@ export function ErrorBoundary() {
 type EventDetailPage = "info" | "stages" | "shop";
 
 export default function EventDetail() {
-  const { event, pickups, recruitedStudentUids, eventRewardBonus, savedShopState, allComments, me, battlePassRewards, nearbyEvents } = useLoaderData<typeof loader>();
+  const { event, recruitments, recruitedStudentUids, eventRewardBonus, savedShopState, allComments, me, battlePassRewards, nearbyEvents } = useLoaderData<typeof loader>();
 
   const [searchParams] = useSearchParams();
 
@@ -235,7 +235,7 @@ export default function EventDetail() {
       {page === "info" && event.type !== "update" && (
         <EventDetailInfoPage
           event={event}
-          pickups={pickups}
+          recruitments={recruitments}
           allComments={allComments}
           me={me}
           battlePassRewards={battlePassRewards ?? undefined}

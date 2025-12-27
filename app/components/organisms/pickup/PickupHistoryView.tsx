@@ -15,11 +15,12 @@ type PickupHistoryViewProps = {
     type: EventTypeEnum;
     since: Date;
   };
-  tier3Students: {
+  recruitedStudents: {
     uid: string;
     name: string;
+    pickup: boolean;
+    tier: number;
   }[];
-  pickupStudentUids: string[];
   trial?: number;
   editable?: boolean;
 };
@@ -28,20 +29,20 @@ function formatPercentage(ratio: number) {
   return `${(ratio * 100).toFixed(2)} %`;
 }
 
-export default function PickupHistoryView({ uid, event, tier3Students, pickupStudentUids, trial, editable }: PickupHistoryViewProps) {
+export default function PickupHistoryView({ uid, event, recruitedStudents, trial, editable }: PickupHistoryViewProps) {
   const actions: ActionCardAction[] = [];
   if (editable) {
     actions.push({ text: "편집", color: "default", link: `/my?path=pickups/edit/${uid}` });
     actions.push({ text: "삭제", color: "red", form: { method: "delete", hiddenInputs: [{ name: "uid", value: uid }] }, danger: true });
   }
 
-  const tier3StudentUids = tier3Students.map(({ uid }) => uid);
-  const pickupCounts = pickupStudentUids.filter((uid) => tier3StudentUids.includes(uid)).length;
+  const tier3Count = recruitedStudents.filter(({ tier }) => tier === 3).length;
+  const pickupCount = recruitedStudents.filter(({ pickup }) => pickup).length;
   const keyValueItems = [];
   if (trial !== undefined) {
-    keyValueItems.push({ key: "모집 횟수", value: `${trial} 회` });
-    keyValueItems.push({ key: "★3 학생 수", value: `${tier3Students.length} 회 (${formatPercentage(tier3StudentUids.length / trial)})` });
-    keyValueItems.push({ key: "픽업 학생 수", value: `${pickupCounts} 회 (${formatPercentage(pickupCounts / trial)})` });
+    keyValueItems.push({ key: "총 모집 횟수", value: `${trial} 회` });
+    keyValueItems.push({ key: "★3 모집 횟수", value: `${tier3Count} 회 (${formatPercentage(tier3Count / trial)})` });
+    keyValueItems.push({ key: "★3 픽업 횟수", value: `${pickupCount} 회 (${formatPercentage(pickupCount / trial)})` });
   }
 
   return (
@@ -54,15 +55,15 @@ export default function PickupHistoryView({ uid, event, tier3Students, pickupStu
         {eventTypeLocale[event.type]} | {dayjs(event.since).format("YYYY-MM-DD")}
       </p>
 
-      {tier3StudentUids.length > 0 && (
+      {tier3Count > 0 && (
         <>
           <p className="mt-4 mb-2 font-bold">모집한 ★3 학생</p>
           <StudentCards
             pcGrid={10}
-            students={tier3Students.map(({ uid, name }) => ({
+            students={recruitedStudents.filter(({ tier }) => tier === 3).map(({ uid, name, pickup }) => ({
               uid,
               name,
-              label: pickupStudentUids.includes(uid) ? <span className="text-yellow-500">픽업</span> : undefined,
+              label: pickup ? <span className="text-yellow-500">픽업</span> : undefined,
             }))}
           />
         </>

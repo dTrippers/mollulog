@@ -339,8 +339,8 @@ const indexQuery = graphql(`
     events(untilAfter: $now, first: 20) {
       nodes {
         __typename name since until endless uid type rerun imageUrl
-        pickups {
-          type rerun since until
+        recruitments {
+          recruitmentType pickup rerun since until studentName
           student { uid name }
         }
       }
@@ -355,9 +355,9 @@ const indexQuery = graphql(`
 `);
 
 export async function getIndexContents(env: Env, forceRefresh = false) {
-  return fetchCached(env, "index-contents", async () => {
+  return fetchCached(env, "index-contents::v2", async () => {
     const now = dayjs();
-    const { data, error } = await runQuery<IndexQuery, { now: Date }>(indexQuery, { now: now.toDate() });
+    const { data, error } = await runQuery(indexQuery, { now: now.toDate() });
     if (error || !data) {
       throw error ?? "failed to fetch events";
     }
@@ -403,19 +403,19 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
     }
 
     // ========== Pickups ==========
-    const currentPickups: { eventUid: string, pickup: IndexQuery["events"]["nodes"][0]["pickups"][0] }[] = data.events.nodes
-      .flatMap((event) => event.pickups.filter((pickup) => pickup.student !== null && pickup.type !== "recollect" && pickup.type !== "archive").map((pickup) => ({ eventUid: event.uid, pickup })))
-      .filter(({ pickup }) => !dayjs(pickup.since).isAfter(now) && dayjs(pickup.until).isAfter(now));
+    const currentRecruitments: { eventUid: string, recruitment: IndexQuery["events"]["nodes"][0]["recruitments"][0] }[] = data.events.nodes
+      .flatMap((event) => event.recruitments.filter((recruitment) => recruitment.student !== null && recruitment.recruitmentType !== "recollect" && recruitment.recruitmentType !== "archive").map((recruitment) => ({ eventUid: event.uid, recruitment })))
+      .filter(({ recruitment }) => !dayjs(recruitment.since).isAfter(now) && dayjs(recruitment.until).isAfter(now));
 
     // Get favorite counts for all students in current pickups (not just user's favorites)
-    const allStudentUids = currentPickups.map(({ pickup }) => pickup.student?.uid).filter((uid) => uid !== null) as string[];
-    const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) => currentPickups.some((pickup) => pickup.eventUid === favorited.contentId));
+    const allStudentUids = currentRecruitments.map(({ recruitment }) => recruitment.student?.uid).filter((uid) => uid !== null) as string[];
+    const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId));
 
     return {
       mainEvent,
       currentRaids: data.raids.nodes,
       currentEvents: data.events.nodes.filter((event) => !dayjs(event.since).isAfter(now)),
-      currentPickups,
+      currentRecruitments,
       favoritedCounts,
     };
   }, 60 * 10, forceRefresh);
@@ -433,8 +433,8 @@ const futureContentsQuery = graphql(`
         ... on Event {
           eventType: type
           rerun endless tags
-          pickups {
-            type rerun since until studentName
+          recruitments {
+            recruitmentType pickup rerun since until studentName
             student { uid attackType defenseType role schaleDbId }
           }
         }
@@ -452,7 +452,7 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
   const truncatedNow = new Date();
   truncatedNow.setMinutes(0, 0, 0);
 
-  return fetchCached(env, "future-contents", async () => {
+  return fetchCached(env, "future-contents::v2", async () => {
     const { data, error } = await runQuery(futureContentsQuery, { now: truncatedNow });
     if (error || !data) {
       throw error ?? "failed to fetch events";

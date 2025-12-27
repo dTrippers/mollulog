@@ -14,14 +14,14 @@ import { ContentSelectForm } from "~/components/molecules/form";
 import { FilterButtons } from "~/components/molecules/content";
 import { Bars3Icon } from "@heroicons/react/16/solid";
 
-const pickupEventsQuery = graphql(`
-  query PickupEvents {
+const recruitmentEventsQuery = graphql(`
+  query RecruitmentEvents {
     events(first: 9999) {
       nodes {
         uid name since until type rerun
-        pickups {
-          student { uid }
-          studentName type
+        recruitments {
+          student { uid name }
+          pickup
         }
       }
     }
@@ -44,7 +44,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     currentPickupHistory = await getPickupHistory(env, sensei.id, params.id, true);
   }
 
-  const { data, error } = await runQuery(pickupEventsQuery, {});
+  const { data, error } = await runQuery(recruitmentEventsQuery, {});
   if (!data) {
     console.error(error);
     throw "failed to load data";
@@ -52,11 +52,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const now = dayjs();
   return {
-    events: data.events.nodes.filter((event) => {
-      return event.pickups.length > 0
-        && !event.pickups.some((pickup) => pickup.type === "recollect" || pickup.type === "archive")
-        && dayjs(event.since).isBefore(now);
-    }).reverse(),
+    events: data.events.nodes.filter((event) => event.recruitments.length > 0 && dayjs(event.since).isBefore(now)).reverse(),
     tier3Students: (await getAllStudents(env))
       .filter((student) => student.initialTier === 3)
       .sort((a, b) => b.order - a.order)

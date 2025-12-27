@@ -300,9 +300,9 @@ export default function PyroxenePlanner() {
         items.push({
           event: {
             ...content,
-            pickups: content.pickups.map((pickup) => ({
-              ...pickup,
-              favorited: favoritedStudents.some(({ contentUid, studentUid }) => contentUid === content.uid && studentUid === pickup.student?.uid),
+            recruitments: content.recruitments.map((recruitment) => ({
+              ...recruitment,
+              favorited: favoritedStudents.some(({ contentUid, studentUid }) => contentUid === content.uid && studentUid === recruitment.student?.uid),
             })),
           },
         });

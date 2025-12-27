@@ -2,13 +2,14 @@ import { ClockIcon, ExclamationTriangleIcon, StarIcon, XCircleIcon } from "@hero
 import dayjs from "dayjs";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useFetcher } from "react-router";
-import type { PickupType, AttackType, DefenseType, Role, EventType } from "~/models/content.d";
-import EventPickup from "./EventPickup";
+import type { AttackType, DefenseType, Role, EventType } from "~/models/content.d";
 import { SubTitle } from "../atoms/typography";
 import ContentCommentEditor from "../contents/ContentCommentEditor";
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 import EventInfoCard from "./EventInfoCard";
 import BattlePassInfo from "./BattlePassInfo";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
+import EventRecruitment from "./EventRecruitment";
 
 type BattlePassReward = {
   normal: {
@@ -32,9 +33,10 @@ type EventDetailInfoPageProps = {
     tags: string[];
     endless: boolean;
   }
-  pickups: {
-    type: PickupType;
+  recruitments: {
+    recruitmentType: RecruitmentTypeEnum;
     rerun: boolean;
+    pickup: boolean;
     since: Date;
     until: Date | null;
     student: {
@@ -90,7 +92,7 @@ export type ActionData = {
   };
 };
 
-export default function EventDetailInfoPage({ event, pickups, allComments, me, battlePassRewards }: EventDetailInfoPageProps) {
+export default function EventDetailInfoPage({ event, recruitments, allComments, me, battlePassRewards }: EventDetailInfoPageProps) {
   return (
     <div>
       {event.type === "fes" && (
@@ -107,7 +109,7 @@ export default function EventDetailInfoPage({ event, pickups, allComments, me, b
           />
         </>
       )}
-      {pickups.some(({ type }) => type === "archive") && (
+      {recruitments.some(({ recruitmentType }) => recruitmentType === "archive") && (
         <>
           <EventInfoCard
             Icon={StarIcon}
@@ -121,7 +123,7 @@ export default function EventDetailInfoPage({ event, pickups, allComments, me, b
           />
         </>
       )}
-      {pickups.some(({ type }) => type === "recollect") && (
+      {recruitments.some(({ recruitmentType }) => recruitmentType === "recollect") && (
         <EventInfoCard
           Icon={StarIcon}
           title="리콜렉트 모집"
@@ -129,16 +131,21 @@ export default function EventDetailInfoPage({ event, pickups, allComments, me, b
         />
       )}
       {event.type === "battle_pass" && battlePassRewards && <BattlePassInfo rewards={battlePassRewards} />}
-      {pickups.length > 0 && (
-        <Pickups pickups={pickups} signedIn={me !== null} event={event} free100={event.tags.includes("recruit_free_100")} />
+      {recruitments.length > 0 && (
+        <Recruitments
+          recruitments={recruitments}
+          signedIn={me !== null}
+          event={event}
+          free100={event.tags.includes("recruit_free_100")}
+        />
       )}
       <EventComment allComments={allComments} me={me} eventUid={event.uid} />
     </div>
   )
 }
 
-type PickupsProps = {
-  pickups: EventDetailInfoPageProps["pickups"];
+type RecruitmentsProps = {
+  recruitments: EventDetailInfoPageProps["recruitments"];
   signedIn: boolean;
   event: {
     uid: string;
@@ -150,50 +157,33 @@ type PickupsProps = {
   free100: boolean;
 };
 
-function Pickups({ pickups, signedIn, event, free100 }: PickupsProps) {
+function Recruitments({ recruitments, signedIn, event, free100 }: RecruitmentsProps) {
   const shouldNotifyPickupPeriod = useMemo(() => {
     if (event.endless) {
       return false;
     }
-    const allPickupsMatchEvent = pickups.every((pickup) => {
-      return dayjs(pickup.since).isSame(dayjs(event.since), "day") && dayjs(pickup.until).isSame(dayjs(event.until), "day");
+    const sameRecruitmentsPeriod = recruitments.every((recruitment) => {
+      return dayjs(recruitment.since).isSame(dayjs(event.since), "day") && dayjs(recruitment.until).isSame(dayjs(event.until), "day");
     });
-    return !allPickupsMatchEvent;
-  }, [pickups, event.since, event.until]);
-
-  const [filteredPickups, nonPickups] = useMemo(() => {
-    if (event.type !== "fes") {
-      return [pickups, []];
-    }
-
-    const filteredPickups: typeof pickups = [];
-    const nonPickups: typeof pickups = [];
-    pickups.forEach((pickup) => {
-      if ((pickup.type === "fes" && !pickup.rerun) || (pickup.type === "limited" && pickup.rerun)) {
-        filteredPickups.push(pickup);
-      } else {
-        nonPickups.push(pickup);
-      }
-    });
-    return [filteredPickups, nonPickups];
-  }, [pickups]);
+    return !sameRecruitmentsPeriod;
+  }, [recruitments, event.since, event.until]);
 
   const filteredPickupDateGroupsArray = useMemo(() => {
-    const pickupDateGroups = filteredPickups.reduce((groups, pickup) => {
-      const key = `${pickup.since}-${pickup.until}`;
+    const recruitmentDateGroups = recruitments.filter(({ pickup, recruitmentType }) => pickup || recruitmentType === "given").reduce((groups, recruitment) => {
+      const key = `${recruitment.since}-${recruitment.until}`;
       if (!groups[key]) {
         groups[key] = {
-          since: pickup.since,
-          until: pickup.until,
-          pickups: []
+          since: recruitment.since,
+          until: recruitment.until,
+          recruitments: []
         };
       }
-      groups[key].pickups.push(pickup);
+      groups[key].recruitments.push(recruitment);
       return groups;
-    }, {} as Record<string, { since: Date; until: Date | null; pickups: typeof filteredPickups }>);
+    }, {} as Record<string, { since: Date; until: Date | null; recruitments: typeof recruitments }>);
 
-    return Object.values(pickupDateGroups);
-  }, [filteredPickups]);
+    return Object.values(recruitmentDateGroups);
+  }, [recruitments]);
 
   return (
     <>
@@ -213,6 +203,7 @@ function Pickups({ pickups, signedIn, event, free100 }: PickupsProps) {
           color="yellow"
         />
       )}
+
       {filteredPickupDateGroupsArray.map((group) => 
         <div key={`${dayjs(group.since).format("YYYY-MM-DD")}-${dayjs(group.until).format("YYYY-MM-DD")}`}>
           {(filteredPickupDateGroupsArray.length > 1 || shouldNotifyPickupPeriod) && (
@@ -220,11 +211,11 @@ function Pickups({ pickups, signedIn, event, free100 }: PickupsProps) {
               {dayjs(group.since).format("M월 D일")} ~ {dayjs(group.until).format("M월 D일")}
             </p>
           )}
-          {group.pickups.map((pickup) => <EventPickupWithFavoriteState key={pickup.student?.uid} pickup={pickup} signedIn={signedIn} />)}
+          {group.recruitments.map((recruitment) => <EventRecruitmentWithFavoriteState key={recruitment.student?.uid} recruitment={recruitment} signedIn={signedIn} />)}
         </div>
       )}
 
-      {nonPickups.length > 0 && (
+      {recruitments.filter(({ pickup, recruitmentType }) => !pickup && recruitmentType !== "given").length > 0 && (
         <>
           <SubTitle text="기간 한정 모집 학생" />
           <EventInfoCard
@@ -232,33 +223,34 @@ function Pickups({ pickups, signedIn, event, free100 }: PickupsProps) {
             title="모집 포인트(천장) 교환 불가"
             description="아래 학생들은 모집 포인트(천장)로는 교환할 수 없어요"
           />
-          {nonPickups.map((pickup) => <EventPickupWithFavoriteState key={pickup.student?.uid} pickup={pickup} signedIn={signedIn} />)}
+          {recruitments.filter(({ pickup, recruitmentType }) => !pickup && recruitmentType !== "given")
+            .map((recruitment) => <EventRecruitmentWithFavoriteState key={recruitment.student?.uid} recruitment={recruitment} signedIn={signedIn} />)}
         </>
       )}
     </>
   );
 }
 
-type EventPickupWithFavoriteStateProps = {
-  pickup: EventDetailInfoPageProps["pickups"][0];
+type EventRecruitmentWithFavoriteStateProps = {
+  recruitment: EventDetailInfoPageProps["recruitments"][0];
   signedIn: boolean;
 }
 
-function EventPickupWithFavoriteState({ pickup, signedIn }: EventPickupWithFavoriteStateProps) {
-  const [favorited, setFavorited] = useState(pickup.favorited);
-  const [favoritedCount, setFavoritedCount] = useState(pickup.favoritedCount);
+function EventRecruitmentWithFavoriteState({ recruitment, signedIn }: EventRecruitmentWithFavoriteStateProps) {
+  const [favorited, setFavorited] = useState(recruitment.favorited);
+  const [favoritedCount, setFavoritedCount] = useState(recruitment.favoritedCount);
 
   const fetcher = useFetcher();
   const submit = (data: ActionData) => fetcher.submit(data, { method: "post", encType: "application/json" });
   const toggleFavorite = (favorited: boolean) => {
-    submit({ favorite: { studentUid: pickup.student?.uid ?? "", favorited } });
+    submit({ favorite: { studentUid: recruitment.student?.uid ?? "", favorited } });
     setFavorited(favorited);
     setFavoritedCount(favoritedCount + (favorited ? 1 : -1));
   };
 
   return (
-    <EventPickup
-      pickup={pickup}
+    <EventRecruitment
+      recruitment={recruitment}
       favorited={favorited}
       favoritedCount={favoritedCount}
       onFavorite={toggleFavorite}

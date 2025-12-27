@@ -5,7 +5,7 @@ import type { AttackType, DefenseType, Position, Role, TacticRole } from "~/mode
 import { FilterButtons } from "~/components/navigation";
 import { Input } from "../atoms/form";
 
-type StudentFilterState = {
+export type StudentFilterState = {
   attackTypes: AttackType[];
   defenseTypes: DefenseType[];
   roles: Role[];
