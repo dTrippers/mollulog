@@ -72,7 +72,8 @@ export function calculateRequiredQuantities({
   }
 
   // Add minigame cost to requirements (only if not overridden)
-  if (minigameRewards && minigamePlayCount > 0 && minigameCostItemUid) {
+  // Note: minigame cost should be added regardless of whether minigameRewards is provided
+  if (minigamePlayCount > 0 && minigameCostItemUid) {
     // Only add if this item doesn't have an override
     if (!overriddenRequiredQuantities || overriddenRequiredQuantities[minigameCostItemUid] === undefined) {
       const current = requirements[minigameCostItemUid] || new Decimal(0);

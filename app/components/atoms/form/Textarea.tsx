@@ -9,12 +9,13 @@ type TextareaProps = {
   rows?: number;
   required?: boolean;
   defaultValue?: string;
+  value?: string;
   error?: string;
   onChange?: (value: string) => void;
 };
 
 export default function Textarea({
-  className, name, label, description, placeholder, rows, required, defaultValue, error, onChange,
+  className, name, label, description, placeholder, rows, required, defaultValue, value, error, onChange,
 }: TextareaProps) {
   return (
     <div className="mt-2 mb-8 last:mb-4 mr-1 md:mr-2">
@@ -31,6 +32,7 @@ export default function Textarea({
         `)}
         required={required}
         defaultValue={defaultValue}
+        value={value}
         onChange={(e) => onChange?.(e.target.value)}
       />
       {error && <p className="text-red-500 text-sm mt-2">{error}</p>}

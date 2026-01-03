@@ -122,7 +122,7 @@ export function calculateItemBreakdowns({
     totalCollected[itemUid] = (fromFirstRun[itemUid] || 0) + (fromRepeatedRuns[itemUid] || 0);
   }
 
-  // Calculate items needed to play minigame
+  // Calculate items needed to play minigame (total required, not adjusted)
   if (minigamePaymentResource && minigamePlayCount > 0) {
     const { resourceUid, quantity } = minigamePaymentResource;
     toPlayMinigame[resourceUid] = minigamePlayCount * quantity;

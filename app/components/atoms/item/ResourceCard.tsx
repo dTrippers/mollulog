@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 
 type ResourceCardProps = {
@@ -17,7 +18,7 @@ type ResourceCardProps = {
   }
 );
 
-export default function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageUrl: imageUrlProp, label, labelColor = "white", name }: ResourceCardProps) {
+function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageUrl: imageUrlProp, label, labelColor = "white", name }: ResourceCardProps) {
   const labelColorClass = labelColor === "white" ? "text-white" : "text-orange-300";
 
   let imageUrl = imageUrlProp;
@@ -59,6 +60,8 @@ export default function ResourceCard({ resourceType, rarity = 1, favoriteLevel, 
     </div>
   );
 }
+
+export default memo(ResourceCard);
 
 function rarityBgClass(rarity: number | null | undefined): string {
   switch (rarity) {

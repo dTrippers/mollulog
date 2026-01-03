@@ -5,29 +5,19 @@ import type { CollectableResource, ShopResource } from "./types";
 import type { ShopState, ShopActions } from "./hooks";
 import { resourceCountLabel, calculateMinigameRewards } from "./utils";
 import { MINIGAME_CONFIG } from "./constants";
-import { Section } from "~/components/ui";
 import { Transition } from "@headlessui/react";
 import { NumberInput } from "~/components/atoms/form";
+import BugReportModal from "./BugReportModal";
+import type { CalculationResult } from "./hooks/useShopCalculations";
 
 type CollectedTotalsSectionProps = {
-  breakdown: {
-    fromFirstRun: Record<string, number>;
-    fromRepeatedRuns: Record<string, number>;
-    toPlayMinigame: Record<string, number>;
-    toBuyShopItems: Record<string, number>;
-    fromMinigame: Record<string, number>;
-    remaining: Record<string, number>;
-  };
   collectableResources: CollectableResource[];
   shopResources: ShopResource[];
-  totalApWithExtras: number;
-  firstClearAp: number;
-  questSweepAp: number;
-  extraSweepAp: number;
-  minigameRewards?: { resourceType: ResourceTypeEnum; resourceUid: string; quantity: number; rarity?: number }[];
   eventUid: string;
   state: ShopState;
   actions: ShopActions;
+  stageCalculations: CalculationResult;
+  signedIn: boolean;
 };
 
 type BreakdownLine = {
@@ -119,25 +109,23 @@ function BreakdownLines({ lines }: { lines: BreakdownLine[] }) {
 }
 
 export const CollectedTotalsSection = memo(function CollectedTotalsSection({
-  breakdown,
   collectableResources,
   shopResources,
-  totalApWithExtras,
-  firstClearAp,
-  questSweepAp,
-  extraSweepAp,
-  minigameRewards,
   eventUid,
   state,
   actions,
+  stageCalculations,
+  signedIn,
 }: CollectedTotalsSectionProps) {
-  const { fromFirstRun, fromRepeatedRuns, toPlayMinigame, toBuyShopItems, fromMinigame } = breakdown;
+  const { itemBreakdown, totalApWithExtras, firstClearAp, questSweepAp, extraSweepAp } = stageCalculations;
+  const { fromFirstRun, fromRepeatedRuns, toPlayMinigame, toBuyShopItems, fromMinigame } = itemBreakdown;
 
   // State for managing popup visibility per item
   const [editingItemUid, setEditingItemUid] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<number>(0);
   const [editingRequiredItemUid, setEditingRequiredItemUid] = useState<string | null>(null);
   const [editRequiredValue, setEditRequiredValue] = useState<number>(0);
+  const [showBugReportModal, setShowBugReportModal] = useState(false);
 
   const allItemUids = useMemo(
     () =>
@@ -210,7 +198,12 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
 
   return (
     <>
-      <Section title="최종 결과" description="필요한 AP와 아이템 수량을 확인할 수 있어요" foldable={false} defaultExpanded={true}>
+      <div className="pb-4 mb-4">
+        <div className="mb-4">
+          <h2 className="font-semibold text-lg text-neutral-900 dark:text-neutral-100">최종 결과</h2>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">필요한 AP와 아이템 수량을 확인할 수 있어요</p>
+        </div>
+        <div>
         {totalApWithExtras > 0 && (
           <div className="my-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-teal-950 border border-green-200 dark:border-green-800 rounded-lg">
             <div className="flex justify-between items-center mb-3 pb-1.5 border-b border-green-200 dark:border-green-800">
@@ -397,7 +390,32 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
             </div>
           </div>
         )}
-      </Section>
+
+        {signedIn && (
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowBugReportModal(true)}
+              className="px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md transition whitespace-nowrap cursor-pointer"
+            >
+              오류 제보
+            </button>
+          </div>
+        )}
+        </div>
+      </div>
+
+      {signedIn && (
+        <BugReportModal
+          show={showBugReportModal}
+          eventUid={eventUid}
+          shopResources={shopResources}
+          collectableResources={collectableResources}
+          stageCalculations={stageCalculations}
+          shopState={state}
+          onClose={() => setShowBugReportModal(false)}
+        />
+      )}
     </>
   );
 });

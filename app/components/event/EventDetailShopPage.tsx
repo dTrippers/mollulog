@@ -67,6 +67,15 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
   // Auto-save
   const { isSaving } = useAutoSave({ state, signedIn, eventUid, savedShopState, isInitialLoad });
 
+  // Memoize minigame payment resource to prevent unnecessary recalculations
+  const minigamePaymentResource = useMemo(() => {
+    if (!minigameConfig) return undefined;
+    return {
+      resourceUid: minigameConfig.payment.resourceUid,
+      quantity: minigameConfig.payment.quantity,
+    };
+  }, [minigameConfig]);
+
   // Shop calculations
   const stageCalculations = useShopCalculations({
     state,
@@ -74,10 +83,7 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
     shopResources,
     collectableResources,
     appliedBonusRatio: appliedBonusRatios,
-    minigamePaymentResource: minigameConfig ? {
-      resourceUid: minigameConfig.payment.resourceUid,
-      quantity: minigameConfig.payment.quantity,
-    } : undefined,
+    minigamePaymentResource,
     minigameRewards: undefined,
     eventUid,
   });
@@ -89,6 +95,14 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
         <div className="fixed bottom-4 right-8 z-50 flex items-center gap-2 px-4 py-2 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 rounded-lg shadow-lg">
           <ArrowPathIcon className="size-4 animate-spin" />
           <span className="text-sm font-medium">저장중...</span>
+        </div>
+      )}
+
+      {/* Calculating indicator */}
+      {stageCalculations.isCalculating && (
+        <div className="fixed bottom-4 right-8 z-50 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg">
+          <ArrowPathIcon className="size-4 animate-spin" />
+          <span className="text-sm font-medium">계산중...</span>
         </div>
       )}
 
@@ -145,17 +159,13 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
         />
 
         <CollectedTotalsSection
-          breakdown={stageCalculations.itemBreakdown}
           collectableResources={collectableResources}
           shopResources={shopResources}
-          totalApWithExtras={stageCalculations.totalApWithExtras}
-          firstClearAp={stageCalculations.firstClearAp}
-          questSweepAp={stageCalculations.questSweepAp}
-          extraSweepAp={stageCalculations.extraSweepAp}
-          minigameRewards={undefined}
           eventUid={eventUid}
           state={state}
           actions={actions}
+          stageCalculations={stageCalculations}
+          signedIn={signedIn}
         />
       </div>
     </>
