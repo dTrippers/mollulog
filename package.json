@@ -49,7 +49,6 @@
     "react-youtube": "^10.1.0",
     "remix-auth": "^3.7.0",
     "remix-auth-google": "^2.0.0",
-    "rxdb": "^16.21.1",
     "sanitize-html": "^2.17.0",
     "urql": "^4.2.2"
   },
