@@ -29,10 +29,10 @@ importers:
         version: 2.2.0(react@19.2.3)
       '@react-router/cloudflare':
         specifier: ^7.10.1
-        version: 7.10.1(@cloudflare/workers-types@4.20251213.0)(react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)
+        version: 7.10.1(@cloudflare/workers-types@4.20251213.0)(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)
       '@react-router/fs-routes':
         specifier: ^7.10.1
-        version: 7.10.1(@react-router/dev@7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0))(typescript@5.9.3)
+        version: 7.10.1(@react-router/dev@7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0))(typescript@5.9.3)
       '@simplewebauthn/browser':
         specifier: ^11.0.0
         version: 11.0.0
@@ -82,8 +82,8 @@ importers:
         specifier: ^3.5.0
         version: 3.5.0(react@19.2.3)
       react-router:
-        specifier: ^7.10.1
-        version: 7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+        specifier: ^7.12.0
+        version: 7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react-top-loading-bar:
         specifier: ^3.0.2
         version: 3.0.2(react@19.2.3)
@@ -129,7 +129,7 @@ importers:
         version: 29.7.0
       '@react-router/dev':
         specifier: ^7.10.1
-        version: 7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0)
+        version: 7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0)
       '@tailwindcss/aspect-ratio':
         specifier: ^0.4.2
         version: 0.4.2(tailwindcss@4.1.17)
@@ -1642,6 +1642,7 @@ packages:
   '@graphql-tools/prisma-loader@8.0.9':
     resolution: {integrity: sha512-Xav7rPzt43L+ij8iAuWw319E8/9DEnvp637jGknGDxuRaLLmnUpozczEczMyUUD0cQeEPdEBq5XHNJ/O3XijZQ==}
     engines: {node: '>=16.0.0'}
+    deprecated: 'This package was intended to be used with an older versions of Prisma.\nThe newer versions of Prisma has a different approach to GraphQL integration.\nTherefore, this package is no longer needed and has been deprecated and removed.\nLearn more: https://www.prisma.io/graphql'
     peerDependencies:
       graphql: ^14.0.0 || ^15.0.0 || ^16.0.0 || ^17.0.0
 
@@ -2268,6 +2269,7 @@ packages:
 
   '@simplewebauthn/types@11.0.0':
     resolution: {integrity: sha512-b2o0wC5u2rWts31dTgBkAtSNKGX0cvL6h8QedNsKmj8O4QoLFQFR3DBVBUlpyVEhYKA+mXGUaXbcOc4JdQ3HzA==}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   '@sinclair/typebox@0.27.8':
     resolution: {integrity: sha512-+Fj43pSMwJs4KRrH/938Uf+uAELIgVBmQzg/q1YG10djyfA3TnrU8N8XzqCh/okZdszqBQTZf96idMfE5lnwTA==}
@@ -2477,6 +2479,9 @@ packages:
 
   '@types/node@25.0.2':
     resolution: {integrity: sha512-gWEkeiyYE4vqjON/+Obqcoeffmk0NF15WSBwSs7zwVA2bAbTaE0SJ7P0WNGoJn8uE7fiaV5a7dKYIJriEqOrmA==}
+
+  '@types/node@25.0.3':
+    resolution: {integrity: sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA==}
 
   '@types/pg@8.6.1':
     resolution: {integrity: sha512-1Kc4oAGzAl7uqUStZCDvaLFqZrW9qWSjXOmBfdgyBP5La7Us6Mg4GBvRlSoaZMhQF/zSj1C8CtKMBkoiT8eL8w==}
@@ -4532,8 +4537,8 @@ packages:
     resolution: {integrity: sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==}
     engines: {node: '>=4'}
 
-  postgres-bytea@1.0.0:
-    resolution: {integrity: sha512-xy3pmLuQqRBZBXDULy7KbaitYqLcmxigw14Q5sj8QBVLqEwXfeybIKVWiqAXTlcvdvb0+xkOtDbfQMOf4lST1w==}
+  postgres-bytea@1.0.1:
+    resolution: {integrity: sha512-5+5HqXnsZPE65IJZSMkZtURARZelel2oXUEO8rH83VS/hxH5vv1uHquPg5wZs8yMAfdv971IU+kcPUczi7NVBQ==}
     engines: {node: '>=0.10.0'}
 
   postgres-date@1.0.7:
@@ -4631,8 +4636,8 @@ packages:
     peerDependencies:
       react: '>=16.8'
 
-  react-router@7.10.1:
-    resolution: {integrity: sha512-gHL89dRa3kwlUYtRQ+m8NmxGI6CgqN+k4XyGjwcFoQwwCWF6xXpOCUlDovkXClS0d0XJN/5q7kc5W3kiFEd0Yw==}
+  react-router@7.12.0:
+    resolution: {integrity: sha512-kTPDYPFzDVGIIGNLS5VJykK0HfHLY5MF3b+xj0/tTyNYL1gF1qs7u67Z9jEhQk2sQ98SUaHxlG31g1JtF7IfVw==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       react: '>=18'
@@ -7655,14 +7660,14 @@ snapshots:
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
 
-  '@react-router/cloudflare@7.10.1(@cloudflare/workers-types@4.20251213.0)(react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)':
+  '@react-router/cloudflare@7.10.1(@cloudflare/workers-types@4.20251213.0)(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)':
     dependencies:
       '@cloudflare/workers-types': 4.20251213.0
-      react-router: 7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react-router: 7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
     optionalDependencies:
       typescript: 5.9.3
 
-  '@react-router/dev@7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0)':
+  '@react-router/dev@7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0)':
     dependencies:
       '@babel/core': 7.28.0
       '@babel/generator': 7.28.5
@@ -7671,7 +7676,7 @@ snapshots:
       '@babel/preset-typescript': 7.28.5(@babel/core@7.28.0)
       '@babel/traverse': 7.28.5
       '@babel/types': 7.28.5
-      '@react-router/node': 7.10.1(react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)
+      '@react-router/node': 7.10.1(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)
       '@remix-run/node-fetch-server': 0.9.0
       arg: 5.0.2
       babel-dead-code-elimination: 1.0.10
@@ -7688,7 +7693,7 @@ snapshots:
       pkg-types: 2.3.0
       prettier: 3.6.2
       react-refresh: 0.14.2
-      react-router: 7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react-router: 7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       semver: 7.7.3
       tinyglobby: 0.2.14
       valibot: 1.2.0(typescript@5.9.3)
@@ -7712,17 +7717,17 @@ snapshots:
       - tsx
       - yaml
 
-  '@react-router/fs-routes@7.10.1(@react-router/dev@7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0))(typescript@5.9.3)':
+  '@react-router/fs-routes@7.10.1(@react-router/dev@7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0))(typescript@5.9.3)':
     dependencies:
-      '@react-router/dev': 7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0)
+      '@react-router/dev': 7.10.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(terser@5.39.0)(typescript@5.9.3)(vite@6.4.1(@types/node@25.0.2)(jiti@2.6.1)(lightningcss@1.30.2)(terser@5.39.0)(yaml@2.6.0))(wrangler@4.54.0(@cloudflare/workers-types@4.20251213.0))(yaml@2.6.0)
       minimatch: 9.0.5
     optionalDependencies:
       typescript: 5.9.3
 
-  '@react-router/node@7.10.1(react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)':
+  '@react-router/node@7.10.1(react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(typescript@5.9.3)':
     dependencies:
       '@mjackson/node-fetch-server': 0.2.0
-      react-router: 7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react-router: 7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
     optionalDependencies:
       typescript: 5.9.3
 
@@ -8051,9 +8056,14 @@ snapshots:
     dependencies:
       undici-types: 7.16.0
 
+  '@types/node@25.0.3':
+    dependencies:
+      undici-types: 7.16.0
+    optional: true
+
   '@types/pg@8.6.1':
     dependencies:
-      '@types/node': 25.0.2
+      '@types/node': 25.0.3
       pg-protocol: 1.10.3
       pg-types: 2.2.0
     optional: true
@@ -10269,7 +10279,7 @@ snapshots:
     dependencies:
       pg-int8: 1.0.1
       postgres-array: 2.0.0
-      postgres-bytea: 1.0.0
+      postgres-bytea: 1.0.1
       postgres-date: 1.0.7
       postgres-interval: 1.2.0
     optional: true
@@ -10317,7 +10327,7 @@ snapshots:
   postgres-array@2.0.0:
     optional: true
 
-  postgres-bytea@1.0.0:
+  postgres-bytea@1.0.1:
     optional: true
 
   postgres-date@1.0.7:
@@ -10417,7 +10427,7 @@ snapshots:
       '@remix-run/router': 1.23.0
       react: 19.2.3
 
-  react-router@7.10.1(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+  react-router@7.12.0(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
     dependencies:
       cookie: 1.1.1
       react: 19.2.3
