@@ -28,6 +28,7 @@ type StudentCardProps = {
   grayscale?: boolean;
   checked?: boolean;
   hideName?: boolean;
+  circular?: boolean;
 
   onSelect?: (id: string) => void;
   popups?: StudentCardPopupProps["popups"];
@@ -44,7 +45,7 @@ function visibileTier(tier: number): [number, boolean] {
 
 export default function StudentCard({
   uid, name, nameSize, tier, level, label, isAssist, attackType, defenseType, role,
-  favorited, favoritedCount, grayscale, checked, hideName, onSelect, popups, popupId = uid,
+  favorited, favoritedCount, grayscale, checked, hideName, circular, onSelect, popups, popupId = uid,
 }: StudentCardProps) {
   const { activePopupId, setActivePopupId } = useStudentCardPopup();
   const showPopup = popupId === activePopupId;
@@ -64,9 +65,9 @@ export default function StudentCard({
       >
         <div className="my-1">
           <div className="relative">
-            <div className="relative rounded-lg overflow-hidden">
+            <div className={`relative ${circular ? "rounded-full" : "rounded-lg"} overflow-hidden ${circular ? "aspect-square" : ""}`}>
               <img
-                className={`w-full h-full ${grayscale ? "grayscale opacity-75" : ""} transition`}
+                className={`w-full h-full object-cover ${grayscale ? "grayscale opacity-75" : ""} transition`}
                 src={studentImageUrl(uid ?? "unlisted")}
                 alt={name ?? undefined} loading="lazy"
               />

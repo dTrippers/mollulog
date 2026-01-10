@@ -37,7 +37,7 @@ export function Section({ title, description, foldable = false, border = true, f
   }, [visible, foldStateKey]);
 
   return (
-    <div className={`pb-4 mb-4 ${visible ? "pb-16" : ""} ${border && foldable ? "border-b border-neutral-200 dark:border-neutral-700" : ""}`}>
+    <div className={`pb-4 mb-4 ${visible ? "pb-8" : ""} ${border && foldable ? "border-b border-neutral-200 dark:border-neutral-700" : ""}`}>
       <div
         className={`flex items-center gap-3 ${foldable ? "cursor-pointer" : ""}`}
         onClick={foldable ? () => setVisible((prev: boolean) => !prev) : undefined}
@@ -45,7 +45,7 @@ export function Section({ title, description, foldable = false, border = true, f
         <div className="grow min-w-0">
           <h2 className="font-semibold text-lg text-neutral-900 dark:text-neutral-100">{title}</h2>
           {description && (
-            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">{description}</p>
+            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{description}</p>
           )}
         </div>
         {foldable && (

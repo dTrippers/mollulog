@@ -1,5 +1,5 @@
-import protobuf from "protobufjs";
 import type { RaidType, DefenseType } from "~/models/content.d";
+import { createProtobufRootCache, fetchProtobuf, RAID_API_BASE_URL } from "./raid-protobuf-utils";
 
 // Protobuf schema definition for server API response
 const PROTO_SCHEMA = `
@@ -80,14 +80,7 @@ type ServerRankResponse = {
   ranks: ServerRank[];
 };
 
-let protobufRoot: protobuf.Root | null = null;
-
-async function getProtobufRoot(): Promise<protobuf.Root> {
-  if (!protobufRoot) {
-    protobufRoot = protobuf.parse(PROTO_SCHEMA).root;
-  }
-  return protobufRoot;
-}
+const getProtobufRoot = createProtobufRootCache();
 
 // Parsed document format (for use in components)
 export type ParsedRaidRankDocument = {
@@ -131,25 +124,6 @@ function convertToTotalTier(tier: number, weaponTier?: number): number {
   return tier + (weaponTier || 0);
 }
 
-/**
- * Parse protobuf binary data to RankResponse
- */
-async function parseProtobufResponse(data: ArrayBuffer): Promise<ServerRankResponse> {
-  const root = await getProtobufRoot();
-  const RankResponse = root.lookupType("ranks.RankResponse");
-
-  // Decode the protobuf message
-  const message = RankResponse.decode(new Uint8Array(data));
-  return RankResponse.toObject(message, {
-    longs: String,
-    enums: String,
-    bytes: String,
-    defaults: true,
-    arrays: true,
-    objects: true,
-    oneofs: true,
-  }) as ServerRankResponse;
-}
 
 /**
  * Convert server Rank to ParsedRaidRankDocument
@@ -216,18 +190,6 @@ function convertServerRankToParsed(
   };
 }
 
-/**
- * Decompress gzip data
- */
-async function decompressGzip(data: ArrayBuffer): Promise<ArrayBuffer> {
-  const ds = new DecompressionStream("gzip");
-  const stream = new Response(data).body?.pipeThrough(ds);
-  if (!stream) {
-    throw new Error("Failed to create decompression stream");
-  }
-  const response = await new Response(stream);
-  return await response.arrayBuffer();
-}
 
 /**
  * Fetch ranks from server API
@@ -273,29 +235,18 @@ export async function fetchRanks(params: {
   body.excludeStudents = excludeStudents;
 
   // Fetch from server
-  const url = `http://localhost:8080/v1/ranks?${queryParams.toString()}`;
-  const response = await fetch(url, {
+  const url = `${RAID_API_BASE_URL}/v1/ranks?${queryParams.toString()}`;
+  const protobufData = await fetchProtobuf<ServerRankResponse>({
+    url,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Accept-Encoding": "gzip",
     },
     body: JSON.stringify(body),
+    schema: PROTO_SCHEMA,
+    messageType: "ranks.RankResponse",
+    getRoot: getProtobufRoot,
   });
-
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ranks: ${response.statusText}`);
-  }
-
-  // Handle gzip decompression
-  let arrayBuffer = await response.arrayBuffer();
-  const contentType = response.headers.get("Content-Encoding");
-  if (contentType === "gzip" || contentType?.includes("gzip")) {
-    arrayBuffer = await decompressGzip(arrayBuffer);
-  }
-
-  // Parse protobuf response
-  const protobufData = await parseProtobufResponse(arrayBuffer);
   const totalCount = Number(protobufData.totalCount || 0);
   const serverRanks = protobufData.ranks || [];
   const ranks = serverRanks.map((rank) => convertServerRankToParsed(rank, raidType, season, defenseType));

@@ -5,13 +5,14 @@ import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { OptionBadge } from "~/components/atoms/student";
 import { StudentCard } from "~/components/students";
 import { KeyValueTable } from "~/components/atoms/typography";
-import { FilterButtons } from "~/components/molecules/content";
 import { TierCounts } from "~/components/molecules/student";
 import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { defenseTypeColor } from "~/locales/ko";
 import { raidTypeLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { DefenseType, RaidType, Terrain } from "~/models/content.d";
+import { ActionCard } from "../molecules/editor";
+import { sanitizeClassName } from "~/prophandlers";
 
 type RaidStatisticsSlotCountProps = {
   student?: { uid: string; name: string };
@@ -62,9 +63,9 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
   };
 
   return (
-    <div className="my-4 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
+    <ActionCard actions={[]}>
       {raid && (
-        <div className="pl-4 xl:pl-6 py-4 relative flex">
+        <div className="mb-4 -mt-4 md:-mt-6 -mr-4 md:-mr-6 py-4 relative flex">
           <Link
             to={`/raids/${raid.uid}`}
             className="grow group z-10 relative "
@@ -91,60 +92,75 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
           </div>
         </div>
       )}
+
       {student && (
-        <div className="pt-4 px-4 xl:px-6 flex items-center grow">
-          <div className="w-16">
-            <StudentCard uid={student.uid} />
+        <Link to={`/students/${student.uid}`} className="hover:underline">
+          <div className="-mt-1 md:-mt-2 mb-2 flex items-center gap-2">
+            <div className="w-10 shrink-0">
+              <StudentCard uid={student.uid} circular />
+            </div>
+            <p className="font-bold text-base">
+              <span>{student.name}</span>
+              <ChevronRightIcon className="inline size-4" />
+            </p>
           </div>
-          <div className="mx-4 grow">
-            <Link to={`/students/${student.uid}`}>
-              <p className="font-bold mb-1 hover:underline">
-                <span>{student.name}</span>
-                <ChevronRightIcon className="inline size-4" />
-              </p>
-            </Link>
-            <KeyValueTable keyPrefix={`${student.uid}-slots-count`} items={[
-              { key: "총 편성 횟수", value: `${slotsCount + assistsCount} 회 (${formatPercentage((slotsCount + assistsCount) / 20000)})` },
-              { key: "모집 학생", value: `${slotsCount} 회 (${formatPercentage(slotsCount / 20000)})` },
-              { key: "조력 학생", value: `${assistsCount} 회 (${formatPercentage(assistsCount / 20000)})` },
-            ]} />
+        </Link>
+      )}
+        <div className="flex-grow min-w-0">
+          <div className="mb-2 flex gap-1.5">
+            <SlotModeButton
+              active={slotMode === "total"}
+              onClick={() => setSlotMode("total")}
+              label="전체"
+              count={slotsCount + assistsCount}
+            />
+            <SlotModeButton
+              active={slotMode === "own"}
+              onClick={() => setSlotMode("own")}
+              label="모집"
+              count={slotsCount}
+            />
+            <SlotModeButton
+              active={slotMode === "assist"}
+              onClick={() => setSlotMode("assist")}
+              label="조력"
+              count={assistsCount}
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <TierCounts
+              tierCounts={tierCounts[slotMode]}
+              // From maxTier to 3
+              visibleTiers={Array.from({ length: maxTier - 2 }, (_, i) => maxTier - i)}
+              reducePaddings
+              totalCount={20000}
+            />
           </div>
         </div>
-      )}
-
-      {!student && raid && (
-        <div className="px-4 xl:px-6">
-          <KeyValueTable keyPrefix={`${raid.uid}-slots-count`} items={[
-            { key: "총 편성 횟수", value: `${slotsCount + assistsCount} 회 (${formatPercentage((slotsCount + assistsCount) / 20000)})` },
-            { key: "모집 학생", value: `${slotsCount} 회 (${formatPercentage(slotsCount / 20000)})` },
-            { key: "조력 학생", value: `${assistsCount} 회 (${formatPercentage(assistsCount / 20000)})` },
-          ]} />
-        </div>
-      )}
-
-      <div className="p-4 xl:px-6 xl:pb-6">
-        <div className="-mx-1 flex gap-2">
-          <FilterButtons
-            buttonProps={[
-              { text: "총 편성 횟수", active: slotMode === "total", onToggle: () => setSlotMode("total") },
-              { text: "모집 학생", active: slotMode === "own", onToggle: () => setSlotMode("own") },
-              { text: "조력 학생", active: slotMode === "assist", onToggle: () => setSlotMode("assist") },
-            ]}
-            exclusive atLeastOne inBlock
-          />
-        </div>
-        <TierCounts
-          tierCounts={tierCounts[slotMode]}
-          // From maxTier to 3
-          visibleTiers={Array.from({ length: maxTier - 2 }, (_, i) => maxTier - i)}
-          reducePaddings
-          totalCount={20000}
-        />
-      </div>
-    </div>
+    </ActionCard>
   );
 }
 
-function formatPercentage(ratio: number) {
-  return (ratio * 100).toFixed(1) + "%";
+type SlotModeButtonProps = {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+};
+
+function SlotModeButton({ active, onClick, label, count }: SlotModeButtonProps) {
+  return (
+    <div
+      className={sanitizeClassName(`
+        text-sm font-medium px-2 py-1 rounded-lg transition cursor-pointer
+        ${active ?
+          "bg-neutral-800 dark:bg-neutral-100 hover:bg-neutral-700 dark:hover:bg-neutral-200 text-neutral-300 dark:text-neutral-700" :
+          "bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300"}
+      `)}
+      onClick={onClick}
+    >
+      <span>{label}</span>
+      <span className={`text-xs ml-1 ${active ? "text-neutral-300 dark:text-neutral-700" : "text-neutral-500 dark:text-neutral-400"}`}>{count}</span>
+    </div>
+  );
 }

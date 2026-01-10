@@ -1,28 +1,107 @@
-import { useEffect } from "react";
-import { useFetcher, useOutletContext } from "react-router";
+import { useEffect, useState } from "react";
+import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
 import { LoadingSkeleton } from "~/components/atoms/layout";
 import { EmptyView } from "~/components/atoms/typography";
 import RaidStatisticsScreen from "~/components/raids/RaidStatisticsScreen";
 import { getMaxTierAt } from "~/models/student";
+import { getAllStudentsMap } from "~/models/student";
+import { fetchStudentStatistics, convertStatisticsToClientFormat } from "~/models/raid-statistics.client";
 import type { RaidPageContext } from "./raids.$id";
-import type { RaidStatisticsData } from "./raids.data.$id.statistics";
+
+export const loader = async ({ context }: LoaderFunctionArgs) => {
+  const { env } = context.cloudflare;
+  const rawAllStudents = await getAllStudentsMap(env, true);
+  const allStudents = Object.fromEntries(Object.entries(rawAllStudents).map(([uid, student]) => [uid, {
+    name: student.name,
+    role: student.role,
+  }]));
+
+  return {
+    allStudents,
+  };
+};
 
 export default function RaidStatistics() {
   const { currentRaid, defenseType } = useOutletContext<RaidPageContext>();
+  const { allStudents } = useLoaderData<typeof loader>();
   const maxTier = getMaxTierAt(currentRaid.since);
 
-  const fetcher = useFetcher<RaidStatisticsData>();
-  useEffect(() => {
-    fetcher.load(`/raids/data/${currentRaid.uid}/statistics?defenseType=${defenseType}`);
-  }, [currentRaid.uid, defenseType]);
+  const [statistics, setStatistics] = useState<Array<{
+    student: { uid: string; name: string; role: string };
+    slotsCount: number;
+    slotsByTier: { tier: number; count: number }[];
+    assistsCount: number;
+    assistsByTier: { tier: number; count: number }[];
+  }> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!fetcher.data || fetcher.state !== "idle") {
+  useEffect(() => {
+    if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadStatistics = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const serverStats = await fetchStudentStatistics({
+          raidType: currentRaid.type,
+          season: currentRaid.raidIndexJp!,
+          defenseType,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        const convertedStats = convertStatisticsToClientFormat(serverStats, allStudents);
+        setStatistics(convertedStats);
+        setLoading(false);
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Failed to load statistics");
+        setLoading(false);
+      }
+    };
+
+    loadStatistics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentRaid.type, currentRaid.raidIndexJp, currentRaid.rankVisible, defenseType, allStudents]);
+
+  if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
+    return (
+      <div className="my-16 md:my-48 w-full flex flex-col items-center justify-center">
+        <p className="my-2 text-2xl font-bold">정보를 준비중이에요</p>
+        <p className="my-2 text-neutral-500 dark:text-neutral-400">
+          정보가 준비된 컨텐츠를 선택하여 확인해보세요
+        </p>
+      </div>
+    );
+  }
+
+  if (loading) {
     return <LoadingSkeleton />;
-  } else if (fetcher.data.statistics?.length === 0) {
+  }
+
+  if (error) {
+    return <EmptyView text={`오류가 발생했어요: ${error}`} />;
+  }
+
+  if (!statistics || statistics.length === 0) {
     return <EmptyView text="통계 정보를 준비중이에요" />;
   }
 
   return (
-    <RaidStatisticsScreen statistics={fetcher.data.statistics!} maxTier={maxTier} />
-  )
+    <RaidStatisticsScreen statistics={statistics} maxTier={maxTier} />
+  );
 }

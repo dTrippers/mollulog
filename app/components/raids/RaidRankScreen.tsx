@@ -207,7 +207,7 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
   const filteredRanks = ranks;
   const maxLevel = getMaxLevelAt(currentRaid.since);
   return (
-    <div>
+    <div className="max-w-2xl">
       {filteredRanks.map(({ rank, score, parties }) => {
         let clearTimeMillisec: number | undefined = undefined;
         try {
@@ -222,58 +222,55 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
         const clearMilliseconds = clearTimeMillisec % 1000;
         const label = `${score.toLocaleString()}점 / ${clearMinutes.toString().padStart(2, "0")}:${clearSeconds.toString().padStart(2, "0")}.${clearMilliseconds.toString().padStart(3, "0")}`
         return (
-          <ActionCard
-            key={`rank-${rank}`}
-            actions={[]}
-          >
+          <ActionCard actions={[]}>
             <p className="mb-2">
               <span className="md:text-lg font-bold">{rank}위</span> ({label})
             </p>
             {parties.map((party) => (
               <StudentCards
-                key={`party-${party.partyIndex}`}
-                students={party.slots.map(({ studentUid, tier, level, isAssist }) => {
-                  if (!studentUid) {
-                    return { uid: null };
-                  }
+              key={`party-${party.partyIndex}`}
+              students={party.slots.map(({ studentUid, tier, level, isAssist }) => {
+                if (!studentUid) {
+                  return { uid: null };
+                }
 
-                  const student = allStudents[studentUid];
-                  if (!student) {
-                    return { uid: null };
-                  }
+                const student = allStudents[studentUid];
+                if (!student) {
+                  return { uid: null };
+                }
 
-                  return {
-                    uid: studentUid,
-                    name: student.name,
-                    hideName: true,
-                    attackType: student.attackType,
-                    defenseType: student.defenseType,
-                    role: student.role,
-                    tier,
-                    level: level && level < maxLevel ? level : undefined,
-                    isAssist,
-                    popups: student && tier ? [
-                      {
-                        Icon: PlusCircleIcon,
-                        text: "이 학생을 포함한 편성만 보기",
-                        onClick: () => onIncludeStudent({ uid: studentUid, tier }),
-                      },
-                      {
-                        Icon: MinusCircleIcon,
-                        text: "이 학생을 제외한 편성만 보기",
-                        onClick: () => onExcludeStudent({ uid: studentUid, tier }),
-                      },
-                      {
-                        Icon: IdentificationIcon,
-                        text: "학생부 보기 (평가/통계)",
-                        link: `/students/${studentUid}`,
-                      },
-                    ] : undefined,
-                    popupId: studentUid ? `${rank}-${party.partyIndex}-${studentUid}` : undefined,
-                  };
-                })}
-                pcGrid={10}
-              />
+                return {
+                  uid: studentUid,
+                  name: student.name,
+                  hideName: true,
+                  attackType: student.attackType,
+                  defenseType: student.defenseType,
+                  role: student.role,
+                  tier,
+                  level: level && level < maxLevel ? level : undefined,
+                  isAssist,
+                  popups: student && tier ? [
+                    {
+                      Icon: PlusCircleIcon,
+                      text: "이 학생을 포함한 편성만 보기",
+                      onClick: () => onIncludeStudent({ uid: studentUid, tier }),
+                    },
+                    {
+                      Icon: MinusCircleIcon,
+                      text: "이 학생을 제외한 편성만 보기",
+                      onClick: () => onExcludeStudent({ uid: studentUid, tier }),
+                    },
+                    {
+                      Icon: IdentificationIcon,
+                      text: "학생부 보기 (평가/통계)",
+                      link: `/students/${studentUid}`,
+                    },
+                  ] : undefined,
+                  popupId: studentUid ? `${rank}-${party.partyIndex}-${studentUid}` : undefined,
+                };
+              })}
+              pcGrid={10}
+            />
             ))}
           </ActionCard>
         )
