@@ -1,8 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import type { RxDatabase } from "rxdb";
+import { useEffect, useState } from "react";
 import { IdentificationIcon, MinusCircleIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
-import { getRaidRankDatabase, type RaidRankDocument, syncRaidRank, parseRaidRankDocument, type ParsedRaidRankDocument, initCollection } from "~/models/raid-rank.client";
-import { raidRankIdPrefix } from "~/models/raid-rank";
+import { fetchRanks, type ParsedRaidRankDocument, convertTier } from "~/models/raid-rank.client";
 import { EmptyView } from "~/components/atoms/typography";
 import { Pagination } from "~/components/atoms/navigation";
 import type { RaidType, DefenseType, AttackType, Role } from "~/models/content.d";
@@ -60,184 +58,149 @@ function getMaxLevelAt(date: Date): number {
 const ITEMS_PER_PAGE = 10;
 
 export default function RaidRankScreen({ currentRaid, filterState, onIncludeStudent, onExcludeStudent, allStudents, recruitedStudentTiers }: RaidRankScreenProps) {
-  const [db, setDb] = useState<RxDatabase | null>(null);
-
-  const [collectionLoaded, setCollectionLoaded] = useState(false);
-  const [initDataLoaded, setInitDataLoaded] = useState(false);
-
-  const [filteredRankIds, setFilteredRankIds] = useState<string[]>([]);
-  const [currentPageRanks, setCurrentPageRanks] = useState<ParsedRaidRankDocument[]>([]);
+  const [ranks, setRanks] = useState<ParsedRaidRankDocument[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const [raidIdRange, collectionName] = useMemo(() => {
-    const raidPrefix = raidRankIdPrefix(currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType);
-    return [raidPrefix * 100000, `ranks-${raidPrefix}`];
-  }, [currentRaid]);
+  // Convert difficulty to score range
+  const getScoreRange = (difficulty: string | null): { gte?: number; lt?: number } | undefined => {
+    if (!difficulty) return undefined;
+    if (difficulty === "lunatic") {
+      return { gte: 44025000, lt: 99999999 };
+    } else if (difficulty === "torment") {
+      return { gte: 31076000, lt: 44025000 };
+    } else if (difficulty === "insane") {
+      return { gte: 19249600, lt: 31076000 };
+    } else if (difficulty === "extreme") {
+      return { gte: 0, lt: 19249600 };
+    }
+    return undefined;
+  };
 
-  // Initialize the database, collection, and load initial data
-  useEffect(() => {
-    setCollectionLoaded(false);
-    setInitDataLoaded(false);
-
-    setFilteredRankIds([]);
-    setCurrentPageRanks([]);
-
-    let cancelled = false;
-    let currentDb: RxDatabase | null = null;
-    getRaidRankDatabase().then((db) => {
-      if (cancelled) {
-        return;
+  // Convert filter state to API format
+  const convertFilterToAPI = () => {
+    // Convert includeStudents: tiers 배열을 [tier, weaponTier?] 형식으로 변환
+    // tiers가 빈 배열이면 tiers: [] (모든 tier 의미)
+    const includeStudents = filterState.includeStudents.map((s) => {
+      if (s.tiers.length === 0) {
+        return { uid: s.uid, tiers: [] };
       }
+      // 기존 total tier를 [tier, weaponTier?] 형식으로 변환
+      const tiers: Array<[number] | [number, number]> = s.tiers.map((totalTier) => {
+        const { tier, weaponTier } = convertTier(totalTier);
+        if (weaponTier !== undefined && weaponTier > 0) {
+          return [tier, weaponTier];
+        }
+        return [tier];
+      });
+      return { uid: s.uid, tiers };
+    });
 
-      currentDb = db;
-      initCollection(db, currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType).then(() => {
+    // Convert excludeStudents: tiers 배열을 [tier, weaponTier?] 형식으로 변환
+    // tiers가 빈 배열이면 tiers: [] (모든 tier 의미)
+    let excludeStudents = filterState.excludeStudents.map((s) => {
+      if (s.tiers.length === 0) {
+        return { uid: s.uid, tiers: [] };
+      }
+      // 기존 total tier를 [tier, weaponTier?] 형식으로 변환
+      const tiers: Array<[number] | [number, number]> = s.tiers.map((totalTier) => {
+        const { tier, weaponTier } = convertTier(totalTier);
+        if (weaponTier !== undefined && weaponTier > 0) {
+          return [tier, weaponTier];
+        }
+        return [tier];
+      });
+      return { uid: s.uid, tiers };
+    });
+
+    // If filterNotOwned is enabled, add all unowned students to excludeStudents
+    if (filterState.filterNotOwned) {
+      const unownedStudentUids = Object.keys(allStudents).filter((uid) => !recruitedStudentTiers[uid]);
+
+      // Add unowned students to excludeStudents (avoid duplicates)
+      const existingExcludeUids = new Set(excludeStudents.map((s) => s.uid));
+      for (const uid of unownedStudentUids) {
+        if (!existingExcludeUids.has(uid)) {
+          excludeStudents.push({ uid, tiers: [] }); // tiers: [] means all tiers
+        }
+      }
+    }
+
+    return {
+      includeStudents,
+      excludeStudents,
+      score: getScoreRange(filterState.difficulty),
+    };
+  };
+
+  // Fetch ranks from server
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+    setCurrentPage(1);
+  }, [currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType, filterState.difficulty, filterState.includeStudents, filterState.excludeStudents, filterState.filterNotOwned]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadRanks = async () => {
+      try {
+        const { includeStudents, excludeStudents, score } = convertFilterToAPI();
+
+        const result = await fetchRanks({
+          raidType: currentRaid.raidType,
+          season: currentRaid.seasonIndex,
+          defenseType: currentRaid.defenseType,
+          score,
+          includeStudents,
+          excludeStudents,
+          perPage: ITEMS_PER_PAGE,
+          page: currentPage,
+        });
+
         if (cancelled) {
           return;
         }
-        setDb(db);
-        setCollectionLoaded(true);
-        syncRaidRank(db, currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType);
-      });
-    });
+
+        setRanks(result.ranks);
+        setTotalCount(result.totalCount);
+        setLoading(false);
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Failed to load ranks");
+        setLoading(false);
+      }
+    };
+
+    loadRanks();
 
     return () => {
       cancelled = true;
-      if (currentDb?.collections[collectionName]) {
-        currentDb.collections[collectionName].remove();
-      }
     };
-  }, [currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType, collectionName, raidIdRange]);
+  }, [currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType, currentPage, filterState, allStudents, recruitedStudentTiers]);
 
-  // Load filtered data
-  useEffect(() => {
-    if (!db || !collectionLoaded || !db.collections[collectionName]) {
-      return;
-    }
-
-    const selector: {
-      numId: { $gte: number; $lte: number };
-      score?: { $gte: number; $lt: number };
-    } = { numId: { $gte: raidIdRange + 1, $lte: raidIdRange + 20000 } };
-
-    if (filterState.difficulty) {
-      if (filterState.difficulty === "lunatic") {
-        selector.score = { $gte: 44025000, $lt: 99999999 };
-      } else if (filterState.difficulty === "torment") {
-        selector.score = { $gte: 31076000, $lt: 44025000 };
-      } else if (filterState.difficulty === "insane") {
-        selector.score = { $gte: 19249600, $lt: 31076000 };
-      } else if (filterState.difficulty === "extreme") {
-        selector.score = { $gte: 0, $lt: 19249600 };
-      }
-    }
-
-    const query = db.collections[collectionName].find({ selector }).sort({ numId: "asc" });
-
-    let cancelled = false;
-    const subscription = query.$.subscribe((ranks: RaidRankDocument[]) => {
-      if (cancelled) {
-        return;
-      }
-
-      const filteredIds: string[] = [];
-      const filterByInclusion = filterState.includeStudents.length > 0;
-      const filterByExclusion = filterState.excludeStudents.length > 0;
-      for (const rank of ranks) {
-        // Parse the encoded parties for filtering
-        const parsed = parseRaidRankDocument(rank);
-        const allStudentSlots = parsed.parties.flatMap((party) => party.slots);
-
-        if (filterByExclusion) {
-          const hasExcludedStudent = filterState.excludeStudents.some((excludeStudent) => {
-            return allStudentSlots.some((slot) => {
-              if (slot.studentUid !== excludeStudent.uid || slot.tier === null) {
-                return false;
-              }
-              return (excludeStudent.tiers.length === 0) || excludeStudent.tiers.includes(slot.tier);
-            });
-          });
-
-          if (hasExcludedStudent) {
-            continue;
-          }
-        }
-
-        if (filterState.filterNotOwned) {
-          const hasUnrecruitedStudent = allStudentSlots.some((slot) => {
-            if (!slot.studentUid) {
-              return false;
-            }
-            return !recruitedStudentTiers[slot.studentUid];
-          });
-
-          if (hasUnrecruitedStudent) {
-            continue;
-          }
-        }
-
-        if (filterByInclusion) {
-          const allIncluded = filterState.includeStudents.every((includeStudent) => {
-            return allStudentSlots.some((slot) => {
-              if (slot.studentUid !== includeStudent.uid || slot.tier === null) {
-                return false;
-              }
-              return (includeStudent.tiers.length === 0) || includeStudent.tiers.includes(slot.tier);
-            });
-          });
-
-          if (!allIncluded) {
-            continue;
-          }
-        }
-
-        filteredIds.push(rank.id);
-      }
-
-      setFilteredRankIds(filteredIds);
-      setCurrentPage(1);
-      setInitDataLoaded(true);
-    });
-
-    return () => {
-      cancelled = true;
-      if (subscription) {
-        subscription.unsubscribe();
-      }
-    };
-  }, [db, collectionLoaded, collectionName, raidIdRange, filterState, recruitedStudentTiers]);
-
-  useEffect(() => {
-    if (!db || !collectionLoaded || !db.collections[collectionName] || filteredRankIds.length === 0) {
-      setCurrentPageRanks([]);
-      return;
-    }
-
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    const pageIds = filteredRankIds.slice(startIndex, endIndex);
-
-    Promise.all(pageIds.map((id) => db.collections[collectionName].findOne(id).exec())).then((docs) => {
-      const ranks = docs
-        .filter((doc) => doc !== null)
-        .map((doc) => parseRaidRankDocument(doc));
-
-      setCurrentPageRanks(ranks);
-    });
-  }, [db, collectionLoaded, collectionName, filteredRankIds, currentPage]);
-
-  if (!db || !collectionLoaded || !initDataLoaded) {
+  if (loading) {
     return <LoadingRanks />;
   }
-  if (collectionLoaded && initDataLoaded && filteredRankIds.length === 0) {
+
+  if (error) {
+    return <EmptyView text={`오류가 발생했어요: ${error}`} />;
+  }
+
+  if (ranks.length === 0) {
     return <EmptyView text="조건에 맞는 순위 정보가 없어요." />;
   }
 
   // Calculate pagination
-  const totalPages = Math.ceil(filteredRankIds.length / ITEMS_PER_PAGE);
-  const filteredRanks = currentPageRanks;
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+  const filteredRanks = ranks;
   const maxLevel = getMaxLevelAt(currentRaid.since);
   return (
-    <div>
+    <div className="max-w-2xl">
       {filteredRanks.map(({ rank, score, parties }) => {
         let clearTimeMillisec: number | undefined = undefined;
         try {
@@ -252,65 +215,61 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
         const clearMilliseconds = clearTimeMillisec % 1000;
         const label = `${score.toLocaleString()}점 / ${clearMinutes.toString().padStart(2, "0")}:${clearSeconds.toString().padStart(2, "0")}.${clearMilliseconds.toString().padStart(3, "0")}`
         return (
-          <ActionCard
-            key={`rank-${rank}`}
-            actions={[]}
-          >
+          <ActionCard actions={[]}>
             <p className="mb-2">
               <span className="md:text-lg font-bold">{rank}위</span> ({label})
             </p>
             {parties.map((party) => (
               <StudentCards
-                key={`party-${party.partyIndex}`}
-                students={party.slots.map(({ studentUid, tier, level, isAssist }) => {
-                  if (!studentUid) {
-                    return { uid: null };
-                  }
+              key={`party-${party.partyIndex}`}
+              students={party.slots.map(({ studentUid, tier, level, isAssist }) => {
+                if (!studentUid) {
+                  return { uid: null };
+                }
 
-                  const student = allStudents[studentUid];
-                  if (!student) {
-                    return { uid: null };
-                  }
+                const student = allStudents[studentUid];
+                if (!student) {
+                  return { uid: null };
+                }
 
-                  return {
-                    uid: studentUid,
-                    name: student.name,
-                    hideName: true,
-                    attackType: student.attackType,
-                    defenseType: student.defenseType,
-                    role: student.role,
-                    tier,
-                    level: level && level < maxLevel ? level : undefined,
-                    isAssist,
-                    popups: student && tier ? [
-                      {
-                        Icon: PlusCircleIcon,
-                        text: "이 학생을 포함한 편성만 보기",
-                        onClick: () => onIncludeStudent({ uid: studentUid, tier }),
-                      },
-                      {
-                        Icon: MinusCircleIcon,
-                        text: "이 학생을 제외한 편성만 보기",
-                        onClick: () => onExcludeStudent({ uid: studentUid, tier }),
-                      },
-                      {
-                        Icon: IdentificationIcon,
-                        text: "학생부 보기 (평가/통계)",
-                        link: `/students/${studentUid}`,
-                      },
-                    ] : undefined,
-                    popupId: studentUid ? `${rank}-${party.partyIndex}-${studentUid}` : undefined,
-                  };
-                })}
-                pcGrid={10}
-              />
+                return {
+                  uid: studentUid,
+                  name: student.name,
+                  hideName: true,
+                  attackType: student.attackType,
+                  defenseType: student.defenseType,
+                  role: student.role,
+                  tier,
+                  level: level && level < maxLevel ? level : undefined,
+                  isAssist,
+                  popups: student && tier ? [
+                    {
+                      Icon: PlusCircleIcon,
+                      text: "이 학생을 포함한 편성만 보기",
+                      onClick: () => onIncludeStudent({ uid: studentUid, tier }),
+                    },
+                    {
+                      Icon: MinusCircleIcon,
+                      text: "이 학생을 제외한 편성만 보기",
+                      onClick: () => onExcludeStudent({ uid: studentUid, tier }),
+                    },
+                    {
+                      Icon: IdentificationIcon,
+                      text: "학생부 보기 (평가/통계)",
+                      link: `/students/${studentUid}`,
+                    },
+                  ] : undefined,
+                  popupId: studentUid ? `${rank}-${party.partyIndex}-${studentUid}` : undefined,
+                };
+              })}
+              pcGrid={10}
+            />
             ))}
           </ActionCard>
         )
       })}
 
       <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
-      {!initDataLoaded && <LoadingRanks />}
     </div>
   );
 }

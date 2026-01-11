@@ -7,15 +7,13 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { SubTitle, Title } from "~/components/atoms/typography";
 import type { IndexQuery } from "~/graphql/graphql";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { defenseTypeColor, defenseTypeLocale, difficultyLocale, recruitmentLabelLocale, raidTypeLocale, relativeTime } from "~/locales/ko";
-import dayjs from "dayjs";
-import { OptionBadge, ProfileImage } from "~/components/atoms/student";
+import { recruitmentLabelLocale } from "~/locales/ko";
+import { ProfileImage } from "~/components/atoms/student";
 import { useState } from "react";
 import { EventHeader } from "~/components/event";
-import type { DefenseType, RaidType } from "~/models/content.d";
-import { bossImageUrl } from "~/models/assets";
 import { getIndexContents } from "~/models/content";
 import EventList from "~/components/event/EventList";
+import { RaidCard } from "~/components/raids";
 
 export const meta: MetaFunction = () => {
   return [
@@ -70,8 +68,18 @@ export default function Index() {
       )}
 
       <SubTitle text="레이드" />
-      {currentTotalAssualt && <CurrentRaid {...currentTotalAssualt} />}
-      {currentUnlimit && <CurrentRaid {...currentUnlimit} />}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {currentTotalAssualt && (
+          <Link to={`/raids/${currentTotalAssualt.uid}`} className="hover:opacity-75 transition-opacity">
+            <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
+          </Link>
+        )}
+        {currentUnlimit && (
+          <Link to={`/raids/${currentUnlimit.uid}`} className="hover:opacity-75 transition-opacity">
+            <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
+          </Link>
+        )}
+      </div>
     </>
   );
 }
@@ -149,59 +157,6 @@ function CurrentRecruitments({ recruitments, favoritedStudentUids, favoritedCoun
         </div>
       )}
     </div>
-  );
-}
-
-type CurrentRaidProps = {
-  type: RaidType;
-  uid: string;
-  name: string;
-  boss: string;
-  since: Date;
-  until: Date;
-  defenseTypes: { defenseType: DefenseType; difficulty: string | null }[];
-}
-
-function CurrentRaid({ type, uid, name, boss, since, until, defenseTypes }: CurrentRaidProps) {
-  const sinceDayjs = dayjs(since);
-  const untilDayjs = dayjs(until);
-  const now = dayjs();
-
-  let timeLabel = null;
-  if (sinceDayjs.isAfter(now)) {
-    timeLabel = `${relativeTime(sinceDayjs)} 시작`;
-  } else if (untilDayjs.isAfter(now)) {
-    timeLabel = `${relativeTime(untilDayjs)} 종료`;
-  }
-
-  return (
-    <Link to={`/raids/${uid}`}>
-      <div className="my-4 relative bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors border border-neutral-200 dark:border-neutral-700 rounded-lg">
-        <img src={bossImageUrl(boss)} alt={`${name} 보스 이미지`} className="absolute right-0 top-0 h-full" />
-        <div className="relative w-full p-4 bg-white/50 dark:bg-neutral-800/50 rounded-lg">
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">{raidTypeLocale[type]}</p>
-          <p className="font-semibold">{name}</p>
-          <div className="mt-2 flex gap-1 flex-wrap">
-            {defenseTypes.map(({ defenseType, difficulty }) => (
-              <OptionBadge
-                key={defenseType}
-                text={`${defenseTypeLocale[defenseType]}${difficulty ? ` / ${difficultyLocale[difficulty]}` : ""}`}
-                color={defenseTypeColor[defenseType]}
-                bgColor="light"
-              />
-            ))}
-          </div>
-          {timeLabel && (
-            <div className="absolute top-0 right-0 p-3">
-              <span className="flex items-center gap-1.5 px-2 md:px-3 py-0.5 text-xs md:text-sm bg-neutral-800/90 text-white rounded-full">
-                {sinceDayjs.isBefore(now) && <div className="size-2 bg-red-500 rounded-full animate-pulse" />}
-                {timeLabel}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    </Link>
   );
 }
 

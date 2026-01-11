@@ -125,7 +125,7 @@ function TimeToScore() {
           label="난이도"
           name="difficulty"
           placeholder="난이도를 선택하세요"
-          options={["lunatic", "torment", "insane", "extreme", "hardcore", "veryhard", "hard", "normal"].map((difficulty) => ({
+          options={["lunatic", "torment", "insane", "extreme", "hardcore", "very_hard", "hard", "normal"].map((difficulty) => ({
             label: difficultyLocale[difficulty as Difficulty],
             value: difficulty,
           }))}

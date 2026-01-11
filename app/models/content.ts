@@ -418,7 +418,7 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
       currentRecruitments,
       favoritedCounts,
     };
-  }, 60 * 10, forceRefresh);
+  }, 60 * 60 * 24, forceRefresh);
 }
 
 
@@ -458,5 +458,5 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
       throw error ?? "failed to fetch events";
     }
     return data.contents.nodes;
-  }, 60 * 10, forceRefresh);
+  }, 60 * 60 * 24, forceRefresh);
 }

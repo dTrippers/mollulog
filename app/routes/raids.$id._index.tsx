@@ -1,134 +1,247 @@
 import { useEffect, useMemo, useState } from "react";
-import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { ClockIcon } from "@heroicons/react/24/solid";
-import RaidRankFilter, { mergeFilteredStudents, type RaidRankFilterState } from "~/components/raids/RaidRankFilter";
-import { RaidRankScreen } from "~/components/raids";
-import type { RaidPageContext } from "./raids.$id";
-import { raidTypeLocale } from "~/locales/ko";
+import { Link, type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import dayjs from "dayjs";
+import { LoadingSkeleton } from "~/components/atoms/layout";
+import { EmptyView } from "~/components/atoms/typography";
+import RaidStatisticsSlotCount from "~/components/raids/RaidStatisticsSlotCount";
+import RaidClearLevels from "~/components/raids/RaidClearLevels";
+import RaidOftenUsedParties from "~/components/raids/RaidOftenUsedParties";
+import { Section } from "~/components/ui/Section";
+import { HorizontalScroll } from "~/components/ui/HorizontalScroll";
+import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
-import { getAuthenticator } from "~/auth/authenticator.server";
-import { getRecruitedStudentTiers } from "~/models/recruited-student";
-import { Difficulty } from "~/graphql/graphql";
-import type { Difficulty as DifficultyType } from "~/models/raid";
+import { fetchRaidStatisticsByRaid, type RaidStatistics } from "~/models/raid-statistics.client";
+import { fetchRaidOverview } from "~/models/raid-overview.client";
+import type { RaidPageContext } from "./raids.$id";
+import { RaidCard } from "~/components/raids";
 
-export const loader = async ({ context, request }: LoaderFunctionArgs) => {
+export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const rawAllStudents = await getAllStudentsMap(env, true);
   const allStudents = Object.fromEntries(Object.entries(rawAllStudents).map(([uid, student]) => [uid, {
     name: student.name,
+    role: student.role,
     attackType: student.attackType,
     defenseType: student.defenseType,
-    role: student.role,
   }]));
-
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
-  const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
 
   return {
     allStudents,
-    recruitedStudentTiers,
   };
 };
 
-export default function RaidDetail() {
-  const { currentRaid, defenseType, setPanel, signedIn } = useOutletContext<RaidPageContext>();
-  const { allStudents, recruitedStudentTiers } = useLoaderData<typeof loader>();
+export default function RaidSummary() {
+  const { currentRaid, allRaids, defenseType } = useOutletContext<RaidPageContext>();
+  const { allStudents } = useLoaderData<typeof loader>();
+  const maxTier = getMaxTierAt(currentRaid.since);
+
+  // Filter raids with the same boss (excluding current raid)
+  const sameBossRaids = useMemo(() => {
+    return allRaids
+      .filter((raid) => raid.boss === currentRaid.boss && raid.rankVisible && raid.uid !== currentRaid.uid)
+      .sort((a, b) => dayjs(b.since).diff(dayjs(a.since)));
+  }, [allRaids, currentRaid.boss, currentRaid.uid]);
+
+  const [statistics, setStatistics] = useState<RaidStatistics[] | null>(null);
+  const [clearLevels, setClearLevels] = useState<Record<string, number> | null>(null);
+  const [oftenUsedParties, setOftenUsedParties] = useState<Array<{
+    count: number;
+    maxRank: number;
+    maxScore: number;
+    parties: Array<{
+      students: Array<{
+        slot: "student" | "empty";
+        student?: {
+          uid: string;
+          level: number;
+          tier: number;
+          weaponTier?: number;
+          isAssist?: boolean;
+        };
+        empty?: Record<string, never>;
+      }>;
+    }>;
+  }> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Load both student statistics and overview data in parallel
+        const [raidStatistics, overviewData] = await Promise.all([
+          fetchRaidStatisticsByRaid(currentRaid.type, currentRaid.raidIndexJp!, defenseType),
+          fetchRaidOverview({ raidType: currentRaid.type, season: currentRaid.raidIndexJp!, defenseType }),
+        ]);
+        if (cancelled) {
+          return;
+        }
+
+        setStatistics(raidStatistics);
+
+        // Convert clear_levels from string keys to numbers
+        const clearLevelsMap: Record<string, number> = {};
+        if (overviewData.clearLevels) {
+          Object.entries(overviewData.clearLevels).forEach(([difficulty, count]) => {
+            clearLevelsMap[difficulty] = Number(count);
+          });
+        }
+        setClearLevels(clearLevelsMap);
+
+        // Convert often_used_parties
+        const partiesData = (overviewData.oftenUsedParties || []).map((party) => ({
+          count: Number(party.count),
+          maxRank: Number(party.maxRank || 0),
+          maxScore: Number(party.maxScore || 0),
+          parties: party.parties || [],
+        }));
+        setOftenUsedParties(partiesData);
+
+        setLoading(false);
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Failed to load statistics");
+        setLoading(false);
+      }
+    };
+
+    loadData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentRaid.type, currentRaid.raidIndexJp, currentRaid.rankVisible, defenseType, allStudents]);
+
+  const top6Statistics = useMemo(() => {
+    if (!statistics || statistics.length === 0) {
+      return [];
+    }
+    const sorted = [...statistics].sort((a, b) => (b.slotsCount + b.assistsCount) - (a.slotsCount + a.assistsCount));
+    return sorted.slice(0, 6);
+  }, [statistics]);
 
   if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
     return (
       <div className="my-16 md:my-48 w-full flex flex-col items-center justify-center">
-        <ClockIcon className="my-2 w-16 h-16" strokeWidth={2} />
-        <p className="my-2 text-2xl font-bold">{raidTypeLocale[currentRaid.type]} 정보를 준비중이에요</p>
+        <p className="my-2 text-2xl font-bold">정보를 준비중이에요</p>
         <p className="my-2 text-neutral-500 dark:text-neutral-400">
           정보가 준비된 컨텐츠를 선택하여 확인해보세요
         </p>
       </div>
-    )
+    );
   }
 
-  // Get all students for current raid
-  const filterableStudents = useMemo(() => {
-    const resultsMap = new Map<string, { uid: string; name: string; tiers: number[] }>();
-    for (const { student, slotsByTier, assistsByTier } of currentRaid.statistics) {
-      const tiers = Array.from(
-        new Set([...slotsByTier.map((slot) => slot.tier), ...assistsByTier.map((assist) => assist.tier)]),
-      );
+  if (loading) {
+    return <LoadingSkeleton />;
+  }
 
-      const existing = resultsMap.get(student.uid);
-      if (existing) {
-        resultsMap.set(
-          student.uid,
-          { uid: student.uid, name: student.name, tiers: Array.from(new Set([...existing.tiers, ...tiers])) },
-        );
-      } else {
-        resultsMap.set(student.uid, { uid: student.uid, name: student.name, tiers });
-      }
-    }
-    return Array.from(resultsMap.values());
-  }, [currentRaid.uid]);
+  if (error) {
+    return <EmptyView text={`오류가 발생했어요: ${error}`} />;
+  }
 
-  const [rankFilterState, setRankFilterState] = useState<RaidRankFilterState>({
-    filterNotOwned: false,
-    includeStudents: [],
-    excludeStudents: [],
-    difficulty: null,
-  });
-
-  useEffect(() => {
-    setRankFilterState((prev) => ({ ...prev, defenseType, difficulty: null }));
-  }, [defenseType]);
-
-  const filterableDifficulties = useMemo(() => {
-    const difficulty = currentRaid.defenseTypes.find((dt) => dt.defenseType === defenseType)?.difficulty;
-    if (difficulty === Difficulty.Lunatic) {
-      return ["lunatic", "torment", "insane"] as DifficultyType[];
-    } else if (difficulty === Difficulty.Torment) {
-      return ["torment", "insane"] as DifficultyType[];
-    } else if (difficulty === Difficulty.Insane) {
-      return ["insane", "extreme"] as DifficultyType[];
-    }
-    return [] as DifficultyType[];
-  }, [currentRaid.defenseTypes, defenseType]);
-
-  useEffect(() => {
-    setPanel({
-      title: "편성 찾기",
-      description: "특정 학생을 포함/제외한 편성을 찾아보세요",
-      Icon: MagnifyingGlassIcon,
-      children: (
-        <RaidRankFilter
-          state={rankFilterState}
-          setState={setRankFilterState}
-          signedIn={signedIn}
-          filterableStudents={filterableStudents}
-          filterableDifficulties={filterableDifficulties}
-        />
-      ),
-    });
-  }, [defenseType, rankFilterState, setPanel, signedIn, filterableStudents, filterableDifficulties]);
+  if (!statistics || statistics.length === 0) {
+    return <EmptyView text="통계 정보를 준비중이에요" />;
+  }
 
   return (
-    <>
-      <RaidRankScreen
-        currentRaid={{ boss: currentRaid.boss, since: currentRaid.since, raidType: currentRaid.type, seasonIndex: currentRaid.raidIndexJp, defenseType }}
-        filterState={rankFilterState}
-        allStudents={allStudents}
-        recruitedStudentTiers={recruitedStudentTiers}
+    <div className="py-4">
+      {sameBossRaids.length > 0 && (
+        <Section title="역대 개최 이력" description="동일 보스의 최근 총력전/대결전 개최 이력">
+          <HorizontalScroll
+            itemWidth={{ mobile: "w-3/4", desktop: "md:w-2/5" }}
+            gap="gap-2"
+          >
+            {sameBossRaids.map((raid) => {
+              // Check if current raid and comparison raid have the same defense type as the currently selected one
+              const hasMatchingDefenseType = raid.defenseTypes.some(({ defenseType: raidDt }) => raidDt === defenseType);
 
-        onIncludeStudent={({ uid, tier }) => {
-          setRankFilterState((prev) => ({
-            ...prev,
-            includeStudents: mergeFilteredStudents(prev.includeStudents, { uid, tiers: [tier] }),
-          }));
-        }}
-        onExcludeStudent={({ uid, tier }) => {
-          setRankFilterState((prev) => ({
-            ...prev,
-            excludeStudents: mergeFilteredStudents(prev.excludeStudents, { uid, tiers: [tier] }),
-          }));
-        }}
-      />
-    </>
+              return (
+                <RaidCard
+                  key={raid.uid}
+                  raid={raid}
+                  timeLocaleType="absolute"
+                  buttons={[
+                    { text: "시즌 정보", to: `/raids/${raid.uid}` },
+                    hasMatchingDefenseType && { text: "비교", to: `/raids/${currentRaid.uid}/compare?from=${raid.uid}&defenseType=${defenseType}` },
+                  ].filter(Boolean) as { text: string; to: string }[]}
+                  showName={false}
+                />
+              );
+            })}
+          </HorizontalScroll>
+        </Section>
+      )}
+
+      {clearLevels && (
+        <Section
+          title="플래티넘 클리어 난이도"
+          description="플래티넘(상위 2만명) 클리어의 난이도 분포"
+        >
+          <RaidClearLevels clearLevels={clearLevels} />
+        </Section>
+      )}
+
+      {oftenUsedParties && oftenUsedParties.length > 0 && (
+        <Section
+          title="많이 사용된 편성 TOP 5"
+          description="플래티넘(상위 2만명)에서 가장 많이 사용된 편성"
+        >
+          <RaidOftenUsedParties
+            oftenUsedParties={oftenUsedParties}
+            allStudents={allStudents}
+          />
+          <Link to={`/raids/${currentRaid.uid}/ranks`}>
+            <div className="my-4 py-2 flex items-center justify-center text-sm hover:underline">
+              <span>모든 편성 보기</span>
+              <ChevronRightIcon className="size-4" />
+            </div>
+          </Link>
+        </Section>
+      )}
+
+      <Section
+        title="출전 횟수 TOP 6"
+        description="플래티넘(상위 2만명)에서 출전한 학생들의 편성 횟수"
+      >
+        <div className="relative">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
+            {top6Statistics.map(({ studentUid, slotsCount, slotsByTier, assistsCount, assistsByTier }) => {
+              const student = allStudents[studentUid];
+              return (
+                <div key={studentUid} className="-my-2">
+                  <RaidStatisticsSlotCount
+                    student={{ uid: studentUid, name: student.name }}
+                    slotsCount={slotsCount}
+                    slotsByTier={slotsByTier}
+                    assistsCount={assistsCount}
+                    assistsByTier={assistsByTier}
+                    maxTier={maxTier}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <Link to={`/raids/${currentRaid.uid}/statistics`}>
+            <div className="my-4 py-2 flex items-center justify-center text-sm hover:underline">
+              <span>모두 보기 ({statistics.length - 5}개)</span>
+              <ChevronRightIcon className="size-4" />
+            </div>
+          </Link>
+        </div>
+      </Section>
+    </div>
   );
 }

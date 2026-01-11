@@ -50,7 +50,7 @@ export const terrainLocale: Record<Terrain, string> = {
 export const difficultyLocale: Record<string, string> = {
   normal: "노말",
   hard: "하드",
-  veryhard: "베리하드",
+  very_hard: "베리하드",
   hardcore: "하드코어",
   extreme: "익스트림",
   insane: "인세인",

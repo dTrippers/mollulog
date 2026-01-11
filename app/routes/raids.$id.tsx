@@ -60,6 +60,7 @@ export const ErrorBoundary = () => {
 
 export type RaidPageContext = {
   currentRaid: Awaited<ReturnType<typeof loader>>["currentRaid"];
+  allRaids: Awaited<ReturnType<typeof loader>>["allRaids"];
   defenseType: DefenseType;
   setPanel: (panel: PagePanelProps) => void;
   signedIn: boolean;
@@ -72,10 +73,11 @@ export default function RaidPage() {
 
   const [panel, setPanel] = useState<PagePanelProps | undefined>(undefined);
   useEffect(() => {
-    if (pathname !== `/raids/${currentRaid.uid}`) {
+    // 요약 페이지와 순위 페이지에서만 panel 표시
+    if (pathname !== `/raids/${currentRaid.uid}/ranks`) {
       setPanel(undefined);
     }
-  }, [pathname, setPanel]);
+  }, [pathname, currentRaid.uid, setPanel]);
 
   const [selectedDefenseType, setDefenseType] = useState<DefenseType>(currentRaid.defenseTypes[0].defenseType);
   useEffect(() => {
@@ -92,27 +94,30 @@ export default function RaidPage() {
       panels={panel ? [panel] : undefined}
       screens={currentRaid.rankVisible ? [
         {
-          text: "상위권 순위",
-          description: "일본 서버 상위 2만명의 편성 정보를 찾아볼 수 있어요",
+          text: "시즌 요약",
+          description: `${raidTypeLocale[currentRaid.type]}의 주요 정보 요약`,
           link: `/raids/${currentRaid.uid}`,
           active: pathname === `/raids/${currentRaid.uid}`,
         },
         {
-          text: "학생 편성 통계",
-          description: "학생들이 편성된 횟수의 통계를 확인할 수 있어요",
+          text: "상위권 편성",
+          link: `/raids/${currentRaid.uid}/ranks`,
+          active: pathname === `/raids/${currentRaid.uid}/ranks`,
+        },
+        {
+          text: "학생별 출전 횟수",
           link: `/raids/${currentRaid.uid}/statistics`,
           active: pathname === `/raids/${currentRaid.uid}/statistics`,
         },
         {
           text: "공략 영상 (베타)",
-          description: videoAvailable ? "공략 영상 목록을 확인할 수 있어요" : "공략 영상을 준비중이에요",
           link: `/raids/${currentRaid.uid}/videos`,
           active: pathname === `/raids/${currentRaid.uid}/videos`,
           disabled: !videoAvailable,
         },
       ] : undefined}
     >
-      {currentRaid.defenseTypes.length > 1 && (
+      {currentRaid.defenseTypes.length > 1 && !pathname.endsWith("/compare") && (
         <div className="my-4">
           <FilterButtons
             key={`filters-${currentRaid.uid}`}
@@ -127,7 +132,7 @@ export default function RaidPage() {
           />
         </div>
       )}
-      <Outlet context={{ currentRaid, defenseType: selectedDefenseType, setPanel, signedIn } satisfies RaidPageContext} />
+      <Outlet context={{ currentRaid, allRaids, defenseType: selectedDefenseType, setPanel, signedIn } satisfies RaidPageContext} />
     </Page>
   );
 }

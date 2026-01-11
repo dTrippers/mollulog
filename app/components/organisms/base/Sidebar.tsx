@@ -132,7 +132,7 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
 
       <div className="my-4 grid grid-cols-2 gap-2">
         <UtilItem name={"청휘석 플래너 (β)"} to="/utils/pyroxene" OutlineIcon={WalletIconOutline} SolidIcon={WalletIconSolid} isActive={pathname.startsWith("/utils/pyroxene")} onItemClick={onMenuClose} />
-        <UtilItem name={"이벤트 소탕 계산기"} to={`/events/say-bing-rerun?page=shop`} OutlineIcon={BoltIconOutline} SolidIcon={BoltIconSolid} isActive={false} onItemClick={onMenuClose} showRedDot />
+        <UtilItem name={"이벤트 소탕 계산기"} to={`/events/say-bing-rerun?page=shop`} OutlineIcon={BoltIconOutline} SolidIcon={BoltIconSolid} isActive={false} onItemClick={onMenuClose} />
         <UtilItem name={"인연 랭크 계산기"} to="/utils/relationship" OutlineIcon={HeartIconOutline} SolidIcon={HeartIconSolid} isActive={pathname.startsWith("/utils/relationship")} onItemClick={onMenuClose} />
         <UtilItem name={"총력전 점수 계산기"} to="/utils/raidscore" OutlineIcon={ClockIconOutline} SolidIcon={ClockIconSolid} isActive={pathname.startsWith("/utils/raidscore")} onItemClick={onMenuClose} />
       </div>
@@ -148,16 +148,6 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
           로그인 후 내 정보 관리
         </div>
       )}
-
-      <a
-        href="https://replay.mollulog.net"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="my-4 block px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer"
-      >
-        <p className="text-sm font-semibold mb-1">re:PLAY 2025</p>
-        <p className="text-xs opacity-90">블루 아카이브의 2025년을 모아봤어요</p>
-      </a>
 
       <Link
         to="/news"

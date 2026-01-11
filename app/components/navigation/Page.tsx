@@ -13,12 +13,14 @@ type PageProps = {
   screens?: PageScreenSelectorProps["screens"];
   panels?: PagePanelProps[];
   links?: PageLinkProps[];
+  contentArea?: "3xl" | "4xl";
 
   children: React.ReactNode;
 };
 
-export default function Page({ title, description, belowTitle, screens, panels, links, children }: PageProps) {
+export default function Page({ title, description, belowTitle, screens, panels, links, contentArea = "3xl", children }: PageProps) {
   const [openPanelIndex, setOpenPanelIndex] = useState<number | null>(null);
+  const contentAreaClass = contentArea === "4xl" ? "max-w-4xl" : "max-w-3xl";
   return (
     <>
       <div className="flex flex-col xl:flex-row">
@@ -45,7 +47,7 @@ export default function Page({ title, description, belowTitle, screens, panels, 
           </div>
         </div>
 
-        <div className="grow xl:p-4 max-w-3xl">
+        <div className={`grow xl:p-4 ${contentAreaClass}`}>
           {children}
         </div>
       </div>

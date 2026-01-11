@@ -1,29 +1,31 @@
 import { useMemo, useState } from "react";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
-import type { RaidStatisticsData } from "~/routes/raids.data.$id.statistics";
+import type { RaidStatistics } from "~/models/raid-statistics.client";
 import RaidStatisticsSlotCount from "./RaidStatisticsSlotCount";
+import { Role } from "~/models/content.d";
 
 type RaidStatisticsScreenProps = {
-  statistics: Exclude<RaidStatisticsData["statistics"], undefined>;
+  statistics: RaidStatistics[];
+  allStudents: Record<string, { name: string; role: Role }>;
   maxTier: number;
 };
 
-export default function RaidStatisticsScreen({ statistics, maxTier }: RaidStatisticsScreenProps) {
+export default function RaidStatisticsScreen({ statistics, allStudents, maxTier }: RaidStatisticsScreenProps) {
   return (
     <div className="xl:grid xl:grid-cols-2 xl:gap-4">
       <div>
         <p className="text-lg font-bold">스트라이커 편성 횟수</p>
-        <SlotCountInfos statistics={statistics.filter(({ student }) => student.role === "striker")} maxTier={maxTier} />
+        <SlotCountInfos statistics={statistics.filter(({ studentUid }) => allStudents[studentUid]?.role === "striker")} allStudents={allStudents} maxTier={maxTier} />
       </div>
       <div>
         <p className="text-lg font-bold">스페셜 편성 횟수</p>
-        <SlotCountInfos statistics={statistics.filter(({ student }) => student.role === "special")} maxTier={maxTier} />
+        <SlotCountInfos statistics={statistics.filter(({ studentUid }) => allStudents[studentUid]?.role === "special")} allStudents={allStudents} maxTier={maxTier} />
       </div>
     </div>
   )
 }
 
-function SlotCountInfos({ statistics, maxTier }: { statistics: Exclude<RaidStatisticsData["statistics"], undefined>, maxTier?: number }) {
+function SlotCountInfos({ statistics, allStudents, maxTier }: { statistics: RaidStatistics[], allStudents: Record<string, { name: string; role: Role }>, maxTier?: number }) {
   const [showMore, setShowMore] = useState(false);
   const sortedStatistics = useMemo(() => {
     const sorted = [...statistics].sort((a, b) => (b.slotsCount + b.assistsCount) - (a.slotsCount + a.assistsCount))
@@ -32,10 +34,10 @@ function SlotCountInfos({ statistics, maxTier }: { statistics: Exclude<RaidStati
 
   return (
     <>
-      {sortedStatistics.map(({ student, slotsCount, slotsByTier, assistsCount, assistsByTier }) => (
+      {sortedStatistics.map(({ studentUid, slotsCount, slotsByTier, assistsCount, assistsByTier }) => (
         <RaidStatisticsSlotCount
-          key={student.uid}
-          student={student}
+          key={studentUid}
+          student={{ uid: studentUid, name: allStudents[studentUid].name }}
           slotsCount={slotsCount}
           slotsByTier={slotsByTier}
           assistsCount={assistsCount}
