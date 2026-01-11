@@ -6,12 +6,13 @@ import { EmptyView } from "~/components/atoms/typography";
 import { OptionBadge } from "~/components/atoms/student";
 import { Section } from "~/components/ui/Section";
 import { getAllStudentsMap } from "~/models/student";
-import { fetchStudentStatistics, convertStatisticsToClientFormat } from "~/models/raid-statistics.client";
+import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
 import { fetchRaidOverview } from "~/models/raid-overview.client";
 import { getRaidDetail } from "~/models/raid";
 import { difficultyLocale, defenseTypeColor, raidTypeLocale } from "~/locales/ko";
 import RaidDifficultyComparison from "~/components/raids/RaidDifficultyComparison";
 import RaidStudentComparison from "~/components/raids/RaidStudentComparison";
+import { ArrowRightIcon } from "@heroicons/react/24/outline";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -71,19 +72,11 @@ export default function RaidCompare() {
 
   const [currentOverview, setCurrentOverview] = useState<{
     clearLevels: Record<string, number>;
-    studentStats: Array<{
-      student: { uid: string; name: string; role: string };
-      slotsCount: number;
-      assistsCount: number;
-    }>;
+    studentStats: { studentUid: string; slotsCount: number; assistsCount: number; }[];
   } | null>(null);
   const [fromOverview, setFromOverview] = useState<{
     clearLevels: Record<string, number>;
-    studentStats: Array<{
-      student: { uid: string; name: string; role: string };
-      slotsCount: number;
-      assistsCount: number;
-    }>;
+    studentStats: { studentUid: string; slotsCount: number; assistsCount: number; }[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,16 +119,8 @@ export default function RaidCompare() {
             season: fromRaid.raidIndexJp!,
             defenseType,
           }),
-          fetchStudentStatistics({
-            raidType: toRaid.type,
-            season: toRaid.raidIndexJp!,
-            defenseType,
-          }),
-          fetchStudentStatistics({
-            raidType: fromRaid.type,
-            season: fromRaid.raidIndexJp!,
-            defenseType,
-          }),
+          fetchRaidStatisticsByRaid(toRaid.type, toRaid.raidIndexJp!, defenseType),
+          fetchRaidStatisticsByRaid(fromRaid.type, fromRaid.raidIndexJp!, defenseType),
         ]);
 
         if (cancelled) {
@@ -158,13 +143,10 @@ export default function RaidCompare() {
         }
 
         // Convert student statistics
-        const currentStudentStats = convertStatisticsToClientFormat(currentStats, allStudents);
-        const fromStudentStats = convertStatisticsToClientFormat(fromStats, allStudents);
-
         setCurrentOverview({
           clearLevels: currentClearLevels,
-          studentStats: currentStudentStats.map((stat) => ({
-            student: stat.student,
+          studentStats: currentStats.map((stat) => ({
+            studentUid: stat.studentUid,
             slotsCount: stat.slotsCount,
             assistsCount: stat.assistsCount,
           })),
@@ -172,8 +154,8 @@ export default function RaidCompare() {
 
         setFromOverview({
           clearLevels: fromClearLevels,
-          studentStats: fromStudentStats.map((stat) => ({
-            student: stat.student,
+          studentStats: fromStats.map((stat) => ({
+            studentUid: stat.studentUid,
             slotsCount: stat.slotsCount,
             assistsCount: stat.assistsCount,
           })),
@@ -220,9 +202,9 @@ export default function RaidCompare() {
   return (
     <div>
       {/* Comparison Header */}
-      <div className="grid grid-cols-2 gap-2 md:gap-4 mb-6">
+      <div className="flex items-center gap-2 md:gap-4 mb-6">
         {/* From Raid */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-neutral-200 dark:border-neutral-700">
+        <div className="flex-1 bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-neutral-200 dark:border-neutral-700">
           <div className="text-sm md:text-base font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
             과거 개최
           </div>
@@ -240,8 +222,10 @@ export default function RaidCompare() {
           )}
         </div>
 
+        <ArrowRightIcon className="size-4 text-neutral-600 dark:text-neutral-300 shrink-0" strokeWidth={2} />
+
         {/* Current Raid */}
-        <div className="bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-neutral-200 dark:border-neutral-700">
+        <div className="flex-1 bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-neutral-200 dark:border-neutral-700">
           <div className="text-sm md:text-base font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
             현재 개최
           </div>
@@ -283,4 +267,3 @@ export default function RaidCompare() {
     </div>
   );
 }
-

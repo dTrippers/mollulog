@@ -5,7 +5,7 @@ import { EmptyView } from "~/components/atoms/typography";
 import RaidStatisticsScreen from "~/components/raids/RaidStatisticsScreen";
 import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
-import { fetchStudentStatistics, convertStatisticsToClientFormat } from "~/models/raid-statistics.client";
+import { fetchRaidStatisticsByRaid, type RaidStatistics } from "~/models/raid-statistics.client";
 import type { RaidPageContext } from "./raids.$id";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
@@ -26,13 +26,7 @@ export default function RaidStatistics() {
   const { allStudents } = useLoaderData<typeof loader>();
   const maxTier = getMaxTierAt(currentRaid.since);
 
-  const [statistics, setStatistics] = useState<Array<{
-    student: { uid: string; name: string; role: string };
-    slotsCount: number;
-    slotsByTier: { tier: number; count: number }[];
-    assistsCount: number;
-    assistsByTier: { tier: number; count: number }[];
-  }> | null>(null);
+  const [statistics, setStatistics] = useState<RaidStatistics[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,18 +43,12 @@ export default function RaidStatistics() {
         setLoading(true);
         setError(null);
 
-        const serverStats = await fetchStudentStatistics({
-          raidType: currentRaid.type,
-          season: currentRaid.raidIndexJp!,
-          defenseType,
-        });
-
+        const rawStatistics = await fetchRaidStatisticsByRaid(currentRaid.type, currentRaid.raidIndexJp!, defenseType);
         if (cancelled) {
           return;
         }
 
-        const convertedStats = convertStatisticsToClientFormat(serverStats, allStudents);
-        setStatistics(convertedStats);
+        setStatistics(rawStatistics);
         setLoading(false);
       } catch (err) {
         if (cancelled) {
@@ -102,6 +90,6 @@ export default function RaidStatistics() {
   }
 
   return (
-    <RaidStatisticsScreen statistics={statistics} maxTier={maxTier} />
+    <RaidStatisticsScreen statistics={statistics} allStudents={allStudents} maxTier={maxTier} />
   );
 }

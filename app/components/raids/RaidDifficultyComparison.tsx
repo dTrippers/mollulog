@@ -12,7 +12,7 @@ const DIFFICULTY_ORDER: string[] = [
   "insane",
   "extreme",
   "hardcore",
-  "veryhard",
+  "very_hard",
   "hard",
   "normal",
 ];

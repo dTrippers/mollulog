@@ -204,6 +204,7 @@ export async function fetchRanks(params: {
   perPage: number;
   page: number;
 }): Promise<{ totalCount: number; ranks: ParsedRaidRankDocument[] }> {
+  console.log("fetchRanks", params);
   const { raidType, season, defenseType, score, includeStudents, excludeStudents, perPage, page } = params;
 
   // Build query parameters

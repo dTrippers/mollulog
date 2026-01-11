@@ -4,7 +4,6 @@ import { Link } from "react-router";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { OptionBadge } from "~/components/atoms/student";
 import { StudentCard } from "~/components/students";
-import { KeyValueTable } from "~/components/atoms/typography";
 import { TierCounts } from "~/components/molecules/student";
 import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { defenseTypeColor } from "~/locales/ko";
@@ -22,7 +21,7 @@ type RaidStatisticsSlotCountProps = {
     type: RaidType;
     boss: string;
     defenseType: DefenseType;
-    difficulty: string;
+    difficulty: string | null;
     since: Date;
     until: Date;
     terrain: Terrain;
@@ -86,7 +85,7 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
             style={{ backgroundImage: `url(${bossImageUrl(raid.boss)})` }}
           />
           <div className="absolute right-2 bottom-1 z-10 flex gap-1">
-            <OptionBadge text={difficultyLocale[raid.difficulty]} bgColor="dark" />
+            {raid.difficulty && <OptionBadge text={difficultyLocale[raid.difficulty]} bgColor="dark" />}
             <OptionBadge text={terrainLocale[raid.terrain]} bgColor="dark" />
             <OptionBadge text={defenseTypeLocale[raid.defenseType]} color={defenseTypeColor[raid.defenseType]} bgColor="dark" />
           </div>

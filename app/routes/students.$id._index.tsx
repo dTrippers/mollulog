@@ -1,7 +1,6 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
 import { isRouteErrorResponse, useLoaderData, useRouteError, Link } from "react-router";
-import dayjs from "dayjs";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import { EmptyView, SubTitle, Title } from "~/components/atoms/typography";
@@ -18,23 +17,17 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import TagIcon from "~/components/atoms/student/TagIcon";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { RecruitmentHistories } from "~/components/students";
+import { fetchRaidStatisticsByStudent, type RaidStatistics  } from "~/models/raid-statistics.client";
+import { getAllRaids } from "~/models/raid";
+import type { RaidType, DefenseType, Terrain } from "~/models/content.d";
 
 const studentDetailQuery = graphql(`
-  query StudentDetail($uid: String!, $raidSince: ISO8601DateTime!) {
+  query StudentDetail($uid: String!) {
     student(uid: $uid) {
       name uid attackType defenseType role school schaleDbId
       recruitments {
         since until
         event { type uid name rerun imageUrl }
-      }
-      raidStatistics(raidSince: $raidSince) {
-        raid { uid name boss type since until terrain }
-        difficulty
-        defenseType
-        slotsCount
-        slotsByTier { tier count }
-        assistsCount
-        assistsByTier { tier count }
       }
     }
   }
@@ -44,8 +37,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const uid = params.id!;
   const { env } = context.cloudflare;
 
-  const raidSince = dayjs().subtract(6, "month").toDate();
-  const { data, error } = await runQuery(studentDetailQuery, { uid, raidSince });
+  const { data, error } = await runQuery(studentDetailQuery, { uid });
   let errorMessage: string | null = null;
   if (error || !data) {
     console.error(error);
@@ -69,7 +61,9 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   // Get all gradings with comments and user information for this student
   const allGradings = await getStudentGradingsByStudentWithUsers(env, uid, true);
-  return { student: data!.student!, tagCounts, allGradings, currentUser };
+
+  const allRaids = await getAllRaids(env);
+  return { student: data!.student!, tagCounts, allGradings, currentUser, allRaids };
 };
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
@@ -100,24 +94,85 @@ export const ErrorBoundary = () => {
 };
 
 export default function StudentDetail() {
-  const { student, tagCounts, allGradings, currentUser } = useLoaderData<typeof loader>();
+  const { student, tagCounts, allGradings, currentUser, allRaids } = useLoaderData<typeof loader>();
 
   const [raidShowMore, setRaidShowMore] = useState(false);
   const [sort, setSort] = useState<"recent" | "old">("recent");
 
+  // Type for enriched raid statistics with full raid details
+  type EnrichedRaidStatistics = Omit<RaidStatistics, "raid"> & {
+    raid: {
+      uid: string;
+      name: string;
+      boss: string;
+      type: RaidType;
+      since: Date;
+      until: Date;
+      terrain: Terrain;
+      defenseType: DefenseType;
+      difficulty: string | null;
+    };
+  };
+
+  // Convert RaidStatistics to EnrichedRaidStatistics using allRaids
+  const enrichRaidStatistics = useMemo(() => {
+    return (stats: RaidStatistics[]): EnrichedRaidStatistics[] => {
+      return stats.map((stat): EnrichedRaidStatistics | null => {
+        // Find matching raid from allRaids
+        const raid = allRaids.find((r) => r.type === stat.raid.raidType && r.raidIndexJp === stat.raid.season);
+        if (!raid) {
+          return null;
+        }
+
+        // Find difficulty from defenseTypes
+        const defenseTypeInfo = raid.defenseTypes.find((dt) => dt.defenseType === stat.raid.defenseType);
+        const difficulty = defenseTypeInfo?.difficulty ?? null;
+        return {
+          ...stat,
+          raid: {
+            uid: raid.uid,
+            name: raid.name,
+            boss: raid.boss,
+            type: raid.type as RaidType,
+            since: new Date(raid.since),
+            until: new Date(raid.until),
+            terrain: raid.terrain as Terrain,
+            defenseType: stat.raid.defenseType,
+            difficulty,
+          },
+        };
+      })
+      .filter((stat): stat is EnrichedRaidStatistics => stat !== null)
+      .filter((stat) => stat.slotsCount > 100); // Filter by minimum count
+    };
+  }, [allRaids]);
+
   // Memoize the filtered statistics to prevent re-computation on every render
-  const statistics = useMemo(() => 
-    student.raidStatistics.filter(({ slotsCount }) => slotsCount > 100),
-    [student.raidStatistics]
-  );
+  const [statistics, setStatistics] = useState<EnrichedRaidStatistics[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    const loadStatistics = async () => {
+      try {
+        const rawStatistics = await fetchRaidStatisticsByStudent(student.uid);
+        if (cancelled) {
+          return;
+        }
+        setStatistics(enrichRaidStatistics(rawStatistics));
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    loadStatistics();
+    return () => { cancelled = true; };
+  }, [student.uid]);
 
   // Memoize the sorted and sliced statistics
   const filteredStatistics = useMemo(() => {
-    const sorted = statistics.sort((a, b) => {
+    const sorted = [...statistics].sort((a, b) => {
       if (sort === "recent") {
-        return new Date(b.raid.since).getTime() - new Date(a.raid.since).getTime();
+        return b.raid.since.getTime() - a.raid.since.getTime();
       } else {
-        return new Date(a.raid.since).getTime() - new Date(b.raid.since).getTime();
+        return a.raid.since.getTime() - b.raid.since.getTime();
       }
     });
     return raidShowMore ? sorted : sorted.slice(0, 5);
@@ -133,10 +188,7 @@ export default function StudentDetail() {
       <StudentGradingChart student={student} tagCounts={tagCounts} noGrading={allGradings.length === 0} signedIn={currentUser !== null} />
       <StudentGradingComments student={student} gradings={allGradings} currentUser={currentUser} />
 
-      <SubTitle
-        text="총력전/대결전 통계"
-        description="최근 1년간 개최된 총력전/대결전의 편성 횟수를 제공해요."
-      />
+      <SubTitle text="총력전/대결전 통계" />
       <div>
         {filteredStatistics.length === 0 ?
           <EmptyView text="편성된 충력전/대결전 정보가 없어요" /> :
@@ -149,22 +201,17 @@ export default function StudentDetail() {
             exclusive atLeastOne
           />
         }
-        {filteredStatistics.map(({ raid, defenseType, difficulty, slotsByTier, slotsCount, assistsCount, assistsByTier }) => {
+        {filteredStatistics.map((stat) => {
+          const { raid, slotsByTier, slotsCount, assistsCount, assistsByTier } = stat;
           return (
             <RaidStatisticsSlotCount
-              key={`${raid.uid}-${defenseType}`}
-              raid={{
-                ...raid,
-                defenseType,
-                difficulty,
-                since: new Date(raid.since),
-                until: new Date(raid.until),
-              }}
+              key={`${raid.uid}-${raid.defenseType}`}
+              raid={raid}
               slotsCount={slotsCount}
               slotsByTier={slotsByTier}
               assistsCount={assistsCount}
               assistsByTier={assistsByTier}
-              maxTier={getMaxTierAt(new Date(raid.since))}
+              maxTier={getMaxTierAt(raid.since)}
             />
           );
         })}

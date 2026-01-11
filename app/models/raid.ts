@@ -2,7 +2,7 @@ import { graphql } from "~/graphql";
 import { fetchCached } from "./base";
 import { runQuery } from "~/lib/baql";
 
-export type Difficulty = "normal" | "hard" | "veryhard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
+export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
 export type Boss = "binah" | "chesed" | "hod" | "shirokuro" | "perorozilla" | "goz" | "hieronymus" | "kaiten-fx-mk0" | "gregorius" | "hovercraft" | "myouki-kurokage" | "geburah" | "yesod";
 
 
@@ -38,7 +38,7 @@ const allRaidQuery = graphql(`
   query AllRaid {
     raids {
       nodes {
-        uid type name boss since until terrain attackType rankVisible
+        uid type name boss since until terrain attackType rankVisible raidIndexJp
         defenseTypes { defenseType difficulty }
       }
     }
@@ -74,7 +74,7 @@ export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [
 const RAID_TIME_SCORE_PER_SECOND = {
   "normal": 120,
   "hard": 240,
-  "veryhard": 480,
+  "very_hard": 480,
   "hardcore": 960,
   "extreme": 1440,
   "insane": 1920,
@@ -85,7 +85,7 @@ const RAID_TIME_SCORE_PER_SECOND = {
 const RAID_DIFFICULTY_SCORE = {
   "normal": 250000,
   "hard": 500000,
-  "veryhard": 1000000,
+  "very_hard": 1000000,
   "hardcore": 2000000,
   "extreme": 4000000,
   "insane": 6800000,
@@ -96,7 +96,7 @@ const RAID_DIFFICULTY_SCORE = {
 const RAID_HP_SCORE = {
   "normal": { 180: 229000, 240: 277000, 270: 304700 },
   "hard": { 180: 458000, 240: 554000, 270: 609400 },
-  "veryhard": { 180: 916000, 240: 1108000, 270: 1218800 },
+  "very_hard": { 180: 916000, 240: 1108000, 270: 1218800 },
   "hardcore": { 180: 1832000, 240: 2216000, 270: 2437600 },
   "extreme": { 180: 5392000, 240: 6160000, 270: 6578880 },
   "insane": { 180: 12449600, 240: 14216000, 270: 14941016 },
@@ -128,7 +128,7 @@ export function timeToScore(boss: Boss, difficulty: Difficulty, clearTimeMillise
 
 export function scoreToDifficultyAndTime(boss: Boss, score: number): { difficulty: Difficulty, clearTimeMillisec: number } {
   const timePerBoss = timeForBoss(boss);
-  const difficulties: Difficulty[] = ["normal", "hard", "veryhard", "hardcore", "extreme", "insane", "torment", "lunatic"];
+  const difficulties: Difficulty[] = ["normal", "hard", "very_hard", "hardcore", "extreme", "insane", "torment", "lunatic"];
 
   // Try each difficulty from highest to lowest
   for (let i = difficulties.length - 1; i >= 0; i--) {

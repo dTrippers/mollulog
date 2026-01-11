@@ -100,7 +100,7 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
 
     // Convert excludeStudents: tiers 배열을 [tier, weaponTier?] 형식으로 변환
     // tiers가 빈 배열이면 tiers: [] (모든 tier 의미)
-    const excludeStudents = filterState.excludeStudents.map((s) => {
+    let excludeStudents = filterState.excludeStudents.map((s) => {
       if (s.tiers.length === 0) {
         return { uid: s.uid, tiers: [] };
       }
@@ -115,6 +115,19 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
       return { uid: s.uid, tiers };
     });
 
+    // If filterNotOwned is enabled, add all unowned students to excludeStudents
+    if (filterState.filterNotOwned) {
+      const unownedStudentUids = Object.keys(allStudents).filter((uid) => !recruitedStudentTiers[uid]);
+
+      // Add unowned students to excludeStudents (avoid duplicates)
+      const existingExcludeUids = new Set(excludeStudents.map((s) => s.uid));
+      for (const uid of unownedStudentUids) {
+        if (!existingExcludeUids.has(uid)) {
+          excludeStudents.push({ uid, tiers: [] }); // tiers: [] means all tiers
+        }
+      }
+    }
+
     return {
       includeStudents,
       excludeStudents,
@@ -127,7 +140,7 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
     setLoading(true);
     setError(null);
     setCurrentPage(1);
-  }, [currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType, filterState.difficulty, filterState.includeStudents, filterState.excludeStudents]);
+  }, [currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType, filterState.difficulty, filterState.includeStudents, filterState.excludeStudents, filterState.filterNotOwned]);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,28 +164,8 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
           return;
         }
 
-        // Apply filterNotOwned on client side
-        let filteredRanks = result.ranks;
-        let adjustedTotalCount = result.totalCount;
-        if (filterState.filterNotOwned) {
-          filteredRanks = filteredRanks.filter((rank) => {
-            const allStudentSlots = rank.parties.flatMap((party) => party.slots);
-            return !allStudentSlots.some((slot) => {
-              if (!slot.studentUid) {
-                return false;
-              }
-              return !recruitedStudentTiers[slot.studentUid];
-            });
-          });
-          // Note: totalCount is approximate when filterNotOwned is applied
-          // since we can't know the exact count without fetching all pages
-          adjustedTotalCount = filteredRanks.length < ITEMS_PER_PAGE 
-            ? filteredRanks.length 
-            : result.totalCount;
-        }
-
-        setRanks(filteredRanks);
-        setTotalCount(adjustedTotalCount);
+        setRanks(result.ranks);
+        setTotalCount(result.totalCount);
         setLoading(false);
       } catch (err) {
         if (cancelled) {
@@ -188,7 +181,7 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
     return () => {
       cancelled = true;
     };
-  }, [currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType, currentPage, filterState, recruitedStudentTiers]);
+  }, [currentRaid.raidType, currentRaid.seasonIndex, currentRaid.defenseType, currentPage, filterState, allStudents, recruitedStudentTiers]);
 
   if (loading) {
     return <LoadingRanks />;
