@@ -64,7 +64,7 @@ export default function RaidStatistics() {
     return () => {
       cancelled = true;
     };
-  }, [currentRaid.type, currentRaid.raidIndexJp, currentRaid.rankVisible, defenseType, allStudents]);
+  }, [currentRaid.type, currentRaid.raidIndexJp, currentRaid.rankVisible, defenseType]);
 
   if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
     return (

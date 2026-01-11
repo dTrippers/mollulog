@@ -149,16 +149,6 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
         </div>
       )}
 
-      {/* <a
-        href="https://replay.mollulog.net"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="my-4 block px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-lg shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200 cursor-pointer"
-      >
-        <p className="text-sm font-semibold mb-1">re:PLAY 2025</p>
-        <p className="text-xs opacity-90">블루 아카이브의 2025년을 모아봤어요</p>
-      </a> */}
-
       <Link
         to="/news"
         className="w-fit my-1.5 py-1 px-2 flex items-center text-neutral-500 dark:text-neutral-400 cursor-pointer hover:underline relative"
