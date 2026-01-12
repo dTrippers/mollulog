@@ -14,11 +14,6 @@ const raidDetailQuery = graphql(`
       videos(first: 1) {
         pageInfo { hasNextPage }
       }
-      statistics {
-        student { uid name }
-        slotsByTier { tier }
-        assistsByTier { tier }
-      }
     }
   }
 `);

@@ -11,6 +11,7 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { Difficulty } from "~/graphql/graphql";
 import type { Difficulty as DifficultyType } from "~/models/raid";
+import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -48,25 +49,19 @@ export default function RaidRanks() {
   }
 
   // Get all students for current raid
-  const filterableStudents = useMemo(() => {
-    const resultsMap = new Map<string, { uid: string; name: string; tiers: number[] }>();
-    for (const { student, slotsByTier, assistsByTier } of currentRaid.statistics) {
-      const tiers = Array.from(
-        new Set([...slotsByTier.map((slot) => slot.tier), ...assistsByTier.map((assist) => assist.tier)]),
-      );
-
-      const existing = resultsMap.get(student.uid);
-      if (existing) {
-        resultsMap.set(
-          student.uid,
-          { uid: student.uid, name: student.name, tiers: Array.from(new Set([...existing.tiers, ...tiers])) },
-        );
-      } else {
-        resultsMap.set(student.uid, { uid: student.uid, name: student.name, tiers });
-      }
-    }
-    return Array.from(resultsMap.values());
-  }, [currentRaid.uid]);
+  const [filterableStudents, setFilterableStudents] = useState<{ uid: string; name: string; tiers: number[] }[]>([]);
+  useEffect(() => {
+    const loadFilterableStudents = async () => {
+      const statistics = await fetchRaidStatisticsByRaid(currentRaid.type, currentRaid.raidIndexJp!, defenseType);
+      setFilterableStudents(statistics.map(({ studentUid }) => {
+        if (!allStudents[studentUid]) {
+          return null;
+        }
+        return { uid: studentUid, name: allStudents[studentUid].name, tiers: [] };
+      }).filter((student) => student !== null));
+    };
+    loadFilterableStudents();
+  }, [currentRaid.type, currentRaid.raidIndexJp, defenseType, allStudents]);
 
   const [rankFilterState, setRankFilterState] = useState<RaidRankFilterState>({
     filterNotOwned: false,

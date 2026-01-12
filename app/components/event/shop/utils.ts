@@ -1,4 +1,4 @@
-import type { MinigameConfig, RewardItem } from "./constants";
+import type { MinigameConfig, RewardItem, DiceMinigameConfig } from "./constants";
 
 /**
  * Formats resource count labels with K/M suffixes for large numbers.
@@ -6,10 +6,10 @@ import type { MinigameConfig, RewardItem } from "./constants";
  */
 export function resourceCountLabel(count: number): string {
   if (count >= 1000000) {
-    return `${(count / 1000000).toLocaleString()}M`;
+    return `${(count / 1000000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`;
   }
   if (count >= 10000) {
-    return `${(count / 1000).toLocaleString()}K`;
+    return `${(count / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K`;
   }
   return count.toLocaleString();
 }
@@ -17,13 +17,19 @@ export function resourceCountLabel(count: number): string {
 /**
  * Calculates minigame rewards based on play count and reward groups.
  * Each reward group specifies which rounds it applies to (specific rounds or "subsequent").
+ * For dice type, playCount is treated as roll count and converted to lap count first.
  */
-export function calculateMinigameRewards(
-  config: MinigameConfig,
-  playCount: number,
-): RewardItem[] {
+export function calculateMinigameRewards(config: MinigameConfig, playCount: number): RewardItem[] {
   if (playCount <= 0) {
     return [];
+  }
+
+  // For dice type, convert roll count to lap count
+  let effectiveCount: number;
+  if (config.minigameType === "dice" && config.dice) {
+    effectiveCount = convertRollsToLaps(config.dice, playCount);
+  } else {
+    effectiveCount = playCount;
   }
 
   // Collect all explicitly specified rounds from all groups (excluding "subsequent")
@@ -59,11 +65,11 @@ export function calculateMinigameRewards(
 
     if (group.rounds === "subsequent") {
       // Count rounds that are not explicitly specified in other groups
-      // This includes all rounds from 1 to playCount, minus the explicitly specified ones
-      appliedCount = playCount - Array.from(allSpecifiedRounds).filter((round) => round <= playCount).length;
+      // This includes all rounds from 1 to effectiveCount, minus the explicitly specified ones
+      appliedCount = effectiveCount - Array.from(allSpecifiedRounds).filter((round) => round <= effectiveCount).length;
     } else {
-      // Count how many of the specified rounds are <= playCount
-      appliedCount = group.rounds.filter((round) => round <= playCount).length;
+      // Count how many of the specified rounds are <= effectiveCount
+      appliedCount = group.rounds.filter((round) => round <= effectiveCount).length;
     }
 
     if (appliedCount > 0) {
@@ -71,5 +77,65 @@ export function calculateMinigameRewards(
     }
   }
 
+  // For dice type, add race node rewards (발판 보상)
+  if (config.minigameType === "dice" && config.dice?.nodeRewards && playCount > 0) {
+    // 각 발판의 보상 * 지나가는 횟수 = (보상 수량 * 주사위 굴림 횟수) / 발판 수
+    const passesPerNode = playCount / config.dice.tiles;
+    for (const reward of config.dice.nodeRewards) {
+      const key = `${reward.resourceType}:${reward.resourceUid}:`;
+      const quantity = Math.floor(reward.quantity * passesPerNode);
+      if (rewardMap.has(key)) {
+        rewardMap.get(key)!.quantity += quantity;
+      } else {
+        rewardMap.set(key, {
+          resourceType: reward.resourceType,
+          resourceUid: reward.resourceUid,
+          quantity,
+        });
+      }
+    }
+  }
+
   return Array.from(rewardMap.values());
+}
+
+/**
+ * Calculates dice minigame statistics based on roll count.
+ * Uses average dice value to estimate laps completed.
+ */
+export function calculateDiceMinigameStats(config: DiceMinigameConfig, rollCount: number): {
+  totalCost: number;
+  estimatedLaps: number;
+  rollsPerLap: number;
+  rollsPerLapWithBonus: number;
+} {
+  const avgDice = (config.diceMin + config.diceMax) / 2;
+  const rollsPerLap = config.tiles / avgDice;
+  const rollsPerLapWithBonus = rollsPerLap - 1;
+
+  // 확정권이 지급되는 바퀴까지 필요한 주사위 던지기 횟수
+  const rollsForBonusLaps = config.bonusRollUntilLap * rollsPerLapWithBonus;
+  let estimatedLaps: number;
+  if (rollCount <= rollsForBonusLaps) {
+    // 확정권이 지급되는 바퀴 범위: 확정권 있음
+    estimatedLaps = rollCount / rollsPerLapWithBonus;
+  } else {
+    // 확정권이 지급되지 않는 바퀴 이후: 확정권 없음
+    estimatedLaps = config.bonusRollUntilLap + (rollCount - rollsForBonusLaps) / rollsPerLap;
+  }
+
+  return {
+    totalCost: rollCount, // 실제 비용은 payment.quantity와 곱해야 함
+    estimatedLaps,
+    rollsPerLap,
+    rollsPerLapWithBonus,
+  };
+}
+
+/**
+ * Converts roll count to lap count for dice minigame.
+ */
+export function convertRollsToLaps(config: DiceMinigameConfig, rollCount: number): number {
+  const stats = calculateDiceMinigameStats(config, rollCount);
+  return stats.estimatedLaps;
 }

@@ -12,9 +12,23 @@ export type RewardGroup = {
   rewards: RewardItem[];
 };
 
+export type DiceNodeReward = {
+  resourceType: ResourceTypeEnum;
+  resourceUid: string;
+  quantity: number;
+};
+
+export type DiceMinigameConfig = {
+  tiles: number; // 칸 수 (18)
+  diceMin: number; // 주사위 최솟값 (1)
+  diceMax: number; // 주사위 최댓값 (6)
+  bonusRollUntilLap: number; // 보너스 종료 바퀴 (16) - 이 바퀴까지 확정권 1회 지급
+  nodeRewards?: DiceNodeReward[]; // 각 발판(노드)의 보상 목록
+};
+
 export type MinigameConfig = {
   title: string;
-  minigameType: "roguelike" | "prize_exchange";
+  minigameType: "roguelike" | "prize_exchange" | "dice";
   description: string;
   payment: {
     resourceType: ResourceTypeEnum;
@@ -22,6 +36,7 @@ export type MinigameConfig = {
     quantity: number;
   };
   rewardGroups: RewardGroup[];
+  dice?: DiceMinigameConfig; // dice 타입일 때만 사용
 };
 
 export const MINIGAME_CONFIG: Record<string, MinigameConfig> = {
@@ -331,4 +346,160 @@ export const MINIGAME_CONFIG: Record<string, MinigameConfig> = {
       },
     ],
   },
+  "occult-club": {
+    minigameType: "dice",
+    title: "주사위 달리기",
+    description: "보상은 주사위의 평균값으로 계산되어 실제와 다를 수 있어요",
+    payment: {
+      resourceType: ResourceTypeEnum.Item,
+      resourceUid: "80660",
+      quantity: 500,
+    },
+    dice: {
+      tiles: 18,
+      diceMin: 1,
+      diceMax: 6,
+      bonusRollUntilLap: 16,
+      nodeRewards: [
+        // { resourceType: ResourceTypeEnum.Item, resourceUid: "100043", quantity: 53 },
+        { resourceType: ResourceTypeEnum.Item, resourceUid: "192", quantity: 3 },
+        { resourceType: ResourceTypeEnum.Item, resourceUid: "262", quantity: 3 },
+        { resourceType: ResourceTypeEnum.Item, resourceUid: "13", quantity: 6 },
+        // { resourceType: ResourceTypeEnum.Item, resourceUid: "100043", quantity: 41 },
+        { resourceType: ResourceTypeEnum.Item, resourceUid: "262", quantity: 2 },
+        { resourceType: ResourceTypeEnum.Item, resourceUid: "23", quantity: 5 },
+        { resourceType: ResourceTypeEnum.Equipment, resourceUid: "4", quantity: 7 },
+        { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 2000000 },
+        { resourceType: ResourceTypeEnum.Item, resourceUid: "23", quantity: 4 },
+        { resourceType: ResourceTypeEnum.Item, resourceUid: "192", quantity: 2 },
+        { resourceType: ResourceTypeEnum.Equipment, resourceUid: "4", quantity: 4 },
+        { resourceType: ResourceTypeEnum.Item, resourceUid: "13", quantity: 6 },
+        { resourceType: ResourceTypeEnum.Equipment, resourceUid: "4", quantity: 4 },
+      ],
+    },
+    rewardGroups: [
+      {
+        rounds: [1],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "12", quantity: 30 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "260", quantity: 50 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "190", quantity: 50 },
+        ],
+      },
+      {
+        rounds: [2],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Equipment, resourceUid: "3", quantity: 30 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "261", quantity: 20 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "191", quantity: 20 },
+        ],
+      },
+      {
+        rounds: [3],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "12", quantity: 40 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "260", quantity: 50 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "190", quantity: 50 },
+        ],
+      },
+      {
+        rounds: [4],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Equipment, resourceUid: "3", quantity: 40 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "261", quantity: 20 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "191", quantity: 20 },
+        ],
+      },
+      {
+        rounds: [5],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "13", quantity: 25 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "260", quantity: 50 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "190", quantity: 50 },
+        ],
+      },
+      {
+        rounds: [6],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Equipment, resourceUid: "4", quantity: 35 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "261", quantity: 20 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "191", quantity: 20 },
+        ],
+      },
+      {
+        rounds: [7],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "6998", quantity: 5 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "262", quantity: 14 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "192", quantity: 14 },
+        ],
+      },
+      {
+        rounds: [8],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "13", quantity: 30 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "263", quantity: 5 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "193", quantity: 5 },
+        ],
+      },
+      {
+        rounds: [9],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Equipment, resourceUid: "4", quantity: 40 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "262", quantity: 16 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "192", quantity: 16 },
+        ],
+      },
+      {
+        rounds: [10],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "9999", quantity: 1 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "263", quantity: 6 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "193", quantity: 6 },
+        ],
+      },
+      {
+        rounds: [11],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 1200000 },
+        ],
+      },
+      {
+        rounds: [12],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 1200000 },
+        ],
+      },
+      {
+        rounds: [13],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 1200000 },
+        ],
+      },
+      {
+        rounds: [14],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 1200000 },
+        ],
+      },
+      {
+        rounds: [15],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 1200000 },
+        ],
+      },
+      {
+        rounds: [16],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 2000000 },
+        ],
+      },
+      {
+        rounds: [17, 18, 19, 20],
+        rewards: [
+          { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 2000000 },
+        ],
+      },
+    ],
+  }
 };

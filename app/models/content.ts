@@ -10,6 +10,7 @@ import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
 import { getFavoritedCounts } from "./favorite-students";
 import type { EventType, RaidType } from "./content.d";
+import { getLatestPostTime } from "./post";
 
 export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "update",
@@ -458,5 +459,50 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
       throw error ?? "failed to fetch events";
     }
     return data.contents.nodes;
+  }, 60 * 60 * 24, forceRefresh);
+}
+
+
+/**
+ * Navigation Bar Contents
+ */
+const upcomingEventQuery = graphql(`
+  query UpcomingEvent($now: ISO8601DateTime!) {
+    events(untilAfter: $now, first: 1, types: [event]) {
+      nodes { uid since until }
+    }
+  }
+`);
+
+type NavigationBarContents = {
+  upcomingEvent: {
+    uid: string;
+    since: Date;
+    until: Date;
+  } | null;
+  hasRecentNews: boolean;
+};
+
+export async function getNavigationBarContents(env: Env, forceRefresh = false): Promise<NavigationBarContents> {
+  return fetchCached(env, "navigation-bar-contents::v1", async () => {
+    const now = dayjs();
+    const { data, error } = await runQuery(upcomingEventQuery, { now: now.toDate() });
+    if (error || !data) {
+      throw error ?? "failed to fetch upcoming event";
+    }
+
+    const upcomingEvent = data.events.nodes[0] ?? null;
+    if (upcomingEvent) {
+      upcomingEvent.since = dayjs(upcomingEvent.since).toDate();
+      upcomingEvent.until = dayjs(upcomingEvent.until).toDate();
+    }
+
+    const latestNewsTime = await getLatestPostTime(env, "news");
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    return {
+      upcomingEvent,
+      hasRecentNews: latestNewsTime !== null && latestNewsTime > threeDaysAgo,
+    };
   }, 60 * 60 * 24, forceRefresh);
 }

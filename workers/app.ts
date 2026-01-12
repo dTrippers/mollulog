@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import { createRequestHandler } from "react-router";
-import { getFutureContents, getIndexContents } from "~/models/content";
+import { getFutureContents, getIndexContents, getNavigationBarContents } from "~/models/content";
 import { getAllRaids, getRaidDetail } from "~/models/raid";
 import { syncRawStudents } from "~/models/student";
 
@@ -31,14 +31,16 @@ export default {
       await syncRawStudents(env);
     } else if (event.cron === "*/10 * * * *") {
       // every 10 minutes
-    } else if (event.cron === "* * * * *") {
-      // every minute
-      await getFutureContents(env, true);
-      await getIndexContents(env, true);
-
       const allRaids = await getAllRaids(env, true);
       const now = dayjs();
       await Promise.all(allRaids.filter((raid) => raid.rankVisible && dayjs(raid.until).isAfter(now)).map((raid) => getRaidDetail(env, raid.uid, true)));
+    } else if (event.cron === "* * * * *") {
+      // every minute
+      Promise.all([
+        getFutureContents(env, true),
+        getIndexContents(env, true),
+        getNavigationBarContents(env, true),
+      ]);
     }
   },
 } satisfies ExportedHandler<Env>;
