@@ -53,11 +53,15 @@ export default function RaidRanks() {
   useEffect(() => {
     const loadFilterableStudents = async () => {
       const statistics = await fetchRaidStatisticsByRaid(currentRaid.type, currentRaid.raidIndexJp!, defenseType);
-      setFilterableStudents(statistics.map(({ studentUid }) => {
+      setFilterableStudents(statistics.map(({ studentUid, slotsByTier, assistsByTier }) => {
         if (!allStudents[studentUid]) {
           return null;
         }
-        return { uid: studentUid, name: allStudents[studentUid].name, tiers: [] };
+        return {
+          uid: studentUid,
+          name: allStudents[studentUid].name,
+          tiers: Array.from(new Set([...slotsByTier.map((slot) => slot.tier), ...assistsByTier.map((assist) => assist.tier)])),
+        };
       }).filter((student) => student !== null));
     };
     loadFilterableStudents();
