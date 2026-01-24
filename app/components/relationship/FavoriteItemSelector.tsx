@@ -28,12 +28,17 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
       return [];
     }
 
-    return favoriteItems.filter(({ favorited }) => filterFavorited ? favorited : true).sort((a, b) => {
-      if (a.item.rarity === b.item.rarity) {
-        return b.favoriteLevel - a.favoriteLevel;
-      }
-      return b.item.rarity - a.item.rarity;
-    });
+    return favoriteItems
+      .filter(({ favorited }) => filterFavorited ? favorited : true)
+      .sort((a, b) => {
+        if (a.item.rarity !== b.item.rarity) {
+          return b.item.rarity - a.item.rarity;
+        }
+        if (a.favoriteLevel !== b.favoriteLevel) {
+          return b.favoriteLevel - a.favoriteLevel;
+        }
+        return parseInt(a.item.uid, 10) - parseInt(b.item.uid, 10);
+      });
   }, [favoriteItems, filterFavorited]);
 
   useEffect(() => {
@@ -45,41 +50,33 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
 
   return (
     <>
-      <div className="mt-8 flex items-center justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <SubTitle text="선물 목록" />
         <Toggle label="좋아하는 선물만 보기" initialState={filterFavorited} onChange={setFilterFavorited} />
       </div>
 
       {fetcher.state === "loading" ?
         <LoadingSkeleton /> :
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 lg:grid-cols-8 gap-1 xl:gap-3">
           {filteredItems.map(({ item, favoriteLevel, exp }) => {
             const quantity = quantities[item.uid] || 0;
             const totalItemExp = exp * quantity;
             return (
               <div key={item.uid} className="group p-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
-                <div className="flex items-start">
-                  <ResourceCard rarity={item.rarity} favoriteLevel={favoriteLevel} itemUid={item.uid} />
-
-                  <div className="ml-3 grow min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="font-medium truncate">{item.name}</p>
-                      {quantity > 0 && (
-                        <span className="shrink-0 rounded-full bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 px-2 py-0.5 text-xs border border-green-200 dark:border-green-800">
-                          +{totalItemExp.toLocaleString()} EXP
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{exp} EXP</div>
-
-                    <div className="mt-3 flex items-center gap-2">
-                      <label className="shrink-0 text-sm text-neutral-600 dark:text-neutral-400">수량</label>
-                      <NumberInput
-                        value={quantity}
-                        onChange={(value) => onQuantitiesChange({ ...quantities, [item.uid]: value })}
-                      />
-                    </div>
+                <div className="flex flex-col items-center">
+                  <ResourceCard rarity={item.rarity} favoriteLevel={favoriteLevel} itemUid={item.uid} name={item.name} size="lg" />
+                  <div className="mt-0.5 text-center text-xs text-neutral-500 dark:text-neutral-400">{exp} EXP</div>
+                  <div className="mt-3 flex items-center gap-2">
+                    <NumberInput
+                      value={quantity}
+                      onChange={(value) => onQuantitiesChange({ ...quantities, [item.uid]: value })}
+                    />
                   </div>
+                  {quantity > 0 && (
+                    <span className="mt-2 rounded-full bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 px-2 py-0.5 text-xs border border-green-200 dark:border-green-800">
+                      +{totalItemExp.toLocaleString()} EXP
+                    </span>
+                  )}
                 </div>
               </div>
             );

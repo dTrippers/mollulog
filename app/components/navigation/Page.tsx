@@ -24,7 +24,7 @@ export default function Page({ title, description, belowTitle, screens, panels, 
   return (
     <>
       <div className="flex flex-col xl:flex-row">
-        <div className="w-full xl:h-screen xl:max-w-sm xl:mr-8 xl:sticky xl:top-6 xl:self-start xl:overflow-y-scroll no-scrollbar">
+        <div className="shrink-0 w-full xl:h-screen xl:max-w-86 xl:mr-8 xl:sticky xl:top-6 xl:self-start xl:overflow-y-scroll overflow-x-hidden no-scrollbar">
           <div className="mt-8 mb-4">
             <h1 className="font-black text-3xl md:text-4xl drop-shadow-xl drop-shadow-neutral-300/50 dark:drop-shadow-neutral-700/50">
               {title}
@@ -67,9 +67,9 @@ export default function Page({ title, description, belowTitle, screens, panels, 
                 key={panel.title}
                 onClick={() => panel.disabled ? undefined : setOpenPanelIndex(index)}
                 className={sanitizeClassName(`
-              w-20 flex flex-col justify-center items-center p-2 text-neutral-700 dark:text-neutral-300 rounded-full transition-colors cursor-pointer
-              ${panel.disabled ? "opacity-50 cursor-default" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}
-            `)}
+                  w-20 flex flex-col justify-center items-center p-2 text-neutral-700 dark:text-neutral-300 rounded-full transition-colors cursor-pointer
+                  ${panel.disabled ? "opacity-50 cursor-default" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}
+                `)}
               >
                 <panel.Icon className="mb-1 size-5 shrink-0" strokeWidth={2} />
                 <span className="text-xs font-medium whitespace-nowrap">{panel.title}</span>
