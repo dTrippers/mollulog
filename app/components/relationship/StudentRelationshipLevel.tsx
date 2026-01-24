@@ -1,9 +1,9 @@
 import { ChevronRightIcon, HeartIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Toggle } from "~/components/atoms/form";
-import { SubTitle } from "~/components/atoms/typography";
 import { RELATIONSHIP_EXP_TABLE } from "~/models/constants";
 import { sanitizeClassName } from "~/prophandlers";
+import { Section } from "~/components/ui";
 
 type StudentRelationshipLevelProps = {
   currentExp: number | null;
@@ -31,8 +31,7 @@ export default function StudentRelationshipLevel({
   const requiredExp = getAccumulatedExpForLevel(targetLevel) - expectedExp;
 
   return (
-    <>
-      <SubTitle text="인연 랭크" description="현재 경험치를 알고 있다면 더 정확하게 계산할 수 있어요" />
+    <Section title="인연 랭크" description="현재 경험치를 알고 있다면 더 정확하게 계산할 수 있어요">
       <Toggle label="현재 경험치로 입력" initialState={useCurrentExp} onChange={setUseCurrentExp} />
       <div className="p-4 bg-neutral-100 dark:bg-neutral-900 rounded-xl">
         <div className="flex flex-col md:flex-row items-center gap-4">
@@ -76,7 +75,7 @@ export default function StudentRelationshipLevel({
           />
         </div>
       </div>
-    </>
+    </Section>
   );
 }
 

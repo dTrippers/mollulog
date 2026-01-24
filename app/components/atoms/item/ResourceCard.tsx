@@ -1,5 +1,6 @@
 import { memo } from "react";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
+import { sanitizeClassName } from "~/prophandlers";
 
 type ResourceCardProps = {
   resourceType?: ResourceTypeEnum;
@@ -7,7 +8,9 @@ type ResourceCardProps = {
   favoriteLevel?: number;
   label?: number | string;
   labelColor?: "white" | "yellow";
+  labelBgColor?: "black" | "red";
   name?: string;
+  size?: "md" | "lg";
 } & (
   {
     itemUid: string;
@@ -18,9 +21,7 @@ type ResourceCardProps = {
   }
 );
 
-function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageUrl: imageUrlProp, label, labelColor = "white", name }: ResourceCardProps) {
-  const labelColorClass = labelColor === "white" ? "text-white" : "text-orange-300";
-
+function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageUrl: imageUrlProp, label, labelColor = "white", labelBgColor = "black", name, size = "md" }: ResourceCardProps) {
   let imageUrl = imageUrlProp;
   if (itemUid) {
     if (resourceType === "furniture") {
@@ -34,18 +35,29 @@ function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageU
     }
   }
 
+  let sizeClass = "size-10";
+  let imageSizeClass = "size-8";
+  if (size === "lg") {
+    sizeClass = "size-12 md:size-14";
+    imageSizeClass = "size-10";
+  }
+
   return (
     <div className="relative group">
-      <div className={`shrink-0 size-10 rounded-lg border border-neutral-200 dark:border-neutral-700 ${rarityBgClass(rarity)} flex items-center justify-center overflow-hidden`}>
+      <div className={`shrink-0 ${sizeClass} rounded-lg border border-neutral-200 dark:border-neutral-700 ${rarityBgClass(rarity)} flex items-center justify-center overflow-hidden`}>
         <img
           alt="아이템 이미지"
           src={imageUrl}
-          className={`${imageUrlProp ? "size-8" : "w-full h-full"} object-contain`}
+          className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} object-contain`}
           loading="lazy"
         />
         {label && (
-          <div className="px-1 absolute -right-1 -bottom-0.5 bg-neutral-900/80 backdrop-blur-sm text-white text-xs rounded-sm">
-            <span className={`${labelColorClass} text-xs font-medium tracking-tighter`}>{label}</span>
+          <div
+            className={sanitizeClassName(`
+              flex items-center justify-center px-1 absolute -bottom-1 -right-1 ${labelBadgeBgClass(labelBgColor)} rounded
+              border-2 border-white dark:border-neutral-800 ${labelTextColorClass(labelColor)} text-xs font-medium tracking-tighter
+            `)}>
+            {label}
           </div>
         )}
       </div>
@@ -62,6 +74,20 @@ function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageU
 }
 
 export default memo(ResourceCard);
+
+function labelBadgeBgClass(labelBgColor: "black" | "red"): string {
+  if (labelBgColor === "red") {
+    return "bg-red-600/80 dark:bg-red-500/80";
+  }
+  return "bg-neutral-900/80";
+}
+
+function labelTextColorClass(labelColor: "white" | "yellow"): string {
+  if (labelColor === "yellow") {
+    return "text-orange-300";
+  }
+  return "text-white";
+}
 
 function rarityBgClass(rarity: number | null | undefined): string {
   switch (rarity) {

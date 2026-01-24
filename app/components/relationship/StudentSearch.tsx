@@ -27,7 +27,7 @@ export default function StudentSearch({ students, selectedStudentUid, onSelectSt
   }, [students]);
 
   return (
-    <>
+    <div>
       <SubTitle text="학생 선택" />
       <Input
         placeholder="이름으로 찾기..."
@@ -42,14 +42,14 @@ export default function StudentSearch({ students, selectedStudentUid, onSelectSt
         }}
       />
 
-      <div className="-mt-4">
+      <div className="-mt-8">
         <StudentSearchResult
           students={filteredStudents}
           selectedStudentUid={selectedStudentUid}
           onSelectStudentUid={onSelectStudentUid}
         />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -125,7 +125,7 @@ function StudentSearchResult({ students, selectedStudentUid, onSelectStudentUid 
 
       <div
         ref={scrollContainerRef}
-        className="flex gap-1 overflow-x-auto no-scrollbar py-2"
+        className="flex overflow-x-auto no-scrollbar py-2"
       >
         {students.map((student) => {
           const visibleNames = parseVisibleNames(student.name);

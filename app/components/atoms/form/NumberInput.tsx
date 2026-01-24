@@ -29,7 +29,7 @@ export default function NumberInput({ label, defaultValue, value, maxValue, onCh
             setInternalValue(newValue);
             onChange(newValue);
           }}
-          className="px-2 py-1 text-sm text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40"
+          className="px-2 py-1 text-sm text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40"
           disabled={internalValue <= 0}
           aria-label="감소"
         >
@@ -62,7 +62,7 @@ export default function NumberInput({ label, defaultValue, value, maxValue, onCh
             setInternalValue(newValue);
             onChange(newValue);
           }}
-          className="px-2 py-1 text-sm text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40"
+          className="px-2 py-1 text-sm text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-40"
           disabled={maxValue !== undefined && internalValue >= maxValue}
           aria-label="증가"
         >
