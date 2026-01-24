@@ -179,15 +179,14 @@ function useSaveStudentItems({ studentItemsMap, initialStudentItems, levelStuden
   const [saveSuccess, setSaveSuccess] = useState(false);
   const lastSuccessRef = useRef<Set<string>>(new Set());
 
-  // Check if student's items have changed from initial state
-  const hasChanged = (studentUid: string, itemUid: string): boolean => {
-    const current = studentItemsMap.get(studentUid)?.items[itemUid] ?? 0;
-    const initial = initialStudentItems.get(studentUid)?.items[itemUid] ?? 0;
-    return current !== initial;
-  };
-
   // Get changed students for this level (memoized to prevent unnecessary effect re-runs)
   const changedStudents = useMemo(() => {
+    const hasChanged = (studentUid: string, itemUid: string): boolean => {
+      const current = studentItemsMap.get(studentUid)?.items[itemUid] ?? 0;
+      const initial = initialStudentItems.get(studentUid)?.items[itemUid] ?? 0;
+      return current !== initial;
+    };
+
     return levelStudents
       .filter((student) => hasChanged(student.uid, activeItem.itemUid))
       .map((student) => student.uid);
