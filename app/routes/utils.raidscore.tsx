@@ -3,7 +3,7 @@ import { CalculatorIcon, ClockIcon } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
 import type { MetaFunction } from "react-router";
 import { Title } from "~/components/atoms/typography";
-import { FilterButtons } from "~/components/molecules/content";
+import { FilterButtons } from "~/components/navigation";
 import { InputForm, SelectForm } from "~/components/molecules/form";
 import ContentSelectForm from "~/components/molecules/form/ContentSelectForm";
 import { FormGroup } from "~/components/organisms/form";

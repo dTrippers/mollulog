@@ -102,6 +102,7 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
               { text: "관통", color: "yellow", active: state.attackTypes.includes("piercing"), onToggle: (activated) => toggleAttackType("piercing", activated) },
               { text: "신비", color: "blue", active: state.attackTypes.includes("mystic"), onToggle: (activated) => toggleAttackType("mystic", activated) },
               { text: "진동", color: "purple", active: state.attackTypes.includes("sonic"), onToggle: (activated) => toggleAttackType("sonic", activated) },
+              { text: "분해", color: "green", active: state.attackTypes.includes("chemical"), onToggle: (activated) => toggleAttackType("chemical", activated) },
             ]}
           />
           <FilterButtons
@@ -109,8 +110,9 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
             buttonProps={[
               { text: "경장갑", color: "red", active: state.defenseTypes.includes("light"), onToggle: (activated) => toggleDefenseType("light", activated) },
               { text: "중장갑", color: "yellow", active: state.defenseTypes.includes("heavy"), onToggle: (activated) => toggleDefenseType("heavy", activated) },
-              { text: "특수", color: "blue", active: state.defenseTypes.includes("special"), onToggle: (activated) => toggleDefenseType("special", activated) },
-              { text: "탄력", color: "purple", active: state.defenseTypes.includes("elastic"), onToggle: (activated) => toggleDefenseType("elastic", activated) },
+              { text: "특수장갑", color: "blue", active: state.defenseTypes.includes("special"), onToggle: (activated) => toggleDefenseType("special", activated) },
+              { text: "탄력장갑", color: "purple", active: state.defenseTypes.includes("elastic"), onToggle: (activated) => toggleDefenseType("elastic", activated) },
+              { text: "복합장갑", color: "green", active: state.defenseTypes.includes("composite"), onToggle: (activated) => toggleDefenseType("composite", activated) },
             ]}
           />
           <FilterButtons

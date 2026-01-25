@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 import { EventHeader, EventDetailShopPage, EventDetailInfoPage, EventDetailStagePage } from "~/components/event";
 import type { ActionData as EventDetailInfoPageActionData } from "~/components/event/EventDetailInfoPage";
-import { FilterButtons } from "~/components/molecules/content";
+import { FilterButtons } from "~/components/navigation";
 import { ErrorPage } from "~/components/organisms/error";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";

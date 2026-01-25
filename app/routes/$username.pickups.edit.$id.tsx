@@ -11,7 +11,7 @@ import { createPickupHistory, getPickupHistory, type PickupHistory, updatePickup
 import { getAllStudents } from "~/models/student";
 import { FormGroup } from "~/components/organisms/form";
 import { ContentSelectForm } from "~/components/molecules/form";
-import { FilterButtons } from "~/components/molecules/content";
+import { FilterButtons } from "~/components/navigation";
 import { Bars3Icon } from "@heroicons/react/16/solid";
 
 const recruitmentEventsQuery = graphql(`

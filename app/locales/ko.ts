@@ -8,13 +8,15 @@ export const attackTypeLocale: Record<AttackType, string> = {
   piercing: "관통",
   mystic: "신비",
   sonic: "진동",
+  chemical: "분해",
 };
 
-export const attackTypeColor: Record<AttackType, "red" | "yellow" | "blue" | "purple"> = {
+export const attackTypeColor: Record<AttackType, "red" | "yellow" | "green" | "blue" | "purple"> = {
   explosive: "red",
   piercing: "yellow",
   mystic: "blue",
   sonic: "purple",
+  chemical: "green",
 };
 
 export const defenseTypeLocale: Record<DefenseType, string> = {
@@ -22,13 +24,15 @@ export const defenseTypeLocale: Record<DefenseType, string> = {
   heavy: "중장갑",
   special: "특수장갑",
   elastic: "탄력장갑",
+  composite: "복합장갑",
 };
 
-export const defenseTypeColor: Record<DefenseType, "red" | "yellow" | "blue" | "purple"> = {
+export const defenseTypeColor: Record<DefenseType, "red" | "yellow" | "green" | "blue" | "purple"> = {
   light: "red",
   heavy: "yellow",
   special: "blue",
   elastic: "purple",
+  composite: "green",
 };
 
 export const roleLocale: Record<Role, string> = {

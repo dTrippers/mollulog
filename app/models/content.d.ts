@@ -1,6 +1,6 @@
 // 전투 관련
-export type AttackType = "explosive" | "piercing" | "mystic" | "sonic";
-export type DefenseType = "light" | "heavy" | "special" | "elastic";
+export type AttackType = "explosive" | "piercing" | "mystic" | "sonic" | "chemical";
+export type DefenseType = "light" | "heavy" | "special" | "elastic" | "composite";
 export type Terrain = "indoor" | "outdoor" | "street";
 export type Role = "striker" | "special";
 export type Position = "front" | "middle" | "back";
@@ -10,11 +10,12 @@ export type TacticRole = "attacker" | "tank" | "support" | "healer" | "tactical_
 export type EventType = "event" | "mini_event" | "guide_mission" | "immortal_event" | "pickup" | "fes" | "campaign" | "exercise" | "main_story" | "collab" | "battle_pass" | "update";
 export type RaidType = "total_assault" | "elimination" | "unlimit";
 
-export const attackTypeColorMap: Record<AttackType, "red" | "yellow" | "blue" | "purple"> = {
+export const attackTypeColorMap: Record<AttackType, "red" | "yellow" | "green" | "blue" | "purple"> = {
   explosive: "red",
   piercing: "yellow",
   mystic: "blue",
   sonic: "purple",
+  chemical: "green",
 };
 
 export const defenseTypeColorMap: Record<DefenseType, "red" | "yellow" | "blue" | "purple"> = {
@@ -22,4 +23,5 @@ export const defenseTypeColorMap: Record<DefenseType, "red" | "yellow" | "blue" 
   heavy: "yellow",
   special: "blue",
   elastic: "purple",
+  composite: "green",
 };

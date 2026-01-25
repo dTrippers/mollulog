@@ -27,7 +27,7 @@ export type AllStudentsFavoriteItems = {
 
 export const COMMON_FAVORITE_ITEM_UIDS = ["5996", "5997", "5998", "5999"];
 
-export async function getAllStudentsFavoriteItems(env: Env): Promise<AllStudentsFavoriteItems[]> {
+export async function getAllStudentsFavoriteItems(env: Env, forceRefresh = false): Promise<AllStudentsFavoriteItems[]> {
   return fetchCached(env, "all-students-favorite-items", async () => {
     const { data } = await runQuery(allStudentsFavoriteItemsQuery, {});
     if (!data?.students) {
@@ -68,5 +68,5 @@ export async function getAllStudentsFavoriteItems(env: Env): Promise<AllStudents
       }
       return b.itemRarity - a.itemRarity;
     });
-  }, 60 * 60 * 24, false);
+  }, 60 * 60 * 24, forceRefresh);
 }

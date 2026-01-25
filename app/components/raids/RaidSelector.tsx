@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import { useState, useMemo } from "react";
 import { Link } from "react-router";
 import { OptionBadge } from "~/components/atoms/student";
-import { FilterButtons } from "~/components/molecules/content";
+import { FilterButtons } from "~/components/navigation";
 import { terrainLocale, defenseTypeLocale, difficultyLocale, defenseTypeColor } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { AttackType, DefenseType, RaidType, Terrain } from "~/models/content.d";

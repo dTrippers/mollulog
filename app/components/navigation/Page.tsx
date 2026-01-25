@@ -24,7 +24,7 @@ export default function Page({ title, description, belowTitle, screens, panels, 
   return (
     <>
       <div className="flex flex-col xl:flex-row">
-        <div className="shrink-0 w-full xl:h-screen xl:max-w-86 xl:mr-8 xl:sticky xl:top-6 xl:self-start xl:overflow-y-scroll overflow-x-hidden no-scrollbar">
+        <div className="shrink-0 w-full xl:h-screen xl:max-w-sm xl:mr-8 xl:sticky xl:top-6 xl:self-start xl:overflow-y-scroll overflow-x-hidden no-scrollbar">
           <div className="mt-8 mb-4">
             <h1 className="font-black text-3xl md:text-4xl drop-shadow-xl drop-shadow-neutral-300/50 dark:drop-shadow-neutral-700/50">
               {title}

@@ -1,17 +1,17 @@
 import dayjs from "dayjs";
 import { useState } from "react";
 import { Link } from "react-router";
+import { ActionCard } from "~/components/molecules/editor";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { OptionBadge } from "~/components/atoms/student";
 import { StudentCard } from "~/components/students";
 import { TierCounts } from "~/components/molecules/student";
+import { FilterButtons } from "~/components/navigation";
 import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { defenseTypeColor } from "~/locales/ko";
 import { raidTypeLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { DefenseType, RaidType, Terrain } from "~/models/content.d";
-import { ActionCard } from "../molecules/editor";
-import { sanitizeClassName } from "~/prophandlers";
 
 type RaidStatisticsSlotCountProps = {
   student?: { uid: string; name: string };
@@ -106,26 +106,15 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
         </Link>
       )}
         <div className="flex-grow min-w-0">
-          <div className="mb-2 flex gap-1.5">
-            <SlotModeButton
-              active={slotMode === "total"}
-              onClick={() => setSlotMode("total")}
-              label="전체"
-              count={slotsCount + assistsCount}
-            />
-            <SlotModeButton
-              active={slotMode === "own"}
-              onClick={() => setSlotMode("own")}
-              label="모집"
-              count={slotsCount}
-            />
-            <SlotModeButton
-              active={slotMode === "assist"}
-              onClick={() => setSlotMode("assist")}
-              label="조력"
-              count={assistsCount}
-            />
-          </div>
+          <FilterButtons
+            buttonProps={[
+              { text: "전체", subText: `${slotsCount + assistsCount}`, active: slotMode === "total", onToggle: () => setSlotMode("total") },
+              { text: "모집", subText: `${slotsCount}`, active: slotMode === "own", onToggle: () => setSlotMode("own") },
+              { text: "조력", subText: `${assistsCount}`, active: slotMode === "assist", onToggle: () => setSlotMode("assist") },
+            ]}
+            exclusive
+            size="sm"
+          />
           <div className="overflow-x-auto">
             <TierCounts
               tierCounts={tierCounts[slotMode]}
@@ -137,29 +126,5 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
           </div>
         </div>
     </ActionCard>
-  );
-}
-
-type SlotModeButtonProps = {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  count: number;
-};
-
-function SlotModeButton({ active, onClick, label, count }: SlotModeButtonProps) {
-  return (
-    <div
-      className={sanitizeClassName(`
-        text-sm font-medium px-2 py-1 rounded-lg transition cursor-pointer
-        ${active ?
-          "bg-neutral-800 dark:bg-neutral-100 hover:bg-neutral-700 dark:hover:bg-neutral-200 text-neutral-300 dark:text-neutral-700" :
-          "bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-300"}
-      `)}
-      onClick={onClick}
-    >
-      <span>{label}</span>
-      <span className={`text-xs ml-1 ${active ? "text-neutral-300 dark:text-neutral-700" : "text-neutral-500 dark:text-neutral-400"}`}>{count}</span>
-    </div>
   );
 }

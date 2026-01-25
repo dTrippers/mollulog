@@ -35,6 +35,7 @@ const defenseTypeColorClass: Record<DefenseType, string> = {
   heavy: "bg-yellow-500",
   special: "bg-blue-500",
   elastic: "bg-purple-500",
+  composite: "bg-green-600",
 };
 
 export default function RaidCard({ raid, timeLocaleType, buttons, showName = true }: RaidCardProps) {

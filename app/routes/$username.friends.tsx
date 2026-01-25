@@ -3,7 +3,7 @@ import { useLoaderData, useSearchParams } from "react-router";
 import { SparklesIcon, UsersIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { SubTitle } from "~/components/atoms/typography";
-import { FilterButtons } from "~/components/molecules/content";
+import { FilterButtons } from "~/components/navigation";
 import { ErrorPage } from "~/components/organisms/error";
 import { SenseiList } from "~/components/organisms/sensei";
 import { getFollowers, getFollowings } from "~/models/followership";

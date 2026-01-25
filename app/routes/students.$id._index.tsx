@@ -9,7 +9,7 @@ import { ErrorPage } from "~/components/organisms/error";
 import { StudentInfo, StudentGradingComments } from "~/components/molecules/student";
 import { RaidStatisticsSlotCount } from "~/components/raids";
 import { getMaxTierAt } from "~/models/student";
-import { FilterButtons } from "~/components/molecules/content";
+import { FilterButtons } from "~/components/navigation";
 import { BarsArrowDownIcon } from "@heroicons/react/24/outline";
 import { getTagCountsByStudent, type StudentGradingTagValue } from "~/models/student-grading-tag";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
