@@ -28,7 +28,7 @@ export type DiceMinigameConfig = {
 
 export type MinigameConfig = {
   title: string;
-  minigameType: "roguelike" | "prize_exchange" | "dice";
+  minigameType: "roguelike" | "prize_exchange" | "dice" | "defense" | "card_flip";
   description: string;
   payment: {
     resourceType: ResourceTypeEnum;
@@ -501,5 +501,60 @@ export const MINIGAME_CONFIG: Record<string, MinigameConfig> = {
         ],
       },
     ],
+  },
+  "sheside-outside-rerun": {
+    minigameType: "defense",
+    title: "미니게임 <Hi-Lo Ha-Lo>",
+    description: "Normal 스테이지 반복 클리어에 따른 주요 보상을 계산해요",
+    payment: {
+      resourceType: ResourceTypeEnum.Item,
+      resourceUid: "80450",
+      quantity: 400,
+    },
+    rewardGroups: [
+      {
+        rounds: "subsequent",
+        rewards: [
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "26013", quantity: 1 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "80453", quantity: 2 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "12", quantity: 4 },
+          { resourceType: ResourceTypeEnum.Equipment, resourceUid: "3", quantity: 1 },
+          { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 300000 },
+        ]
+      }
+    ],
+  },
+  "art-for-someone": {
+    minigameType: "card_flip",
+    title: "카드 뒤집기",
+    description: "예상 보상은 전체 카드를 뒤집었을 때의 평균 결과를 기준으로 계산해요",
+    payment: {
+      resourceType: ResourceTypeEnum.Item,
+      resourceUid: "80680",
+      quantity: 200,
+    },
+    rewardGroups: [
+      {
+        rounds: "subsequent",
+        rewards: [
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "80683", quantity: 1.8662 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "13", rarity: 4, quantity: 0.1275 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "12", rarity: 3, quantity: 1.2375 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "11", rarity: 2, quantity: 3.6338 },
+          { resourceType: ResourceTypeEnum.Equipment, resourceUid: "4", rarity: 4, quantity: 0.1275 },
+          { resourceType: ResourceTypeEnum.Equipment, resourceUid: "3", rarity: 3, quantity: 1.2375 },
+          { resourceType: ResourceTypeEnum.Equipment, resourceUid: "2", rarity: 2, quantity: 3.6338 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "203", rarity: 4, quantity: 0.1063 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "202", rarity: 3, quantity: 0.58 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "201", rarity: 2, quantity: 0.9012 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "200", rarity: 1, quantity: 1.9988 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "153", rarity: 4, quantity: 0.1063 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "152", rarity: 3, quantity: 0.58 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "151", rarity: 2, quantity: 0.9012 },
+          { resourceType: ResourceTypeEnum.Item, resourceUid: "150", rarity: 1, quantity: 1.9988 },
+          { resourceType: ResourceTypeEnum.Currency, resourceUid: "1", quantity: 175762.5 },
+        ]
+      }
+    ]
   }
 };

@@ -101,7 +101,7 @@ function BreakdownLines({ lines }: { lines: BreakdownLine[] }) {
           <span className="text-neutral-500 dark:text-neutral-500">
             <span className="mr-1.5">·</span>{label}
           </span>
-          <span className="text-neutral-500 dark:text-neutral-500">{value.toLocaleString()}</span>
+          <span className="text-neutral-500 dark:text-neutral-500">{Math.floor(value).toLocaleString()}</span>
         </div>
       ))}
     </>
@@ -268,7 +268,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-neutral-800 dark:text-neutral-200">획득 수량</span>
                       {acquiredSubtotal > 0 && (
-                        <span className="font-semibold text-neutral-800 dark:text-neutral-200">{acquiredSubtotal.toLocaleString()}</span>
+                        <span className="font-semibold text-neutral-800 dark:text-neutral-200">{Math.floor(acquiredSubtotal).toLocaleString()}</span>
                       )}
                     </div>
                     <div className="pl-2 space-y-1">
@@ -281,7 +281,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                     <div className="space-y-1">
                       <div className="flex justify-between items-center">
                         <span className="font-medium text-neutral-800 dark:text-neutral-200">필요 수량</span>
-                        <span className="font-semibold text-neutral-800 dark:text-neutral-200">{actualRequired.toLocaleString()}</span>
+                        <span className="font-semibold text-neutral-800 dark:text-neutral-200">{Math.floor(actualRequired).toLocaleString()}</span>
                       </div>
                       <div className="pl-2 space-y-1">
                         {hasOverride ? (
@@ -300,7 +300,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                       <span
                         className={`font-bold ${remainingCount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
                       >
-                        {remainingCount.toLocaleString()}
+                        {Math.floor(remainingCount).toLocaleString()}
                       </span>
                     </div>
                   </div>

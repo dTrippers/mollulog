@@ -57,7 +57,7 @@ const eventRewardBonusQuery = graphql(`
   query EventRewardBonus($itemUids: [String!]!) {
     items(uids: $itemUids) {
       uid name
-      rewardBonuses { student { uid role } ratio }
+      rewardBonuses { student { uid name role } ratio }
     }
   }
 `);

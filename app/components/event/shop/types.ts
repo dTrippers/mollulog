@@ -42,6 +42,7 @@ export type EventRewardBonus = {
   rewardBonuses: {
     student: {
       uid: string;
+      name: string;
       role: string;
     };
     ratio: string; // decimal string

@@ -11,7 +11,7 @@ export function resourceCountLabel(count: number): string {
   if (count >= 10000) {
     return `${(count / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K`;
   }
-  return count.toLocaleString();
+  return count.toLocaleString(undefined, { maximumFractionDigits: 1 });
 }
 
 /**

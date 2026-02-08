@@ -57,7 +57,7 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
 
       {fetcher.state === "loading" ?
         <LoadingSkeleton /> :
-        <div className="grid grid-cols-3 lg:grid-cols-8 gap-1 xl:gap-3">
+        <div className="grid grid-cols-3 lg:grid-cols-8 gap-1 xl:gap-2">
           {filteredItems.map(({ item, favoriteLevel, exp }) => {
             const quantity = quantities[item.uid] || 0;
             const totalItemExp = exp * quantity;

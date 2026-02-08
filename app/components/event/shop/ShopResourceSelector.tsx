@@ -5,7 +5,7 @@ import { formatResourceAmount } from "~/locales/ko";
 import { Tabs } from "./Tabs";
 import type { ShopResource, CollectableResource } from "./types";
 import type { ShopState, ShopActions } from "./hooks";
-import { Section } from "~/components/ui";
+import { MiniButton, Section } from "~/components/ui";
 
 type ShopResourceSelectorProps = {
   shopResources: ShopResource[];
@@ -99,24 +99,12 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
               </div>
 
               <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleSetMinQuantity(uid)}
-                  disabled={quantity === 0}
-                  className="shrink-0 h-full px-1.5 text-xs bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500 text-white rounded transition-colors disabled:bg-neutral-300 dark:disabled:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  최소
-                </button>
+                <MiniButton text="최소" onClick={() => handleSetMinQuantity(uid)} disabled={quantity === 0} minimizeWidth />
                 <div className="grow">
                   <NumberInput value={quantity} maxValue={shopAmount ?? undefined} onChange={(value) => actions.updateItemQuantity(uid, value)} />
                 </div>
                 {shopAmount && (
-                  <button
-                    onClick={() => handleSetMaxQuantity(uid, shopAmount)}
-                    disabled={quantity >= shopAmount}
-                    className="shrink-0 h-full px-1.5 text-xs bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500 text-white rounded transition-colors disabled:bg-neutral-300 dark:disabled:bg-neutral-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    최대
-                  </button>
+                  <MiniButton text="최대" onClick={() => handleSetMaxQuantity(uid, shopAmount)} disabled={quantity >= shopAmount} color="blue" minimizeWidth />
                 )}
               </div>
             </div>

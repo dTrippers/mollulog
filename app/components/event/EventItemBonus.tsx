@@ -10,6 +10,7 @@ type EventItemBonusProps = {
     ratio: string;
     student: {
       uid: string;
+      name: string;
       role: string;
     };
   }[];
@@ -17,9 +18,10 @@ type EventItemBonusProps = {
   selectedBonusStudentUids: string[];
   setSelectedBonusStudentUid?: (studentUid: string) => void;
   signedIn: boolean;
+  showStudentName: boolean;
 };
 
-export default function EventItemBonus({ itemUid, itemName, appliedRatio, maxRatio, rewardBonuses, selectedBonusStudentUids, setSelectedBonusStudentUid, signedIn }: EventItemBonusProps) {
+export default function EventItemBonus({ itemUid, itemName, appliedRatio, maxRatio, rewardBonuses, selectedBonusStudentUids, setSelectedBonusStudentUid, signedIn, showStudentName }: EventItemBonusProps) {
   return (
     <div key={itemUid} className="mt-4 mb-8">
       <div className="my-2 p-4 bg-neutral-100 dark:bg-neutral-900 rounded-lg flex items-center gap-2">
@@ -40,8 +42,9 @@ export default function EventItemBonus({ itemUid, itemName, appliedRatio, maxRat
         <div>
           <p className="mb-2 font-bold">스트라이커</p>
           <StudentCards
-            mobileGrid={8} pcGrid={6}
+            mobileGrid={6} pcGrid={6}
             students={rewardBonuses.filter(({ student }) => student.role === "striker").map(({ student, ratio }) => ({
+              name: showStudentName ? student.name : undefined,
               uid: student.uid,
               grayscale: signedIn ? !selectedBonusStudentUids.includes(student.uid) : false,
               checked: setSelectedBonusStudentUid ? selectedBonusStudentUids.includes(student.uid) : false,
@@ -53,8 +56,9 @@ export default function EventItemBonus({ itemUid, itemName, appliedRatio, maxRat
         <div>
           <p className="mb-2 font-bold">스페셜</p>
           <StudentCards
-            mobileGrid={8} pcGrid={6}
+            mobileGrid={6} pcGrid={6}
             students={rewardBonuses.filter(({ student }) => student.role === "special").map(({ student, ratio }) => ({
+              name: showStudentName ? student.name : undefined,
               uid: student.uid,
               grayscale: signedIn ? !selectedBonusStudentUids.includes(student.uid) : false,
               checked: setSelectedBonusStudentUid ? selectedBonusStudentUids.includes(student.uid) : false,

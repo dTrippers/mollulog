@@ -39,7 +39,7 @@ export default {
       await Promise.all(allRaids.filter((raid) => raid.rankVisible && dayjs(raid.until).isAfter(now)).map((raid) => getRaidDetail(env, raid.uid, true)));
     } else if (event.cron === "* * * * *") {
       // every minute
-      Promise.all([
+      await Promise.all([
         getFutureContents(env, true),
         getIndexContents(env, true),
         getNavigationBarContents(env, true),

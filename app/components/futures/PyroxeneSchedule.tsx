@@ -12,6 +12,7 @@ import { Transition } from "@headlessui/react";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import { NumberInput } from "~/components/atoms/form";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import { MiniButton } from "~/components/ui";
 
 dayjs.locale("ko");
 
@@ -270,13 +271,11 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
                   초기화
                 </button>
               )}
-              <button
-                type="button"
+              <MiniButton
+                text={showExpectedTrialsAction ? "변경 취소" : "목표 변경"}
                 onClick={() => setShowExpectedTrialsAction((prev) => !prev)}
-                className="px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md transition whitespace-nowrap"
-              >
-                {showExpectedTrialsAction ? "변경 취소" : "목표 변경"}
-              </button>
+                color="blue"
+              />
               <Transition
                 show={showExpectedTrialsAction}
                 as="div"

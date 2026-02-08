@@ -1,3 +1,4 @@
+import dayjs from "dayjs";
 import { MoonIcon, EnvelopeIcon, MegaphoneIcon } from "@heroicons/react/16/solid";
 import {
   HomeIcon as HomeIconOutline,
@@ -162,6 +163,7 @@ interface MenuContentProps {
 function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onDarkModeToggle, hasRecentNews, upcomingEvent }: MenuContentProps) {
   const submit = useSubmit();
 
+  const now = dayjs();
   return (
     <>
       <MenuItem
@@ -216,7 +218,7 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
             OutlineIcon={BoltIconOutline}
             SolidIcon={BoltIconSolid}
             onItemClick={onMenuClose}
-            showRedDot={upcomingEvent.since < new Date() && upcomingEvent.until > new Date()}
+            showRedDot={dayjs(upcomingEvent.since).isBefore(now) && dayjs(upcomingEvent.until).isAfter(now)}
             isActive={pathname.startsWith(`/events/${upcomingEvent!.uid}`)}
           /> :
           <UtilItem
