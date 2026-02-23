@@ -9,9 +9,7 @@ export async function fetchCached<T>(env: Env, dataKey: string, fn: () => Promis
   }
 
   const data = await fn();
-  await env.KV_USERDATA.put(cacheKey, JSON.stringify(data), {
-    expirationTtl: ttl ?? 60,
-  });
+  await env.KV_USERDATA.put(cacheKey, JSON.stringify(data), ttl ? { expirationTtl: ttl } : undefined);
   return data;
 }
 

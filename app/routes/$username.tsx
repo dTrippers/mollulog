@@ -72,8 +72,8 @@ export default function User() {
       description="선생님의 정보를 확인해보세요"
       panels={panel ? [panel] : undefined}
       screens={[
-        { text: "프로필 정보", Icon: UserIcon, link: `/@${username}`, active: currentScreen === "profile" },
-        { text: "모집한 학생", Icon: IdentificationIcon, link: `/@${username}/students`, active: currentScreen === "students" },
+        { text: "프로필 정보", Icon: IdentificationIcon, link: `/@${username}`, active: currentScreen === "profile" },
+        { text: "모집한 학생", Icon: UserIcon, link: `/@${username}/students`, active: currentScreen === "students" },
         { text: "모집 이력/통계", Icon: ChartBarIcon, link: `/@${username}/pickups`, active: currentScreen === "pickups" },
         { text: "관심 학생", Icon: HeartIcon, link: `/@${username}/futures`, active: currentScreen === "futures" },
         { text: "편성/공략", Icon: DocumentTextIcon, link: `/@${username}/parties`, active: currentScreen === "parties" },

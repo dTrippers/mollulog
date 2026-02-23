@@ -1,0 +1,46 @@
+import { LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
+import { InformationCircleIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
+import { Page } from "~/components/navigation";
+import { getEventMetadata } from "~/models/event-content";
+
+export const loader = async ({ context, params }: LoaderFunctionArgs) => {
+  const { uid } = params;
+  const { env } = context.cloudflare;
+  const eventMetadata = await getEventMetadata(env, uid!);
+  if (!eventMetadata) {
+    throw new Response("Not Found", { status: 404 });
+  }
+  return { eventMetadata };
+};
+
+export default function EventPage() {
+  const { uid } = useParams();
+  const { pathname } = useLocation();
+  const { eventMetadata } = useLoaderData<typeof loader>();
+  return (
+    <Page
+      title="이벤트 정보"
+      description={eventMetadata.name}
+      backward={{ title: "미래시", to: "/futures" }}
+      screens={[
+        {
+          text: "개요",
+          description: "모집 학생 정보와 선생님들의 의견을 확인해보세요",
+          Icon: InformationCircleIcon,
+          link: `/events/${uid}`,
+          active: pathname === `/events/${uid}`,
+        },
+        {
+          text: "상점 계산기",
+          description: eventMetadata.shopAvailable ? "상점 아이템 구매에 필요한 AP를 계산할 수 있어요" : "상점이 없는 이벤트이거나 정보를 준비중이에요",
+          Icon: ShoppingCartIcon,
+          link: `/events/${uid}/shop`,
+          active: pathname === `/events/${uid}/shop`,
+          disabled: !eventMetadata.shopAvailable,
+        }
+      ]}
+    >
+      <Outlet />
+    </Page>
+  );
+}

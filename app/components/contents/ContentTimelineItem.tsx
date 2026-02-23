@@ -425,7 +425,7 @@ function RecruitmentStudents({ title, recruitments, favoritedStudents, favorited
           pcGrid={8}
           students={recruitments.map((recruitment) => {
             const student = recruitment.student;
-            const colorClass = (recruitment.rerun || recruitment.recruitmentType === "archive" || recruitment.recruitmentType === "recollect") ? "text-white" : "text-yellow-500";
+            const colorClass = (recruitment.rerun || recruitment.recruitmentType === "archive" || recruitment.recruitmentType === "recollect" || recruitment.recruitmentType === "encore") ? "text-white" : "text-yellow-500";
             return {
               ...student,
               uid: student?.uid ?? null,
@@ -484,7 +484,7 @@ function RecruitmentStudents({ title, recruitments, favoritedStudents, favorited
           mobileGrid={5}
           students={recruitments.map((recruitment) => {
             const student = recruitment.student;
-            const colorClass = (recruitment.rerun || recruitment.recruitmentType === "archive") ? "text-white" : "text-yellow-500";
+            const colorClass = (recruitment.rerun || recruitment.recruitmentType === "archive" || recruitment.recruitmentType === "recollect" || recruitment.recruitmentType === "encore") ? "text-white" : "text-yellow-500";
             return {
               ...student,
               uid: student?.uid ?? null,

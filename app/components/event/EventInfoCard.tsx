@@ -25,7 +25,7 @@ export default function EventInfoCard({ Icon, title, description, color, onClick
   return (
     <div
       onClick={onClick}
-      className={`my-2 flex items-center gap-3 p-3 md:p-4 rounded-lg border ${bgColorClass} ${onClick ? "cursor-pointer hover:opacity-50 transition-opacity" : ""}`}
+      className={`my-4 flex items-center gap-3 p-3 md:p-4 rounded-lg border ${bgColorClass} ${onClick ? "cursor-pointer hover:opacity-50 transition-opacity" : ""}`}
     >
       <div className={`flex-shrink-0 p-2 rounded-lg ${iconBgColorClass}`}>
         <Icon className={`size-4 md:size-5 ${textColorClass}`} />

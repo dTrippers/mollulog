@@ -173,7 +173,7 @@ export default function FutureContents() {
 
   return (
     <Page
-      title="미래시" description="컨텐츠 일정을 확인하고 계획을 세워보세요"
+      title="미래시" description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요"
       panels={[
         {
           title: "컨텐츠 필터",

@@ -109,6 +109,8 @@ export function recruitmentLabelLocale({ recruitmentType: type, rerun }: { recru
     return "아카이브";
   } else if (type === "recollect") {
     return "리콜렉트";
+  } else if (type === "encore") {
+    return "앙코르";
   } else if (type === "usual") {
     return rerun ? "복각" : "신규";
   } else if (type === "limited") {

@@ -405,7 +405,7 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
 
     // ========== Pickups ==========
     const currentRecruitments: { eventUid: string, recruitment: IndexQuery["events"]["nodes"][0]["recruitments"][0] }[] = data.events.nodes
-      .flatMap((event) => event.recruitments.filter((recruitment) => recruitment.student !== null && recruitment.recruitmentType !== "recollect" && recruitment.recruitmentType !== "archive").map((recruitment) => ({ eventUid: event.uid, recruitment })))
+      .flatMap((event) => event.recruitments.filter((recruitment) => recruitment.student !== null && recruitment.recruitmentType !== "recollect" && recruitment.recruitmentType !== "archive" && recruitment.recruitmentType !== "encore").map((recruitment) => ({ eventUid: event.uid, recruitment })))
       .filter(({ recruitment }) => !dayjs(recruitment.since).isAfter(now) && dayjs(recruitment.until).isAfter(now));
 
     // Get favorite counts for all students in current pickups (not just user's favorites)
