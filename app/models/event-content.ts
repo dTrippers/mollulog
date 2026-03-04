@@ -1,6 +1,8 @@
 import { graphql } from "~/graphql";
+import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
+import type { MinigameConfig } from "~/components/event/shop/constants";
 
 //
 // Get Event Metadata
@@ -8,24 +10,23 @@ import { fetchCached } from "./base";
 const eventMetadataQuery = graphql(`
   query EventMetadata($timelineUid: String!) {
     event(uid: $timelineUid) {
-      name uid rerun
-      shopResources { uid }
+      name type rerun since until eventIndex
     }
   }
 `);
 
 export async function getEventMetadata(env: Env, timelineUid: string) {
-  return fetchCached(env, `event-content::metadata::${timelineUid}`, async () => {
+  return fetchCached(env, `event-content::metadata:::v2::${timelineUid}`, async () => {
     const { data, error } = await runQuery(eventMetadataQuery, { timelineUid });
     if (error || !data?.event) {
       return null;
     }
 
+    const { name, rerun, since, until } = data.event;
     return {
-      name: data.event.name,
-      eventUid: data.event.uid,
-      rerun: data.event.rerun,
-      shopAvailable: data.event.shopResources.length > 0,
+      name, rerun, since, until,
+      eventUid: data.event.eventIndex?.toString() ?? null,
+      shopAvailable: data.event.eventIndex != null && data.event.type === "event",
     };
   }, 7 * 24 * 60 * 60);
 }
@@ -89,53 +90,135 @@ export async function getEventContentSummary(env: Env, timelineUid: string) {
 //
 // Get Event Shop Content (stages, shopResources, eventRewardBonus)
 //
-const eventShopContentQuery = graphql(`
-  query EventShopContent($eventUid: String!) {
-    event(uid: $eventUid) {
-      uid
-      stages {
-        uid name entryAp index difficulty
-        rewards(rewardType: "item") {
-          amount rewardRequirement chance
-          item { uid name category rarity }
+const eventContentShopContentQuery = graphql(`
+  query EventContentShopContent($eventUid: String!, $runType: RunTypeEnum!) {
+    eventContent(uid: $eventUid) {
+      stages(runType: $runType) {
+        uid stageNumber stageIndex stageType enterCostAmount
+        rewards {
+          amount probability tag
+          resource { __typename uid name rarity ... on Item { category } }
         }
       }
-      shopResources {
+      shopResources(runType: $runType) {
         uid resourceAmount paymentResourceAmount shopAmount
         resource { type uid name rarity }
         paymentResource { uid name }
       }
-    }
-  }
-`);
-
-const eventRewardBonusQuery = graphql(`
-  query EventShopRewardBonus($itemUids: [String!]!) {
-    items(uids: $itemUids) {
-      uid name
-      rewardBonuses { student { uid name role } ratio }
+      bonuses(runType: $runType) {
+        percentage
+        resource { uid name }
+        student { uid name role }
+      }
+      minigameConfigs(runType: $runType) {
+        minigameType
+        payment { quantity resource { type uid name } }
+        rewardGroups {
+          condition { type value values divisor remainders }
+          rewards { quantity resource { type uid name rarity } }
+        }
+      }
     }
   }
 `);
 
 export async function getEventShopContent(env: Env, timelineUid: string) {
-  const { data, error } = await runQuery(eventShopContentQuery, { eventUid: timelineUid });
-  if (error || !data?.event) {
+  const metadata = await getEventMetadata(env, timelineUid);
+  if (!metadata?.eventUid) {
     return null;
   }
 
-  const { stages, shopResources } = data.event;
+  return fetchCached(env, `event-content::shop::v1::${timelineUid}`, async () => {
+    const runType = metadata.rerun ? RunTypeEnum.Rerun : RunTypeEnum.First;
+    const { data, error } = await runQuery(eventContentShopContentQuery, { eventUid: metadata.eventUid!, runType });
+    if (error || !data?.eventContent) {
+      return null;
+    }
 
-  const paymentResourceUids = [
-    ...new Set(
-      stages.flatMap((stage) =>
-        stage.rewards.flatMap((reward) => reward.item?.uid).filter((uid) => uid !== undefined),
-      ),
-    ),
-  ];
+    const stages = data.eventContent.stages.map((stage) => ({
+      uid: stage.uid,
+      entryAp: stage.enterCostAmount,
+      index: stage.stageNumber,
+      difficulty: stage.stageType === "story" ? 0 : stage.stageType === "stage" ? 1 : 2,
+      rewards: stage.rewards.map((reward) => ({
+        amount: reward.amount,
+        rewardRequirement: reward.tag === "Event" ? null : reward.tag || null,
+        chance: reward.probability || null,
+        item: reward.resource
+          ? { uid: reward.resource.uid, name: reward.resource.name, category: 'category' in reward.resource ? (reward.resource as { category: string }).category : '', rarity: reward.resource.rarity }
+          : null,
+      })),
+    }));
 
-  const { data: bonusData } = await runQuery(eventRewardBonusQuery, { itemUids: paymentResourceUids });
-  const eventRewardBonus = bonusData?.items ?? [];
+    const shopResources = data.eventContent.shopResources
+      .filter((r) => r.resource != null && r.paymentResource != null)
+      .map((r) => ({
+        uid: r.uid,
+        resourceAmount: r.resourceAmount,
+        paymentResourceAmount: r.paymentResourceAmount,
+        shopAmount: r.shopAmount,
+        resource: r.resource!,
+        paymentResource: r.paymentResource!,
+      }));
 
-  return { stages, shopResources, eventRewardBonus };
+    // Group bonuses by resource uid to build EventRewardBonus[]
+    const bonusByResource = new Map<string, { uid: string; name: string; rewardBonuses: { student: { uid: string; name: string; role: string }; ratio: string }[] }>();
+    for (const bonus of data.eventContent.bonuses) {
+      if (!bonus.resource || !bonus.student) continue;
+      const { uid, name } = bonus.resource;
+      if (!bonusByResource.has(uid)) {
+        bonusByResource.set(uid, { uid, name, rewardBonuses: [] });
+      }
+      bonusByResource.get(uid)!.rewardBonuses.push({
+        student: { uid: bonus.student.uid, name: bonus.student.name, role: bonus.student.role },
+        ratio: bonus.percentage,
+      });
+    }
+    const eventRewardBonus = [...bonusByResource.values()];
+
+    // Convert server minigame configs to local MinigameConfig format
+    const serverMinigameConfigs = data.eventContent.minigameConfigs;
+    let minigameConfig: MinigameConfig | null = null;
+    if (serverMinigameConfigs.length > 0) {
+      const serverConfig = serverMinigameConfigs[0];
+      const paymentResource = serverConfig.payment.resource;
+      if (paymentResource) {
+        minigameConfig = {
+          minigameType: serverConfig.minigameType as MinigameConfig["minigameType"],
+          payment: {
+            resourceType: paymentResource.type,
+            resourceUid: paymentResource.uid,
+            resourceName: paymentResource.name,
+            quantity: serverConfig.payment.quantity,
+          },
+          rewardGroups: serverConfig.rewardGroups.map((group) => {
+            const { condition } = group;
+            let rounds: MinigameConfig["rewardGroups"][number]["rounds"];
+            if (condition.type === "Subsequent") {
+              rounds = "subsequent";
+            } else if (condition.type === "Values" && condition.values) {
+              rounds = condition.values;
+            } else if (condition.type === "Divisor" && condition.divisor != null && condition.remainders) {
+              rounds = { divisor: condition.divisor, remainders: condition.remainders };
+            } else {
+              rounds = "subsequent";
+            }
+            return {
+              rounds,
+              rewards: group.rewards
+                .filter((r) => r.resource != null)
+                .map((r) => ({
+                  resourceType: r.resource!.type,
+                  resourceUid: r.resource!.uid,
+                  quantity: r.quantity,
+                  rarity: r.resource!.rarity ?? undefined,
+                })),
+            };
+          }),
+        };
+      }
+    }
+
+    return { stages, shopResources, eventRewardBonus, minigameConfig };
+  }, 7 * 24 * 60 * 60);
 }

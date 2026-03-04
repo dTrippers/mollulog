@@ -165,3 +165,12 @@ export function formatResourceAmount(amount: number): string {
   }
   return amount.toLocaleString();
 }
+
+export function minigameDescription(minigameType: string): string | null {
+  if (minigameType === "card_flip") {
+    return "예상 보상은 전체 카드를 뒤집었을 때의 평균 결과를 기준으로 계산해요";
+  } else if (minigameType === "fortune_gacha") {
+    return "예상 보상은 평균값으로 계산하며 각종 보정치는 적용되지 않아요";
+  }
+  return null;
+}

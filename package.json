@@ -21,7 +21,7 @@
     "lint": "biome lint --write"
   },
   "dependencies": {
-    "@cloudflare/kv-asset-handler": "^0.4.1",
+    "@cloudflare/kv-asset-handler": "^0.4.2",
     "@graphql-codegen/cli": "^5.0.7",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@headlessui/react": "^2.2.9",
@@ -55,8 +55,8 @@
   "devDependencies": {
     "@babel/preset-typescript": "^7.28.5",
     "@biomejs/biome": "^1.9.4",
-    "@cloudflare/vite-plugin": "^1.15.3",
-    "@cloudflare/workers-types": "^4.20251213.0",
+    "@cloudflare/vite-plugin": "^1.25.6",
+    "@cloudflare/workers-types": "^4.20260301.1",
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.39.1",
     "@jest/globals": "^29.7.0",
@@ -76,7 +76,7 @@
     "typescript": "^5.9.3",
     "vite": "^6.4.1",
     "vite-tsconfig-paths": "^5.1.4",
-    "wrangler": "^4.54.0"
+    "wrangler": "^4.69.0"
   },
   "engines": {
     "node": ">=22.14.0"

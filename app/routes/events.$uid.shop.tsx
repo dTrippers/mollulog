@@ -1,6 +1,7 @@
 import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { EventDetailShopPage } from "~/components/event";
+import { EmptyView } from "~/components/atoms/typography";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { getEventMetadata, getEventShopContent } from "~/models/event-content";
 import { getRecruitedStudents } from "~/models/recruited-student";
@@ -16,11 +17,24 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   }
 
   const shopContent = await getEventShopContent(env, timelineUid!);
-  if (!shopContent) {
-    throw new Response("Not Found", { status: 404 });
+  if (!shopContent || shopContent.shopResources.length === 0) {
+    return {
+      eventName: metadata.name,
+      until: metadata.until,
+      empty: true as const,
+    };
   }
 
-  const { stages, shopResources, eventRewardBonus } = shopContent;
+  const eventEnded = new Date(metadata.until) < new Date();
+  if (eventEnded) {
+    return {
+      eventName: metadata.name,
+      until: metadata.until,
+      empty: true as const,
+    };
+  }
+
+  const { stages, shopResources, eventRewardBonus, minigameConfig } = shopContent;
 
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   let recruitedStudentUids: string[] = [];
@@ -32,9 +46,12 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const savedShopState = currentUser ? await getEventShopState(env, currentUser.id, timelineUid!) : null;
   return {
     eventName: metadata.name,
+    until: metadata.until,
+    empty: false as const,
     stages,
     shopResources,
     eventRewardBonus,
+    minigameConfig,
     recruitedStudentUids,
     savedShopState,
     eventUid: timelineUid!,
@@ -52,8 +69,12 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params }) => {
 };
 
 export default function EventShop() {
-  const { stages, shopResources, eventRewardBonus, recruitedStudentUids, savedShopState, eventUid, signedIn } =
-    useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  if (loaderData.empty) {
+    return <EmptyView text="상점 정보가 없거나 종료된 이벤트예요" />;
+  }
+
+  const { stages, shopResources, eventRewardBonus, minigameConfig, recruitedStudentUids, savedShopState, eventUid, signedIn } = loaderData;
 
   return (
     <EventDetailShopPage
@@ -64,6 +85,7 @@ export default function EventShop() {
       eventUid={eventUid}
       savedShopState={savedShopState}
       signedIn={signedIn}
+      minigameConfig={minigameConfig}
     />
   );
 }

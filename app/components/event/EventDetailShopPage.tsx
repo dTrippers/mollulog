@@ -5,7 +5,7 @@ import { useSignIn } from "~/contexts/SignInProvider";
 import type { EventShopState } from "~/models/event-shop-state";
 import { StudentBonusSelector, ShopResourceSelector, StageSelector, MiniGameSection, CollectedTotalsSection } from "./shop";
 import type { Stage, ShopResource, EventRewardBonus, CollectableResource } from "./shop";
-import { MINIGAME_CONFIG } from "./shop/constants";
+import type { MinigameConfig } from "./shop/constants";
 import { useShopState, useBonusCalculation, useAutoSave, useShopCalculations } from "./shop/hooks";
 
 type EventDetailShopPageProps = {
@@ -16,11 +16,10 @@ type EventDetailShopPageProps = {
   eventUid: string;
   savedShopState: EventShopState | null;
   signedIn: boolean;
+  minigameConfig?: MinigameConfig | null;
 };
 
-export default function EventDetailShopPage({ stages, shopResources, eventRewardBonus, recruitedStudentUids, eventUid, savedShopState, signedIn }: EventDetailShopPageProps) {
-  const minigameConfig = MINIGAME_CONFIG[eventUid];
-
+export default function EventDetailShopPage({ stages, shopResources, eventRewardBonus, recruitedStudentUids, eventUid, savedShopState, signedIn, minigameConfig = null }: EventDetailShopPageProps) {
   const collectableResources = useMemo<CollectableResource[]>(() => {
     const items: CollectableResource[] = [];
     for (const { paymentResource } of shopResources) {
@@ -37,8 +36,15 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
       }
     }
 
+    if (minigameConfig) {
+      const { resourceUid, resourceName } = minigameConfig.payment;
+      if (!items.some(({ uid }) => uid === resourceUid)) {
+        items.push({ uid: resourceUid, name: resourceName ?? resourceUid, forPayment: false });
+      }
+    }
+
     return items.sort((a, b) => a.uid.localeCompare(b.uid));
-  }, [stages, shopResources]);
+  }, [stages, shopResources, minigameConfig]);
 
   const { showSignIn } = useSignIn();
 
@@ -85,6 +91,7 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
     appliedBonusRatio: appliedBonusRatios,
     minigamePaymentResource,
     minigameRewards: undefined,
+    minigameConfig,
     eventUid,
   });
 
@@ -143,12 +150,12 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
 
         {minigameConfig && (
           <MiniGameSection
-            title={minigameConfig.title}
             config={minigameConfig}
             state={state}
             actions={actions}
           />
         )}
+
 
         <StageSelector
           stages={stages}
@@ -159,9 +166,11 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
         />
 
         <CollectedTotalsSection
+          stages={stages}
           collectableResources={collectableResources}
           shopResources={shopResources}
           eventUid={eventUid}
+          minigameConfig={minigameConfig}
           state={state}
           actions={actions}
           stageCalculations={stageCalculations}

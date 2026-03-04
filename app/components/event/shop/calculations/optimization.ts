@@ -27,7 +27,6 @@ export function calculateStageInfos(
     const contributes = targets.length > 0 && targets.some(([uid]) => rewardPerItem[uid]?.gt(0));
     return {
       uid: stage.uid,
-      name: stage.name,
       index: stage.index,
       entryAp: new Decimal(stage.entryAp),
       rewardPerItem,

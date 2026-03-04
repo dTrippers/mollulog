@@ -1,4 +1,4 @@
-import type { MinigameConfig, RewardItem, DiceMinigameConfig } from "./constants";
+import type { MinigameConfig, RewardItem, DiceMinigameConfig, DivisorRoundCondition } from "./constants";
 
 /**
  * Formats resource count labels with K/M suffixes for large numbers.
@@ -32,7 +32,7 @@ export function calculateMinigameRewards(config: MinigameConfig, playCount: numb
     effectiveCount = playCount;
   }
 
-  // Collect all explicitly specified rounds from all groups (excluding "subsequent")
+  // Collect all explicitly specified rounds from all groups (excluding "subsequent" and divisor conditions)
   const allSpecifiedRounds = new Set<number>();
   for (const group of config.rewardGroups) {
     if (Array.isArray(group.rounds)) {
@@ -59,6 +59,9 @@ export function calculateMinigameRewards(config: MinigameConfig, playCount: numb
     }
   };
 
+  const isDivisorCondition = (rounds: unknown): rounds is DivisorRoundCondition =>
+    typeof rounds === "object" && rounds !== null && "divisor" in rounds;
+
   // Process each reward group
   for (const group of config.rewardGroups) {
     let appliedCount = 0;
@@ -67,6 +70,14 @@ export function calculateMinigameRewards(config: MinigameConfig, playCount: numb
       // Count rounds that are not explicitly specified in other groups
       // This includes all rounds from 1 to effectiveCount, minus the explicitly specified ones
       appliedCount = effectiveCount - Array.from(allSpecifiedRounds).filter((round) => round <= effectiveCount).length;
+    } else if (isDivisorCondition(group.rounds)) {
+      // Count rounds from 1 to effectiveCount where round % divisor is in remainders
+      const { divisor, remainders } = group.rounds;
+      const fullCycles = Math.floor(effectiveCount / divisor);
+      const remainder = effectiveCount % divisor;
+      appliedCount =
+        fullCycles * remainders.length +
+        remainders.filter((r) => r !== 0 && r <= remainder).length;
     } else {
       // Count how many of the specified rounds are <= effectiveCount
       appliedCount = group.rounds.filter((round) => round <= effectiveCount).length;

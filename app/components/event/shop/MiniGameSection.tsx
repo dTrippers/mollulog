@@ -9,15 +9,15 @@ import {
   calculateDiceMinigameStats,
 } from "./utils";
 import type { MinigameConfig } from "./constants";
+import { minigameDescription } from "~/locales/ko";
 
 type MiniGameSectionProps = {
-  title: string;
   config: MinigameConfig;
   state: ShopState;
   actions: ShopActions;
 };
 
-export function MiniGameSection({ title, config, state, actions }: MiniGameSectionProps) {
+export function MiniGameSection({ config, state, actions }: MiniGameSectionProps) {
   const rewards = useMemo(
     () => calculateMinigameRewards(config, state.minigamePlayCount),
     [config, state.minigamePlayCount],
@@ -35,7 +35,7 @@ export function MiniGameSection({ title, config, state, actions }: MiniGameSecti
   return (
     <Section
       title="미니 게임"
-      description={title}
+      description={minigameDescription(config.minigameType) ?? undefined}
       foldable
       foldStateKey="event-shop-section::mini-game"
       defaultExpanded={true}
@@ -76,10 +76,6 @@ export function MiniGameSection({ title, config, state, actions }: MiniGameSecti
           </div>
         )}
       </div>
-
-      <p className="my-4 text-sm text-neutral-500 dark:text-neutral-400">
-        {config.description}
-      </p>
     </Section>
   );
 }
