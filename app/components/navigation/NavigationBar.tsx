@@ -11,6 +11,7 @@ import {
   BoltIcon as BoltIconOutline,
   ClockIcon as ClockIconOutline,
   WalletIcon as WalletIconOutline,
+  BookOpenIcon as BookOpenIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeIconSolid,
@@ -22,6 +23,7 @@ import {
   BoltIcon as BoltIconSolid,
   ClockIcon as ClockIconSolid,
   WalletIcon as WalletIconSolid,
+  BookOpenIcon as BookOpenIconSolid,
 } from "@heroicons/react/24/solid";
 import { Transition } from "@headlessui/react";
 import { Link, useMatches, useSubmit } from "react-router";
@@ -200,6 +202,14 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
         OutlineIcon={IdentificationIconOutline}
         SolidIcon={IdentificationIconSolid}
         isActive={pathname.startsWith("/students")}
+        onItemClick={onMenuClose}
+      />
+      <MenuItem
+        to="/mainstory"
+        name="메인 스토리"
+        OutlineIcon={BookOpenIconOutline}
+        SolidIcon={BookOpenIconSolid}
+        isActive={pathname.startsWith("/mainstory")}
         onItemClick={onMenuClose}
       />
       {currentUsername && (
