@@ -5,7 +5,7 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { ContentTimeline } from "~/components/contents";
 import type { ContentTimelineProps } from "~/components/contents";
 import { ContentFilterPanel } from "~/components/futures";
-import { getContentsComments, getFutureContents, nestComments, type NestedComment } from "~/models/content";
+import { getContentsComments, getFutureContents, nestComments, RAID_CONTENT_TYPES, type NestedComment } from "~/models/content";
 import { getUserFavoritedStudents, getFavoritedCounts } from "~/models/favorite-students";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
@@ -29,24 +29,19 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const contents = await getFutureContents(env);
 
-  const allStudentUids = contents.flatMap((content) => {
-    if (content.__typename === "Event") {
-      return content.recruitments?.map((recruitment) => recruitment.student?.uid ?? null) ?? [];
-    }
-    return [];
-  }).filter((studentUid) => studentUid !== null);
+  const allStudentUids = contents.flatMap((content) =>
+    content.recruitments.map((r) => r.student?.uid ?? null),
+  ).filter((uid): uid is string => uid !== null);
 
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   const signedIn = currentUser !== null;
-  const flatComments = await getContentsComments(env, contents.map((content) => content.uid), currentUser?.id);
+  const flatComments = await getContentsComments(env, contents.map((c) => c.uid), currentUser?.id);
 
-  // Transform flat comments to nested structure with sensei.me property
   const allComments: Record<string, NestedComment[]> = {};
-  contents.forEach((content) => {
+  for (const content of contents) {
     const contentComments = flatComments[content.uid] ?? [];
-    const nested = nestComments(contentComments, currentUser);
-    allComments[content.uid] = nested;
-  });
+    allComments[content.uid] = nestComments(contentComments, currentUser);
+  }
 
   return {
     signedIn,
@@ -64,11 +59,9 @@ function equalFavorites(a: { contentUid: string, studentUid: string }, b: { cont
 const futuresContentFilterKey = "futures::content-filter";
 
 export default function FutureContents() {
-  // Initialize with default value to ensure server/client match
   const [filter, setFilter] = useState<ContentFilterState>({ types: [], onlyPickups: false });
   const [isHydrated, setIsHydrated] = useState(false);
 
-  // Load from localStorage after hydration
   useEffect(() => {
     setIsHydrated(true);
     const saved = localStorage.getItem(futuresContentFilterKey);
@@ -105,10 +98,8 @@ export default function FutureContents() {
   const commentFetcher = useFetcher();
   const submitComment = (contentUid: string, data: CommentActionData) => commentFetcher.submit(data, { action: `/api/contents/${contentUid}/comments`, method: "post", encType: "application/json" });
 
-  // Track which contentUid we're updating comments for
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
 
-  // Update comments state when comment action completes and returns updated comments
   useEffect(() => {
     if ((commentFetcher.state === "idle" || commentFetcher.state === "loading") && commentFetcher.data && Array.isArray(commentFetcher.data) && pendingContentUid) {
       setAllComments((prev) => ({
@@ -119,7 +110,6 @@ export default function FutureContents() {
     }
   }, [commentFetcher.state, commentFetcher.data, commentFetcher.formAction, pendingContentUid, initialComments]);
 
-  // Sync with loader data when it changes
   useEffect(() => {
     setAllComments(initialComments);
   }, [initialComments]);
@@ -153,22 +143,13 @@ export default function FutureContents() {
   };
 
   const filteredContents = useMemo(() => contents.filter((content) => {
-    if (content.__typename === "Event") {
-      if (filter.types.length > 0 && !filter.types.includes(content.eventType)) {
-        return false;
-      } else if (filter.onlyPickups && content.recruitments?.filter((recruitment) => recruitment.pickup).length === 0) {
-        return false;
-      }
-      return true;
-    } else if (content.__typename === "Raid") {
-      if (filter.types.length > 0 && !filter.types.includes(content.raidType)) {
-        return false;
-      } else if (filter.onlyPickups) {
-        return false;
-      }
-      return true;
+    if (filter.types.length > 0 && !filter.types.includes(content.contentType)) {
+      return false;
     }
-    return false;
+    if (filter.onlyPickups && content.recruitments.filter((r) => r.pickup).length === 0) {
+      return false;
+    }
+    return true;
   }), [contents, filter]);
 
   return (
@@ -183,29 +164,23 @@ export default function FutureContents() {
       ]}
     >
       <ContentTimeline
-        contents={filteredContents.map((content) => {
-          const contentAttrs: Partial<ContentTimelineProps["contents"][number]> = {
-            ...content,
-            since: new Date(content.since),
-            until: new Date(content.until),
+        contents={filteredContents.map((content): ContentTimelineProps["contents"][number] => {
+          const isRaid = (RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType);
+          return {
+            uid: content.uid,
+            name: content.name,
+            contentType: content.contentType,
+            runType: content.runType,
+            since: content.startAt,
+            until: content.endAt,
+            endless: content.endless,
+            confirmed: content.confirmed,
+            tags: content.tags,
+            link: isRaid ? `/raids/${content.contentUid}` : `/events/${content.uid}`,
+            recruitments: content.recruitments.length > 0 ? content.recruitments : undefined,
+            raidInfo: content.raidInfo,
             allComments: allComments[content.uid] ?? [],
           };
-
-          if (content.__typename === "Event") {
-            contentAttrs.contentType = content.eventType;
-            contentAttrs.rerun = content.rerun;
-            contentAttrs.recruitments = content.recruitments ?? undefined;
-            contentAttrs.link = `/events/${content.uid}`;
-            contentAttrs.tags = content.tags ?? [];
-          } else if (content.__typename === "Raid") {
-            contentAttrs.contentType = content.raidType;
-            contentAttrs.rerun = false;
-            contentAttrs.link = `/raids/${content.uid}`;
-            contentAttrs.raidInfo = content;
-            contentAttrs.tags = [];
-          }
-
-          return contentAttrs as ContentTimelineProps["contents"][number];
         })}
         favoritedStudents={favoritedStudents ?? []}
         favoritedCounts={favoritedCounts}

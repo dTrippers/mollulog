@@ -106,7 +106,7 @@ export default function EventIndex() {
           imageUrl={eventContent.imageUrl}
           name={eventContent.name}
           type={eventContent.type}
-          rerun={eventContent.rerun}
+          runType={eventContent.runType}
           since={eventContent.since}
           until={eventContent.until}
           endless={eventContent.endless}

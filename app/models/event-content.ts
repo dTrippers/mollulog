@@ -1,89 +1,99 @@
 import { graphql } from "~/graphql";
+import type { RecruitmentGroupQuery } from "~/graphql/graphql";
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
+import { getTimelineContent } from "./timeline-content";
+import type { RunType } from "./timeline-content";
+import { getEventContentName } from "./content";
 import type { MinigameConfig } from "~/components/event/shop/constants";
 
+function toRunTypeEnum(runType: RunType): RunTypeEnum {
+  if (runType === "rerun") return RunTypeEnum.Rerun;
+  if (runType === "permanent") return RunTypeEnum.Permanent;
+  return RunTypeEnum.First;
+}
+
 //
-// Get Event Metadata
+// Get Event Metadata (from D1 timeline_contents + BAQL for name)
 //
-const eventMetadataQuery = graphql(`
-  query EventMetadata($timelineUid: String!) {
-    event(uid: $timelineUid) {
-      name type rerun since until eventIndex
+export async function getEventMetadata(env: Env, timelineUid: string) {
+  const content = await getTimelineContent(env, timelineUid);
+  if (!content) {
+    return null;
+  }
+
+  const name = content.contentUid
+    ? (await getEventContentName(env, content.contentUid)) ?? timelineUid
+    : timelineUid;
+
+  return {
+    name,
+    runType: content.runType,
+    since: content.startAt,
+    until: content.endAt,
+    contentUid: content.contentUid,
+    recruitmentGroupUid: content.recruitmentGroupUid,
+    shopAvailable: content.contentType === "event" && content.contentUid != null,
+  };
+}
+
+//
+// Get Recruitment Group
+//
+const recruitmentGroupQuery = graphql(`
+  query RecruitmentGroup($uid: String!) {
+    recruitmentGroup(uid: $uid) {
+      uid contentType contentUid startAt endAt recruitmentType
+      recruitments {
+        recruitmentType pickup rerun since until studentName
+        student { uid attackType defenseType role }
+      }
     }
   }
 `);
 
-export async function getEventMetadata(env: Env, timelineUid: string) {
-  return fetchCached(env, `event-content::metadata:::v2::${timelineUid}`, async () => {
-    const { data, error } = await runQuery(eventMetadataQuery, { timelineUid });
-    if (error || !data?.event) {
+type RecruitmentGroupResult = NonNullable<RecruitmentGroupQuery["recruitmentGroup"]>;
+
+export async function getRecruitmentGroup(env: Env, uid: string): Promise<RecruitmentGroupResult | null> {
+  return fetchCached(env, `recruitment-group::v1::${uid}`, async () => {
+    const { data, error } = await runQuery(recruitmentGroupQuery, { uid });
+    if (error || !data?.recruitmentGroup) {
       return null;
     }
-
-    const { name, rerun, since, until } = data.event;
-    return {
-      name, rerun, since, until,
-      eventUid: data.event.eventIndex?.toString() ?? null,
-      shopAvailable: data.event.eventIndex != null && data.event.type === "event",
-    };
+    return data.recruitmentGroup;
   }, 7 * 24 * 60 * 60);
 }
 
 //
 // Get Event Content Summary
 //
-const legacyEventSummaryQuery = graphql(`
-  query LegacyEventSummary($timelineUid: String!) {
-    legacyEvent: event(uid: $timelineUid) {
-      name since until imageUrl type rerun endless
-      videos { title youtube start }
-      recruitments {
-        recruitmentType pickup rerun since until studentName
-        student { uid attackType defenseType role }
-      }
-    }
-  }
-`);
-
-const eventContentSummaryQuery = graphql(`
-  query EventContentSummary($timelineUid: String!, $uid: String!) {
-    legacyEvent: event(uid: $timelineUid) {
-      name since until imageUrl type rerun endless
-      videos { title youtube start }
-      recruitments {
-        recruitmentType pickup rerun since until studentName
-        student { uid attackType defenseType role }
-      }
-    }
-    eventContent(uid: $uid) {
-      name
-      schedules { region runType startAt endAt }
-    }
-  }
-`);
-
 export async function getEventContentSummary(env: Env, timelineUid: string) {
-  const eventUid = (await getEventMetadata(env, timelineUid))?.eventUid;
-  return fetchCached(env, `event-content::summary::${timelineUid}`, async () => {
-    if (!eventUid) {
-      const { data, error } = await runQuery(legacyEventSummaryQuery, { timelineUid });
-      if (error || !data?.legacyEvent) {
-        return null;
-      }
-      return data.legacyEvent;
-    }
+  const content = await getTimelineContent(env, timelineUid);
+  if (!content) {
+    return null;
+  }
 
-    const { data, error } = await runQuery(eventContentSummaryQuery, { timelineUid, uid: eventUid });
-    if (error || !data?.legacyEvent) {
-      return null;
-    }
-    return {
-      ...data.eventContent,
-      ...data.legacyEvent,
-    };
-  }, 7 * 24 * 60 * 60);
+  const [name, recruitments] = await Promise.all([
+    content.contentUid
+      ? (getEventContentName(env, content.contentUid).then((n) => n ?? timelineUid))
+      : Promise.resolve(timelineUid),
+    content.recruitmentGroupUid
+      ? (getRecruitmentGroup(env, content.recruitmentGroupUid).then((g) => g?.recruitments ?? []))
+      : Promise.resolve([]),
+  ]);
+
+  return {
+    name,
+    since: content.startAt,
+    until: content.endAt,
+    imageUrl: content.imageUrl,
+    type: content.contentType,
+    runType: content.runType,
+    endless: content.endless,
+    videos: content.videos,
+    recruitments,
+  };
 }
 
 
@@ -124,13 +134,13 @@ const eventContentShopContentQuery = graphql(`
 
 export async function getEventShopContent(env: Env, timelineUid: string) {
   const metadata = await getEventMetadata(env, timelineUid);
-  if (!metadata?.eventUid) {
+  if (!metadata?.contentUid) {
     return null;
   }
 
   return fetchCached(env, `event-content::shop::v1::${timelineUid}`, async () => {
-    const runType = metadata.rerun ? RunTypeEnum.Rerun : RunTypeEnum.First;
-    const { data, error } = await runQuery(eventContentShopContentQuery, { eventUid: metadata.eventUid!, runType });
+    const runType = toRunTypeEnum(metadata.runType);
+    const { data, error } = await runQuery(eventContentShopContentQuery, { eventUid: metadata.contentUid!, runType });
     if (error || !data?.eventContent) {
       return null;
     }

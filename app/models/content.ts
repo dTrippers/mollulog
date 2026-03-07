@@ -1,16 +1,19 @@
 import dayjs from "dayjs";
-import { and, eq, inArray, isNull, not, or, sql, type SQLWrapper } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { nanoid } from "nanoid/non-secure";
-import { senseisTable } from "./sensei";
 import { graphql } from "~/graphql";
-import type { FutureContentsQuery, IndexQuery } from "~/graphql/graphql";
+import type { IndexQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
 import { getFavoritedCounts } from "./favorite-students";
-import type { EventType, RaidType } from "./content.d";
+import type { AttackType, DefenseType, EventType, RaidType, Role, Terrain } from "./content.d";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { getLatestPostTime } from "./post";
+import { getTimelineContents, type TimelineContent } from "./timeline-content";
+import { getRecruitmentGroup } from "./event-content";
+import { getRaidDetail } from "./raid";
+import { getMainStories } from "./main-story";
+import { campaignCategoryLocale, drillTypeLocale, pickupGroupTypeLocale } from "~/locales/ko";
+export { contentComments, getUserComments, getContentComments, getContentsComments, createComment, createSubcomment, updateComment, deleteComment, getCommentIdByUid, pinComment, unpinComment, getPinnedComment, getNestedContentComments, nestComments } from "./content-comment";
+export type { NestedComment } from "./content-comment";
 
 export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "update",
@@ -24,7 +27,7 @@ export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "elimination",
   "unlimit",
   "campaign",
-  "exercise",
+  "joint_firing_drill",
   "mini_event",
   "guide_mission",
   "battle_pass",
@@ -42,294 +45,6 @@ export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
   "elimination",
   "battle_pass",
 ];
-
-type ContentComment = {
-  id: number;
-  uid: string;
-  contentId: string;
-  body: string;
-  visibility: ContentCommentVisibility;
-  parentCommentId?: number | null;
-  pinned: boolean;
-  createdAt: string;
-};
-
-type ContentCommentWithSensei = ContentComment & {
-  sensei: {
-    username: string;
-    profileStudentId: string | null;
-  };
-};
-
-type ContentCommentVisibility = "private" | "public";
-
-export const contentComments = sqliteTable("content_comments", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  contentId: text().notNull(),
-  parentCommentId: int(),
-  body: text().notNull(),
-  visibility: text().notNull().default("private"),
-  pinned: int().notNull().default(0),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-});
-
-const SELECT_USER_COMMENTS_COLUMNS = {
-  id: contentComments.id,
-  uid: contentComments.uid,
-  contentId: contentComments.contentId,
-  body: contentComments.body,
-  visibility: contentComments.visibility,
-  parentCommentId: contentComments.parentCommentId,
-  pinned: contentComments.pinned,
-  createdAt: contentComments.createdAt,
-};
-
-export async function getUserComments(env: Env, userId: number): Promise<ContentComment[]> {
-  const db = drizzle(env.DB);
-  const results = await db.select(SELECT_USER_COMMENTS_COLUMNS)
-    .from(contentComments)
-    .where(eq(contentComments.userId, userId))
-    .all()
-
-  return results.map(toModel);
-}
-
-const SELECT_CONTENT_COMMENTS_COLUMNS = {
-  ...SELECT_USER_COMMENTS_COLUMNS,
-  sensei: {
-    username: senseisTable.username,
-    profileStudentId: senseisTable.profileStudentId,
-  },
-};
-
-export async function getContentComments(env: Env, contentId: string, userId?: number): Promise<ContentCommentWithSensei[]> {
-  return (await getContentsComments(env, [contentId], userId))[contentId] ?? [];
-}
-
-export async function getContentsComments(env: Env, contentIds: string[], userId?: number): Promise<Record<string, ContentCommentWithSensei[]>> {
-  const db = drizzle(env.DB);
-  const results = await db.select(SELECT_CONTENT_COMMENTS_COLUMNS)
-    .from(contentComments)
-    .where(and(
-      not(eq(contentComments.body, "")),
-      inArray(contentComments.contentId, contentIds),
-      or(...visibilityFilter(userId)),
-    ))
-    .innerJoin(senseisTable, eq(contentComments.userId, senseisTable.id))
-    .orderBy(contentComments.createdAt)
-    .all();
-
-  return results.reduce((acc, result) => {
-    acc[result.contentId] = [...(acc[result.contentId] ?? []), toModel(result)];
-    return acc;
-  }, {} as Record<string, ContentCommentWithSensei[]>);
-}
-
-function toModel<T extends { visibility: string; parentCommentId: number | null; pinned: number; createdAt: string; id: number }>(rows: T): (T & { visibility: ContentCommentVisibility; parentCommentId?: number | null; pinned: boolean }) {
-  return { 
-    ...rows, 
-    visibility: rows.visibility as ContentCommentVisibility,
-    pinned: rows.pinned === 1,
-  };
-}
-
-export async function createComment(env: Env, userId: number, contentId: string, body: string, visibility: ContentCommentVisibility = "private"): Promise<string> {
-  const db = drizzle(env.DB);
-
-  // Check if this is the user's first comment for this content
-  const existingComment = await db.select({ id: contentComments.id })
-    .from(contentComments)
-    .where(and(
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-      isNull(contentComments.parentCommentId),
-    ))
-    .limit(1)
-    .get();
-  const isFirstComment = existingComment === undefined;
-
-  const uid = nanoid(8);
-  await db.insert(contentComments).values({ uid, userId, contentId, body, visibility, parentCommentId: null, pinned: isFirstComment ? 1 : 0 });
-  return uid;
-}
-
-export async function createSubcomment(env: Env, userId: number, contentId: string, parentCommentId: number, body: string, visibility: ContentCommentVisibility = "private"): Promise<string> {
-  const db = drizzle(env.DB);
-
-  // Validate that parent comment exists and is a top-level comment (not a subcomment)
-  const parent = await db.select({ parentCommentId: contentComments.parentCommentId })
-    .from(contentComments)
-    .where(eq(contentComments.id, parentCommentId))
-    .get();
-
-  if (!parent) {
-    throw new Error("Parent comment not found");
-  }
-  if (parent.parentCommentId !== null) {
-    throw new Error("Cannot reply to a subcomment (max depth is 1)");
-  }
-
-  const uid = nanoid(8);
-  await db.insert(contentComments).values({ uid, userId, contentId, parentCommentId, body, visibility });
-  return uid;
-}
-
-export async function updateComment(env: Env, userId: number, commentUid: string, body: string, visibility: ContentCommentVisibility): Promise<void> {
-  const db = drizzle(env.DB);
-  await db.update(contentComments)
-    .set({ body, visibility, updatedAt: sql`current_timestamp` })
-    .where(and(
-      eq(contentComments.uid, commentUid),
-      eq(contentComments.userId, userId)
-    ));
-}
-
-export async function deleteComment(env: Env, userId: number, commentUid: string): Promise<void> {
-  const db = drizzle(env.DB);
-  await db.delete(contentComments)
-    .where(and(
-      eq(contentComments.uid, commentUid),
-      eq(contentComments.userId, userId)
-    ));
-}
-
-export async function getCommentIdByUid(env: Env, commentUid: string, userId?: number): Promise<number | null> {
-  const db = drizzle(env.DB);
-  const comment = await db.select({ id: contentComments.id })
-    .from(contentComments)
-    .where(and(
-      eq(contentComments.uid, commentUid),
-      or(...visibilityFilter(userId)),
-    ))
-    .get();
-
-  return comment?.id ?? null;
-}
-
-export async function pinComment(env: Env, userId: number, contentId: string, commentUid: string): Promise<void> {
-  const db = drizzle(env.DB);
-
-  // First, unpin any existing pinned comment for this user/content
-  await db.update(contentComments)
-    .set({ pinned: 0, updatedAt: sql`current_timestamp` })
-    .where(and(
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-      eq(contentComments.pinned, 1),
-    ));
-
-  // Then, pin the specified comment (only if it belongs to the user and is a top-level comment)
-  const comment = await db.select({ id: contentComments.id, parentCommentId: contentComments.parentCommentId })
-    .from(contentComments)
-    .where(and(
-      eq(contentComments.uid, commentUid),
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-    ))
-    .get();
-
-  if (!comment) {
-    throw new Error("Comment not found or does not belong to user");
-  }
-  if (comment.parentCommentId !== null) {
-    throw new Error("Cannot pin subcomments");
-  }
-
-  await db.update(contentComments)
-    .set({ pinned: 1, updatedAt: sql`current_timestamp` })
-    .where(eq(contentComments.uid, commentUid));
-}
-
-export async function unpinComment(env: Env, userId: number, contentId: string): Promise<void> {
-  const db = drizzle(env.DB);
-  await db.update(contentComments)
-    .set({ pinned: 0, updatedAt: sql`current_timestamp` })
-    .where(and(
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-      eq(contentComments.pinned, 1),
-    ));
-}
-
-export async function getPinnedComment(env: Env, contentId: string, userId: number): Promise<ContentCommentWithSensei | null> {
-  const db = drizzle(env.DB);
-  const result = await db.select(SELECT_CONTENT_COMMENTS_COLUMNS)
-    .from(contentComments)
-    .where(and(
-      eq(contentComments.contentId, contentId),
-      eq(contentComments.userId, userId),
-      eq(contentComments.pinned, 1),
-      isNull(contentComments.parentCommentId),
-    ))
-    .innerJoin(senseisTable, eq(contentComments.userId, senseisTable.id))
-    .get();
-  
-  return result ? toModel(result) : null;
-}
-
-export type NestedComment = {
-  uid: string;
-  body: string;
-  visibility: "private" | "public";
-  pinned: boolean;
-  createdAt: string;
-  sensei: {
-    me: boolean;
-    username: string;
-    profileStudentId: string | null;
-  };
-  subcomments?: NestedComment[];
-};
-
-export async function getNestedContentComments(env: Env, contentUid: string, currentUser: { id: number; username: string } | null): Promise<NestedComment[]> {
-  const comments = await getContentComments(env, contentUid, currentUser?.id);
-  return nestComments(comments, currentUser);
-}
-
-export function nestComments(flatComments: ContentCommentWithSensei[], currentUser: { id: number; username: string } | null): NestedComment[] {
-  const topLevelComments = flatComments.filter((comment) => !comment.parentCommentId);
-  const subcomments = flatComments.filter((comment) => comment.parentCommentId);
-  const nestedComments = topLevelComments.map((comment) => {
-    const commentSubcomments = subcomments.filter((subComment) => subComment.parentCommentId === comment.id);
-    return {
-      uid: comment.uid,
-      body: comment.body,
-      visibility: comment.visibility,
-      pinned: comment.pinned && comment.sensei.username === currentUser?.username,
-      createdAt: comment.createdAt,
-      sensei: {
-        me: currentUser?.username === comment.sensei.username,
-        username: comment.sensei.username,
-        profileStudentId: comment.sensei.profileStudentId,
-      },
-      subcomments: commentSubcomments.map((subComment) => ({
-        uid: subComment.uid,
-        body: subComment.body,
-        visibility: subComment.visibility,
-        pinned: false,
-        createdAt: subComment.createdAt,
-        sensei: {
-          me: currentUser?.username === subComment.sensei.username,
-          username: subComment.sensei.username,
-          profileStudentId: subComment.sensei.profileStudentId,
-        },
-      })),
-    };
-  });
-  return nestedComments;
-}
-
-function visibilityFilter(userId?: number): SQLWrapper[] {
-  const filters: SQLWrapper[] = [eq(contentComments.visibility, "public")];
-  if (userId) {
-    filters.push(eq(contentComments.userId, userId));
-  }
-  return filters;
-}
-
 
 /**
  * Index Contents
@@ -424,42 +139,245 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
 
 
 /**
- * Future Contents
+ * Joint Firing Drill
  */
-const futureContentsQuery = graphql(`
-  query FutureContents($now: ISO8601DateTime!) {
-    contents(untilAfter: $now, first: 9999) {
-      nodes {
-        __typename uid name since until confirmed
-        ... on Event {
-          eventType: type
-          rerun endless tags
-          recruitments {
-            recruitmentType pickup rerun since until studentName
-            student { uid attackType defenseType role schaleDbId }
-          }
-        }
-        ... on Raid {
-          raidType: type
-          rankVisible boss terrain attackType
-          defenseTypes { defenseType difficulty }
-        }
-      }
+
+const jointFiringDrillQuery = graphql(`
+  query JointFiringDrill($uid: String!) {
+    jointFiringDrill(uid: $uid) {
+      uid season drillType
     }
   }
 `);
 
-export async function getFutureContents(env: Env, forceRefresh = false): Promise<FutureContentsQuery["contents"]["nodes"]> {
-  const truncatedNow = new Date();
-  truncatedNow.setMinutes(0, 0, 0);
-
-  return fetchCached(env, "future-contents::v2", async () => {
-    const { data, error } = await runQuery(futureContentsQuery, { now: truncatedNow });
-    if (error || !data) {
-      throw error ?? "failed to fetch events";
+async function getJointFiringDrill(env: Env, uid: string) {
+  return fetchCached(env, `joint-firing-drill::v1::${uid}`, async () => {
+    const { data, error } = await runQuery(jointFiringDrillQuery, { uid });
+    if (error || !data?.jointFiringDrill) {
+      return null;
     }
-    return data.contents.nodes;
-  }, 60 * 60 * 24, forceRefresh);
+    return data.jointFiringDrill;
+  }, 7 * 24 * 60 * 60);
+}
+
+
+/**
+ * Campaign name helper
+ */
+
+function buildCampaignName(categories: string[], multiplier: number): string {
+  const categoryNames = categories.map((c) => campaignCategoryLocale[c] ?? c).join("/");
+  return `${categoryNames} 보상량 ${multiplier}배`;
+}
+
+const campaignNameQuery = graphql(`
+  query CampaignName($uid: String!) {
+    campaign(uid: $uid) { uid category multiplier }
+  }
+`);
+
+async function getCampaignDetail(env: Env, uid: string) {
+  return fetchCached(env, `campaign-detail::v1::${uid}`, async () => {
+    const { data, error } = await runQuery(campaignNameQuery, { uid });
+    if (error || !data?.campaign) {
+      return null;
+    }
+    return data.campaign;
+  }, 7 * 24 * 60 * 60);
+}
+
+
+/**
+ * EventContent name helper
+ */
+
+const eventContentNameQuery = graphql(`
+  query EventContentName($uid: String!) {
+    eventContent(uid: $uid) { uid name }
+  }
+`);
+
+export async function getEventContentName(env: Env, uid: string): Promise<string | null> {
+  return fetchCached(env, `event-content-name::v1::${uid}`, async () => {
+    const { data, error } = await runQuery(eventContentNameQuery, { uid });
+    if (error || !data?.eventContent) {
+      return null;
+    }
+    return data.eventContent.name;
+  }, 7 * 24 * 60 * 60);
+}
+
+
+/**
+ * MiniEventContent name helper
+ */
+
+const miniEventContentNameQuery = graphql(`
+  query MiniEventContentName($uid: String!) {
+    miniEventContent(uid: $uid) { uid name }
+  }
+`);
+
+export async function getMiniEventContentName(env: Env, uid: string): Promise<string | null> {
+  return fetchCached(env, `mini-event-content-name::v1::${uid}`, async () => {
+    const { data, error } = await runQuery(miniEventContentNameQuery, { uid });
+    if (error || !data?.miniEventContent) {
+      return null;
+    }
+    return data.miniEventContent.name;
+  }, 7 * 24 * 60 * 60);
+}
+
+
+/**
+ * Future Contents
+ */
+
+export type RecruitmentInfo = {  recruitmentType: RecruitmentTypeEnum;
+  pickup: boolean;
+  rerun: boolean;
+  since: Date;
+  until: Date | null;
+  studentName: string;
+  student: {
+    uid: string;
+    attackType?: AttackType;
+    defenseType?: DefenseType;
+    role?: Role;
+  } | null;
+};
+
+export type RaidInfo = {
+  uid: string;
+  boss: string;
+  terrain: Terrain;
+  attackType: AttackType;
+  defenseTypes: { defenseType: DefenseType; difficulty: string | null }[];
+  rankVisible: boolean;
+};
+
+export type FutureContent = TimelineContent & {
+  name: string;
+  recruitments: RecruitmentInfo[];
+  raidInfo?: RaidInfo;
+};
+
+export const RAID_CONTENT_TYPES = ["total_assault", "elimination", "unlimit", "allied"] as const;
+
+function toRecruitmentInfos(group: Awaited<ReturnType<typeof getRecruitmentGroup>>): RecruitmentInfo[] {
+  return (group?.recruitments ?? []).sort((a, b) => Number(a.rerun) - Number(b.rerun)).map((r) => ({
+    recruitmentType: r.recruitmentType,
+    pickup: r.pickup,
+    rerun: r.rerun,
+    since: new Date(r.since),
+    until: r.until ? new Date(r.until) : null,
+    studentName: r.studentName,
+    student: r.student
+      ? {
+          uid: r.student.uid,
+          attackType: r.student.attackType as AttackType | undefined,
+          defenseType: r.student.defenseType as DefenseType | undefined,
+          role: r.student.role as Role | undefined,
+        }
+      : null,
+  }));
+}
+
+export async function getFutureContents(env: Env): Promise<FutureContent[]> {
+  const contents = await getTimelineContents(env);
+  const enriched = await Promise.all(
+    contents.map(async (content) => {
+      // joint_firing_drill — name derived from season + drillType
+      if (content.contentType === "joint_firing_drill" && content.contentUid) {
+        const drill = await getJointFiringDrill(env, content.contentUid);
+        if (!drill) {
+          return null;
+        }
+        const name = `${drill.season}차: ${drillTypeLocale[drill.drillType]}시험`;
+        return { ...content, name, recruitments: [] };
+      }
+
+      // Raid types — name and raidInfo from getRaidDetail
+      if ((RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType) && content.contentUid) {
+        const raid = await getRaidDetail(env, content.contentUid);
+        const name = raid?.name ?? content.uid;
+        const raidInfo: RaidInfo | undefined = raid
+          ? {
+              uid: raid.uid,
+              boss: raid.boss,
+              terrain: raid.terrain as Terrain,
+              attackType: raid.attackType as AttackType,
+              defenseTypes: raid.defenseTypes.map((d) => ({
+                defenseType: d.defenseType as DefenseType,
+                difficulty: d.difficulty ?? null,
+              })),
+              rankVisible: raid.rankVisible,
+            }
+          : undefined;
+        return { ...content, name, recruitments: [], raidInfo };
+      }
+
+      // campaign — name derived from category + multiplier
+      if (content.contentType === "campaign" && content.contentUid) {
+        const detail = await getCampaignDetail(env, content.contentUid);
+        const name = detail ? buildCampaignName(detail.category, detail.multiplier) : content.uid;
+        return { ...content, name, recruitments: [] };
+      }
+
+      // pickup — name derived from recruitmentGroup.recruitmentType
+      if (content.contentType === "pickup") {
+        const group = await getRecruitmentGroup(env, content.uid);
+        const name = group ? (pickupGroupTypeLocale[group.recruitmentType] ?? "픽업 모집") : "픽업 모집";
+        return { ...content, name, recruitments: toRecruitmentInfos(group) };
+      }
+
+      // main_story — name derived from volume + chapter + part info
+      if (content.contentType === "main_story" && content.contentUid) {
+        const [volumes, group] = await Promise.all([
+          getMainStories(env),
+          getRecruitmentGroup(env, content.uid),
+        ]);
+        let name = content.uid;
+        outer: for (const volume of volumes) {
+          for (const chapter of volume.chapters) {
+            for (const part of chapter.parts) {
+              if (part.uid === content.contentUid) {
+                const volumeTitle = [volume.label, volume.name].filter(Boolean).join(" ");
+                const chapterTitle = `제${chapter.chapterNumber}장: ${chapter.name}${part.name ? ` (${part.name})` : ""}`;
+                name = `${volumeTitle}\n${chapterTitle}`;
+                break outer;
+              }
+            }
+          }
+        }
+        return { ...content, name, recruitments: toRecruitmentInfos(group) };
+      }
+
+      // mini_event — name from miniEventContent(uid:)
+      if (content.contentType === "mini_event" && content.contentUid) {
+        const [miniEventName, group] = await Promise.all([
+          getMiniEventContentName(env, content.contentUid),
+          getRecruitmentGroup(env, content.uid),
+        ]);
+        const name = miniEventName ?? content.uid;
+        return { ...content, name, recruitments: toRecruitmentInfos(group) };
+      }
+
+      // event and others — name from eventContent(uid:)
+      if (content.contentUid) {
+        const [eventName, group] = await Promise.all([
+          getEventContentName(env, content.contentUid),
+          getRecruitmentGroup(env, content.uid),
+        ]);
+        const name = eventName ?? content.uid;
+        return { ...content, name, recruitments: toRecruitmentInfos(group) };
+      }
+
+      return { ...content, name: content.uid, recruitments: [] };
+    }),
+  );
+
+  return enriched.filter((content) => content !== null) as FutureContent[];
 }
 
 

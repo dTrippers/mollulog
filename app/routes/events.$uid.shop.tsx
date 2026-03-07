@@ -25,7 +25,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     };
   }
 
-  const eventEnded = new Date(metadata.until) < new Date();
+  const eventEnded = metadata.until ? new Date(metadata.until) < new Date() : false;
   if (eventEnded) {
     return {
       eventName: metadata.name,

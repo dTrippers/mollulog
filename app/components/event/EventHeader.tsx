@@ -17,24 +17,24 @@ type EventHeaderProps = {
   imageUrl: string | null;
   name: string;
   type: EventType;
-  rerun: boolean;
+  runType: "first" | "rerun" | "permanent";
   since: Date;
-  until: Date;
+  until: Date | null;
   endless: boolean;
 
   videos?: Video[];
 };
 
-export default function EventHeader({ imageUrl, name, type, rerun, since, until, endless, videos }: EventHeaderProps) {
+export default function EventHeader({ imageUrl, name, type, runType, since, until, endless, videos }: EventHeaderProps) {
   const sinceDayjs = dayjs(since);
-  const untilDayjs = dayjs(until);
+  const untilDayjs = until ? dayjs(until) : null;
   const now = dayjs();
 
   // Calculate remaining time
   let timeLabel = null;
   if (sinceDayjs.isAfter(now)) {
     timeLabel = `${relativeTime(sinceDayjs)} 시작`;
-  } else if (!endless && untilDayjs.isAfter(now)) {
+  } else if (!endless && untilDayjs && untilDayjs.isAfter(now)) {
     timeLabel = `${relativeTime(untilDayjs)} 종료`;
   }
 
@@ -138,11 +138,12 @@ export default function EventHeader({ imageUrl, name, type, rerun, since, until,
 
           <div className="flex items-end gap-1">
             <p className="grow text-xs md:text-sm text-neutral-300">
-              {endless ? sinceDayjs.format("YYYY-MM-DD") : `${sinceDayjs.format("YYYY-MM-DD")} ~ ${untilDayjs.format("YYYY-MM-DD")}`}
+              {endless ? sinceDayjs.format("YYYY-MM-DD") : `${sinceDayjs.format("YYYY-MM-DD")} ~ ${untilDayjs?.format("YYYY-MM-DD") ?? ""}`}
             </p>
-            {rerun && <Label text="복각" />}
+            {runType === "rerun" && <Label text="복각" />}
+            {runType === "permanent" && <Label text="상설" />}
             {timeLabel && <Label text={timeLabel} showRedDot={sinceDayjs.isBefore(now)} />}
-            {!endless && untilDayjs.isBefore(now) && <Label text="종료" />}
+            {!endless && untilDayjs && untilDayjs.isBefore(now) && <Label text="종료" />}
           </div>
         </div>
       </div>

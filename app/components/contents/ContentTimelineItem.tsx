@@ -20,7 +20,7 @@ export type ContentTimelineItemProps = {
   uid: string;
   name: string;
   contentType: EventType | RaidType;
-  rerun: boolean;
+  runType: "first" | "rerun" | "permanent";
   endless: boolean;
   since?: Date | null;
   until: Date | null;
@@ -95,7 +95,7 @@ export type ContentTimelineItemProps = {
 };
 
 export function ContentTimelineItem({
-  name, contentType, rerun, endless, since, until, link, confirmed, tags, raidInfo, recruitments,
+  name, contentType, runType, endless, since, until, link, confirmed, tags, raidInfo, recruitments,
   allComments, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
 }: ContentTimelineItemProps) {
   const showComments = recruitments && recruitments.length > 0;
@@ -128,7 +128,7 @@ export function ContentTimelineItem({
       <div className="flex items-center gap-x-1 md:my-1">
         <div className="my-1 flex flex-wrap gap-1 text-sm">
           <span className="pr-1 py-0.5 text-neutral-500 dark:text-neutral-400">
-            {(contentType === "event" || contentType === "pickup") && rerun && "복각 "}{contentTypeLocale[contentType]}
+            {(contentType === "event" || contentType === "pickup") && runType === "rerun" && "복각 "}{contentTypeLocale[contentType]}
           </span>
           {!endless && daysLabel && <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />}
           {confirmed && (since && sinceDayjs.isAfter(now)) && <ContentTag Icon={CheckCircleIcon} text="확정" color="green" />}
@@ -341,21 +341,7 @@ function Recruitments({ contentType, recruitments, favoritedStudents, favoritedC
   if (contentType === "fes") {
     return (
       <>
-        <RecruitmentStudents
-          title="픽업 학생"
-          recruitments={recruitments.filter(({ pickup }) => pickup)}
-          favoritedStudents={favoritedStudents ?? []}
-          favoritedCounts={favoritedCounts ?? {}}
-          onFavorite={onFavorite}
-        />
 
-        <RecruitmentStudents
-          title="기간 한정 모집 가능 학생"
-          recruitments={recruitments.filter(({ pickup }) => !pickup)}
-          favoritedStudents={favoritedStudents ?? []}
-          favoritedCounts={favoritedCounts ?? {}}
-          onFavorite={onFavorite}
-        />
 
         <TimelineItemBanner
           message="픽업 외 학생은 모집 포인트(천장)로 교환할 수 없어요."
@@ -384,15 +370,26 @@ function Recruitments({ contentType, recruitments, favoritedStudents, favoritedC
     );
   }
 
+  const hasNonPickupRecruitments = recruitments.some(({ pickup }) => !pickup);
   return (
     <>
       <RecruitmentStudents
-        recruitments={recruitments}
+        title={hasNonPickupRecruitments ? "픽업 학생" : undefined}
+        recruitments={recruitments.filter(({ pickup }) => pickup)}
         favoritedStudents={favoritedStudents ?? []}
         favoritedCounts={favoritedCounts ?? {}}
         onFavorite={onFavorite}
-        showToggle={recruitments.some((recruitment) => recruitment.recruitmentType === "archive")}
       />
+
+      {hasNonPickupRecruitments && (
+        <RecruitmentStudents
+          title="픽업 대상 외 모집 가능 학생"
+          recruitments={recruitments.filter(({ pickup }) => !pickup)}
+          favoritedStudents={favoritedStudents ?? []}
+          favoritedCounts={favoritedCounts ?? {}}
+          onFavorite={onFavorite}
+        />
+      )}
 
       {isPickupDayDifferent && (
         <TimelineItemBanner

@@ -87,16 +87,41 @@ export const eventTypeLocale: Record<EventType, string> = {
   fes: "페스 이벤트",
   pickup: "픽업 모집",
   campaign: "캠페인",
-  exercise: "종합전술시험",
+  joint_firing_drill: "종합전술시험",
   main_story: "메인 스토리",
   battle_pass: "배틀 패스",
   update: "점검/업데이트",
+};
+
+export const drillTypeLocale: Record<string, string> = {
+  shooting: "사격",
+  defense: "방어",
+  assault: "돌파",
+  escort: "호위",
+};
+
+export const campaignCategoryLocale: Record<string, string> = {
+  bounty_hunt: "현상수배",
+  commision: "특별의뢰",
+  exp: "계정 경험치",
+  mission_hard: "임무(Hard)",
+  mission_normal: "임무(Normal)",
+  schedule: "스케줄",
+  scrimmage: "학원교류회",
+};
+
+export const pickupGroupTypeLocale: Record<string, string> = {
+  fes: "페스 모집",
+  encore: "앙코르 모집",
+  archive: "아카이브 모집",
+  recollect: "리콜렉트 모집",
 };
 
 export const raidTypeLocale: Record<RaidType, string> = {
   total_assault: "총력전",
   elimination: "대결전",
   unlimit: "제약해제결전",
+  allied: "연합작전",
 };
 
 export const contentTypeLocale: Record<EventType | RaidType, string> = {
