@@ -5,10 +5,10 @@ import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import { OptionBadge } from "~/components/atoms/student";
 import { StudentCard } from "~/components/students";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, recruitmentLabelLocale, roleColor, roleLocale } from "~/locales/ko";
-import type { AttackType, DefenseType, Role } from "~/models/content.d";
+import type { Role } from "~/models/content.d";
 import { sanitizeClassName } from "~/prophandlers";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { RecruitmentTypeEnum } from "~/graphql/graphql";
+import type { RecruitmentTypeEnum, Attack, Defense } from "~/graphql/graphql";
 
 type EventRecruitmentProps = {
   recruitment: {
@@ -18,8 +18,8 @@ type EventRecruitmentProps = {
     until: Date | null;
     student: {
       uid: string;
-      attackType: AttackType;
-      defenseType: DefenseType;
+      attackType: Attack;
+      defenseType: Defense;
       role: Role;
     } | null;
     studentName: string;

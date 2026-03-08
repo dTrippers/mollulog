@@ -1,7 +1,6 @@
 create table timeline_contents (
   id integer primary key autoincrement,
   uid text not null,
-  name text not null,
   start_at text not null,
   end_at text,
   endless integer not null default 0,

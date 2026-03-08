@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import { ChevronRightIcon, ChartBarIcon, ClockIcon, CheckCircleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon, StarIcon } from "@heroicons/react/16/solid";
 import { IdentificationIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
-import type { AttackType, DefenseType, EventType, RaidType, Role, Terrain } from "~/models/content.d";
+import type { EventType, RaidType, Role } from "~/models/content.d";
 import { attackTypeColor, attackTypeLocale, contentTypeLocale, defenseTypeColor, defenseTypeLocale, recruitmentLabelLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import { StudentCards } from "~/components/students";
@@ -14,7 +14,7 @@ import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";
 import { SHOW_LINK_CONTENT_TYPES } from "~/models/content";
-import { RecruitmentTypeEnum } from "~/graphql/graphql";
+import type { Attack, Defense, Terrain, RecruitmentTypeEnum } from "~/graphql/graphql";
 
 export type ContentTimelineItemProps = {
   uid: string;
@@ -70,8 +70,8 @@ export type ContentTimelineItemProps = {
     rerun: boolean;
     student: {
       uid: string;
-      attackType?: AttackType;
-      defenseType?: DefenseType;
+      attackType?: Attack;
+      defenseType?: Defense;
       role?: Role;
       schaleDbId?: string | null;
     } | null;
@@ -83,9 +83,9 @@ export type ContentTimelineItemProps = {
     uid: string;
     boss: string;
     terrain: Terrain;
-    attackType: AttackType;
+    attackType: Attack;
     defenseTypes: {
-      defenseType: DefenseType;
+      defenseType: Defense;
       difficulty: string | null;
     }[];
     rankVisible: boolean;
@@ -243,9 +243,9 @@ type RaidInfoProps = {
   raid: {
     boss: string;
     terrain: Terrain;
-    attackType: AttackType;
+    attackType: Attack;
     defenseTypes: {
-      defenseType: DefenseType;
+      defenseType: Defense;
       difficulty: string | null;
     }[];
   };
@@ -292,8 +292,8 @@ type RecruitmentsProps = {
     student: {
       uid: string;
       schaleDbId?: string | null;
-      attackType?: AttackType;
-      defenseType?: DefenseType;
+      attackType?: Attack;
+      defenseType?: Defense;
       role?: Role;
     } | null;
     since: Date;

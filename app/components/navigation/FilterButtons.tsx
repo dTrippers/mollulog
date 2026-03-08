@@ -51,7 +51,7 @@ export default function FilterButtons({ Icon, buttonProps, exclusive, atLeastOne
 type FilterButtonProps = {
   text: string;
   subText?: string;
-  color?: "red" | "yellow" | "green" | "blue" | "purple";
+  color?: "red" | "yellow" | "green" | "blue" | "purple" | "grey";
   active?: boolean;
   onToggle: (activated: boolean) => void;
 };
@@ -62,6 +62,7 @@ const buttonColors = {
   green: "bg-green-600",
   blue: "bg-blue-500",
   purple: "bg-purple-500",
+  grey: "bg-neutral-500",
 };
 
 function FilterButton({ text, subText, color, active, onToggle, size = "md" }: FilterButtonProps & { size: "sm" | "md" }) {

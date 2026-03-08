@@ -64,7 +64,7 @@ export async function getAllStudentsFavoriteItems(env: Env, forceRefresh = false
 
     return Array.from(items.values()).sort((a, b) => {
       if (a.itemRarity === b.itemRarity) {
-        return parseInt(a.itemUid) - parseInt(b.itemUid);
+        return Number.parseInt(a.itemUid) - Number.parseInt(b.itemUid);
       }
       return b.itemRarity - a.itemRarity;
     });

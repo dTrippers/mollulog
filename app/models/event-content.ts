@@ -1,11 +1,12 @@
 import { graphql } from "~/graphql";
-import type { RecruitmentGroupQuery } from "~/graphql/graphql";
+import type { RecruitmentGroupQuery, RecruitmentGroupsListQuery } from "~/graphql/graphql";
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
 import { getTimelineContent } from "./timeline-content";
-import type { RunType } from "./timeline-content";
-import { getEventContentName } from "./content";
+import type { RunType, TimelineContentType } from "./timeline-content";
+import type { EventType } from "./content.d";
+import { resolveContentName } from "./content-name";
 import type { MinigameConfig } from "~/components/event/shop/constants";
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
@@ -23,9 +24,7 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
     return null;
   }
 
-  const name = content.contentUid
-    ? (await getEventContentName(env, content.contentUid)) ?? timelineUid
-    : timelineUid;
+  const name = await resolveContentName(env, { uid: timelineUid, contentType: content.contentType, contentUid: content.contentUid });
 
   return {
     name,
@@ -47,7 +46,7 @@ const recruitmentGroupQuery = graphql(`
       uid contentType contentUid startAt endAt recruitmentType
       recruitments {
         recruitmentType pickup rerun since until studentName
-        student { uid attackType defenseType role }
+        student { uid attackType defenseType role schaleDbId }
       }
     }
   }
@@ -66,6 +65,38 @@ export async function getRecruitmentGroup(env: Env, uid: string): Promise<Recrui
 }
 
 //
+// Get Recruitment Groups (plural)
+//
+const recruitmentGroupsQuery = graphql(`
+  query RecruitmentGroupsList($endAfter: ISO8601DateTime, $uids: [String!]) {
+    recruitmentGroups(endAfter: $endAfter, uids: $uids) {
+      uid contentType contentUid startAt endAt recruitmentType
+      recruitments {
+        recruitmentType pickup rerun since until studentName
+        student { uid attackType defenseType role name schaleDbId }
+      }
+    }
+  }
+`);
+
+export type RecruitmentGroupsResult = RecruitmentGroupsListQuery["recruitmentGroups"];
+
+export async function getRecruitmentGroups(
+  env: Env,
+  opts: { endAfter?: Date; uids?: string[] } = {},
+): Promise<RecruitmentGroupsResult> {
+  const { data, error } = await runQuery(recruitmentGroupsQuery, {
+    endAfter: opts.endAfter ?? null,
+    uids: opts.uids ?? null,
+  });
+  if (error || !data) {
+    console.error("[getRecruitmentGroups] Failed", error);
+    return [];
+  }
+  return data.recruitmentGroups;
+}
+
+//
 // Get Event Content Summary
 //
 export async function getEventContentSummary(env: Env, timelineUid: string) {
@@ -75,9 +106,7 @@ export async function getEventContentSummary(env: Env, timelineUid: string) {
   }
 
   const [name, recruitments] = await Promise.all([
-    content.contentUid
-      ? (getEventContentName(env, content.contentUid).then((n) => n ?? timelineUid))
-      : Promise.resolve(timelineUid),
+    resolveContentName(env, { uid: timelineUid, contentType: content.contentType, contentUid: content.contentUid }),
     content.recruitmentGroupUid
       ? (getRecruitmentGroup(env, content.recruitmentGroupUid).then((g) => g?.recruitments ?? []))
       : Promise.resolve([]),
@@ -88,7 +117,7 @@ export async function getEventContentSummary(env: Env, timelineUid: string) {
     since: content.startAt,
     until: content.endAt,
     imageUrl: content.imageUrl,
-    type: content.contentType,
+    type: content.contentType as EventType,
     runType: content.runType,
     endless: content.endless,
     videos: content.videos,

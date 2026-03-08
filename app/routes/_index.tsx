@@ -5,15 +5,15 @@ import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { ChevronDownIcon, ChevronUpIcon, ArrowRightIcon } from "@heroicons/react/16/solid";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { SubTitle, Title } from "~/components/atoms/typography";
-import type { IndexQuery } from "~/graphql/graphql";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { recruitmentLabelLocale } from "~/locales/ko";
 import { ProfileImage } from "~/components/atoms/student";
 import { useState } from "react";
 import { EventHeader } from "~/components/event";
-import { getIndexContents } from "~/models/content";
+import { getIndexContents, type IndexRecruitment } from "~/models/content";
 import EventList from "~/components/event/EventList";
 import { RaidCard } from "~/components/raids";
+import type { TimelineContent } from "~/models/timeline-content";
 
 export const meta: MetaFunction = () => {
   return [
@@ -36,7 +36,16 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const currentUnlimit = currentRaids.find((raid) => raid.type === "unlimit");
   return {
     mainEvent,
-    currentEvents: currentEvents.filter((event) => (event.uid !== mainEvent?.uid)),
+    currentEvents: currentEvents
+      .filter((event) => event.uid !== mainEvent?.uid)
+      .map((event) => ({
+        uid: event.uid,
+        name: event.name,
+        type: event.contentType,
+        since: event.startAt,
+        until: event.endAt!,
+        imageUrl: event.imageUrl,
+      })),
     currentRecruitments,
     favoritedCounts,
     favoritedStudentUids,
@@ -84,7 +93,7 @@ export default function Index() {
   );
 }
 
-function MainEvent({ event }: { event: Exclude<IndexQuery["events"]["nodes"][0], null> | null }) {
+function MainEvent({ event }: { event: TimelineContent | null }) {
   if (!event) {
     return (
       <div className="my-8 p-8 text-center border border-neutral-200 dark:border-neutral-700 rounded-xl bg-neutral-50 dark:bg-neutral-800">
@@ -96,16 +105,24 @@ function MainEvent({ event }: { event: Exclude<IndexQuery["events"]["nodes"][0],
   return (
     <div className="my-8">
       <Link to={`/events/${event.uid}`} className="block hover:opacity-75 transition-opacity">
-        <EventHeader {...event} />
+        <EventHeader
+          name={event.name}
+          type={event.contentType}
+          runType={event.runType}
+          since={event.startAt}
+          until={event.endAt}
+          endless={event.endless}
+          imageUrl={event.imageUrl}
+        />
       </Link>
     </div>
   );
 }
 
 type CurrentRecruitmentsProps = {
-  recruitments: { eventUid: string, recruitment: IndexQuery["events"]["nodes"][0]["recruitments"][0] }[];
+  recruitments: { eventUid: string; recruitment: IndexRecruitment }[];
   favoritedStudentUids: string[];
-  favoritedCounts: { studentId: string, count: number }[];
+  favoritedCounts: { studentId: string; count: number }[];
 };
 
 function CurrentRecruitments({ recruitments, favoritedStudentUids, favoritedCounts }: CurrentRecruitmentsProps) {

@@ -5,28 +5,14 @@ import { useState } from "react";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { SubTitle, Title } from "~/components/atoms/typography";
 import { PickupHistoryEditor, PickupHistoryImporter } from "~/components/organisms/pickup";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
 import { createPickupHistory, getPickupHistory, type PickupHistory, updatePickupHistory } from "~/models/pickup-history";
 import { getAllStudents } from "~/models/student";
+import { getAllTimelineContentsMeta } from "~/models/timeline-content";
+import { getRecruitmentGroups } from "~/models/event-content";
 import { FormGroup } from "~/components/organisms/form";
 import { ContentSelectForm } from "~/components/molecules/form";
 import { FilterButtons } from "~/components/navigation";
 import { Bars3Icon } from "@heroicons/react/16/solid";
-
-const recruitmentEventsQuery = graphql(`
-  query RecruitmentEvents {
-    events(first: 9999) {
-      nodes {
-        uid name since until type rerun
-        recruitments {
-          student { uid name }
-          pickup
-        }
-      }
-    }
-  }
-`);
 
 export const meta: MetaFunction = () => [
   { title: "모집 이력 관리 | 몰루로그" },
@@ -44,16 +30,40 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     currentPickupHistory = await getPickupHistory(env, sensei.id, params.id, true);
   }
 
-  const { data, error } = await runQuery(recruitmentEventsQuery, {});
-  if (!data) {
-    console.error(error);
-    throw "failed to load data";
-  }
-
+  const EVENT_CONTENT_TYPES = new Set(["event", "main_story", "pickup"]);
   const now = dayjs();
+
+  const [allContents, allGroups, allStudentsList] = await Promise.all([
+    getAllTimelineContentsMeta(env),
+    getRecruitmentGroups(env, {}),
+    getAllStudents(env),
+  ]);
+
+  // Build a map from timeline content uid → recruitment group for student name search
+  const groupByUid = new Map(allGroups.map((g) => [g.uid, g]));
+
+  const events = allContents
+    .filter((tc) => EVENT_CONTENT_TYPES.has(tc.contentType) && tc.startAt && dayjs(tc.startAt).isBefore(now))
+    .sort((a, b) => dayjs(b.startAt).diff(dayjs(a.startAt)))
+    .map((tc) => {
+      const group = groupByUid.get(tc.uid);
+      return {
+        uid: tc.uid,
+        name: tc.name,
+        since: tc.startAt,
+        until: tc.endAt ?? undefined,
+        recruitments: group?.recruitments
+          .filter((r) => r.pickup && r.student)
+          .map((r) => ({
+            student: r.student ? { uid: r.student.uid, name: r.student.name ?? "" } : null,
+            pickup: r.pickup,
+          })) ?? [],
+      };
+    });
+
   return {
-    events: data.events.nodes.filter((event) => event.recruitments.length > 0 && dayjs(event.since).isBefore(now)).reverse(),
-    tier3Students: (await getAllStudents(env))
+    events,
+    tier3Students: allStudentsList
       .filter((student) => student.initialTier === 3)
       .sort((a, b) => b.order - a.order)
       .map((student) => ({ uid: student.uid, name: student.name })),

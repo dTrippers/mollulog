@@ -1,33 +1,16 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { runQuery } from "~/lib/baql";
 import { Link, useLoaderData } from "react-router";
-import { graphql } from "~/graphql";
 import { SubTitle } from "~/components/atoms/typography";
-import { getContentsComments, nestComments } from "~/models/content";
+import { getContentsComments, nestComments, getFutureContents } from "~/models/content";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRouteSensei } from "./$username";
 import { FuturePlan } from "~/components/organisms/future";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import type { NestedComment } from "~/models/content";
-
-const userFuturesQuery = graphql(`
-  query UserFutures($now: ISO8601DateTime!) {
-    events(first: 999, untilAfter: $now) {
-      nodes {
-        uid name since until
-        recruitments {
-          recruitmentType rerun
-          student {
-            uid attackType defenseType role schaleDbId name school equipments
-            skillItems(skillType: ex, skillLevel: 5) {
-              item { uid subCategory rarity }
-            }
-          }
-        }
-      }
-    }
-  }
-`);
+import { getAllStudentsMap } from "~/models/student";
+import { getStudentSkillItems } from "~/models/student";
+import type { RecruitmentTypeEnum } from "~/graphql/graphql";
+import type { Role } from "~/models/student";
 
 export const meta: MetaFunction = ({ params }) => {
   return [
@@ -39,22 +22,68 @@ export const meta: MetaFunction = ({ params }) => {
 };
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
-  const truncatedNow = new Date();
-  truncatedNow.setMinutes(0, 0, 0);
-
-  const { data, error } = await runQuery(userFuturesQuery, { now: truncatedNow });
-  if (error || !data) {
-    throw error ?? "failed to fetch events";
-  }
-
   const env = context.cloudflare.env;
   const sensei = await getRouteSensei(env, params);
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
 
-  const favoritedStudents = await getUserFavoritedStudents(env, sensei.id);
+  const [favoritedStudents, futureContents, studentsMap] = await Promise.all([
+    getUserFavoritedStudents(env, sensei.id),
+    getFutureContents(env),
+    getAllStudentsMap(env, true),
+  ]);
+
   const plannedContentIds = favoritedStudents.map(({ contentId }) => contentId);
 
-  const events = data.events.nodes.filter((event) => plannedContentIds.includes(event.uid));
+  // Filter future event contents to planned content IDs only
+  const RAID_TYPES = new Set(["total_assault", "elimination", "unlimit", "allied"]);
+  const matchedContents = futureContents.filter(
+    (c) => !RAID_TYPES.has(c.contentType) && plannedContentIds.includes(c.uid),
+  );
+
+  // Collect favorited student UIDs across matched events
+  const favoritedStudentUids = new Set(favoritedStudents.map(({ studentId }) => studentId));
+  const relevantStudentUids = new Set(
+    matchedContents.flatMap((c) =>
+      c.recruitments.map((r) => r.student?.uid).filter((uid): uid is string => uid != null),
+    ).filter((uid) => favoritedStudentUids.has(uid)),
+  );
+
+  // Fetch skill items only for favorited students that appear in matched events
+  const skillItemsMap = new Map(
+    await Promise.all([...relevantStudentUids].map(async (uid) => {
+      const data = await getStudentSkillItems(env, uid);
+      return [uid, data] as const;
+    })),
+  );
+
+  // Build events in the shape FuturePlan expects
+  const events = matchedContents.map((content) => ({
+    uid: content.uid,
+    name: content.name,
+    since: content.startAt,
+    until: content.endAt ?? content.startAt,
+    recruitments: content.recruitments.map((r) => {
+      const studentBase = r.student?.uid ? studentsMap[r.student.uid] : null;
+      const skillData = r.student?.uid ? skillItemsMap.get(r.student.uid) : null;
+      return {
+        recruitmentType: r.recruitmentType as RecruitmentTypeEnum,
+        rerun: r.rerun,
+        student: studentBase
+          ? {
+              uid: studentBase.uid,
+              name: studentBase.name,
+              school: studentBase.school,
+              attackType: studentBase.attackType,
+              defenseType: studentBase.defenseType,
+              role: studentBase.role as Role,
+              schaleDbId: skillData?.schaleDbId ?? null,
+              equipments: studentBase.equipments,
+              skillItems: skillData?.skillItems ?? [],
+            }
+          : null,
+      };
+    }),
+  }));
 
   const allComments: Record<string, NestedComment[]> = {};
   const contentComments = await getContentsComments(env, plannedContentIds, currentUser?.id);

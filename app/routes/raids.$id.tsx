@@ -9,7 +9,7 @@ import { RaidSelector } from "~/components/raids";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { getAllRaids, getRaidDetail } from "~/models/raid";
-import type { DefenseType } from "~/models/content.d";
+import type { Defense } from "~/graphql/graphql";
 
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
@@ -61,7 +61,7 @@ export const ErrorBoundary = () => {
 export type RaidPageContext = {
   currentRaid: Awaited<ReturnType<typeof loader>>["currentRaid"];
   allRaids: Awaited<ReturnType<typeof loader>>["allRaids"];
-  defenseType: DefenseType;
+  defenseType: Defense;
   setPanel: (panel: PagePanelProps) => void;
   signedIn: boolean;
 };
@@ -79,10 +79,10 @@ export default function RaidPage() {
     }
   }, [pathname, currentRaid.uid, setPanel]);
 
-  const [selectedDefenseType, setDefenseType] = useState<DefenseType>(currentRaid.defenseTypes[0].defenseType);
+  const [selectedDefense, setDefense] = useState<Defense>(currentRaid.defenseTypes[0].defenseType);
   useEffect(() => {
-    if (!currentRaid.defenseTypes.some(({ defenseType }) => defenseType === selectedDefenseType)) {
-      setDefenseType(currentRaid.defenseTypes[0].defenseType);
+    if (!currentRaid.defenseTypes.some(({ defenseType }) => defenseType === selectedDefense)) {
+      setDefense(currentRaid.defenseTypes[0].defenseType);
     }
   }, [currentRaid.defenseTypes]);
 
@@ -129,14 +129,14 @@ export default function RaidPage() {
             buttonProps={currentRaid.defenseTypes.map(({ defenseType }) => ({
               text: defenseTypeLocale[defenseType],
               color: defenseTypeColor[defenseType],
-              active: defenseType === selectedDefenseType,
-              onToggle: () => setDefenseType(defenseType),
+              active: defenseType === selectedDefense,
+              onToggle: () => setDefense(defenseType),
             }))}
             exclusive atLeastOne
           />
         </div>
       )}
-      <Outlet context={{ currentRaid, allRaids, defenseType: selectedDefenseType, setPanel, signedIn } satisfies RaidPageContext} />
+      <Outlet context={{ currentRaid, allRaids, defenseType: selectedDefense, setPanel, signedIn } satisfies RaidPageContext} />
     </Page>
   );
 }

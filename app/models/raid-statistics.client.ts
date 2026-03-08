@@ -1,4 +1,5 @@
-import type { RaidType, DefenseType } from "~/models/content.d";
+import type { RaidType } from "~/models/content.d";
+import type { Defense } from "~/graphql/graphql";
 import { createProtobufRootCache, fetchProtobuf, RAID_API_BASE_URL } from "./raid-protobuf-utils";
 
 // Protobuf schema definition for statistics API response
@@ -76,7 +77,7 @@ function convertToTotalTier(tier: number, weaponTier?: number): number {
  * Fetch student statistics from server API
  */
 async function fetchStudentStatistics(params:
-  | { raidType: RaidType; season: number; defenseType: DefenseType }
+  | { raidType: RaidType; season: number; defenseType: Defense }
   | { studentUid: string }
 ): Promise<ServerStudentStatisticsResponse> {
   // Build query parameters
@@ -102,7 +103,7 @@ async function fetchStudentStatistics(params:
 }
 
 export type RaidStatistics = {
-  raid: { raidType: RaidType; season: number; defenseType: DefenseType };
+  raid: { raidType: RaidType; season: number; defenseType: Defense };
   studentUid: string;
   slotsCount: number;
   slotsByTier: { tier: number; count: number }[];
@@ -115,7 +116,7 @@ export async function fetchRaidStatisticsByStudent(studentUid: string): Promise<
   return convertToRaidStatistics(response);
 }
 
-export async function fetchRaidStatisticsByRaid(raidType: RaidType, season: number, defenseType: DefenseType): Promise<RaidStatistics[]> {
+export async function fetchRaidStatisticsByRaid(raidType: RaidType, season: number, defenseType: Defense): Promise<RaidStatistics[]> {
   const response = await fetchStudentStatistics({ raidType, season, defenseType });
   return convertToRaidStatistics(response);
 }
@@ -150,7 +151,7 @@ function convertToRaidStatistics(response: ServerStudentStatisticsResponse): Rai
       raid: {
         raidType: rawStat.raid.raidType as RaidType,
         season: rawStat.raid.season,
-        defenseType: rawStat.raid.defenseType as DefenseType,
+        defenseType: rawStat.raid.defenseType as Defense,
       },
       studentUid: rawStat.studentUid,
       slotsCount,

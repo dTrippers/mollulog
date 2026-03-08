@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { CheckIcon, HeartIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { Transition } from "@headlessui/react";
 import { studentImageUrl } from "~/models/assets";
-import type { AttackType, DefenseType, Role } from "~/models/content.d";
+import type { Role } from "~/models/content.d";
+import type { Attack, Defense } from "~/graphql/graphql";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, roleColor, roleLocale } from "~/locales/ko";
 import OptionBadge from "~/components/atoms/student/OptionBadge";
 import { Link } from "react-router";
@@ -19,8 +20,8 @@ type StudentCardProps = {
   level?: number | null;
   label?: ReactNode;
   isAssist?: boolean;
-  attackType?: AttackType;
-  defenseType?: DefenseType;
+  attackType?: Attack;
+  defenseType?: Defense;
   role?: Role;
 
   favorited?: boolean;
@@ -143,8 +144,8 @@ type StudentCardPopupProps = {
   student: {
     uid: string;
     name: string;
-    attackType?: AttackType;
-    defenseType?: DefenseType;
+    attackType?: Attack;
+    defenseType?: Defense;
     role?: Role;
   };
   popups: {

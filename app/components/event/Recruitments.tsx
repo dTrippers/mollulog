@@ -15,8 +15,8 @@ import {
   roleColor,
   roleLocale,
 } from "~/locales/ko";
-import { RecruitmentTypeEnum } from "~/graphql/graphql";
-import type { AttackType, DefenseType, Role } from "~/models/content.d";
+import type { RecruitmentTypeEnum, Attack, Defense } from "~/graphql/graphql";
+import type { Role } from "~/models/content.d";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { sanitizeClassName } from "~/prophandlers";
 import OptionBadge from "../atoms/student/OptionBadge";
@@ -31,8 +31,8 @@ type Recruitment = {
   studentName: string;
   student: {
     uid: string;
-    attackType: AttackType;
-    defenseType: DefenseType;
+    attackType: Attack;
+    defenseType: Defense;
     role: Role;
   } | null;
   favorited: boolean;

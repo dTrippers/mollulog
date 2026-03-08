@@ -1,6 +1,8 @@
 import { runQuery } from "~/lib/baql";
 import { graphql } from "~/graphql";
-import type { AttackType, DefenseType, Position, TacticRole } from "./content.d";
+import type { Position, TacticRole } from "./content.d";
+import { fetchCached } from "./base";
+import { Attack, Defense } from "~/graphql/graphql";
 
 export type Role = "striker" | "special";
 export type Student = {
@@ -10,8 +12,8 @@ export type Student = {
   school: string;
   initialTier: number;
   order: number;
-  attackType: AttackType;
-  defenseType: DefenseType;
+  attackType: Attack;
+  defenseType: Defense;
   position: Position;
   tacticRole: TacticRole;
   birthday: Date;
@@ -82,6 +84,32 @@ export function getMaxTierAt(date: Date): number {
     }
   }
   return 8;
+}
+
+const studentSkillItemsQuery = graphql(`
+  query StudentSkillItems($uid: String!) {
+    student(uid: $uid) {
+      uid
+      schaleDbId
+      skillItems(skillType: ex, skillLevel: 5) {
+        item { uid subCategory rarity }
+      }
+    }
+  }
+`);
+
+export type StudentSkillItem = { item: { uid: string; subCategory: string | null; rarity: number } };
+
+export async function getStudentSkillItems(env: Env, uid: string): Promise<{ schaleDbId: string | null; skillItems: StudentSkillItem[] }> {
+  return fetchCached(env, `student-skill-items::v1::${uid}`, async () => {
+    const { data } = await runQuery(studentSkillItemsQuery, { uid });
+    return {
+      schaleDbId: data?.student?.schaleDbId ?? null,
+      skillItems: (data?.student?.skillItems ?? []).map((si) => ({
+        item: { uid: si.item.uid, subCategory: si.item.subCategory ?? null, rarity: si.item.rarity },
+      })),
+    };
+  }, 7 * 24 * 60 * 60);
 }
 
 export function parseVisibleNames(name: string): string[] {

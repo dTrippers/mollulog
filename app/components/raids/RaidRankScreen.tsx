@@ -3,7 +3,8 @@ import { IdentificationIcon, MinusCircleIcon, PlusCircleIcon } from "@heroicons/
 import { fetchRanks, type ParsedRaidRankDocument, convertTier } from "~/models/raid-rank.client";
 import { EmptyView } from "~/components/atoms/typography";
 import { Pagination } from "~/components/atoms/navigation";
-import type { RaidType, DefenseType, AttackType, Role } from "~/models/content.d";
+import type { RaidType, Role } from "~/models/content.d";
+import type { Attack, Defense } from "~/graphql/graphql";
 import type { RaidRankFilterState } from "./RaidRankFilter";
 import { StudentCards } from "~/components/students";
 import { ActionCard } from "~/components/molecules/editor";
@@ -15,7 +16,7 @@ type RaidRankScreenProps = {
     since: Date;
     raidType: RaidType;
     seasonIndex: number;
-    defenseType: DefenseType;
+    defenseType: Defense;
   };
   filterState: RaidRankFilterState;
 
@@ -25,8 +26,8 @@ type RaidRankScreenProps = {
   allStudents: {
     [uid: string]: {
       name: string;
-      attackType: AttackType;
-      defenseType: DefenseType;
+      attackType: Attack;
+      defenseType: Defense;
       role: Role;
     };
   };
@@ -100,7 +101,7 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
 
     // Convert excludeStudents: tiers 배열을 [tier, weaponTier?] 형식으로 변환
     // tiers가 빈 배열이면 tiers: [] (모든 tier 의미)
-    let excludeStudents = filterState.excludeStudents.map((s) => {
+    const excludeStudents = filterState.excludeStudents.map((s) => {
       if (s.tiers.length === 0) {
         return { uid: s.uid, tiers: [] };
       }

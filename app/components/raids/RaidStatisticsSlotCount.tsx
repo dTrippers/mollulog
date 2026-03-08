@@ -11,7 +11,8 @@ import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko
 import { defenseTypeColor } from "~/locales/ko";
 import { raidTypeLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
-import type { DefenseType, RaidType, Terrain } from "~/models/content.d";
+import type { RaidType, Terrain } from "~/models/content.d";
+import type { Defense } from "~/graphql/graphql";
 
 type RaidStatisticsSlotCountProps = {
   student?: { uid: string; name: string };
@@ -20,7 +21,7 @@ type RaidStatisticsSlotCountProps = {
     name: string;
     type: RaidType;
     boss: string;
-    defenseType: DefenseType;
+    defenseType: Defense;
     difficulty: string | null;
     since: Date;
     until: Date;

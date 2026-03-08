@@ -1,13 +1,14 @@
 import { ArrowsRightLeftIcon, ArrowsUpDownIcon, BarsArrowDownIcon, FireIcon, MagnifyingGlassIcon, ShieldCheckIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { useState, useEffect } from "react";
 import hangul from "hangul-js";
-import type { AttackType, DefenseType, Position, Role, TacticRole } from "~/models/content.d";
+import type { Position, Role, TacticRole } from "~/models/content.d";
+import { Attack, Defense } from "~/graphql/graphql";
 import { FilterButtons } from "~/components/navigation";
 import { Input } from "../atoms/form";
 
 export type StudentFilterState = {
-  attackTypes: AttackType[];
-  defenseTypes: DefenseType[];
+  attackTypes: Attack[];
+  defenseTypes: Defense[];
   roles: Role[];
   tacticRoles: TacticRole[];
   positions: Position[];
@@ -52,14 +53,14 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
     onFilterChange(filtered.map((student) => student.uid));
   }, [students, state, onFilterChange]);
 
-  const toggleAttackType = (attackType: AttackType, activated: boolean) => {
+  const toggleAttack = (attackType: Attack, activated: boolean) => {
     setState((prev) => ({
       ...prev,
       attackTypes: activated ? [...prev.attackTypes, attackType] : prev.attackTypes.filter((type) => type !== attackType),
     }));
   };
 
-  const toggleDefenseType = (defenseType: DefenseType, activated: boolean) => {
+  const toggleDefense = (defenseType: Defense, activated: boolean) => {
     setState((prev) => ({
       ...prev,
       defenseTypes: activated ? [...prev.defenseTypes, defenseType] : prev.defenseTypes.filter((type) => type !== defenseType),
@@ -98,21 +99,21 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
           <FilterButtons
             Icon={FireIcon}
             buttonProps={[
-              { text: "폭발", color: "red", active: state.attackTypes.includes("explosive"), onToggle: (activated) => toggleAttackType("explosive", activated) },
-              { text: "관통", color: "yellow", active: state.attackTypes.includes("piercing"), onToggle: (activated) => toggleAttackType("piercing", activated) },
-              { text: "신비", color: "blue", active: state.attackTypes.includes("mystic"), onToggle: (activated) => toggleAttackType("mystic", activated) },
-              { text: "진동", color: "purple", active: state.attackTypes.includes("sonic"), onToggle: (activated) => toggleAttackType("sonic", activated) },
-              { text: "분해", color: "green", active: state.attackTypes.includes("chemical"), onToggle: (activated) => toggleAttackType("chemical", activated) },
+              { text: "폭발", color: "red", active: state.attackTypes.includes(Attack.Explosive), onToggle: (activated) => toggleAttack(Attack.Explosive, activated) },
+              { text: "관통", color: "yellow", active: state.attackTypes.includes(Attack.Piercing), onToggle: (activated) => toggleAttack(Attack.Piercing, activated) },
+              { text: "신비", color: "blue", active: state.attackTypes.includes(Attack.Mystic), onToggle: (activated) => toggleAttack(Attack.Mystic, activated) },
+              { text: "진동", color: "purple", active: state.attackTypes.includes(Attack.Sonic), onToggle: (activated) => toggleAttack(Attack.Sonic, activated) },
+              { text: "분해", color: "green", active: state.attackTypes.includes(Attack.Chemical), onToggle: (activated) => toggleAttack(Attack.Chemical, activated) },
             ]}
           />
           <FilterButtons
             Icon={ShieldCheckIcon}
             buttonProps={[
-              { text: "경장갑", color: "red", active: state.defenseTypes.includes("light"), onToggle: (activated) => toggleDefenseType("light", activated) },
-              { text: "중장갑", color: "yellow", active: state.defenseTypes.includes("heavy"), onToggle: (activated) => toggleDefenseType("heavy", activated) },
-              { text: "특수장갑", color: "blue", active: state.defenseTypes.includes("special"), onToggle: (activated) => toggleDefenseType("special", activated) },
-              { text: "탄력장갑", color: "purple", active: state.defenseTypes.includes("elastic"), onToggle: (activated) => toggleDefenseType("elastic", activated) },
-              { text: "복합장갑", color: "green", active: state.defenseTypes.includes("composite"), onToggle: (activated) => toggleDefenseType("composite", activated) },
+              { text: "경장갑", color: "red", active: state.defenseTypes.includes(Defense.Light), onToggle: (activated) => toggleDefense(Defense.Light, activated) },
+              { text: "중장갑", color: "yellow", active: state.defenseTypes.includes(Defense.Heavy), onToggle: (activated) => toggleDefense(Defense.Heavy, activated) },
+              { text: "특수장갑", color: "blue", active: state.defenseTypes.includes(Defense.Special), onToggle: (activated) => toggleDefense(Defense.Special, activated) },
+              { text: "탄력장갑", color: "purple", active: state.defenseTypes.includes(Defense.Elastic), onToggle: (activated) => toggleDefense(Defense.Elastic, activated) },
+              { text: "복합장갑", color: "green", active: state.defenseTypes.includes(Defense.Composite), onToggle: (activated) => toggleDefense(Defense.Composite, activated) },
             ]}
           />
           <FilterButtons
@@ -170,8 +171,8 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
 }
 
 type FilterableStudent = {
-  attackType: AttackType;
-  defenseType: DefenseType;
+  attackType: Attack;
+  defenseType: Defense;
   role: Role;
   position: Position;
   tacticRole: TacticRole;

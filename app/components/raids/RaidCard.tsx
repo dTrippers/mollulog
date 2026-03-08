@@ -1,10 +1,11 @@
 import dayjs from "dayjs";
 import { Link } from "react-router";
-import { DefenseType, RaidType, Terrain } from "~/models/content.d";
-import { Difficulty } from "~/models/raid";
+import type { RaidType, Terrain } from "~/models/content.d";
+import type { Difficulty } from "~/models/raid";
 import { bossImageUrl } from "~/models/assets";
 import { defenseTypeLocale, difficultyLocale, raidTypeLocale, relativeTime, terrainLocale } from "~/locales/ko";
 import { sanitizeClassName } from "~/prophandlers";
+import { Defense } from "~/graphql/graphql";
 
 type RaidCardProps = {
   raid: {
@@ -13,7 +14,7 @@ type RaidCardProps = {
     type: RaidType;
     raidIndexJp: number | null;
     defenseTypes: {
-      defenseType: DefenseType;
+      defenseType: Defense;
       difficulty: Difficulty | null;
     }[];
     since: Date;
@@ -30,12 +31,13 @@ type RaidCardProps = {
   showName?: boolean;
 };
 
-const defenseTypeColorClass: Record<DefenseType, string> = {
+const defenseTypeColorClass: Record<Defense, string> = {
   light: "bg-red-500",
   heavy: "bg-yellow-500",
   special: "bg-blue-500",
   elastic: "bg-purple-500",
   composite: "bg-green-600",
+  normal: "bg-gray-500",
 };
 
 export default function RaidCard({ raid, timeLocaleType, buttons, showName = true }: RaidCardProps) {

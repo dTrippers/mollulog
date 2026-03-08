@@ -1,16 +1,8 @@
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
-
-const sitemapQuery = graphql(`
-  query Sitemap {
-    contents {
-      nodes { __typename uid until }
-    }
-    students { uid }
-  }
-`);
+import type { LoaderFunctionArgs } from "react-router";
+import { getAllStudents } from "~/models/student";
+import { getAllTimelineContentsMeta } from "~/models/timeline-content";
 
 type SitemapItem = {
   link: string;
@@ -21,38 +13,51 @@ type SitemapItem = {
 
 const HOST = "https://mollulog.net";
 
-export const loader = async () => {
+const RAID_CONTENT_TYPES = new Set(["total_assault", "elimination", "unlimit"]);
+const EVENT_CONTENT_TYPES = new Set(["event", "fes", "collab", "immortal_event", "main_story", "pickup", "mini_event", "allied"]);
+
+export const loader = async ({ context }: LoaderFunctionArgs) => {
+  const env = context.cloudflare.env;
   const items: SitemapItem[] = [
     { link: `${HOST}/futures`, lastmod: dayjs(), changefreq: "daily", priority: 1.0 },
     { link: `${HOST}/students`, lastmod: dayjs(), changefreq: "monthly", priority: 0.5 },
   ];
 
-  const { data, error } = await runQuery(sitemapQuery, {});
-  if (error || !data) {
-    throw error ?? "failed to fetch events";
-  }
-
   const now = dayjs();
-  data.contents.nodes.forEach((content) => {
-    const until = dayjs(content.until);
+  const [contents, students] = await Promise.all([
+    getAllTimelineContentsMeta(env),
+    getAllStudents(env),
+  ]);
+
+  for (const content of contents) {
+    let basePath: string;
+    if (RAID_CONTENT_TYPES.has(content.contentType)) {
+      basePath = "raids";
+    } else if (EVENT_CONTENT_TYPES.has(content.contentType)) {
+      basePath = "events";
+    } else {
+      continue;
+    }
+
+    const until = content.endAt ? dayjs(content.endAt) : now;
     const isOutdated = until.isBefore(now);
     items.push({
-      link: `${HOST}/${content.__typename.toLowerCase()}s/${content.uid}`,
+      link: `${HOST}/${basePath}/${content.uid}`,
       lastmod: isOutdated ? until : now,
       changefreq: isOutdated ? "yearly" : "daily",
       priority: isOutdated ? 0.3 : 1.0,
     });
-  });
+  }
 
   const beginningOfMonth = now.startOf("month");
-  data.students.forEach((student) => {
+  for (const student of students) {
     items.push({
       link: `${HOST}/students/${student.uid}`,
       lastmod: beginningOfMonth,
       changefreq: "monthly",
       priority: 0.5,
     });
-  });
+  }
 
   const xmlUrls = items.map((item) => {
     return `

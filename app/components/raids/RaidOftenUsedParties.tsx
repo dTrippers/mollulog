@@ -1,4 +1,5 @@
-import type { AttackType, DefenseType, Role } from "~/models/content.d";
+import type { Role } from "~/models/content.d";
+import type { Attack, Defense } from "~/graphql/graphql";
 import { StudentCards } from "~/components/students";
 import { ActionCard } from "~/components/molecules/editor";
 
@@ -27,7 +28,7 @@ type RaidOftenUsedPartiesProps = {
     maxScore: number;
     parties: Party[];
   }>;
-  allStudents: Record<string, { name: string; attackType: AttackType; defenseType: DefenseType; role: Role }>;
+  allStudents: Record<string, { name: string; attackType: Attack; defenseType: Defense; role: Role }>;
 };
 
 export default function RaidOftenUsedParties({ oftenUsedParties, allStudents }: RaidOftenUsedPartiesProps) {

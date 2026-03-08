@@ -1,4 +1,4 @@
-import { LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
+import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
 import { InformationCircleIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
 import { Page } from "~/components/navigation";
 import { getEventMetadata } from "~/models/event-content";

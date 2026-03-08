@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import { upsertTimelineContent } from "~/models/timeline-content";
+import type { TimelineContentType, RunType } from "~/models/timeline-content";
 
 // ============================================================
 // Campaign
@@ -326,6 +327,115 @@ async function syncMiniEvents(env: Env): Promise<void> {
 }
 
 // ============================================================
+// Events (이벤트)
+// ============================================================
+
+/**
+ * Step 1: List query — fetches future recruitment groups to discover events.
+ * RecruitmentGroups link to EventContent via contentUid.
+ */
+const eventRecruitmentGroupsListQuery = graphql(`
+  query EventRecruitmentGroupsForSync($endAfter: ISO8601DateTime!) {
+    recruitmentGroups(endAfter: $endAfter) {
+      uid contentType contentUid startAt endAt recruitmentType
+    }
+  }
+`);
+
+/**
+ * Step 2: Detail query — fetches event name from EventContent.
+ */
+const eventContentForSyncQuery = graphql(`
+  query EventContentForSync($uid: String!) {
+    eventContent(uid: $uid) {
+      uid
+      schedules { region runType startAt endAt }
+    }
+  }
+`);
+
+/**
+ * Syncs event data from BAQL into the timeline_contents D1 table.
+ *
+ * Flow:
+ * 1. Query `recruitmentGroups(endAfter: now)` to get future recruitment groups.
+ *    Each group has contentType (event type) and contentUid (EventContent uid).
+ * 2. For each unique contentUid, query `eventContent(uid:)` for name and schedules.
+ * 3. Upsert each event (per runType/region schedule) into timeline_contents.
+ *    - uid: `{recruitmentGroup.uid}` (so pickup_histories.eventId can reference it)
+ *    - contentUid: EventContent uid
+ *    - recruitmentGroupUid: RecruitmentGroup uid
+ */
+async function syncEvents(env: Env): Promise<void> {
+  const { data: listData, error: listError } = await runQuery(eventRecruitmentGroupsListQuery, { endAfter: new Date() });
+  if (listError || !listData?.recruitmentGroups) {
+    console.error("[sync-timeline-contents] Failed to fetch event recruitment groups list", listError);
+    return;
+  }
+
+  // Filter to supported content types only
+  const eventContentTypes = ["event", "main_story", "pickup"];
+  const eventGroups = listData.recruitmentGroups.filter((g) => eventContentTypes.includes(g.contentType ?? ""));
+
+  console.log(`[sync-timeline-contents] Found ${eventGroups.length} future event recruitment groups`);
+
+  await Promise.all(
+    eventGroups.map(async (group) => {
+      // For pickup-type groups without a contentUid, store directly
+      if (!group.contentUid) {
+        await upsertTimelineContent(env, {
+          uid: group.uid,
+          startAt: dayjs(group.startAt).toDate(),
+          endAt: group.endAt ? dayjs(group.endAt).toDate() : null,
+          endless: false,
+          imageUrl: null,
+          videos: [],
+          contentType: (group.contentType ?? "pickup") as TimelineContentType,
+          runType: "first",
+          occurrence: null,
+          contentUid: null,
+          recruitmentGroupUid: group.uid,
+          confirmed: false,
+          tags: [],
+        });
+        return;
+      }
+
+      const { data: detailData, error: detailError } = await runQuery(eventContentForSyncQuery, { uid: group.contentUid });
+      if (detailError || !detailData?.eventContent) {
+        console.error(`[sync-timeline-contents] Failed to fetch event content for uid=${group.contentUid}`, detailError);
+        return;
+      }
+
+      const detail = detailData.eventContent;
+
+      // Use gl schedule if available, otherwise fall back to group dates
+      const glSchedule = detail.schedules.find((s) => s.region === "gl");
+      const startAt = glSchedule ? dayjs(glSchedule.startAt).toDate() : dayjs(group.startAt).toDate();
+      const endAt = glSchedule?.endAt ? dayjs(glSchedule.endAt).toDate() : (group.endAt ? dayjs(group.endAt).toDate() : null);
+      const runType = (glSchedule?.runType ?? "first") as RunType;
+      const confirmed = false;
+
+      await upsertTimelineContent(env, {
+        uid: group.uid,
+        startAt,
+        endAt,
+        endless: false,
+        imageUrl: null,
+        videos: [],
+        contentType: (group.contentType ?? "event") as TimelineContentType,
+        runType,
+        occurrence: null,
+        contentUid: group.contentUid,
+        recruitmentGroupUid: group.uid,
+        confirmed,
+        tags: [],
+      });
+    }),
+  );
+}
+
+// ============================================================
 // Entry point — add new content type sync functions here
 // ============================================================
 
@@ -338,4 +448,5 @@ export async function syncTimelineContents(env: Env): Promise<void> {
   await syncJointFiringDrills(env);
   await syncRaids(env);
   await syncMiniEvents(env);
+  await syncEvents(env);
 }

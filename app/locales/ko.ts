@@ -1,38 +1,43 @@
 import dayjs from "dayjs";
-import { RecruitmentTypeEnum } from "~/graphql/graphql";
-import type { AttackType, DefenseType, EventType, RaidType, Role, Terrain } from "~/models/content.d";
+import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
+import type { EventType, RaidType, Role, Terrain } from "~/models/content.d";
 import type { Boss } from "~/models/raid";
+import { TimelineContentType } from "~/models/timeline-content";
 
-export const attackTypeLocale: Record<AttackType, string> = {
+export const attackTypeLocale: Record<Attack, string> = {
   explosive: "폭발",
   piercing: "관통",
   mystic: "신비",
   sonic: "진동",
   chemical: "분해",
+  normal: "일반",
 };
 
-export const attackTypeColor: Record<AttackType, "red" | "yellow" | "green" | "blue" | "purple"> = {
+export const attackTypeColor: Record<Attack, "red" | "yellow" | "green" | "blue" | "purple" | "grey"> = {
   explosive: "red",
   piercing: "yellow",
   mystic: "blue",
   sonic: "purple",
   chemical: "green",
+  normal: "grey",
 };
 
-export const defenseTypeLocale: Record<DefenseType, string> = {
+export const defenseTypeLocale: Record<Defense, string> = {
   light: "경장갑",
   heavy: "중장갑",
   special: "특수장갑",
   elastic: "탄력장갑",
   composite: "복합장갑",
+  normal: "일반",
 };
 
-export const defenseTypeColor: Record<DefenseType, "red" | "yellow" | "green" | "blue" | "purple"> = {
+export const defenseTypeColor: Record<Defense, "red" | "yellow" | "green" | "blue" | "purple" | "grey"> = {
   light: "red",
   heavy: "yellow",
   special: "blue",
   elastic: "purple",
   composite: "green",
+  normal: "grey",
 };
 
 export const roleLocale: Record<Role, string> = {
@@ -91,6 +96,19 @@ export const eventTypeLocale: Record<EventType, string> = {
   main_story: "메인 스토리",
   battle_pass: "배틀 패스",
   update: "점검/업데이트",
+};
+
+export const timelineContentTypeLocale: Record<TimelineContentType, string> = {
+  event: "이벤트",
+  mini_event: "미니 이벤트",
+  pickup: "픽업 모집",
+  main_story: "메인 스토리",
+  campaign: "캠페인",
+  joint_firing_drill: "종합전술시험",
+  total_assault: "총력전",
+  elimination: "대결전",
+  unlimit: "제약해제결전",
+  allied: "연합작전",
 };
 
 export const drillTypeLocale: Record<string, string> = {

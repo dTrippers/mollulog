@@ -1,30 +1,15 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { EventTypeEnum } from "~/graphql/graphql";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { runQuery } from "~/lib/baql";
 import { deletePickupHistory, getPickupHistories } from "~/models/pickup-history";
 import { redirect, useLoaderData } from "react-router";
 import { AddContentButton } from "~/components/molecules/editor";
 import { PickupHistoryView } from "~/components/organisms/pickup";
 import { SubTitle } from "~/components/atoms/typography";
-import { graphql } from "~/graphql";
 import { getAllStudentsMap } from "~/models/student";
 import dayjs from "dayjs";
 import { getRouteSensei } from "./$username";
-
-export const userRecruitmentEventsQuery = graphql(`
-  query UserRecruitmentEvents($eventUids: [String!]!) {
-    events(uids: $eventUids) {
-      nodes {
-        uid name type since
-        recruitments {
-          student { uid }
-          pickup
-        }
-      }
-    }
-  }
-`);
+import { getRecruitmentGroups } from "~/models/event-content";
+import { getTimelineContentsByUids } from "~/models/timeline-content";
 
 export const meta: MetaFunction = ({ params }) => {
   return [
@@ -64,13 +49,14 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     getAllStudentsMap(env),
   ]);
   const eventUids = recruitmentHistories.map((history) => history.eventId);
-  const { data, error } = await runQuery(userRecruitmentEventsQuery, { eventUids });
-  if (!data) {
-    console.error(error);
-    throw "failed to load data";
-  }
 
-  const eventMap = new Map(data.events.nodes.map((event) => [event.uid, event]));
+  const [groups, timelineContents] = await Promise.all([
+    getRecruitmentGroups(env, { uids: eventUids }),
+    getTimelineContentsByUids(env, eventUids),
+  ]);
+
+  const groupMap = new Map(groups.map((g) => [g.uid, g]));
+  const tcMap = new Map(timelineContents.map((tc) => [tc.uid, tc]));
 
   let tier3Count = 0;
   let tier3RateCount = 0;
@@ -79,8 +65,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let totalTrial = 0;
 
   const aggregatedHistories = recruitmentHistories.map((history) => {
-    const event = eventMap.get(history.eventId)!;
-    const pickupStudentUids = getPickupStudentUids(event);
+    const group = groupMap.get(history.eventId);
+    const tc = tcMap.get(history.eventId);
+    const pickupStudentUids = group ? getPickupStudentUids(group) : new Set<string>();
     const allTier3StudentIds = history.result.flatMap((trial) => trial.tier3StudentIds);
     const students = allTier3StudentIds
       .filter((studentUid) => studentUid && allStudentsMap[studentUid])
@@ -96,7 +83,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
     const currentTier3Count = history.result.reduce((sum, trial) => sum + trial.tier3Count, 0);
     const currentPickupCount = allTier3StudentIds.filter((uid) => pickupStudentUids.has(uid)).length;
-    const rateMultiplier = event.type === EventTypeEnum.Fes ? 0.5 : 1;
+    const rateMultiplier = group?.recruitmentType === "fes" ? 0.5 : 1;
 
     tier3Count += currentTier3Count;
     pickupCount += currentPickupCount;
@@ -104,9 +91,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     pickupRateCount += currentPickupCount * rateMultiplier;
     totalTrial += history.result.length > 0 ? Math.max(...history.result.map((result) => result.trial)) : 0;
 
+    const eventSince = tc?.startAt ?? (group?.startAt ? new Date(group.startAt) : new Date(0));
     return {
       uid: history.uid,
-      event,
+      event: {
+        uid: history.eventId,
+        name: tc?.name ?? group?.uid ?? history.eventId,
+        type: group?.recruitmentType ?? "pickup",
+        since: eventSince,
+      },
       trial: history.result.length > 0 ? history.result[history.result.length - 1].trial : 0,
       recruitedStudents: students,
     };

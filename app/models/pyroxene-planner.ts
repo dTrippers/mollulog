@@ -3,42 +3,86 @@ import dayjs from "dayjs";
 import { and, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
-import type { PyroxenePlannerContentsQuery } from "~/graphql/graphql";
 import { fetchCached } from "./base";
+import { getTimelineContents } from "./timeline-content";
+import type { TimelineContentType } from "./timeline-content";
+import { getRecruitmentGroups } from "./event-content";
+import { getRaidDetail } from "./raid";
+import { getAllStudentsMap } from "./student";
+import type { RecruitmentTypeEnum } from "~/graphql/graphql";
+import type { RaidType } from "./content.d";
 
 
 /**
  * Pyroxene Planner Contents
  */
-export const pyroxenePlannerContentsQuery = graphql(`
-  query PyroxenePlannerContents($now: ISO8601DateTime!) {
-    contents(untilAfter: $now, first: 9999) {
-      nodes {
-        __typename uid name since until
-        ... on Event {
-          recruitments {
-            recruitmentType pickup rerun
-            student { uid initialTier }
-          }
-        }
-        ... on Raid {
-          type
-        }
+const RAID_CONTENT_TYPES: TimelineContentType[] = ["total_assault", "elimination"];
+const EVENT_CONTENT_TYPES: TimelineContentType[] = ["event", "main_story", "pickup"];
+
+export type PyroxenePlannerContent =
+  {
+    kind: "event";
+    uid: string;
+    name: string;
+    since: Date;
+    until: Date;
+    recruitments: {
+      recruitmentType: RecruitmentTypeEnum;
+      pickup: boolean;
+      rerun: boolean;
+      student: { uid: string; initialTier: number } | null;
+    }[];
+  } | {
+    kind: "raid";
+    uid: string;
+    name: string;
+    type: RaidType;
+    since: Date;
+    until: Date;
+  };
+
+export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
+  return fetchCached(env, "pyroxene-planner-contents::v3", async () => {
+    const allContents = await getTimelineContents(env);
+    const recruitmentGroupUids = allContents.map((c) => c.recruitmentGroupUid).filter((uid) => uid !== null) as string[];
+    const [recruitmentGroups, studentsMap] = await Promise.all([
+      getRecruitmentGroups(env, { uids: recruitmentGroupUids }),
+      getAllStudentsMap(env, true),
+    ]);
+
+    const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
+    const results: PyroxenePlannerContent[] = [];
+    for (const content of allContents) {
+      if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
+        const group = recruitmentGroupMap.get(content.uid);
+        const recruitments = (group?.recruitments ?? []).map((r) => ({
+          recruitmentType: r.recruitmentType,
+          pickup: r.pickup,
+          rerun: r.rerun,
+          student: r.student ? { uid: r.student.uid, initialTier: studentsMap[r.student.uid]!.initialTier } : null,
+        }));
+        results.push({
+          kind: "event",
+          uid: content.uid,
+          name: content.name,
+          since: content.startAt,
+          until: content.endAt!,
+          recruitments,
+        });
+      } else if (RAID_CONTENT_TYPES.includes(content.contentType)) {
+        const raidDetail = content.contentUid ? await getRaidDetail(env, content.contentUid) : null;
+        results.push({
+          kind: "raid",
+          uid: content.uid,
+          name: raidDetail?.name ?? content.name,
+          type: content.contentType as RaidType,
+          since: content.startAt,
+          until: content.endAt!,
+        });
       }
     }
-  }
-`);
 
-export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContentsQuery["contents"]["nodes"]> {
-  const now = new Date();
-  return fetchCached(env, "pyroxene-planner-contents::v2", async () => {
-    const { data, error } = await runQuery(pyroxenePlannerContentsQuery, { now });
-    if (error || !data) {
-      throw error ?? "failed to fetch pyroxene planner contents";
-    }
-    return data.contents.nodes;
+    return results;
   }, 60 * 10, forceRefresh);
 }
 

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
 import type { RaidStatistics } from "~/models/raid-statistics.client";
 import RaidStatisticsSlotCount from "./RaidStatisticsSlotCount";
-import { Role } from "~/models/content.d";
+import type { Role } from "~/models/content.d";
 
 type RaidStatisticsScreenProps = {
   statistics: RaidStatistics[];

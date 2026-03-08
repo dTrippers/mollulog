@@ -6,7 +6,7 @@ import { ActionCard, type ActionCardAction } from "~/components/molecules/editor
 import { StudentCards } from "~/components/students";
 import type { RaidType } from "~/models/content.d";
 import { useEffect, useMemo, useState } from "react";
-import { RecruitmentTypeEnum, ResourceTypeEnum } from "~/graphql/graphql";
+import { type RecruitmentTypeEnum, ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";
 import { Transition } from "@headlessui/react";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
