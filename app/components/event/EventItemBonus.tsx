@@ -43,7 +43,7 @@ export default function EventItemBonus({ itemUid, itemName, appliedRatio, maxRat
           <p className="mb-2 font-bold">스트라이커</p>
           <StudentCards
             mobileGrid={6} pcGrid={6}
-            students={rewardBonuses.filter(({ student }) => student.role === "striker").map(({ student, ratio }) => ({
+            students={rewardBonuses.sort((a, b) => Number(b.ratio) - Number(a.ratio)).filter(({ student }) => student.role === "striker").map(({ student, ratio }) => ({
               name: showStudentName ? student.name : undefined,
               uid: student.uid,
               grayscale: signedIn ? !selectedBonusStudentUids.includes(student.uid) : false,
@@ -57,7 +57,7 @@ export default function EventItemBonus({ itemUid, itemName, appliedRatio, maxRat
           <p className="mb-2 font-bold">스페셜</p>
           <StudentCards
             mobileGrid={6} pcGrid={6}
-            students={rewardBonuses.filter(({ student }) => student.role === "special").map(({ student, ratio }) => ({
+            students={rewardBonuses.sort((a, b) => Number(b.ratio) - Number(a.ratio)).filter(({ student }) => student.role === "special").map(({ student, ratio }) => ({
               name: showStudentName ? student.name : undefined,
               uid: student.uid,
               grayscale: signedIn ? !selectedBonusStudentUids.includes(student.uid) : false,

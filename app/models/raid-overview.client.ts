@@ -1,4 +1,5 @@
-import type { RaidType, DefenseType } from "~/models/content.d";
+import type { RaidType } from "~/models/content.d";
+import type { Defense } from "~/graphql/graphql";
 import { createProtobufRootCache, fetchProtobuf, RAID_API_BASE_URL } from "./raid-protobuf-utils";
 
 // Protobuf schema definition for overview API response
@@ -117,7 +118,7 @@ type ServerRaidOverviewResponse = {
 export async function fetchRaidOverview(params: {
   raidType: RaidType;
   season: number;
-  defenseType: DefenseType;
+  defenseType: Defense;
 }): Promise<ServerRaidOverviewResponse> {
   const { raidType, season, defenseType } = params;
 

@@ -31,18 +31,27 @@ type ContentCommentViewProps = {
 export default function ContentCommentView({ comments, placeholder, onClick }: ContentCommentViewProps) {
   const commentCount = comments ? comments.reduce((acc, comment) => acc + 1 + (comment.subcomments?.length ?? 0), 0) : 0;
 
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const hasRecentComment = comments?.some((comment) =>
+    new Date(comment.createdAt) >= threeDaysAgo ||
+    comment.subcomments?.some((sub) => new Date(sub.createdAt) >= threeDaysAgo)
+  ) ?? false;
+
   const pinnedComment = comments?.find((comment) => comment.pinned);
   const displayBody = pinnedComment ? (pinnedComment.body.length > 50 ? `${pinnedComment.body.slice(0, 50)}...` : pinnedComment.body) : null;
   return (
     <div
       className={sanitizeClassName(`
-        w-full p-2 flex items-center gap-x-1 bg-neutral-100 dark:bg-neutral-900 rounded-lg text-sm transition
+        w-full p-2 flex items-center gap-x-1.5 bg-neutral-100 dark:bg-neutral-900 rounded-lg text-sm transition
         ${onClick ? "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700" : ""}
       `)}
       onClick={onClick}
     >
-      <ChatBubbleOvalLeftEllipsisIcon className="shrink-0 size-4 text-neutral-500 dark:text-neutral-400" />
-      {comments && <span className="text-neutral-500 dark:text-neutral-400">{commentCount}</span>}
+      <div className="relative flex items-center gap-x-1">
+        <ChatBubbleOvalLeftEllipsisIcon className="shrink-0 size-4 text-neutral-500 dark:text-neutral-400" />
+        {comments && <span className="text-neutral-500 dark:text-neutral-400">{commentCount}</span>}
+        {hasRecentComment && <div className="absolute -top-0.5 -right-2 size-1.5 bg-red-500 rounded-full animate-pulse" />}
+      </div>
       {pinnedComment ? (
         <p className="ml-1 pl-2 border-l border-neutral-200 dark:border-neutral-700 grow text-neutral-700 dark:text-neutral-300">
           {displayBody}

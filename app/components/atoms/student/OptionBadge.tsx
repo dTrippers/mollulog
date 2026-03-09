@@ -1,7 +1,7 @@
 type OptionBadgeProps = {
   text: string;
   bgColor?: "dark" | "grey" | "light";
-  color?: "red" | "yellow" | "green" | "blue" | "purple";
+  color?: "red" | "yellow" | "green" | "blue" | "purple" | "grey";
 };
 
 const bgColorClass = {
@@ -17,6 +17,7 @@ const colorClass = {
   green: "bg-green-600",
   blue: "bg-blue-500",
   purple: "bg-purple-500",
+  grey: "bg-neutral-500",
 };
 
 export default function OptionBadge({ text, color, bgColor }: OptionBadgeProps) {

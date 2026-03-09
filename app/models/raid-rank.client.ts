@@ -1,4 +1,5 @@
-import type { RaidType, DefenseType } from "~/models/content.d";
+import type { RaidType } from "~/models/content.d";
+import type { Defense } from "~/graphql/graphql";
 import { createProtobufRootCache, fetchProtobuf, RAID_API_BASE_URL } from "./raid-protobuf-utils";
 
 // Protobuf schema definition for server API response
@@ -86,7 +87,7 @@ const getProtobufRoot = createProtobufRootCache();
 export type ParsedRaidRankDocument = {
   raidType: RaidType;
   seasonIndex: number;
-  defenseType: DefenseType;
+  defenseType: Defense;
   rank: number;
   finalRank: number;
   score: number;
@@ -132,7 +133,7 @@ function convertServerRankToParsed(
   serverRank: ServerRank,
   raidType: RaidType,
   seasonIndex: number,
-  defenseType: DefenseType
+  defenseType: Defense
 ): ParsedRaidRankDocument {
   const rank = Number(serverRank.rank);
 
@@ -197,7 +198,7 @@ function convertServerRankToParsed(
 export async function fetchRanks(params: {
   raidType: RaidType;
   season: number;
-  defenseType: DefenseType;
+  defenseType: Defense;
   score?: { gte?: number; lt?: number };
   includeStudents: { uid: string; tiers: Array<[number] | [number, number]> }[];
   excludeStudents: { uid: string; tiers: Array<[number] | [number, number]> }[];

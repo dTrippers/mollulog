@@ -1,16 +1,17 @@
 import dayjs from "dayjs";
-import { and, eq, inArray, isNull, not, or, sql, type SQLWrapper } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { nanoid } from "nanoid/non-secure";
-import { senseisTable } from "./sensei";
 import { graphql } from "~/graphql";
-import type { FutureContentsQuery, IndexQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
 import { getFavoritedCounts } from "./favorite-students";
-import type { EventType, RaidType } from "./content.d";
+import type { EventType, RaidType, Role } from "./content.d";
+import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
 import { getLatestPostTime } from "./post";
+import { getTimelineContents, getUpcomingEvent, getTimelineContentsByContentTypes } from "./timeline-content";
+import type { TimelineContent, TimelineContentType } from "./timeline-content";
+import { getRecruitmentGroup, getRecruitmentGroups } from "./event-content";
+import { getRaidDetail } from "./raid";
+export { contentComments, getUserComments, getContentComments, getContentsComments, createComment, createSubcomment, updateComment, deleteComment, getCommentIdByUid, pinComment, unpinComment, getPinnedComment, getNestedContentComments, nestComments } from "./content-comment";
+export type { NestedComment } from "./content-comment";
 
 export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "update",
@@ -24,7 +25,7 @@ export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "elimination",
   "unlimit",
   "campaign",
-  "exercise",
+  "joint_firing_drill",
   "mini_event",
   "guide_mission",
   "battle_pass",
@@ -43,379 +44,94 @@ export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
   "battle_pass",
 ];
 
-type ContentComment = {
-  id: number;
-  uid: string;
-  contentId: string;
-  body: string;
-  visibility: ContentCommentVisibility;
-  parentCommentId?: number | null;
-  pinned: boolean;
-  createdAt: string;
-};
-
-type ContentCommentWithSensei = ContentComment & {
-  sensei: {
-    username: string;
-    profileStudentId: string | null;
-  };
-};
-
-type ContentCommentVisibility = "private" | "public";
-
-export const contentComments = sqliteTable("content_comments", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  contentId: text().notNull(),
-  parentCommentId: int(),
-  body: text().notNull(),
-  visibility: text().notNull().default("private"),
-  pinned: int().notNull().default(0),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-});
-
-const SELECT_USER_COMMENTS_COLUMNS = {
-  id: contentComments.id,
-  uid: contentComments.uid,
-  contentId: contentComments.contentId,
-  body: contentComments.body,
-  visibility: contentComments.visibility,
-  parentCommentId: contentComments.parentCommentId,
-  pinned: contentComments.pinned,
-  createdAt: contentComments.createdAt,
-};
-
-export async function getUserComments(env: Env, userId: number): Promise<ContentComment[]> {
-  const db = drizzle(env.DB);
-  const results = await db.select(SELECT_USER_COMMENTS_COLUMNS)
-    .from(contentComments)
-    .where(eq(contentComments.userId, userId))
-    .all()
-
-  return results.map(toModel);
-}
-
-const SELECT_CONTENT_COMMENTS_COLUMNS = {
-  ...SELECT_USER_COMMENTS_COLUMNS,
-  sensei: {
-    username: senseisTable.username,
-    profileStudentId: senseisTable.profileStudentId,
-  },
-};
-
-export async function getContentComments(env: Env, contentId: string, userId?: number): Promise<ContentCommentWithSensei[]> {
-  return (await getContentsComments(env, [contentId], userId))[contentId] ?? [];
-}
-
-export async function getContentsComments(env: Env, contentIds: string[], userId?: number): Promise<Record<string, ContentCommentWithSensei[]>> {
-  const db = drizzle(env.DB);
-  const results = await db.select(SELECT_CONTENT_COMMENTS_COLUMNS)
-    .from(contentComments)
-    .where(and(
-      not(eq(contentComments.body, "")),
-      inArray(contentComments.contentId, contentIds),
-      or(...visibilityFilter(userId)),
-    ))
-    .innerJoin(senseisTable, eq(contentComments.userId, senseisTable.id))
-    .orderBy(contentComments.createdAt)
-    .all();
-
-  return results.reduce((acc, result) => {
-    acc[result.contentId] = [...(acc[result.contentId] ?? []), toModel(result)];
-    return acc;
-  }, {} as Record<string, ContentCommentWithSensei[]>);
-}
-
-function toModel<T extends { visibility: string; parentCommentId: number | null; pinned: number; createdAt: string; id: number }>(rows: T): (T & { visibility: ContentCommentVisibility; parentCommentId?: number | null; pinned: boolean }) {
-  return { 
-    ...rows, 
-    visibility: rows.visibility as ContentCommentVisibility,
-    pinned: rows.pinned === 1,
-  };
-}
-
-export async function createComment(env: Env, userId: number, contentId: string, body: string, visibility: ContentCommentVisibility = "private"): Promise<string> {
-  const db = drizzle(env.DB);
-
-  // Check if this is the user's first comment for this content
-  const existingComment = await db.select({ id: contentComments.id })
-    .from(contentComments)
-    .where(and(
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-      isNull(contentComments.parentCommentId),
-    ))
-    .limit(1)
-    .get();
-  const isFirstComment = existingComment === undefined;
-
-  const uid = nanoid(8);
-  await db.insert(contentComments).values({ uid, userId, contentId, body, visibility, parentCommentId: null, pinned: isFirstComment ? 1 : 0 });
-  return uid;
-}
-
-export async function createSubcomment(env: Env, userId: number, contentId: string, parentCommentId: number, body: string, visibility: ContentCommentVisibility = "private"): Promise<string> {
-  const db = drizzle(env.DB);
-
-  // Validate that parent comment exists and is a top-level comment (not a subcomment)
-  const parent = await db.select({ parentCommentId: contentComments.parentCommentId })
-    .from(contentComments)
-    .where(eq(contentComments.id, parentCommentId))
-    .get();
-
-  if (!parent) {
-    throw new Error("Parent comment not found");
-  }
-  if (parent.parentCommentId !== null) {
-    throw new Error("Cannot reply to a subcomment (max depth is 1)");
-  }
-
-  const uid = nanoid(8);
-  await db.insert(contentComments).values({ uid, userId, contentId, parentCommentId, body, visibility });
-  return uid;
-}
-
-export async function updateComment(env: Env, userId: number, commentUid: string, body: string, visibility: ContentCommentVisibility): Promise<void> {
-  const db = drizzle(env.DB);
-  await db.update(contentComments)
-    .set({ body, visibility, updatedAt: sql`current_timestamp` })
-    .where(and(
-      eq(contentComments.uid, commentUid),
-      eq(contentComments.userId, userId)
-    ));
-}
-
-export async function deleteComment(env: Env, userId: number, commentUid: string): Promise<void> {
-  const db = drizzle(env.DB);
-  await db.delete(contentComments)
-    .where(and(
-      eq(contentComments.uid, commentUid),
-      eq(contentComments.userId, userId)
-    ));
-}
-
-export async function getCommentIdByUid(env: Env, commentUid: string, userId?: number): Promise<number | null> {
-  const db = drizzle(env.DB);
-  const comment = await db.select({ id: contentComments.id })
-    .from(contentComments)
-    .where(and(
-      eq(contentComments.uid, commentUid),
-      or(...visibilityFilter(userId)),
-    ))
-    .get();
-
-  return comment?.id ?? null;
-}
-
-export async function pinComment(env: Env, userId: number, contentId: string, commentUid: string): Promise<void> {
-  const db = drizzle(env.DB);
-
-  // First, unpin any existing pinned comment for this user/content
-  await db.update(contentComments)
-    .set({ pinned: 0, updatedAt: sql`current_timestamp` })
-    .where(and(
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-      eq(contentComments.pinned, 1),
-    ));
-
-  // Then, pin the specified comment (only if it belongs to the user and is a top-level comment)
-  const comment = await db.select({ id: contentComments.id, parentCommentId: contentComments.parentCommentId })
-    .from(contentComments)
-    .where(and(
-      eq(contentComments.uid, commentUid),
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-    ))
-    .get();
-
-  if (!comment) {
-    throw new Error("Comment not found or does not belong to user");
-  }
-  if (comment.parentCommentId !== null) {
-    throw new Error("Cannot pin subcomments");
-  }
-
-  await db.update(contentComments)
-    .set({ pinned: 1, updatedAt: sql`current_timestamp` })
-    .where(eq(contentComments.uid, commentUid));
-}
-
-export async function unpinComment(env: Env, userId: number, contentId: string): Promise<void> {
-  const db = drizzle(env.DB);
-  await db.update(contentComments)
-    .set({ pinned: 0, updatedAt: sql`current_timestamp` })
-    .where(and(
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-      eq(contentComments.pinned, 1),
-    ));
-}
-
-export async function getPinnedComment(env: Env, contentId: string, userId: number): Promise<ContentCommentWithSensei | null> {
-  const db = drizzle(env.DB);
-  const result = await db.select(SELECT_CONTENT_COMMENTS_COLUMNS)
-    .from(contentComments)
-    .where(and(
-      eq(contentComments.contentId, contentId),
-      eq(contentComments.userId, userId),
-      eq(contentComments.pinned, 1),
-      isNull(contentComments.parentCommentId),
-    ))
-    .innerJoin(senseisTable, eq(contentComments.userId, senseisTable.id))
-    .get();
-  
-  return result ? toModel(result) : null;
-}
-
-export type NestedComment = {
-  uid: string;
-  body: string;
-  visibility: "private" | "public";
-  pinned: boolean;
-  createdAt: string;
-  sensei: {
-    me: boolean;
-    username: string;
-    profileStudentId: string | null;
-  };
-  subcomments?: NestedComment[];
-};
-
-export async function getNestedContentComments(env: Env, contentUid: string, currentUser: { id: number; username: string } | null): Promise<NestedComment[]> {
-  const comments = await getContentComments(env, contentUid, currentUser?.id);
-  return nestComments(comments, currentUser);
-}
-
-export function nestComments(flatComments: ContentCommentWithSensei[], currentUser: { id: number; username: string } | null): NestedComment[] {
-  const topLevelComments = flatComments.filter((comment) => !comment.parentCommentId);
-  const subcomments = flatComments.filter((comment) => comment.parentCommentId);
-  const nestedComments = topLevelComments.map((comment) => {
-    const commentSubcomments = subcomments.filter((subComment) => subComment.parentCommentId === comment.id);
-    return {
-      uid: comment.uid,
-      body: comment.body,
-      visibility: comment.visibility,
-      pinned: comment.pinned && comment.sensei.username === currentUser?.username,
-      createdAt: comment.createdAt,
-      sensei: {
-        me: currentUser?.username === comment.sensei.username,
-        username: comment.sensei.username,
-        profileStudentId: comment.sensei.profileStudentId,
-      },
-      subcomments: commentSubcomments.map((subComment) => ({
-        uid: subComment.uid,
-        body: subComment.body,
-        visibility: subComment.visibility,
-        pinned: false,
-        createdAt: subComment.createdAt,
-        sensei: {
-          me: currentUser?.username === subComment.sensei.username,
-          username: subComment.sensei.username,
-          profileStudentId: subComment.sensei.profileStudentId,
-        },
-      })),
-    };
-  });
-  return nestedComments;
-}
-
-function visibilityFilter(userId?: number): SQLWrapper[] {
-  const filters: SQLWrapper[] = [eq(contentComments.visibility, "public")];
-  if (userId) {
-    filters.push(eq(contentComments.userId, userId));
-  }
-  return filters;
-}
-
-
 /**
  * Index Contents
  */
 
-const indexQuery = graphql(`
-  query Index($now: ISO8601DateTime!) {
-    events(untilAfter: $now, first: 20) {
+const indexRaidsQuery = graphql(`
+  query IndexRaids($endAfter: ISO8601DateTime!) {
+    raids(endAfter: $endAfter) {
       nodes {
-        __typename name since until endless uid type rerun imageUrl
-        recruitments {
-          recruitmentType pickup rerun since until studentName
-          student { uid name }
-        }
-      }
-    }
-    raids(untilAfter: $now, first: 3) {
-      nodes {
-        name since until uid type boss attackType terrain
+        uid name type boss startAt endAt terrain attackType raidIndexJp
         defenseTypes { defenseType difficulty }
       }
     }
   }
 `);
 
+export type IndexRecruitment = {
+  student: { uid: string; name: string } | null;
+  recruitmentType: RecruitmentTypeEnum;
+  pickup: boolean;
+  rerun: boolean;
+  since: Date;
+  until: Date;
+  studentName: string;
+};
+
 export async function getIndexContents(env: Env, forceRefresh = false) {
-  return fetchCached(env, "index-contents::v2", async () => {
+  return fetchCached(env, "index-contents::v3", async () => {
     const now = dayjs();
-    const { data, error } = await runQuery(indexQuery, { now: now.toDate() });
-    if (error || !data) {
-      throw error ?? "failed to fetch events";
-    }
+    const nowDate = now.toDate();
 
-    // ========== Events ==========
-    const mainEventTypes = ["event", "main_story", "collab", "fes", "immortal_event"];
-    const mainEvents = data.events.nodes.filter((event) => mainEventTypes.includes(event.type));
+    // ========== Events (from D1) ==========
+    const eventContentTypes: TimelineContentType[] = ["event", "main_story", "mini_event", "campaign"];
+    const allEvents = await getTimelineContentsByContentTypes(env, eventContentTypes, nowDate);
 
-    // Priority 1: Find currently ongoing events (since <= now <= until)
-    const ongoingEvents = mainEvents.filter((event) => {
-      const since = dayjs(event.since);
-      const until = dayjs(event.until);
-      return !since.isAfter(now) && until.isAfter(now);
-    });
+    const ongoingEvents = allEvents.filter((e) => e.contentType === "event" && !dayjs(e.startAt).isAfter(now) && e.endAt && dayjs(e.endAt).isAfter(now));
 
-    let mainEvent = null;
+    let mainEvent: typeof allEvents[0] | null = null;
     if (ongoingEvents.length > 0) {
-      // If there are ongoing events, prioritize by event type order
-      mainEvent = ongoingEvents.sort((a, b) => {
-        const aTypeIndex = mainEventTypes.indexOf(a.type);
-        const bTypeIndex = mainEventTypes.indexOf(b.type);
-        return aTypeIndex - bTypeIndex;
-      })[0];
+      mainEvent = ongoingEvents[0];
     } else {
-      // Priority 2: Find the nearest starting event
-      const futureEvents = mainEvents.filter((event) => dayjs(event.since).isAfter(now));
+      const futureEvents = allEvents.filter((e) => e.contentType === "event" && dayjs(e.startAt).isAfter(now));
       if (futureEvents.length > 0) {
-        // Sort by start date, then by event type priority for same date
-        mainEvent = futureEvents.sort((a, b) => {
-          const aSince = dayjs(a.since);
-          const bSince = dayjs(b.since);
-          const dateDiff = aSince.diff(bSince, "day");
-          if (dateDiff !== 0) {
-            return dateDiff;
-          }
-
-          // If same date, prioritize by event type order
-          const aTypeIndex = mainEventTypes.indexOf(a.type);
-          const bTypeIndex = mainEventTypes.indexOf(b.type);
-          return aTypeIndex - bTypeIndex;
-        })[0];
+        mainEvent = futureEvents[0];
       }
     }
 
-    // ========== Pickups ==========
-    const currentRecruitments: { eventUid: string, recruitment: IndexQuery["events"]["nodes"][0]["recruitments"][0] }[] = data.events.nodes
-      .flatMap((event) => event.recruitments.filter((recruitment) => recruitment.student !== null && recruitment.recruitmentType !== "recollect" && recruitment.recruitmentType !== "archive").map((recruitment) => ({ eventUid: event.uid, recruitment })))
+    // ========== Raids (from BAQL) ==========
+    const { data: raidData, error: raidError } = await runQuery(indexRaidsQuery, { endAfter: nowDate });
+    if (raidError || !raidData) {
+      throw raidError ?? "failed to fetch raids";
+    }
+    const currentRaids = raidData.raids.nodes.map((raid) => ({
+      ...raid,
+      since: dayjs(raid.startAt).toDate(),
+      until: dayjs(raid.endAt).toDate(),
+    }));
+
+    // ========== Recruitments (from BAQL) ==========
+    const recruitmentGroups = await getRecruitmentGroups(env, { endAfter: nowDate });
+    const currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[] = recruitmentGroups
+      .flatMap((group) =>
+        group.recruitments
+          .filter((r) => r.student !== null && r.recruitmentType !== "recollect" && r.recruitmentType !== "archive" && r.recruitmentType !== "encore")
+          .map((r) => ({
+            eventUid: group.uid,
+            recruitment: {
+              student: r.student ? { uid: r.student.uid, name: r.student.name ?? "" } : null,
+              recruitmentType: r.recruitmentType,
+              pickup: r.pickup,
+              rerun: r.rerun,
+              since: dayjs(r.since).toDate(),
+              until: dayjs(r.until).toDate(),
+              studentName: r.studentName,
+            } satisfies IndexRecruitment,
+          })),
+      )
       .filter(({ recruitment }) => !dayjs(recruitment.since).isAfter(now) && dayjs(recruitment.until).isAfter(now));
 
-    // Get favorite counts for all students in current pickups (not just user's favorites)
+    // Get favorite counts for all students in current pickups
     const allStudentUids = currentRecruitments.map(({ recruitment }) => recruitment.student?.uid).filter((uid) => uid !== null) as string[];
     const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId));
 
+    const currentEvents = allEvents.filter((e) => !dayjs(e.startAt).isAfter(now));
+
     return {
       mainEvent,
-      currentRaids: data.raids.nodes,
-      currentEvents: data.events.nodes.filter((event) => !dayjs(event.since).isAfter(now)),
+      currentRaids,
+      currentEvents,
       currentRecruitments,
       favoritedCounts,
     };
@@ -423,57 +139,102 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
 }
 
 
+export { getEventContentName, getMiniEventContentName } from "./content-name";
+
+
 /**
  * Future Contents
  */
-const futureContentsQuery = graphql(`
-  query FutureContents($now: ISO8601DateTime!) {
-    contents(untilAfter: $now, first: 9999) {
-      nodes {
-        __typename uid name since until confirmed
-        ... on Event {
-          eventType: type
-          rerun endless tags
-          recruitments {
-            recruitmentType pickup rerun since until studentName
-            student { uid attackType defenseType role schaleDbId }
-          }
+
+export type RecruitmentInfo = {  recruitmentType: RecruitmentTypeEnum;
+  pickup: boolean;
+  rerun: boolean;
+  since: Date;
+  until: Date | null;
+  studentName: string;
+  student: {
+    uid: string;
+    attackType?: Attack;
+    defenseType?: Defense;
+    role?: Role;
+    schaleDbId?: string | null;
+  } | null;
+};
+
+export type RaidInfo = {
+  uid: string;
+  boss: string;
+  terrain: Terrain;
+  attackType: Attack;
+  defenseTypes: { defenseType: Defense; difficulty: string | null }[];
+  rankVisible: boolean;
+};
+
+export type FutureContent = TimelineContent & {
+  recruitments: RecruitmentInfo[];
+  raidInfo?: RaidInfo;
+};
+
+export const RAID_CONTENT_TYPES = ["total_assault", "elimination", "unlimit", "allied"] as const;
+
+function toRecruitmentInfos(group: Awaited<ReturnType<typeof getRecruitmentGroup>>): RecruitmentInfo[] {
+  return (group?.recruitments ?? []).sort((a, b) => Number(a.rerun) - Number(b.rerun)).map((r) => ({
+    recruitmentType: r.recruitmentType,
+    pickup: r.pickup,
+    rerun: r.rerun,
+    since: new Date(r.since),
+    until: r.until ? new Date(r.until) : null,
+    studentName: r.studentName,
+    student: r.student
+      ? {
+          uid: r.student.uid,
+          attackType: r.student.attackType,
+          defenseType: r.student.defenseType,
+          role: r.student.role as Role | undefined,
+          schaleDbId: r.student.schaleDbId,
         }
-        ... on Raid {
-          raidType: type
-          rankVisible boss terrain attackType
-          defenseTypes { defenseType difficulty }
-        }
+      : null,
+  }));
+}
+
+export async function getFutureContents(env: Env): Promise<FutureContent[]> {
+  const contents = await getTimelineContents(env);
+  return Promise.all(
+    contents.map(async (content) => {
+      // Raid types — raidInfo from getRaidDetail
+      if ((RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType) && content.contentUid) {
+        const raid = await getRaidDetail(env, content.contentUid);
+        const raidInfo: RaidInfo | undefined = raid
+          ? {
+              uid: raid.uid,
+              boss: raid.boss,
+              terrain: raid.terrain,
+              attackType: raid.attackType,
+              defenseTypes: raid.defenseTypes.map((d) => ({
+                defenseType: d.defenseType,
+                difficulty: d.difficulty ?? null,
+              })),
+              rankVisible: raid.rankVisible,
+            }
+          : undefined;
+        return { ...content, recruitments: [], raidInfo };
       }
-    }
-  }
-`);
 
-export async function getFutureContents(env: Env, forceRefresh = false): Promise<FutureContentsQuery["contents"]["nodes"]> {
-  const truncatedNow = new Date();
-  truncatedNow.setMinutes(0, 0, 0);
+      // Event types with a recruitment group
+      if (content.recruitmentGroupUid) {
+        const group = await getRecruitmentGroup(env, content.recruitmentGroupUid);
+        return { ...content, recruitments: toRecruitmentInfos(group) };
+      }
 
-  return fetchCached(env, "future-contents::v2", async () => {
-    const { data, error } = await runQuery(futureContentsQuery, { now: truncatedNow });
-    if (error || !data) {
-      throw error ?? "failed to fetch events";
-    }
-    return data.contents.nodes;
-  }, 60 * 60 * 24, forceRefresh);
+      return { ...content, recruitments: [] };
+    }),
+  );
 }
 
 
 /**
  * Navigation Bar Contents
  */
-const upcomingEventQuery = graphql(`
-  query UpcomingEvent($now: ISO8601DateTime!) {
-    events(untilAfter: $now, first: 1, types: [event]) {
-      nodes { uid since until }
-    }
-  }
-`);
-
 type NavigationBarContents = {
   upcomingEvent: {
     uid: string;
@@ -484,18 +245,11 @@ type NavigationBarContents = {
 };
 
 export async function getNavigationBarContents(env: Env, forceRefresh = false): Promise<NavigationBarContents> {
-  return fetchCached(env, "navigation-bar-contents::v1", async () => {
-    const now = dayjs();
-    const { data, error } = await runQuery(upcomingEventQuery, { now: now.toDate() });
-    if (error || !data) {
-      throw error ?? "failed to fetch upcoming event";
-    }
-
-    const upcomingEvent = data.events.nodes[0] ?? null;
-    if (upcomingEvent) {
-      upcomingEvent.since = dayjs(upcomingEvent.since).toDate();
-      upcomingEvent.until = dayjs(upcomingEvent.until).toDate();
-    }
+  return fetchCached(env, "navigation-bar-contents::v2", async () => {
+    const content = await getUpcomingEvent(env);
+    const upcomingEvent = content
+      ? { uid: content.uid, since: content.startAt, until: content.endAt! }
+      : null;
 
     const latestNewsTime = await getLatestPostTime(env, "news");
     const threeDaysAgo = new Date();

@@ -70,7 +70,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 const wideLayout = ["/utils/relationship"];
-const fullLayout = ["^/raids", "^/futures", "^/utils/pyroxene", "^/students$", "^/@"];
+const fullLayout = ["^/raids", "^/futures", "^/utils/pyroxene", "^/students$", "^/@", "^/events"];
 
 export default function App() {
   const loaderData = useLoaderData<typeof loader>();
@@ -113,7 +113,7 @@ export default function App() {
       />
       <SignInProvider>
         <StudentCardPopupProvider>
-          <div className="flex flex-col xl:flex-row">
+          <div className="flex flex-col xl:flex-row h-dvh">
             <NavigationBar
               currentUsername={currentUsername}
               darkMode={darkMode}

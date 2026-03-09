@@ -9,12 +9,13 @@ export type ContentTimelineProps = {
   contents: {
     name: string;
     since: Date;
-    until: Date;
+    until: Date | null;
     endless: boolean;
-    rerun: boolean;
+    runType: "first" | "rerun" | "permanent";
     uid: string;
     link: string;
     contentType: EventType | RaidType;
+    confirmed?: boolean;
     tags: string[];
     recruitments?: ContentTimelineItemProps["recruitments"];
     raidInfo?: ContentTimelineItemProps["raidInfo"];
@@ -47,8 +48,8 @@ function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup
   const now = dayjs();
   contents.sort((a, b) => a.since.getTime() - b.since.getTime()).forEach((content) => {
     const since = dayjs(content.since);
-    const until = dayjs(content.until);
-    const isCurrent = since.isBefore(now) && until.isAfter(now);
+    const until = content.until ? dayjs(content.until) : null;
+    const isCurrent = since.isBefore(now) && (until === null || until.isAfter(now));
 
     const groupDate = isCurrent ? null : since.startOf("day");
     const lastGroup = groups[groups.length - 1];
@@ -122,6 +123,7 @@ export default function ContentTimeline({ contents, favoritedStudents, favorited
                   return (
                     <ContentTimelineItem
                       key={content.uid}
+                      confirmed={content.confirmed}
                       {...content}
 
                       allComments={content.allComments}
@@ -147,12 +149,14 @@ export default function ContentTimeline({ contents, favoritedStudents, favorited
         );
       })}
 
-      <div className="flex items-center">
-        <div className="inline-block size-3 bg-neutral-500 dark:bg-neutral-400 rounded-full" />
-        <span className="mx-2 md:mx-4 font-bold text-neutral-500 dark:text-neutral-400 text-sm ">
-          {`남은 미래시까지 D-${dayjs(contents[contents.length - 1].until).diff(today, "day")}`}
-        </span>
-      </div>
+      {contents[contents.length - 1].until && (
+        <div className="flex items-center">
+          <div className="inline-block size-3 bg-neutral-500 dark:bg-neutral-400 rounded-full" />
+          <span className="mx-2 md:mx-4 font-bold text-neutral-500 dark:text-neutral-400 text-sm ">
+            {`남은 미래시까지 D-${dayjs(contents[contents.length - 1].until).diff(today, "day")}`}
+          </span>
+        </div>
+      )}
     </>
   );
 }

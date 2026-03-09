@@ -8,18 +8,19 @@ import { OptionBadge } from "~/components/atoms/student";
 import { StudentCard } from "~/components/students";
 import { ResourceCards } from "~/components/molecules/student";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, recruitmentLabelLocale, roleColor, roleLocale, schoolNameLocale } from "~/locales/ko";
-import type { AttackType, DefenseType, Role } from "~/models/content.d";
+import type { Role } from "~/models/content.d";
+import type { Attack, Defense } from "~/graphql/graphql";
 import ContentCommentView from "~/components/contents/ContentCommentView";
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 import type { NestedComment } from "~/models/content";
-import { RecruitmentTypeEnum } from "~/graphql/graphql";
+import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 
 type FuturePlanStudents = {
   uid: string;
   name: string;
   school: string;
-  attackType: AttackType;
-  defenseType: DefenseType;
+  attackType: Attack;
+  defenseType: Defense;
   role: Role;
   schaleDbId: string | null;
   equipments: string[];

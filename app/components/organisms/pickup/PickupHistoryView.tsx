@@ -3,8 +3,8 @@ import { KeyValueTable, SubTitle } from "~/components/atoms/typography";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ActionCard, type ActionCardAction } from "~/components/molecules/editor";
 import { StudentCards } from "~/components/students";
-import type { EventTypeEnum } from "~/graphql/graphql";
 import { eventTypeLocale } from "~/locales/ko";
+import type { EventType } from "~/models/content.d";
 import { Link } from "react-router";
 
 type PickupHistoryViewProps = {
@@ -12,7 +12,7 @@ type PickupHistoryViewProps = {
   event: {
     uid: string;
     name: string;
-    type: EventTypeEnum;
+    type: string;
     since: Date;
   };
   recruitedStudents: {
@@ -52,7 +52,7 @@ export default function PickupHistoryView({ uid, event, recruitedStudents, trial
         <ChevronRightIcon className="size-4" />
       </Link>
       <p className="text-neutral-500 text-sm">
-        {eventTypeLocale[event.type]} | {dayjs(event.since).format("YYYY-MM-DD")}
+        {eventTypeLocale[event.type as EventType] ?? event.type} | {dayjs(event.since).format("YYYY-MM-DD")}
       </p>
 
       {tier3Count > 0 && (

@@ -17,7 +17,8 @@ type StageCardProps = {
 };
 
 export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedRuns, extraRuns, appliedBonusRatio, onToggleStage, onChangeExtraRuns }: StageCardProps) {
-  const { uid, name, entryAp, index, rewards } = stage;
+  const { uid, entryAp, index, rewards } = stage;
+
   const coinRewards = rewards.filter(({ item, rewardRequirement }) => item?.category === "coin" && rewardRequirement === null);
   const nonCoinRewards = rewards.filter(({ item, rewardRequirement }) => item?.category !== "coin" && rewardRequirement === null);
 
@@ -28,7 +29,6 @@ export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedR
           {index}
         </div>
         <div className="grow">
-          <p className="text-sm font-medium line-clamp-1">{name}</p>
           <div className="my-0.5 flex items-center gap-1.5">
             <div className="flex items-center gap-0.5 border border-green-600 text-green-600 text-xs font-medium px-1 rounded">
               <BoltIcon className="size-2.5" />

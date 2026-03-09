@@ -1,19 +1,21 @@
 import { memo, useMemo, useState } from "react";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { ResourceCard } from "~/components/atoms/item";
-import type { CollectableResource, ShopResource } from "./types";
+import type { Stage, CollectableResource, ShopResource } from "./types";
 import type { ShopState, ShopActions } from "./hooks";
 import { resourceCountLabel, calculateMinigameRewards } from "./utils";
-import { MINIGAME_CONFIG } from "./constants";
+import type { MinigameConfig } from "./constants";
 import { Transition } from "@headlessui/react";
 import { NumberInput } from "~/components/atoms/form";
 import BugReportModal from "./BugReportModal";
 import type { CalculationResult } from "./hooks/useShopCalculations";
 
 type CollectedTotalsSectionProps = {
+  stages: Stage[];
   collectableResources: CollectableResource[];
   shopResources: ShopResource[];
   eventUid: string;
+  minigameConfig?: MinigameConfig | null;
   state: ShopState;
   actions: ShopActions;
   stageCalculations: CalculationResult;
@@ -109,9 +111,11 @@ function BreakdownLines({ lines }: { lines: BreakdownLine[] }) {
 }
 
 export const CollectedTotalsSection = memo(function CollectedTotalsSection({
+  stages,
   collectableResources,
   shopResources,
   eventUid,
+  minigameConfig,
   state,
   actions,
   stageCalculations,
@@ -176,7 +180,6 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     }
 
     // Add minigame rewards
-    const minigameConfig = MINIGAME_CONFIG[eventUid];
     if (minigameConfig && state.minigamePlayCount > 0) {
       const rewards = calculateMinigameRewards(minigameConfig, state.minigamePlayCount);
       for (const { resourceType, resourceUid, quantity, rarity } of rewards) {
@@ -228,16 +231,19 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
             </p>
           )}
           {collectableResources.map(({ uid: itemUid, name: itemName }) => {
+            const shopItemUid = shopResources.find(({ resource }) => resource.uid === itemUid)?.uid;
+
             // Gather all counts
             const existingCount = state.existingPaymentItemQuantities[itemUid] || 0;
             const firstRunCount = fromFirstRun[itemUid] || 0;
             const fromMinigameCount = fromMinigame[itemUid] || 0;
+            const fromShopCount = shopItemUid ? state.itemQuantities[shopItemUid] || 0 : 0;
             const repeatedRunsCount = fromRepeatedRuns[itemUid] || 0;
             const toPlayMinigameCount = toPlayMinigame[itemUid] || 0;
             const toBuyCount = toBuyShopItems[itemUid] || 0;
 
             // Calculate subtotals
-            const acquiredSubtotal = existingCount + firstRunCount + fromMinigameCount + repeatedRunsCount;
+            const acquiredSubtotal = existingCount + firstRunCount + fromMinigameCount + repeatedRunsCount + fromShopCount;
             const requiredSubtotal = toBuyCount + toPlayMinigameCount;
             const hasOverride = state.overriddenRequiredQuantities[itemUid] !== undefined;
             const overrideValue = state.overriddenRequiredQuantities[itemUid];
@@ -250,6 +256,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
               firstRunCount > 0 && { label: "스토리 / 초회 보상", value: firstRunCount },
               fromMinigameCount > 0 && { label: "미니게임", value: fromMinigameCount },
               repeatedRunsCount > 0 && { label: "퀘스트", value: repeatedRunsCount },
+              fromShopCount > 0 && { label: "상점 구매", value: fromShopCount },
             ].filter(Boolean) as BreakdownLine[];
 
             const requiredLines: BreakdownLine[] = !hasOverride
@@ -263,19 +270,6 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
               <div key={itemUid} className="p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg flex items-start gap-2 relative">
                 <ResourceCard itemUid={itemUid} resourceType={ResourceTypeEnum.Item} rarity={1} name={itemName} />
                 <div className="grow space-y-3 text-sm relative">
-                  {/* 획득 수량 */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-neutral-800 dark:text-neutral-200">획득 수량</span>
-                      {acquiredSubtotal > 0 && (
-                        <span className="font-semibold text-neutral-800 dark:text-neutral-200">{Math.floor(acquiredSubtotal).toLocaleString()}</span>
-                      )}
-                    </div>
-                    <div className="pl-2 space-y-1">
-                      <BreakdownLines lines={acquiredLines} />
-                    </div>
-                  </div>
-
                   {/* 필요 수량 */}
                   {(toBuyCount > 0 || toPlayMinigameCount > 0 || hasOverride) && (
                     <div className="space-y-1">
@@ -292,6 +286,19 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                       </div>
                     </div>
                   )}
+
+                  {/* 획득 수량 */}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-neutral-800 dark:text-neutral-200">획득 수량</span>
+                      {acquiredSubtotal > 0 && (
+                        <span className="font-semibold text-neutral-800 dark:text-neutral-200">{Math.floor(acquiredSubtotal).toLocaleString()}</span>
+                      )}
+                    </div>
+                    <div className="pl-2 space-y-1">
+                      <BreakdownLines lines={acquiredLines} />
+                    </div>
+                  </div>
 
                   {/* 남은/부족 수량 */}
                   <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
@@ -409,6 +416,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
         <BugReportModal
           show={showBugReportModal}
           eventUid={eventUid}
+          stages={stages}
           shopResources={shopResources}
           collectableResources={collectableResources}
           stageCalculations={stageCalculations}

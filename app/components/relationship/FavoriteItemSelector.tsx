@@ -37,7 +37,7 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
         if (a.favoriteLevel !== b.favoriteLevel) {
           return b.favoriteLevel - a.favoriteLevel;
         }
-        return parseInt(a.item.uid, 10) - parseInt(b.item.uid, 10);
+        return Number.parseInt(a.item.uid, 10) - Number.parseInt(b.item.uid, 10);
       });
   }, [favoriteItems, filterFavorited]);
 

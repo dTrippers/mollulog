@@ -2,10 +2,10 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import YouTube from "react-youtube";
 import dayjs from "dayjs";
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/16/solid";
-import type { EventType } from "~/models/content.d";
-import { eventTypeLocale, relativeTime } from "~/locales/ko";
+import { timelineContentTypeLocale, relativeTime } from "~/locales/ko";
 import { sanitizeClassName } from "~/prophandlers";
 import MultilineText from "~/components/atoms/typography/MultilineText";
+import type { TimelineContentType } from "~/models/timeline-content";
 
 type Video = {
   title: string;
@@ -16,25 +16,25 @@ type Video = {
 type EventHeaderProps = {
   imageUrl: string | null;
   name: string;
-  type: EventType;
-  rerun: boolean;
+  type: TimelineContentType;
+  runType: "first" | "rerun" | "permanent";
   since: Date;
-  until: Date;
+  until: Date | null;
   endless: boolean;
 
   videos?: Video[];
 };
 
-export default function EventHeader({ imageUrl, name, type, rerun, since, until, endless, videos }: EventHeaderProps) {
+export default function EventHeader({ imageUrl, name, type, runType, since, until, endless, videos }: EventHeaderProps) {
   const sinceDayjs = dayjs(since);
-  const untilDayjs = dayjs(until);
+  const untilDayjs = until ? dayjs(until) : null;
   const now = dayjs();
 
   // Calculate remaining time
   let timeLabel = null;
   if (sinceDayjs.isAfter(now)) {
     timeLabel = `${relativeTime(sinceDayjs)} 시작`;
-  } else if (!endless && untilDayjs.isAfter(now)) {
+  } else if (!endless && untilDayjs && untilDayjs.isAfter(now)) {
     timeLabel = `${relativeTime(untilDayjs)} 종료`;
   }
 
@@ -128,7 +128,7 @@ export default function EventHeader({ imageUrl, name, type, rerun, since, until,
         <div className={`p-4 md:p-6 ${imageUrl ? "absolute bottom-0 left-0 right-0 text-white bg-linear-to-t from-black/80 via-black/60 to-transparent via-75%" : "bg-linear-to-br from-neutral-900 via-neutral-800 to-neutral-700 via-75%"}`}>
           {/* Event Type and Status */}
           <span className="text-sm md:text-base text-white">
-            {eventTypeLocale[type]}
+            {timelineContentTypeLocale[type]}
           </span>
 
           {/* Event Name */}
@@ -138,11 +138,12 @@ export default function EventHeader({ imageUrl, name, type, rerun, since, until,
 
           <div className="flex items-end gap-1">
             <p className="grow text-xs md:text-sm text-neutral-300">
-              {endless ? sinceDayjs.format("YYYY-MM-DD") : `${sinceDayjs.format("YYYY-MM-DD")} ~ ${untilDayjs.format("YYYY-MM-DD")}`}
+              {endless ? sinceDayjs.format("YYYY-MM-DD") : `${sinceDayjs.format("YYYY-MM-DD")} ~ ${untilDayjs?.format("YYYY-MM-DD") ?? ""}`}
             </p>
-            {rerun && <Label text="복각" />}
+            {runType === "rerun" && <Label text="복각" />}
+            {runType === "permanent" && <Label text="상설" />}
             {timeLabel && <Label text={timeLabel} showRedDot={sinceDayjs.isBefore(now)} />}
-            {!endless && untilDayjs.isBefore(now) && <Label text="종료" />}
+            {!endless && untilDayjs && untilDayjs.isBefore(now) && <Label text="종료" />}
           </div>
         </div>
       </div>

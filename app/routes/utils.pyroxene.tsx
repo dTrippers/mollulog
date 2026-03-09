@@ -296,18 +296,21 @@ export default function PyroxenePlanner() {
   const scheduleItems = useMemo(() => {
     const items: PyroxeneScheduleItem[] = [];
     contents.forEach((content) => {
-      if (content.__typename === "Event") {
+      if (content.kind === "event") {
         items.push({
           event: {
-            ...content,
+            uid: content.uid,
+            name: content.name,
+            since: content.since,
+            until: content.until,
             recruitments: content.recruitments.map((recruitment) => ({
               ...recruitment,
               favorited: favoritedStudents.some(({ contentUid, studentUid }) => contentUid === content.uid && studentUid === recruitment.student?.uid),
             })),
           },
         });
-      } else if (content.__typename === "Raid") {
-        items.push({ raid: content });
+      } else if (content.kind === "raid") {
+        items.push({ raid: { uid: content.uid, name: content.name, type: content.type, since: content.since, until: content.until } });
       }
     });
     timelineItems.forEach((item) => {

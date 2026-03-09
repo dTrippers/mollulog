@@ -2,14 +2,14 @@ import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { isRouteErrorResponse, Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { ShieldCheckIcon, InformationCircleIcon, TrophyIcon, ChartBarIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import { ErrorPage } from "~/components/organisms/error";
 import { FilterButtons, Page, type PagePanelProps } from "~/components/navigation";
 import { RaidSelector } from "~/components/raids";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { getAllRaids, getRaidDetail } from "~/models/raid";
-import type { DefenseType } from "~/models/content.d";
+import type { Defense } from "~/graphql/graphql";
 
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
@@ -61,7 +61,7 @@ export const ErrorBoundary = () => {
 export type RaidPageContext = {
   currentRaid: Awaited<ReturnType<typeof loader>>["currentRaid"];
   allRaids: Awaited<ReturnType<typeof loader>>["allRaids"];
-  defenseType: DefenseType;
+  defenseType: Defense;
   setPanel: (panel: PagePanelProps) => void;
   signedIn: boolean;
 };
@@ -79,10 +79,10 @@ export default function RaidPage() {
     }
   }, [pathname, currentRaid.uid, setPanel]);
 
-  const [selectedDefenseType, setDefenseType] = useState<DefenseType>(currentRaid.defenseTypes[0].defenseType);
+  const [selectedDefense, setDefense] = useState<Defense>(currentRaid.defenseTypes[0].defenseType);
   useEffect(() => {
-    if (!currentRaid.defenseTypes.some(({ defenseType }) => defenseType === selectedDefenseType)) {
-      setDefenseType(currentRaid.defenseTypes[0].defenseType);
+    if (!currentRaid.defenseTypes.some(({ defenseType }) => defenseType === selectedDefense)) {
+      setDefense(currentRaid.defenseTypes[0].defenseType);
     }
   }, [currentRaid.defenseTypes]);
 
@@ -96,21 +96,25 @@ export default function RaidPage() {
         {
           text: "시즌 요약",
           description: `${raidTypeLocale[currentRaid.type]}의 주요 정보 요약`,
+          Icon: InformationCircleIcon,
           link: `/raids/${currentRaid.uid}`,
           active: pathname === `/raids/${currentRaid.uid}`,
         },
         {
           text: "상위권 편성",
+          Icon: TrophyIcon,
           link: `/raids/${currentRaid.uid}/ranks`,
           active: pathname === `/raids/${currentRaid.uid}/ranks`,
         },
         {
           text: "학생별 출전 횟수",
+          Icon: ChartBarIcon,
           link: `/raids/${currentRaid.uid}/statistics`,
           active: pathname === `/raids/${currentRaid.uid}/statistics`,
         },
         {
           text: "공략 영상 (베타)",
+          Icon: VideoCameraIcon,
           link: `/raids/${currentRaid.uid}/videos`,
           active: pathname === `/raids/${currentRaid.uid}/videos`,
           disabled: !videoAvailable,
@@ -125,14 +129,14 @@ export default function RaidPage() {
             buttonProps={currentRaid.defenseTypes.map(({ defenseType }) => ({
               text: defenseTypeLocale[defenseType],
               color: defenseTypeColor[defenseType],
-              active: defenseType === selectedDefenseType,
-              onToggle: () => setDefenseType(defenseType),
+              active: defenseType === selectedDefense,
+              onToggle: () => setDefense(defenseType),
             }))}
             exclusive atLeastOne
           />
         </div>
       )}
-      <Outlet context={{ currentRaid, allRaids, defenseType: selectedDefenseType, setPanel, signedIn } satisfies RaidPageContext} />
+      <Outlet context={{ currentRaid, allRaids, defenseType: selectedDefense, setPanel, signedIn } satisfies RaidPageContext} />
     </Page>
   );
 }

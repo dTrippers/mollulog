@@ -1,13 +1,14 @@
 import type { ReactNode } from "react";
-import type { AttackType, DefenseType, Role } from "~/models/content.d";
+import type { Role } from "~/models/content.d";
+import type { Attack, Defense } from "~/graphql/graphql";
 import StudentCard from "./StudentCard";
 
 type StudentCardsProps = {
   students?: {
     uid: string | null;
     name?: string | null;
-    attackType?: AttackType;
-    defenseType?: DefenseType;
+    attackType?: Attack;
+    defenseType?: Defense;
     role?: Role;
     schaleDbId?: string | null;
 

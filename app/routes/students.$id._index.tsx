@@ -19,14 +19,16 @@ import { useSignIn } from "~/contexts/SignInProvider";
 import { RecruitmentHistories } from "~/components/students";
 import { fetchRaidStatisticsByStudent, type RaidStatistics  } from "~/models/raid-statistics.client";
 import { getAllRaids } from "~/models/raid";
-import type { RaidType, DefenseType, Terrain } from "~/models/content.d";
+import type { RaidType, Terrain } from "~/models/content.d";
+import type { EventType } from "~/models/content.d";
+import type { Defense } from "~/graphql/graphql";
 
 const studentDetailQuery = graphql(`
   query StudentDetail($uid: String!) {
     student(uid: $uid) {
       name uid attackType defenseType role school schaleDbId
       recruitments {
-        since until
+        since rerun
         event { type uid name rerun imageUrl }
       }
     }
@@ -53,6 +55,21 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     });
   }
 
+  const student = data!.student!;
+
+  const recruitments = student.recruitments
+    .filter((r) => r.event != null)
+    .map((r) => ({
+      event: {
+        uid: r.event!.uid,
+        name: r.event!.name,
+        imageUrl: r.event!.imageUrl ?? null,
+        rerun: r.event!.rerun,
+        type: r.event!.type as EventType,
+      },
+      since: new Date(r.since),
+    }));
+
   // Get current user
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
 
@@ -63,7 +80,22 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const allGradings = await getStudentGradingsByStudentWithUsers(env, uid, true);
 
   const allRaids = await getAllRaids(env);
-  return { student: data!.student!, tagCounts, allGradings, currentUser, allRaids };
+  return {
+    student: {
+      uid: student.uid,
+      name: student.name,
+      attackType: student.attackType,
+      defenseType: student.defenseType,
+      role: student.role,
+      school: student.school,
+      schaleDbId: student.schaleDbId,
+    },
+    recruitments,
+    tagCounts,
+    allGradings,
+    currentUser,
+    allRaids,
+  };
 };
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
@@ -94,7 +126,7 @@ export const ErrorBoundary = () => {
 };
 
 export default function StudentDetail() {
-  const { student, tagCounts, allGradings, currentUser, allRaids } = useLoaderData<typeof loader>();
+  const { student, recruitments, tagCounts, allGradings, currentUser, allRaids } = useLoaderData<typeof loader>();
 
   const [raidShowMore, setRaidShowMore] = useState(false);
   const [sort, setSort] = useState<"recent" | "old">("recent");
@@ -109,7 +141,7 @@ export default function StudentDetail() {
       since: Date;
       until: Date;
       terrain: Terrain;
-      defenseType: DefenseType;
+      defenseType: Defense;
       difficulty: string | null;
     };
   };
@@ -226,10 +258,10 @@ export default function StudentDetail() {
         )}
       </div>
 
-      {student.recruitments.length > 0 && (
+      {recruitments.length > 0 && (
         <>
           <SubTitle text="모집 일정" />
-          <RecruitmentHistories recruitments={student.recruitments} />
+          <RecruitmentHistories recruitments={recruitments} />
         </>
       )}
     </>

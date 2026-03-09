@@ -2,7 +2,6 @@ import type { ResourceTypeEnum } from "~/graphql/graphql";
 
 export type Stage = {
   uid: string;
-  name: string;
   entryAp: number;
   index: string;
   difficulty: number;

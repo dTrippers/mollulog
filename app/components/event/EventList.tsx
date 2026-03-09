@@ -2,14 +2,14 @@ import { useMemo } from "react";
 import { Link } from "react-router";
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
-import type { EventType } from "~/models/content.d";
-import { eventTypeLocale } from "~/locales/ko";
+import { timelineContentTypeLocale } from "~/locales/ko";
 import { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES } from "~/models/content";
+import type { TimelineContentType } from "~/models/timeline-content";
 
 type EventListItem = {
   uid: string;
   name: string;
-  type: EventType;
+  type: TimelineContentType;
   since: Date;
   until: Date;
   imageUrl?: string | null;
@@ -46,7 +46,7 @@ export default function EventList({ events, showArrow = true, className = "" }: 
         <Link to={`/events/${event.uid}`} key={event.uid} className="block group">
           <div className="p-3 flex items-center gap-3 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
             <div className={`flex-1 ${event.imageUrl ? "min-w-0" : ""}`}>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{eventTypeLocale[event.type]}</p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{timelineContentTypeLocale[event.type]}</p>
               <p className={`font-semibold text-neutral-900 dark:text-neutral-100 ${event.imageUrl ? "truncate" : ""}`}>
                 {event.name}
               </p>

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { AttackType, DefenseType, Role } from "~/models/content.d";
+import type { Role } from "~/models/content.d";
+import type { Attack, Defense } from "~/graphql/graphql";
 import { StudentCard } from "~/components/students";
 
 type RaidStudentComparisonProps = {
@@ -13,7 +14,7 @@ type RaidStudentComparisonProps = {
     slotsCount: number;
     assistsCount: number;
   }>;
-  allStudents: Record<string, { name: string; attackType: AttackType; defenseType: DefenseType; role: Role }>;
+  allStudents: Record<string, { name: string; attackType: Attack; defenseType: Defense; role: Role }>;
 };
 
 type StudentComparison = {

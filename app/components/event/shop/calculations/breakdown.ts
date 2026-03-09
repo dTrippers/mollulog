@@ -1,6 +1,5 @@
 import Decimal from "decimal.js";
 import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
-import { MINIGAME_CONFIG } from "../constants";
 import { calculateMinigameRewards } from "../utils";
 
 /**
@@ -14,7 +13,7 @@ export function calculateItemBreakdowns({
   appliedBonusRatio,
   includeFirstClear,
   minigamePlayCount,
-  eventUid,
+  minigameConfig,
   minigameRewards,
   shopResources,
   itemQuantities,
@@ -137,7 +136,6 @@ export function calculateItemBreakdowns({
   }
 
   // Add minigame rewards
-  const minigameConfig = MINIGAME_CONFIG[eventUid];
   if (minigameConfig && minigamePlayCount > 0) {
     const rewards = calculateMinigameRewards(minigameConfig, minigamePlayCount);
     for (const { resourceUid, quantity } of rewards) {

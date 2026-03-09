@@ -396,7 +396,7 @@ function FavoriteLevelCard({ favoriteLevel, exp, levelStudents, activeItem, stud
   return (
     <div className="mt-8 bg-neutral-100 dark:bg-neutral-900 rounded-lg p-4 flex flex-col">
       <div className="flex items-center gap-3 mb-4 pb-3 border-b border-neutral-200 dark:border-neutral-700">
-        <ResourceCard rarity={activeItem.itemRarity} itemUid={activeItem.itemUid} favoriteLevel={parseInt(favoriteLevel)} />
+        <ResourceCard rarity={activeItem.itemRarity} itemUid={activeItem.itemUid} favoriteLevel={Number.parseInt(favoriteLevel)} />
         <div className="flex-1 min-w-0">
           <p className="font-medium truncate">{activeItem.itemName}</p>
           <p className="text-sm text-neutral-500 dark:text-neutral-400">+{exp} EXP</p>

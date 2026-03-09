@@ -1,38 +1,43 @@
 import dayjs from "dayjs";
-import { RecruitmentTypeEnum } from "~/graphql/graphql";
-import type { AttackType, DefenseType, EventType, RaidType, Role, Terrain } from "~/models/content.d";
+import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
+import type { EventType, RaidType, Role, Terrain } from "~/models/content.d";
 import type { Boss } from "~/models/raid";
+import type { TimelineContentType } from "~/models/timeline-content";
 
-export const attackTypeLocale: Record<AttackType, string> = {
+export const attackTypeLocale: Record<Attack, string> = {
   explosive: "폭발",
   piercing: "관통",
   mystic: "신비",
   sonic: "진동",
   chemical: "분해",
+  normal: "일반",
 };
 
-export const attackTypeColor: Record<AttackType, "red" | "yellow" | "green" | "blue" | "purple"> = {
+export const attackTypeColor: Record<Attack, "red" | "yellow" | "green" | "blue" | "purple" | "grey"> = {
   explosive: "red",
   piercing: "yellow",
   mystic: "blue",
   sonic: "purple",
   chemical: "green",
+  normal: "grey",
 };
 
-export const defenseTypeLocale: Record<DefenseType, string> = {
+export const defenseTypeLocale: Record<Defense, string> = {
   light: "경장갑",
   heavy: "중장갑",
   special: "특수장갑",
   elastic: "탄력장갑",
   composite: "복합장갑",
+  normal: "일반",
 };
 
-export const defenseTypeColor: Record<DefenseType, "red" | "yellow" | "green" | "blue" | "purple"> = {
+export const defenseTypeColor: Record<Defense, "red" | "yellow" | "green" | "blue" | "purple" | "grey"> = {
   light: "red",
   heavy: "yellow",
   special: "blue",
   elastic: "purple",
   composite: "green",
+  normal: "grey",
 };
 
 export const roleLocale: Record<Role, string> = {
@@ -87,16 +92,54 @@ export const eventTypeLocale: Record<EventType, string> = {
   fes: "페스 이벤트",
   pickup: "픽업 모집",
   campaign: "캠페인",
-  exercise: "종합전술시험",
+  joint_firing_drill: "종합전술시험",
   main_story: "메인 스토리",
   battle_pass: "배틀 패스",
   update: "점검/업데이트",
+};
+
+export const timelineContentTypeLocale: Record<TimelineContentType, string> = {
+  event: "이벤트",
+  mini_event: "미니 이벤트",
+  pickup: "픽업 모집",
+  main_story: "메인 스토리",
+  campaign: "캠페인",
+  joint_firing_drill: "종합전술시험",
+  total_assault: "총력전",
+  elimination: "대결전",
+  unlimit: "제약해제결전",
+  allied: "연합작전",
+};
+
+export const drillTypeLocale: Record<string, string> = {
+  shooting: "사격",
+  defense: "방어",
+  assault: "돌파",
+  escort: "호위",
+};
+
+export const campaignCategoryLocale: Record<string, string> = {
+  bounty_hunt: "현상수배",
+  commision: "특별의뢰",
+  exp: "계정 경험치",
+  mission_hard: "임무(Hard)",
+  mission_normal: "임무(Normal)",
+  schedule: "스케줄",
+  scrimmage: "학원교류회",
+};
+
+export const pickupGroupTypeLocale: Record<string, string> = {
+  fes: "페스 모집",
+  encore: "앙코르 모집",
+  archive: "아카이브 모집",
+  recollect: "리콜렉트 모집",
 };
 
 export const raidTypeLocale: Record<RaidType, string> = {
   total_assault: "총력전",
   elimination: "대결전",
   unlimit: "제약해제결전",
+  allied: "연합작전",
 };
 
 export const contentTypeLocale: Record<EventType | RaidType, string> = {
@@ -109,6 +152,8 @@ export function recruitmentLabelLocale({ recruitmentType: type, rerun }: { recru
     return "아카이브";
   } else if (type === "recollect") {
     return "리콜렉트";
+  } else if (type === "encore") {
+    return "앙코르";
   } else if (type === "usual") {
     return rerun ? "복각" : "신규";
   } else if (type === "limited") {
@@ -162,4 +207,13 @@ export function formatResourceAmount(amount: number): string {
     return `${(amount / 1000).toLocaleString()}k`;
   }
   return amount.toLocaleString();
+}
+
+export function minigameDescription(minigameType: string): string | null {
+  if (minigameType === "card_flip") {
+    return "예상 보상은 전체 카드를 뒤집었을 때의 평균 결과를 기준으로 계산해요";
+  } else if (minigameType === "fortune_gacha") {
+    return "예상 보상은 평균값으로 계산하며 각종 보정치는 적용되지 않아요";
+  }
+  return null;
 }

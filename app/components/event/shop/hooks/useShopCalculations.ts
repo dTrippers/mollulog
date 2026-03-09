@@ -3,6 +3,7 @@ import type Decimal from "decimal.js";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import type { Stage, ShopResource, CollectableResource } from "../types";
 import type { ShopState } from "./useShopState";
+import type { MinigameConfig } from "../constants";
 import { calculateStageInfos, optimizeStageRuns, calculateItemBreakdowns, calculateRequiredQuantities } from "../calculations";
 import type { ItemBreakdownResult } from "../calculations";
 
@@ -18,6 +19,7 @@ type UseShopCalculationsParams = {
     resourceUid: string;
     quantity: number;
   }[];
+  minigameConfig?: MinigameConfig | null;
   eventUid: string;
 };
 
@@ -56,22 +58,12 @@ export function useShopCalculations({
   appliedBonusRatio,
   minigamePaymentResource,
   minigameRewards,
+  minigameConfig,
   eventUid,
 }: UseShopCalculationsParams) {
   const [result, setResult] = useState<CalculationResult>(EMPTY_RESULT);
   const [isCalculating, setIsCalculating] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Create a stable reference to inputs for comparison
-  const inputsRef = useRef({
-    itemQuantities: state.itemQuantities,
-    existingPaymentItemQuantities: state.existingPaymentItemQuantities,
-    includeFirstClear: state.includeFirstClear,
-    minigamePlayCount: state.minigamePlayCount,
-    enabledStages: state.enabledStages,
-    extraStageRuns: state.extraStageRuns,
-    overriddenRequiredQuantities: state.overriddenRequiredQuantities,
-  });
 
   useEffect(() => {
     // Clear existing timer
@@ -91,13 +83,13 @@ export function useShopCalculations({
         stages,
         includeFirstClear: state.includeFirstClear,
         minigamePlayCount: state.minigamePlayCount,
+        minigameConfig,
         minigameRewards,
         minigameCostItemUid: minigamePaymentResource?.resourceUid,
         minigameCostAmount: minigamePaymentResource?.quantity,
         enabledStages: state.enabledStages,
         appliedBonusRatio,
         overriddenRequiredQuantities: state.overriddenRequiredQuantities,
-        eventUid,
       });
 
       const targets = Object.entries(targetRequirements).filter(([, qty]) => (qty || 0) > 0);
@@ -113,7 +105,7 @@ export function useShopCalculations({
         paymentItemQuantities: targetRequirements,
         includeFirstClear: state.includeFirstClear,
         minigamePlayCount: state.minigamePlayCount,
-        eventUid,
+        minigameConfig,
         minigameRewards: minigameRewards ? { [eventUid]: minigameRewards } : undefined,
         shopResources,
         itemQuantities: state.itemQuantities,
@@ -144,6 +136,7 @@ export function useShopCalculations({
     appliedBonusRatio,
     minigamePaymentResource,
     minigameRewards,
+    minigameConfig,
     eventUid,
   ]);
 

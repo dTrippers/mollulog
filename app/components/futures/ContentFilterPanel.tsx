@@ -30,15 +30,15 @@ export default function ContentFilterPanel({ filter, onFilterChange }: ContentFi
     { text: "미니 이벤트", active: filter.types.includes("mini_event"), onToggle: (activated: boolean) => onToggleType(activated, ["mini_event"]) },
     { text: "스토리", active: filter.types.includes("main_story"), onToggle: (activated: boolean) => onToggleType(activated, ["main_story"]) },
     { text: "캠페인", active: filter.types.includes("campaign"), onToggle: (activated: boolean) => onToggleType(activated, ["campaign"]) },
-    { text: "종합전술시험", active: filter.types.includes("exercise"), onToggle: (activated: boolean) => onToggleType(activated, ["exercise"]) },
+    { text: "종합전술시험", active: filter.types.includes("joint_firing_drill"), onToggle: (activated: boolean) => onToggleType(activated, ["joint_firing_drill"]) },
     { text: "픽업 모집", active: filter.types.includes("pickup"), onToggle: (activated: boolean) => onToggleType(activated, ["pickup"]) },
-    { text: "배틀 패스", active: filter.types.includes("battle_pass"), onToggle: (activated: boolean) => onToggleType(activated, ["battle_pass"]) },
   ];
 
   const contentFilterProps = [
     { text: "총력전", active: filter.types.includes("total_assault"), onToggle: (activated: boolean) => onToggleType(activated, ["total_assault"]) },
     { text: "대결전", active: filter.types.includes("elimination"), onToggle: (activated: boolean) => onToggleType(activated, ["elimination"]) },
     { text: "제약해제결전", active: filter.types.includes("unlimit"), onToggle: (activated: boolean) => onToggleType(activated, ["unlimit"]) },
+    { text: "연합작전", active: filter.types.includes("allied"), onToggle: (activated: boolean) => onToggleType(activated, ["allied"]) },
   ];
 
   return (

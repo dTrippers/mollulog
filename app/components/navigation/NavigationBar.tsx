@@ -11,6 +11,7 @@ import {
   BoltIcon as BoltIconOutline,
   ClockIcon as ClockIconOutline,
   WalletIcon as WalletIconOutline,
+  BookOpenIcon as BookOpenIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeIconSolid,
@@ -22,6 +23,7 @@ import {
   BoltIcon as BoltIconSolid,
   ClockIcon as ClockIconSolid,
   WalletIcon as WalletIconSolid,
+  BookOpenIcon as BookOpenIconSolid,
 } from "@heroicons/react/24/solid";
 import { Transition } from "@headlessui/react";
 import { Link, useMatches, useSubmit } from "react-router";
@@ -50,8 +52,12 @@ export default function NavigationBar({ currentUsername, darkMode, setDarkMode, 
   };
 
   return (
-    <div className="fixed xl:relative w-full xl:w-96 xl:h-screen bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-b xl:border-b-0 xl:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30 z-100">
-      <div className="px-4 py-4">
+    <div className={sanitizeClassName(`
+      fixed xl:relative w-full xl:w-96 xl:h-screen bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
+      border-b xl:border-b-0 xl:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30
+      ${isMenuOpen ? "z-200" : "z-100"}
+    `)}>
+      <div className="px-4 py-3">
         <div className="flex items-center">
           <Bars3Icon className="p-2 -m-2 block xl:hidden size-10" strokeWidth={2} onClick={() => setIsMenuOpen(!isMenuOpen)} />
           <img src={darkMode ? "/logo-dark.png" : "/logo-light.png"} alt="몰루로그 로고" className="ml-2 mr-1 xl:mr-2 object-cover h-8 xl:h-10 aspect-4/3" />
@@ -198,6 +204,14 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
         isActive={pathname.startsWith("/students")}
         onItemClick={onMenuClose}
       />
+      <MenuItem
+        to="/mainstory"
+        name="메인 스토리"
+        OutlineIcon={BookOpenIconOutline}
+        SolidIcon={BookOpenIconSolid}
+        isActive={pathname.startsWith("/mainstory")}
+        onItemClick={onMenuClose}
+      />
       {currentUsername && (
         <MenuItem
           to={`/@${currentUsername}`}
@@ -214,7 +228,7 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
         {upcomingEvent ?
           <UtilItem
             name="이벤트 소탕 계산기"
-            to={`/events/${upcomingEvent.uid}?page=shop`}
+            to={`/events/${upcomingEvent.uid}/shop`}
             OutlineIcon={BoltIconOutline}
             SolidIcon={BoltIconSolid}
             onItemClick={onMenuClose}

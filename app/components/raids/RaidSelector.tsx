@@ -7,7 +7,8 @@ import { OptionBadge } from "~/components/atoms/student";
 import { FilterButtons } from "~/components/navigation";
 import { terrainLocale, defenseTypeLocale, difficultyLocale, defenseTypeColor } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
-import type { AttackType, DefenseType, RaidType, Terrain } from "~/models/content.d";
+import type { RaidType, Terrain } from "~/models/content.d";
+import type { Attack, Defense } from "~/graphql/graphql";
 import { sanitizeClassName } from "~/prophandlers";
 
 type SelectableRaid = {
@@ -18,9 +19,9 @@ type SelectableRaid = {
   since: Date;
   until: Date;
   terrain: Terrain;
-  attackType: AttackType;
+  attackType: Attack;
   rankVisible: boolean;
-  defenseTypes: { defenseType: DefenseType; difficulty: string | null }[];
+  defenseTypes: { defenseType: Defense; difficulty: string | null }[];
 };
 
 

@@ -4,13 +4,14 @@ import { Transition } from "@headlessui/react";
 import { XMarkIcon, CheckCircleIcon } from "@heroicons/react/16/solid";
 import Textarea from "~/components/atoms/form/Textarea";
 import Button from "~/components/atoms/form/Button";
-import type { ShopResource, CollectableResource } from "./types";
+import type { Stage, ShopResource, CollectableResource } from "./types";
 import type { ShopState } from "./hooks/useShopState";
 import type { CalculationResult } from "./hooks/useShopCalculations";
 
 type BugReportModalProps = {
   show: boolean;
   eventUid: string;
+  stages: Stage[];
   shopResources: ShopResource[];
   collectableResources: CollectableResource[];
   stageCalculations: CalculationResult;
@@ -21,6 +22,7 @@ type BugReportModalProps = {
 export default function BugReportModal({
   show,
   eventUid,
+  stages,
   shopResources,
   collectableResources,
   stageCalculations,
@@ -44,6 +46,7 @@ export default function BugReportModal({
     const debugLog = {
       timestamp: new Date().toISOString(),
       eventUid,
+      stages,
       shopResources,
       collectableResources,
       stageCalculations,
