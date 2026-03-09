@@ -2,7 +2,7 @@ import { runQuery } from "~/lib/baql";
 import { graphql } from "~/graphql";
 import type { Position, TacticRole } from "./content.d";
 import { fetchCached } from "./base";
-import { Attack, Defense } from "~/graphql/graphql";
+import type { Attack, Defense } from "~/graphql/graphql";
 
 export type Role = "striker" | "special";
 export type Student = {

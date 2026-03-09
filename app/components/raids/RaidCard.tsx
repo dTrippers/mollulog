@@ -5,7 +5,7 @@ import type { Difficulty } from "~/models/raid";
 import { bossImageUrl } from "~/models/assets";
 import { defenseTypeLocale, difficultyLocale, raidTypeLocale, relativeTime, terrainLocale } from "~/locales/ko";
 import { sanitizeClassName } from "~/prophandlers";
-import { Defense } from "~/graphql/graphql";
+import type { Defense } from "~/graphql/graphql";
 
 type RaidCardProps = {
   raid: {

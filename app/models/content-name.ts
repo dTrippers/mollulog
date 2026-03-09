@@ -27,12 +27,12 @@ const campaignNameQuery = graphql(`
   }
 `);
 
-async function getCampaignDetail(env: Env, uid: string) {
+async function getCampaignDetail(env: Env, uid: string, forceRefresh = false) {
   return fetchCached(env, `campaign-detail::v1::${uid}`, async () => {
     const { data, error } = await runQuery(campaignNameQuery, { uid });
     if (error || !data?.campaign) return null;
     return data.campaign;
-  }, 7 * 24 * 60 * 60);
+  }, 7 * 24 * 60 * 60, forceRefresh);
 }
 
 // ============================================================
@@ -45,12 +45,12 @@ const eventContentNameQuery = graphql(`
   }
 `);
 
-export async function getEventContentName(env: Env, uid: string): Promise<string | null> {
+export async function getEventContentName(env: Env, uid: string, forceRefresh = false): Promise<string | null> {
   return fetchCached(env, `event-content-name::v1::${uid}`, async () => {
     const { data, error } = await runQuery(eventContentNameQuery, { uid });
     if (error || !data?.eventContent) return null;
     return data.eventContent.name;
-  }, 7 * 24 * 60 * 60);
+  }, 7 * 24 * 60 * 60, forceRefresh);
 }
 
 // ============================================================
@@ -63,12 +63,12 @@ const miniEventContentNameQuery = graphql(`
   }
 `);
 
-export async function getMiniEventContentName(env: Env, uid: string): Promise<string | null> {
+export async function getMiniEventContentName(env: Env, uid: string, forceRefresh = false): Promise<string | null> {
   return fetchCached(env, `mini-event-content-name::v1::${uid}`, async () => {
     const { data, error } = await runQuery(miniEventContentNameQuery, { uid });
     if (error || !data?.miniEventContent) return null;
     return data.miniEventContent.name;
-  }, 7 * 24 * 60 * 60);
+  }, 7 * 24 * 60 * 60, forceRefresh);
 }
 
 // ============================================================
@@ -81,19 +81,54 @@ const jointFiringDrillNameQuery = graphql(`
   }
 `);
 
-export async function getJointFiringDrillDetail(env: Env, uid: string) {
+export async function getJointFiringDrillDetail(env: Env, uid: string, forceRefresh = false) {
   return fetchCached(env, `joint-firing-drill::v1::${uid}`, async () => {
     const { data, error } = await runQuery(jointFiringDrillNameQuery, { uid });
     if (error || !data?.jointFiringDrill) return null;
     return data.jointFiringDrill;
-  }, 7 * 24 * 60 * 60);
+  }, 7 * 24 * 60 * 60, forceRefresh);
+}
+
+// ============================================================
+// Cache warm-up
+// ============================================================
+
+type ContentRef = {
+  uid: string;
+  contentType: string;
+  contentUid: string | null;
+  recruitmentGroupUid?: string | null;
+};
+
+const RAID_TYPES = ["total_assault", "elimination", "unlimit", "allied"];
+
+export async function warmUpNameCaches(env: Env, contents: ContentRef[]) {
+  await Promise.all(
+    contents.map(async ({ uid, contentType, contentUid, recruitmentGroupUid }) => {
+      if (contentType === "joint_firing_drill" && contentUid) {
+        await getJointFiringDrillDetail(env, contentUid, true);
+      } else if (RAID_TYPES.includes(contentType) && contentUid) {
+        // raid caches are warmed up separately via getRaidDetail in the cron
+      } else if (contentType === "campaign" && contentUid) {
+        await getCampaignDetail(env, contentUid, true);
+      } else if (contentType === "pickup") {
+        await getRecruitmentGroup(env, uid, true);
+      } else if (contentType === "mini_event" && contentUid) {
+        await getMiniEventContentName(env, contentUid, true);
+      } else if (contentUid) {
+        await getEventContentName(env, contentUid, true);
+      }
+
+      if (recruitmentGroupUid) {
+        await getRecruitmentGroup(env, recruitmentGroupUid, true);
+      }
+    }),
+  );
 }
 
 // ============================================================
 // Main resolver
 // ============================================================
-
-const RAID_TYPES = ["total_assault", "elimination", "unlimit", "allied"];
 
 export async function resolveContentName(env: Env, content: ContentInput): Promise<string> {
   const { uid, contentType, contentUid } = content;

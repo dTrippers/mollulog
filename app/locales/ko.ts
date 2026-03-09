@@ -2,7 +2,7 @@ import dayjs from "dayjs";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { EventType, RaidType, Role, Terrain } from "~/models/content.d";
 import type { Boss } from "~/models/raid";
-import { TimelineContentType } from "~/models/timeline-content";
+import type { TimelineContentType } from "~/models/timeline-content";
 
 export const attackTypeLocale: Record<Attack, string> = {
   explosive: "폭발",

@@ -54,14 +54,14 @@ const recruitmentGroupQuery = graphql(`
 
 type RecruitmentGroupResult = NonNullable<RecruitmentGroupQuery["recruitmentGroup"]>;
 
-export async function getRecruitmentGroup(env: Env, uid: string): Promise<RecruitmentGroupResult | null> {
+export async function getRecruitmentGroup(env: Env, uid: string, forceRefresh = false): Promise<RecruitmentGroupResult | null> {
   return fetchCached(env, `recruitment-group::v1::${uid}`, async () => {
     const { data, error } = await runQuery(recruitmentGroupQuery, { uid });
     if (error || !data?.recruitmentGroup) {
       return null;
     }
     return data.recruitmentGroup;
-  }, 7 * 24 * 60 * 60);
+  }, 7 * 24 * 60 * 60, forceRefresh);
 }
 
 //

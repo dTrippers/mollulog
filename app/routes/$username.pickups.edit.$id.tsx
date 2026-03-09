@@ -59,7 +59,8 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
             pickup: r.pickup,
           })) ?? [],
       };
-    });
+    })
+    .filter((e) => e.recruitments.length > 0);
 
   return {
     events,
