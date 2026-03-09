@@ -32,7 +32,7 @@ export type DiceMinigameConfig = {
 };
 
 export type MinigameConfig = {
-  minigameType: "roguelike" | "prize_exchange" | "dice" | "defense" | "card_flip";
+  minigameType: "roguelike" | "prize_exchange" | "dice" | "defense" | "card_flip" | "fortune_gacha";
   payment: {
     resourceType: ResourceTypeEnum;
     resourceUid: string;

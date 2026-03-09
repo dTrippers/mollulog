@@ -444,9 +444,11 @@ async function syncEvents(env: Env): Promise<void> {
  * Add a new `sync*` function above and call it here as new content types are supported.
  */
 export async function syncTimelineContents(env: Env): Promise<void> {
-  await syncCampaigns(env);
-  await syncJointFiringDrills(env);
-  await syncRaids(env);
-  await syncMiniEvents(env);
-  await syncEvents(env);
+  await Promise.all([
+    syncCampaigns(env),
+    syncJointFiringDrills(env),
+    syncRaids(env),
+    syncMiniEvents(env),
+    syncEvents(env),
+  ]);
 }

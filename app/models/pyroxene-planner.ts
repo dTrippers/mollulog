@@ -51,38 +51,38 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
     ]);
 
     const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
-    const results: PyroxenePlannerContent[] = [];
-    for (const content of allContents) {
+    const results = await Promise.all(allContents.map(async (content) => {
       if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
         const group = recruitmentGroupMap.get(content.uid);
         const recruitments = (group?.recruitments ?? []).map((r) => ({
           recruitmentType: r.recruitmentType,
           pickup: r.pickup,
           rerun: r.rerun,
-          student: r.student ? { uid: r.student.uid, initialTier: studentsMap[r.student.uid]!.initialTier } : null,
+          student: r.student ? { uid: r.student.uid, initialTier: studentsMap[r.student.uid]?.initialTier ?? 0 } : null,
         }));
-        results.push({
-          kind: "event",
+        return {
+          kind: "event" as const,
           uid: content.uid,
           name: content.name,
           since: content.startAt,
           until: content.endAt!,
           recruitments,
-        });
+        };
       } else if (RAID_CONTENT_TYPES.includes(content.contentType)) {
         const raidDetail = content.contentUid ? await getRaidDetail(env, content.contentUid) : null;
-        results.push({
-          kind: "raid",
+        return {
+          kind: "raid" as const,
           uid: content.uid,
           name: raidDetail?.name ?? content.name,
           type: content.contentType as RaidType,
           since: content.startAt,
           until: content.endAt!,
-        });
+        };
       }
-    }
+      return null;
+    }));
 
-    return results;
+    return results.filter((r) => r !== null);
   }, 60 * 10, forceRefresh);
 }
 

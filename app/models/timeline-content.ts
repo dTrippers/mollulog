@@ -95,7 +95,7 @@ export async function getTimelineContents(env: Env): Promise<TimelineContent[]> 
   const rows = await db
     .select()
     .from(timelineContentsTable)
-    .where(gte(timelineContentsTable.endAt, now))
+    .where(or(isNull(timelineContentsTable.endAt), gte(timelineContentsTable.endAt, now)))
     .orderBy(timelineContentsTable.startAt)
     .all();
   return enrichAll(env, rows.map(toRaw));
