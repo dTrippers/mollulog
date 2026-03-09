@@ -20,8 +20,8 @@ import { RecruitmentHistories } from "~/components/students";
 import { fetchRaidStatisticsByStudent, type RaidStatistics  } from "~/models/raid-statistics.client";
 import { getAllRaids } from "~/models/raid";
 import type { RaidType, Terrain } from "~/models/content.d";
-import type { EventType } from "~/models/content.d";
 import type { Defense } from "~/graphql/graphql";
+import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 
 const studentDetailQuery = graphql(`
   query StudentDetail($uid: String!) {
@@ -29,7 +29,7 @@ const studentDetailQuery = graphql(`
       name uid attackType defenseType role school schaleDbId
       recruitments {
         since rerun
-        event { type uid name rerun imageUrl }
+        recruitmentGroup { uid startAt endAt }
       }
     }
   }
@@ -57,18 +57,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const student = data!.student!;
 
-  const recruitments = student.recruitments
-    .filter((r) => r.event != null)
-    .map((r) => ({
-      event: {
-        uid: r.event!.uid,
-        name: r.event!.name,
-        imageUrl: r.event!.imageUrl ?? null,
-        rerun: r.event!.rerun,
-        type: r.event!.type as EventType,
-      },
-      since: new Date(r.since),
-    }));
+  const recruitmentGroupUids = student.recruitments.map((r) => r.recruitmentGroup.uid);
+  const timelineContents = await getTimelineContentsByRecruitmentGroupUids(env, recruitmentGroupUids);
+  const recruitments = timelineContents.map((c) => ({ 
+    uid: c.uid, name: c.name, since: c.startAt, until: c.endAt, imageUrl: c.imageUrl ?? null,
+  }));
 
   // Get current user
   const currentUser = await getAuthenticator(env).isAuthenticated(request);

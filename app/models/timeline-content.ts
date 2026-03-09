@@ -158,6 +158,17 @@ export async function getTimelineContentsByContentUids(env: Env, contentUids: st
   return enrichAll(env, rows.map(toRaw));
 }
 
+export async function getTimelineContentsByRecruitmentGroupUids(env: Env, recruitmentGroupUids: string[]): Promise<TimelineContent[]> {
+  if (recruitmentGroupUids.length === 0) return [];
+  const db = drizzle(env.DB);
+  const rows = await db
+    .select()
+    .from(timelineContentsTable)
+    .where(inArray(timelineContentsTable.recruitmentGroupUid, recruitmentGroupUids))
+    .all();
+  return enrichAll(env, rows.map(toRaw));
+}
+
 export async function getAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
   const db = drizzle(env.DB);
   const rows = await db

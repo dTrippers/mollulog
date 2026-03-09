@@ -4,8 +4,7 @@ import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
 import { getTimelineContent } from "./timeline-content";
-import type { RunType, TimelineContentType } from "./timeline-content";
-import type { EventType } from "./content.d";
+import type { RunType } from "./timeline-content";
 import { resolveContentName } from "./content-name";
 import type { MinigameConfig } from "~/components/event/shop/constants";
 
@@ -45,7 +44,7 @@ const recruitmentGroupQuery = graphql(`
     recruitmentGroup(uid: $uid) {
       uid contentType contentUid startAt endAt recruitmentType
       recruitments {
-        recruitmentType pickup rerun since until studentName
+        recruitmentType pickup rerun studentName since until
         student { uid attackType defenseType role schaleDbId }
       }
     }
@@ -117,7 +116,7 @@ export async function getEventContentSummary(env: Env, timelineUid: string) {
     since: content.startAt,
     until: content.endAt,
     imageUrl: content.imageUrl,
-    type: content.contentType as EventType,
+    type: content.contentType,
     runType: content.runType,
     endless: content.endless,
     videos: content.videos,

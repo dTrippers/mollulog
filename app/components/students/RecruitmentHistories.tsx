@@ -2,19 +2,13 @@ import dayjs from "dayjs";
 import { Link } from "react-router";
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState, useCallback } from "react";
-import { eventTypeLocale } from "~/locales/ko";
-import type { EventType } from "~/models/content.d";
 import { sanitizeClassName } from "~/prophandlers";
 
 type RecruitmentHistoriesProps = {
   recruitments: {
-    event: {
-      uid: string;
-      name: string;
-      imageUrl: string | null;
-      rerun: boolean;
-      type: EventType;
-    };
+    uid: string;
+    name: string;
+    imageUrl: string | null;
     since: Date;
   }[];
 }
@@ -107,7 +101,7 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
 
       {/* Scrollable container */}
       <div className="flex overflow-x-auto gap-2 md:gap-4 no-scrollbar w-full" ref={scrollContainerRef}>
-        {sortedRecruitments.map(({ event, since }) => (
+        {sortedRecruitments.map((event) => (
           <div key={event.uid} className="w-3/4 md:w-2/5 aspect-video rounded-lg relative shrink-0">
             {event.imageUrl && (
               <img
@@ -125,7 +119,7 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
             >
               <p className="font-bold text-semibold">{event.name}</p>
               <p className="text-xs mt-1">
-                {`${event.rerun ? "복각 " : ""}${eventTypeLocale[event.type]} • ${dayjs(since).format("YYYY-MM-DD")}`}
+                {dayjs(event.since).format("YYYY-MM-DD")}
               </p>
             </Link>
           </div>
