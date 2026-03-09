@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { MoonIcon, EnvelopeIcon, MegaphoneIcon } from "@heroicons/react/16/solid";
+import { MoonIcon, EnvelopeIcon, MegaphoneIcon, ChevronDownIcon } from "@heroicons/react/16/solid";
 import {
   HomeIcon as HomeIconOutline,
   CalendarIcon as CalendarIconOutline,
@@ -12,6 +12,8 @@ import {
   ClockIcon as ClockIconOutline,
   WalletIcon as WalletIconOutline,
   BookOpenIcon as BookOpenIconOutline,
+  RectangleGroupIcon as RectangleGroupIconOutline,
+  Cog6ToothIcon as Cog6ToothIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeIconSolid,
@@ -24,6 +26,8 @@ import {
   ClockIcon as ClockIconSolid,
   WalletIcon as WalletIconSolid,
   BookOpenIcon as BookOpenIconSolid,
+  RectangleGroupIcon as RectangleGroupIconSolid,
+  Cog6ToothIcon as Cog6ToothIconSolid,
 } from "@heroicons/react/24/solid";
 import { Transition } from "@headlessui/react";
 import { Link, useMatches, useSubmit } from "react-router";
@@ -133,16 +137,16 @@ function MenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, sho
   );
 }
 
-function UtilItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, showRedDot, disabled }: MenuItemProps) {
+function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, showRedDot, disabled }: MenuItemProps) {
   const child = (
-    <div className={sanitizeClassName(`
-      p-2 flex flex-col items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 rounded-lg transition relative
-      ${isActive ? "font-bold drop-shadow-lg" : ""}
-      ${disabled ? "opacity-50 cursor-not-allowed" : ""}
-    `)}>
-      {isActive ? <SolidIcon className="size-6" /> : <OutlineIcon className="size-6" />}
-      <p className="mt-1 text-xs text-center">{name}</p>
-      {showRedDot && <div className="absolute top-2 right-2 size-1.5 bg-red-500 rounded-full animate-pulse" />}
+    <div className={sanitizeClassName(`my-1 px-2 py-1.5 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition relative ${isActive ? "font-semibold drop-shadow-lg" : ""} ${disabled ? "opacity-40 cursor-not-allowed" : ""}`)}>
+      {isActive ? <SolidIcon className="inline-block mr-3 size-5" /> : <OutlineIcon className="inline-block mr-3 size-5" />}
+      <span className="relative">
+        {name}
+        {showRedDot && (
+          <div className="absolute top-0 -right-3 size-1.5 bg-red-500 rounded-full animate-pulse" />
+        )}
+      </span>
     </div>
   );
 
@@ -150,9 +154,39 @@ function UtilItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, sho
     return child;
   }
   return (
-    <Link to={to} onClick={onItemClick}>
+    <Link to={to} onClick={() => onItemClick?.()}>
       {child}
     </Link>
+  );
+}
+
+interface MenuSectionProps {
+  name: string;
+  OutlineIcon: React.ComponentType<React.ComponentProps<"svg">>;
+  SolidIcon: React.ComponentType<React.ComponentProps<"svg">>;
+  isActive: boolean;
+  children: React.ReactNode;
+}
+
+function MenuSection({ name, OutlineIcon, SolidIcon, isActive, children }: MenuSectionProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const showChildren = isOpen || isActive;
+
+  return (
+    <div className="my-1">
+      <button
+        type="button"
+        className={sanitizeClassName(`w-full px-2 py-1.5 xl:py-2 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition xl:cursor-default ${isActive ? "font-bold" : ""}`)}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        {isActive ? <SolidIcon className="inline-block mr-3 size-6" /> : <OutlineIcon className="inline-block mr-3 size-6" />}
+        <span className="text-lg flex-1 text-left">{name}</span>
+        <ChevronDownIcon className={`size-4 transition-transform xl:hidden ${showChildren ? "rotate-180" : ""}`} />
+      </button>
+      <div className={`ml-3 pl-3 border-l border-neutral-200 dark:border-neutral-700 xl:block ${showChildren ? "" : "hidden"}`}>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -170,6 +204,18 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
   const submit = useSubmit();
 
   const now = dayjs();
+
+  const isContentActive =
+    pathname.startsWith("/futures") ||
+    pathname.startsWith("/events") ||
+    pathname.startsWith("/raids") ||
+    pathname.startsWith("/students") ||
+    pathname.startsWith("/mainstory");
+
+  const isUtilActive =
+    pathname.startsWith("/utils") ||
+    (upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`));
+
   return (
     <>
       <MenuItem
@@ -180,62 +226,73 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
         isActive={pathname === "/"}
         onItemClick={onMenuClose}
       />
-      <MenuItem
-        to="/futures"
-        name="미래시"
-        OutlineIcon={CalendarIconOutline}
-        SolidIcon={CalendarIconSolid}
-        isActive={pathname.startsWith("/futures") || pathname.startsWith("/events")}
-        onItemClick={onMenuClose}
-      />
-      <MenuItem
-        to="/raids"
-        name="총력전 / 대결전"
-        OutlineIcon={FireIconOutline}
-        SolidIcon={FireIconSolid}
-        isActive={pathname.startsWith("/raids")}
-        onItemClick={onMenuClose}
-      />
-      <MenuItem
-        to="/students"
-        name="학생부"
-        OutlineIcon={IdentificationIconOutline}
-        SolidIcon={IdentificationIconSolid}
-        isActive={pathname.startsWith("/students")}
-        onItemClick={onMenuClose}
-      />
-      <MenuItem
-        to="/mainstory"
-        name="메인 스토리"
-        OutlineIcon={BookOpenIconOutline}
-        SolidIcon={BookOpenIconSolid}
-        isActive={pathname.startsWith("/mainstory")}
-        onItemClick={onMenuClose}
-      />
-      {currentUsername && (
-        <MenuItem
-          to={`/@${currentUsername}`}
-          name="내 정보"
-          OutlineIcon={UserCircleIconOutline}
-          SolidIcon={UserCircleIconSolid}
-          isActive={pathname.startsWith("/@") || pathname.startsWith("/edit")}
+
+      <MenuSection
+        name="컨텐츠"
+        OutlineIcon={RectangleGroupIconOutline}
+        SolidIcon={RectangleGroupIconSolid}
+        isActive={isContentActive}
+      >
+        <SubMenuItem
+          to="/futures"
+          name="미래시"
+          OutlineIcon={CalendarIconOutline}
+          SolidIcon={CalendarIconSolid}
+          isActive={pathname.startsWith("/futures") || (pathname.startsWith("/events") && !(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)))}
           onItemClick={onMenuClose}
         />
-      )}
+        <SubMenuItem
+          to="/raids"
+          name="총력전 / 대결전"
+          OutlineIcon={FireIconOutline}
+          SolidIcon={FireIconSolid}
+          isActive={pathname.startsWith("/raids")}
+          onItemClick={onMenuClose}
+        />
+        <SubMenuItem
+          to="/students"
+          name="학생부"
+          OutlineIcon={IdentificationIconOutline}
+          SolidIcon={IdentificationIconSolid}
+          isActive={pathname.startsWith("/students")}
+          onItemClick={onMenuClose}
+        />
+        <SubMenuItem
+          to="/mainstory"
+          name="메인 스토리"
+          OutlineIcon={BookOpenIconOutline}
+          SolidIcon={BookOpenIconSolid}
+          isActive={pathname.startsWith("/mainstory")}
+          onItemClick={onMenuClose}
+        />
+      </MenuSection>
 
-      <div className="my-4 grid grid-cols-2 gap-2">
-        <UtilItem name="청휘석 플래너" to="/utils/pyroxene" OutlineIcon={WalletIconOutline} SolidIcon={WalletIconSolid} isActive={pathname.startsWith("/utils/pyroxene")} onItemClick={onMenuClose} />
-        {upcomingEvent ?
-          <UtilItem
+      <MenuSection
+        name="플래너 & 계산기"
+        OutlineIcon={Cog6ToothIconOutline}
+        SolidIcon={Cog6ToothIconSolid}
+        isActive={!!isUtilActive}
+      >
+        <SubMenuItem
+          name="청휘석 플래너"
+          to="/utils/pyroxene"
+          OutlineIcon={WalletIconOutline}
+          SolidIcon={WalletIconSolid}
+          isActive={pathname.startsWith("/utils/pyroxene")}
+          onItemClick={onMenuClose}
+        />
+        {upcomingEvent ? (
+          <SubMenuItem
             name="이벤트 소탕 계산기"
             to={`/events/${upcomingEvent.uid}/shop`}
             OutlineIcon={BoltIconOutline}
             SolidIcon={BoltIconSolid}
             onItemClick={onMenuClose}
             showRedDot={dayjs(upcomingEvent.since).isBefore(now) && dayjs(upcomingEvent.until).isAfter(now)}
-            isActive={pathname.startsWith(`/events/${upcomingEvent!.uid}`)}
-          /> :
-          <UtilItem
+            isActive={pathname.startsWith(`/events/${upcomingEvent.uid}`)}
+          />
+        ) : (
+          <SubMenuItem
             name="이벤트 소탕 계산기"
             to="/futures"
             OutlineIcon={BoltIconOutline}
@@ -243,12 +300,37 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
             onItemClick={onMenuClose}
             disabled
           />
-        }
-        <UtilItem name="인연 랭크 계산기" to="/utils/relationship" OutlineIcon={HeartIconOutline} SolidIcon={HeartIconSolid} isActive={pathname.startsWith("/utils/relationship")} onItemClick={onMenuClose} />
-        <UtilItem name="총력전 점수 계산기" to="/utils/raidscore" OutlineIcon={ClockIconOutline} SolidIcon={ClockIconSolid} isActive={pathname.startsWith("/utils/raidscore")} onItemClick={onMenuClose} />
-      </div>
+        )}
+        <SubMenuItem
+          name="인연 랭크 계산기"
+          to="/utils/relationship"
+          OutlineIcon={HeartIconOutline}
+          SolidIcon={HeartIconSolid}
+          isActive={pathname.startsWith("/utils/relationship")}
+          onItemClick={onMenuClose}
+        />
+        <SubMenuItem
+          name="총력전 점수 계산기"
+          to="/utils/raidscore"
+          OutlineIcon={ClockIconOutline}
+          SolidIcon={ClockIconSolid}
+          isActive={pathname.startsWith("/utils/raidscore")}
+          onItemClick={onMenuClose}
+        />
+      </MenuSection>
 
-      {!currentUsername && (
+
+
+      {currentUsername ? (
+        <MenuItem
+          to={currentUsername ? `/@${currentUsername}` : "/"}
+          name="내 정보"
+          OutlineIcon={UserCircleIconOutline}
+          SolidIcon={UserCircleIconSolid}
+          isActive={pathname.startsWith("/@") || pathname.startsWith("/edit")}
+          onItemClick={currentUsername ? onMenuClose : () => { onShowSignIn(); onMenuClose(); }}
+        />
+      ) :(
         <div
           className="w-full my-4 py-3 bg-neutral-800 dark:bg-neutral-100 text-white dark:text-neutral-900 text-center rounded-full hover:opacity-50 transition-opacity cursor-pointer"
           onClick={() => {

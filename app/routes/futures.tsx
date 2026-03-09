@@ -11,6 +11,7 @@ import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
 import { Page } from "~/components/navigation";
 import type { ContentFilterState } from "~/components/futures/ContentFilterPanel";
+import { useSignIn } from "~/contexts/SignInProvider";
 
 export const meta: MetaFunction = () => {
   const title = "블루 아카이브 이벤트, 픽업 미래시";
@@ -61,6 +62,8 @@ const futuresContentFilterKey = "futures::content-filter";
 export default function FutureContents() {
   const [filter, setFilter] = useState<ContentFilterState>({ types: [], onlyPickups: false });
   const [isHydrated, setIsHydrated] = useState(false);
+
+  const { showSignIn } = useSignIn();
 
   useEffect(() => {
     setIsHydrated(true);
@@ -115,6 +118,11 @@ export default function FutureContents() {
   }, [initialComments]);
 
   const toggleFavorite = (contentUid: string, studentUid: string, favorited: boolean) => {
+    if (!signedIn) {
+      showSignIn();
+      return;
+    }
+
     submitFavorite({ favorite: { contentUid, studentUid, favorited } });
 
     setFavoritedStudents((prev) => {
