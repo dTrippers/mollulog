@@ -1,16 +1,17 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, Link, redirect } from "react-router";
+import { data, redirect } from "react-router";
 import { useActionData, useLoaderData } from "react-router";
 import { ProfileEditor } from "~/components/organisms/profile";
 import { getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { getSenseiById, updateSensei } from "~/models/sensei";
-import { Callout, SubTitle, Title } from "~/components/atoms/typography";
+import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
+import { SubTitle, Title } from "~/components/atoms/typography";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { getAllStudents } from "~/models/student";
 import { FormGroup } from "~/components/organisms/form";
-import { LinkForm } from "~/components/molecules/form";
+import { InputForm, LinkForm } from "~/components/molecules/form";
 import { getPasskeysBySensei } from "~/models/passkey";
 
 dayjs.extend(utc);
@@ -28,12 +29,14 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   }
 
   const senseiData = (await getSenseiById(env, sensei.id))!;
+  const senseiPrivacy = await getSenseiPrivacyByUserId(env, sensei.id);
   return {
     sensei: {
       username: senseiData.username,
       bio: senseiData.bio,
       profileStudentId: senseiData.profileStudentId,
       friendCode: senseiData.friendCode,
+      memberCode: senseiPrivacy?.memberCode ?? null,
     },
     allStudents: (await getAllStudents(env, true)).map((student) => ({
       uid: student.uid,
@@ -49,6 +52,7 @@ type ActionData = {
     username?: string;
     friendCode?: string;
     bio?: string;
+    memberCode?: string;
   };
 }
 
@@ -61,29 +65,48 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 
   const formData = await request.formData();
-  const getStringOrNull = (key: string) => formData.get(key) as string | null;
-  sensei.username = formData.get("username") as string;
-  sensei.bio = getStringOrNull("bio");
-  sensei.profileStudentId = getStringOrNull("profileStudentId");
-  sensei.friendCode = getStringOrNull("friendCode")?.toUpperCase() ?? null;
+  const getOptionalString = (key: string) => {
+    if (!formData.has(key)) return undefined;
+    const value = formData.get(key);
+    if (value === null) return undefined;
+    return (value as string).trim();
+  };
+  const toNullable = (value: string | undefined) => {
+    if (value === undefined) return undefined;
+    return value === "" ? null : value;
+  };
 
-  if (!/^[a-zA-Z0-9_]{4,20}$/.test(sensei.username)) {
+  const username = getOptionalString("username");
+  const bio = toNullable(getOptionalString("bio"));
+  const profileStudentId = toNullable(getOptionalString("profileStudentId"));
+  const friendCodeInput = toNullable(getOptionalString("friendCode"));
+  const memberCode = toNullable(getOptionalString("memberCode"));
+  const friendCode = typeof friendCodeInput === "string" ? friendCodeInput.toUpperCase() : friendCodeInput;
+
+  if (username !== undefined && !/^[a-zA-Z0-9_]{4,20}$/.test(username)) {
     return { error: { username: "4~20글자의 영숫자 및 _ 기호만 사용할 수 있어요." } };
   }
-  if (sensei.bio && sensei.bio.length > 100) {
+  if (typeof bio === "string" && bio.length > 100) {
     return { error: { bio: "100자 이하로 작성해주세요." } };
   }
-  if (sensei.friendCode && !/^[A-Z]{8}$/.test(sensei.friendCode)) {
+  if (typeof friendCode === "string" && !/^[A-Z]{8}$/.test(friendCode)) {
     return { error: { friendCode: "친구 코드는 알파벳 8글자에요." } };
   }
 
-  const result = await updateSensei(env, sensei.id, sensei);
+  const result = await updateSensei(env, sensei.id, { username, bio, profileStudentId, friendCode });
   if (result.error) {
     return { error: { username: "오류가 발생했어요. 잠시 후 다시 시도해주세요." } };
+  }
+  if (memberCode !== undefined) {
+    await upsertSenseiPrivacy(env, sensei.id, memberCode);
   }
 
   const { getSession, commitSession } = sessionStorage(env);
   const session = await getSession(request.headers.get("cookie"));
+  if (username !== undefined) sensei.username = username;
+  if (bio !== undefined) sensei.bio = bio;
+  if (profileStudentId !== undefined) sensei.profileStudentId = profileStudentId;
+  if (friendCode !== undefined) sensei.friendCode = friendCode;
   session.set(authenticator.sessionKey, sensei);
   return data(null, {
     headers: { "Set-Cookie": await commitSession(session) },
@@ -96,23 +119,28 @@ export default function EditProfile() {
     <>
       <Title text="프로필 관리" />
 
-      <Callout emoji="🚚" className="mb-8">
-        <p>
-          이제 학생 명부, 모집 이력, 편성/공략 정보는 내 정보 페이지에서 수정할 수 있어요.<br />
-          <Link to="/my?path=students" className="text-blue-500 underline">
-            내 정보 페이지로 →
-          </Link>
-        </p>
-      </Callout>
-
-      <SubTitle text="계정 정보" />
+      <SubTitle text="프로필 정보" />
       <ProfileEditor
         method="put"
         students={allStudents}
         initialData={sensei}
-        error={useActionData<typeof action>()?.error}
+        error={useActionData<ActionData>()?.error}
         submitOnChange
       />
+
+      <SubTitle
+        text="블루 아카이브 계정 정보"
+        description="게임을 켜지 않아도 필요한 정보를 확인할 수 있어요"
+      />
+      <FormGroup method="put" submitOnChange>
+        <InputForm
+          label="회원 코드" type="text" name="memberCode"
+          description="쿠폰 등록에 사용하는 회원 코드"
+          defaultValue={sensei.memberCode ?? undefined}
+          placeholder="[메뉴] > [계정] > [고객센터]에서 확인"
+          error={useActionData<ActionData>()?.error?.memberCode}
+        />
+      </FormGroup>
 
       <SubTitle text="인증 및 보안" />
       <FormGroup>

@@ -13,7 +13,6 @@ export const senseisTable = sqliteTable("senseis", {
   profileStudentId: text(),
   bio: text(),
   friendCode: text(),
-  memberCode: text(),
   googleId: text(),
   role: text().notNull().$type<SenseiRole>(),
   active: int().notNull().default(0),
@@ -24,7 +23,6 @@ export type Sensei = {
   uid: string;
   username: string;
   friendCode: string | null;
-  memberCode: string | null;
   profileStudentId: string | null;
   bio: string | null;
   active: boolean;
@@ -116,7 +114,6 @@ function toModel(row: typeof senseisTable.$inferSelect): Sensei {
     uid: row.uid,
     username: row.username,
     friendCode: row.friendCode,
-    memberCode: row.memberCode,
     profileStudentId: row.profileStudentId,
     bio: row.bio,
     active: row.active === 1,

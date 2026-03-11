@@ -59,18 +59,7 @@ export async function getAllCoupons(env: Env): Promise<Coupon[]> {
   const rows = await db
     .select()
     .from(couponsTable)
-    .orderBy(sql`CASE WHEN ${couponsTable.expiresAt} IS NULL THEN 1 ELSE 0 END, ${couponsTable.expiresAt} ASC`);
-  return rows.map(toModel);
-}
-
-export async function getActiveCoupons(env: Env): Promise<Coupon[]> {
-  const db = drizzle(env.DB);
-  const now = new Date().toISOString();
-  const rows = await db
-    .select()
-    .from(couponsTable)
-    .where(or(isNull(couponsTable.expiresAt), gt(couponsTable.expiresAt, now)))
-    .orderBy(sql`CASE WHEN ${couponsTable.expiresAt} IS NULL THEN 1 ELSE 0 END, ${couponsTable.expiresAt} ASC`);
+    .orderBy(sql`CASE WHEN ${couponsTable.expiresAt} IS NULL THEN 1 ELSE 0 END, ${couponsTable.expiresAt} DESC, ${couponsTable.createdAt} DESC`);
   return rows.map(toModel);
 }
 

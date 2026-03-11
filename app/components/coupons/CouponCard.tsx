@@ -3,7 +3,7 @@ import { ArrowTopRightOnSquareIcon, CheckCircleIcon, ClockIcon } from "@heroicon
 import { CheckCircleIcon as CheckCircleIconSolid } from "@heroicons/react/24/solid";
 import dayjs from "dayjs";
 import type { Coupon } from "~/models/coupon";
-import CopyButton from "./CopyButton";
+import CopyField from "./CopyField";
 import CouponRewardList from "./CouponRewardList";
 
 type CouponCardProps = {
@@ -81,11 +81,8 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
         </div>
 
         {/* 쿠폰 코드 + 복사 */}
-        <div className="flex items-center gap-2 px-3 py-2 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700">
-          <code className="flex-1 text-sm font-mono text-neutral-700 dark:text-neutral-300 select-all break-all">
-            {coupon.code}
-          </code>
-          <CopyButton text={coupon.code} />
+        <div className="px-3 py-2 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700">
+          <CopyField text={coupon.code} />
         </div>
 
         {/* 보상 */}
@@ -118,7 +115,7 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
           >
             <span className="flex items-center justify-center gap-1.5">
               <CheckCircleIcon className="size-4 shrink-0" strokeWidth={2} />
-              등록 완료 기록하기
+              등록 완료
             </span>
           </button>
         )}

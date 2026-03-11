@@ -27,4 +27,12 @@ CREATE TABLE coupon_registrations (
 CREATE UNIQUE INDEX coupon_registrations_user_coupon ON coupon_registrations (userId, couponId);
 
 -- 회원 코드
-ALTER TABLE senseis ADD COLUMN memberCode TEXT;
+CREATE TABLE sensei_privacies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  userId INTEGER NOT NULL,
+  memberCode TEXT,
+  createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE UNIQUE INDEX sensei_privacies_userId ON sensei_privacies (userId);

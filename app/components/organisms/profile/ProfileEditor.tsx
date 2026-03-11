@@ -46,9 +46,9 @@ export default function ProfileEditor({ method, students, initialData, error, su
       />
       <InputForm
         label="친구 코드" type="text" name="friendCode"
-        description="[소셜] > [친구] > [ID 카드] 에서 확인할 수 있어요"
+        description="8자리 영문자"
         defaultValue={initialData?.friendCode ?? undefined}
-        placeholder="친구 코드 입력"
+        placeholder="[소셜] > [친구] > [ID 카드] 에서 확인"
         error={error?.friendCode}
       />
       <TextareaForm
