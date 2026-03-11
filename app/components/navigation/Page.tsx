@@ -111,12 +111,24 @@ export default function Page({ title, description, belowTitle, screens, panels, 
       {(links && links.length > 0 || panels && panels.length > 0) && (
         <div className="xl:hidden fixed w-fit bottom-4 right-4 z-20 flex gap-x-2">
           <div className="flex px-2 py-1 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-full shadow-lg">
-            {links?.map((link) => (
-              <Link key={link.title} to={link.to} className="w-20 flex flex-col justify-center items-center p-2 text-neutral-700 dark:text-neutral-300 rounded-full transition-colors cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800">
-                <link.Icon className="mb-1 size-5 shrink-0" strokeWidth={2} />
-                <span className="text-xs font-medium whitespace-nowrap">{link.title}</span>
-              </Link>
-            ))}
+            {links?.map((link) => {
+              const className = "w-20 flex flex-col justify-center items-center p-2 text-neutral-700 dark:text-neutral-300 rounded-full transition-colors cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-800";
+              const inner = (
+                <>
+                  <link.Icon className="mb-1 size-5 shrink-0" strokeWidth={2} />
+                  <span className="text-xs font-medium whitespace-nowrap">{link.title}</span>
+                </>
+              );
+              return link.to.startsWith("http") ? (
+                <a key={link.title} href={link.to} target="_blank" rel="noopener noreferrer" className={className}>
+                  {inner}
+                </a>
+              ) : (
+                <Link key={link.title} to={link.to} className={className}>
+                  {inner}
+                </Link>
+              );
+            })}
             {panels?.map((panel, index) => (
               <div
                 key={panel.title}
