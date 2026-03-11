@@ -70,7 +70,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 const wideLayout = ["/utils/relationship"];
-const fullLayout = ["^/raids", "^/futures", "^/utils/pyroxene", "^/students$", "^/@", "^/events"];
+const fullLayout = ["^/raids", "^/futures", "^/utils/pyroxene", "^/students$", "^/@", "^/events", "^/coupon"];
 
 export default function App() {
   const loaderData = useLoaderData<typeof loader>();
@@ -120,6 +120,7 @@ export default function App() {
               setDarkMode={setDarkMode}
               upcomingEvent={navigationBarContents.upcomingEvent}
               hasRecentNews={navigationBarContents.hasRecentNews}
+              hasActiveCoupons={navigationBarContents.hasActiveCoupons}
             />
             <div className="mllg-content-area w-full pt-10 xl:pt-0 overflow-y-scroll">
               <div className={`xl:h-screen mx-auto ${widthClass} px-4 md:px-8 py-6`}>

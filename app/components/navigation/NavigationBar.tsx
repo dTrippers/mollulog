@@ -14,6 +14,8 @@ import {
   BookOpenIcon as BookOpenIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
   Cog6ToothIcon as Cog6ToothIconOutline,
+  GiftIcon as GiftIconOutline,
+  TicketIcon as TicketIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeIconSolid,
@@ -28,6 +30,8 @@ import {
   BookOpenIcon as BookOpenIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
+  GiftIcon as GiftIconSolid,
+  TicketIcon as TicketIconSolid,
 } from "@heroicons/react/24/solid";
 import { Transition } from "@headlessui/react";
 import { Link, useMatches, useSubmit } from "react-router";
@@ -42,9 +46,10 @@ type NavigationBarProps = {
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   upcomingEvent: { uid: string; since: Date; until: Date } | null;
   hasRecentNews: boolean;
+  hasActiveCoupons: boolean;
 };
 
-export default function NavigationBar({ currentUsername, darkMode, setDarkMode, upcomingEvent, hasRecentNews }: NavigationBarProps) {
+export default function NavigationBar({ currentUsername, darkMode, setDarkMode, upcomingEvent, hasRecentNews, hasActiveCoupons }: NavigationBarProps) {
   const matches = useMatches();
   const pathname = matches[matches.length - 1].pathname;
 
@@ -78,6 +83,7 @@ export default function NavigationBar({ currentUsername, darkMode, setDarkMode, 
             onDarkModeToggle={setDarkMode}
             hasRecentNews={hasRecentNews}
             upcomingEvent={upcomingEvent}
+            hasActiveCoupons={hasActiveCoupons}
           />
         </div>
       </div>
@@ -101,6 +107,7 @@ export default function NavigationBar({ currentUsername, darkMode, setDarkMode, 
             onDarkModeToggle={setDarkMode}
             hasRecentNews={hasRecentNews}
             upcomingEvent={upcomingEvent}
+            hasActiveCoupons={hasActiveCoupons}
           />
         </Transition>
       </div>
@@ -173,10 +180,10 @@ function MenuSection({ name, OutlineIcon, SolidIcon, isActive, children }: MenuS
   const showChildren = isOpen || isActive;
 
   return (
-    <div className="my-1">
+    <div className="mt-2 mb-4">
       <button
         type="button"
-        className={sanitizeClassName(`w-full px-2 py-1.5 xl:py-2 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition xl:cursor-default ${isActive ? "font-bold" : ""}`)}
+        className={sanitizeClassName(`w-full px-2 py-1.5 xl:py-2 flex items-center rounded-lg transition xl:cursor-default ${isActive ? "font-bold" : ""}`)}
         onClick={() => setIsOpen((prev) => !prev)}
       >
         {isActive ? <SolidIcon className="inline-block mr-3 size-6" /> : <OutlineIcon className="inline-block mr-3 size-6" />}
@@ -198,9 +205,10 @@ interface MenuContentProps {
   onDarkModeToggle: (fn: (prev: boolean) => boolean) => void;
   hasRecentNews: boolean;
   upcomingEvent: { uid: string; since: Date; until: Date } | null;
+  hasActiveCoupons: boolean;
 }
 
-function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onDarkModeToggle, hasRecentNews, upcomingEvent }: MenuContentProps) {
+function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onDarkModeToggle, hasRecentNews, upcomingEvent, hasActiveCoupons }: MenuContentProps) {
   const submit = useSubmit();
 
   const now = dayjs();
@@ -215,6 +223,8 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
   const isUtilActive =
     pathname.startsWith("/utils") ||
     (upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`));
+
+  const isExternalActive = pathname.startsWith("/coupons");
 
   return (
     <>
@@ -319,7 +329,22 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
         />
       </MenuSection>
 
-
+      <MenuSection
+        name="게임 외 정보"
+        OutlineIcon={GiftIconOutline}
+        SolidIcon={GiftIconSolid}
+        isActive={isExternalActive}
+      >
+        <SubMenuItem
+          to="/coupons"
+          name="쿠폰"
+          OutlineIcon={TicketIconOutline}
+          SolidIcon={TicketIconSolid}
+          isActive={pathname.startsWith("/coupons")}
+          onItemClick={onMenuClose}
+          showRedDot={hasActiveCoupons}
+        />
+      </MenuSection>
 
       {currentUsername ? (
         <MenuItem
@@ -332,7 +357,7 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
         />
       ) :(
         <div
-          className="w-full my-4 py-3 bg-neutral-800 dark:bg-neutral-100 text-white dark:text-neutral-900 text-center rounded-full hover:opacity-50 transition-opacity cursor-pointer"
+          className="w-full my-4 py-3 bg-neutral-800 dark:bg-neutral-100 text-sm text-white dark:text-neutral-900 text-center rounded-full hover:opacity-50 transition-opacity cursor-pointer"
           onClick={() => {
             onShowSignIn();
             onMenuClose();

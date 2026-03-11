@@ -10,6 +10,7 @@ import { getTimelineContents, getUpcomingEvent, getTimelineContentsByContentType
 import type { TimelineContent, TimelineContentType } from "./timeline-content";
 import { getRecruitmentGroup, getRecruitmentGroups } from "./event-content";
 import { getRaidDetail } from "./raid";
+import { hasActiveCoupons } from "./coupon";
 export { contentComments, getUserComments, getContentComments, getContentsComments, createComment, createSubcomment, updateComment, deleteComment, getCommentIdByUid, pinComment, unpinComment, getPinnedComment, getNestedContentComments, nestComments } from "./content-comment";
 export type { NestedComment } from "./content-comment";
 
@@ -242,10 +243,11 @@ type NavigationBarContents = {
     until: Date;
   } | null;
   hasRecentNews: boolean;
+  hasActiveCoupons: boolean;
 };
 
 export async function getNavigationBarContents(env: Env, forceRefresh = false): Promise<NavigationBarContents> {
-  return fetchCached(env, "navigation-bar-contents::v2", async () => {
+  return fetchCached(env, "navigation-bar-contents::v3", async () => {
     const content = await getUpcomingEvent(env);
     const upcomingEvent = content
       ? { uid: content.uid, since: content.startAt, until: content.endAt! }
@@ -254,9 +256,11 @@ export async function getNavigationBarContents(env: Env, forceRefresh = false): 
     const latestNewsTime = await getLatestPostTime(env, "news");
     const threeDaysAgo = new Date();
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    const hasActiveCouponsValue = await hasActiveCoupons(env);
     return {
       upcomingEvent,
       hasRecentNews: latestNewsTime !== null && latestNewsTime > threeDaysAgo,
+      hasActiveCoupons: hasActiveCouponsValue,
     };
   }, 60 * 60 * 24, forceRefresh);
 }
