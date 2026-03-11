@@ -46,9 +46,10 @@ type NavigationBarProps = {
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   upcomingEvent: { uid: string; since: Date; until: Date } | null;
   hasRecentNews: boolean;
+  hasActiveCoupons: boolean;
 };
 
-export default function NavigationBar({ currentUsername, darkMode, setDarkMode, upcomingEvent, hasRecentNews }: NavigationBarProps) {
+export default function NavigationBar({ currentUsername, darkMode, setDarkMode, upcomingEvent, hasRecentNews, hasActiveCoupons }: NavigationBarProps) {
   const matches = useMatches();
   const pathname = matches[matches.length - 1].pathname;
 
@@ -82,6 +83,7 @@ export default function NavigationBar({ currentUsername, darkMode, setDarkMode, 
             onDarkModeToggle={setDarkMode}
             hasRecentNews={hasRecentNews}
             upcomingEvent={upcomingEvent}
+            hasActiveCoupons={hasActiveCoupons}
           />
         </div>
       </div>
@@ -105,6 +107,7 @@ export default function NavigationBar({ currentUsername, darkMode, setDarkMode, 
             onDarkModeToggle={setDarkMode}
             hasRecentNews={hasRecentNews}
             upcomingEvent={upcomingEvent}
+            hasActiveCoupons={hasActiveCoupons}
           />
         </Transition>
       </div>
@@ -202,9 +205,10 @@ interface MenuContentProps {
   onDarkModeToggle: (fn: (prev: boolean) => boolean) => void;
   hasRecentNews: boolean;
   upcomingEvent: { uid: string; since: Date; until: Date } | null;
+  hasActiveCoupons: boolean;
 }
 
-function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onDarkModeToggle, hasRecentNews, upcomingEvent }: MenuContentProps) {
+function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onDarkModeToggle, hasRecentNews, upcomingEvent, hasActiveCoupons }: MenuContentProps) {
   const submit = useSubmit();
 
   const now = dayjs();
@@ -338,7 +342,7 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
           SolidIcon={TicketIconSolid}
           isActive={pathname.startsWith("/coupons")}
           onItemClick={onMenuClose}
-          showRedDot  // TODO: implement
+          showRedDot={hasActiveCoupons}
         />
       </MenuSection>
 

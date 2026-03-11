@@ -1,4 +1,4 @@
-import { and, eq, isNull, or, gt, sql } from "drizzle-orm";
+import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
@@ -63,13 +63,24 @@ export async function getAllCoupons(env: Env): Promise<Coupon[]> {
   return rows.map(toModel);
 }
 
-export async function getCouponRegistrations(env: Env, userId: number): Promise<Set<number>> {
+export async function hasActiveCoupons(env: Env): Promise<boolean> {
+  const db = drizzle(env.DB);
+  const nowIso = new Date().toISOString();
+  const rows = await db
+    .select({ id: couponsTable.id })
+    .from(couponsTable)
+    .where(or(isNull(couponsTable.expiresAt), gt(couponsTable.expiresAt, nowIso)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function getCouponRegistrations(env: Env, userId: number): Promise<number[]> {
   const db = drizzle(env.DB);
   const rows = await db
     .select({ couponId: couponRegistrationsTable.couponId })
     .from(couponRegistrationsTable)
     .where(eq(couponRegistrationsTable.userId, userId));
-  return new Set(rows.map((r) => r.couponId));
+  return rows.map((r) => r.couponId);
 }
 
 export async function registerCoupon(env: Env, userId: number, couponId: number): Promise<void> {

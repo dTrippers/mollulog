@@ -38,11 +38,16 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
 
   const formData = await request.formData();
   const couponId = Number(formData.get("couponId"));
+  if (!Number.isFinite(couponId) || couponId <= 0) {
+    return data({ error: "Invalid couponId" }, { status: 400 });
+  }
 
   if (request.method === "POST") {
     await registerCoupon(env, sensei.id, couponId);
   } else if (request.method === "DELETE") {
     await unregisterCoupon(env, sensei.id, couponId);
+  } else {
+    return data({ error: "Method not allowed" }, { status: 405 });
   }
 
   return data({ success: true });
