@@ -18,14 +18,6 @@
     "head_sampling_rate": 1
   },
 
-  "triggers": {
-    "crons": [
-      "0 * * * *", // every hour
-      "*/10 * * * *", // every 10 minutes
-      "* * * * *"  // every minute
-    ]
-  },
-
   "kv_namespaces": [
     { "binding": "KV_USERDATA", "id": "local_kv_userdata" },
     { "binding": "KV_SESSION", "id": "local_kv_session" }
@@ -34,7 +26,7 @@
     {
       "binding": "DB",
       "database_name": "local_mollulog_db",
-      "database_id": "local_mollulog_db",
+      "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
       "migrations_dir": "db/migrations"
     }
   ],
@@ -42,6 +34,7 @@
   // Secrets configuration
   // - SESSION_SECRET
   // - GOOGLE_CLIENT_SECRET
+  // - BETTER_STACK_SOURCE_TOKEN
   "env": {
     "staging": {
       "routes": [
@@ -89,7 +82,15 @@
           "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
           "migrations_dir": "db/migrations"
         }
-      ]
+      ],
+      "triggers": {
+        "crons": [
+          "0 * * * *", // every hour
+          "*/10 * * * *", // every 10 minutes
+          "* * * * *" // every minute
+        ]
+      },
+      "logpush": true
     }
   }
 }
