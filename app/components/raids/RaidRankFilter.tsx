@@ -4,6 +4,7 @@ import RaidRankFilterStudentSearch from "./RaidRankFilterStudentSearch";
 import { FilterButtons } from "~/components/navigation";
 import type { Difficulty } from "~/models/raid";
 import { difficultyLocale } from "~/locales/ko";
+import ClickableSurface from "../primitives/ClickableSurface";
 
 export type RaidRankFilterState = {
   filterNotOwned: boolean;
@@ -42,6 +43,12 @@ export function mergeFilteredStudents(prev: { uid: string; tiers: number[] }[], 
 
 export default function RaidRankFilter({ state, setState, signedIn, filterableStudents, filterableDifficulties }: RaidRankFilterProps) {
   const { showSignIn } = useSignIn();
+  const updateStudents = (
+    key: "includeStudents" | "excludeStudents",
+    nextStudents: RaidRankFilterState["includeStudents"],
+  ) => {
+    setState((prev) => ({ ...prev, [key]: nextStudents }));
+  };
 
   return (
     <>
@@ -64,12 +71,10 @@ export default function RaidRankFilter({ state, setState, signedIn, filterableSt
           searchableStudents={filterableStudents}
           selectedStudents={state.includeStudents}
           onSelect={({ uid, tiers }) => {
-            const newIncludeStudents = mergeFilteredStudents(state.includeStudents, { uid, tiers });
-            setState((prev) => ({ ...prev, includeStudents: newIncludeStudents }));
+            updateStudents("includeStudents", mergeFilteredStudents(state.includeStudents, { uid, tiers }));
           }}
           onRemove={(uid) => {
-            const newIncludeStudents = state.includeStudents.filter((student) => student.uid !== uid);
-            setState((prev) => ({ ...prev, includeStudents: newIncludeStudents }));
+            updateStudents("includeStudents", state.includeStudents.filter((student) => student.uid !== uid));
           }}
         />
       </div>
@@ -77,23 +82,21 @@ export default function RaidRankFilter({ state, setState, signedIn, filterableSt
       <div>
         <p className="font-bold">제외할 학생</p>
         <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">선택한 학생이 한 명이라도 포함되면 제외</p>
-        <div onClick={() => { !signedIn && showSignIn() }}>
+        <ClickableSurface onClick={!signedIn ? showSignIn : undefined}>
           <Toggle
             label="내가 모집하지 않은 학생"
             disabled={!signedIn}
             onChange={(activated) => setState((prev) => ({ ...prev, filterNotOwned: activated }))}
           />
-        </div>
+        </ClickableSurface>
         <RaidRankFilterStudentSearch
           searchableStudents={filterableStudents}
           selectedStudents={state.excludeStudents}
           onSelect={({ uid, tiers }) => {
-            const newExcludeStudents = mergeFilteredStudents(state.excludeStudents, { uid, tiers });
-            setState((prev) => ({ ...prev, excludeStudents: newExcludeStudents }));
+            updateStudents("excludeStudents", mergeFilteredStudents(state.excludeStudents, { uid, tiers }));
           }}
           onRemove={(uid) => {
-            const newExcludeStudents = state.excludeStudents.filter((student) => student.uid !== uid);
-            setState((prev) => ({ ...prev, excludeStudents: newExcludeStudents }));
+            updateStudents("excludeStudents", state.excludeStudents.filter((student) => student.uid !== uid));
           }}
         />
       </div>

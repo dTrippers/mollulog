@@ -1,7 +1,7 @@
 import { Transition } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { OptionBadge } from "~/components/atoms/student";
 import { FilterButtons } from "~/components/navigation";
@@ -35,19 +35,24 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
   const [raidType, setRaidType] = useState<RaidType>(currentRaid?.type ?? "total_assault");
 
   const selectableRaids = useMemo(() => {
-    return raids.sort((a, b) => dayjs(b.since).diff(dayjs(a.since))).filter((raid) => raid.type === raidType && raid.rankVisible);
+    return [...raids]
+      .sort((a, b) => dayjs(b.since).diff(dayjs(a.since)))
+      .filter((raid) => raid.type === raidType && raid.rankVisible);
   }, [raids, raidType]);
 
   return (
     <div className="relative">
-      <div
-        className="border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-900 rounded-lg shadow-lg"
-        onClick={() => setIsOpen(!isOpen)}
+      <button
+        type="button"
+        className="rounded-lg border border-neutral-200 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
       >
         {currentRaid && (
           <RaidSelectorItem raid={currentRaid} />
         )}
-      </div>
+      </button>
 
       <Transition
         show={isOpen}
@@ -66,9 +71,17 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
               { text: "총력전", active: raidType === "total_assault", onToggle: () => setRaidType("total_assault") },
               { text: "대결전", active: raidType === "elimination", onToggle: () => setRaidType("elimination") },
             ]}
-            exclusive atLeastOne
+            exclusive
+            atLeastOne
           />
-          <XMarkIcon className="size-6 cursor-pointer" strokeWidth={2} onClick={() => setIsOpen(false)} />
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="rounded-md p-1 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+            aria-label="총력전 선택 닫기"
+          >
+            <XMarkIcon className="size-6" strokeWidth={2} />
+          </button>
         </div>
         <div className="max-h-64 xl:max-h-96 overflow-y-auto no-scrollbar mt-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg">
           {selectableRaids.map((raid) => (
@@ -84,7 +97,7 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
 
 function RaidSelectorItem({ raid }: { raid: SelectableRaid }) {
   return (
-    <div className="relative cursor-pointer bg-white dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800 first:rounded-t-lg last:rounded-b-lg group">
+    <div className="group relative bg-white hover:bg-neutral-100 first:rounded-t-lg last:rounded-b-lg dark:bg-neutral-900 dark:hover:bg-neutral-800">
       <img src={bossImageUrl(raid.boss)} alt="보스 이미지" className="absolute top-0 right-0 h-full object-cover" />
       <div className={sanitizeClassName(`
         relative p-3 xl:p-4 pr-12 w-full bg-white/90 dark:bg-neutral-900/80

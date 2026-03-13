@@ -103,13 +103,12 @@ export default function StudentGradingComments({ student, gradings, currentUser 
            {currentUserGrading ?
              <CommentCard grading={currentUserGrading} isCurrentUser={true} /> :
              currentUser && student ?
-                <Link to={`/students/${student.uid}/grade`} className="flex-shrink-0 w-32 text-neutral-500">
-                  <div className="bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition rounded-lg cursor-pointer p-3 h-full">
-                    <div className="flex flex-col items-center justify-center h-full text-center">
-                      <PlusCircleIcon className="size-6 mb-2" />
-                      <p className="text-sm">내 평가 작성하기</p>
-                    </div>
-                  </div>
+                <Link
+                  to={`/students/${student.uid}/grade`}
+                  className="flex h-full w-32 flex-shrink-0 flex-col items-center justify-center rounded-lg bg-neutral-100 p-3 text-center text-neutral-500 transition hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+                >
+                  <PlusCircleIcon className="mb-2 size-6" />
+                  <p className="text-sm">내 평가 작성하기</p>
                 </Link>
              : null
            }

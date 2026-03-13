@@ -1,8 +1,9 @@
 import { Link } from "react-router";
+import { sanitizeClassName } from "~/prophandlers";
 
 export type PageScreenSelectorProps = {
   screens: PageScreenSelectorItemProps[];
-}
+};
 
 export type PageScreenSelectorItemProps = {
   text: string;
@@ -13,18 +14,18 @@ export type PageScreenSelectorItemProps = {
 
   onClick?: () => void;
   link?: string;
-}
+};
 
 export default function PageScreenSelector({ screens }: PageScreenSelectorProps) {
   return (
     <div className="hidden xl:block my-4">
-      {screens.map((screen, index) => <PageScreenSelectorItem key={index} {...screen} />)}
+      {screens.map((screen) => <PageScreenSelectorItem key={screen.link ?? screen.text} {...screen} />)}
     </div>
   );
 }
 
 function PageScreenSelectorItem({ text, description, Icon, active, disabled, onClick, link }: PageScreenSelectorItemProps) {
-  const classNames = ["flex items-center justify-between gap-x-3 my-2 w-full py-3 px-4 rounded-lg transition-all duration-200 border"];
+  const classNames = ["flex items-center justify-between gap-x-3 my-2 w-full py-3 px-4 rounded-lg transition-all duration-200 border text-left"];
   if (disabled) {
     classNames.push("bg-neutral-100 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-700 cursor-not-allowed opacity-60");
   } else if (active) {
@@ -33,8 +34,8 @@ function PageScreenSelectorItem({ text, description, Icon, active, disabled, onC
     classNames.push("bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-700 cursor-pointer");
   }
 
-  const Inner = (
-    <div className={classNames.join(" ")} onClick={disabled ? undefined : onClick}>
+  const inner = (
+    <>
       <Icon className={`size-5 shrink-0 ${active ? "text-blue-500 dark:text-blue-400" : "text-neutral-500 dark:text-neutral-400"}`} strokeWidth={2} />
       <div className="grow">
         <p className={`font-semibold transition-colors ${disabled ? "text-neutral-400 dark:text-neutral-500" : active ? "text-blue-700 dark:text-blue-300" : "text-neutral-700 dark:text-neutral-300"}`}>
@@ -46,8 +47,25 @@ function PageScreenSelectorItem({ text, description, Icon, active, disabled, onC
           </p>
         )}
       </div>
-    </div>
+    </>
   );
 
-  return (!disabled && link) ? <Link to={link}>{Inner}</Link> : Inner;
+  if (!disabled && link) {
+    return (
+      <Link to={link} className={classNames.join(" ")}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={sanitizeClassName(classNames.join(" "))}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled || !onClick}
+    >
+      {inner}
+    </button>
+  );
 }

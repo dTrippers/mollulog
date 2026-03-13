@@ -1,7 +1,7 @@
 import ResourceCards, { type ResourceCardsProps } from "./ResourceCards";
 import StudentGradingComments from "./StudentGradingComments";
 import StudentInfo from "./StudentInfo";
-import StudentSearch from "./StudentSearch";
+import StudentSearchInput from "./StudentSearchInput";
 import TierCounts from "./TierCounts";
 import TierSelector from "./TierSelector";
 
@@ -9,7 +9,7 @@ export {
   ResourceCards,
   StudentGradingComments,
   StudentInfo,
-  StudentSearch,
+  StudentSearchInput,
   TierCounts,
   TierSelector,
 };

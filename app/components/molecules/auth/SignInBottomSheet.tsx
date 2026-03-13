@@ -20,7 +20,7 @@ export default function SignInBottomSheet() {
     if (navigation.state === "idle") {
       hideSignIn();
     }
-  }, [navigation.state]);
+  }, [hideSignIn, navigation.state]);
 
   if (!isSignInVisible) {
     return null;
@@ -38,7 +38,7 @@ export default function SignInBottomSheet() {
     }
 
     const authenticationOptions = await (await fetch("/auth/passkey/signin")).json<PublicKeyCredentialRequestOptionsJSON>();
-    let authenticationResponse;
+    let authenticationResponse: Awaited<ReturnType<typeof startAuthentication>>;
     try {
       authenticationResponse = await startAuthentication({ optionsJSON: authenticationOptions });
     } catch (e) {
@@ -53,9 +53,11 @@ export default function SignInBottomSheet() {
 
   return (
     <>
-      <div
+      <button
+        type="button"
         className="w-screen h-full min-h-screen top-0 left-0 fixed bg-black opacity-50 z-100"
         onClick={hideSignIn}
+        aria-label="로그인 창 닫기"
       />
       <div className="fixed bottom-0 w-full md:max-w-3xl mx-auto left-1/2 -translate-x-1/2 p-4 md:p-8 bg-white dark:bg-neutral-800 z-200 rounded-t-2xl">
         <p className="mt-4 mb-4 md:mb-8 text-2xl md:text-4xl font-black">로그인</p>

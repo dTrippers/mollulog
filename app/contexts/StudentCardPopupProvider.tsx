@@ -1,5 +1,4 @@
-import { createContext, useContext, useState, type ReactNode, useEffect } from "react";
-import { useLocation } from "react-router";
+import { createContext, useContext, useState, type ReactNode } from "react";
 
 type StudentCardPopupContextType = {
   activePopupId: string | null;
@@ -17,11 +16,6 @@ export function useStudentCardPopup() {
 
 export function StudentCardPopupProvider({ children }: { children: ReactNode }) {
   const [activePopupId, setActivePopupId] = useState<string | null>(null);
-  const location = useLocation();
-
-  useEffect(() => {
-    setActivePopupId(null);
-  }, [location]);
 
   return (
     <StudentCardPopupContext.Provider value={{ activePopupId, setActivePopupId }}>

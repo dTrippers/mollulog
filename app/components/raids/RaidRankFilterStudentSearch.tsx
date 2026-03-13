@@ -63,22 +63,24 @@ export default function RaidRankFilterStudentSearch({ selectedStudents, searchab
                 <StudentCard uid={uid} />
               </div>
               <div className="grow flex flex-wrap gap-x-1 gap-y-2">
-                <div
-                  className={`
+                <button
+                  type="button"
+                  className={sanitizeClassName(`
                     px-3 py-0.5 rounded-full border transition-all duration-200 justify-center cursor-pointer shadow-sm
                     ${tiers.length === 0
                       ? "bg-blue-500 border-blue-500 text-white"
                       : "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:border-blue-300 dark:hover:border-blue-600"
                     }
-                  `}
+                  `)}
                   onClick={() => onSelect({ uid, tiers: [] })}
                 >
                   <span className="text-sm font-semibold">전체</span>
-                </div>
+                </button>
                 {availableTiers.map((tier) => {
                   const isSelected = tiers.includes(tier);
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={`tier-${tier}`}
                       onClick={() => onSelect({ uid, tiers: isSelected ? tiers.filter((t) => t !== tier) : [...tiers, tier] })}
                       className={sanitizeClassName(`
@@ -96,11 +98,16 @@ export default function RaidRankFilterStudentSearch({ selectedStudents, searchab
                       <span className="text-sm font-semibold">
                         {tier > 5 ? tier - 5 : tier}
                       </span>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
-              <button className="-mr-2 p-1 rounded-lg text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 shrink-0 transition cursor-pointer" onClick={() => onRemove(uid)}>
+              <button
+                type="button"
+                className="-mr-2 shrink-0 rounded-lg p-1 text-neutral-700 transition hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700"
+                onClick={() => onRemove(uid)}
+                aria-label="선택한 학생 제거"
+              >
                 <XMarkIcon className="size-4" strokeWidth={2} />
               </button>
             </div>

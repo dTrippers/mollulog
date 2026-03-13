@@ -1,4 +1,5 @@
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
+import { ClickableSurface } from "~/components/primitives";
 
 type EventInfoCardProps = {
   Icon: React.ElementType;
@@ -23,7 +24,7 @@ export default function EventInfoCard({ Icon, title, description, color, onClick
   }
 
   return (
-    <div
+    <ClickableSurface
       onClick={onClick}
       className={`my-4 flex items-center gap-3 p-3 md:p-4 rounded-lg border ${bgColorClass} ${onClick ? "cursor-pointer hover:opacity-50 transition-opacity" : ""}`}
     >
@@ -37,6 +38,6 @@ export default function EventInfoCard({ Icon, title, description, color, onClick
       {showArrow && (
         <ArrowRightIcon className="shrink-0 size-4 text-neutral-600 dark:text-neutral-300" />
       )}
-    </div>
+    </ClickableSurface>
   );
 }

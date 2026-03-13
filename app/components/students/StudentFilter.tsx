@@ -1,5 +1,5 @@
 import { ArrowsRightLeftIcon, ArrowsUpDownIcon, BarsArrowDownIcon, FireIcon, MagnifyingGlassIcon, ShieldCheckIcon, UserGroupIcon } from "@heroicons/react/24/outline";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import hangul from "hangul-js";
 import type { Position, Role, TacticRole } from "~/models/content.d";
 import { Attack, Defense } from "~/graphql/graphql";
@@ -28,6 +28,48 @@ type StudentFilterProps = {
   useSearch?: boolean;
 }
 
+const attackFilterOptions = [
+  { text: "폭발", color: "red" as const, value: Attack.Explosive },
+  { text: "관통", color: "yellow" as const, value: Attack.Piercing },
+  { text: "신비", color: "blue" as const, value: Attack.Mystic },
+  { text: "진동", color: "purple" as const, value: Attack.Sonic },
+  { text: "분해", color: "green" as const, value: Attack.Chemical },
+];
+
+const defenseFilterOptions = [
+  { text: "경장갑", color: "red" as const, value: Defense.Light },
+  { text: "중장갑", color: "yellow" as const, value: Defense.Heavy },
+  { text: "특수장갑", color: "blue" as const, value: Defense.Special },
+  { text: "탄력장갑", color: "purple" as const, value: Defense.Elastic },
+  { text: "복합장갑", color: "green" as const, value: Defense.Composite },
+];
+
+const roleFilterOptions = [
+  { text: "스트라이커", color: "red" as const, value: "striker" as const },
+  { text: "스페셜", color: "blue" as const, value: "special" as const },
+];
+
+const positionFilterOptions = [
+  { text: "FRONT", value: "front" as const },
+  { text: "MIDDLE", value: "middle" as const },
+  { text: "BACK", value: "back" as const },
+];
+
+const tacticRoleFilterOptions = [
+  { text: "딜러", value: "attacker" as const },
+  { text: "탱커", value: "tank" as const },
+  { text: "힐러", value: "healer" as const },
+  { text: "서포터", value: "support" as const },
+  { text: "T.S.", value: "tactical_support" as const },
+];
+
+const sortFilterOptions: Record<SortBy, string> = {
+  recent: "최신순",
+  old: "과거순",
+  name: "이름순",
+  tier: "★ 등급순",
+};
+
 export default function StudentFilter({ students, onFilterChange, useFilter, sortBy, useSearch }: StudentFilterProps) {
   const [state, setState] = useState<StudentFilterState>({
     attackTypes: [],
@@ -54,24 +96,15 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
   }, [students, state, onFilterChange]);
 
   const toggleAttack = (attackType: Attack, activated: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      attackTypes: activated ? [...prev.attackTypes, attackType] : prev.attackTypes.filter((type) => type !== attackType),
-    }));
+    updateFilterState("attackTypes", attackType, activated, setState);
   };
 
   const toggleDefense = (defenseType: Defense, activated: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      defenseTypes: activated ? [...prev.defenseTypes, defenseType] : prev.defenseTypes.filter((type) => type !== defenseType),
-    }));
+    updateFilterState("defenseTypes", defenseType, activated, setState);
   };
 
   const toggleRole = (role: Role, activated: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      roles: activated ? [...prev.roles, role] : prev.roles.filter((r) => r !== role),
-    }));
+    updateFilterState("roles", role, activated, setState);
   };
 
   const toggleSort = (sort: SortBy) => {
@@ -79,17 +112,11 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
   };
 
   const togglePosition = (position: Position, activated: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      positions: activated ? [...prev.positions, position] : prev.positions.filter((p) => p !== position),
-    }));
+    updateFilterState("positions", position, activated, setState);
   };
 
   const toggleTacticRole = (tacticRole: TacticRole, activated: boolean) => {
-    setState((prev) => ({
-      ...prev,
-      tacticRoles: activated ? [...prev.tacticRoles, tacticRole] : prev.tacticRoles.filter((r) => r !== tacticRole),
-    }));
+    updateFilterState("tacticRoles", tacticRole, activated, setState);
   };
 
   return (
@@ -98,60 +125,61 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
         <>
           <FilterButtons
             Icon={FireIcon}
-            buttonProps={[
-              { text: "폭발", color: "red", active: state.attackTypes.includes(Attack.Explosive), onToggle: (activated) => toggleAttack(Attack.Explosive, activated) },
-              { text: "관통", color: "yellow", active: state.attackTypes.includes(Attack.Piercing), onToggle: (activated) => toggleAttack(Attack.Piercing, activated) },
-              { text: "신비", color: "blue", active: state.attackTypes.includes(Attack.Mystic), onToggle: (activated) => toggleAttack(Attack.Mystic, activated) },
-              { text: "진동", color: "purple", active: state.attackTypes.includes(Attack.Sonic), onToggle: (activated) => toggleAttack(Attack.Sonic, activated) },
-              { text: "분해", color: "green", active: state.attackTypes.includes(Attack.Chemical), onToggle: (activated) => toggleAttack(Attack.Chemical, activated) },
-            ]}
+            buttonProps={attackFilterOptions.map(({ text, color, value }) => ({
+              text,
+              color,
+              active: state.attackTypes.includes(value),
+              onToggle: (activated) => toggleAttack(value, activated),
+            }))}
           />
           <FilterButtons
             Icon={ShieldCheckIcon}
-            buttonProps={[
-              { text: "경장갑", color: "red", active: state.defenseTypes.includes(Defense.Light), onToggle: (activated) => toggleDefense(Defense.Light, activated) },
-              { text: "중장갑", color: "yellow", active: state.defenseTypes.includes(Defense.Heavy), onToggle: (activated) => toggleDefense(Defense.Heavy, activated) },
-              { text: "특수장갑", color: "blue", active: state.defenseTypes.includes(Defense.Special), onToggle: (activated) => toggleDefense(Defense.Special, activated) },
-              { text: "탄력장갑", color: "purple", active: state.defenseTypes.includes(Defense.Elastic), onToggle: (activated) => toggleDefense(Defense.Elastic, activated) },
-              { text: "복합장갑", color: "green", active: state.defenseTypes.includes(Defense.Composite), onToggle: (activated) => toggleDefense(Defense.Composite, activated) },
-            ]}
+            buttonProps={defenseFilterOptions.map(({ text, color, value }) => ({
+              text,
+              color,
+              active: state.defenseTypes.includes(value),
+              onToggle: (activated) => toggleDefense(value, activated),
+            }))}
           />
           <FilterButtons
             Icon={ArrowsUpDownIcon}
-            buttonProps={[
-              { text: "스트라이커", color: "red", active: state.roles.includes("striker"), onToggle: (activated) => toggleRole("striker", activated) },
-              { text: "스페셜", color: "blue", active: state.roles.includes("special"), onToggle: (activated) => toggleRole("special", activated) },
-            ]}
+            buttonProps={roleFilterOptions.map(({ text, color, value }) => ({
+              text,
+              color,
+              active: state.roles.includes(value),
+              onToggle: (activated) => toggleRole(value, activated),
+            }))}
           />
           <FilterButtons
             Icon={ArrowsRightLeftIcon}
-            buttonProps={[
-              { text: "FRONT", active: state.positions.includes("front"), onToggle: (activated) => togglePosition("front", activated) },
-              { text: "MIDDLE", active: state.positions.includes("middle"), onToggle: (activated) => togglePosition("middle", activated) },
-              { text: "BACK", active: state.positions.includes("back"), onToggle: (activated) => togglePosition("back", activated) },
-            ]}
+            buttonProps={positionFilterOptions.map(({ text, value }) => ({
+              text,
+              active: state.positions.includes(value),
+              onToggle: (activated) => togglePosition(value, activated),
+            }))}
           />
           <FilterButtons
             Icon={UserGroupIcon}
-            buttonProps={[
-              { text: "딜러", active: state.tacticRoles.includes("attacker"), onToggle: (activated) => toggleTacticRole("attacker", activated) },
-              { text: "탱커", active: state.tacticRoles.includes("tank"), onToggle: (activated) => toggleTacticRole("tank", activated) },
-              { text: "힐러", active: state.tacticRoles.includes("healer"), onToggle: (activated) => toggleTacticRole("healer", activated) },
-              { text: "서포터", active: state.tacticRoles.includes("support"), onToggle: (activated) => toggleTacticRole("support", activated) },
-              { text: "T.S.", active: state.tacticRoles.includes("tactical_support"), onToggle: (activated) => toggleTacticRole("tactical_support", activated) },
-            ]}
+            buttonProps={tacticRoleFilterOptions.map(({ text, value }) => ({
+              text,
+              active: state.tacticRoles.includes(value),
+              onToggle: (activated) => toggleTacticRole(value, activated),
+            }))}
           />
         </>
       )}
       {sortBy && sortBy.length > 0 && (
         <FilterButtons
           Icon={BarsArrowDownIcon}
-          buttonProps={[
-            sortBy.includes("recent") ? { text: "최신순", active: state.sort === "recent", onToggle: (activated: boolean) => activated ? toggleSort("recent") : undefined } : null,
-            sortBy.includes("old") ? { text: "과거순", active: state.sort === "old", onToggle: (activated: boolean) => activated ? toggleSort("old") : undefined } : null,
-            sortBy.includes("name") ? { text: "이름순", active: state.sort === "name", onToggle: (activated: boolean) => activated ? toggleSort("name") : undefined } : null,
-            sortBy.includes("tier") ? { text: "★ 등급순", active: state.sort === "tier", onToggle: (activated: boolean) => activated ? toggleSort("tier") : undefined } : null,
-          ].filter((button) => button !== null)}
+          buttonProps={sortBy.map((sort) => ({
+            text: sortFilterOptions[sort],
+            active: state.sort === sort,
+            onToggle: (activated: boolean) => {
+              if (activated) {
+                toggleSort(sort);
+              }
+            },
+          }))}
           exclusive
           atLeastOne
         />
@@ -183,6 +211,20 @@ type FilterableStudent = {
   order: number;
 };
 
+function updateFilterState<K extends keyof Pick<StudentFilterState, "attackTypes" | "defenseTypes" | "roles" | "tacticRoles" | "positions">>(
+  key: K,
+  value: StudentFilterState[K][number],
+  activated: boolean,
+  setState: React.Dispatch<React.SetStateAction<StudentFilterState>>,
+) {
+  setState((prev) => ({
+    ...prev,
+    [key]: activated
+      ? [...prev[key], value]
+      : prev[key].filter((item) => item !== value),
+  }));
+}
+
 export function applyStudentFilter<T extends FilterableStudent>(students: T[], state: StudentFilterState): T[] {
   const filtered = students.filter((student) => {
     if (state.attackTypes.length > 0 && !state.attackTypes.includes(student.attackType)) {
@@ -209,11 +251,14 @@ export function applyStudentFilter<T extends FilterableStudent>(students: T[], s
 
   if (state.sort === "recent") {
     return filtered.sort((a, b) => b.order - a.order);
-  } else if (state.sort === "old") {
+  }
+  if (state.sort === "old") {
     return filtered.sort((a, b) => a.order - b.order);
-  } else if (state.sort === "name") {
+  }
+  if (state.sort === "name") {
     return filtered.sort((a, b) => a.name.localeCompare(b.name));
-  } else if (state.sort === "tier") {
+  }
+  if (state.sort === "tier") {
     return filtered.sort((a, b) => {
       const tierA = a.tier ?? a.initialTier ?? 0;
       const tierB = b.tier ?? b.initialTier ?? 0;

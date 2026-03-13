@@ -1,7 +1,9 @@
+import { Field } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
 
 type InputProps = {
   className?: string;
+  containerClassName?: string;
   type?: "text" | "number";
   name?: string;
   label?: string;
@@ -15,13 +17,18 @@ type InputProps = {
 };
 
 export default function Input({
-  className, type, name, label, description, placeholder, required, defaultValue, value, error, onChange,
+  className, containerClassName, type, name, label, description, placeholder, required, defaultValue, value, error, onChange,
 }: InputProps) {
   return (
-    <div className="mt-2 mb-8 last:mb-2">
-      {label && <p className="font-bold my-2">{label}</p>}
-      {description && <p className="my-2 text-sm text-neutral-500">{description}</p>}
+    <Field
+      label={label}
+      description={description}
+      error={error}
+      htmlFor={name}
+      containerClassName={containerClassName ?? "mt-2 mb-8 last:mb-2"}
+    >
       <input
+        id={name}
         type={type ?? "text"}
         name={name}
         placeholder={placeholder}
@@ -36,7 +43,6 @@ export default function Input({
         defaultValue={defaultValue}
         onChange={(e) => onChange?.(e.target.value)}
       />
-      {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-    </div>
+    </Field>
   );
 }

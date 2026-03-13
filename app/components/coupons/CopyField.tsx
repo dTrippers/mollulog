@@ -31,7 +31,7 @@ export default function CopyField({ text, label, className }: CopyFieldProps) {
     <button
       type="button"
       onClick={handleCopy}
-      className={`group w-full flex items-center gap-2 text-left cursor-pointer ${className ?? ""}`}
+      className={`group flex w-full items-center gap-2 text-left ${className ?? ""}`}
       title="복사"
     >
       {label && <span className="text-xs text-neutral-500 dark:text-neutral-400 shrink-0">{label}</span>}

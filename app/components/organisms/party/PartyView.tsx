@@ -38,7 +38,7 @@ export default function PartyView({ party, sensei, students, editable, raids }: 
   const studentsMap = new Map(students.map((student) => [student.uid, student]));
 
   const raid = (raids && party.raidId) ? raids.find(({ uid }) => party.raidId === uid) : null;
-  let raidText;
+  let raidText = "";
   if (raid) {
     raidText = [
       raidTypeLocale[raid.type],
@@ -90,14 +90,18 @@ export default function PartyView({ party, sensei, students, editable, raids }: 
       )}
 
       {party.studentIds.map((squad, index) => (
-        <div key={`squad-${index}`} className={index > 0 ? "mt-2 pt-2 md:pt-0 border-t border-neutral-200 md:border-0" : undefined}>
+        <div key={squad.map((studentUid) => studentUid ?? "empty").join("-") || `empty-squad-${party.uid}-${index > 0 ? "rest" : "first"}`} className={index > 0 ? "mt-2 pt-2 md:pt-0 border-t border-neutral-200 md:border-0" : undefined}>
           <StudentCards
             students={squad.map((uid) => {
               if (!uid) {
                 return { uid: null };
               }
 
-              const student = studentsMap.get(uid)!;
+              const student = studentsMap.get(uid);
+              if (!student) {
+                return { uid: null };
+              }
+
               return { uid, name: student.name, tier: student.tier };
             })}
             mobileGrid={6}
@@ -112,18 +116,26 @@ export default function PartyView({ party, sensei, students, editable, raids }: 
             <>
               <p className="pb-2">{party.memo}</p>
               {party.memo.length > 100 && (
-                <span className="cursor-pointer hover:underline text-neutral-500" onClick={() => setMemoOpened(false)}>
+                <button
+                  type="button"
+                  className="text-neutral-500 hover:underline"
+                  onClick={() => setMemoOpened(false)}
+                >
                   ... 감추기
-                </span>
+                </button>
               )}
             </>
           ) : (
             <p>
               {party.memo.slice(0, 100)}
               {party.memo.length > 100 && (
-                <span className="cursor-pointer hover:underline text-neutral-500" onClick={() => setMemoOpened(true)}>
+                <button
+                  type="button"
+                  className="text-neutral-500 hover:underline"
+                  onClick={() => setMemoOpened(true)}
+                >
                   ... 더보기
-                </span>
+                </button>
               )}
             </p>
           )}

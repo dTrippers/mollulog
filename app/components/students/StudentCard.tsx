@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { CheckIcon, HeartIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { Transition } from "@headlessui/react";
+import { Link } from "react-router";
 import { studentImageUrl } from "~/models/assets";
 import type { Role } from "~/models/content.d";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, roleColor, roleLocale } from "~/locales/ko";
 import OptionBadge from "~/components/atoms/student/OptionBadge";
-import { Link } from "react-router";
 import { sanitizeClassName } from "~/prophandlers";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import { parseVisibleNames } from "~/models/student";
@@ -39,9 +39,57 @@ type StudentCardProps = {
 function visibileTier(tier: number): [number, boolean] {
   if (tier <= 5) {
     return [tier, false];
-  } else {
-    return [tier - 5, true];
   }
+  return [tier - 5, true];
+}
+
+function getStudentCardAction({
+  uid,
+  onSelect,
+  popupId,
+  activePopupId,
+  setActivePopupId,
+}: {
+  uid: string | null;
+  onSelect?: (id: string) => void;
+  popupId: string | null;
+  activePopupId: string | null;
+  setActivePopupId: (id: string | null) => void;
+}) {
+  if (!uid) {
+    return undefined;
+  }
+
+  return () => {
+    if (onSelect) {
+      onSelect(uid);
+      return;
+    }
+
+    setActivePopupId(popupId === activePopupId ? null : popupId);
+  };
+}
+
+function StudentCardFrame({
+  interactive,
+  onClick,
+  children,
+}: {
+  interactive: boolean;
+  onClick?: () => void;
+  children: ReactNode;
+}) {
+  const className = interactive ? "block w-full hover:scale-105 transition text-left cursor-pointer" : "";
+
+  if (!interactive) {
+    return <div>{children}</div>;
+  }
+
+  return (
+    <button type="button" className={className} onClick={onClick}>
+      {children}
+    </button>
+  );
 }
 
 export default function StudentCard({
@@ -50,20 +98,19 @@ export default function StudentCard({
 }: StudentCardProps) {
   const { activePopupId, setActivePopupId } = useStudentCardPopup();
   const showPopup = popupId === activePopupId;
+  const interactive = Boolean((onSelect || popups) && uid);
+  const handleCardClick = getStudentCardAction({
+    uid,
+    onSelect,
+    popupId,
+    activePopupId,
+    setActivePopupId,
+  });
 
   const visibleNames = parseVisibleNames(name ?? "");
   return (
     <div className="relative">
-      <div
-        className={((onSelect || popups) && uid) ? "hover:scale-105 cursor-pointer transition" : ""}
-        onClick={uid ? () => {
-          if (onSelect) {
-            onSelect(uid);
-          } else {
-            setActivePopupId(popupId === activePopupId ? null : popupId);
-          }
-        } : undefined}
-      >
+      <StudentCardFrame interactive={interactive} onClick={handleCardClick}>
         <div className="my-1">
           <div className="relative">
             <div className={`relative ${circular ? "rounded-full" : "rounded-lg"} overflow-hidden ${circular ? "aspect-square" : ""}`}>
@@ -115,7 +162,7 @@ export default function StudentCard({
             )}
           </div>
         </div>
-      </div>
+      </StudentCardFrame>
 
       {uid && name && popups && popups.length > 0 && (
         <Transition
@@ -172,43 +219,60 @@ export function StudentCardPopup({ student, popups, onClose }: StudentCardPopupP
             <OptionBadge text={roleLocale[role]} color={roleColor[role]} bgColor="light" />
           </div>
         )}
-        <XMarkIcon className="absolute top-4 right-2 size-5 hover:text-neutral-700 transition cursor-pointer" strokeWidth={2} onClick={onClose} />
+        <button
+          type="button"
+          className="absolute top-3 right-2 rounded-lg p-1 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          onClick={onClose}
+          aria-label="학생 카드 팝업 닫기"
+        >
+          <XMarkIcon className="size-5 hover:text-neutral-700" strokeWidth={2} />
+        </button>
       </div>
       <div>
         {popups.map((popup, index) => {
+          const itemClassName = sanitizeClassName(`
+            w-full px-4 py-3 flex items-center text-left hover:bg-neutral-200/80 dark:hover:bg-neutral-700/80 transition gap-x-2 border-t border-neutral-200 dark:border-neutral-800
+            ${index === popups.length - 1 ? "rounded-b-lg" : ""}
+          `);
+
           const content = (
-            <div
-              onClick={() => {
-                popup.onClick?.();
-                onClose();
-              }}
-              className={sanitizeClassName(`
-                px-4 py-3 flex items-center hover:bg-neutral-200/80 dark:hover:bg-neutral-700/80 transition cursor-pointer gap-x-2 border-t border-neutral-200 dark:border-neutral-800
-                ${index === popups.length - 1 ? "rounded-b-lg" : ""}
-              `)}
-            >
+            <>
               {popup.Icon && <popup.Icon className="size-5" />}
               {popup.text && <span>{popup.text}</span>}
               {popup.children}
-            </div>
+            </>
           );
 
           const key = `${popup.text ?? popup.link ?? `popup-${index}`}`;
-          if (popup.link && popup.link.startsWith("/")) {
+          if (popup.link?.startsWith("/")) {
             return (
-              <Link key={key} to={popup.link}>{content}</Link>
+              <Link key={key} to={popup.link} className={itemClassName} onClick={onClose}>
+                {content}
+              </Link>
             );
-          } else if (popup.link) {
+          }
+          if (popup.link) {
             return (
-              <a key={key} href={popup.link} target="_blank" rel="noopener noreferrer">
+              <a key={key} href={popup.link} target="_blank" rel="noopener noreferrer" className={itemClassName} onClick={onClose}>
                 {content}
               </a>
             );
           }
-          return <div key={key}>{content}</div>;
+          return (
+            <button
+              key={key}
+              type="button"
+              className={itemClassName}
+              onClick={() => {
+                popup.onClick?.();
+                onClose();
+              }}
+            >
+              {content}
+            </button>
+          );
         })}
       </div>
     </div>
   );
 }
-

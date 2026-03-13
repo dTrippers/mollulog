@@ -73,7 +73,11 @@ function RewardOptionCard({ option, isSelected, onSelect }: { option: RewardOpti
     : "border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800";
 
   return (
-    <div className={`relative p-3 pr-12 border rounded-lg cursor-pointer transition-all duration-200 ${cardClass}`} onClick={onSelect}>
+    <button
+      type="button"
+      className={`relative w-full p-3 pr-12 border rounded-lg cursor-pointer transition-all duration-200 text-left ${cardClass}`}
+      onClick={onSelect}
+    >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{option.title}</p>
@@ -92,7 +96,7 @@ function RewardOptionCard({ option, isSelected, onSelect }: { option: RewardOpti
           {isSelected && <div className="absolute size-2.5 rounded-full bg-white dark:bg-white" />}
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -105,8 +109,7 @@ function RewardSummary({ rewards, selectedReward }: { rewards: BattlePassInfoPro
     const normalMap = new Map<string, { resourceType: string; resourceUid: string; quantity: number }>();
     const growthMap = new Map<string, { resourceType: string; resourceUid: string; quantity: number }>();
 
-    rewards.forEach((reward) => {
-      // Process normal rewards
+    for (const reward of rewards) {
       const normalKey = `${reward.normal.resourceType}:${reward.normal.resourceUid}`;
       const normalExisting = normalMap.get(normalKey);
       if (normalExisting) {
@@ -119,7 +122,6 @@ function RewardSummary({ rewards, selectedReward }: { rewards: BattlePassInfoPro
         });
       }
 
-      // Process growth rewards
       const growthKey = `${reward.growth.resourceType}:${reward.growth.resourceUid}`;
       const growthExisting = growthMap.get(growthKey);
       if (growthExisting) {
@@ -131,7 +133,7 @@ function RewardSummary({ rewards, selectedReward }: { rewards: BattlePassInfoPro
           quantity: reward.growth.quantity,
         });
       }
-    });
+    }
 
     const normalRewards = Array.from(normalMap.values()).sort((a, b) => {
       if (a.resourceType !== b.resourceType) {
@@ -162,9 +164,9 @@ function RewardSummary({ rewards, selectedReward }: { rewards: BattlePassInfoPro
         <div className="bg-white dark:bg-neutral-800">
           <div className="px-3 py-3 flex flex-wrap gap-2">
             {normalRewards.length > 0 ? (
-              normalRewards.map((reward, index) => (
+              normalRewards.map((reward) => (
                 <ResourceCard
-                  key={`normal-${reward.resourceType}-${reward.resourceUid}-${index}`}
+                  key={`normal-${reward.resourceType}-${reward.resourceUid}`}
                   resourceType={reward.resourceType as ResourceTypeEnum}
                   itemUid={reward.resourceUid}
                   label={formatQuantity(reward.quantity)}
@@ -185,9 +187,9 @@ function RewardSummary({ rewards, selectedReward }: { rewards: BattlePassInfoPro
         <div className={`bg-white dark:bg-neutral-800 ${isGrowthDimmed ? "opacity-40" : ""} transition-opacity`}>
           <div className="px-3 py-3 flex flex-wrap gap-2">
             {growthRewards.length > 0 ? (
-              growthRewards.map((reward, index) => (
+              growthRewards.map((reward) => (
                 <ResourceCard
-                  key={`growth-${reward.resourceType}-${reward.resourceUid}-${index}`}
+                  key={`growth-${reward.resourceType}-${reward.resourceUid}`}
                   resourceType={reward.resourceType as ResourceTypeEnum}
                   itemUid={reward.resourceUid}
                   label={formatQuantity(reward.quantity)}
@@ -227,7 +229,7 @@ function RewardTable({ rewards, selectedReward }: { rewards: BattlePassInfoProps
           {rewards.map((reward, index) => {
             const level = index + 1;
             return (
-              <div key={index} className="grid grid-cols-[60px_1fr_1fr] bg-white dark:bg-neutral-800">
+              <div key={`battle-pass-level-${level}`} className="grid grid-cols-[60px_1fr_1fr] bg-white dark:bg-neutral-800">
                 <div className="px-3 py-2 flex items-center justify-center border-r border-neutral-200 dark:border-neutral-700">
                   <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{level}</p>
                 </div>

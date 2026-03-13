@@ -6,6 +6,7 @@ import { LoadingSkeleton } from "~/components/atoms/layout";
 import { ProfileImage } from "~/components/atoms/student";
 import { SubTitle } from "~/components/atoms/typography";
 import { MiniButton } from "~/components/ui";
+import ClickableSurface from "../primitives/ClickableSurface";
 import { COMMON_FAVORITE_ITEM_UIDS, type AllStudentsFavoriteItems } from "~/models/resource";
 import type { action } from "~/routes/utils.relationship";
 
@@ -48,9 +49,9 @@ export default function FavoritedItemSelector({ items, students, isAuthenticated
   const itemCounts = useMemo(() => {
     const _itemCounts = new Map<string, number>();
     for (const studentItem of studentItemsState.values()) {
-      Object.entries(studentItem.items).forEach(([itemUid, count]) => {
+      for (const [itemUid, count] of Object.entries(studentItem.items)) {
         _itemCounts.set(itemUid, (_itemCounts.get(itemUid) ?? 0) + count);
-      });
+      }
     }
     return _itemCounts;
   }, [studentItemsState]);
@@ -152,9 +153,13 @@ function ItemSelector({ items, itemCounts, onSelectItem }: ItemSelectorProps) {
       <div className="flex flex-wrap gap-1">
         {items.map(({ itemUid, itemName, itemRarity }) => {
           return (
-            <div key={itemUid} className="hover:scale-105 cursor-pointer transition" onClick={() => onSelectItem(itemUid)}>
+            <ClickableSurface
+              key={itemUid}
+              className="transition hover:scale-105"
+              onClick={() => onSelectItem(itemUid)}
+            >
               <ResourceCard rarity={itemRarity} itemUid={itemUid} name={itemName} size="lg" label={itemCounts.get(itemUid)} />
-            </div>
+            </ClickableSurface>
           );
         })}
       </div>
@@ -393,6 +398,14 @@ function FavoriteLevelCard({ favoriteLevel, exp, levelStudents, activeItem, stud
     .map((student) => studentItemsMap.get(student.uid)?.items[activeItem.itemUid] ?? 0)
     .reduce((acc, count) => acc + count, 0);
 
+  const handleCancelEdit = () => {
+    setIsEditMode(false);
+  };
+
+  const handleEnterEditMode = () => {
+    setIsEditMode(true);
+  };
+
   return (
     <div className="mt-8 bg-neutral-100 dark:bg-neutral-900 rounded-lg p-4 flex flex-col">
       <div className="flex items-center gap-3 mb-4 pb-3 border-b border-neutral-200 dark:border-neutral-700">
@@ -416,7 +429,7 @@ function FavoriteLevelCard({ favoriteLevel, exp, levelStudents, activeItem, stud
           isSaving={isSaving}
           hasChanges={hasChanges}
           onSave={handleSave}
-          onCancel={() => setIsEditMode(false)}
+          onCancel={handleCancelEdit}
         />
       ) : (
         <FavoriteLevelCardViewMode
@@ -424,7 +437,7 @@ function FavoriteLevelCard({ favoriteLevel, exp, levelStudents, activeItem, stud
           activeItem={activeItem}
           studentItemsMap={studentItemsMap}
           isAuthenticated={isAuthenticated}
-          onEnterEditMode={() => setIsEditMode(true)}
+          onEnterEditMode={handleEnterEditMode}
         />
       )}
     </div>

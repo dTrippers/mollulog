@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { sanitizeClassName } from "~/prophandlers";
 
 // === FilterButtons
@@ -11,9 +11,10 @@ type FilterButtonsProps = {
 };
 
 export default function FilterButtons({ Icon, buttonProps, exclusive, atLeastOne, size = "md" }: FilterButtonsProps) {
-  const [actives, setActives] = useState(() => buttonProps.map((prop) => prop.active ?? false));
+  const [actives, setActives] = useState(() => getActiveStates(buttonProps));
+
   useEffect(() => {
-    setActives(buttonProps.map((prop) => prop.active ?? false));
+    setActives(getActiveStates(buttonProps));
   }, [buttonProps]);
 
   return (
@@ -22,21 +23,25 @@ export default function FilterButtons({ Icon, buttonProps, exclusive, atLeastOne
       <div className="flex flex-wrap items-center gap-x-1 md:gap-x-1.5 gap-y-1.5">
         {buttonProps.map((prop, index) => (
           <FilterButton
-            key={`${prop.text}-${index}`}
+            key={`${prop.text}-${prop.subText ?? "none"}`}
             text={prop.text}
             subText={prop.subText}
             color={prop.color}
             active={actives[index]}
             onToggle={(activated) => {
-              if (atLeastOne && !activated && actives.filter((active) => active).length <= 1) {
+              const nextActives = getNextActiveStates({
+                actives,
+                buttonCount: buttonProps.length,
+                index,
+                activated,
+                exclusive: exclusive ?? false,
+              });
+
+              if (atLeastOne && !activated && actives.filter(Boolean).length <= 1) {
                 return;
-              } else if (exclusive) {
-                const newActives = new Array(buttonProps.length).fill(false);
-                newActives[index] = activated;
-                setActives(newActives);
-              } else {
-                setActives((prev) => { const newActives = [...prev]; newActives[index] = activated; return newActives; })
               }
+
+              setActives(nextActives);
               prop.onToggle(activated);
             }}
             size={size}
@@ -65,6 +70,34 @@ const buttonColors = {
   grey: "bg-neutral-500",
 };
 
+function getActiveStates(buttonProps: FilterButtonProps[]) {
+  return buttonProps.map((prop) => prop.active ?? false);
+}
+
+function getNextActiveStates({
+  actives,
+  buttonCount,
+  index,
+  activated,
+  exclusive,
+}: {
+  actives: boolean[];
+  buttonCount: number;
+  index: number;
+  activated: boolean;
+  exclusive: boolean;
+}) {
+  if (exclusive) {
+    const nextActives = new Array(buttonCount).fill(false);
+    nextActives[index] = activated;
+    return nextActives;
+  }
+
+  const nextActives = [...actives];
+  nextActives[index] = activated;
+  return nextActives;
+}
+
 function FilterButton({ text, subText, color, active, onToggle, size = "md" }: FilterButtonProps & { size: "sm" | "md" }) {
   let textSizeClass = "text-sm";
   if (size === "md") {
@@ -72,18 +105,20 @@ function FilterButton({ text, subText, color, active, onToggle, size = "md" }: F
   }
 
   return (
-    <div
+    <button
+      type="button"
+      aria-pressed={active}
       className={sanitizeClassName(`
-        flex items-center px-2 py-1 rounded-lg cursor-pointer transition-colors border border-neutral-200 dark:border-neutral-700 gap-x-1
+        inline-flex items-center px-2 py-1 rounded-lg transition-colors border border-neutral-200 dark:border-neutral-700 gap-x-1
         ${active ?
           "bg-neutral-800 hover:bg-neutral-700 dark:bg-neutral-200 dark:hover:bg-neutral-300 text-neutral-200 dark:text-neutral-700" :
           "bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-neutral-700 dark:text-neutral-200"}
       `)}
       onClick={() => { onToggle(!active); }}
     >
-      {color && <div className={`size-2.5 rounded-full ` + buttonColors[color]} />}
+      {color && <div className={`size-2.5 rounded-full ${buttonColors[color]}`} />}
       <span className={`${textSizeClass} tracking-tighter shrink-0`}>{text}</span>
       {subText && <span className={`text-xs ${active ? "text-neutral-300 dark:text-neutral-700" : "text-neutral-500 dark:text-neutral-400"}`}>{subText}</span>}
-    </div>
+    </button>
   );
 }

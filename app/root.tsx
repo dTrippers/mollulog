@@ -18,11 +18,13 @@ import { getAuthenticator } from "./auth/authenticator.server";
 import { Footer } from "./components/organisms/base";
 import { NavigationBar } from "./components/navigation";
 import { getPreference } from "./auth/preference.server";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { SignInProvider } from "./contexts/SignInProvider";
-import { SignInBottomSheet } from "./components/molecules/auth";
+import { useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { getNavigationBarContents } from "./models/content";
+
+const SignInBottomSheet = lazy(() => import("./components/molecules/auth/SignInBottomSheet"));
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -89,53 +91,70 @@ export default function App() {
   }, [navigate.state]);
 
   const location = useLocation();
+  const pathname = location.pathname;
   useEffect(() => {
-    const scrollableContainer = document.querySelector('.mllg-content-area') as HTMLElement;
+    const scrollableContainer = document.querySelector(".mllg-content-area") as HTMLElement;
     if (scrollableContainer) {
-      scrollableContainer.scrollTo({ top: 0, behavior: 'instant' });
+      scrollableContainer.scrollTo({ top: 0, behavior: "instant" });
     }
-  }, [location.pathname]);
+  });
 
-  let widthClass = "max-w-3xl";
-  if (fullLayout.find((path) => location.pathname.match(path))) {
-    widthClass = "w-full";
-  } else if (wideLayout.find((path) => location.pathname.startsWith(path))) {
-    widthClass = "max-w-6xl";
-  }
+  const widthClass = getContentWidthClass(pathname);
 
   return (
     <div className={`${darkMode ? "dark " : ""}text-neutral-900 dark:bg-neutral-800 dark:text-neutral-200 transition`}>
-      <LoadingBar
-        ref={loadingBarRef}
-        color="#0ea5e9"
-        height={3}
-        waitingTime={300}
-      />
+      <LoadingBar ref={loadingBarRef} color="#0ea5e9" height={3} waitingTime={300} />
       <SignInProvider>
-        <StudentCardPopupProvider>
-          <div className="flex flex-col xl:flex-row h-dvh">
-            <NavigationBar
-              currentUsername={currentUsername}
-              darkMode={darkMode}
-              setDarkMode={setDarkMode}
-              upcomingEvent={navigationBarContents.upcomingEvent}
-              hasRecentNews={navigationBarContents.hasRecentNews}
-              hasActiveCoupons={navigationBarContents.hasActiveCoupons}
-            />
-            <div className="mllg-content-area w-full pt-10 xl:pt-0 overflow-y-scroll">
-              <div className={`xl:h-screen mx-auto ${widthClass} px-4 md:px-8 py-6`}>
-                <div className="pb-32">
+        <div className="flex flex-col xl:flex-row h-dvh">
+          <NavigationBar
+            currentUsername={currentUsername}
+            darkMode={darkMode}
+            setDarkMode={setDarkMode}
+            upcomingEvent={navigationBarContents.upcomingEvent}
+            hasRecentNews={navigationBarContents.hasRecentNews}
+            hasActiveCoupons={navigationBarContents.hasActiveCoupons}
+          />
+          <div className="mllg-content-area w-full pt-10 xl:pt-0 overflow-y-scroll">
+            <div className={`xl:h-screen mx-auto ${widthClass} px-4 md:px-8 py-6`}>
+              <div className="pb-32">
+                <StudentCardPopupProvider key={pathname}>
                   <Outlet />
-                </div>
-                <Footer />
+                </StudentCardPopupProvider>
               </div>
+              <Footer />
             </div>
           </div>
-          <SignInBottomSheet />
-        </StudentCardPopupProvider>
+        </div>
+        <SignInBottomSheetHost />
       </SignInProvider>
     </div>
   );
+}
+
+function SignInBottomSheetHost() {
+  const { isSignInVisible } = useSignIn();
+
+  if (!isSignInVisible) {
+    return null;
+  }
+
+  return (
+    <Suspense fallback={null}>
+      <SignInBottomSheet />
+    </Suspense>
+  );
+}
+
+function getContentWidthClass(pathname: string) {
+  if (fullLayout.find((path) => pathname.match(path))) {
+    return "w-full";
+  }
+
+  if (wideLayout.find((path) => pathname.startsWith(path))) {
+    return "max-w-6xl";
+  }
+
+  return "max-w-3xl";
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
@@ -151,9 +170,13 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         <Link to="/" className="px-4 py-2 bg-neutral-700 rounded-md cursor-pointer hover:bg-neutral-800 transition-colors">
           첫 화면으로
         </Link>
-        <div className="px-4 py-2 bg-neutral-700 rounded-md cursor-pointer hover:bg-neutral-800 transition-colors" onClick={() => window.location.reload()}>
+        <button
+          type="button"
+          className="px-4 py-2 bg-neutral-700 rounded-md cursor-pointer hover:bg-neutral-800 transition-colors"
+          onClick={() => window.location.reload()}
+        >
           새로고침
-        </div>
+        </button>
       </div>
 
       <video

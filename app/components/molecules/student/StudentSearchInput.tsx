@@ -8,45 +8,57 @@ type SearchableStudent = {
   name: string;
 };
 
-type StudentSearchProps = {
+type StudentSearchInputProps = {
   label?: string;
   placeholder?: string;
   description?: string;
   grid?: 4;
-
   students: SearchableStudent[];
   onSelect: (studentUid: string) => void;
 };
 
-export default function StudentSearch(
-  { label, placeholder, description, grid, students, onSelect }: StudentSearchProps,
-) {
+export default function StudentSearchInput({
+  label,
+  placeholder,
+  description,
+  grid,
+  students,
+  onSelect,
+}: StudentSearchInputProps) {
   const [searched, setSearched] = useState<SearchableStudent[]>([]);
   const [searchValue, setSearchValue] = useState("");
 
   const onSearch = (search: string) => {
     setSearchValue(search);
     if (search.length === 0) {
-      return setSearched([]);
+      setSearched([]);
+      return;
     }
+
     setSearched(filterStudentByName(search, students, grid ?? 6));
   };
 
   return (
     <>
-      <div>
-        <Input label={label} placeholder={placeholder ?? "이름으로 찾기..."} description={description} onChange={onSearch} value={searchValue} />
-      </div>
-      {(searched && searched.length > 0) && (
+      <Input
+        label={label}
+        placeholder={placeholder ?? "이름으로 찾기..."}
+        description={description}
+        onChange={onSearch}
+        value={searchValue}
+      />
+      {searched.length > 0 && (
         <StudentCards
           pcGrid={grid}
           students={searched}
           onSelect={(studentUid) => {
-            if (studentUid) {
-              onSelect(studentUid);
-              setSearchValue("");
-              setSearched([]);
+            if (!studentUid) {
+              return;
             }
+
+            onSelect(studentUid);
+            setSearchValue("");
+            setSearched([]);
           }}
         />
       )}

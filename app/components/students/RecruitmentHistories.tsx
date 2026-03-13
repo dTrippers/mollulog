@@ -11,7 +11,7 @@ type RecruitmentHistoriesProps = {
     imageUrl: string | null;
     since: Date;
   }[];
-}
+};
 
 export default function RecruitmentHistories({ recruitments }: RecruitmentHistoriesProps) {
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -19,7 +19,7 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
   const [showLeftBlur, setShowLeftBlur] = useState(false);
   const [showRightBlur, setShowRightBlur] = useState(false);
 
-  const sortedRecruitments = recruitments.sort((a, b) => dayjs(b.since).diff(dayjs(a.since)));
+  const sortedRecruitments = [...recruitments].sort((a, b) => dayjs(b.since).diff(dayjs(a.since)));
 
   const updateBlur = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -30,7 +30,7 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
     setShowRightBlur(container.scrollLeft + container.offsetWidth < container.scrollWidth - 1);
   }, []);
 
-  const scrollToIndex = (index: number) => {
+  const scrollToIndex = useCallback((index: number) => {
     if (!scrollContainerRef.current) {
       return;
     }
@@ -50,7 +50,7 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
       left: Math.max(0, scrollLeft),
       behavior: "smooth",
     });
-  };
+  }, []);
 
   const selectPickup = (indexDiff: 1 | -1) => {
     const newIndex = (currentIndex + indexDiff + sortedRecruitments.length) % sortedRecruitments.length;
@@ -62,7 +62,7 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
     if (scrollContainerRef.current) {
       scrollToIndex(currentIndex);
     }
-  }, [currentIndex]);
+  }, [currentIndex, scrollToIndex]);
 
   useEffect(() => {
     updateBlur();
@@ -83,11 +83,9 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
       {/* Left Arrow (desktop only) */}
       {sortedRecruitments.length > 2 && (
         <div className="hidden md:flex pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full z-10 w-10 items-center justify-center">
-          <ChevronDoubleLeftIcon
-            className="pointer-events-auto p-1 size-6 hover:bg-black hover:text-white rounded-full transition cursor-pointer"
-            strokeWidth={2}
-            onClick={() => selectPickup(-1)}
-          />
+          <button type="button" className="pointer-events-auto p-1 hover:bg-black hover:text-white rounded-full transition" onClick={() => selectPickup(-1)}>
+            <ChevronDoubleLeftIcon className="size-6" strokeWidth={2} />
+          </button>
         </div>
       )}
 
@@ -129,11 +127,9 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
       {/* Right Arrow (desktop only) */}
       {sortedRecruitments.length > 2 && (
         <div className="hidden md:flex pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-10 w-10 items-center justify-center">
-          <ChevronDoubleRightIcon
-            className="pointer-events-auto p-1 size-6 hover:bg-black hover:text-white rounded-full transition cursor-pointer"
-            strokeWidth={2}
-            onClick={() => selectPickup(1)}
-          />
+          <button type="button" className="pointer-events-auto p-1 hover:bg-black hover:text-white rounded-full transition" onClick={() => selectPickup(1)}>
+            <ChevronDoubleRightIcon className="size-6" strokeWidth={2} />
+          </button>
         </div>
       )}
     </div>

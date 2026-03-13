@@ -1,5 +1,5 @@
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
-import { useState, useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import hangul from "hangul-js";
 
 export type PlannerSelectFormProps = {
@@ -47,24 +47,38 @@ export default function PlannerSelectForm({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  const closeOptions = () => {
+    setIsOpen(false);
+    setSearchQuery("");
+  };
+
+  const handleSelect = (value: string) => {
+    setSelectedValue(value);
+    closeOptions();
+    onSelect?.(value);
+  };
+
   return (
     <>
-      <div className="cursor-pointer relative">
-        <label className="block text-sm font-medium text-neutral-900 dark:text-neutral-100 mb-1">
+      <div className="relative">
+        <p className="mb-1 block text-sm font-medium text-neutral-900 dark:text-neutral-100">
           {label}
-        </label>
+        </p>
         {description && (
           <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-2">{description}</p>
         )}
-        <div 
+        <button
+          type="button"
           className="w-full px-3 py-2 text-sm border border-neutral-200 dark:border-neutral-700 rounded-lg bg-white dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 flex items-center justify-between hover:border-neutral-300 dark:hover:border-neutral-600 transition"
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => setIsOpen((prev) => !prev)}
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
         >
           <span className={selectedLabel ? "" : "text-neutral-400 dark:text-neutral-500"}>
             {selectedLabel ?? placeholder ?? "선택해주세요"}
           </span>
           <ChevronDownIcon className="size-4 text-neutral-500 dark:text-neutral-400" />
-        </div>
+        </button>
         {isOpen && (
           <div className="absolute top-full mt-4 left-0 w-full max-h-72 md:max-h-128 overflow-y-auto no-scrollbar bg-white/90 dark:bg-black/80 backdrop-blur-sm border border-neutral-100 dark:border-neutral-800 rounded-lg shadow-lg z-5">
             {useSearch && (
@@ -84,18 +98,14 @@ export default function PlannerSelectForm({
             )}
             {filteredOptions.length > 0 ? (
               filteredOptions.slice(0, 20).map((option) => (
-                <div
+                <button
+                  type="button"
                   key={option.value}
                   className="flex items-center gap-x-2 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors duration-100 cursor-pointer"
-                  onClick={() => {
-                    setSelectedValue(option.value);
-                    setIsOpen(false);
-                    setSearchQuery("");
-                    onSelect?.(option.value);
-                  }}
+                  onClick={() => handleSelect(option.value)}
                 >
                   {option.element ?? <div className="p-4">{option.label}</div>}
-                </div>
+                </button>
               ))
             ) : (
               <div className="p-4 text-neutral-500 dark:text-neutral-400 text-center">
@@ -107,6 +117,5 @@ export default function PlannerSelectForm({
       </div>
       <input type="hidden" name={name} value={selectedValue} />
     </>
-  )
+  );
 }
-

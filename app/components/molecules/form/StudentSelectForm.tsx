@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import hangul from "hangul-js";
 import { studentImageUrl } from "~/models/assets";
 import { useFormGroup } from "~/components/organisms/form/FormGroup";
+import { Field } from "~/components/primitives";
 
 type Student = {
   uid: string;
@@ -147,15 +148,13 @@ export default function StudentSelectForm({
 
   return (
     <>
-      <div className="p-4 cursor-pointer relative" onClick={() => setIsOpen(!isOpen)}>
-        <div className="flex items-center gap-x-2">
-          <div className="grow">
-            <label className="font-bold">{label}</label>
-            {description && <p className="text-sm text-neutral-500 dark:text-neutral-400">{description}</p>}
+      <div className="p-4 relative">
+        <button type="button" className="w-full cursor-pointer text-left" onClick={() => setIsOpen(!isOpen)}>
+          <Field label={label} description={description} containerClassName="pointer-events-none">
             {renderSelectedDisplay()}
-          </div>
-          <ChevronDownIcon className="size-4" />
-        </div>
+          </Field>
+          <ChevronDownIcon className="size-4 absolute right-4 top-1/2 -translate-y-1/2" />
+        </button>
         {isOpen && (
           <div className="absolute top-full left-0 w-full max-h-64 overflow-y-auto no-scrollbar bg-white/90 dark:bg-black/80 backdrop-blur-sm rounded-b-lg shadow-lg">
             <SearchInput
@@ -165,7 +164,8 @@ export default function StudentSelectForm({
             />
             {filteredStudents.length > 0 ? (
               filteredStudents.slice(0, 10).map((student) => (
-                <div
+                <button
+                  type="button"
                   key={student.uid}
                   className="flex items-center gap-x-2 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors duration-100 cursor-pointer"
                   onClick={() => handleSelect(student.uid)}
@@ -174,7 +174,7 @@ export default function StudentSelectForm({
                     <StudentImage student={student} size="size-10" />
                     <p className="grow">{student.name}</p>
                   </div>
-                </div>
+                </button>
               ))
             ) : (
               <div className="p-4 text-neutral-500 dark:text-neutral-400 text-center">

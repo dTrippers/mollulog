@@ -72,6 +72,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
     <div className="flex flex-col items-center gap-4 mt-6">
       <div className="flex items-center gap-1.5 flex-wrap justify-center">
         <button
+          type="button"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
           className="p-1.5 rounded transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100 dark:hover:bg-neutral-800"
@@ -82,8 +83,10 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
 
         {pageNumbers.map((page, index) => {
           if (page === "...") {
+            const previousPage = pageNumbers[index - 1];
+            const nextPage = pageNumbers[index + 1];
             return (
-              <span key={`ellipsis-${index}`} className="px-2 text-neutral-500">
+              <span key={`ellipsis-${previousPage ?? "start"}-${nextPage ?? "end"}`} className="px-2 text-neutral-500">
                 ...
               </span>
             );
@@ -94,6 +97,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
           return (
             <button
               key={pageNum}
+              type="button"
               onClick={() => onPageChange(pageNum)}
               className={`px-3 py-1 text-sm rounded transition ${
                 isActive
@@ -109,6 +113,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
         })}
         
         <button
+          type="button"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
           className="p-1.5 rounded transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100 dark:hover:bg-neutral-800"
@@ -130,6 +135,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
           className="w-20 px-2 py-1 text-sm border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-900 rounded transition focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600 no-decoration"
         />
         <button
+          type="button"
           onClick={handleJumpToPage}
           disabled={!jumpPage || Number.isNaN(Number.parseInt(jumpPage, 10))}
           className="px-3 py-1 text-sm rounded transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"

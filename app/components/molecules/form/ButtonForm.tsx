@@ -1,3 +1,5 @@
+import PrimitiveButton from "~/components/primitives/Button";
+
 type ButtonFormProps = {
   type?: "button" | "submit" | "reset";
   label: string;
@@ -6,15 +8,16 @@ type ButtonFormProps = {
 };
 
 export default function ButtonForm({ type = "button", label, color = "default", onClick }: ButtonFormProps) {
-  const colorClass = {
-    default: "",
-    blue: "text-blue-500",
-    red: "text-red-500",
-  }[color];
-
   return (
-    <button type={type} className="w-full text-left p-4 cursor-pointer" onClick={onClick}>
-      <label className={`${colorClass} cursor-pointer`}>{label}</label>
-    </button>
+    <PrimitiveButton
+      type={type}
+      text={label}
+      variant="list"
+      size="list"
+      justify="start"
+      className={color === "blue" ? "text-blue-500" : color === "red" ? "text-red-500" : ""}
+      onClick={onClick}
+      fullWidth
+    />
   );
 }

@@ -1,6 +1,7 @@
 import { LockClosedIcon, LockOpenIcon, ArrowUturnLeftIcon, TrashIcon, PencilSquareIcon, ArrowUpIcon, XMarkIcon, BookmarkIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
 import { Callout } from "~/components/atoms/typography";
+import { ClickableSurface } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { sanitizeClassName } from "~/prophandlers";
 import CommentView from "./CommentView";
@@ -194,11 +195,11 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
             placeholder={placeholder ?? "의견을 남겨보세요"}
           />
         ) : (
-          <div className="w-full" onClick={() => showSignIn()}>
+          <ClickableSurface className="w-full" onClick={() => showSignIn()}>
             <Callout emoji="💬" className="hover:bg-neutral-200 dark:hover:bg-neutral-900 cursor-pointer transition">
               <p>로그인 후 의견을 남겨보세요.</p>
             </Callout>
-          </div>
+          </ClickableSurface>
         )}
       </div>
     </>
@@ -308,6 +309,7 @@ function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying
       <div className={`flex gap-x-1 shrink-0 ${!isSubcomment ? "text-neutral-500 dark:text-neutral-400" : ""}`}>
         {signedIn && !isSubcomment && comment.visibility === "public" && (
           <button
+            type="button"
             className="p-1 rounded transition cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"
             onClick={isReplying ? onCancelReply : onReply}
             disabled={isSubmitting}
@@ -317,6 +319,7 @@ function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying
         )}
         {showPinActions && (
           <button
+            type="button"
             className={sanitizeClassName(`
               p-1 rounded transition
               ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}
@@ -333,6 +336,7 @@ function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying
           <>
             {isEditing ? (
               <button
+                type="button"
                 className={`p-1 rounded transition ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}`}
                 onClick={onCancelEdit}
                 disabled={isSubmitting}
@@ -341,6 +345,7 @@ function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying
               </button>
             ) : (
               <button
+                type="button"
                 className = {`p-1 rounded transition ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}`}
                 onClick={onEdit}
                 disabled={isSubmitting}
@@ -349,6 +354,7 @@ function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying
               </button>
             )}
             <button
+              type="button"
               className={sanitizeClassName(`
                 p-1 rounded transition text-neutral-500 dark:text-neutral-400 hover:text-red-500 dark:hover:text-red-400 transition-colors
                 ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}

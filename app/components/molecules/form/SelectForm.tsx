@@ -1,7 +1,8 @@
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
-import { useState, useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import hangul from "hangul-js";
 import { useFormGroup } from "~/components/organisms/form/FormGroup";
+import { Field } from "~/components/primitives";
 
 export type SelectFormProps = {
   label: string;
@@ -50,17 +51,33 @@ export default function SelectForm({
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  const closeOptions = () => {
+    setIsOpen(false);
+    setSearchQuery("");
+  };
+
+  const handleSelect = (value: string) => {
+    setSelectedValue(value);
+    closeOptions();
+    onSelect?.(value);
+    submitFormGroup();
+  };
+
   return (
     <>
-      <div className="p-4 cursor-pointer relative" onClick={() => setIsOpen(!isOpen)}>
-        <div className="flex items-center gap-x-2">
-          <div className="grow">
-            <label className="font-bold">{label}</label>
-            {description && <p className="text-sm text-neutral-500 dark:text-neutral-400">{description}</p>}
+      <div className="p-4 relative">
+        <button
+          type="button"
+          className="w-full text-left"
+          onClick={() => setIsOpen((prev) => !prev)}
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
+        >
+          <Field label={label} description={description} containerClassName="pointer-events-none">
             {(selectedLabel ?? placeholder) && <p className="mt-1 text-neutral-700 dark:text-neutral-300">{selectedLabel ?? placeholder}</p>}
-          </div>
-          <ChevronDownIcon className="size-4" />
-        </div>
+          </Field>
+          <ChevronDownIcon className="size-4 absolute right-4 top-1/2 -translate-y-1/2" />
+        </button>
         {isOpen && (
           <div className="absolute top-full mt-4 left-0 w-full max-h-72 md:max-h-128 overflow-y-auto no-scrollbar bg-white/90 dark:bg-black/80 backdrop-blur-sm border border-neutral-100 dark:border-neutral-800 rounded-lg shadow-lg z-5">
             {useSearch && (
@@ -80,19 +97,14 @@ export default function SelectForm({
             )}
             {filteredOptions.length > 0 ? (
               filteredOptions.slice(0, 20).map((option) => (
-                <div
+                <button
+                  type="button"
                   key={option.value}
                   className="flex items-center gap-x-2 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors duration-100 cursor-pointer"
-                  onClick={() => {
-                    setSelectedValue(option.value);
-                    setIsOpen(false);
-                    setSearchQuery("");
-                    onSelect?.(option.value);
-                    submitFormGroup();
-                  }}
+                  onClick={() => handleSelect(option.value)}
                 >
                   {option.element ?? <div className="p-4">{option.label}</div>}
-                </div>
+                </button>
               ))
             ) : (
               <div className="p-4 text-neutral-500 dark:text-neutral-400 text-center">
@@ -104,5 +116,5 @@ export default function SelectForm({
       </div>
       <input type="hidden" name={name} value={selectedValue} />
     </>
-  )
+  );
 }

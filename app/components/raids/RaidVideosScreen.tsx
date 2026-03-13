@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { EmptyView } from "~/components/atoms/typography";
 import { LoadingSkeleton } from "~/components/atoms/layout";
 import { PlayIcon } from "@heroicons/react/24/outline";
@@ -76,7 +77,13 @@ type VideoCardProps = {
 
 function VideoCard({ title, score, youtubeId, thumbnailUrl, publishedAt }: VideoCardProps) {
   return (
-    <div className="bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden transition-colors cursor-pointer">
+    <Link
+      to={`https://www.youtube.com/watch?v=${youtubeId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden transition-colors"
+      aria-label={`${title} 영상 보기`}
+    >
       <div className="relative aspect-video">
         <img
           src={thumbnailUrl}
@@ -86,13 +93,6 @@ function VideoCard({ title, score, youtubeId, thumbnailUrl, publishedAt }: Video
         <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
           <PlayIcon className="w-12 h-12 text-white" />
         </div>
-        <a
-          href={`https://www.youtube.com/watch?v=${youtubeId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="absolute inset-0"
-          aria-label={`${title} 영상 보기`}
-        />
       </div>
       <div className="p-4">
         <h3 className="font-semibold text-sm line-clamp-2 mb-2">
@@ -103,6 +103,6 @@ function VideoCard({ title, score, youtubeId, thumbnailUrl, publishedAt }: Video
           <span>{dayjs(publishedAt.slice(0, 10)).format("YYYY.MM.DD")}</span>
         </div>
       </div>
-    </div>
+    </Link>
   );
 }

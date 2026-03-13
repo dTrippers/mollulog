@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Field } from "~/components/primitives";
 
 type NumberInputProps = {
   label?: string;
@@ -19,8 +20,11 @@ export default function NumberInput({ label, defaultValue, value, maxValue, onCh
   }, [value]);
 
   return (
-    <div>
-      {label && <p className="mb-1 text-sm text-neutral-700 dark:text-neutral-200 font-medium">{label}</p>}
+    <Field
+      label={label}
+      containerClassName="space-y-1"
+      labelClassName="mb-1 my-0 text-sm text-neutral-700 dark:text-neutral-200 font-medium"
+    >
       <div className="w-full flex items-center rounded-md border border-neutral-300 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-900">
         <button
           type="button"
@@ -69,6 +73,6 @@ export default function NumberInput({ label, defaultValue, value, maxValue, onCh
           +
         </button>
       </div>
-    </div>
+    </Field>
   );
 }

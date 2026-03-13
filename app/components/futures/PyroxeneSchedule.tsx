@@ -87,20 +87,26 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
   // 30일 이내의 월간 패키지는 삭제가 가능하도록 별도 레이아웃에서 표시
   const availableOneTimePackages = useMemo(() => {
     const since = dayjs().subtract(30, "day");
-    return scheduleItems.filter((item) => {
-      if (item.onetimeGain?.source !== "package_onetime") {
-        return false;
+    const currentDate = initialDate ? dayjs(initialDate) : dayjs();
+    return scheduleItems.flatMap((item) => {
+      const { onetimeGain } = item;
+      if (onetimeGain?.source !== "package_onetime" || !onetimeGain.uid) {
+        return [];
       }
 
-      const packageDate = dayjs(item.onetimeGain.date);
-      return packageDate.isAfter(since) && packageDate.isBefore(initialDate ? dayjs(initialDate) : dayjs());
-    }).map((item) => ({
-      uid: item.onetimeGain!.uid!,
-      date: item.onetimeGain!.date,
-      description: item.onetimeGain!.description,
-      pyroxeneDelta: item.onetimeGain!.pyroxeneDelta!,
-    }));
-  }, [scheduleItems]);
+      const packageDate = dayjs(onetimeGain.date);
+      if (!packageDate.isAfter(since) || !packageDate.isBefore(currentDate)) {
+        return [];
+      }
+
+      return [{
+        uid: onetimeGain.uid,
+        date: onetimeGain.date,
+        description: onetimeGain.description,
+        pyroxeneDelta: onetimeGain.pyroxeneDelta ?? 0,
+      }];
+    });
+  }, [initialDate, scheduleItems]);
 
   return (
     <>
@@ -144,7 +150,8 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
               onUpdateEventData={onUpdateEventData}
             />
           );
-        } else if (source.description) {
+        }
+        if (source.description) {
           return (
             <TimelineResources
               key={`${source.description}-${date.toISOString()}`}
@@ -177,13 +184,15 @@ function AvailableOneTimePackages({ packages, onDeleteItem }: AvailableOneTimePa
 
   return (
     <>
-      <div
-        className="p-4 flex items-center justify-center bg-neutral-100 dark:bg-neutral-900 rounded-lg cursor-pointer"
+      <button
+        type="button"
+        className="flex w-full items-center justify-center rounded-lg bg-neutral-100 p-4 dark:bg-neutral-900"
         onClick={() => setShow((prev) => !prev)}
+        aria-expanded={show}
       >
         <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">적용중인 월간 패키지</p>
         <ChevronDownIcon className={`size-4 text-neutral-500 dark:text-neutral-400 transition-transform duration-200 ease-in-out ${show ? "rotate-180" : ""}`} />
-      </div>
+      </button>
 
       {show && (packages.map(({ uid, date, description, pyroxeneDelta }) => (
         <TimelineResources
@@ -246,7 +255,12 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
         </div>
         <div className="flex-1">
           <StudentCards
-            students={event.recruitments.filter(({ favorited }) => favorited).map(({ student }) => ({ uid: student!.uid, tier: student!.initialTier }))}
+            students={event.recruitments.flatMap(({ favorited, student }) => {
+              if (!favorited || !student) {
+                return [];
+              }
+              return [{ uid: student.uid, tier: student.initialTier }];
+            })}
             pcGrid={10}
           />
         </div>
@@ -412,11 +426,12 @@ function InitialResources({ resources, onUpdateResources }: { resources: PickupR
           ))}
           <div className="flex items-center justify-end gap-2 mt-2">
             {isEditing ? (
-              <button className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap" onClick={handleCancel}>
+              <button type="button" className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap" onClick={handleCancel}>
                 취소
               </button>
             ) : (
               <button
+                type="button"
                 className="px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md transition whitespace-nowrap"
                 onClick={() => setIsEditing(true)}
               >
@@ -470,6 +485,7 @@ function TimelineResources({ date, description, resources, itemUid, onDeleteItem
       </div>
       {itemUid && onDeleteItem && (
         <button
+          type="button"
           onClick={() => onDeleteItem(itemUid)}
           className="ml-2 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md transition whitespace-nowrap"
         >
@@ -524,10 +540,16 @@ function buildTimeline(
   scheduleItems: PyroxeneScheduleItem[],
   options: PyroxenePlannerOptions,
 ): Timeline {
-  const maxDate = scheduleItems.filter((item) => item.event).reduce((max, item) => max.isAfter(dayjs(item.event!.until)) ? max : dayjs(item.event!.until), dayjs(initialDate));
+  const maxDate = scheduleItems.reduce((max, item) => {
+    if (!item.event) {
+      return max;
+    }
+    const eventUntil = dayjs(item.event.until);
+    return max.isAfter(eventUntil) ? max : eventUntil;
+  }, dayjs(initialDate));
 
   const timelineDeltas: TimelineDelta[] = [];
-  scheduleItems.forEach((scheduleItem) => {
+  for (const scheduleItem of scheduleItems) {
     if (scheduleItem.event) {
       // 픽업 일정
       const { event } = scheduleItem;
@@ -539,7 +561,7 @@ function buildTimeline(
           source: { type: "event", event },
           resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
         });
-        return;
+        continue;
       }
 
       // Use expectedTrials if set, otherwise calculate from pickupCount
@@ -549,7 +571,7 @@ function buildTimeline(
       } else {
         const pickupCount = event.recruitments.filter(({ pickup, favorited, recruitmentType }) => pickup && favorited && recruitmentType !== "given").length;
         if (pickupCount === 0) {
-          return;
+          continue;
         }
         pickupTrial = pickupCount * (options.event.pickupChance === "ceil" ? 200 : 140);
       }
@@ -605,7 +627,7 @@ function buildTimeline(
         repeatedGainCount++;
       }
     }
-  });
+  }
 
   // 일별/주간 임무 및 전술대회
   const dateFrom = dayjs(initialDate);
@@ -661,7 +683,7 @@ function buildTimeline(
 
   const timeline: Timeline = [];
   let currentResources: PickupResources = initialResources;
-  filteredDeltas.sort((a, b) => a.date.diff(b.date)).forEach((delta) => {
+  for (const delta of filteredDeltas.sort((a, b) => a.date.diff(b.date))) {
     let resourceDelta = delta.resourceDelta;
     if (!resourceDelta && delta.pickupTrial !== undefined) {
       if (delta.pickupTrial > 0) {
@@ -683,7 +705,7 @@ function buildTimeline(
     }
 
     if (!resourceDelta) {
-      return;
+      continue;
     }
 
     currentResources = {
@@ -698,6 +720,6 @@ function buildTimeline(
       resourceDelta,
       accumulatedResources: { ...currentResources },
     });
-  });
+  }
   return timeline;
 }

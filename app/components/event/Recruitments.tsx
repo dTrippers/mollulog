@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { ChevronRightIcon, ClockIcon, StarIcon, XCircleIcon } from "@heroicons/react/16/solid";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
@@ -47,6 +47,72 @@ type RecruitmentsProps = {
 type ActionData = {
   favorite?: { studentUid: string; favorited: boolean };
 };
+
+function getFavoriteButtonClassName(favorited: boolean) {
+  return sanitizeClassName(`inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-all ${
+    favorited
+      ? "bg-gradient-to-r from-red-500 to-pink-500 text-white shadow shadow-red-500/25 hover:shadow-red-500/40 hover:brightness-110"
+      : "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-red-50 hover:text-red-500 hover:border-red-200 dark:hover:bg-red-950/40 dark:hover:text-red-400 dark:hover:border-red-800"
+  }`);
+}
+
+function useRecruitmentFavorite(recruitment: Recruitment) {
+  const studentUid = recruitment.student?.uid ?? null;
+  const fetcher = useFetcher();
+  const [favorited, setFavorited] = useState(recruitment.favorited);
+  const [favoritedCount, setFavoritedCount] = useState(recruitment.favoritedCount);
+
+  useEffect(() => {
+    setFavorited(recruitment.favorited);
+  }, [recruitment.favorited]);
+
+  useEffect(() => {
+    setFavoritedCount(recruitment.favoritedCount);
+  }, [recruitment.favoritedCount]);
+
+  const toggleFavorite = () => {
+    if (!studentUid) {
+      return;
+    }
+
+    const next = !favorited;
+    setFavorited(next);
+    setFavoritedCount((count) => count + (next ? 1 : -1));
+
+    const data: ActionData = { favorite: { studentUid, favorited: next } };
+    fetcher.submit(data, { method: "post", encType: "application/json" });
+  };
+
+  return {
+    studentUid,
+    favorited,
+    favoritedCount,
+    toggleFavorite,
+  };
+}
+
+function RecruitmentFavoriteButton({
+  favorited,
+  favoritedCount,
+  onClick,
+  className,
+}: {
+  favorited: boolean;
+  favoritedCount: number;
+  onClick: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      className={sanitizeClassName(`${getFavoriteButtonClassName(favorited)} ${className ?? ""}`)}
+      onClick={onClick}
+    >
+      {favorited ? <HeartIconSolid className="size-3.5" /> : <HeartIconOutline className="size-3.5" strokeWidth={2} />}
+      <span>{favoritedCount}</span>
+    </button>
+  );
+}
 
 export default function Recruitments({ recruitments, signedIn }: RecruitmentsProps) {
   const groups = useMemo(() => {
@@ -188,21 +254,9 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
 }
 
 function MobileRecruitmentRow({ recruitment, signedIn }: { recruitment: Recruitment; signedIn: boolean }) {
-  const studentUid = recruitment.student?.uid ?? null;
   const { attackType, defenseType, role } = recruitment.student ?? {};
   const { showSignIn } = useSignIn();
-
-  const [favorited, setFavorited] = useState(recruitment.favorited);
-  const [favoritedCount, setFavoritedCount] = useState(recruitment.favoritedCount);
-  const fetcher = useFetcher();
-
-  const toggleFavorite = () => {
-    const next = !favorited;
-    setFavorited(next);
-    setFavoritedCount((c) => c + (next ? 1 : -1));
-    const data: ActionData = { favorite: { studentUid: studentUid ?? "", favorited: next } };
-    fetcher.submit(data, { method: "post", encType: "application/json" });
-  };
+  const { studentUid, favorited, favoritedCount, toggleFavorite } = useRecruitmentFavorite(recruitment);
 
   return (
     <div className="relative flex items-center gap-4 p-3 bg-neutral-100 dark:bg-neutral-900 rounded-xl pr-20">
@@ -234,40 +288,21 @@ function MobileRecruitmentRow({ recruitment, signedIn }: { recruitment: Recruitm
         )}
       </div>
       {studentUid && (
-        <button
-          type="button"
-          className={sanitizeClassName(`absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-2 py-1 rounded-xl text-sm font-semibold transition-all ${
-            favorited
-              ? "bg-gradient-to-r from-red-500 to-pink-500 text-white shadow shadow-red-500/25"
-              : "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700"
-          }`)}
+        <RecruitmentFavoriteButton
+          favorited={favorited}
+          favoritedCount={favoritedCount}
+          className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-xl"
           onClick={() => (signedIn ? toggleFavorite() : showSignIn())}
-        >
-          {favorited ? <HeartIconSolid className="size-3.5" /> : <HeartIconOutline className="size-3.5" strokeWidth={2} />}
-          <span>{favoritedCount}</span>
-        </button>
+        />
       )}
     </div>
   );
 }
 
 function DesktopRecruitmentCard({ recruitment, signedIn }: { recruitment: Recruitment; signedIn: boolean }) {
-  const studentUid = recruitment.student?.uid ?? null;
   const { attackType, defenseType, role } = recruitment.student ?? {};
   const { showSignIn } = useSignIn();
-
-  const [favorited, setFavorited] = useState(recruitment.favorited);
-  const [favoritedCount, setFavoritedCount] = useState(recruitment.favoritedCount);
-  const fetcher = useFetcher();
-
-  const toggleFavorite = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const next = !favorited;
-    setFavorited(next);
-    setFavoritedCount((c) => c + (next ? 1 : -1));
-    const data: ActionData = { favorite: { studentUid: studentUid ?? "", favorited: next } };
-    fetcher.submit(data, { method: "post", encType: "application/json" });
-  };
+  const { studentUid, favorited, favoritedCount, toggleFavorite } = useRecruitmentFavorite(recruitment);
 
   const [mainName, skinName] = recruitment.studentName.split("(");
   const trimmedSkinName = skinName?.replace(")", "").trim();
@@ -319,18 +354,12 @@ function DesktopRecruitmentCard({ recruitment, signedIn }: { recruitment: Recrui
         )}
 
         {studentUid && (
-          <button
-            type="button"
-            className={sanitizeClassName(`inline-flex items-center justify-center gap-1.5 w-full py-1 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-              favorited
-                ? "bg-gradient-to-r from-red-500 to-pink-500 text-white shadow shadow-red-500/25 hover:shadow-red-500/40 hover:brightness-110"
-                : "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-red-50 hover:text-red-500 hover:border-red-200 dark:hover:bg-red-950/40 dark:hover:text-red-400 dark:hover:border-red-800"
-            }`)}
-            onClick={(e) => (signedIn ? toggleFavorite(e) : showSignIn())}
-          >
-            {favorited ? <HeartIconSolid className="size-3.5" /> : <HeartIconOutline className="size-3.5" strokeWidth={2} />}
-            <span>{favoritedCount}</span>
-          </button>
+          <RecruitmentFavoriteButton
+            favorited={favorited}
+            favoritedCount={favoritedCount}
+            className="w-full py-1"
+            onClick={() => (signedIn ? toggleFavorite() : showSignIn())}
+          />
         )}
       </div>
     </div>

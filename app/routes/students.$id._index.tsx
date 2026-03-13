@@ -332,4 +332,3 @@ function StudentGradingChart({ student, tagCounts, noGrading, signedIn }: Studen
     </div>
   );
 }
-

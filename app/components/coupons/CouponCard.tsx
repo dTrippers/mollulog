@@ -47,7 +47,7 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
             type="button"
             onClick={handleToggle}
             disabled={fetcher.state !== "idle"}
-            className={`text-xs text-neutral-500 dark:text-neutral-400 hover:underline cursor-pointer pointer-events-auto ${fetcher.state !== "idle" ? "opacity-50 cursor-not-allowed hover:no-underline" : ""}`}
+            className={`pointer-events-auto text-xs text-neutral-500 dark:text-neutral-400 hover:underline ${fetcher.state !== "idle" ? "opacity-50 cursor-not-allowed hover:no-underline" : ""}`}
           >
             코드 다시 보기
           </button>

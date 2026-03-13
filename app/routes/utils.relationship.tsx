@@ -4,7 +4,7 @@ import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { Title } from "~/components/atoms/typography";
 import { Button } from "~/components/atoms/form";
-import { FavoriteItemSelector, RequiredGifts, StudentRelationshipLevel, StudentSearch, FavoritedItemSelector } from "~/components/relationship";
+import { FavoriteItemSelector, RequiredGifts, StudentRelationshipLevel, RelationshipStudentPicker, FavoritedItemSelector } from "~/components/relationship";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { getAllStudents } from "~/models/student";
 import { upsertRelationshipLevel, getRelationshipLevels, removeRelationshipLevel, type RelationshipLevel } from "~/models/relationship-level";
@@ -131,6 +131,10 @@ export default function RelationshipUtil() {
   const [activeTab, setActiveTab] = useState<TabId>("student");
   const [selectedStudentUid, setSelectedStudentUid] = useState<string | null>(null);
   const [selectedItemExp, setSelectedItemExp] = useState<number>(0);
+  const handleSelectStudentUid = (studentUid: string | null) => {
+    setSaveSuccess(false);
+    setSelectedStudentUid(studentUid);
+  };
 
   const [currentRelationship, setCurrentRelationship] = useState<Relationship>(emptyRelationship);
   useEffect(() => {
@@ -148,10 +152,6 @@ export default function RelationshipUtil() {
       }
     }
   }, [selectedStudentUid, students]);
-
-  useEffect(() => {
-    setSaveSuccess(false);
-  }, [selectedStudentUid]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
@@ -231,10 +231,10 @@ export default function RelationshipUtil() {
 
       {activeTab === "student" ? (
         <>
-          <StudentSearch
+          <RelationshipStudentPicker
             students={students}
             selectedStudentUid={selectedStudentUid}
-            onSelectStudentUid={setSelectedStudentUid}
+            onSelectStudentUid={handleSelectStudentUid}
           />
 
           {selectedStudentUid && (

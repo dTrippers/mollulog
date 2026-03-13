@@ -114,7 +114,7 @@ export function ContentTimelineItem({
     } else {
       const remainingHours = untilDayjs.startOf("hour").diff(now.startOf("hour"), "hour");
       if (remainingHours > 24) {
-        daysLabel = `내일 종료`;
+        daysLabel = "내일 종료";
       } else {
         finishSoon = true;
         daysLabel = `${remainingHours}시간 남음`;
@@ -132,7 +132,7 @@ export function ContentTimelineItem({
           </span>
           {!endless && daysLabel && <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />}
           {confirmed && (since && sinceDayjs.isAfter(now)) && <ContentTag Icon={CheckCircleIcon} text="확정" color="green" />}
-          {raidInfo && raidInfo.rankVisible && <ContentTag Icon={ChartBarIcon} text="순위/통계" color="default" />}
+          {raidInfo?.rankVisible && <ContentTag Icon={ChartBarIcon} text="순위/통계" color="default" />}
           {tags.includes("recruit_free_100") && recruitments?.every(({ until }) => until !== null && dayjs(until).isAfter(now)) && (
             <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
           )}
@@ -203,14 +203,13 @@ function ContentTitles({ name, showLink }: { name: string, showLink: boolean }):
       const key = `${name}-${index}`;
       if (index < titles.length - 1) {
         return <p key={key} className="text-lg md:text-xl font-semibold">{titleLine}</p>;
-      } else {
-        return (
-          <div key={key} className="text-lg md:text-xl font-semibold flex items-center">
-            <span className="inline">{titleLine}</span>
-            {showLink && <ChevronRightIcon className="inline size-4" strokeWidth={2} />}
-          </div>
-        );
       }
+      return (
+        <div key={key} className="text-lg md:text-xl font-semibold flex items-center">
+          <span className="inline">{titleLine}</span>
+          {showLink && <ChevronRightIcon className="inline size-4" strokeWidth={2} />}
+        </div>
+      );
     })
   )
 }
@@ -410,8 +409,68 @@ type RecruitmentStudentsProps = {
   showToggle?: boolean;
 };
 
+function getRecruitmentStudentCards({
+  recruitments,
+  favoritedStudents,
+  favoritedCounts,
+  onFavorite,
+  detailedLinkText,
+}: {
+  recruitments: RecruitmentsProps["recruitments"];
+  favoritedStudents: string[];
+  favoritedCounts: Record<string, number>;
+  onFavorite?: (studentUid: string, favorited: boolean) => void;
+  detailedLinkText: string;
+}) {
+  return recruitments.map((recruitment) => {
+    const student = recruitment.student;
+    const studentUid = student?.uid;
+    const isFavorited = studentUid ? favoritedStudents.includes(studentUid) : false;
+    const labelColorClass = (recruitment.rerun ||
+      recruitment.recruitmentType === "archive" ||
+      recruitment.recruitmentType === "recollect" ||
+      recruitment.recruitmentType === "encore")
+      ? "text-white"
+      : "text-yellow-500";
+
+    return {
+      ...student,
+      uid: studentUid ?? null,
+      name: recruitment.studentName,
+      label: <span className={labelColorClass}>{recruitmentLabelLocale(recruitment)}</span>,
+      state: studentUid ? {
+        favorited: isFavorited,
+        favoritedCount: favoritedCounts[studentUid],
+      } : undefined,
+      popups: (studentUid && student?.schaleDbId) ? [
+        isFavorited ? {
+          Icon: FilledHeartIcon,
+          text: "관심 학생에서 해제",
+          onClick: () => onFavorite?.(studentUid, false),
+        } : {
+          Icon: EmptyHeartIcon,
+          text: "관심 학생에 등록",
+          onClick: () => onFavorite?.(studentUid, true),
+        },
+        {
+          Icon: IdentificationIcon,
+          text: detailedLinkText,
+          link: `/students/${studentUid}`,
+        },
+      ] : undefined,
+    };
+  });
+}
+
 function RecruitmentStudents({ title, recruitments, favoritedStudents, favoritedCounts, onFavorite, showToggle = false }: RecruitmentStudentsProps) {
   const [showCards, setShowCards] = useState(!showToggle);
+  const studentCards = useMemo(() => getRecruitmentStudentCards({
+    recruitments,
+    favoritedStudents,
+    favoritedCounts,
+    onFavorite,
+    detailedLinkText: "학생부 보기 (평가/통계)",
+  }), [favoritedCounts, favoritedStudents, onFavorite, recruitments]);
 
   if (!showToggle) {
     return (
@@ -420,36 +479,7 @@ function RecruitmentStudents({ title, recruitments, favoritedStudents, favorited
         <StudentCards
           mobileGrid={5}
           pcGrid={8}
-          students={recruitments.map((recruitment) => {
-            const student = recruitment.student;
-            const colorClass = (recruitment.rerun || recruitment.recruitmentType === "archive" || recruitment.recruitmentType === "recollect" || recruitment.recruitmentType === "encore") ? "text-white" : "text-yellow-500";
-            return {
-              ...student,
-              uid: student?.uid ?? null,
-              name: recruitment.studentName,
-              label: <span className={`${colorClass}`}>{recruitmentLabelLocale(recruitment)}</span>,
-              state: student?.uid ? {
-                favorited: favoritedStudents?.includes(student.uid),
-                favoritedCount: favoritedCounts?.[student.uid],
-              } : undefined,
-              popups: (student?.uid && student?.schaleDbId) ? [
-                favoritedStudents?.includes(student.uid) ? {
-                  Icon: FilledHeartIcon,
-                  text: "관심 학생에서 해제",
-                  onClick: () => onFavorite?.(student.uid, false),
-                } : {
-                  Icon: EmptyHeartIcon,
-                  text: "관심 학생에 등록",
-                  onClick: () => onFavorite?.(student.uid, true),
-                },
-                {
-                  Icon: IdentificationIcon,
-                  text: "학생부 보기 (평가/통계)",
-                  link: `/students/${student?.uid}`,
-                },
-              ] : undefined,
-            };
-          })}
+          students={studentCards}
         />
       </div>
     );
@@ -459,6 +489,7 @@ function RecruitmentStudents({ title, recruitments, favoritedStudents, favorited
     <div>
       <div className="mb-2">
         <button
+          type="button"
           onClick={() => setShowCards(!showCards)}
           className="flex items-center gap-x-1 px-3 py-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg transition border border-neutral-200 dark:border-neutral-700"
         >
@@ -479,36 +510,7 @@ function RecruitmentStudents({ title, recruitments, favoritedStudents, favorited
       {showCards && (
         <StudentCards
           mobileGrid={5}
-          students={recruitments.map((recruitment) => {
-            const student = recruitment.student;
-            const colorClass = (recruitment.rerun || recruitment.recruitmentType === "archive" || recruitment.recruitmentType === "recollect" || recruitment.recruitmentType === "encore") ? "text-white" : "text-yellow-500";
-            return {
-              ...student,
-              uid: student?.uid ?? null,
-              name: recruitment.studentName,
-              label: <span className={`${colorClass}`}>{recruitmentLabelLocale(recruitment)}</span>,
-              state: student?.uid ? {
-                favorited: favoritedStudents?.includes(student.uid),
-                favoritedCount: favoritedCounts?.[student.uid],
-              } : undefined,
-              popups: (student?.uid && student?.schaleDbId) ? [
-                favoritedStudents?.includes(student.uid) ? {
-                  Icon: FilledHeartIcon,
-                  text: "관심 학생에서 해제",
-                  onClick: () => onFavorite?.(student.uid, false),
-                } : {
-                  Icon: EmptyHeartIcon,
-                  text: "관심 학생에 등록",
-                  onClick: () => onFavorite?.(student.uid, true),
-                },
-                {
-                  Icon: IdentificationIcon,
-                  text: "학생부 보기",
-                  link: `/students/${student?.uid}`,
-                },
-              ] : undefined,
-            };
-          })}
+          students={studentCards}
         />
       )}
     </div>

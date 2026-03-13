@@ -14,15 +14,14 @@ type ContentFilterPanelProps = {
 
 export default function ContentFilterPanel({ filter, onFilterChange }: ContentFilterPanelProps) {
   const onToggleType = (activated: boolean, types: (EventType | RaidType)[]) => {
-    const newFilters = { ...filter };
-    const newTypes = activated ? [...filter.types, ...types] : filter.types.filter((type) => !types.includes(type));
-    newFilters.types = newTypes;
-    onFilterChange(newFilters);
+    const nextTypes = activated
+      ? Array.from(new Set([...filter.types, ...types]))
+      : filter.types.filter((type) => !types.includes(type));
+    onFilterChange({ ...filter, types: nextTypes });
   };
 
   const onToggleOnlyPickups = (activated: boolean) => {
-    const newFilters = { ...filter, onlyPickups: activated };
-    onFilterChange(newFilters);
+    onFilterChange({ ...filter, onlyPickups: activated });
   };
 
   const eventFilterProps = [

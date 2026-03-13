@@ -13,6 +13,17 @@ type Video = {
   start: number | null;
 };
 
+type YouTubePlayer = {
+  mute: () => void;
+  unMute: () => void;
+  setVolume: (volume: number) => void;
+  getDuration: () => number;
+};
+
+type YouTubeEvent = {
+  target: YouTubePlayer;
+};
+
 type EventHeaderProps = {
   imageUrl: string | null;
   name: string;
@@ -43,7 +54,7 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [videoEndTimer, setVideoEndTimer] = useState<NodeJS.Timeout | null>(null);
 
-  const playerRef = useRef<any | null>(null);
+  const playerRef = useRef<YouTubePlayer | null>(null);
   const [muted, setMuted] = useState(true);
   useEffect(() => {
     if (!playerRef?.current) {
@@ -56,7 +67,19 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
       playerRef.current.unMute();
       playerRef.current.setVolume(30);
     }
-  }, [muted, playerRef]);
+  }, [muted]);
+
+  useEffect(() => {
+    return () => {
+      if (videoEndTimer) {
+        clearTimeout(videoEndTimer);
+      }
+    };
+  }, [videoEndTimer]);
+
+  useEffect(() => {
+    setCurrentVideo(videos?.[0] ?? null);
+  }, [videos]);
 
   let aspectRatioClass = "";
   if (!imageUrl) {
@@ -81,14 +104,12 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
                 opts={{
                   playerVars: { autoplay: 1, mute: 1, controls: 0, rel: 0, start: currentVideo.start ?? 0 },
                 }}
-                // @ts-ignore
-                onReady={(ytEvent: any) => {
+                onReady={(ytEvent: YouTubeEvent) => {
                   playerRef.current = ytEvent.target;
                   setMuted(true);
                   ytEvent.target.setVolume(30);
                 }}
-                // @ts-ignore
-                onPlay={(ytEvent: any) => {
+                onPlay={(ytEvent: YouTubeEvent) => {
                   if (videoEndTimer) {
                     clearTimeout(videoEndTimer);
                   }
@@ -118,9 +139,13 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
         {/* Action Buttons */}
         <div className="absolute top-0 right-0 p-4 flex items-center gap-2">
           {videos && videos.length > 0 && (
-            <div className="p-2 rounded-full bg-neutral-900/75 hover:bg-neutral-700/75 transition backdrop-blur-sm cursor-pointer text-white" onClick={() => setMuted((prev) => !prev)}>
+            <button
+              type="button"
+              className="p-2 rounded-full bg-neutral-900/75 hover:bg-neutral-700/75 transition backdrop-blur-sm text-white"
+              onClick={() => setMuted((prev) => !prev)}
+            >
               {muted ? <SpeakerXMarkIcon className="size-4" /> : <SpeakerWaveIcon className="size-4" />}
-            </div>
+            </button>
           )}
         </div>
 
@@ -175,12 +200,17 @@ function VideoList({ videos, currentVideo, onVideoSelect }: VideoListProps): Rea
       return;
     }
 
-    const target = videoListRef.current.children[videos!.findIndex((video) => video.youtube === currentVideo.youtube)] as HTMLElement;
+    const targetIndex = videos.findIndex((video) => video.youtube === currentVideo.youtube);
+    const target = videoListRef.current.children[targetIndex] as HTMLElement | undefined;
+    if (!target) {
+      return;
+    }
+
     videoListRef.current.scrollTo({
       left: target.offsetLeft - 40,
       behavior: "smooth",
     });
-  }, [currentVideo, videoListRef]);
+  }, [currentVideo, videos]);
 
   const changeVideo = (indexDiff: 1 | -1) => {
     if (!currentVideo) {
@@ -195,29 +225,28 @@ function VideoList({ videos, currentVideo, onVideoSelect }: VideoListProps): Rea
     <div className="w-full my-2 md:my-4 relative">
       <div className="w-full px-10 flex flex-nowrap overflow-x-scroll no-scrollbar" ref={videoListRef}>
         {videos.map((video) => (
-          <span
+          <button
+            type="button"
             key={video.youtube}
             className={sanitizeClassName(`
-              -mx-1 px-4 py-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-600 transition text-sm cursor-pointer shrink-0
+              -mx-1 px-4 py-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-600 transition text-sm shrink-0
               ${currentVideo?.youtube === video.youtube ? "bg-neutral-100 dark:bg-neutral-700 font-bold" : ""}
             `)}
             onClick={() => onVideoSelect(video)}
           >
             {video.title}
-          </span>
+          </button>
         ))}
       </div>
       <div className="h-full w-8 absolute left-0 top-0 flex items-center justify-center bg-white dark:bg-neutral-800">
-        <ChevronDoubleLeftIcon
-          className="p-1 size-6 hover:bg-black hover:text-white rounded-full transition cursor-pointer" strokeWidth={2}
-          onClick={() => changeVideo(-1)}
-        />
+        <button type="button" onClick={() => changeVideo(-1)} className="p-1 hover:bg-black hover:text-white rounded-full transition">
+          <ChevronDoubleLeftIcon className="size-6" strokeWidth={2} />
+        </button>
       </div>
       <div className="h-full w-8 absolute right-0 top-0 flex items-center justify-center bg-white dark:bg-neutral-800">
-        <ChevronDoubleRightIcon
-          className="p-1 size-6 hover:bg-black hover:text-white rounded-full transition cursor-pointer" strokeWidth={2}
-          onClick={() => changeVideo(1)}
-        />
+        <button type="button" onClick={() => changeVideo(1)} className="p-1 hover:bg-black hover:text-white rounded-full transition">
+          <ChevronDoubleRightIcon className="size-6" strokeWidth={2} />
+        </button>
       </div>
     </div>
   );

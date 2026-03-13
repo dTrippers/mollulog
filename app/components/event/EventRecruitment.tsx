@@ -63,18 +63,19 @@ export default function EventRecruitment({ recruitment, favoritedCount, favorite
       </div>
       {studentUid && (
         <div className="absolute right-4 top-4 md:top-0 h-full flex items-start md:items-center justify-end">
-          <div
+          <button
+            type="button"
             className={sanitizeClassName(`group inline-flex items-center gap-2 px-4 py-1 md:py-2 rounded-xl font-medium transition-all duration-200 cursor-pointer ${favorited
                 ? "bg-gradient-to-r from-red-500 to-pink-500 text-white shadow-lg shadow-red-500/25 hover:shadow-red-500/40"
                 : "bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 shadow-lg shadow-neutral-200/50 dark:shadow-neutral-700/50 hover:bg-neutral-100 dark:hover:bg-neutral-700"
               }`)}
-            onClick={() => signedIn ? onFavorite(!favorited) : showSignIn()}
+            onClick={() => (signedIn ? onFavorite(!favorited) : showSignIn())}
           >
             {favorited ? <HeartIconSolid className="size-4" /> : <HeartIconOutline className="size-4" strokeWidth={2} />}
             <span className="font-semibold">{favoritedCount}</span>
-          </div>
+          </button>
         </div>
       )}
     </div>
-  )
+  );
 }

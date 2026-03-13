@@ -1,7 +1,9 @@
+import { Field } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
 
 type TextareaProps = {
   className?: string;
+  containerClassName?: string;
   name?: string;
   label?: string;
   description?: string;
@@ -15,13 +17,18 @@ type TextareaProps = {
 };
 
 export default function Textarea({
-  className, name, label, description, placeholder, rows, required, defaultValue, value, error, onChange,
+  className, containerClassName, name, label, description, placeholder, rows, required, defaultValue, value, error, onChange,
 }: TextareaProps) {
   return (
-    <div className="mt-2 mb-8 last:mb-4 mr-1 md:mr-2">
-      {label && <p className="font-bold my-2">{label}</p>}
-      {description && <p className="my-2 text-sm text-neutral-500">{description}</p>}
+    <Field
+      label={label}
+      description={description}
+      error={error}
+      htmlFor={name}
+      containerClassName={containerClassName ?? "mt-2 mb-8 last:mb-4 mr-1 md:mr-2"}
+    >
       <textarea
+        id={name}
         name={name}
         placeholder={placeholder}
         rows={rows}
@@ -35,7 +42,6 @@ export default function Textarea({
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
       />
-      {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-    </div>
+    </Field>
   );
 }

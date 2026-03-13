@@ -1,5 +1,6 @@
 import { Form, Link } from "react-router";
 import { useState } from "react";
+import { sanitizeClassName } from "~/prophandlers";
 
 export type ActionCardAction = {
   text: string;
@@ -33,15 +34,12 @@ export default function ActionCard({ children, actions }: ActionCardProps) {
           {remindDangerAction ? (
             <>
               <p className="mr-2">정말로 {remindDangerAction.text} 할까요?</p>
-              <ActionButton action={{
-                text: "취소",
-                onClick: () => setRemindDangerAction(null),
-              }} />
+              <ActionButton action={{ text: "취소", onClick: () => setRemindDangerAction(null) }} />
               <ActionButton action={remindDangerAction} />
             </>
-          ) : actions.map((action, index) => {
-            return <ActionButton key={index} action={action} setRemindDangerAction={setRemindDangerAction} />;
-          })}
+          ) : actions.map((action) => (
+            <ActionButton key={getActionKey(action)} action={action} setRemindDangerAction={setRemindDangerAction} />
+          ))}
         </div>
       )}
     </div>
@@ -54,49 +52,45 @@ type ActionButtonProps = {
 };
 
 function ActionButton({ action, setRemindDangerAction }: ActionButtonProps) {
-  let colorClass = "text-neutral-500 dark:text-neutral-200";
-  if (action.color === "red") {
-    colorClass = "text-red-500";
-  }
-
   const [showPopup, setShowPopup] = useState(false);
-
-  let buttonOnclick;
-  if (action.onClick) {
-    buttonOnclick = action.onClick;
-  } else if (action.popup) {
-    buttonOnclick = () => setShowPopup((prev) => !prev);
-  } else if (action.danger && setRemindDangerAction) {
-    buttonOnclick = () => setRemindDangerAction(action);
-  }
-
-  const button = (
-    <button
-      type={action.form ? "submit" : "button"}
-      className={`-mx-1 px-4 py-2 hover:bg-neutral-200 dark:hover:bg-neutral-700 ${colorClass} font-semibold text-sm transition rounded-lg cursor-pointer`}
-      onClick={buttonOnclick}
-    >
-      {action.text}
-    </button>
-  );
+  const buttonOnClick = getActionButtonOnClick(action, setRemindDangerAction, () => setShowPopup((prev) => !prev));
+  const buttonClassName = getActionButtonClassName(action.color);
 
   if (action.danger && setRemindDangerAction) {
-    return button;
-  } else if (action.link) {
-    return <Link to={action.link} target={action.link.startsWith("http") ? "_blank" : undefined}>{button}</Link>;
-  } else if (action.form) {
+    return (
+      <button type="button" className={buttonClassName} onClick={buttonOnClick}>
+        {action.text}
+      </button>
+    );
+  }
+
+  if (action.link) {
+    return (
+      <Link to={action.link} target={action.link.startsWith("http") ? "_blank" : undefined} className={buttonClassName}>
+        {action.text}
+      </Link>
+    );
+  }
+
+  if (action.form) {
     return (
       <Form method={action.form.method}>
         {action.form.hiddenInputs.map((input) => (
           <input key={input.name} type="hidden" name={input.name} value={input.value} />
         ))}
-        {button}
+        <button type="submit" className={buttonClassName}>
+          {action.text}
+        </button>
       </Form>
     );
-  } else if (action.popup) {
+  }
+
+  if (action.popup) {
     return (
       <div className="relative">
-        {button}
+        <button type="button" className={buttonClassName} onClick={buttonOnClick}>
+          {action.text}
+        </button>
         {showPopup && (
           <div className="absolute right-0 top-0 mt-12 p-4 w-64 bg-white shadow-lg rounded-lg z-10">
             {action.popup(() => setShowPopup(false))}
@@ -105,5 +99,49 @@ function ActionButton({ action, setRemindDangerAction }: ActionButtonProps) {
       </div>
     );
   }
-  return button;
+
+  return (
+    <button type="button" className={buttonClassName} onClick={buttonOnClick}>
+      {action.text}
+    </button>
+  );
+}
+
+function getActionKey(action: ActionCardAction) {
+  if (action.link) {
+    return `${action.text}-${action.link}`;
+  }
+
+  if (action.form) {
+    return `${action.text}-${action.form.method}-${action.form.hiddenInputs.map((input) => `${input.name}:${input.value}`).join(",")}`;
+  }
+
+  return action.text;
+}
+
+function getActionButtonClassName(color: ActionCardAction["color"]) {
+  return sanitizeClassName(`
+    -mx-1 px-4 py-2 hover:bg-neutral-200 dark:hover:bg-neutral-700 font-semibold text-sm transition rounded-lg
+    ${color === "red" ? "text-red-500" : "text-neutral-500 dark:text-neutral-200"}
+  `);
+}
+
+function getActionButtonOnClick(
+  action: ActionCardAction,
+  setRemindDangerAction?: (action: ActionCardAction | null) => void,
+  togglePopup?: () => void,
+) {
+  if (action.onClick) {
+    return action.onClick;
+  }
+
+  if (action.popup) {
+    return togglePopup;
+  }
+
+  if (action.danger && setRemindDangerAction) {
+    return () => setRemindDangerAction(action);
+  }
+
+  return undefined;
 }
