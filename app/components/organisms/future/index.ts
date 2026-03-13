@@ -1,3 +1,1 @@
-import FuturePlan from "./FuturePlan";
-
-export { FuturePlan };
+export { FuturePlan } from "../../features/futures";

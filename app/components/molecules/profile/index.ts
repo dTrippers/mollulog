@@ -1,5 +1,1 @@
-import ProfileUsername from "./ProfileUsername";
-
-export {
-  ProfileUsername,
-};
+export { ProfileUsername } from "../../features/profile";

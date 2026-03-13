@@ -1,13 +1,2 @@
-import ActionCard, { type ActionCardAction } from "./ActionCard";
-import AddContentButton from "./AddContentButton";
-import PartyUnitEditor from "./PartyUnitEditor";
-
-export {
-  ActionCard,
-  AddContentButton,
-  PartyUnitEditor,
-};
-
-export type {
-  ActionCardAction,
-};
+export { ActionCard, AddContentButton, PartyUnitEditor } from "../../features/editor";
+export type { ActionCardAction } from "../../features/editor";

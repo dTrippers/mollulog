@@ -1,18 +1,10 @@
-import StudentFilter, { applyStudentFilter } from "./StudentFilter";
-import type { StudentFilterState } from "./StudentFilter";
-import StudentCard, { StudentCardPopup } from "./StudentCard";
-import StudentCards from "./StudentCards";
-import RecruitmentHistories from "./RecruitmentHistories";
-
 export {
-  StudentFilter,
-  applyStudentFilter,
+  RecruitmentHistories,
   StudentCard,
   StudentCardPopup,
   StudentCards,
-  RecruitmentHistories,
-};
+  StudentFilter,
+  applyStudentFilter,
+} from "../features/students";
 
-export type {
-  StudentFilterState,
-};
+export type { StudentFilterState } from "../features/students";

@@ -1,8 +1,2 @@
-import ProfileCard, { type ProfileCardProps } from "./ProfileCard";
-import ProfileEditor from "./ProfileEditor";
-
-export {
-  ProfileCard,
-  type ProfileCardProps,
-  ProfileEditor,
-};
+export { ProfileCard, ProfileEditor } from "../../features/profile";
+export type { ProfileCardProps } from "../../features/profile";

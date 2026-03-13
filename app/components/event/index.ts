@@ -1,6 +1,6 @@
-import EventHeader from "./EventHeader";
-import EventDetailShopPage from "./EventDetailShopPage";
-import EventInfoCard from "./EventInfoCard";
-import Recruitments from "./Recruitments";
-
-export { EventHeader, EventDetailShopPage, EventInfoCard, Recruitments };
+export {
+  EventDetailShopPage,
+  EventHeader,
+  EventInfoCard,
+  Recruitments,
+} from "../features/events";

@@ -2,6 +2,7 @@ import PageScreenSelector from "./PageScreenSelector";
 import FilterButtons from "./FilterButtons";
 import Page from "./Page";
 import PageLink from "./PageLink";
+import type { PageLinkProps } from "./PageLink";
 import type { PagePanelProps } from "./PagePanel";
 import NavigationBar from "./NavigationBar";
 
@@ -13,4 +14,4 @@ export {
   NavigationBar,
 };
 
-export type { PagePanelProps };
+export type { PageLinkProps, PagePanelProps };

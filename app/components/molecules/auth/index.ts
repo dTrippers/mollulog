@@ -1,5 +1,1 @@
-import SignInBottomSheet from "./SignInBottomSheet";
-
-export {
-  SignInBottomSheet,
-};
+export { SignInBottomSheet } from "../../features/auth";

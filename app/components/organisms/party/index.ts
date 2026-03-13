@@ -1,7 +1,1 @@
-import PartyGenerator from "./PartyGenerator";
-import PartyView from "./PartyView";
-
-export {
-  PartyGenerator,
-  PartyView,
-};
+export { PartyGenerator, PartyView } from "../../features/editor";
