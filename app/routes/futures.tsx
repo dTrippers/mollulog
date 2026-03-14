@@ -2,15 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
 import { FunnelIcon } from "@heroicons/react/24/outline";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { ContentTimeline } from "~/components/contents";
-import type { ContentTimelineProps } from "~/components/contents";
-import { ContentFilterPanel } from "~/components/futures";
+import { ContentTimeline } from "~/components/features/contents";
+import type { ContentTimelineProps } from "~/components/features/contents";
+import { ContentFilterPanel } from "~/components/features/futures";
 import { getContentsComments, getFutureContents, nestComments, RAID_CONTENT_TYPES, type NestedComment } from "~/models/content";
 import { getUserFavoritedStudents, getFavoritedCounts } from "~/models/favorite-students";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
-import { Page } from "~/components/navigation";
-import type { ContentFilterState } from "~/components/futures/ContentFilterPanel";
+import { Page } from "~/components/features/layout";
+import type { ContentFilterState } from "~/components/features/futures/ContentFilterPanel";
 import { useSignIn } from "~/contexts/SignInProvider";
 
 export const meta: MetaFunction = () => {
@@ -111,7 +111,7 @@ export default function FutureContents() {
       }));
       setPendingContentUid(null);
     }
-  }, [commentFetcher.state, commentFetcher.data, commentFetcher.formAction, pendingContentUid, initialComments]);
+  }, [commentFetcher.state, commentFetcher.data, pendingContentUid]);
 
   useEffect(() => {
     setAllComments(initialComments);
@@ -126,11 +126,12 @@ export default function FutureContents() {
     submitFavorite({ favorite: { contentUid, studentUid, favorited } });
 
     setFavoritedStudents((prev) => {
-      const alreadyFavorited = prev && prev.some((favorite) => equalFavorites(favorite, { contentUid, studentUid }));
+      const alreadyFavorited = prev?.some((favorite) => equalFavorites(favorite, { contentUid, studentUid }));
       if (favorited && !alreadyFavorited) {
         return prev && [...prev, { contentUid, studentUid }];
-      } else if (!favorited && alreadyFavorited) {
-        return prev && prev.filter((fav) => !equalFavorites(fav, { contentUid, studentUid }));
+      }
+      if (!favorited && alreadyFavorited) {
+        return prev?.filter((fav) => !equalFavorites(fav, { contentUid, studentUid }));
       }
     });
 

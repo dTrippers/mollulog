@@ -1,6 +1,6 @@
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/16/solid";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, roleColor, roleLocale, schoolNameLocale } from "~/locales/ko";
-import { OptionBadge } from "~/components/atoms/student";
+import { OptionBadge } from "~/components/primitives";
 import { studentStandingImageUrl } from "~/models/assets";
 
 type StudentInfoProps = {

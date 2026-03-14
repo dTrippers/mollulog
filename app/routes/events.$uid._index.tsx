@@ -1,20 +1,20 @@
-import { useEffect, useRef, useState } from "react";
-import { useLoaderData, useFetcher } from "react-router";
+import { useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect } from "react-router";
-import { EventHeader, Recruitments } from "~/components/event";
-import { SubTitle } from "~/components/atoms/typography";
-import ContentCommentEditor from "~/components/contents/ContentCommentEditor";
+import { EventHeader, Recruitments } from "~/components/features/events";
 import { getEventContentSummary } from "~/models/event-content";
-import { getNestedContentComments, type NestedComment } from "~/models/content";
+import { getNestedContentComments } from "~/models/content";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { favoriteStudent, getFavoritedCounts, getUserFavoritedStudents, unfavoriteStudent } from "~/models/favorite-students";
-import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
+import EventComment from "./events.$uid._components/EventComment";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
-  const { uid: timelineUid } = params;
+  const timelineUid = params.uid;
+  if (!timelineUid) {
+    throw new Response("Not Found", { status: 404 });
+  }
   const { env } = context.cloudflare;
-  const eventContent = await getEventContentSummary(env, timelineUid!);
+  const eventContent = await getEventContentSummary(env, timelineUid);
   if (!eventContent) {
     throw new Response("Not Found", { status: 404 });
   }
@@ -26,9 +26,9 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     .filter((uid): uid is string => uid !== undefined);
 
   const [favoritedStudents, favoritedCounts, allComments] = await Promise.all([
-    currentUser ? getUserFavoritedStudents(env, currentUser.id, timelineUid!) : [],
+    currentUser ? getUserFavoritedStudents(env, currentUser.id, timelineUid) : [],
     getFavoritedCounts(env, studentUids),
-    getNestedContentComments(env, timelineUid!, currentUser),
+    getNestedContentComments(env, timelineUid, currentUser),
   ]);
 
   const recruitmentsWithFavorites = eventContent.recruitments.map((recruitment) => ({
@@ -45,7 +45,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     signedIn: currentUser !== null,
     allComments,
     me: currentUser ? { username: currentUser.username } : null,
-    eventUid: timelineUid!,
+    eventUid: timelineUid,
   };
 };
 
@@ -63,7 +63,10 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     return redirect("/unauthorized");
   }
 
-  const eventUid = params.uid!;
+  const eventUid = params.uid;
+  if (!eventUid) {
+    throw new Response("Not Found", { status: 404 });
+  }
   const actionData = await request.json() as ActionData;
   if (actionData.favorite) {
     const { studentUid, favorited } = actionData.favorite;
@@ -120,54 +123,5 @@ export default function EventIndex() {
 
       <EventComment allComments={allComments} me={me} eventUid={eventUid} />
     </div>
-  );
-}
-
-type EventCommentProps = {
-  allComments: NestedComment[];
-  me: { username: string } | null;
-  eventUid: string;
-};
-
-function EventComment({ allComments: initialComments, me, eventUid }: EventCommentProps) {
-  const [allComments, setAllComments] = useState(initialComments);
-  const [hasPendingUpdate, setHasPendingUpdate] = useState(false);
-  const justUpdatedRef = useRef(false);
-
-  const fetcher = useFetcher();
-  const submit = (data: CommentActionData) => {
-    setHasPendingUpdate(true);
-    justUpdatedRef.current = false;
-    fetcher.submit(data, { action: `/api/contents/${eventUid}/comments`, method: "post", encType: "application/json" });
-  };
-
-  useEffect(() => {
-    if ((fetcher.state === "loading" || fetcher.state === "idle") && hasPendingUpdate && fetcher.data && Array.isArray(fetcher.data)) {
-      setAllComments(fetcher.data);
-      justUpdatedRef.current = true;
-      setHasPendingUpdate(false);
-    }
-  }, [fetcher.state, fetcher.data, hasPendingUpdate]);
-
-  useEffect(() => {
-    if (!hasPendingUpdate && !justUpdatedRef.current) {
-      setAllComments(initialComments);
-    }
-    justUpdatedRef.current = false;
-  }, [initialComments, hasPendingUpdate]);
-
-  return (
-    <>
-      <SubTitle text="이벤트 의견" />
-      <ContentCommentEditor
-        comments={allComments}
-        onCreateComment={(body, visibility) => submit({ action: "create", body, visibility })}
-        onCreateSubcomment={(parentCommentId, body, visibility) => submit({ action: "createSubcomment", parentCommentId, body, visibility })}
-        onUpdateComment={(commentUid, body, visibility) => submit({ action: "update", commentUid, body, visibility })}
-        onDeleteComment={(commentUid) => submit({ action: "delete", commentUid })}
-        signedIn={me !== null}
-        isSubmitting={fetcher.state === "submitting"}
-      />
-    </>
   );
 }

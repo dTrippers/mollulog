@@ -3,8 +3,7 @@ import { XMarkIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { OptionBadge } from "~/components/atoms/student";
-import { FilterButtons } from "~/components/navigation";
+import { FilterButtons, OptionBadge } from "~/components/primitives";
 import { terrainLocale, defenseTypeLocale, difficultyLocale, defenseTypeColor } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType, Terrain } from "~/models/content.d";
@@ -22,7 +21,7 @@ type SelectableRaid = {
   attackType: Attack;
   rankVisible: boolean;
   defenseTypes: { defenseType: Defense; difficulty: string | null }[];
-};
+}
 
 
 type RaidSelectorProps = {

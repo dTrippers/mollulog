@@ -1,7 +1,5 @@
 import { useState, useMemo } from "react";
-import { SubTitle } from "~/components/atoms/typography";
-import ResourceCard from "~/components/atoms/item/ResourceCard";
-import { Section } from "~/components/ui";
+import { ResourceCard, Section, SubTitle } from "~/components/primitives";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 
 type RewardType = "normal" | "growth" | "growth_plus";

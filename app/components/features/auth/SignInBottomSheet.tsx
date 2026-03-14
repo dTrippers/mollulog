@@ -3,7 +3,7 @@ import { startAuthentication } from "@simplewebauthn/browser";
 import { useEffect, useState } from "react";
 // @ts-ignore
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/server/script/deps";
-import { Button } from "~/components/atoms/form";
+import { Button } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 
 export default function SignInBottomSheet() {

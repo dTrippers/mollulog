@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import dayjs from "dayjs";
 import { LockClosedIcon } from "@heroicons/react/16/solid";
-import { ProfileImage } from "~/components/atoms/student";
+import { ProfileImage } from "~/components/primitives";
 
 type CommentViewProps = {
   body: string;
@@ -35,4 +35,3 @@ export default function CommentView({ body, visibility, createdAt, sensei }: Com
     </div>
   );
 }
-

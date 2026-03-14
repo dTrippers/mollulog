@@ -1,5 +1,5 @@
 import { ExclamationCircleIcon } from "@heroicons/react/24/outline";
-import { EmptyView } from "~/components/atoms/typography";
+import { EmptyView } from "~/components/primitives";
 
 export default function Unauthorized() {
   return (

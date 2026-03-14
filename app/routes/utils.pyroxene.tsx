@@ -3,10 +3,10 @@ import { type MetaFunction, useFetcher, useLoaderData, useRevalidator, type Acti
 import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { LockClosedIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { PyroxenePlannerInputPanel, PyroxenePlannerOptionsPanel, PyroxeneSchedule } from "~/components/futures";
-import type { PickupResources, PyroxeneScheduleItem } from "~/components/futures";
+import { PyroxenePlannerInputPanel, PyroxenePlannerOptionsPanel, PyroxeneSchedule } from "~/components/features/futures";
+import type { PickupResources, PyroxeneScheduleItem } from "~/components/features/futures";
 import type { PyroxenePlannerOptions } from "~/models/pyroxene-planner";
-import Page from "~/components/navigation/Page";
+import Page from "~/components/features/layout/Page";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import {
   createPyroxeneOwnedResource,
@@ -24,7 +24,7 @@ import {
   upsertPyroxeneEventData,
   deletePyroxeneEventData,
 } from "~/models/pyroxene-planner";
-import { ErrorPage } from "~/components/organisms/error";
+import { ErrorPage } from "~/components/features/layout";
 
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
@@ -261,7 +261,7 @@ export default function PyroxenePlanner() {
       revalidator.revalidate();
       setRevalidated(true);
     }
-  }, [fetcher.data, fetcher.state, fetcher.formMethod, revalidator, revalidated]);
+  }, [fetcher.data, fetcher.state, revalidator, revalidated]);
 
   const defaultOptions: PyroxenePlannerOptions = {
     event: {
@@ -284,18 +284,18 @@ export default function PyroxenePlanner() {
 
   const eventDataMap = useMemo(() => {
     const map = new Map<string, { completed: boolean; expectedTrials: number | null }>();
-    eventData.forEach((data) => {
+    for (const data of eventData) {
       map.set(data.eventUid, {
         completed: data.completed,
         expectedTrials: data.expectedTrials,
       });
-    });
+    }
     return map;
   }, [eventData]);
 
   const scheduleItems = useMemo(() => {
     const items: PyroxeneScheduleItem[] = [];
-    contents.forEach((content) => {
+    for (const content of contents) {
       if (content.kind === "event") {
         items.push({
           event: {
@@ -312,8 +312,8 @@ export default function PyroxenePlanner() {
       } else if (content.kind === "raid") {
         items.push({ raid: { uid: content.uid, name: content.name, type: content.type, since: content.since, until: content.until } });
       }
-    });
-    timelineItems.forEach((item) => {
+    }
+    for (const item of timelineItems) {
       if (item.source === "buy") {
         items.push({
           onetimeGain: { uid: item.uid, source: "buy", description: item.description, date: new Date(item.eventAt), pyroxeneDelta: item.pyroxeneDelta },
@@ -327,15 +327,15 @@ export default function PyroxenePlanner() {
           repeatedGain: {
             source: "package_daily", description: item.description, date: new Date(item.eventAt),
             pyroxeneDelta: item.pyroxeneDelta,
-            repeatIntervalDays: item.repeatIntervalDays!,
-            repeatCount: item.repeatCount!,
+            repeatIntervalDays: item.repeatIntervalDays ?? 0,
+            repeatCount: item.repeatCount ?? 0,
           },
         });
       } else if (item.source === "attendance") {
         items.push({
           repeatedGain: {
             source: "attendance", description: item.description, date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta, repeatIntervalDays: item.repeatIntervalDays!,
+            pyroxeneDelta: item.pyroxeneDelta, repeatIntervalDays: item.repeatIntervalDays ?? 0,
           },
         });
       } else if (item.source === "other") {
@@ -346,7 +346,7 @@ export default function PyroxenePlanner() {
           },
         });
       }
-    });
+    }
     return items;
   }, [contents, favoritedStudents, timelineItems]);
 

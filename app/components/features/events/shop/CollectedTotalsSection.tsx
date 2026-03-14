@@ -1,12 +1,11 @@
 import { memo, useMemo, useState } from "react";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { ResourceCard } from "~/components/atoms/item";
+import { NumberInput, ResourceCard } from "~/components/primitives";
 import type { Stage, CollectableResource, ShopResource } from "./types";
 import type { ShopState, ShopActions } from "./hooks";
 import { resourceCountLabel, calculateMinigameRewards } from "./utils";
 import type { MinigameConfig } from "./constants";
 import { Transition } from "@headlessui/react";
-import { NumberInput } from "~/components/atoms/form";
 import BugReportModal from "./BugReportModal";
 import type { CalculationResult } from "./hooks/useShopCalculations";
 

@@ -1,9 +1,8 @@
 import { ChevronRightIcon, HeartIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useState } from "react";
-import { Toggle } from "~/components/atoms/form";
 import { RELATIONSHIP_EXP_TABLE } from "~/models/constants";
 import { sanitizeClassName } from "~/prophandlers";
-import { Section } from "~/components/ui";
+import { Section, Toggle } from "~/components/primitives";
 
 type StudentRelationshipLevelProps = {
   currentExp: number | null;

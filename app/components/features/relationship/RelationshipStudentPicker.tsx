@@ -1,9 +1,6 @@
 import { HeartIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useState } from "react";
-import { Input } from "~/components/atoms/form";
-import { ProfileImage } from "~/components/atoms/student";
-import { SubTitle } from "~/components/atoms/typography";
-import { HorizontalScroll } from "~/components/ui";
+import { HorizontalScroll, Input, ProfileImage, SubTitle } from "~/components/primitives";
 import { filterStudentByName } from "~/filters/student";
 import { parseVisibleNames } from "~/models/student";
 import { sanitizeClassName } from "~/prophandlers";

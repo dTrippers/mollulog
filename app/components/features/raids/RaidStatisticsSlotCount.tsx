@@ -1,12 +1,10 @@
 import dayjs from "dayjs";
 import { useState } from "react";
 import { Link } from "react-router";
-import { ActionCard } from "~/components/molecules/editor";
+import { ActionCard } from "~/components/features/editor";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
-import { OptionBadge } from "~/components/atoms/student";
-import { StudentCard } from "~/components/students";
-import { TierCounts } from "~/components/molecules/student";
-import { FilterButtons } from "~/components/navigation";
+import { StudentCard, TierCounts } from "~/components/features/students";
+import { FilterButtons, OptionBadge } from "~/components/primitives";
 import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { defenseTypeColor } from "~/locales/ko";
 import { raidTypeLocale } from "~/locales/ko";
@@ -33,7 +31,7 @@ type RaidStatisticsSlotCountProps = {
   assistsByTier: { tier: number; count: number }[];
 
   maxTier?: number;
-};
+}
 
 type SlotMode = "total" | "own" | "assist";
 

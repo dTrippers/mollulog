@@ -3,10 +3,16 @@ import { ExclamationCircleIcon, UserIcon, ArrowPathIcon } from "@heroicons/react
 import EventInfoCard from "./EventInfoCard";
 import { useSignIn } from "~/contexts/SignInProvider";
 import type { EventShopState } from "~/models/event-shop-state";
-import { StudentBonusSelector, ShopResourceSelector, StageSelector, MiniGameSection, CollectedTotalsSection } from "~/components/event/shop";
-import type { Stage, ShopResource, EventRewardBonus, CollectableResource } from "~/components/event/shop";
-import type { MinigameConfig } from "~/components/event/shop/constants";
-import { useShopState, useBonusCalculation, useAutoSave, useShopCalculations } from "~/components/event/shop/hooks";
+import {
+  CollectedTotalsSection,
+  MiniGameSection,
+  ShopResourceSelector,
+  StageSelector,
+  StudentBonusSelector,
+} from "./shop";
+import type { CollectableResource, EventRewardBonus, ShopResource, Stage } from "./shop";
+import type { MinigameConfig } from "./shop/constants";
+import { useAutoSave, useBonusCalculation, useShopCalculations, useShopState } from "./shop/hooks";
 
 type EventDetailShopPageProps = {
   stages: Stage[];

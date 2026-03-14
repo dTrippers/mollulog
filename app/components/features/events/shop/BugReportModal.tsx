@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { useFetcher } from "react-router";
 import { Transition } from "@headlessui/react";
 import { XMarkIcon, CheckCircleIcon } from "@heroicons/react/16/solid";
-import Textarea from "~/components/atoms/form/Textarea";
-import Button from "~/components/atoms/form/Button";
+import { Button, Textarea } from "~/components/primitives";
 import type { Stage, ShopResource, CollectableResource } from "./types";
 import type { ShopState } from "./hooks/useShopState";
 import type { CalculationResult } from "./hooks/useShopCalculations";
@@ -133,7 +132,7 @@ export default function BugReportModal({
               <Button
                 type="submit"
                 text={fetcher.state === "submitting" ? "제출 중..." : "제출하기"}
-                color="primary"
+                variant="primary"
                 disabled={fetcher.state === "submitting"}
               />
             </div>

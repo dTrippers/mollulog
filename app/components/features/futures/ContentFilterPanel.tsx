@@ -1,6 +1,5 @@
 import type { EventType, RaidType } from "~/models/content.d";
-import { Toggle } from "~/components/atoms/form";
-import { FilterButtons } from "~/components/navigation";
+import { FilterButtons, Toggle } from "~/components/primitives";
 
 export type ContentFilterState = {
   types: (EventType | RaidType)[];

@@ -1,4 +1,4 @@
-import { Progress } from "~/components/atoms/profile";
+import { Progress } from "~/components/primitives";
 
 type TierCountsProps = {
   tierCounts: { [key: number]: number };

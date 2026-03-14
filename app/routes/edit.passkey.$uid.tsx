@@ -1,8 +1,7 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect, useLoaderData, useSubmit } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { FormGroup } from "~/components/organisms/form";
 import { deletePasskey, getPasskeysBySensei, updatePasskeyMemo } from "~/models/passkey";
-import { InputForm, ButtonForm } from "~/components/molecules/form";
+import { ButtonForm, FormGroup, InputForm } from "~/components/features/forms";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const sensei = await getAuthenticator(context.cloudflare.env).isAuthenticated(request);
@@ -30,15 +29,21 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   if (request.method === "PATCH") {
     const formData = await request.formData();
     const memo = formData.get("memo") as string;
+    if (!uid) {
+      return redirect("/edit/passkey");
+    }
 
-    await updatePasskeyMemo(env, sensei, uid!, memo);
+    await updatePasskeyMemo(env, sensei, uid, memo);
     return { success: true };
-  } else if (request.method === "DELETE") {
-    await deletePasskey(env, sensei, uid!);
-    return redirect("/edit/passkey");
-  } else {
-    return new Response(null, { status: 405 });
   }
+  if (request.method === "DELETE") {
+    if (!uid) {
+      return redirect("/edit/passkey");
+    }
+    await deletePasskey(env, sensei, uid);
+    return redirect("/edit/passkey");
+  }
+  return new Response(null, { status: 405 });
 };
 
 export default function EditPasskey() {

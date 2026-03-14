@@ -1,7 +1,6 @@
 import { Link } from "react-router";
 import { PlusCircleIcon, PencilSquareIcon } from "@heroicons/react/16/solid";
-import ProfileImage from "~/components/atoms/student/ProfileImage";
-import TagIcon from "~/components/atoms/student/TagIcon";
+import { ProfileImage, TagIcon } from "~/components/primitives";
 import { STUDENT_GRADING_TAG_CONSTANTS, type StudentGradingTagValue } from "~/models/student-grading-tag";
 
 // Reusable CommentCard component
@@ -27,7 +26,7 @@ function CommentCard({ grading, isCurrentUser }: CommentCardProps) {
         {isCurrentUser && (
           <div className="flex items-center justify-between">
             <p className="text-sm font-bold text-neutral-700 dark:text-neutral-300">내가 작성한 평가</p>
-            <Link 
+            <Link
               to={`/students/${grading.studentUid}/grade`}
               className="px-2 py-1 -mr-2 flex items-center rounded-full hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors text-neutral-500 dark:text-neutral-400"
             >
@@ -98,20 +97,19 @@ export default function StudentGradingComments({ student, gradings, currentUser 
   return (
     <div className="mt-4">
       <div className="overflow-x-auto">
-        <div className="flex gap-3 pb-2" style={{ width: 'max-content' }}>
+        <div className="flex gap-3 pb-2" style={{ width: "max-content" }}>
           {/* Current user's comment or link button */}
-           {currentUserGrading ?
-             <CommentCard grading={currentUserGrading} isCurrentUser={true} /> :
-             currentUser && student ?
+          {currentUserGrading ?
+            <CommentCard grading={currentUserGrading} isCurrentUser={true} /> :
+            currentUser && student ?
                 <Link
                   to={`/students/${student.uid}/grade`}
                   className="flex h-full w-32 flex-shrink-0 flex-col items-center justify-center rounded-lg bg-neutral-100 p-3 text-center text-neutral-500 transition hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800"
                 >
                   <PlusCircleIcon className="mb-2 size-6" />
                   <p className="text-sm">내 평가 작성하기</p>
-                </Link>
-             : null
-           }
+                </Link> :
+              null}
 
           {/* Other users' comments */}
           {otherComments.map((grading) => (

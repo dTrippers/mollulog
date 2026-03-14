@@ -1,5 +1,4 @@
-import { FormGroup } from "~/components/organisms/form";
-import { ButtonForm, InputForm, StudentSelectForm, TextareaForm } from "~/components/molecules/form";
+import { ButtonForm, FormGroup, InputForm, StudentSelectForm, TextareaForm } from "~/components/features/forms";
 
 type ProfileStudent = {
   uid: string;
@@ -12,7 +11,7 @@ type Profile = {
   profileStudentId: string | null;
   friendCode: string | null;
   bio: string | null;
-}
+};
 
 type ProfileEditorProps = {
   method: "put" | "post";
@@ -24,7 +23,7 @@ type ProfileEditorProps = {
     bio?: string;
   };
   submitOnChange?: boolean;
-}
+};
 
 export default function ProfileEditor({ method, students, initialData, error, submitOnChange }: ProfileEditorProps) {
   const initialProfileStudentId = initialData?.profileStudentId ? students.find(({ uid }) => initialData.profileStudentId === uid)?.uid : undefined;

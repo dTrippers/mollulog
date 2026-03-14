@@ -1,7 +1,7 @@
 import type { Role } from "~/models/content.d";
 import type { Attack, Defense } from "~/graphql/graphql";
-import { StudentCards } from "~/components/students";
-import { ActionCard } from "~/components/molecules/editor";
+import { ActionCard } from "~/components/features/editor";
+import { StudentCards } from "~/components/features/students";
 
 type ServerStudent = {
   uid: string;

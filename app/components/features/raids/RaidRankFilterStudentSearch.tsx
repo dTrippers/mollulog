@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import hangul from "hangul-js";
-import { StudentCard, StudentCards } from "~/components/students";
-import { Input } from "~/components/atoms/form";
+import { StudentCard, StudentCards } from "~/components/features/students";
+import { Input } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
 
 type RaidRankFilterStudentSearchProps = {

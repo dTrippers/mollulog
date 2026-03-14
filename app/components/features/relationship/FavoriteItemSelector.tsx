@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
-import { NumberInput, Toggle } from "~/components/atoms/form";
-import { ResourceCard } from "~/components/atoms/item";
-import { LoadingSkeleton } from "~/components/atoms/layout";
-import { SubTitle } from "~/components/atoms/typography";
+import { LoadingSkeleton, NumberInput, ResourceCard, SubTitle, Toggle } from "~/components/primitives";
 import type { loader as favoriteItemsLoader } from "~/routes/api.students.$uid.items";
 
 type FavoriteItemSelectorProps = {

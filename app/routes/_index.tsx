@@ -4,15 +4,14 @@ import { CalendarIcon, IdentificationIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { ChevronDownIcon, ChevronUpIcon, ArrowRightIcon } from "@heroicons/react/16/solid";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { SubTitle, Title } from "~/components/atoms/typography";
+import { ProfileImage, SubTitle, Title } from "~/components/primitives";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { recruitmentLabelLocale } from "~/locales/ko";
-import { ProfileImage } from "~/components/atoms/student";
 import { useState } from "react";
-import { EventHeader } from "~/components/event";
+import { EventHeader } from "~/components/features/events";
 import { getIndexContents, type IndexRecruitment } from "~/models/content";
-import EventList from "~/components/event/EventList";
-import { RaidCard } from "~/components/raids";
+import EventList from "~/components/features/events/EventList";
+import { RaidCard } from "~/components/features/raids";
 import type { TimelineContent } from "~/models/timeline-content";
 
 export const meta: MetaFunction = () => {
@@ -43,7 +42,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
         name: event.name,
         type: event.contentType,
         since: event.startAt,
-        until: event.endAt!,
+        until: event.endAt ?? event.startAt,
         imageUrl: event.imageUrl,
       })),
     currentRecruitments,
@@ -52,7 +51,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     currentTotalAssualt,
     currentUnlimit,
   };
-}
+};
 
 export default function Index() {
   const { mainEvent, currentEvents, currentRecruitments, favoritedCounts, favoritedStudentUids, currentTotalAssualt, currentUnlimit } = useLoaderData<typeof loader>();
@@ -165,13 +164,14 @@ function CurrentRecruitments({ recruitments, favoritedStudentUids, favoritedCoun
         })}
       </div>
       {recruitments.length > 6 && (
-        <div
+        <button
+          type="button"
           className="w-full my-4 py-2 flex items-center justify-center bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors rounded-lg text-neutral-500 dark:text-neutral-400 cursor-pointer"
           onClick={() => setShowAll(!showAll)}
         >
           <span className="text-sm mr-1">{showAll ? "접기" : `학생 ${recruitments.length}명 모두 보기`}</span>
           {showAll ? <ChevronUpIcon className="size-4 inline" /> : <ChevronDownIcon className="size-4 inline" />}
-        </div>
+        </button>
       )}
     </div>
   );

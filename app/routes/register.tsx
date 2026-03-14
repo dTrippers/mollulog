@@ -1,10 +1,10 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useActionData } from "react-router";
 import { useLoaderData } from "react-router";
-import { Title } from "~/components/atoms/typography";
 import { getSenseiByUsername, updateSensei } from "~/models/sensei";
 import { getAuthenticator, redirectTo, sessionStorage } from "~/auth/authenticator.server";
-import { ProfileEditor } from "~/components/organisms/profile";
+import { ProfileEditor } from "~/components/features/profile";
+import { Title } from "~/components/primitives";
 import { getAllStudents } from "~/models/student";
 
 export const meta: MetaFunction = () => [
@@ -15,7 +15,8 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const sensei = await getAuthenticator(context.cloudflare.env).isAuthenticated(request);
   if (!sensei) {
     return redirect("/unauthorized");
-  } else if (sensei.active) {
+  }
+  if (sensei.active) {
     return redirect(redirectTo(request) ?? `/@${sensei.username}`);
   }
 
@@ -35,7 +36,8 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   const sensei = await authenticator.isAuthenticated(request);
   if (!sensei) {
     return redirect("/unauthorized");
-  } else if (sensei.active) {
+  }
+  if (sensei.active) {
     return redirect(redirectTo(request) ?? `/@${sensei?.username}`);
   }
 

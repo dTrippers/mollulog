@@ -1,7 +1,7 @@
 import { ChatBubbleOvalLeftEllipsisIcon, MagnifyingGlassIcon, UserPlusIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
-import { Label, Toggle } from "~/components/atoms/form";
-import { StudentCard, StudentCards } from "~/components/students";
+import { StudentCard, StudentCards } from "~/components/features/students";
+import { Label, Toggle } from "~/components/primitives";
 import { filterStudentByName } from "~/filters/student";
 import type { Role } from "~/models/content.d";
 
@@ -184,7 +184,7 @@ export default function PartyUnitEditor(
           </button>
           <button
             type="button"
-            className={`py-2 px-4 hover:bg-neutral-100 dark:hover:bg-neutral-700 font-bold transition rounded-lg transition
+            className={`py-2 px-4 hover:bg-neutral-100 dark:hover:bg-neutral-700 font-bold transition rounded-lg
                         ${completable ? "text-blue-500" : "text-neutral-300"}`}
             onClick={() => {
               if (completable) {

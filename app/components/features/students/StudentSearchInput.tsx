@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Input } from "~/components/atoms/form";
-import { StudentCards } from "~/components/students";
+import { StudentCards } from "~/components/features/students";
+import { Input } from "~/components/primitives";
 import { filterStudentByName } from "~/filters/student";
 
 type SearchableStudent = {

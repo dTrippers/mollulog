@@ -1,7 +1,5 @@
 import { useMemo } from "react";
-import { NumberInput } from "~/components/atoms/form";
-import { ResourceCard } from "~/components/atoms/item";
-import { Section } from "~/components/ui";
+import { NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { ShopState, ShopActions } from "./hooks";
 import {
   resourceCountLabel,

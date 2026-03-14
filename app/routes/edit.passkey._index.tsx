@@ -3,8 +3,7 @@ import { useState } from "react";
 import { type LoaderFunctionArgs, redirect, useLoaderData, useRevalidator } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { getPasskeysBySensei } from "~/models/passkey";
-import { FormGroup } from "~/components/organisms/form";
-import { LinkForm, ButtonForm } from "~/components/molecules/form";
+import { ButtonForm, FormGroup, LinkForm } from "~/components/features/forms";
 import { startRegistration } from "@simplewebauthn/browser";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {

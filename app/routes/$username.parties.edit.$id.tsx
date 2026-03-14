@@ -2,8 +2,8 @@ import type { ActionFunction, LoaderFunctionArgs, MetaFunction } from "react-rou
 import { redirect } from "react-router";
 import { Form, useLoaderData } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { Title } from "~/components/atoms/typography";
-import { PartyGenerator } from "~/components/organisms/party";
+import { Title } from "~/components/primitives";
+import PartyGenerator from "./$username.parties._components/PartyGenerator";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import { updateParty, getUserParties, createParty } from "~/models/party";

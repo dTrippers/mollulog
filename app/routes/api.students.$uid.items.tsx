@@ -15,7 +15,14 @@ const favoriteItemsQuery = graphql(`
 `);
 
 export const loader = async ({ params }: LoaderFunctionArgs) => {
-  const uid = params.uid!;
+  const uid = params.uid;
+  if (!uid) {
+    throw new Response(JSON.stringify({ error: { message: "학생 정보가 누락되었어요" } }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   const { data } = await runQuery(favoriteItemsQuery, { uid });
   const student = data?.student;
   if (!student) {

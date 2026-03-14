@@ -2,12 +2,9 @@ import { useFetcher, useRouteError, isRouteErrorResponse, redirect } from "react
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useState, useEffect } from "react";
 import { CheckCircleIcon, ArrowPathIcon } from "@heroicons/react/20/solid";
-import { Title } from "~/components/atoms/typography";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { ErrorPage } from "~/components/organisms/error";
-import Input from "~/components/atoms/form/Input";
-import Textarea from "~/components/atoms/form/Textarea";
-import Button from "~/components/atoms/form/Button";
+import { ErrorPage } from "~/components/features/layout";
+import { Button, Input, Textarea, Title } from "~/components/primitives";
 import { createFeedbackSubmission } from "~/models/feedback";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
@@ -31,9 +28,11 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
 
   if (!title.trim()) {
     return { error: { title: "제목을 입력해주세요." } };
-  } else if (!content.trim()) {
+  }
+  if (!content.trim()) {
     return { error: { content: "내용을 입력해주세요." } };
-  } else if (replyEmail && !replyEmail.includes("@")) {
+  }
+  if (replyEmail && !replyEmail.includes("@")) {
     return { error: { replyEmail: "올바른 이메일 주소를 입력해주세요." } };
   }
 
@@ -63,9 +62,8 @@ export function ErrorBoundary() {
   const error = useRouteError();
   if (isRouteErrorResponse(error)) {
     return <ErrorPage message={error.data.error.message} />;
-  } else {
-    return <ErrorPage />;
   }
+  return <ErrorPage />;
 }
 
 
@@ -112,9 +110,9 @@ export default function Contact() {
         <Button
           type="submit"
           text={fetcher.state === "submitting" ? "제출 중..." : "제출하기"}
-          color="primary"
+          variant="primary"
           disabled={fetcher.state === "submitting"}
-          Icon={fetcher.state === "submitting" ? ArrowPathIcon : undefined}
+          icon={fetcher.state === "submitting" ? ArrowPathIcon : undefined}
         />
       </fetcher.Form>
     </>

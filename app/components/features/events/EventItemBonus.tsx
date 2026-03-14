@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { StudentCards } from "~/components/students";
+import { StudentCards } from "~/components/features/students";
 
 type EventItemBonusProps = {
   itemUid: string;

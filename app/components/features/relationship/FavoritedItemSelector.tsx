@@ -1,12 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Await, useFetcher, useRevalidator } from "react-router";
-import { NumberInput } from "~/components/atoms/form";
-import { ResourceCard } from "~/components/atoms/item";
-import { LoadingSkeleton } from "~/components/atoms/layout";
-import { ProfileImage } from "~/components/atoms/student";
-import { SubTitle } from "~/components/atoms/typography";
-import { ClickableSurface } from "~/components/primitives";
-import { MiniButton } from "~/components/ui";
+import { ClickableSurface, LoadingSkeleton, NumberInput, ProfileImage, ResourceCard, SubTitle } from "~/components/primitives";
+import { MiniButton } from "~/components/primitives";
 import { COMMON_FAVORITE_ITEM_UIDS, type AllStudentsFavoriteItems } from "~/models/resource";
 import type { action } from "~/routes/utils.relationship";
 

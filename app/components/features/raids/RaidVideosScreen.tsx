@@ -1,12 +1,10 @@
 import { Link } from "react-router";
-import { EmptyView } from "~/components/atoms/typography";
-import { LoadingSkeleton } from "~/components/atoms/layout";
 import { PlayIcon } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
-import { FilterButtons } from "~/components/navigation";
 import { ArrowsUpDownIcon } from "@heroicons/react/24/outline";
 import { VideoSortEnum } from "~/graphql/graphql";
 import type { RefObject } from "react";
+import { EmptyView, FilterButtons, LoadingSkeleton } from "~/components/primitives";
 
 export type RaidVideosScreenProps = {
   videos: {

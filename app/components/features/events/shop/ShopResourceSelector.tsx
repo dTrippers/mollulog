@@ -1,11 +1,9 @@
 import { useMemo, useState, memo } from "react";
-import { ResourceCard } from "~/components/atoms/item";
-import { Button, NumberInput } from "~/components/atoms/form";
 import { formatResourceAmount } from "~/locales/ko";
 import { Tabs } from "./Tabs";
 import type { ShopResource, CollectableResource } from "./types";
 import type { ShopState, ShopActions } from "./hooks";
-import { MiniButton, Section } from "~/components/ui";
+import { Button, MiniButton, NumberInput, ResourceCard, Section } from "~/components/primitives";
 
 type ShopResourceSelectorProps = {
   shopResources: ShopResource[];

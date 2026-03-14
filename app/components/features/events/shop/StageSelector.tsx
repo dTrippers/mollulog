@@ -1,9 +1,8 @@
 import type Decimal from "decimal.js";
-import { Toggle } from "~/components/atoms/form";
+import { Section, Toggle } from "~/components/primitives";
 import { StageCard } from "./StageCard";
 import type { Stage } from "./types";
 import type { ShopState, ShopActions } from "./hooks";
-import { Section } from "~/components/ui";
 
 type StagesProps = {
   stages: Stage[];
@@ -11,7 +10,7 @@ type StagesProps = {
   stageRuns: Record<string, number>;
   state: ShopState;
   actions: ShopActions;
-}
+};
 
 export function StageSelector({ stages, appliedBonusRatio, stageRuns, state, actions }: StagesProps) {
   return (

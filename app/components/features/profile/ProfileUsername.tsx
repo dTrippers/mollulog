@@ -1,6 +1,6 @@
 import { PencilSquareIcon, UserIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
 import { Link } from "react-router";
-import ProfileImage from "~/components/atoms/student/ProfileImage";
+import { ProfileImage } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
 
 type ProfileUsernameProps = {

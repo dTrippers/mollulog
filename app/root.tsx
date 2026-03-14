@@ -15,8 +15,7 @@ import { ExclamationCircleIcon } from "@heroicons/react/16/solid";
 import type { Route } from "./+types/root";
 import styles from "./tailwind.css?url";
 import { getAuthenticator } from "./auth/authenticator.server";
-import { Footer } from "./components/organisms/base";
-import { NavigationBar } from "./components/navigation";
+import { Footer, NavigationBar } from "./components/features/layout";
 import { getPreference } from "./auth/preference.server";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { SignInProvider } from "./contexts/SignInProvider";
@@ -24,7 +23,7 @@ import { useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { getNavigationBarContents } from "./models/content";
 
-const SignInBottomSheet = lazy(() => import("./components/molecules/auth/SignInBottomSheet"));
+const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;

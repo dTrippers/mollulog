@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { PickupResources } from "..";
-import { NumberInput } from "~/components/atoms/form";
-import { ResourceCard } from "~/components/atoms/item";
+import { NumberInput, ResourceCard } from "~/components/primitives";
 import PlannerButtonForm from "./PlannerButtonForm";
 import PlannerInputForm from "./PlannerInputForm";
 import PlannerFormGroup from "./PlannerFormGroup";
@@ -35,10 +34,10 @@ export default function ResourcesInput({ description, onSaveResources, descripti
   const [descriptionValue, setDescriptionValue] = useState<string>(description ?? "");
   const [date, setDate] = useState<Date>(new Date());
   
-  const descriptionError = descriptionInput && descriptionValue.length > 20 
-    ? "획득 사유는 20자 이하여야 해요" 
+  const descriptionError = descriptionInput && descriptionValue.length > 20
+    ? "획득 사유는 20자 이하여야 해요"
     : undefined;
-  
+
   const dateError = dateInput && dayjs(date).startOf("day").isBefore(dayjs().startOf("day"))
     ? "획득 날짜가 오늘보다 이전이에요"
     : undefined;

@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { IdentificationIcon, MinusCircleIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
 import { fetchRanks, type ParsedRaidRankDocument, convertTier } from "~/models/raid-rank.client";
-import { EmptyView } from "~/components/atoms/typography";
-import { Pagination } from "~/components/atoms/navigation";
 import type { RaidType, Role } from "~/models/content.d";
 import type { Attack, Defense } from "~/graphql/graphql";
 import type { RaidRankFilterState } from "./RaidRankFilter";
-import { StudentCards } from "~/components/students";
-import { ActionCard } from "~/components/molecules/editor";
+import { ActionCard } from "~/components/features/editor";
+import { StudentCards } from "~/components/features/students";
+import { EmptyView, Pagination } from "~/components/primitives";
 import { type Boss, scoreToDifficultyAndTime } from "~/models/raid";
 
 type RaidRankScreenProps = {

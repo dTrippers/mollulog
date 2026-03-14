@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { FilterButtons } from "~/components/navigation";
+import { FilterButtons } from "~/components/primitives";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 
 const pickupChanceOptions = [

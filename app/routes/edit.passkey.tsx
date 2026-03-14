@@ -1,5 +1,5 @@
 import { type MetaFunction, Outlet, useLocation } from "react-router";
-import { Title } from "~/components/atoms/typography";
+import { Title } from "~/components/primitives";
 
 export const meta: MetaFunction = () => [
   { title: "Passkey 관리 | 몰루로그" },
@@ -13,5 +13,5 @@ export default function EditPasskey() {
       <Title text="Passkey 관리" parentPath={parentPath} />
       <Outlet />
     </>
-  )
+  );
 }

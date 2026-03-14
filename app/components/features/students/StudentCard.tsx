@@ -6,7 +6,7 @@ import { studentImageUrl } from "~/models/assets";
 import type { Role } from "~/models/content.d";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, roleColor, roleLocale } from "~/locales/ko";
-import OptionBadge from "~/components/atoms/student/OptionBadge";
+import { OptionBadge } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import { parseVisibleNames } from "~/models/student";
@@ -34,7 +34,7 @@ type StudentCardProps = {
   onSelect?: (id: string) => void;
   popups?: StudentCardPopupProps["popups"];
   popupId?: string | null;
-}
+};
 
 function visibileTier(tier: number): [number, boolean] {
   if (tier <= 5) {
@@ -184,7 +184,7 @@ export default function StudentCard({
         </Transition>
       )}
     </div>
-  )
+  );
 }
 
 type StudentCardPopupProps = {

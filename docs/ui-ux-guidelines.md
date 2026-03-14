@@ -21,7 +21,7 @@ Use this structure as the default rule:
 
 ### 2. `components/features/<domain>`
 - Domain-specific reusable UI composed from primitives.
-- Examples: `features/students`, `features/raids`, `features/events`, `features/profile`.
+- Examples: `features/students`, `features/raids`, `features/events`, `features/profile`, `features/forms`.
 - Feature components may contain domain logic and domain-specific layout.
 - Feature components should not redefine base button, field, or panel styling.
 
@@ -57,7 +57,8 @@ Use this structure as the default rule:
 - Prefer one canonical section container and one canonical panel container.
 
 ## Form Rules
-- Inputs, textareas, selects, toggles, and submit actions should come from shared primitives.
+- Base inputs, textareas, toggles, and buttons should come from shared primitives.
+- Reusable form composition such as labeled form rows, select pickers, and hidden-field serialization should live in `features/forms`.
 - Labels, descriptions, error messages, and disabled states should follow the same structure everywhere.
 - Avoid creating route-specific button or field wrappers unless they add real behavior.
 
@@ -94,4 +95,4 @@ Before adding or changing UI, check the following:
 - Consolidate panel and section containers into a small shared set.
 - Move one-off route UI closer to routes.
 - Keep domain-specific composition inside feature folders.
-- Avoid reviving broad `atoms / molecules / organisms` separation unless there is a strict, enforced rule set.
+- Do not reintroduce `atoms / molecules / organisms` separation.

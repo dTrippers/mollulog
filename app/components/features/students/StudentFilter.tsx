@@ -3,8 +3,7 @@ import { useEffect, useState } from "react";
 import hangul from "hangul-js";
 import type { Position, Role, TacticRole } from "~/models/content.d";
 import { Attack, Defense } from "~/graphql/graphql";
-import { Input } from "~/components/atoms/form";
-import { FilterButtons } from "~/components/navigation";
+import { FilterButtons, Input } from "~/components/primitives";
 
 export type StudentFilterState = {
   attackTypes: Attack[];

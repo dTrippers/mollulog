@@ -1,18 +1,15 @@
 import dayjs from "dayjs";
 import "dayjs/locale/ko";
-import { MultilineText, SubTitle } from "~/components/atoms/typography";
-import { ResourceCard } from "~/components/atoms/item";
-import { ActionCard, type ActionCardAction } from "~/components/molecules/editor";
-import { StudentCards } from "~/components/students";
+import { ActionCard, type ActionCardAction } from "~/components/features/editor";
+import { StudentCards } from "~/components/features/students";
 import type { RaidType } from "~/models/content.d";
 import { useEffect, useMemo, useState } from "react";
 import { type RecruitmentTypeEnum, ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";
 import { Transition } from "@headlessui/react";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
-import { NumberInput } from "~/components/atoms/form";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
-import { MiniButton } from "~/components/ui";
+import { MiniButton, MultilineText, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
 
 dayjs.locale("ko");
 

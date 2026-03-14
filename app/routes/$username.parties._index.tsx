@@ -1,8 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { AddContentButton } from "~/components/molecules/editor";
-import { PartyView } from "~/components/organisms/party";
+import { AddContentButton } from "~/components/features/editor";
+import PartyView from "./$username.parties._components/PartyView";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import { getUserParties, removePartyByUid } from "~/models/party";
@@ -76,7 +76,7 @@ export default function UserPartyPage() {
         </p>
       )}
 
-      {me && <AddContentButton text="새로운 공략 추가하기" link={`./edit/new`} />}
+      {me && <AddContentButton text="새로운 공략 추가하기" link="./edit/new" />}
 
       {parties.map((party) => (
         <PartyView

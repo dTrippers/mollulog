@@ -2,8 +2,7 @@ import { memo } from "react";
 import Decimal from "decimal.js";
 import { BoltIcon } from "@heroicons/react/16/solid";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { ResourceCard } from "~/components/atoms/item";
-import { NumberInput, Toggle } from "~/components/atoms/form";
+import { NumberInput, ResourceCard, Toggle } from "~/components/primitives";
 import type { Stage } from "./types";
 
 type StageCardProps = {

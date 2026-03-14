@@ -2,10 +2,10 @@ import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
 import { SparklesIcon, UsersIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
-import { SubTitle } from "~/components/atoms/typography";
-import { FilterButtons } from "~/components/navigation";
-import { ErrorPage } from "~/components/organisms/error";
-import { SenseiList } from "~/components/organisms/sensei";
+import { ErrorPage } from "~/components/features/layout";
+import { FilterButtons } from "~/components/primitives";
+import { SubTitle } from "~/components/primitives";
+import SenseiList from "./$username.friends._components/SenseiList";
 import { getFollowers, getFollowings } from "~/models/followership";
 import type { Sensei } from "~/models/sensei";
 import { getRouteSensei } from "./$username";
@@ -26,7 +26,7 @@ export default function UserFollowing() {
   const [senseis, setSenseis] = useState<Sensei[]>(params.get("tab") === "followers" ? followers : following);
   useEffect(() => {
     setSenseis(params.get("tab") === "followers" ? followers : following);
-  }, [params]);
+  }, [followers, following, params]);
 
   return (
     <div className="my-8">

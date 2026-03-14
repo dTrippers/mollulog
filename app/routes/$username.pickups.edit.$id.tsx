@@ -3,15 +3,15 @@ import { useLoaderData, useSearchParams, useSubmit } from "react-router";
 import dayjs from "dayjs";
 import { useState } from "react";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { SubTitle, Title } from "~/components/atoms/typography";
-import { PickupHistoryEditor, PickupHistoryImporter } from "~/components/organisms/pickup";
+import { SubTitle, Title } from "~/components/primitives";
+import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
+import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
 import { createPickupHistory, getPickupHistory, type PickupHistory, updatePickupHistory } from "~/models/pickup-history";
 import { getAllStudents } from "~/models/student";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content";
 import { getRecruitmentGroups } from "~/models/event-content";
-import { FormGroup } from "~/components/organisms/form";
-import { ContentSelectForm } from "~/components/molecules/form";
-import { FilterButtons } from "~/components/navigation";
+import { ContentSelectForm, FormGroup } from "~/components/features/forms";
+import { FilterButtons } from "~/components/primitives";
 import { Bars3Icon } from "@heroicons/react/16/solid";
 
 export const meta: MetaFunction = () => [
@@ -114,10 +114,10 @@ export default function EditPickup() {
   let initialTier3StudentUids: string[] | undefined = undefined;
   if (currentPickupHistory?.result) {
     initialTotalCount = Math.max(...currentPickupHistory.result.map((trial) => trial.trial));
-    currentPickupHistory.result.forEach((trial) => {
+    for (const trial of currentPickupHistory.result) {
       initialTier3Count = (initialTier3Count ?? 0) + trial.tier3Count;
-      initialTier3StudentUids = (initialTier3StudentUids ?? []).concat(trial.tier3StudentIds);
-    });
+      initialTier3StudentUids = (initialTier3StudentUids ?? ([] as string[])).concat(trial.tier3StudentIds);
+    }
   }
 
   const initialEvent = initialEventUid ? events.find((event) => event.uid === initialEventUid) : null;

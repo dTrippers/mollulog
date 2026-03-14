@@ -2,13 +2,13 @@ import { data, Link } from "react-router";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/solid";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import Page from "~/components/navigation/Page";
-import CouponCard from "~/components/coupons/CouponCard";
+import Page from "~/components/features/layout/Page";
+import CouponCard from "~/components/features/coupons/CouponCard";
 import { getAllCoupons, getCouponRegistrations, registerCoupon, unregisterCoupon } from "~/models/coupon";
 import { useLoaderData } from "react-router";
 import { getSenseiPrivacyByUserId } from "~/models/sensei-privacy";
 import { IdentificationIcon } from "@heroicons/react/16/solid";
-import CopyField from "~/components/coupons/CopyField";
+import CopyField from "~/components/features/coupons/CopyField";
 
 export const meta = () => [
   { title: "블루 아카이브 쿠폰 목록 | 몰루로그" },

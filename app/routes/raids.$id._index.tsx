@@ -2,19 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
-import { LoadingSkeleton } from "~/components/atoms/layout";
-import { EmptyView } from "~/components/atoms/typography";
-import RaidStatisticsSlotCount from "~/components/raids/RaidStatisticsSlotCount";
-import RaidClearLevels from "~/components/raids/RaidClearLevels";
-import RaidOftenUsedParties from "~/components/raids/RaidOftenUsedParties";
-import { Section } from "~/components/ui/Section";
-import { HorizontalScroll } from "~/components/ui/HorizontalScroll";
+import RaidStatisticsSlotCount from "~/components/features/raids/RaidStatisticsSlotCount";
+import RaidClearLevels from "~/components/features/raids/RaidClearLevels";
+import RaidOftenUsedParties from "~/components/features/raids/RaidOftenUsedParties";
+import { EmptyView, HorizontalScroll, LoadingSkeleton, Section } from "~/components/primitives";
 import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
 import { fetchRaidStatisticsByRaid, type RaidStatistics } from "~/models/raid-statistics.client";
 import { fetchRaidOverview } from "~/models/raid-overview.client";
 import type { RaidPageContext } from "./raids.$id";
-import { RaidCard } from "~/components/raids";
+import { RaidCard } from "~/components/features/raids";
+import RaidUnavailableState from "./raids.$id._components/RaidUnavailableState";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -71,6 +69,7 @@ export default function RaidSummary() {
       setLoading(false);
       return;
     }
+    const raidIndexJp = currentRaid.raidIndexJp;
 
     let cancelled = false;
 
@@ -81,8 +80,8 @@ export default function RaidSummary() {
 
         // Load both student statistics and overview data in parallel
         const [raidStatistics, overviewData] = await Promise.all([
-          fetchRaidStatisticsByRaid(currentRaid.type, currentRaid.raidIndexJp!, defenseType),
-          fetchRaidOverview({ raidType: currentRaid.type, season: currentRaid.raidIndexJp!, defenseType }),
+          fetchRaidStatisticsByRaid(currentRaid.type, raidIndexJp, defenseType),
+          fetchRaidOverview({ raidType: currentRaid.type, season: raidIndexJp, defenseType }),
         ]);
         if (cancelled) {
           return;
@@ -93,9 +92,9 @@ export default function RaidSummary() {
         // Convert clear_levels from string keys to numbers
         const clearLevelsMap: Record<string, number> = {};
         if (overviewData.clearLevels) {
-          Object.entries(overviewData.clearLevels).forEach(([difficulty, count]) => {
+          for (const [difficulty, count] of Object.entries(overviewData.clearLevels)) {
             clearLevelsMap[difficulty] = Number(count);
-          });
+          }
         }
         setClearLevels(clearLevelsMap);
 
@@ -123,7 +122,7 @@ export default function RaidSummary() {
     return () => {
       cancelled = true;
     };
-  }, [currentRaid.type, currentRaid.raidIndexJp, currentRaid.rankVisible, defenseType, allStudents]);
+  }, [currentRaid.type, currentRaid.raidIndexJp, currentRaid.rankVisible, defenseType]);
 
   const top6Statistics = useMemo(() => {
     if (!statistics || statistics.length === 0) {
@@ -134,14 +133,7 @@ export default function RaidSummary() {
   }, [statistics]);
 
   if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
-    return (
-      <div className="my-16 md:my-48 w-full flex flex-col items-center justify-center">
-        <p className="my-2 text-2xl font-bold">정보를 준비중이에요</p>
-        <p className="my-2 text-neutral-500 dark:text-neutral-400">
-          정보가 준비된 컨텐츠를 선택하여 확인해보세요
-        </p>
-      </div>
-    );
+    return <RaidUnavailableState />;
   }
 
   if (loading) {

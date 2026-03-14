@@ -5,9 +5,11 @@ type PrimitiveButtonProps = {
   text?: string;
   children?: ReactNode | ReactNode[];
   icon?: React.ElementType;
+  Icon?: React.ElementType;
   className?: string;
   type?: "button" | "submit" | "reset";
   variant?: "default" | "primary" | "danger" | "inverse" | "tint" | "tint-blue" | "tint-red" | "list";
+  color?: "primary" | "red" | "black";
   size?: "md" | "sm" | "xs" | "list";
   onClick?: () => void;
   disabled?: boolean;
@@ -20,9 +22,11 @@ export default function PrimitiveButton({
   text,
   children,
   icon: Icon,
+  Icon: LegacyIcon,
   className,
   type = "button",
   variant = "default",
+  color,
   size = "md",
   onClick,
   disabled = false,
@@ -30,6 +34,15 @@ export default function PrimitiveButton({
   justify = "center",
   compact = false,
 }: PrimitiveButtonProps) {
+  const resolvedVariant = color === "primary"
+    ? "primary"
+    : color === "red"
+      ? "danger"
+      : color === "black"
+        ? "inverse"
+        : variant;
+  const ResolvedIcon = Icon ?? LegacyIcon;
+
   const variantClass = {
     default: "border-neutral-200 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-700 shadow-neutral-200 dark:shadow-neutral-900",
     primary: "bg-blue-500 enabled:hover:bg-blue-400 disabled:bg-blue-300 text-white border-transparent shadow-blue-200/60 dark:shadow-blue-950/40",
@@ -39,7 +52,7 @@ export default function PrimitiveButton({
     "tint-blue": "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-blue-200 dark:border-blue-800",
     "tint-red": "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border-red-200 dark:border-red-800",
     list: "border-transparent shadow-none hover:bg-neutral-100 dark:hover:bg-neutral-800",
-  }[variant];
+  }[resolvedVariant];
 
   const sizeClass = {
     md: "px-4 py-1.5 rounded-lg text-sm",
@@ -79,7 +92,16 @@ export default function PrimitiveButton({
       onClick={onClick}
       disabled={disabled}
     >
-      {content}
+      {children ?? (
+        ResolvedIcon ? (
+          <div className="flex items-center gap-2">
+            <ResolvedIcon className="size-3.5 shrink-0" strokeWidth={2} />
+            <span>{text}</span>
+          </div>
+        ) : (
+          content
+        )
+      )}
     </button>
   );
 }

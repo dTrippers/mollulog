@@ -1,6 +1,6 @@
 import { LockClosedIcon, LockOpenIcon, ArrowUturnLeftIcon, TrashIcon, PencilSquareIcon, ArrowUpIcon, XMarkIcon, BookmarkIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
-import { Callout } from "~/components/atoms/typography";
+import { Callout } from "~/components/primitives";
 import { ClickableSurface } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { sanitizeClassName } from "~/prophandlers";

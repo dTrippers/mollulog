@@ -1,6 +1,5 @@
-import { ResourceCard } from "~/components/atoms/item";
+import { ResourceCard, Section } from "~/components/primitives";
 import { RELATIONSHIP_EXP_TABLE, RELATIONSHIP_ITEMS } from "~/models/constants";
-import { Section } from "~/components/ui";
 
 type RequiredGiftsProps = {
   currentExp: number | null;

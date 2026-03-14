@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/16/solid";
 import { timelineContentTypeLocale, relativeTime } from "~/locales/ko";
 import { sanitizeClassName } from "~/prophandlers";
-import MultilineText from "~/components/atoms/typography/MultilineText";
+import { MultilineText } from "~/components/primitives";
 import type { TimelineContentType } from "~/models/timeline-content";
 
 type Video = {

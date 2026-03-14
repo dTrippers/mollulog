@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeftIcon } from "@heroicons/react/16/solid";
 import { Link } from "react-router";
-import { BottomSheet } from "~/components/atoms/layout";
+import { BottomSheet } from "~/components/primitives";
 import { type PageLinkProps, default as PageLink } from "~/components/primitives/PageLink";
 import { type PagePanelProps, default as PagePanel } from "~/components/primitives/PagePanel";
 import { type PageScreenSelectorItemProps, type PageScreenSelectorProps, default as PageScreenSelector } from "~/components/primitives/PageScreenSelector";

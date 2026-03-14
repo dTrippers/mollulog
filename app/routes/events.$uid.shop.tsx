@@ -1,22 +1,24 @@
 import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { EventDetailShopPage } from "~/components/event";
-import { EmptyView } from "~/components/atoms/typography";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { getEventMetadata, getEventShopContent } from "~/models/event-content";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getEventShopState } from "~/models/event-shop-state";
+import EventShopContent from "./events.$uid._components/EventShopContent";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
-  const { uid: timelineUid } = params;
+  const timelineUid = params.uid;
+  if (!timelineUid) {
+    throw new Response("Not Found", { status: 404 });
+  }
   const { env } = context.cloudflare;
 
-  const metadata = await getEventMetadata(env, timelineUid!);
+  const metadata = await getEventMetadata(env, timelineUid);
   if (!metadata) {
     throw new Response("Not Found", { status: 404 });
   }
 
-  const shopContent = await getEventShopContent(env, timelineUid!);
+  const shopContent = await getEventShopContent(env, timelineUid);
   if (!shopContent || shopContent.shopResources.length === 0) {
     return {
       eventName: metadata.name,
@@ -43,7 +45,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitedStudentUids = recruitedStudents.map((student) => student.studentUid);
   }
 
-  const savedShopState = currentUser ? await getEventShopState(env, currentUser.id, timelineUid!) : null;
+  const savedShopState = currentUser ? await getEventShopState(env, currentUser.id, timelineUid) : null;
   return {
     eventName: metadata.name,
     until: metadata.until,
@@ -54,13 +56,13 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     minigameConfig,
     recruitedStudentUids,
     savedShopState,
-    eventUid: timelineUid!,
+    eventUid: timelineUid,
     signedIn: currentUser !== null,
   };
 };
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, params }) => {
-  const title = `${loaderData!.eventName} - 상점 계산기`;
+  const title = `${loaderData?.eventName ?? "이벤트"} - 상점 계산기`;
   return [
     { title: `${title} | 몰루로그` },
     { name: "og:title", content: title },
@@ -71,21 +73,20 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params }) => {
 export default function EventShop() {
   const loaderData = useLoaderData<typeof loader>();
   if (loaderData.empty) {
-    return <EmptyView text="상점 정보가 없거나 종료된 이벤트예요" />;
+    return <EventShopContent empty />;
   }
 
-  const { stages, shopResources, eventRewardBonus, minigameConfig, recruitedStudentUids, savedShopState, eventUid, signedIn } = loaderData;
-
   return (
-    <EventDetailShopPage
-      stages={stages}
-      shopResources={shopResources}
-      eventRewardBonus={eventRewardBonus}
-      recruitedStudentUids={recruitedStudentUids}
-      eventUid={eventUid}
-      savedShopState={savedShopState}
-      signedIn={signedIn}
-      minigameConfig={minigameConfig}
+    <EventShopContent
+      empty={false}
+      stages={loaderData.stages}
+      shopResources={loaderData.shopResources}
+      eventRewardBonus={loaderData.eventRewardBonus}
+      recruitedStudentUids={loaderData.recruitedStudentUids}
+      eventUid={loaderData.eventUid}
+      savedShopState={loaderData.savedShopState}
+      signedIn={loaderData.signedIn}
+      minigameConfig={loaderData.minigameConfig}
     />
   );
 }

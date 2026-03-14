@@ -1,6 +1,6 @@
 import { Link } from "react-router";
-import { ProfileUsername } from "~/components/molecules/profile";
-import TierCounts from "~/components/molecules/student/TierCounts";
+import { TierCounts } from "~/components/features/students";
+import ProfileUsername from "./ProfileUsername";
 
 export type ProfileCardProps = {
   profileStudentUid: string | null;

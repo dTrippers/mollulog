@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { Role } from "~/models/content.d";
 import type { Attack, Defense } from "~/graphql/graphql";
-import { StudentCard } from "~/components/students";
+import { StudentCard } from "~/components/features/students";
 
 type RaidStudentComparisonProps = {
   currentStudentStats: Array<{

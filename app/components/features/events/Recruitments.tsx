@@ -4,7 +4,7 @@ import { ChevronRightIcon, ClockIcon, StarIcon, XCircleIcon } from "@heroicons/r
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import dayjs from "dayjs";
-import { SubTitle } from "~/components/atoms/typography";
+import { SubTitle } from "~/components/primitives";
 import { studentImageUrl } from "~/models/assets";
 import {
   attackTypeColor,

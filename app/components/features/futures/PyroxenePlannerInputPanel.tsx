@@ -1,5 +1,5 @@
 import { useState } from "react";
-import FilterButtons from "~/components/navigation/FilterButtons";
+import { FilterButtons } from "~/components/primitives";
 import type { PickupResources } from ".";
 import ResourcesInput from "./planner-input/ResourcesInput";
 import BuyInput from "./planner-input/BuyInput";
@@ -79,7 +79,9 @@ export default function PyroxenePlannerInputPanel({ onSaveBuy, onSavePackage, on
               onSaveOther(resources, description, date);
               setInputMode(null);
             }}
-            descriptionInput dateInput vertical
+            descriptionInput
+            dateInput
+            vertical
           />
         )}
         {inputMode === null && (
