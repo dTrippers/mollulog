@@ -9,13 +9,14 @@ import {
   useLoaderData,
   useNavigation,
   useRouteError,
+  useSubmit,
 } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { ErrorPage } from "~/components/features/layout";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
+import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
 import type { StudentGradingTagValue } from "~/models/student-grading-tag";
 import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
 
@@ -76,10 +77,7 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
 
 export const action = async ({ params, request, context }: ActionFunctionArgs) => {
   const formData = await request.formData();
-  const comment = formData.get("comment") as string;
-  if (comment.length > 100) {
-    return { error: "평가 내용은 최대 100자까지 작성할 수 있어요" };
-  }
+  const intent = formData.get("intent");
 
   const { env } = context.cloudflare;
   const studentUid = params.id;
@@ -92,6 +90,21 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   if (!currentUser) {
     return redirect(`/students/${studentUid}`);
+  }
+
+  if (intent === "delete") {
+    try {
+      await deleteStudentGrading(env, currentUser.id, studentUid);
+      return redirect(`/students/${studentUid}`);
+    } catch (error) {
+      console.error("Error deleting grading:", error);
+      return { error: "평가를 삭제하는 중 오류가 발생했어요" };
+    }
+  }
+
+  const comment = formData.get("comment") as string;
+  if (comment.length > 100) {
+    return { error: "평가 내용은 최대 100자까지 작성할 수 있어요" };
   }
 
   const selectedTags = formData.getAll("tags") as StudentGradingTagValue[];
@@ -137,7 +150,10 @@ export default function StudentGrade() {
   const { student, existingGrading } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const submit = useSubmit();
   const isSubmitting = navigation.state === "submitting";
+  const isDeleting = isSubmitting && navigation.formData?.get("intent") === "delete";
+  const isSaving = isSubmitting && !isDeleting;
 
   const [selectedTags, setSelectedTags] = useState<StudentGradingTagValue[]>(existingGrading?.tags || []);
 
@@ -167,15 +183,31 @@ export default function StudentGrade() {
         ))}
 
         {/* Submit Button */}
-        <div className="flex">
+        <div className="flex flex-wrap gap-2">
           <Button
             type="submit"
             variant="primary"
-            text={isSubmitting ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"}
+            name="intent"
+            value="save"
+            text={isSaving ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"}
+            disabled={isSubmitting}
           />
-          <Link to={`/students/${student.uid}`}>
-            <Button type="button" text="취소" />
+          <Link to={`/students/${student.uid}`} className="shrink-0">
+            <Button type="button" text="취소" disabled={isSubmitting} />
           </Link>
+          {existingGrading && (
+            <Button
+              type="button"
+              variant="danger"
+              text={isDeleting ? "삭제 중..." : "삭제"}
+              disabled={isSubmitting}
+              onClick={() => {
+                if (confirm("정말 이 평가를 삭제할까요?")) {
+                  submit({ intent: "delete" }, { method: "post" });
+                }
+              }}
+            />
+          )}
         </div>
         {actionData?.error && <p className="text-sm text-red-500 -mt-4">{actionData.error}</p>}
       </Form>

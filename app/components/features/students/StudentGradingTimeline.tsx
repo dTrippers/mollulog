@@ -21,7 +21,6 @@ export type StudentGradingTimelineItem = {
 
 type StudentGradingTimelineProps = {
   gradings: StudentGradingTimelineItem[];
-  student?: { uid: string; name: string };
   currentUser?: { username: string } | null;
   hideAuthorName?: boolean;
 };
@@ -103,9 +102,7 @@ function TimelineCard({
 
       <div className="mt-4 space-y-3">
         {grading.comment && (
-          <p className="text-sm leading-6 text-neutral-700 dark:text-neutral-200">
-            {grading.comment.trim()}
-          </p>
+          <p className="text-sm leading-6 text-neutral-700 dark:text-neutral-200">{grading.comment.trim()}</p>
         )}
 
         {grading.tags && grading.tags.length > 0 && (
@@ -128,7 +125,6 @@ function TimelineCard({
 
 export default function StudentGradingTimeline({
   gradings,
-  student,
   currentUser,
   hideAuthorName = false,
 }: StudentGradingTimelineProps) {
@@ -143,19 +139,6 @@ export default function StudentGradingTimeline({
 
   return (
     <div className="space-y-3">
-      {student && currentUser && !currentUserGrading && (
-        <Link
-          to={`/students/${student.uid}/grade`}
-          className="flex items-center justify-between rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 px-4 py-4 text-sm text-neutral-700 transition hover:border-neutral-400 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900/50 dark:text-neutral-200 dark:hover:border-neutral-600 dark:hover:bg-neutral-800/80"
-        >
-          <span>내 평가를 추가해서 타임라인에 남기기</span>
-          <span className="inline-flex items-center gap-1 font-medium">
-            <PlusCircleIcon className="size-4" />
-            작성하기
-          </span>
-        </Link>
-      )}
-
       {sortedGradings.map((grading) => (
         <TimelineCard
           key={grading.uid}

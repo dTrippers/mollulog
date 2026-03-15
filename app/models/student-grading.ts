@@ -4,7 +4,12 @@ import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { senseisTable } from "./sensei";
 import type { StudentGradingTagValue } from "./student-grading-tag";
-import { getGradingTags, getGradingTagsByGradingUids, updateGradingTags } from "./student-grading-tag";
+import {
+  deleteGradingTags,
+  getGradingTags,
+  getGradingTagsByGradingUids,
+  updateGradingTags,
+} from "./student-grading-tag";
 
 export const studentGradingsTable = sqliteTable("student_gradings", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -109,6 +114,24 @@ export async function upsertStudentGrading(
 
   // Update tags
   await updateGradingTags(env, gradingUid, studentUid, tags);
+}
+
+export async function deleteStudentGrading(env: Env, senseiId: number, studentUid: string): Promise<void> {
+  const db = drizzle(env.DB);
+  const existing = await db
+    .select({ uid: studentGradingsTable.uid })
+    .from(studentGradingsTable)
+    .where(and(eq(studentGradingsTable.userId, senseiId), eq(studentGradingsTable.studentUid, studentUid)))
+    .limit(1);
+
+  if (existing.length === 0) {
+    return;
+  }
+
+  await deleteGradingTags(env, existing[0].uid);
+  await db
+    .delete(studentGradingsTable)
+    .where(and(eq(studentGradingsTable.userId, senseiId), eq(studentGradingsTable.studentUid, studentUid)));
 }
 
 export async function getStudentGradingsByStudentWithUsers(

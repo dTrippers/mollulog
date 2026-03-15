@@ -1,3 +1,4 @@
+import { PlusCircleIcon } from "@heroicons/react/16/solid";
 import { Link } from "react-router";
 import type { StudentGradingTimelineItem } from "~/components/features/students";
 import { ProfileImage, TagIcon } from "~/components/primitives";
@@ -11,6 +12,7 @@ type StudentGradingChartProps = {
   signedIn: boolean;
   recentReview?: StudentGradingTimelineItem;
   recentReviewIsCurrentUser?: boolean;
+  hasCurrentUserGrading: boolean;
   totalReviewCount?: number;
 };
 
@@ -21,19 +23,10 @@ export default function StudentGradingChart({
   signedIn,
   recentReview,
   recentReviewIsCurrentUser = false,
+  hasCurrentUserGrading,
   totalReviewCount,
 }: StudentGradingChartProps) {
-  const { showSignIn } = useSignIn();
   const maxCount = Math.max(...tagCounts.map((tagCount) => tagCount.count), 1);
-
-  const noGradingView = (
-    <div className="p-4 text-center text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 bg-neutral-100 dark:bg-neutral-900 transition rounded-lg cursor-pointer">
-      <p className="text-sm">아직 평가가 없어요</p>
-      <p className="text-xs mt-1 text-blue-600 dark:text-blue-400 group-hover:underline">
-        {signedIn ? "첫 번째 평가를 작성해보세요!" : "로그인 후 첫 번째 평가를 작성해보세요!"}
-      </p>
-    </div>
-  );
 
   return (
     <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 bg-white dark:bg-neutral-800/50">
@@ -58,16 +51,6 @@ export default function StudentGradingChart({
               </span>
             </div>
           </div>
-        ))}
-
-        {noGrading && (signedIn ? (
-          <Link to={`/students/${student.uid}/grade`} className="group">
-            {noGradingView}
-          </Link>
-        ) : (
-          <button type="button" className="w-full text-left" onClick={() => showSignIn()}>
-            {noGradingView}
-          </button>
         ))}
 
         {recentReview && totalReviewCount ? (
@@ -108,7 +91,47 @@ export default function StudentGradingChart({
             </Link>
           </>
         ) : null}
+
+        {(noGrading || !hasCurrentUserGrading) && (
+          <NewGrading
+            title={noGrading ? "아무도 평가를 남기지 않았어요" : "아직 평가를 작성하지 않았어요"}
+            message={noGrading ? "첫 번째 평가를 남겨보세요!" : "다른 선생님들에게 정보를 공유해주세요!"}
+            studentUid={student.uid}
+            signedIn={signedIn}
+          />
+        )}
       </div>
     </div>
+  );
+}
+
+type NewGradingProps = {
+  title: string;
+  message: string;
+  studentUid: string;
+  signedIn: boolean;
+};
+
+function NewGrading({ title, message, studentUid, signedIn }: NewGradingProps) {
+  const { showSignIn } = useSignIn();
+  const inner = (
+    <div className="p-4 text-center text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 bg-neutral-100 dark:bg-neutral-900 transition rounded-lg cursor-pointer">
+      <p className="text-sm">{title}</p>
+      <p className="text-xs mt-1 text-blue-600 dark:text-blue-400 group-hover:underline">{message}</p>
+    </div>
+  );
+
+  if (signedIn) {
+    return (
+      <Link to={`/students/${studentUid}/grade`} className="group">
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" className="w-full text-left" onClick={() => showSignIn()}>
+      {inner}
+    </button>
   );
 }

@@ -12,8 +12,10 @@ type PrimitiveButtonProps = {
   variant?: "default" | "primary" | "danger" | "inverse" | "tint" | "tint-blue" | "tint-red" | "list";
   color?: "primary" | "red" | "black";
   size?: "md" | "sm" | "xs" | "list";
-  onClick?: () => void;
+  onClick?: (event: MouseEvent<HTMLElement>) => void;
   disabled?: boolean;
+  name?: string;
+  value?: string;
   fullWidth?: boolean;
   justify?: "start" | "center";
   compact?: boolean;
@@ -36,6 +38,8 @@ export default function PrimitiveButton({
   size = "md",
   onClick,
   disabled = false,
+  name,
+  value,
   fullWidth = false,
   justify = "center",
   compact = false,
@@ -102,7 +106,7 @@ export default function PrimitiveButton({
       event.preventDefault();
       return;
     }
-    onClick?.();
+    onClick?.(event);
   };
 
   if (href) {
@@ -129,7 +133,7 @@ export default function PrimitiveButton({
   }
 
   return (
-    <button type={type} className={buttonClassName} onClick={handleClick} disabled={disabled}>
+    <button type={type} className={buttonClassName} onClick={handleClick} disabled={disabled} name={name} value={value}>
       {content}
     </button>
   );

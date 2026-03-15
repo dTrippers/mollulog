@@ -38,7 +38,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     youtubeSections,
   ] = await Promise.all([
     getIndexContents(env),
-    getRecentStudentGradingsWithUsers(env, 3, true),
+    getRecentStudentGradingsWithUsers(env, 5, true),
     getAllStudentsMap(env, true),
     getHomeYoutubeSections(env).catch((error) => {
       console.error("Failed to load home youtube sections", error);

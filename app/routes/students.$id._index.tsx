@@ -124,6 +124,9 @@ export default function StudentDetail() {
         signedIn={currentUser !== null}
         recentReview={highlightedGradings[0]}
         recentReviewIsCurrentUser={!!currentUser && highlightedGradings[0]?.user?.username === currentUser.username}
+        hasCurrentUserGrading={
+          !!currentUser && allGradings.some((grading) => grading.user.username === currentUser.username)
+        }
         totalReviewCount={allGradings.length}
       />
 

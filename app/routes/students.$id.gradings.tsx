@@ -13,8 +13,11 @@ export default function StudentGradingsPage() {
         tagCounts={tagCounts}
         noGrading={allGradings.length === 0}
         signedIn={currentUser !== null}
+        hasCurrentUserGrading={
+          !!currentUser && allGradings.some((grading) => grading.user.username === currentUser.username)
+        }
       />
-      <StudentGradingTimeline student={student} gradings={allGradings} currentUser={currentUser} />
+      <StudentGradingTimeline gradings={allGradings} currentUser={currentUser} />
     </section>
   );
 }

@@ -49,7 +49,7 @@ function HomeYoutubeSection({ youtubeSections }: Pick<HomeRightRailProps, "youtu
       })),
     )
     .sort((a, b) => dayjs(b.publishedAt).valueOf() - dayjs(a.publishedAt).valueOf())
-    .slice(0, 5);
+    .slice(0, 3);
 
   return (
     <RailSection title="공식 유튜브 최근 영상">
@@ -110,14 +110,16 @@ function RecentGradingCard({ grading }: RecentGradingCardProps) {
 
   return (
     <Link
-      to={`/students/${grading.student.uid}/gradings`}
+      to={`/students/${grading.student.uid}`}
       className="group rounded-lg border border-neutral-200 bg-white transition-colors hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900 block p-3"
     >
       <div className="flex items-center gap-3">
         <ProfileImage studentUid={grading.student.uid} imageSize={8} />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">{grading.student.name}</p>
+            <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+              {grading.student.name}
+            </p>
             <span className="shrink-0 text-xs text-neutral-400 dark:text-neutral-500">
               {dayjs(grading.updatedAt).format("MM/DD")}
             </span>
@@ -134,9 +136,11 @@ function RecentGradingCard({ grading }: RecentGradingCardProps) {
 
       {grading.tags && grading.tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {sortTags(grading.tags).slice(0, 3).map((tag) => (
-            <TagBadge key={tag} tag={tag} />
-          ))}
+          {sortTags(grading.tags)
+            .slice(0, 3)
+            .map((tag) => (
+              <TagBadge key={tag} tag={tag} />
+            ))}
         </div>
       )}
     </Link>
