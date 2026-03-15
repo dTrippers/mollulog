@@ -1,4 +1,5 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
+import { Link } from "react-router";
 import { sanitizeClassName } from "~/prophandlers";
 
 type PrimitiveButtonProps = {
@@ -16,6 +17,10 @@ type PrimitiveButtonProps = {
   fullWidth?: boolean;
   justify?: "start" | "center";
   compact?: boolean;
+  href?: string;
+  to?: string;
+  target?: "_blank" | "_self" | "_parent" | "_top";
+  rel?: string;
 };
 
 export default function PrimitiveButton({
@@ -33,6 +38,10 @@ export default function PrimitiveButton({
   fullWidth = false,
   justify = "center",
   compact = false,
+  href,
+  to,
+  target,
+  rel,
 }: PrimitiveButtonProps) {
   const resolvedVariant = color === "primary"
     ? "primary"
@@ -64,7 +73,17 @@ export default function PrimitiveButton({
   const justifyClass = justify === "start" ? "justify-start text-left" : "justify-center text-center";
   const widthClass = fullWidth ? "w-full" : "w-fit";
   const disabledClass = disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer";
-  const shadowClass = variant === "list" || size === "xs" ? "" : "shadow";
+  const shadowClass = variant === "list" || size === "xs" ? "" : "shadow-sm";
+  const buttonClassName = sanitizeClassName(`
+    inline-flex items-center border transition
+    ${widthClass}
+    ${justifyClass}
+    ${sizeClass}
+    ${variantClass}
+    ${shadowClass}
+    ${disabledClass}
+    ${className ?? ""}
+  `);
   const content = children ?? (
     Icon ? (
       <div className="flex items-center gap-2">
@@ -75,33 +94,50 @@ export default function PrimitiveButton({
       text
     )
   );
+  const handleClick = (event: MouseEvent<HTMLElement>) => {
+    if (disabled) {
+      event.preventDefault();
+      return;
+    }
+    onClick?.();
+  };
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target={target}
+        rel={rel ?? (target === "_blank" ? "noopener noreferrer" : undefined)}
+        className={buttonClassName}
+        onClick={handleClick}
+        aria-disabled={disabled}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className={buttonClassName}
+        onClick={handleClick}
+        aria-disabled={disabled}
+      >
+        {content}
+      </Link>
+    );
+  }
 
   return (
     <button
       type={type}
-      className={sanitizeClassName(`
-        inline-flex items-center border transition
-        ${widthClass}
-        ${justifyClass}
-        ${sizeClass}
-        ${variantClass}
-        ${shadowClass}
-        ${disabledClass}
-        ${className ?? ""}
-      `)}
-      onClick={onClick}
+      className={buttonClassName}
+      onClick={handleClick}
       disabled={disabled}
     >
-      {children ?? (
-        ResolvedIcon ? (
-          <div className="flex items-center gap-2">
-            <ResolvedIcon className="size-3.5 shrink-0" strokeWidth={2} />
-            <span>{text}</span>
-          </div>
-        ) : (
-          content
-        )
-      )}
+      {content}
     </button>
   );
 }

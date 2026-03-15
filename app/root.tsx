@@ -71,7 +71,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 const wideLayout = ["/utils/relationship"];
-const fullLayout = ["^/raids", "^/futures", "^/utils/pyroxene", "^/students$", "^/@", "^/events", "^/coupon"];
+const fullLayout = ["^/$", "^/raids", "^/futures", "^/utils/pyroxene", "^/students$", "^/@", "^/events", "^/coupon"];
 
 export default function App() {
   const loaderData = useLoaderData<typeof loader>();

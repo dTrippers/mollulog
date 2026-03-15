@@ -13,6 +13,8 @@ import { getIndexContents, type IndexRecruitment } from "~/models/content";
 import EventList from "~/components/features/events/EventList";
 import { RaidCard } from "~/components/features/raids";
 import type { TimelineContent } from "~/models/timeline-content";
+import { getHomeYoutubeSections } from "~/models/youtube";
+import HomeRightRail from "./_index._components/HomeRightRail";
 
 export const meta: MetaFunction = () => {
   return [
@@ -24,7 +26,16 @@ export const meta: MetaFunction = () => {
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
 
-  const { mainEvent, currentRaids, currentEvents, currentRecruitments, favoritedCounts } = await getIndexContents(env);
+  const [
+    { mainEvent, currentRaids, currentEvents, currentRecruitments, favoritedCounts },
+    youtubeSections,
+  ] = await Promise.all([
+    getIndexContents(env),
+    getHomeYoutubeSections(env).catch((error) => {
+      console.error("Failed to load home youtube sections", error);
+      return [];
+    }),
+  ]);
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   const favoritedStudentUids = currentUser ?
     (await getUserFavoritedStudents(env, currentUser.id)).filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId)).map((favorited) => favorited.studentId) :
@@ -50,45 +61,51 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     favoritedStudentUids,
     currentTotalAssualt,
     currentUnlimit,
+    youtubeSections,
   };
 };
 
 export default function Index() {
-  const { mainEvent, currentEvents, currentRecruitments, favoritedCounts, favoritedStudentUids, currentTotalAssualt, currentUnlimit } = useLoaderData<typeof loader>();
+  const { mainEvent, currentEvents, currentRecruitments, favoritedCounts, favoritedStudentUids, currentTotalAssualt, currentUnlimit, youtubeSections } = useLoaderData<typeof loader>();
 
   return (
-    <>
-      <Title text="진행중인 컨텐츠" />
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 xl:flex-row xl:items-start">
+      <div className="min-w-0 xl:flex-1">
+        <Title text="진행중인 컨텐츠" />
 
-      <MainEvent event={mainEvent} />
-      <EventList events={currentEvents} />
-      <div className="grid grid-cols-2 gap-2">
-        <LinkCard Icon={CalendarIcon} title="미래시" description="컨텐츠 및 픽업 일정" to="/futures" />
-        <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가 정보" to="/students" />
-      </div>
+        <MainEvent event={mainEvent} />
+        <EventList events={currentEvents} />
+        <div className="grid grid-cols-2 gap-2 xl:hidden">
+          <LinkCard Icon={CalendarIcon} title="미래시" description="컨텐츠 및 픽업 일정" to="/futures" />
+          <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가 정보" to="/students" />
+        </div>
 
-      {CurrentRecruitments.length > 0 && (
-        <CurrentRecruitments
-          recruitments={currentRecruitments}
-          favoritedStudentUids={favoritedStudentUids}
-          favoritedCounts={favoritedCounts}
-        />
-      )}
-
-      <SubTitle text="레이드" />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {currentTotalAssualt && (
-          <Link to={`/raids/${currentTotalAssualt.uid}`} className="hover:opacity-75 transition-opacity">
-            <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
-          </Link>
+        {currentRecruitments.length > 0 && (
+          <CurrentRecruitments
+            recruitments={currentRecruitments}
+            favoritedStudentUids={favoritedStudentUids}
+            favoritedCounts={favoritedCounts}
+          />
         )}
-        {currentUnlimit && (
-          <Link to={`/raids/${currentUnlimit.uid}`} className="hover:opacity-75 transition-opacity">
-            <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
-          </Link>
-        )}
+
+        <SubTitle text="레이드" />
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+          {currentTotalAssualt && (
+            <Link to={`/raids/${currentTotalAssualt.uid}`} className="hover:opacity-75 transition-opacity">
+              <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
+            </Link>
+          )}
+          {currentUnlimit && (
+            <Link to={`/raids/${currentUnlimit.uid}`} className="hover:opacity-75 transition-opacity">
+              <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
+            </Link>
+          )}
+        </div>
       </div>
-    </>
+      <div className="min-w-0 xl:w-full xl:max-w-xs xl:flex-none">
+        <HomeRightRail youtubeSections={youtubeSections} />
+      </div>
+    </div>
   );
 }
 
