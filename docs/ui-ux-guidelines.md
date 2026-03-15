@@ -49,6 +49,8 @@ Use this structure as the default rule:
 - Keep spacing, radius, border, and shadow behavior consistent across similar components.
 - Avoid mixing multiple competing visual idioms in the same area.
 - Preserve existing product identity unless a broader redesign is intentional.
+- Do not introduce magic-number layout widths or arbitrary pixel-based width values unless there is no existing project token or layout scale that fits.
+- Prefer existing Tailwind width and max-width utilities already used in the codebase such as `max-w-3xl`, `max-w-4xl`, and `max-w-sm`.
 
 ## Layout Rules
 - Use a clear page shell with predictable width, spacing, and section rhythm.
