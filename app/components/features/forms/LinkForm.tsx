@@ -17,7 +17,7 @@ export default function LinkForm({ label, value, to, color = "default" }: LinkFo
 
   return (
     <Link to={to}>
-      <div className="flex items-center gap-x-2 p-4">
+      <div className="flex items-center gap-x-2 px-4 py-3">
         <p className={`grow line-clamp-1 ${colorClass}`}>{label}</p>
         {value && <p className="shrink-0 text-neutral-500 dark:text-neutral-400">{value}</p>}
         <ChevronRightIcon className="size-4" />

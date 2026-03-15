@@ -63,7 +63,7 @@ export default function RelationshipStudentPicker({
         {hasSearchResults && (
           <HorizontalScroll
             itemWidth={{ mobile: "w-auto", desktop: "md:w-auto" }}
-            gap="gap-2"
+            gap="gap-0"
             showArrowsOnMobile
             className="py-2"
           >
@@ -90,7 +90,7 @@ function StudentPickerCard({
     <button
       type="button"
       className={sanitizeClassName(`
-        relative flex flex-col items-center border-2 transition-all p-1 rounded-lg min-w-24
+        relative flex flex-col items-center border-2 transition-all p-1 rounded-lg
         ${selected ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700" : "hover:bg-neutral-100 dark:hover:bg-neutral-700 border-transparent"}
       `)}
       onClick={onSelect}

@@ -79,7 +79,7 @@ export default function SelectForm({
         >
           <Field label={label} description={description} containerClassName="pointer-events-none">
             {(selectedLabel ?? placeholder) && (
-              <p className="mt-1 text-neutral-700 dark:text-neutral-300">{selectedLabel ?? placeholder}</p>
+              <p className="mt-2 text-neutral-500 dark:text-neutral-400">{selectedLabel ?? placeholder}</p>
             )}
           </Field>
           <ChevronDownIcon className="absolute top-1/2 right-4 size-4 -translate-y-1/2" />
@@ -106,10 +106,10 @@ export default function SelectForm({
                 <button
                   type="button"
                   key={option.value}
-                  className="flex cursor-pointer items-center gap-x-2 transition-colors duration-100 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+                  className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-neutral-200 dark:hover:bg-neutral-800"
                   onClick={() => handleSelect(option.value)}
                 >
-                  {option.element ?? <div className="p-4">{option.label}</div>}
+                  {option.element ?? <div className="px-4 py-3">{option.label}</div>}
                 </button>
               ))
             ) : (

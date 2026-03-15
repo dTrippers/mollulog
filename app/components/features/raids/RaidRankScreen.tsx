@@ -137,8 +137,6 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
     };
   }, [allStudents, filterState.difficulty, filterState.excludeStudents, filterState.filterNotOwned, filterState.includeStudents, recruitedStudentTiers]);
 
-  // Fetch ranks from server
-  const scoreRange = getScoreRange(filterState.difficulty);
   const resetKey = JSON.stringify({
     raidType: currentRaid.raidType,
     seasonIndex: currentRaid.seasonIndex,
@@ -158,6 +156,8 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
     }
 
     previousResetKeyRef.current = resetKey;
+    setLoading(true);
+    setError(null);
 
     const loadRanks = async () => {
       try {
@@ -167,7 +167,7 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
           raidType: currentRaid.raidType,
           season: currentRaid.seasonIndex,
           defenseType: currentRaid.defenseType,
-          score: scoreRange,
+          score: apiFilter.score,
           includeStudents,
           excludeStudents,
           perPage: ITEMS_PER_PAGE,
@@ -195,7 +195,7 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
     return () => {
       cancelled = true;
     };
-  }, [apiFilter, currentPage, currentRaid.defenseType, currentRaid.raidType, currentRaid.seasonIndex, resetKey, scoreRange]);
+  }, [apiFilter, currentPage, currentRaid.defenseType, currentRaid.raidType, currentRaid.seasonIndex, resetKey]);
 
   if (loading) {
     return <LoadingRanks />;

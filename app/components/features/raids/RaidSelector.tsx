@@ -40,10 +40,10 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
   }, [raids, raidType]);
 
   return (
-    <div className="relative">
+    <div className="relative w-full">
       <button
         type="button"
-        className="rounded-lg border border-neutral-200 shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
+        className="w-full rounded-lg border border-neutral-200 text-left shadow-lg dark:border-neutral-700 dark:bg-neutral-900"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
         aria-haspopup="dialog"

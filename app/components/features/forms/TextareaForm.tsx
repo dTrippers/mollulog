@@ -49,7 +49,7 @@ export default function TextareaForm({
         id={name}
         name={name}
         defaultValue={defaultValue}
-        className="mt-2 w-full resize-none text-neutral-700 dark:text-neutral-300"
+        className="mt-2 w-full resize-none text-neutral-500 dark:text-neutral-400"
         onInput={(event) => {
           adjustHeight();
           onChange?.(event.currentTarget.value);

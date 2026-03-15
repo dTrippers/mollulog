@@ -178,10 +178,10 @@ export default function StudentSelectForm({
                 <button
                   type="button"
                   key={student.uid}
-                  className="flex cursor-pointer items-center gap-x-2 transition-colors duration-100 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+                  className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-neutral-200 dark:hover:bg-neutral-800"
                   onClick={() => handleSelect(student.uid)}
                 >
-                  <div className="my-2 flex items-center gap-x-4 px-4">
+                  <div className="flex w-full items-center gap-x-4 px-4 py-3">
                     <StudentImage student={student} size="size-10" />
                     <p className="grow">{student.name}</p>
                   </div>

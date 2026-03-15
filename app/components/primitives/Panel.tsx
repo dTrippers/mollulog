@@ -101,7 +101,7 @@ export default function Panel({
       {clickable ? (
         <button
           type="button"
-          className={sanitizeClassName(`${headerClass} w-full ${titleClassName ?? ""}`)}
+          className={sanitizeClassName(`${headerClass} w-full text-left ${titleClassName ?? ""}`)}
           onClick={() => setExpanded((prev: boolean) => !prev)}
         >
           {content}

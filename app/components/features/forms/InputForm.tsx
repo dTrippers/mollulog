@@ -38,7 +38,7 @@ export default function InputForm({
         type={type}
         name={name}
         defaultValue={defaultValue}
-        className="mt-1 w-full text-neutral-700 dark:text-neutral-300"
+        className="mt-2 w-full text-neutral-500 dark:text-neutral-400"
         placeholder={placeholder}
         onChange={(event) => onChange?.(event.target.value)}
       />
