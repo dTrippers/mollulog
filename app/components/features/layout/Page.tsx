@@ -70,7 +70,7 @@ export default function Page({ title, description, belowTitle, screens, panels, 
           <MobileTabBar screens={screens} isSticky={isTabBarSticky} />
         )}
 
-        <div className={`grow xl:p-4 ${contentAreaClass}`}>
+        <div className={`relative z-0 grow xl:p-4 ${contentAreaClass}`}>
           {children}
         </div>
       </div>
@@ -103,7 +103,7 @@ function PageSidebar({
   links,
 }: Omit<PageProps, "children" | "contentArea">) {
   return (
-    <div className="shrink-0 w-full xl:h-screen xl:max-w-sm xl:mr-8 xl:sticky xl:top-6 xl:self-start xl:overflow-y-scroll overflow-x-hidden no-scrollbar">
+    <div className="relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar xl:z-auto xl:h-screen xl:max-w-sm xl:mr-8 xl:sticky xl:top-6 xl:self-start xl:overflow-y-scroll">
       <div className="mt-8 mb-4">
         {backward && (
           <Link to={backward.to} className="mb-4 inline-flex items-center gap-1 text-neutral-500 dark:text-neutral-400 hover:underline">

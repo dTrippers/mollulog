@@ -1,5 +1,5 @@
 import { Transition } from "@headlessui/react";
-import { XMarkIcon } from "@heroicons/react/16/solid";
+import { ChevronDownIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -48,9 +48,15 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
         aria-expanded={isOpen}
         aria-haspopup="dialog"
       >
-        {currentRaid && (
-          <RaidSelectorItem raid={currentRaid} />
-        )}
+        <div className="relative">
+          {currentRaid && <RaidSelectorItem raid={currentRaid} />}
+          <ChevronDownIcon
+            className={sanitizeClassName(`
+              absolute top-1/2 right-3 size-5 -translate-y-1/2 text-neutral-500 transition-transform
+              ${isOpen ? "rotate-180" : ""}
+            `)}
+          />
+        </div>
       </button>
 
       <Transition
@@ -62,7 +68,7 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
         leave="transition duration-100 ease-in"
         leaveFrom="opacity-100 scale-100"
         leaveTo="opacity-0 scale-95"
-        className="mt-4 mb-2 absolute w-full top-full left-0 z-10 bg-white dark:bg-neutral-800"
+        className="mt-4 mb-2 w-full bg-white dark:bg-neutral-800 xl:absolute xl:top-full xl:left-0 xl:z-30"
       >
         <div className="flex items-center justify-between">
           <FilterButtons

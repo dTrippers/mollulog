@@ -105,7 +105,7 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
     <>
       {/* Saving indicator */}
       {isSaving && (
-        <div className="fixed bottom-4 right-8 z-50 flex items-center gap-2 px-4 py-2 bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 rounded-lg shadow-lg">
+        <div className="fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900 md:right-8">
           <ArrowPathIcon className="size-4 animate-spin" />
           <span className="text-sm font-medium">저장중...</span>
         </div>
@@ -113,73 +113,75 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
 
       {/* Calculating indicator */}
       {stageCalculations.isCalculating && (
-        <div className="fixed bottom-4 right-8 z-50 flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg shadow-lg">
+        <div className="fixed right-4 bottom-4 z-50 flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white shadow-lg md:right-8">
           <ArrowPathIcon className="size-4 animate-spin" />
           <span className="text-sm font-medium">계산중...</span>
         </div>
       )}
 
-      <div className="my-8">
-        <EventInfoCard
-          Icon={ExclamationCircleIcon}
-          title="데이터가 부정확할 수 있어요"
-          description="오류가 있거나 일본 서비스와 차이가 있을 수 있으니 참고용으로만 사용해주세요"
-        />
-        {!signedIn && (
+      <div className="overflow-x-hidden">
+        <div className="my-8">
           <EventInfoCard
-            Icon={UserIcon}
-            title="로그인 후 더 많은 기능을 이용할 수 있어요"
-            description="모집 학생 데이터가 자동으로 반영되며, 입력한 정보를 저장하고 언제든지 불러올 수 있어요"
-            onClick={showSignIn}
-            showArrow
+            Icon={ExclamationCircleIcon}
+            title="데이터가 부정확할 수 있어요"
+            description="오류가 있거나 일본 서비스와 차이가 있을 수 있으니 참고용으로만 사용해주세요"
           />
-        )}
-      </div>
+          {!signedIn && (
+            <EventInfoCard
+              Icon={UserIcon}
+              title="로그인 후 더 많은 기능을 이용할 수 있어요"
+              description="모집 학생 데이터가 자동으로 반영되며, 입력한 정보를 저장하고 언제든지 불러올 수 있어요"
+              onClick={showSignIn}
+              showArrow
+            />
+          )}
+        </div>
 
-      <div>
-        <StudentBonusSelector
-          eventRewardBonus={eventRewardBonus}
-          recruitedStudentUids={recruitedStudentUids}
-          state={state}
-          actions={actions}
-          signedIn={signedIn}
-        />
+        <div>
+          <StudentBonusSelector
+            eventRewardBonus={eventRewardBonus}
+            recruitedStudentUids={recruitedStudentUids}
+            state={state}
+            actions={actions}
+            signedIn={signedIn}
+          />
 
-        {collectableResources && (
-          <ShopResourceSelector
-            shopResources={shopResources}
+          {collectableResources && (
+            <ShopResourceSelector
+              shopResources={shopResources}
+              collectableResources={collectableResources}
+              state={state}
+              actions={actions}
+            />
+          )}
+
+          {minigameConfig && (
+            <MiniGameSection
+              config={minigameConfig}
+              state={state}
+              actions={actions}
+            />
+          )}
+          <StageSelector
+            stages={stages}
+            appliedBonusRatio={appliedBonusRatios}
+            stageRuns={stageCalculations.stageRuns}
+            state={state}
+            actions={actions}
+          />
+
+          <CollectedTotalsSection
+            stages={stages}
             collectableResources={collectableResources}
+            shopResources={shopResources}
+            eventUid={eventUid}
+            minigameConfig={minigameConfig}
             state={state}
             actions={actions}
+            stageCalculations={stageCalculations}
+            signedIn={signedIn}
           />
-        )}
-
-        {minigameConfig && (
-          <MiniGameSection
-            config={minigameConfig}
-            state={state}
-            actions={actions}
-          />
-        )}
-        <StageSelector
-          stages={stages}
-          appliedBonusRatio={appliedBonusRatios}
-          stageRuns={stageCalculations.stageRuns}
-          state={state}
-          actions={actions}
-        />
-
-        <CollectedTotalsSection
-          stages={stages}
-          collectableResources={collectableResources}
-          shopResources={shopResources}
-          eventUid={eventUid}
-          minigameConfig={minigameConfig}
-          state={state}
-          actions={actions}
-          stageCalculations={stageCalculations}
-          signedIn={signedIn}
-        />
+        </div>
       </div>
     </>
   );
