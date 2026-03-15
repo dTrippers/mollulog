@@ -122,6 +122,7 @@ export default function UserIndex() {
           <SubTitle text="학생 평가 내역" description="최근에 남긴 평가부터 확인해보세요" />
           <StudentGradingTimeline
             hideAuthorName
+            hideEditAction
             gradings={gradings.map((grading) => ({
               ...grading,
               student: {

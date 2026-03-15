@@ -23,6 +23,7 @@ type StudentGradingTimelineProps = {
   gradings: StudentGradingTimelineItem[];
   currentUser?: { username: string } | null;
   hideAuthorName?: boolean;
+  hideEditAction?: boolean;
 };
 
 function formatTimestamp(createdAt: string, updatedAt: string) {
@@ -38,10 +39,12 @@ function TimelineCard({
   grading,
   isCurrentUser,
   hideAuthorName,
+  hideEditAction,
 }: {
   grading: StudentGradingTimelineItem;
   isCurrentUser: boolean;
   hideAuthorName: boolean;
+  hideEditAction: boolean;
 }) {
   return (
     <article className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800/50">
@@ -83,7 +86,7 @@ function TimelineCard({
           </div>
         </div>
 
-        {isCurrentUser && (
+        {isCurrentUser && !hideEditAction && (
           <Link
             to={`/students/${grading.studentUid}/grade`}
             className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-neutral-50"
@@ -121,6 +124,7 @@ export default function StudentGradingTimeline({
   gradings,
   currentUser,
   hideAuthorName = false,
+  hideEditAction = false,
 }: StudentGradingTimelineProps) {
   const currentUserGrading = gradings.find((grading) => currentUser && grading.user?.username === currentUser.username);
   const sortedGradings = currentUserGrading
@@ -139,6 +143,7 @@ export default function StudentGradingTimeline({
           grading={grading}
           isCurrentUser={currentUser?.username === grading.user?.username}
           hideAuthorName={hideAuthorName}
+          hideEditAction={hideEditAction}
         />
       ))}
     </div>
