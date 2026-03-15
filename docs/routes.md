@@ -12,17 +12,17 @@ React Router v7 파일시스템 라우팅. `app/routes/` 의 파일명 규칙:
 | 파일 | URL | 설명 |
 |------|-----|------|
 | `_index.tsx` | `/` | 홈 (현재 이벤트, 레이드, 픽업) |
-| `futures.tsx` | `/futures` | 미래 콘텐츠 타임라인 |
-| `students._index.tsx` | `/students` | 학생 도감 |
+| `futures.tsx` | `/futures` | 미래시 타임라인 |
+| `students._index.tsx` | `/students` | 학생 목록 |
 | `students.$id._index.tsx` | `/students/:id` | 학생 상세 |
 | `students.$id.grade.tsx` | `/students/:id/grade` | 학생 평가 |
-| `raids._index.tsx` | `/raids` | 레이드 목록 (→ 최신 레이드로 리다이렉트) |
+| `raids._index.tsx` | `/raids` | 레이드(총력전/대결전) 목록 (→ 최신 레이드로 리다이렉트) |
 | `raids.$id.tsx` | `/raids/:id` | 레이드 레이아웃 |
 | `raids.$id._index.tsx` | `/raids/:id` | 레이드 개요 |
 | `raids.$id.ranks.tsx` | `/raids/:id/ranks` | 레이드 랭킹 |
 | `raids.$id.statistics.tsx` | `/raids/:id/statistics` | 레이드 통계 |
 | `raids.$id.videos.tsx` | `/raids/:id/videos` | 레이드 공략 영상 |
-| `raids.$id.compare.tsx` | `/raids/:id/compare` | 레이드 비교 |
+| `raids.$id.compare.tsx` | `/raids/:id/compare` | 동일 보스에 대한 레이드 비교 |
 | `events.$uid.tsx` | `/events/:uid` | 이벤트 레이아웃 |
 | `events.$uid._index.tsx` | `/events/:uid` | 이벤트 개요 |
 | `events.$uid.shop.tsx` | `/events/:uid/shop` | 이벤트 상점 플래너 |

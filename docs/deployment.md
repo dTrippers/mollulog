@@ -54,24 +54,6 @@ wrangler deploy
 
 Wrangler secrets로 관리. 직접 `.env` 파일 사용 안 함 (로컬은 `.dev.vars` 사용).
 
-| 시크릿 | 설명 |
-|--------|------|
-| `SESSION_SECRET` | 세션 암호화 키 |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth 클라이언트 시크릿 |
-
-시크릿 설정:
-```bash
-wrangler secret put SESSION_SECRET --env production
-wrangler secret put GOOGLE_CLIENT_SECRET --env production
-```
-
-로컬 개발은 `.dev.vars` 파일 사용:
-```
-SESSION_SECRET=local-dev-secret
-GOOGLE_CLIENT_SECRET=your-google-secret
-VITE_BAQL_URL=https://baql.mollulog.net/graphql
-```
-
 ## 데이터베이스 마이그레이션
 
 ```bash

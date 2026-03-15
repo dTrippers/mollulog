@@ -53,46 +53,47 @@ const { DB, KV_SESSION, KV_USERDATA } = context.cloudflare.env;
 
 타입은 `worker-configuration.d.ts`에 자동 생성됨 (`pnpm cf-typegen`).
 
-## 컴포넌트 아키텍처 (원자 설계)
+## 컴포넌트 아키텍처
 
-### Atoms (`app/components/atoms/`)
-재사용 가능한 최소 단위. 외부 상태 의존 없음.
+현재 UI 구조의 단일 소스 오브 트루스는 [component-development-guide.md](./component-development-guide.md) 이다.
 
-- `form/` — Button, Input, Label, NumberInput, SmallButton, Textarea, Toggle
-- `item/` — ItemCard, ResourceCard
-- `layout/` — BottomSheet, Page, Section 등
-- `student/` — StudentImage, StudentBadge 등
-- `typography/` — Title, SubTitle, Text
-- `navigation/` — 네비게이션 프리미티브
+아키텍처 관점에서만 요약하면 현재 활성 구조는 세 계층이다.
 
-### Molecules (`app/components/molecules/`)
-Atoms 조합. 도메인 로직 일부 포함 가능.
+1. `app/components/primitives`
+2. `app/components/features/<domain>`
+3. `app/routes/*._components` 또는 `app/routes/*/_components`
 
-- `auth/` — SignInBottomSheet
-- `editor/` — 리치 텍스트 에디터
-- `form/` — 복합 폼 컴포넌트
-- `item/` — 아이템 선택/관리
-- `pickup/` — 픽업 관련
-- `student/` — StudentCard, StudentListItem
-- `profile/` — 프로필 카드
+현재 실제 컴포넌트 디렉터리도 이 구조만 남아 있다.
 
-### Organisms (`app/components/organisms/`)
-복잡한 UI 블록. 도메인 모델과 직접 연결.
+```text
+app/components/
+  primitives/
+  features/
+    auth/
+    contents/
+    coupons/
+    editor/
+    events/
+    forms/
+    futures/
+    layout/
+    profile/
+    raids/
+    relationship/
+    students/
+```
 
-- `base/` — Navigation, Footer (전역 레이아웃)
-- `raids/` — 레이드 카드, 레이드 목록
-- `students/` — 학생 도감
-- `contents/` — 콘텐츠 타임라인, 필터
-- `event/` — 이벤트 헤더, 이벤트 표시
-- `futures/` — 미래 콘텐츠 필터/뷰
-- `relationship/` — 관계 추적 UI
-
-### UI (`app/components/ui/`)
-Headless UI 기반 재사용 프리미티브 (버튼, 카드, 모달 등).
+상세 규칙은 중복을 피하기 위해 이 문서에 다시 쓰지 않는다.
+- 계층 정의, import 규칙, naming/API/styling 규칙:
+  - [component-development-guide.md](./component-development-guide.md)
+- UI/UX 규칙:
+  - [ui-ux-guidelines.md](./ui-ux-guidelines.md)
+- route-local 구성 규칙:
+  - [routes.md](./routes.md)
 
 ## 전역 상태 (Context API)
 
-### SignInProvider (`app/contexts/SignInContext.tsx`)
+### SignInProvider (`app/contexts/SignInProvider.tsx`)
 로그인 모달 가시성 관리.
 
 ```typescript
@@ -100,7 +101,7 @@ const { showSignIn, hideSignIn } = useSignIn();
 // 인증 필요 시: showSignIn() 호출
 ```
 
-### StudentCardPopupProvider
+### StudentCardPopupProvider (`app/contexts/StudentCardPopupProvider.tsx`)
 학생 카드 팝업 상태 관리. 호버/클릭 시 학생 정보 표시.
 
 ## Cloudflare Workers 엔트리

@@ -32,28 +32,27 @@
 
 | 테이블 | 설명 |
 |--------|------|
-| `timeline_contents` | BAQL에서 동기화된 콘텐츠 캐시 |
-| `event_shop_states` | 이벤트 상점 아이템 상태 |
-| `content_memos` | 콘텐츠 즐겨찾기/메모 |
-| `content_favorite_counts` | 콘텐츠 즐겨찾기 집계 |
-| `content_comments` | 콘텐츠 댓글 |
+| `timeline_contents` | 사이트에서 보여줄 컨텐츠 및 메타 데이터 목록. BAQL의 Event, MainStory, RecruitmentGroup의 레퍼런스 키를 가짐 |
+| `event_shop_states` | 사용자의 이벤트 상점 상태 (구매할 아이템, 목표 재화 수집량 등) |
+| `content_favorite_students` | 관심 학생 |
+| `content_favorite_counts` | 관심 학생 통계 |
+| `content_comments` | 콘텐츠 의견 |
 
 ### 플래너
 
 | 테이블 | 설명 |
 |--------|------|
-| `pyroxene_planner_options` | 파이록신 플래너 설정 |
-| `pyroxene_event_data` | 이벤트 자원 계획 데이터 |
-| `pyroxene_models` | LP 솔버 모델 |
+| `pyroxene_planner_options` | 청휘석 플래너 메타 설정값 |
+| `pyroxene_event_data` | 청휘석 플래너 이벤트별 설정값 (모집 목표, 완료 여부 등) |
 
 ### 기타
 
 | 테이블 | 설명 |
 |--------|------|
-| `posts` | 사용자 게시물 |
-| `feedback_submissions` | 피드백 제출 |
-| `coupons` | 쿠폰 마스터 데이터 |
-| `coupon_registrations` | 사용자 쿠폰 등록 기록 |
+| `posts` | 공지사항 게시물 |
+| `feedback_submissions` | 버그 제보/기능 제안 제출 |
+| `coupons` | 게임 쿠폰 |
+| `coupon_registrations` | 사용자별 게임 쿠폰 등록 기록 |
 
 ## 마이그레이션 추가
 
@@ -96,8 +95,6 @@ await db.delete(followerships).where(eq(followerships.followerId, id));
 ```
 
 ## 로컬 개발 DB
-
-Wrangler가 `.wrangler/state/v3/d1/` 에 SQLite 파일로 로컬 D1 에뮬레이션.
 
 ```bash
 # 로컬 DB 초기화 (마이그레이션 적용)
