@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
@@ -179,5 +179,49 @@ export async function getStudentGradingsByUser(env: Env, userId: number): Promis
   for (const grading of result) {
     grading.tags = tagsMap[grading.uid]?.map((tag) => tag.tagValue) || [];
   }
+  return result;
+}
+
+export async function getRecentStudentGradingsWithUsers(
+  env: Env,
+  limit = 3,
+  includeTags = false,
+): Promise<StudentGradingWithUser[]> {
+  const db = drizzle(env.DB);
+  const gradings = await db
+    .select({
+      uid: studentGradingsTable.uid,
+      studentUid: studentGradingsTable.studentUid,
+      comment: studentGradingsTable.comment,
+      createdAt: studentGradingsTable.createdAt,
+      updatedAt: studentGradingsTable.updatedAt,
+      username: senseisTable.username,
+      profileStudentId: senseisTable.profileStudentId,
+    })
+    .from(studentGradingsTable)
+    .innerJoin(senseisTable, eq(studentGradingsTable.userId, senseisTable.id))
+    .orderBy(desc(studentGradingsTable.updatedAt), desc(studentGradingsTable.createdAt))
+    .limit(limit);
+
+  const result: StudentGradingWithUser[] = gradings.map((grading) => ({
+    uid: grading.uid,
+    studentUid: grading.studentUid,
+    comment: grading.comment,
+    createdAt: grading.createdAt,
+    updatedAt: grading.updatedAt,
+    user: {
+      username: grading.username,
+      profileStudentId: grading.profileStudentId,
+    },
+  }));
+
+  if (includeTags) {
+    const gradingUids = result.map((grading) => grading.uid);
+    const tagsMap = await getGradingTagsByGradingUids(env, gradingUids);
+    for (const grading of result) {
+      grading.tags = tagsMap[grading.uid]?.map((tag) => tag.tagValue) || [];
+    }
+  }
+
   return result;
 }

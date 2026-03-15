@@ -1,17 +1,19 @@
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { ArrowRightIcon, ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
 import { CalendarIcon, IdentificationIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
-import { ChevronDownIcon, ChevronUpIcon, ArrowRightIcon } from "@heroicons/react/16/solid";
-import { getAuthenticator } from "~/auth/authenticator.server";
-import { ProfileImage, SubTitle, Title } from "~/components/primitives";
-import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { recruitmentLabelLocale } from "~/locales/ko";
 import { useState } from "react";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Link, useLoaderData } from "react-router";
+import { getAuthenticator } from "~/auth/authenticator.server";
 import { EventHeader } from "~/components/features/events";
-import { getIndexContents, type IndexRecruitment } from "~/models/content";
 import EventList from "~/components/features/events/EventList";
 import { RaidCard } from "~/components/features/raids";
+import { ProfileImage, SubTitle, Title } from "~/components/primitives";
+import { recruitmentLabelLocale } from "~/locales/ko";
+import { type IndexRecruitment, getIndexContents } from "~/models/content";
+import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { getAllStudentsMap } from "~/models/student";
+import { getRecentStudentGradingsWithUsers } from "~/models/student-grading";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
 import HomeRightRail from "./_index._components/HomeRightRail";
@@ -19,7 +21,10 @@ import HomeRightRail from "./_index._components/HomeRightRail";
 export const meta: MetaFunction = () => {
   return [
     { title: "몰루로그 - 블루 아카이브 미래시/통계 정보 모음" },
-    { name: "description", content: "게임 <블루 아카이브>의 컨텐츠, 통계 정보 등을 확인하고 미래시 계획을 관리해보세요." },
+    {
+      name: "description",
+      content: "게임 <블루 아카이브>의 컨텐츠, 통계 정보 등을 확인하고 미래시 계획을 관리해보세요.",
+    },
   ];
 };
 
@@ -28,18 +33,24 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
   const [
     { mainEvent, currentRaids, currentEvents, currentRecruitments, favoritedCounts },
+    recentGradings,
+    allStudentsMap,
     youtubeSections,
   ] = await Promise.all([
     getIndexContents(env),
+    getRecentStudentGradingsWithUsers(env, 3, true),
+    getAllStudentsMap(env, true),
     getHomeYoutubeSections(env).catch((error) => {
       console.error("Failed to load home youtube sections", error);
       return [];
     }),
   ]);
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
-  const favoritedStudentUids = currentUser ?
-    (await getUserFavoritedStudents(env, currentUser.id)).filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId)).map((favorited) => favorited.studentId) :
-    [];
+  const favoritedStudentUids = currentUser
+    ? (await getUserFavoritedStudents(env, currentUser.id))
+        .filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId))
+        .map((favorited) => favorited.studentId)
+    : [];
 
   // ========== Raids ==========
   const currentTotalAssualt = currentRaids.find((raid) => raid.type === "total_assault" || raid.type === "elimination");
@@ -61,12 +72,28 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     favoritedStudentUids,
     currentTotalAssualt,
     currentUnlimit,
+    recentGradings: recentGradings.map((grading) => ({
+      ...grading,
+      student: allStudentsMap[grading.studentUid]
+        ? { uid: grading.studentUid, name: allStudentsMap[grading.studentUid].name }
+        : undefined,
+    })),
     youtubeSections,
   };
 };
 
 export default function Index() {
-  const { mainEvent, currentEvents, currentRecruitments, favoritedCounts, favoritedStudentUids, currentTotalAssualt, currentUnlimit, youtubeSections } = useLoaderData<typeof loader>();
+  const {
+    mainEvent,
+    currentEvents,
+    currentRecruitments,
+    favoritedCounts,
+    favoritedStudentUids,
+    currentTotalAssualt,
+    currentUnlimit,
+    recentGradings,
+    youtubeSections,
+  } = useLoaderData<typeof loader>();
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 xl:flex-row xl:items-start">
@@ -103,7 +130,7 @@ export default function Index() {
         </div>
       </div>
       <div className="min-w-0 xl:w-full xl:max-w-xs xl:flex-none">
-        <HomeRightRail youtubeSections={youtubeSections} />
+        <HomeRightRail recentGradings={recentGradings} youtubeSections={youtubeSections} />
       </div>
     </div>
   );
@@ -163,7 +190,9 @@ function CurrentRecruitments({ recruitments, favoritedStudentUids, favoritedCoun
                 <div className="relative">
                   <ProfileImage imageSize={12} studentUid={student.uid} />
                   <div className="absolute -bottom-1 -right-1">
-                    <div className={`text-xs relative flex items-center gap-0.5 ${favorited ? "bg-red-500/90" : "bg-neutral-900/90"} text-white rounded-lg px-1.5 border border-white dark:border-transparent`}>
+                    <div
+                      className={`text-xs relative flex items-center gap-0.5 ${favorited ? "bg-red-500/90" : "bg-neutral-900/90"} text-white rounded-lg px-1.5 border border-white dark:border-transparent`}
+                    >
                       <FilledHeartIcon className="size-3" />
                       <span className="font-semibold">
                         {favoritedCounts.find((favorited) => favorited.studentId === student.uid)?.count ?? 0}
@@ -172,7 +201,10 @@ function CurrentRecruitments({ recruitments, favoritedStudentUids, favoritedCoun
                   </div>
                 </div>
                 <div className="grow">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">{recruitmentLabelLocale(recruitment)}{recruitment.pickup ? " • 픽업" : ""}</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    {recruitmentLabelLocale(recruitment)}
+                    {recruitment.pickup ? " • 픽업" : ""}
+                  </p>
                   <p className="text-sm md:text-base font-semibold">{student.name}</p>
                 </div>
               </div>
@@ -214,7 +246,10 @@ function LinkCard({ Icon, title, description, to }: LinkCardProps) {
             <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">{description}</p>
           </div>
         </div>
-        <ArrowRightIcon className="hidden md:block size-4 text-neutral-500 dark:text-neutral-400 group-hover:translate-x-1 transition-transform duration-200" strokeWidth={2} />
+        <ArrowRightIcon
+          className="hidden md:block size-4 text-neutral-500 dark:text-neutral-400 group-hover:translate-x-1 transition-transform duration-200"
+          strokeWidth={2}
+        />
       </div>
     </Link>
   );

@@ -1,20 +1,38 @@
 import dayjs from "dayjs";
+import { Link } from "react-router";
+import type { StudentGradingTimelineItem } from "~/components/features/students";
+import { Button, HorizontalScroll, ProfileImage, TagIcon } from "~/components/primitives";
+import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
 import type { HomeYoutubeChannelSection } from "~/models/youtube";
-import { Button, HorizontalScroll } from "~/components/primitives";
 
 type HomeRightRailProps = {
+  recentGradings: StudentGradingTimelineItem[];
   youtubeSections: HomeYoutubeChannelSection[];
 };
 
-export default function HomeRightRail({ youtubeSections }: HomeRightRailProps) {
+export default function HomeRightRail({ recentGradings, youtubeSections }: HomeRightRailProps) {
   return (
     <aside className="space-y-4 lg:sticky lg:top-24">
+      <HomeRecentGradingsSection recentGradings={recentGradings} />
       <HomeYoutubeSection youtubeSections={youtubeSections} />
     </aside>
   );
 }
 
-function HomeYoutubeSection({ youtubeSections }: HomeRightRailProps) {
+function HomeRecentGradingsSection({ recentGradings }: Pick<HomeRightRailProps, "recentGradings">) {
+  return (
+    <RailSection title="최근 작성된 학생 평가">
+      <div className="space-y-2">
+        {recentGradings.map((grading) => (
+          <RecentGradingCard key={grading.uid} grading={grading} />
+        ))}
+      </div>
+      <Button text="학생 평가 목록" to="/students" variant="tint" fullWidth shadow="xs" />
+    </RailSection>
+  );
+}
+
+function HomeYoutubeSection({ youtubeSections }: Pick<HomeRightRailProps, "youtubeSections">) {
   const channelLinks = [...youtubeSections]
     .sort((a, b) => a.channelKey.localeCompare(b.channelKey))
     .map((section) => ({
@@ -34,45 +52,103 @@ function HomeYoutubeSection({ youtubeSections }: HomeRightRailProps) {
     .slice(0, 5);
 
   return (
-    <section className="rounded-2xl border border-neutral-200 bg-neutral-50/80 mt-4 p-4 dark:border-neutral-800 dark:bg-neutral-900/80">
-      <div>
-        <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">공식 유튜브 최근 영상</h2>
-      </div>
-      <div className="mt-4 space-y-5">
-        {videos.length === 0 ? (
-          <div className="py-6 text-sm text-neutral-500 dark:text-neutral-400">
-            최근 영상을 불러오지 못했어요. 잠시 후 다시 시도해주세요.
-          </div>
-        ) : (
-          <>
-            <div className="lg:hidden -mx-4">
-              <HorizontalScroll itemWidth={{ mobile: "w-2/3", desktop: "lg:w-full" }} gap="gap-3" className="px-4">
-                {videos.map((video) => (
-                  <YoutubeVideoCard key={`${video.channelKey}-${video.id}`} video={video} mobile />
-                ))}
-              </HorizontalScroll>
-            </div>
-            <div className="hidden space-y-3 lg:block">
+    <RailSection title="공식 유튜브 최근 영상">
+      {videos.length === 0 ? (
+        <div className="py-6 text-sm text-neutral-500 dark:text-neutral-400">
+          최근 영상을 불러오지 못했어요. 잠시 후 다시 시도해주세요.
+        </div>
+      ) : (
+        <>
+          <div className="-mx-4 lg:hidden">
+            <HorizontalScroll itemWidth={{ mobile: "w-2/3", desktop: "lg:w-full" }} gap="gap-3" className="px-4">
               {videos.map((video) => (
-                <YoutubeVideoCard key={`${video.channelKey}-${video.id}`} video={video} />
+                <YoutubeVideoCard key={`${video.channelKey}-${video.id}`} video={video} mobile />
               ))}
-            </div>
-          </>
-        )}
-        <div className="grid grid-cols-2 gap-2 pt-1">
-          {channelLinks.map((channel) => (
-            <Button
-              key={channel.href}
-              text={channel.text}
-              href={channel.href}
-              target="_blank"
-              variant="tint"
-              fullWidth
-            />
-          ))}
+            </HorizontalScroll>
+          </div>
+          <div className="hidden space-y-3 lg:block">
+            {videos.map((video) => (
+              <YoutubeVideoCard key={`${video.channelKey}-${video.id}`} video={video} />
+            ))}
+          </div>
+        </>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        {channelLinks.map((channel) => (
+          <Button
+            key={channel.href}
+            text={channel.text}
+            href={channel.href}
+            target="_blank"
+            variant="tint"
+            fullWidth
+            shadow="xs"
+          />
+        ))}
+      </div>
+    </RailSection>
+  );
+}
+
+function RailSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50/80 p-4 dark:border-neutral-800 dark:bg-neutral-900/80">
+      <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h2>
+      <div className="mt-4 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+type RecentGradingCardProps = {
+  grading: StudentGradingTimelineItem;
+};
+
+function RecentGradingCard({ grading }: RecentGradingCardProps) {
+  if (!grading.student || !grading.user) {
+    return null;
+  }
+
+  return (
+    <Link
+      to={`/students/${grading.student.uid}/gradings`}
+      className="group rounded-lg border border-neutral-200 bg-white transition-colors hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900 block p-3"
+    >
+      <div className="flex items-center gap-3">
+        <ProfileImage studentUid={grading.student.uid} imageSize={8} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">{grading.student.name}</p>
+            <span className="shrink-0 text-xs text-neutral-400 dark:text-neutral-500">
+              {dayjs(grading.updatedAt).format("MM/DD")}
+            </span>
+          </div>
+          <p className="text-xs text-neutral-500 dark:text-neutral-400">@{grading.user.username}</p>
         </div>
       </div>
-    </section>
+
+      {grading.comment && (
+        <p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-700 dark:text-neutral-200">
+          {grading.comment.trim()}
+        </p>
+      )}
+
+      {grading.tags && grading.tags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {sortTags(grading.tags).slice(0, 3).map((tag) => (
+            <TagBadge key={tag} tag={tag} />
+          ))}
+        </div>
+      )}
+    </Link>
+  );
+}
+
+function TagBadge({ tag }: { tag: StudentGradingTagValue }) {
+  return (
+    <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+      <TagIcon tag={tag} size="sm" />
+      <span>{STUDENT_GRADING_TAG_DISPLAY[tag]}</span>
+    </div>
   );
 }
 
@@ -125,4 +201,8 @@ function YoutubeVideoCard({ video, mobile = false }: YoutubeVideoCardProps) {
       </div>
     </a>
   );
+}
+
+function sortTags(tags: StudentGradingTagValue[]) {
+  return [...tags].sort((a, b) => a.localeCompare(b));
 }
