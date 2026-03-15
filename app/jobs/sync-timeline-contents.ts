@@ -1,8 +1,9 @@
 import dayjs from "dayjs";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
+import { getLogger } from "~/lib/observability.server";
 import { upsertTimelineContent } from "~/models/timeline-content";
-import type { TimelineContentType, RunType } from "~/models/timeline-content";
+import type { RunType, TimelineContentType } from "~/models/timeline-content";
 
 // ============================================================
 // Campaign
@@ -39,22 +40,30 @@ const campaignDetailQuery = graphql(`
  *    - On uid conflict: update startAt, endAt, updatedAt.
  *    - On new uid: insert with contentType="campaign", runType="first".
  */
-async function syncCampaigns(env: Env): Promise<void> {
+async function syncCampaigns(env: Env, ctx?: ExecutionContext): Promise<void> {
+  const logger = getLogger(env, ctx, {
+    job: "sync-timeline-contents",
+    contentType: "campaign",
+  });
   // Step 1: Fetch campaign list filtered by endAfter=now
   const { data: listData, error: listError } = await runQuery(campaignsListQuery, { endAfter: new Date() });
   if (listError || !listData?.campaigns) {
-    console.error("[sync-timeline-contents] Failed to fetch campaigns list", listError);
+    logger.error("Failed to fetch campaigns list", listError);
     return;
   }
 
-  console.log(`[sync-timeline-contents] Found ${listData.campaigns.length} future campaigns`);
+  logger.info("Found future campaigns", {
+    count: listData.campaigns.length,
+  });
 
   // Step 2 & 3: Fetch details and upsert
   await Promise.all(
     listData.campaigns.map(async (campaign) => {
       const { data: detailData, error: detailError } = await runQuery(campaignDetailQuery, { uid: campaign.uid });
       if (detailError || !detailData?.campaign) {
-        console.error(`[sync-timeline-contents] Failed to fetch campaign detail for uid=${campaign.uid}`, detailError);
+        logger.error("Failed to fetch campaign detail", detailError, {
+          uid: campaign.uid,
+        });
         return;
       }
 
@@ -116,27 +125,37 @@ const jointFiringDrillDetailQuery = graphql(`
  *    - confirmed is taken directly from the BAQL response.
  *    - Name is derived at runtime from BAQL (season + drillType), not stored.
  */
-async function syncJointFiringDrills(env: Env): Promise<void> {
+async function syncJointFiringDrills(env: Env, ctx?: ExecutionContext): Promise<void> {
+  const logger = getLogger(env, ctx, {
+    job: "sync-timeline-contents",
+    contentType: "joint-firing-drill",
+  });
   const { data: listData, error: listError } = await runQuery(jointFiringDrillsListQuery, { endAfter: new Date() });
   if (listError || !listData?.jointFiringDrills) {
-    console.error("[sync-timeline-contents] Failed to fetch joint firing drills list", listError);
+    logger.error("Failed to fetch joint firing drills list", listError);
     return;
   }
 
-  console.log(`[sync-timeline-contents] Found ${listData.jointFiringDrills.length} future joint firing drills`);
+  logger.info("Found future joint firing drills", {
+    count: listData.jointFiringDrills.length,
+  });
 
   await Promise.all(
     listData.jointFiringDrills.map(async (drill) => {
       const { data: detailData, error: detailError } = await runQuery(jointFiringDrillDetailQuery, { uid: drill.uid });
       if (detailError || !detailData?.jointFiringDrill) {
-        console.error(`[sync-timeline-contents] Failed to fetch drill detail for uid=${drill.uid}`, detailError);
+        logger.error("Failed to fetch drill detail", detailError, {
+          uid: drill.uid,
+        });
         return;
       }
 
       const detail = detailData.jointFiringDrill;
       const glSchedule = detail.schedules.find((s) => s.region === "gl");
       if (!glSchedule) {
-        console.warn(`[sync-timeline-contents] No gl schedule for drill uid=${detail.uid}, skipping`);
+        logger.warn("No gl schedule for drill, skipping", {
+          uid: detail.uid,
+        });
         return;
       }
 
@@ -197,22 +216,32 @@ const raidDetailSyncQuery = graphql(`
  *    - confirmed is taken directly from the BAQL response.
  *    - Name is derived at runtime from BAQL (raid.name), not stored.
  */
-async function syncRaids(env: Env): Promise<void> {
+async function syncRaids(env: Env, ctx?: ExecutionContext): Promise<void> {
+  const logger = getLogger(env, ctx, {
+    job: "sync-timeline-contents",
+    contentType: "raid",
+  });
   // Step 1: Fetch raid list filtered by endAfter=now
-  const { data: listData, error: listError } = await runQuery(raidsListQuery, { endAfter: new Date() });
+  const { data: listData, error: listError } = await runQuery(raidsListQuery, {
+    endAfter: new Date(),
+  });
   if (listError || !listData?.raids) {
-    console.error("[sync-timeline-contents] Failed to fetch raids list", listError);
+    logger.error("Failed to fetch raids list", listError);
     return;
   }
 
-  console.log(`[sync-timeline-contents] Found ${listData.raids.nodes.length} future raids`);
+  logger.info("Found future raids", {
+    count: listData.raids.nodes.length,
+  });
 
   // Step 2 & 3: Fetch details and upsert
   await Promise.all(
     listData.raids.nodes.map(async (raid) => {
       const { data: detailData, error: detailError } = await runQuery(raidDetailSyncQuery, { uid: raid.uid });
       if (detailError || !detailData?.raid) {
-        console.error(`[sync-timeline-contents] Failed to fetch raid detail for uid=${raid.uid}`, detailError);
+        logger.error("Failed to fetch raid detail", detailError, {
+          uid: raid.uid,
+        });
         return;
       }
 
@@ -273,20 +302,30 @@ const miniEventContentDetailQuery = graphql(`
  *    - contentType = "mini_event", runType = "first".
  *    - Name is derived at runtime from BAQL (miniEventContent.name), not stored.
  */
-async function syncMiniEvents(env: Env): Promise<void> {
+async function syncMiniEvents(env: Env, ctx?: ExecutionContext): Promise<void> {
+  const logger = getLogger(env, ctx, {
+    job: "sync-timeline-contents",
+    contentType: "mini-event",
+  });
   const { data: listData, error: listError } = await runQuery(miniEventContentsListQuery, { endAfter: new Date() });
   if (listError || !listData?.miniEventContents) {
-    console.error("[sync-timeline-contents] Failed to fetch mini event contents list", listError);
+    logger.error("Failed to fetch mini event contents list", listError);
     return;
   }
 
-  console.log(`[sync-timeline-contents] Found ${listData.miniEventContents.length} future mini events`);
+  logger.info("Found future mini events", {
+    count: listData.miniEventContents.length,
+  });
 
   await Promise.all(
     listData.miniEventContents.map(async (miniEvent) => {
-      const { data: detailData, error: detailError } = await runQuery(miniEventContentDetailQuery, { uid: miniEvent.uid });
+      const { data: detailData, error: detailError } = await runQuery(miniEventContentDetailQuery, {
+        uid: miniEvent.uid,
+      });
       if (detailError || !detailData?.miniEventContent) {
-        console.error(`[sync-timeline-contents] Failed to fetch mini event detail for uid=${miniEvent.uid}`, detailError);
+        logger.error("Failed to fetch mini event detail", detailError, {
+          uid: miniEvent.uid,
+        });
         return;
       }
 
@@ -299,7 +338,9 @@ async function syncMiniEvents(env: Env): Promise<void> {
       );
 
       if (futureGlSchedules.length === 0) {
-        console.warn(`[sync-timeline-contents] No future gl schedules for mini event uid=${detail.uid}, skipping`);
+        logger.warn("No future gl schedules for mini event, skipping", {
+          uid: detail.uid,
+        });
         return;
       }
 
@@ -366,10 +407,16 @@ const eventContentForSyncQuery = graphql(`
  *    - contentUid: EventContent uid
  *    - recruitmentGroupUid: RecruitmentGroup uid
  */
-async function syncEvents(env: Env): Promise<void> {
-  const { data: listData, error: listError } = await runQuery(eventRecruitmentGroupsListQuery, { endAfter: new Date() });
+async function syncEvents(env: Env, ctx?: ExecutionContext): Promise<void> {
+  const logger = getLogger(env, ctx, {
+    job: "sync-timeline-contents",
+    contentType: "event",
+  });
+  const { data: listData, error: listError } = await runQuery(eventRecruitmentGroupsListQuery, {
+    endAfter: new Date(),
+  });
   if (listError || !listData?.recruitmentGroups) {
-    console.error("[sync-timeline-contents] Failed to fetch event recruitment groups list", listError);
+    logger.error("Failed to fetch event recruitment groups list", listError);
     return;
   }
 
@@ -377,7 +424,9 @@ async function syncEvents(env: Env): Promise<void> {
   const eventContentTypes = ["event", "main_story", "pickup"];
   const eventGroups = listData.recruitmentGroups.filter((g) => eventContentTypes.includes(g.contentType ?? ""));
 
-  console.log(`[sync-timeline-contents] Found ${eventGroups.length} future event recruitment groups`);
+  logger.info("Found future event recruitment groups", {
+    count: eventGroups.length,
+  });
 
   await Promise.all(
     eventGroups.map(async (group) => {
@@ -401,9 +450,13 @@ async function syncEvents(env: Env): Promise<void> {
         return;
       }
 
-      const { data: detailData, error: detailError } = await runQuery(eventContentForSyncQuery, { uid: group.contentUid });
+      const { data: detailData, error: detailError } = await runQuery(eventContentForSyncQuery, {
+        uid: group.contentUid,
+      });
       if (detailError || !detailData?.eventContent) {
-        console.error(`[sync-timeline-contents] Failed to fetch event content for uid=${group.contentUid}`, detailError);
+        logger.error("Failed to fetch event content", detailError, {
+          uid: group.contentUid,
+        });
         return;
       }
 
@@ -412,7 +465,11 @@ async function syncEvents(env: Env): Promise<void> {
       // Use gl schedule if available, otherwise fall back to group dates
       const glSchedule = detail.schedules.find((s) => s.region === "gl");
       const startAt = glSchedule ? dayjs(glSchedule.startAt).toDate() : dayjs(group.startAt).toDate();
-      const endAt = glSchedule?.endAt ? dayjs(glSchedule.endAt).toDate() : (group.endAt ? dayjs(group.endAt).toDate() : null);
+      const endAt = glSchedule?.endAt
+        ? dayjs(glSchedule.endAt).toDate()
+        : group.endAt
+          ? dayjs(group.endAt).toDate()
+          : null;
       const runType = (glSchedule?.runType ?? "first") as RunType;
       const confirmed = false;
 
@@ -443,12 +500,12 @@ async function syncEvents(env: Env): Promise<void> {
  * Syncs all supported content types from BAQL into the timeline_contents D1 table.
  * Add a new `sync*` function above and call it here as new content types are supported.
  */
-export async function syncTimelineContents(env: Env): Promise<void> {
+export async function syncTimelineContents(env: Env, ctx?: ExecutionContext): Promise<void> {
   await Promise.all([
-    syncCampaigns(env),
-    syncJointFiringDrills(env),
-    syncRaids(env),
-    syncMiniEvents(env),
-    syncEvents(env),
+    syncCampaigns(env, ctx),
+    syncJointFiringDrills(env, ctx),
+    syncRaids(env, ctx),
+    syncMiniEvents(env, ctx),
+    syncEvents(env, ctx),
   ]);
 }

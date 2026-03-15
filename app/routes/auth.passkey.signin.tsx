@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { AuthorizationError } from "remix-auth";
 import { getAuthenticator } from "~/auth/authenticator.server";
+import { getLogger } from "~/lib/observability.server";
 import { createPasskeyAuthenticationOptions } from "~/models/passkey";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
@@ -9,14 +10,17 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, {
+    route: "auth.passkey.signin",
+  });
   try {
-    return await getAuthenticator(env).authenticate("passkey", request, {
+    return await getAuthenticator(env, ctx).authenticate("passkey", request, {
       successRedirect: "/register",
       failureRedirect: "/",
     });
   } catch (error) {
-    console.log("error", error);
+    logger.error("Passkey sign-in failed", error);
     if (error instanceof AuthorizationError) {
       return { error: error.message };
     }

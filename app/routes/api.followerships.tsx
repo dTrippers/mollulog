@@ -1,12 +1,17 @@
 import type { ActionFunction } from "react-router";
 import { redirect } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
+import { getLogger } from "~/lib/observability.server";
 import { follow, unfollow } from "~/models/followership";
 import { getSenseiByUsername } from "~/models/sensei";
 
 export const action: ActionFunction = async ({ request, context }) => {
-  const env = context.cloudflare.env;
-  const follower = await getAuthenticator(env).isAuthenticated(request);
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, {
+    route: "api.followerships",
+    method: request.method,
+  });
+  const follower = await getAuthenticator(env, ctx).isAuthenticated(request);
   if (!follower) {
     return redirect("/unauthorized");
   }
@@ -30,10 +35,13 @@ export const action: ActionFunction = async ({ request, context }) => {
     }
     return okResponse(201, { followed: request.method === "POST" });
   } catch (error) {
-    console.error(error);
+    logger.error("Followership mutation failed", error, {
+      followeeName: followeeName.toString(),
+      followerId: follower.id,
+    });
     return errorResponse(500);
   }
-}
+};
 
 export type ActionData = {
   followed?: boolean;
@@ -41,21 +49,15 @@ export type ActionData = {
 };
 
 function okResponse(status: number, data: ActionData): Response {
-  return new Response(
-    JSON.stringify(data),
-    {
-      status,
-      headers: { "Content-Type": "application/json" },
-    },
-  );
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 function errorResponse(status: number, message?: string): Response {
-  return new Response(
-    JSON.stringify({ error: { message: message ?? "error" } }),
-    {
-      status,
-      headers: { "Content-Type": "application/json" },
-    },
-  );
+  return new Response(JSON.stringify({ error: { message: message ?? "error" } }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }

@@ -1,14 +1,24 @@
-import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { isRouteErrorResponse, useLoaderData, useRouteError, useActionData, useNavigation, Form, redirect, Link } from "react-router";
 import { useState } from "react";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import {
+  Form,
+  Link,
+  isRouteErrorResponse,
+  redirect,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+  useRouteError,
+} from "react-router";
+import { getAuthenticator } from "~/auth/authenticator.server";
 import { ErrorPage } from "~/components/features/layout";
 import { StudentInfo } from "~/components/features/students";
 import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
-import type { StudentGradingTagValue } from "~/models/student-grading-tag";
+import { graphql } from "~/graphql";
+import { runQuery } from "~/lib/baql";
+import { getLogger } from "~/lib/observability.server";
 import { getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import type { StudentGradingTagValue } from "~/models/student-grading-tag";
 import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
 
 const studentDetailQuery = graphql(`
@@ -20,7 +30,11 @@ const studentDetailQuery = graphql(`
 `);
 
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, {
+    route: "students.$id.grade.loader",
+    studentUid: params.id,
+  });
   const studentUid = params.id;
   if (!studentUid) {
     throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
@@ -28,15 +42,17 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
       headers: { "Content-Type": "application/json" },
     });
   }
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getAuthenticator(env, ctx).isAuthenticated(request);
   if (!currentUser) {
     return redirect(`/students/${studentUid}`);
   }
 
-  const { data, error } = await runQuery(studentDetailQuery, { uid: studentUid });
+  const { data, error } = await runQuery(studentDetailQuery, {
+    uid: studentUid,
+  });
   let errorMessage: string | null = null;
   if (error || !data) {
-    console.error(error);
+    logger.error("Failed to load student grading detail", error);
     errorMessage = "학생 정보를 가져오는 중 오류가 발생했어요";
   } else if (!data.student) {
     errorMessage = "학생 정보를 찾을 수 없어요";
@@ -58,9 +74,9 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
       headers: { "Content-Type": "application/json" },
     });
   }
-  return { 
+  return {
     student,
-    existingGrading: existingGrading || null
+    existingGrading: existingGrading || null,
   };
 };
 
@@ -71,7 +87,11 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
     return { error: "평가 내용은 최대 100자까지 작성할 수 있어요" };
   }
 
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, {
+    route: "students.$id.grade.action",
+    studentUid: params.id,
+  });
   const studentUid = params.id;
   if (!studentUid) {
     throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
@@ -79,17 +99,20 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
       headers: { "Content-Type": "application/json" },
     });
   }
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getAuthenticator(env, ctx).isAuthenticated(request);
   if (!currentUser) {
     return redirect(`/students/${studentUid}`);
   }
 
   const selectedTags = formData.getAll("tags") as StudentGradingTagValue[];
   try {
-    await upsertStudentGrading(env, currentUser.id, studentUid, comment || null, selectedTags); 
+    await upsertStudentGrading(env, currentUser.id, studentUid, comment || null, selectedTags);
     return redirect(`/students/${studentUid}`);
   } catch (error) {
-    console.error("Error saving grading:", error);
+    logger.error("Error saving grading", error, {
+      currentUserId: currentUser.id,
+      selectedTagCount: selectedTags.length,
+    });
     return { error: "평가를 저장하는 중 오류가 발생했어요" };
   }
 };
@@ -163,7 +186,11 @@ export default function StudentGrade() {
 
         {/* Submit Button */}
         <div className="flex">
-          <Button type="submit" variant="primary" text={isSubmitting ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"} />
+          <Button
+            type="submit"
+            variant="primary"
+            text={isSubmitting ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"}
+          />
           <Link to={`/students/${student.uid}`}>
             <Button type="button" text="취소" />
           </Link>

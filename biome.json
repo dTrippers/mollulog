@@ -3,6 +3,12 @@
     "include": ["app/**/*.tsx", "app/**/*.ts"],
     "ignore": ["app/graphql/**/*"]
   },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 120
+  },
   "linter": {
     "enabled": true,
     "rules": {

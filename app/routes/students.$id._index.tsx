@@ -1,24 +1,25 @@
-import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { isRouteErrorResponse, useLoaderData, useRouteError } from "react-router";
-import { useState, useMemo, useEffect } from "react";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
-import { EmptyView, SubTitle, Title } from "~/components/primitives";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
-import { ErrorPage } from "~/components/features/layout";
-import { StudentGradingComments, StudentInfo } from "~/components/features/students";
-import { RaidStatisticsSlotCount } from "~/components/features/raids";
-import { getMaxTierAt } from "~/models/student";
-import { FilterButtons } from "~/components/primitives";
 import { BarsArrowDownIcon } from "@heroicons/react/24/outline";
-import { getTagCountsByStudent } from "~/models/student-grading-tag";
-import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
+import { useEffect, useMemo, useState } from "react";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { isRouteErrorResponse, useLoaderData, useRouteError } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
+import { ErrorPage } from "~/components/features/layout";
+import { RaidStatisticsSlotCount } from "~/components/features/raids";
+import { StudentGradingComments, StudentInfo } from "~/components/features/students";
 import { RecruitmentHistories } from "~/components/features/students";
-import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/models/raid-statistics.client";
-import { getAllRaids } from "~/models/raid";
-import type { RaidType, Terrain } from "~/models/content.d";
+import { EmptyView, SubTitle, Title } from "~/components/primitives";
+import { FilterButtons } from "~/components/primitives";
+import { graphql } from "~/graphql";
 import type { Defense } from "~/graphql/graphql";
+import { runQuery } from "~/lib/baql";
+import { getLogger } from "~/lib/observability.server";
+import type { RaidType, Terrain } from "~/models/content.d";
+import { getAllRaids } from "~/models/raid";
+import { type RaidStatistics, fetchRaidStatisticsByStudent } from "~/models/raid-statistics.client";
+import { getMaxTierAt } from "~/models/student";
+import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
+import { getTagCountsByStudent } from "~/models/student-grading-tag";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import StudentGradingChart from "./students.$id._components/StudentGradingChart";
 
@@ -39,12 +40,16 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   if (!uid) {
     throw new Response("Not Found", { status: 404 });
   }
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, {
+    route: "students.$id._index.loader",
+    studentUid: uid,
+  });
 
   const { data, error } = await runQuery(studentDetailQuery, { uid });
   let errorMessage: string | null = null;
   if (error || !data) {
-    console.error(error);
+    logger.error("Failed to load student detail", error);
     errorMessage = "학생 정보를 가져오는 중 오류가 발생했어요";
   } else if (!data.student) {
     errorMessage = "학생 정보를 찾을 수 없어요";
@@ -67,12 +72,16 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const recruitmentGroupUids = student.recruitments.map((r) => r.recruitmentGroup.uid);
   const timelineContents = await getTimelineContentsByRecruitmentGroupUids(env, recruitmentGroupUids);
-  const recruitments = timelineContents.map((c) => ({ 
-    uid: c.uid, name: c.name, since: c.startAt, until: c.endAt, imageUrl: c.imageUrl ?? null,
+  const recruitments = timelineContents.map((c) => ({
+    uid: c.uid,
+    name: c.name,
+    since: c.startAt,
+    until: c.endAt,
+    imageUrl: c.imageUrl ?? null,
   }));
 
   // Get current user
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getAuthenticator(env, ctx).isAuthenticated(request);
 
   // Get grading tag counts for this student
   const tagCounts = await getTagCountsByStudent(env, uid);
@@ -149,33 +158,34 @@ export default function StudentDetail() {
   // Convert RaidStatistics to EnrichedRaidStatistics using allRaids
   const enrichRaidStatistics = useMemo(() => {
     return (stats: RaidStatistics[]): EnrichedRaidStatistics[] => {
-      return stats.map((stat): EnrichedRaidStatistics | null => {
-        // Find matching raid from allRaids
-        const raid = allRaids.find((r) => r.type === stat.raid.raidType && r.raidIndexJp === stat.raid.season);
-        if (!raid) {
-          return null;
-        }
+      return stats
+        .map((stat): EnrichedRaidStatistics | null => {
+          // Find matching raid from allRaids
+          const raid = allRaids.find((r) => r.type === stat.raid.raidType && r.raidIndexJp === stat.raid.season);
+          if (!raid) {
+            return null;
+          }
 
-        // Find difficulty from defenseTypes
-        const defenseTypeInfo = raid.defenseTypes.find((dt) => dt.defenseType === stat.raid.defenseType);
-        const difficulty = defenseTypeInfo?.difficulty ?? null;
-        return {
-          ...stat,
-          raid: {
-            uid: raid.uid,
-            name: raid.name,
-            boss: raid.boss,
-            type: raid.type as RaidType,
-            since: new Date(raid.since),
-            until: new Date(raid.until),
-            terrain: raid.terrain as Terrain,
-            defenseType: stat.raid.defenseType,
-            difficulty,
-          },
-        };
-      })
-      .filter((stat): stat is EnrichedRaidStatistics => stat !== null)
-      .filter((stat) => stat.slotsCount > 100); // Filter by minimum count
+          // Find difficulty from defenseTypes
+          const defenseTypeInfo = raid.defenseTypes.find((dt) => dt.defenseType === stat.raid.defenseType);
+          const difficulty = defenseTypeInfo?.difficulty ?? null;
+          return {
+            ...stat,
+            raid: {
+              uid: raid.uid,
+              name: raid.name,
+              boss: raid.boss,
+              type: raid.type as RaidType,
+              since: new Date(raid.since),
+              until: new Date(raid.until),
+              terrain: raid.terrain as Terrain,
+              defenseType: stat.raid.defenseType,
+              difficulty,
+            },
+          };
+        })
+        .filter((stat): stat is EnrichedRaidStatistics => stat !== null)
+        .filter((stat) => stat.slotsCount > 100); // Filter by minimum count
     };
   }, [allRaids]);
 
@@ -195,7 +205,9 @@ export default function StudentDetail() {
       }
     };
     loadStatistics();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [enrichRaidStatistics, student.uid]);
 
   // Memoize the sorted and sliced statistics
@@ -216,22 +228,37 @@ export default function StudentDetail() {
 
       {/* Grading Section */}
       <SubTitle text="학생 평가" />
-      <StudentGradingChart student={student} tagCounts={tagCounts} noGrading={allGradings.length === 0} signedIn={currentUser !== null} />
+      <StudentGradingChart
+        student={student}
+        tagCounts={tagCounts}
+        noGrading={allGradings.length === 0}
+        signedIn={currentUser !== null}
+      />
       <StudentGradingComments student={student} gradings={allGradings} currentUser={currentUser} />
 
       <SubTitle text="총력전/대결전 통계" />
       <div>
-        {filteredStatistics.length === 0 ?
-          <EmptyView text="편성된 충력전/대결전 정보가 없어요" /> :
+        {filteredStatistics.length === 0 ? (
+          <EmptyView text="편성된 충력전/대결전 정보가 없어요" />
+        ) : (
           <FilterButtons
             Icon={BarsArrowDownIcon}
             buttonProps={[
-              { text: "최신순", onToggle: () => setSort("recent"), active: sort === "recent" },
-              { text: "과거순", onToggle: () => setSort("old"), active: sort === "old" },
+              {
+                text: "최신순",
+                onToggle: () => setSort("recent"),
+                active: sort === "recent",
+              },
+              {
+                text: "과거순",
+                onToggle: () => setSort("old"),
+                active: sort === "old",
+              },
             ]}
-            exclusive atLeastOne
+            exclusive
+            atLeastOne
           />
-        }
+        )}
         {filteredStatistics.map((stat) => {
           const { raid, slotsByTier, slotsCount, assistsCount, assistsByTier } = stat;
           return (

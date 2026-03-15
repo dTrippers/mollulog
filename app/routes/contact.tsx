@@ -1,22 +1,26 @@
-import { useFetcher, useRouteError, isRouteErrorResponse, redirect } from "react-router";
+import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
+import { useEffect, useState } from "react";
+import { isRouteErrorResponse, redirect, useFetcher, useRouteError } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useState, useEffect } from "react";
-import { CheckCircleIcon, ArrowPathIcon } from "@heroicons/react/20/solid";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { ErrorPage } from "~/components/features/layout";
 import { Button, Input, Textarea, Title } from "~/components/primitives";
+import { getLogger } from "~/lib/observability.server";
 import { createFeedbackSubmission } from "~/models/feedback";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const sensei = await getAuthenticator(context.cloudflare.env).isAuthenticated(request);
+  const sensei = await getAuthenticator(context.cloudflare.env, context.cloudflare.ctx).isAuthenticated(request);
   if (!sensei) {
     return redirect("/unauthorized");
   }
 };
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, {
+    route: "contact",
+  });
+  const currentUser = await getAuthenticator(env, ctx).isAuthenticated(request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
@@ -40,21 +44,30 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     await createFeedbackSubmission(env, currentUser.id, title.trim(), content.trim(), replyEmail);
     return { success: true };
   } catch (error) {
-    console.error("Error creating feedback submission:", error);
+    logger.error("Error creating feedback submission", error, {
+      currentUserId: currentUser.id,
+      hasReplyEmail: Boolean(replyEmail),
+      titleLength: title.trim().length,
+    });
     throw new Response(
-      JSON.stringify({ error: { message: "오류가 발생했어요. 잠시 후 다시 시도해주세요." } }),
+      JSON.stringify({
+        error: { message: "오류가 발생했어요. 잠시 후 다시 시도해주세요." },
+      }),
       {
         status: 500,
         headers: { "Content-Type": "application/json" },
       },
     );
   }
-}; 
+};
 
 export const meta: MetaFunction = () => {
   return [
     { title: "제안/문의 | 몰루로그" },
-    { name: "description", content: "게임 <블루 아카이브> 관련 컨텐츠 제안, 오류 신고, 기타 문의 사항을 제출해주세요." },
+    {
+      name: "description",
+      content: "게임 <블루 아카이브> 관련 컨텐츠 제안, 오류 신고, 기타 문의 사항을 제출해주세요.",
+    },
   ];
 };
 
@@ -65,7 +78,6 @@ export function ErrorBoundary() {
   }
   return <ErrorPage />;
 }
-
 
 export default function Contact() {
   const [submitted, setSubmitted] = useState(false);
@@ -101,7 +113,12 @@ export default function Contact() {
 
       <fetcher.Form method="post">
         <Input label="제목" name="title" error={fetcher.data?.error?.title} required />
-        <Input label="연락처 (선택)" name="replyEmail" description="답변이 필요한 경우 이메일 주소를 남겨주세요." error={fetcher.data?.error?.replyEmail} />
+        <Input
+          label="연락처 (선택)"
+          name="replyEmail"
+          description="답변이 필요한 경우 이메일 주소를 남겨주세요."
+          error={fetcher.data?.error?.replyEmail}
+        />
         <Textarea label="내용" name="content" rows={6} error={fetcher.data?.error?.content} required />
 
         <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">

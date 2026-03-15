@@ -1,8 +1,8 @@
-import { nanoid } from "nanoid/non-secure";
-import { isUniqueConstraintError } from "./base";
-import { sqliteTable, int, text } from "drizzle-orm/sqlite-core";
 import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
+import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { nanoid } from "nanoid/non-secure";
+import { isUniqueConstraintError } from "./base";
 
 type SenseiRole = "guest" | "admin";
 
@@ -61,7 +61,10 @@ export async function getOrCreateSenseiByGoogleId(env: Env, googleId: string): P
     return toModel(result[0]);
   }
 
-  const createResult = await db.insert(senseisTable).values({ uid: nanoid(8), username: nanoid(8), googleId, role: "guest" }).onConflictDoNothing();
+  const createResult = await db
+    .insert(senseisTable)
+    .values({ uid: nanoid(8), username: nanoid(8), googleId, role: "guest" })
+    .onConflictDoNothing();
   if (createResult.error) {
     throw createResult.error;
   }
@@ -70,7 +73,7 @@ export async function getOrCreateSenseiByGoogleId(env: Env, googleId: string): P
 }
 
 // Update a sensei
-type SenseiUpdateFields = Partial<Pick<Sensei, "username" | "friendCode" | "profileStudentId" | "active" | "bio">>
+type SenseiUpdateFields = Partial<Pick<Sensei, "username" | "friendCode" | "profileStudentId" | "active" | "bio">>;
 
 function nullableFieldToUpdate<T>(value: T | null | undefined, existingValue: T | null): T | null {
   if (value === undefined) {
@@ -79,7 +82,11 @@ function nullableFieldToUpdate<T>(value: T | null | undefined, existingValue: T 
   return value;
 }
 
-export async function updateSensei(env: Env, id: number, fields: SenseiUpdateFields): Promise<{ error?: { username?: string } }> {
+export async function updateSensei(
+  env: Env,
+  id: number,
+  fields: SenseiUpdateFields,
+): Promise<{ error?: { username?: string } }> {
   const existingSensei = await getSenseiById(env, id);
   if (!existingSensei) {
     return {};
@@ -87,13 +94,16 @@ export async function updateSensei(env: Env, id: number, fields: SenseiUpdateFie
 
   const db = drizzle(env.DB);
   try {
-    await db.update(senseisTable).set({
-      username: fields.username ?? existingSensei.username,
-      friendCode: nullableFieldToUpdate(fields.friendCode, existingSensei.friendCode),
-      profileStudentId: nullableFieldToUpdate(fields.profileStudentId, existingSensei.profileStudentId),
-      bio: nullableFieldToUpdate(fields.bio, existingSensei.bio),
-      active: (fields.active ?? existingSensei.active) ? 1 : 0,
-    }).where(eq(senseisTable.id, id));
+    await db
+      .update(senseisTable)
+      .set({
+        username: fields.username ?? existingSensei.username,
+        friendCode: nullableFieldToUpdate(fields.friendCode, existingSensei.friendCode),
+        profileStudentId: nullableFieldToUpdate(fields.profileStudentId, existingSensei.profileStudentId),
+        bio: nullableFieldToUpdate(fields.bio, existingSensei.bio),
+        active: (fields.active ?? existingSensei.active) ? 1 : 0,
+      })
+      .where(eq(senseisTable.id, id));
   } catch (e) {
     const err = e as Error;
     const uniqueError = isUniqueConstraintError(err);
