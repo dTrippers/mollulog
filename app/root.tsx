@@ -1,32 +1,34 @@
+import { ExclamationCircleIcon } from "@heroicons/react/16/solid";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
+  Link,
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
   useLoaderData,
-  useNavigation,
   useLocation,
-  Link,
+  useNavigation,
 } from "react-router";
 import LoadingBar, { type LoadingBarRef } from "react-top-loading-bar";
-import { ExclamationCircleIcon } from "@heroicons/react/16/solid";
 import type { Route } from "./+types/root";
-import styles from "./tailwind.css?url";
 import { getAuthenticator } from "./auth/authenticator.server";
-import { Footer, NavigationBar } from "./components/features/layout";
 import { getPreference } from "./auth/preference.server";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { Footer, NavigationBar } from "./components/features/layout";
 import { SignInProvider } from "./contexts/SignInProvider";
 import { useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { getNavigationBarContents } from "./models/content";
+import styles from "./tailwind.css?url";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const env = context.cloudflare.env as Env & {
+    FRONT_BETTER_STACK_SENTRY_DSN?: string;
+  };
 
   const sensei = await getAuthenticator(env).isAuthenticated(request);
   const preference = await getPreference(env, request);
@@ -36,16 +38,36 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     currentUsername: sensei?.username ?? null,
     darkMode: preference.darkMode ?? false,
     navigationBarContents,
+    publicEnv: {
+      STAGE: env.STAGE ?? "local",
+      FRONT_BETTER_STACK_SENTRY_DSN: env.FRONT_BETTER_STACK_SENTRY_DSN ?? "",
+    },
   };
 };
 
 export const links: LinksFunction = () => [
-  { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
-  { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
+  {
+    rel: "icon",
+    type: "image/png",
+    sizes: "32x32",
+    href: "/favicon-32x32.png",
+  },
+  {
+    rel: "icon",
+    type: "image/png",
+    sizes: "16x16",
+    href: "/favicon-16x16.png",
+  },
   { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
   { rel: "manifest", href: "/site.webmanifest" },
-  { rel: "stylesheet", href: "https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.8/static/pretendard.css" },
-  { rel: "stylesheet", href: "https://cdn.jsdelivr.net/gh/Nyannnnnng/GyeonggiTitleWoff/stylesheet.css" },
+  {
+    rel: "stylesheet",
+    href: "https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.8/static/pretendard.css",
+  },
+  {
+    rel: "stylesheet",
+    href: "https://cdn.jsdelivr.net/gh/Nyannnnnng/GyeonggiTitleWoff/stylesheet.css",
+  },
   { rel: "stylesheet", href: styles },
 ];
 
@@ -55,9 +77,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html lang="ko">
       <head>
         <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0,viewport-fit=cover" />
+        <meta
+          name="viewport"
+          content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0,viewport-fit=cover"
+        />
         <meta name="theme-color" content={loaderData?.darkMode ? "#262626" : "#ffffff"} />
         <meta name="background-color" content={loaderData?.darkMode ? "#262626" : "#ffffff"} />
+        <meta name="mollulog:stage" content={loaderData?.publicEnv.STAGE ?? "local"} />
+        <meta
+          name="mollulog:front-better-stack-sentry-dsn"
+          content={loaderData?.publicEnv.FRONT_BETTER_STACK_SENTRY_DSN ?? ""}
+        />
         <Meta />
         <Links />
       </head>
@@ -168,7 +198,10 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       <p className="text-sm">{message}</p>
 
       <div className="my-4 flex gap-2">
-        <Link to="/" className="px-4 py-2 bg-neutral-700 rounded-md cursor-pointer hover:bg-neutral-800 transition-colors">
+        <Link
+          to="/"
+          className="px-4 py-2 bg-neutral-700 rounded-md cursor-pointer hover:bg-neutral-800 transition-colors"
+        >
           첫 화면으로
         </Link>
         <button
@@ -183,11 +216,16 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
       <video
         className="my-4 w-full max-w-lg aspect-video"
         src="https://assets.mollulog.net/assets/videos/site/aropla-sorry.mp4"
-        autoPlay muted loop
+        autoPlay
+        muted
+        loop
       />
 
       <p className="mt-4 text-sm">
-        <Link to="/contact" className="underline text-blue-300">문의 메일</Link>을 통해 상황을 알려주시면 빠르게 해결할 수 있어요.
+        <Link to="/contact" className="underline text-blue-300">
+          문의 메일
+        </Link>
+        을 통해 상황을 알려주시면 빠르게 해결할 수 있어요.
       </p>
     </div>
   );

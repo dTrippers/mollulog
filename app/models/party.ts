@@ -1,5 +1,5 @@
 import { nanoid } from "nanoid/non-secure";
-import { getSenseisById, type Sensei } from "./sensei";
+import { type Sensei, getSenseisById } from "./sensei";
 
 export type DBParty = {
   id: number;
@@ -43,15 +43,25 @@ export async function getPartiesByRaidId(env: Env, raidId: string, includeSensei
 
   const senseiMap = new Map<number, Sensei>();
   if (includeSensei) {
-    const senseis = await getSenseisById(env, rows.map((row) => row.userId));
-    senseis.forEach((sensei) => senseiMap.set(sensei.id, sensei));
+    const senseis = await getSenseisById(
+      env,
+      rows.map((row) => row.userId),
+    );
+    for (const sensei of senseis) {
+      senseiMap.set(sensei.id, sensei);
+    }
   }
 
   return rows.map((row) => {
     const sensei = includeSensei ? senseiMap.get(row.userId) : undefined;
     return {
       ...toModel(row),
-      sensei : sensei ? { username: sensei.username, profileStudentId: sensei.profileStudentId } : undefined,
+      sensei: sensei
+        ? {
+            username: sensei.username,
+            profileStudentId: sensei.profileStudentId,
+          }
+        : undefined,
     };
   });
 }
@@ -66,18 +76,21 @@ export async function removePartyByUid(env: Env, userId: number, uid: string) {
 // Create a party
 type PartyCreateFields = Pick<Party, "name" | "studentIds" | "raidId" | "showAsRaidTip" | "memo">;
 
-const CREATE_PARTY_QUERY = "insert into parties (uid, name, userId, raidId, students, showAsRaidTip, memo) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
+const CREATE_PARTY_QUERY =
+  "insert into parties (uid, name, userId, raidId, students, showAsRaidTip, memo) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
 
 export async function createParty(env: Env, sensei: Sensei, fields: PartyCreateFields) {
-  const result = await env.DB.prepare(CREATE_PARTY_QUERY).bind(
-    nanoid(8),
-    fields.name,
-    sensei.id,
-    fields.raidId,
-    JSON.stringify(fields.studentIds),
-    fields.showAsRaidTip,
-    fields.memo,
-  ).run();
+  const result = await env.DB.prepare(CREATE_PARTY_QUERY)
+    .bind(
+      nanoid(8),
+      fields.name,
+      sensei.id,
+      fields.raidId,
+      JSON.stringify(fields.studentIds),
+      fields.showAsRaidTip,
+      fields.memo,
+    )
+    .run();
 
   if (result.error) {
     console.error(result.error);
@@ -88,7 +101,8 @@ export async function createParty(env: Env, sensei: Sensei, fields: PartyCreateF
 // Update a party
 type PartyUpdateFields = Partial<PartyCreateFields>;
 
-const UPDATE_PARTY_QUERY = "update parties set name = ?1, raidId = ?2, students = ?3, showAsRaidTip = ?4, memo = ?5 where uid = ?6 and userId = ?7";
+const UPDATE_PARTY_QUERY =
+  "update parties set name = ?1, raidId = ?2, students = ?3, showAsRaidTip = ?4, memo = ?5 where uid = ?6 and userId = ?7";
 
 export async function updateParty(env: Env, sensei: Sensei, uid: string, fields: PartyUpdateFields) {
   const existingParty = (await getUserParties(env, sensei.username)).find((party) => party.uid === uid);
@@ -96,15 +110,17 @@ export async function updateParty(env: Env, sensei: Sensei, uid: string, fields:
     return;
   }
 
-  const result = await env.DB.prepare(UPDATE_PARTY_QUERY).bind(
-    fields.name ?? existingParty.name,
-    fields.raidId ?? existingParty.raidId,
-    JSON.stringify(fields.studentIds ?? existingParty.studentIds),
-    fields.showAsRaidTip ?? existingParty.showAsRaidTip,
-    fields.memo ?? existingParty.memo,
-    uid,
-    sensei.id,
-  ).run();
+  const result = await env.DB.prepare(UPDATE_PARTY_QUERY)
+    .bind(
+      fields.name ?? existingParty.name,
+      fields.raidId ?? existingParty.raidId,
+      JSON.stringify(fields.studentIds ?? existingParty.studentIds),
+      fields.showAsRaidTip ?? existingParty.showAsRaidTip,
+      fields.memo ?? existingParty.memo,
+      uid,
+      sensei.id,
+    )
+    .run();
 
   if (result.error) {
     console.error(result.error);

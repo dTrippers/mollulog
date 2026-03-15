@@ -1,12 +1,12 @@
+import type { MinigameConfig } from "~/components/features/events/shop/constants";
 import { graphql } from "~/graphql";
 import type { RecruitmentGroupQuery, RecruitmentGroupsListQuery } from "~/graphql/graphql";
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
+import { resolveContentName } from "./content-name";
 import { getTimelineContent } from "./timeline-content";
 import type { RunType } from "./timeline-content";
-import { resolveContentName } from "./content-name";
-import type { MinigameConfig } from "~/components/features/events/shop/constants";
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
   if (runType === "rerun") return RunTypeEnum.Rerun;
@@ -23,7 +23,11 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
     return null;
   }
 
-  const name = await resolveContentName(env, { uid: timelineUid, contentType: content.contentType, contentUid: content.contentUid });
+  const name = await resolveContentName(env, {
+    uid: timelineUid,
+    contentType: content.contentType,
+    contentUid: content.contentUid,
+  });
 
   return {
     name,
@@ -53,14 +57,24 @@ const recruitmentGroupQuery = graphql(`
 
 type RecruitmentGroupResult = NonNullable<RecruitmentGroupQuery["recruitmentGroup"]>;
 
-export async function getRecruitmentGroup(env: Env, uid: string, forceRefresh = false): Promise<RecruitmentGroupResult | null> {
-  return fetchCached(env, `recruitment-group::v1::${uid}`, async () => {
-    const { data, error } = await runQuery(recruitmentGroupQuery, { uid });
-    if (error || !data?.recruitmentGroup) {
-      return null;
-    }
-    return data.recruitmentGroup;
-  }, 7 * 24 * 60 * 60, forceRefresh);
+export async function getRecruitmentGroup(
+  env: Env,
+  uid: string,
+  forceRefresh = false,
+): Promise<RecruitmentGroupResult | null> {
+  return fetchCached(
+    env,
+    `recruitment-group::v1::${uid}`,
+    async () => {
+      const { data, error } = await runQuery(recruitmentGroupQuery, { uid });
+      if (error || !data?.recruitmentGroup) {
+        return null;
+      }
+      return data.recruitmentGroup;
+    },
+    7 * 24 * 60 * 60,
+    forceRefresh,
+  );
 }
 
 //
@@ -105,9 +119,13 @@ export async function getEventContentSummary(env: Env, timelineUid: string) {
   }
 
   const [name, recruitments] = await Promise.all([
-    resolveContentName(env, { uid: timelineUid, contentType: content.contentType, contentUid: content.contentUid }),
+    resolveContentName(env, {
+      uid: timelineUid,
+      contentType: content.contentType,
+      contentUid: content.contentUid,
+    }),
     content.recruitmentGroupUid
-      ? (getRecruitmentGroup(env, content.recruitmentGroupUid).then((g) => g?.recruitments ?? []))
+      ? getRecruitmentGroup(env, content.recruitmentGroupUid).then((g) => g?.recruitments ?? [])
       : Promise.resolve([]),
   ]);
 
@@ -123,7 +141,6 @@ export async function getEventContentSummary(env: Env, timelineUid: string) {
     recruitments,
   };
 }
-
 
 //
 // Get Event Shop Content (stages, shopResources, eventRewardBonus)
@@ -166,111 +183,143 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
     return null;
   }
 
-  return fetchCached(env, `event-content::shop::v1::${timelineUid}`, async () => {
-    const contentUid = metadata.contentUid;
-    if (!contentUid) {
-      return null;
-    }
-    const runType = toRunTypeEnum(metadata.runType);
-    const { data, error } = await runQuery(eventContentShopContentQuery, { eventUid: contentUid, runType });
-    if (error || !data?.eventContent) {
-      return null;
-    }
+  return fetchCached(
+    env,
+    `event-content::shop::v1::${timelineUid}`,
+    async () => {
+      const contentUid = metadata.contentUid;
+      if (!contentUid) {
+        return null;
+      }
+      const runType = toRunTypeEnum(metadata.runType);
+      const { data, error } = await runQuery(eventContentShopContentQuery, {
+        eventUid: contentUid,
+        runType,
+      });
+      if (error || !data?.eventContent) {
+        return null;
+      }
 
-    const stages = data.eventContent.stages.map((stage) => ({
-      uid: stage.uid,
-      entryAp: stage.enterCostAmount,
-      index: stage.stageNumber,
-      difficulty: stage.stageType === "story" ? 0 : stage.stageType === "stage" ? 1 : 2,
-      rewards: stage.rewards.map((reward) => ({
-        amount: reward.amount,
-        rewardRequirement: reward.tag === "Event" ? null : reward.tag || null,
-        chance: reward.probability || null,
-        item: reward.resource
-          ? { uid: reward.resource.uid, name: reward.resource.name, category: 'category' in reward.resource ? (reward.resource as { category: string }).category : '', rarity: reward.resource.rarity }
-          : null,
-      })),
-    }));
+      const stages = data.eventContent.stages.map((stage) => ({
+        uid: stage.uid,
+        entryAp: stage.enterCostAmount,
+        index: stage.stageNumber,
+        difficulty: stage.stageType === "story" ? 0 : stage.stageType === "stage" ? 1 : 2,
+        rewards: stage.rewards.map((reward) => ({
+          amount: reward.amount,
+          rewardRequirement: reward.tag === "Event" ? null : reward.tag || null,
+          chance: reward.probability || null,
+          item: reward.resource
+            ? {
+                uid: reward.resource.uid,
+                name: reward.resource.name,
+                category: "category" in reward.resource ? (reward.resource as { category: string }).category : "",
+                rarity: reward.resource.rarity,
+              }
+            : null,
+        })),
+      }));
 
-    const shopResources = data.eventContent.shopResources
-      .flatMap((r) => {
+      const shopResources = data.eventContent.shopResources.flatMap((r) => {
         if (!r.resource || !r.paymentResource) {
           return [];
         }
 
-        return [{
-          uid: r.uid,
-          resourceAmount: r.resourceAmount,
-          paymentResourceAmount: r.paymentResourceAmount,
-          shopAmount: r.shopAmount,
-          resource: r.resource,
-          paymentResource: r.paymentResource,
-        }];
-      });
-
-    // Group bonuses by resource uid to build EventRewardBonus[]
-    const bonusByResource = new Map<string, { uid: string; name: string; rewardBonuses: { student: { uid: string; name: string; role: string }; ratio: string }[] }>();
-    for (const bonus of data.eventContent.bonuses) {
-      if (!bonus.resource || !bonus.student) continue;
-      const { uid, name } = bonus.resource;
-      if (!bonusByResource.has(uid)) {
-        bonusByResource.set(uid, { uid, name, rewardBonuses: [] });
-      }
-      bonusByResource.get(uid)?.rewardBonuses.push({
-        student: { uid: bonus.student.uid, name: bonus.student.name, role: bonus.student.role },
-        ratio: bonus.percentage,
-      });
-    }
-    const eventRewardBonus = [...bonusByResource.values()];
-
-    // Convert server minigame configs to local MinigameConfig format
-    const serverMinigameConfigs = data.eventContent.minigameConfigs;
-    let minigameConfig: MinigameConfig | null = null;
-    if (serverMinigameConfigs.length > 0) {
-      const serverConfig = serverMinigameConfigs[0];
-      const paymentResource = serverConfig.payment.resource;
-      if (paymentResource) {
-        minigameConfig = {
-          minigameType: serverConfig.minigameType as MinigameConfig["minigameType"],
-          payment: {
-            resourceType: paymentResource.type,
-            resourceUid: paymentResource.uid,
-            resourceName: paymentResource.name,
-            quantity: serverConfig.payment.quantity,
+        return [
+          {
+            uid: r.uid,
+            resourceAmount: r.resourceAmount,
+            paymentResourceAmount: r.paymentResourceAmount,
+            shopAmount: r.shopAmount,
+            resource: r.resource,
+            paymentResource: r.paymentResource,
           },
-          rewardGroups: serverConfig.rewardGroups.map((group) => {
-            const { condition } = group;
-            let rounds: MinigameConfig["rewardGroups"][number]["rounds"];
-            if (condition.type === "Subsequent") {
-              rounds = "subsequent";
-            } else if (condition.type === "Values" && condition.values) {
-              rounds = condition.values;
-            } else if (condition.type === "Divisor" && condition.divisor != null && condition.remainders) {
-              rounds = { divisor: condition.divisor, remainders: condition.remainders };
-            } else {
-              rounds = "subsequent";
-            }
-            return {
-              rounds,
-              rewards: group.rewards
-                .flatMap((r) => {
+        ];
+      });
+
+      // Group bonuses by resource uid to build EventRewardBonus[]
+      const bonusByResource = new Map<
+        string,
+        {
+          uid: string;
+          name: string;
+          rewardBonuses: {
+            student: { uid: string; name: string; role: string };
+            ratio: string;
+          }[];
+        }
+      >();
+      for (const bonus of data.eventContent.bonuses) {
+        if (!bonus.resource || !bonus.student) continue;
+        const { uid, name } = bonus.resource;
+        if (!bonusByResource.has(uid)) {
+          bonusByResource.set(uid, { uid, name, rewardBonuses: [] });
+        }
+        bonusByResource.get(uid)?.rewardBonuses.push({
+          student: {
+            uid: bonus.student.uid,
+            name: bonus.student.name,
+            role: bonus.student.role,
+          },
+          ratio: bonus.percentage,
+        });
+      }
+      const eventRewardBonus = [...bonusByResource.values()];
+
+      // Convert server minigame configs to local MinigameConfig format
+      const serverMinigameConfigs = data.eventContent.minigameConfigs;
+      let minigameConfig: MinigameConfig | null = null;
+      if (serverMinigameConfigs.length > 0) {
+        const serverConfig = serverMinigameConfigs[0];
+        const paymentResource = serverConfig.payment.resource;
+        if (paymentResource) {
+          minigameConfig = {
+            minigameType: serverConfig.minigameType as MinigameConfig["minigameType"],
+            payment: {
+              resourceType: paymentResource.type,
+              resourceUid: paymentResource.uid,
+              resourceName: paymentResource.name,
+              quantity: serverConfig.payment.quantity,
+            },
+            rewardGroups: serverConfig.rewardGroups.map((group) => {
+              const { condition } = group;
+              let rounds: MinigameConfig["rewardGroups"][number]["rounds"];
+              if (condition.type === "Subsequent") {
+                rounds = "subsequent";
+              } else if (condition.type === "Values" && condition.values) {
+                rounds = condition.values;
+              } else if (condition.type === "Divisor" && condition.divisor != null && condition.remainders) {
+                rounds = {
+                  divisor: condition.divisor,
+                  remainders: condition.remainders,
+                };
+              } else {
+                rounds = "subsequent";
+              }
+              return {
+                rounds,
+                rewards: group.rewards.flatMap((r) => {
                   if (!r.resource) {
                     return [];
                   }
 
-                  return [{
-                    resourceType: r.resource.type,
-                    resourceUid: r.resource.uid,
-                    quantity: r.quantity,
-                    rarity: r.resource.rarity ?? undefined,
-                  }];
+                  return [
+                    {
+                      resourceType: r.resource.type,
+                      resourceUid: r.resource.uid,
+                      quantity: r.quantity,
+                      rarity: r.resource.rarity ?? undefined,
+                    },
+                  ];
                 }),
-            };
-          }),
-        };
+              };
+            }),
+          };
+        }
       }
-    }
 
-    return { stages, shopResources, eventRewardBonus, minigameConfig };
-  }, 7 * 24 * 60 * 60);
+      return { stages, shopResources, eventRewardBonus, minigameConfig };
+    },
+    7 * 24 * 60 * 60,
+  );
 }

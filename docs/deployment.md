@@ -54,6 +54,12 @@ wrangler deploy
 
 Wrangler secrets로 관리. 직접 `.env` 파일 사용 안 함 (로컬은 `.dev.vars` 사용).
 
+### Observability
+
+- `SERVER_BETTER_STACK_SOURCE_TOKEN` — Better Stack Logs source token
+- `SERVER_BETTER_STACK_SENTRY_DSN` — 서버/워커에서 사용하는 Better Stack Errors Sentry 호환 DSN (`https://$APPLICATION_TOKEN@$INGESTING_HOST/1`)
+- `FRONT_BETTER_STACK_SENTRY_DSN` — 브라우저에서 사용하는 공개 DSN.
+
 ## 데이터베이스 마이그레이션
 
 ```bash

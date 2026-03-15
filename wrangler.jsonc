@@ -34,7 +34,9 @@
   // Secrets configuration
   // - SESSION_SECRET
   // - GOOGLE_CLIENT_SECRET
-  // - BETTER_STACK_SOURCE_TOKEN
+  // - SERVER_BETTER_STACK_SOURCE_TOKEN
+  // - SERVER_BETTER_STACK_SENTRY_DSN
+  // - FRONT_BETTER_STACK_SENTRY_DSN
   "env": {
     "staging": {
       "routes": [
