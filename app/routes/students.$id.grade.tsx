@@ -1,14 +1,23 @@
-import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { isRouteErrorResponse, useLoaderData, useRouteError, useActionData, useNavigation, Form, redirect, Link } from "react-router";
 import { useState } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import {
+  Form,
+  Link,
+  isRouteErrorResponse,
+  redirect,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+  useRouteError,
+  useSubmit,
+} from "react-router";
+import { getAuthenticator } from "~/auth/authenticator.server";
+import { ErrorPage } from "~/components/features/layout";
+import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { ErrorPage } from "~/components/features/layout";
-import { StudentInfo } from "~/components/features/students";
-import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
+import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
 import type { StudentGradingTagValue } from "~/models/student-grading-tag";
-import { getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
-import { getAuthenticator } from "~/auth/authenticator.server";
 import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
 
 const studentDetailQuery = graphql(`
@@ -33,7 +42,9 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     return redirect(`/students/${studentUid}`);
   }
 
-  const { data, error } = await runQuery(studentDetailQuery, { uid: studentUid });
+  const { data, error } = await runQuery(studentDetailQuery, {
+    uid: studentUid,
+  });
   let errorMessage: string | null = null;
   if (error || !data) {
     console.error(error);
@@ -58,18 +69,15 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
       headers: { "Content-Type": "application/json" },
     });
   }
-  return { 
+  return {
     student,
-    existingGrading: existingGrading || null
+    existingGrading: existingGrading || null,
   };
 };
 
 export const action = async ({ params, request, context }: ActionFunctionArgs) => {
   const formData = await request.formData();
-  const comment = formData.get("comment") as string;
-  if (comment.length > 100) {
-    return { error: "평가 내용은 최대 100자까지 작성할 수 있어요" };
-  }
+  const intent = formData.get("intent");
 
   const { env } = context.cloudflare;
   const studentUid = params.id;
@@ -84,9 +92,24 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
     return redirect(`/students/${studentUid}`);
   }
 
+  if (intent === "delete") {
+    try {
+      await deleteStudentGrading(env, currentUser.id, studentUid);
+      return redirect(`/students/${studentUid}`);
+    } catch (error) {
+      console.error("Error deleting grading:", error);
+      return { error: "평가를 삭제하는 중 오류가 발생했어요" };
+    }
+  }
+
+  const comment = formData.get("comment") as string;
+  if (comment.length > 100) {
+    return { error: "평가 내용은 최대 100자까지 작성할 수 있어요" };
+  }
+
   const selectedTags = formData.getAll("tags") as StudentGradingTagValue[];
   try {
-    await upsertStudentGrading(env, currentUser.id, studentUid, comment || null, selectedTags); 
+    await upsertStudentGrading(env, currentUser.id, studentUid, comment || null, selectedTags);
     return redirect(`/students/${studentUid}`);
   } catch (error) {
     console.error("Error saving grading:", error);
@@ -127,7 +150,10 @@ export default function StudentGrade() {
   const { student, existingGrading } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const submit = useSubmit();
   const isSubmitting = navigation.state === "submitting";
+  const isDeleting = isSubmitting && navigation.formData?.get("intent") === "delete";
+  const isSaving = isSubmitting && !isDeleting;
 
   const [selectedTags, setSelectedTags] = useState<StudentGradingTagValue[]>(existingGrading?.tags || []);
 
@@ -137,11 +163,6 @@ export default function StudentGrade() {
 
   return (
     <>
-      <Title text="학생 평가" parentPath={`/students/${student.uid}`} />
-
-      {/* Student Info */}
-      <StudentInfo student={student} className="mb-6" />
-
       <Form method="post" className="space-y-6">
         <SubTitle text="학생 평가하기" description="최대 100자까지 작성할 수 있어요" />
 
@@ -162,11 +183,31 @@ export default function StudentGrade() {
         ))}
 
         {/* Submit Button */}
-        <div className="flex">
-          <Button type="submit" variant="primary" text={isSubmitting ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"} />
-          <Link to={`/students/${student.uid}`}>
-            <Button type="button" text="취소" />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="submit"
+            variant="primary"
+            name="intent"
+            value="save"
+            text={isSaving ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"}
+            disabled={isSubmitting}
+          />
+          <Link to={`/students/${student.uid}`} className="shrink-0">
+            <Button type="button" text="취소" disabled={isSubmitting} />
           </Link>
+          {existingGrading && (
+            <Button
+              type="button"
+              variant="danger"
+              text={isDeleting ? "삭제 중..." : "삭제"}
+              disabled={isSubmitting}
+              onClick={() => {
+                if (confirm("정말 이 평가를 삭제할까요?")) {
+                  submit({ intent: "delete" }, { method: "post" });
+                }
+              }}
+            />
+          )}
         </div>
         {actionData?.error && <p className="text-sm text-red-500 -mt-4">{actionData.error}</p>}
       </Form>

@@ -1,16 +1,16 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
-import { ProfileCard, type ProfileCardProps } from "~/components/features/profile";
-import { getFollowerIds, getFollowingIds } from "~/models/followership";
-import type { ActionData } from "./api.followerships";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { getRouteSensei } from "./$username";
-import { useSignIn } from "~/contexts/SignInProvider";
-import { StudentGradingComments } from "~/components/features/students";
+import { ProfileCard, type ProfileCardProps } from "~/components/features/profile";
+import { StudentGradingTimeline } from "~/components/features/students";
 import { SubTitle } from "~/components/primitives";
+import { useSignIn } from "~/contexts/SignInProvider";
+import { getFollowerIds, getFollowingIds } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
-import { getStudentGradingsByUser } from "~/models/student-grading";
 import { getAllStudentsMap } from "~/models/student";
+import { getStudentGradingsByUser } from "~/models/student-grading";
+import { getRouteSensei } from "./$username";
+import type { ActionData } from "./api.followerships";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -37,6 +37,13 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   // Get all gradings by this user
   const gradings = await getStudentGradingsByUser(env, sensei.id);
   const allStudentsMap = await getAllStudentsMap(env, true);
+  const sortedGradings = [...gradings].sort((a, b) => {
+    const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    if (updatedDiff !== 0) {
+      return updatedDiff;
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
   return {
     currentUsername: currentUser?.username ?? null,
     sensei: {
@@ -49,7 +56,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     followingCount: followingIds.length,
     followerCount: followerIds.length,
     tierCounts,
-    gradings: gradings.map((grading) => ({
+    gradings: sortedGradings.map((grading) => ({
       ...grading,
       studentName: allStudentsMap[grading.studentUid]?.name ?? grading.studentUid,
     })),
@@ -59,9 +66,18 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 export const meta: MetaFunction = ({ params }) => {
   return [
     { title: `${params.username || ""} - 프로필 | 몰루로그`.trim() },
-    { name: "description", content: `${params.username} 선생님의 프로필과 최근 활동을 확인해보세요.` },
-    { name: "og:title", content: `${params.username || ""} - 프로필 | 몰루로그`.trim() },
-    { name: "og:description", content: `${params.username} 선생님의 프로필과 최근 활동을 확인해보세요.` },
+    {
+      name: "description",
+      content: `${params.username} 선생님의 프로필과 최근 활동을 확인해보세요.`,
+    },
+    {
+      name: "og:title",
+      content: `${params.username || ""} - 프로필 | 몰루로그`.trim(),
+    },
+    {
+      name: "og:description",
+      content: `${params.username} 선생님의 프로필과 최근 활동을 확인해보세요.`,
+    },
   ];
 };
 
@@ -88,16 +104,24 @@ export default function UserIndex() {
           followerCount={loaderData.followerCount}
           followingCount={loaderData.followingCount}
           loading={fetcher.state !== "idle"}
-          onFollow={() => currentUsername ? fetcher.submit({ username: sensei.username }, { method: "post", action: "/api/followerships" }) : showSignIn()}
-          onUnfollow={() => currentUsername ? fetcher.submit({ username: sensei.username }, { method: "delete", action: "/api/followerships" }) : showSignIn()}
+          onFollow={() =>
+            currentUsername
+              ? fetcher.submit({ username: sensei.username }, { method: "post", action: "/api/followerships" })
+              : showSignIn()
+          }
+          onUnfollow={() =>
+            currentUsername
+              ? fetcher.submit({ username: sensei.username }, { method: "delete", action: "/api/followerships" })
+              : showSignIn()
+          }
         />
       </div>
 
-      {/* Grading Comments Section */}
       {gradings.length > 0 && (
         <div className="my-8">
-          <SubTitle text="학생 평가 내역" />
-          <StudentGradingComments
+          <SubTitle text="학생 평가 내역" description="최근에 남긴 평가부터 확인해보세요" />
+          <StudentGradingTimeline
+            hideAuthorName
             gradings={gradings.map((grading) => ({
               ...grading,
               student: {

@@ -1,10 +1,15 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
+import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
-import type { StudentGradingTagValue } from "./student-grading-tag";
-import { getGradingTags, updateGradingTags, getGradingTagsByGradingUids } from "./student-grading-tag";
 import { senseisTable } from "./sensei";
+import type { StudentGradingTagValue } from "./student-grading-tag";
+import {
+  getGradingTags,
+  getGradingTagsByGradingUids,
+  studentGradingTagsTable,
+  updateGradingTags,
+} from "./student-grading-tag";
 
 export const studentGradingsTable = sqliteTable("student_gradings", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -20,6 +25,8 @@ export type StudentGrading = {
   uid: string;
   studentUid: string;
   comment: string | null;
+  createdAt: string;
+  updatedAt: string;
   tags?: StudentGradingTagValue[]; // Optional, loaded separately
 };
 
@@ -35,36 +42,41 @@ function toModel(grading: typeof studentGradingsTable.$inferSelect): StudentGrad
     uid: grading.uid,
     studentUid: grading.studentUid,
     comment: grading.comment,
+    createdAt: grading.createdAt,
+    updatedAt: grading.updatedAt,
   };
 }
 
-export async function getStudentGrading(env: Env, senseiId: number, studentUid: string, includeTags = false): Promise<StudentGrading | null> {
+export async function getStudentGrading(
+  env: Env,
+  senseiId: number,
+  studentUid: string,
+  includeTags = false,
+): Promise<StudentGrading | null> {
   const db = drizzle(env.DB);
-  const result = await db.select()
+  const result = await db
+    .select()
     .from(studentGradingsTable)
-    .where(and(
-      eq(studentGradingsTable.userId, senseiId),
-      eq(studentGradingsTable.studentUid, studentUid)
-    ))
+    .where(and(eq(studentGradingsTable.userId, senseiId), eq(studentGradingsTable.studentUid, studentUid)))
     .limit(1);
-  
+
   if (result.length === 0) return null;
-  
+
   const grading = toModel(result[0]);
-  
+
   if (includeTags) {
-    grading.tags = (await getGradingTags(env, grading.uid)).map(tag => tag.tagValue);
+    grading.tags = (await getGradingTags(env, grading.uid)).map((tag) => tag.tagValue);
   }
-  
+
   return grading;
 }
 
 export async function upsertStudentGrading(
-  env: Env, 
-  senseiId: number, 
-  studentUid: string, 
-  comment: string | null, 
-  tags: StudentGradingTagValue[]
+  env: Env,
+  senseiId: number,
+  studentUid: string,
+  comment: string | null,
+  tags: StudentGradingTagValue[],
 ): Promise<void> {
   // Validate comment length
   if (comment && comment.length > 100) {
@@ -72,22 +84,21 @@ export async function upsertStudentGrading(
   }
 
   const db = drizzle(env.DB);
-  
+
   // Check if grading already exists
-  const existing = await db.select()
+  const existing = await db
+    .select()
     .from(studentGradingsTable)
-    .where(and(
-      eq(studentGradingsTable.userId, senseiId),
-      eq(studentGradingsTable.studentUid, studentUid)
-    ))
+    .where(and(eq(studentGradingsTable.userId, senseiId), eq(studentGradingsTable.studentUid, studentUid)))
     .limit(1);
-  
+
   let gradingUid: string;
-  
+
   if (existing.length > 0) {
     // Update existing grading
     gradingUid = existing[0].uid;
-    await db.update(studentGradingsTable)
+    await db
+      .update(studentGradingsTable)
       .set({ comment, updatedAt: sql`current_timestamp` })
       .where(eq(studentGradingsTable.uid, gradingUid));
   } else {
@@ -105,15 +116,40 @@ export async function upsertStudentGrading(
   await updateGradingTags(env, gradingUid, studentUid, tags);
 }
 
-export async function getStudentGradingsByStudentWithUsers(env: Env, studentUid: string, includeTags = false): Promise<StudentGradingWithUser[]> {
+export async function deleteStudentGrading(env: Env, senseiId: number, studentUid: string): Promise<void> {
   const db = drizzle(env.DB);
-  const gradings = await db.select({
-    uid: studentGradingsTable.uid,
-    studentUid: studentGradingsTable.studentUid,
-    comment: studentGradingsTable.comment,
-    username: senseisTable.username,
-    profileStudentId: senseisTable.profileStudentId,
-  })
+  const existing = await db
+    .select({ uid: studentGradingsTable.uid })
+    .from(studentGradingsTable)
+    .where(and(eq(studentGradingsTable.userId, senseiId), eq(studentGradingsTable.studentUid, studentUid)))
+    .limit(1);
+
+  if (existing.length === 0) {
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(studentGradingTagsTable).where(eq(studentGradingTagsTable.gradingUid, existing[0].uid));
+    await tx.delete(studentGradingsTable).where(eq(studentGradingsTable.uid, existing[0].uid));
+  });
+}
+
+export async function getStudentGradingsByStudentWithUsers(
+  env: Env,
+  studentUid: string,
+  includeTags = false,
+): Promise<StudentGradingWithUser[]> {
+  const db = drizzle(env.DB);
+  const gradings = await db
+    .select({
+      uid: studentGradingsTable.uid,
+      studentUid: studentGradingsTable.studentUid,
+      comment: studentGradingsTable.comment,
+      createdAt: studentGradingsTable.createdAt,
+      updatedAt: studentGradingsTable.updatedAt,
+      username: senseisTable.username,
+      profileStudentId: senseisTable.profileStudentId,
+    })
     .from(studentGradingsTable)
     .innerJoin(senseisTable, eq(studentGradingsTable.userId, senseisTable.id))
     .where(eq(studentGradingsTable.studentUid, studentUid));
@@ -122,29 +158,34 @@ export async function getStudentGradingsByStudentWithUsers(env: Env, studentUid:
     uid: grading.uid,
     studentUid: grading.studentUid,
     comment: grading.comment,
+    createdAt: grading.createdAt,
+    updatedAt: grading.updatedAt,
     user: {
       username: grading.username,
       profileStudentId: grading.profileStudentId,
-    }
+    },
   }));
 
   if (includeTags) {
-    const gradingUids = result.map(g => g.uid);
+    const gradingUids = result.map((g) => g.uid);
     const tagsMap = await getGradingTagsByGradingUids(env, gradingUids);
-    result.forEach((grading) => {
-      grading.tags = tagsMap[grading.uid]?.map(tag => tag.tagValue) || [];
-    });
+    for (const grading of result) {
+      grading.tags = tagsMap[grading.uid]?.map((tag) => tag.tagValue) || [];
+    }
   }
   return result;
 }
 
 export async function getStudentGradingsByUser(env: Env, userId: number): Promise<StudentGrading[]> {
   const db = drizzle(env.DB);
-  const gradings = await db.select({
-    uid: studentGradingsTable.uid,
-    studentUid: studentGradingsTable.studentUid,
-    comment: studentGradingsTable.comment,
-  })
+  const gradings = await db
+    .select({
+      uid: studentGradingsTable.uid,
+      studentUid: studentGradingsTable.studentUid,
+      comment: studentGradingsTable.comment,
+      createdAt: studentGradingsTable.createdAt,
+      updatedAt: studentGradingsTable.updatedAt,
+    })
     .from(studentGradingsTable)
     .where(eq(studentGradingsTable.userId, userId));
 
@@ -152,12 +193,58 @@ export async function getStudentGradingsByUser(env: Env, userId: number): Promis
     uid: grading.uid,
     studentUid: grading.studentUid,
     comment: grading.comment,
+    createdAt: grading.createdAt,
+    updatedAt: grading.updatedAt,
   }));
 
-  const gradingUids = result.map(g => g.uid);
+  const gradingUids = result.map((g) => g.uid);
   const tagsMap = await getGradingTagsByGradingUids(env, gradingUids);
-  result.forEach((grading) => {
+  for (const grading of result) {
     grading.tags = tagsMap[grading.uid]?.map((tag) => tag.tagValue) || [];
-  });
+  }
+  return result;
+}
+
+export async function getRecentStudentGradingsWithUsers(
+  env: Env,
+  limit = 3,
+  includeTags = false,
+): Promise<StudentGradingWithUser[]> {
+  const db = drizzle(env.DB);
+  const gradings = await db
+    .select({
+      uid: studentGradingsTable.uid,
+      studentUid: studentGradingsTable.studentUid,
+      comment: studentGradingsTable.comment,
+      createdAt: studentGradingsTable.createdAt,
+      updatedAt: studentGradingsTable.updatedAt,
+      username: senseisTable.username,
+      profileStudentId: senseisTable.profileStudentId,
+    })
+    .from(studentGradingsTable)
+    .innerJoin(senseisTable, eq(studentGradingsTable.userId, senseisTable.id))
+    .orderBy(desc(studentGradingsTable.updatedAt), desc(studentGradingsTable.createdAt))
+    .limit(limit);
+
+  const result: StudentGradingWithUser[] = gradings.map((grading) => ({
+    uid: grading.uid,
+    studentUid: grading.studentUid,
+    comment: grading.comment,
+    createdAt: grading.createdAt,
+    updatedAt: grading.updatedAt,
+    user: {
+      username: grading.username,
+      profileStudentId: grading.profileStudentId,
+    },
+  }));
+
+  if (includeTags) {
+    const gradingUids = result.map((grading) => grading.uid);
+    const tagsMap = await getGradingTagsByGradingUids(env, gradingUids);
+    for (const grading of result) {
+      grading.tags = tagsMap[grading.uid]?.map((tag) => tag.tagValue) || [];
+    }
+  }
+
   return result;
 }
