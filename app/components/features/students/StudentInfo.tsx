@@ -1,6 +1,14 @@
-import { ArrowTopRightOnSquareIcon } from "@heroicons/react/16/solid";
-import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, roleColor, roleLocale, schoolNameLocale } from "~/locales/ko";
 import { OptionBadge } from "~/components/primitives";
+import type { Attack, Defense, RoleEnum } from "~/graphql/graphql";
+import {
+  attackTypeColor,
+  attackTypeLocale,
+  defenseTypeColor,
+  defenseTypeLocale,
+  roleColor,
+  roleLocale,
+  schoolNameLocale,
+} from "~/locales/ko";
 import { studentStandingImageUrl } from "~/models/assets";
 
 type StudentInfoProps = {
@@ -8,54 +16,49 @@ type StudentInfoProps = {
     name: string;
     uid: string;
     school: string;
-    attackType: string;
-    defenseType: string;
-    role: string;
-    schaleDbId?: string | null;
+    attackType: Attack;
+    defenseType: Defense;
+    role: RoleEnum;
   };
   className?: string;
 };
 
 export default function StudentInfo({ student, className = "" }: StudentInfoProps) {
   return (
-    <div className={`w-full aspect-16/9 flex rounded-xl bg-neutral-100 dark:bg-neutral-900 ${className}`}>
-      <div className="p-4 md:p-8 grow flex flex-col justify-center z-10">
-        <p className="text-xl md:text-2xl font-bold">{student.name}</p>
-        <p className="my-1 md:my-2">{schoolNameLocale[student.school as keyof typeof schoolNameLocale]}</p>
-        <div className="flex gap-2">
-          <OptionBadge 
-            text={attackTypeLocale[student.attackType as keyof typeof attackTypeLocale]} 
-            color={attackTypeColor[student.attackType as keyof typeof attackTypeColor]} 
+    <section
+      className={`overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-800/50 ${className}`}
+    >
+      <div className="relative min-h-40 overflow-hidden bg-linear-to-r from-neutral-100 via-white to-neutral-50 dark:from-neutral-900 dark:via-neutral-800 dark:to-neutral-800">
+        <div className="absolute inset-0 z-0">
+          <img
+            src={studentStandingImageUrl(student.uid)}
+            alt={student.name}
+            className="absolute right-0 top-2 h-full w-auto origin-top-right scale-150 object-contain object-top opacity-95"
           />
-          <OptionBadge 
-            text={defenseTypeLocale[student.defenseType as keyof typeof defenseTypeLocale]} 
-            color={defenseTypeColor[student.defenseType as keyof typeof defenseTypeColor]} 
-          />
-          <OptionBadge 
-            text={roleLocale[student.role as keyof typeof roleLocale]} 
-            color={roleColor[student.role as keyof typeof roleColor]} 
-          />
+          <div className="absolute inset-0 bg-linear-to-r from-white via-white/85 to-transparent dark:from-neutral-800 dark:via-neutral-800/80 dark:to-transparent" />
         </div>
-        {student.schaleDbId && (
-          <a 
-            href={`https://schaledb.com/student/${student.schaleDbId}`} 
-            target="_blank" 
-            rel="noreferrer" 
-            className="pt-4 hover:underline"
-          >
-            <ArrowTopRightOnSquareIcon className="size-3 text-neutral-500 inline" />
-            <span className="text-sm text-neutral-500">샬레DB</span>
-          </a>
-        )}
+
+        <div className="relative z-10 flex min-h-40 flex-col justify-center p-4 md:p-5">
+          <p className="text-xl font-bold text-neutral-950 dark:text-neutral-50">{student.name}</p>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
+            {schoolNameLocale[student.school]}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <OptionBadge
+              text={attackTypeLocale[student.attackType]}
+              color={attackTypeColor[student.attackType]}
+            />
+            <OptionBadge
+              text={defenseTypeLocale[student.defenseType]}
+              color={defenseTypeColor[student.defenseType]}
+            />
+            <OptionBadge
+              text={roleLocale[student.role]}
+              color={roleColor[student.role]}
+            />
+          </div>
+        </div>
       </div>
-      <div className="relative w-1/3 h-full overflow-hidden rounded-r-xl">
-        <img
-          src={studentStandingImageUrl(student.uid)}
-          alt={student.name}
-          className="absolute w-full h-full object-cover object-top scale-125 translate-y-1/20 transform-gpu origin-top"
-        />
-        <div className="absolute w-full h-full bg-linear-to-r from-neutral-100 dark:from-neutral-900 to-transparent to-15%" />
-      </div>
-    </div>
+    </section>
   );
 }

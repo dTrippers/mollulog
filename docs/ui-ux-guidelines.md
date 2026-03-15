@@ -47,6 +47,8 @@ Use this structure as the default rule:
 - Use Tailwind utilities consistently, but centralize repeated class sets inside primitives.
 - Prefer neutral, readable defaults with clear accent colors.
 - Keep spacing, radius, border, and shadow behavior consistent across similar components.
+- When adding a new surface inside an existing screen section, match the nearest established surface pattern first. Reuse the same border, radius, background, and shadow treatment before introducing a new card style.
+- If adjacent cards are flat bordered panels, do not introduce a stronger radius or drop shadow for a sibling card without updating the whole section pattern together.
 - Avoid mixing multiple competing visual idioms in the same area.
 - Preserve existing product identity unless a broader redesign is intentional.
 - Do not introduce magic-number layout widths or arbitrary pixel-based width values unless there is no existing project token or layout scale that fits.

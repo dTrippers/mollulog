@@ -1,14 +1,22 @@
-import type { MetaFunction, LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { isRouteErrorResponse, useLoaderData, useRouteError, useActionData, useNavigation, Form, redirect, Link } from "react-router";
 import { useState } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import {
+  Form,
+  Link,
+  isRouteErrorResponse,
+  redirect,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+  useRouteError,
+} from "react-router";
+import { getAuthenticator } from "~/auth/authenticator.server";
+import { ErrorPage } from "~/components/features/layout";
+import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { ErrorPage } from "~/components/features/layout";
-import { StudentInfo } from "~/components/features/students";
-import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
-import type { StudentGradingTagValue } from "~/models/student-grading-tag";
 import { getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import type { StudentGradingTagValue } from "~/models/student-grading-tag";
 import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
 
 const studentDetailQuery = graphql(`
@@ -33,7 +41,9 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     return redirect(`/students/${studentUid}`);
   }
 
-  const { data, error } = await runQuery(studentDetailQuery, { uid: studentUid });
+  const { data, error } = await runQuery(studentDetailQuery, {
+    uid: studentUid,
+  });
   let errorMessage: string | null = null;
   if (error || !data) {
     console.error(error);
@@ -58,9 +68,9 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
       headers: { "Content-Type": "application/json" },
     });
   }
-  return { 
+  return {
     student,
-    existingGrading: existingGrading || null
+    existingGrading: existingGrading || null,
   };
 };
 
@@ -86,7 +96,7 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
 
   const selectedTags = formData.getAll("tags") as StudentGradingTagValue[];
   try {
-    await upsertStudentGrading(env, currentUser.id, studentUid, comment || null, selectedTags); 
+    await upsertStudentGrading(env, currentUser.id, studentUid, comment || null, selectedTags);
     return redirect(`/students/${studentUid}`);
   } catch (error) {
     console.error("Error saving grading:", error);
@@ -137,11 +147,6 @@ export default function StudentGrade() {
 
   return (
     <>
-      <Title text="학생 평가" parentPath={`/students/${student.uid}`} />
-
-      {/* Student Info */}
-      <StudentInfo student={student} className="mb-6" />
-
       <Form method="post" className="space-y-6">
         <SubTitle text="학생 평가하기" description="최대 100자까지 작성할 수 있어요" />
 
@@ -163,7 +168,11 @@ export default function StudentGrade() {
 
         {/* Submit Button */}
         <div className="flex">
-          <Button type="submit" variant="primary" text={isSubmitting ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"} />
+          <Button
+            type="submit"
+            variant="primary"
+            text={isSubmitting ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"}
+          />
           <Link to={`/students/${student.uid}`}>
             <Button type="button" text="취소" />
           </Link>
