@@ -59,13 +59,10 @@ export default function StudentGradingChart({
             <Link to={`/students/${student.uid}/gradings`} className="group block">
               <div className="mt-2 rounded-lg bg-neutral-100 p-4 transition hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800">
                 <div className="flex items-center gap-3">
-                  <ProfileImage
-                    studentUid={recentReview.user?.profileStudentId ?? recentReview.student?.uid ?? null}
-                    imageSize={6}
-                  />
+                  <ProfileImage studentUid={recentReview.student.uid} imageSize={6} />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100">
-                      {recentReviewIsCurrentUser ? "나의 평가" : (recentReview.user?.username ?? "익명")}
+                      {recentReviewIsCurrentUser ? "나의 평가" : recentReview.user.username}
                     </p>
                     {recentReview.comment && (
                       <p className="mt-0.5 line-clamp-2 text-sm text-neutral-600 dark:text-neutral-300">

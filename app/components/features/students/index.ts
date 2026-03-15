@@ -8,6 +8,7 @@ export { default as StudentFilter } from "./StudentFilter";
 export { applyStudentFilter } from "./StudentFilter";
 export type { StudentFilterState } from "./StudentFilter";
 export { default as StudentGradingTimeline } from "./StudentGradingTimeline";
+export { formatStudentGradingTimestamp } from "./StudentGradingTimeline";
 export type { StudentGradingTimelineItem } from "./StudentGradingTimeline";
 export { default as StudentInfo } from "./StudentInfo";
 export { default as StudentSearchInput } from "./StudentSearchInput";

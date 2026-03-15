@@ -37,6 +37,14 @@ export type StudentGradingWithUser = StudentGrading & {
   };
 };
 
+export type StudentGradingPageWithUser = {
+  items: StudentGradingWithUser[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+};
+
 function toModel(grading: typeof studentGradingsTable.$inferSelect): StudentGrading {
   return {
     uid: grading.uid,
@@ -247,4 +255,65 @@ export async function getRecentStudentGradingsWithUsers(
   }
 
   return result;
+}
+
+export async function getRecentStudentGradingsPageWithUsers(
+  env: Env,
+  page = 1,
+  pageSize = 20,
+  includeTags = false,
+): Promise<StudentGradingPageWithUser> {
+  const db = drizzle(env.DB);
+  const safePage = Math.max(1, page);
+  const safePageSize = Math.max(1, pageSize);
+  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(studentGradingsTable);
+
+  const totalCount = Number(count);
+  const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
+  const currentPage = Math.min(safePage, totalPages);
+  const offset = (currentPage - 1) * safePageSize;
+
+  const gradings = await db
+    .select({
+      uid: studentGradingsTable.uid,
+      studentUid: studentGradingsTable.studentUid,
+      comment: studentGradingsTable.comment,
+      createdAt: studentGradingsTable.createdAt,
+      updatedAt: studentGradingsTable.updatedAt,
+      username: senseisTable.username,
+      profileStudentId: senseisTable.profileStudentId,
+    })
+    .from(studentGradingsTable)
+    .innerJoin(senseisTable, eq(studentGradingsTable.userId, senseisTable.id))
+    .orderBy(desc(studentGradingsTable.updatedAt), desc(studentGradingsTable.createdAt))
+    .limit(safePageSize)
+    .offset(offset);
+
+  const items: StudentGradingWithUser[] = gradings.map((grading) => ({
+    uid: grading.uid,
+    studentUid: grading.studentUid,
+    comment: grading.comment,
+    createdAt: grading.createdAt,
+    updatedAt: grading.updatedAt,
+    user: {
+      username: grading.username,
+      profileStudentId: grading.profileStudentId,
+    },
+  }));
+
+  if (includeTags) {
+    const gradingUids = items.map((grading) => grading.uid);
+    const tagsMap = await getGradingTagsByGradingUids(env, gradingUids);
+    for (const grading of items) {
+      grading.tags = tagsMap[grading.uid]?.map((tag) => tag.tagValue) || [];
+    }
+  }
+
+  return {
+    items,
+    page: currentPage,
+    pageSize: safePageSize,
+    totalCount,
+    totalPages,
+  };
 }

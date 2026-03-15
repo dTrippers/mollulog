@@ -58,7 +58,14 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     tierCounts,
     gradings: sortedGradings.map((grading) => ({
       ...grading,
-      studentName: allStudentsMap[grading.studentUid]?.name ?? grading.studentUid,
+      user: {
+        username: sensei.username,
+        profileStudentId: sensei.profileStudentId ?? null,
+      },
+      student: {
+        uid: grading.studentUid,
+        name: allStudentsMap[grading.studentUid].name,
+      },
     })),
   };
 };
@@ -120,17 +127,7 @@ export default function UserIndex() {
       {gradings.length > 0 && (
         <div className="my-8">
           <SubTitle text="학생 평가 내역" description="최근에 남긴 평가부터 확인해보세요" />
-          <StudentGradingTimeline
-            hideAuthorName
-            hideEditAction
-            gradings={gradings.map((grading) => ({
-              ...grading,
-              student: {
-                uid: grading.studentUid,
-                name: grading.studentName,
-              },
-            }))}
-          />
+          <StudentGradingTimeline hideMetaRow hideEditAction gradings={gradings} />
         </div>
       )}
     </div>

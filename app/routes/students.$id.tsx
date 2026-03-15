@@ -89,7 +89,13 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       imageUrl: content.imageUrl ?? null,
     })),
     tagCounts,
-    allGradings: sortedGradings,
+    allGradings: sortedGradings.map((grading) => ({
+      ...grading,
+      student: {
+        uid: student.uid,
+        name: student.name,
+      },
+    })),
     currentUser,
     allRaids,
   };

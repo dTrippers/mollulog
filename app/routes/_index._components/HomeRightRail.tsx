@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import { Link } from "react-router";
-import type { StudentGradingTimelineItem } from "~/components/features/students";
+import { type StudentGradingTimelineItem, formatStudentGradingTimestamp } from "~/components/features/students";
 import { Button, HorizontalScroll, ProfileImage, TagIcon } from "~/components/primitives";
 import {
   STUDENT_GRADING_TAG_DISPLAY,
@@ -31,7 +31,7 @@ function HomeRecentGradingsSection({ recentGradings }: Pick<HomeRightRailProps, 
           <RecentGradingCard key={grading.uid} grading={grading} />
         ))}
       </div>
-      <Button text="학생 평가 목록" to="/students" variant="tint" fullWidth shadow="xs" />
+      <Button text="학생 평가 목록" to="/students/gradings" variant="tint" fullWidth shadow="xs" />
     </RailSection>
   );
 }
@@ -108,24 +108,20 @@ type RecentGradingCardProps = {
 };
 
 function RecentGradingCard({ grading }: RecentGradingCardProps) {
-  if (!grading.student || !grading.user) {
-    return null;
-  }
-
   return (
     <Link
       to={`/students/${grading.student.uid}`}
       className="group rounded-lg border border-neutral-200 bg-white transition-colors hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900 block p-3"
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2">
         <ProfileImage studentUid={grading.student.uid} imageSize={8} />
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-3">
             <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
               {grading.student.name}
             </p>
             <span className="shrink-0 text-xs text-neutral-400 dark:text-neutral-500">
-              {dayjs(grading.updatedAt).format("MM/DD")}
+              {formatStudentGradingTimestamp(grading.createdAt, grading.updatedAt)}
             </span>
           </div>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">@{grading.user.username}</p>

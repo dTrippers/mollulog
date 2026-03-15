@@ -38,7 +38,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     youtubeSections,
   ] = await Promise.all([
     getIndexContents(env),
-    getRecentStudentGradingsWithUsers(env, 5, true),
+    getRecentStudentGradingsWithUsers(env, 3, true),
     getAllStudentsMap(env, true),
     getHomeYoutubeSections(env).catch((error) => {
       console.error("Failed to load home youtube sections", error);
@@ -74,9 +74,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     currentUnlimit,
     recentGradings: recentGradings.map((grading) => ({
       ...grading,
-      student: allStudentsMap[grading.studentUid]
-        ? { uid: grading.studentUid, name: allStudentsMap[grading.studentUid].name }
-        : undefined,
+      student: {
+        uid: grading.studentUid,
+        name: allStudentsMap[grading.studentUid].name,
+      },
     })),
     youtubeSections,
   };
