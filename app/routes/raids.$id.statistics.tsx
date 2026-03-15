@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
-import { LoadingSkeleton } from "~/components/atoms/layout";
-import { EmptyView } from "~/components/atoms/typography";
-import RaidStatisticsScreen from "~/components/raids/RaidStatisticsScreen";
+import { EmptyView, LoadingSkeleton } from "~/components/primitives";
+import RaidStatisticsScreen from "~/components/features/raids/RaidStatisticsScreen";
 import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
-import { fetchRaidStatisticsByRaid, type RaidStatistics } from "~/models/raid-statistics.client";
+import { fetchRaidStatisticsByRaid, type RaidStatistics as RaidStatisticsData } from "~/models/raid-statistics.client";
 import type { RaidPageContext } from "./raids.$id";
+import RaidUnavailableState from "./raids.$id._components/RaidUnavailableState";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -21,12 +21,12 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   };
 };
 
-export default function RaidStatistics() {
+export default function RaidStatisticsPage() {
   const { currentRaid, defenseType } = useOutletContext<RaidPageContext>();
   const { allStudents } = useLoaderData<typeof loader>();
   const maxTier = getMaxTierAt(currentRaid.since);
 
-  const [statistics, setStatistics] = useState<RaidStatistics[] | null>(null);
+  const [statistics, setStatistics] = useState<RaidStatisticsData[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,6 +35,7 @@ export default function RaidStatistics() {
       setLoading(false);
       return;
     }
+    const raidIndexJp = currentRaid.raidIndexJp;
 
     let cancelled = false;
 
@@ -43,7 +44,7 @@ export default function RaidStatistics() {
         setLoading(true);
         setError(null);
 
-        const rawStatistics = await fetchRaidStatisticsByRaid(currentRaid.type, currentRaid.raidIndexJp!, defenseType);
+        const rawStatistics = await fetchRaidStatisticsByRaid(currentRaid.type, raidIndexJp, defenseType);
         if (cancelled) {
           return;
         }
@@ -67,14 +68,7 @@ export default function RaidStatistics() {
   }, [currentRaid.type, currentRaid.raidIndexJp, currentRaid.rankVisible, defenseType]);
 
   if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
-    return (
-      <div className="my-16 md:my-48 w-full flex flex-col items-center justify-center">
-        <p className="my-2 text-2xl font-bold">정보를 준비중이에요</p>
-        <p className="my-2 text-neutral-500 dark:text-neutral-400">
-          정보가 준비된 컨텐츠를 선택하여 확인해보세요
-        </p>
-      </div>
-    );
+    return <RaidUnavailableState />;
   }
 
   if (loading) {

@@ -1,22 +1,25 @@
 import { useEffect, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData } from "react-router";
 import dayjs from "dayjs";
-import { LoadingSkeleton } from "~/components/atoms/layout";
-import { EmptyView } from "~/components/atoms/typography";
-import { OptionBadge } from "~/components/atoms/student";
-import { Section } from "~/components/ui/Section";
+import { EmptyView, LoadingSkeleton, Section } from "~/components/primitives";
 import { getAllStudentsMap } from "~/models/student";
 import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
 import { fetchRaidOverview } from "~/models/raid-overview.client";
 import { getRaidDetail } from "~/models/raid";
-import { difficultyLocale, defenseTypeColor, raidTypeLocale } from "~/locales/ko";
-import RaidDifficultyComparison from "~/components/raids/RaidDifficultyComparison";
-import RaidStudentComparison from "~/components/raids/RaidStudentComparison";
-import { ArrowRightIcon } from "@heroicons/react/24/outline";
+import { type defenseTypeColor, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
+import RaidDifficultyComparison from "~/components/features/raids/RaidDifficultyComparison";
+import RaidStudentComparison from "~/components/features/raids/RaidStudentComparison";
+import RaidComparisonHeader from "./raids.$id._components/RaidComparisonHeader";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const currentRaidUid = params.id!;
+  const currentRaidUid = params.id;
+  if (!currentRaidUid) {
+    throw new Response(
+      JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
+      { status: 404, headers: { "Content-Type": "application/json" } },
+    );
+  }
 
   const url = new URL(request.url);
   const fromRaidUid = url.searchParams.get("from");
@@ -86,6 +89,8 @@ export default function RaidCompare() {
       setLoading(false);
       return;
     }
+    const toRaidIndexJp = toRaid.raidIndexJp;
+    const fromRaidIndexJp = fromRaid.raidIndexJp;
 
     let cancelled = false;
 
@@ -111,16 +116,16 @@ export default function RaidCompare() {
         const [currentOverviewData, fromOverviewData, currentStats, fromStats] = await Promise.all([
           fetchRaidOverview({
             raidType: toRaid.type,
-            season: toRaid.raidIndexJp!,
+            season: toRaidIndexJp,
             defenseType,
           }),
           fetchRaidOverview({
             raidType: fromRaid.type,
-            season: fromRaid.raidIndexJp!,
+            season: fromRaidIndexJp,
             defenseType,
           }),
-          fetchRaidStatisticsByRaid(toRaid.type, toRaid.raidIndexJp!, defenseType),
-          fetchRaidStatisticsByRaid(fromRaid.type, fromRaid.raidIndexJp!, defenseType),
+          fetchRaidStatisticsByRaid(toRaid.type, toRaidIndexJp, defenseType),
+          fetchRaidStatisticsByRaid(fromRaid.type, fromRaidIndexJp, defenseType),
         ]);
 
         if (cancelled) {
@@ -130,16 +135,16 @@ export default function RaidCompare() {
         // Convert clear levels
         const currentClearLevels: Record<string, number> = {};
         if (currentOverviewData.clearLevels) {
-          Object.entries(currentOverviewData.clearLevels).forEach(([difficulty, count]) => {
+          for (const [difficulty, count] of Object.entries(currentOverviewData.clearLevels)) {
             currentClearLevels[difficulty] = Number(count);
-          });
+          }
         }
 
         const fromClearLevels: Record<string, number> = {};
         if (fromOverviewData.clearLevels) {
-          Object.entries(fromOverviewData.clearLevels).forEach(([difficulty, count]) => {
+          for (const [difficulty, count] of Object.entries(fromOverviewData.clearLevels)) {
             fromClearLevels[difficulty] = Number(count);
-          });
+          }
         }
 
         // Convert student statistics
@@ -176,7 +181,7 @@ export default function RaidCompare() {
     return () => {
       cancelled = true;
     };
-  }, [toRaid, fromRaid, allStudents, loaderDefenseType]);
+  }, [fromRaid, loaderDefenseType, toRaid]);
 
   if (loading) {
     return <LoadingSkeleton />;
@@ -201,48 +206,13 @@ export default function RaidCompare() {
 
   return (
     <div>
-      {/* Comparison Header */}
-      <div className="flex items-center gap-2 md:gap-4 mb-6">
-        {/* From Raid */}
-        <div className="flex-1 bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-neutral-200 dark:border-neutral-700">
-          <div className="text-sm md:text-base font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-            과거 개최
-          </div>
-          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">
-            {dayjs(fromRaid.since).format("YYYY/M/D")} ~ {dayjs(fromRaid.until).format("M/D")}
-          </div>
-          {fromDifficulty && (
-            <div className="flex mt-2 gap-x-1">
-              <OptionBadge text={raidTypeLocale[fromRaid.type]} />
-              <OptionBadge
-                text={difficultyLocale[fromDifficulty]}
-                color={defenseTypeColor[loaderDefenseType as keyof typeof defenseTypeColor]}
-              />
-            </div>
-          )}
-        </div>
-
-        <ArrowRightIcon className="size-4 text-neutral-600 dark:text-neutral-300 shrink-0" strokeWidth={2} />
-
-        {/* Current Raid */}
-        <div className="flex-1 bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-neutral-200 dark:border-neutral-700">
-          <div className="text-sm md:text-base font-semibold text-neutral-700 dark:text-neutral-300 mb-1">
-            현재 개최
-          </div>
-          <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">
-            {dayjs(toRaid.since).format("YYYY/M/D")} ~ {dayjs(toRaid.until).format("M/D")}
-          </div>
-          {currentDifficulty && (
-            <div className="flex mt-2 gap-x-1">
-              <OptionBadge text={raidTypeLocale[toRaid.type]} />
-              <OptionBadge
-                text={difficultyLocale[currentDifficulty]}
-                color={defenseTypeColor[loaderDefenseType as keyof typeof defenseTypeColor]}
-              />
-            </div>
-          )}
-        </div>
-      </div>
+      <RaidComparisonHeader
+        fromRaid={fromRaid as typeof fromRaid & { type: keyof typeof raidTypeLocale }}
+        toRaid={toRaid as typeof toRaid & { type: keyof typeof raidTypeLocale }}
+        defenseType={loaderDefenseType as keyof typeof defenseTypeColor}
+        fromDifficulty={fromDifficulty}
+        currentDifficulty={currentDifficulty}
+      />
 
       <Section
         title="난이도별 클리어 비율 증감"

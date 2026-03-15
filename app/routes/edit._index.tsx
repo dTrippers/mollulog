@@ -1,17 +1,16 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect } from "react-router";
 import { useActionData, useLoaderData } from "react-router";
-import { ProfileEditor } from "~/components/organisms/profile";
+import { ProfileEditor } from "~/components/features/profile";
 import { getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { getSenseiById, updateSensei } from "~/models/sensei";
 import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
-import { SubTitle, Title } from "~/components/atoms/typography";
+import { SubTitle, Title } from "~/components/primitives";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import { getAllStudents } from "~/models/student";
-import { FormGroup } from "~/components/organisms/form";
-import { InputForm, LinkForm } from "~/components/molecules/form";
+import { FormGroup, InputForm, LinkForm } from "~/components/features/forms";
 import { getPasskeysBySensei } from "~/models/passkey";
 
 dayjs.extend(utc);
@@ -28,7 +27,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     return redirect("/unauthorized");
   }
 
-  const senseiData = (await getSenseiById(env, sensei.id))!;
+  const senseiData = await getSenseiById(env, sensei.id);
+  if (!senseiData) {
+    return redirect("/unauthorized");
+  }
   const senseiPrivacy = await getSenseiPrivacyByUserId(env, sensei.id);
   return {
     sensei: {
@@ -45,7 +47,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     })).sort((a, b) => a.order - b.order),
     passkeyCount: (await getPasskeysBySensei(env, sensei)).length,
   };
-}
+};
 
 type ActionData = {
   error?: {

@@ -6,7 +6,7 @@ import { fetchCached } from "./base";
 import { getTimelineContent } from "./timeline-content";
 import type { RunType } from "./timeline-content";
 import { resolveContentName } from "./content-name";
-import type { MinigameConfig } from "~/components/event/shop/constants";
+import type { MinigameConfig } from "~/components/features/events/shop/constants";
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
   if (runType === "rerun") return RunTypeEnum.Rerun;
@@ -167,8 +167,12 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
   }
 
   return fetchCached(env, `event-content::shop::v1::${timelineUid}`, async () => {
+    const contentUid = metadata.contentUid;
+    if (!contentUid) {
+      return null;
+    }
     const runType = toRunTypeEnum(metadata.runType);
-    const { data, error } = await runQuery(eventContentShopContentQuery, { eventUid: metadata.contentUid!, runType });
+    const { data, error } = await runQuery(eventContentShopContentQuery, { eventUid: contentUid, runType });
     if (error || !data?.eventContent) {
       return null;
     }
@@ -189,15 +193,20 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
     }));
 
     const shopResources = data.eventContent.shopResources
-      .filter((r) => r.resource != null && r.paymentResource != null)
-      .map((r) => ({
-        uid: r.uid,
-        resourceAmount: r.resourceAmount,
-        paymentResourceAmount: r.paymentResourceAmount,
-        shopAmount: r.shopAmount,
-        resource: r.resource!,
-        paymentResource: r.paymentResource!,
-      }));
+      .flatMap((r) => {
+        if (!r.resource || !r.paymentResource) {
+          return [];
+        }
+
+        return [{
+          uid: r.uid,
+          resourceAmount: r.resourceAmount,
+          paymentResourceAmount: r.paymentResourceAmount,
+          shopAmount: r.shopAmount,
+          resource: r.resource,
+          paymentResource: r.paymentResource,
+        }];
+      });
 
     // Group bonuses by resource uid to build EventRewardBonus[]
     const bonusByResource = new Map<string, { uid: string; name: string; rewardBonuses: { student: { uid: string; name: string; role: string }; ratio: string }[] }>();
@@ -207,7 +216,7 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
       if (!bonusByResource.has(uid)) {
         bonusByResource.set(uid, { uid, name, rewardBonuses: [] });
       }
-      bonusByResource.get(uid)!.rewardBonuses.push({
+      bonusByResource.get(uid)?.rewardBonuses.push({
         student: { uid: bonus.student.uid, name: bonus.student.name, role: bonus.student.role },
         ratio: bonus.percentage,
       });
@@ -244,13 +253,18 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
             return {
               rounds,
               rewards: group.rewards
-                .filter((r) => r.resource != null)
-                .map((r) => ({
-                  resourceType: r.resource!.type,
-                  resourceUid: r.resource!.uid,
-                  quantity: r.quantity,
-                  rarity: r.resource!.rarity ?? undefined,
-                })),
+                .flatMap((r) => {
+                  if (!r.resource) {
+                    return [];
+                  }
+
+                  return [{
+                    resourceType: r.resource.type,
+                    resourceUid: r.resource.uid,
+                    quantity: r.quantity,
+                    rarity: r.resource.rarity ?? undefined,
+                  }];
+                }),
             };
           }),
         };

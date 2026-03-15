@@ -27,4 +27,7 @@ This project has been deployed to Cloudflare Workers.
 ## Development Guides
 - Please follow the conventions of the project. Search for the existing code and follow the same style.
 - For UI layout, use modern and simple design.
+- Before creating or changing UI components, read `docs/ui-ux-guidelines.md` and follow its component structure, naming, reuse, layout, and performance rules.
+- Before adding, moving, or refactoring components, read `docs/component-development-guide.md` and follow its final structure rules for `primitives`, `features`, and route-local components.
+- Before restructuring route files or extracting screen-only UI, read `docs/routes.md` and follow its route-local composition rules.
 - This project uses Biome for code formatting and linting. Always follow the Biome conventions when creating or modifying code. You can run `pnpm run lint` to check formatting issues.

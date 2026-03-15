@@ -1,9 +1,8 @@
 import { data } from "react-router";
 import { Outlet, type Params, isRouteErrorResponse, useParams, useRouteError, useLocation } from "react-router";
 import { ChartBarIcon, DocumentTextIcon, HeartIcon, IdentificationIcon, UserIcon } from "@heroicons/react/24/outline";
-import { Title } from "~/components/atoms/typography";
-import { Page } from "~/components/navigation";
-import { ErrorPage } from "~/components/organisms/error";
+import { ErrorPage, Page } from "~/components/features/layout";
+import { Title } from "~/components/primitives";
 import { getSenseiByUsername, type Sensei } from "~/models/sensei";
 import { useEffect, useState } from "react";
 
@@ -27,7 +26,8 @@ export async function getRouteSensei(env: Env, params: Params<string>): Promise<
 
 export const ErrorBoundary = () => {
   const error = useRouteError();
-  let username, message;
+  let username: string | undefined;
+  let message: string | undefined;
   if (isRouteErrorResponse(error)) {
     username = error.data.error.data.username;
     message = error.data.error.message;
@@ -38,7 +38,7 @@ export const ErrorBoundary = () => {
       {username && <Title text={`@${username}`} />}
       <ErrorPage message={message} />
     </>
-  )
+  );
 };
 
 type Screen = "profile" | "students" | "pickups" | "futures" | "parties";

@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { ClockIcon } from "@heroicons/react/24/solid";
-import RaidRankFilter, { mergeFilteredStudents, type RaidRankFilterState } from "~/components/raids/RaidRankFilter";
-import { RaidRankScreen } from "~/components/raids";
+import RaidRankFilter, { mergeFilteredStudents, type RaidRankFilterState } from "~/components/features/raids/RaidRankFilter";
+import { RaidRankScreen } from "~/components/features/raids";
 import type { RaidPageContext } from "./raids.$id";
-import { raidTypeLocale } from "~/locales/ko";
 import { getAllStudentsMap } from "~/models/student";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { Difficulty } from "~/graphql/graphql";
 import type { Difficulty as DifficultyType } from "~/models/raid";
 import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
+import RaidUnavailableState from "./raids.$id._components/RaidUnavailableState";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -37,22 +36,18 @@ export default function RaidRanks() {
   const { allStudents, recruitedStudentTiers } = useLoaderData<typeof loader>();
 
   if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
-    return (
-      <div className="my-16 md:my-48 w-full flex flex-col items-center justify-center">
-        <ClockIcon className="my-2 w-16 h-16" strokeWidth={2} />
-        <p className="my-2 text-2xl font-bold">{raidTypeLocale[currentRaid.type]} 정보를 준비중이에요</p>
-        <p className="my-2 text-neutral-500 dark:text-neutral-400">
-          정보가 준비된 컨텐츠를 선택하여 확인해보세요
-        </p>
-      </div>
-    )
+    return <RaidUnavailableState raidType={currentRaid.type} />;
   }
 
   // Get all students for current raid
   const [filterableStudents, setFilterableStudents] = useState<{ uid: string; name: string; tiers: number[] }[]>([]);
   useEffect(() => {
+    if (currentRaid.raidIndexJp === null) {
+      return;
+    }
+    const raidIndexJp = currentRaid.raidIndexJp;
     const loadFilterableStudents = async () => {
-      const statistics = await fetchRaidStatisticsByRaid(currentRaid.type, currentRaid.raidIndexJp!, defenseType);
+      const statistics = await fetchRaidStatisticsByRaid(currentRaid.type, raidIndexJp, defenseType);
       setFilterableStudents(statistics.map(({ studentUid, slotsByTier, assistsByTier }) => {
         if (!allStudents[studentUid]) {
           return null;
@@ -82,9 +77,11 @@ export default function RaidRanks() {
     const difficulty = currentRaid.defenseTypes.find((dt) => dt.defenseType === defenseType)?.difficulty;
     if (difficulty === Difficulty.Lunatic) {
       return ["lunatic", "torment", "insane"] as DifficultyType[];
-    } else if (difficulty === Difficulty.Torment) {
+    }
+    if (difficulty === Difficulty.Torment) {
       return ["torment", "insane"] as DifficultyType[];
-    } else if (difficulty === Difficulty.Insane) {
+    }
+    if (difficulty === Difficulty.Insane) {
       return ["insane", "extreme"] as DifficultyType[];
     }
     return [] as DifficultyType[];
@@ -105,7 +102,7 @@ export default function RaidRanks() {
         />
       ),
     });
-  }, [defenseType, rankFilterState, setPanel, signedIn, filterableStudents, filterableDifficulties]);
+  }, [rankFilterState, setPanel, signedIn, filterableStudents, filterableDifficulties]);
 
   return (
     <>
@@ -131,4 +128,3 @@ export default function RaidRanks() {
     </>
   );
 }
-

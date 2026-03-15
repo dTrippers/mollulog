@@ -3,9 +3,9 @@ import { useEffect, useState } from "react";
 import { isRouteErrorResponse, Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { ShieldCheckIcon, InformationCircleIcon, TrophyIcon, ChartBarIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
-import { ErrorPage } from "~/components/organisms/error";
-import { FilterButtons, Page, type PagePanelProps } from "~/components/navigation";
-import { RaidSelector } from "~/components/raids";
+import { ErrorPage, Page } from "~/components/features/layout";
+import { RaidSelector } from "~/components/features/raids";
+import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { getAllRaids, getRaidDetail } from "~/models/raid";
@@ -14,7 +14,14 @@ import type { Defense } from "~/graphql/graphql";
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const raidDetail = await getRaidDetail(env, params.id!);
+  const raidId = params.id;
+  if (!raidId) {
+    throw new Response(
+      JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
+      { status: 404, headers: { "Content-Type": "application/json" } },
+    );
+  }
+  const raidDetail = await getRaidDetail(env, raidId);
   if (!raidDetail) {
     throw new Response(
       JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
@@ -53,9 +60,8 @@ export const ErrorBoundary = () => {
   const error = useRouteError();
   if (isRouteErrorResponse(error)) {
     return <ErrorPage message={error.data.error.message} />;
-  } else {
-    return <ErrorPage />;
   }
+  return <ErrorPage />;
 };
 
 export type RaidPageContext = {
@@ -77,19 +83,19 @@ export default function RaidPage() {
     if (pathname !== `/raids/${currentRaid.uid}/ranks`) {
       setPanel(undefined);
     }
-  }, [pathname, currentRaid.uid, setPanel]);
+  }, [pathname, currentRaid.uid]);
 
   const [selectedDefense, setDefense] = useState<Defense>(currentRaid.defenseTypes[0].defenseType);
   useEffect(() => {
     if (!currentRaid.defenseTypes.some(({ defenseType }) => defenseType === selectedDefense)) {
       setDefense(currentRaid.defenseTypes[0].defenseType);
     }
-  }, [currentRaid.defenseTypes]);
+  }, [currentRaid.defenseTypes, selectedDefense]);
 
   return (
     <Page
       title={`${raidTypeLocale[currentRaid.type]} 정보`}
-      description={`일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요`}
+      description="일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
       belowTitle={<RaidSelector raids={allRaids} currentRaid={currentRaid ?? null} />}
       panels={panel ? [panel] : undefined}
       screens={currentRaid.rankVisible ? [

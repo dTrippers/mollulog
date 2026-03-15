@@ -2,11 +2,8 @@ import { Bars3Icon, ExclamationCircleIcon } from "@heroicons/react/16/solid";
 import { CalculatorIcon, ClockIcon } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
 import type { MetaFunction } from "react-router";
-import { Title } from "~/components/atoms/typography";
-import { FilterButtons } from "~/components/navigation";
-import { InputForm, SelectForm } from "~/components/molecules/form";
-import ContentSelectForm from "~/components/molecules/form/ContentSelectForm";
-import { FormGroup } from "~/components/organisms/form";
+import { ContentSelectForm, FormGroup, InputForm, SelectForm } from "~/components/features/forms";
+import { FilterButtons, Title } from "~/components/primitives";
 import { bossName, difficultyLocale } from "~/locales/ko";
 import { ALL_TOTAL_ASSUALT_BOSS, type Boss, type Difficulty, scoreToDifficultyAndTime, timeToScore } from "~/models/raid";
 
@@ -40,8 +37,8 @@ export default function RaidScoreUtil() {
       {mode === "timeToScore" && <TimeToScore />}
       {mode === "scoreToTime" && <ScoreToTime />}
     </>
-  )
-};
+  );
+}
 
 function TimeToScore() {
   const [boss, setBoss] = useState<Boss | null>(null);
@@ -205,7 +202,7 @@ function ScoreToTime() {
     if (!boss || !scoreString) return;
 
     const score = Number.parseInt(scoreString.replace(/,/g, ""));
-    if (isNaN(score)) {
+    if (Number.isNaN(score)) {
       setCalculatedDifficulty(null);
       setCalculatedTimeString(null);
       return;

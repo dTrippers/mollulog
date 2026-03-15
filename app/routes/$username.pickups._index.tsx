@@ -2,9 +2,9 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { deletePickupHistory, getPickupHistories } from "~/models/pickup-history";
 import { redirect, useLoaderData } from "react-router";
-import { AddContentButton } from "~/components/molecules/editor";
-import { PickupHistoryView } from "~/components/organisms/pickup";
-import { SubTitle } from "~/components/atoms/typography";
+import { AddContentButton } from "~/components/features/editor";
+import PickupHistoryView from "./$username.pickups._components/PickupHistoryView";
+import { SubTitle } from "~/components/primitives";
 import { getAllStudentsMap } from "~/models/student";
 import dayjs from "dayjs";
 import { getRouteSensei } from "./$username";
@@ -33,11 +33,13 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 };
 
 function getPickupStudentUids(event: { recruitments: { pickup: boolean; student: { uid: string } | null }[] }) {
-  return new Set(
-    event.recruitments
-      .filter(({ pickup, student }) => pickup && student !== null)
-      .map(({ student }) => student!.uid)
-  );
+  const pickupStudentUids = new Set<string>();
+  for (const { pickup, student } of event.recruitments) {
+    if (pickup && student) {
+      pickupStudentUids.add(student.uid);
+    }
+  }
+  return pickupStudentUids;
 };
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {

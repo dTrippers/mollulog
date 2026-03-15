@@ -7,7 +7,7 @@ export const loader: LoaderFunction = async ({ request, context }) => {
   if (sensei) {
     const url = new URL(request.url);
     return redirect(`/@${sensei.username}/${url.searchParams.get("path") ?? ""}`);
-  } else {
-    return redirect("/unauthorized");
   }
+
+  return redirect("/unauthorized");
 }

@@ -1,10 +1,10 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
-import { SubTitle } from "~/components/atoms/typography";
+import { SubTitle } from "~/components/primitives";
 import { getContentsComments, nestComments, getFutureContents } from "~/models/content";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRouteSensei } from "./$username";
-import { FuturePlan } from "~/components/organisms/future";
+import FuturePlan from "./$username.futures._components/FuturePlan";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import type { NestedComment } from "~/models/content";
 import { getAllStudentsMap } from "~/models/student";
@@ -110,7 +110,7 @@ export default function UserFutures() {
           <p>미래시 보고 등록하러 가기 →</p>
         </Link>
       </div>
-    )
+    );
   }
 
   return (

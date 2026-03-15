@@ -3,15 +3,13 @@ import { isRouteErrorResponse, useLoaderData, useRouteError, useActionData, useN
 import { useState } from "react";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { SubTitle, Title } from "~/components/atoms/typography";
-import { ErrorPage } from "~/components/organisms/error";
-import { StudentInfo } from "~/components/molecules/student";
-import Button from "~/components/atoms/form/Button";
-import Textarea from "~/components/atoms/form/Textarea";
-import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
-import TagIcon from "~/components/atoms/student/TagIcon";
+import { ErrorPage } from "~/components/features/layout";
+import { StudentInfo } from "~/components/features/students";
+import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
+import type { StudentGradingTagValue } from "~/models/student-grading-tag";
 import { getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
 import { getAuthenticator } from "~/auth/authenticator.server";
+import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
 
 const studentDetailQuery = graphql(`
   query StudentGradeDetail($uid: String!) {
@@ -23,13 +21,19 @@ const studentDetailQuery = graphql(`
 
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const studentUid = params.id!;
+  const studentUid = params.id;
+  if (!studentUid) {
+    throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   if (!currentUser) {
     return redirect(`/students/${studentUid}`);
   }
 
-  const { data, error } = await runQuery(studentDetailQuery as any, { uid: studentUid });
+  const { data, error } = await runQuery(studentDetailQuery, { uid: studentUid });
   let errorMessage: string | null = null;
   if (error || !data) {
     console.error(error);
@@ -47,8 +51,15 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
 
   // Get existing grading if any
   const existingGrading = await getStudentGrading(env, currentUser.id, studentUid, true);
+  const student = data?.student;
+  if (!student) {
+    throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   return { 
-    student: data!.student!,
+    student,
     existingGrading: existingGrading || null
   };
 };
@@ -61,7 +72,13 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
   }
 
   const { env } = context.cloudflare;
-  const studentUid = params.id!;
+  const studentUid = params.id;
+  if (!studentUid) {
+    throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   if (!currentUser) {
     return redirect(`/students/${studentUid}`);
@@ -79,7 +96,7 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   if (!data) {
-    return [{ title: `학생 평가 | 몰루로그` }];
+    return [{ title: "학생 평가 | 몰루로그" }];
   }
 
   const { student } = data;
@@ -102,9 +119,8 @@ export const ErrorBoundary = () => {
       return <ErrorPage message="로그인이 필요해요" />;
     }
     return <ErrorPage message={error.data.error.message} />;
-  } else {
-    return <ErrorPage />;
   }
+  return <ErrorPage />;
 };
 
 export default function StudentGrade() {
@@ -113,12 +129,10 @@ export default function StudentGrade() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
-  const [selectedTags, setSelectedTags] = useState<StudentGradingTagValue[]>(
-    existingGrading?.tags || []
-  );
+  const [selectedTags, setSelectedTags] = useState<StudentGradingTagValue[]>(existingGrading?.tags || []);
 
   const toggleTag = (tag: StudentGradingTagValue) => {
-    setSelectedTags((prev) => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((value) => value !== tag) : [...prev, tag]));
   };
 
   return (
@@ -140,42 +154,22 @@ export default function StudentGrade() {
         />
 
         {/* Tags Section */}
-        <div className="-mt-4 flex flex-wrap gap-2">
-          {Object.entries(STUDENT_GRADING_TAG_DISPLAY).map(([tagValue, displayName]) => {
-            const isSelected = selectedTags.includes(tagValue as StudentGradingTagValue);
-            const tag = tagValue as StudentGradingTagValue;
-            return (
-              <button
-                key={tagValue}
-                type="button"
-                onClick={() => toggleTag(tag)}
-                className={`px-3 py-2 flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-700 transition-colors ${isSelected
-                    ? "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
-                    : "bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-200 hover:bg-neutral-200 dark:hover:bg-neutral-600"
-                  }`}
-              >
-                <TagIcon tag={tag} />
-                <span className="tracking-tighter shrink-0">{displayName}</span>
-              </button>
-            );
-          })}
-        </div>
+        <StudentGradingTagSelector selectedTags={selectedTags} onToggleTag={toggleTag} />
 
         {/* Hidden inputs for selected tags */}
-        {selectedTags.map(tag => (
+        {selectedTags.map((tag) => (
           <input key={tag} type="hidden" name="tags" value={tag} />
         ))}
 
         {/* Submit Button */}
         <div className="flex">
-          <Button type="submit" color="primary" text={isSubmitting ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"}/>
+          <Button type="submit" variant="primary" text={isSubmitting ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"} />
           <Link to={`/students/${student.uid}`}>
             <Button type="button" text="취소" />
           </Link>
         </div>
-        {actionData?.error && <p className="text-sm text-red-500 text-sm -mt-4">{actionData.error}</p>}
+        {actionData?.error && <p className="text-sm text-red-500 -mt-4">{actionData.error}</p>}
       </Form>
     </>
   );
 }
-

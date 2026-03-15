@@ -1,27 +1,26 @@
 import type { MetaFunction, LoaderFunctionArgs } from "react-router";
-import { isRouteErrorResponse, useLoaderData, useRouteError, Link } from "react-router";
+import { isRouteErrorResponse, useLoaderData, useRouteError } from "react-router";
 import { useState, useMemo, useEffect } from "react";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { EmptyView, SubTitle, Title } from "~/components/atoms/typography";
+import { EmptyView, SubTitle, Title } from "~/components/primitives";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
-import { ErrorPage } from "~/components/organisms/error";
-import { StudentInfo, StudentGradingComments } from "~/components/molecules/student";
-import { RaidStatisticsSlotCount } from "~/components/raids";
+import { ErrorPage } from "~/components/features/layout";
+import { StudentGradingComments, StudentInfo } from "~/components/features/students";
+import { RaidStatisticsSlotCount } from "~/components/features/raids";
 import { getMaxTierAt } from "~/models/student";
-import { FilterButtons } from "~/components/navigation";
+import { FilterButtons } from "~/components/primitives";
 import { BarsArrowDownIcon } from "@heroicons/react/24/outline";
-import { getTagCountsByStudent, type StudentGradingTagValue } from "~/models/student-grading-tag";
+import { getTagCountsByStudent } from "~/models/student-grading-tag";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import TagIcon from "~/components/atoms/student/TagIcon";
-import { useSignIn } from "~/contexts/SignInProvider";
-import { RecruitmentHistories } from "~/components/students";
-import { fetchRaidStatisticsByStudent, type RaidStatistics  } from "~/models/raid-statistics.client";
+import { RecruitmentHistories } from "~/components/features/students";
+import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/models/raid-statistics.client";
 import { getAllRaids } from "~/models/raid";
 import type { RaidType, Terrain } from "~/models/content.d";
 import type { Defense } from "~/graphql/graphql";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import StudentGradingChart from "./students.$id._components/StudentGradingChart";
 
 const studentDetailQuery = graphql(`
   query StudentDetail($uid: String!) {
@@ -36,7 +35,10 @@ const studentDetailQuery = graphql(`
 `);
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
-  const uid = params.id!;
+  const uid = params.id;
+  if (!uid) {
+    throw new Response("Not Found", { status: 404 });
+  }
   const { env } = context.cloudflare;
 
   const { data, error } = await runQuery(studentDetailQuery, { uid });
@@ -55,7 +57,13 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     });
   }
 
-  const student = data!.student!;
+  const student = data?.student;
+  if (!student) {
+    throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   const recruitmentGroupUids = student.recruitments.map((r) => r.recruitmentGroup.uid);
   const timelineContents = await getTimelineContentsByRecruitmentGroupUids(env, recruitmentGroupUids);
@@ -93,7 +101,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   if (!data) {
-    return [{ title: `학생 정보 | 몰루로그` }];
+    return [{ title: "학생 정보 | 몰루로그" }];
   }
 
   const { student } = data;
@@ -113,9 +121,8 @@ export const ErrorBoundary = () => {
   const error = useRouteError();
   if (isRouteErrorResponse(error)) {
     return <ErrorPage message={error.data.error.message} />;
-  } else {
-    return <ErrorPage />;
   }
+  return <ErrorPage />;
 };
 
 export default function StudentDetail() {
@@ -189,16 +196,15 @@ export default function StudentDetail() {
     };
     loadStatistics();
     return () => { cancelled = true; };
-  }, [student.uid]);
+  }, [enrichRaidStatistics, student.uid]);
 
   // Memoize the sorted and sliced statistics
   const filteredStatistics = useMemo(() => {
     const sorted = [...statistics].sort((a, b) => {
       if (sort === "recent") {
         return b.raid.since.getTime() - a.raid.since.getTime();
-      } else {
-        return a.raid.since.getTime() - b.raid.since.getTime();
       }
+      return a.raid.since.getTime() - b.raid.since.getTime();
     });
     return raidShowMore ? sorted : sorted.slice(0, 5);
   }, [statistics, sort, raidShowMore]);
@@ -241,13 +247,14 @@ export default function StudentDetail() {
           );
         })}
         {statistics.length > 5 && (
-          <div
-            className="py-2 mb-4 text-center cursor-pointer hover:underline flex items-center justify-center"
+          <button
+            type="button"
+            className="w-full py-2 mb-4 text-center cursor-pointer hover:underline flex items-center justify-center"
             onClick={() => setRaidShowMore(!raidShowMore)}
           >
             {raidShowMore ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
             <span className="ml-1">{raidShowMore ? "접기" : "더 보기"}</span>
-          </div>
+          </button>
         )}
       </div>
 
@@ -260,76 +267,3 @@ export default function StudentDetail() {
     </>
   );
 }
-
-// StudentGradingChart component for displaying tag counts
-type StudentGradingChartProps = {
-  student: { uid: string; name: string };
-  tagCounts: Array<{ tag: StudentGradingTagValue; displayName: string; count: number }>;
-  noGrading: boolean;
-  signedIn: boolean;
-};
-
-function StudentGradingChart({ student, tagCounts, noGrading, signedIn }: StudentGradingChartProps) {
-  const { showSignIn } = useSignIn();
-
-  // Get the maximum count for scaling the bars
-  const maxCount = Math.max(...tagCounts.map(tc => tc.count), 1);
-
-  // Show all tags, even with 0 count, and sort by count (descending)
-  const allTagsWithCounts = tagCounts;
-
-  const noGradingView = (
-    <div className="mb-4 p-4 text-center text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 bg-neutral-100 dark:bg-neutral-900 transition rounded-lg cursor-pointer">
-      <p className="text-sm">아직 평가가 없어요</p>
-      <p className="text-xs mt-1 text-blue-600 dark:text-blue-400 group-hover:underline">
-        {signedIn ? "첫 번째 평가를 작성해보세요!" : "로그인 후 첫 번째 평가를 작성해보세요!"}
-      </p>
-    </div>
-  );
-
-  return (
-    <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 bg-white dark:bg-neutral-800/50">
-      <div className="space-y-3">
-        {noGrading && (
-          signedIn ?
-            <Link to={`/students/${student.uid}/grade`} className="group">
-              {noGradingView}
-            </Link> :
-            <div onClick={() => showSignIn()}>
-              {noGradingView}
-            </div>
-        )}
-
-        {allTagsWithCounts.map(({ tag, displayName, count }) => (
-          <div key={tag} className="flex items-center gap-2">
-            {/* Icon */}
-            <div className="flex-shrink-0">
-              <TagIcon tag={tag} />
-            </div>
-
-            {/* Text */}
-            <div className="flex-shrink-0 w-32">
-              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                {displayName}
-              </span>
-            </div>
-
-            {/* Bar */}
-            <div className="flex-1 flex items-center gap-2">
-              <div className="flex-1 bg-neutral-200 dark:bg-neutral-700 rounded-full h-2 relative">
-                <div 
-                  className="bg-neutral-700 dark:bg-neutral-50 h-2 rounded-full transition-all duration-300 absolute left-0 top-0 min-w-0"
-                  style={{ width: `${(count / maxCount) * 100}%` }}
-                />
-              </div>
-              <span className="ml-2 text-sm font-medium text-neutral-500 dark:text-neutral-400 min-w-0 flex-shrink-0">
-                {count}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-

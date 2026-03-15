@@ -1,14 +1,13 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useFetcher, useLoaderData } from "react-router";
-import type { ProfileCardProps } from "~/components/organisms/profile";
-import { ProfileCard } from "~/components/organisms/profile";
+import { ProfileCard, type ProfileCardProps } from "~/components/features/profile";
 import { getFollowerIds, getFollowingIds } from "~/models/followership";
 import type { ActionData } from "./api.followerships";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { getRouteSensei } from "./$username";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { StudentGradingComments } from "~/components/molecules/student";
-import { SubTitle } from "~/components/atoms/typography";
+import { StudentGradingComments } from "~/components/features/students";
+import { SubTitle } from "~/components/primitives";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getStudentGradingsByUser } from "~/models/student-grading";
 import { getAllStudentsMap } from "~/models/student";
@@ -31,9 +30,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   // Get student tiers
   const recruitedStudents = await getRecruitedStudents(env, sensei.id);
   const tierCounts: { [key: number]: number } = {};
-  recruitedStudents.forEach(({ tier }) => {
+  for (const { tier } of recruitedStudents) {
     tierCounts[tier] = (tierCounts[tier] ?? 0) + 1;
-  });
+  }
 
   // Get all gradings by this user
   const gradings = await getStudentGradingsByUser(env, sensei.id);
@@ -52,7 +51,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     tierCounts,
     gradings: gradings.map((grading) => ({
       ...grading,
-      studentName: allStudentsMap[grading.studentUid]!.name,
+      studentName: allStudentsMap[grading.studentUid]?.name ?? grading.studentUid,
     })),
   };
 };

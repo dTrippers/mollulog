@@ -2,10 +2,9 @@ import { useMemo, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useNavigate } from "react-router";
 import { FunnelIcon } from "@heroicons/react/24/outline";
-import { StudentCards } from "~/components/students";
+import { StudentCards, StudentFilter } from "~/components/features/students";
 import { getAllStudents } from "~/models/student";
-import { Page } from "~/components/navigation";
-import { StudentFilter } from "~/components/students";
+import { Page } from "~/components/features/layout";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -35,7 +34,10 @@ export default function Students() {
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [filteredUids, setFilteredUids] = useState<string[]>(students.map((student) => student.uid));
   const filteredStudents = useMemo(() => {
-    return filteredUids.map((uid) => studentMap.get(uid)!);
+    return filteredUids.flatMap((uid) => {
+      const student = studentMap.get(uid);
+      return student ? [student] : [];
+    });
   }, [studentMap, filteredUids]);
 
   return (

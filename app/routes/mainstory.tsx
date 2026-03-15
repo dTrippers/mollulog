@@ -3,8 +3,8 @@ import { useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { BookOpenIcon, CalendarIcon } from "@heroicons/react/24/outline";
-import { FilterButtons } from "~/components/navigation";
-import { Title } from "~/components/atoms/typography";
+import { FilterButtons } from "~/components/primitives";
+import { Title } from "~/components/primitives";
 import { getMainStories } from "~/models/main-story";
 import type { MainStoriesQuery } from "~/graphql/graphql";
 
@@ -76,7 +76,7 @@ function groupByYear(flatParts: FlatPart[]): YearGroup[] {
   for (const item of flatParts) {
     const year = item.releasedAt ? item.releasedAt.getFullYear() : null;
     if (!map.has(year)) map.set(year, []);
-    map.get(year)!.push(item);
+    map.get(year)?.push(item);
   }
   // Sort years ascending, null at end
   const years = [...map.keys()].sort((a, b) => {
@@ -84,7 +84,10 @@ function groupByYear(flatParts: FlatPart[]): YearGroup[] {
     if (b === null) return -1;
     return a - b;
   });
-  return years.map((year) => ({ year, parts: map.get(year)! }));
+  return years.flatMap((year) => {
+    const parts = map.get(year);
+    return parts ? [{ year, parts }] : [];
+  });
 }
 
 function formatDate(date: Date | null): string {

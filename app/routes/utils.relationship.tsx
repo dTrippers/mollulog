@@ -2,14 +2,12 @@ import { useEffect, useState, useRef } from "react";
 import { useFetcher, useLoaderData, useRevalidator, redirect } from "react-router";
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { Title } from "~/components/atoms/typography";
-import { Button } from "~/components/atoms/form";
-import { FavoriteItemSelector, RequiredGifts, StudentRelationshipLevel, StudentSearch, FavoritedItemSelector } from "~/components/relationship";
+import { Button, FilterButtons, Title } from "~/components/primitives";
+import { FavoriteItemSelector, RequiredGifts, StudentRelationshipLevel, RelationshipStudentPicker, FavoritedItemSelector } from "~/components/features/relationship";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { getAllStudents } from "~/models/student";
 import { upsertRelationshipLevel, getRelationshipLevels, removeRelationshipLevel, type RelationshipLevel } from "~/models/relationship-level";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
-import { FilterButtons } from "~/components/navigation";
 import { Bars3Icon } from "@heroicons/react/24/outline";
 
 export const meta: MetaFunction = () => {
@@ -71,7 +69,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 export type ActionData = {
   studentId: string;
   currentLevel: number;
-  currentExp?: number | null;  // Backward compatibility
+  currentExp?: number | null;
   targetLevel: number;
   items: Record<string, number>;
 };
@@ -97,7 +95,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
         actionData.currentLevel,
         actionData.currentExp ?? null,
         actionData.targetLevel,
-        actionData.items
+        actionData.items,
       );
     }
   }
@@ -131,6 +129,10 @@ export default function RelationshipUtil() {
   const [activeTab, setActiveTab] = useState<TabId>("student");
   const [selectedStudentUid, setSelectedStudentUid] = useState<string | null>(null);
   const [selectedItemExp, setSelectedItemExp] = useState<number>(0);
+  const handleSelectStudentUid = (studentUid: string | null) => {
+    setSaveSuccess(false);
+    setSelectedStudentUid(studentUid);
+  };
 
   const [currentRelationship, setCurrentRelationship] = useState<Relationship>(emptyRelationship);
   useEffect(() => {
@@ -148,10 +150,6 @@ export default function RelationshipUtil() {
       }
     }
   }, [selectedStudentUid, students]);
-
-  useEffect(() => {
-    setSaveSuccess(false);
-  }, [selectedStudentUid]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
@@ -231,10 +229,10 @@ export default function RelationshipUtil() {
 
       {activeTab === "student" ? (
         <>
-          <StudentSearch
+          <RelationshipStudentPicker
             students={students}
             selectedStudentUid={selectedStudentUid}
-            onSelectStudentUid={setSelectedStudentUid}
+            onSelectStudentUid={handleSelectStudentUid}
           />
 
           {selectedStudentUid && (
@@ -263,7 +261,7 @@ export default function RelationshipUtil() {
 
               <div className="mt-4 flex justify-end gap-0.5">
                 <Button text="초기화" onClick={handleDelete} />
-                <Button color="primary" text="저장" onClick={handleSave} disabled={saveFetcher.state !== "idle"} />
+                <Button variant="primary" text="저장" onClick={handleSave} disabled={saveFetcher.state !== "idle"} />
               </div>
               {saveError && <p className="mr-2 text-right text-sm text-red-600 dark:text-red-400">{saveError}</p>}
               {saveSuccess && <p className="mr-2 text-right text-sm text-green-600 dark:text-green-400">성공적으로 저장했어요</p>}

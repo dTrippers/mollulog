@@ -1,12 +1,15 @@
 import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
 import { InformationCircleIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
-import { Page } from "~/components/navigation";
+import { Page } from "~/components/features/layout";
 import { getEventMetadata } from "~/models/event-content";
 
 export const loader = async ({ context, params }: LoaderFunctionArgs) => {
-  const { uid } = params;
+  const uid = params.uid;
+  if (!uid) {
+    throw new Response("Not Found", { status: 404 });
+  }
   const { env } = context.cloudflare;
-  const eventMetadata = await getEventMetadata(env, uid!);
+  const eventMetadata = await getEventMetadata(env, uid);
   if (!eventMetadata) {
     throw new Response("Not Found", { status: 404 });
   }

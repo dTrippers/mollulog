@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import { type LoaderFunctionArgs, useLoaderData, type MetaFunction } from "react-router";
-import { MarkdownText, Title } from "~/components/atoms/typography";
-import { ActionCard } from "~/components/molecules/editor";
+import { ActionCard } from "~/components/features/editor";
+import { MarkdownText, Title } from "~/components/primitives";
 import { getAllPosts } from "~/models/post";
 
 export const meta: MetaFunction = () => {

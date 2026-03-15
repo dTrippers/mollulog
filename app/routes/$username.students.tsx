@@ -1,16 +1,14 @@
 import type { LoaderFunctionArgs, MetaFunction, ActionFunctionArgs } from "react-router";
 import { useLoaderData, data, useFetcher, useOutletContext } from "react-router";
-import { StudentCards } from "~/components/students";
-import { TierSelector } from "~/components/molecules/student";
+import { StudentCards, TierSelector } from "~/components/features/students";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { SubTitle, Description } from "~/components/atoms/typography";
+import { Button, Description, SubTitle, Toggle } from "~/components/primitives";
 import { getRouteSensei } from "./$username";
 import { getAllStudents } from "~/models/student";
 import { getRecruitedStudents, upsertRecruitedStudent, removeRecruitedStudent } from "~/models/recruited-student";
 import { MinusCircleIcon, IdentificationIcon, PlusCircleIcon, FunnelIcon } from "@heroicons/react/24/outline";
 import { useRef, useEffect, useState, useMemo } from "react";
-import { Button, Toggle } from "~/components/atoms/form";
-import { StudentFilter } from "~/components/students";
+import { StudentFilter } from "~/components/features/students";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -91,7 +89,10 @@ export default function UserPage() {
   const [filteredUids, setFilteredUids] = useState<string[]>(Object.values(students).sort((a, b) => b.order - a.order).map((student) => student.uid));
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [recruitedStudents, unrecruitedStudents] = useMemo(() => {
-    const filteredStudents = filteredUids.map((uid) => studentMap.get(uid)!);
+    const filteredStudents = filteredUids.flatMap((uid) => {
+      const student = studentMap.get(uid);
+      return student ? [student] : [];
+    });
     return [filteredStudents.filter(({ tier }) => tier), filteredStudents.filter(({ tier }) => !tier)];
   }, [studentMap, filteredUids]);
 
@@ -178,7 +179,12 @@ export default function UserPage() {
             {batchAddMode && (
               <div className="mb-2 flex gap-x-1">
                 <Button color="primary" onClick={() => {
-                  batchAddStudentUids.forEach((uid) => handleAddStudent(uid, unrecruitedStudents.find((student) => student.uid === uid)!.initialTier));
+                  for (const uid of batchAddStudentUids) {
+                    const student = unrecruitedStudents.find((currentStudent) => currentStudent.uid === uid);
+                    if (student) {
+                      handleAddStudent(uid, student.initialTier);
+                    }
+                  }
                   setBatchAddStudentUids([]);
                   setBatchAddMode(false);
                 }}>선택한 학생 등록</Button>
