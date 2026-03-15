@@ -48,7 +48,7 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
     if (!isSubmitting && newCommentBody.trim()) {
       onCreateComment(newCommentBody.trim(), newCommentVisibility);
       setNewCommentBody("");
-      setNewCommentVisibility("private");
+      setNewCommentVisibility("public");
     }
   };
 
@@ -56,7 +56,7 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
     if (!isSubmitting && replyBody.trim()) {
       onCreateSubcomment(parentCommentId, replyBody.trim(), replyVisibility);
       setReplyBody("");
-      setReplyVisibility("private");
+      setReplyVisibility("public");
       setReplyingTo(null);
     }
   };

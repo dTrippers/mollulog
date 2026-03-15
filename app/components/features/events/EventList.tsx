@@ -40,12 +40,10 @@ export default function EventList({ events, showArrow = true, className = "" }: 
     return SHOW_LINK_CONTENT_TYPES.includes(event.type);
   };
 
-  const getEventPath = (event: EventListItem) => `/events/${event.uid}`;
-
   return (
     <div className={`border border-neutral-200 dark:border-neutral-700 rounded-lg overflow-hidden ${className}`}>
       {sortedEvents.map((event) => (
-        <Link to={getEventPath(event)} key={event.uid} className="block group">
+        <Link to={`/events/${event.uid}`} key={event.uid} className="block group">
           <div className="p-3 flex items-center gap-3 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
             <div className={`flex-1 ${event.imageUrl ? "min-w-0" : ""}`}>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{timelineContentTypeLocale[event.type]}</p>

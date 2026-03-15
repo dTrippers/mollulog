@@ -29,26 +29,29 @@ export default function PartyUnitEditor(
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (partySize === unitStudents.length) {
-      return;
-    }
+    setUnitStudents((prev) => {
+      if (partySize === prev.length) {
+        return prev;
+      }
 
-    const newUnitStudents = new Array(partySize).fill(null);
-    if (partySize === 10) {
-      unitStudents.forEach((student, index) => {
-        newUnitStudents[index < 4 ? index : index + 2] = student;
-      });
-    } else {
-      unitStudents.forEach((student, index) => {
-        if (0 <= index && index < 4) {
-          newUnitStudents[index] = student;
-        } else if (6 <= index && index < 8) {
-          newUnitStudents[index - 2] = student;
+      const newUnitStudents = new Array(partySize).fill(null);
+      if (partySize === 10) {
+        for (const [index, student] of prev.entries()) {
+          newUnitStudents[index < 4 ? index : index + 2] = student;
         }
-      });
-    }
-    setUnitStudents(newUnitStudents);
-  }, [partySize, unitStudents]);
+      } else {
+        for (const [index, student] of prev.entries()) {
+          if (0 <= index && index < 4) {
+            newUnitStudents[index] = student;
+          } else if (6 <= index && index < 8) {
+            newUnitStudents[index - 2] = student;
+          }
+        }
+      }
+
+      return newUnitStudents;
+    });
+  }, [partySize]);
 
   const onSearch = (search: string) => {
     if (search.length === 0) {

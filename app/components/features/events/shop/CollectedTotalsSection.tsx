@@ -48,8 +48,7 @@ function EditPopup({ show, title, value, onValueChange, onCancel, onSave, onRese
       leave="transition duration-100 ease-in"
       leaveFrom="opacity-100 scale-100"
       leaveTo="opacity-0 scale-95"
-      className="absolute top-full left-0 right-0 md:left-auto md:right-0 mt-2 z-20"
-      style={{ left: '-0.75rem', right: '-0.75rem' }}
+      className="absolute inset-x-0 top-full z-20 mt-2 md:right-0 md:left-auto"
     >
       <div className="bg-white/90 dark:bg-black/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-4 md:w-auto md:min-w-[280px]">
         <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">{title}</p>

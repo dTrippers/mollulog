@@ -91,12 +91,14 @@ export default function App() {
 
   const location = useLocation();
   const pathname = location.pathname;
+  const routeKey = location.key;
   useEffect(() => {
+    void routeKey;
     const scrollableContainer = document.querySelector(".mllg-content-area") as HTMLElement;
     if (scrollableContainer) {
       scrollableContainer.scrollTo({ top: 0, behavior: "instant" });
     }
-  });
+  }, [routeKey]);
 
   const widthClass = getContentWidthClass(pathname);
 

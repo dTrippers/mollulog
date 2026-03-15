@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExclamationCircleIcon, UserIcon, ArrowPathIcon } from "@heroicons/react/16/solid";
 import EventInfoCard from "./EventInfoCard";
 import { useSignIn } from "~/contexts/SignInProvider";
@@ -58,17 +58,17 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
   const { state, actions } = useShopState({ savedShopState, recruitedStudentUids, stages });
 
   // Track initial load for auto-save
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(() => !savedShopState);
+  const hasSavedShopStateRef = useRef(savedShopState !== null);
   useEffect(() => {
-    if (savedShopState) {
-      setIsInitialLoad(false);
-    } else {
+    if (!hasSavedShopStateRef.current) {
       const timer = setTimeout(() => {
         setIsInitialLoad(false);
       }, 100);
+
       return () => clearTimeout(timer);
     }
-  }, [savedShopState]);
+  }, []);
 
   // Bonus calculation
   const { appliedBonusRatios } = useBonusCalculation({
@@ -161,8 +161,6 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
             actions={actions}
           />
         )}
-
-
         <StageSelector
           stages={stages}
           appliedBonusRatio={appliedBonusRatios}

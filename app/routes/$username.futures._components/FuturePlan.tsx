@@ -62,10 +62,10 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
 
   // Sync with initial comments when they change
   useEffect(() => {
-    if (fetcher.state === "idle") {
+    if (fetcher.state === "idle" && !fetcher.data) {
       setAllComments(comments ?? []);
     }
-  }, [comments, fetcher.state]);
+  }, [comments, fetcher.data, fetcher.state]);
 
   const submit = (data: CommentActionData) => {
     fetcher.submit(data, { action: `/api/contents/${event.uid}/comments`, method: "post", encType: "application/json" });
