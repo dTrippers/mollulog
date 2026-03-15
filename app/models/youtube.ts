@@ -62,7 +62,7 @@ export async function getHomeYoutubeSections(env: Env, forceRefresh = false): Pr
         .filter((section) => section.videos.length > 0);
     },
     60 * 30,
-    true,
+    forceRefresh,
   );
 }
 

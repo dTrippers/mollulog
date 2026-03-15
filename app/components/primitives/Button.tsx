@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { Link } from "react-router";
 import { sanitizeClassName } from "~/prophandlers";
 
@@ -94,6 +94,13 @@ export default function PrimitiveButton({
       text
     )
   );
+  const handleClick = (event: MouseEvent<HTMLElement>) => {
+    if (disabled) {
+      event.preventDefault();
+      return;
+    }
+    onClick?.();
+  };
 
   if (href) {
     return (
@@ -102,19 +109,10 @@ export default function PrimitiveButton({
         target={target}
         rel={rel ?? (target === "_blank" ? "noopener noreferrer" : undefined)}
         className={buttonClassName}
-        onClick={onClick}
+        onClick={handleClick}
         aria-disabled={disabled}
       >
-        {children ?? (
-          ResolvedIcon ? (
-            <div className="flex items-center gap-2">
-              <ResolvedIcon className="size-3.5 shrink-0" strokeWidth={2} />
-              <span>{text}</span>
-            </div>
-          ) : (
-            content
-          )
-        )}
+        {content}
       </a>
     );
   }
@@ -124,19 +122,10 @@ export default function PrimitiveButton({
       <Link
         to={to}
         className={buttonClassName}
-        onClick={onClick}
+        onClick={handleClick}
         aria-disabled={disabled}
       >
-        {children ?? (
-          ResolvedIcon ? (
-            <div className="flex items-center gap-2">
-              <ResolvedIcon className="size-3.5 shrink-0" strokeWidth={2} />
-              <span>{text}</span>
-            </div>
-          ) : (
-            content
-          )
-        )}
+        {content}
       </Link>
     );
   }
@@ -145,19 +134,10 @@ export default function PrimitiveButton({
     <button
       type={type}
       className={buttonClassName}
-      onClick={onClick}
+      onClick={handleClick}
       disabled={disabled}
     >
-      {children ?? (
-        ResolvedIcon ? (
-          <div className="flex items-center gap-2">
-            <ResolvedIcon className="size-3.5 shrink-0" strokeWidth={2} />
-            <span>{text}</span>
-          </div>
-        ) : (
-          content
-        )
-      )}
+      {content}
     </button>
   );
 }

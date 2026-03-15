@@ -69,8 +69,8 @@ export default function Index() {
   const { mainEvent, currentEvents, currentRecruitments, favoritedCounts, favoritedStudentUids, currentTotalAssualt, currentUnlimit, youtubeSections } = useLoaderData<typeof loader>();
 
   return (
-    <div className="flex flex-col gap-8 lg:flex-row lg:justify-center lg:items-start">
-      <div className="min-w-0 lg:w-full lg:max-w-2xl lg:flex-none">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 xl:flex-row xl:items-start">
+      <div className="min-w-0 xl:flex-1">
         <Title text="진행중인 컨텐츠" />
 
         <MainEvent event={mainEvent} />
@@ -102,7 +102,7 @@ export default function Index() {
           )}
         </div>
       </div>
-      <div className="min-w-0 lg:w-full lg:max-w-sm lg:flex-none">
+      <div className="min-w-0 xl:w-full xl:max-w-xs xl:flex-none">
         <HomeRightRail youtubeSections={youtubeSections} />
       </div>
     </div>

@@ -6,17 +6,6 @@ type HomeRightRailProps = {
   youtubeSections: HomeYoutubeChannelSection[];
 };
 
-const channelLinks = [
-  {
-    text: "일본 서버 채널",
-    href: "https://www.youtube.com/@BlueArchive_JP",
-  },
-  {
-    text: "한국 서버 채널",
-    href: "https://www.youtube.com/@bluearchive_kr",
-  },
-] as const;
-
 export default function HomeRightRail({ youtubeSections }: HomeRightRailProps) {
   return (
     <aside className="space-y-4 lg:sticky lg:top-24">
@@ -26,6 +15,13 @@ export default function HomeRightRail({ youtubeSections }: HomeRightRailProps) {
 }
 
 function HomeYoutubeSection({ youtubeSections }: HomeRightRailProps) {
+  const channelLinks = [...youtubeSections]
+    .sort((a, b) => a.channelKey.localeCompare(b.channelKey))
+    .map((section) => ({
+      key: section.channelKey,
+      text: `${section.channelName} 채널`,
+      href: section.channelUrl,
+    }));
   const videos = youtubeSections
     .flatMap((section) =>
       section.videos.map((video) => ({
@@ -72,7 +68,6 @@ function HomeYoutubeSection({ youtubeSections }: HomeRightRailProps) {
               target="_blank"
               variant="tint"
               fullWidth
-              className="justify-center"
             />
           ))}
         </div>
