@@ -156,7 +156,7 @@ export default function StudentDetailPage() {
         },
         {
           text: "학생 평가",
-          description: "",
+          description: "평가 목록 및 태그 통계",
           Icon: ChatBubbleLeftRightIcon,
           link: `/students/${student.uid}/gradings`,
           active: pathname === `/students/${student.uid}/gradings` || pathname === `/students/${student.uid}/grade`,

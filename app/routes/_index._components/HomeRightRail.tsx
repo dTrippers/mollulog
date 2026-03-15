@@ -2,7 +2,11 @@ import dayjs from "dayjs";
 import { Link } from "react-router";
 import type { StudentGradingTimelineItem } from "~/components/features/students";
 import { Button, HorizontalScroll, ProfileImage, TagIcon } from "~/components/primitives";
-import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
+import {
+  STUDENT_GRADING_TAG_DISPLAY,
+  type StudentGradingTagValue,
+  sortStudentGradingTags,
+} from "~/models/student-grading-tag";
 import type { HomeYoutubeChannelSection } from "~/models/youtube";
 
 type HomeRightRailProps = {
@@ -136,7 +140,7 @@ function RecentGradingCard({ grading }: RecentGradingCardProps) {
 
       {grading.tags && grading.tags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
-          {sortTags(grading.tags)
+          {sortStudentGradingTags(grading.tags)
             .slice(0, 3)
             .map((tag) => (
               <TagBadge key={tag} tag={tag} />
@@ -205,8 +209,4 @@ function YoutubeVideoCard({ video, mobile = false }: YoutubeVideoCardProps) {
       </div>
     </a>
   );
-}
-
-function sortTags(tags: StudentGradingTagValue[]) {
-  return [...tags].sort((a, b) => a.localeCompare(b));
 }

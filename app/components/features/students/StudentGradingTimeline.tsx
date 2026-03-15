@@ -3,9 +3,9 @@ import dayjs from "dayjs";
 import { Link } from "react-router";
 import { ProfileImage, TagIcon } from "~/components/primitives";
 import {
-  STUDENT_GRADING_TAG_CONSTANTS,
   STUDENT_GRADING_TAG_DISPLAY,
   type StudentGradingTagValue,
+  sortStudentGradingTags,
 } from "~/models/student-grading-tag";
 
 export type StudentGradingTimelineItem = {
@@ -25,8 +25,6 @@ type StudentGradingTimelineProps = {
   hideAuthorName?: boolean;
 };
 
-const TAG_ORDER = Object.values(STUDENT_GRADING_TAG_CONSTANTS);
-
 function formatTimestamp(createdAt: string, updatedAt: string) {
   const created = dayjs(createdAt);
   const updated = dayjs(updatedAt);
@@ -34,10 +32,6 @@ function formatTimestamp(createdAt: string, updatedAt: string) {
     return `${updated.format("YYYY.MM.DD")} 수정됨`;
   }
   return created.format("YYYY.MM.DD");
-}
-
-function sortTags(tags: StudentGradingTagValue[]) {
-  return [...tags].sort((a, b) => TAG_ORDER.indexOf(a) - TAG_ORDER.indexOf(b));
 }
 
 function TimelineCard({
@@ -107,7 +101,7 @@ function TimelineCard({
 
         {grading.tags && grading.tags.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {sortTags(grading.tags).map((tag) => (
+            {sortStudentGradingTags(grading.tags).map((tag) => (
               <div
                 key={tag}
                 className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"

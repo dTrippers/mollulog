@@ -5,9 +5,9 @@ import { nanoid } from "nanoid/non-secure";
 import { senseisTable } from "./sensei";
 import type { StudentGradingTagValue } from "./student-grading-tag";
 import {
-  deleteGradingTags,
   getGradingTags,
   getGradingTagsByGradingUids,
+  studentGradingTagsTable,
   updateGradingTags,
 } from "./student-grading-tag";
 
@@ -128,10 +128,10 @@ export async function deleteStudentGrading(env: Env, senseiId: number, studentUi
     return;
   }
 
-  await deleteGradingTags(env, existing[0].uid);
-  await db
-    .delete(studentGradingsTable)
-    .where(and(eq(studentGradingsTable.userId, senseiId), eq(studentGradingsTable.studentUid, studentUid)));
+  await db.transaction(async (tx) => {
+    await tx.delete(studentGradingTagsTable).where(eq(studentGradingTagsTable.gradingUid, existing[0].uid));
+    await tx.delete(studentGradingsTable).where(eq(studentGradingsTable.uid, existing[0].uid));
+  });
 }
 
 export async function getStudentGradingsByStudentWithUsers(

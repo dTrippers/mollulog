@@ -19,7 +19,7 @@ type PrimitiveButtonProps = {
   fullWidth?: boolean;
   justify?: "start" | "center";
   compact?: boolean;
-  shadow?: "auto" | "sm" | "xs" | "none";
+  shadow?: "auto" | "xs" | "none";
   href?: string;
   to?: string;
   target?: "_blank" | "_self" | "_parent" | "_top";
@@ -80,7 +80,8 @@ export default function PrimitiveButton({
   const justifyClass = justify === "start" ? "justify-start text-left" : "justify-center text-center";
   const widthClass = fullWidth ? "w-full" : "w-fit";
   const disabledClass = disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer";
-  const shadowClass = variant === "list" || size === "xs" ? "" : "shadow-xs";
+  const shadowClass =
+    shadow === "none" ? "" : shadow === "xs" ? "shadow-xs" : variant === "list" || size === "xs" ? "" : "shadow-xs";
   const buttonClassName = sanitizeClassName(`
     inline-flex items-center border transition
     ${widthClass}

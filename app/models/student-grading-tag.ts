@@ -41,6 +41,12 @@ export type StudentGradingTag = {
 // All available tag values for validation
 export const ALL_STUDENT_GRADING_TAG_VALUES: StudentGradingTagValue[] = Object.values(STUDENT_GRADING_TAG_CONSTANTS);
 
+export function sortStudentGradingTags(tags: StudentGradingTagValue[]) {
+  return [...tags].sort(
+    (a, b) => ALL_STUDENT_GRADING_TAG_VALUES.indexOf(a) - ALL_STUDENT_GRADING_TAG_VALUES.indexOf(b),
+  );
+}
+
 function toModel(tag: typeof studentGradingTagsTable.$inferSelect): StudentGradingTag {
   return {
     uid: tag.uid,
