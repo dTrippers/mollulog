@@ -3,11 +3,12 @@ import { redirect, data as routeData, type LoaderFunctionArgs } from "react-rout
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "~/models/base";
+import { raidTypeToParam } from "~/models/raid";
 
-const latestRaidQuery = graphql(`
-  query LatestRaid($endAfter: ISO8601DateTime!) {
-    raids(types: [total_assault, elimination], endAfter: $endAfter) {
-      nodes { uid type name boss since until terrain attackType rankVisible }
+const latestRaidScheduleQuery = graphql(`
+  query LatestRaidSchedule($endAfter: ISO8601DateTime!) {
+    raidSchedules(region: "gl", endAfter: $endAfter) {
+      nodes { uid raidType seasonIndex jpSchedule { uid seasonIndex } }
     }
   }
 `);
@@ -15,8 +16,8 @@ const latestRaidQuery = graphql(`
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
 
-  const raidUid = await fetchCached(env, "latest-raid", async () => {
-    const { data, error } = await runQuery(latestRaidQuery, { endAfter: new Date() });
+  const redirectTarget = await fetchCached(env, "latest-raid-schedule", async () => {
+    const { data, error } = await runQuery(latestRaidScheduleQuery, { endAfter: new Date() });
     if (error || !data) {
       throw routeData(
         { error: { message: "총력전/대결전 정보를 찾을 수 없어요" } },
@@ -24,14 +25,18 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
       );
     }
 
-    const latestRaid = data.raids.nodes.filter((raid) => raid.rankVisible).sort((a, b) => dayjs(a.since).diff(dayjs(b.since)))[0];
-    if (!latestRaid) {
+    const latestSchedule = data.raidSchedules.nodes
+      .filter((s) => ["total_assault", "elimination"].includes(s.raidType) && s.jpSchedule !== null)
+      .sort((a, b) => a.seasonIndex - b.seasonIndex)[0];
+
+    if (!latestSchedule) {
       throw routeData(
         { error: { message: "총력전/대결전 정보를 찾을 수 없어요" } },
         { status: 404 },
       );
     }
-    return latestRaid.uid;
+    return `/raids/${raidTypeToParam(latestSchedule.raidType)}/${latestSchedule.seasonIndex}`;
   }, 60 * 10);
-  return redirect(`/raids/${raidUid}`);
+
+  return redirect(redirectTarget);
 };

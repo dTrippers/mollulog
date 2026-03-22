@@ -11,6 +11,7 @@ import { RaidCard } from "~/components/features/raids";
 import { ProfileImage, SubTitle, Title } from "~/components/primitives";
 import { recruitmentLabelLocale } from "~/locales/ko";
 import { type IndexRecruitment, getIndexContents } from "~/models/content";
+import { raidTypeToParam } from "~/models/raid";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getAllStudentsMap } from "~/models/student";
 import { getRecentStudentGradingsWithUsers } from "~/models/student-grading";
@@ -53,8 +54,8 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     : [];
 
   // ========== Raids ==========
-  const currentTotalAssualt = currentRaids.find((raid) => raid.type === "total_assault" || raid.type === "elimination");
-  const currentUnlimit = currentRaids.find((raid) => raid.type === "unlimit");
+  const currentTotalAssualt = currentRaids.find((raid) => raid.raidType === "total_assault" || raid.raidType === "elimination");
+  const currentUnlimit = currentRaids.find((raid) => raid.raidType === "unlimit");
   return {
     mainEvent,
     currentEvents: currentEvents
@@ -119,12 +120,12 @@ export default function Index() {
         <SubTitle text="레이드" />
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
           {currentTotalAssualt && (
-            <Link to={`/raids/${currentTotalAssualt.uid}`} className="hover:opacity-75 transition-opacity">
+            <Link to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`} className="hover:opacity-75 transition-opacity">
               <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
             </Link>
           )}
           {currentUnlimit && (
-            <Link to={`/raids/${currentUnlimit.uid}`} className="hover:opacity-75 transition-opacity">
+            <Link to={`/raids/${raidTypeToParam(currentUnlimit.raidType)}/${currentUnlimit.seasonIndex}`} className="hover:opacity-75 transition-opacity">
               <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
             </Link>
           )}

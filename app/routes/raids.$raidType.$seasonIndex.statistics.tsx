@@ -5,8 +5,9 @@ import RaidStatisticsScreen from "~/components/features/raids/RaidStatisticsScre
 import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
 import { fetchRaidStatisticsByRaid, type RaidStatistics as RaidStatisticsData } from "~/models/raid-statistics.client";
-import type { RaidPageContext } from "./raids.$id";
-import RaidUnavailableState from "./raids.$id._components/RaidUnavailableState";
+import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
+import type { RaidType } from "~/models/content.d";
+import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -24,18 +25,19 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 export default function RaidStatisticsPage() {
   const { currentRaid, defenseType } = useOutletContext<RaidPageContext>();
   const { allStudents } = useLoaderData<typeof loader>();
-  const maxTier = getMaxTierAt(currentRaid.since);
+  const maxTier = currentRaid.startAt ? getMaxTierAt(currentRaid.startAt) : null;
+
+  const jpSeasonIndex = currentRaid.jpSchedule?.seasonIndex ?? null;
 
   const [statistics, setStatistics] = useState<RaidStatisticsData[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
+    if (jpSeasonIndex === null) {
       setLoading(false);
       return;
     }
-    const raidIndexJp = currentRaid.raidIndexJp;
 
     let cancelled = false;
 
@@ -44,7 +46,7 @@ export default function RaidStatisticsPage() {
         setLoading(true);
         setError(null);
 
-        const rawStatistics = await fetchRaidStatisticsByRaid(currentRaid.type, raidIndexJp, defenseType);
+        const rawStatistics = await fetchRaidStatisticsByRaid(currentRaid.raidType as RaidType, jpSeasonIndex, defenseType);
         if (cancelled) {
           return;
         }
@@ -65,9 +67,9 @@ export default function RaidStatisticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [currentRaid.type, currentRaid.raidIndexJp, currentRaid.rankVisible, defenseType]);
+  }, [currentRaid.raidType, jpSeasonIndex, defenseType]);
 
-  if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
+  if (jpSeasonIndex === null) {
     return <RaidUnavailableState />;
   }
 
@@ -84,6 +86,6 @@ export default function RaidStatisticsPage() {
   }
 
   return (
-    <RaidStatisticsScreen statistics={statistics} allStudents={allStudents} maxTier={maxTier} />
+    <RaidStatisticsScreen statistics={statistics} allStudents={allStudents} maxTier={maxTier ?? 8} />
   );
 }

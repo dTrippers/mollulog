@@ -1,10 +1,63 @@
 import { graphql } from "~/graphql";
 import { fetchCached } from "./base";
 import { runQuery } from "~/lib/baql";
+import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
 export type Boss = "binah" | "chesed" | "hod" | "shirokuro" | "perorozilla" | "goz" | "hieronymus" | "kaiten-fx-mk0" | "gregorius" | "hovercraft" | "myouki-kurokage" | "geburah" | "yesod";
 
+// ============================================================
+// RaidSchedule (새 API)
+// ============================================================
+
+const raidScheduleDetailQuery = graphql(`
+  query RaidScheduleDetail($uid: String!) {
+    raidSchedule(uid: $uid) {
+      uid raidType seasonIndex region terrain startAt endAt attackType
+      raidBoss { uid name }
+      defenseTypes { defenseType difficulty }
+      jpSchedule { uid seasonIndex }
+      videos(first: 1) { pageInfo { hasNextPage } }
+    }
+  }
+`);
+
+export function getRaidSchedule(env: Env, uid: string, forceRefresh = false) {
+  return fetchCached(env, `raid-schedule-${uid}`, async () => {
+    const { data, error } = await runQuery(raidScheduleDetailQuery, { uid });
+    if (error) {
+      throw "failed to fetch raid schedule";
+    }
+    return data?.raidSchedule ?? null;
+  }, 60 * 90, forceRefresh);
+}
+
+const allRaidSchedulesQuery = graphql(`
+  query AllRaidSchedules($region: String!) {
+    raidSchedules(region: $region) {
+      nodes {
+        uid raidType seasonIndex region terrain startAt endAt attackType
+        raidBoss { uid name }
+        defenseTypes { defenseType difficulty }
+        jpSchedule { uid seasonIndex }
+      }
+    }
+  }
+`);
+
+export function getAllRaidSchedules(env: Env, forceRefresh = false) {
+  return fetchCached(env, "all-raid-schedules", async () => {
+    const { data, error } = await runQuery(allRaidSchedulesQuery, { region: "gl" });
+    if (error || !data) {
+      throw error ?? "failed to fetch raid schedules";
+    }
+    return data.raidSchedules.nodes;
+  }, 60 * 90, forceRefresh);
+}
+
+// ============================================================
+// 레거시 Raid (하위 호환 — deprecated 쿼리)
+// ============================================================
 
 const raidDetailQuery = graphql(`
   query RaidDetail($uid: String!) {
@@ -143,4 +196,58 @@ export function scoreToDifficultyAndTime(boss: Boss, score: number): { difficult
   }
 
   throw new Error("유효하지 않은 점수에요");
+}
+
+// ============================================================
+// Timeline date fallback
+// ============================================================
+
+/**
+ * RaidSchedule의 startAt/endAt이 null인 경우 timeline_contents DB의 날짜로 fallback
+ */
+export async function applyTimelineDateFallback<T extends { uid: string; startAt: Date | null; endAt: Date | null }>(
+  env: Env,
+  schedules: T[],
+): Promise<T[]> {
+  const nullDateSchedules = schedules.filter((s) => !s.startAt || !s.endAt);
+  if (nullDateSchedules.length === 0) return schedules;
+
+  const timelineDatesMap = await getTimelineContentDatesByContentUids(
+    env,
+    nullDateSchedules.map((s) => s.uid),
+  );
+
+  return schedules.map((s) => {
+    if (s.startAt && s.endAt) return s;
+    const dates = timelineDatesMap.get(s.uid);
+    return {
+      ...s,
+      startAt: s.startAt ?? dates?.startAt ?? null,
+      endAt: s.endAt ?? dates?.endAt ?? null,
+    };
+  });
+}
+
+// ============================================================
+// URL param ↔ internal raidType conversion
+// ============================================================
+
+const PARAM_TO_RAID_TYPE: Record<string, string> = {
+  "total-assault": "total_assault",
+  "grand-assault": "elimination",
+};
+
+const RAID_TYPE_TO_PARAM: Record<string, string> = {
+  total_assault: "total-assault",
+  elimination: "grand-assault",
+};
+
+/** URL path param (e.g. "total-assault") → internal raidType (e.g. "total_assault") */
+export function raidTypeFromParam(param: string): string {
+  return PARAM_TO_RAID_TYPE[param] ?? param;
+}
+
+/** Internal raidType (e.g. "elimination") → URL path param (e.g. "grand-assault") */
+export function raidTypeToParam(raidType: string): string {
+  return RAID_TYPE_TO_PARAM[raidType] ?? raidType;
 }

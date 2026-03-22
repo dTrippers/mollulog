@@ -5,14 +5,14 @@ import { defenseTypeColor, difficultyLocale, raidTypeLocale } from "~/locales/ko
 
 type RaidComparisonHeaderProps = {
   fromRaid: {
-    since: Date;
-    until: Date;
-    type: keyof typeof raidTypeLocale;
+    startAt: string | Date | null;
+    endAt: string | Date | null;
+    raidType: keyof typeof raidTypeLocale;
   };
   toRaid: {
-    since: Date;
-    until: Date;
-    type: keyof typeof raidTypeLocale;
+    startAt: string | Date | null;
+    endAt: string | Date | null;
+    raidType: keyof typeof raidTypeLocale;
   };
   defenseType: keyof typeof defenseTypeColor;
   fromDifficulty: keyof typeof difficultyLocale | null;
@@ -27,11 +27,11 @@ export default function RaidComparisonHeader({ fromRaid, toRaid, defenseType, fr
           과거 개최
         </div>
         <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">
-          {dayjs(fromRaid.since).format("YYYY/M/D")} ~ {dayjs(fromRaid.until).format("M/D")}
+          {dayjs(fromRaid.startAt).format("YYYY/M/D")} ~ {dayjs(fromRaid.endAt).format("M/D")}
         </div>
         {fromDifficulty && (
           <div className="flex mt-2 gap-x-1">
-            <OptionBadge text={raidTypeLocale[fromRaid.type]} />
+            <OptionBadge text={raidTypeLocale[fromRaid.raidType]} />
             <OptionBadge text={difficultyLocale[fromDifficulty]} color={defenseTypeColor[defenseType]} />
           </div>
         )}
@@ -44,11 +44,11 @@ export default function RaidComparisonHeader({ fromRaid, toRaid, defenseType, fr
           현재 개최
         </div>
         <div className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">
-          {dayjs(toRaid.since).format("YYYY/M/D")} ~ {dayjs(toRaid.until).format("M/D")}
+          {dayjs(toRaid.startAt).format("YYYY/M/D")} ~ {dayjs(toRaid.endAt).format("M/D")}
         </div>
         {currentDifficulty && (
           <div className="flex mt-2 gap-x-1">
-            <OptionBadge text={raidTypeLocale[toRaid.type]} />
+            <OptionBadge text={raidTypeLocale[toRaid.raidType]} />
             <OptionBadge text={difficultyLocale[currentDifficulty]} color={defenseTypeColor[defenseType]} />
           </div>
         )}

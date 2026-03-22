@@ -1,15 +1,16 @@
 import { useLoaderData, useOutletContext } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
-import type { RaidPageContext } from "./raids.$id";
+import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import { RaidVideosScreen } from "~/components/features/raids";
 import { graphql } from "~/graphql";
 import type { VideoSortEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { useRaidVideosFeed, type RaidVideoItem } from "./raids.$id._components/useRaidVideosFeed";
+import { useRaidVideosFeed, type RaidVideoItem } from "./raids.$raidType.$seasonIndex._components/useRaidVideosFeed";
+import { raidTypeFromParam, raidTypeToParam } from "~/models/raid";
 
 const raidVideosQuery = graphql(`
-  query RaidVideos($uid: String!, $first: Int, $after: String, $sort: VideoSortEnum) {
-    raid(uid: $uid) {
+  query RaidScheduleVideos($uid: String!, $first: Int, $after: String, $sort: VideoSortEnum) {
+    raidSchedule(uid: $uid) {
       videos(first: $first, after: $after, sort: $sort) {
         pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
         edges {
@@ -21,10 +22,12 @@ const raidVideosQuery = graphql(`
 `);
 
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
-  const uid = params.id;
-  if (!uid) {
-    throw new Response("Raid ID is required", { status: 400 });
+  const { raidType, seasonIndex } = params;
+  if (!raidType || !seasonIndex) {
+    throw new Response("Raid params are required", { status: 400 });
   }
+
+  const uid = `gl_${raidTypeFromParam(raidType)}_${seasonIndex}`;
 
   const url = new URL(request.url);
   const after = url.searchParams.get("after");
@@ -34,11 +37,11 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
   if (error || !data) {
     throw new Response("Error fetching raid videos", { status: 500 });
   }
-  if (!data.raid?.videos) {
+  if (!data.raidSchedule?.videos) {
     return null;
   }
 
-  const videos: RaidVideoItem[] = data.raid.videos.edges
+  const videos: RaidVideoItem[] = data.raidSchedule.videos.edges
     .flatMap((edge) => {
       const node = edge.node;
       if (!node) {
@@ -50,12 +53,12 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
         score: node.score ?? 0,
         youtubeId: node.youtubeId ?? "",
         thumbnailUrl: node.thumbnailUrl ?? "",
-        publishedAt: node.publishedAt instanceof Date 
-          ? node.publishedAt.toISOString() 
+        publishedAt: node.publishedAt instanceof Date
+          ? node.publishedAt.toISOString()
           : String(node.publishedAt ?? ""),
       };
     });
-  const pageInfo = data.raid.videos.pageInfo;
+  const pageInfo = data.raidSchedule.videos.pageInfo;
   return { videos, pageInfo };
 };
 
@@ -64,7 +67,8 @@ export default function RaidVideos() {
   const initialData = useLoaderData<typeof loader>();
   const { allVideos, endCursor, hasNextPage, isLoading, loadingRef, sort, setSort } = useRaidVideosFeed({
     initialData,
-    raidUid: currentRaid.uid,
+    raidType: raidTypeToParam(currentRaid.raidType),
+    seasonIndex: currentRaid.seasonIndex,
   });
 
   return (

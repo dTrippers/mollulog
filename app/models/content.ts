@@ -9,7 +9,7 @@ import { getLatestPostTime } from "./post";
 import { getTimelineContents, getUpcomingEvent, getTimelineContentsByContentTypes } from "./timeline-content";
 import type { TimelineContent, TimelineContentType } from "./timeline-content";
 import { getRecruitmentGroup, getRecruitmentGroups } from "./event-content";
-import { getRaidDetail } from "./raid";
+import { getRaidDetail, getRaidSchedule } from "./raid";
 import { hasActiveCoupons } from "./coupon";
 export { contentComments, getUserComments, getContentComments, getContentsComments, createComment, createSubcomment, updateComment, deleteComment, getCommentIdByUid, pinComment, unpinComment, getPinnedComment, getNestedContentComments, nestComments } from "./content-comment";
 export type { NestedComment } from "./content-comment";
@@ -22,6 +22,7 @@ export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "fes",
   "pickup",
   "collab",
+  "raid",
   "total_assault",
   "elimination",
   "unlimit",
@@ -40,6 +41,7 @@ export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
   "main_story",
   "pickup",
   "collab",
+  "raid",
   "total_assault",
   "elimination",
   "battle_pass",
@@ -51,10 +53,12 @@ export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
 
 const indexRaidsQuery = graphql(`
   query IndexRaids($endAfter: ISO8601DateTime!) {
-    raids(endAfter: $endAfter) {
+    raidSchedules(region: "gl", endAfter: $endAfter) {
       nodes {
-        uid name type boss startAt endAt terrain attackType raidIndexJp
+        uid raidType seasonIndex startAt endAt terrain attackType
+        raidBoss { uid name }
         defenseTypes { defenseType difficulty }
+        jpSchedule { uid seasonIndex }
       }
     }
   }
@@ -96,10 +100,10 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
     if (raidError || !raidData) {
       throw raidError ?? "failed to fetch raids";
     }
-    const currentRaids = raidData.raids.nodes.map((raid) => ({
-      ...raid,
-      since: dayjs(raid.startAt).toDate(),
-      until: dayjs(raid.endAt).toDate(),
+    const currentRaids = raidData.raidSchedules.nodes.map((schedule) => ({
+      ...schedule,
+      since: schedule.startAt ? dayjs(schedule.startAt).toDate() : null,
+      until: schedule.endAt ? dayjs(schedule.endAt).toDate() : null,
     }));
 
     // ========== Recruitments (from BAQL) ==========
@@ -163,12 +167,13 @@ export type RecruitmentInfo = {  recruitmentType: RecruitmentTypeEnum;
 };
 
 export type RaidInfo = {
-  uid: string;
+  raidType: RaidType;
   boss: string;
+  name: string;
+  seasonIndex?: number;
   terrain: Terrain;
-  attackType: Attack;
+  attackType: Attack | null;
   defenseTypes: { defenseType: Defense; difficulty: string | null }[];
-  rankVisible: boolean;
 };
 
 export type FutureContent = TimelineContent & {
@@ -176,7 +181,7 @@ export type FutureContent = TimelineContent & {
   raidInfo?: RaidInfo;
 };
 
-export const RAID_CONTENT_TYPES = ["total_assault", "elimination", "unlimit", "allied"] as const;
+export const RAID_CONTENT_TYPES = ["total_assault", "elimination", "unlimit", "allied", "raid"] as const;
 
 function toRecruitmentInfos(group: Awaited<ReturnType<typeof getRecruitmentGroup>>): RecruitmentInfo[] {
   return (group?.recruitments ?? []).sort((a, b) => Number(a.rerun) - Number(b.rerun)).map((r) => ({
@@ -202,20 +207,40 @@ export async function getFutureContents(env: Env): Promise<FutureContent[]> {
   const contents = await getTimelineContents(env);
   return Promise.all(
     contents.map(async (content) => {
-      // Raid types — raidInfo from getRaidDetail
-      if ((RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType) && content.contentUid) {
+      // New raid type — raidInfo from getRaidSchedule
+      if (content.contentType === "raid" && content.contentUid) {
+        const schedule = await getRaidSchedule(env, content.contentUid);
+        const raidInfo: RaidInfo | undefined = schedule
+          ? {
+              raidType: schedule.raidType as RaidType,
+              boss: schedule.raidBoss.uid,
+              name: schedule.raidBoss.name,
+              seasonIndex: schedule.seasonIndex,
+              terrain: schedule.terrain,
+              attackType: schedule.attackType,
+              defenseTypes: schedule.defenseTypes.map((d) => ({
+                defenseType: d.defenseType,
+                difficulty: d.difficulty ?? null,
+              })),
+            }
+          : undefined;
+        return { ...content, recruitments: [], raidInfo };
+      }
+
+      // Legacy raid types — raidInfo from deprecated getRaidDetail
+      if ((["total_assault", "elimination", "unlimit", "allied"] as readonly string[]).includes(content.contentType) && content.contentUid) {
         const raid = await getRaidDetail(env, content.contentUid);
         const raidInfo: RaidInfo | undefined = raid
           ? {
-              uid: raid.uid,
+              raidType: raid.type as RaidType,
               boss: raid.boss,
+              name: raid.name,
               terrain: raid.terrain,
               attackType: raid.attackType,
               defenseTypes: raid.defenseTypes.map((d) => ({
                 defenseType: d.defenseType,
                 difficulty: d.difficulty ?? null,
               })),
-              rankVisible: raid.rankVisible,
             }
           : undefined;
         return { ...content, recruitments: [], raidInfo };

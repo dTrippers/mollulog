@@ -1,5 +1,4 @@
 import dayjs from "dayjs";
-import "dayjs/locale/ko";
 import { ActionCard, type ActionCardAction } from "~/components/features/editor";
 import { StudentCards } from "~/components/features/students";
 import type { RaidType } from "~/models/content.d";
@@ -10,8 +9,6 @@ import { Transition } from "@headlessui/react";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { MiniButton, MultilineText, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
-
-dayjs.locale("ko");
 
 export type PickupResources = {
   pyroxene: number;
@@ -124,7 +121,10 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
         <AvailableOneTimePackages packages={availableOneTimePackages} onDeleteItem={onDeleteItem} />
       )}
 
-      <SubTitle text="재화 획득/소비 계획" />
+      <SubTitle
+        text="재화 획득/소비 계획"
+        description="미래시 페이지에서 관심 학생을 등록하면 모집 시점의 예상 청휘석을 계산할 수 있어요"
+      />
       {timeline.map(({ date, accumulatedResources, resourceDelta, source }) => {
         if (source.type !== "event" && !options.timeline.display.includes(source.type)) {
           return null;

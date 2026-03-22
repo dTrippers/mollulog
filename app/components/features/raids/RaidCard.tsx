@@ -9,16 +9,15 @@ import type { Defense } from "~/graphql/graphql";
 
 type RaidCardProps = {
   raid: {
-    name: string;
-    boss: string;
-    type: RaidType;
-    raidIndexJp: number | null;
+    raidBoss: { uid: string; name: string };
+    raidType: string;
+    seasonIndex: number;
     defenseTypes: {
       defenseType: Defense;
       difficulty: Difficulty | null;
     }[];
-    since: Date;
-    until: Date;
+    startAt: string | Date | null;
+    endAt: string | Date | null;
     terrain: Terrain;
   };
 
@@ -41,21 +40,21 @@ const defenseTypeColorClass: Record<Defense, string> = {
 };
 
 export default function RaidCard({ raid, timeLocaleType, buttons, showName = true }: RaidCardProps) {
-  const { name, boss, type, defenseTypes, since, until, terrain } = raid;
+  const { raidBoss, raidType, seasonIndex, defenseTypes, startAt, endAt, terrain } = raid;
 
-  const sinceDayjs = dayjs(since);
-  const untilDayjs = dayjs(until);
+  const sinceDayjs = startAt ? dayjs(startAt) : null;
+  const untilDayjs = endAt ? dayjs(endAt) : null;
   const now = dayjs();
 
   let timeLabel = null;
   if (timeLocaleType === "relative") {
-    if (sinceDayjs.isAfter(now)) {
+    if (sinceDayjs?.isAfter(now)) {
       timeLabel = `${relativeTime(sinceDayjs)} 시작`;
-    } else if (untilDayjs.isAfter(now)) {
+    } else if (untilDayjs?.isAfter(now)) {
       timeLabel = `${relativeTime(untilDayjs)} 종료`;
     }
-  } else {
-    timeLabel = `${dayjs(since).format("YYYY/M/D")}`;
+  } else if (sinceDayjs) {
+    timeLabel = `${sinceDayjs.format("YYYY/M/D")}`;
   }
 
   return (
@@ -63,7 +62,7 @@ export default function RaidCard({ raid, timeLocaleType, buttons, showName = tru
       <div className="aspect-[5/2] md:aspect-[2/1] relative">
         <div
           className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${bossImageUrl(boss)})` }}
+          style={{ backgroundImage: `url(${bossImageUrl(raidBoss.uid)})` }}
         >
           <div className="absolute inset-0 bg-white/85 dark:bg-neutral-800/85" />
         </div>
@@ -72,7 +71,7 @@ export default function RaidCard({ raid, timeLocaleType, buttons, showName = tru
           {timeLabel && (
             <div className="absolute top-0 left-0 py-3 px-3 md:px-4">
               <div className="flex items-center px-1.5 py-0.5 gap-x-1.5 text-xs text-center bg-neutral-100 dark:bg-neutral-800 rounded-md">
-                {timeLocaleType === "relative" && sinceDayjs.isBefore(now) && <div className="size-2 bg-red-500 rounded-full animate-pulse" />}
+                {timeLocaleType === "relative" && sinceDayjs?.isBefore(now) && <div className="size-2 bg-red-500 rounded-full animate-pulse" />}
                 <p className="text-sm text-neutral-600 dark:text-neutral-300">{timeLabel}</p>
               </div>
             </div>
@@ -84,9 +83,9 @@ export default function RaidCard({ raid, timeLocaleType, buttons, showName = tru
               {/* 좌측: 보스 이름 */}
               <div>
                 <p className="md:mb-0.5 text-xs text-neutral-600 dark:text-neutral-300">
-                  {raidTypeLocale[type]}{raid.raidIndexJp ? ` #${raid.raidIndexJp}` : ""} · {terrainLocale[terrain]}
+                  {raidTypeLocale[raidType as RaidType] ?? raidType} #{seasonIndex} · {terrainLocale[terrain]}
                 </p>
-                {showName && <h3 className="text-lg md:text-xl font-bold">{name}</h3>}
+                {showName && <h3 className="text-lg md:text-xl font-bold">{raidBoss.name}</h3>}
                 {buttons && buttons.length > 0 && (
                   <div className="mt-1 flex gap-1">
                     {buttons.map(({ text, to }) => (

@@ -1,7 +1,8 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
-import { getRaidDetail } from "./raid";
+import { getRaidDetail, getRaidSchedule } from "./raid";
+import { raidTypeLocale } from "~/locales/ko";
 import { getMainStories } from "./main-story";
 import { getRecruitmentGroup } from "./event-content";
 import { campaignCategoryLocale, drillTypeLocale, pickupGroupTypeLocale } from "~/locales/ko";
@@ -93,22 +94,57 @@ export async function getJointFiringDrillDetail(env: Env, uid: string, forceRefr
 // Cache warm-up
 // ============================================================
 
-type ContentRef = {
+export type ContentRef = {
   uid: string;
   contentType: string;
   contentUid: string | null;
   recruitmentGroupUid?: string | null;
 };
 
-const RAID_TYPES = ["total_assault", "elimination", "unlimit", "allied"];
+const LEGACY_RAID_TYPES = ["total_assault", "elimination", "unlimit", "allied"];
+
+/**
+ * Warms up KV cache for a single timeline content item with forceRefresh=true.
+ * Returns true if the primary BAQL query returned data (item is confirmed to exist in BAQL).
+ */
+export async function warmUpSingleItemCache(env: Env, item: ContentRef): Promise<boolean> {
+  const { uid, contentType, contentUid, recruitmentGroupUid } = item;
+  let primarySuccess = false;
+
+  if (contentType === "joint_firing_drill" && contentUid) {
+    primarySuccess = (await getJointFiringDrillDetail(env, contentUid, true)) !== null;
+  } else if (contentType === "raid" && contentUid) {
+    primarySuccess = (await getRaidSchedule(env, contentUid, true)) !== null;
+  } else if (LEGACY_RAID_TYPES.includes(contentType) && contentUid) {
+    primarySuccess = (await getRaidDetail(env, contentUid, true)) !== null;
+  } else if (contentType === "campaign" && contentUid) {
+    primarySuccess = (await getCampaignDetail(env, contentUid, true)) !== null;
+  } else if (contentType === "pickup") {
+    primarySuccess = (await getRecruitmentGroup(env, uid, true)) !== null;
+  } else if (contentType === "mini_event" && contentUid) {
+    primarySuccess = (await getMiniEventContentName(env, contentUid, true)) !== null;
+  } else if (contentUid) {
+    primarySuccess = (await getEventContentName(env, contentUid, true)) !== null;
+  } else {
+    primarySuccess = true;
+  }
+
+  if (recruitmentGroupUid) {
+    await getRecruitmentGroup(env, recruitmentGroupUid, true);
+  }
+
+  return primarySuccess;
+}
 
 export async function warmUpNameCaches(env: Env, contents: ContentRef[]) {
   await Promise.all(
     contents.map(async ({ uid, contentType, contentUid, recruitmentGroupUid }) => {
       if (contentType === "joint_firing_drill" && contentUid) {
         await getJointFiringDrillDetail(env, contentUid, true);
-      } else if (RAID_TYPES.includes(contentType) && contentUid) {
-        // raid caches are warmed up separately via getRaidDetail in the cron
+      } else if (contentType === "raid" && contentUid) {
+        // raid schedule caches are warmed up separately via getRaidSchedule in the cron
+      } else if (LEGACY_RAID_TYPES.includes(contentType) && contentUid) {
+        // legacy raid caches are warmed up separately via getRaidDetail in the cron
       } else if (contentType === "campaign" && contentUid) {
         await getCampaignDetail(env, contentUid, true);
       } else if (contentType === "pickup") {
@@ -139,7 +175,13 @@ export async function resolveContentName(env: Env, content: ContentInput): Promi
     return `${drill.season}차: ${drillTypeLocale[drill.drillType]}시험`;
   }
 
-  if (RAID_TYPES.includes(contentType) && contentUid) {
+  if (contentType === "raid" && contentUid) {
+    const schedule = await getRaidSchedule(env, contentUid);
+    if (!schedule) return uid;
+    return `${(raidTypeLocale as Record<string, string>)[schedule.raidType] ?? schedule.raidType} ${schedule.raidBoss.name}`;
+  }
+
+  if (LEGACY_RAID_TYPES.includes(contentType) && contentUid) {
     const raid = await getRaidDetail(env, contentUid);
     return raid?.name ?? uid;
   }

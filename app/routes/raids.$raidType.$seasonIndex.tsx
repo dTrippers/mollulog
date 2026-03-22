@@ -8,31 +8,42 @@ import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { getAllRaids, getRaidDetail } from "~/models/raid";
+import { getAllRaidSchedules, getRaidSchedule, applyTimelineDateFallback, raidTypeFromParam, raidTypeToParam } from "~/models/raid";
 import type { Defense } from "~/graphql/graphql";
 
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const raidId = params.id;
-  if (!raidId) {
-    throw new Response(
-      JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
-      { status: 404, headers: { "Content-Type": "application/json" } },
-    );
-  }
-  const raidDetail = await getRaidDetail(env, raidId);
-  if (!raidDetail) {
+  const { raidType, seasonIndex } = params;
+  if (!raidType || !seasonIndex) {
     throw new Response(
       JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
       { status: 404, headers: { "Content-Type": "application/json" } },
     );
   }
 
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const scheduleUid = `gl_${raidTypeFromParam(raidType)}_${seasonIndex}`;
+  const raidSchedule = await getRaidSchedule(env, scheduleUid);
+  if (!raidSchedule) {
+    throw new Response(
+      JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
+      { status: 404, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  const [allRaidSchedules, sensei] = await Promise.all([
+    getAllRaidSchedules(env),
+    getAuthenticator(env).isAuthenticated(request),
+  ]);
+
+  const [[currentRaid], allRaids] = await Promise.all([
+    applyTimelineDateFallback(env, [raidSchedule]),
+    applyTimelineDateFallback(env, allRaidSchedules),
+  ]);
+
   return {
-    currentRaid: raidDetail,
-    allRaids: await getAllRaids(env),
+    currentRaid,
+    allRaids,
     signedIn: sensei !== null,
   };
 };
@@ -43,9 +54,9 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   }
 
   const { currentRaid } = data;
-  const since = dayjs(currentRaid.since);
-  const title = `${raidTypeLocale[currentRaid.type]} ${currentRaid.name}(${since.year()}년 ${since.month() + 1}월) 정보`;
-  const description = `${since.year()}년 ${since.month() + 1}월에 진행${dayjs(currentRaid.until).isAfter(dayjs()) ? "될" : "된"} ${raidTypeLocale[currentRaid.type]} ${currentRaid.name}의 상위권 순위, 학생 통계, 공략 영상 정보 등을 확인해보세요.`;
+  const since = dayjs(currentRaid.startAt);
+  const title = `${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} 시즌 #${currentRaid.seasonIndex} ${currentRaid.raidBoss.name}(${since.year()}년 ${since.month() + 1}월) 정보`;
+  const description = `${since.year()}년 ${since.month() + 1}월에 진행${dayjs(currentRaid.endAt).isAfter(dayjs()) ? "될" : "된"} ${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} ${currentRaid.raidBoss.name}의 상위권 순위, 학생 통계, 공략 영상 정보 등을 확인해보세요.`;
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
@@ -75,15 +86,15 @@ export type RaidPageContext = {
 export default function RaidPage() {
   const { currentRaid, allRaids, signedIn } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
+  const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
   const videoAvailable = currentRaid.videos.pageInfo.hasNextPage;
 
   const [panel, setPanel] = useState<PagePanelProps | undefined>(undefined);
   useEffect(() => {
-    // 요약 페이지와 순위 페이지에서만 panel 표시
-    if (pathname !== `/raids/${currentRaid.uid}/ranks`) {
+    if (pathname !== `${raidPath}/ranks`) {
       setPanel(undefined);
     }
-  }, [pathname, currentRaid.uid]);
+  }, [pathname, raidPath]);
 
   const [selectedDefense, setDefense] = useState<Defense>(currentRaid.defenseTypes[0].defenseType);
   useEffect(() => {
@@ -94,38 +105,38 @@ export default function RaidPage() {
 
   return (
     <Page
-      title={`${raidTypeLocale[currentRaid.type]} 정보`}
+      title={`${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} 정보`}
       description="일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
       belowTitle={<RaidSelector raids={allRaids} currentRaid={currentRaid ?? null} />}
       panels={panel ? [panel] : undefined}
-      screens={currentRaid.rankVisible ? [
+      screens={[
         {
           text: "시즌 요약",
-          description: `${raidTypeLocale[currentRaid.type]}의 주요 정보 요약`,
+          description: `${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType}의 주요 정보 요약`,
           Icon: InformationCircleIcon,
-          link: `/raids/${currentRaid.uid}`,
-          active: pathname === `/raids/${currentRaid.uid}`,
+          link: raidPath,
+          active: pathname === raidPath,
         },
         {
           text: "상위권 편성",
           Icon: TrophyIcon,
-          link: `/raids/${currentRaid.uid}/ranks`,
-          active: pathname === `/raids/${currentRaid.uid}/ranks`,
+          link: `${raidPath}/ranks`,
+          active: pathname === `${raidPath}/ranks`,
         },
         {
           text: "학생별 출전 횟수",
           Icon: ChartBarIcon,
-          link: `/raids/${currentRaid.uid}/statistics`,
-          active: pathname === `/raids/${currentRaid.uid}/statistics`,
+          link: `${raidPath}/statistics`,
+          active: pathname === `${raidPath}/statistics`,
         },
         {
           text: "공략 영상 (베타)",
           Icon: VideoCameraIcon,
-          link: `/raids/${currentRaid.uid}/videos`,
-          active: pathname === `/raids/${currentRaid.uid}/videos`,
+          link: `${raidPath}/videos`,
+          active: pathname === `${raidPath}/videos`,
           disabled: !videoAvailable,
         },
-      ] : undefined}
+      ]}
     >
       {currentRaid.defenseTypes.length > 1 && !pathname.endsWith("/compare") && (
         <div className="my-4">

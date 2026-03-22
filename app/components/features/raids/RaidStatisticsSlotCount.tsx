@@ -11,18 +11,19 @@ import { raidTypeLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType, Terrain } from "~/models/content.d";
 import type { Defense } from "~/graphql/graphql";
+import { raidTypeToParam } from "~/models/raid";
 
 type RaidStatisticsSlotCountProps = {
   student?: { uid: string; name: string };
   raid?: {
-    uid: string;
+    raidType: RaidType;
+    seasonIndex: number;
     name: string;
-    type: RaidType;
     boss: string;
     defenseType: Defense;
     difficulty: string | null;
-    since: Date;
-    until: Date;
+    startAt: Date;
+    endAt: Date;
     terrain: Terrain;
   };
   slotsCount: number;
@@ -65,18 +66,18 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
       {raid && (
         <div className="mb-4 -mt-4 md:-mt-6 -mr-4 md:-mr-6 py-4 relative flex">
           <Link
-            to={`/raids/${raid.uid}`}
+            to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
             className="grow group z-10 relative "
           >
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {raidTypeLocale[raid.type]}
+              {raidTypeLocale[raid.raidType]}
             </p>
             <p className="text-lg font-bold group-hover:underline">
               {raid.name}
               <ChevronRightIcon className="size-4 inline-block" />
             </p>
             <p className="text-xs">
-              {dayjs(raid.since).format("YYYY-MM-DD")}<span className="hidden md:inline"> ~ {dayjs(raid.until).format("YYYY-MM-DD")}</span>
+              {dayjs(raid.startAt).format("YYYY-MM-DD")}<span className="hidden md:inline"> ~ {dayjs(raid.endAt).format("YYYY-MM-DD")}</span>
             </p>
           </Link>
           <div

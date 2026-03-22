@@ -6,6 +6,7 @@ import { ContentTimeline } from "~/components/features/contents";
 import type { ContentTimelineProps } from "~/components/features/contents";
 import { ContentFilterPanel } from "~/components/features/futures";
 import { getContentsComments, getFutureContents, nestComments, RAID_CONTENT_TYPES, type NestedComment } from "~/models/content";
+import { raidTypeToParam } from "~/models/raid";
 import { getUserFavoritedStudents, getFavoritedCounts } from "~/models/favorite-students";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
@@ -152,7 +153,9 @@ export default function FutureContents() {
   };
 
   const filteredContents = useMemo(() => contents.filter((content) => {
-    if (filter.types.length > 0 && !filter.types.includes(content.contentType)) {
+    const isRaid = (RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType);
+    const effectiveType = isRaid && content.raidInfo ? content.raidInfo.raidType : content.contentType;
+    if (filter.types.length > 0 && !filter.types.includes(effectiveType)) {
       return false;
     }
     if (filter.onlyPickups && content.recruitments.filter((r) => r.pickup).length === 0) {
@@ -175,17 +178,20 @@ export default function FutureContents() {
       <ContentTimeline
         contents={filteredContents.map((content): ContentTimelineProps["contents"][number] => {
           const isRaid = (RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType);
+          const raidLink = content.raidInfo?.seasonIndex != null
+            ? `/raids/${raidTypeToParam(content.raidInfo.raidType)}/${content.raidInfo.seasonIndex}`
+            : `/raids/${content.contentUid}`;
           return {
             uid: content.uid,
-            name: content.name,
-            contentType: content.contentType,
+            name: isRaid && content.raidInfo ? content.raidInfo.name : content.name,
+            contentType: isRaid && content.raidInfo ? content.raidInfo.raidType : content.contentType,
             runType: content.runType,
             since: content.startAt,
             until: content.endAt,
             endless: content.endless,
             confirmed: content.confirmed,
             tags: content.tags,
-            link: isRaid ? `/raids/${content.contentUid}` : `/events/${content.uid}`,
+            link: isRaid ? raidLink : `/events/${content.uid}`,
             recruitments: content.recruitments.length > 0 ? content.recruitments : undefined,
             raidInfo: content.raidInfo,
             allComments: allComments[content.uid] ?? [],

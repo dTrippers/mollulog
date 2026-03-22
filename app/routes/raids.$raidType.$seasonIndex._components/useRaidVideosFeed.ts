@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator, useSearchParams } from "react-router";
 import { VideoSortEnum } from "~/graphql/graphql";
-import type { RaidVideosData } from "~/routes/raids.data.$id.videos";
+import type { RaidVideosData } from "~/routes/raids.data.$raidType.$seasonIndex.videos";
 
 export type RaidVideoItem = {
   id: string;
@@ -22,10 +22,11 @@ type UseRaidVideosFeedParams = {
       endCursor: string | null;
     };
   } | null;
-  raidUid: string;
+  raidType: string;
+  seasonIndex: number;
 };
 
-export function useRaidVideosFeed({ initialData, raidUid }: UseRaidVideosFeedParams) {
+export function useRaidVideosFeed({ initialData, raidType, seasonIndex }: UseRaidVideosFeedParams) {
   const fetcher = useFetcher<RaidVideosData>();
   const revalidator = useRevalidator();
 
@@ -98,8 +99,8 @@ export function useRaidVideosFeed({ initialData, raidUid }: UseRaidVideosFeedPar
     params.set("sort", sort.toString());
     params.set("after", endCursor);
 
-    fetcher.load(`/raids/data/${raidUid}/videos?${params.toString()}`);
-  }, [endCursor, fetcher, hasNextPage, isLoading, raidUid, sort]);
+    fetcher.load(`/raids/data/${raidType}/${seasonIndex}/videos?${params.toString()}`);
+  }, [endCursor, fetcher, hasNextPage, isLoading, raidType, seasonIndex, sort]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

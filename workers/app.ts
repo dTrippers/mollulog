@@ -6,7 +6,7 @@ import { getIndexContents, getNavigationBarContents } from "~/models/content";
 import { warmUpNameCaches } from "~/models/content-name";
 import { getMainStories } from "~/models/main-story";
 import { getPyroxenePlannerContents } from "~/models/pyroxene-planner";
-import { getAllRaids, getRaidDetail } from "~/models/raid";
+import { getAllRaidSchedules, getRaidSchedule } from "~/models/raid";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { syncRawStudents } from "~/models/student";
 import { getTimelineContents } from "~/models/timeline-content";
@@ -61,16 +61,16 @@ const handler: ExportedHandler<ObservabilityEnv> = {
           ]);
 
           // Step 2: refresh leaf caches (independent)
-          const [allRaids, activeContents] = await Promise.all([
-            getAllRaids(env, true),
+          const [allSchedules, activeContents] = await Promise.all([
+            getAllRaidSchedules(env, true),
             getTimelineContents(env),
           ]);
           const now = dayjs();
           await Promise.all([
-            // refresh active raid detail caches
-            ...allRaids
-              .filter((raid) => raid.rankVisible && dayjs(raid.until).isAfter(now))
-              .map((raid) => getRaidDetail(env, raid.uid, true)),
+            // refresh active raid schedule caches
+            ...allSchedules
+              .filter((schedule: { endAt: Date | null; uid: string }) => schedule.endAt && dayjs(schedule.endAt).isAfter(now))
+              .map((schedule: { uid: string }) => getRaidSchedule(env, schedule.uid, true)),
             // refresh per-uid name caches for active/upcoming timeline contents
             warmUpNameCaches(env, activeContents),
           ]);

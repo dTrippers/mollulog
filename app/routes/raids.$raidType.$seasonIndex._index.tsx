@@ -10,9 +10,11 @@ import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
 import { fetchRaidStatisticsByRaid, type RaidStatistics } from "~/models/raid-statistics.client";
 import { fetchRaidOverview } from "~/models/raid-overview.client";
-import type { RaidPageContext } from "./raids.$id";
+import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
+import type { RaidType } from "~/models/content.d";
+import { raidTypeToParam } from "~/models/raid";
 import { RaidCard } from "~/components/features/raids";
-import RaidUnavailableState from "./raids.$id._components/RaidUnavailableState";
+import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -32,14 +34,15 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 export default function RaidSummary() {
   const { currentRaid, allRaids, defenseType } = useOutletContext<RaidPageContext>();
   const { allStudents } = useLoaderData<typeof loader>();
-  const maxTier = getMaxTierAt(currentRaid.since);
+  const maxTier = currentRaid.startAt ? getMaxTierAt(currentRaid.startAt) : null;
+  const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
 
   // Filter raids with the same boss (excluding current raid)
   const sameBossRaids = useMemo(() => {
     return allRaids
-      .filter((raid) => raid.boss === currentRaid.boss && raid.rankVisible && raid.uid !== currentRaid.uid)
-      .sort((a, b) => dayjs(b.since).diff(dayjs(a.since)));
-  }, [allRaids, currentRaid.boss, currentRaid.uid]);
+      .filter((raid) => raid.raidBoss.uid === currentRaid.raidBoss.uid && raid.jpSchedule !== null && raid.uid !== currentRaid.uid)
+      .sort((a, b) => dayjs(b.startAt).diff(dayjs(a.startAt)));
+  }, [allRaids, currentRaid.raidBoss.uid, currentRaid.uid]);
 
   const [statistics, setStatistics] = useState<RaidStatistics[] | null>(null);
   const [clearLevels, setClearLevels] = useState<Record<string, number> | null>(null);
@@ -64,12 +67,13 @@ export default function RaidSummary() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const jpSeasonIndex = currentRaid.jpSchedule?.seasonIndex ?? null;
+
   useEffect(() => {
-    if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
+    if (jpSeasonIndex === null) {
       setLoading(false);
       return;
     }
-    const raidIndexJp = currentRaid.raidIndexJp;
 
     let cancelled = false;
 
@@ -80,8 +84,8 @@ export default function RaidSummary() {
 
         // Load both student statistics and overview data in parallel
         const [raidStatistics, overviewData] = await Promise.all([
-          fetchRaidStatisticsByRaid(currentRaid.type, raidIndexJp, defenseType),
-          fetchRaidOverview({ raidType: currentRaid.type, season: raidIndexJp, defenseType }),
+          fetchRaidStatisticsByRaid(currentRaid.raidType as RaidType, jpSeasonIndex, defenseType),
+          fetchRaidOverview({ raidType: currentRaid.raidType as RaidType, season: jpSeasonIndex, defenseType }),
         ]);
         if (cancelled) {
           return;
@@ -122,7 +126,7 @@ export default function RaidSummary() {
     return () => {
       cancelled = true;
     };
-  }, [currentRaid.type, currentRaid.raidIndexJp, currentRaid.rankVisible, defenseType]);
+  }, [currentRaid.raidType, jpSeasonIndex, defenseType]);
 
   const top6Statistics = useMemo(() => {
     if (!statistics || statistics.length === 0) {
@@ -132,7 +136,7 @@ export default function RaidSummary() {
     return sorted.slice(0, 6);
   }, [statistics]);
 
-  if (!currentRaid.rankVisible || currentRaid.raidIndexJp === null) {
+  if (jpSeasonIndex === null) {
     return <RaidUnavailableState />;
   }
 
@@ -166,8 +170,8 @@ export default function RaidSummary() {
                   raid={raid}
                   timeLocaleType="absolute"
                   buttons={[
-                    { text: "시즌 정보", to: `/raids/${raid.uid}` },
-                    hasMatchingDefenseType && { text: "비교", to: `/raids/${currentRaid.uid}/compare?from=${raid.uid}&defenseType=${defenseType}` },
+                    { text: "시즌 정보", to: `/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}` },
+                    hasMatchingDefenseType && { text: "비교", to: `${raidPath}/compare?from=${raid.uid}&defenseType=${defenseType}` },
                   ].filter(Boolean) as { text: string; to: string }[]}
                   showName={false}
                 />
@@ -195,7 +199,7 @@ export default function RaidSummary() {
             oftenUsedParties={oftenUsedParties}
             allStudents={allStudents}
           />
-          <Link to={`/raids/${currentRaid.uid}/ranks`}>
+          <Link to={`${raidPath}/ranks`}>
             <div className="my-4 py-2 flex items-center justify-center text-sm hover:underline">
               <span>모든 편성 보기</span>
               <ChevronRightIcon className="size-4" />
@@ -220,13 +224,13 @@ export default function RaidSummary() {
                     slotsByTier={slotsByTier}
                     assistsCount={assistsCount}
                     assistsByTier={assistsByTier}
-                    maxTier={maxTier}
+                    maxTier={maxTier ?? 8}
                   />
                 </div>
               );
             })}
           </div>
-          <Link to={`/raids/${currentRaid.uid}/statistics`}>
+          <Link to={`${raidPath}/statistics`}>
             <div className="my-4 py-2 flex items-center justify-center text-sm hover:underline">
               <span>모두 보기 ({statistics.length - 5}개)</span>
               <ChevronRightIcon className="size-4" />

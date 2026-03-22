@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import dayjs from "dayjs";
-import { ChevronRightIcon, ChartBarIcon, ClockIcon, CheckCircleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon, StarIcon } from "@heroicons/react/16/solid";
+import { ChevronRightIcon, ClockIcon, CheckCircleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon, StarIcon } from "@heroicons/react/16/solid";
 import { IdentificationIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import type { EventType, RaidType, Role } from "~/models/content.d";
@@ -79,15 +79,15 @@ export type ContentTimelineItemProps = {
     until: Date | null;
   }[];
   raidInfo?: {
-    uid: string;
+    raidType: string;
     boss: string;
+    name: string;
     terrain: Terrain;
-    attackType: Attack;
+    attackType: Attack | null;
     defenseTypes: {
       defenseType: Defense;
       difficulty: string | null;
     }[];
-    rankVisible: boolean;
   };
 
   signedIn: boolean;
@@ -131,7 +131,6 @@ export function ContentTimelineItem({
           </span>
           {!endless && daysLabel && <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />}
           {confirmed && (since && sinceDayjs.isAfter(now)) && <ContentTag Icon={CheckCircleIcon} text="확정" color="green" />}
-          {raidInfo?.rankVisible && <ContentTag Icon={ChartBarIcon} text="순위/통계" color="default" />}
           {tags.includes("recruit_free_100") && recruitments?.every(({ until }) => until !== null && dayjs(until).isAfter(now)) && (
             <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
           )}
@@ -241,7 +240,7 @@ type RaidInfoProps = {
   raid: {
     boss: string;
     terrain: Terrain;
-    attackType: Attack;
+    attackType: Attack | null;
     defenseTypes: {
       defenseType: Defense;
       difficulty: string | null;
@@ -259,7 +258,7 @@ function RaidInfo({ raid }: RaidInfoProps) {
       <div className="absolute bottom-0 right-0 flex flex-col items-end gap-y-1 p-1 text-white text-sm">
         <div className="flex gap-x-1">
           <OptionBadge text={terrainLocale[raid.terrain]} bgColor="dark" />
-          <OptionBadge text={attackTypeLocale[raid.attackType]} color={attackTypeColor[raid.attackType]} bgColor="dark" />
+          {raid.attackType && <OptionBadge text={attackTypeLocale[raid.attackType]} color={attackTypeColor[raid.attackType]} bgColor="dark" />}
           {raid.defenseTypes.length === 1 && (
             <OptionBadge
               text={defenseTypeLocale[raid.defenseTypes[0].defenseType]}
