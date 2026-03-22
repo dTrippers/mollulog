@@ -1,6 +1,7 @@
 import { graphql } from "~/graphql";
 import { fetchCached } from "./base";
 import { runQuery } from "~/lib/baql";
+import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
 export type Boss = "binah" | "chesed" | "hod" | "shirokuro" | "perorozilla" | "goz" | "hieronymus" | "kaiten-fx-mk0" | "gregorius" | "hovercraft" | "myouki-kurokage" | "geburah" | "yesod";
@@ -195,6 +196,36 @@ export function scoreToDifficultyAndTime(boss: Boss, score: number): { difficult
   }
 
   throw new Error("유효하지 않은 점수에요");
+}
+
+// ============================================================
+// Timeline date fallback
+// ============================================================
+
+/**
+ * RaidSchedule의 startAt/endAt이 null인 경우 timeline_contents DB의 날짜로 fallback
+ */
+export async function applyTimelineDateFallback<T extends { uid: string; startAt: Date | null; endAt: Date | null }>(
+  env: Env,
+  schedules: T[],
+): Promise<T[]> {
+  const nullDateSchedules = schedules.filter((s) => !s.startAt || !s.endAt);
+  if (nullDateSchedules.length === 0) return schedules;
+
+  const timelineDatesMap = await getTimelineContentDatesByContentUids(
+    env,
+    nullDateSchedules.map((s) => s.uid),
+  );
+
+  return schedules.map((s) => {
+    if (s.startAt && s.endAt) return s;
+    const dates = timelineDatesMap.get(s.uid);
+    return {
+      ...s,
+      startAt: s.startAt ?? dates?.startAt ?? null,
+      endAt: s.endAt ?? dates?.endAt ?? null,
+    };
+  });
 }
 
 // ============================================================

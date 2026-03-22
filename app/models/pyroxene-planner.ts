@@ -4,7 +4,7 @@ import { and, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
 import { fetchCached } from "./base";
-import { getTimelineContents } from "./timeline-content";
+import { getTimelineContents, getFutureRaidContents } from "./timeline-content";
 import type { TimelineContentType } from "./timeline-content";
 import { getRecruitmentGroups } from "./event-content";
 import { getRaidDetail, getRaidSchedule } from "./raid";
@@ -42,8 +42,18 @@ export type PyroxenePlannerContent =
   };
 
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
-  return fetchCached(env, "pyroxene-planner-contents::v3", async () => {
-    const allContents = await getTimelineContents(env);
+  return fetchCached(env, "pyroxene-planner-contents::v4", async () => {
+    // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
+    const [eventContents, raidContents] = await Promise.all([
+      getTimelineContents(env),
+      getFutureRaidContents(env, RAID_CONTENT_TYPES),
+    ]);
+    const raidUids = new Set(raidContents.map((c) => c.uid));
+    const allContents = [
+      ...eventContents.filter((c) => !raidUids.has(c.uid)),
+      ...raidContents,
+    ].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+
     const recruitmentGroupUids = allContents.map((c) => c.recruitmentGroupUid).filter((uid) => uid !== null) as string[];
     const [recruitmentGroups, studentsMap] = await Promise.all([
       getRecruitmentGroups(env, { uids: recruitmentGroupUids }),
@@ -71,20 +81,31 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
       }
       if (RAID_CONTENT_TYPES.includes(content.contentType)) {
         let raidName = content.name;
+        let raidType = content.contentType as RaidType;
+        let until: Date | null = content.endAt;
+
         if (content.contentType === "raid" && content.contentUid) {
+          // 신규 형식: RaidSchedule에서 raidType과 날짜를 가져옴
           const schedule = await getRaidSchedule(env, content.contentUid);
-          raidName = schedule ? `${schedule.raidBoss.name}` : content.name;
+          if (schedule) {
+            raidName = schedule.raidBoss.name;
+            raidType = schedule.raidType as RaidType;
+            until = until ?? schedule.endAt;
+          }
         } else if (content.contentUid) {
           const raidDetail = await getRaidDetail(env, content.contentUid);
           raidName = raidDetail?.name ?? content.name;
         }
+
+        if (!until) return null;
+
         return {
           kind: "raid" as const,
           uid: content.uid,
           name: raidName,
-          type: content.contentType as RaidType,
+          type: raidType,
           since: content.startAt,
-          until: content.endAt!,
+          until,
         };
       }
       return null;

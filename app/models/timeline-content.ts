@@ -136,6 +136,22 @@ export async function getTimelineContentsByUids(env: Env, uids: string[]): Promi
   return enrichAll(env, rows.map(toRaw));
 }
 
+export async function getFutureRaidContents(env: Env, contentTypes: TimelineContentType[]): Promise<TimelineContent[]> {
+  if (contentTypes.length === 0) return [];
+  const db = drizzle(env.DB);
+  const now = new Date().toISOString();
+  const rows = await db
+    .select()
+    .from(timelineContentsTable)
+    .where(and(
+      inArray(timelineContentsTable.contentType, contentTypes),
+      or(isNull(timelineContentsTable.endAt), gte(timelineContentsTable.endAt, now)),
+    ))
+    .orderBy(timelineContentsTable.startAt)
+    .all();
+  return enrichAll(env, rows.map(toRaw));
+}
+
 export async function getTimelineContentsByContentTypes(
   env: Env,
   contentTypes: TimelineContentType[],

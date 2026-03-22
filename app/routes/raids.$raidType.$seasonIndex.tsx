@@ -8,8 +8,7 @@ import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { getAllRaidSchedules, getRaidSchedule, raidTypeFromParam, raidTypeToParam } from "~/models/raid";
-import { getTimelineContentDatesByContentUid, getTimelineContentDatesByContentUids } from "~/models/timeline-content";
+import { getAllRaidSchedules, getRaidSchedule, applyTimelineDateFallback, raidTypeFromParam, raidTypeToParam } from "~/models/raid";
 import type { Defense } from "~/graphql/graphql";
 
 
@@ -32,30 +31,18 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
     );
   }
 
-  // startAt/endAt이 null이면 timeline_contents의 일정으로 fallback
-  let { startAt, endAt } = raidSchedule;
-  if (!startAt || !endAt) {
-    const timelineDates = await getTimelineContentDatesByContentUid(env, scheduleUid);
-    startAt ??= timelineDates?.startAt ?? null;
-    endAt ??= timelineDates?.endAt ?? null;
-  }
-
   const [allRaidSchedules, sensei] = await Promise.all([
     getAllRaidSchedules(env),
     getAuthenticator(env).isAuthenticated(request),
   ]);
 
-  // allRaids에도 동일한 fallback 적용
-  const nullDateUids = allRaidSchedules.filter((s) => !s.startAt || !s.endAt).map((s) => s.uid);
-  const timelineDatesMap = await getTimelineContentDatesByContentUids(env, nullDateUids);
-  const allRaids = allRaidSchedules.map((s) => ({
-    ...s,
-    startAt: s.startAt ?? timelineDatesMap.get(s.uid)?.startAt ?? null,
-    endAt: s.endAt ?? timelineDatesMap.get(s.uid)?.endAt ?? null,
-  }));
+  const [[currentRaid], allRaids] = await Promise.all([
+    applyTimelineDateFallback(env, [raidSchedule]),
+    applyTimelineDateFallback(env, allRaidSchedules),
+  ]);
 
   return {
-    currentRaid: { ...raidSchedule, startAt, endAt },
+    currentRaid,
     allRaids,
     signedIn: sensei !== null,
   };
