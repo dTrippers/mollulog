@@ -2,14 +2,22 @@
 const cachePrefix = "cache::";
 
 export async function fetchCached<T>(env: Env, dataKey: string, fn: () => Promise<T>, ttl?: number, forceRefresh = false): Promise<T> {
+  const cacheDisabled = Boolean(env.DISABLE_CACHE);
   const cacheKey = `${cachePrefix}${dataKey}`;
-  const cached = await env.KV_USERDATA.get(cacheKey);
-  if (cached && !forceRefresh) {
-    return JSON.parse(cached) as T;
+
+  if (!cacheDisabled) {
+    const cached = await env.KV_USERDATA.get(cacheKey);
+    if (cached && !forceRefresh) {
+      return JSON.parse(cached) as T;
+    }
   }
 
   const data = await fn();
-  await env.KV_USERDATA.put(cacheKey, JSON.stringify(data), ttl ? { expirationTtl: ttl } : undefined);
+
+  if (!cacheDisabled) {
+    await env.KV_USERDATA.put(cacheKey, JSON.stringify(data), ttl ? { expirationTtl: ttl } : undefined);
+  }
+
   return data;
 }
 

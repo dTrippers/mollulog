@@ -216,6 +216,8 @@ export function minigameDescription(minigameType: string): string | null {
     return "예상 보상은 전체 카드를 뒤집었을 때의 평균 결과를 기준으로 계산해요";
   } else if (minigameType === "fortune_gacha") {
     return "예상 보상은 평균값으로 계산하며 각종 보정치는 적용되지 않아요";
+  } else if (minigameType === "box_gacha") {
+    return "회차별 모든 보상을 획득했을 때를 기준으로 계산해요";
   }
   return null;
 }

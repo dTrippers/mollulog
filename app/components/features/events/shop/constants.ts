@@ -12,8 +12,12 @@ export type DivisorRoundCondition = {
   remainders: number[];
 };
 
+export type GteRoundCondition = {
+  gte: number;
+};
+
 export type RewardGroup = {
-  rounds: number[] | "subsequent" | DivisorRoundCondition; // 특정 회차, 이후 모든 회차, 또는 나머지 조건
+  rounds: number[] | "subsequent" | DivisorRoundCondition | GteRoundCondition;
   rewards: RewardItem[];
 };
 
@@ -32,7 +36,7 @@ export type DiceMinigameConfig = {
 };
 
 export type MinigameConfig = {
-  minigameType: "roguelike" | "prize_exchange" | "dice" | "defense" | "card_flip" | "fortune_gacha";
+  minigameType: "roguelike" | "prize_exchange" | "dice" | "defense" | "card_flip" | "fortune_gacha" | "box_gacha";
   payment: {
     resourceType: ResourceTypeEnum;
     resourceUid: string;

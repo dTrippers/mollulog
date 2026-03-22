@@ -1,4 +1,4 @@
-import type { MinigameConfig, RewardItem, DiceMinigameConfig, DivisorRoundCondition } from "./constants";
+import type { MinigameConfig, RewardItem, DiceMinigameConfig, DivisorRoundCondition, GteRoundCondition } from "./constants";
 
 /**
  * Formats resource count labels with K/M suffixes for large numbers.
@@ -19,9 +19,39 @@ export function resourceCountLabel(count: number): string {
  * Each reward group specifies which rounds it applies to (specific rounds or "subsequent").
  * For dice type, playCount is treated as roll count and converted to lap count first.
  */
+const isDivisorCondition = (rounds: unknown): rounds is DivisorRoundCondition =>
+  typeof rounds === "object" && rounds !== null && "divisor" in rounds;
+
+const isGteCondition = (rounds: unknown): rounds is GteRoundCondition =>
+  typeof rounds === "object" && rounds !== null && "gte" in rounds;
+
 export function calculateMinigameRewards(config: MinigameConfig, playCount: number): RewardItem[] {
   if (playCount <= 0) {
     return [];
+  }
+
+  // box_gacha: playCount = 총 플레이 횟수. 1~playCount 회차의 보상을 누적 합산.
+  // exact 그룹은 해당 회차 1번, gte 그룹은 조건을 만족하는 각 회차마다 1번씩 적용.
+  if (config.minigameType === "box_gacha") {
+    const rewardMap = new Map<string, RewardItem>();
+    for (let round = 1; round <= playCount; round++) {
+      const matchingGroup = config.rewardGroups.find((group) => {
+        if (Array.isArray(group.rounds)) return group.rounds.includes(round);
+        if (isGteCondition(group.rounds)) return round >= group.rounds.gte;
+        return false;
+      });
+      if (!matchingGroup) continue;
+      for (const reward of matchingGroup.rewards) {
+        const key = `${reward.resourceType}:${reward.resourceUid}:${reward.rarity ?? ""}`;
+        const existing = rewardMap.get(key);
+        if (existing) {
+          existing.quantity += reward.quantity;
+        } else {
+          rewardMap.set(key, { ...reward });
+        }
+      }
+    }
+    return Array.from(rewardMap.values());
   }
 
   // For dice type, convert roll count to lap count
@@ -59,9 +89,6 @@ export function calculateMinigameRewards(config: MinigameConfig, playCount: numb
       }
     }
   };
-
-  const isDivisorCondition = (rounds: unknown): rounds is DivisorRoundCondition =>
-    typeof rounds === "object" && rounds !== null && "divisor" in rounds;
 
   // Process each reward group
   for (const group of config.rewardGroups) {
