@@ -14,12 +14,12 @@ import StudentGradingChart from "./students.$id._components/StudentGradingChart"
 
 type EnrichedRaidStatistics = Omit<RaidStatistics, "raid"> & {
   raid: {
-    uid: string;
+    raidType: RaidType;
+    seasonIndex: number;
     name: string;
     boss: string;
-    type: RaidType;
-    since: Date;
-    until: Date;
+    startAt: Date;
+    endAt: Date;
     terrain: Terrain;
     defenseType: Defense;
     difficulty: string | null;
@@ -38,7 +38,7 @@ export default function StudentDetail() {
       return stats
         .map((stat): EnrichedRaidStatistics | null => {
           const raid = allRaids.find(
-            (currentRaid) => currentRaid.type === stat.raid.raidType && currentRaid.raidIndexJp === stat.raid.season,
+            (currentRaid) => currentRaid.raidType === stat.raid.raidType && currentRaid.jpSchedule?.seasonIndex === stat.raid.season,
           );
           if (!raid) {
             return null;
@@ -51,12 +51,12 @@ export default function StudentDetail() {
           return {
             ...stat,
             raid: {
-              uid: raid.uid,
-              name: raid.name,
-              boss: raid.boss,
-              type: raid.type as RaidType,
-              since: new Date(raid.since),
-              until: new Date(raid.until),
+              raidType: raid.raidType as RaidType,
+              seasonIndex: raid.seasonIndex,
+              name: raid.raidBoss.name,
+              boss: raid.raidBoss.uid,
+              startAt: new Date(raid.startAt ?? 0),
+              endAt: new Date(raid.endAt ?? 0),
               terrain: raid.terrain as Terrain,
               defenseType: stat.raid.defenseType,
               difficulty,
@@ -95,9 +95,9 @@ export default function StudentDetail() {
   const filteredStatistics = useMemo(() => {
     const sorted = [...statistics].sort((a, b) => {
       if (sort === "recent") {
-        return b.raid.since.getTime() - a.raid.since.getTime();
+        return b.raid.startAt.getTime() - a.raid.startAt.getTime();
       }
-      return a.raid.since.getTime() - b.raid.since.getTime();
+      return a.raid.startAt.getTime() - b.raid.startAt.getTime();
     });
     return raidShowMore ? sorted : sorted.slice(0, 5);
   }, [statistics, sort, raidShowMore]);
@@ -161,13 +161,13 @@ export default function StudentDetail() {
           const { raid, slotsByTier, slotsCount, assistsCount, assistsByTier } = stat;
           return (
             <RaidStatisticsSlotCount
-              key={`${raid.uid}-${raid.defenseType}`}
+              key={`${raid.raidType}-${raid.seasonIndex}-${raid.defenseType}`}
               raid={raid}
               slotsCount={slotsCount}
               slotsByTier={slotsByTier}
               assistsCount={assistsCount}
               assistsByTier={assistsByTier}
-              maxTier={getMaxTierAt(raid.since)}
+              maxTier={getMaxTierAt(raid.startAt)}
             />
           );
         })}

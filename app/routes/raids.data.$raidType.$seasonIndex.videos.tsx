@@ -2,10 +2,11 @@ import type { LoaderFunctionArgs } from "react-router";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import type { VideoSortEnum } from "~/graphql/graphql";
+import { raidTypeFromParam } from "~/models/raid";
 
-const raidVideosQuery = graphql(`
-  query RaidVideos($uid: String!, $first: Int, $after: String, $sort: VideoSortEnum) {
-    raid(uid: $uid) {
+const raidScheduleVideosQuery = graphql(`
+  query RaidScheduleVideosData($uid: String!, $first: Int, $after: String, $sort: VideoSortEnum) {
+    raidSchedule(uid: $uid) {
       videos(first: $first, after: $after, sort: $sort) {
         pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
         edges {
@@ -33,27 +34,28 @@ export type RaidVideosData = {
   };
 } | null;
 
-// @deprecated Use the loader from ./raids.$id.videos.tsx instead
 export const loader = async ({ params, request }: LoaderFunctionArgs) => {
-  const uid = params.id;
-  if (!uid) {
-    throw new Response("Raid ID is required", { status: 400 });
+  const { raidType, seasonIndex } = params;
+  if (!raidType || !seasonIndex) {
+    throw new Response("Raid params are required", { status: 400 });
   }
+
+  const uid = `gl_${raidTypeFromParam(raidType)}_${seasonIndex}`;
 
   const url = new URL(request.url);
   const first = Number.parseInt(url.searchParams.get("first") || "20");
   const after = url.searchParams.get("after");
   const sort = (url.searchParams.get("sort") || "PUBLISHED_AT_DESC") as VideoSortEnum;
 
-  const { data, error } = await runQuery(raidVideosQuery, { uid, first, after, sort });
+  const { data, error } = await runQuery(raidScheduleVideosQuery, { uid, first, after, sort });
   if (error || !data) {
     throw new Response("Error fetching raid videos", { status: 500 });
   }
-  if (!data.raid?.videos) {
+  if (!data.raidSchedule?.videos) {
     return null;
   }
 
-  const videos = data.raid.videos.edges.map((edge) => edge.node);
-  const pageInfo = data.raid.videos.pageInfo;
+  const videos = data.raidSchedule.videos.edges.map((edge) => edge.node);
+  const pageInfo = data.raidSchedule.videos.pageInfo;
   return { videos, pageInfo };
 };

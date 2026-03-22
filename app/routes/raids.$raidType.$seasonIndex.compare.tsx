@@ -5,26 +5,29 @@ import { EmptyView, LoadingSkeleton, Section } from "~/components/primitives";
 import { getAllStudentsMap } from "~/models/student";
 import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
 import { fetchRaidOverview } from "~/models/raid-overview.client";
-import { getRaidDetail } from "~/models/raid";
+import { getRaidSchedule, raidTypeFromParam } from "~/models/raid";
+import type { RaidType } from "~/models/content.d";
 import { type defenseTypeColor, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
 import RaidDifficultyComparison from "~/components/features/raids/RaidDifficultyComparison";
 import RaidStudentComparison from "~/components/features/raids/RaidStudentComparison";
-import RaidComparisonHeader from "./raids.$id._components/RaidComparisonHeader";
+import RaidComparisonHeader from "./raids.$raidType.$seasonIndex._components/RaidComparisonHeader";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const currentRaidUid = params.id;
-  if (!currentRaidUid) {
+  const { raidType, seasonIndex } = params;
+  if (!raidType || !seasonIndex) {
     throw new Response(
       JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
       { status: 404, headers: { "Content-Type": "application/json" } },
     );
   }
 
+  const currentRaidUid = `gl_${raidTypeFromParam(raidType)}_${seasonIndex}`;
+
   const url = new URL(request.url);
   const fromRaidUid = url.searchParams.get("from");
   const defenseTypeParam = url.searchParams.get("defenseType");
-  
+
   if (!fromRaidUid) {
     throw new Response(
       JSON.stringify({ error: { message: "비교할 총력전/대결전을 선택해주세요" } }),
@@ -39,13 +42,13 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     );
   }
 
-  const [toRaid, fromRaid, rawAllStudents] = await Promise.all([
-    getRaidDetail(env, currentRaidUid),
-    getRaidDetail(env, fromRaidUid),
+  const [toSchedule, fromSchedule, rawAllStudents] = await Promise.all([
+    getRaidSchedule(env, currentRaidUid),
+    getRaidSchedule(env, fromRaidUid),
     getAllStudentsMap(env, true),
   ]);
 
-  if (!toRaid || !fromRaid) {
+  if (!toSchedule || !fromSchedule) {
     throw new Response(
       JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
       { status: 404, headers: { "Content-Type": "application/json" } },
@@ -59,12 +62,12 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     defenseType: student.defenseType,
   }]));
 
-  if (dayjs(toRaid.since).isAfter(dayjs(fromRaid.since))) {
-    return { toRaid, fromRaid, allStudents, defenseType: defenseTypeParam };
+  if (dayjs(toSchedule.startAt).isAfter(dayjs(fromSchedule.startAt))) {
+    return { toRaid: toSchedule, fromRaid: fromSchedule, allStudents, defenseType: defenseTypeParam };
   }
   return {
-    toRaid: fromRaid,
-    fromRaid: toRaid,
+    toRaid: fromSchedule,
+    fromRaid: toSchedule,
     allStudents,
     defenseType: defenseTypeParam,
   };
@@ -85,12 +88,12 @@ export default function RaidCompare() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!toRaid.rankVisible || !toRaid.raidIndexJp || !fromRaid.rankVisible || !fromRaid.raidIndexJp) {
+    const toJp = toRaid.jpSchedule?.seasonIndex ?? null;
+    const fromJp = fromRaid.jpSchedule?.seasonIndex ?? null;
+    if (!toJp || !fromJp) {
       setLoading(false);
       return;
     }
-    const toRaidIndexJp = toRaid.raidIndexJp;
-    const fromRaidIndexJp = fromRaid.raidIndexJp;
 
     let cancelled = false;
 
@@ -115,17 +118,17 @@ export default function RaidCompare() {
         // Load both overviews and statistics in parallel
         const [currentOverviewData, fromOverviewData, currentStats, fromStats] = await Promise.all([
           fetchRaidOverview({
-            raidType: toRaid.type,
-            season: toRaidIndexJp,
+            raidType: toRaid.raidType as RaidType,
+            season: toJp,
             defenseType,
           }),
           fetchRaidOverview({
-            raidType: fromRaid.type,
-            season: fromRaidIndexJp,
+            raidType: fromRaid.raidType as RaidType,
+            season: fromJp,
             defenseType,
           }),
-          fetchRaidStatisticsByRaid(toRaid.type, toRaidIndexJp, defenseType),
-          fetchRaidStatisticsByRaid(fromRaid.type, fromRaidIndexJp, defenseType),
+          fetchRaidStatisticsByRaid(toRaid.raidType as RaidType, toJp, defenseType),
+          fetchRaidStatisticsByRaid(fromRaid.raidType as RaidType, fromJp, defenseType),
         ]);
 
         if (cancelled) {
@@ -207,8 +210,8 @@ export default function RaidCompare() {
   return (
     <div>
       <RaidComparisonHeader
-        fromRaid={fromRaid as typeof fromRaid & { type: keyof typeof raidTypeLocale }}
-        toRaid={toRaid as typeof toRaid & { type: keyof typeof raidTypeLocale }}
+        fromRaid={fromRaid as typeof fromRaid & { raidType: keyof typeof raidTypeLocale }}
+        toRaid={toRaid as typeof toRaid & { raidType: keyof typeof raidTypeLocale }}
         defenseType={loaderDefenseType as keyof typeof defenseTypeColor}
         fromDifficulty={fromDifficulty}
         currentDifficulty={currentDifficulty}

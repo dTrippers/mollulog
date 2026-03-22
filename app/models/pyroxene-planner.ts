@@ -7,7 +7,7 @@ import { fetchCached } from "./base";
 import { getTimelineContents } from "./timeline-content";
 import type { TimelineContentType } from "./timeline-content";
 import { getRecruitmentGroups } from "./event-content";
-import { getRaidDetail } from "./raid";
+import { getRaidDetail, getRaidSchedule } from "./raid";
 import { getAllStudentsMap } from "./student";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { RaidType } from "./content.d";
@@ -16,7 +16,7 @@ import type { RaidType } from "./content.d";
 /**
  * Pyroxene Planner Contents
  */
-const RAID_CONTENT_TYPES: TimelineContentType[] = ["total_assault", "elimination"];
+const RAID_CONTENT_TYPES: TimelineContentType[] = ["total_assault", "elimination", "raid"];
 const EVENT_CONTENT_TYPES: TimelineContentType[] = ["event", "main_story", "pickup"];
 
 export type PyroxenePlannerContent =
@@ -68,12 +68,20 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
           until: content.endAt!,
           recruitments,
         };
-      } else if (RAID_CONTENT_TYPES.includes(content.contentType)) {
-        const raidDetail = content.contentUid ? await getRaidDetail(env, content.contentUid) : null;
+      }
+      if (RAID_CONTENT_TYPES.includes(content.contentType)) {
+        let raidName = content.name;
+        if (content.contentType === "raid" && content.contentUid) {
+          const schedule = await getRaidSchedule(env, content.contentUid);
+          raidName = schedule ? `${schedule.raidBoss.name}` : content.name;
+        } else if (content.contentUid) {
+          const raidDetail = await getRaidDetail(env, content.contentUid);
+          raidName = raidDetail?.name ?? content.name;
+        }
         return {
           kind: "raid" as const,
           uid: content.uid,
-          name: raidDetail?.name ?? content.name,
+          name: raidName,
           type: content.contentType as RaidType,
           since: content.startAt,
           until: content.endAt!,

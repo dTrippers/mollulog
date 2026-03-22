@@ -105,6 +105,7 @@ export const timelineContentTypeLocale: Record<TimelineContentType, string> = {
   main_story: "메인 스토리",
   campaign: "캠페인",
   joint_firing_drill: "종합전술시험",
+  raid: "레이드",
   total_assault: "총력전",
   elimination: "대결전",
   unlimit: "제약해제결전",
@@ -136,6 +137,7 @@ export const pickupGroupTypeLocale: Record<string, string> = {
 };
 
 export const raidTypeLocale: Record<RaidType, string> = {
+  raid: "레이드",
   total_assault: "총력전",
   elimination: "대결전",
   unlimit: "제약해제결전",

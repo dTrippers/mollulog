@@ -6,7 +6,7 @@ import { ErrorPage, Page } from "~/components/features/layout";
 import { StudentInfo } from "~/components/features/students";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { getAllRaids } from "~/models/raid";
+import { getAllRaidSchedules } from "~/models/raid";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
@@ -61,7 +61,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   const tagCounts = await getTagCountsByStudent(env, uid);
   const allGradings = await getStudentGradingsByStudentWithUsers(env, uid, true);
-  const allRaids = await getAllRaids(env);
+  const allRaids = await getAllRaidSchedules(env);
 
   const sortedGradings = [...allGradings].sort((a, b) => {
     const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
