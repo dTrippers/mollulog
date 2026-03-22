@@ -40,7 +40,7 @@ export default function StudentDetail() {
           const raid = allRaids.find(
             (currentRaid) => currentRaid.raidType === stat.raid.raidType && currentRaid.jpSchedule?.seasonIndex === stat.raid.season,
           );
-          if (!raid) {
+          if (!raid || !raid.startAt || !raid.endAt) {
             return null;
           }
 
@@ -55,8 +55,8 @@ export default function StudentDetail() {
               seasonIndex: raid.seasonIndex,
               name: raid.raidBoss.name,
               boss: raid.raidBoss.uid,
-              startAt: new Date(raid.startAt ?? 0),
-              endAt: new Date(raid.endAt ?? 0),
+              startAt: raid.startAt,
+              endAt: raid.endAt,
               terrain: raid.terrain as Terrain,
               defenseType: stat.raid.defenseType,
               difficulty,

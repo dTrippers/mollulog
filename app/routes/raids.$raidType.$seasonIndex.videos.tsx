@@ -65,7 +65,6 @@ export const loader = async ({ params, request }: LoaderFunctionArgs) => {
 export default function RaidVideos() {
   const { currentRaid } = useOutletContext<RaidPageContext>();
   const initialData = useLoaderData<typeof loader>();
-  const raidUid = currentRaid.uid;
   const { allVideos, endCursor, hasNextPage, isLoading, loadingRef, sort, setSort } = useRaidVideosFeed({
     initialData,
     raidType: raidTypeToParam(currentRaid.raidType),

@@ -34,7 +34,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 export default function RaidSummary() {
   const { currentRaid, allRaids, defenseType } = useOutletContext<RaidPageContext>();
   const { allStudents } = useLoaderData<typeof loader>();
-  const maxTier = getMaxTierAt(new Date(currentRaid.startAt ?? 0));
+  const maxTier = currentRaid.startAt ? getMaxTierAt(currentRaid.startAt) : null;
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
 
   // Filter raids with the same boss (excluding current raid)
@@ -224,7 +224,7 @@ export default function RaidSummary() {
                     slotsByTier={slotsByTier}
                     assistsCount={assistsCount}
                     assistsByTier={assistsByTier}
-                    maxTier={maxTier}
+                    maxTier={maxTier ?? 8}
                   />
                 </div>
               );

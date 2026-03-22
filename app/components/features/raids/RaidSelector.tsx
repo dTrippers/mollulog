@@ -36,8 +36,8 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
 
   const selectableRaids = useMemo(() => {
     return [...raids]
-      .sort((a, b) => dayjs(b.startAt).diff(dayjs(a.startAt)))
-      .filter((raid) => raid.raidType === raidType && raid.jpSchedule !== null);
+      .filter((raid) => raid.startAt != null && raid.raidType === raidType && raid.jpSchedule !== null)
+      .sort((a, b) => dayjs(b.startAt).diff(dayjs(a.startAt)));
   }, [raids, raidType]);
 
   return (
@@ -126,7 +126,7 @@ function RaidSelectorItem({ raid }: { raid: SelectableRaid }) {
               {raid.raidBoss.name}
             </p>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {dayjs(raid.startAt).format("YYYY.MM.DD")} ~ {dayjs(raid.endAt).format("YYYY.MM.DD")}
+              {raid.startAt ? dayjs(raid.startAt).format("YYYY.MM.DD") : "-"} ~ {raid.endAt ? dayjs(raid.endAt).format("YYYY.MM.DD") : "-"}
             </p>
           </div>
           <div className="flex flex-col gap-1 items-start flex-shrink-0">

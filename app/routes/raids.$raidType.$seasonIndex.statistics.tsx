@@ -25,7 +25,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 export default function RaidStatisticsPage() {
   const { currentRaid, defenseType } = useOutletContext<RaidPageContext>();
   const { allStudents } = useLoaderData<typeof loader>();
-  const maxTier = getMaxTierAt(new Date(currentRaid.startAt ?? 0));
+  const maxTier = currentRaid.startAt ? getMaxTierAt(currentRaid.startAt) : null;
 
   const jpSeasonIndex = currentRaid.jpSchedule?.seasonIndex ?? null;
 
@@ -86,6 +86,6 @@ export default function RaidStatisticsPage() {
   }
 
   return (
-    <RaidStatisticsScreen statistics={statistics} allStudents={allStudents} maxTier={maxTier} />
+    <RaidStatisticsScreen statistics={statistics} allStudents={allStudents} maxTier={maxTier ?? 8} />
   );
 }

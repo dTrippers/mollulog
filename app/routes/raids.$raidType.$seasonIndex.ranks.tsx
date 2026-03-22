@@ -109,7 +109,7 @@ export default function RaidRanks() {
   return (
     <>
       <RaidRankScreen
-        currentRaid={{ boss: currentRaid.raidBoss.uid, since: new Date(currentRaid.startAt ?? 0), raidType: currentRaid.raidType as RaidType, seasonIndex: jpSeasonIndex, defenseType }}
+        currentRaid={{ boss: currentRaid.raidBoss.uid, since: currentRaid.startAt ?? new Date(), raidType: currentRaid.raidType as RaidType, seasonIndex: jpSeasonIndex, defenseType }}
         filterState={rankFilterState}
         allStudents={allStudents}
         recruitedStudentTiers={recruitedStudentTiers}

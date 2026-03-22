@@ -42,18 +42,18 @@ const defenseTypeColorClass: Record<Defense, string> = {
 export default function RaidCard({ raid, timeLocaleType, buttons, showName = true }: RaidCardProps) {
   const { raidBoss, raidType, seasonIndex, defenseTypes, startAt, endAt, terrain } = raid;
 
-  const sinceDayjs = dayjs(startAt);
-  const untilDayjs = dayjs(endAt);
+  const sinceDayjs = startAt ? dayjs(startAt) : null;
+  const untilDayjs = endAt ? dayjs(endAt) : null;
   const now = dayjs();
 
   let timeLabel = null;
   if (timeLocaleType === "relative") {
-    if (sinceDayjs.isAfter(now)) {
+    if (sinceDayjs?.isAfter(now)) {
       timeLabel = `${relativeTime(sinceDayjs)} 시작`;
-    } else if (untilDayjs.isAfter(now)) {
+    } else if (untilDayjs?.isAfter(now)) {
       timeLabel = `${relativeTime(untilDayjs)} 종료`;
     }
-  } else {
+  } else if (sinceDayjs) {
     timeLabel = `${sinceDayjs.format("YYYY/M/D")}`;
   }
 
@@ -71,7 +71,7 @@ export default function RaidCard({ raid, timeLocaleType, buttons, showName = tru
           {timeLabel && (
             <div className="absolute top-0 left-0 py-3 px-3 md:px-4">
               <div className="flex items-center px-1.5 py-0.5 gap-x-1.5 text-xs text-center bg-neutral-100 dark:bg-neutral-800 rounded-md">
-                {timeLocaleType === "relative" && sinceDayjs.isBefore(now) && <div className="size-2 bg-red-500 rounded-full animate-pulse" />}
+                {timeLocaleType === "relative" && sinceDayjs?.isBefore(now) && <div className="size-2 bg-red-500 rounded-full animate-pulse" />}
                 <p className="text-sm text-neutral-600 dark:text-neutral-300">{timeLabel}</p>
               </div>
             </div>

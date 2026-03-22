@@ -62,7 +62,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     defenseType: student.defenseType,
   }]));
 
-  if (dayjs(toSchedule.startAt).isAfter(dayjs(fromSchedule.startAt))) {
+  if (toSchedule.startAt && fromSchedule.startAt && dayjs(toSchedule.startAt).isAfter(dayjs(fromSchedule.startAt))) {
     return { toRaid: toSchedule, fromRaid: fromSchedule, allStudents, defenseType: defenseTypeParam };
   }
   return {
@@ -90,7 +90,7 @@ export default function RaidCompare() {
   useEffect(() => {
     const toJp = toRaid.jpSchedule?.seasonIndex ?? null;
     const fromJp = fromRaid.jpSchedule?.seasonIndex ?? null;
-    if (!toJp || !fromJp) {
+    if (toJp === null || fromJp === null) {
       setLoading(false);
       return;
     }

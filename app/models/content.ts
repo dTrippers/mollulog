@@ -102,8 +102,8 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
     }
     const currentRaids = raidData.raidSchedules.nodes.map((schedule) => ({
       ...schedule,
-      since: dayjs(schedule.startAt).toDate(),
-      until: dayjs(schedule.endAt).toDate(),
+      since: schedule.startAt ? dayjs(schedule.startAt).toDate() : null,
+      until: schedule.endAt ? dayjs(schedule.endAt).toDate() : null,
     }));
 
     // ========== Recruitments (from BAQL) ==========

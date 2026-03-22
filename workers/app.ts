@@ -69,7 +69,7 @@ const handler: ExportedHandler<ObservabilityEnv> = {
           await Promise.all([
             // refresh active raid schedule caches
             ...allSchedules
-              .filter((schedule: { endAt: Date | null; uid: string }) => dayjs(schedule.endAt).isAfter(now))
+              .filter((schedule: { endAt: Date | null; uid: string }) => schedule.endAt && dayjs(schedule.endAt).isAfter(now))
               .map((schedule: { uid: string }) => getRaidSchedule(env, schedule.uid, true)),
             // refresh per-uid name caches for active/upcoming timeline contents
             warmUpNameCaches(env, activeContents),
