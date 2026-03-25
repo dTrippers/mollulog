@@ -1,66 +1,96 @@
+import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData } from "react-router";
-import dayjs from "dayjs";
-import { EmptyView, LoadingSkeleton, Section } from "~/components/primitives";
-import { getAllStudentsMap } from "~/models/student";
-import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
-import { fetchRaidOverview } from "~/models/raid-overview.client";
-import { getRaidSchedule, raidTypeFromParam } from "~/models/raid";
-import type { RaidType } from "~/models/content.d";
-import { type defenseTypeColor, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
 import RaidDifficultyComparison from "~/components/features/raids/RaidDifficultyComparison";
 import RaidStudentComparison from "~/components/features/raids/RaidStudentComparison";
+import { EmptyView, LoadingSkeleton, Section } from "~/components/primitives";
+import { type defenseTypeColor, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
+import { getUpcomingRaidContentByTypeAndSeason, getUpcomingRaidContents } from "~/models/content";
+import type { RaidType } from "~/models/content.d";
+import { applyTimelineDateFallback, getRaidSchedule, raidTypeFromParam } from "~/models/raid";
+import { fetchRaidOverview } from "~/models/raid-overview.client";
+import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
+import { getAllStudentsMap } from "~/models/student";
 import RaidComparisonHeader from "./raids.$raidType.$seasonIndex._components/RaidComparisonHeader";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
   if (!raidType || !seasonIndex) {
-    throw new Response(
-      JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
-      { status: 404, headers: { "Content-Type": "application/json" } },
-    );
+    throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  const currentRaidUid = `gl_${raidTypeFromParam(raidType)}_${seasonIndex}`;
+  const normalizedRaidType = raidTypeFromParam(raidType);
+  const parsedSeasonIndex = Number.parseInt(seasonIndex, 10);
+  if (Number.isNaN(parsedSeasonIndex)) {
+    throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const currentRaidUid = `gl_${normalizedRaidType}_${seasonIndex}`;
 
   const url = new URL(request.url);
   const fromRaidUid = url.searchParams.get("from");
   const defenseTypeParam = url.searchParams.get("defenseType");
 
   if (!fromRaidUid) {
-    throw new Response(
-      JSON.stringify({ error: { message: "비교할 총력전/대결전을 선택해주세요" } }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
+    throw new Response(JSON.stringify({ error: { message: "비교할 총력전/대결전을 선택해주세요" } }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   if (!defenseTypeParam) {
-    throw new Response(
-      JSON.stringify({ error: { message: "방어 타입을 선택해주세요" } }),
-      { status: 400, headers: { "Content-Type": "application/json" } },
-    );
+    throw new Response(JSON.stringify({ error: { message: "방어 타입을 선택해주세요" } }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  const [toSchedule, fromSchedule, rawAllStudents] = await Promise.all([
-    getRaidSchedule(env, currentRaidUid),
-    getRaidSchedule(env, fromRaidUid),
-    getAllStudentsMap(env, true),
-  ]);
+  const [upcomingCurrentRaid, upcomingRaidContents, directToSchedule, directFromSchedule, rawAllStudents] =
+    await Promise.all([
+      getUpcomingRaidContentByTypeAndSeason(
+        env,
+        normalizedRaidType as "total_assault" | "elimination" | "unlimit" | "allied",
+        parsedSeasonIndex,
+      ),
+      getUpcomingRaidContents(env),
+      getRaidSchedule(env, currentRaidUid),
+      getRaidSchedule(env, fromRaidUid),
+      getAllStudentsMap(env, true),
+    ]);
+
+  const upcomingFromRaid = upcomingRaidContents.find((content) => content.raidSchedule?.uid === fromRaidUid);
+  const [toSchedule] = upcomingCurrentRaid?.raidSchedule
+    ? [upcomingCurrentRaid.raidSchedule]
+    : await applyTimelineDateFallback(env, directToSchedule ? [directToSchedule] : []);
+  const [fromSchedule] = upcomingFromRaid?.raidSchedule
+    ? [upcomingFromRaid.raidSchedule]
+    : await applyTimelineDateFallback(env, directFromSchedule ? [directFromSchedule] : []);
 
   if (!toSchedule || !fromSchedule) {
-    throw new Response(
-      JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
-      { status: 404, headers: { "Content-Type": "application/json" } },
-    );
+    throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  const allStudents = Object.fromEntries(Object.entries(rawAllStudents).map(([uid, student]) => [uid, {
-    name: student.name,
-    role: student.role,
-    attackType: student.attackType,
-    defenseType: student.defenseType,
-  }]));
+  const allStudents = Object.fromEntries(
+    Object.entries(rawAllStudents).map(([uid, student]) => [
+      uid,
+      {
+        name: student.name,
+        role: student.role,
+        attackType: student.attackType,
+        defenseType: student.defenseType,
+      },
+    ]),
+  );
 
   if (toSchedule.startAt && fromSchedule.startAt && dayjs(toSchedule.startAt).isAfter(dayjs(fromSchedule.startAt))) {
     return { toRaid: toSchedule, fromRaid: fromSchedule, allStudents, defenseType: defenseTypeParam };
@@ -78,11 +108,11 @@ export default function RaidCompare() {
 
   const [currentOverview, setCurrentOverview] = useState<{
     clearLevels: Record<string, number>;
-    studentStats: { studentUid: string; slotsCount: number; assistsCount: number; }[];
+    studentStats: { studentUid: string; slotsCount: number; assistsCount: number }[];
   } | null>(null);
   const [fromOverview, setFromOverview] = useState<{
     clearLevels: Record<string, number>;
-    studentStats: { studentUid: string; slotsCount: number; assistsCount: number; }[];
+    studentStats: { studentUid: string; slotsCount: number; assistsCount: number }[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +133,7 @@ export default function RaidCompare() {
         setError(null);
 
         // Use defense type from query parameter
-        const defenseType = loaderDefenseType as typeof toRaid.defenseTypes[number]["defenseType"];
+        const defenseType = loaderDefenseType as (typeof toRaid.defenseTypes)[number]["defenseType"];
 
         // Verify defense type exists in both raids
         const toHasDefenseType = toRaid.defenseTypes.some((dt) => dt.defenseType === defenseType);
@@ -217,20 +247,14 @@ export default function RaidCompare() {
         currentDifficulty={currentDifficulty}
       />
 
-      <Section
-        title="난이도별 클리어 비율 증감"
-        description="과거 시즌 대비 난이도별 클리어 비율 변화"
-      >
+      <Section title="난이도별 클리어 비율 증감" description="과거 시즌 대비 난이도별 클리어 비율 변화">
         <RaidDifficultyComparison
           currentClearLevels={currentOverview.clearLevels}
           fromClearLevels={fromOverview.clearLevels}
         />
       </Section>
 
-      <Section
-        title="학생별 출전 횟수 증감"
-        description="과거 시즌 대비 학생별 출전 횟수 변화"
-      >
+      <Section title="학생별 출전 횟수 증감" description="과거 시즌 대비 학생별 출전 횟수 변화">
         <RaidStudentComparison
           currentStudentStats={currentOverview.studentStats}
           fromStudentStats={fromOverview.studentStats}

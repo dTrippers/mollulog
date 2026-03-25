@@ -1,7 +1,8 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
 import type { VideoSortEnum } from "~/graphql/graphql";
+import { runQuery } from "~/lib/baql";
+import { getUpcomingRaidContentByTypeAndSeason } from "~/models/content";
 import { raidTypeFromParam } from "~/models/raid";
 
 const raidScheduleVideosQuery = graphql(`
@@ -34,13 +35,25 @@ export type RaidVideosData = {
   };
 } | null;
 
-export const loader = async ({ params, request }: LoaderFunctionArgs) => {
+export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
+  const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
   if (!raidType || !seasonIndex) {
     throw new Response("Raid params are required", { status: 400 });
   }
 
-  const uid = `gl_${raidTypeFromParam(raidType)}_${seasonIndex}`;
+  const normalizedRaidType = raidTypeFromParam(raidType);
+  const parsedSeasonIndex = Number.parseInt(seasonIndex, 10);
+  if (Number.isNaN(parsedSeasonIndex)) {
+    throw new Response("Raid params are required", { status: 400 });
+  }
+
+  const upcomingRaid = await getUpcomingRaidContentByTypeAndSeason(
+    env,
+    normalizedRaidType as "total_assault" | "elimination" | "unlimit" | "allied",
+    parsedSeasonIndex,
+  );
+  const uid = upcomingRaid?.raidSchedule?.uid ?? `gl_${normalizedRaidType}_${seasonIndex}`;
 
   const url = new URL(request.url);
   const first = Number.parseInt(url.searchParams.get("first") || "20");

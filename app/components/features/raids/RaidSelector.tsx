@@ -4,12 +4,12 @@ import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { FilterButtons } from "~/components/primitives";
-import { terrainLocale, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
+import type { Attack, Defense } from "~/graphql/graphql";
+import { defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType, Terrain } from "~/models/content.d";
-import type { Attack, Defense } from "~/graphql/graphql";
-import { sanitizeClassName } from "~/prophandlers";
 import { raidTypeToParam } from "~/models/raid";
+import { sanitizeClassName } from "~/prophandlers";
 
 type SelectableRaid = {
   uid: string;
@@ -22,8 +22,7 @@ type SelectableRaid = {
   attackType: Attack | null;
   jpSchedule: { uid: string; seasonIndex: number } | null;
   defenseTypes: { defenseType: Defense; difficulty: string | null }[];
-}
-
+};
 
 type RaidSelectorProps = {
   raids: SelectableRaid[];
@@ -36,9 +35,17 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
 
   const selectableRaids = useMemo(() => {
     return [...raids]
-      .filter((raid) => raid.startAt != null && raid.raidType === raidType && raid.jpSchedule !== null)
+      .filter(
+        (raid) =>
+          raid.startAt != null &&
+          raid.raidType === raidType &&
+          (raid.jpSchedule !== null ||
+            (currentRaid !== null &&
+              raid.raidType === currentRaid.raidType &&
+              raid.seasonIndex === currentRaid.seasonIndex)),
+      )
       .sort((a, b) => dayjs(b.startAt).diff(dayjs(a.startAt)));
-  }, [raids, raidType]);
+  }, [currentRaid, raids, raidType]);
 
   return (
     <div className="relative w-full">
@@ -50,9 +57,7 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
         aria-haspopup="dialog"
       >
         <div className="flex items-center">
-          <div className="flex-1 min-w-0">
-            {currentRaid && <RaidSelectorItem raid={currentRaid} />}
-          </div>
+          <div className="flex-1 min-w-0">{currentRaid && <RaidSelectorItem raid={currentRaid} />}</div>
           <ChevronDownIcon
             className={sanitizeClassName(`
               mr-3 size-5 flex-shrink-0 text-neutral-500 transition-transform
@@ -93,7 +98,11 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
         </div>
         <div className="max-h-64 xl:max-h-96 overflow-y-auto no-scrollbar mt-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg">
           {selectableRaids.map((raid) => (
-            <Link to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`} key={raid.uid} onClick={() => setIsOpen(false)}>
+            <Link
+              to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
+              key={raid.uid}
+              onClick={() => setIsOpen(false)}
+            >
               <RaidSelectorItem raid={raid} />
             </Link>
           ))}
@@ -115,18 +124,22 @@ const defenseTypeColorClass: Record<Defense, string> = {
 function RaidSelectorItem({ raid }: { raid: SelectableRaid }) {
   return (
     <div className="group relative bg-white hover:bg-neutral-100 first:rounded-t-lg last:rounded-b-lg dark:bg-neutral-900 dark:hover:bg-neutral-800">
-      <img src={bossImageUrl(raid.raidBoss.uid)} alt="보스 이미지" className="absolute top-0 right-0 h-full object-cover" />
+      <img
+        src={bossImageUrl(raid.raidBoss.uid)}
+        alt="보스 이미지"
+        className="absolute top-0 right-0 h-full object-cover"
+      />
       <div className="relative p-3 xl:p-4 w-full bg-white/90 dark:bg-neutral-900/80 group-hover:to-neutral-100/90 dark:group-hover:to-neutral-700/80 rounded-lg transition-colors">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex} · {terrainLocale[raid.terrain]}
+              {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex} ·{" "}
+              {terrainLocale[raid.terrain]}
             </p>
-            <p className="font-bold text-sm xl:text-base">
-              {raid.raidBoss.name}
-            </p>
+            <p className="font-bold text-sm xl:text-base">{raid.raidBoss.name}</p>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {raid.startAt ? dayjs(raid.startAt).format("YYYY.MM.DD") : "-"} ~ {raid.endAt ? dayjs(raid.endAt).format("YYYY.MM.DD") : "-"}
+              {raid.startAt ? dayjs(raid.startAt).format("YYYY.MM.DD") : "-"} ~{" "}
+              {raid.endAt ? dayjs(raid.endAt).format("YYYY.MM.DD") : "-"}
             </p>
           </div>
           <div className="flex flex-col gap-1 items-start flex-shrink-0">
@@ -135,7 +148,9 @@ function RaidSelectorItem({ raid }: { raid: SelectableRaid }) {
                 <span className="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
                   {difficulty ? difficultyLocale[difficulty as keyof typeof difficultyLocale] : "방어 타입"}
                 </span>
-                <span className={`inline-block px-2 py-0.5 rounded text-xs font-semibold text-white whitespace-nowrap flex-shrink-0 ${defenseTypeColorClass[defenseType]}`}>
+                <span
+                  className={`inline-block px-2 py-0.5 rounded text-xs font-semibold text-white whitespace-nowrap flex-shrink-0 ${defenseTypeColorClass[defenseType]}`}
+                >
                   {defenseTypeLocale[defenseType]}
                 </span>
               </div>
@@ -145,4 +160,4 @@ function RaidSelectorItem({ raid }: { raid: SelectableRaid }) {
       </div>
     </div>
   );
-};
+}

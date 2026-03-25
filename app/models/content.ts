@@ -1,17 +1,35 @@
 import dayjs from "dayjs";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
-import { fetchCached } from "./base";
-import { getFavoritedCounts } from "./favorite-students";
-import type { EventType, RaidType, Role } from "./content.d";
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
-import { getLatestPostTime } from "./post";
-import { getTimelineContents, getUpcomingEvent, getTimelineContentsByContentTypes } from "./timeline-content";
-import type { TimelineContent, TimelineContentType } from "./timeline-content";
-import { getRecruitmentGroup, getRecruitmentGroups } from "./event-content";
-import { getRaidDetail, getRaidSchedule } from "./raid";
+import { fetchCached } from "./base";
+import type { EventType, RaidType, Role } from "./content.d";
 import { hasActiveCoupons } from "./coupon";
-export { contentComments, getUserComments, getContentComments, getContentsComments, createComment, createSubcomment, updateComment, deleteComment, getCommentIdByUid, pinComment, unpinComment, getPinnedComment, getNestedContentComments, nestComments } from "./content-comment";
+import { getRecruitmentGroup, getRecruitmentGroups } from "./event-content";
+import { getFavoritedCounts } from "./favorite-students";
+import { getLatestPostTime } from "./post";
+import { getRaidDetail, getRaidSchedule } from "./raid";
+import {
+  getFutureRaidContents,
+  getTimelineContents,
+  getTimelineContentsByContentTypes,
+  getUpcomingEvent,
+} from "./timeline-content";
+import type { TimelineContent, TimelineContentType } from "./timeline-content";
+export {
+  contentComments,
+  getUserComments,
+  getContentComments,
+  getContentsComments,
+  createComment,
+  createSubcomment,
+  updateComment,
+  deleteComment,
+  getCommentIdByUid,
+  pinComment,
+  unpinComment,
+  getPinnedComment,
+  getNestedContentComments,
+  nestComments,
+} from "./content-comment";
 export type { NestedComment } from "./content-comment";
 
 export const CONTENT_ORDER: (EventType | RaidType)[] = [
@@ -51,19 +69,6 @@ export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
  * Index Contents
  */
 
-const indexRaidsQuery = graphql(`
-  query IndexRaids($endAfter: ISO8601DateTime!) {
-    raidSchedules(region: "gl", endAfter: $endAfter) {
-      nodes {
-        uid raidType seasonIndex startAt endAt terrain attackType
-        raidBoss { uid name }
-        defenseTypes { defenseType difficulty }
-        jpSchedule { uid seasonIndex }
-      }
-    }
-  }
-`);
-
 export type IndexRecruitment = {
   student: { uid: string; name: string } | null;
   recruitmentType: RecruitmentTypeEnum;
@@ -75,83 +80,94 @@ export type IndexRecruitment = {
 };
 
 export async function getIndexContents(env: Env, forceRefresh = false) {
-  return fetchCached(env, "index-contents::v3", async () => {
-    const now = dayjs();
-    const nowDate = now.toDate();
+  return fetchCached(
+    env,
+    "index-contents::v4",
+    async () => {
+      const now = dayjs();
+      const nowDate = now.toDate();
 
-    // ========== Events (from D1) ==========
-    const eventContentTypes: TimelineContentType[] = ["event", "main_story", "mini_event", "campaign"];
-    const allEvents = await getTimelineContentsByContentTypes(env, eventContentTypes, nowDate);
+      // ========== Events (from D1) ==========
+      const eventContentTypes: TimelineContentType[] = ["event", "main_story", "mini_event", "campaign"];
+      const allEvents = await getTimelineContentsByContentTypes(env, eventContentTypes, nowDate);
 
-    const ongoingEvents = allEvents.filter((e) => e.contentType === "event" && !dayjs(e.startAt).isAfter(now) && e.endAt && dayjs(e.endAt).isAfter(now));
+      const ongoingEvents = allEvents.filter(
+        (e) => e.contentType === "event" && !dayjs(e.startAt).isAfter(now) && e.endAt && dayjs(e.endAt).isAfter(now),
+      );
 
-    let mainEvent: typeof allEvents[0] | null = null;
-    if (ongoingEvents.length > 0) {
-      mainEvent = ongoingEvents[0];
-    } else {
-      const futureEvents = allEvents.filter((e) => e.contentType === "event" && dayjs(e.startAt).isAfter(now));
-      if (futureEvents.length > 0) {
-        mainEvent = futureEvents[0];
+      let mainEvent: (typeof allEvents)[0] | null = null;
+      if (ongoingEvents.length > 0) {
+        mainEvent = ongoingEvents[0];
+      } else {
+        const futureEvents = allEvents.filter((e) => e.contentType === "event" && dayjs(e.startAt).isAfter(now));
+        if (futureEvents.length > 0) {
+          mainEvent = futureEvents[0];
+        }
       }
-    }
 
-    // ========== Raids (from BAQL) ==========
-    const { data: raidData, error: raidError } = await runQuery(indexRaidsQuery, { endAfter: nowDate });
-    if (raidError || !raidData) {
-      throw raidError ?? "failed to fetch raids";
-    }
-    const currentRaids = raidData.raidSchedules.nodes.map((schedule) => ({
-      ...schedule,
-      since: schedule.startAt ? dayjs(schedule.startAt).toDate() : null,
-      until: schedule.endAt ? dayjs(schedule.endAt).toDate() : null,
-    }));
+      // ========== Raids (from timeline_contents + BAQL metadata) ==========
+      const currentRaids = (await getUpcomingRaidContents(env, { limit: 4 })).flatMap((content) =>
+        content.raidSchedule ? [content.raidSchedule] : [],
+      );
 
-    // ========== Recruitments (from BAQL) ==========
-    const recruitmentGroups = await getRecruitmentGroups(env, { endAfter: nowDate });
-    const currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[] = recruitmentGroups
-      .flatMap((group) =>
-        group.recruitments
-          .filter((r) => r.student !== null && r.recruitmentType !== "recollect" && r.recruitmentType !== "archive" && r.recruitmentType !== "encore")
-          .map((r) => ({
-            eventUid: group.uid,
-            recruitment: {
-              student: r.student ? { uid: r.student.uid, name: r.student.name ?? "" } : null,
-              recruitmentType: r.recruitmentType,
-              pickup: r.pickup,
-              rerun: r.rerun,
-              since: dayjs(r.since).toDate(),
-              until: dayjs(r.until).toDate(),
-              studentName: r.studentName,
-            } satisfies IndexRecruitment,
-          })),
-      )
-      .filter(({ recruitment }) => !dayjs(recruitment.since).isAfter(now) && dayjs(recruitment.until).isAfter(now));
+      // ========== Recruitments (from BAQL) ==========
+      const recruitmentGroups = await getRecruitmentGroups(env, { endAfter: nowDate });
+      const currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[] = recruitmentGroups
+        .flatMap((group) =>
+          group.recruitments
+            .filter(
+              (r) =>
+                r.student !== null &&
+                r.recruitmentType !== "recollect" &&
+                r.recruitmentType !== "archive" &&
+                r.recruitmentType !== "encore",
+            )
+            .map((r) => ({
+              eventUid: group.uid,
+              recruitment: {
+                student: r.student ? { uid: r.student.uid, name: r.student.name ?? "" } : null,
+                recruitmentType: r.recruitmentType,
+                pickup: r.pickup,
+                rerun: r.rerun,
+                since: dayjs(r.since).toDate(),
+                until: dayjs(r.until).toDate(),
+                studentName: r.studentName,
+              } satisfies IndexRecruitment,
+            })),
+        )
+        .filter(({ recruitment }) => !dayjs(recruitment.since).isAfter(now) && dayjs(recruitment.until).isAfter(now));
 
-    // Get favorite counts for all students in current pickups
-    const allStudentUids = currentRecruitments.map(({ recruitment }) => recruitment.student?.uid).filter((uid) => uid !== null) as string[];
-    const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId));
+      // Get favorite counts for all students in current pickups
+      const allStudentUids = currentRecruitments
+        .map(({ recruitment }) => recruitment.student?.uid)
+        .filter((uid) => uid !== null) as string[];
+      const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) =>
+        currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId),
+      );
 
-    const currentEvents = allEvents.filter((e) => !dayjs(e.startAt).isAfter(now));
+      const currentEvents = allEvents.filter((e) => !dayjs(e.startAt).isAfter(now));
 
-    return {
-      mainEvent,
-      currentRaids,
-      currentEvents,
-      currentRecruitments,
-      favoritedCounts,
-    };
-  }, 60 * 60 * 24, forceRefresh);
+      return {
+        mainEvent,
+        currentRaids,
+        currentEvents,
+        currentRecruitments,
+        favoritedCounts,
+      };
+    },
+    60 * 60 * 24,
+    forceRefresh,
+  );
 }
 
-
 export { getEventContentName, getMiniEventContentName } from "./content-name";
-
 
 /**
  * Future Contents
  */
 
-export type RecruitmentInfo = {  recruitmentType: RecruitmentTypeEnum;
+export type RecruitmentInfo = {
+  recruitmentType: RecruitmentTypeEnum;
   pickup: boolean;
   rerun: boolean;
   since: Date;
@@ -176,6 +192,77 @@ export type RaidInfo = {
   defenseTypes: { defenseType: Defense; difficulty: string | null }[];
 };
 
+type RaidScheduleMeta = NonNullable<Awaited<ReturnType<typeof getRaidSchedule>>>;
+
+export type TimelineRaidContent = TimelineContent & {
+  raidInfo?: RaidInfo;
+  raidSchedule?: RaidScheduleMeta;
+};
+
+function toRaidInfo(schedule: RaidScheduleMeta): RaidInfo {
+  return {
+    raidType: schedule.raidType as RaidType,
+    boss: schedule.raidBoss.uid,
+    name: schedule.raidBoss.name,
+    seasonIndex: schedule.seasonIndex,
+    terrain: schedule.terrain,
+    attackType: schedule.attackType,
+    defenseTypes: schedule.defenseTypes.map((d) => ({
+      defenseType: d.defenseType,
+      difficulty: d.difficulty ?? null,
+    })),
+  };
+}
+
+function withTimelineDates(schedule: RaidScheduleMeta, content: TimelineContent): RaidScheduleMeta {
+  return {
+    ...schedule,
+    startAt: content.startAt,
+    endAt: content.endAt,
+  };
+}
+
+export async function getUpcomingRaidContents(
+  env: Env,
+  { limit }: { limit?: number } = {},
+): Promise<TimelineRaidContent[]> {
+  const raidContents = await getFutureRaidContents(env, ["raid"]);
+  const sortedRaidContents = [...raidContents].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+  const selectedRaidContents = limit ? sortedRaidContents.slice(0, limit) : sortedRaidContents;
+
+  return Promise.all(
+    selectedRaidContents.map(async (content) => {
+      if (!content.contentUid) {
+        return { ...content };
+      }
+
+      const schedule = await getRaidSchedule(env, content.contentUid);
+      if (!schedule) {
+        return { ...content };
+      }
+
+      return {
+        ...content,
+        raidInfo: toRaidInfo(schedule),
+        raidSchedule: withTimelineDates(schedule, content),
+      };
+    }),
+  );
+}
+
+export async function getUpcomingRaidContentByTypeAndSeason(
+  env: Env,
+  raidType: RaidType,
+  seasonIndex: number,
+): Promise<TimelineRaidContent | null> {
+  const upcomingRaidContents = await getUpcomingRaidContents(env);
+  return (
+    upcomingRaidContents.find(
+      (content) => content.raidInfo?.raidType === raidType && content.raidInfo.seasonIndex === seasonIndex,
+    ) ?? null
+  );
+}
+
 export type FutureContent = TimelineContent & {
   recruitments: RecruitmentInfo[];
   raidInfo?: RaidInfo;
@@ -184,51 +271,43 @@ export type FutureContent = TimelineContent & {
 export const RAID_CONTENT_TYPES = ["total_assault", "elimination", "unlimit", "allied", "raid"] as const;
 
 function toRecruitmentInfos(group: Awaited<ReturnType<typeof getRecruitmentGroup>>): RecruitmentInfo[] {
-  return (group?.recruitments ?? []).sort((a, b) => Number(a.rerun) - Number(b.rerun)).map((r) => ({
-    recruitmentType: r.recruitmentType,
-    pickup: r.pickup,
-    rerun: r.rerun,
-    since: new Date(r.since),
-    until: r.until ? new Date(r.until) : null,
-    studentName: r.studentName,
-    student: r.student
-      ? {
-          uid: r.student.uid,
-          attackType: r.student.attackType,
-          defenseType: r.student.defenseType,
-          role: r.student.role as Role | undefined,
-          schaleDbId: r.student.schaleDbId,
-        }
-      : null,
-  }));
+  return (group?.recruitments ?? [])
+    .sort((a, b) => Number(a.rerun) - Number(b.rerun))
+    .map((r) => ({
+      recruitmentType: r.recruitmentType,
+      pickup: r.pickup,
+      rerun: r.rerun,
+      since: new Date(r.since),
+      until: r.until ? new Date(r.until) : null,
+      studentName: r.studentName,
+      student: r.student
+        ? {
+            uid: r.student.uid,
+            attackType: r.student.attackType,
+            defenseType: r.student.defenseType,
+            role: r.student.role as Role | undefined,
+            schaleDbId: r.student.schaleDbId,
+          }
+        : null,
+    }));
 }
 
 export async function getFutureContents(env: Env): Promise<FutureContent[]> {
-  const contents = await getTimelineContents(env);
+  const [contents, upcomingRaidContents] = await Promise.all([getTimelineContents(env), getUpcomingRaidContents(env)]);
+  const upcomingRaidMap = new Map(upcomingRaidContents.map((content) => [content.uid, content]));
+
   return Promise.all(
     contents.map(async (content) => {
-      // New raid type — raidInfo from getRaidSchedule
-      if (content.contentType === "raid" && content.contentUid) {
-        const schedule = await getRaidSchedule(env, content.contentUid);
-        const raidInfo: RaidInfo | undefined = schedule
-          ? {
-              raidType: schedule.raidType as RaidType,
-              boss: schedule.raidBoss.uid,
-              name: schedule.raidBoss.name,
-              seasonIndex: schedule.seasonIndex,
-              terrain: schedule.terrain,
-              attackType: schedule.attackType,
-              defenseTypes: schedule.defenseTypes.map((d) => ({
-                defenseType: d.defenseType,
-                difficulty: d.difficulty ?? null,
-              })),
-            }
-          : undefined;
-        return { ...content, recruitments: [], raidInfo };
+      // New raid type — raidInfo from timeline-first upcoming raid lookup
+      if (content.contentType === "raid") {
+        return { ...content, recruitments: [], raidInfo: upcomingRaidMap.get(content.uid)?.raidInfo };
       }
 
       // Legacy raid types — raidInfo from deprecated getRaidDetail
-      if ((["total_assault", "elimination", "unlimit", "allied"] as readonly string[]).includes(content.contentType) && content.contentUid) {
+      if (
+        (["total_assault", "elimination", "unlimit", "allied"] as readonly string[]).includes(content.contentType) &&
+        content.contentUid
+      ) {
         const raid = await getRaidDetail(env, content.contentUid);
         const raidInfo: RaidInfo | undefined = raid
           ? {
@@ -257,7 +336,6 @@ export async function getFutureContents(env: Env): Promise<FutureContent[]> {
   );
 }
 
-
 /**
  * Navigation Bar Contents
  */
@@ -272,20 +350,26 @@ type NavigationBarContents = {
 };
 
 export async function getNavigationBarContents(env: Env, forceRefresh = false): Promise<NavigationBarContents> {
-  return fetchCached(env, "navigation-bar-contents::v3", async () => {
-    const content = await getUpcomingEvent(env);
-    const upcomingEvent = content
-      ? { uid: content.uid, since: content.startAt, until: content.endAt! }
-      : null;
+  return fetchCached(
+    env,
+    "navigation-bar-contents::v3",
+    async () => {
+      const content = await getUpcomingEvent(env);
+      const upcomingEvent = content
+        ? { uid: content.uid, since: content.startAt, until: content.endAt ?? content.startAt }
+        : null;
 
-    const latestNewsTime = await getLatestPostTime(env, "news");
-    const threeDaysAgo = new Date();
-    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
-    const hasActiveCouponsValue = await hasActiveCoupons(env);
-    return {
-      upcomingEvent,
-      hasRecentNews: latestNewsTime !== null && latestNewsTime > threeDaysAgo,
-      hasActiveCoupons: hasActiveCouponsValue,
-    };
-  }, 60 * 60 * 24, forceRefresh);
+      const latestNewsTime = await getLatestPostTime(env, "news");
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+      const hasActiveCouponsValue = await hasActiveCoupons(env);
+      return {
+        upcomingEvent,
+        hasRecentNews: latestNewsTime !== null && latestNewsTime > threeDaysAgo,
+        hasActiveCoupons: hasActiveCouponsValue,
+      };
+    },
+    60 * 60 * 24,
+    forceRefresh,
+  );
 }

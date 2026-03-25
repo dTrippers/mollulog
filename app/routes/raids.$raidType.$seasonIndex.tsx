@@ -1,49 +1,87 @@
+import {
+  ChartBarIcon,
+  InformationCircleIcon,
+  ShieldCheckIcon,
+  TrophyIcon,
+  VideoCameraIcon,
+} from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
-import { isRouteErrorResponse, Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
+import { Outlet, isRouteErrorResponse, useLoaderData, useLocation, useRouteError } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { ShieldCheckIcon, InformationCircleIcon, TrophyIcon, ChartBarIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import { getAuthenticator } from "~/auth/authenticator.server";
 import { ErrorPage, Page } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
-import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
-import { getAuthenticator } from "~/auth/authenticator.server";
-import { getAllRaidSchedules, getRaidSchedule, applyTimelineDateFallback, raidTypeFromParam, raidTypeToParam } from "~/models/raid";
 import type { Defense } from "~/graphql/graphql";
+import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
+import { getUpcomingRaidContentByTypeAndSeason, getUpcomingRaidContents } from "~/models/content";
+import {
+  applyTimelineDateFallback,
+  getAllRaidSchedules,
+  getRaidSchedule,
+  raidTypeFromParam,
+  raidTypeToParam,
+} from "~/models/raid";
 
+function raidKey(raid: { raidType: string; seasonIndex: number }) {
+  return `${raid.raidType}:${raid.seasonIndex}`;
+}
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
   if (!raidType || !seasonIndex) {
-    throw new Response(
-      JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
-      { status: 404, headers: { "Content-Type": "application/json" } },
-    );
+    throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  const scheduleUid = `gl_${raidTypeFromParam(raidType)}_${seasonIndex}`;
-  const raidSchedule = await getRaidSchedule(env, scheduleUid);
-  if (!raidSchedule) {
-    throw new Response(
-      JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }),
-      { status: 404, headers: { "Content-Type": "application/json" } },
-    );
+  const normalizedRaidType = raidTypeFromParam(raidType);
+  const parsedSeasonIndex = Number.parseInt(seasonIndex, 10);
+  if (Number.isNaN(parsedSeasonIndex)) {
+    throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  const [allRaidSchedules, sensei] = await Promise.all([
+  const scheduleUid = `gl_${normalizedRaidType}_${seasonIndex}`;
+  const [upcomingCurrentRaid, directRaidSchedule, allRaidSchedules, upcomingRaidContents, sensei] = await Promise.all([
+    getUpcomingRaidContentByTypeAndSeason(
+      env,
+      normalizedRaidType as "total_assault" | "elimination" | "unlimit" | "allied",
+      parsedSeasonIndex,
+    ),
+    getRaidSchedule(env, scheduleUid),
     getAllRaidSchedules(env),
+    getUpcomingRaidContents(env),
     getAuthenticator(env).isAuthenticated(request),
   ]);
 
-  const [[currentRaid], allRaids] = await Promise.all([
-    applyTimelineDateFallback(env, [raidSchedule]),
-    applyTimelineDateFallback(env, allRaidSchedules),
-  ]);
+  const [currentRaid] = upcomingCurrentRaid?.raidSchedule
+    ? [upcomingCurrentRaid.raidSchedule]
+    : await applyTimelineDateFallback(env, directRaidSchedule ? [directRaidSchedule] : []);
+
+  if (!currentRaid) {
+    throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const [allRaidsWithTimelineDates] = await Promise.all([applyTimelineDateFallback(env, allRaidSchedules)]);
+  const mergedRaids = new Map(allRaidsWithTimelineDates.map((raid) => [raidKey(raid), raid]));
+  for (const upcomingRaid of upcomingRaidContents) {
+    if (upcomingRaid.raidSchedule) {
+      mergedRaids.set(raidKey(upcomingRaid.raidSchedule), upcomingRaid.raidSchedule);
+    }
+  }
 
   return {
     currentRaid,
-    allRaids,
+    allRaids: Array.from(mergedRaids.values()),
     signedIn: sensei !== null,
   };
 };
@@ -149,11 +187,14 @@ export default function RaidPage() {
               active: defenseType === selectedDefense,
               onToggle: () => setDefense(defenseType),
             }))}
-            exclusive atLeastOne
+            exclusive
+            atLeastOne
           />
         </div>
       )}
-      <Outlet context={{ currentRaid, allRaids, defenseType: selectedDefense, setPanel, signedIn } satisfies RaidPageContext} />
+      <Outlet
+        context={{ currentRaid, allRaids, defenseType: selectedDefense, setPanel, signedIn } satisfies RaidPageContext}
+      />
     </Page>
   );
 }
