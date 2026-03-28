@@ -3,7 +3,7 @@ import { fetchCached } from "../../../app/models/base";
 
 type CacheEnv = Parameters<typeof fetchCached>[0];
 
-function createEnv(raw: string | null) {
+function createEnv(raw: string | null, disableCache?: string) {
   const kv = {
     get: jest.fn(async () => raw),
     put: jest.fn(async () => undefined),
@@ -14,6 +14,7 @@ function createEnv(raw: string | null) {
   return {
     env: {
       KV_USERDATA: kv,
+      DISABLE_CACHE: disableCache,
     } as unknown as CacheEnv,
     kv,
   };
@@ -24,6 +25,18 @@ afterEach(() => {
 });
 
 describe("fetchCached", () => {
+  it("bypasses KV when DISABLE_CACHE is set", async () => {
+    const freshData = ["fresh-video"];
+    const { env, kv } = createEnv(JSON.stringify(["cached-video"]), "1");
+    const fn = jest.fn(async () => freshData);
+
+    await expect(fetchCached(env, "youtube", fn, 60 * 30)).resolves.toEqual(freshData);
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
   it("returns fresh cached data without calling fn", async () => {
     const now = 1_800_000_000_000;
     jest.spyOn(Date, "now").mockReturnValue(now);

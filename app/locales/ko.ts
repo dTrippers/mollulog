@@ -152,23 +152,17 @@ export const contentTypeLocale: Record<EventType | RaidType, string> = {
 export function recruitmentLabelLocale({ recruitmentType: type, rerun }: { recruitmentType: RecruitmentTypeEnum, rerun: boolean }): string {
   if (type === "archive") {
     return "아카이브";
-  }
-  if (type === "recollect") {
+  } else if (type === "recollect") {
     return "리콜렉트";
-  }
-  if (type === "encore") {
+  } else if (type === "encore") {
     return "앙코르";
-  }
-  if (type === "usual") {
+  } else if (type === "usual") {
     return rerun ? "복각" : "신규";
-  }
-  if (type === "limited") {
+  } else if (type === "limited") {
     return rerun ? "한정 복각" : "한정 신규";
-  }
-  if (type === "fes") {
+  } else if (type === "fes") {
     return rerun ? "페스 복각" : "페스 신규";
-  }
-  if (type === "given") {
+  } else if (type === "given") {
     return "배포";
   }
   return "-";
@@ -220,8 +214,7 @@ export function formatResourceAmount(amount: number): string {
 export function minigameDescription(minigameType: string): string | null {
   if (minigameType === "card_flip") {
     return "예상 보상은 전체 카드를 뒤집었을 때의 평균 결과를 기준으로 계산해요";
-  }
-  if (minigameType === "fortune_gacha") {
+  } else if (minigameType === "fortune_gacha") {
     return "예상 보상은 평균값으로 계산하며 각종 보정치는 적용되지 않아요";
   }
   return null;

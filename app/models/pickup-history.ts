@@ -86,13 +86,25 @@ export function parsePickupHistory(raw: string, students: { uid: string, name: s
     trial += 10;
 
     const names = Array.from(line.matchAll(/[가-힣]+/g)).map((m) => m[0]);
-    const tierOrderAsc = names.length === count1 || names.length === count3
-      ? names.length === count3
-      : count1 > count3;
+    let tierOrderAsc = false;
+    if (names.length === count1 || names.length === count3) {
+      tierOrderAsc = names.length === count3;
+    } else {
+      tierOrderAsc = count1 > count3;
+    }
 
-    const [tier1Count, tier2Count, tier3Count] = tierOrderAsc
-      ? [count1, count2, count3]
-      : [count3, count2, count1];
+    let tier1Count = 0;
+    let tier2Count = 0;
+    let tier3Count = 0;
+    if (tierOrderAsc) {
+      tier1Count = count1;
+      tier2Count = count2;
+      tier3Count = count3;
+    } else {
+      tier1Count = count3;
+      tier2Count = count2;
+      tier3Count = count1;
+    }
 
     const tier3StudentIds = tier3Count > 0 ? names.map((searchName) => {
       const studentId = studentMap.get(searchName);

@@ -12,6 +12,11 @@ function isCacheEnvelope<T>(value: CacheEnvelope<T> | T): value is CacheEnvelope
 }
 
 export async function fetchCached<T>(env: Env, dataKey: string, fn: () => Promise<T>, ttl?: number, forceRefresh = false): Promise<T> {
+  // biome-ignore lint/complexity/noExtraBooleanCast: keep the explicit env-flag check requested in review.
+  if (Boolean(env.DISABLE_CACHE)) {
+    return fn();
+  }
+
   const cacheKey = `${cachePrefix}${dataKey}`;
   const raw = await env.KV_USERDATA.get(cacheKey);
 
