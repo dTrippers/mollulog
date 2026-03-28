@@ -38,9 +38,16 @@ export default function StudentDetail() {
       return stats
         .map((stat): EnrichedRaidStatistics | null => {
           const raid = allRaids.find(
-            (currentRaid) => currentRaid.raidType === stat.raid.raidType && currentRaid.jpSchedule?.seasonIndex === stat.raid.season,
+            (currentRaid) =>
+              currentRaid.raidType === stat.raid.raidType && currentRaid.jpSchedule?.seasonIndex === stat.raid.season,
           );
           if (!raid || !raid.startAt || !raid.endAt) {
+            return null;
+          }
+
+          const startAt = raid.startAt instanceof Date ? raid.startAt : new Date(raid.startAt);
+          const endAt = raid.endAt instanceof Date ? raid.endAt : new Date(raid.endAt);
+          if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
             return null;
           }
 
@@ -55,8 +62,8 @@ export default function StudentDetail() {
               seasonIndex: raid.seasonIndex,
               name: raid.raidBoss.name,
               boss: raid.raidBoss.uid,
-              startAt: raid.startAt,
-              endAt: raid.endAt,
+              startAt,
+              endAt,
               terrain: raid.terrain as Terrain,
               defenseType: stat.raid.defenseType,
               difficulty,
