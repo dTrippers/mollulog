@@ -7,7 +7,7 @@
     "worker-configuration.d.ts"
   ],
   "compilerOptions": {
-    "types": ["@react-router/cloudflare", "vite/client"],
+    "types": ["@react-router/cloudflare", "@cloudflare/workers-types", "vite/client"],
     "rootDirs": [".", "./.react-router/types"],
     "skipLibCheck": true,
     "module": "ESNext",

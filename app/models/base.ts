@@ -1,24 +1,58 @@
 
 const cachePrefix = "cache::";
 
-export async function fetchCached<T>(env: Env, dataKey: string, fn: () => Promise<T>, ttl?: number, forceRefresh = false): Promise<T> {
-  const cacheDisabled = Boolean(env.DISABLE_CACHE);
-  const cacheKey = `${cachePrefix}${dataKey}`;
+type CacheEnvelope<T> = {
+  _ver: 2;
+  data: T;
+  cachedAt: number;
+};
 
-  if (!cacheDisabled) {
-    const cached = await env.KV_USERDATA.get(cacheKey);
-    if (cached && !forceRefresh) {
-      return JSON.parse(cached) as T;
+function isCacheEnvelope<T>(value: CacheEnvelope<T> | T): value is CacheEnvelope<T> {
+  return typeof value === "object" && value !== null && "_ver" in value && value._ver === 2;
+}
+
+export async function fetchCached<T>(env: Env, dataKey: string, fn: () => Promise<T>, ttl?: number, forceRefresh = false): Promise<T> {
+  // biome-ignore lint/complexity/noExtraBooleanCast: keep the explicit env-flag check requested in review.
+  if (Boolean(env.DISABLE_CACHE)) {
+    return fn();
+  }
+
+  const cacheKey = `${cachePrefix}${dataKey}`;
+  const raw = await env.KV_USERDATA.get(cacheKey);
+
+  let cachedData: T | undefined;
+  let cachedAt = 0;
+  if (raw) {
+    const parsed = JSON.parse(raw) as CacheEnvelope<T> | T;
+    if (isCacheEnvelope(parsed)) {
+      cachedData = parsed.data;
+      cachedAt = parsed.cachedAt;
+    } else {
+      cachedData = parsed;
     }
   }
 
-  const data = await fn();
-
-  if (!cacheDisabled) {
-    await env.KV_USERDATA.put(cacheKey, JSON.stringify(data), ttl ? { expirationTtl: ttl } : undefined);
+  if (cachedData !== undefined && !forceRefresh && (ttl ? Date.now() - cachedAt < ttl * 1000 : true)) {
+    return cachedData;
   }
 
-  return data;
+  try {
+    const data = await fn();
+    const envelope: CacheEnvelope<T> = {
+      _ver: 2,
+      data,
+      cachedAt: Date.now(),
+    };
+
+    await env.KV_USERDATA.put(cacheKey, JSON.stringify(envelope));
+    return data;
+  } catch (error) {
+    if (cachedData !== undefined) {
+      return cachedData;
+    }
+
+    throw error;
+  }
 }
 
 export async function deleteCache(env: Env, ...dataKeys: string[]) {

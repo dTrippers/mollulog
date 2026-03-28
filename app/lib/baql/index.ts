@@ -1,7 +1,7 @@
 import type { TypedDocumentNode, AnyVariables, OperationResult } from "urql";
 import { createClient, fetchExchange } from "urql";
 
-export async function runQuery<Data = any, Variables extends AnyVariables = AnyVariables>(
+export async function runQuery<Data = unknown, Variables extends AnyVariables = AnyVariables>(
   query: TypedDocumentNode<Data, Variables>,
   variables: Variables,
 ): Promise<OperationResult<Data, Variables>> {
