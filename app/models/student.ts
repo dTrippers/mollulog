@@ -67,9 +67,8 @@ async function getRawStudents(env: Env): Promise<Student[]> {
   const cached = await env.KV_USERDATA.get(rawStudentsKey);
   if (cached) {
     return JSON.parse(cached) as Student[];
-  } else {
-    return syncRawStudents(env);
   }
+  return syncRawStudents(env);
 }
 
 const maximumTiers: Record<string, number> = {

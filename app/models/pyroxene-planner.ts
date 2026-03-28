@@ -63,6 +63,8 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
     const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
     const results = await Promise.all(allContents.map(async (content) => {
       if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
+        if (!content.endAt) return null;
+
         const group = recruitmentGroupMap.get(content.uid);
         const recruitments = (group?.recruitments ?? []).map((r) => ({
           recruitmentType: r.recruitmentType,
@@ -75,7 +77,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
           uid: content.uid,
           name: content.name,
           since: content.startAt,
-          until: content.endAt!,
+          until: content.endAt,
           recruitments,
         };
       }

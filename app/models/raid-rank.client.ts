@@ -149,7 +149,7 @@ function convertServerRankToParsed(
         };
       }
 
-      const student = studentSlot.student!;
+      const student = studentSlot.student;
       // Convert server tier + weaponTier to total tier format
       // Server: tier (1-5), weaponTier (0-4, 0 if not specified)
       // Total tier format: tier (1-9) = tier + weaponTier
@@ -215,9 +215,20 @@ export async function fetchRanks(params: {
   });
 
   // Build request body
-  const body: any = {
+  const body: {
+    perPage: number;
+    page: number;
+    score?: {
+      gte?: number;
+      lt?: number;
+    };
+    includeStudents: typeof includeStudents;
+    excludeStudents: typeof excludeStudents;
+  } = {
     perPage,
     page,
+    includeStudents,
+    excludeStudents,
   };
 
   if (score) {
@@ -232,9 +243,6 @@ export async function fetchRanks(params: {
 
   // Always include includeStudents and excludeStudents, even if empty
   // Empty tiers array means "all tiers"
-  body.includeStudents = includeStudents;
-  body.excludeStudents = excludeStudents;
-
   // Fetch from server
   const url = `${RAID_API_BASE_URL}/v1/ranks?${queryParams.toString()}`;
   const protobufData = await fetchProtobuf<ServerRankResponse>({
