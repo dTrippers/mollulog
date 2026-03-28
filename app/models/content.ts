@@ -275,7 +275,7 @@ export async function getNavigationBarContents(env: Env, forceRefresh = false): 
   return fetchCached(env, "navigation-bar-contents::v3", async () => {
     const content = await getUpcomingEvent(env);
     const upcomingEvent = content
-      ? { uid: content.uid, since: content.startAt, until: content.endAt! }
+      ? { uid: content.uid, since: content.startAt, until: content.endAt ?? content.startAt }
       : null;
 
     const latestNewsTime = await getLatestPostTime(env, "news");

@@ -43,7 +43,7 @@ export type HomeYoutubeChannelSection = {
 export async function getHomeYoutubeSections(env: Env, forceRefresh = false): Promise<HomeYoutubeChannelSection[]> {
   return fetchCached(
     env,
-    "home-youtube-sections::v1",
+    "home-youtube-sections::v2",
     async () => {
       const sectionResults = await Promise.allSettled(
         YOUTUBE_CHANNELS.map(async (channel) => {
@@ -57,9 +57,15 @@ export async function getHomeYoutubeSections(env: Env, forceRefresh = false): Pr
         }),
       );
 
-      return sectionResults
+      const sections = sectionResults
         .flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))
         .filter((section) => section.videos.length > 0);
+
+      if (sections.length === 0) {
+        throw new Error("All YouTube channel fetches failed or returned no videos");
+      }
+
+      return sections;
     },
     60 * 30,
     forceRefresh,

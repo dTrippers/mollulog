@@ -165,7 +165,7 @@ export function recruitmentLabelLocale({ recruitmentType: type, rerun }: { recru
   } else if (type === "given") {
     return "배포";
   }
-  return "-"; 
+  return "-";
 }
 
 export const schoolNameLocale: Record<string, string> = {
