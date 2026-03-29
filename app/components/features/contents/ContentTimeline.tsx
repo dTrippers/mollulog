@@ -30,6 +30,7 @@ export type ContentTimelineProps = {
   signedIn: boolean;
   revealedSpoilerContentUids?: string[];
   onRevealSpoiler?: (contentUid: string) => void;
+  onHideSpoiler?: (contentUid: string) => void;
   onCommentCreate?: (contentUid: string, body: string, visibility: "private" | "public") => void;
   onCommentCreateSubcomment?: (
     contentUid: string,
@@ -80,6 +81,7 @@ export default function ContentTimeline({
   favoritedCounts,
   revealedSpoilerContentUids = [],
   onRevealSpoiler,
+  onHideSpoiler,
   onCommentCreate,
   onCommentCreateSubcomment,
   onCommentUpdate,
@@ -148,6 +150,7 @@ export default function ContentTimeline({
                       {...content}
                       spoilerVisible={!content.isSpoiler || revealedSpoilerContentUids.includes(content.uid)}
                       onRevealSpoiler={content.isSpoiler ? () => onRevealSpoiler?.(content.uid) : undefined}
+                      onHideSpoiler={content.isSpoiler ? () => onHideSpoiler?.(content.uid) : undefined}
                       allComments={content.allComments}
                       onCommentCreate={
                         showComments

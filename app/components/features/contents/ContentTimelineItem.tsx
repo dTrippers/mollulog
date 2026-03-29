@@ -82,6 +82,7 @@ export type ContentTimelineItemProps = {
   favoritedCounts?: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
   onRevealSpoiler?: () => void;
+  onHideSpoiler?: () => void;
 
   recruitments?: {
     recruitmentType: RecruitmentTypeEnum;
@@ -139,6 +140,7 @@ export function ContentTimelineItem({
   favoritedCounts,
   onFavorite,
   onRevealSpoiler,
+  onHideSpoiler,
   signedIn,
 }: ContentTimelineItemProps) {
   const showComments = recruitments && recruitments.length > 0;
@@ -202,7 +204,11 @@ export function ContentTimelineItem({
       </div>
 
       {/* 컨텐츠 이름 */}
-      <SpoilerHeader hidden={isSpoiler && !spoilerVisible} onReveal={onRevealSpoiler}>
+      <SpoilerHeader
+        hidden={isSpoiler && !spoilerVisible}
+        onReveal={onRevealSpoiler}
+        onHide={isSpoiler && spoilerVisible ? onHideSpoiler : undefined}
+      >
         {headerContent}
       </SpoilerHeader>
 
@@ -253,17 +259,35 @@ export function ContentTimelineItem({
 function SpoilerHeader({
   hidden,
   onReveal,
+  onHide,
   children,
-}: { hidden: boolean; onReveal?: () => void; children: ReactNode }) {
+}: { hidden: boolean; onReveal?: () => void; onHide?: () => void; children: ReactNode }) {
   if (!hidden) {
-    return <>{children}</>;
+    return (
+      <div className="space-y-2">
+        {children}
+        {onHide && (
+          <Button
+            text="스포일러 다시 숨기기"
+            icon={EyeSlashIcon}
+            size="xs"
+            variant="tint"
+            shadow="none"
+            onClick={onHide}
+            className="dark:border-neutral-700/80 dark:bg-neutral-800/70 dark:hover:bg-neutral-700/75"
+          />
+        )}
+      </div>
+    );
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl">
-      <div className="pointer-events-none select-none blur-md opacity-80">{children}</div>
+    <div className="relative overflow-hidden rounded-xl border border-neutral-200/70 bg-white/60 dark:border-neutral-700/70 dark:bg-neutral-800/45">
+      <div className="pointer-events-none select-none blur-md opacity-80 dark:opacity-35 dark:saturate-75">
+        {children}
+      </div>
 
-      <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/78 px-4 text-center dark:bg-neutral-950/80">
+      <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-linear-to-b from-white/86 to-white/78 px-4 text-center shadow-sm backdrop-blur-[2px] dark:from-neutral-800/84 dark:to-neutral-800/76">
         <div className="flex flex-col items-center gap-3">
           <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
             스포일러가 포함되어 있어요

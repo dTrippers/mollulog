@@ -166,6 +166,10 @@ export default function FutureContents() {
     setRevealedSpoilerContentUids((prev) => (prev.includes(contentUid) ? prev : [...prev, contentUid]));
   };
 
+  const hideSpoiler = (contentUid: string) => {
+    setRevealedSpoilerContentUids((prev) => prev.filter((uid) => uid !== contentUid));
+  };
+
   const toggleFavorite = (contentUid: string, studentUid: string, favorited: boolean) => {
     if (!signedIn) {
       showSignIn();
@@ -257,6 +261,7 @@ export default function FutureContents() {
         signedIn={signedIn}
         revealedSpoilerContentUids={revealedSpoilerContentUids}
         onRevealSpoiler={revealSpoiler}
+        onHideSpoiler={hideSpoiler}
         onCommentCreate={(contentUid, body, visibility) => {
           setPendingContentUid(contentUid);
           submitComment(contentUid, { action: "create", body, visibility });
