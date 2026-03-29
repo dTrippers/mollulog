@@ -266,9 +266,9 @@ function SpoilerHeader({
       <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/78 px-4 text-center dark:bg-neutral-950/80">
         <div className="flex flex-col items-center gap-3">
           <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
-            스포일러가 포함된 미래시 컨텐츠입니다.
+            스포일러가 포함되어 있어요
           </p>
-          <Button text="보기" size="sm" variant="inverse" onClick={onReveal} />
+          <Button text="내용 보기" size="sm" variant="inverse" onClick={onReveal} />
         </div>
       </div>
     </div>

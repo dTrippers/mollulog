@@ -293,11 +293,15 @@ function toRecruitmentInfos(group: Awaited<ReturnType<typeof getRecruitmentGroup
 }
 
 export async function getFutureContents(env: Env): Promise<FutureContent[]> {
+  const now = new Date();
   const [contents, upcomingRaidContents] = await Promise.all([getTimelineContents(env), getUpcomingRaidContents(env)]);
+  const futureVisibleContents = contents.filter((content) =>
+    content.endAt ? content.endAt > now : content.startAt > now,
+  );
   const upcomingRaidMap = new Map(upcomingRaidContents.map((content) => [content.uid, content]));
 
   return Promise.all(
-    contents.map(async (content) => {
+    futureVisibleContents.map(async (content) => {
       // New raid type — raidInfo from timeline-first upcoming raid lookup
       if (content.contentType === "raid") {
         return { ...content, recruitments: [], raidInfo: upcomingRaidMap.get(content.uid)?.raidInfo };
