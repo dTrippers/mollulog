@@ -1,9 +1,9 @@
 import dayjs from "dayjs";
 import { useMemo } from "react";
+import { CONTENT_ORDER } from "~/models/content";
+import type { EventType, RaidType } from "~/models/content.d";
 import type { ContentTimelineItemProps } from "./ContentTimelineItem";
 import { ContentTimelineItem } from "./ContentTimelineItem";
-import type { EventType, RaidType } from "~/models/content.d";
-import { CONTENT_ORDER } from "~/models/content";
 
 export type ContentTimelineProps = {
   contents: {
@@ -16,6 +16,7 @@ export type ContentTimelineProps = {
     link: string;
     contentType: EventType | RaidType;
     confirmed?: boolean;
+    isSpoiler: boolean;
     tags: string[];
     recruitments?: ContentTimelineItemProps["recruitments"];
     raidInfo?: ContentTimelineItemProps["raidInfo"];
@@ -23,12 +24,19 @@ export type ContentTimelineProps = {
     allComments?: ContentTimelineItemProps["allComments"];
   }[];
 
-  favoritedStudents?: { contentUid: string, studentUid: string }[];
-  favoritedCounts: { contentUid: string, studentUid: string, count: number }[];
+  favoritedStudents?: { contentUid: string; studentUid: string }[];
+  favoritedCounts: { contentUid: string; studentUid: string; count: number }[];
 
   signedIn: boolean;
+  revealedSpoilerContentUids?: string[];
+  onRevealSpoiler?: (contentUid: string) => void;
   onCommentCreate?: (contentUid: string, body: string, visibility: "private" | "public") => void;
-  onCommentCreateSubcomment?: (contentUid: string, parentCommentId: string, body: string, visibility: "private" | "public") => void;
+  onCommentCreateSubcomment?: (
+    contentUid: string,
+    parentCommentId: string,
+    body: string,
+    visibility: "private" | "public",
+  ) => void;
   onCommentUpdate?: (contentUid: string, commentUid: string, body: string, visibility: "private" | "public") => void;
   onCommentDelete?: (contentUid: string, commentUid: string) => void;
   onCommentPin?: (contentUid: string, commentUid: string) => void;
@@ -43,7 +51,7 @@ type ContentGroup = {
 };
 
 function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup[] {
-  const groups: { groupDate: dayjs.Dayjs | null, contents: ContentTimelineProps["contents"] }[] = [];
+  const groups: { groupDate: dayjs.Dayjs | null; contents: ContentTimelineProps["contents"] }[] = [];
 
   const now = dayjs();
   for (const content of contents.sort((a, b) => a.since.getTime() - b.since.getTime())) {
@@ -66,7 +74,22 @@ function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup
   }));
 }
 
-export default function ContentTimeline({ contents, favoritedStudents, favoritedCounts, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, onFavorite, isSubmittingComment, signedIn }: ContentTimelineProps) {
+export default function ContentTimeline({
+  contents,
+  favoritedStudents,
+  favoritedCounts,
+  revealedSpoilerContentUids = [],
+  onRevealSpoiler,
+  onCommentCreate,
+  onCommentCreateSubcomment,
+  onCommentUpdate,
+  onCommentDelete,
+  onCommentPin,
+  onCommentUnpin,
+  onFavorite,
+  isSubmittingComment,
+  signedIn,
+}: ContentTimelineProps) {
   const contentGroups = useMemo(() => groupContents(contents), [contents]);
   const favoriteStudentIdsByContents = useMemo(() => {
     const aggregatedResult: Record<string, Record<string, number>> = {};
@@ -99,9 +122,7 @@ export default function ContentTimeline({ contents, favoritedStudents, favorited
             {isCurrent ? (
               <div className="flex items-center">
                 <div className="inline-block size-3 bg-red-600 rounded-full animate-pulse" />
-                <span className="mx-2 md:mx-4 font-bold text-red-600">
-                  진행중인 컨텐츠
-                </span>
+                <span className="mx-2 md:mx-4 font-bold text-red-600">진행중인 컨텐츠</span>
               </div>
             ) : (
               <div className="flex items-center">
@@ -125,19 +146,36 @@ export default function ContentTimeline({ contents, favoritedStudents, favorited
                       key={content.uid}
                       confirmed={content.confirmed}
                       {...content}
-
+                      spoilerVisible={!content.isSpoiler || revealedSpoilerContentUids.includes(content.uid)}
+                      onRevealSpoiler={content.isSpoiler ? () => onRevealSpoiler?.(content.uid) : undefined}
                       allComments={content.allComments}
-                      onCommentCreate={showComments ? (body, visibility) => onCommentCreate?.(content.uid, body, visibility) : undefined}
-                      onCommentCreateSubcomment={showComments ? (parentCommentId, body, visibility) => onCommentCreateSubcomment?.(content.uid, parentCommentId, body, visibility) : undefined}
-                      onCommentUpdate={showComments ? (commentUid, body, visibility) => onCommentUpdate?.(content.uid, commentUid, body, visibility) : undefined}
-                      onCommentDelete={showComments ? (commentUid) => onCommentDelete?.(content.uid, commentUid) : undefined}
+                      onCommentCreate={
+                        showComments
+                          ? (body, visibility) => onCommentCreate?.(content.uid, body, visibility)
+                          : undefined
+                      }
+                      onCommentCreateSubcomment={
+                        showComments
+                          ? (parentCommentId, body, visibility) =>
+                              onCommentCreateSubcomment?.(content.uid, parentCommentId, body, visibility)
+                          : undefined
+                      }
+                      onCommentUpdate={
+                        showComments
+                          ? (commentUid, body, visibility) =>
+                              onCommentUpdate?.(content.uid, commentUid, body, visibility)
+                          : undefined
+                      }
+                      onCommentDelete={
+                        showComments ? (commentUid) => onCommentDelete?.(content.uid, commentUid) : undefined
+                      }
                       onCommentPin={showComments ? (commentUid) => onCommentPin?.(content.uid, commentUid) : undefined}
                       onCommentUnpin={showComments ? () => onCommentUnpin?.(content.uid) : undefined}
-
-                      favoritedStudents={favoritedStudents?.filter(({ contentUid }) => contentUid === content.uid).map(({ studentUid }) => studentUid)}
+                      favoritedStudents={favoritedStudents
+                        ?.filter(({ contentUid }) => contentUid === content.uid)
+                        .map(({ studentUid }) => studentUid)}
                       favoritedCounts={favoriteStudentIdsByContents[content.uid]}
                       onFavorite={(studentUid, favorited) => onFavorite?.(content.uid, studentUid, favorited)}
-
                       isSubmittingComment={isSubmittingComment}
                       signedIn={signedIn}
                     />

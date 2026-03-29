@@ -1,12 +1,20 @@
 import { and, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
+import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { resolveContentName } from "./content-name";
 
 export type TimelineContentType =
-  "event" | "mini_event" | "pickup" | "main_story" | "campaign" | "joint_firing_drill" |
-  "raid" |
-  "total_assault" | "elimination" | "unlimit" | "allied"; // 하위 호환
+  | "event"
+  | "mini_event"
+  | "pickup"
+  | "main_story"
+  | "campaign"
+  | "joint_firing_drill"
+  | "raid"
+  | "total_assault"
+  | "elimination"
+  | "unlimit"
+  | "allied"; // 하위 호환
 export type RunType = "first" | "rerun" | "permanent";
 
 export type TimelineContentVideo = {
@@ -29,6 +37,7 @@ export const timelineContentsTable = sqliteTable("timeline_contents", {
   contentUid: text("content_uid"),
   recruitmentGroupUid: text("recruitment_group_uid"),
   confirmed: int().notNull().default(0),
+  isSpoiler: int("is_spoiler").notNull().default(0),
   tags: text().notNull().default("[]"),
   createdAt: text("created_at").notNull().default(sql`current_timestamp`),
   updatedAt: text("updated_at").notNull().default(sql`current_timestamp`),
@@ -49,6 +58,7 @@ export type TimelineContent = {
   contentUid: string | null;
   recruitmentGroupUid: string | null;
   confirmed: boolean;
+  isSpoiler: boolean;
   tags: string[];
   syncedAt: Date | null;
 };
@@ -69,6 +79,7 @@ function toRaw(row: typeof timelineContentsTable.$inferSelect): RawTimelineConte
     contentUid: row.contentUid ?? null,
     recruitmentGroupUid: row.recruitmentGroupUid ?? null,
     confirmed: row.confirmed === 1,
+    isSpoiler: row.isSpoiler === 1,
     tags: JSON.parse(row.tags) as string[],
     syncedAt: row.syncedAt ? new Date(row.syncedAt) : null,
   };
@@ -85,11 +96,7 @@ async function enrichAll(env: Env, raws: RawTimelineContent[]): Promise<Timeline
 
 export async function getTimelineContent(env: Env, uid: string): Promise<TimelineContent | null> {
   const db = drizzle(env.DB);
-  const row = await db
-    .select()
-    .from(timelineContentsTable)
-    .where(eq(timelineContentsTable.uid, uid))
-    .get();
+  const row = await db.select().from(timelineContentsTable).where(eq(timelineContentsTable.uid, uid)).get();
   return row ? enrich(env, toRaw(row)) : null;
 }
 
@@ -99,10 +106,12 @@ export async function getTimelineContents(env: Env): Promise<TimelineContent[]> 
   const rows = await db
     .select()
     .from(timelineContentsTable)
-    .where(and(
-      or(isNull(timelineContentsTable.endAt), gte(timelineContentsTable.endAt, now)),
-      or(lte(timelineContentsTable.startAt, now), isNotNull(timelineContentsTable.syncedAt)),
-    ))
+    .where(
+      and(
+        or(isNull(timelineContentsTable.endAt), gte(timelineContentsTable.endAt, now)),
+        or(lte(timelineContentsTable.startAt, now), isNotNull(timelineContentsTable.syncedAt)),
+      ),
+    )
     .orderBy(timelineContentsTable.startAt)
     .all();
   return enrichAll(env, rows.map(toRaw));
@@ -114,11 +123,13 @@ export async function getUpcomingEvent(env: Env): Promise<TimelineContent | null
   const row = await db
     .select()
     .from(timelineContentsTable)
-    .where(and(
-      eq(timelineContentsTable.contentType, "event"),
-      gte(timelineContentsTable.endAt, now),
-      or(lte(timelineContentsTable.startAt, now), isNotNull(timelineContentsTable.syncedAt)),
-    ))
+    .where(
+      and(
+        eq(timelineContentsTable.contentType, "event"),
+        gte(timelineContentsTable.endAt, now),
+        or(lte(timelineContentsTable.startAt, now), isNotNull(timelineContentsTable.syncedAt)),
+      ),
+    )
     .orderBy(timelineContentsTable.startAt)
     .limit(1)
     .get();
@@ -128,11 +139,7 @@ export async function getUpcomingEvent(env: Env): Promise<TimelineContent | null
 export async function getTimelineContentsByUids(env: Env, uids: string[]): Promise<TimelineContent[]> {
   if (uids.length === 0) return [];
   const db = drizzle(env.DB);
-  const rows = await db
-    .select()
-    .from(timelineContentsTable)
-    .where(inArray(timelineContentsTable.uid, uids))
-    .all();
+  const rows = await db.select().from(timelineContentsTable).where(inArray(timelineContentsTable.uid, uids)).all();
   return enrichAll(env, rows.map(toRaw));
 }
 
@@ -143,10 +150,12 @@ export async function getFutureRaidContents(env: Env, contentTypes: TimelineCont
   const rows = await db
     .select()
     .from(timelineContentsTable)
-    .where(and(
-      inArray(timelineContentsTable.contentType, contentTypes),
-      or(isNull(timelineContentsTable.endAt), gte(timelineContentsTable.endAt, now)),
-    ))
+    .where(
+      and(
+        inArray(timelineContentsTable.contentType, contentTypes),
+        or(isNull(timelineContentsTable.endAt), gte(timelineContentsTable.endAt, now)),
+      ),
+    )
     .orderBy(timelineContentsTable.startAt)
     .all();
   return enrichAll(env, rows.map(toRaw));
@@ -196,15 +205,21 @@ export async function getTimelineContentDatesByContentUids(
   if (contentUids.length === 0) return new Map();
   const db = drizzle(env.DB);
   const rows = await db
-    .select({ contentUid: timelineContentsTable.contentUid, startAt: timelineContentsTable.startAt, endAt: timelineContentsTable.endAt })
+    .select({
+      contentUid: timelineContentsTable.contentUid,
+      startAt: timelineContentsTable.startAt,
+      endAt: timelineContentsTable.endAt,
+    })
     .from(timelineContentsTable)
     .where(inArray(timelineContentsTable.contentUid, contentUids))
     .all();
   return new Map(
-    rows.filter((r) => r.contentUid).map((r) => [
-      r.contentUid as string,
-      { startAt: new Date(r.startAt), endAt: r.endAt ? new Date(r.endAt) : null },
-    ]),
+    rows
+      .filter((r) => r.contentUid)
+      .map((r) => [
+        r.contentUid as string,
+        { startAt: new Date(r.startAt), endAt: r.endAt ? new Date(r.endAt) : null },
+      ]),
   );
 }
 
@@ -219,7 +234,10 @@ export async function getTimelineContentsByContentUids(env: Env, contentUids: st
   return enrichAll(env, rows.map(toRaw));
 }
 
-export async function getTimelineContentsByRecruitmentGroupUids(env: Env, recruitmentGroupUids: string[]): Promise<TimelineContent[]> {
+export async function getTimelineContentsByRecruitmentGroupUids(
+  env: Env,
+  recruitmentGroupUids: string[],
+): Promise<TimelineContent[]> {
   if (recruitmentGroupUids.length === 0) return [];
   const db = drizzle(env.DB);
   const rows = await db
@@ -232,14 +250,9 @@ export async function getTimelineContentsByRecruitmentGroupUids(env: Env, recrui
 
 export async function getAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
   const db = drizzle(env.DB);
-  const rows = await db
-    .select()
-    .from(timelineContentsTable)
-    .orderBy(timelineContentsTable.startAt)
-    .all();
+  const rows = await db.select().from(timelineContentsTable).orderBy(timelineContentsTable.startAt).all();
   return enrichAll(env, rows.map(toRaw));
 }
-
 
 export async function getUnsyncedUnstartedContents(env: Env): Promise<RawTimelineContent[]> {
   const db = drizzle(env.DB);
@@ -247,10 +260,7 @@ export async function getUnsyncedUnstartedContents(env: Env): Promise<RawTimelin
   const rows = await db
     .select()
     .from(timelineContentsTable)
-    .where(and(
-      isNull(timelineContentsTable.syncedAt),
-      gte(timelineContentsTable.startAt, now),
-    ))
+    .where(and(isNull(timelineContentsTable.syncedAt), gte(timelineContentsTable.startAt, now)))
     .all();
   return rows.map(toRaw);
 }
@@ -273,17 +283,19 @@ export async function upsertTimelineContent(env: Env, input: Omit<TimelineConten
   const existing = await db
     .select({ id: timelineContentsTable.id })
     .from(timelineContentsTable)
-    .where(or(
-      eq(timelineContentsTable.uid, input.uid),
-      and(
-        eq(timelineContentsTable.contentType, input.contentType),
-        eq(timelineContentsTable.contentUid, input.contentUid ?? ""),
-        eq(timelineContentsTable.runType, input.runType),
-        input.occurrence != null
-          ? eq(timelineContentsTable.occurrence, input.occurrence)
-          : isNull(timelineContentsTable.occurrence),
+    .where(
+      or(
+        eq(timelineContentsTable.uid, input.uid),
+        and(
+          eq(timelineContentsTable.contentType, input.contentType),
+          eq(timelineContentsTable.contentUid, input.contentUid ?? ""),
+          eq(timelineContentsTable.runType, input.runType),
+          input.occurrence != null
+            ? eq(timelineContentsTable.occurrence, input.occurrence)
+            : isNull(timelineContentsTable.occurrence),
+        ),
       ),
-    ))
+    )
     .get();
 
   const values = {

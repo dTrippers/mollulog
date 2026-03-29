@@ -1,19 +1,36 @@
-import { useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router";
-import dayjs from "dayjs";
-import { ChevronRightIcon, ClockIcon, CheckCircleIcon, ChatBubbleOvalLeftEllipsisIcon, EyeIcon, EyeSlashIcon, CalculatorIcon, StarIcon } from "@heroicons/react/16/solid";
-import { IdentificationIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
+import {
+  CalculatorIcon,
+  ChatBubbleOvalLeftEllipsisIcon,
+  CheckCircleIcon,
+  ChevronRightIcon,
+  ClockIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  StarIcon,
+} from "@heroicons/react/16/solid";
+import { HeartIcon as EmptyHeartIcon, IdentificationIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
-import type { EventType, RaidType, Role } from "~/models/content.d";
-import { attackTypeColor, attackTypeLocale, contentTypeLocale, defenseTypeColor, defenseTypeLocale, recruitmentLabelLocale, terrainLocale } from "~/locales/ko";
-import { bossImageUrl } from "~/models/assets";
+import dayjs from "dayjs";
+import { type ReactNode, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { StudentCards } from "~/components/features/students";
-import { BottomSheet, OptionBadge } from "~/components/primitives";
+import { BottomSheet, Button, OptionBadge } from "~/components/primitives";
+import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
+import {
+  attackTypeColor,
+  attackTypeLocale,
+  contentTypeLocale,
+  defenseTypeColor,
+  defenseTypeLocale,
+  recruitmentLabelLocale,
+  terrainLocale,
+} from "~/locales/ko";
+import { bossImageUrl } from "~/models/assets";
+import { SHOW_LINK_CONTENT_TYPES } from "~/models/content";
+import type { EventType, RaidType, Role } from "~/models/content.d";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";
-import { SHOW_LINK_CONTENT_TYPES } from "~/models/content";
-import type { Attack, Defense, Terrain, RecruitmentTypeEnum } from "~/graphql/graphql";
 
 export type ContentTimelineItemProps = {
   uid: string;
@@ -25,6 +42,8 @@ export type ContentTimelineItemProps = {
   until: Date | null;
   link: string;
   confirmed?: boolean;
+  isSpoiler?: boolean;
+  spoilerVisible?: boolean;
   tags: string[];
 
   allComments?: {
@@ -62,6 +81,7 @@ export type ContentTimelineItemProps = {
   favoritedStudents?: string[];
   favoritedCounts?: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
+  onRevealSpoiler?: () => void;
 
   recruitments?: {
     recruitmentType: RecruitmentTypeEnum;
@@ -94,8 +114,32 @@ export type ContentTimelineItemProps = {
 };
 
 export function ContentTimelineItem({
-  name, contentType, runType, endless, since, until, link, confirmed, tags, raidInfo, recruitments,
-  allComments, onCommentCreate, onCommentCreateSubcomment, onCommentUpdate, onCommentDelete, onCommentPin, onCommentUnpin, isSubmittingComment, favoritedStudents, favoritedCounts, onFavorite, signedIn,
+  name,
+  contentType,
+  runType,
+  endless,
+  since,
+  until,
+  link,
+  confirmed,
+  isSpoiler = false,
+  spoilerVisible = true,
+  tags,
+  raidInfo,
+  recruitments,
+  allComments,
+  onCommentCreate,
+  onCommentCreateSubcomment,
+  onCommentUpdate,
+  onCommentDelete,
+  onCommentPin,
+  onCommentUnpin,
+  isSubmittingComment,
+  favoritedStudents,
+  favoritedCounts,
+  onFavorite,
+  onRevealSpoiler,
+  signedIn,
 }: ContentTimelineItemProps) {
   const showComments = recruitments && recruitments.length > 0;
   const [commentEditing, setCommentEditing] = useState(false);
@@ -121,35 +165,46 @@ export function ContentTimelineItem({
     }
   }
 
+  const headerLinked = SHOW_LINK_CONTENT_TYPES.includes(contentType) && (!isSpoiler || spoilerVisible);
+  const headerContent = headerLinked ? (
+    <Link to={link} className="block cursor-pointer hover:underline tracking-tight">
+      <ContentTitles name={name} showLink={true} />
+      {raidInfo && <RaidInfo raid={raidInfo} />}
+    </Link>
+  ) : (
+    <>
+      <ContentTitles name={name} showLink={false} />
+      {raidInfo && <RaidInfo raid={raidInfo} />}
+    </>
+  );
+
   return (
     <div className="my-4 md:my-6">
       {/* 컨텐츠 분류 */}
       <div className="flex items-center gap-x-1 md:my-1">
         <div className="my-1 flex flex-wrap gap-1 text-sm">
           <span className="pr-1 py-0.5 text-neutral-500 dark:text-neutral-400">
-            {(contentType === "event" || contentType === "pickup") && runType === "rerun" && "복각 "}{contentTypeLocale[contentType]}
+            {(contentType === "event" || contentType === "pickup") && runType === "rerun" && "복각 "}
+            {contentTypeLocale[contentType]}
           </span>
-          {!endless && daysLabel && <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />}
-          {confirmed && (since && sinceDayjs.isAfter(now)) && <ContentTag Icon={CheckCircleIcon} text="확정" color="green" />}
-          {tags.includes("recruit_free_100") && recruitments?.every(({ until }) => until !== null && dayjs(until).isAfter(now)) && (
-            <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
+          {!endless && daysLabel && (
+            <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />
           )}
+          {confirmed && since && sinceDayjs.isAfter(now) && (
+            <ContentTag Icon={CheckCircleIcon} text="확정" color="green" />
+          )}
+          {tags.includes("recruit_free_100") &&
+            recruitments?.every(({ until }) => until !== null && dayjs(until).isAfter(now)) && (
+              <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
+            )}
           {tags.includes("shop") && <ContentTag Icon={CalculatorIcon} text="이벤트 상점" color="default" />}
         </div>
       </div>
 
       {/* 컨텐츠 이름 */}
-      {SHOW_LINK_CONTENT_TYPES.includes(contentType) ? (
-        <Link to={link} className="cursor-pointer hover:underline tracking-tight">
-          <ContentTitles name={name} showLink={true} />
-          {raidInfo && <RaidInfo raid={raidInfo} />}
-        </Link> 
-      ) : (
-        <>
-          <ContentTitles name={name} showLink={false} />
-          {raidInfo && <RaidInfo raid={raidInfo} />}
-        </>
-      )}
+      <SpoilerHeader hidden={isSpoiler && !spoilerVisible} onReveal={onRevealSpoiler}>
+        {headerContent}
+      </SpoilerHeader>
 
       {/* 모집 정보 */}
       {recruitments && recruitments.length > 0 && (
@@ -168,13 +223,14 @@ export function ContentTimelineItem({
       {/* 댓글 */}
       {showComments && onCommentCreate && (
         <>
-          <ContentCommentView
-            comments={allComments}
-            onClick={() => setCommentEditing(true)}
-          />
+          <ContentCommentView comments={allComments} onClick={() => setCommentEditing(true)} />
 
           {commentEditing && (
-            <BottomSheet Icon={ChatBubbleOvalLeftEllipsisIcon} title="이벤트 의견" onClose={() => setCommentEditing(false)}>
+            <BottomSheet
+              Icon={ChatBubbleOvalLeftEllipsisIcon}
+              title="이벤트 의견"
+              onClose={() => setCommentEditing(false)}
+            >
               <ContentCommentEditor
                 comments={allComments ?? []}
                 onCreateComment={onCommentCreate}
@@ -194,22 +250,49 @@ export function ContentTimelineItem({
   );
 }
 
-function ContentTitles({ name, showLink }: { name: string, showLink: boolean }): ReactNode {
-  const titles = name.split("\n");
+function SpoilerHeader({
+  hidden,
+  onReveal,
+  children,
+}: { hidden: boolean; onReveal?: () => void; children: ReactNode }) {
+  if (!hidden) {
+    return <>{children}</>;
+  }
+
   return (
-    titles.map((titleLine, index) => {
-      const key = `${name}-${index}`;
-      if (index < titles.length - 1) {
-        return <p key={key} className="text-lg md:text-xl font-semibold">{titleLine}</p>;
-      }
-      return (
-        <div key={key} className="text-lg md:text-xl font-semibold flex items-center">
-          <span className="inline">{titleLine}</span>
-          {showLink && <ChevronRightIcon className="inline size-4" strokeWidth={2} />}
+    <div className="relative overflow-hidden rounded-xl">
+      <div className="pointer-events-none select-none blur-md opacity-80">{children}</div>
+
+      <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/78 px-4 text-center dark:bg-neutral-950/80">
+        <div className="flex flex-col items-center gap-3">
+          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
+            스포일러가 포함된 미래시 컨텐츠입니다.
+          </p>
+          <Button text="보기" size="sm" variant="inverse" onClick={onReveal} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ContentTitles({ name, showLink }: { name: string; showLink: boolean }): ReactNode {
+  const titles = name.split("\n");
+  return titles.map((titleLine, index) => {
+    const key = `${name}-${index}`;
+    if (index < titles.length - 1) {
+      return (
+        <p key={key} className="text-lg md:text-xl font-semibold">
+          {titleLine}
+        </p>
       );
-    })
-  )
+    }
+    return (
+      <div key={key} className="text-lg md:text-xl font-semibold flex items-center">
+        <span className="inline">{titleLine}</span>
+        {showLink && <ChevronRightIcon className="inline size-4" strokeWidth={2} />}
+      </div>
+    );
+  });
 }
 
 type ContentTagProps = {
@@ -253,12 +336,20 @@ function RaidInfo({ raid }: RaidInfoProps) {
     <div className="mt-2 mb-6 relative md:w-96">
       <img
         className="md:w-96 rounded-lg bg-linear-to-br from-neutral-50 to-neutral-300 dark:from-neutral-600 dark:to-neutral-800"
-        src={bossImageUrl(raid.boss)} alt={`총력전 보스 ${raid.boss}`} loading="lazy"
+        src={bossImageUrl(raid.boss)}
+        alt={`총력전 보스 ${raid.boss}`}
+        loading="lazy"
       />
       <div className="absolute bottom-0 right-0 flex flex-col items-end gap-y-1 p-1 text-white text-sm">
         <div className="flex gap-x-1">
           <OptionBadge text={terrainLocale[raid.terrain]} bgColor="dark" />
-          {raid.attackType && <OptionBadge text={attackTypeLocale[raid.attackType]} color={attackTypeColor[raid.attackType]} bgColor="dark" />}
+          {raid.attackType && (
+            <OptionBadge
+              text={attackTypeLocale[raid.attackType]}
+              color={attackTypeColor[raid.attackType]}
+              bgColor="dark"
+            />
+          )}
           {raid.defenseTypes.length === 1 && (
             <OptionBadge
               text={defenseTypeLocale[raid.defenseTypes[0].defenseType]}
@@ -270,7 +361,12 @@ function RaidInfo({ raid }: RaidInfoProps) {
         {raid.defenseTypes.length > 1 && (
           <div className="flex gap-x-1">
             {raid.defenseTypes.map(({ defenseType }) => (
-              <OptionBadge key={defenseType} text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} bgColor="dark" />
+              <OptionBadge
+                key={defenseType}
+                text={defenseTypeLocale[defenseType]}
+                color={defenseTypeColor[defenseType]}
+                bgColor="dark"
+              />
             ))}
           </div>
         )}
@@ -306,23 +402,35 @@ type RecruitmentsProps = {
   eventUntil: Date | null;
 };
 
-function Recruitments({ contentType, recruitments, favoritedStudents, favoritedCounts, onFavorite, link, eventSince, eventUntil }: RecruitmentsProps) {
+function Recruitments({
+  contentType,
+  recruitments,
+  favoritedStudents,
+  favoritedCounts,
+  onFavorite,
+  link,
+  eventSince,
+  eventUntil,
+}: RecruitmentsProps) {
   // Group pickups by period (since/until dates)
   const recruitmentDateGroups = useMemo(() => {
-    return recruitments.reduce((groups, recruitment) => {
-      const sinceKey = dayjs(recruitment.since).format("YYYY-MM-DD");
-      const untilKey = recruitment.until ? dayjs(recruitment.until).format("YYYY-MM-DD") : "null";
-      const key = `${sinceKey}-${untilKey}`;
-      if (!groups[key]) {
-        groups[key] = {
-          since: recruitment.since,
-          until: recruitment.until,
-          recruitments: []
-        };
-      }
-      groups[key].recruitments.push(recruitment);
-      return groups;
-    }, {} as Record<string, { since: Date; until: Date | null; recruitments: RecruitmentsProps["recruitments"] }>)
+    return recruitments.reduce(
+      (groups, recruitment) => {
+        const sinceKey = dayjs(recruitment.since).format("YYYY-MM-DD");
+        const untilKey = recruitment.until ? dayjs(recruitment.until).format("YYYY-MM-DD") : "null";
+        const key = `${sinceKey}-${untilKey}`;
+        if (!groups[key]) {
+          groups[key] = {
+            since: recruitment.since,
+            until: recruitment.until,
+            recruitments: [],
+          };
+        }
+        groups[key].recruitments.push(recruitment);
+        return groups;
+      },
+      {} as Record<string, { since: Date; until: Date | null; recruitments: RecruitmentsProps["recruitments"] }>,
+    );
   }, [recruitments]);
 
   const recruitDateGroupsArray = Object.values(recruitmentDateGroups);
@@ -330,7 +438,9 @@ function Recruitments({ contentType, recruitments, favoritedStudents, favoritedC
 
   const firstSince = recruitments[0].since;
   const firstUntil = recruitments[0].until;
-  const isPickupDayDifferent = firstSince && firstUntil &&
+  const isPickupDayDifferent =
+    firstSince &&
+    firstUntil &&
     (!dayjs(firstSince).isSame(dayjs(eventSince), "day") || !dayjs(firstUntil).isSame(dayjs(eventUntil), "day"));
 
   const lastUntil = recruitments[recruitments.length - 1].until;
@@ -338,14 +448,9 @@ function Recruitments({ contentType, recruitments, favoritedStudents, favoritedC
   if (contentType === "fes") {
     return (
       <>
-
-
-        <TimelineItemBanner
-          message="픽업 외 학생은 모집 포인트(천장)로 교환할 수 없어요."
-          link={link}
-        />
+        <TimelineItemBanner message="픽업 외 학생은 모집 포인트(천장)로 교환할 수 없어요." link={link} />
       </>
-    )
+    );
   }
 
   if (hasMultiplePeriods) {
@@ -390,12 +495,14 @@ function Recruitments({ contentType, recruitments, favoritedStudents, favoritedC
 
       {isPickupDayDifferent && (
         <TimelineItemBanner
-          message={dayjs(lastUntil).isBefore(dayjs()) ? "학생 모집이 종료되었어요." : "이벤트 개최 기간과 모집 기간이 달라요."}
+          message={
+            dayjs(lastUntil).isBefore(dayjs()) ? "학생 모집이 종료되었어요." : "이벤트 개최 기간과 모집 기간이 달라요."
+          }
           link={link}
         />
       )}
     </>
-  )
+  );
 }
 
 type RecruitmentStudentsProps = {
@@ -424,61 +531,76 @@ function getRecruitmentStudentCards({
     const student = recruitment.student;
     const studentUid = student?.uid;
     const isFavorited = studentUid ? favoritedStudents.includes(studentUid) : false;
-    const labelColorClass = (recruitment.rerun ||
+    const labelColorClass =
+      recruitment.rerun ||
       recruitment.recruitmentType === "archive" ||
       recruitment.recruitmentType === "recollect" ||
-      recruitment.recruitmentType === "encore")
-      ? "text-white"
-      : "text-yellow-500";
+      recruitment.recruitmentType === "encore"
+        ? "text-white"
+        : "text-yellow-500";
 
     return {
       ...student,
       uid: studentUid ?? null,
       name: recruitment.studentName,
       label: <span className={labelColorClass}>{recruitmentLabelLocale(recruitment)}</span>,
-      state: studentUid ? {
-        favorited: isFavorited,
-        favoritedCount: favoritedCounts[studentUid],
-      } : undefined,
-      popups: (studentUid && student?.schaleDbId) ? [
-        isFavorited ? {
-          Icon: FilledHeartIcon,
-          text: "관심 학생에서 해제",
-          onClick: () => onFavorite?.(studentUid, false),
-        } : {
-          Icon: EmptyHeartIcon,
-          text: "관심 학생에 등록",
-          onClick: () => onFavorite?.(studentUid, true),
-        },
-        {
-          Icon: IdentificationIcon,
-          text: detailedLinkText,
-          link: `/students/${studentUid}`,
-        },
-      ] : undefined,
+      state: studentUid
+        ? {
+            favorited: isFavorited,
+            favoritedCount: favoritedCounts[studentUid],
+          }
+        : undefined,
+      popups:
+        studentUid && student?.schaleDbId
+          ? [
+              isFavorited
+                ? {
+                    Icon: FilledHeartIcon,
+                    text: "관심 학생에서 해제",
+                    onClick: () => onFavorite?.(studentUid, false),
+                  }
+                : {
+                    Icon: EmptyHeartIcon,
+                    text: "관심 학생에 등록",
+                    onClick: () => onFavorite?.(studentUid, true),
+                  },
+              {
+                Icon: IdentificationIcon,
+                text: detailedLinkText,
+                link: `/students/${studentUid}`,
+              },
+            ]
+          : undefined,
     };
   });
 }
 
-function RecruitmentStudents({ title, recruitments, favoritedStudents, favoritedCounts, onFavorite, showToggle = false }: RecruitmentStudentsProps) {
+function RecruitmentStudents({
+  title,
+  recruitments,
+  favoritedStudents,
+  favoritedCounts,
+  onFavorite,
+  showToggle = false,
+}: RecruitmentStudentsProps) {
   const [showCards, setShowCards] = useState(!showToggle);
-  const studentCards = useMemo(() => getRecruitmentStudentCards({
-    recruitments,
-    favoritedStudents,
-    favoritedCounts,
-    onFavorite,
-    detailedLinkText: "학생부 보기 (평가/통계)",
-  }), [favoritedCounts, favoritedStudents, onFavorite, recruitments]);
+  const studentCards = useMemo(
+    () =>
+      getRecruitmentStudentCards({
+        recruitments,
+        favoritedStudents,
+        favoritedCounts,
+        onFavorite,
+        detailedLinkText: "학생부 보기 (평가/통계)",
+      }),
+    [favoritedCounts, favoritedStudents, onFavorite, recruitments],
+  );
 
   if (!showToggle) {
     return (
       <div className="my-2">
         {title && <p className="mt-4 mb-1 font-semibold">{title}</p>}
-        <StudentCards
-          mobileGrid={5}
-          pcGrid={8}
-          students={studentCards}
-        />
+        <StudentCards mobileGrid={5} pcGrid={8} students={studentCards} />
       </div>
     );
   }
@@ -505,12 +627,7 @@ function RecruitmentStudents({ title, recruitments, favoritedStudents, favorited
         </button>
       </div>
 
-      {showCards && (
-        <StudentCards
-          mobileGrid={5}
-          students={studentCards}
-        />
-      )}
+      {showCards && <StudentCards mobileGrid={5} students={studentCards} />}
     </div>
   );
 }

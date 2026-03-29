@@ -1,18 +1,24 @@
+import { FunnelIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
-import { FunnelIcon } from "@heroicons/react/24/outline";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { ContentTimeline } from "~/components/features/contents";
 import type { ContentTimelineProps } from "~/components/features/contents";
 import { ContentFilterPanel } from "~/components/features/futures";
-import { getContentsComments, getFutureContents, nestComments, RAID_CONTENT_TYPES, type NestedComment } from "~/models/content";
+import type { ContentFilterState } from "~/components/features/futures/ContentFilterPanel";
+import { Page } from "~/components/features/layout";
+import { useSignIn } from "~/contexts/SignInProvider";
+import {
+  type NestedComment,
+  RAID_CONTENT_TYPES,
+  getContentsComments,
+  getFutureContents,
+  nestComments,
+} from "~/models/content";
+import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/models/raid";
-import { getUserFavoritedStudents, getFavoritedCounts } from "~/models/favorite-students";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
-import { Page } from "~/components/features/layout";
-import type { ContentFilterState } from "~/components/features/futures/ContentFilterPanel";
-import { useSignIn } from "~/contexts/SignInProvider";
 
 export const meta: MetaFunction = () => {
   const title = "블루 아카이브 이벤트, 픽업 미래시";
@@ -31,13 +37,17 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const contents = await getFutureContents(env);
 
-  const allStudentUids = contents.flatMap((content) =>
-    content.recruitments.map((r) => r.student?.uid ?? null),
-  ).filter((uid): uid is string => uid !== null);
+  const allStudentUids = contents
+    .flatMap((content) => content.recruitments.map((r) => r.student?.uid ?? null))
+    .filter((uid): uid is string => uid !== null);
 
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   const signedIn = currentUser !== null;
-  const flatComments = await getContentsComments(env, contents.map((c) => c.uid), currentUser?.id);
+  const flatComments = await getContentsComments(
+    env,
+    contents.map((c) => c.uid),
+    currentUser?.id,
+  );
 
   const allComments: Record<string, NestedComment[]> = {};
   for (const content of contents) {
@@ -54,14 +64,19 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   };
 };
 
-function equalFavorites(a: { contentUid: string, studentUid: string }, b: { contentUid: string, studentUid: string }): boolean {
+function equalFavorites(
+  a: { contentUid: string; studentUid: string },
+  b: { contentUid: string; studentUid: string },
+): boolean {
   return a.contentUid === b.contentUid && a.studentUid === b.studentUid;
 }
 
 const futuresContentFilterKey = "futures::content-filter";
+const futuresRevealedSpoilerKey = "futures::revealed-spoilers";
 
 export default function FutureContents() {
   const [filter, setFilter] = useState<ContentFilterState>({ types: [], onlyPickups: false });
+  const [revealedSpoilerContentUids, setRevealedSpoilerContentUids] = useState<string[]>([]);
   const [isHydrated, setIsHydrated] = useState(false);
 
   const { showSignIn } = useSignIn();
@@ -77,6 +92,18 @@ export default function FutureContents() {
         console.warn("Failed to parse saved content filter:", e);
       }
     }
+
+    const savedSpoilers = localStorage.getItem(futuresRevealedSpoilerKey);
+    if (savedSpoilers) {
+      try {
+        const parsed = JSON.parse(savedSpoilers);
+        if (Array.isArray(parsed)) {
+          setRevealedSpoilerContentUids(parsed.filter((value): value is string => typeof value === "string"));
+        }
+      } catch (e) {
+        console.warn("Failed to parse saved revealed spoilers:", e);
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -85,30 +112,47 @@ export default function FutureContents() {
     }
   }, [filter, isHydrated]);
 
+  useEffect(() => {
+    if (isHydrated) {
+      localStorage.setItem(futuresRevealedSpoilerKey, JSON.stringify(revealedSpoilerContentUids));
+    }
+  }, [isHydrated, revealedSpoilerContentUids]);
+
   const loaderData = useLoaderData<typeof loader>();
   const { contents, allComments: initialComments, signedIn } = loaderData;
 
-  const [favoritedStudents, setFavoritedStudents] = useState<{ contentUid: string, studentUid: string }[] | undefined>(
-    loaderData.favoritedStudents?.map((f) => ({ contentUid: f.contentId, studentUid: f.studentId })) ?? undefined
+  const [favoritedStudents, setFavoritedStudents] = useState<{ contentUid: string; studentUid: string }[] | undefined>(
+    loaderData.favoritedStudents?.map((f) => ({ contentUid: f.contentId, studentUid: f.studentId })) ?? undefined,
   );
   const [favoritedCounts, setFavoritedCounts] = useState(
-    loaderData.favoritedCounts.map((f) => ({ contentUid: f.contentId, studentUid: f.studentId, count: f.count }))
+    loaderData.favoritedCounts.map((f) => ({ contentUid: f.contentId, studentUid: f.studentId, count: f.count })),
   );
   const [allComments, setAllComments] = useState(initialComments);
 
   const favoriteFetcher = useFetcher();
-  const submitFavorite = (data: ContentsActionData) => favoriteFetcher.submit(data, { action: "/api/contents", method: "post", encType: "application/json" });
+  const submitFavorite = (data: ContentsActionData) =>
+    favoriteFetcher.submit(data, { action: "/api/contents", method: "post", encType: "application/json" });
 
   const commentFetcher = useFetcher();
-  const submitComment = (contentUid: string, data: CommentActionData) => commentFetcher.submit(data, { action: `/api/contents/${contentUid}/comments`, method: "post", encType: "application/json" });
+  const submitComment = (contentUid: string, data: CommentActionData) =>
+    commentFetcher.submit(data, {
+      action: `/api/contents/${contentUid}/comments`,
+      method: "post",
+      encType: "application/json",
+    });
 
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
 
   useEffect(() => {
-    if ((commentFetcher.state === "idle" || commentFetcher.state === "loading") && commentFetcher.data && Array.isArray(commentFetcher.data) && pendingContentUid) {
+    if (
+      (commentFetcher.state === "idle" || commentFetcher.state === "loading") &&
+      commentFetcher.data &&
+      Array.isArray(commentFetcher.data) &&
+      pendingContentUid
+    ) {
       setAllComments((prev) => ({
         ...prev,
-        [pendingContentUid]: commentFetcher.data as typeof initialComments[string],
+        [pendingContentUid]: commentFetcher.data as (typeof initialComments)[string],
       }));
       setPendingContentUid(null);
     }
@@ -117,6 +161,10 @@ export default function FutureContents() {
   useEffect(() => {
     setAllComments(initialComments);
   }, [initialComments]);
+
+  const revealSpoiler = (contentUid: string) => {
+    setRevealedSpoilerContentUids((prev) => (prev.includes(contentUid) ? prev : [...prev, contentUid]));
+  };
 
   const toggleFavorite = (contentUid: string, studentUid: string, favorited: boolean) => {
     if (!signedIn) {
@@ -152,21 +200,26 @@ export default function FutureContents() {
     });
   };
 
-  const filteredContents = useMemo(() => contents.filter((content) => {
-    const isRaid = (RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType);
-    const effectiveType = isRaid && content.raidInfo ? content.raidInfo.raidType : content.contentType;
-    if (filter.types.length > 0 && !filter.types.includes(effectiveType)) {
-      return false;
-    }
-    if (filter.onlyPickups && content.recruitments.filter((r) => r.pickup).length === 0) {
-      return false;
-    }
-    return true;
-  }), [contents, filter]);
+  const filteredContents = useMemo(
+    () =>
+      contents.filter((content) => {
+        const isRaid = (RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType);
+        const effectiveType = isRaid && content.raidInfo ? content.raidInfo.raidType : content.contentType;
+        if (filter.types.length > 0 && !filter.types.includes(effectiveType)) {
+          return false;
+        }
+        if (filter.onlyPickups && content.recruitments.filter((r) => r.pickup).length === 0) {
+          return false;
+        }
+        return true;
+      }),
+    [contents, filter],
+  );
 
   return (
     <Page
-      title="미래시" description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요"
+      title="미래시"
+      description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요"
       panels={[
         {
           title: "컨텐츠 필터",
@@ -178,9 +231,10 @@ export default function FutureContents() {
       <ContentTimeline
         contents={filteredContents.map((content): ContentTimelineProps["contents"][number] => {
           const isRaid = (RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType);
-          const raidLink = content.raidInfo?.seasonIndex != null
-            ? `/raids/${raidTypeToParam(content.raidInfo.raidType)}/${content.raidInfo.seasonIndex}`
-            : `/raids/${content.contentUid}`;
+          const raidLink =
+            content.raidInfo?.seasonIndex != null
+              ? `/raids/${raidTypeToParam(content.raidInfo.raidType)}/${content.raidInfo.seasonIndex}`
+              : `/raids/${content.contentUid}`;
           return {
             uid: content.uid,
             name: isRaid && content.raidInfo ? content.raidInfo.name : content.name,
@@ -190,6 +244,7 @@ export default function FutureContents() {
             until: content.endAt,
             endless: content.endless,
             confirmed: content.confirmed,
+            isSpoiler: content.isSpoiler,
             tags: content.tags,
             link: isRaid ? raidLink : `/events/${content.uid}`,
             recruitments: content.recruitments.length > 0 ? content.recruitments : undefined,
@@ -200,6 +255,8 @@ export default function FutureContents() {
         favoritedStudents={favoritedStudents ?? []}
         favoritedCounts={favoritedCounts}
         signedIn={signedIn}
+        revealedSpoilerContentUids={revealedSpoilerContentUids}
+        onRevealSpoiler={revealSpoiler}
         onCommentCreate={(contentUid, body, visibility) => {
           setPendingContentUid(contentUid);
           submitComment(contentUid, { action: "create", body, visibility });
