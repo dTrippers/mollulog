@@ -15,9 +15,7 @@ import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
-import { getUpcomingRaidContentByTypeAndSeason, getUpcomingRaidContents } from "~/models/content";
 import {
-  applyTimelineDateFallback,
   getAllRaidSchedules,
   getRaidSchedule,
   raidTypeFromParam,
@@ -48,21 +46,11 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
   }
 
   const scheduleUid = `gl_${normalizedRaidType}_${seasonIndex}`;
-  const [upcomingCurrentRaid, directRaidSchedule, allRaidSchedules, upcomingRaidContents, sensei] = await Promise.all([
-    getUpcomingRaidContentByTypeAndSeason(
-      env,
-      normalizedRaidType as "total_assault" | "elimination" | "unlimit" | "allied",
-      parsedSeasonIndex,
-    ),
+  const [currentRaid, allRaidSchedules, sensei] = await Promise.all([
     getRaidSchedule(env, scheduleUid),
     getAllRaidSchedules(env),
-    getUpcomingRaidContents(env),
     getAuthenticator(env).isAuthenticated(request),
   ]);
-
-  const [currentRaid] = upcomingCurrentRaid?.raidSchedule
-    ? [upcomingCurrentRaid.raidSchedule]
-    : await applyTimelineDateFallback(env, directRaidSchedule ? [directRaidSchedule] : []);
 
   if (!currentRaid) {
     throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
@@ -71,13 +59,7 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
     });
   }
 
-  const [allRaidsWithTimelineDates] = await Promise.all([applyTimelineDateFallback(env, allRaidSchedules)]);
-  const mergedRaids = new Map(allRaidsWithTimelineDates.map((raid) => [raidKey(raid), raid]));
-  for (const upcomingRaid of upcomingRaidContents) {
-    if (upcomingRaid.raidSchedule) {
-      mergedRaids.set(raidKey(upcomingRaid.raidSchedule), upcomingRaid.raidSchedule);
-    }
-  }
+  const mergedRaids = new Map(allRaidSchedules.map((raid) => [raidKey(raid), raid]));
 
   return {
     currentRaid,

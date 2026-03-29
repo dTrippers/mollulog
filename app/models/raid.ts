@@ -55,6 +55,27 @@ export function getAllRaidSchedules(env: Env, forceRefresh = false) {
   }, 60 * 90, forceRefresh);
 }
 
+export async function getUpcomingRaidSchedules(
+  env: Env,
+  { limit, raidTypes }: { limit?: number; raidTypes?: string[] } = {},
+) {
+  const now = new Date();
+  const schedules = await getAllRaidSchedules(env);
+  const filteredSchedules = schedules
+    .filter((schedule) => {
+      if (!schedule.startAt || !schedule.endAt) {
+        return false;
+      }
+      if (raidTypes && !raidTypes.includes(schedule.raidType)) {
+        return false;
+      }
+      return new Date(schedule.endAt) >= now;
+    })
+    .sort((a, b) => new Date(a.startAt as Date).getTime() - new Date(b.startAt as Date).getTime());
+
+  return typeof limit === "number" ? filteredSchedules.slice(0, limit) : filteredSchedules;
+}
+
 // ============================================================
 // 레거시 Raid (하위 호환 — deprecated 쿼리)
 // ============================================================

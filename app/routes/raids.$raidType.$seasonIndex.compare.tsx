@@ -5,9 +5,8 @@ import RaidDifficultyComparison from "~/components/features/raids/RaidDifficulty
 import RaidStudentComparison from "~/components/features/raids/RaidStudentComparison";
 import { EmptyView, LoadingSkeleton, Section } from "~/components/primitives";
 import { type defenseTypeColor, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
-import { getUpcomingRaidContentByTypeAndSeason, getUpcomingRaidContents } from "~/models/content";
 import type { RaidType } from "~/models/content.d";
-import { applyTimelineDateFallback, getRaidSchedule, raidTypeFromParam } from "~/models/raid";
+import { getRaidSchedule, raidTypeFromParam } from "~/models/raid";
 import { fetchRaidOverview } from "~/models/raid-overview.client";
 import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
 import { getAllStudentsMap } from "~/models/student";
@@ -52,26 +51,12 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     });
   }
 
-  const [upcomingCurrentRaid, upcomingRaidContents, directToSchedule, directFromSchedule, rawAllStudents] =
+  const [toSchedule, fromSchedule, rawAllStudents] =
     await Promise.all([
-      getUpcomingRaidContentByTypeAndSeason(
-        env,
-        normalizedRaidType as "total_assault" | "elimination" | "unlimit" | "allied",
-        parsedSeasonIndex,
-      ),
-      getUpcomingRaidContents(env),
       getRaidSchedule(env, currentRaidUid),
       getRaidSchedule(env, fromRaidUid),
       getAllStudentsMap(env, true),
     ]);
-
-  const upcomingFromRaid = upcomingRaidContents.find((content) => content.raidSchedule?.uid === fromRaidUid);
-  const [toSchedule] = upcomingCurrentRaid?.raidSchedule
-    ? [upcomingCurrentRaid.raidSchedule]
-    : await applyTimelineDateFallback(env, directToSchedule ? [directToSchedule] : []);
-  const [fromSchedule] = upcomingFromRaid?.raidSchedule
-    ? [upcomingFromRaid.raidSchedule]
-    : await applyTimelineDateFallback(env, directFromSchedule ? [directFromSchedule] : []);
 
   if (!toSchedule || !fromSchedule) {
     throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
