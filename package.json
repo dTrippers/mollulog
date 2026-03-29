@@ -16,6 +16,7 @@
     "assets:deploy": "tofu -chdir=deploy/assets apply",
     "dev:db:migrate": "wrangler d1 migrations apply --local DB",
     "prod:db:migrate": "wrangler d1 migrations apply --remote DB --env production",
+    "prod:db:pull": "mkdir -p tmp && wrangler d1 export mollulog --remote --env production --output=tmp/prod-remote-dump.sql && rm -rf .wrangler/state/v3/d1/miniflare-D1DatabaseObject && wrangler d1 execute DB --local --file=tmp/prod-remote-dump.sql --yes",
     "test": "jest",
     "typecheck": "react-router typegen && tsc",
     "lint": "biome lint --write"

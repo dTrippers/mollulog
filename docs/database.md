@@ -101,6 +101,20 @@ await db.delete(followerships).where(eq(followerships.followerId, id));
 pnpm dev:db:migrate
 ```
 
+## 원격 D1 데이터를 로컬로 덮어쓰기
+
+```bash
+# 프로덕션 D1 export 후 로컬 DB 덮어쓰기
+pnpm prod:db:pull
+
+# 스테이징 D1 export 후 로컬 DB 덮어쓰기
+pnpm staging:db:pull
+```
+
+- 원격 D1을 SQL로 export한 뒤 로컬 D1 상태 디렉터리를 비우고 다시 import합니다.
+- export 파일은 `tmp/` 아래에 생성되고, 실행 후 `.wrangler/state/v3/d1/miniflare-D1DatabaseObject` 아래 로컬 DB가 원격 기준으로 재생성됩니다.
+- 로컬 DB 데이터는 완전히 덮어써지므로 필요하면 실행 전에 별도 백업이 필요합니다.
+
 ## 중요 주의사항
 
 - D1은 SQLite 기반이므로 JSON 컬럼은 TEXT로 저장 후 파싱 필요

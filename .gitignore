@@ -35,3 +35,5 @@ terraform.rc
 
 ### Lambda Functions
 /lambda/build
+
+tmp/
