@@ -39,6 +39,7 @@ export const timelineContentsTable = sqliteTable("timeline_contents", {
   confirmed: int().notNull().default(0),
   isSpoiler: int("is_spoiler").notNull().default(0),
   tags: text().notNull().default("[]"),
+  earnablePyroxene: int("earnable_pyroxene"),
   createdAt: text("created_at").notNull().default(sql`current_timestamp`),
   updatedAt: text("updated_at").notNull().default(sql`current_timestamp`),
   syncedAt: text("synced_at"),
@@ -60,6 +61,7 @@ export type TimelineContent = {
   confirmed: boolean;
   isSpoiler: boolean;
   tags: string[];
+  earnablePyroxene: number | null;
   syncedAt: Date | null;
 };
 
@@ -81,6 +83,7 @@ function toRaw(row: typeof timelineContentsTable.$inferSelect): RawTimelineConte
     confirmed: row.confirmed === 1,
     isSpoiler: row.isSpoiler === 1,
     tags: JSON.parse(row.tags) as string[],
+    earnablePyroxene: row.earnablePyroxene ?? null,
     syncedAt: row.syncedAt ? new Date(row.syncedAt) : null,
   };
 }

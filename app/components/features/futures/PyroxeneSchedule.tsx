@@ -8,7 +8,9 @@ import ResourcesInput from "./planner-input/ResourcesInput";
 import { Transition } from "@headlessui/react";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
-import { MiniButton, MultilineText, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
+import { EmptyView, MiniButton, MultilineText, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
+import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import PyroxeneChart from "./PyroxeneChart";
 
 export type PickupResources = {
   pyroxene: number;
@@ -22,11 +24,12 @@ export type PyroxeneScheduleItem = ({
     name: string;
     since: Date;
     until: Date;
+    earnablePyroxene: number | null;
     recruitments: {
       recruitmentType: RecruitmentTypeEnum;
       pickup: boolean;
       rerun: boolean;
-      student: { uid: string; initialTier: number } | null;
+      student: { uid: string; name: string; initialTier: number } | null;
       favorited: boolean;
     }[];
   };
@@ -125,6 +128,10 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
         text="재화 획득/소비 계획"
         description="미래시 페이지에서 관심 학생을 등록하면 모집 시점의 예상 청휘석을 계산할 수 있어요"
       />
+      <PyroxeneChart timeline={timeline} />
+      {timeline.every(({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type)) && (
+        <EmptyView text="표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해보세요." />
+      )}
       {timeline.map(({ date, accumulatedResources, resourceDelta, source }) => {
         if (source.type !== "event" && !options.timeline.display.includes(source.type)) {
           return null;
@@ -226,12 +233,21 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
   const [showCompleteAction, setShowCompleteAction] = useState(false);
   const [showExpectedTrialsAction, setShowExpectedTrialsAction] = useState(false);
   const [expectedTrialsInputValue, setExpectedTrialsInputValue] = useState<number>(expectedTrials ?? 0);
+  const [confirmingPickupDelete, setConfirmingPickupDelete] = useState(false);
+
   const actions: ActionCardAction[] = [];
   if (completed) {
     actions.push({
-      text: "모집 기록 삭제",
+      text: confirmingPickupDelete ? "정말 삭제할까요?" : "모집 기록 삭제",
       color: "red",
-      onClick: () => onDeletePickupComplete(event.uid),
+      onClick: () => {
+        if (confirmingPickupDelete) {
+          onDeletePickupComplete(event.uid);
+        } else {
+          setConfirmingPickupDelete(true);
+          setTimeout(() => setConfirmingPickupDelete(false), 3000);
+        }
+      },
       danger: true,
     });
   } else if (dayjs(event.since).isBefore(dayjs())) {
@@ -465,6 +481,18 @@ function InitialResources({ resources, onUpdateResources }: { resources: PickupR
 }
 
 function TimelineResources({ date, description, resources, itemUid, onDeleteItem }: { date: dayjs.Dayjs, description: string, resources: PickupResources, itemUid?: string, onDeleteItem?: (itemUid: string) => void }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const handleDeleteClick = () => {
+    if (!itemUid || !onDeleteItem) return;
+    if (confirmingDelete) {
+      onDeleteItem(itemUid);
+    } else {
+      setConfirmingDelete(true);
+      setTimeout(() => setConfirmingDelete(false), 3000);
+    }
+  };
+
   return (
     <div className="my-4 px-3 md:px-4 py-2 flex items-center justify-between border border-neutral-200 dark:border-neutral-700 rounded-lg">
       <div className="w-40">
@@ -483,10 +511,14 @@ function TimelineResources({ date, description, resources, itemUid, onDeleteItem
       {itemUid && onDeleteItem && (
         <button
           type="button"
-          onClick={() => onDeleteItem(itemUid)}
-          className="ml-2 px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md transition whitespace-nowrap"
+          onClick={handleDeleteClick}
+          className={`ml-2 px-2.5 py-1 text-xs font-medium border rounded-md transition whitespace-nowrap ${
+            confirmingDelete
+              ? "text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 border-red-300 dark:border-red-700 animate-pulse"
+              : "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border-red-200 dark:border-red-800"
+          }`}
         >
-          삭제
+          {confirmingDelete ? "정말 삭제할까요?" : "삭제"}
         </button>
       )}
     </div>
@@ -530,6 +562,16 @@ type Timeline = {
 
 const MAX_REPEATED_ENTRIES = 365;
 
+const PYROXENE = {
+  RAID_TOTAL_ASSAULT_BASE: 650,
+  RAID_TOTAL_ASSAULT_TIER: { platinum: 1200, gold: 1000, silver: 800, bronze: 600 },
+  RAID_ELIMINATION_BASE: 650,
+  DAILY_MISSION: 20,
+  WEEKLY_MISSION: 120,
+  TACTICAL: { in10: 35, in100: 30, in200: 25, over200: 20 },
+  PICKUP_TRIAL: { average: 140, ceil: 200 },
+} as const;
+
 function buildTimeline(
   initialResources: PickupResources,
   initialDate: Date,
@@ -550,6 +592,16 @@ function buildTimeline(
     if (scheduleItem.event) {
       // 픽업 일정
       const { event } = scheduleItem;
+
+      // 이벤트 보상 청휘석 (픽업 완료 여부와 무관하게 이벤트 종료일에 수급)
+      if (event.earnablePyroxene) {
+        timelineDeltas.push({
+          date: dayjs(event.until),
+          source: { type: "event_reward", description: event.name },
+          resourceDelta: { pyroxene: event.earnablePyroxene, oneTimeTicket: 0, tenTimeTicket: 0 },
+        });
+      }
+
       const eventData = eventDataMap.get(event.uid);
       if (eventData?.completed) {
         // 이미 픽업을 완료한 일정은 계산하지 않음
@@ -570,7 +622,7 @@ function buildTimeline(
         if (pickupCount === 0) {
           continue;
         }
-        pickupTrial = pickupCount * (options.event.pickupChance === "ceil" ? 200 : 140);
+        pickupTrial = pickupCount * PYROXENE.PICKUP_TRIAL[options.event.pickupChance];
       }
 
       timelineDeltas.push({
@@ -581,28 +633,19 @@ function buildTimeline(
     } else if (scheduleItem.raid) {
       const { raid } = scheduleItem;
       if (raid.type === "total_assault") {
-        // 총력전 종료일 기준으로 650 + 등급 보상 청휘석 획득
-        let tierReward = 600;
-        const tier = options.raid.tier;
-        if (tier === "platinum") {
-          tierReward = 1200;
-        } else if (tier === "gold") {
-          tierReward = 1000;
-        } else if (tier === "silver") {
-          tierReward = 800;
-        }
-
+        // 총력전 종료일 기준으로 기본 + 등급 보상 청휘석 획득
+        const tierReward = PYROXENE.RAID_TOTAL_ASSAULT_TIER[options.raid.tier];
         timelineDeltas.push({
           date: dayjs(raid.until),
           source: { type: "raid", description: `총력전 ${raid.name}` },
-          resourceDelta: { pyroxene: 650 + tierReward, oneTimeTicket: 0, tenTimeTicket: 0 },
+          resourceDelta: { pyroxene: PYROXENE.RAID_TOTAL_ASSAULT_BASE + tierReward, oneTimeTicket: 0, tenTimeTicket: 0 },
         });
       } else if (raid.type === "elimination") {
-        // 대결전 종료일 익일 기준으로 650 청휘석, 10연차 티켓 1장 획득
+        // 대결전 종료일 익일 기준으로 기본 청휘석, 10연차 티켓 1장 획득
         timelineDeltas.push({
           date: dayjs(raid.until).add(1, "day"),
           source: { type: "raid", description: `대결전 ${raid.name}` },
-          resourceDelta: { pyroxene: 650, oneTimeTicket: 0, tenTimeTicket: 1 },
+          resourceDelta: { pyroxene: PYROXENE.RAID_ELIMINATION_BASE, oneTimeTicket: 0, tenTimeTicket: 1 },
         });
       }
     } else if (scheduleItem.onetimeGain) {
@@ -628,14 +671,7 @@ function buildTimeline(
 
   // 일별/주간 임무 및 전술대회
   const dateFrom = dayjs(initialDate);
-  let tacticalPyroxene = 20;
-  if (options.tactical.level === "in200") {
-    tacticalPyroxene = 25;
-  } else if (options.tactical.level === "in100") {
-    tacticalPyroxene = 30;
-  } else if (options.tactical.level === "in10") {
-    tacticalPyroxene = 35;
-  }
+  const tacticalPyroxene = PYROXENE.TACTICAL[options.tactical.level];
 
   let dailyEntryCount = 0;
   for (let date = dateFrom; date.isBefore(maxDate) && dailyEntryCount < MAX_REPEATED_ENTRIES; date = date.add(1, "day")) {
@@ -644,7 +680,7 @@ function buildTimeline(
     timelineDeltas.push({
       date,
       source: { type: "daily_mission", description: "일일 임무" },
-      resourceDelta: { pyroxene: 20, oneTimeTicket: 0, tenTimeTicket: 0 },
+      resourceDelta: { pyroxene: PYROXENE.DAILY_MISSION, oneTimeTicket: 0, tenTimeTicket: 0 },
     });
 
     // 매주 일요일
@@ -652,7 +688,7 @@ function buildTimeline(
       timelineDeltas.push({
         date,
         source: { type: "weekly_mission", description: "주간 임무" },
-        resourceDelta: { pyroxene: 120, oneTimeTicket: 0, tenTimeTicket: 0 },
+        resourceDelta: { pyroxene: PYROXENE.WEEKLY_MISSION, oneTimeTicket: 0, tenTimeTicket: 0 },
       });
     }
 

@@ -12,8 +12,7 @@ export default function BuyInput({ onSaveBuy }: BuyInputProps) {
   const [quantity, setQuantity] = useState(6600);
   const [date, setDate] = useState(new Date());
 
-  // Check if the date (without time) is before today
-  const dateIsBeforeToday = dayjs(date).startOf("day").isBefore(dayjs().startOf("day"));
+  const quantityError = quantity <= 0 ? "구매 수량은 0보다 커야 해요" : undefined;
 
   return (
     <>
@@ -24,18 +23,18 @@ export default function BuyInput({ onSaveBuy }: BuyInputProps) {
           type="number"
           defaultValue="6600"
           onChange={(value) => setQuantity(Number(value))}
-          error={quantity <= 0 ? "구매 수량은 0보다 커야 해요" : undefined}
+          error={quantityError}
         />
         <PlannerInputForm
           label="구매 날짜"
           type="date"
           defaultValue={dayjs().format("YYYY-MM-DD")}
           onChange={(value) => setDate(new Date(value))}
-          error={dateIsBeforeToday ? "구매 날짜가 오늘보다 이전이에요" : undefined}
         />
         <PlannerButtonForm
           label="저장"
           color="blue"
+          disabled={!!quantityError}
           onClick={() => onSaveBuy(quantity, date)}
         />
       </PlannerFormGroup>
