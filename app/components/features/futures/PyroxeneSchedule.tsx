@@ -10,6 +10,7 @@ import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxe
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { EmptyView, MiniButton, MultilineText, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import PyroxeneChart from "./PyroxeneChart";
 
 export type PickupResources = {
   pyroxene: number;
@@ -28,7 +29,7 @@ export type PyroxeneScheduleItem = ({
       recruitmentType: RecruitmentTypeEnum;
       pickup: boolean;
       rerun: boolean;
-      student: { uid: string; initialTier: number } | null;
+      student: { uid: string; name: string; initialTier: number } | null;
       favorited: boolean;
     }[];
   };
@@ -127,6 +128,7 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
         text="재화 획득/소비 계획"
         description="미래시 페이지에서 관심 학생을 등록하면 모집 시점의 예상 청휘석을 계산할 수 있어요"
       />
+      <PyroxeneChart timeline={timeline} />
       {timeline.every(({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type)) && (
         <EmptyView text="표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해보세요." />
       )}

@@ -31,7 +31,7 @@ export type PyroxenePlannerContent =
       recruitmentType: RecruitmentTypeEnum;
       pickup: boolean;
       rerun: boolean;
-      student: { uid: string; initialTier: number } | null;
+      student: { uid: string; name: string; initialTier: number } | null;
     }[];
   } | {
     kind: "raid";
@@ -71,7 +71,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
           recruitmentType: r.recruitmentType,
           pickup: r.pickup,
           rerun: r.rerun,
-          student: r.student ? { uid: r.student.uid, initialTier: studentsMap[r.student.uid]?.initialTier ?? 0 } : null,
+          student: r.student ? { uid: r.student.uid, name: r.student.name, initialTier: studentsMap[r.student.uid]?.initialTier ?? 0 } : null,
         }));
         return {
           kind: "event" as const,
