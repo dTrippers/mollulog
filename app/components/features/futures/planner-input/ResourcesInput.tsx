@@ -38,10 +38,6 @@ export default function ResourcesInput({ description, onSaveResources, descripti
     ? "획득 사유는 20자 이하여야 해요"
     : undefined;
 
-  const dateError = dateInput && dayjs(date).startOf("day").isBefore(dayjs().startOf("day"))
-    ? "획득 날짜가 오늘보다 이전이에요"
-    : undefined;
-
   return (
     <>
       {description && <p className="mb-4 text-sm text-neutral-500">{description}</p>}
@@ -52,7 +48,6 @@ export default function ResourcesInput({ description, onSaveResources, descripti
             type="date"
             defaultValue={dayjs(date).format("YYYY-MM-DD")}
             onChange={(value) => setDate(new Date(value))}
-            error={dateError}
           />
         )}
         {descriptionInput && (
@@ -98,6 +93,7 @@ export default function ResourcesInput({ description, onSaveResources, descripti
         <PlannerButtonForm
           label="저장"
           color="blue"
+          disabled={!!descriptionError}
           onClick={() => onSaveResources(resources, descriptionInput ? descriptionValue : undefined, dateInput ? date : undefined)}
         />
       </PlannerFormGroup>

@@ -264,13 +264,16 @@ export async function deletePyroxeneTimelineItem(env: Env, userId: number, uid: 
     ));
 }
 
+const PACKAGE_CONFIG = {
+  half: { name: "하프 패키지", oneTime: 176, daily: 20 },
+  full: { name: "월간 패키지", oneTime: 392, daily: 40 },
+} as const;
+
 export async function createPyroxenePackage(env: Env, userId: number, startDate: Date, packageType: "half" | "full"): Promise<void> {
   const uid = nanoid(8);
   const eventAt = dayjs(startDate).utcOffset(9).hour(4).toISOString(); // KST 4:00 on the given date
 
-  const packageName = packageType === "half" ? "하프 패키지" : "월간 패키지";
-  const oneTimePyroxene = packageType === "half" ? 176 : 392;
-  const dailyPyroxene = packageType === "half" ? 20 : 40;
+  const { name: packageName, oneTime: oneTimePyroxene, daily: dailyPyroxene } = PACKAGE_CONFIG[packageType];
 
   const db = drizzle(env.DB);
   await db.insert(pyroxeneTimelineItemsTable)
@@ -473,30 +476,27 @@ export async function upsertPyroxeneEventData(
   data: { completed?: boolean; expectedTrials?: number | null },
 ): Promise<void> {
   const db = drizzle(env.DB);
+  const uid = nanoid(8);
   const updatedAt = new Date().toISOString();
 
-  const existing = await getPyroxeneEventData(env, userId, eventUid);
-
-  if (existing) {
-    await db
-      .update(pyroxeneEventDataTable)
-      .set({
-        completed: data.completed !== undefined ? (data.completed ? 1 : 0) : existing.completed ? 1 : 0,
-        expectedTrials: data.expectedTrials !== undefined ? data.expectedTrials : existing.expectedTrials,
-        updatedAt,
-      })
-      .where(and(eq(pyroxeneEventDataTable.userId, userId), eq(pyroxeneEventDataTable.eventUid, eventUid)));
-  } else {
-    const uid = nanoid(8);
-    await db.insert(pyroxeneEventDataTable).values({
+  // Only overwrite fields that were explicitly provided; omitted fields preserve their existing value on conflict.
+  await db.insert(pyroxeneEventDataTable)
+    .values({
       uid,
       userId,
       eventUid,
-      completed: data.completed !== undefined ? (data.completed ? 1 : 0) : 0,
-      expectedTrials: data.expectedTrials !== undefined ? data.expectedTrials : null,
+      completed: data.completed ? 1 : 0,
+      expectedTrials: data.expectedTrials ?? null,
       updatedAt,
+    })
+    .onConflictDoUpdate({
+      target: [pyroxeneEventDataTable.userId, pyroxeneEventDataTable.eventUid],
+      set: {
+        ...(data.completed !== undefined && { completed: data.completed ? 1 : 0 }),
+        ...(data.expectedTrials !== undefined && { expectedTrials: data.expectedTrials }),
+        updatedAt,
+      },
     });
-  }
 }
 
 export async function deletePyroxeneEventData(env: Env, userId: number, eventUid: string): Promise<void> {
