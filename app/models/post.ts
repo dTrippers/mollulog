@@ -23,6 +23,14 @@ type Post = {
   updatedAt: string;
 };
 
+type PostPage = {
+  items: Post[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+};
+
 function toModel(post: typeof postsTable.$inferSelect): Post {
   return {
     uid: post.uid,
@@ -84,6 +92,37 @@ export async function getAllPosts(env: Env, board?: string): Promise<Post[]> {
     .where(board ? eq(postsTable.board, board) : undefined)
     .orderBy(sql`createdAt DESC`);
   return posts.map(toModel);
+}
+
+export async function getNewsPosts(env: Env, page = 1, pageSize = 5): Promise<PostPage> {
+  const db = drizzle(env.DB);
+  const safePage = Math.max(1, page);
+  const safePageSize = Math.max(1, pageSize);
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(postsTable)
+    .where(eq(postsTable.board, "news"));
+
+  const totalCount = Number(count);
+  const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
+  const currentPage = Math.min(safePage, totalPages);
+  const offset = (currentPage - 1) * safePageSize;
+
+  const posts = await db
+    .select()
+    .from(postsTable)
+    .where(eq(postsTable.board, "news"))
+    .orderBy(sql`createdAt DESC`)
+    .limit(safePageSize)
+    .offset(offset);
+
+  return {
+    items: posts.map(toModel),
+    page: currentPage,
+    pageSize: safePageSize,
+    totalCount,
+    totalPages,
+  };
 }
 
 export async function getLatestPostTime(env: Env, board: string): Promise<Date | null> {
