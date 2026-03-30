@@ -343,7 +343,7 @@ export default function PyroxenePlanner() {
       level: "in100",
     },
     timeline: {
-      display: ["event", "raid", "buy", "package_onetime"],
+      display: ["event", "event_reward", "raid", "buy", "package_onetime"],
     },
   };
 
@@ -386,6 +386,7 @@ export default function PyroxenePlanner() {
             name: content.name,
             since: content.since,
             until: content.until,
+            earnablePyroxene: content.earnablePyroxene ?? null,
             recruitments: content.recruitments.map((recruitment) => ({
               ...recruitment,
               favorited: favoritedStudents.some(({ contentUid, studentUid }) => contentUid === content.uid && studentUid === recruitment.student?.uid),

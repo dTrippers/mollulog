@@ -23,6 +23,7 @@ export type PyroxeneScheduleItem = ({
     name: string;
     since: Date;
     until: Date;
+    earnablePyroxene: number | null;
     recruitments: {
       recruitmentType: RecruitmentTypeEnum;
       pickup: boolean;
@@ -589,6 +590,16 @@ function buildTimeline(
     if (scheduleItem.event) {
       // 픽업 일정
       const { event } = scheduleItem;
+
+      // 이벤트 보상 청휘석 (픽업 완료 여부와 무관하게 이벤트 종료일에 수급)
+      if (event.earnablePyroxene) {
+        timelineDeltas.push({
+          date: dayjs(event.until),
+          source: { type: "event_reward", description: event.name },
+          resourceDelta: { pyroxene: event.earnablePyroxene, oneTimeTicket: 0, tenTimeTicket: 0 },
+        });
+      }
+
       const eventData = eventDataMap.get(event.uid);
       if (eventData?.completed) {
         // 이미 픽업을 완료한 일정은 계산하지 않음

@@ -22,6 +22,7 @@ const tacticalLevelOptions = [
 ];
 
 const timelineDisplayOptions: { text: string; value: TimelineSourceType }[] = [
+  { text: "이벤트 보상", value: "event_reward" },
   { text: "총력전/대결전", value: "raid" },
   { text: "청휘석 구매", value: "buy" },
   { text: "패키지 (초회)", value: "package_onetime" },

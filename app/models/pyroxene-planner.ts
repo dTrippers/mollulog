@@ -26,6 +26,7 @@ export type PyroxenePlannerContent =
     name: string;
     since: Date;
     until: Date;
+    earnablePyroxene: number | null;
     recruitments: {
       recruitmentType: RecruitmentTypeEnum;
       pickup: boolean;
@@ -78,6 +79,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
           name: content.name,
           since: content.startAt,
           until: content.endAt,
+          earnablePyroxene: content.earnablePyroxene ?? null,
           recruitments,
         };
       }
@@ -355,7 +357,7 @@ export async function createOtherPyroxeneGain(env: Env, userId: number, date: Da
 /**
  * Pyroxene Planner Options
  */
-export type TimelineSourceType = "event" | "raid" | "daily_mission" | "weekly_mission" | "buy" | "package_onetime" | "package_daily" | "attendance" | "tactical" | "other";
+export type TimelineSourceType = "event" | "event_reward" | "raid" | "daily_mission" | "weekly_mission" | "buy" | "package_onetime" | "package_daily" | "attendance" | "tactical" | "other";
 export type PyroxenePlannerOptions = {
   event: {
     pickupChance: "ceil" | "average";
