@@ -17,6 +17,7 @@ import type { Route } from "./+types/root";
 import { getAuthenticator } from "./auth/authenticator.server";
 import { getPreference } from "./auth/preference.server";
 import { Footer, NavigationBar } from "./components/features/layout";
+import { AprilFoolsProvider } from "./contexts/AprilFoolsProvider";
 import { SignInProvider } from "./contexts/SignInProvider";
 import { useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
@@ -136,27 +137,29 @@ export default function App() {
     <div className={`${darkMode ? "dark " : ""}text-neutral-900 dark:bg-neutral-800 dark:text-neutral-200 transition`}>
       <LoadingBar ref={loadingBarRef} color="#0ea5e9" height={3} waitingTime={300} />
       <SignInProvider>
-        <div className="flex flex-col xl:flex-row h-dvh">
-          <NavigationBar
-            currentUsername={currentUsername}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
-            upcomingEvent={navigationBarContents.upcomingEvent}
-            hasRecentNews={navigationBarContents.hasRecentNews}
-            hasActiveCoupons={navigationBarContents.hasActiveCoupons}
-          />
-          <div className="mllg-content-area w-full pt-10 xl:pt-0 overflow-y-scroll">
-            <div className={`xl:h-screen mx-auto ${widthClass} px-4 md:px-8 py-6`}>
-              <div className="pb-32">
-                <StudentCardPopupProvider key={pathname}>
-                  <Outlet />
-                </StudentCardPopupProvider>
+        <AprilFoolsProvider>
+          <div className="flex flex-col xl:flex-row h-dvh">
+            <NavigationBar
+              currentUsername={currentUsername}
+              darkMode={darkMode}
+              setDarkMode={setDarkMode}
+              upcomingEvent={navigationBarContents.upcomingEvent}
+              hasRecentNews={navigationBarContents.hasRecentNews}
+              hasActiveCoupons={navigationBarContents.hasActiveCoupons}
+            />
+            <div className="mllg-content-area w-full pt-10 xl:pt-0 overflow-y-scroll">
+              <div className={`xl:h-screen mx-auto ${widthClass} px-4 md:px-8 py-6`}>
+                <div className="pb-32">
+                  <StudentCardPopupProvider key={pathname}>
+                    <Outlet />
+                  </StudentCardPopupProvider>
+                </div>
+                <Footer />
               </div>
-              <Footer />
             </div>
           </div>
-        </div>
-        <SignInBottomSheetHost />
+          <SignInBottomSheetHost />
+        </AprilFoolsProvider>
       </SignInProvider>
     </div>
   );

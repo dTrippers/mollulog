@@ -8,6 +8,7 @@ import type { Attack, Defense } from "~/graphql/graphql";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, roleColor, roleLocale } from "~/locales/ko";
 import { OptionBadge } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
+import { getAprilFoolsStudentUid, useAprilFools } from "~/contexts/AprilFoolsProvider";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import { parseVisibleNames } from "~/models/student";
 
@@ -96,9 +97,11 @@ export default function StudentCard({
   uid, name, nameSize, tier, level, label, isAssist, attackType, defenseType, role,
   favorited, favoritedCount, grayscale, checked, hideName, circular, onSelect, popups, popupId = uid,
 }: StudentCardProps) {
+  const { isActive: isAprilFoolsActive } = useAprilFools();
   const { activePopupId, setActivePopupId } = useStudentCardPopup();
   const showPopup = popupId === activePopupId;
   const interactive = Boolean((onSelect || popups) && uid);
+  const imageUid = isAprilFoolsActive && uid ? getAprilFoolsStudentUid(uid) : (uid ?? "unlisted");
   const handleCardClick = getStudentCardAction({
     uid,
     onSelect,
@@ -116,7 +119,7 @@ export default function StudentCard({
             <div className={`relative ${circular ? "rounded-full" : "rounded-lg"} overflow-hidden ${circular ? "aspect-square" : ""}`}>
               <img
                 className={`w-full h-full object-cover ${grayscale ? "grayscale opacity-75" : ""} transition`}
-                src={studentImageUrl(uid ?? "unlisted")}
+                src={studentImageUrl(imageUid)}
                 alt={name ?? undefined} loading="lazy"
               />
               {/* 우측 상단 */}

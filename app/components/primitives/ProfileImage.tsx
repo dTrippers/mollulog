@@ -1,4 +1,5 @@
 import { UserIcon } from "@heroicons/react/24/outline";
+import { getAprilFoolsStudentUid, useAprilFools } from "~/contexts/AprilFoolsProvider";
 import { studentImageUrl } from "~/models/assets";
 
 type ProfileImageProps = {
@@ -7,6 +8,8 @@ type ProfileImageProps = {
 };
 
 export default function ProfileImage({ studentUid, imageSize }: ProfileImageProps) {
+  const { isActive: isAprilFoolsActive } = useAprilFools();
+
   let [imageSizeClass, iconSizeClass]: string[] = [];
   switch (imageSize) {
     case 16:
@@ -22,8 +25,10 @@ export default function ProfileImage({ studentUid, imageSize }: ProfileImageProp
       [imageSizeClass, iconSizeClass] = ["size-8", "size-6"];
   }
 
-  return studentUid ?
-    <img className={`${imageSizeClass} dark:opacity-90 inline rounded-full object-cover`} src={studentImageUrl(studentUid)} alt="학생 프로필" /> :
+  const imageUid = isAprilFoolsActive && studentUid ? getAprilFoolsStudentUid(studentUid) : studentUid;
+
+  return imageUid ?
+    <img className={`${imageSizeClass} dark:opacity-90 inline rounded-full object-cover`} src={studentImageUrl(imageUid)} alt="학생 프로필" /> :
     (
       <div className={`${imageSizeClass} flex items-center justify-center rounded-full border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300`}>
         <UserIcon className={iconSizeClass} />
