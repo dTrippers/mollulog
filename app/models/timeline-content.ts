@@ -129,6 +129,7 @@ export async function getUpcomingEvent(env: Env): Promise<TimelineContent | null
     .where(
       and(
         eq(timelineContentsTable.contentType, "event"),
+        sql`${timelineContentsTable.runType} != 'permanent'`,
         gte(timelineContentsTable.endAt, now),
         or(lte(timelineContentsTable.startAt, now), isNotNull(timelineContentsTable.syncedAt)),
       ),

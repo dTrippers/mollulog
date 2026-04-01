@@ -187,7 +187,7 @@ export function ContentTimelineItem({
         <div className="my-1 flex flex-wrap gap-1 text-sm">
           <span className="pr-1 py-0.5 text-neutral-500 dark:text-neutral-400">
             {(contentType === "event" || contentType === "pickup") && runType === "rerun" && "복각 "}
-            {contentTypeLocale[contentType]}
+            {contentType === "event" && runType === "permanent" ? "이벤트 상설화" : contentTypeLocale[contentType]}
           </span>
           {!endless && daysLabel && (
             <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />

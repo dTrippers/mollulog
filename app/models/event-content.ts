@@ -36,7 +36,7 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
     until: content.endAt,
     contentUid: content.contentUid,
     recruitmentGroupUid: content.recruitmentGroupUid,
-    shopAvailable: content.contentType === "event" && content.contentUid != null,
+    shopAvailable: content.contentType === "event" && content.contentUid != null && content.runType !== "permanent",
   };
 }
 

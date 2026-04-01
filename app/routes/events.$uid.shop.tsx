@@ -17,9 +17,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   if (!metadata) {
     throw new Response("Not Found", { status: 404 });
   }
-
   const shopContent = await getEventShopContent(env, timelineUid);
-  if (!shopContent || shopContent.shopResources.length === 0) {
+  if (metadata.runType === "permanent" || !shopContent || shopContent.shopResources.length === 0) {
     return {
       eventName: metadata.name,
       until: metadata.until,
