@@ -196,20 +196,26 @@ export async function resolveContentName(env: Env, content: ContentInput): Promi
     return group ? (pickupGroupTypeLocale[group.recruitmentType] ?? "픽업 모집") : "픽업 모집";
   }
 
-  if (contentType === "main_story" && contentUid) {
+  if (contentType === "main_story") {
     const volumes = await getMainStories(env);
-    for (const volume of volumes) {
-      for (const chapter of volume.chapters) {
-        for (const part of chapter.parts) {
-          if (part.uid === contentUid) {
-            const volumeTitle = [volume.label, volume.name].filter(Boolean).join(" ");
-            const chapterTitle = `제${chapter.chapterNumber}장: ${chapter.name}${part.name ? ` (${part.name})` : ""}`;
-            return `${volumeTitle}\n${chapterTitle}`;
+    const candidates = contentUid ? [contentUid, uid] : [uid];
+    for (const candidate of candidates) {
+      for (const volume of volumes) {
+        for (const chapter of volume.chapters) {
+          for (const part of chapter.parts) {
+            if (part.uid === candidate) {
+              const volumeTitle = [volume.label, volume.name].filter(Boolean).join(" ");
+              const chapterTitle = `제${chapter.chapterNumber}장: ${chapter.name}${part.name ? ` (${part.name})` : ""}`;
+              return `${volumeTitle}\n${chapterTitle}`;
+            }
           }
         }
       }
     }
-    return (await getEventContentName(env, contentUid)) ?? uid;
+    if (contentUid) {
+      return (await getEventContentName(env, contentUid)) ?? uid;
+    }
+    return uid;
   }
 
   if (contentType === "mini_event" && contentUid) {

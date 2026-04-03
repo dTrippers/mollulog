@@ -3,8 +3,7 @@ import { KeyValueTable, SubTitle } from "~/components/primitives";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ActionCard, type ActionCardAction } from "~/components/features/editor";
 import { StudentCards } from "~/components/features/students";
-import { eventTypeLocale } from "~/locales/ko";
-import type { EventType } from "~/models/content.d";
+import { pickupGroupTypeLocale } from "~/locales/ko";
 import { Link } from "react-router";
 
 type PickupHistoryViewProps = {
@@ -48,11 +47,11 @@ export default function PickupHistoryView({ uid, event, recruitedStudents, trial
   return (
     <ActionCard actions={actions}>
       <Link to={`/events/${event.uid}`} className="-my-4 flex items-center hover:underline">
-        <SubTitle text={event.name} />
+        <SubTitle text={event.name} className="whitespace-pre-line" />
         <ChevronRightIcon className="size-4" />
       </Link>
       <p className="text-neutral-500 text-sm">
-        {eventTypeLocale[event.type as EventType] ?? event.type} | {dayjs(event.since).format("YYYY-MM-DD")}
+        {pickupGroupTypeLocale[event.type] ?? "픽업 모집"} | {dayjs(event.since).format("YYYY-MM-DD")}
       </p>
 
       {tier3Count > 0 && (

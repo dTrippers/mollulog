@@ -252,6 +252,22 @@ export async function getTimelineContentsByRecruitmentGroupUids(
   return enrichAll(env, rows.map(toRaw));
 }
 
+export async function getContentUidsByRecruitmentGroup(
+  env: Env,
+): Promise<Map<string, { contentType: string; contentUid: string | null }>> {
+  const db = drizzle(env.DB);
+  const rows = await db
+    .select({
+      uid: timelineContentsTable.uid,
+      contentType: timelineContentsTable.contentType,
+      contentUid: timelineContentsTable.contentUid,
+    })
+    .from(timelineContentsTable)
+    .where(isNotNull(timelineContentsTable.recruitmentGroupUid))
+    .all();
+  return new Map(rows.map((row) => [row.uid, { contentType: row.contentType, contentUid: row.contentUid ?? null }]));
+}
+
 export async function getAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
   const db = drizzle(env.DB);
   const rows = await db.select().from(timelineContentsTable).orderBy(timelineContentsTable.startAt).all();

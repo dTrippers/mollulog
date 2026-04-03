@@ -8,8 +8,9 @@ import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEd
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
 import { createPickupHistory, getPickupHistory, type PickupHistory, updatePickupHistory } from "~/models/pickup-history";
 import { getAllStudents } from "~/models/student";
-import { getAllTimelineContentsMeta } from "~/models/timeline-content";
 import { getRecruitmentGroups } from "~/models/event-content";
+import { resolveContentName } from "~/models/content-name";
+import { getContentUidsByRecruitmentGroup } from "~/models/timeline-content";
 import { ContentSelectForm, FormGroup } from "~/components/features/forms";
 import { FilterButtons } from "~/components/primitives";
 import { Bars3Icon } from "@heroicons/react/16/solid";
@@ -30,37 +31,42 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     currentPickupHistory = await getPickupHistory(env, sensei.id, params.id, true);
   }
 
-  const EVENT_CONTENT_TYPES = new Set(["event", "main_story", "pickup"]);
   const now = dayjs();
 
-  const [allContents, allGroups, allStudentsList] = await Promise.all([
-    getAllTimelineContentsMeta(env),
+  const [allGroups, allStudentsList, contentUidMap] = await Promise.all([
     getRecruitmentGroups(env, {}),
     getAllStudents(env),
+    getContentUidsByRecruitmentGroup(env),
   ]);
 
-  // Build a map from timeline content uid → recruitment group for student name search
-  const groupByUid = new Map(allGroups.map((g) => [g.uid, g]));
+  const pickupGroups = allGroups.filter((g) =>
+    g.recruitments.some((r) => r.pickup && r.student) && dayjs(g.startAt).isBefore(now)
+  );
 
-  const events = allContents
-    .filter((tc) => EVENT_CONTENT_TYPES.has(tc.contentType) && tc.startAt && dayjs(tc.startAt).isBefore(now))
-    .sort((a, b) => dayjs(b.startAt).diff(dayjs(a.startAt)))
-    .map((tc) => {
-      const group = groupByUid.get(tc.uid);
+  const events = await Promise.all(
+    pickupGroups.map(async (group) => {
+      const d1Meta = contentUidMap.get(group.uid);
+      const name = await resolveContentName(env, {
+        uid: group.uid,
+        contentType: d1Meta?.contentType ?? group.contentType ?? "pickup",
+        contentUid: d1Meta?.contentUid ?? group.contentUid ?? null,
+      });
       return {
-        uid: tc.uid,
-        name: tc.name,
-        since: tc.startAt,
-        until: tc.endAt ?? undefined,
-        recruitments: group?.recruitments
+        uid: group.uid,
+        name,
+        since: group.startAt,
+        until: group.endAt ?? undefined,
+        recruitments: group.recruitments
           .filter((r) => r.pickup && r.student)
           .map((r) => ({
             student: r.student ? { uid: r.student.uid, name: r.student.name ?? "" } : null,
             pickup: r.pickup,
-          })) ?? [],
+          })),
       };
     })
-    .filter((e) => e.recruitments.length > 0);
+  );
+
+  events.sort((a, b) => dayjs(b.since).diff(dayjs(a.since)));
 
   return {
     events,

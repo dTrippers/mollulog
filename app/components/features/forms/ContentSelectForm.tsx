@@ -33,7 +33,7 @@ export default function ContentSelectForm(props: ContentSelectFormProps) {
         element: (
           <div className="relative w-full overflow-hidden rounded-lg px-4 py-3">
             <div className={content.boss ? "pr-24 md:pr-28" : ""}>
-              <p className="font-semibold">{content.name}</p>
+              <p className="font-semibold whitespace-pre-line">{content.name}</p>
               {content.since && content.until && (
                 <p className="text-sm text-neutral-500">
                   {dayjs(content.since).format("YYYY.MM.DD")} ~ {dayjs(content.until).format("YYYY.MM.DD")}

@@ -130,10 +130,13 @@ export const campaignCategoryLocale: Record<string, string> = {
 };
 
 export const pickupGroupTypeLocale: Record<string, string> = {
+  limited: "한정 모집",
+  usual: "픽업 모집",
   fes: "페스 모집",
   encore: "앙코르 모집",
   archive: "아카이브 모집",
   recollect: "리콜렉트 모집",
+  given: "배포",
 };
 
 export const raidTypeLocale: Record<RaidType, string> = {
