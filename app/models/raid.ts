@@ -56,13 +56,11 @@ export function getAllRaidSchedules(env: Env, forceRefresh = false) {
 }
 
 export async function getUpcomingRaidSchedules(env: Env, forceRefresh = false) {
-  return fetchCached(env, "raids::upcoming-schedules", async () => {
-    const now = new Date();
-    const schedules = await getAllRaidSchedules(env);
-    return schedules
-      .filter((schedule) => schedule.endAt && new Date(schedule.endAt) >= now)
-      .sort((a, b) => new Date(a.startAt as Date).getTime() - new Date(b.startAt as Date).getTime());
-  }, 24 * 60 * 60, forceRefresh);
+  const now = new Date();
+  const schedules = await getAllRaidSchedules(env, forceRefresh);
+  return schedules
+    .filter((schedule) => schedule.endAt && new Date(schedule.endAt) >= now)
+    .sort((a, b) => new Date(a.startAt as Date).getTime() - new Date(b.startAt as Date).getTime());
 }
 
 // ============================================================

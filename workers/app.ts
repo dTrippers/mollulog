@@ -6,7 +6,7 @@ import { getFutureContents, getIndexContents, getNavigationBarContents } from "~
 import { warmUpNameCaches } from "~/models/content-name";
 import { getMainStories } from "~/models/main-story";
 import { getPyroxenePlannerContents } from "~/models/pyroxene-planner";
-import { getAllRaidSchedules, getRaidSchedule, getUpcomingRaidSchedules } from "~/models/raid";
+import { getAllRaidSchedules, getRaidSchedule } from "~/models/raid";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { syncRawStudents } from "~/models/student";
 import { getTimelineContents } from "~/models/timeline-content";
@@ -61,9 +61,8 @@ const handler: ExportedHandler<ObservabilityEnv> = {
           ]);
 
           // Step 2: refresh leaf caches (independent)
-          const [allSchedules, _, activeContents] = await Promise.all([
+          const [allSchedules, activeContents] = await Promise.all([
             getAllRaidSchedules(env, true),
-            getUpcomingRaidSchedules(env, true),
             getTimelineContents(env),
           ]);
           const now = dayjs();

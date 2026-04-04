@@ -136,29 +136,13 @@ export async function warmUpSingleItemCache(env: Env, item: ContentRef): Promise
   return primarySuccess;
 }
 
+const SKIP_IN_BULK_WARM_UP = new Set(["raid", ...LEGACY_RAID_TYPES]);
+
 export async function warmUpNameCaches(env: Env, contents: ContentRef[]) {
   await Promise.all(
-    contents.map(async ({ uid, contentType, contentUid, recruitmentGroupUid }) => {
-      if (contentType === "joint_firing_drill" && contentUid) {
-        await getJointFiringDrillDetail(env, contentUid, true);
-      } else if (contentType === "raid" && contentUid) {
-        // raid schedule caches are warmed up separately via getRaidSchedule in the cron
-      } else if (LEGACY_RAID_TYPES.includes(contentType) && contentUid) {
-        // legacy raid caches are warmed up separately via getRaidDetail in the cron
-      } else if (contentType === "campaign" && contentUid) {
-        await getCampaignDetail(env, contentUid, true);
-      } else if (contentType === "pickup") {
-        await getRecruitmentGroup(env, uid, true);
-      } else if (contentType === "mini_event" && contentUid) {
-        await getMiniEventContentName(env, contentUid, true);
-      } else if (contentUid) {
-        await getEventContentName(env, contentUid, true);
-      }
-
-      if (recruitmentGroupUid) {
-        await getRecruitmentGroup(env, recruitmentGroupUid, true);
-      }
-    }),
+    contents
+      .filter((item) => !SKIP_IN_BULK_WARM_UP.has(item.contentType))
+      .map((item) => warmUpSingleItemCache(env, item)),
   );
 }
 

@@ -160,8 +160,6 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
   );
 }
 
-export { getEventContentName, getMiniEventContentName } from "./content-name";
-
 /**
  * Future Contents
  */
@@ -293,16 +291,12 @@ function toRecruitmentInfos(group: Awaited<ReturnType<typeof getRecruitmentGroup
 }
 
 export async function getFutureContents(env: Env, forceRefresh = false): Promise<FutureContent[]> {
-  return fetchCached(env, "future-contents::v1", async () => {
-    const now = new Date();
+  const allEnriched = await fetchCached(env, "future-contents::v1", async () => {
     const [contents, upcomingRaidContents] = await Promise.all([getTimelineContents(env), getUpcomingRaidContents(env)]);
-    const futureVisibleContents = contents.filter((content) =>
-      content.endAt ? content.endAt > now : content.startAt > now,
-    );
     const upcomingRaidMap = new Map(upcomingRaidContents.map((content) => [content.uid, content]));
 
     return Promise.all(
-      futureVisibleContents.map(async (content) => {
+      contents.map(async (content) => {
         // New raid type — raidInfo from timeline-first upcoming raid lookup
         if (content.contentType === "raid") {
           return { ...content, recruitments: [], raidInfo: upcomingRaidMap.get(content.uid)?.raidInfo };
@@ -340,6 +334,11 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
       }),
     );
   }, 24 * 60 * 60, forceRefresh);
+
+  const now = new Date();
+  return allEnriched.filter((content) =>
+    content.endAt ? content.endAt > now : content.startAt > now,
+  );
 }
 
 /**
