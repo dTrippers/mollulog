@@ -23,13 +23,13 @@ const raidScheduleDetailQuery = graphql(`
 `);
 
 export function getRaidSchedule(env: Env, uid: string, forceRefresh = false) {
-  return fetchCached(env, `raid-schedule-${uid}`, async () => {
+  return fetchCached(env, `raids::schedules::uid=${uid}`, async () => {
     const { data, error } = await runQuery(raidScheduleDetailQuery, { uid });
     if (error) {
       throw "failed to fetch raid schedule";
     }
     return data?.raidSchedule ?? null;
-  }, 60 * 90, forceRefresh);
+  }, 24 * 60 * 60, forceRefresh);
 }
 
 const allRaidSchedulesQuery = graphql(`
@@ -46,34 +46,23 @@ const allRaidSchedulesQuery = graphql(`
 `);
 
 export function getAllRaidSchedules(env: Env, forceRefresh = false) {
-  return fetchCached(env, "all-raid-schedules", async () => {
+  return fetchCached(env, "raids::schedules::all", async () => {
     const { data, error } = await runQuery(allRaidSchedulesQuery, { region: "gl" });
     if (error || !data) {
       throw error ?? "failed to fetch raid schedules";
     }
     return data.raidSchedules.nodes;
-  }, 60 * 90, forceRefresh);
+  }, 24 * 60 * 60, forceRefresh);
 }
 
-export async function getUpcomingRaidSchedules(
-  env: Env,
-  { limit, raidTypes }: { limit?: number; raidTypes?: string[] } = {},
-) {
-  const now = new Date();
-  const schedules = await getAllRaidSchedules(env);
-  const filteredSchedules = schedules
-    .filter((schedule) => {
-      if (!schedule.startAt || !schedule.endAt) {
-        return false;
-      }
-      if (raidTypes && !raidTypes.includes(schedule.raidType)) {
-        return false;
-      }
-      return new Date(schedule.endAt) >= now;
-    })
-    .sort((a, b) => new Date(a.startAt as Date).getTime() - new Date(b.startAt as Date).getTime());
-
-  return typeof limit === "number" ? filteredSchedules.slice(0, limit) : filteredSchedules;
+export async function getUpcomingRaidSchedules(env: Env, forceRefresh = false) {
+  return fetchCached(env, "raids::upcoming-schedules", async () => {
+    const now = new Date();
+    const schedules = await getAllRaidSchedules(env);
+    return schedules
+      .filter((schedule) => schedule.endAt && new Date(schedule.endAt) >= now)
+      .sort((a, b) => new Date(a.startAt as Date).getTime() - new Date(b.startAt as Date).getTime());
+  }, 24 * 60 * 60, forceRefresh);
 }
 
 // ============================================================
@@ -93,35 +82,13 @@ const raidDetailQuery = graphql(`
 `);
 
 export function getRaidDetail(env: Env, uid: string, forceRefresh = false) {
-  return fetchCached(env, `raid-detail-${uid}`, async () => {
+  return fetchCached(env, `raids::detail::uid=${uid}`, async () => {
     const { data, error } = await runQuery(raidDetailQuery, { uid });
     if (error) {
       throw "failed to fetch raid detail";
     }
     return data?.raid ?? null;
-  }, 60 * 90, forceRefresh);
-}
-
-
-const allRaidQuery = graphql(`
-  query AllRaid {
-    raids {
-      nodes {
-        uid type name boss since until terrain attackType rankVisible raidIndexJp
-        defenseTypes { defenseType difficulty }
-      }
-    }
-  }
-`);
-
-export function getAllRaids(env: Env, forceRefresh = false) {
-  return fetchCached(env, "all-raids", async () => {
-    const { data, error } = await runQuery(allRaidQuery, {});
-    if (error || !data) {
-      throw error ?? "failed to fetch raids";
-    }
-    return data.raids.nodes;
-  }, 60 * 90, forceRefresh);
+  }, 24 * 60 * 60, forceRefresh);
 }
 
 export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [

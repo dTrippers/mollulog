@@ -11,9 +11,18 @@ function isCacheEnvelope<T>(value: CacheEnvelope<T> | T): value is CacheEnvelope
   return typeof value === "object" && value !== null && "_ver" in value && value._ver === 2;
 }
 
-export async function fetchCached<T>(env: Env, dataKey: string, fn: () => Promise<T>, ttl?: number, forceRefresh = false): Promise<T> {
-  // biome-ignore lint/complexity/noExtraBooleanCast: keep the explicit env-flag check requested in review.
-  if (Boolean(env.DISABLE_CACHE)) {
+function resolveTtl<T>(ttl: number | ((data: T) => number), data: T): number {
+  return typeof ttl === "function" ? ttl(data) : ttl;
+}
+
+export async function fetchCached<T>(
+  env: Env,
+  dataKey: string,
+  fn: () => Promise<T>,
+  ttl?: number | ((data: T) => number),
+  forceRefresh = false,
+): Promise<T> {
+  if (env.DISABLE_CACHE === "true") {
     return fn();
   }
 
@@ -23,7 +32,12 @@ export async function fetchCached<T>(env: Env, dataKey: string, fn: () => Promis
   let cachedData: T | undefined;
   let cachedAt = 0;
   if (raw) {
-    const parsed = JSON.parse(raw) as CacheEnvelope<T> | T;
+    const parsed = JSON.parse(raw, (_, value) => {
+      if (value !== null && typeof value === "object" && "$date" in value && typeof value.$date === "string") {
+        return new Date(value.$date);
+      }
+      return value;
+    }) as CacheEnvelope<T> | T;
     if (isCacheEnvelope(parsed)) {
       cachedData = parsed.data;
       cachedAt = parsed.cachedAt;
@@ -32,7 +46,7 @@ export async function fetchCached<T>(env: Env, dataKey: string, fn: () => Promis
     }
   }
 
-  if (cachedData !== undefined && !forceRefresh && (ttl ? Date.now() - cachedAt < ttl * 1000 : true)) {
+  if (cachedData !== undefined && !forceRefresh && (ttl !== undefined ? Date.now() - cachedAt < resolveTtl(ttl, cachedData) * 1000 : true)) {
     return cachedData;
   }
 
@@ -44,7 +58,9 @@ export async function fetchCached<T>(env: Env, dataKey: string, fn: () => Promis
       cachedAt: Date.now(),
     };
 
-    await env.KV_USERDATA.put(cacheKey, JSON.stringify(envelope));
+    await env.KV_USERDATA.put(cacheKey, JSON.stringify(envelope, (_, value) =>
+      value instanceof Date ? { $date: value.toISOString() } : value
+    ));
     return data;
   } catch (error) {
     if (cachedData !== undefined) {

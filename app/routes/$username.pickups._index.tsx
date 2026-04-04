@@ -8,7 +8,7 @@ import { SubTitle } from "~/components/primitives";
 import { getAllStudentsMap } from "~/models/student";
 import dayjs from "dayjs";
 import { getRouteSensei } from "./$username";
-import { getRecruitmentGroups } from "~/models/event-content";
+import { getRecruitmentGroup } from "~/models/event-content";
 import { getTimelineContentsByUids } from "~/models/timeline-content";
 
 export const meta: MetaFunction = ({ params }) => {
@@ -53,11 +53,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const eventUids = recruitmentHistories.map((history) => history.eventId);
 
   const [groups, timelineContents] = await Promise.all([
-    getRecruitmentGroups(env, { uids: eventUids }),
+    Promise.all(eventUids.map((uid) => getRecruitmentGroup(env, uid))),
     getTimelineContentsByUids(env, eventUids),
   ]);
 
-  const groupMap = new Map(groups.map((g) => [g.uid, g]));
+  const groupMap = new Map(groups.flatMap((g) => (g ? [[g.uid, g] as const] : [])));
   const tcMap = new Map(timelineContents.map((tc) => [tc.uid, tc]));
 
   let tier3Count = 0;

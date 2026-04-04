@@ -55,7 +55,7 @@ function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup
   const groups: { groupDate: dayjs.Dayjs | null; contents: ContentTimelineProps["contents"] }[] = [];
 
   const now = dayjs();
-  for (const content of contents.sort((a, b) => a.since.getTime() - b.since.getTime())) {
+  for (const content of contents.sort((a, b) => dayjs(a.since).diff(dayjs(b.since)))) {
     const since = dayjs(content.since);
     const until = content.until ? dayjs(content.until) : null;
     const isCurrent = since.isBefore(now) && (until === null || until.isAfter(now));
