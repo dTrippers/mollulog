@@ -12,16 +12,28 @@ type ResourceCardProps = {
   name?: string;
   size?: "md" | "lg";
 } & (
-  {
-    itemUid: string;
-    imageUrl?: undefined;
-  } | {
-    itemUid?: undefined;
-    imageUrl: string;
-  }
+  | {
+      itemUid: string;
+      imageUrl?: undefined;
+    }
+  | {
+      itemUid?: undefined;
+      imageUrl: string;
+    }
 );
 
-function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageUrl: imageUrlProp, label, labelColor = "white", labelBgColor = "black", name, size = "md" }: ResourceCardProps) {
+function ResourceCard({
+  resourceType,
+  rarity = 1,
+  favoriteLevel,
+  itemUid,
+  imageUrl: imageUrlProp,
+  label,
+  labelColor = "white",
+  labelBgColor = "black",
+  name,
+  size = "md",
+}: ResourceCardProps) {
   let imageUrl = imageUrlProp;
   if (itemUid) {
     if (resourceType === "furniture") {
@@ -43,8 +55,10 @@ function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageU
   }
 
   return (
-    <div className="relative group">
-      <div className={`shrink-0 ${sizeClass} rounded-lg border border-neutral-200 dark:border-neutral-700 ${rarityBgClass(rarity)} flex items-center justify-center overflow-hidden`}>
+    <div className="relative group" title={name}>
+      <div
+        className={`shrink-0 ${sizeClass} rounded-lg border border-neutral-200 dark:border-neutral-700 ${rarityBgClass(rarity)} flex items-center justify-center overflow-hidden`}
+      >
         <img
           alt="아이템 이미지"
           src={imageUrl}
@@ -56,12 +70,20 @@ function ResourceCard({ resourceType, rarity = 1, favoriteLevel, itemUid, imageU
             className={sanitizeClassName(`
               flex items-center justify-center px-1 absolute -bottom-1 -right-1 ${labelBadgeBgClass(labelBgColor)} rounded
               border-2 border-white dark:border-neutral-800 ${labelTextColorClass(labelColor)} text-xs font-medium tracking-tighter
-            `)}>
+            `)}
+          >
             {label}
           </div>
         )}
       </div>
-      {favoriteLevel && <img src={favoriteLevelImageUrl(favoriteLevel)} alt={`호감 레벨 ${favoriteLevel}`} className="absolute -bottom-1 -right-1 w-6 h-6 object-contain" loading="lazy" />}
+      {favoriteLevel && (
+        <img
+          src={favoriteLevelImageUrl(favoriteLevel)}
+          alt={`호감 레벨 ${favoriteLevel}`}
+          className="absolute -bottom-1 -right-1 w-6 h-6 object-contain"
+          loading="lazy"
+        />
+      )}
       {name && (
         <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-800 text-white text-xs rounded border border-neutral-700 dark:border-neutral-600 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
           {name}

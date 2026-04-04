@@ -86,6 +86,9 @@ React Router v7 파일시스템 라우팅. `app/routes/` 의 파일명 규칙:
 
 | 파일 | URL | 설명 |
 |------|-----|------|
+| `utils.growth.tsx` | `/utils/growth` | 성장 플래너 레이아웃 |
+| `utils.growth._index.tsx` | `/utils/growth` | `/utils/growth/students`로 리다이렉트 |
+| `utils.growth.students.tsx` | `/utils/growth/students` | 학생 성장/재화 플래너 |
 | `utils.pyroxene.tsx` | `/utils/pyroxene` | 파이록신 계획 도구 |
 | `utils.raidscore.tsx` | `/utils/raidscore` | 레이드 점수 계산 |
 | `utils.relationship.tsx` | `/utils/relationship` | 관계 추적 도구 |
