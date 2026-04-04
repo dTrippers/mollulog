@@ -12,7 +12,7 @@ type StudentSearchInputProps = {
   label?: string;
   placeholder?: string;
   description?: string;
-  grid?: 4;
+  grid?: 4 | 6;
   students: SearchableStudent[];
   onSelect: (studentUid: string) => void;
 };

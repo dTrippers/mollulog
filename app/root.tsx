@@ -100,9 +100,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-const wideLayout = ["/utils/relationship"];
-const fullLayout = ["^/$", "^/raids", "^/futures", "^/utils/pyroxene", "^/students", "^/@", "^/events", "^/coupon"];
-
 export default function App() {
   const loaderData = useLoaderData<typeof loader>();
   const { currentUsername, navigationBarContents } = loaderData;
@@ -140,8 +137,6 @@ export default function App() {
     }
   }, [routeKey]);
 
-  const widthClass = getContentWidthClass(pathname);
-
   return (
     <div className={`${darkMode ? "dark " : ""}text-neutral-900 dark:bg-neutral-800 dark:text-neutral-200 transition`}>
       <LoadingBar ref={loadingBarRef} color="#0ea5e9" height={3} waitingTime={300} />
@@ -156,7 +151,7 @@ export default function App() {
             hasActiveCoupons={navigationBarContents.hasActiveCoupons}
           />
           <div className="mllg-content-area w-full pt-10 xl:pt-0 overflow-y-scroll">
-            <div className={`xl:h-screen mx-auto ${widthClass} px-4 md:px-8 py-6`}>
+            <div className="xl:h-screen mx-auto w-full px-4 md:px-8 py-6">
               <div className="pb-32">
                 <StudentCardPopupProvider key={pathname}>
                   <Outlet />
@@ -184,18 +179,6 @@ function SignInBottomSheetHost() {
       <SignInBottomSheet />
     </Suspense>
   );
-}
-
-function getContentWidthClass(pathname: string) {
-  if (fullLayout.find((path) => pathname.match(path))) {
-    return "w-full";
-  }
-
-  if (wideLayout.find((path) => pathname.startsWith(path))) {
-    return "max-w-6xl";
-  }
-
-  return "max-w-3xl";
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

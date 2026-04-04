@@ -8,10 +8,11 @@ type ToggleProps = {
   initialState?: boolean;
   colorClass?: string;
   disabled?: boolean;
+  className?: string;
   onChange?: (value: boolean) => void;
 };
 
-export default function Toggle({ name, label, colorClass, initialState, disabled, onChange }: ToggleProps) {
+export default function Toggle({ name, label, colorClass, initialState, disabled, className, onChange }: ToggleProps) {
   const [enabled, setEnabled] = useState(initialState ?? false);
 
   useEffect(() => {
@@ -20,7 +21,7 @@ export default function Toggle({ name, label, colorClass, initialState, disabled
 
   return (
     <>
-      <Field className="my-4 flex items-center">
+      <Field className={`${className ?? "my-4"} flex items-center`}>
         <Switch
           disabled={disabled}
           className={sanitizeClassName(`

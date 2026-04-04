@@ -10,12 +10,13 @@ import {
   HeartIcon as HeartIconOutline,
   BoltIcon as BoltIconOutline,
   ClockIcon as ClockIconOutline,
-  WalletIcon as WalletIconOutline,
+  CreditCardIcon as CreditCardIconOutline,
   BookOpenIcon as BookOpenIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
   Cog6ToothIcon as Cog6ToothIconOutline,
   GiftIcon as GiftIconOutline,
   TicketIcon as TicketIconOutline,
+  TableCellsIcon as TableCellsIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   HomeIcon as HomeIconSolid,
@@ -26,12 +27,13 @@ import {
   HeartIcon as HeartIconSolid,
   BoltIcon as BoltIconSolid,
   ClockIcon as ClockIconSolid,
-  WalletIcon as WalletIconSolid,
+  CreditCardIcon as CreditCardIconSolid,
   BookOpenIcon as BookOpenIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
   GiftIcon as GiftIconSolid,
   TicketIcon as TicketIconSolid,
+  TableCellsIcon as TableCellsIconSolid,
 } from "@heroicons/react/24/solid";
 import { Transition } from "@headlessui/react";
 import { Link, useMatches, useSubmit } from "react-router";
@@ -77,7 +79,7 @@ export default function NavigationBar({ currentUsername, darkMode, setDarkMode, 
             <Bars3Icon className="size-6" strokeWidth={2} />
           </button>
           <img src={darkMode ? "/logo-dark.png" : "/logo-light.png"} alt="몰루로그 로고" className="ml-2 mr-1 xl:mr-2 object-cover h-8 xl:h-10 aspect-4/3" />
-          <h1 className="text-2xl xl:text-3xl font-ingame">
+          <h1 className="text-xl xl:text-3xl font-ingame">
             <span className="font-bold">몰루</span>로그
           </h1>
         </div>
@@ -137,11 +139,11 @@ function MenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, sho
   return (
     <Link
       to={to}
-      className={sanitizeClassName(`my-2 px-2 py-1.5 xl:py-2 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition relative ${isActive ? "font-bold drop-shadow-lg" : ""}`)}
+      className={sanitizeClassName(`my-2 px-2 py-1 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition relative ${isActive ? "font-bold drop-shadow-lg" : ""}`)}
       onClick={() => onItemClick?.()}
     >
       {isActive ? <SolidIcon className="inline-block mr-3 size-6" /> : <OutlineIcon className="inline-block mr-3 size-6" />}
-      <span className="text-lg relative">
+      <span className="relative">
         {name}
         {showRedDot && (
           <div className="absolute top-0 -right-3 size-1.5 bg-red-500 rounded-full animate-pulse" />
@@ -167,11 +169,11 @@ function MenuSection({ name, OutlineIcon, SolidIcon, isActive, children }: MenuS
     <div className="mt-2 mb-4">
       <button
         type="button"
-        className={sanitizeClassName(`w-full px-2 py-1.5 xl:py-2 flex items-center rounded-lg transition xl:cursor-default ${isActive ? "font-bold" : ""}`)}
+        className={sanitizeClassName(`w-full px-2 py-1 flex items-center rounded-lg transition xl:cursor-default ${isActive ? "font-bold" : ""}`)}
         onClick={() => setIsOpen((prev) => !prev)}
       >
         {isActive ? <SolidIcon className="inline-block mr-3 size-6" /> : <OutlineIcon className="inline-block mr-3 size-6" />}
-        <span className="text-lg flex-1 text-left">{name}</span>
+        <span className="flex-1 text-left">{name}</span>
         <ChevronDownIcon className={`size-4 transition-transform xl:hidden ${showChildren ? "rotate-180" : ""}`} />
       </button>
       <div className={`ml-3 pl-3 border-l border-neutral-200 dark:border-neutral-700 xl:block ${showChildren ? "" : "hidden"}`}>
@@ -273,7 +275,7 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
 }
 
 function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, showRedDot, disabled }: MenuItemProps) {
-  const className = sanitizeClassName(`my-1 px-2 py-1.5 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition relative ${isActive ? "font-semibold drop-shadow-lg" : ""} ${disabled ? "opacity-40" : ""}`);
+  const className = sanitizeClassName(`my-1 px-2 py-1.5 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 text-sm rounded-lg transition relative ${isActive ? "font-semibold drop-shadow-lg" : ""} ${disabled ? "opacity-40" : ""}`);
   const content = (
     <>
       {isActive ? <SolidIcon className="inline-block mr-3 size-5" /> : <OutlineIcon className="inline-block mr-3 size-5" />}
@@ -407,9 +409,17 @@ function getMenuSections({
         {
           to: "/utils/pyroxene",
           name: "청휘석 플래너",
-          OutlineIcon: WalletIconOutline,
-          SolidIcon: WalletIconSolid,
+          OutlineIcon: CreditCardIconOutline,
+          SolidIcon: CreditCardIconSolid,
           isActive: pathname.startsWith("/utils/pyroxene"),
+          onItemClick: onMenuClose,
+        },
+        {
+          to: "/utils/growth",
+          name: "학생 성장/재화 플래너",
+          OutlineIcon: TableCellsIconOutline,
+          SolidIcon: TableCellsIconSolid,
+          isActive: pathname.startsWith("/utils/growth"),
           onItemClick: onMenuClose,
         },
         upcomingEvent ? {
