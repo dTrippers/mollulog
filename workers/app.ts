@@ -2,7 +2,7 @@ import dayjs from "dayjs";
 import * as Sentry from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 import { getLogger } from "~/lib/observability.server";
-import { getIndexContents, getNavigationBarContents } from "~/models/content";
+import { getFutureContents, getIndexContents, getNavigationBarContents } from "~/models/content";
 import { warmUpNameCaches } from "~/models/content-name";
 import { getMainStories } from "~/models/main-story";
 import { getPyroxenePlannerContents } from "~/models/pyroxene-planner";
@@ -76,7 +76,10 @@ const handler: ExportedHandler<ObservabilityEnv> = {
           ]);
 
           // Step 3: refresh composite caches that depend on leaf caches
-          await getPyroxenePlannerContents(env, true);
+          await Promise.all([
+            getPyroxenePlannerContents(env, true),
+            getFutureContents(env, true),
+          ]);
         } else if (event.cron === "0 * * * *") {
           // every hour: refresh longer-lived caches
           // Step 1: refresh leaf caches (independent of each other)

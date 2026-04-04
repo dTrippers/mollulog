@@ -35,7 +35,11 @@ export const meta: MetaFunction = () => {
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const contents = await getFutureContents(env);
+  const rawContents = await getFutureContents(env);
+  const contents = rawContents.map(({
+    uid, name, startAt, endAt, endless, contentType, runType,
+    contentUid, confirmed, isSpoiler, tags, recruitments, raidInfo,
+  }) => ({ uid, name, startAt, endAt, endless, contentType, runType, contentUid, confirmed, isSpoiler, tags, recruitments, raidInfo }));
 
   const allStudentUids = contents
     .flatMap((content) => content.recruitments.map((r) => r.student?.uid ?? null))

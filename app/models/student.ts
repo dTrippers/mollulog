@@ -49,27 +49,21 @@ export async function getAllStudentsMap(env: Env, includeUnreleased = false): Pr
   }, {} as StudentMap);
 }
 
-const rawStudentsKey = "students::v4";
+const rawStudentsKey = "students::v5";
+const RAW_STUDENTS_TTL = 60 * 10; // 10 minutes
 
-export async function syncRawStudents(env: Env): Promise<Student[]> {
+async function fetchStudentsFromBaql(): Promise<Student[]> {
   const { data } = await runQuery(allStudentsQuery, {});
-  if (!data?.students) {
-    return [];
-  }
-
-  await env.KV_USERDATA.put(rawStudentsKey, JSON.stringify(data.students satisfies Student[]), {
-    expirationTtl: 60 * 10,
-  });
+  if (!data?.students) return [];
   return data.students satisfies Student[];
 }
 
+export async function syncRawStudents(env: Env): Promise<Student[]> {
+  return fetchCached(env, rawStudentsKey, fetchStudentsFromBaql, RAW_STUDENTS_TTL, true);
+}
+
 async function getRawStudents(env: Env): Promise<Student[]> {
-  const cached = await env.KV_USERDATA.get(rawStudentsKey);
-  if (cached) {
-    return JSON.parse(cached) as Student[];
-  } else {
-    return syncRawStudents(env);
-  }
+  return fetchCached(env, rawStudentsKey, fetchStudentsFromBaql, RAW_STUDENTS_TTL);
 }
 
 const maximumTiers: Record<string, number> = {

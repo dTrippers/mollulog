@@ -4,7 +4,6 @@ import type { EventContentShopContentQuery, RecruitmentGroupQuery, RecruitmentGr
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "./base";
-import { resolveContentName } from "./content-name";
 import { getTimelineContent } from "./timeline-content";
 import type { RunType } from "./timeline-content";
 
@@ -23,14 +22,8 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
     return null;
   }
 
-  const name = await resolveContentName(env, {
-    uid: timelineUid,
-    contentType: content.contentType,
-    contentUid: content.contentUid,
-  });
-
   return {
-    name,
+    name: content.name,
     runType: content.runType,
     since: content.startAt,
     until: content.endAt,
@@ -118,19 +111,12 @@ export async function getEventContentSummary(env: Env, timelineUid: string) {
     return null;
   }
 
-  const [name, recruitments] = await Promise.all([
-    resolveContentName(env, {
-      uid: timelineUid,
-      contentType: content.contentType,
-      contentUid: content.contentUid,
-    }),
-    content.recruitmentGroupUid
-      ? getRecruitmentGroup(env, content.recruitmentGroupUid).then((g) => g?.recruitments ?? [])
-      : Promise.resolve([]),
-  ]);
+  const recruitments = content.recruitmentGroupUid
+    ? ((await getRecruitmentGroup(env, content.recruitmentGroupUid))?.recruitments ?? [])
+    : [];
 
   return {
-    name,
+    name: content.name,
     since: content.startAt,
     until: content.endAt,
     imageUrl: content.imageUrl,
