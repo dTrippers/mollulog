@@ -62,7 +62,7 @@ function ResourceCard({
         <img
           alt="아이템 이미지"
           src={imageUrl}
-          className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} object-contain`}
+          className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} scale-110 object-contain`}
           loading="lazy"
         />
         {label && (

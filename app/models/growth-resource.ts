@@ -21,6 +21,11 @@ export type StudentGrowthResourceRequirements = {
   skillUnavailable: boolean;
 };
 
+export type AggregatedGrowthResourceRequirements = {
+  items: GrowthResourceItem[];
+  skillUnavailable: boolean;
+};
+
 export type GrowthResourceStudentInput = {
   uid: string;
   isRecruited?: boolean;
@@ -230,6 +235,31 @@ const EQUIPMENT_BLUEPRINT_BASE_UID = {
   watch: 107999,
   necklace: 108999,
 } as const;
+
+export const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
+  hat: "모자",
+  gloves: "장갑",
+  shoes: "신발",
+  bag: "가방",
+  badge: "배지",
+  hairpin: "헤어핀",
+  charm: "부적",
+  watch: "시계",
+  necklace: "목걸이",
+};
+
+const EQUIPMENT_UID_PREFIX_TO_TYPE = Object.fromEntries(
+  Object.entries(EQUIPMENT_BLUEPRINT_BASE_UID).map(([type, baseUid]) => [Math.floor(baseUid / 1000) + 1, type]),
+) as Record<number, string>;
+
+export function getEquipmentTypeKey(uid: string): string | null {
+  const prefix = Math.floor(Number(uid) / 1000);
+  return EQUIPMENT_UID_PREFIX_TO_TYPE[prefix] ?? null;
+}
+
+export function getEquipmentTier(uid: string): number {
+  return (Number(uid) % 1000) + 1;
+}
 
 const EQUIPMENT_TIER_RECIPE: Record<number, readonly { tier: number; amount: number }[]> = {
   2: [{ tier: 2, amount: 15 }],
@@ -971,7 +1001,44 @@ export function sortGrowthResourceItems(items: GrowthResourceItem[]): GrowthReso
   });
 }
 
-function getResourceKindOrder(item: GrowthResourceItem): number {
+export function aggregateGrowthResourceRequirements(
+  requirements: StudentGrowthResourceRequirements[],
+): AggregatedGrowthResourceRequirements {
+  const aggregatedItems = new Map<string, GrowthResourceItem>();
+
+  for (const requirement of requirements) {
+    for (const item of requirement.items) {
+      const existing = aggregatedItems.get(item.uid);
+      if (existing) {
+        existing.amount += item.amount;
+        existing.name ??= item.name;
+        existing.category ??= item.category ?? null;
+        existing.subCategory ??= item.subCategory ?? null;
+        continue;
+      }
+
+      aggregatedItems.set(item.uid, { ...item });
+    }
+  }
+
+  return {
+    items: sortGrowthResourceItems(Array.from(aggregatedItems.values())),
+    skillUnavailable: requirements.some((requirement) => requirement.skillUnavailable),
+  };
+}
+
+export const GROWTH_RESOURCE_KIND_LABELS: Record<number, string> = {
+  0: "엘레프",
+  1: "활동 보고서",
+  2: "BD",
+  3: "기술 노트",
+  4: "선물",
+  5: "오파츠",
+  6: "장비 설계도",
+  7: "기타",
+};
+
+export function getResourceKindOrder(item: GrowthResourceItem): number {
   const itemUid = Number(item.uid);
 
   if (item.source === "tier") {

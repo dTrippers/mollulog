@@ -1,15 +1,9 @@
-import { MagnifyingGlassIcon, UserPlusIcon } from "@heroicons/react/24/outline";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { data, redirect, useFetcher, useLoaderData } from "react-router";
+import type { ActionFunctionArgs } from "react-router";
+import { data, useOutletContext } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { Page } from "~/components/features/layout";
-import { StudentSearchInput } from "~/components/features/students";
-import { EmptyView } from "~/components/primitives";
-import { fetchStudentGearData, getStudentGrowthResourceRequirements } from "~/models/growth-resource";
 import { getRecruitedStudents, upsertRecruitedStudent } from "~/models/recruited-student";
 import {
   getRelationshipLevel,
-  getRelationshipLevels,
   removeRelationshipLevel,
   resolveRelationshipLevelInput,
   upsertRelationshipLevel,
@@ -17,11 +11,11 @@ import {
 import { getAllStudentsMap } from "~/models/student";
 import {
   type StudentGrowthInput,
-  getStudentGrowths,
   removeStudentGrowth,
   upsertStudentGrowth,
 } from "~/models/student-growth";
 import GrowthTable from "./utils.growth._components/GrowthTable";
+import type { GrowthLayoutContext } from "./utils.growth._components/types";
 
 type GrowthActionData = {
   _intent?: "growth";
@@ -107,111 +101,6 @@ function toGrowthInput(payload: Partial<GrowthActionData>): StudentGrowthInput {
     return acc;
   }, {} as StudentGrowthInput);
 }
-
-export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
-  if (!currentUser) {
-    return redirect("/unauthorized");
-  }
-
-  const [recruitedStudents, growths, relationshipLevels, allStudentsMap] = await Promise.all([
-    getRecruitedStudents(env, currentUser.id),
-    getStudentGrowths(env, currentUser.id),
-    getRelationshipLevels(env, currentUser.id),
-    getAllStudentsMap(env, true),
-  ]);
-
-  const growthMap = growths.reduce(
-    (acc, growth) => {
-      acc[growth.studentUid] = growth;
-      return acc;
-    },
-    {} as Record<string, (typeof growths)[number]>,
-  );
-  const relationshipMap = relationshipLevels.reduce(
-    (acc, relationshipLevel) => {
-      acc[relationshipLevel.studentId] = relationshipLevel;
-      return acc;
-    },
-    {} as Record<string, (typeof relationshipLevels)[number]>,
-  );
-
-  const managedUids = new Set(growths.map((g) => g.studentUid));
-  const recruitedUids = new Set(recruitedStudents.map((r) => r.studentUid));
-  const recruitedTierMap = recruitedStudents.reduce(
-    (acc, r) => {
-      acc[r.studentUid] = r.tier;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  const managedStudentsBase = [...managedUids]
-    .map((studentUid) => ({
-      studentUid,
-      student: allStudentsMap[studentUid],
-      growth: growthMap[studentUid],
-      isRecruited: recruitedUids.has(studentUid),
-    }))
-    .sort((a, b) => (b.student?.order ?? -1) - (a.student?.order ?? -1));
-
-  const studentGearDataMap = await fetchStudentGearData(managedStudentsBase.map(({ studentUid }) => studentUid));
-
-  const managedStudentsData = managedStudentsBase.map((entry) => {
-    const { studentUid, student, growth, isRecruited } = entry;
-    const gearData = studentGearDataMap.get(studentUid) ?? null;
-
-    return {
-      uid: studentUid,
-      name: student?.name ?? studentUid,
-      order: student?.order ?? -1,
-      isRecruited,
-      released: student?.released ?? false,
-      hasGear: gearData != null,
-      tier: isRecruited ? (recruitedTierMap[studentUid] ?? null) : null,
-      initialTier: student?.initialTier ?? 1,
-      relationshipCurrentLevel: relationshipMap[studentUid]?.currentLevel ?? null,
-      relationshipTargetLevel: relationshipMap[studentUid]?.targetLevel ?? null,
-      level: growth?.level ?? null,
-      skillEx: growth?.skillEx ?? null,
-      skillNormal: growth?.skillNormal ?? null,
-      skillEnhanced: growth?.skillEnhanced ?? null,
-      skillSub: growth?.skillSub ?? null,
-      equip1: growth?.equip1 ?? null,
-      equip2: growth?.equip2 ?? null,
-      equip3: growth?.equip3 ?? null,
-      equipSpecial: gearData ? (growth?.equipSpecial ?? null) : null,
-      targetLevel: growth?.targetLevel ?? null,
-      targetSkillEx: growth?.targetSkillEx ?? null,
-      targetSkillNormal: growth?.targetSkillNormal ?? null,
-      targetSkillEnhanced: growth?.targetSkillEnhanced ?? null,
-      targetSkillSub: growth?.targetSkillSub ?? null,
-      targetEquip1: growth?.targetEquip1 ?? null,
-      targetEquip2: growth?.targetEquip2 ?? null,
-      targetEquip3: growth?.targetEquip3 ?? null,
-      targetEquipSpecial: gearData ? (growth?.targetEquipSpecial ?? null) : null,
-      targetTier: growth?.targetTier ?? null,
-    };
-  });
-
-  const growthResourceRequirements = await getStudentGrowthResourceRequirements(
-    managedStudentsData,
-    allStudentsMap,
-    studentGearDataMap,
-  );
-  const managedStudents = managedStudentsData.map((student) => ({
-    ...student,
-    resourceRequirements: growthResourceRequirements[student.uid] ?? { items: [], skillUnavailable: false },
-  }));
-
-  const availableStudents = Object.values(allStudentsMap)
-    .filter((student) => !managedUids.has(student.uid))
-    .map((student) => ({ uid: student.uid, name: student.name }))
-    .sort((a, b) => (allStudentsMap[b.uid]?.order ?? -1) - (allStudentsMap[a.uid]?.order ?? -1));
-
-  return { managedStudents, availableStudents };
-};
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -303,43 +192,8 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   }
 };
 
-function StudentAddSearch({ availableStudents }: { availableStudents: { uid: string; name: string }[] }) {
-  const fetcher = useFetcher();
-
-  return (
-    <StudentSearchInput
-      placeholder="학생 이름으로 검색해서 추가..."
-      students={availableStudents}
-      grid={6}
-      onSelect={(studentUid) => {
-        fetcher.submit({ _intent: "add", studentUid }, { method: "post", encType: "application/json" });
-      }}
-    />
-  );
-}
-
 export default function GrowthStudentsPage() {
-  const { managedStudents, availableStudents } = useLoaderData<typeof loader>();
+  const { managedStudents, availableStudents } = useOutletContext<GrowthLayoutContext>();
 
-  return (
-    <Page
-      title="성장/재화 플래너 (β)"
-      description="학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요."
-      contentArea="full"
-      panels={[
-        {
-          title: "학생 추가",
-          description: "성장을 관리할 학생을 검색해서 추가해보세요",
-          Icon: MagnifyingGlassIcon,
-          children: <StudentAddSearch availableStudents={availableStudents} />,
-        },
-      ]}
-    >
-      {managedStudents.length === 0 ? (
-        <EmptyView Icon={UserPlusIcon} text="사이드바에서 학생을 검색해서 추가해보세요" />
-      ) : (
-        <GrowthTable students={managedStudents} />
-      )}
-    </Page>
-  );
+  return <GrowthTable students={managedStudents} availableStudents={availableStudents} />;
 }

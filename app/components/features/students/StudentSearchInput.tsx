@@ -13,6 +13,7 @@ type StudentSearchInputProps = {
   placeholder?: string;
   description?: string;
   grid?: 4 | 6;
+  size?: "sm" | "md";
   students: SearchableStudent[];
   onSelect: (studentUid: string) => void;
 };
@@ -22,6 +23,7 @@ export default function StudentSearchInput({
   placeholder,
   description,
   grid,
+  size,
   students,
   onSelect,
 }: StudentSearchInputProps) {
@@ -44,6 +46,7 @@ export default function StudentSearchInput({
         label={label}
         placeholder={placeholder ?? "이름으로 찾기..."}
         description={description}
+        size={size}
         onChange={onSearch}
         value={searchValue}
       />

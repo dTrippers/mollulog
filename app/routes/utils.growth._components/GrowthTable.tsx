@@ -1,43 +1,9 @@
+import { UserPlusIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { TierSelector } from "~/components/features/students";
-import { Button, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
-import type { GrowthResourceItem } from "~/models/growth-resource";
-
-type GrowthStudent = {
-  uid: string;
-  name: string;
-  isRecruited: boolean;
-  released: boolean;
-  hasGear: boolean;
-  tier: number | null;
-  initialTier: number;
-  targetTier: number | null;
-  relationshipCurrentLevel: number | null;
-  relationshipTargetLevel: number | null;
-  level: number | null;
-  skillEx: number | null;
-  skillNormal: number | null;
-  skillEnhanced: number | null;
-  skillSub: number | null;
-  equip1: number | null;
-  equip2: number | null;
-  equip3: number | null;
-  equipSpecial: number | null;
-  targetLevel: number | null;
-  targetSkillEx: number | null;
-  targetSkillNormal: number | null;
-  targetSkillEnhanced: number | null;
-  targetSkillSub: number | null;
-  targetEquip1: number | null;
-  targetEquip2: number | null;
-  targetEquip3: number | null;
-  targetEquipSpecial: number | null;
-  resourceRequirements: {
-    items: GrowthResourceItem[];
-    skillUnavailable: boolean;
-  };
-};
+import { StudentSearchInput, TierSelector } from "~/components/features/students";
+import { Button, MiniButton, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
+import type { GrowthAvailableStudent, GrowthStudent } from "./types";
 
 type ActionResult = {
   success?: boolean;
@@ -331,18 +297,19 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
 
   const displayedError = growthError ?? relationshipError;
 
-  const studentCell = (
-    <td rowSpan={3} className={`sticky left-0 z-10 min-w-32 ${cellBase} bg-white px-3 py-2 dark:bg-neutral-950`}>
-      <div className="flex items-start gap-1.5">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <ProfileImage studentUid={student.uid} />
-            <span className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50">{student.name}</span>
-          </div>
-          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1.5">
-            <button
-              type="button"
-              className="text-xs text-red-500 dark:text-red-400 hover:underline cursor-pointer"
+  return (
+    <>
+      <tr className="bg-neutral-50 dark:bg-neutral-900">
+        <td colSpan={TOTAL_COLS} className={`${cellBase} px-3 py-2`}>
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <ProfileImage studentUid={student.uid} />
+              <span className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50">{student.name}</span>
+              {displayedError && <p className="text-xs text-red-500 dark:text-red-400">{displayedError}</p>}
+            </div>
+            <Button
+              size="xs"
+              variant="tint-red"
               onClick={() =>
                 confirm("정말로 성장 목표를 삭제할까요? 삭제된 기록은 복구할 수 없어요.") &&
                 removeFetcher.submit(
@@ -352,18 +319,12 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
               }
             >
               삭제
-            </button>
+            </Button>
           </div>
-          {displayedError && <p className="mt-0.5 text-[11px] text-red-500 dark:text-red-400">{displayedError}</p>}
-        </div>
-      </div>
-    </td>
-  );
+        </td>
+      </tr>
 
-  return (
-    <>
       <tr className="align-middle relative">
-        {studentCell}
 
         <td
           className={`${cellBase} w-10 px-1 py-2 text-center text-xs font-medium text-neutral-400 dark:text-neutral-500`}
@@ -539,25 +500,10 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
                   name={item.name}
                 />
               ))}
-              {draftRelationshipValues.relationshipTargetLevel != null && (
-                <Button to="/utils/relationship" size="xs" variant="tint-blue">
-                  인연 랭크 계산기로
-                </Button>
-              )}
             </div>
           ) : (
-            <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">추가 재화 없음</p>
-              {draftRelationshipValues.relationshipTargetLevel != null && (
-                <Button to="/utils/relationship" size="xs" variant="tint-blue">
-                  인연 랭크 계산기로
-                </Button>
-              )}
-            </div>
-          )}
-          {student.resourceRequirements.skillUnavailable && (
-            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-              스킬 재화는 BAQL 응답을 불러오지 못해 제외됐어요.
+            <p className="text-xs text-center font-medium text-neutral-400 dark:text-neutral-500">
+              필요한 재화가 없어요
             </p>
           )}
         </td>
@@ -566,18 +512,52 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
   );
 }
 
-export default function GrowthTable({ students }: { students: GrowthStudent[] }) {
+const TOTAL_COLS = 4 + fieldDefinitions.length;
+
+function AddStudentRow({ availableStudents }: { availableStudents: GrowthAvailableStudent[] }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const fetcher = useFetcher();
+
+  return (
+    <tr>
+      <td colSpan={TOTAL_COLS} className="border-b border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+        {isOpen ? (
+          <div className="py-1 max-w-md">
+            <StudentSearchInput
+              placeholder="학생 이름으로 검색해서 추가..."
+              students={availableStudents}
+              grid={6}
+              size="sm"
+              onSelect={(studentUid) => {
+                fetcher.submit({ _intent: "add", studentUid }, { method: "post", encType: "application/json" });
+              }}
+            />
+            <Button size="sm" variant="default" onClick={() => setIsOpen(false)}>
+              취소
+            </Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="inverse" onClick={() => setIsOpen(true)}>
+            <UserPlusIcon className="size-4" />
+            학생 추가
+          </Button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+export default function GrowthTable({ students, availableStudents }: { students: GrowthStudent[]; availableStudents: GrowthAvailableStudent[] }) {
   return (
     <div className="max-w-full overflow-x-auto">
-      <div className="inline-block align-top rounded-2xl border border-neutral-200 dark:border-neutral-800">
+      <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800">
         <table className="w-max border-collapse">
           <thead className="bg-neutral-50 dark:bg-neutral-900">
             <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-              <th className="sticky left-0 z-10 min-w-32 bg-neutral-50 px-3 py-3 dark:bg-neutral-900">학생</th>
               <th className="px-1 py-3" />
               <th className="px-2 py-3 text-center">성급</th>
               <th className="min-w-20 px-2 py-3 text-center">인연 랭크</th>
-              <th className="border-l border-neutral-200 px-2 py-3 text-center dark:border-neutral-800">일괄 적용</th>
+              <th className="px-2 py-3 text-center">일괄 적용</th>
               {fieldDefinitions.map(({ key, label }) => (
                 <th key={key} className="w-16 px-1 py-3 text-center">
                   {label}
@@ -586,6 +566,7 @@ export default function GrowthTable({ students }: { students: GrowthStudent[] })
             </tr>
           </thead>
           <tbody>
+            <AddStudentRow availableStudents={availableStudents} />
             {students.map((student) => (
               <GrowthRow key={student.uid} student={student} />
             ))}

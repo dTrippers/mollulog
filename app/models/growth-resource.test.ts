@@ -6,6 +6,7 @@ jest.mock("~/lib/baql", () => ({
 }));
 
 import {
+  aggregateGrowthResourceRequirements,
   breakdownCharacterExpToBooks,
   calculateCharacterExpDifference,
   calculateCumulativeTierEleph,
@@ -496,5 +497,58 @@ describe("growth-resource", () => {
         },
       ]).map((item) => item.uid),
     ).toEqual(["5017", "150", "101009"]);
+  });
+
+  it("aggregates duplicated resource uids across students and keeps the existing sort order", () => {
+    const aggregated = aggregateGrowthResourceRequirements([
+      {
+        skillUnavailable: false,
+        items: [
+          {
+            uid: "150",
+            type: ResourceTypeEnum.Item,
+            rarity: 1,
+            amount: 80,
+            source: "gear",
+            category: "material",
+            subCategory: "artifact",
+          },
+          {
+            uid: "10000",
+            type: ResourceTypeEnum.Item,
+            rarity: 1,
+            amount: 120,
+            source: "tier",
+          },
+        ],
+      },
+      {
+        skillUnavailable: true,
+        items: [
+          {
+            uid: "13",
+            type: ResourceTypeEnum.Item,
+            rarity: 4,
+            amount: 2,
+            source: "level",
+            category: "character_exp_growth",
+          },
+          {
+            uid: "10000",
+            type: ResourceTypeEnum.Item,
+            rarity: 1,
+            amount: 80,
+            source: "tier",
+          },
+        ],
+      },
+    ]);
+
+    expect(aggregated.skillUnavailable).toBe(true);
+    expect(aggregated.items.map((item) => [item.uid, item.amount])).toEqual([
+      ["10000", 200],
+      ["13", 2],
+      ["150", 80],
+    ]);
   });
 });

@@ -7,6 +7,8 @@ type NumberInputBaseProps = {
   minValue?: number;
   compact?: boolean;
   showMax?: boolean;
+  showDecrease?: boolean;
+  showIncrease?: boolean;
 };
 
 type NonNullableProps = NumberInputBaseProps & {
@@ -25,7 +27,7 @@ type NullableProps = NumberInputBaseProps & {
 
 type NumberInputProps = NonNullableProps | NullableProps;
 
-export default function NumberInput({ label, defaultValue, value, maxValue, minValue, compact, showMax, onChange, ...rest }: NumberInputProps) {
+export default function NumberInput({ label, defaultValue, value, maxValue, minValue, compact, showMax, showDecrease = true, showIncrease = true, onChange, ...rest }: NumberInputProps) {
   const nullable = "nullable" in rest && rest.nullable === true;
   const effectiveMin = minValue ?? (nullable ? undefined : 0);
 
@@ -46,20 +48,22 @@ export default function NumberInput({ label, defaultValue, value, maxValue, minV
       labelClassName="mb-1 my-0 text-sm text-neutral-700 dark:text-neutral-200 font-medium"
     >
       <div className="w-full flex items-center rounded-md border border-neutral-300 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-900">
-        <button
-          type="button"
-          onClick={() => {
-            const base = internalValue ?? (effectiveMin ?? 0);
-            const newValue = base - 1;
-            setInternalValue(newValue);
-            (onChange as (v: number | null) => void)(newValue);
-          }}
-          className={buttonClass}
-          disabled={internalValue != null && effectiveMin !== undefined ? internalValue <= effectiveMin : internalValue != null && internalValue <= 0}
-          aria-label="감소"
-        >
-          -
-        </button>
+        {showDecrease && (
+          <button
+            type="button"
+            onClick={() => {
+              const base = internalValue ?? (effectiveMin ?? 0);
+              const newValue = base - 1;
+              setInternalValue(newValue);
+              (onChange as (v: number | null) => void)(newValue);
+            }}
+            className={buttonClass}
+            disabled={internalValue != null && effectiveMin !== undefined ? internalValue <= effectiveMin : internalValue != null && internalValue <= 0}
+            aria-label="감소"
+          >
+            -
+          </button>
+        )}
         <input
           type="text"
           inputMode="numeric"
@@ -86,20 +90,22 @@ export default function NumberInput({ label, defaultValue, value, maxValue, minV
           }}
           className={`w-full shrink text-center text-sm bg-transparent text-neutral-900 dark:text-neutral-100 focus:outline-none appearance-none [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield] ${compact ? "py-0.5" : "py-1"}`}
         />
-        <button
-          type="button"
-          onClick={() => {
-            const base = internalValue ?? (effectiveMin ?? 0);
-            const newValue = Math.min(base + 1, maxValue ?? Number.POSITIVE_INFINITY);
-            setInternalValue(newValue);
-            (onChange as (v: number | null) => void)(newValue);
-          }}
-          className={buttonClass}
-          disabled={maxValue !== undefined && internalValue != null && internalValue >= maxValue}
-          aria-label="증가"
-        >
-          +
-        </button>
+        {showIncrease && (
+          <button
+            type="button"
+            onClick={() => {
+              const base = internalValue ?? (effectiveMin ?? 0);
+              const newValue = Math.min(base + 1, maxValue ?? Number.POSITIVE_INFINITY);
+              setInternalValue(newValue);
+              (onChange as (v: number | null) => void)(newValue);
+            }}
+            className={buttonClass}
+            disabled={maxValue !== undefined && internalValue != null && internalValue >= maxValue}
+            aria-label="증가"
+          >
+            +
+          </button>
+        )}
         {showMax && maxValue !== undefined && (
           <button
             type="button"

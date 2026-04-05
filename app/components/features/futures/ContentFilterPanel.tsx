@@ -1,10 +1,6 @@
-import type { EventType, RaidType } from "~/models/content.d";
 import { FilterButtons, Toggle } from "~/components/primitives";
-
-export type ContentFilterState = {
-  types: (EventType | RaidType)[];
-  onlyPickups: boolean;
-};
+import type { EventType, RaidType } from "~/models/content.d";
+import type { ContentFilterState } from "./content-filter-state";
 
 type ContentFilterPanelProps = {
   filter: ContentFilterState;

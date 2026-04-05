@@ -72,7 +72,7 @@ export default function NavigationBar({
   return (
     <div
       className={sanitizeClassName(`
-      fixed xl:relative w-full xl:w-96 xl:h-screen bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
+      fixed xl:relative w-full xl:w-92 xl:h-screen bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
       border-b xl:border-b-0 xl:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30
       ${isMenuOpen ? "z-200" : "z-100"}
     `)}
