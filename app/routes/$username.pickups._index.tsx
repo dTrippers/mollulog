@@ -8,8 +8,8 @@ import { SubTitle } from "~/components/primitives";
 import { getAllStudentsMap } from "~/models/student";
 import dayjs from "dayjs";
 import { getRouteSensei } from "./$username";
-import { getRecruitmentGroup } from "~/models/event-content";
 import { getTimelineContentsByUids } from "~/models/timeline-content";
+import { RecruitmentRepository } from "~/repositories";
 
 export const meta: MetaFunction = ({ params }) => {
   return [
@@ -45,6 +45,7 @@ function getPickupStudentUids(event: { recruitments: { pickup: boolean; student:
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const sensei = await getRouteSensei(env, params);
+  const recruitmentRepository = new RecruitmentRepository(env);
 
   const [recruitmentHistories, allStudentsMap] = await Promise.all([
     getPickupHistories(env, sensei.id),
@@ -53,11 +54,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const eventUids = recruitmentHistories.map((history) => history.eventId);
 
   const [groups, timelineContents] = await Promise.all([
-    Promise.all(eventUids.map((uid) => getRecruitmentGroup(env, uid))),
+    recruitmentRepository.getByUids(eventUids),
     getTimelineContentsByUids(env, eventUids),
   ]);
 
-  const groupMap = new Map(groups.flatMap((g) => (g ? [[g.uid, g] as const] : [])));
+  const groupMap = new Map(groups.map((group) => [group.uid, group] as const));
   const tcMap = new Map(timelineContents.map((tc) => [tc.uid, tc]));
 
   let tier3Count = 0;

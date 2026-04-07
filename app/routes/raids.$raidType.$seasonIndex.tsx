@@ -15,12 +15,8 @@ import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
-import {
-  getAllRaidSchedules,
-  getRaidSchedule,
-  raidTypeFromParam,
-  raidTypeToParam,
-} from "~/models/raid";
+import { raidTypeFromParam, raidTypeToParam } from "~/models/raid";
+import { RaidRepository } from "~/repositories";
 
 function raidKey(raid: { raidType: string; seasonIndex: number }) {
   return `${raid.raidType}:${raid.seasonIndex}`;
@@ -29,6 +25,7 @@ function raidKey(raid: { raidType: string; seasonIndex: number }) {
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
+  const raidRepository = new RaidRepository(env);
   if (!raidType || !seasonIndex) {
     throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
       status: 404,
@@ -47,8 +44,8 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
 
   const scheduleUid = `gl_${normalizedRaidType}_${seasonIndex}`;
   const [currentRaid, allRaidSchedules, sensei] = await Promise.all([
-    getRaidSchedule(env, scheduleUid),
-    getAllRaidSchedules(env),
+    raidRepository.getSchedule(scheduleUid),
+    raidRepository.getAll(),
     getAuthenticator(env).isAuthenticated(request),
   ]);
 

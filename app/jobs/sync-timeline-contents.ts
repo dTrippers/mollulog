@@ -1,6 +1,7 @@
 import { getLogger } from "~/lib/observability.server";
 import { warmUpSingleItemCache } from "~/models/content-name";
 import { getUnsyncedUnstartedContents, markSyncedAt } from "~/models/timeline-content";
+import { RecruitmentRepository, RaidRepository } from "~/repositories";
 
 /**
  * Syncs metadata from BAQL for unstarted timeline contents that have not yet been synced.
@@ -13,6 +14,10 @@ import { getUnsyncedUnstartedContents, markSyncedAt } from "~/models/timeline-co
  */
 export async function syncTimelineContents(env: Env, ctx?: ExecutionContext): Promise<void> {
   const logger = getLogger(env, ctx, { job: "sync-timeline-contents" });
+  const repositories = {
+    raidRepository: new RaidRepository(env),
+    recruitmentRepository: new RecruitmentRepository(env),
+  };
 
   const unsyncedItems = await getUnsyncedUnstartedContents(env);
   logger.info("Found unsynced unstarted timeline contents", { count: unsyncedItems.length });
@@ -21,7 +26,7 @@ export async function syncTimelineContents(env: Env, ctx?: ExecutionContext): Pr
 
   await Promise.all(
     unsyncedItems.map(async (item) => {
-      const success = await warmUpSingleItemCache(env, item);
+      const success = await warmUpSingleItemCache(env, item, repositories);
       if (success) {
         await markSyncedAt(env, item.uid);
         logger.info("Synced timeline content", { uid: item.uid, contentType: item.contentType });

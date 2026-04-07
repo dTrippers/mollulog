@@ -1,9 +1,10 @@
 import type { ShopResource } from "~/components/features/events/shop/types";
 import type { MinigameConfig } from "~/components/features/events/shop/constants";
 import { graphql } from "~/graphql";
-import type { EventContentShopContentQuery, RecruitmentGroupQuery, RecruitmentGroupsListQuery } from "~/graphql/graphql";
+import type { EventContentShopContentQuery, RecruitmentGroupsListQuery } from "~/graphql/graphql";
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
+import { RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
 import { getTimelineContent } from "./timeline-content";
 import type { RunType } from "./timeline-content";
@@ -37,70 +38,46 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
 //
 // Get Recruitment Group
 //
-const recruitmentGroupQuery = graphql(`
-  query RecruitmentGroup($uid: String!) {
-    recruitmentGroup(uid: $uid) {
-      uid contentType contentUid startAt endAt recruitmentType
-      recruitments {
-        recruitmentType pickup rerun studentName since until
-        student { uid attackType defenseType role schaleDbId }
-      }
-    }
-  }
-`);
+type RecruitmentGroupResult = RecruitmentGroupsListQuery["recruitmentGroups"][number];
 
-type RecruitmentGroupResult = NonNullable<RecruitmentGroupQuery["recruitmentGroup"]>;
-
+/**
+ * @deprecated Use RecruitmentRepository.getByUid().
+ */
 export async function getRecruitmentGroup(
   env: Env,
   uid: string,
   forceRefresh = false,
 ): Promise<RecruitmentGroupResult | null> {
-  return fetchCached(
-    env,
-    `recruitment-group::v1::${uid}`,
-    async () => {
-      const { data, error } = await runQuery(recruitmentGroupQuery, { uid });
-      if (error || !data?.recruitmentGroup) {
-        return null;
-      }
-      return data.recruitmentGroup;
-    },
-    7 * 24 * 60 * 60,
-    forceRefresh,
-  );
+  return new RecruitmentRepository(env).getByUid(uid, forceRefresh);
 }
 
 //
 // Get Recruitment Groups (plural)
 //
-const recruitmentGroupsQuery = graphql(`
-  query RecruitmentGroupsList($endAfter: ISO8601DateTime, $uids: [String!]) {
-    recruitmentGroups(endAfter: $endAfter, uids: $uids) {
-      uid contentType contentUid startAt endAt recruitmentType
-      recruitments {
-        recruitmentType pickup rerun since until studentName
-        student { uid attackType defenseType role name schaleDbId }
-      }
-    }
-  }
-`);
-
 export type RecruitmentGroupsResult = RecruitmentGroupsListQuery["recruitmentGroups"];
 
 export async function getRecruitmentGroups(
   env: Env,
   opts: { endAfter?: Date; uids?: string[] } = {},
 ): Promise<RecruitmentGroupsResult> {
-  const { data, error } = await runQuery(recruitmentGroupsQuery, {
-    endAfter: opts.endAfter ?? null,
-    uids: opts.uids ?? null,
-  });
-  if (error || !data) {
-    console.error("[getRecruitmentGroups] Failed", error);
-    return [];
+  const repository = new RecruitmentRepository(env);
+
+  if (opts.uids) {
+    let groups = await repository.getByUids(opts.uids);
+    if (opts.endAfter) {
+      const endAfterTime = opts.endAfter.getTime();
+      groups = groups.filter((group) => !group.endAt || new Date(group.endAt).getTime() >= endAfterTime);
+    }
+    return groups;
   }
-  return data.recruitmentGroups;
+
+  if (opts.endAfter) {
+    const endAfterTime = opts.endAfter.getTime();
+    const groups = await repository.getAll();
+    return groups.filter((group) => !group.endAt || new Date(group.endAt).getTime() >= endAfterTime);
+  }
+
+  return repository.getAll();
 }
 
 //
@@ -189,23 +166,26 @@ function transformStages(stages: NonNullable<EventContentData>["stages"]) {
   }));
 }
 
+function hasShopResourceAndPaymentResource(
+  resource: NonNullable<EventContentData>["shopResources"][number],
+): resource is NonNullable<EventContentData>["shopResources"][number] & {
+  resource: NonNullable<NonNullable<EventContentData>["shopResources"][number]["resource"]>;
+  paymentResource: NonNullable<NonNullable<EventContentData>["shopResources"][number]["paymentResource"]>;
+} {
+  return resource.resource !== null && resource.paymentResource !== null;
+}
+
 function transformShopResources(
   shopResources: NonNullable<EventContentData>["shopResources"],
 ): ShopResource[] {
-  return shopResources.flatMap((resource) => {
-    if (!resource.resource || !resource.paymentResource) {
-      return [];
-    }
-
-    return [{
-      uid: resource.uid,
-      resourceAmount: resource.resourceAmount,
-      paymentResourceAmount: resource.paymentResourceAmount,
-      shopAmount: resource.shopAmount,
-      resource: resource.resource,
-      paymentResource: resource.paymentResource,
-    }];
-  });
+  return shopResources.filter(hasShopResourceAndPaymentResource).map((r) => ({
+    uid: r.uid,
+    resourceAmount: r.resourceAmount,
+    paymentResourceAmount: r.paymentResourceAmount,
+    shopAmount: r.shopAmount,
+    resource: r.resource,
+    paymentResource: r.paymentResource,
+  }));
 }
 
 function transformBonuses(bonuses: NonNullable<EventContentData>["bonuses"]) {

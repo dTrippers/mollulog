@@ -3,11 +3,11 @@ import dayjs from "dayjs";
 import { and, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
+import { RecruitmentRepository, RaidRepository } from "~/repositories";
 import { fetchCached } from "./base";
 import { getTimelineContents, getFutureRaidContents } from "./timeline-content";
 import type { TimelineContentType } from "./timeline-content";
-import { getRecruitmentGroups } from "./event-content";
-import { getRaidDetail, getRaidSchedule } from "./raid";
+import { getRaidDetail } from "./raid";
 import { getAllStudentsMap } from "./student";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { RaidType } from "./content.d";
@@ -44,6 +44,9 @@ export type PyroxenePlannerContent =
 
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
   return fetchCached(env, "pyroxene-planner-contents::v4", async () => {
+    const recruitmentRepository = new RecruitmentRepository(env);
+    const raidRepository = new RaidRepository(env);
+
     // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
     const [eventContents, raidContents] = await Promise.all([
       getTimelineContents(env),
@@ -57,7 +60,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
 
     const recruitmentGroupUids = allContents.map((c) => c.recruitmentGroupUid).filter((uid) => uid !== null) as string[];
     const [recruitmentGroups, studentsMap] = await Promise.all([
-      getRecruitmentGroups(env, { uids: recruitmentGroupUids }),
+      recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh),
       getAllStudentsMap(env, true),
     ]);
 
@@ -96,7 +99,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
 
         if (content.contentType === "raid" && content.contentUid) {
           // 신규 형식: RaidSchedule에서 raidType과 날짜를 가져옴
-          const schedule = await getRaidSchedule(env, content.contentUid);
+          const schedule = await raidRepository.getSchedule(content.contentUid, forceRefresh);
           if (schedule) {
             raidName = schedule.raidBoss.name;
             raidType = schedule.raidType as RaidType;

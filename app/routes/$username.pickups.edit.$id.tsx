@@ -8,12 +8,11 @@ import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEd
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
 import { createPickupHistory, getPickupHistory, type PickupHistory, updatePickupHistory } from "~/models/pickup-history";
 import { getAllStudents } from "~/models/student";
-import { getRecruitmentGroups } from "~/models/event-content";
 import { resolveContentName } from "~/models/content-name";
-import { getContentUidsByRecruitmentGroup } from "~/models/timeline-content";
 import { ContentSelectForm, FormGroup } from "~/components/features/forms";
 import { FilterButtons } from "~/components/primitives";
 import { Bars3Icon } from "@heroicons/react/16/solid";
+import { RecruitmentRepository } from "~/repositories";
 
 export const meta: MetaFunction = () => [
   { title: "모집 이력 관리 | 몰루로그" },
@@ -22,6 +21,7 @@ export const meta: MetaFunction = () => [
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const recruitmentRepository = new RecruitmentRepository(env);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -33,10 +33,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const now = dayjs();
 
-  const [allGroups, allStudentsList, contentUidMap] = await Promise.all([
-    getRecruitmentGroups(env, {}),
+  const [allGroups, allStudentsList] = await Promise.all([
+    recruitmentRepository.getAll(),
     getAllStudents(env),
-    getContentUidsByRecruitmentGroup(env),
   ]);
 
   const pickupGroups = allGroups.filter((g) =>
@@ -45,11 +44,10 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const events = await Promise.all(
     pickupGroups.map(async (group) => {
-      const d1Meta = contentUidMap.get(group.uid);
       const name = await resolveContentName(env, {
         uid: group.uid,
-        contentType: d1Meta?.contentType ?? group.contentType ?? "pickup",
-        contentUid: d1Meta?.contentUid ?? group.contentUid ?? null,
+        contentType: group.contentType ?? "pickup",
+        contentUid: group.contentUid ?? null,
       });
       return {
         uid: group.uid,

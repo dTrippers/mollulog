@@ -1,6 +1,7 @@
 import { Outlet, redirect } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
-import { getAllRaidSchedules, getRaidDetail, raidTypeToParam } from "~/models/raid";
+import { getRaidDetail, raidTypeToParam } from "~/models/raid";
+import { RaidRepository } from "~/repositories";
 
 // Valid URL path params (dash-format)
 const VALID_URL_PARAMS = ["total-assault", "grand-assault", "unlimit", "allied"];
@@ -8,6 +9,7 @@ const VALID_URL_PARAMS = ["total-assault", "grand-assault", "unlimit", "allied"]
 export const loader = async ({ context, params }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
+  const raidRepository = new RaidRepository(env);
 
   if (!raidType) {
     throw new Response(null, { status: 404 });
@@ -34,7 +36,7 @@ export const loader = async ({ context, params }: LoaderFunctionArgs) => {
     );
   }
 
-  const allSchedules = await getAllRaidSchedules(env);
+  const allSchedules = await raidRepository.getAll();
   const matchingSchedule = allSchedules.find(
     (s) => s.raidType === oldRaid.type && s.jpSchedule?.seasonIndex === oldRaid.raidIndexJp,
   );

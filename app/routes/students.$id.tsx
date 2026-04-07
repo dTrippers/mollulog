@@ -6,10 +6,10 @@ import { ErrorPage, Page } from "~/components/features/layout";
 import { StudentInfo } from "~/components/features/students";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { getAllRaidSchedules } from "~/models/raid";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import { RaidRepository } from "~/repositories";
 
 const studentDetailQuery = graphql(`
   query StudentDetail($uid: String!) {
@@ -29,6 +29,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
   const { env } = context.cloudflare;
+  const raidRepository = new RaidRepository(env);
 
   const { data, error } = await runQuery(studentDetailQuery, { uid });
   let errorMessage: string | null = null;
@@ -61,7 +62,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   const tagCounts = await getTagCountsByStudent(env, uid);
   const allGradings = await getStudentGradingsByStudentWithUsers(env, uid, true);
-  const allRaids = await getAllRaidSchedules(env);
+  const allRaids = await raidRepository.getAll();
 
   const sortedGradings = [...allGradings].sort((a, b) => {
     const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();

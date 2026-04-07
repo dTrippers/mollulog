@@ -1,10 +1,10 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
+import { RaidRepository, RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
-import { getRaidDetail, getRaidSchedule } from "./raid";
+import { getRaidDetail } from "./raid";
 import { raidTypeLocale } from "~/locales/ko";
 import { getMainStories } from "./main-story";
-import { getRecruitmentGroup } from "./event-content";
 import { campaignCategoryLocale, drillTypeLocale, pickupGroupTypeLocale } from "~/locales/ko";
 
 type ContentInput = {
@@ -103,24 +103,41 @@ export type ContentRef = {
 
 const LEGACY_RAID_TYPES = ["total_assault", "elimination", "unlimit", "allied"];
 
+type ContentRepositories = {
+  raidRepository: RaidRepository;
+  recruitmentRepository: RecruitmentRepository;
+};
+
+function createRepositories(env: Env): ContentRepositories {
+  return {
+    raidRepository: new RaidRepository(env),
+    recruitmentRepository: new RecruitmentRepository(env),
+  };
+}
+
 /**
  * Warms up KV cache for a single timeline content item with forceRefresh=true.
  * Returns true if the primary BAQL query returned data (item is confirmed to exist in BAQL).
  */
-export async function warmUpSingleItemCache(env: Env, item: ContentRef): Promise<boolean> {
+export async function warmUpSingleItemCache(
+  env: Env,
+  item: ContentRef,
+  repositories: ContentRepositories = createRepositories(env),
+): Promise<boolean> {
   const { uid, contentType, contentUid, recruitmentGroupUid } = item;
+  const { raidRepository, recruitmentRepository } = repositories;
   let primarySuccess = false;
 
   if (contentType === "joint_firing_drill" && contentUid) {
     primarySuccess = (await getJointFiringDrillDetail(env, contentUid, true)) !== null;
   } else if (contentType === "raid" && contentUid) {
-    primarySuccess = (await getRaidSchedule(env, contentUid, true)) !== null;
+    primarySuccess = (await raidRepository.getSchedule(contentUid, true)) !== null;
   } else if (LEGACY_RAID_TYPES.includes(contentType) && contentUid) {
     primarySuccess = (await getRaidDetail(env, contentUid, true)) !== null;
   } else if (contentType === "campaign" && contentUid) {
     primarySuccess = (await getCampaignDetail(env, contentUid, true)) !== null;
   } else if (contentType === "pickup") {
-    primarySuccess = (await getRecruitmentGroup(env, uid, true)) !== null;
+    primarySuccess = (await recruitmentRepository.getByUid(uid, true)) !== null;
   } else if (contentType === "mini_event" && contentUid) {
     primarySuccess = (await getMiniEventContentName(env, contentUid, true)) !== null;
   } else if (contentUid) {
@@ -130,7 +147,7 @@ export async function warmUpSingleItemCache(env: Env, item: ContentRef): Promise
   }
 
   if (recruitmentGroupUid) {
-    await getRecruitmentGroup(env, recruitmentGroupUid, true);
+    await recruitmentRepository.getByUid(recruitmentGroupUid, true);
   }
 
   return primarySuccess;
@@ -139,10 +156,11 @@ export async function warmUpSingleItemCache(env: Env, item: ContentRef): Promise
 const SKIP_IN_BULK_WARM_UP = new Set(["raid", ...LEGACY_RAID_TYPES]);
 
 export async function warmUpNameCaches(env: Env, contents: ContentRef[]) {
+  const repositories = createRepositories(env);
   await Promise.all(
     contents
       .filter((item) => !SKIP_IN_BULK_WARM_UP.has(item.contentType))
-      .map((item) => warmUpSingleItemCache(env, item)),
+      .map((item) => warmUpSingleItemCache(env, item, repositories)),
   );
 }
 
@@ -152,6 +170,8 @@ export async function warmUpNameCaches(env: Env, contents: ContentRef[]) {
 
 export async function resolveContentName(env: Env, content: ContentInput): Promise<string> {
   const { uid, contentType, contentUid } = content;
+  const raidRepository = new RaidRepository(env);
+  const recruitmentRepository = new RecruitmentRepository(env);
 
   if (contentType === "joint_firing_drill" && contentUid) {
     const drill = await getJointFiringDrillDetail(env, contentUid);
@@ -160,7 +180,7 @@ export async function resolveContentName(env: Env, content: ContentInput): Promi
   }
 
   if (contentType === "raid" && contentUid) {
-    const schedule = await getRaidSchedule(env, contentUid);
+    const schedule = await raidRepository.getSchedule(contentUid);
     if (!schedule) return uid;
     return `${(raidTypeLocale as Record<string, string>)[schedule.raidType] ?? schedule.raidType} ${schedule.raidBoss.name}`;
   }
@@ -176,7 +196,7 @@ export async function resolveContentName(env: Env, content: ContentInput): Promi
   }
 
   if (contentType === "pickup") {
-    const group = await getRecruitmentGroup(env, uid);
+    const group = await recruitmentRepository.getByUid(uid);
     return group ? (pickupGroupTypeLocale[group.recruitmentType] ?? "픽업 모집") : "픽업 모집";
   }
 
