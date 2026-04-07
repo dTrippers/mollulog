@@ -106,6 +106,9 @@ export function calculateMinigameRewards(config: MinigameConfig, playCount: numb
       appliedCount =
         fullCycles * remainders.length +
         remainders.filter((r) => r !== 0 && r <= remainder).length;
+    } else if (isGteCondition(group.rounds)) {
+      // Count rounds from gte to effectiveCount
+      appliedCount = Math.max(0, effectiveCount - group.rounds.gte + 1);
     } else {
       // Count how many of the specified rounds are <= effectiveCount
       appliedCount = group.rounds.filter((round) => round <= effectiveCount).length;

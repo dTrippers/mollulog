@@ -516,15 +516,6 @@ function Recruitments({
           onFavorite={onFavorite}
         />
       )}
-
-      {isPickupDayDifferent && (
-        <TimelineItemBanner
-          message={
-            dayjs(lastUntil).isBefore(dayjs()) ? "학생 모집이 종료되었어요." : "이벤트 개최 기간과 모집 기간이 달라요."
-          }
-          link={link}
-        />
-      )}
     </>
   );
 }

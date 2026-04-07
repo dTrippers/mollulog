@@ -64,21 +64,27 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
     const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
     const results = await Promise.all(allContents.map(async (content) => {
       if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
-        if (!content.endAt) return null;
-
-        const group = recruitmentGroupMap.get(content.uid);
+        const group = content.recruitmentGroupUid ? recruitmentGroupMap.get(content.recruitmentGroupUid) : undefined;
         const recruitments = (group?.recruitments ?? []).map((r) => ({
           recruitmentType: r.recruitmentType,
           pickup: r.pickup,
           rerun: r.rerun,
           student: r.student ? { uid: r.student.uid, name: r.student.name, initialTier: studentsMap[r.student.uid]?.initialTier ?? 0 } : null,
         }));
+
+        // endAt이 없는 경우 recruitment의 최대 until 날짜를 사용
+        const until = content.endAt ?? group?.recruitments.reduce<Date | null>(
+          (max, r) => r.until ? (max && max > new Date(r.until) ? max : new Date(r.until)) : max,
+          null,
+        );
+        if (!until) return null;
+
         return {
           kind: "event" as const,
           uid: content.uid,
           name: content.name,
           since: content.startAt,
-          until: content.endAt,
+          until,
           earnablePyroxene: content.earnablePyroxene ?? null,
           recruitments,
         };

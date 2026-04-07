@@ -337,7 +337,7 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
 
   const now = new Date();
   return allEnriched.filter((content) =>
-    content.endAt ? content.endAt > now : content.startAt > now,
+    content.endAt ? dayjs(content.endAt).isAfter(now) : dayjs(content.startAt).isAfter(now),
   );
 }
 
