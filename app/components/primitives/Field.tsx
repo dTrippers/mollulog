@@ -27,7 +27,7 @@ export default function Field({
   return (
     <div className={sanitizeClassName(containerClassName ?? "")}>
       {label && (
-        <label className={sanitizeClassName(`block font-bold ${labelClassName ?? ""}`)} htmlFor={htmlFor}>
+        <label className={sanitizeClassName(`mb-2 block text-sm font-bold ${labelClassName ?? ""}`)} htmlFor={htmlFor}>
           {label}
         </label>
       )}
