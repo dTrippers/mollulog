@@ -1,3 +1,4 @@
+import type { ShopResource } from "~/components/features/events/shop/types";
 import type { MinigameConfig } from "~/components/features/events/shop/constants";
 import { graphql } from "~/graphql";
 import type { EventContentShopContentQuery, RecruitmentGroupQuery, RecruitmentGroupsListQuery } from "~/graphql/graphql";
@@ -188,15 +189,23 @@ function transformStages(stages: NonNullable<EventContentData>["stages"]) {
   }));
 }
 
-function transformShopResources(shopResources: NonNullable<EventContentData>["shopResources"]) {
-  return shopResources.filter((r) => r.resource && r.paymentResource).map((r) => ({
-    uid: r.uid,
-    resourceAmount: r.resourceAmount,
-    paymentResourceAmount: r.paymentResourceAmount,
-    shopAmount: r.shopAmount,
-    resource: r.resource,
-    paymentResource: r.paymentResource,
-  }));
+function transformShopResources(
+  shopResources: NonNullable<EventContentData>["shopResources"],
+): ShopResource[] {
+  return shopResources.flatMap((resource) => {
+    if (!resource.resource || !resource.paymentResource) {
+      return [];
+    }
+
+    return [{
+      uid: resource.uid,
+      resourceAmount: resource.resourceAmount,
+      paymentResourceAmount: resource.paymentResourceAmount,
+      shopAmount: resource.shopAmount,
+      resource: resource.resource,
+      paymentResource: resource.paymentResource,
+    }];
+  });
 }
 
 function transformBonuses(bonuses: NonNullable<EventContentData>["bonuses"]) {

@@ -11,7 +11,7 @@ startTransition(() => {
     document,
     <StrictMode>
       <HydratedRouter
-        unstable_onError={(error, errorInfo) => {
+        onError={(error, errorInfo) => {
           captureClientError(error, {
             componentStack: errorInfo.errorInfo?.componentStack,
             location: errorInfo.location.pathname,
