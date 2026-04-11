@@ -6,7 +6,6 @@ import RaidStudentComparison from "~/components/features/raids/RaidStudentCompar
 import { EmptyView, LoadingSkeleton, Section } from "~/components/primitives";
 import { type defenseTypeColor, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
 import type { RaidType } from "~/models/content.d";
-import { raidTypeFromParam } from "~/models/raid";
 import { fetchRaidOverview } from "~/models/raid-overview.client";
 import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
 import { getAllStudentsMap } from "~/models/student";
@@ -24,7 +23,6 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     });
   }
 
-  const normalizedRaidType = raidTypeFromParam(raidType);
   const parsedSeasonIndex = Number.parseInt(seasonIndex, 10);
   if (Number.isNaN(parsedSeasonIndex)) {
     throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
@@ -32,8 +30,6 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
       headers: { "Content-Type": "application/json" },
     });
   }
-
-  const currentRaidUid = `gl_${normalizedRaidType}_${seasonIndex}`;
 
   const url = new URL(request.url);
   const fromRaidUid = url.searchParams.get("from");
@@ -55,7 +51,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
 
   const [toSchedule, fromSchedule, rawAllStudents] =
     await Promise.all([
-      raidRepository.getSchedule(currentRaidUid),
+      raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex),
       raidRepository.getSchedule(fromRaidUid),
       getAllStudentsMap(env, true),
     ]);

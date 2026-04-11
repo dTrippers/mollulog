@@ -15,7 +15,7 @@ import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
-import { raidTypeFromParam, raidTypeToParam } from "~/models/raid";
+import { raidTypeToParam } from "~/models/raid";
 import { RaidRepository } from "~/repositories";
 
 function raidKey(raid: { raidType: string; seasonIndex: number }) {
@@ -33,7 +33,6 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
     });
   }
 
-  const normalizedRaidType = raidTypeFromParam(raidType);
   const parsedSeasonIndex = Number.parseInt(seasonIndex, 10);
   if (Number.isNaN(parsedSeasonIndex)) {
     throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
@@ -42,9 +41,8 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
     });
   }
 
-  const scheduleUid = `gl_${normalizedRaidType}_${seasonIndex}`;
   const [currentRaid, allRaidSchedules, sensei] = await Promise.all([
-    raidRepository.getSchedule(scheduleUid),
+    raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex),
     raidRepository.getAll(),
     getAuthenticator(env).isAuthenticated(request),
   ]);

@@ -7,7 +7,6 @@ import { RecruitmentRepository, RaidRepository } from "~/repositories";
 import { fetchCached } from "./base";
 import { getTimelineContents, getFutureRaidContents } from "./timeline-content";
 import type { TimelineContentType } from "./timeline-content";
-import { getRaidDetail } from "./raid";
 import { getAllStudentsMap } from "./student";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { RaidType } from "./content.d";
@@ -106,8 +105,12 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
             until = until ?? schedule.endAt;
           }
         } else if (content.contentUid) {
-          const raidDetail = await getRaidDetail(env, content.contentUid);
-          raidName = raidDetail?.name ?? content.name;
+          const schedule = await raidRepository.findSummaryByContent(content, forceRefresh);
+          if (schedule) {
+            raidName = schedule.raidBoss.name;
+            raidType = schedule.raidType as RaidType;
+            until = until ?? schedule.endAt;
+          }
         }
 
         if (!until) return null;

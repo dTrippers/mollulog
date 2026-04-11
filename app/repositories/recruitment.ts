@@ -55,9 +55,8 @@ export class RecruitmentRepository {
             this.allPromise = Promise.resolve(groups);
             return groups;
           })
-          .catch((error) => {
+          .finally(() => {
             this.refreshPromise = null;
-            throw error;
           });
       }
 

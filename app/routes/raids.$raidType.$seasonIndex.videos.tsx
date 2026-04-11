@@ -4,8 +4,8 @@ import { RaidVideosScreen } from "~/components/features/raids";
 import { graphql } from "~/graphql";
 import type { VideoSortEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { getUpcomingRaidContentByTypeAndSeason } from "~/models/content";
-import { raidTypeFromParam, raidTypeToParam } from "~/models/raid";
+import { raidTypeToParam } from "~/models/raid";
+import { RaidRepository } from "~/repositories";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import { type RaidVideoItem, useRaidVideosFeed } from "./raids.$raidType.$seasonIndex._components/useRaidVideosFeed";
 
@@ -25,28 +25,26 @@ const raidVideosQuery = graphql(`
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
+  const raidRepository = new RaidRepository(env);
   if (!raidType || !seasonIndex) {
     throw new Response("Raid params are required", { status: 400 });
   }
 
-  const normalizedRaidType = raidTypeFromParam(raidType);
   const parsedSeasonIndex = Number.parseInt(seasonIndex, 10);
   if (Number.isNaN(parsedSeasonIndex)) {
     throw new Response("Raid params are required", { status: 400 });
   }
 
-  const upcomingRaid = await getUpcomingRaidContentByTypeAndSeason(
-    env,
-    normalizedRaidType as "total_assault" | "elimination" | "unlimit" | "allied",
-    parsedSeasonIndex,
-  );
-  const uid = upcomingRaid?.raidSchedule?.uid ?? `gl_${normalizedRaidType}_${seasonIndex}`;
+  const currentRaid = await raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex);
+  if (!currentRaid) {
+    throw new Response("Raid not found", { status: 404 });
+  }
 
   const url = new URL(request.url);
   const after = url.searchParams.get("after");
   const sort = (url.searchParams.get("sort") || "PUBLISHED_AT_DESC") as VideoSortEnum;
 
-  const { data, error } = await runQuery(raidVideosQuery, { uid, first: 12, after, sort });
+  const { data, error } = await runQuery(raidVideosQuery, { uid: currentRaid.uid, first: 12, after, sort });
   if (error || !data) {
     throw new Response("Error fetching raid videos", { status: 500 });
   }

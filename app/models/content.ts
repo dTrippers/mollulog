@@ -6,7 +6,6 @@ import type { EventType, RaidType, Role } from "./content.d";
 import { hasActiveCoupons } from "./coupon";
 import { getFavoritedCounts } from "./favorite-students";
 import { getLatestPostTime } from "./post";
-import { getRaidDetail } from "./raid";
 import {
   getFutureRaidContents,
   getTimelineContents,
@@ -255,12 +254,29 @@ export async function getUpcomingRaidContentByTypeAndSeason(
   raidType: RaidType,
   seasonIndex: number,
 ): Promise<TimelineRaidContent | null> {
-  const upcomingRaidContents = await getUpcomingRaidContents(env);
-  return (
-    upcomingRaidContents.find(
-      (content) => content.raidInfo?.raidType === raidType && content.raidInfo.seasonIndex === seasonIndex,
-    ) ?? null
-  );
+  const raidRepository = new RaidRepository(env);
+  const schedule = await raidRepository.getByTypeAndSeason(raidType, seasonIndex);
+  if (!schedule) {
+    return null;
+  }
+
+  const scheduleStartAt = schedule.startAt ? new Date(schedule.startAt).getTime() : null;
+  const raidContents = await getFutureRaidContents(env, ["raid"]);
+  const matchingContent =
+    raidContents.find((content) => content.contentUid === schedule.uid) ??
+    (scheduleStartAt !== null
+      ? raidContents.find((content) => content.startAt.getTime() === scheduleStartAt)
+      : undefined);
+
+  if (!matchingContent) {
+    return null;
+  }
+
+  return {
+    ...matchingContent,
+    raidInfo: toRaidInfo(schedule),
+    raidSchedule: withTimelineDates(schedule, matchingContent),
+  };
 }
 
 export type FutureContent = TimelineContent & {
@@ -294,6 +310,7 @@ function toRecruitmentInfos(group: Awaited<ReturnType<RecruitmentRepository["get
 
 export async function getFutureContents(env: Env, forceRefresh = false): Promise<FutureContent[]> {
   const allEnriched = await fetchCached(env, "future-contents::v1", async () => {
+    const raidRepository = new RaidRepository(env);
     const recruitmentRepository = new RecruitmentRepository(env);
     const [contents, upcomingRaidContents] = await Promise.all([
       getTimelineContents(env),
@@ -318,15 +335,16 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
           (["total_assault", "elimination", "unlimit", "allied"] as readonly string[]).includes(content.contentType) &&
           content.contentUid
         ) {
-          const raid = await getRaidDetail(env, content.contentUid);
-          const raidInfo: RaidInfo | undefined = raid
+          const schedule = await raidRepository.findSummaryByContent(content, forceRefresh);
+          const raidInfo: RaidInfo | undefined = schedule
             ? {
-                raidType: raid.type as RaidType,
-                boss: raid.boss,
-                name: raid.name,
-                terrain: raid.terrain,
-                attackType: raid.attackType,
-                defenseTypes: raid.defenseTypes.map((d) => ({
+                raidType: schedule.raidType as RaidType,
+                boss: schedule.raidBoss.uid,
+                name: schedule.raidBoss.name,
+                seasonIndex: schedule.seasonIndex,
+                terrain: schedule.terrain,
+                attackType: schedule.attackType,
+                defenseTypes: schedule.defenseTypes.map((d) => ({
                   defenseType: d.defenseType,
                   difficulty: d.difficulty ?? null,
                 })),

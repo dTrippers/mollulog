@@ -2,7 +2,6 @@ import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import { RaidRepository, RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
-import { getRaidDetail } from "./raid";
 import { raidTypeLocale } from "~/locales/ko";
 import { getMainStories } from "./main-story";
 import { campaignCategoryLocale, drillTypeLocale, pickupGroupTypeLocale } from "~/locales/ko";
@@ -11,6 +10,8 @@ type ContentInput = {
   uid: string;
   contentType: string;
   contentUid: string | null;
+  startAt?: Date | null;
+  endAt?: Date | null;
 };
 
 // ============================================================
@@ -99,6 +100,8 @@ export type ContentRef = {
   contentType: string;
   contentUid: string | null;
   recruitmentGroupUid?: string | null;
+  startAt?: Date | null;
+  endAt?: Date | null;
 };
 
 const LEGACY_RAID_TYPES = ["total_assault", "elimination", "unlimit", "allied"];
@@ -133,7 +136,7 @@ export async function warmUpSingleItemCache(
   } else if (contentType === "raid" && contentUid) {
     primarySuccess = (await raidRepository.getSchedule(contentUid, true)) !== null;
   } else if (LEGACY_RAID_TYPES.includes(contentType) && contentUid) {
-    primarySuccess = (await getRaidDetail(env, contentUid, true)) !== null;
+    primarySuccess = (await raidRepository.findSummaryByContent(item, true)) !== null;
   } else if (contentType === "campaign" && contentUid) {
     primarySuccess = (await getCampaignDetail(env, contentUid, true)) !== null;
   } else if (contentType === "pickup") {
@@ -186,8 +189,12 @@ export async function resolveContentName(env: Env, content: ContentInput): Promi
   }
 
   if (LEGACY_RAID_TYPES.includes(contentType) && contentUid) {
-    const raid = await getRaidDetail(env, contentUid);
-    return raid?.name ?? uid;
+    const schedule = await raidRepository.findSummaryByContent(content);
+    if (!schedule) {
+      return uid;
+    }
+
+    return `${(raidTypeLocale as Record<string, string>)[schedule.raidType] ?? schedule.raidType} ${schedule.raidBoss.name}`;
   }
 
   if (contentType === "campaign" && contentUid) {
