@@ -11,7 +11,15 @@ export class PasskeyStrategy<User> extends Strategy<User, PasskeyStrategyOptions
   name = "passkey";
 
   async authenticate(request: Request, sessionStorage: SessionStorage, options: AuthenticateOptions): Promise<User> {
-    const authenticationResponse = await request.json<AuthenticationResponseJSON>();
-    return this.success(await this.verify({ authenticationResponse }), request, sessionStorage, options);
+    let user: User;
+    try {
+      const authenticationResponse = await request.json<AuthenticationResponseJSON>();
+      user = await this.verify({ authenticationResponse });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const cause = error instanceof Error ? error : undefined;
+      return await this.failure(message, request, sessionStorage, options, cause as Error);
+    }
+    return this.success(user, request, sessionStorage, options);
   }
 }
