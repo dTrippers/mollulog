@@ -167,7 +167,9 @@ export function ContentTimelineItem({
     }
   }
 
-  const headerLinked = SHOW_LINK_CONTENT_TYPES.includes(contentType) && (!isSpoiler || spoilerVisible);
+  const headerLinked =
+    ((raidInfo !== undefined && raidInfo.raidType !== "unlimit") || SHOW_LINK_CONTENT_TYPES.includes(contentType)) &&
+    (!isSpoiler || spoilerVisible);
   const headerContent = headerLinked ? (
     <Link to={link} className="block cursor-pointer hover:underline tracking-tight">
       <ContentTitles name={name} showLink={true} />

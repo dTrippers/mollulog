@@ -115,7 +115,7 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
                   ${event.imageUrl ? "bg-black/65 hover:bg-black/80 text-white" : "bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700"}
                 `)}
             >
-              <p className="font-bold text-semibold">{event.name}</p>
+              <p className="font-bold text-semibold whitespace-pre-line">{event.name}</p>
               <p className="text-xs mt-1">
                 {dayjs(event.since).format("YYYY-MM-DD")}
               </p>

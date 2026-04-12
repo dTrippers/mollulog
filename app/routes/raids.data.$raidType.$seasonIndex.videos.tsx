@@ -1,74 +1,35 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { graphql } from "~/graphql";
 import type { VideoSortEnum } from "~/graphql/graphql";
-import { runQuery } from "~/lib/baql";
-import { getUpcomingRaidContentByTypeAndSeason } from "~/models/content";
-import { raidTypeFromParam } from "~/models/raid";
-
-const raidScheduleVideosQuery = graphql(`
-  query RaidScheduleVideosData($uid: String!, $first: Int, $after: String, $sort: VideoSortEnum) {
-    raidSchedule(uid: $uid) {
-      videos(first: $first, after: $after, sort: $sort) {
-        pageInfo { hasNextPage hasPreviousPage startCursor endCursor }
-        edges {
-          node { id title score youtubeId thumbnailUrl publishedAt }
-        }
-      }
-    }
-  }
-`);
-
-export type RaidVideosData = {
-  videos: {
-    id: string;
-    title: string;
-    score: number;
-    youtubeId: string;
-    thumbnailUrl: string;
-    publishedAt: string;
-  }[];
-  pageInfo: {
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
-    startCursor: string | null;
-    endCursor: string | null;
-  };
-} | null;
+import { RaidRepository } from "~/repositories";
+export type RaidVideosData = Awaited<ReturnType<RaidRepository["getVideos"]>>;
 
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
+  const raidRepository = new RaidRepository(env);
   if (!raidType || !seasonIndex) {
     throw new Response("Raid params are required", { status: 400 });
   }
 
-  const normalizedRaidType = raidTypeFromParam(raidType);
   const parsedSeasonIndex = Number.parseInt(seasonIndex, 10);
   if (Number.isNaN(parsedSeasonIndex)) {
     throw new Response("Raid params are required", { status: 400 });
   }
 
-  const upcomingRaid = await getUpcomingRaidContentByTypeAndSeason(
-    env,
-    normalizedRaidType as "total_assault" | "elimination" | "unlimit" | "allied",
-    parsedSeasonIndex,
-  );
-  const uid = upcomingRaid?.raidSchedule?.uid ?? `gl_${normalizedRaidType}_${seasonIndex}`;
+  const currentRaid = await raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex);
+  if (!currentRaid) {
+    throw new Response("Raid not found", { status: 404 });
+  }
 
   const url = new URL(request.url);
-  const first = Number.parseInt(url.searchParams.get("first") || "20");
+  const parsedFirst = Number.parseInt(url.searchParams.get("first") || "20", 10);
+  const first = Number.isNaN(parsedFirst) ? 20 : parsedFirst;
   const after = url.searchParams.get("after");
   const sort = (url.searchParams.get("sort") || "PUBLISHED_AT_DESC") as VideoSortEnum;
 
-  const { data, error } = await runQuery(raidScheduleVideosQuery, { uid, first, after, sort });
-  if (error || !data) {
+  try {
+    return await raidRepository.getVideos(currentRaid.uid, { first, after, sort });
+  } catch {
     throw new Response("Error fetching raid videos", { status: 500 });
   }
-  if (!data.raidSchedule?.videos) {
-    return null;
-  }
-
-  const videos = data.raidSchedule.videos.edges.map((edge) => edge.node);
-  const pageInfo = data.raidSchedule.videos.pageInfo;
-  return { videos, pageInfo };
 };

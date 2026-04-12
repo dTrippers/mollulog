@@ -1,8 +1,10 @@
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import type { LoaderFunctionArgs } from "react-router";
+import { raidTypeToParam } from "~/models/raid";
 import { getAllStudents } from "~/models/student";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content";
+import { RaidRepository } from "~/repositories";
 
 type SitemapItem = {
   link: string;
@@ -13,11 +15,11 @@ type SitemapItem = {
 
 const HOST = "https://mollulog.net";
 
-const RAID_CONTENT_TYPES = new Set(["total_assault", "elimination", "unlimit"]);
 const EVENT_CONTENT_TYPES = new Set(["event", "fes", "collab", "immortal_event", "main_story", "pickup", "mini_event", "allied"]);
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
+  const raidRepository = new RaidRepository(env);
   const items: SitemapItem[] = [
     { link: `${HOST}/futures`, lastmod: dayjs(), changefreq: "daily", priority: 1.0 },
     { link: `${HOST}/utils/relationship`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
@@ -26,25 +28,32 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   ];
 
   const now = dayjs();
-  const [contents, students] = await Promise.all([
+  const [contents, students, raidSchedules] = await Promise.all([
     getAllTimelineContentsMeta(env),
     getAllStudents(env),
+    raidRepository.getAll(),
   ]);
+  const raidScheduleMap = new Map(raidSchedules.map((schedule) => [schedule.uid, schedule]));
 
   for (const content of contents) {
-    let basePath: string;
-    if (RAID_CONTENT_TYPES.has(content.contentType)) {
-      basePath = "raids";
+    let link: string | null = null;
+    if (content.contentType === "raid" && content.contentUid) {
+      const schedule = raidScheduleMap.get(content.contentUid);
+      if (schedule) {
+        link = `${HOST}/raids/${raidTypeToParam(schedule.raidType)}/${schedule.seasonIndex}`;
+      }
     } else if (EVENT_CONTENT_TYPES.has(content.contentType)) {
-      basePath = "events";
-    } else {
+      link = `${HOST}/events/${content.uid}`;
+    }
+
+    if (!link) {
       continue;
     }
 
     const until = content.endAt ? dayjs(content.endAt) : now;
     const isOutdated = until.isBefore(now);
     items.push({
-      link: `${HOST}/${basePath}/${content.uid}`,
+      link,
       lastmod: isOutdated ? until : now,
       changefreq: isOutdated ? "yearly" : "daily",
       priority: isOutdated ? 0.3 : 1.0,

@@ -47,7 +47,7 @@ export default function EventList({ events, showArrow = true, className = "" }: 
           <div className="p-3 flex items-center gap-3 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
             <div className={`flex-1 ${event.imageUrl ? "min-w-0" : ""}`}>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{timelineContentTypeLocale[event.type]}</p>
-              <p className={`font-semibold text-neutral-900 dark:text-neutral-100 ${event.imageUrl ? "truncate" : ""}`}>
+              <p className="font-semibold whitespace-pre-line text-neutral-900 dark:text-neutral-100">
                 {event.name}
               </p>
               <p className="text-xs text-neutral-500 dark:text-neutral-400">

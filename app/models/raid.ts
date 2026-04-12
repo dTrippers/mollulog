@@ -32,6 +32,33 @@ export function getRaidSchedule(env: Env, uid: string, forceRefresh = false) {
   }, 24 * 60 * 60, forceRefresh);
 }
 
+const raidScheduleBySeasonIndexQuery = graphql(`
+  query RaidScheduleBySeasonIndex($region: String!, $seasonIndex: Int!) {
+    raidScheduleBySeasonIndex(region: $region, seasonIndex: $seasonIndex) {
+      uid raidType seasonIndex region terrain startAt endAt attackType
+      raidBoss { uid name }
+      defenseTypes { defenseType difficulty }
+      jpSchedule { uid seasonIndex }
+      videos(first: 1) { pageInfo { hasNextPage } }
+    }
+  }
+`);
+
+export function getRaidScheduleBySeasonIndex(
+  env: Env,
+  region: string,
+  seasonIndex: number,
+  forceRefresh = false,
+) {
+  return fetchCached(env, `raids::schedules::region=${region}::seasonIndex=${seasonIndex}`, async () => {
+    const { data, error } = await runQuery(raidScheduleBySeasonIndexQuery, { region, seasonIndex });
+    if (error) {
+      throw "failed to fetch raid schedule by season index";
+    }
+    return data?.raidScheduleBySeasonIndex ?? null;
+  }, 24 * 60 * 60, forceRefresh);
+}
+
 const allRaidSchedulesQuery = graphql(`
   query AllRaidSchedules($region: String!) {
     raidSchedules(region: $region) {
@@ -61,32 +88,6 @@ export async function getUpcomingRaidSchedules(env: Env, forceRefresh = false) {
   return schedules
     .filter((schedule) => schedule.endAt && new Date(schedule.endAt) >= now)
     .sort((a, b) => new Date(a.startAt as Date).getTime() - new Date(b.startAt as Date).getTime());
-}
-
-// ============================================================
-// 레거시 Raid (하위 호환 — deprecated 쿼리)
-// ============================================================
-
-const raidDetailQuery = graphql(`
-  query RaidDetail($uid: String!) {
-    raid(uid: $uid) {
-      uid type name boss since until terrain attackType rankVisible raidIndexJp
-      defenseTypes { defenseType difficulty }
-      videos(first: 1) {
-        pageInfo { hasNextPage }
-      }
-    }
-  }
-`);
-
-export function getRaidDetail(env: Env, uid: string, forceRefresh = false) {
-  return fetchCached(env, `raids::detail::uid=${uid}`, async () => {
-    const { data, error } = await runQuery(raidDetailQuery, { uid });
-    if (error) {
-      throw "failed to fetch raid detail";
-    }
-    return data?.raid ?? null;
-  }, 24 * 60 * 60, forceRefresh);
 }
 
 export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [

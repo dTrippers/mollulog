@@ -1,4 +1,3 @@
-import dayjs from "dayjs";
 import * as Sentry from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 import { getLogger } from "~/lib/observability.server";
@@ -6,7 +5,7 @@ import { getFutureContents, getIndexContents, getNavigationBarContents } from "~
 import { warmUpNameCaches } from "~/models/content-name";
 import { getMainStories } from "~/models/main-story";
 import { getPyroxenePlannerContents } from "~/models/pyroxene-planner";
-import { getAllRaidSchedules, getRaidSchedule } from "~/models/raid";
+import { RecruitmentRepository, RaidRepository } from "~/repositories";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { syncRawStudents } from "~/models/student";
 import { getTimelineContents } from "~/models/timeline-content";
@@ -54,23 +53,20 @@ const handler: ExportedHandler<ObservabilityEnv> = {
           ]);
         } else if (event.cron === "*/10 * * * *") {
           // every 10 minutes: sync D1 data, refresh short-lived caches
+          const recruitmentRepository = new RecruitmentRepository(env);
+          const raidRepository = new RaidRepository(env);
+
           // Step 1: sync raw data sources (independent)
           await Promise.all([
             syncRawStudents(env),
             syncTimelineContents(env, ctx),
+            recruitmentRepository.refresh(),
           ]);
 
           // Step 2: refresh leaf caches (independent)
-          const [allSchedules, activeContents] = await Promise.all([
-            getAllRaidSchedules(env, true),
-            getTimelineContents(env),
-          ]);
-          const now = dayjs();
+          const activeContents = await getTimelineContents(env);
           await Promise.all([
-            // refresh active raid schedule caches
-            ...allSchedules
-              .filter((schedule: { endAt: Date | null; uid: string }) => schedule.endAt && dayjs(schedule.endAt).isAfter(now))
-              .map((schedule: { uid: string }) => getRaidSchedule(env, schedule.uid, true)),
+            raidRepository.refresh(),
             // refresh per-uid name caches for active/upcoming timeline contents
             warmUpNameCaches(env, activeContents),
           ]);
