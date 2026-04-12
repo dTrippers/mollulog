@@ -17,9 +17,12 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   try {
     return await getAuthenticator(env, ctx).authenticate("passkey", request, {
       successRedirect: "/register",
-      failureRedirect: "/",
+      throwOnError: true,
     });
   } catch (error) {
+    if (error instanceof Response) {
+      throw error;
+    }
     logger.error("Passkey sign-in failed", error);
     if (error instanceof AuthorizationError) {
       return { error: error.message };

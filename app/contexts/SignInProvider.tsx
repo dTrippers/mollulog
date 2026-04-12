@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 type SignInContextType = {
   isSignInVisible: boolean;
@@ -14,19 +14,16 @@ const SignInContext = createContext<SignInContextType>({
 
 export function SignInProvider({ children }: { children: React.ReactNode }) {
   const [isSignInVisible, setIsSignInVisible] = useState(false);
-  const showSignIn = () => {
-    setIsSignInVisible(true);
-  };
 
-  const hideSignIn = () => {
-    setIsSignInVisible(false);
-  };
+  const showSignIn = useCallback(() => setIsSignInVisible(true), []);
+  const hideSignIn = useCallback(() => setIsSignInVisible(false), []);
 
-  return (
-    <SignInContext.Provider value={{ isSignInVisible, showSignIn, hideSignIn }}>
-      {children}
-    </SignInContext.Provider>
+  const value = useMemo(
+    () => ({ isSignInVisible, showSignIn, hideSignIn }),
+    [isSignInVisible, showSignIn, hideSignIn],
   );
+
+  return <SignInContext.Provider value={value}>{children}</SignInContext.Provider>;
 }
 
 export function useSignIn() {

@@ -119,6 +119,16 @@ export default function App() {
     }
   }, [navigate.state]);
 
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    };
+    window.addEventListener("pageshow", onPageShow);
+    return () => window.removeEventListener("pageshow", onPageShow);
+  }, []);
+
   const location = useLocation();
   const pathname = location.pathname;
   const routeKey = location.key;
