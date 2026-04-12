@@ -1,8 +1,9 @@
-import { UserPlusIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, UserPlusIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { StudentSearchInput, TierSelector } from "~/components/features/students";
-import { Button, MiniButton, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
+import { Button, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
+import { EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
 import type { GrowthAvailableStudent, GrowthStudent } from "./types";
 
 type ActionResult = {
@@ -92,10 +93,10 @@ function getRelationshipValidationError(values: RelationshipValues): string | nu
   return null;
 }
 
-const cellBase = "border-b border-neutral-200 dark:border-neutral-800";
+const cellBase = "border-b border-neutral-200 dark:border-neutral-700";
 const dataCellClass = `${cellBase} w-25 px-1 py-2`;
 const targetCellClass = `${cellBase} w-25 px-1 py-1.5 bg-blue-50/40 dark:bg-blue-950/10`;
-const bulkActionCellClass = `${cellBase} border-l border-neutral-200 px-2 py-2 dark:border-neutral-800`;
+const bulkActionCellClass = `${cellBase} border-l border-neutral-200 px-2 py-2 dark:border-neutral-700`;
 
 function isGearField(key: CurrentFieldKey | TargetFieldKey): boolean {
   return key === "equipSpecial" || key === "targetEquipSpecial";
@@ -128,6 +129,17 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
   const removeFetcher = useFetcher<ActionResult>();
   const enrollFetcher = useFetcher<ActionResult>();
 
+  const [isPendingSave, setIsPendingSave] = useState(false);
+
+  const equipLabels: Partial<Record<CurrentFieldKey | TargetFieldKey, string>> = {
+    equip1: EQUIPMENT_TYPE_LABELS[student.equipments[0]] ?? "",
+    equip2: EQUIPMENT_TYPE_LABELS[student.equipments[1]] ?? "",
+    equip3: EQUIPMENT_TYPE_LABELS[student.equipments[2]] ?? "",
+    targetEquip1: EQUIPMENT_TYPE_LABELS[student.equipments[0]] ?? "",
+    targetEquip2: EQUIPMENT_TYPE_LABELS[student.equipments[1]] ?? "",
+    targetEquip3: EQUIPMENT_TYPE_LABELS[student.equipments[2]] ?? "",
+  };
+
   useEffect(() => {
     // Always sync tier display
     setTierDraft(student.tier ?? student.initialTier);
@@ -151,7 +163,9 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
   }, [initialRelationshipValues, relationshipFetcher.state]);
 
   useEffect(() => {
-    if (fetcher.state !== "idle" || !submittedRef.current) return;
+    if (fetcher.state !== "idle") return;
+    setIsPendingSave(false);
+    if (!submittedRef.current) return;
     const submitted = submittedRef.current;
     submittedRef.current = null;
     if (fetcher.data?.success) {
@@ -179,7 +193,9 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
   }, [relationshipFetcher.state, relationshipFetcher.data, savedRelationshipValues]);
 
   useEffect(() => {
-    if (tierFetcher.state !== "idle" || tierSubmittedRef.current == null) return;
+    if (tierFetcher.state !== "idle") return;
+    setIsPendingSave(false);
+    if (tierSubmittedRef.current == null) return;
     const submitted = tierSubmittedRef.current;
     tierSubmittedRef.current = null;
     if (!tierFetcher.data?.success) {
@@ -191,11 +207,13 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
 
   const scheduleAutoSave = (values: GrowthValues, targetTier: number | null) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setIsPendingSave(true);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
       const validationError = getClientValidationError(values);
       if (validationError) {
         setGrowthError(validationError);
+        setIsPendingSave(false);
         return;
       }
       setGrowthError(null);
@@ -251,6 +269,7 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
 
   const handleCurrentTierChange = (newTier: number) => {
     setTierDraft(newTier);
+    setIsPendingSave(true);
     tierSubmittedRef.current = newTier;
     tierFetcher.submit(
       { _intent: "tier", studentUid: student.uid, tier: newTier },
@@ -275,6 +294,7 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
     const validationError = getClientValidationError(newValues);
     if (!validationError) {
       setGrowthError(null);
+      setIsPendingSave(true);
       submittedRef.current = { values: newValues, targetTier: targetTierDraft };
       fetcher.submit(
         { studentUid: student.uid, ...newValues, targetTier: targetTierDraft },
@@ -299,14 +319,21 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
 
   return (
     <>
-      <tr className="bg-neutral-50 dark:bg-neutral-900">
+      <tr className="bg-neutral-100 dark:bg-neutral-900">
         <td colSpan={TOTAL_COLS} className={`${cellBase} px-3 py-2`}>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="flex grow items-center gap-2 min-w-0">
               <ProfileImage studentUid={student.uid} />
               <span className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50">{student.name}</span>
               {displayedError && <p className="text-xs text-red-500 dark:text-red-400">{displayedError}</p>}
             </div>
+            {(student.relationshipCurrentLevel != null || student.relationshipTargetLevel != null) && (
+              <Link to="/utils/relationship">
+                <Button size="xs">
+                  인연 랭크 계산기
+                </Button>
+              </Link>
+            )}
             <Button
               size="xs"
               variant="tint-red"
@@ -324,7 +351,7 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
         </td>
       </tr>
 
-      <tr className="align-middle relative">
+      <tr className="align-top relative">
 
         <td
           className={`${cellBase} w-10 px-1 py-2 text-center text-xs font-medium text-neutral-400 dark:text-neutral-500`}
@@ -363,15 +390,22 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
             {fieldDefinitions.map(({ key, min, max }) => (
               <td key={key} className={dataCellClass}>
                 {student.hasGear || !isGearField(key) ? (
-                  <NumberInput
-                    nullable
-                    compact
-                    showMax
-                    minValue={min}
-                    maxValue={max}
-                    value={draftValues[key]}
-                    onChange={(v) => handleFieldChange(key, v)}
-                  />
+                  <div className="flex flex-col items-center gap-0.5">
+                    <NumberInput
+                      nullable
+                      compact
+                      showMax
+                      minValue={min}
+                      maxValue={max}
+                      value={draftValues[key]}
+                      onChange={(v) => handleFieldChange(key, v)}
+                    />
+                    {equipLabels[key] && (
+                      <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+                        {equipLabels[key]}
+                      </span>
+                    )}
+                  </div>
                 ) : null}
               </td>
             ))}
@@ -426,7 +460,7 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
         )}
       </tr>
 
-      <tr className="align-middle">
+      <tr className="align-top">
         <td
           className={`${cellBase} w-10 px-1 py-1.5 text-center text-xs font-medium text-blue-500 bg-blue-50/40 dark:text-blue-400 dark:bg-blue-950/10`}
         >
@@ -463,15 +497,22 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
           return (
             <td key={targetKey} className={targetCellClass}>
               {student.hasGear || !isGearField(targetKey) ? (
-                <NumberInput
-                  nullable
-                  compact
-                  showMax
-                  minValue={min}
-                  maxValue={max}
-                  value={draftValues[targetKey]}
-                  onChange={(v) => handleFieldChange(targetKey, v)}
-                />
+                <div className="flex flex-col items-center gap-0.5">
+                  <NumberInput
+                    nullable
+                    compact
+                    showMax
+                    minValue={min}
+                    maxValue={max}
+                    value={draftValues[targetKey]}
+                    onChange={(v) => handleFieldChange(targetKey, v)}
+                  />
+                  {equipLabels[targetKey] && (
+                    <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+                      {equipLabels[targetKey]}
+                    </span>
+                  )}
+                </div>
               ) : null}
             </td>
           );
@@ -486,26 +527,41 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
         </td>
         <td
           colSpan={fieldDefinitions.length + 3}
-          className={`${cellBase} w-0 max-w-0 px-3 pt-2 pb-3 bg-emerald-50/20 dark:bg-emerald-950/5`}
+          className={`relative ${cellBase} w-0 max-w-0 px-3 pt-2 pb-3 bg-emerald-50/20 dark:bg-emerald-950/5`}
         >
-          {student.resourceRequirements.items.length > 0 ? (
-            <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
-              {student.resourceRequirements.items.map((item) => (
-                <ResourceCard
-                  key={`${student.uid}-${item.uid}`}
-                  itemUid={item.uid}
-                  resourceType={item.type}
-                  rarity={item.rarity}
-                  label={item.amount.toLocaleString()}
-                  name={item.name}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-center font-medium text-neutral-400 dark:text-neutral-500">
-              필요한 재화가 없어요
-            </p>
-          )}
+          {(() => {
+            const isCalculating = isPendingSave || fetcher.state !== "idle" || tierFetcher.state !== "idle";
+            return (
+              <>
+                <div className={`${isCalculating ? "opacity-40 pointer-events-none" : ""} transition-opacity duration-200`}>
+                  {student.resourceRequirements.items.length > 0 ? (
+                    <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
+                      {student.resourceRequirements.items.map((item) => (
+                        <ResourceCard
+                          key={`${student.uid}-${item.uid}`}
+                          itemUid={item.uid}
+                          resourceType={item.type}
+                          rarity={item.rarity}
+                          label={item.amount.toLocaleString()}
+                          name={item.name}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-center font-medium text-neutral-400 dark:text-neutral-500">
+                      필요한 재화가 없어요
+                    </p>
+                  )}
+                </div>
+                {isCalculating && (
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                    <ArrowPathIcon className="size-4 animate-spin" />
+                    <span>재화 계산 중...</span>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </td>
       </tr>
     </>
@@ -514,13 +570,18 @@ function GrowthRow({ student }: { student: GrowthStudent }) {
 
 const TOTAL_COLS = 4 + fieldDefinitions.length;
 
-function AddStudentRow({ availableStudents }: { availableStudents: GrowthAvailableStudent[] }) {
+function AddStudentRow({ availableStudents, isFirst }: { availableStudents: GrowthAvailableStudent[]; isFirst: boolean }) {
   const [isOpen, setIsOpen] = useState(false);
   const fetcher = useFetcher();
 
   return (
     <tr>
-      <td colSpan={TOTAL_COLS} className="border-b border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-800 dark:bg-neutral-900">
+      <td colSpan={TOTAL_COLS} className="border-b border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
+        {isFirst && (
+          <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">
+            학생 이름을 검색하여 성장 목표를 관리할 학생을 등록해주세요.
+          </p>
+        )}
         {isOpen ? (
           <div className="py-1 max-w-md">
             <StudentSearchInput
@@ -550,7 +611,7 @@ function AddStudentRow({ availableStudents }: { availableStudents: GrowthAvailab
 export default function GrowthTable({ students, availableStudents }: { students: GrowthStudent[]; availableStudents: GrowthAvailableStudent[] }) {
   return (
     <div className="max-w-full overflow-x-auto">
-      <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-800">
+      <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
         <table className="w-max border-collapse">
           <thead className="bg-neutral-50 dark:bg-neutral-900">
             <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
@@ -566,7 +627,7 @@ export default function GrowthTable({ students, availableStudents }: { students:
             </tr>
           </thead>
           <tbody>
-            <AddStudentRow availableStudents={availableStudents} />
+            <AddStudentRow availableStudents={availableStudents} isFirst={students.length === 0} />
             {students.map((student) => (
               <GrowthRow key={student.uid} student={student} />
             ))}

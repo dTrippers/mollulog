@@ -40,9 +40,10 @@ export default function GrowthLayout() {
       title="성장/재화 플래너 (β)"
       description="학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요."
       contentArea="full"
+      layout="vertical"
       screens={[
         {
-          text: "학생 성장",
+          text: "학생 성장 목표",
           description: "학생별 현재 성장 상태와 목표 관리",
           Icon: UserIcon,
           link: "/utils/growth/students",
@@ -55,6 +56,13 @@ export default function GrowthLayout() {
           link: "/utils/growth/resources",
           active: pathname === "/utils/growth/resources",
         },
+        {
+          text: "재화 수급처 (준비중)",
+          description: "재화별 수급처 정보",
+          Icon: ArchiveBoxIcon,
+          link: "/utils/growth/sources",
+          disabled: true,
+        }
       ]}
     >
       <Outlet context={loaderData satisfies GrowthLayoutContext} />

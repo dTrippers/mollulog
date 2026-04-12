@@ -51,8 +51,9 @@ export default function RaidRankFilter({ state, setState, signedIn, filterableSt
   return (
     <>
       <div className="mb-6">
-        <p className="font-bold">난이도</p>
+        <p className="text-sm font-bold">난이도</p>
         <FilterButtons
+          size="sm"
           buttonProps={filterableDifficulties.map((difficulty) => ({
             text: difficultyLocale[difficulty],
             active: state.difficulty === difficulty,
@@ -63,8 +64,8 @@ export default function RaidRankFilter({ state, setState, signedIn, filterableSt
       </div>
 
       <div className="mb-4">
-        <p className="font-bold">포함할 학생</p>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">선택한 학생을 모두 포함</p>
+        <p className="text-sm font-bold">포함할 학생</p>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">선택한 학생을 모두 포함</p>
         <RaidRankFilterStudentSearch
           searchableStudents={filterableStudents}
           selectedStudents={state.includeStudents}
@@ -78,8 +79,8 @@ export default function RaidRankFilter({ state, setState, signedIn, filterableSt
       </div>
 
       <div>
-        <p className="font-bold">제외할 학생</p>
-        <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">선택한 학생이 한 명이라도 포함되면 제외</p>
+        <p className="text-sm font-bold">제외할 학생</p>
+        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">선택한 학생이 한 명이라도 포함되면 제외</p>
         <ClickableSurface onClick={!signedIn ? showSignIn : undefined}>
           <Toggle
             label="내가 모집하지 않은 학생"

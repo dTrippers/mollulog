@@ -40,8 +40,8 @@ export default function RaidRankFilterStudentSearch({ selectedStudents, searchab
 
   return (
     <>
-      <Input placeholder="이름으로 찾기..." value={searchValue} onChange={setSearchValue} />
-      <div className="-mt-6">
+      <Input size="sm" placeholder="이름으로 찾기..." value={searchValue} onChange={setSearchValue} />
+      <div>
         {searchedStudents.length > 0 && (
           <StudentCards
             students={searchedStudents}

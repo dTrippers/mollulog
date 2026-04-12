@@ -7,6 +7,7 @@ export type GrowthStudent = {
   isRecruited: boolean;
   released: boolean;
   hasGear: boolean;
+  equipments: string[];
   tier: number | null;
   initialTier: number;
   relationshipCurrentLevel: number | null;

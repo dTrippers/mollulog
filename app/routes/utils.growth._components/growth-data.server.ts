@@ -60,6 +60,7 @@ export async function loadGrowthPlannerData(env: Env, userId: number): Promise<G
       isRecruited,
       released: student?.released ?? false,
       hasGear: gearData != null,
+      equipments: student?.equipments ?? [],
       tier: isRecruited ? (recruitedTierMap[studentUid] ?? null) : null,
       initialTier: student?.initialTier ?? 1,
       relationshipCurrentLevel: relationshipMap[studentUid]?.currentLevel ?? null,
