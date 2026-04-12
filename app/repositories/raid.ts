@@ -1,8 +1,30 @@
+import { and, desc, eq, inArray } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
 import dayjs from "dayjs";
-import { getAllRaidSchedules, getRaidSchedule, getRaidScheduleBySeasonIndex, raidTypeFromParam } from "~/models/raid";
+import { RaidScheduleVideosDocument, type RaidScheduleVideosQueryVariables } from "~/graphql/graphql";
+import { runQuery } from "~/lib/baql";
+import { getAllRaidSchedules, getRaidSchedule, raidTypeFromParam } from "~/models/raid";
+import { timelineContentsTable } from "~/models/timeline-content";
 
 export type RaidSchedule = NonNullable<Awaited<ReturnType<typeof getRaidSchedule>>>;
 export type RaidScheduleListItem = Awaited<ReturnType<typeof getAllRaidSchedules>>[number];
+export type RaidVideoItem = {
+  id: string;
+  title: string;
+  score: number;
+  youtubeId: string;
+  thumbnailUrl: string;
+  publishedAt: string;
+};
+export type RaidVideosData = {
+  videos: RaidVideoItem[];
+  pageInfo: {
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    startCursor: string | null;
+    endCursor: string | null;
+  };
+} | null;
 
 type RaidLookupContent = {
   contentType: string;
@@ -10,6 +32,8 @@ type RaidLookupContent = {
   startAt?: Date | string | null;
   endAt?: Date | string | null;
 };
+
+type RaidVideosQueryOptions = Partial<Pick<RaidScheduleVideosQueryVariables, "first" | "after" | "sort">>;
 
 type TimelineRaidRow = {
   uid: string;
@@ -20,6 +44,7 @@ type TimelineRaidRow = {
 };
 
 const LEGACY_RAID_TYPES = new Set(["total_assault", "elimination", "unlimit", "allied"]);
+const TIMELINE_RAID_CONTENT_TYPES = ["raid", "total_assault", "elimination", "unlimit", "allied"] as const;
 
 function toTimestamp(value: Date | string | null | undefined): number | null {
   if (!value) {
@@ -74,6 +99,23 @@ export class RaidRepository {
     return getRaidSchedule(this.env, uid, forceRefresh);
   }
 
+  async findSummaryByTypeAndSeason(raidType: string, seasonIndex: number | string, forceRefresh = false) {
+    const parsedSeasonIndex =
+      typeof seasonIndex === "number" ? seasonIndex : Number.parseInt(String(seasonIndex), 10);
+    if (Number.isNaN(parsedSeasonIndex)) {
+      return null;
+    }
+
+    const normalizedRaidType = raidTypeFromParam(raidType);
+    const schedules = await this.getAll(forceRefresh);
+
+    return (
+      schedules.find(
+        (schedule) => schedule.raidType === normalizedRaidType && schedule.seasonIndex === parsedSeasonIndex,
+      ) ?? null
+    );
+  }
+
   async getUpcoming(forceRefresh = false) {
     const now = dayjs();
     const schedules = await this.getAll(forceRefresh);
@@ -84,18 +126,12 @@ export class RaidRepository {
   }
 
   async getByTypeAndSeason(raidType: string, seasonIndex: number | string, forceRefresh = false) {
-    const parsedSeasonIndex =
-      typeof seasonIndex === "number" ? seasonIndex : Number.parseInt(String(seasonIndex), 10);
-    if (Number.isNaN(parsedSeasonIndex)) {
+    const summary = await this.findSummaryByTypeAndSeason(raidType, seasonIndex, forceRefresh);
+    if (!summary) {
       return null;
     }
 
-    const schedule = await getRaidScheduleBySeasonIndex(this.env, "gl", parsedSeasonIndex, forceRefresh);
-    if (!schedule) {
-      return null;
-    }
-
-    return schedule.raidType === raidTypeFromParam(raidType) ? schedule : null;
+    return this.getSchedule(summary.uid, forceRefresh);
   }
 
   async findByTypeAndJpSeason(raidType: string, jpSeasonIndex: number, forceRefresh = false) {
@@ -107,6 +143,37 @@ export class RaidRepository {
         (schedule) => schedule.raidType === normalizedRaidType && schedule.jpSchedule?.seasonIndex === jpSeasonIndex,
       ) ?? null
     );
+  }
+
+  async getVideos(uid: string, { first, after, sort }: RaidVideosQueryOptions = {}): Promise<RaidVideosData> {
+    const { data, error } = await runQuery(RaidScheduleVideosDocument, { uid, first, after, sort });
+    if (error || !data) {
+      throw error ?? new Error("failed to fetch raid videos");
+    }
+
+    const videosConnection = data.raidSchedule?.videos;
+    if (!videosConnection) {
+      return null;
+    }
+
+    return {
+      videos: videosConnection.edges.flatMap((edge) => {
+        const node = edge.node;
+        if (!node) {
+          return [];
+        }
+
+        return {
+          id: node.id ?? "",
+          title: node.title ?? "",
+          score: node.score ?? 0,
+          youtubeId: node.youtubeId ?? "",
+          thumbnailUrl: node.thumbnailUrl ?? "",
+          publishedAt: node.publishedAt instanceof Date ? node.publishedAt.toISOString() : String(node.publishedAt ?? ""),
+        } satisfies RaidVideoItem;
+      }),
+      pageInfo: videosConnection.pageInfo,
+    };
   }
 
   private findMatchingSchedule(
@@ -166,23 +233,25 @@ export class RaidRepository {
   }
 
   private async getTimelineRaidByContentUid(contentUid: string): Promise<TimelineRaidRow | null> {
-    const row = await this.env.DB.prepare(
-      `
-        SELECT
-          uid,
-          content_type AS contentType,
-          content_uid AS contentUid,
-          start_at AS startAt,
-          end_at AS endAt
-        FROM timeline_contents
-        WHERE content_uid = ?1
-          AND content_type IN ('raid', 'total_assault', 'elimination', 'unlimit', 'allied')
-        ORDER BY start_at DESC
-        LIMIT 1
-      `,
-    )
-      .bind(contentUid)
-      .first<{ uid: string; contentType: string; contentUid: string | null; startAt: string; endAt: string | null }>();
+    const db = drizzle(this.env.DB);
+    const row = await db
+      .select({
+        uid: timelineContentsTable.uid,
+        contentType: timelineContentsTable.contentType,
+        contentUid: timelineContentsTable.contentUid,
+        startAt: timelineContentsTable.startAt,
+        endAt: timelineContentsTable.endAt,
+      })
+      .from(timelineContentsTable)
+      .where(
+        and(
+          eq(timelineContentsTable.contentUid, contentUid),
+          inArray(timelineContentsTable.contentType, TIMELINE_RAID_CONTENT_TYPES),
+        ),
+      )
+      .orderBy(desc(timelineContentsTable.startAt))
+      .limit(1)
+      .get();
 
     if (!row) {
       return null;
@@ -197,13 +266,37 @@ export class RaidRepository {
     };
   }
 
-  async findByLegacyContentUid(contentUid: string, forceRefresh = false): Promise<RaidSchedule | null> {
+  async findSummaryByLegacyContentUid(contentUid: string, forceRefresh = false): Promise<RaidScheduleListItem | null> {
     const timelineRaid = await this.getTimelineRaidByContentUid(contentUid);
     if (!timelineRaid) {
       return null;
     }
 
-    return this.findByContent(timelineRaid, forceRefresh);
+    return this.findSummaryByContent(timelineRaid, forceRefresh);
+  }
+
+  async findByLegacyContentUid(contentUid: string, forceRefresh = false): Promise<RaidSchedule | null> {
+    const summary = await this.findSummaryByLegacyContentUid(contentUid, forceRefresh);
+    if (!summary) {
+      return null;
+    }
+
+    return this.getSchedule(summary.uid, forceRefresh);
+  }
+
+  async findSummaryByPartyReference(
+    reference: { raidType: string | null; seasonIndex: number | null; legacyRaidContentUid?: string | null },
+    forceRefresh = false,
+  ): Promise<RaidScheduleListItem | null> {
+    if (reference.raidType && reference.seasonIndex !== null) {
+      return this.findSummaryByTypeAndSeason(reference.raidType, reference.seasonIndex, forceRefresh);
+    }
+
+    if (reference.legacyRaidContentUid) {
+      return this.findSummaryByLegacyContentUid(reference.legacyRaidContentUid, forceRefresh);
+    }
+
+    return null;
   }
 
   async refresh() {

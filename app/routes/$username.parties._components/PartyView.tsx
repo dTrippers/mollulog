@@ -1,13 +1,15 @@
 import dayjs from "dayjs";
+import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { useState } from "react";
+import { Link } from "react-router";
 import { ProfileImage, SubTitle } from "~/components/primitives";
 import { raidTypeLocale, terrainLocale } from "~/locales/ko";
-import type { RaidType, Terrain } from "~/models/content.d";
-import type { Party } from "~/models/party"
-import { useState } from "react";
 import { ActionCard } from "~/components/features/editor";
-import { CheckCircleIcon } from "@heroicons/react/24/outline";
-import { Link } from "react-router";
 import { bossImageUrl } from "~/models/assets";
+import type { RaidType } from "~/models/content.d";
+import { raidTypeToParam } from "~/models/raid";
+import type { Party } from "~/models/party";
+import type { RaidScheduleListItem } from "~/repositories";
 import { StudentCards } from "~/components/features/students";
 
 type PartyViewProps = {
@@ -22,28 +24,28 @@ type PartyViewProps = {
     tier: number | null;
   }[];
   editable?: boolean;
-  raids?: {
-    uid: string;
-    type: RaidType;
-    name: string;
-    boss: string;
-    terrain: Terrain;
-    since: Date;
-  }[];
+  raids?: RaidScheduleListItem[];
 };
 
 export default function PartyView({ party, sensei, students, editable, raids }: PartyViewProps) {
   const [memoOpened, setMemoOpened] = useState(false);
   const studentsMap = new Map(students.map((student) => [student.uid, student]));
 
-  const raid = (raids && party.raidId) ? raids.find(({ uid }) => party.raidId === uid) : null;
+  const raid =
+    raids && party.raidType && party.seasonIndex !== null
+      ? raids.find(
+          (candidate) => candidate.raidType === party.raidType && candidate.seasonIndex === party.seasonIndex,
+        ) ?? null
+      : null;
   let raidText = "";
   if (raid) {
     raidText = [
-      raidTypeLocale[raid.type],
+      raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType,
       terrainLocale[raid.terrain],
-      dayjs(raid.since).format("YYYY-MM-DD"),
-    ].filter((text) => text).join(" | ");
+      raid.startAt ? dayjs(raid.startAt).format("YYYY-MM-DD") : null,
+    ]
+      .filter((text) => text)
+      .join(" | ");
   }
 
   return (
@@ -65,15 +67,18 @@ export default function PartyView({ party, sensei, students, editable, raids }: 
       )}
 
       {raid && (
-        <Link className="group flex items-center my-4 md:my-8 -mx-4 md:-mx-6" to={`/raids/${raid.uid}`}>
+        <Link
+          className="group flex items-center my-4 md:my-8 -mx-4 md:-mx-6"
+          to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
+        >
           <img
             className="h-12 md:h-24 w-36 md:w-fit object-cover object-left bg-linear-to-l from-white dark:from-neutral-800 rounded-r-lg"
-            src={bossImageUrl(raid.boss)}
-            alt={`${raid.name} 이벤트`}
+            src={bossImageUrl(raid.raidBoss.uid)}
+            alt={`${raid.raidBoss.name} 레이드`}
           />
           <div className="px-4 md:px-6 w-full">
             <p className="font-bold group-hover:underline">
-              {raid.name}
+              {(raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType)} {raid.raidBoss.name}
             </p>
             <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-300">
               {raidText}

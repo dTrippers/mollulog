@@ -3,26 +3,23 @@ import { useState } from "react";
 import { Button, Label, SubTitle } from "~/components/primitives";
 import { AddContentButton, PartyUnitEditor } from "~/components/features/editor";
 import { StudentCards } from "~/components/features/students";
-import type { RaidType, Role, Terrain } from "~/models/content.d";
-import type { Party } from "~/models/party";
 import { ContentSelectForm, FormGroup, InputForm, TextareaForm } from "~/components/features/forms";
 import { raidTypeLocale } from "~/locales/ko";
+import type { RaidType, Role } from "~/models/content.d";
+import {
+  getPartyRaidReference,
+  serializePartyRaidReference,
+  type Party,
+} from "~/models/party";
+import type { RaidScheduleListItem } from "~/repositories";
 
 type PartyGeneratorProps = {
   party?: Party;
-  raids: {
-    uid: string;
-    name: string;
-    type: RaidType;
-    boss: string;
-    terrain: Terrain;
-    since: Date;
-    until: Date;
-  }[];
+  raids: RaidScheduleListItem[];
   students: {
     uid: string;
     name: string;
-    tier: number;
+    tier?: number;
     role: Role;
   }[];
 };
@@ -30,7 +27,9 @@ type PartyGeneratorProps = {
 export default function PartyGenerator({ party, raids, students }: PartyGeneratorProps) {
   const studentsMap = new Map(students.map((student) => [student.uid, student]));
 
-  const [raidUid, setRaidUid] = useState<string | undefined>(party?.raidId ?? undefined);
+  const [raidReference, setRaidReference] = useState<string | undefined>(
+    serializePartyRaidReference(getPartyRaidReference(party)),
+  );
 
   const [showPartyEditor, setShowPartyEditor] = useState(false);
   const [units, setUnits] = useState<(string | null)[][]>(party?.studentIds ?? []);
@@ -43,13 +42,16 @@ export default function PartyGenerator({ party, raids, students }: PartyGenerato
         <ContentSelectForm
           label="공략 컨텐츠"
           description="공략 대상 컨텐츠를 선택하세요"
-          name="raidId"
+          name="raid"
           contents={raids.map((raid) => ({
-            ...raid,
-            name: `${raid.name} (${raidTypeLocale[raid.type]})`,
+            uid: serializePartyRaidReference({ raidType: raid.raidType, seasonIndex: raid.seasonIndex }) ?? raid.uid,
+            name: `${raid.raidBoss.name} (${raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType}) #${raid.seasonIndex}`,
+            since: raid.startAt ?? undefined,
+            until: raid.endAt ?? undefined,
+            boss: raid.raidBoss.uid,
           }))}
-          initialValue={raidUid}
-          onSelect={(raidUid) => setRaidUid(raidUid)}
+          initialValue={raidReference}
+          onSelect={(value) => setRaidReference(value)}
           searchPlaceholder="컨텐츠 이름으로 찾기..."
         />
         <TextareaForm

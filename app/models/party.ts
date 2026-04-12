@@ -1,13 +1,20 @@
 import { nanoid } from "nanoid/non-secure";
 import { type Sensei, getSenseisById } from "./sensei";
 
+export type PartyRaidReference = {
+  raidType: string;
+  seasonIndex: number;
+};
+
 export type DBParty = {
   id: number;
   uid: string;
   name: string;
   userId: number;
   raidId: string | null;
-  memo: string;
+  raidType: string | null;
+  seasonIndex: number | null;
+  memo: string | null;
   showAsRaidTip: number;
   students: string;
 };
@@ -20,13 +27,57 @@ export type Party = {
   };
   name: string;
   studentIds: (string | null)[][];
-  raidId: string | null;
+  raidType: string | null;
+  seasonIndex: number | null;
+  legacyRaidContentUid?: string | null;
   memo: string | null;
   showAsRaidTip: boolean;
 };
 
+export function getPartyRaidReference(
+  party: { raidType: string | null; seasonIndex: number | null } | null | undefined,
+): PartyRaidReference | null {
+  if (!party?.raidType || party.seasonIndex === null) {
+    return null;
+  }
+
+  return {
+    raidType: party.raidType,
+    seasonIndex: party.seasonIndex,
+  };
+}
+
+export function serializePartyRaidReference(raid: PartyRaidReference | null | undefined): string | undefined {
+  if (!raid) {
+    return undefined;
+  }
+
+  return `${raid.raidType}:${raid.seasonIndex}`;
+}
+
+export function parsePartyRaidReference(
+  value: FormDataEntryValue | string | null | undefined,
+): PartyRaidReference | null {
+  if (typeof value !== "string" || value.length === 0) {
+    return null;
+  }
+
+  const [raidType, rawSeasonIndex, ...rest] = value.split(":");
+  if (!raidType || !rawSeasonIndex || rest.length > 0) {
+    return null;
+  }
+
+  const seasonIndex = Number.parseInt(rawSeasonIndex, 10);
+  if (Number.isNaN(seasonIndex)) {
+    return null;
+  }
+
+  return { raidType, seasonIndex };
+}
+
 // Get all parties for a user
-const GET_PARTIES_BY_RAID_QUERY = "select * from parties where raidId = ?1 and showAsRaidTip = true";
+const GET_PARTIES_BY_RAID_QUERY =
+  "select * from parties where raidType = ?1 and seasonIndex = ?2 and showAsRaidTip = true";
 
 export async function getUserParties(env: Env, username: string): Promise<Party[]> {
   const query = "select p.* from parties p, senseis s where p.userId = s.id and s.username = ?1";
@@ -34,8 +85,13 @@ export async function getUserParties(env: Env, username: string): Promise<Party[
   return result.results.map(toModel);
 }
 
-export async function getPartiesByRaidId(env: Env, raidId: string, includeSensei = false): Promise<Party[]> {
-  const result = await env.DB.prepare(GET_PARTIES_BY_RAID_QUERY).bind(raidId).all<DBParty>();
+export async function getPartiesByRaidReference(
+  env: Env,
+  raidType: string,
+  seasonIndex: number,
+  includeSensei = false,
+): Promise<Party[]> {
+  const result = await env.DB.prepare(GET_PARTIES_BY_RAID_QUERY).bind(raidType, seasonIndex).all<DBParty>();
   const rows = result.results;
   if (rows.length === 0) {
     return [];
@@ -74,10 +130,13 @@ export async function removePartyByUid(env: Env, userId: number, uid: string) {
 }
 
 // Create a party
-type PartyCreateFields = Pick<Party, "name" | "studentIds" | "raidId" | "showAsRaidTip" | "memo">;
+type PartyCreateFields = Pick<
+  Party,
+  "name" | "studentIds" | "raidType" | "seasonIndex" | "showAsRaidTip" | "memo"
+>;
 
 const CREATE_PARTY_QUERY =
-  "insert into parties (uid, name, userId, raidId, students, showAsRaidTip, memo) values (?1, ?2, ?3, ?4, ?5, ?6, ?7)";
+  "insert into parties (uid, name, userId, raidId, raidType, seasonIndex, students, showAsRaidTip, memo) values (?1, ?2, ?3, null, ?4, ?5, ?6, ?7, ?8)";
 
 export async function createParty(env: Env, sensei: Sensei, fields: PartyCreateFields) {
   const result = await env.DB.prepare(CREATE_PARTY_QUERY)
@@ -85,7 +144,8 @@ export async function createParty(env: Env, sensei: Sensei, fields: PartyCreateF
       nanoid(8),
       fields.name,
       sensei.id,
-      fields.raidId,
+      fields.raidType,
+      fields.seasonIndex,
       JSON.stringify(fields.studentIds),
       fields.showAsRaidTip,
       fields.memo,
@@ -102,7 +162,7 @@ export async function createParty(env: Env, sensei: Sensei, fields: PartyCreateF
 type PartyUpdateFields = Partial<PartyCreateFields>;
 
 const UPDATE_PARTY_QUERY =
-  "update parties set name = ?1, raidId = ?2, students = ?3, showAsRaidTip = ?4, memo = ?5 where uid = ?6 and userId = ?7";
+  "update parties set name = ?1, raidId = null, raidType = ?2, seasonIndex = ?3, students = ?4, showAsRaidTip = ?5, memo = ?6 where uid = ?7 and userId = ?8";
 
 export async function updateParty(env: Env, sensei: Sensei, uid: string, fields: PartyUpdateFields) {
   const existingParty = (await getUserParties(env, sensei.username)).find((party) => party.uid === uid);
@@ -110,13 +170,22 @@ export async function updateParty(env: Env, sensei: Sensei, uid: string, fields:
     return;
   }
 
+  const nextName = fields.name === undefined ? existingParty.name : fields.name;
+  const nextRaidType = fields.raidType === undefined ? existingParty.raidType : fields.raidType;
+  const nextSeasonIndex = fields.seasonIndex === undefined ? existingParty.seasonIndex : fields.seasonIndex;
+  const nextStudentIds = fields.studentIds === undefined ? existingParty.studentIds : fields.studentIds;
+  const nextShowAsRaidTip =
+    fields.showAsRaidTip === undefined ? existingParty.showAsRaidTip : fields.showAsRaidTip;
+  const nextMemo = fields.memo === undefined ? existingParty.memo : fields.memo;
+
   const result = await env.DB.prepare(UPDATE_PARTY_QUERY)
     .bind(
-      fields.name ?? existingParty.name,
-      fields.raidId ?? existingParty.raidId,
-      JSON.stringify(fields.studentIds ?? existingParty.studentIds),
-      fields.showAsRaidTip ?? existingParty.showAsRaidTip,
-      fields.memo ?? existingParty.memo,
+      nextName,
+      nextRaidType,
+      nextSeasonIndex,
+      JSON.stringify(nextStudentIds),
+      nextShowAsRaidTip,
+      nextMemo,
       uid,
       sensei.id,
     )
@@ -129,11 +198,20 @@ export async function updateParty(env: Env, sensei: Sensei, uid: string, fields:
 }
 
 function toModel(row: DBParty): Party {
+  const parsedSeasonIndex =
+    row.seasonIndex === null
+      ? null
+      : typeof row.seasonIndex === "number"
+        ? row.seasonIndex
+        : Number(row.seasonIndex);
+
   return {
     uid: row.uid,
     name: row.name,
     studentIds: JSON.parse(row.students),
-    raidId: row.raidId,
+    raidType: row.raidType,
+    seasonIndex: parsedSeasonIndex === null || Number.isNaN(parsedSeasonIndex) ? null : parsedSeasonIndex,
+    legacyRaidContentUid: row.raidId,
     memo: row.memo,
     showAsRaidTip: row.showAsRaidTip === 1,
   };

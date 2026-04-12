@@ -3,20 +3,11 @@ import { redirect, useLoaderData } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { AddContentButton } from "~/components/features/editor";
 import PartyView from "./$username.parties._components/PartyView";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
 import { getUserParties, removePartyByUid } from "~/models/party";
 import { getAllStudents } from "~/models/student";
 import { getRouteSensei } from "./$username";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
-
-export const raidForPartyQuery = graphql(`
-  query RaidForParty {
-    raids {
-      nodes { uid name type boss terrain since }
-    }
-  }
-`);
+import { RaidRepository } from "~/repositories";
 
 export const meta: MetaFunction = ({ params }) => {
   return [
@@ -28,19 +19,33 @@ export const meta: MetaFunction = ({ params }) => {
 };
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
-  const { data } = await runQuery(raidForPartyQuery, {});
-  if (!data) {
-    throw new Error("failed to load data");
-  }
-
   const env = context.cloudflare.env;
+  const raidRepository = new RaidRepository(env);
   const sensei = await getRouteSensei(env, params);
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
 
   const allStudents = await getAllStudents(env, true);
   const recruitedStudentTiers = await getRecruitedStudentTiers(env, sensei.id);
+  const allRaids = await raidRepository.getAll();
+  const parties = (
+    await Promise.all(
+      (await getUserParties(env, sensei.username))
+        .reverse()
+        .map(async (party) => {
+          const resolvedRaid = await raidRepository.findSummaryByPartyReference(party);
+          if (!resolvedRaid) {
+            return party;
+          }
 
-  const parties = (await getUserParties(env, sensei.username)).reverse();
+          return {
+            ...party,
+            raidType: resolvedRaid.raidType,
+            seasonIndex: resolvedRaid.seasonIndex,
+          };
+        }),
+    )
+  );
+
   return {
     me: sensei.username === currentUser?.username,
     parties,
@@ -49,7 +54,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       name: student.name,
       tier: recruitedStudentTiers[student.uid] ?? null,
     })),
-    raids: data.raids.nodes,
+    raids: allRaids,
   };
 };
 
@@ -83,7 +88,7 @@ export default function UserPartyPage() {
           key={`party-${party.uid}`}
           party={party}
           students={students}
-          raids={raids.map((raid) => ({ ...raid, raidId: raid.uid, since: new Date(raid.since) }))}
+          raids={raids}
           editable={me}
         />
       ))}

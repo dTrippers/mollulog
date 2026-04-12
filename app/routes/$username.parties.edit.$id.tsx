@@ -4,19 +4,15 @@ import { Form, useLoaderData } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { Title } from "~/components/primitives";
 import PartyGenerator from "./$username.parties._components/PartyGenerator";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
-import { updateParty, getUserParties, createParty } from "~/models/party";
+import {
+  createParty,
+  getUserParties,
+  parsePartyRaidReference,
+  updateParty,
+} from "~/models/party";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
-
-export const raidForPartyEditQuery = graphql(`
-  query RaidForPartyEdit {
-    raids {
-      nodes { uid name type boss terrain since until }
-    }
-  }
-`);
+import { RaidRepository } from "~/repositories";
 
 export const meta: MetaFunction = () => [
   { title: "편성/공략 관리 | 몰루로그" },
@@ -24,6 +20,7 @@ export const meta: MetaFunction = () => [
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
+  const raidRepository = new RaidRepository(env);
   const sensei = await getAuthenticator(env).isAuthenticated(request);
   if (!sensei) {
     return redirect("/unauthorized");
@@ -32,17 +29,24 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let party = null;
   if (params.id) {
     party = (await getUserParties(env, sensei.username)).find((p) => p.uid === params.id) ?? null;
-  }
-
-  const { data } = await runQuery(raidForPartyEditQuery, {});
-  if (!data) {
-    throw "failed to load data";
+    if (party) {
+      const resolvedRaid = await raidRepository.findSummaryByPartyReference(party);
+      if (resolvedRaid) {
+        party = {
+          ...party,
+          raidType: resolvedRaid.raidType,
+          seasonIndex: resolvedRaid.seasonIndex,
+        };
+      }
+    }
   }
 
   return {
     allStudents: (await getAllStudents(env, true)).sort((a, b) => a.order - b.order),
     recruitedStudentTiers: await getRecruitedStudentTiers(env, sensei.id),
-    raids: data.raids.nodes.sort((a, b) => new Date(b.since).getTime() - new Date(a.since).getTime()),
+    raids: (await raidRepository.getAll()).sort(
+      (a, b) => new Date(b.startAt as Date).getTime() - new Date(a.startAt as Date).getTime(),
+    ),
     party,
   };
 };
@@ -55,18 +59,23 @@ export const action: ActionFunction = async ({ context, request }) => {
   }
 
   const formData = await request.formData();
-  const raidId = formData.get("raidId");
+  const selectedRaid = parsePartyRaidReference(formData.get("raid"));
+  const showAsRaidTip = formData.has("showAsRaidTip") ? formData.get("showAsRaidTip") === "true" : undefined;
   const partyPatches = {
     name: formData.get("name") as string,
     studentIds: JSON.parse(formData.get("studentIds") as string),
-    raidId: raidId ? raidId as string : null,
-    showAsRaidTip: formData.get("showAsRaidTip") === "true",
+    raidType: selectedRaid?.raidType ?? null,
+    seasonIndex: selectedRaid?.seasonIndex ?? null,
+    showAsRaidTip,
     memo: formData.get("memo") as string | null,
   };
 
   const uid = formData.get("uid");
   if (!uid) {
-    await createParty(env, sensei, partyPatches);
+    await createParty(env, sensei, {
+      ...partyPatches,
+      showAsRaidTip: showAsRaidTip ?? false,
+    });
   } else {
     await updateParty(env, sensei, uid as string, partyPatches);
   }
@@ -85,7 +94,7 @@ export default function EditParties() {
         <div className="max-w-4xl">
           <PartyGenerator
             party={loaderData.party ?? undefined}
-            raids={loaderData.raids.map((raid) => ({ ...raid, since: new Date(raid.since), until: new Date(raid.until) }))}
+            raids={loaderData.raids}
             students={loaderData.allStudents.map((student) => ({
               ...student,
               tier: loaderData.recruitedStudentTiers[student.uid],

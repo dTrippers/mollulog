@@ -2,10 +2,11 @@ import { useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect } from "react-router";
 import { EventHeader, Recruitments } from "~/components/features/events";
-import { getEventContentSummary } from "~/models/event-content";
 import { getNestedContentComments } from "~/models/content";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { favoriteStudent, getFavoritedCounts, getUserFavoritedStudents, unfavoriteStudent } from "~/models/favorite-students";
+import { getTimelineContent } from "~/models/timeline-content";
+import { RecruitmentRepository } from "~/repositories";
 import EventComment from "./events.$uid._components/EventComment";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -14,10 +15,26 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
   const { env } = context.cloudflare;
-  const eventContent = await getEventContentSummary(env, timelineUid);
-  if (!eventContent) {
+  const content = await getTimelineContent(env, timelineUid);
+  if (!content) {
     throw new Response("Not Found", { status: 404 });
   }
+
+  const recruitmentRepository = new RecruitmentRepository(env);
+  const recruitments = content.recruitmentGroupUid
+    ? ((await recruitmentRepository.getByUid(content.recruitmentGroupUid))?.recruitments ?? [])
+    : [];
+  const eventContent = {
+    name: content.name,
+    since: content.startAt,
+    until: content.endAt,
+    imageUrl: content.imageUrl,
+    type: content.contentType,
+    runType: content.runType,
+    endless: content.endless,
+    videos: content.videos,
+    recruitments,
+  };
 
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
 

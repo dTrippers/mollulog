@@ -36,22 +36,6 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
 }
 
 //
-// Get Recruitment Group
-//
-type RecruitmentGroupResult = RecruitmentGroupsListQuery["recruitmentGroups"][number];
-
-/**
- * @deprecated Use RecruitmentRepository.getByUid().
- */
-export async function getRecruitmentGroup(
-  env: Env,
-  uid: string,
-  forceRefresh = false,
-): Promise<RecruitmentGroupResult | null> {
-  return new RecruitmentRepository(env).getByUid(uid, forceRefresh);
-}
-
-//
 // Get Recruitment Groups (plural)
 //
 export type RecruitmentGroupsResult = RecruitmentGroupsListQuery["recruitmentGroups"];
@@ -78,32 +62,6 @@ export async function getRecruitmentGroups(
   }
 
   return repository.getAll();
-}
-
-//
-// Get Event Content Summary
-//
-export async function getEventContentSummary(env: Env, timelineUid: string) {
-  const content = await getTimelineContent(env, timelineUid);
-  if (!content) {
-    return null;
-  }
-
-  const recruitments = content.recruitmentGroupUid
-    ? ((await getRecruitmentGroup(env, content.recruitmentGroupUid))?.recruitments ?? [])
-    : [];
-
-  return {
-    name: content.name,
-    since: content.startAt,
-    until: content.endAt,
-    imageUrl: content.imageUrl,
-    type: content.contentType,
-    runType: content.runType,
-    endless: content.endless,
-    videos: content.videos,
-    recruitments,
-  };
 }
 
 //
