@@ -39,6 +39,7 @@ export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "fes",
   "pickup",
   "collab",
+  "allied",
   "raid",
   "total_assault",
   "elimination",
@@ -59,8 +60,6 @@ export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
   "pickup",
   "collab",
   "raid",
-  "total_assault",
-  "elimination",
   "battle_pass",
 ];
 
@@ -284,8 +283,6 @@ export type FutureContent = TimelineContent & {
   raidInfo?: RaidInfo;
 };
 
-export const RAID_CONTENT_TYPES = ["total_assault", "elimination", "unlimit", "allied", "raid"] as const;
-
 function toRecruitmentInfos(group: Awaited<ReturnType<RecruitmentRepository["getByUid"]>>): RecruitmentInfo[] {
   return (group?.recruitments ?? [])
     .sort((a, b) => Number(a.rerun) - Number(b.rerun))
@@ -310,7 +307,6 @@ function toRecruitmentInfos(group: Awaited<ReturnType<RecruitmentRepository["get
 
 export async function getFutureContents(env: Env, forceRefresh = false): Promise<FutureContent[]> {
   const allEnriched = await fetchCached(env, "future-contents::v1", async () => {
-    const raidRepository = new RaidRepository(env);
     const recruitmentRepository = new RecruitmentRepository(env);
     const [contents, upcomingRaidContents] = await Promise.all([
       getTimelineContents(env),
@@ -325,35 +321,10 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
 
     return Promise.all(
       contents.map(async (content) => {
-        // New raid type — raidInfo from timeline-first upcoming raid lookup
         if (content.contentType === "raid") {
           return { ...content, recruitments: [], raidInfo: upcomingRaidMap.get(content.uid)?.raidInfo };
         }
 
-        // Legacy raid types — raidInfo from deprecated getRaidDetail
-        if (
-          (["total_assault", "elimination", "unlimit", "allied"] as readonly string[]).includes(content.contentType) &&
-          content.contentUid
-        ) {
-          const schedule = await raidRepository.findSummaryByContent(content, forceRefresh);
-          const raidInfo: RaidInfo | undefined = schedule
-            ? {
-                raidType: schedule.raidType as RaidType,
-                boss: schedule.raidBoss.uid,
-                name: schedule.raidBoss.name,
-                seasonIndex: schedule.seasonIndex,
-                terrain: schedule.terrain,
-                attackType: schedule.attackType,
-                defenseTypes: schedule.defenseTypes.map((d) => ({
-                  defenseType: d.defenseType,
-                  difficulty: d.difficulty ?? null,
-                })),
-              }
-            : undefined;
-          return { ...content, recruitments: [], raidInfo };
-        }
-
-        // Event types with a recruitment group
         if (content.recruitmentGroupUid) {
           const group = recruitmentGroupMap.get(content.recruitmentGroupUid) ?? null;
           return { ...content, recruitments: toRecruitmentInfos(group) };

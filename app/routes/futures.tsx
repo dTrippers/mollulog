@@ -10,7 +10,6 @@ import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
 import {
   type NestedComment,
-  RAID_CONTENT_TYPES,
   getContentsComments,
   getFutureContents,
   nestComments,
@@ -211,8 +210,7 @@ export default function FutureContents() {
   const filteredContents = useMemo(
     () =>
       contents.filter((content) => {
-        const isRaid = (RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType);
-        const effectiveType = isRaid && content.raidInfo ? content.raidInfo.raidType : content.contentType;
+        const effectiveType = content.raidInfo?.raidType ?? content.contentType;
         if (filter.types.length > 0 && !filter.types.includes(effectiveType)) {
           return false;
         }
@@ -238,15 +236,16 @@ export default function FutureContents() {
     >
       <ContentTimeline
         contents={filteredContents.map((content): ContentTimelineProps["contents"][number] => {
-          const isRaid = (RAID_CONTENT_TYPES as readonly string[]).includes(content.contentType);
+          const raidInfo = content.raidInfo;
+          const hasRaidInfo = raidInfo !== undefined;
           const raidLink =
-            content.raidInfo?.seasonIndex != null
-              ? `/raids/${raidTypeToParam(content.raidInfo.raidType)}/${content.raidInfo.seasonIndex}`
-              : `/raids/${content.contentUid}`;
+            raidInfo?.seasonIndex != null
+              ? `/raids/${raidTypeToParam(raidInfo.raidType)}/${raidInfo.seasonIndex}`
+              : "/raids";
           return {
             uid: content.uid,
-            name: isRaid && content.raidInfo ? content.raidInfo.name : content.name,
-            contentType: isRaid && content.raidInfo ? content.raidInfo.raidType : content.contentType,
+            name: hasRaidInfo ? raidInfo.name : content.name,
+            contentType: hasRaidInfo ? raidInfo.raidType : content.contentType,
             runType: content.runType,
             since: content.startAt,
             until: content.endAt,
@@ -254,9 +253,9 @@ export default function FutureContents() {
             confirmed: content.confirmed,
             isSpoiler: content.isSpoiler,
             tags: content.tags,
-            link: isRaid ? raidLink : `/events/${content.uid}`,
+            link: content.contentType === "raid" ? raidLink : `/events/${content.uid}`,
             recruitments: content.recruitments.length > 0 ? content.recruitments : undefined,
-            raidInfo: content.raidInfo,
+            raidInfo,
             allComments: allComments[content.uid] ?? [],
           };
         })}

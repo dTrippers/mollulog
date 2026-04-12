@@ -47,11 +47,26 @@ const eventContentNameQuery = graphql(`
   }
 `);
 
+function normalizeDecoratedContentName(name: string): string {
+  const match = name.match(/^(.+?)\s*~([^~]+)~$/);
+  if (!match) {
+    return name;
+  }
+
+  const title = match[1]?.trim();
+  const subtitle = match[2]?.trim();
+  if (!title || !subtitle) {
+    return name;
+  }
+
+  return `${title}\n~${subtitle}~`;
+}
+
 export async function getEventContentName(env: Env, uid: string, forceRefresh = false): Promise<string | null> {
   return fetchCached(env, `event-content-name::v1::${uid}`, async () => {
     const { data, error } = await runQuery(eventContentNameQuery, { uid });
     if (error || !data?.eventContent) return null;
-    return data.eventContent.name;
+    return normalizeDecoratedContentName(data.eventContent.name);
   }, 7 * 24 * 60 * 60, forceRefresh);
 }
 
@@ -69,7 +84,7 @@ export async function getMiniEventContentName(env: Env, uid: string, forceRefres
   return fetchCached(env, `mini-event-content-name::v1::${uid}`, async () => {
     const { data, error } = await runQuery(miniEventContentNameQuery, { uid });
     if (error || !data?.miniEventContent) return null;
-    return data.miniEventContent.name;
+    return normalizeDecoratedContentName(data.miniEventContent.name);
   }, 7 * 24 * 60 * 60, forceRefresh);
 }
 
@@ -104,8 +119,6 @@ export type ContentRef = {
   endAt?: Date | null;
 };
 
-const LEGACY_RAID_TYPES = ["total_assault", "elimination", "unlimit", "allied"];
-
 type ContentRepositories = {
   raidRepository: RaidRepository;
   recruitmentRepository: RecruitmentRepository;
@@ -135,8 +148,6 @@ export async function warmUpSingleItemCache(
     primarySuccess = (await getJointFiringDrillDetail(env, contentUid, true)) !== null;
   } else if (contentType === "raid" && contentUid) {
     primarySuccess = (await raidRepository.getSchedule(contentUid, true)) !== null;
-  } else if (LEGACY_RAID_TYPES.includes(contentType) && contentUid) {
-    primarySuccess = (await raidRepository.findSummaryByContent(item, true)) !== null;
   } else if (contentType === "campaign" && contentUid) {
     primarySuccess = (await getCampaignDetail(env, contentUid, true)) !== null;
   } else if (contentType === "pickup") {
@@ -156,13 +167,11 @@ export async function warmUpSingleItemCache(
   return primarySuccess;
 }
 
-const SKIP_IN_BULK_WARM_UP = new Set(["raid", ...LEGACY_RAID_TYPES]);
-
 export async function warmUpNameCaches(env: Env, contents: ContentRef[]) {
   const repositories = createRepositories(env);
   await Promise.all(
     contents
-      .filter((item) => !SKIP_IN_BULK_WARM_UP.has(item.contentType))
+      .filter((item) => item.contentType !== "raid")
       .map((item) => warmUpSingleItemCache(env, item, repositories)),
   );
 }
@@ -185,15 +194,6 @@ export async function resolveContentName(env: Env, content: ContentInput): Promi
   if (contentType === "raid" && contentUid) {
     const schedule = await raidRepository.getSchedule(contentUid);
     if (!schedule) return uid;
-    return `${(raidTypeLocale as Record<string, string>)[schedule.raidType] ?? schedule.raidType} ${schedule.raidBoss.name}`;
-  }
-
-  if (LEGACY_RAID_TYPES.includes(contentType) && contentUid) {
-    const schedule = await raidRepository.findSummaryByContent(content);
-    if (!schedule) {
-      return uid;
-    }
-
     return `${(raidTypeLocale as Record<string, string>)[schedule.raidType] ?? schedule.raidType} ${schedule.raidBoss.name}`;
   }
 

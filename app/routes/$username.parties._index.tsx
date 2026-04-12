@@ -27,24 +27,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const allStudents = await getAllStudents(env, true);
   const recruitedStudentTiers = await getRecruitedStudentTiers(env, sensei.id);
   const allRaids = await raidRepository.getAll();
-  const parties = (
-    await Promise.all(
-      (await getUserParties(env, sensei.username))
-        .reverse()
-        .map(async (party) => {
-          const resolvedRaid = await raidRepository.findSummaryByPartyReference(party);
-          if (!resolvedRaid) {
-            return party;
-          }
-
-          return {
-            ...party,
-            raidType: resolvedRaid.raidType,
-            seasonIndex: resolvedRaid.seasonIndex,
-          };
-        }),
-    )
-  );
+  const parties = (await getUserParties(env, sensei.username)).reverse();
 
   return {
     me: sensei.username === currentUser?.username,

@@ -20,25 +20,9 @@ jest.mock("~/lib/baql", () => ({
 
 type RepositoryEnv = ConstructorParameters<typeof RaidRepository>[0];
 
-type TimelineRow = {
-  uid: string;
-  contentType: string;
-  contentUid: string | null;
-  startAt: string;
-  endAt: string | null;
-} | null;
-
-function createEnv(row: TimelineRow = null) {
-  const first = jest.fn(async () => row);
-  const all = jest.fn(async () => (row ? [row] : []));
-  const raw = jest.fn(async () => (row ? [[row.uid, row.contentType, row.contentUid, row.startAt, row.endAt]] : []));
-  const run = jest.fn(async () => undefined);
-  const bind = jest.fn((..._args: unknown[]) => ({ first, all, raw, run }));
-  const prepare = jest.fn(() => ({ bind }));
-
+function createEnv() {
   return {
     env: {
-      DB: { prepare },
       KV_USERDATA: {
         get: jest.fn(async () => null),
         put: jest.fn(async () => undefined),
@@ -46,12 +30,6 @@ function createEnv(row: TimelineRow = null) {
         list: jest.fn(async () => ({ keys: [] })),
       },
     } as unknown as RepositoryEnv,
-    first,
-    all,
-    raw,
-    run,
-    bind,
-    prepare,
   };
 }
 
@@ -172,104 +150,6 @@ describe("RaidRepository", () => {
 
     await expect(repository.getByTypeAndSeason("grand-assault", 42)).resolves.toEqual(eliminationDetail);
     expect(getRaidSchedule).toHaveBeenCalledWith(env, "gl_elimination_42", false);
-  });
-
-  it("finds a legacy raid schedule by content type and timeline dates", async () => {
-    const { env } = createEnv();
-    const repository = new RaidRepository(env);
-    const schedule = {
-      uid: "gl_total_assault_99",
-      raidType: "total_assault",
-      seasonIndex: 99,
-      raidBoss: { uid: "binah", name: "비나" },
-      terrain: "outdoor",
-      attackType: null,
-      defenseTypes: [],
-      jpSchedule: { uid: "jp_total_assault_106", seasonIndex: 106 },
-      startAt: new Date("2026-05-01T03:00:00Z"),
-      endAt: new Date("2026-05-08T03:00:00Z"),
-    };
-    jest.mocked(getAllRaidSchedules).mockResolvedValue([schedule] as never);
-
-    await expect(
-      repository.findSummaryByContent({
-        contentType: "total_assault",
-        contentUid: "legacy-total-assault-99",
-        startAt: new Date("2026-05-01T03:00:00Z"),
-        endAt: new Date("2026-05-08T03:00:00Z"),
-      }),
-    ).resolves.toEqual(schedule);
-
-    expect(getAllRaidSchedules).toHaveBeenCalledWith(env, false);
-    expect(getRaidSchedule).not.toHaveBeenCalled();
-  });
-
-  it("resolves an old raid uid through timeline_contents and loads the matched schedule", async () => {
-    const { env, prepare, bind, raw } = createEnv({
-      uid: "timeline-raid-77",
-      contentType: "elimination",
-      contentUid: "legacy-elimination-77",
-      startAt: "2026-06-10T03:00:00Z",
-      endAt: "2026-06-17T03:00:00Z",
-    });
-    const repository = new RaidRepository(env);
-    const summary = {
-      uid: "gl_elimination_77",
-      raidType: "elimination",
-      seasonIndex: 77,
-      raidBoss: { uid: "shirokuro", name: "시로쿠로" },
-      terrain: "indoor",
-      attackType: null,
-      defenseTypes: [],
-      jpSchedule: { uid: "jp_elimination_84", seasonIndex: 84 },
-      startAt: new Date("2026-06-10T03:00:00Z"),
-      endAt: new Date("2026-06-17T03:00:00Z"),
-    };
-    const detail = {
-      ...summary,
-      videos: { pageInfo: { hasNextPage: true } },
-    };
-    jest.mocked(getAllRaidSchedules).mockResolvedValue([summary] as never);
-    jest.mocked(getRaidSchedule).mockResolvedValue(detail as never);
-
-    await expect(repository.findByLegacyContentUid("legacy-elimination-77")).resolves.toEqual(detail);
-
-    expect(prepare).toHaveBeenCalled();
-    expect(bind).toHaveBeenCalled();
-    expect(raw).toHaveBeenCalled();
-    expect(getRaidSchedule).toHaveBeenCalledWith(env, "gl_elimination_77", false);
-  });
-
-  it("falls back to legacy content uid when resolving a party raid reference", async () => {
-    const { env } = createEnv({
-      uid: "timeline-raid-77",
-      contentType: "elimination",
-      contentUid: "legacy-elimination-77",
-      startAt: "2026-06-10T03:00:00Z",
-      endAt: "2026-06-17T03:00:00Z",
-    });
-    const repository = new RaidRepository(env);
-    const summary = {
-      uid: "gl_elimination_77",
-      raidType: "elimination",
-      seasonIndex: 77,
-      raidBoss: { uid: "shirokuro", name: "시로쿠로" },
-      terrain: "indoor",
-      attackType: null,
-      defenseTypes: [],
-      jpSchedule: { uid: "jp_elimination_84", seasonIndex: 84 },
-      startAt: new Date("2026-06-10T03:00:00Z"),
-      endAt: new Date("2026-06-17T03:00:00Z"),
-    };
-    jest.mocked(getAllRaidSchedules).mockResolvedValue([summary] as never);
-
-    await expect(
-      repository.findSummaryByPartyReference({
-        raidType: null,
-        seasonIndex: null,
-        legacyRaidContentUid: "legacy-elimination-77",
-      }),
-    ).resolves.toEqual(summary);
   });
 
   it("loads raid videos through BAQL and normalizes the response", async () => {

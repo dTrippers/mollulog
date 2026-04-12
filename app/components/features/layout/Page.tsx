@@ -114,7 +114,11 @@ function PageSidebar({
         <h1 className="font-black text-3xl md:text-4xl drop-shadow-xl drop-shadow-neutral-300/50 dark:drop-shadow-neutral-700/50">
           {title}
         </h1>
-        {description && <p className="mt-2 xl:mt-4 text-neutral-500 dark:text-neutral-400">{description}</p>}
+        {description && (
+          <p className="mt-2 xl:mt-4 whitespace-pre-line text-neutral-500 dark:text-neutral-400">
+            {description}
+          </p>
+        )}
       </div>
       {belowTitle && <div className="my-4">{belowTitle}</div>}
       {screens && <PageScreenSelector screens={screens} />}

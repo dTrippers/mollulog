@@ -66,6 +66,15 @@ export type TimelineContent = {
 };
 
 type RawTimelineContent = Omit<TimelineContent, "name">;
+const IN_QUERY_BATCH_SIZE = 90;
+
+function splitIntoBatches<T>(values: T[], batchSize = IN_QUERY_BATCH_SIZE): T[][] {
+  const batches: T[][] = [];
+  for (let start = 0; start < values.length; start += batchSize) {
+    batches.push(values.slice(start, start + batchSize));
+  }
+  return batches;
+}
 
 function toRaw(row: typeof timelineContentsTable.$inferSelect): RawTimelineContent {
   return {
@@ -143,7 +152,13 @@ export async function getUpcomingEvent(env: Env): Promise<TimelineContent | null
 export async function getTimelineContentsByUids(env: Env, uids: string[]): Promise<TimelineContent[]> {
   if (uids.length === 0) return [];
   const db = drizzle(env.DB);
-  const rows = await db.select().from(timelineContentsTable).where(inArray(timelineContentsTable.uid, uids)).all();
+  const rows = (
+    await Promise.all(
+      splitIntoBatches([...new Set(uids)]).map((batch) =>
+        db.select().from(timelineContentsTable).where(inArray(timelineContentsTable.uid, batch)).all(),
+      ),
+    )
+  ).flat();
   return enrichAll(env, rows.map(toRaw));
 }
 
@@ -208,15 +223,21 @@ export async function getTimelineContentDatesByContentUids(
 ): Promise<Map<string, { startAt: Date; endAt: Date | null }>> {
   if (contentUids.length === 0) return new Map();
   const db = drizzle(env.DB);
-  const rows = await db
-    .select({
-      contentUid: timelineContentsTable.contentUid,
-      startAt: timelineContentsTable.startAt,
-      endAt: timelineContentsTable.endAt,
-    })
-    .from(timelineContentsTable)
-    .where(inArray(timelineContentsTable.contentUid, contentUids))
-    .all();
+  const rows = (
+    await Promise.all(
+      splitIntoBatches([...new Set(contentUids)]).map((batch) =>
+        db
+          .select({
+            contentUid: timelineContentsTable.contentUid,
+            startAt: timelineContentsTable.startAt,
+            endAt: timelineContentsTable.endAt,
+          })
+          .from(timelineContentsTable)
+          .where(inArray(timelineContentsTable.contentUid, batch))
+          .all(),
+      ),
+    )
+  ).flat();
   return new Map(
     rows
       .filter((r) => r.contentUid)
@@ -230,11 +251,17 @@ export async function getTimelineContentDatesByContentUids(
 export async function getTimelineContentsByContentUids(env: Env, contentUids: string[]): Promise<TimelineContent[]> {
   if (contentUids.length === 0) return [];
   const db = drizzle(env.DB);
-  const rows = await db
-    .select()
-    .from(timelineContentsTable)
-    .where(inArray(timelineContentsTable.contentUid, contentUids))
-    .all();
+  const rows = (
+    await Promise.all(
+      splitIntoBatches([...new Set(contentUids)]).map((batch) =>
+        db
+          .select()
+          .from(timelineContentsTable)
+          .where(inArray(timelineContentsTable.contentUid, batch))
+          .all(),
+      ),
+    )
+  ).flat();
   return enrichAll(env, rows.map(toRaw));
 }
 
@@ -244,11 +271,17 @@ export async function getTimelineContentsByRecruitmentGroupUids(
 ): Promise<TimelineContent[]> {
   if (recruitmentGroupUids.length === 0) return [];
   const db = drizzle(env.DB);
-  const rows = await db
-    .select()
-    .from(timelineContentsTable)
-    .where(inArray(timelineContentsTable.recruitmentGroupUid, recruitmentGroupUids))
-    .all();
+  const rows = (
+    await Promise.all(
+      splitIntoBatches([...new Set(recruitmentGroupUids)]).map((batch) =>
+        db
+          .select()
+          .from(timelineContentsTable)
+          .where(inArray(timelineContentsTable.recruitmentGroupUid, batch))
+          .all(),
+      ),
+    )
+  ).flat();
   return enrichAll(env, rows.map(toRaw));
 }
 

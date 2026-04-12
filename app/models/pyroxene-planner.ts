@@ -4,18 +4,16 @@ import { and, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
 import { RecruitmentRepository, RaidRepository } from "~/repositories";
+import type { TimelineContentType } from "./timeline-content";
 import { fetchCached } from "./base";
 import { getTimelineContents, getFutureRaidContents } from "./timeline-content";
-import type { TimelineContentType } from "./timeline-content";
 import { getAllStudentsMap } from "./student";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { RaidType } from "./content.d";
 
-
 /**
  * Pyroxene Planner Contents
  */
-const RAID_CONTENT_TYPES: TimelineContentType[] = ["total_assault", "elimination", "raid"];
 const EVENT_CONTENT_TYPES: TimelineContentType[] = ["event", "main_story", "pickup"];
 
 export type PyroxenePlannerContent =
@@ -49,7 +47,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
     // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
     const [eventContents, raidContents] = await Promise.all([
       getTimelineContents(env),
-      getFutureRaidContents(env, RAID_CONTENT_TYPES),
+      getFutureRaidContents(env, ["raid"]),
     ]);
     const raidUids = new Set(raidContents.map((c) => c.uid));
     const allContents = [
@@ -91,21 +89,13 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
           recruitments,
         };
       }
-      if (RAID_CONTENT_TYPES.includes(content.contentType)) {
+      if (content.contentType === "raid") {
         let raidName = content.name;
         let raidType = content.contentType as RaidType;
         let until: Date | null = content.endAt;
 
-        if (content.contentType === "raid" && content.contentUid) {
-          // 신규 형식: RaidSchedule에서 raidType과 날짜를 가져옴
+        if (content.contentUid) {
           const schedule = await raidRepository.getSchedule(content.contentUid, forceRefresh);
-          if (schedule) {
-            raidName = schedule.raidBoss.name;
-            raidType = schedule.raidType as RaidType;
-            until = until ?? schedule.endAt;
-          }
-        } else if (content.contentUid) {
-          const schedule = await raidRepository.findSummaryByContent(content, forceRefresh);
           if (schedule) {
             raidName = schedule.raidBoss.name;
             raidType = schedule.raidType as RaidType;
@@ -130,7 +120,6 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
     return results.filter((r) => r !== null);
   }, 60 * 10, forceRefresh);
 }
-
 
 /**
  * Pyroxene Owned Resources

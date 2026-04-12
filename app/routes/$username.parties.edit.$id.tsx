@@ -29,16 +29,6 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let party = null;
   if (params.id) {
     party = (await getUserParties(env, sensei.username)).find((p) => p.uid === params.id) ?? null;
-    if (party) {
-      const resolvedRaid = await raidRepository.findSummaryByPartyReference(party);
-      if (resolvedRaid) {
-        party = {
-          ...party,
-          raidType: resolvedRaid.raidType,
-          seasonIndex: resolvedRaid.seasonIndex,
-        };
-      }
-    }
   }
 
   return {

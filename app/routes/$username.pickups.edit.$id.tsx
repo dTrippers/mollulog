@@ -9,6 +9,7 @@ import PickupHistoryImporter from "./$username.pickups._components/PickupHistory
 import { createPickupHistory, getPickupHistory, type PickupHistory, updatePickupHistory } from "~/models/pickup-history";
 import { getAllStudents } from "~/models/student";
 import { resolveContentName } from "~/models/content-name";
+import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { ContentSelectForm, FormGroup } from "~/components/features/forms";
 import { FilterButtons } from "~/components/primitives";
 import { Bars3Icon } from "@heroicons/react/16/solid";
@@ -41,14 +42,21 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const pickupGroups = allGroups.filter((g) =>
     g.recruitments.some((r) => r.pickup && r.student) && dayjs(g.startAt).isBefore(now)
   );
+  const timelineContents = await getTimelineContentsByRecruitmentGroupUids(
+    env,
+    pickupGroups.map((group) => group.uid),
+  );
+  const timelineContentMap = new Map(timelineContents.map((content) => [content.recruitmentGroupUid, content] as const));
 
   const events = await Promise.all(
     pickupGroups.map(async (group) => {
-      const name = await resolveContentName(env, {
-        uid: group.uid,
-        contentType: group.contentType ?? "pickup",
-        contentUid: group.contentUid ?? null,
-      });
+      const name =
+        timelineContentMap.get(group.uid)?.name ??
+        (await resolveContentName(env, {
+          uid: group.uid,
+          contentType: group.contentType ?? "pickup",
+          contentUid: group.contentUid ?? null,
+        }));
       return {
         uid: group.uid,
         name,

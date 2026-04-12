@@ -29,7 +29,6 @@ export type Party = {
   studentIds: (string | null)[][];
   raidType: string | null;
   seasonIndex: number | null;
-  legacyRaidContentUid?: string | null;
   memo: string | null;
   showAsRaidTip: boolean;
 };
@@ -211,7 +210,6 @@ function toModel(row: DBParty): Party {
     studentIds: JSON.parse(row.students),
     raidType: row.raidType,
     seasonIndex: parsedSeasonIndex === null || Number.isNaN(parsedSeasonIndex) ? null : parsedSeasonIndex,
-    legacyRaidContentUid: row.raidId,
     memo: row.memo,
     showAsRaidTip: row.showAsRaidTip === 1,
   };
