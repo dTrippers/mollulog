@@ -5,6 +5,7 @@ import { fetchCached } from "./base";
 import type { EventType, RaidType, Role } from "./content.d";
 import { hasActiveCoupons } from "./coupon";
 import { getFavoritedCounts } from "./favorite-students";
+import { normalizeFutureContentDates } from "./future-content";
 import { getLatestPostTime } from "./post";
 import {
   getFutureRaidContents,
@@ -336,8 +337,8 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
   }, 24 * 60 * 60, forceRefresh);
 
   const now = new Date();
-  return allEnriched.filter((content) =>
-    content.endAt ? dayjs(content.endAt).isAfter(now) : dayjs(content.startAt).isAfter(now),
+  return allEnriched.map(normalizeFutureContentDates).filter((content) =>
+    content.endAt ? content.endAt > now : content.startAt > now,
   );
 }
 

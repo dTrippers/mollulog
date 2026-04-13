@@ -15,6 +15,7 @@ type PageProps = {
   panels?: PagePanelProps[];
   links?: PageLinkProps[];
   contentArea?: "3xl" | "4xl" | "full";
+  layout?: "horizontal" | "vertical";
 
   backward?: {
     title: string;
@@ -24,7 +25,7 @@ type PageProps = {
   children: React.ReactNode;
 };
 
-export default function Page({ title, description, belowTitle, screens, panels, links, contentArea = "3xl", backward, children }: PageProps) {
+export default function Page({ title, description, belowTitle, screens, panels, links, contentArea = "3xl", layout = "horizontal", backward, children }: PageProps) {
   const [openPanelIndex, setOpenPanelIndex] = useState<number | null>(null);
   const tabBarSentinelRef = useRef<HTMLDivElement>(null);
   const [isTabBarSticky, setIsTabBarSticky] = useState(false);
@@ -51,7 +52,7 @@ export default function Page({ title, description, belowTitle, screens, panels, 
 
   return (
     <>
-      <div className="flex flex-col xl:flex-row">
+      <div className={`flex flex-col ${layout === "horizontal" ? "xl:flex-row" : ""}`}>
         <PageSidebar
           title={title}
           description={description}
@@ -60,14 +61,19 @@ export default function Page({ title, description, belowTitle, screens, panels, 
           screens={screens}
           panels={panels}
           links={links}
+          layout={layout}
         />
 
         {screens && screens.length > 0 && (
-          <div ref={tabBarSentinelRef} className="xl:hidden h-px" />
+          <div ref={tabBarSentinelRef} className={layout === "vertical" ? "h-px" : "xl:hidden h-px"} />
         )}
 
         {screens && screens.length > 0 && (
           <MobileTabBar screens={screens} isSticky={isTabBarSticky} />
+        )}
+
+        {layout === "vertical" && screens && screens.length > 0 && (
+          <VerticalDesktopTabBar screens={screens} isSticky={isTabBarSticky} />
         )}
 
         <div className={`relative z-0 grow xl:p-4 ${contentAreaClass}`}>
@@ -101,9 +107,15 @@ function PageSidebar({
   screens,
   panels,
   links,
+  layout = "horizontal",
 }: Omit<PageProps, "children" | "contentArea">) {
+  const isVertical = layout === "vertical";
+  const containerClass = isVertical
+    ? "relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar"
+    : "relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar xl:z-auto xl:h-screen xl:max-w-xs xl:mr-6 xl:sticky xl:top-6 xl:self-start xl:overflow-y-scroll";
+
   return (
-    <div className="relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar xl:z-auto xl:h-screen xl:max-w-sm xl:mr-8 xl:sticky xl:top-6 xl:self-start xl:overflow-y-scroll">
+    <div className={containerClass}>
       <div className="mt-8 mb-4">
         {backward && (
           <Link to={backward.to} className="mb-4 inline-flex items-center gap-1 text-neutral-500 dark:text-neutral-400 hover:underline">
@@ -111,29 +123,31 @@ function PageSidebar({
             <span className="text-sm">{backward.title}</span>
           </Link>
         )}
-        <h1 className="font-black text-3xl md:text-4xl drop-shadow-xl drop-shadow-neutral-300/50 dark:drop-shadow-neutral-700/50">
+        <h1 className="font-black text-3xl drop-shadow-xl drop-shadow-neutral-300/50 dark:drop-shadow-neutral-700/50">
           {title}
         </h1>
         {description && (
-          <p className="mt-2 xl:mt-4 whitespace-pre-line text-neutral-500 dark:text-neutral-400">
+          <p className="mt-2 text-sm xl:mt-4 text-neutral-500 dark:text-neutral-400">
             {description}
           </p>
         )}
       </div>
       {belowTitle && <div className="my-4">{belowTitle}</div>}
-      {screens && <PageScreenSelector screens={screens} />}
-      <div className="my-8 hidden xl:block">
-        {panels?.map((panel) => (
-          <PagePanel key={panel.title} {...panel} />
-        ))}
-        {links && links.length > 0 && (
-          <div className="xl:mt-8">
-            {links.map((link) => (
-              <PageLink key={link.title} {...link} />
-            ))}
-          </div>
-        )}
-      </div>
+      {!isVertical && screens && <PageScreenSelector screens={screens} />}
+      {(panels || links) && (
+        <div className="my-8 hidden xl:block">
+          {panels?.map((panel) => (
+            <PagePanel key={panel.title} {...panel} />
+          ))}
+          {links && links.length > 0 && (
+            <div className="xl:mt-8">
+              {links.map((link) => (
+                <PageLink key={link.title} {...link} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -215,6 +229,65 @@ function MobileActionLink({ Icon, title, to }: PageLinkProps) {
     <Link to={to} className={className}>
       {inner}
     </Link>
+  );
+}
+
+function VerticalDesktopTabBar({
+  screens,
+  isSticky,
+}: {
+  screens: PageScreenSelectorProps["screens"];
+  isSticky: boolean;
+}) {
+  return (
+    <div className={sanitizeClassName(`
+      hidden xl:flex sticky top-0 z-100 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
+      ${isSticky ? "border-b" : ""}
+    `)}>
+      <div className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">
+        {screens.map((screen) => (
+          <VerticalDesktopTabItem key={screen.link ?? screen.text} {...screen} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function VerticalDesktopTabItem({ text, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
+  const className = active
+    ? sanitizeClassName(`
+        flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
+        ${disabled
+          ? "bg-neutral-200 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 opacity-50"
+          : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
+        }
+      `)
+    : sanitizeClassName(`
+        flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
+        ${disabled
+          ? "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-600 opacity-50"
+          : "bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+        }
+      `);
+  const inner = (
+    <>
+      <Icon className="size-5 shrink-0" strokeWidth={2} />
+      <span className={`text-sm whitespace-nowrap ${active ? "font-semibold" : "font-medium"}`}>{text}</span>
+    </>
+  );
+
+  if (!disabled && link) {
+    return (
+      <Link to={link} className={className}>
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" className={className} onClick={disabled ? undefined : onClick} disabled={disabled || !onClick}>
+      {inner}
+    </button>
   );
 }
 

@@ -13,6 +13,7 @@ type InputProps = {
   defaultValue?: string;
   value?: string;
   error?: string;
+  size?: "sm" | "md";
   onChange?: (value: string) => void;
 };
 
@@ -28,6 +29,7 @@ export default function Input({
   defaultValue,
   value,
   error,
+  size = "md",
   onChange,
 }: InputProps) {
   return (
@@ -36,7 +38,7 @@ export default function Input({
       description={description}
       error={error}
       htmlFor={name}
-      containerClassName={containerClassName ?? "mt-2 mb-8 last:mb-2"}
+      containerClassName={containerClassName ?? (size === "sm" ? "mt-1 mb-1" : "mt-2 mb-8 last:mb-2")}
     >
       <input
         id={name}
@@ -44,7 +46,8 @@ export default function Input({
         name={name}
         placeholder={placeholder}
         className={sanitizeClassName(`
-          w-full max-w-96 p-2 border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-900 rounded-lg transition
+          w-full max-w-96 border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-900 rounded-lg transition
+          ${size === "sm" ? "p-1.5 text-sm" : "p-2"}
           ${error ? "border-red-300 shadow-red-300 dark:border-red-700 dark:shadow-red-700" : ""}
           ${type === "number" && "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"}
           ${className ?? ""}

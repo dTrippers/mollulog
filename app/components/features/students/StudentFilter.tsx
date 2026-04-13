@@ -130,6 +130,7 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
               active: state.attackTypes.includes(value),
               onToggle: (activated) => toggleAttack(value, activated),
             }))}
+            size="sm"
           />
           <FilterButtons
             Icon={ShieldCheckIcon}
@@ -139,6 +140,7 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
               active: state.defenseTypes.includes(value),
               onToggle: (activated) => toggleDefense(value, activated),
             }))}
+            size="sm"
           />
           <FilterButtons
             Icon={ArrowsUpDownIcon}
@@ -148,6 +150,7 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
               active: state.roles.includes(value),
               onToggle: (activated) => toggleRole(value, activated),
             }))}
+            size="sm"
           />
           <FilterButtons
             Icon={ArrowsRightLeftIcon}
@@ -156,6 +159,7 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
               active: state.positions.includes(value),
               onToggle: (activated) => togglePosition(value, activated),
             }))}
+            size="sm"
           />
           <FilterButtons
             Icon={UserGroupIcon}
@@ -164,6 +168,7 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
               active: state.tacticRoles.includes(value),
               onToggle: (activated) => toggleTacticRole(value, activated),
             }))}
+            size="sm"
           />
         </>
       )}
@@ -181,6 +186,7 @@ export default function StudentFilter({ students, onFilterChange, useFilter, sor
           }))}
           exclusive
           atLeastOne
+          size="sm"
         />
       )}
       {useSearch && (

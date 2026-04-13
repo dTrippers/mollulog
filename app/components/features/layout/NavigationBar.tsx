@@ -1,41 +1,43 @@
-import dayjs from "dayjs";
-import { MoonIcon, EnvelopeIcon, MegaphoneIcon, ChevronDownIcon } from "@heroicons/react/16/solid";
+import { Transition } from "@headlessui/react";
+import { ChevronDownIcon, EnvelopeIcon, MegaphoneIcon, MoonIcon } from "@heroicons/react/16/solid";
 import {
-  HomeIcon as HomeIconOutline,
-  CalendarIcon as CalendarIconOutline,
-  UserCircleIcon as UserCircleIconOutline,
-  IdentificationIcon as IdentificationIconOutline,
-  FireIcon as FireIconOutline,
   Bars3Icon,
-  HeartIcon as HeartIconOutline,
   BoltIcon as BoltIconOutline,
-  ClockIcon as ClockIconOutline,
-  WalletIcon as WalletIconOutline,
   BookOpenIcon as BookOpenIconOutline,
-  RectangleGroupIcon as RectangleGroupIconOutline,
+  CalendarIcon as CalendarIconOutline,
+  ClockIcon as ClockIconOutline,
   Cog6ToothIcon as Cog6ToothIconOutline,
+  CreditCardIcon as CreditCardIconOutline,
+  FireIcon as FireIconOutline,
   GiftIcon as GiftIconOutline,
+  HeartIcon as HeartIconOutline,
+  HomeIcon as HomeIconOutline,
+  IdentificationIcon as IdentificationIconOutline,
+  RectangleGroupIcon as RectangleGroupIconOutline,
+  TableCellsIcon as TableCellsIconOutline,
   TicketIcon as TicketIconOutline,
+  UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
 import {
-  HomeIcon as HomeIconSolid,
-  CalendarIcon as CalendarIconSolid,
-  UserCircleIcon as UserCircleIconSolid,
-  IdentificationIcon as IdentificationIconSolid,
-  FireIcon as FireIconSolid,
-  HeartIcon as HeartIconSolid,
   BoltIcon as BoltIconSolid,
-  ClockIcon as ClockIconSolid,
-  WalletIcon as WalletIconSolid,
   BookOpenIcon as BookOpenIconSolid,
-  RectangleGroupIcon as RectangleGroupIconSolid,
+  CalendarIcon as CalendarIconSolid,
+  ClockIcon as ClockIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
+  CreditCardIcon as CreditCardIconSolid,
+  FireIcon as FireIconSolid,
   GiftIcon as GiftIconSolid,
+  HeartIcon as HeartIconSolid,
+  HomeIcon as HomeIconSolid,
+  IdentificationIcon as IdentificationIconSolid,
+  RectangleGroupIcon as RectangleGroupIconSolid,
+  TableCellsIcon as TableCellsIconSolid,
   TicketIcon as TicketIconSolid,
+  UserCircleIcon as UserCircleIconSolid,
 } from "@heroicons/react/24/solid";
-import { Transition } from "@headlessui/react";
-import { Link, useMatches, useSubmit } from "react-router";
+import dayjs from "dayjs";
 import { useState } from "react";
+import { Link, useMatches, useSubmit } from "react-router";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { sanitizeClassName } from "~/prophandlers";
 import { submitPreference } from "~/routes/api.preference";
@@ -49,7 +51,14 @@ type NavigationBarProps = {
   hasActiveCoupons: boolean;
 };
 
-export default function NavigationBar({ currentUsername, darkMode, setDarkMode, upcomingEvent, hasRecentNews, hasActiveCoupons }: NavigationBarProps) {
+export default function NavigationBar({
+  currentUsername,
+  darkMode,
+  setDarkMode,
+  upcomingEvent,
+  hasRecentNews,
+  hasActiveCoupons,
+}: NavigationBarProps) {
   const matches = useMatches();
   const pathname = matches[matches.length - 1].pathname;
 
@@ -61,11 +70,13 @@ export default function NavigationBar({ currentUsername, darkMode, setDarkMode, 
   };
 
   return (
-    <div className={sanitizeClassName(`
-      fixed xl:relative w-full xl:w-96 xl:h-screen bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
+    <div
+      className={sanitizeClassName(`
+      fixed xl:relative w-full xl:w-84 xl:h-screen bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
       border-b xl:border-b-0 xl:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30
       ${isMenuOpen ? "z-200" : "z-100"}
-    `)}>
+    `)}
+    >
       <div className="px-4 py-3">
         <div className="flex items-center">
           <button
@@ -76,8 +87,12 @@ export default function NavigationBar({ currentUsername, darkMode, setDarkMode, 
           >
             <Bars3Icon className="size-6" strokeWidth={2} />
           </button>
-          <img src={darkMode ? "/logo-dark.png" : "/logo-light.png"} alt="몰루로그 로고" className="ml-2 mr-1 xl:mr-2 object-cover h-8 xl:h-10 aspect-4/3" />
-          <h1 className="text-2xl xl:text-3xl font-ingame">
+          <img
+            src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
+            alt="몰루로그 로고"
+            className="ml-2 mr-1 xl:mr-2 object-cover h-8 xl:h-10 aspect-4/3"
+          />
+          <h1 className="text-xl xl:text-3xl font-ingame">
             <span className="font-bold">몰루</span>로그
           </h1>
         </div>
@@ -137,15 +152,19 @@ function MenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, sho
   return (
     <Link
       to={to}
-      className={sanitizeClassName(`my-2 px-2 py-1.5 xl:py-2 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition relative ${isActive ? "font-bold drop-shadow-lg" : ""}`)}
+      className={sanitizeClassName(
+        `my-2 px-2 py-1 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition relative ${isActive ? "font-bold drop-shadow-lg" : ""}`,
+      )}
       onClick={() => onItemClick?.()}
     >
-      {isActive ? <SolidIcon className="inline-block mr-3 size-6" /> : <OutlineIcon className="inline-block mr-3 size-6" />}
-      <span className="text-lg relative">
+      {isActive ? (
+        <SolidIcon className="inline-block mr-3 size-6" />
+      ) : (
+        <OutlineIcon className="inline-block mr-3 size-6" />
+      )}
+      <span className="relative">
         {name}
-        {showRedDot && (
-          <div className="absolute top-0 -right-3 size-1.5 bg-red-500 rounded-full animate-pulse" />
-        )}
+        {showRedDot && <div className="absolute top-0 -right-3 size-1.5 bg-red-500 rounded-full animate-pulse" />}
       </span>
     </Link>
   );
@@ -167,14 +186,22 @@ function MenuSection({ name, OutlineIcon, SolidIcon, isActive, children }: MenuS
     <div className="mt-2 mb-4">
       <button
         type="button"
-        className={sanitizeClassName(`w-full px-2 py-1.5 xl:py-2 flex items-center rounded-lg transition xl:cursor-default ${isActive ? "font-bold" : ""}`)}
+        className={sanitizeClassName(
+          `w-full px-2 py-1 flex items-center rounded-lg transition xl:cursor-default ${isActive ? "font-bold" : ""}`,
+        )}
         onClick={() => setIsOpen((prev) => !prev)}
       >
-        {isActive ? <SolidIcon className="inline-block mr-3 size-6" /> : <OutlineIcon className="inline-block mr-3 size-6" />}
-        <span className="text-lg flex-1 text-left">{name}</span>
+        {isActive ? (
+          <SolidIcon className="inline-block mr-3 size-6" />
+        ) : (
+          <OutlineIcon className="inline-block mr-3 size-6" />
+        )}
+        <span className="flex-1 text-left">{name}</span>
         <ChevronDownIcon className={`size-4 transition-transform xl:hidden ${showChildren ? "rotate-180" : ""}`} />
       </button>
-      <div className={`ml-3 pl-3 border-l border-neutral-200 dark:border-neutral-700 xl:block ${showChildren ? "" : "hidden"}`}>
+      <div
+        className={`ml-3 pl-3 border-l border-neutral-200 dark:border-neutral-700 xl:block ${showChildren ? "" : "hidden"}`}
+      >
         {children}
       </div>
     </div>
@@ -192,7 +219,16 @@ interface MenuContentProps {
   hasActiveCoupons: boolean;
 }
 
-function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onDarkModeToggle, hasRecentNews, upcomingEvent, hasActiveCoupons }: MenuContentProps) {
+function MenuContent({
+  currentUsername,
+  pathname,
+  onMenuClose,
+  onShowSignIn,
+  onDarkModeToggle,
+  hasRecentNews,
+  upcomingEvent,
+  hasActiveCoupons,
+}: MenuContentProps) {
   const submit = useSubmit();
   const now = dayjs();
   const sectionStates = getMenuSectionStates(pathname, upcomingEvent);
@@ -207,7 +243,14 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
 
   return (
     <>
-      <MenuItem to="/" name="홈" OutlineIcon={HomeIconOutline} SolidIcon={HomeIconSolid} isActive={pathname === "/"} onItemClick={onMenuClose} />
+      <MenuItem
+        to="/"
+        name="홈"
+        OutlineIcon={HomeIconOutline}
+        SolidIcon={HomeIconSolid}
+        isActive={pathname === "/"}
+        onItemClick={onMenuClose}
+      />
 
       {menuSections.map((section) => (
         <MenuSection
@@ -230,9 +273,16 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
           OutlineIcon={UserCircleIconOutline}
           SolidIcon={UserCircleIconSolid}
           isActive={pathname.startsWith("/@") || pathname.startsWith("/edit")}
-          onItemClick={currentUsername ? onMenuClose : () => { onShowSignIn(); onMenuClose(); }}
+          onItemClick={
+            currentUsername
+              ? onMenuClose
+              : () => {
+                  onShowSignIn();
+                  onMenuClose();
+                }
+          }
         />
-      ) :(
+      ) : (
         <button
           type="button"
           className="my-4 w-full rounded-full bg-neutral-800 py-3 text-center text-sm text-white transition-opacity hover:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
@@ -252,9 +302,7 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
         onClick={onMenuClose}
         showRedDot={hasRecentNews}
       />
-      {currentUsername && (
-        <UtilityLink to="/contact" text="제안/문의" Icon={EnvelopeIcon} onClick={onMenuClose} />
-      )}
+      {currentUsername && <UtilityLink to="/contact" text="제안/문의" Icon={EnvelopeIcon} onClick={onMenuClose} />}
       <button
         type="button"
         className="my-1.5 flex w-fit items-center px-2 py-1 font-bold text-yellow-600 hover:underline dark:text-yellow-400"
@@ -273,10 +321,16 @@ function MenuContent({ currentUsername, pathname, onMenuClose, onShowSignIn, onD
 }
 
 function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, showRedDot, disabled }: MenuItemProps) {
-  const className = sanitizeClassName(`my-1 px-2 py-1.5 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition relative ${isActive ? "font-semibold drop-shadow-lg" : ""} ${disabled ? "opacity-40" : ""}`);
+  const className = sanitizeClassName(
+    `my-1 px-2 py-1.5 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 text-sm rounded-lg transition relative ${isActive ? "font-semibold drop-shadow-lg" : ""} ${disabled ? "opacity-40" : ""}`,
+  );
   const content = (
     <>
-      {isActive ? <SolidIcon className="inline-block mr-3 size-5" /> : <OutlineIcon className="inline-block mr-3 size-5" />}
+      {isActive ? (
+        <SolidIcon className="inline-block mr-3 size-5" />
+      ) : (
+        <OutlineIcon className="inline-block mr-3 size-5" />
+      )}
       <span className="relative">
         {name}
         {showRedDot && <div className="absolute top-0 -right-3 size-1.5 bg-red-500 rounded-full animate-pulse" />}
@@ -285,11 +339,7 @@ function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, 
   );
 
   if (disabled) {
-    return (
-      <div className={className}>
-        {content}
-      </div>
-    );
+    return <div className={className}>{content}</div>;
   }
 
   return (
@@ -320,9 +370,7 @@ function UtilityLink({
     >
       <Icon className="size-4" />
       <span className="ml-2">{text}</span>
-      {showRedDot && (
-        <div className="absolute top-1 -right-1 size-1.5 bg-red-500 rounded-full animate-pulse" />
-      )}
+      {showRedDot && <div className="absolute top-1 -right-1 size-1.5 bg-red-500 rounded-full animate-pulse" />}
     </Link>
   );
 }
@@ -336,8 +384,7 @@ function getMenuSectionStates(pathname: string, upcomingEvent: NavigationBarProp
       pathname.startsWith("/students") ||
       pathname.startsWith("/mainstory"),
     isUtilActive:
-      pathname.startsWith("/utils") ||
-      !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
+      pathname.startsWith("/utils") || !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
     isExternalActive: pathname.startsWith("/coupons"),
   };
 }
@@ -369,7 +416,9 @@ function getMenuSections({
           name: "미래시",
           OutlineIcon: CalendarIconOutline,
           SolidIcon: CalendarIconSolid,
-          isActive: pathname.startsWith("/futures") || (pathname.startsWith("/events") && !(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`))),
+          isActive:
+            pathname.startsWith("/futures") ||
+            (pathname.startsWith("/events") && !(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`))),
           onItemClick: onMenuClose,
         },
         {
@@ -407,27 +456,37 @@ function getMenuSections({
         {
           to: "/utils/pyroxene",
           name: "청휘석 플래너",
-          OutlineIcon: WalletIconOutline,
-          SolidIcon: WalletIconSolid,
+          OutlineIcon: CreditCardIconOutline,
+          SolidIcon: CreditCardIconSolid,
           isActive: pathname.startsWith("/utils/pyroxene"),
           onItemClick: onMenuClose,
         },
-        upcomingEvent ? {
-          to: `/events/${upcomingEvent.uid}/shop`,
-          name: "이벤트 소탕 계산기",
-          OutlineIcon: BoltIconOutline,
-          SolidIcon: BoltIconSolid,
+        {
+          to: "/utils/growth/students",
+          name: "학생 성장/재화 플래너",
+          OutlineIcon: TableCellsIconOutline,
+          SolidIcon: TableCellsIconSolid,
+          isActive: pathname.startsWith("/utils/growth"),
           onItemClick: onMenuClose,
-          showRedDot: dayjs(upcomingEvent.since).isBefore(now) && dayjs(upcomingEvent.until).isAfter(now),
-          isActive: pathname.startsWith(`/events/${upcomingEvent.uid}`),
-        } : {
-          to: "/futures",
-          name: "이벤트 소탕 계산기",
-          OutlineIcon: BoltIconOutline,
-          SolidIcon: BoltIconSolid,
-          onItemClick: onMenuClose,
-          disabled: true,
         },
+        upcomingEvent
+          ? {
+              to: `/events/${upcomingEvent.uid}/shop`,
+              name: "이벤트 소탕 계산기",
+              OutlineIcon: BoltIconOutline,
+              SolidIcon: BoltIconSolid,
+              onItemClick: onMenuClose,
+              showRedDot: dayjs(upcomingEvent.since).isBefore(now) && dayjs(upcomingEvent.until).isAfter(now),
+              isActive: pathname.startsWith(`/events/${upcomingEvent.uid}`),
+            }
+          : {
+              to: "/futures",
+              name: "이벤트 소탕 계산기",
+              OutlineIcon: BoltIconOutline,
+              SolidIcon: BoltIconSolid,
+              onItemClick: onMenuClose,
+              disabled: true,
+            },
         {
           to: "/utils/relationship",
           name: "인연 랭크 계산기",

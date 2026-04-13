@@ -61,7 +61,7 @@ export default function Panel({
   const clickable = collapsible && !disabled;
   const isCard = variant === "card";
   const containerClass = isCard
-    ? `my-2 rounded-xl py-3 px-4 border ${bordered ? "border-neutral-200 dark:border-neutral-700" : "border-transparent"} ${disabled ? "opacity-50" : ""}`
+    ? `my-2 rounded-xl px-3 py-2 border ${bordered ? "border-neutral-200 dark:border-neutral-700" : "border-transparent"} ${disabled ? "opacity-50" : ""}`
     : `${expanded ? "pb-8" : "pb-4"} mb-4 ${bordered && collapsible ? "border-b border-neutral-200 dark:border-neutral-700" : ""} ${disabled ? "opacity-50" : ""}`;
   const headerClass = isCard
     ? `px-2 py-1 -mx-2 -my-1 flex items-center gap-3 ${clickable ? "hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded-lg cursor-pointer transition-colors" : ""}`
@@ -69,7 +69,7 @@ export default function Panel({
   const iconWrapperClass = isCard
     ? "shrink-0 my-2 p-2 flex items-center justify-center bg-neutral-100 dark:bg-neutral-700 rounded-lg"
     : "";
-  const titleElementClass = isCard ? "font-bold" : "font-semibold text-lg text-neutral-900 dark:text-neutral-100";
+  const titleElementClass = isCard ? "font-bold text-sm" : "font-semibold text-lg text-neutral-900 dark:text-neutral-100";
   const descriptionClass = isCard ? "text-sm text-neutral-500 dark:text-neutral-400" : "mt-1 text-sm text-neutral-500 dark:text-neutral-400";
   const bodySpacingClass = isCard ? "mt-4" : title ? "mt-4" : "";
 

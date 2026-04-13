@@ -1,10 +1,6 @@
-import type { EventType, RaidType } from "~/models/content.d";
 import { FilterButtons, Toggle } from "~/components/primitives";
-
-export type ContentFilterState = {
-  types: (EventType | RaidType)[];
-  onlyPickups: boolean;
-};
+import type { EventType, RaidType } from "~/models/content.d";
+import type { ContentFilterState } from "./content-filter-state";
 
 type ContentFilterPanelProps = {
   filter: ContentFilterState;
@@ -43,11 +39,11 @@ export default function ContentFilterPanel({ filter, onFilterChange }: ContentFi
     <>
       <div className="mb-4">
         <p className="mb-2 font-bold">이벤트</p>
-        <FilterButtons buttonProps={eventFilterProps} />
+        <FilterButtons buttonProps={eventFilterProps} size="sm" />
       </div>
       <div className="mb-2 xl:mb-8">
         <p className="mb-2 font-bold">레이드</p>
-        <FilterButtons buttonProps={contentFilterProps} />
+        <FilterButtons buttonProps={contentFilterProps} size="sm" />
       </div>
       <Toggle label="학생 모집 컨텐츠만 보기" initialState={filter.onlyPickups} onChange={onToggleOnlyPickups} />
     </>
