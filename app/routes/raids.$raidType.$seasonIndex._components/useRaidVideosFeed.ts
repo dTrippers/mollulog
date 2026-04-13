@@ -1,27 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator, useSearchParams } from "react-router";
-import { VideoSortEnum } from "~/graphql/graphql";
+import {
+  parseVideoSort,
+  type RaidVideoItem,
+  RAID_VIDEOS_PAGE_SIZE,
+  type VideoSort,
+} from "~/repositories";
 import type { RaidVideosData } from "~/routes/raids.data.$raidType.$seasonIndex.videos";
 
-export type RaidVideoItem = {
-  id: string;
-  title: string;
-  score: number;
-  youtubeId: string;
-  thumbnailUrl: string;
-  publishedAt: string;
-};
-
 type UseRaidVideosFeedParams = {
-  initialData: {
-    videos: RaidVideoItem[];
-    pageInfo: {
-      hasNextPage: boolean;
-      hasPreviousPage: boolean;
-      startCursor: string | null;
-      endCursor: string | null;
-    };
-  } | null;
+  initialData: RaidVideosData;
   raidType: string;
   seasonIndex: number;
 };
@@ -31,81 +19,93 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex }: UseRai
   const revalidator = useRevalidator();
 
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialSort = (searchParams.get("sort") as VideoSortEnum) || VideoSortEnum.PublishedAtDesc;
-  const [sort, setSort] = useState<VideoSortEnum>(initialSort);
-  const [allVideos, setAllVideos] = useState<RaidVideoItem[]>(initialData?.videos || []);
-  const [hasNextPage, setHasNextPage] = useState(initialData?.pageInfo.hasNextPage || false);
-  const [endCursor, setEndCursor] = useState<string | null>(initialData?.pageInfo.endCursor || null);
+  const initialSort = parseVideoSort(searchParams.get("sort"));
+  const [sort, setSort] = useState<VideoSort>(initialSort);
+  const [allVideos, setAllVideos] = useState<RaidVideoItem[]>(initialData?.videos ?? []);
+  const [hasMore, setHasMore] = useState(initialData?.hasMore ?? false);
+  const [offset, setOffset] = useState(initialData?.videos.length ?? 0);
   const [isLoading, setIsLoading] = useState(false);
 
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement | null>(null);
-  const prevSortRef = useRef<VideoSortEnum>(sort);
+  const prevSortRef = useRef<VideoSort>(sort);
   const isResettingRef = useRef(false);
-  const lastInitialDataSortRef = useRef<string | null>(null);
+  const lastInitialDataKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (prevSortRef.current !== sort) {
       prevSortRef.current = sort;
       isResettingRef.current = true;
       setAllVideos([]);
-      setHasNextPage(false);
-      setEndCursor(null);
+      setHasMore(false);
+      setOffset(0);
       setIsLoading(true);
       setSearchParams((prev) => {
-        prev.set("sort", sort.toString());
-        return prev;
+        const next = new URLSearchParams(prev);
+        next.set("sort", sort);
+        return next;
       });
       revalidator.revalidate();
     }
   }, [revalidator, setSearchParams, sort]);
 
   useEffect(() => {
-    if (initialData && revalidator.state === "idle") {
-      const currentSort = searchParams.get("sort") || VideoSortEnum.PublishedAtDesc.toString();
-      if (isResettingRef.current || lastInitialDataSortRef.current !== currentSort) {
-        lastInitialDataSortRef.current = currentSort;
-        isResettingRef.current = false;
-        setAllVideos(initialData.videos || []);
-        setHasNextPage(initialData.pageInfo?.hasNextPage || false);
-        setEndCursor(initialData.pageInfo?.endCursor || null);
-        setIsLoading(false);
-      }
+    if (revalidator.state !== "idle") {
+      return;
     }
-  }, [initialData, revalidator.state, searchParams]);
 
-  useEffect(() => {
-    if (fetcher.data && fetcher.state === "idle") {
-      const fetchedData = fetcher.data;
-      setAllVideos((prev) => {
-        const existingIds = new Set(prev.map((video) => video.id));
-        const newVideos = (fetchedData.videos || []).filter((video) => !existingIds.has(video.id));
-        return [...prev, ...newVideos];
-      });
-      setHasNextPage(fetchedData.pageInfo?.hasNextPage || false);
-      setEndCursor(fetchedData.pageInfo?.endCursor || null);
+    const currentSort = parseVideoSort(searchParams.get("sort"));
+    const currentKey = `${raidType}:${seasonIndex}:${currentSort}`;
+    if (isResettingRef.current || lastInitialDataKeyRef.current !== currentKey) {
+      lastInitialDataKeyRef.current = currentKey;
+      isResettingRef.current = false;
+      setAllVideos(initialData?.videos ?? []);
+      setHasMore(initialData?.hasMore ?? false);
+      setOffset(initialData?.videos.length ?? 0);
       setIsLoading(false);
     }
+  }, [initialData, raidType, revalidator.state, searchParams, seasonIndex]);
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || fetcher.data === undefined) {
+      return;
+    }
+
+    const fetchedData = fetcher.data;
+    if (!fetchedData) {
+      setHasMore(false);
+      setIsLoading(false);
+      return;
+    }
+
+    setAllVideos((prev) => {
+      const existingIds = new Set(prev.map((video) => video.youtubeId));
+      const newVideos = fetchedData.videos.filter((video) => !existingIds.has(video.youtubeId));
+      return [...prev, ...newVideos];
+    });
+    setHasMore(fetchedData.hasMore);
+    setOffset((prev) => prev + RAID_VIDEOS_PAGE_SIZE);
+    setIsLoading(false);
   }, [fetcher.data, fetcher.state]);
 
   const loadMoreVideos = useCallback(() => {
-    if (isLoading || !hasNextPage || !endCursor) {
+    if (isLoading || !hasMore) {
       return;
     }
 
     setIsLoading(true);
     const params = new URLSearchParams();
-    params.set("first", "12");
-    params.set("sort", sort.toString());
-    params.set("after", endCursor);
+    params.set("limit", String(RAID_VIDEOS_PAGE_SIZE));
+    params.set("sort", sort);
+    params.set("offset", String(offset));
 
     fetcher.load(`/raids/data/${raidType}/${seasonIndex}/videos?${params.toString()}`);
-  }, [endCursor, fetcher, hasNextPage, isLoading, raidType, seasonIndex, sort]);
+  }, [fetcher, hasMore, isLoading, offset, raidType, seasonIndex, sort]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasNextPage && !isLoading) {
+        if (entries[0].isIntersecting && hasMore && !isLoading) {
           loadMoreVideos();
         }
       },
@@ -120,12 +120,11 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex }: UseRai
     return () => {
       observerRef.current?.disconnect();
     };
-  }, [hasNextPage, isLoading, loadMoreVideos]);
+  }, [hasMore, isLoading, loadMoreVideos]);
 
   return {
     allVideos,
-    endCursor,
-    hasNextPage,
+    hasMore,
     isLoading,
     loadingRef,
     sort,

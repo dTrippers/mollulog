@@ -5,7 +5,7 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { ContentTimeline } from "~/components/features/contents";
 import type { ContentTimelineProps } from "~/components/features/contents";
 import { ContentFilterPanel } from "~/components/features/futures";
-import type { ContentFilterState } from "~/components/features/futures/ContentFilterPanel";
+import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
 import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
 import {

@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
 import { IdentificationIcon, MinusCircleIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
-import { fetchRanks, type ParsedRaidRankDocument, convertTier } from "~/models/raid-rank.client";
-import type { RaidType, Role } from "~/models/content.d";
-import type { Attack, Defense } from "~/graphql/graphql";
-import type { RaidRankFilterState } from "./RaidRankFilter";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActionCard } from "~/components/features/editor";
 import { StudentCards } from "~/components/features/students";
 import { EmptyView, Pagination } from "~/components/primitives";
+import type { Attack, Defense } from "~/graphql/graphql";
+import { type ParsedRaidRankDocument, convertTier, fetchRanks } from "~/lib/ranks/ranks";
+import type { RaidType, Role } from "~/models/content.d";
 import { type Boss, scoreToDifficultyAndTime } from "~/models/raid";
+import type { RaidRankFilterState } from "./RaidRankFilter";
 
 type RaidRankScreenProps = {
   currentRaid: {
@@ -74,7 +74,14 @@ function getScoreRange(difficulty: string | null): { gte?: number; lt?: number }
   return undefined;
 }
 
-export default function RaidRankScreen({ currentRaid, filterState, onIncludeStudent, onExcludeStudent, allStudents, recruitedStudentTiers }: RaidRankScreenProps) {
+export default function RaidRankScreen({
+  currentRaid,
+  filterState,
+  onIncludeStudent,
+  onExcludeStudent,
+  allStudents,
+  recruitedStudentTiers,
+}: RaidRankScreenProps) {
   const [ranks, setRanks] = useState<ParsedRaidRankDocument[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -135,7 +142,14 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
       excludeStudents,
       score: getScoreRange(filterState.difficulty),
     };
-  }, [allStudents, filterState.difficulty, filterState.excludeStudents, filterState.filterNotOwned, filterState.includeStudents, recruitedStudentTiers]);
+  }, [
+    allStudents,
+    filterState.difficulty,
+    filterState.excludeStudents,
+    filterState.filterNotOwned,
+    filterState.includeStudents,
+    recruitedStudentTiers,
+  ]);
 
   const resetKey = JSON.stringify({
     raidType: currentRaid.raidType,
@@ -235,52 +249,55 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
             </p>
             {parties.map((party) => (
               <StudentCards
-              key={`party-${party.partyIndex}`}
-              students={party.slots.map(({ studentUid, tier, level, isAssist }) => {
-                if (!studentUid) {
-                  return { uid: null };
-                }
+                key={`party-${party.partyIndex}`}
+                students={party.slots.map(({ studentUid, tier, level, isAssist }) => {
+                  if (!studentUid) {
+                    return { uid: null };
+                  }
 
-                const student = allStudents[studentUid];
-                if (!student) {
-                  return { uid: null };
-                }
+                  const student = allStudents[studentUid];
+                  if (!student) {
+                    return { uid: null };
+                  }
 
-                return {
-                  uid: studentUid,
-                  name: student.name,
-                  hideName: true,
-                  attackType: student.attackType,
-                  defenseType: student.defenseType,
-                  role: student.role,
-                  tier,
-                  level: level && level < maxLevel ? level : undefined,
-                  isAssist,
-                  popups: student && tier ? [
-                    {
-                      Icon: PlusCircleIcon,
-                      text: "이 학생을 포함한 편성만 보기",
-                      onClick: () => onIncludeStudent({ uid: studentUid, tier }),
-                    },
-                    {
-                      Icon: MinusCircleIcon,
-                      text: "이 학생을 제외한 편성만 보기",
-                      onClick: () => onExcludeStudent({ uid: studentUid, tier }),
-                    },
-                    {
-                      Icon: IdentificationIcon,
-                      text: "학생부 보기 (평가/통계)",
-                      link: `/students/${studentUid}`,
-                    },
-                  ] : undefined,
-                  popupId: studentUid ? `${rank}-${party.partyIndex}-${studentUid}` : undefined,
-                };
-              })}
-              pcGrid={10}
-            />
+                  return {
+                    uid: studentUid,
+                    name: student.name,
+                    hideName: true,
+                    attackType: student.attackType,
+                    defenseType: student.defenseType,
+                    role: student.role,
+                    tier,
+                    level: level && level < maxLevel ? level : undefined,
+                    isAssist,
+                    popups:
+                      student && tier
+                        ? [
+                            {
+                              Icon: PlusCircleIcon,
+                              text: "이 학생을 포함한 편성만 보기",
+                              onClick: () => onIncludeStudent({ uid: studentUid, tier }),
+                            },
+                            {
+                              Icon: MinusCircleIcon,
+                              text: "이 학생을 제외한 편성만 보기",
+                              onClick: () => onExcludeStudent({ uid: studentUid, tier }),
+                            },
+                            {
+                              Icon: IdentificationIcon,
+                              text: "학생부 보기 (평가/통계)",
+                              link: `/students/${studentUid}`,
+                            },
+                          ]
+                        : undefined,
+                    popupId: studentUid ? `${rank}-${party.partyIndex}-${studentUid}` : undefined,
+                  };
+                })}
+                pcGrid={10}
+              />
             ))}
           </ActionCard>
-        )
+        );
       })}
 
       <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
@@ -292,7 +309,10 @@ export default function RaidRankScreen({ currentRaid, filterState, onIncludeStud
 function LoadingRanks() {
   return (
     <div className="my-16 flex flex-col justify-center items-center gap-y-4 text-neutral-900 dark:text-neutral-100">
-      <div className="animate-spin inline-block size-10 border-3 border-current border-t-transparent rounded-full" aria-label="loading">
+      <div
+        className="animate-spin inline-block size-10 border-3 border-current border-t-transparent rounded-full"
+        aria-label="loading"
+      >
         <span className="sr-only">Loading...</span>
       </div>
       <p>데이터를 불러오고 있어요...</p>

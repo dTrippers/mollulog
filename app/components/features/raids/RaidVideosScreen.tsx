@@ -2,39 +2,27 @@ import { Link } from "react-router";
 import { PlayIcon } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { ArrowsUpDownIcon } from "@heroicons/react/24/outline";
-import { VideoSortEnum } from "~/graphql/graphql";
 import type { RefObject } from "react";
 import { EmptyView, FilterButtons, LoadingSkeleton } from "~/components/primitives";
+import type { RaidVideoItem, VideoSort } from "~/repositories";
 
 export type RaidVideosScreenProps = {
-  videos: {
-    id: string;
-    title: string;
-    score: number;
-    youtubeId: string;
-    thumbnailUrl: string;
-    publishedAt: string;
-  }[];
-  pageInfo: {
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
-    startCursor: string | null;
-    endCursor: string | null;
-  };
-  sort: VideoSortEnum;
-  setSort: (sort: VideoSortEnum) => void;
+  videos: RaidVideoItem[];
+  hasMore: boolean;
+  sort: VideoSort;
+  setSort: (sort: VideoSort) => void;
   isLoading: boolean;
   loadingRef: RefObject<HTMLDivElement | null>;
 };
 
-export default function RaidVideosScreen({ videos, pageInfo, sort, setSort, isLoading, loadingRef }: RaidVideosScreenProps) {
+export default function RaidVideosScreen({ videos, hasMore, sort, setSort, isLoading, loadingRef }: RaidVideosScreenProps) {
   return (
     <div>
       <FilterButtons
         Icon={ArrowsUpDownIcon}
         buttonProps={[
-          { text: "점수순", active: sort === VideoSortEnum.ScoreDesc, onToggle: () => setSort(VideoSortEnum.ScoreDesc) },
-          { text: "최신순", active: sort === VideoSortEnum.PublishedAtDesc, onToggle: () => setSort(VideoSortEnum.PublishedAtDesc) },
+          { text: "점수순", active: sort === "score_desc", onToggle: () => setSort("score_desc") },
+          { text: "최신순", active: sort === "published_at_desc", onToggle: () => setSort("published_at_desc") },
         ]}
         exclusive
         atLeastOne
@@ -46,11 +34,11 @@ export default function RaidVideosScreen({ videos, pageInfo, sort, setSort, isLo
       {videos.length > 0 ? (
         <div className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {videos.map((video) => <VideoCard key={video.id} {...video} />)}
+            {videos.map((video) => <VideoCard key={video.youtubeId} {...video} />)}
           </div>
 
           {/* Infinite scroll loading indicator */}
-          {pageInfo.hasNextPage && (
+          {hasMore && (
             <div ref={loadingRef} className="flex justify-center py-8">
               {isLoading && <LoadingSkeleton />}
             </div>
@@ -65,15 +53,7 @@ export default function RaidVideosScreen({ videos, pageInfo, sort, setSort, isLo
   );
 }
 
-type VideoCardProps = {
-  title: string;
-  score: number;
-  youtubeId: string;
-  thumbnailUrl: string;
-  publishedAt: string;
-};
-
-function VideoCard({ title, score, youtubeId, thumbnailUrl, publishedAt }: VideoCardProps) {
+function VideoCard({ title, channelTitle, score, youtubeId, thumbnailUrl, publishedAt }: RaidVideoItem) {
   return (
     <Link
       to={`https://www.youtube.com/watch?v=${youtubeId}`}
@@ -96,8 +76,9 @@ function VideoCard({ title, score, youtubeId, thumbnailUrl, publishedAt }: Video
         <h3 className="font-semibold text-sm line-clamp-2 mb-2">
           {title}
         </h3>
+        <p className="mb-2 line-clamp-1 text-xs text-neutral-500 dark:text-neutral-400">{channelTitle}</p>
         <div className="flex justify-between items-center text-xs text-neutral-500 dark:text-neutral-400">
-          <span>{score.toLocaleString()}점</span>
+          <span>{typeof score === "number" ? `${score.toLocaleString()}점` : "점수 정보 없음"}</span>
           <span>{dayjs(publishedAt.slice(0, 10)).format("YYYY.MM.DD")}</span>
         </div>
       </div>

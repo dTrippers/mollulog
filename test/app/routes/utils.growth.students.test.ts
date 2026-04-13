@@ -44,14 +44,14 @@ describe("utils.growth.students action", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    mockIsAuthenticated.mockResolvedValue({ id: 1 });
+    mockIsAuthenticated.mockResolvedValue({ id: 1 } as never);
     mockGetAllStudentsMap.mockResolvedValue({
       studentA: {
         uid: "studentA",
         released: true,
       },
-    });
-    mockLoadStudentRow.mockResolvedValue({ uid: "studentA" });
+    } as never);
+    mockLoadStudentRow.mockResolvedValue({ uid: "studentA" } as never);
   });
 
   it("preserves saved relationship items when updating ranks from growth planner", async () => {
@@ -62,7 +62,7 @@ describe("utils.growth.students action", () => {
       currentExp: 123,
       targetLevel: 20,
       items: { gift1: 5, gift2: 2 },
-    });
+    } as never);
     mockResolveRelationshipLevelInput.mockReturnValue({
       currentLevel: 10,
       currentExp: 123,
@@ -97,7 +97,7 @@ describe("utils.growth.students action", () => {
   });
 
   it("initializes relationship items to an empty object when no saved row exists", async () => {
-    mockGetRelationshipLevel.mockResolvedValue(null);
+    mockGetRelationshipLevel.mockResolvedValue(null as never);
     mockResolveRelationshipLevelInput.mockReturnValue({
       currentLevel: 1,
       currentExp: null,

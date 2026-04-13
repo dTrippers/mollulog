@@ -1,30 +1,35 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
-import RaidStatisticsSlotCount from "~/components/features/raids/RaidStatisticsSlotCount";
+import { useEffect, useMemo, useState } from "react";
+import { Link, type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
+import { RaidCard } from "~/components/features/raids";
 import RaidClearLevels from "~/components/features/raids/RaidClearLevels";
 import RaidOftenUsedParties from "~/components/features/raids/RaidOftenUsedParties";
+import RaidStatisticsSlotCount from "~/components/features/raids/RaidStatisticsSlotCount";
 import { EmptyView, HorizontalScroll, LoadingSkeleton, Section } from "~/components/primitives";
-import { getMaxTierAt } from "~/models/student";
-import { getAllStudentsMap } from "~/models/student";
-import { fetchRaidStatisticsByRaid, type RaidStatistics } from "~/models/raid-statistics.client";
-import { fetchRaidOverview } from "~/models/raid-overview.client";
-import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
+import { fetchRaidOverview } from "~/lib/ranks/overview";
+import { type RaidStatistics, fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import type { RaidType } from "~/models/content.d";
 import { raidTypeToParam } from "~/models/raid";
-import { RaidCard } from "~/components/features/raids";
+import { getMaxTierAt } from "~/models/student";
+import { getAllStudentsMap } from "~/models/student";
+import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const rawAllStudents = await getAllStudentsMap(env, true);
-  const allStudents = Object.fromEntries(Object.entries(rawAllStudents).map(([uid, student]) => [uid, {
-    name: student.name,
-    role: student.role,
-    attackType: student.attackType,
-    defenseType: student.defenseType,
-  }]));
+  const allStudents = Object.fromEntries(
+    Object.entries(rawAllStudents).map(([uid, student]) => [
+      uid,
+      {
+        name: student.name,
+        role: student.role,
+        attackType: student.attackType,
+        defenseType: student.defenseType,
+      },
+    ]),
+  );
 
   return {
     allStudents,
@@ -40,7 +45,10 @@ export default function RaidSummary() {
   // Filter raids with the same boss (excluding current raid)
   const sameBossRaids = useMemo(() => {
     return allRaids
-      .filter((raid) => raid.raidBoss.uid === currentRaid.raidBoss.uid && raid.jpSchedule !== null && raid.uid !== currentRaid.uid)
+      .filter(
+        (raid) =>
+          raid.raidBoss.uid === currentRaid.raidBoss.uid && raid.jpSchedule !== null && raid.uid !== currentRaid.uid,
+      )
       .sort((a, b) => dayjs(b.startAt).diff(dayjs(a.startAt)));
   }, [allRaids, currentRaid.raidBoss.uid, currentRaid.uid]);
 
@@ -132,7 +140,7 @@ export default function RaidSummary() {
     if (!statistics || statistics.length === 0) {
       return [];
     }
-    const sorted = [...statistics].sort((a, b) => (b.slotsCount + b.assistsCount) - (a.slotsCount + a.assistsCount));
+    const sorted = [...statistics].sort((a, b) => b.slotsCount + b.assistsCount - (a.slotsCount + a.assistsCount));
     return sorted.slice(0, 6);
   }, [statistics]);
 
@@ -156,23 +164,27 @@ export default function RaidSummary() {
     <div className="py-4">
       {sameBossRaids.length > 0 && (
         <Section title="역대 개최 이력" description="동일 보스의 최근 총력전/대결전 개최 이력">
-          <HorizontalScroll
-            itemWidth={{ mobile: "w-3/4", desktop: "md:w-2/5" }}
-            gap="gap-2"
-          >
+          <HorizontalScroll itemWidth={{ mobile: "w-3/4", desktop: "md:w-2/5" }} gap="gap-2">
             {sameBossRaids.map((raid) => {
               // Check if current raid and comparison raid have the same defense type as the currently selected one
-              const hasMatchingDefenseType = raid.defenseTypes.some(({ defenseType: raidDt }) => raidDt === defenseType);
+              const hasMatchingDefenseType = raid.defenseTypes.some(
+                ({ defenseType: raidDt }) => raidDt === defenseType,
+              );
 
               return (
                 <RaidCard
                   key={raid.uid}
                   raid={raid}
                   timeLocaleType="absolute"
-                  buttons={[
-                    { text: "시즌 정보", to: `/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}` },
-                    hasMatchingDefenseType && { text: "비교", to: `${raidPath}/compare?from=${raid.uid}&defenseType=${defenseType}` },
-                  ].filter(Boolean) as { text: string; to: string }[]}
+                  buttons={
+                    [
+                      { text: "시즌 정보", to: `/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}` },
+                      hasMatchingDefenseType && {
+                        text: "비교",
+                        to: `${raidPath}/compare?from=${raid.uid}&defenseType=${defenseType}`,
+                      },
+                    ].filter(Boolean) as { text: string; to: string }[]
+                  }
                   showName={false}
                 />
               );
@@ -182,23 +194,14 @@ export default function RaidSummary() {
       )}
 
       {clearLevels && (
-        <Section
-          title="플래티넘 클리어 난이도"
-          description="플래티넘(상위 2만명) 클리어의 난이도 분포"
-        >
+        <Section title="플래티넘 클리어 난이도" description="플래티넘(상위 2만명) 클리어의 난이도 분포">
           <RaidClearLevels clearLevels={clearLevels} />
         </Section>
       )}
 
       {oftenUsedParties && oftenUsedParties.length > 0 && (
-        <Section
-          title="많이 사용된 편성 TOP 5"
-          description="플래티넘(상위 2만명)에서 가장 많이 사용된 편성"
-        >
-          <RaidOftenUsedParties
-            oftenUsedParties={oftenUsedParties}
-            allStudents={allStudents}
-          />
+        <Section title="많이 사용된 편성 TOP 5" description="플래티넘(상위 2만명)에서 가장 많이 사용된 편성">
+          <RaidOftenUsedParties oftenUsedParties={oftenUsedParties} allStudents={allStudents} />
           <Link to={`${raidPath}/ranks`}>
             <div className="my-4 py-2 flex items-center justify-center text-sm hover:underline">
               <span>모든 편성 보기</span>
@@ -208,10 +211,7 @@ export default function RaidSummary() {
         </Section>
       )}
 
-      <Section
-        title="출전 횟수 TOP 6"
-        description="플래티넘(상위 2만명)에서 출전한 학생들의 편성 횟수"
-      >
+      <Section title="출전 횟수 TOP 6" description="플래티넘(상위 2만명)에서 출전한 학생들의 편성 횟수">
         <div className="relative">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
             {top6Statistics.map(({ studentUid, slotsCount, slotsByTier, assistsCount, assistsByTier }) => {

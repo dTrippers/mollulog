@@ -1,8 +1,7 @@
-import type { RaidType } from "~/models/content.d";
 import type { Defense } from "~/graphql/graphql";
-import { createProtobufRootCache, fetchProtobuf, RAID_API_BASE_URL } from "./raid-protobuf-utils";
+import type { RaidType } from "~/models/content.d";
+import { RANK_API_BASE_URL, createProtobufRootCache, fetchProtobuf } from "./base";
 
-// Protobuf schema definition for server API response
 const PROTO_SCHEMA = `
 syntax = "proto3";
 
@@ -10,13 +9,11 @@ package ranks;
 
 option go_package = "github.com/dTrippers/mollulog-rank/api";
 
-// RankResponse contains paginated rank data
 message RankResponse {
   int64 total_count = 1;
   repeated Rank ranks = 2;
 }
 
-// Rank represents a single rank entry
 message Rank {
   int64 score = 1;
   int32 rank = 2;
@@ -24,12 +21,10 @@ message Rank {
   repeated Party parties = 4;
 }
 
-// Party represents a team composition with up to 6 student slots
 message Party {
   repeated StudentSlot students = 1;
 }
 
-// StudentSlot can be either a student or empty (null)
 message StudentSlot {
   oneof slot {
     Student student = 1;
@@ -37,20 +32,17 @@ message StudentSlot {
   }
 }
 
-// EmptySlot represents an empty slot in a party
 message EmptySlot {}
 
-// Student represents a character in the game
 message Student {
-  string uid = 1;           // 5-digit student ID
+  string uid = 1;
   int32 level = 2;
-  int32 tier = 3;           // 1-5
-  int32 weapon_tier = 4;    // 1-4, 0 if not specified
+  int32 tier = 3;
+  int32 weapon_tier = 4;
   bool is_assist = 5;
 }
 `;
 
-// Type definitions for protobuf response
 type ServerStudent = {
   uid: string;
   level: number;
@@ -70,20 +62,19 @@ type ServerParty = {
 };
 
 type ServerRank = {
-  score: string | number; // int64 converted to string
+  score: string | number;
   rank: number;
   finalRank: number;
   parties: ServerParty[];
 };
 
 type ServerRankResponse = {
-  totalCount: string | number; // int64 converted to string
+  totalCount: string | number;
   ranks: ServerRank[];
 };
 
 const getProtobufRoot = createProtobufRootCache();
 
-// Parsed document format (for use in components)
 export type ParsedRaidRankDocument = {
   raidType: RaidType;
   seasonIndex: number;
@@ -103,42 +94,26 @@ export type ParsedRaidRankDocument = {
   }[];
 };
 
-/**
- * Convert total tier format to tier + weaponTier format
- * Total tier = tier + weaponTier (tier max 5)
- * Examples:
- * - Total tier 8 → { tier: 5, weaponTier: 3 }
- * - Total tier 4 → { tier: 4 }
- */
 export function convertTier(totalTier: number): { tier: number; weaponTier?: number } {
   if (totalTier <= 5) {
     return { tier: totalTier };
   }
+
   return { tier: 5, weaponTier: totalTier - 5 };
 }
 
-/**
- * Convert new tier + weaponTier format to total tier format
- * Total tier = tier + (weaponTier || 0)
- */
 function convertToTotalTier(tier: number, weaponTier?: number): number {
   return tier + (weaponTier || 0);
 }
 
-
-/**
- * Convert server Rank to ParsedRaidRankDocument
- */
 function convertServerRankToParsed(
   serverRank: ServerRank,
   raidType: RaidType,
   seasonIndex: number,
-  defenseType: Defense
+  defenseType: Defense,
 ): ParsedRaidRankDocument {
-  const rank = Number(serverRank.rank);
-
-  const parties = (serverRank.parties || []).map((party: ServerParty, partyIndex: number) => {
-    const slots = (party.students || []).map((studentSlot: ServerStudentSlot, slotIndex: number) => {
+  const parties = (serverRank.parties || []).map((party, partyIndex) => {
+    const slots = (party.students || []).map((studentSlot, slotIndex) => {
       if (studentSlot.slot === "empty" || !studentSlot.student) {
         return {
           slotIndex,
@@ -150,12 +125,7 @@ function convertServerRankToParsed(
       }
 
       const student = studentSlot.student;
-      // Convert server tier + weaponTier to total tier format
-      // Server: tier (1-5), weaponTier (0-4, 0 if not specified)
-      // Total tier format: tier (1-9) = tier + weaponTier
-      const serverTier = Number(student.tier || 0);
-      const serverWeaponTier = student.weaponTier !== undefined ? Number(student.weaponTier) : 0;
-      const totalTier = convertToTotalTier(serverTier, serverWeaponTier);
+      const totalTier = convertToTotalTier(Number(student.tier || 0), student.weaponTier ?? 0);
 
       return {
         slotIndex,
@@ -166,7 +136,6 @@ function convertServerRankToParsed(
       };
     });
 
-    // Ensure 6 slots per party
     while (slots.length < 6) {
       slots.push({
         slotIndex: slots.length,
@@ -184,17 +153,13 @@ function convertServerRankToParsed(
     raidType,
     seasonIndex,
     defenseType,
-    rank,
+    rank: Number(serverRank.rank),
     finalRank: Number(serverRank.finalRank),
     score: Number(serverRank.score),
     parties,
   };
 }
 
-
-/**
- * Fetch ranks from server API
- */
 export async function fetchRanks(params: {
   raidType: RaidType;
   season: number;
@@ -207,14 +172,12 @@ export async function fetchRanks(params: {
 }): Promise<{ totalCount: number; ranks: ParsedRaidRankDocument[] }> {
   const { raidType, season, defenseType, score, includeStudents, excludeStudents, perPage, page } = params;
 
-  // Build query parameters
   const queryParams = new URLSearchParams({
     raidType,
     season: season.toString(),
     defenseType,
   });
 
-  // Build request body
   const body: {
     perPage: number;
     page: number;
@@ -241,12 +204,8 @@ export async function fetchRanks(params: {
     }
   }
 
-  // Always include includeStudents and excludeStudents, even if empty
-  // Empty tiers array means "all tiers"
-  // Fetch from server
-  const url = `${RAID_API_BASE_URL}/v1/ranks?${queryParams.toString()}`;
   const protobufData = await fetchProtobuf<ServerRankResponse>({
-    url,
+    url: `${RANK_API_BASE_URL}/v1/ranks?${queryParams.toString()}`,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -256,8 +215,9 @@ export async function fetchRanks(params: {
     messageType: "ranks.RankResponse",
     getRoot: getProtobufRoot,
   });
-  const totalCount = Number(protobufData.totalCount || 0);
-  const serverRanks = protobufData.ranks || [];
-  const ranks = serverRanks.map((rank) => convertServerRankToParsed(rank, raidType, season, defenseType));
-  return { totalCount, ranks };
+
+  return {
+    totalCount: Number(protobufData.totalCount || 0),
+    ranks: (protobufData.ranks || []).map((rank) => convertServerRankToParsed(rank, raidType, season, defenseType)),
+  };
 }

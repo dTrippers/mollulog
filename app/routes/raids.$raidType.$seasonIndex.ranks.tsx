@@ -1,27 +1,35 @@
+import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
-import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import RaidRankFilter, { mergeFilteredStudents, type RaidRankFilterState } from "~/components/features/raids/RaidRankFilter";
-import { RaidRankScreen } from "~/components/features/raids";
-import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
-import type { RaidType } from "~/models/content.d";
-import { getAllStudentsMap } from "~/models/student";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { getRecruitedStudentTiers } from "~/models/recruited-student";
+import { RaidRankScreen } from "~/components/features/raids";
+import RaidRankFilter, {
+  mergeFilteredStudents,
+  type RaidRankFilterState,
+} from "~/components/features/raids/RaidRankFilter";
 import { Difficulty } from "~/graphql/graphql";
+import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
+import type { RaidType } from "~/models/content.d";
 import type { Difficulty as DifficultyType } from "~/models/raid";
-import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
+import { getRecruitedStudentTiers } from "~/models/recruited-student";
+import { getAllStudentsMap } from "~/models/student";
+import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const rawAllStudents = await getAllStudentsMap(env, true);
-  const allStudents = Object.fromEntries(Object.entries(rawAllStudents).map(([uid, student]) => [uid, {
-    name: student.name,
-    attackType: student.attackType,
-    defenseType: student.defenseType,
-    role: student.role,
-  }]));
+  const allStudents = Object.fromEntries(
+    Object.entries(rawAllStudents).map(([uid, student]) => [
+      uid,
+      {
+        name: student.name,
+        attackType: student.attackType,
+        defenseType: student.defenseType,
+        role: student.role,
+      },
+    ]),
+  );
 
   const sensei = await getAuthenticator(env).isAuthenticated(request);
   const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
@@ -50,16 +58,22 @@ export default function RaidRanks() {
     }
     const loadFilterableStudents = async () => {
       const statistics = await fetchRaidStatisticsByRaid(currentRaid.raidType as RaidType, jpSeasonIndex, defenseType);
-      setFilterableStudents(statistics.map(({ studentUid, slotsByTier, assistsByTier }) => {
-        if (!allStudents[studentUid]) {
-          return null;
-        }
-        return {
-          uid: studentUid,
-          name: allStudents[studentUid].name,
-          tiers: Array.from(new Set([...slotsByTier.map((slot) => slot.tier), ...assistsByTier.map((assist) => assist.tier)])),
-        };
-      }).filter((student) => student !== null));
+      setFilterableStudents(
+        statistics
+          .map(({ studentUid, slotsByTier, assistsByTier }) => {
+            if (!allStudents[studentUid]) {
+              return null;
+            }
+            return {
+              uid: studentUid,
+              name: allStudents[studentUid].name,
+              tiers: Array.from(
+                new Set([...slotsByTier.map((slot) => slot.tier), ...assistsByTier.map((assist) => assist.tier)]),
+              ),
+            };
+          })
+          .filter((student) => student !== null),
+      );
     };
     loadFilterableStudents();
   }, [currentRaid.raidType, jpSeasonIndex, defenseType, allStudents]);
@@ -109,11 +123,16 @@ export default function RaidRanks() {
   return (
     <>
       <RaidRankScreen
-        currentRaid={{ boss: currentRaid.raidBoss.uid, since: currentRaid.startAt ?? new Date(), raidType: currentRaid.raidType as RaidType, seasonIndex: jpSeasonIndex, defenseType }}
+        currentRaid={{
+          boss: currentRaid.raidBoss.uid,
+          since: currentRaid.startAt ?? new Date(),
+          raidType: currentRaid.raidType as RaidType,
+          seasonIndex: jpSeasonIndex,
+          defenseType,
+        }}
         filterState={rankFilterState}
         allStudents={allStudents}
         recruitedStudentTiers={recruitedStudentTiers}
-
         onIncludeStudent={({ uid }) => {
           setRankFilterState((prev) => ({
             ...prev,

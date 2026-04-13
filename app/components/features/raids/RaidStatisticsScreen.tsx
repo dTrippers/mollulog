@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
-import type { RaidStatistics } from "~/models/raid-statistics.client";
-import RaidStatisticsSlotCount from "./RaidStatisticsSlotCount";
+import { useMemo, useState } from "react";
+import type { RaidStatistics } from "~/lib/ranks/stats";
 import type { Role } from "~/models/content.d";
+import RaidStatisticsSlotCount from "./RaidStatisticsSlotCount";
 
 type RaidStatisticsScreenProps = {
   statistics: RaidStatistics[];
@@ -15,20 +15,32 @@ export default function RaidStatisticsScreen({ statistics, allStudents, maxTier 
     <div className="xl:grid xl:grid-cols-2 xl:gap-4">
       <div>
         <p className="text-lg font-bold">스트라이커 편성 횟수</p>
-        <SlotCountInfos statistics={statistics.filter(({ studentUid }) => allStudents[studentUid]?.role === "striker")} allStudents={allStudents} maxTier={maxTier} />
+        <SlotCountInfos
+          statistics={statistics.filter(({ studentUid }) => allStudents[studentUid]?.role === "striker")}
+          allStudents={allStudents}
+          maxTier={maxTier}
+        />
       </div>
       <div>
         <p className="text-lg font-bold">스페셜 편성 횟수</p>
-        <SlotCountInfos statistics={statistics.filter(({ studentUid }) => allStudents[studentUid]?.role === "special")} allStudents={allStudents} maxTier={maxTier} />
+        <SlotCountInfos
+          statistics={statistics.filter(({ studentUid }) => allStudents[studentUid]?.role === "special")}
+          allStudents={allStudents}
+          maxTier={maxTier}
+        />
       </div>
     </div>
   );
 }
 
-function SlotCountInfos({ statistics, allStudents, maxTier }: { statistics: RaidStatistics[], allStudents: Record<string, { name: string; role: Role }>, maxTier?: number }) {
+function SlotCountInfos({
+  statistics,
+  allStudents,
+  maxTier,
+}: { statistics: RaidStatistics[]; allStudents: Record<string, { name: string; role: Role }>; maxTier?: number }) {
   const [showMore, setShowMore] = useState(false);
   const sortedStatistics = useMemo(() => {
-    const sorted = [...statistics].sort((a, b) => (b.slotsCount + b.assistsCount) - (a.slotsCount + a.assistsCount));
+    const sorted = [...statistics].sort((a, b) => b.slotsCount + b.assistsCount - (a.slotsCount + a.assistsCount));
     return showMore ? sorted : sorted.slice(0, 5);
   }, [statistics, showMore]);
 

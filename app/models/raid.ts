@@ -17,7 +17,6 @@ const raidScheduleDetailQuery = graphql(`
       raidBoss { uid name }
       defenseTypes { defenseType difficulty }
       jpSchedule { uid seasonIndex }
-      videos(first: 1) { pageInfo { hasNextPage } }
     }
   }
 `);
@@ -39,7 +38,6 @@ const raidScheduleBySeasonIndexQuery = graphql(`
       raidBoss { uid name }
       defenseTypes { defenseType difficulty }
       jpSchedule { uid seasonIndex }
-      videos(first: 1) { pageInfo { hasNextPage } }
     }
   }
 `);

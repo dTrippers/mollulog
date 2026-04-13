@@ -4,10 +4,10 @@ import { type LoaderFunctionArgs, useLoaderData } from "react-router";
 import RaidDifficultyComparison from "~/components/features/raids/RaidDifficultyComparison";
 import RaidStudentComparison from "~/components/features/raids/RaidStudentComparison";
 import { EmptyView, LoadingSkeleton, Section } from "~/components/primitives";
+import { fetchRaidOverview } from "~/lib/ranks/overview";
+import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import { type defenseTypeColor, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
 import type { RaidType } from "~/models/content.d";
-import { fetchRaidOverview } from "~/models/raid-overview.client";
-import { fetchRaidStatisticsByRaid } from "~/models/raid-statistics.client";
 import { getAllStudentsMap } from "~/models/student";
 import { RaidRepository } from "~/repositories";
 import RaidComparisonHeader from "./raids.$raidType.$seasonIndex._components/RaidComparisonHeader";
@@ -49,12 +49,11 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     });
   }
 
-  const [toSchedule, fromSchedule, rawAllStudents] =
-    await Promise.all([
-      raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex),
-      raidRepository.getSchedule(fromRaidUid),
-      getAllStudentsMap(env, true),
-    ]);
+  const [toSchedule, fromSchedule, rawAllStudents] = await Promise.all([
+    raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex),
+    raidRepository.getSchedule(fromRaidUid),
+    getAllStudentsMap(env, true),
+  ]);
 
   if (!toSchedule || !fromSchedule) {
     throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {

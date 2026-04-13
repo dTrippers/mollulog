@@ -1,52 +1,42 @@
 import protobuf from "protobufjs";
 
-/**
- * Base URL for the raid API server
- */
-export const RAID_API_BASE_URL = "https://ranks.mollulog.net";
+export const RANK_API_BASE_URL = 'https://ranks.mollulog.net'
 
-/**
- * Decompress gzip data
- */
 export async function decompressGzip(data: ArrayBuffer): Promise<ArrayBuffer> {
   const ds = new DecompressionStream("gzip");
   const stream = new Response(data).body?.pipeThrough(ds);
+
   if (!stream) {
     throw new Error("Failed to create decompression stream");
   }
-  const response = await new Response(stream);
-  return await response.arrayBuffer();
+
+  return await new Response(stream).arrayBuffer();
 }
 
-/**
- * Create a cached protobuf root parser
- */
 export function createProtobufRootCache() {
-  let root: protobuf.Root | null = null;
+  const roots = new Map<string, protobuf.Root>();
 
   return async (schema: string): Promise<protobuf.Root> => {
+    let root = roots.get(schema);
     if (!root) {
       root = protobuf.parse(schema).root;
+      roots.set(schema, root);
     }
+
     return root;
   };
 }
 
-/**
- * Parse protobuf binary data to a typed object
- */
 export async function parseProtobufResponse<T>(
   data: ArrayBuffer,
   schema: string,
   messageType: string,
-  getRoot: (schema: string) => Promise<protobuf.Root>
+  getRoot: (schema: string) => Promise<protobuf.Root>,
 ): Promise<T> {
   const root = await getRoot(schema);
-  const MessageType = root.lookupType(messageType);
+  const message = root.lookupType(messageType).decode(new Uint8Array(data));
 
-  // Decode the protobuf message
-  const message = MessageType.decode(new Uint8Array(data));
-  return MessageType.toObject(message, {
+  return root.lookupType(messageType).toObject(message, {
     longs: String,
     enums: String,
     bytes: String,
@@ -57,9 +47,6 @@ export async function parseProtobufResponse<T>(
   }) as T;
 }
 
-/**
- * Fetch protobuf data from server with gzip support
- */
 export async function fetchProtobuf<T>(params: {
   url: string;
   method?: "GET" | "POST";
@@ -84,14 +71,11 @@ export async function fetchProtobuf<T>(params: {
     throw new Error(`Failed to fetch: ${response.statusText}`);
   }
 
-  // Handle gzip decompression
   let arrayBuffer = await response.arrayBuffer();
-  const contentType = response.headers.get("Content-Encoding");
-  if (contentType === "gzip" || contentType?.includes("gzip")) {
+  const contentEncoding = response.headers.get("Content-Encoding");
+  if (contentEncoding === "gzip" || contentEncoding?.includes("gzip")) {
     arrayBuffer = await decompressGzip(arrayBuffer);
   }
 
-  // Parse protobuf response
   return await parseProtobufResponse<T>(arrayBuffer, schema, messageType, getRoot);
 }
-

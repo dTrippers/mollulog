@@ -85,7 +85,11 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 export const ErrorBoundary = () => {
   const error = useRouteError();
   if (isRouteErrorResponse(error)) {
-    return <ErrorPage message={error.data.error.message} />;
+    const message =
+      typeof error.data === "string"
+        ? error.data
+        : (error.data?.error?.message ?? "오류가 발생했어요. 잠시 후 다시 시도해주세요.");
+    return <ErrorPage message={message} />;
   }
   return <ErrorPage />;
 };
@@ -102,7 +106,6 @@ export default function RaidPage() {
   const { currentRaid, allRaids, signedIn } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
-  const videoAvailable = currentRaid.videos.pageInfo.hasNextPage;
 
   const [panel, setPanel] = useState<PagePanelProps | undefined>(undefined);
   useEffect(() => {
@@ -145,28 +148,29 @@ export default function RaidPage() {
           active: pathname === `${raidPath}/statistics`,
         },
         {
-          text: "공략 영상 (베타)",
+          text: "공략 영상",
           Icon: VideoCameraIcon,
           link: `${raidPath}/videos`,
           active: pathname === `${raidPath}/videos`,
-          disabled: !videoAvailable,
         },
       ]}
     >
       {currentRaid.defenseTypes.length > 1 && !pathname.endsWith("/compare") && (
         <div className="my-4">
-          <FilterButtons
-            key={`filters-${currentRaid.uid}`}
-            Icon={ShieldCheckIcon}
-            buttonProps={currentRaid.defenseTypes.map(({ defenseType }) => ({
-              text: defenseTypeLocale[defenseType],
-              color: defenseTypeColor[defenseType],
-              active: defenseType === selectedDefense,
-              onToggle: () => setDefense(defenseType),
-            }))}
-            exclusive
-            atLeastOne
-          />
+          {!pathname.endsWith("/videos") && (
+            <FilterButtons
+              key={`filters-${currentRaid.uid}`}
+              Icon={ShieldCheckIcon}
+              buttonProps={currentRaid.defenseTypes.map(({ defenseType }) => ({
+                text: defenseTypeLocale[defenseType],
+                color: defenseTypeColor[defenseType],
+                active: defenseType === selectedDefense,
+                onToggle: () => setDefense(defenseType),
+              }))}
+              exclusive
+              atLeastOne
+            />
+          )}
         </div>
       )}
       <Outlet

@@ -1,29 +1,8 @@
 import dayjs from "dayjs";
-import { RaidScheduleVideosDocument, type RaidScheduleVideosQueryVariables } from "~/graphql/graphql";
-import { runQuery } from "~/lib/baql";
 import { getAllRaidSchedules, getRaidSchedule, raidTypeFromParam } from "~/models/raid";
 
 export type RaidSchedule = NonNullable<Awaited<ReturnType<typeof getRaidSchedule>>>;
 export type RaidScheduleListItem = Awaited<ReturnType<typeof getAllRaidSchedules>>[number];
-export type RaidVideoItem = {
-  id: string;
-  title: string;
-  score: number;
-  youtubeId: string;
-  thumbnailUrl: string;
-  publishedAt: string;
-};
-export type RaidVideosData = {
-  videos: RaidVideoItem[];
-  pageInfo: {
-    hasNextPage: boolean;
-    hasPreviousPage: boolean;
-    startCursor: string | null;
-    endCursor: string | null;
-  };
-} | null;
-
-type RaidVideosQueryOptions = Partial<Pick<RaidScheduleVideosQueryVariables, "first" | "after" | "sort">>;
 
 export class RaidRepository {
   private allPromise: Promise<RaidScheduleListItem[]> | null = null;
@@ -70,8 +49,7 @@ export class RaidRepository {
   }
 
   async findSummaryByTypeAndSeason(raidType: string, seasonIndex: number | string, forceRefresh = false) {
-    const parsedSeasonIndex =
-      typeof seasonIndex === "number" ? seasonIndex : Number.parseInt(String(seasonIndex), 10);
+    const parsedSeasonIndex = typeof seasonIndex === "number" ? seasonIndex : Number.parseInt(String(seasonIndex), 10);
     if (Number.isNaN(parsedSeasonIndex)) {
       return null;
     }
@@ -113,37 +91,6 @@ export class RaidRepository {
         (schedule) => schedule.raidType === normalizedRaidType && schedule.jpSchedule?.seasonIndex === jpSeasonIndex,
       ) ?? null
     );
-  }
-
-  async getVideos(uid: string, { first, after, sort }: RaidVideosQueryOptions = {}): Promise<RaidVideosData> {
-    const { data, error } = await runQuery(RaidScheduleVideosDocument, { uid, first, after, sort });
-    if (error || !data) {
-      throw error ?? new Error("failed to fetch raid videos");
-    }
-
-    const videosConnection = data.raidSchedule?.videos;
-    if (!videosConnection) {
-      return null;
-    }
-
-    return {
-      videos: videosConnection.edges.flatMap((edge) => {
-        const node = edge.node;
-        if (!node) {
-          return [];
-        }
-
-        return {
-          id: node.id ?? "",
-          title: node.title ?? "",
-          score: node.score ?? 0,
-          youtubeId: node.youtubeId ?? "",
-          thumbnailUrl: node.thumbnailUrl ?? "",
-          publishedAt: node.publishedAt instanceof Date ? node.publishedAt.toISOString() : String(node.publishedAt ?? ""),
-        } satisfies RaidVideoItem;
-      }),
-      pageInfo: videosConnection.pageInfo,
-    };
   }
 
   async refresh() {

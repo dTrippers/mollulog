@@ -1,21 +1,26 @@
 import { useEffect, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
-import { EmptyView, LoadingSkeleton } from "~/components/primitives";
 import RaidStatisticsScreen from "~/components/features/raids/RaidStatisticsScreen";
+import { EmptyView, LoadingSkeleton } from "~/components/primitives";
+import { type RaidStatistics as RaidStatisticsData, fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
+import type { RaidType } from "~/models/content.d";
 import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
-import { fetchRaidStatisticsByRaid, type RaidStatistics as RaidStatisticsData } from "~/models/raid-statistics.client";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
-import type { RaidType } from "~/models/content.d";
 import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const rawAllStudents = await getAllStudentsMap(env, true);
-  const allStudents = Object.fromEntries(Object.entries(rawAllStudents).map(([uid, student]) => [uid, {
-    name: student.name,
-    role: student.role,
-  }]));
+  const allStudents = Object.fromEntries(
+    Object.entries(rawAllStudents).map(([uid, student]) => [
+      uid,
+      {
+        name: student.name,
+        role: student.role,
+      },
+    ]),
+  );
 
   return {
     allStudents,
@@ -46,7 +51,11 @@ export default function RaidStatisticsPage() {
         setLoading(true);
         setError(null);
 
-        const rawStatistics = await fetchRaidStatisticsByRaid(currentRaid.raidType as RaidType, jpSeasonIndex, defenseType);
+        const rawStatistics = await fetchRaidStatisticsByRaid(
+          currentRaid.raidType as RaidType,
+          jpSeasonIndex,
+          defenseType,
+        );
         if (cancelled) {
           return;
         }
@@ -85,7 +94,5 @@ export default function RaidStatisticsPage() {
     return <EmptyView text="통계 정보를 준비중이에요" />;
   }
 
-  return (
-    <RaidStatisticsScreen statistics={statistics} allStudents={allStudents} maxTier={maxTier ?? 8} />
-  );
+  return <RaidStatisticsScreen statistics={statistics} allStudents={allStudents} maxTier={maxTier ?? 8} />;
 }
