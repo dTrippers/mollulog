@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
-import type { FutureContent } from "./content";
-import { normalizeFutureContentDates } from "./future-content";
+import type { FutureContent } from "../../../app/models/content";
+import { normalizeFutureContentDates } from "../../../app/models/future-content";
 
 describe("normalizeFutureContentDates", () => {
   it("restores cached ISO date strings back into Date instances", () => {

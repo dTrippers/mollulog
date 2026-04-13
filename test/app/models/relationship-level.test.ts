@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { resolveRelationshipLevelInput } from "./relationship-level";
+import { resolveRelationshipLevelInput } from "../../../app/models/relationship-level";
 
 describe("relationship-level", () => {
   it("returns null when both current and target levels are empty", () => {

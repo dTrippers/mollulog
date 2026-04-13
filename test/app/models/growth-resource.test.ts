@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { ResourceTypeEnum } from "../graphql/graphql";
+import { ResourceTypeEnum } from "../../../app/graphql/graphql";
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
@@ -16,7 +16,7 @@ import {
   calculateTierResourceItems,
   normalizeStudentGrowthInputForCalculation,
   sortGrowthResourceItems,
-} from "./growth-resource";
+} from "../../../app/models/growth-resource";
 
 describe("growth-resource", () => {
   it("calculates exact character exp difference between levels", () => {

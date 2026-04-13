@@ -149,8 +149,9 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       return data<GrowthActionResult>({ kind: "listChange", requiresRevalidation: true });
     } else if (payload._intent === "relationship") {
       const relationshipPayload = payload as Partial<RelationshipActionData>;
+      const existingRelationshipLevel = await getRelationshipLevel(env, currentUser.id, payload.studentUid);
       const resolvedRelationshipLevel = resolveRelationshipLevelInput(
-        await getRelationshipLevel(env, currentUser.id, payload.studentUid),
+        existingRelationshipLevel,
         {
           currentLevel: parseNullableInteger(relationshipPayload.currentLevel),
           targetLevel: parseNullableInteger(relationshipPayload.targetLevel),
@@ -167,7 +168,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
           resolvedRelationshipLevel.currentLevel,
           resolvedRelationshipLevel.currentExp,
           resolvedRelationshipLevel.targetLevel,
-          {},
+          existingRelationshipLevel?.items ?? {},
         );
       }
     } else if (payload._intent === "tier") {

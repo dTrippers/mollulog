@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   defaultContentFilterState,
   normalizeContentFilterState,
-} from "./content-filter-state";
+} from "../../../../../app/components/features/futures/content-filter-state";
 
 describe("content-filter-state", () => {
   it("returns the default filter for malformed saved values", () => {
