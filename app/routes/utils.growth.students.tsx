@@ -14,8 +14,31 @@ import {
   removeStudentGrowth,
   upsertStudentGrowth,
 } from "~/models/student-growth";
+import { loadStudentRow } from "./utils.growth._components/growth-data.server";
 import GrowthTable from "./utils.growth._components/GrowthTable";
-import type { GrowthLayoutContext } from "./utils.growth._components/types";
+import type { GrowthActionResult, GrowthLayoutContext } from "./utils.growth._components/types";
+
+const growthFieldKeys = [
+  "level",
+  "skillEx",
+  "skillNormal",
+  "skillEnhanced",
+  "skillSub",
+  "equip1",
+  "equip2",
+  "equip3",
+  "equipSpecial",
+  "targetLevel",
+  "targetSkillEx",
+  "targetSkillNormal",
+  "targetSkillEnhanced",
+  "targetSkillSub",
+  "targetEquip1",
+  "targetEquip2",
+  "targetEquip3",
+  "targetEquipSpecial",
+  "targetTier",
+] as const satisfies (keyof StudentGrowthInput)[];
 
 type GrowthActionData = {
   _intent?: "growth";
@@ -49,28 +72,6 @@ type RelationshipActionData = {
   currentLevel: number | null;
   targetLevel: number | null;
 };
-
-const growthFieldKeys = [
-  "level",
-  "skillEx",
-  "skillNormal",
-  "skillEnhanced",
-  "skillSub",
-  "equip1",
-  "equip2",
-  "equip3",
-  "equipSpecial",
-  "targetLevel",
-  "targetSkillEx",
-  "targetSkillNormal",
-  "targetSkillEnhanced",
-  "targetSkillSub",
-  "targetEquip1",
-  "targetEquip2",
-  "targetEquip3",
-  "targetEquipSpecial",
-  "targetTier",
-] as const satisfies (keyof StudentGrowthInput)[];
 
 function parseNullableInteger(value: unknown): number | null {
   if (value == null || value === "") {
@@ -106,11 +107,11 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
   if (!currentUser) {
-    return data({ error: "로그인이 필요해요" }, { status: 401 });
+    return data<GrowthActionResult>({ error: "로그인이 필요해요" }, { status: 401 });
   }
 
   if (request.method !== "POST") {
-    return data({ error: "지원하지 않는 요청 방식이에요" }, { status: 405 });
+    return data<GrowthActionResult>({ error: "지원하지 않는 요청 방식이에요" }, { status: 405 });
   }
 
   try {
@@ -126,24 +127,26 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
         >
       >();
     if (!payload.studentUid) {
-      return data({ error: "학생 정보가 필요해요" }, { status: 400 });
+      return data<GrowthActionResult>({ error: "학생 정보가 필요해요" }, { status: 400 });
     }
 
     const allStudentsMap = await getAllStudentsMap(env, true);
     if (!(payload.studentUid in allStudentsMap)) {
-      return data({ error: "존재하지 않는 학생이에요" }, { status: 400 });
+      return data<GrowthActionResult>({ error: "존재하지 않는 학생이에요" }, { status: 400 });
     }
 
     if (payload._intent === "enroll") {
       const student = allStudentsMap[payload.studentUid];
       if (!student?.released) {
-        return data({ error: "출시되지 않은 학생이에요" }, { status: 400 });
+        return data<GrowthActionResult>({ error: "출시되지 않은 학생이에요" }, { status: 400 });
       }
       await upsertRecruitedStudent(env, currentUser.id, payload.studentUid, student.initialTier);
     } else if (payload._intent === "add") {
       await upsertStudentGrowth(env, currentUser.id, payload.studentUid, toGrowthInput({}));
+      return data<GrowthActionResult>({ kind: "listChange", requiresRevalidation: true });
     } else if (payload._intent === "remove") {
       await removeStudentGrowth(env, currentUser.id, payload.studentUid);
+      return data<GrowthActionResult>({ kind: "listChange", requiresRevalidation: true });
     } else if (payload._intent === "relationship") {
       const relationshipPayload = payload as Partial<RelationshipActionData>;
       const resolvedRelationshipLevel = resolveRelationshipLevelInput(
@@ -170,11 +173,11 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     } else if (payload._intent === "tier") {
       const recruitedStudents = await getRecruitedStudents(env, currentUser.id);
       if (!recruitedStudents.some(({ studentUid }) => studentUid === payload.studentUid)) {
-        return data({ error: "모집하지 않은 학생이에요" }, { status: 400 });
+        return data<GrowthActionResult>({ error: "모집하지 않은 학생이에요" }, { status: 400 });
       }
       const tierPayload = payload as Partial<TierActionData>;
       if (tierPayload.tier == null || tierPayload.tier < 1 || tierPayload.tier > 9) {
-        return data({ error: "성급 범위가 올바르지 않아요" }, { status: 400 });
+        return data<GrowthActionResult>({ error: "성급 범위가 올바르지 않아요" }, { status: 400 });
       }
       await upsertRecruitedStudent(env, currentUser.id, payload.studentUid, tierPayload.tier);
     } else {
@@ -186,14 +189,23 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       );
     }
 
-    return data({ success: true });
+    const row = await loadStudentRow(env, currentUser.id, payload.studentUid);
+    if (!row) {
+      return data<GrowthActionResult>({ error: "학생 정보를 다시 불러오지 못했어요" }, { status: 500 });
+    }
+    return data<GrowthActionResult>({ kind: "studentUpdate", student: row });
   } catch (error) {
-    return data({ error: error instanceof Error ? error.message : "데이터를 저장하지 못했어요" }, { status: 400 });
+    return data<GrowthActionResult>(
+      { error: error instanceof Error ? error.message : "데이터를 저장하지 못했어요" },
+      { status: 400 },
+    );
   }
 };
 
 export default function GrowthStudentsPage() {
-  const { managedStudents, availableStudents } = useOutletContext<GrowthLayoutContext>();
+  const { managedStudents, availableStudents, updateStudent } = useOutletContext<GrowthLayoutContext>();
 
-  return <GrowthTable students={managedStudents} availableStudents={availableStudents} />;
+  return (
+    <GrowthTable students={managedStudents} availableStudents={availableStudents} onStudentUpdate={updateStudent} />
+  );
 }

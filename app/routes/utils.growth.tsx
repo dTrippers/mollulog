@@ -1,10 +1,11 @@
 import { ArchiveBoxIcon, UserIcon } from "@heroicons/react/24/outline";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
-import type { GrowthLayoutContext } from "./utils.growth._components/types";
+import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
 
 export const meta: MetaFunction = () => {
   return [
@@ -21,6 +22,23 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  actionResult,
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+}) => {
+  if (currentUrl.pathname !== nextUrl.pathname) return true;
+
+  if (actionResult && typeof actionResult === "object") {
+    if ("kind" in actionResult && actionResult.kind === "listChange") return true;
+    if ("kind" in actionResult && actionResult.kind === "studentUpdate") return false;
+    if ("error" in actionResult) return false;
+  }
+
+  return defaultShouldRevalidate;
+};
+
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
@@ -34,6 +52,33 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 export default function GrowthLayout() {
   const loaderData = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
+
+  const [managedStudents, setManagedStudents] = useState(loaderData.managedStudents);
+  const managedStudentListKey = loaderData.managedStudents.map((student) => student.uid).join(":");
+  const syncedManagedStudentListKeyRef = useRef(managedStudentListKey);
+
+  useEffect(() => {
+    if (syncedManagedStudentListKeyRef.current === managedStudentListKey) return;
+    syncedManagedStudentListKeyRef.current = managedStudentListKey;
+    // Preserve per-row optimistic updates and only replace the list on real list revalidation.
+    setManagedStudents(loaderData.managedStudents);
+  }, [loaderData.managedStudents, managedStudentListKey]);
+
+  const updateStudent = useCallback((next: GrowthStudent) => {
+    setManagedStudents((prev) => {
+      const idx = prev.findIndex((s) => s.uid === next.uid);
+      if (idx === -1) return prev;
+      const copy = prev.slice();
+      copy[idx] = next;
+      return copy;
+    });
+  }, []);
+
+  const contextValue: GrowthLayoutContext = {
+    managedStudents,
+    availableStudents: loaderData.availableStudents,
+    updateStudent,
+  };
 
   return (
     <Page
@@ -65,7 +110,7 @@ export default function GrowthLayout() {
         }
       ]}
     >
-      <Outlet context={loaderData satisfies GrowthLayoutContext} />
+      <Outlet context={contextValue satisfies GrowthLayoutContext} />
     </Page>
   );
 }

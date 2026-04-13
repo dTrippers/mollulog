@@ -1,5 +1,10 @@
 import type { GrowthResourceItem } from "~/models/growth-resource";
 
+export type GrowthActionResult =
+  | { kind: "studentUpdate"; student: GrowthStudent }
+  | { kind: "listChange"; requiresRevalidation: true }
+  | { error: string };
+
 export type GrowthStudent = {
   uid: string;
   name: string;
@@ -47,4 +52,6 @@ export type GrowthLayoutLoaderData = {
   availableStudents: GrowthAvailableStudent[];
 };
 
-export type GrowthLayoutContext = GrowthLayoutLoaderData;
+export type GrowthLayoutContext = GrowthLayoutLoaderData & {
+  updateStudent: (student: GrowthStudent) => void;
+};
