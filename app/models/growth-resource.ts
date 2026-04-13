@@ -1,6 +1,5 @@
-import type { TypedDocumentNode } from "urql";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { runQuery } from "~/lib/baql";
+import type { GrowthResourceRepository } from "~/repositories/growth-resource";
 import type { StudentMap } from "./student";
 
 export type GrowthResourceSource = "level" | "skill" | "equipment" | "tier" | "gear";
@@ -66,19 +65,25 @@ type SkillCostItem = {
   };
 };
 
-type SkillCostStudent = {
+type SkillCostLevelKey =
+  | "ex2"
+  | "ex3"
+  | "ex4"
+  | "ex5"
+  | "normal2"
+  | "normal3"
+  | "normal4"
+  | "normal5"
+  | "normal6"
+  | "normal7"
+  | "normal8"
+  | "normal9";
+
+export type SkillCostStudent = {
   uid: string;
-} & Record<string, SkillCostItem[]>;
+} & Partial<Record<SkillCostLevelKey, SkillCostItem[]>>;
 
-type SkillCostQueryData = {
-  students: SkillCostStudent[];
-};
-
-type StudentUidsVariables = {
-  uids: string[];
-};
-
-type ItemMetadata = {
+export type ItemMetadata = {
   uid: string;
   name: string;
   rarity: number;
@@ -87,20 +92,12 @@ type ItemMetadata = {
   subCategory?: string | null;
 };
 
-type ItemMetadataQueryData = {
-  items: ItemMetadata[];
-};
-
-type EquipmentMetadata = {
+export type EquipmentMetadata = {
   uid: string;
   name: string;
   rarity: number;
   type: ResourceTypeEnum;
   category?: string | null;
-};
-
-type EquipmentMetadataQueryData = {
-  equipments: EquipmentMetadata[];
 };
 
 export type StudentGearData = {
@@ -112,16 +109,13 @@ export type StudentGearData = {
   }[];
 };
 
+
 type GearCostStudent = {
   uid: string;
   gear: {
     name: string;
     growthItems: StudentGearData["growthItems"];
   } | null;
-};
-
-type GearCostQueryData = {
-  students: GearCostStudent[];
 };
 
 const CHARACTER_TOTAL_EXP_BY_LEVEL: Record<number, number> = {
@@ -320,79 +314,8 @@ const TIER_UP_ELEPH_REQUIREMENTS: Record<number, number> = {
   9: 200,
 };
 
-const SKILL_COST_QUERY = `
-  query GrowthSkillCosts($uids: [String!]) {
-    students(uids: $uids) {
-      uid
-      ex2: skillItems(skillType: ex, skillLevel: 2) { amount item { uid rarity } }
-      ex3: skillItems(skillType: ex, skillLevel: 3) { amount item { uid rarity } }
-      ex4: skillItems(skillType: ex, skillLevel: 4) { amount item { uid rarity } }
-      ex5: skillItems(skillType: ex, skillLevel: 5) { amount item { uid rarity } }
-      normal2: skillItems(skillType: normal, skillLevel: 2) { amount item { uid rarity } }
-      normal3: skillItems(skillType: normal, skillLevel: 3) { amount item { uid rarity } }
-      normal4: skillItems(skillType: normal, skillLevel: 4) { amount item { uid rarity } }
-      normal5: skillItems(skillType: normal, skillLevel: 5) { amount item { uid rarity } }
-      normal6: skillItems(skillType: normal, skillLevel: 6) { amount item { uid rarity } }
-      normal7: skillItems(skillType: normal, skillLevel: 7) { amount item { uid rarity } }
-      normal8: skillItems(skillType: normal, skillLevel: 8) { amount item { uid rarity } }
-      normal9: skillItems(skillType: normal, skillLevel: 9) { amount item { uid rarity } }
-    }
-  }
-`;
-
-const ITEM_METADATA_QUERY = `
-  query GrowthResourceItems($uids: [String!]) {
-    items(uids: $uids) {
-      uid
-      name
-      rarity
-      type
-      ... on Item {
-        category
-        subCategory
-      }
-    }
-  }
-`;
-
-const EQUIPMENT_METADATA_QUERY = `
-  query GrowthResourceEquipments($uids: [String!]) {
-    equipments(uids: $uids) {
-      uid
-      name
-      rarity
-      type
-      category
-    }
-  }
-`;
-
-const GEAR_COST_QUERY = `
-  query GrowthStudentGears($uids: [String!]) {
-    students(uids: $uids) {
-      uid
-      gear {
-        name
-        growthItems {
-          gearTier
-          amount
-          item {
-            uid
-            name
-            rarity
-            type
-            ... on Item {
-              category
-              subCategory
-            }
-          }
-        }
-      }
-    }
-  }
-`;
-
 export async function getStudentGrowthResourceRequirements(
+  repository: GrowthResourceRepository,
   students: GrowthResourceStudentInput[],
   allStudentsMap: StudentMap,
   studentGearDataMap: Map<string, StudentGearData | null>,
@@ -422,7 +345,7 @@ export async function getStudentGrowthResourceRequirements(
   const studentsNeedingSkillCosts = normalizedStudents.filter(needsSkillResources);
   if (studentsNeedingSkillCosts.length > 0) {
     try {
-      const skillCostMap = await fetchSkillCosts(studentsNeedingSkillCosts.map(({ uid }) => uid));
+      const skillCostMap = await repository.getSkillCosts(studentsNeedingSkillCosts.map(({ uid }) => uid));
       for (const student of studentsNeedingSkillCosts) {
         const skillCost = skillCostMap.get(student.uid);
         if (!skillCost) {
@@ -452,9 +375,10 @@ export async function getStudentGrowthResourceRequirements(
       }
     }
 
+    // TODO: Remove this metadata enrichment pass once item/equipment metadata is sourced from browser-local data.
     const [itemMetadataMap, equipmentMetadataMap] = await Promise.all([
-      fetchItemMetadata([...itemUids]),
-      fetchEquipmentMetadata([...equipmentUids]),
+      repository.getItemMetadata([...itemUids]),
+      repository.getEquipmentMetadata([...equipmentUids]),
     ]);
 
     for (const requirement of Object.values(requirements)) {
@@ -762,7 +686,8 @@ function accumulateSkillRange(
       continue;
     }
 
-    const levelItems = skillCost[`${prefix}${level}`] ?? [];
+    const levelKey = `${prefix}${level}` as SkillCostLevelKey;
+    const levelItems = skillCost[levelKey] ?? [];
     for (const levelItem of levelItems) {
       const existing = items.get(levelItem.item.uid);
       if (existing) {
@@ -843,106 +768,6 @@ export function calculateCumulativeTierEleph(initialTier: number, targetTier: nu
     total += TIER_UP_ELEPH_REQUIREMENTS[tier] ?? 0;
   }
   return total;
-}
-
-async function fetchSkillCosts(studentUids: string[]): Promise<Map<string, SkillCostStudent>> {
-  const { data, error } = await runQuery(
-    SKILL_COST_QUERY as unknown as TypedDocumentNode<SkillCostQueryData, StudentUidsVariables>,
-    { uids: studentUids },
-  );
-  if (error) {
-    throw error;
-  }
-
-  const students = data?.students ?? [];
-  return new Map(students.map((student) => [student.uid, student]));
-}
-
-async function fetchItemMetadata(itemUids: string[]): Promise<Map<string, ItemMetadata>> {
-  const uniqueItemUids = [...new Set(itemUids)];
-  if (uniqueItemUids.length === 0) {
-    return new Map();
-  }
-
-  const { data, error } = await runQuery(
-    ITEM_METADATA_QUERY as unknown as TypedDocumentNode<ItemMetadataQueryData, StudentUidsVariables>,
-    { uids: uniqueItemUids },
-  );
-  if (error) {
-    throw error;
-  }
-
-  const items = data?.items ?? [];
-  return new Map(
-    items.map((item) => [
-      item.uid,
-      {
-        ...item,
-        name: item.name.replaceAll("\n", " ").trim(),
-      },
-    ]),
-  );
-}
-
-async function fetchEquipmentMetadata(equipmentUids: string[]): Promise<Map<string, EquipmentMetadata>> {
-  const uniqueEquipmentUids = [...new Set(equipmentUids)];
-  if (uniqueEquipmentUids.length === 0) {
-    return new Map();
-  }
-
-  const { data, error } = await runQuery(
-    EQUIPMENT_METADATA_QUERY as unknown as TypedDocumentNode<EquipmentMetadataQueryData, StudentUidsVariables>,
-    { uids: uniqueEquipmentUids },
-  );
-  if (error) {
-    throw error;
-  }
-
-  const equipments = data?.equipments ?? [];
-  return new Map(
-    equipments.map((equipment) => [
-      equipment.uid,
-      {
-        ...equipment,
-        name: equipment.name.replaceAll("\n", " ").trim(),
-      },
-    ]),
-  );
-}
-
-export async function fetchStudentGearData(studentUids: string[]): Promise<Map<string, StudentGearData | null>> {
-  const uniqueStudentUids = [...new Set(studentUids)];
-  if (uniqueStudentUids.length === 0) {
-    return new Map();
-  }
-
-  const { data, error } = await runQuery(
-    GEAR_COST_QUERY as unknown as TypedDocumentNode<GearCostQueryData, StudentUidsVariables>,
-    { uids: uniqueStudentUids },
-  );
-  if (error) {
-    throw error;
-  }
-
-  const students = data?.students ?? [];
-  return new Map(
-    students.map((student) => [
-      student.uid,
-      student.gear
-        ? {
-            name: student.gear.name.replaceAll("\n", " ").trim(),
-            growthItems: student.gear.growthItems.map((growthItem) => ({
-              gearTier: growthItem.gearTier,
-              amount: growthItem.amount,
-              item: {
-                ...growthItem.item,
-                name: growthItem.item.name.replaceAll("\n", " ").trim(),
-              },
-            })),
-          }
-        : null,
-    ]),
-  );
 }
 
 function applyItemMetadata(items: Map<string, GrowthResourceItem>, metadataMap: Map<string, ItemMetadata>) {

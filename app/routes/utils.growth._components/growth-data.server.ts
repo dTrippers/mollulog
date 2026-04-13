@@ -1,12 +1,12 @@
 import {
   type StudentGearData,
-  fetchStudentGearData,
   getStudentGrowthResourceRequirements,
 } from "~/models/growth-resource";
 import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getRelationshipLevel, getRelationshipLevels } from "~/models/relationship-level";
 import { type Student, getAllStudentsMap } from "~/models/student";
 import { type StudentGrowth, getStudentGrowth, getStudentGrowths } from "~/models/student-growth";
+import { GrowthResourceRepository } from "~/repositories/growth-resource";
 import type { GrowthLayoutLoaderData, GrowthStudent } from "./types";
 
 type BuildStudentRowDataParams = {
@@ -60,12 +60,13 @@ export async function loadStudentRow(
   userId: number,
   studentUid: string,
 ): Promise<GrowthStudent | null> {
+  const growthResourceRepository = new GrowthResourceRepository(env);
   const [growth, relationship, recruitedTierMap, allStudentsMap, gearDataMap] = await Promise.all([
     getStudentGrowth(env, userId, studentUid),
     getRelationshipLevel(env, userId, studentUid),
     getRecruitedStudentTiers(env, userId),
     getAllStudentsMap(env, true),
-    fetchStudentGearData([studentUid]),
+    growthResourceRepository.getStudentGearData([studentUid]),
   ]);
 
   const student = allStudentsMap[studentUid];
@@ -89,7 +90,12 @@ export async function loadStudentRow(
     gearData,
   });
 
-  const requirementsMap = await getStudentGrowthResourceRequirements([base], allStudentsMap, gearDataMap);
+  const requirementsMap = await getStudentGrowthResourceRequirements(
+    growthResourceRepository,
+    [base],
+    allStudentsMap,
+    gearDataMap,
+  );
 
   return {
     ...base,
@@ -98,6 +104,7 @@ export async function loadStudentRow(
 }
 
 export async function loadGrowthPlannerData(env: Env, userId: number): Promise<GrowthLayoutLoaderData> {
+  const growthResourceRepository = new GrowthResourceRepository(env);
   const [recruitedStudents, growths, relationshipLevels, allStudentsMap] = await Promise.all([
     getRecruitedStudents(env, userId),
     getStudentGrowths(env, userId),
@@ -139,7 +146,9 @@ export async function loadGrowthPlannerData(env: Env, userId: number): Promise<G
     }))
     .sort((a, b) => (b.student?.order ?? -1) - (a.student?.order ?? -1));
 
-  const studentGearDataMap = await fetchStudentGearData(managedStudentsBase.map(({ studentUid }) => studentUid));
+  const studentGearDataMap = await growthResourceRepository.getStudentGearData(
+    managedStudentsBase.map(({ studentUid }) => studentUid),
+  );
 
   const managedStudentsData = managedStudentsBase.map((entry) => {
     const { studentUid, student, growth, isRecruited } = entry;
@@ -160,6 +169,7 @@ export async function loadGrowthPlannerData(env: Env, userId: number): Promise<G
   });
 
   const growthResourceRequirements = await getStudentGrowthResourceRequirements(
+    growthResourceRepository,
     managedStudentsData,
     allStudentsMap,
     studentGearDataMap,
