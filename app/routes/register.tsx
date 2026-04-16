@@ -1,10 +1,9 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { redirect, useActionData } from "react-router";
-import { useLoaderData } from "react-router";
-import { getSenseiByUsername, updateSensei } from "~/models/sensei";
+import { Form, redirect, useActionData, useLoaderData } from "react-router";
+import { getSenseiById, getSenseiByUsername, updateSensei } from "~/models/sensei";
 import { getAuthenticator, redirectTo, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
-import { Title } from "~/components/primitives";
+import { Button, Title } from "~/components/primitives";
 import { getAllStudents } from "~/models/student";
 
 export const meta: MetaFunction = () => [
@@ -12,15 +11,16 @@ export const meta: MetaFunction = () => [
 ];
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
-  const sensei = await getAuthenticator(context.cloudflare.env).isAuthenticated(request);
+  const env = context.cloudflare.env;
+  const sensei = await getAuthenticator(env).isAuthenticated(request);
   if (!sensei) {
     return redirect("/unauthorized");
   }
   if (sensei.active) {
-    return redirect(redirectTo(request) ?? `/@${sensei.username}`);
+    const latestSensei = await getSenseiById(env, sensei.id);
+    return redirect(redirectTo(request) ?? `/@${latestSensei?.username ?? sensei.username}`);
   }
 
-  const env = context.cloudflare.env;
   return {
     allStudents: (await getAllStudents(env, true)).map((student) => ({
       uid: student.uid,
@@ -38,7 +38,8 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     return redirect("/unauthorized");
   }
   if (sensei.active) {
-    return redirect(redirectTo(request) ?? `/@${sensei?.username}`);
+    const latestSensei = await getSenseiById(env, sensei.id);
+    return redirect(redirectTo(request) ?? `/@${latestSensei?.username ?? sensei.username}`);
   }
 
   const formData = await request.formData();
@@ -53,7 +54,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 
   const existingSensei = await getSenseiByUsername(env, sensei.username);
-  if (existingSensei) {
+  if (existingSensei && existingSensei.id !== sensei.id) {
     return { error: { username: "닉네임이 이미 존재해요." } };
   }
   if (sensei.bio && sensei.bio.length > 100) {
@@ -79,7 +80,13 @@ export default function Register() {
   return (
     <>
       <Title text="선생님 등록" />
-      <ProfileEditor method="post" students={allStudents} error={useActionData<typeof action>()?.error} />
+      <Form method="post" className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900/40">
+        <ProfileEditor students={allStudents} error={useActionData<typeof action>()?.error} />
+
+        <div className="mt-6 flex justify-end border-t border-neutral-200 pt-4 dark:border-neutral-700">
+          <Button type="submit" variant="primary" text="선생님 등록하기" />
+        </div>
+      </Form>
     </>
   );
 }

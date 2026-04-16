@@ -3,6 +3,7 @@ import hangul from "hangul-js";
 import { useEffect, useState } from "react";
 import { Field } from "~/components/primitives";
 import { studentImageUrl } from "~/models/assets";
+import { sanitizeClassName } from "~/prophandlers";
 import { useFormGroup } from "./FormGroup";
 
 type Student = {
@@ -29,10 +30,10 @@ type SearchInputProps = {
 
 function SearchInput({ searchQuery, setSearchQuery, searchPlaceholder }: SearchInputProps) {
   return (
-    <div className="sticky top-0 z-10 border-b border-neutral-100 bg-white/90 p-2 backdrop-blur-sm dark:border-neutral-800 dark:bg-black/80">
+    <div className="sticky top-0 z-10 border-b border-neutral-200 bg-white/95 p-2 backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-950/95">
       <input
         type="text"
-        className="w-full p-2"
+        className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-blue-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:focus:border-blue-700"
         placeholder={searchPlaceholder ?? "검색해서 찾기..."}
         value={searchQuery}
         onChange={(event) => {
@@ -55,6 +56,8 @@ export type StudentSelectFormProps = {
   searchPlaceholder?: string;
   multiple?: boolean;
   onSelect?: (value: string | string[]) => void;
+  className?: string;
+  containerClassName?: string;
 };
 
 export default function StudentSelectForm({
@@ -67,6 +70,8 @@ export default function StudentSelectForm({
   searchPlaceholder,
   multiple = false,
   onSelect,
+  className,
+  containerClassName,
 }: StudentSelectFormProps) {
   const { submitFormGroup } = useFormGroup();
   const [isOpen, setIsOpen] = useState(false);
@@ -114,12 +119,12 @@ export default function StudentSelectForm({
 
   const renderSelectedDisplay = () => {
     if (selectedStudents.length === 0) {
-      return placeholder ? <p className="mt-2 text-neutral-400 dark:text-neutral-500">{placeholder}</p> : null;
+      return placeholder ? <p className="text-neutral-400 dark:text-neutral-500">{placeholder}</p> : null;
     }
 
     if (multiple) {
       return (
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           {selectedStudents.map((student) => (
             <div
               key={student.uid}
@@ -146,53 +151,67 @@ export default function StudentSelectForm({
     const student = selectedStudents[0];
 
     return (
-      <div className="mt-2 flex items-center gap-x-2">
-        <StudentImage student={student} size="size-6 md:size-8" />
-        <p className="text-neutral-700 dark:text-neutral-300">{student.name}</p>
+      <div className="flex items-center gap-3 text-neutral-700 dark:text-neutral-300">
+        <StudentImage student={student} size="size-6" />
+        <p>{student.name}</p>
       </div>
     );
   };
 
   return (
     <>
-      <div className="relative p-4">
-        <button
-          type="button"
-          className="w-full cursor-pointer text-left"
-          onClick={() => setIsOpen((prev) => !prev)}
-        >
-          <Field label={label} description={description} containerClassName="pointer-events-none">
-            {renderSelectedDisplay()}
-          </Field>
-          <ChevronDownIcon className="absolute top-1/2 right-4 size-4 -translate-y-1/2" />
-        </button>
-        {isOpen && (
-          <div className="absolute top-full left-0 max-h-64 w-full overflow-y-auto rounded-b-lg bg-white/90 shadow-lg backdrop-blur-sm dark:bg-black/80">
-            <SearchInput
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              searchPlaceholder={searchPlaceholder}
+      <Field
+        label={label}
+        description={description}
+        containerClassName={containerClassName ?? "mt-2 mb-8 last:mb-2"}
+      >
+        <div className="relative">
+          <button
+            type="button"
+            className={sanitizeClassName(`
+              flex w-full items-center justify-between gap-3 rounded-lg border border-neutral-200
+              bg-white px-3 py-2 text-left transition hover:border-neutral-300 hover:bg-neutral-50
+              dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:hover:bg-neutral-900/80
+              ${className ?? ""}
+            `)}
+            onClick={() => setIsOpen((prev) => !prev)}
+          >
+            <div className="min-w-0 flex-1">{renderSelectedDisplay()}</div>
+            <ChevronDownIcon
+              className={sanitizeClassName(`
+                size-5 shrink-0 text-neutral-400 transition-transform
+                ${isOpen ? "rotate-180" : ""}
+              `)}
             />
-            {filteredStudents.length > 0 ? (
-              filteredStudents.slice(0, 10).map((student) => (
-                <button
-                  type="button"
-                  key={student.uid}
-                  className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-neutral-200 dark:hover:bg-neutral-800"
-                  onClick={() => handleSelect(student.uid)}
-                >
-                  <div className="flex w-full items-center gap-x-4 px-4 py-3">
-                    <StudentImage student={student} size="size-10" />
-                    <p className="grow">{student.name}</p>
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="p-4 text-center text-neutral-500 dark:text-neutral-400">검색 결과가 없어요</div>
-            )}
-          </div>
-        )}
-      </div>
+          </button>
+          {isOpen && (
+            <div className="absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-neutral-200 bg-white shadow-lg shadow-neutral-950/10 dark:border-neutral-700 dark:bg-neutral-950">
+              <SearchInput
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                searchPlaceholder={searchPlaceholder}
+              />
+              {filteredStudents.length > 0 ? (
+                filteredStudents.slice(0, 10).map((student) => (
+                  <button
+                    type="button"
+                    key={student.uid}
+                    className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-neutral-50 dark:hover:bg-neutral-900"
+                    onClick={() => handleSelect(student.uid)}
+                  >
+                    <div className="flex w-full items-center gap-x-3 px-3 py-2.5">
+                      <StudentImage student={student} size="size-8" />
+                      <p className="grow text-sm text-neutral-700 dark:text-neutral-200">{student.name}</p>
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="p-4 text-center text-sm text-neutral-500 dark:text-neutral-400">검색 결과가 없어요</div>
+              )}
+            </div>
+          )}
+        </div>
+      </Field>
       <input type="hidden" name={name} value={selectedUids.join(",")} />
     </>
   );

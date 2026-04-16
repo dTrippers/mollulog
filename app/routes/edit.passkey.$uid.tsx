@@ -1,7 +1,7 @@
-import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect, useLoaderData, useSubmit } from "react-router";
+import { type ActionFunctionArgs, type LoaderFunctionArgs, Form, redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { deletePasskey, getPasskeysBySensei, updatePasskeyMemo } from "~/models/passkey";
-import { ButtonForm, FormGroup, InputForm } from "~/components/features/forms";
+import { Button, Input } from "~/components/primitives";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const sensei = await getAuthenticator(context.cloudflare.env).isAuthenticated(request);
@@ -48,19 +48,48 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 export default function EditPasskey() {
   const { passkey } = useLoaderData<typeof loader>();
-
+  const actionData = useActionData<typeof action>();
+  const navigation = useNavigation();
   const submit = useSubmit();
+  const isSubmitting = navigation.state === "submitting";
+  const isSaving = isSubmitting && navigation.formMethod?.toLowerCase() === "patch";
+  const isDeleting = isSubmitting && navigation.formMethod?.toLowerCase() === "delete";
 
   return (
-    <>
-      <FormGroup method="patch" submitOnChange>
-        <InputForm label="이름" type="text" name="memo" defaultValue={passkey.memo} />
-        <ButtonForm label="이 Passkey 삭제" color="red" onClick={() => {
-          if (confirm("정말 삭제할까요? 삭제된 Passkey는 복구할 수 없어요.")) {
-            submit(null, { method: "delete" });
-          }
-        }} />
-      </FormGroup>
-    </>
+    <Form method="patch" className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900/40">
+      <Input
+        label="이름"
+        type="text"
+        name="memo"
+        defaultValue={passkey.memo}
+        className="max-w-none"
+        containerClassName="mt-0 mb-0"
+      />
+
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 pt-4 dark:border-neutral-700">
+        <div className="text-sm">
+          {actionData?.success && <p className="text-green-600 dark:text-green-400">Passkey 이름을 저장했어요.</p>}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="submit"
+            variant="primary"
+            text={isSaving ? "저장 중..." : "이름 저장"}
+            disabled={isSubmitting}
+          />
+          <Button
+            type="button"
+            variant="danger"
+            text={isDeleting ? "삭제 중..." : "이 Passkey 삭제"}
+            disabled={isSubmitting}
+            onClick={() => {
+              if (confirm("정말 삭제할까요? 삭제된 Passkey는 복구할 수 없어요.")) {
+                submit(null, { method: "delete" });
+              }
+            }}
+          />
+        </div>
+      </div>
+    </Form>
   );
 }
