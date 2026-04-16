@@ -161,7 +161,7 @@ function MobileTabBar({
 }) {
   return (
     <div className={sanitizeClassName(`
-      xl:hidden sticky top-0 z-100 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
+      xl:hidden sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
       ${isSticky ? "border-b" : ""}
     `)}>
       <div className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">
@@ -183,7 +183,7 @@ function MobileActionBar({
   onOpenPanel: React.Dispatch<React.SetStateAction<number | null>>;
 }) {
   return (
-    <div className="xl:hidden fixed w-fit bottom-4 right-4 z-20 flex gap-x-2">
+    <div className="xl:hidden fixed w-fit bottom-4 right-4 z-30 flex gap-x-2">
       <div className="flex px-2 py-1 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-full shadow-lg">
         {links?.map((link) => (
           <MobileActionLink key={link.title} {...link} />
@@ -241,7 +241,7 @@ function VerticalDesktopTabBar({
 }) {
   return (
     <div className={sanitizeClassName(`
-      hidden xl:flex sticky top-0 z-100 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
+      hidden xl:flex sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
       ${isSticky ? "border-b" : ""}
     `)}>
       <div className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">

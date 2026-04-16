@@ -6,6 +6,7 @@ const mockGetRelationshipLevel = jest.fn();
 const mockResolveRelationshipLevelInput = jest.fn();
 const mockUpsertRelationshipLevel = jest.fn();
 const mockLoadStudentRow = jest.fn();
+const mockUpsertRecruitedStudent = jest.fn();
 
 jest.mock("~/auth/authenticator.server", () => ({
   getAuthenticator: jest.fn(() => ({
@@ -19,7 +20,7 @@ jest.mock("~/models/student", () => ({
 
 jest.mock("~/models/recruited-student", () => ({
   getRecruitedStudents: jest.fn(),
-  upsertRecruitedStudent: jest.fn(),
+  upsertRecruitedStudent: mockUpsertRecruitedStudent,
 }));
 
 jest.mock("~/models/student-growth", () => ({
@@ -49,9 +50,36 @@ describe("utils.growth.students action", () => {
       studentA: {
         uid: "studentA",
         released: true,
+        initialTier: 3,
       },
     } as never);
     mockLoadStudentRow.mockResolvedValue({ uid: "studentA" } as never);
+  });
+
+  it("returns the refreshed student row after enrolling a released student", async () => {
+    const enrolledRow = {
+      uid: "studentA",
+      isRecruited: true,
+      tier: 3,
+    };
+    mockLoadStudentRow.mockResolvedValue(enrolledRow as never);
+
+    const response = await action({
+      context: { cloudflare: { env: {} } },
+      request: new Request("http://localhost/utils/growth/students", {
+        method: "POST",
+        body: JSON.stringify({
+          _intent: "enroll",
+          studentUid: "studentA",
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    } as never);
+
+    expect(mockUpsertRecruitedStudent).toHaveBeenCalledWith({}, 1, "studentA", 3);
+    expect(response).toMatchObject({ data: { kind: "studentUpdate", student: enrolledRow } });
   });
 
   it("preserves saved relationship items when updating ranks from growth planner", async () => {

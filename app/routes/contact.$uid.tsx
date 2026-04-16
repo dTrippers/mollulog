@@ -128,13 +128,13 @@ export default function ContactDetail() {
   const { ticket, replies } = useLoaderData<typeof loader>();
 
   return (
-    <>
+    <div className="mx-auto max-w-3xl">
       <Title
         text="문의 내용 확인"
         parentPath="/contact"
       />
       <ThreadView ticket={ticket} replies={replies} />
       <ReplyForm />
-    </>
+    </div>
   );
 }

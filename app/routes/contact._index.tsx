@@ -119,7 +119,7 @@ export default function Contact() {
   const isSubmitting = navigation.state === "submitting" && navigation.formMethod?.toLowerCase() === "post";
 
   return (
-    <>
+    <div className="mx-auto max-w-3xl">
       <Title
         text="제안/문의"
         description="서비스 개선을 위한 의견이나 새로운 기능 요청, 발견한 문제점이 있다면 알려주세요."
@@ -147,6 +147,6 @@ export default function Contact() {
           <TicketForm errors={actionData?.error} values={actionData?.values} submitting={isSubmitting} />
         </div>
       )}
-    </>
+    </div>
   );
 }

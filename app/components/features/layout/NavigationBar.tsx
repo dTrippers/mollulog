@@ -295,27 +295,29 @@ function MenuContent({
         </button>
       )}
 
-      <UtilityLink
-        to="/news"
-        text="업데이트 소식"
-        Icon={MegaphoneIcon}
-        onClick={onMenuClose}
-        showRedDot={hasRecentNews}
-      />
-      {currentUsername && <UtilityLink to="/contact" text="제안/문의" Icon={EnvelopeIcon} onClick={onMenuClose} />}
-      <button
-        type="button"
-        className="my-1.5 flex w-fit items-center px-2 py-1 font-bold text-yellow-600 hover:underline dark:text-yellow-400"
-        onClick={() => {
-          onDarkModeToggle((prev) => {
-            submitPreference(submit, { darkMode: !prev });
-            return !prev;
-          });
-        }}
-      >
-        <MoonIcon className="size-4" />
-        <span className="ml-2">다크 모드</span>
-      </button>
+      <div className="mt-4">
+        <UtilityLink
+          to="/news"
+          text="업데이트 소식"
+          Icon={MegaphoneIcon}
+          onClick={onMenuClose}
+          showRedDot={hasRecentNews}
+        />
+        {currentUsername && <UtilityLink to="/contact" text="제안/문의" Icon={EnvelopeIcon} onClick={onMenuClose} />}
+        <button
+          type="button"
+          className="my-1 flex w-fit items-center text-sm px-2 py-1 font-bold text-yellow-600 hover:underline dark:text-yellow-400"
+          onClick={() => {
+            onDarkModeToggle((prev) => {
+              submitPreference(submit, { darkMode: !prev });
+              return !prev;
+            });
+          }}
+        >
+          <MoonIcon className="size-4" />
+          <span className="ml-2">다크 모드</span>
+        </button>
+      </div>
     </>
   );
 }
@@ -365,7 +367,7 @@ function UtilityLink({
   return (
     <Link
       to={to}
-      className="relative my-1.5 flex w-fit items-center px-2 py-1 text-neutral-500 hover:underline dark:text-neutral-400"
+      className="relative my-1 flex w-fit items-center px-2 py-1 text-sm text-neutral-500 hover:underline dark:text-neutral-400"
       onClick={onClick}
     >
       <Icon className="size-4" />

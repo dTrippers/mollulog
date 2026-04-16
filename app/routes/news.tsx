@@ -47,7 +47,7 @@ export default function News() {
   };
 
   return (
-    <>
+    <div className="mx-auto max-w-3xl">
       <Title text="업데이트 소식" />
       <div className="mt-4">
         {posts.map((post) => (
@@ -61,6 +61,6 @@ export default function News() {
         ))}
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} />
       </div>
-    </>
+    </div>
   );
 }

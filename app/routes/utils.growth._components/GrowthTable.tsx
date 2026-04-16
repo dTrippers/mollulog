@@ -137,6 +137,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
 
   const removeFetcher = useFetcher<GrowthActionResult>();
   const enrollFetcher = useFetcher<GrowthActionResult>();
+  const [enrollError, setEnrollError] = useState<string | null>(null);
 
   const [isPendingSave, setIsPendingSave] = useState(false);
 
@@ -165,6 +166,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     setTargetTierDraft(student.targetTier);
     setTargetTierSaved(student.targetTier);
     setGrowthError(null);
+    setEnrollError(null);
     submittedRef.current = null;
     tierSubmittedRef.current = null;
   }, [initialValues, student.targetTier, student.tier, student.initialTier, fetcher.state, fetcher.data]);
@@ -240,6 +242,23 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
       setTierDraft(student.tier ?? student.initialTier);
     }
   }, [tierFetcher.state, tierFetcher.data, student.tier, student.initialTier, onStudentUpdate]);
+
+  useEffect(() => {
+    if (enrollFetcher.state !== "idle") return;
+    if (!enrollFetcher.data) return;
+
+    if (isActionSuccess(enrollFetcher.data)) {
+      setEnrollError(null);
+      const next = extractStudentUpdate(enrollFetcher.data);
+      if (next) onStudentUpdate(next);
+      return;
+    }
+
+    const err = getActionError(enrollFetcher.data);
+    if (err) {
+      setEnrollError(err);
+    }
+  }, [enrollFetcher.state, enrollFetcher.data, onStudentUpdate]);
 
   const scheduleAutoSave = (values: GrowthValues, targetTier: number | null) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -351,7 +370,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     scheduleAutoSave(newValues, targetTierDraft);
   };
 
-  const displayedError = growthError ?? relationshipError;
+  const displayedError = enrollError ?? growthError ?? relationshipError;
 
   return (
     <>
@@ -476,12 +495,13 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                 {student.released ? (
                   <Button
                     size="xs"
-                    onClick={() =>
+                    onClick={() => {
+                      setEnrollError(null);
                       enrollFetcher.submit(
                         { _intent: "enroll", studentUid: student.uid },
                         { method: "post", encType: "application/json" },
-                      )
-                    }
+                      );
+                    }}
                   >
                     모집 학생으로 등록
                   </Button>
