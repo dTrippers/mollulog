@@ -1,102 +1,61 @@
 # UI/UX Guidelines
 
-This document defines the default UI and UX rules for MolluLog.
-When creating or modifying UI, follow these rules before introducing a new component pattern.
+This document defines the default UI direction for MolluLog.
+When creating or changing UI, follow these rules before introducing a new pattern.
 
-## Goals
-- Keep the product visually modern, simple, and easy to scan.
-- Prefer consistency over one-off styling.
-- Reduce repeated UI implementations by consolidating shared patterns.
-- Make route-level screens lighter and easier to reason about.
+## Design Direction
 
-## Component Structure
+- Prefer `shadcn/ui` as the default design system for new UI work.
+- Before writing custom markup, first check whether an existing `shadcn/ui` component or composition can solve the problem.
+- Treat `shadcn/ui` as the default base layer for buttons, fields, inputs, cards, dialogs, popovers, and similar low-level controls.
+- Reuse existing project patterns before introducing a new one.
+- Keep one visual language per screen. Do not mix competing card, button, field, or list styles in the same area.
+- Preserve MolluLog's product tone, but use `shadcn/ui` as the default interaction and layout baseline.
 
-Use this structure as the default rule:
+## Component Strategy
 
-### 1. `components/primitives`
-- Small reusable building blocks with shared styling rules.
-- Examples: `Button`, `IconButton`, `Input`, `Textarea`, `Select`, `Panel`, `Section`, `BottomSheet`, `Tabs`.
-- These components own visual variants such as `size`, `tone`, `variant`, and `disabled`.
-- Do not create multiple components for the same role if variants can solve it.
+- Build new UI from shared components, not route-specific ad hoc markup.
+- Do not create new generic primitives when `shadcn/ui` already provides the same responsibility.
+- Keep app-specific abstractions thin. If a wrapper only renames a `shadcn/ui` component without adding real project value, prefer using the `shadcn/ui` component directly.
+- If the same UI appears in more than one route, promote it to a shared component.
+- Remove obsolete components after migration to avoid parallel implementations.
+- Do not create a second generic design system beside the existing `shadcn/ui` base.
 
-### 2. `components/features/<domain>`
-- Domain-specific reusable UI composed from primitives.
-- Examples: `features/students`, `features/raids`, `features/events`, `features/profile`, `features/forms`.
-- Feature components may contain domain logic and domain-specific layout.
-- Feature components should not redefine base button, field, or panel styling.
+## Surface And Layout Rules
 
-### 3. `routes/<route>/_components`
-- Route-local UI that is not reused elsewhere.
-- If a component is only used in one route, keep it near that route instead of promoting it too early.
-- Promote it to `features` only after clear reuse appears.
+- Use one clear section surface pattern per screen.
+- Avoid unnecessary nested borders, stacked wrappers, and decorative containers.
+- Keep spacing, radius, border, and shadow treatment consistent within the same section.
+- Match component width to content intent. Do not make every control full width by default.
 
-## Naming Rules
-- Name components by role, not by size alone.
-- Good: `Button`, `IconButton`, `Panel`, `StudentPicker`.
-- Avoid parallel names for the same responsibility such as `Button`, `SmallButton`, `MiniButton`, `ButtonForm`.
-- If two components share the same responsibility, merge them and express differences through props.
-- Avoid identical names for different behaviors across domains.
+## Typography And Copy
 
-## Reuse Rules
-- Before adding a new component, search for an existing primitive or feature component.
-- If only styling differs, extend the existing component with variants.
-- If behavior differs but the visual frame is shared, extract a shared primitive and keep behavior outside.
-- Do not create a shared component for a single screen unless reuse is already likely.
-
-## Styling Rules
-- Use Tailwind utilities consistently, but centralize repeated class sets inside primitives.
-- Prefer neutral, readable defaults with clear accent colors.
-- Keep spacing, radius, border, and shadow behavior consistent across similar components.
-- When adding a new surface inside an existing screen section, match the nearest established surface pattern first. Reuse the same border, radius, background, and shadow treatment before introducing a new card style.
-- If adjacent cards are flat bordered panels, do not introduce a stronger radius or drop shadow for a sibling card without updating the whole section pattern together.
-- Avoid mixing multiple competing visual idioms in the same area.
-- Preserve existing product identity unless a broader redesign is intentional.
-- Do not introduce magic-number layout widths or arbitrary pixel-based width values unless there is no existing project token or layout scale that fits.
-- Prefer existing Tailwind width and max-width utilities already used in the codebase such as `max-w-3xl`, `max-w-4xl`, and `max-w-sm`.
-
-## Layout Rules
-- Use a clear page shell with predictable width, spacing, and section rhythm.
-- Standardize page sections around shared container components instead of bespoke wrappers.
-- Avoid overlapping abstractions with similar responsibilities.
-- Prefer one canonical section container and one canonical panel container.
+- Keep text hierarchy obvious: title, label, description, action.
+- Labels should be visually stronger than descriptions.
+- Use helper text only when it reduces uncertainty.
+- Avoid decorative English labels or filler copy that do not help task completion.
 
 ## Form Rules
-- Base inputs, textareas, toggles, and buttons should come from shared primitives.
-- Reusable form composition such as labeled form rows, select pickers, and hidden-field serialization should live in `features/forms`.
-- Labels, descriptions, error messages, and disabled states should follow the same structure everywhere.
-- Avoid creating route-specific button or field wrappers unless they add real behavior.
 
-## Interaction Rules
-- Use motion sparingly and consistently.
-- Prefer CSS transitions for simple state changes.
-- Load expensive interactive UI only when needed.
-- Avoid globally mounting heavy client-side UI if only a subset of routes uses it.
+- Use explicit submit flows for settings and account forms by default.
+- Do not auto-save on change unless the interaction clearly benefits from it.
+- Save feedback must be immediate and obvious in idle, submitting, and saved states.
+- Saved state must reset as soon as the user changes the form again.
+- Keep validation, descriptions, and error placement structurally consistent across forms.
 
-## Performance Rules
-- Keep root-level UI lightweight.
-- Do not put route-specific heavy logic into the global layout without a strong reason.
-- Lazy-load heavy client-only features when possible.
-- Prefer route-local composition over globally imported UI for infrequently used features.
-- Consolidate repeated UI code to reduce maintenance cost, but do not over-centralize route-only code.
+## Interactive Controls
 
-## Content and Accessibility Rules
-- Preserve clear hierarchy with visible titles, descriptions, and actionable controls.
-- Interactive elements must use semantic buttons or links.
-- Decorative-only wrappers should not handle critical interaction.
-- Provide accessible labels for controls that do not expose visible text.
+- Controls with visual identity should preserve that identity in both closed and open states.
+- Dropdowns, popovers, and selectors should align with their trigger width unless there is a strong reason not to.
+- Adjacent controls in the same row should align in height and rhythm.
+- Avoid interactions that block navigation or make the UI feel unresponsive.
 
-## Default Decision Checklist
-Before adding or changing UI, check the following:
+## Agent Checklist
 
-1. Does a primitive already exist for this role?
-2. Can this difference be represented with variants instead of a new component?
-3. Is this component really reusable, or should it stay route-local?
-4. Does this introduce a second pattern for the same interaction?
-5. Does this make the root layout or common bundle heavier than necessary?
+Before adding UI, check:
 
-## Current Cleanup Direction
-- Consolidate button-like components into a single primitive button API.
-- Consolidate panel and section containers into a small shared set.
-- Move one-off route UI closer to routes.
-- Keep domain-specific composition inside feature folders.
-- Do not reintroduce `atoms / molecules / organisms` separation.
+1. Can this be built with existing `shadcn/ui` components?
+2. Does this match an existing screen pattern in the project?
+3. Is this shared UI or only route-local composition?
+4. Is the visual hierarchy clear without extra decoration?
+5. Does the interaction give clear feedback without extra noise?

@@ -1,14 +1,31 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, redirect, useActionData, useLoaderData } from "react-router";
+import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getSenseiById, getSenseiByUsername, updateSensei } from "~/models/sensei";
 import { getAuthenticator, redirectTo, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
-import { Button, Title } from "~/components/primitives";
+import { Title } from "~/components/primitives";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { getAllStudents } from "~/models/student";
+import { LoaderCircleIcon } from "lucide-react";
 
 export const meta: MetaFunction = () => [
   { title: "선생님 등록 | 몰루로그" },
 ];
+
+type ActionData = {
+  error?: {
+    username?: string;
+    friendCode?: string;
+    bio?: string;
+  };
+  values?: {
+    username: string;
+    profileStudentId: string | null;
+    friendCode: string | null;
+    bio: string | null;
+  };
+};
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -48,20 +65,32 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   sensei.bio = getStringOrNull("bio");
   sensei.profileStudentId = getStringOrNull("profileStudentId");
   sensei.friendCode = getStringOrNull("friendCode")?.toUpperCase() ?? null;
+  const values = {
+    username: sensei.username,
+    profileStudentId: sensei.profileStudentId,
+    friendCode: sensei.friendCode,
+    bio: sensei.bio,
+  };
 
   if (!/^[a-zA-Z0-9_]{4,20}$/.test(sensei.username)) {
-    return { error: { username: "4~20글자의 영숫자 및 _ 기호만 사용할 수 있어요." } };
+    return {
+      error: { username: "4~20글자의 영숫자 및 _ 기호만 사용할 수 있어요." },
+      values,
+    } satisfies ActionData;
   }
 
   const existingSensei = await getSenseiByUsername(env, sensei.username);
   if (existingSensei && existingSensei.id !== sensei.id) {
-    return { error: { username: "닉네임이 이미 존재해요." } };
+    return { error: { username: "닉네임이 이미 존재해요." }, values } satisfies ActionData;
   }
   if (sensei.bio && sensei.bio.length > 100) {
-    return { error: { bio: "100자 이하로 작성해주세요." } };
+    return { error: { bio: "100자 이하로 작성해주세요." }, values } satisfies ActionData;
   }
   if (sensei.friendCode && !/^[A-Z]{8}$/.test(sensei.friendCode)) {
-    return { error: { friendCode: "친구 코드는 알파벳 8글자에요." } };
+    return {
+      error: { friendCode: "친구 코드는 알파벳 8글자에요." },
+      values,
+    } satisfies ActionData;
   }
 
   sensei.active = true;
@@ -77,16 +106,36 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
 
 export default function Register() {
   const { allStudents } = useLoaderData<typeof loader>();
-  return (
-    <>
-      <Title text="선생님 등록" />
-      <Form method="post" className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900/40">
-        <ProfileEditor students={allStudents} error={useActionData<typeof action>()?.error} />
+  const actionData = useActionData<ActionData>();
+  const navigation = useNavigation();
+  const isSubmitting = navigation.state === "submitting";
 
-        <div className="mt-6 flex justify-end border-t border-neutral-200 pt-4 dark:border-neutral-700">
-          <Button type="submit" variant="primary" text="선생님 등록하기" />
-        </div>
-      </Form>
-    </>
+  return (
+    <div className="max-w-3xl">
+      <Title text="선생님 등록" />
+      <Card className="gap-0">
+        <CardHeader>
+          <CardTitle>프로필 정보</CardTitle>
+          <CardDescription>프로필 정보는 다른 사람에게 표시돼요</CardDescription>
+        </CardHeader>
+        <Form method="post" className="contents">
+          <CardContent className="pt-5">
+            <ProfileEditor
+              students={allStudents}
+              initialData={actionData?.values}
+              error={actionData?.error}
+            />
+          </CardContent>
+          <CardFooter className="justify-end border-0 bg-transparent pt-0">
+            <Button type="submit" size="lg" disabled={isSubmitting} className="self-start">
+              {isSubmitting ? (
+                <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
+              ) : null}
+              {isSubmitting ? "등록 중..." : "선생님 등록하기"}
+            </Button>
+          </CardFooter>
+        </Form>
+      </Card>
+    </div>
   );
 }
