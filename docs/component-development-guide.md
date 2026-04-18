@@ -5,38 +5,41 @@ Use it as the default rule when adding, moving, or refactoring UI code.
 
 ## Source Of Truth
 
-The project should be treated as having three active layers:
+The project should be treated as having three application layers plus one reserved base layer:
 
-1. `app/components/primitives`
-2. `app/components/features/<domain>`
-3. `app/routes/*._components` or `app/routes/*/_components`
+1. `app/components/ui`
+2. `app/components/primitives`
+3. `app/components/features/<domain>`
+4. `app/routes/*._components` or `app/routes/*/_components`
 
-Use these layers directly. Do not recreate `atoms`, `molecules`, `organisms`, `ui`, or `navigation`.
+Use these layers directly. Do not recreate `atoms`, `molecules`, `organisms`, or `navigation`.
+`app/components/ui` is reserved for `shadcn/ui` source and low-level shared UI building blocks. Do not create another parallel generic UI layer.
+
+### `components/ui`
+- Reserved for `shadcn/ui` source files and low-level design-system components.
+- Use this layer when adopting, extending, or composing `shadcn/ui` primitives.
+- Keep this layer generic and domain-agnostic.
+- Do not move route-specific or domain-specific UI into this layer.
 
 ## Layer Rules
 
 ### `components/primitives`
-- Shared low-level UI building blocks.
-- Own visual language and repeated interaction patterns.
-- Must be domain-agnostic.
+- Thin app-level abstractions built on top of `components/ui` when the project needs shared presentation or behavior that is still generic.
+- Must remain domain-agnostic, but should not duplicate `shadcn/ui` base controls without a clear project-specific reason.
 - Typical examples:
-  - `Button`
-  - `Field`
-  - `Panel`
-  - `ClickableSurface`
-  - `BottomSheet`
-  - `Toggle`
-  - `Pagination`
-  - `Tabs`
   - `Title`
   - `ProfileImage`
+  - `ClickableSurface`
+  - `EmptyView`
+  - `Section`
 
 Use `primitives` when:
 - the component is reused across multiple domains
-- the difference is mostly styling, sizing, layout shell, or generic interaction
-- the API can be expressed with generic props like `variant`, `size`, `tone`, `disabled`
+- the project needs a shared abstraction above `shadcn/ui`
+- the component expresses MolluLog-specific presentation or interaction rules that should stay consistent across screens
 
 Do not put into `primitives`:
+- direct reimplementations of `shadcn/ui` controls such as generic `Button`, `Input`, `Textarea`, `Field`, or `Card`
 - student-specific, raid-specific, or event-specific rendering
 - route-only composition
 - business logic tied to one domain
@@ -83,6 +86,7 @@ Promote route-local code to `features` only after reuse is real.
 
 ## Import Rules
 
+- Prefer importing from `~/components/ui` when you need existing `shadcn/ui` building blocks.
 - Prefer importing from `~/components/primitives`.
 - Prefer importing from `~/components/features/<domain>`.
 - Prefer importing route-local components with relative imports from the route directory.
@@ -90,7 +94,6 @@ Promote route-local code to `features` only after reuse is real.
   - `~/components/atoms`
   - `~/components/molecules`
   - `~/components/organisms`
-  - `~/components/ui`
   - `~/components/navigation`
 - Inside `features`, prefer importing sibling domain code through that domain's public entrypoint when it keeps imports clear.
 - Inside a route family, prefer relative imports for route-local files and feature imports for shared domain UI.
@@ -109,6 +112,7 @@ Promote route-local code to `features` only after reuse is real.
 
 ## API Rules
 
+- Prefer `components/ui` directly for low-level controls.
 - Primitive APIs should be small and predictable.
 - Prefer props like `variant`, `size`, `tone`, `disabled`, `loading`, `fullWidth`.
 - Feature APIs should express domain intent clearly.
@@ -123,10 +127,14 @@ When a component is getting complex:
 
 ## Styling Rules
 
-- Shared styling belongs in primitives.
-- Feature components should compose primitives instead of redefining base look-and-feel.
+- Shared base styling belongs in `components/ui`.
+- `primitives` should compose `components/ui` instead of redefining base controls.
+- Feature components should compose `components/ui` and `primitives` instead of redefining base look-and-feel.
 - Keep spacing, radius, border, and surface treatment consistent.
 - Do not create a second visual pattern for the same interaction without a strong reason.
+- Treat spacing in `components/ui` as the source of truth for `shadcn/ui` form density.
+- Do not locally compress `Card`, `Field`, `Input`, `Textarea`, `Button`, `InputGroup`, or similar `shadcn/ui` controls with one-off `gap-0`, `pt-0`, `pt-1`, `h-8`, or reduced padding overrides unless the component is intentionally using a compact variant.
+- If a compact form is truly needed, add or use an explicit variant instead of tightening layout ad hoc in routes or feature components.
 
 ## Interaction Rules
 
@@ -162,7 +170,8 @@ This project should bias toward route-local first, then promote upward only when
 
 ## Legacy Rules
 
-- The old `atoms / molecules / organisms / ui / navigation` layers are no longer part of the active architecture.
+- The old `atoms / molecules / organisms / navigation` layers are no longer part of the active architecture.
+- `app/components/ui` is the active `shadcn/ui` base layer and is the explicit exception.
 - Do not recreate those directories.
 - If an external reference or old branch reintroduces them, migrate that code immediately into `primitives`, `features`, or route-local components instead of extending the legacy shape.
 
@@ -181,7 +190,8 @@ Before adding new UI code, verify:
 
 The following should be treated as the intended final state:
 
-- shared building blocks live in `app/components/primitives`
+- shared low-level `shadcn/ui` building blocks live in `app/components/ui`
+- thin app-level shared abstractions live in `app/components/primitives`
 - reusable domain UI lives in `app/components/features/<domain>`
 - route-only composition lives next to routes
 - route-only hooks and screen helpers also live next to routes when they are not shared

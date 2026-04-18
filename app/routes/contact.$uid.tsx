@@ -128,7 +128,7 @@ export default function ContactDetail() {
   const { ticket, replies } = useLoaderData<typeof loader>();
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto flex max-w-3xl flex-col gap-8">
       <Title
         text="문의 내용 확인"
         parentPath="/contact"

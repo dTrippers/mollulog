@@ -1,6 +1,8 @@
 import dayjs from "dayjs";
-import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
-import { EmptyView } from "~/components/primitives";
+import { MessageSquareTextIcon } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import { cn } from "~/lib/utils";
 import type { FeedbackReply, FeedbackTicket } from "~/models/feedback";
 import FeedbackStatusBadge from "./FeedbackStatusBadge";
 
@@ -11,55 +13,63 @@ type ThreadViewProps = {
 
 export default function ThreadView({ ticket, replies }: ThreadViewProps) {
   return (
-    <div className="space-y-8">
-      <section className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900/40">
+    <Card>
+      <CardHeader className="gap-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="mt-1 text-xl font-bold">{ticket.title}</h2>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <CardTitle className="text-lg md:text-xl">{ticket.title}</CardTitle>
+            <CardDescription>{dayjs(ticket.createdAt).format("YYYY-MM-DD HH:mm")}</CardDescription>
           </div>
           <FeedbackStatusBadge status={ticket.status} />
         </div>
+      </CardHeader>
 
-        <div className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
-          <p>{dayjs(ticket.createdAt).format("YYYY-MM-DD HH:mm")}</p>
-        </div>
+      <CardContent className="flex flex-col gap-7">
+        <section className="flex flex-col gap-3 rounded-xl border border-border/70 bg-muted/20 p-4">
+          <p className="text-sm font-medium">문의 내용</p>
+          <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{ticket.content}</p>
+        </section>
 
-        <div className="mt-5 rounded-xl bg-neutral-50 p-4 dark:bg-neutral-900">
-          <p className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">문의 내용</p>
-          <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-neutral-900 dark:text-neutral-100">
-            {ticket.content}
-          </p>
-        </div>
-      </section>
-
-      <section>
-        {replies.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-neutral-200 px-4 dark:border-neutral-700">
-            <EmptyView Icon={ChatBubbleLeftRightIcon} text="아직 등록된 답글이 없어요." />
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-sm font-medium">대화 내역</h2>
+            <p className="text-sm text-muted-foreground">{replies.length}개의 답글</p>
           </div>
-        ) : (
-          <div className="space-y-4">
-            {replies.map((reply) => (
-              <div key={reply.uid} className={`flex ${reply.isAdmin ? "justify-start" : "justify-end"}`}>
-                <div
-                  className={`w-full max-w-2xl rounded-xl border p-4 ${
-                    reply.isAdmin
-                      ? "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30"
-                      : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900/60"
-                  }`}
-                >
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                    {dayjs(reply.createdAt).format("YYYY-MM-DD HH:mm")}
-                  </p>
-                  <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-neutral-900 dark:text-neutral-100">
-                    {reply.content}
-                  </p>
+
+          {replies.length === 0 ? (
+            <Alert className="rounded-xl border-dashed bg-muted/20">
+              <MessageSquareTextIcon />
+              <AlertTitle>아직 등록된 답글이 없어요.</AlertTitle>
+              <AlertDescription>열심히 검토하고 있으니 조금만 기다려주세요.</AlertDescription>
+            </Alert>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {replies.map((reply) => (
+                <div key={reply.uid} className={cn("flex", reply.isAdmin ? "justify-start" : "justify-end")}>
+                  <div
+                    className={cn(
+                      "flex w-full max-w-2xl flex-col gap-2 rounded-xl border px-4 py-3",
+                      reply.isAdmin
+                        ? "border-primary/20 bg-primary/5"
+                        : "border-border/70 bg-card",
+                    )}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {reply.isAdmin ? "운영팀 답변" : "내 문의"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {dayjs(reply.createdAt).format("YYYY-MM-DD HH:mm")}
+                      </p>
+                    </div>
+                    <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{reply.content}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-    </div>
+              ))}
+            </div>
+          )}
+        </section>
+      </CardContent>
+    </Card>
   );
 }

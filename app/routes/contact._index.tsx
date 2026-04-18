@@ -1,9 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, isRouteErrorResponse, redirect, useActionData, useLoaderData, useNavigation, useRouteError } from "react-router";
+import { MailIcon } from "lucide-react";
 
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { Callout, Title } from "~/components/primitives";
 import { ErrorPage } from "~/components/features/layout";
+import { Title } from "~/components/primitives";
+import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { getLogger } from "~/lib/observability.server";
 import { createFeedbackTicket, getFeedbackTicketsByUserId } from "~/models/feedback";
 import TicketForm from "./contact._components/TicketForm";
@@ -119,28 +121,23 @@ export default function Contact() {
   const isSubmitting = navigation.state === "submitting" && navigation.formMethod?.toLowerCase() === "post";
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="max-w-3xl">
       <Title
         text="제안/문의"
         description="서비스 개선을 위한 의견이나 새로운 기능 요청, 발견한 문제점이 있다면 알려주세요."
       />
 
       {!loaderData.authenticated ? (
-        <Callout>
-          <div className="space-y-1 text-sm text-neutral-700 dark:text-neutral-300">
-            <p>문의를 등록하려면 로그인이 필요해요.</p>
+        <Alert className="rounded-xl">
+          <MailIcon />
+          <AlertTitle>문의 등록에는 로그인이 필요해요.</AlertTitle>
+          <AlertDescription>
+            <p>계정이 없으신 경우 메일로도 문의를 남기실 수 있어요.</p>
             <p>
-              계정이 없으신 경우{" "}
-              <a
-                href="mailto:contact@mollulog.net"
-                className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
-              >
-                contact@mollulog.net
-              </a>
-              으로 연락주세요.
+              <a href="mailto:contact@mollulog.net">contact@mollulog.net</a>
             </p>
-          </div>
-        </Callout>
+          </AlertDescription>
+        </Alert>
       ) : (
         <div className="flex flex-col gap-8">
           <TicketList tickets={loaderData.tickets} />
