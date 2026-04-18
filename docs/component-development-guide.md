@@ -132,6 +132,9 @@ When a component is getting complex:
 - Feature components should compose `components/ui` and `primitives` instead of redefining base look-and-feel.
 - Keep spacing, radius, border, and surface treatment consistent.
 - Do not create a second visual pattern for the same interaction without a strong reason.
+- Treat spacing in `components/ui` as the source of truth for `shadcn/ui` form density.
+- Do not locally compress `Card`, `Field`, `Input`, `Textarea`, `Button`, `InputGroup`, or similar `shadcn/ui` controls with one-off `gap-0`, `pt-0`, `pt-1`, `h-8`, or reduced padding overrides unless the component is intentionally using a compact variant.
+- If a compact form is truly needed, add or use an explicit variant instead of tightening layout ad hoc in routes or feature components.
 
 ## Interaction Rules
 

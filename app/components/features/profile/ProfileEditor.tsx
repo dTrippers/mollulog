@@ -90,7 +90,7 @@ function ProfileStudentField({
             render={
               <Button
                 variant="outline"
-                className="h-8 w-full justify-between px-2.5 font-normal"
+                className="w-full justify-between font-normal"
               />
             }
           >
@@ -128,7 +128,7 @@ function ProfileStudentField({
                 <ComboboxItem
                   key={student.uid}
                   value={student}
-                  className="gap-3 px-2.5 py-2"
+                  className="gap-3 px-3 py-2.5"
                 >
                   <Avatar size="sm">
                     <AvatarImage
@@ -137,7 +137,7 @@ function ProfileStudentField({
                     />
                     <AvatarFallback>{student.name.slice(0, 1)}</AvatarFallback>
                   </Avatar>
-                  <ItemContent className="gap-0">
+                  <ItemContent className="gap-0.5">
                     <ItemTitle>{student.name}</ItemTitle>
                   </ItemContent>
                 </ComboboxItem>
@@ -169,7 +169,7 @@ export default function ProfileEditor({
   const hasBioError = Boolean(error?.bio);
 
   return (
-    <FieldGroup className="md:grid md:grid-cols-2">
+    <FieldGroup className="md:grid md:grid-cols-2 md:gap-x-6 md:gap-y-6">
       <Field data-invalid={hasUsernameError || undefined}>
         <FieldLabel htmlFor="profile-username">닉네임</FieldLabel>
         <FieldContent>
@@ -216,7 +216,7 @@ export default function ProfileEditor({
             name="bio"
             defaultValue={profile.bio ?? undefined}
             placeholder="자기소개 입력"
-            className="min-h-32 resize-y md:min-h-36"
+            className="min-h-36 resize-y md:min-h-40"
             aria-invalid={hasBioError || undefined}
           />
           <FieldDescription>100글자까지 작성할 수 있어요</FieldDescription>

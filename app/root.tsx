@@ -74,7 +74,7 @@ export const links: LinksFunction = () => [
 export function Layout({ children }: { children: React.ReactNode }) {
   const loaderData = useLoaderData<typeof loader>();
   return (
-    <html lang="ko">
+    <html lang="ko" className={loaderData?.darkMode ? "dark" : undefined}>
       <head>
         <meta charSet="utf-8" />
         <meta
@@ -117,6 +117,10 @@ export default function App() {
   }, [navigate.state]);
 
   useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+  }, [darkMode]);
+
+  useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
       if (event.persisted) {
         window.location.reload();
@@ -138,7 +142,7 @@ export default function App() {
   }, [routeKey]);
 
   return (
-    <div className={`${darkMode ? "dark " : ""}text-neutral-900 dark:bg-neutral-800 dark:text-neutral-200 transition`}>
+    <div className="text-neutral-900 transition dark:bg-neutral-800 dark:text-neutral-200">
       <LoadingBar ref={loadingBarRef} color="#0ea5e9" height={3} waitingTime={300} />
       <SignInProvider>
         <div className="flex flex-col xl:flex-row h-dvh">

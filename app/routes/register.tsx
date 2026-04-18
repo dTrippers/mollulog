@@ -113,20 +113,20 @@ export default function Register() {
   return (
     <div className="max-w-3xl">
       <Title text="선생님 등록" />
-      <Card className="gap-0">
+      <Card>
         <CardHeader>
           <CardTitle>프로필 정보</CardTitle>
           <CardDescription>프로필 정보는 다른 사람에게 표시돼요</CardDescription>
         </CardHeader>
         <Form method="post" className="contents">
-          <CardContent className="pt-5">
+          <CardContent>
             <ProfileEditor
               students={allStudents}
               initialData={actionData?.values}
               error={actionData?.error}
             />
           </CardContent>
-          <CardFooter className="justify-end border-0 bg-transparent pt-0">
+          <CardFooter className="justify-end border-0 bg-transparent">
             <Button type="submit" size="lg" disabled={isSubmitting} className="self-start">
               {isSubmitting ? (
                 <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />

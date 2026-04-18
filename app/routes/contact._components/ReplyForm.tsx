@@ -1,7 +1,10 @@
-import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import { useEffect, useRef } from "react";
 import { useFetcher, useRevalidator } from "react-router";
-import { Button, Textarea } from "~/components/primitives";
+import { LoaderCircleIcon } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardDescription, CardTitle } from "~/components/ui/card";
+import { Field, FieldContent, FieldError, FieldGroup, FieldLabel } from "~/components/ui/field";
+import { Textarea } from "~/components/ui/textarea";
 
 type ReplyActionData = {
   success?: boolean;
@@ -14,6 +17,7 @@ export default function ReplyForm() {
   const fetcher = useFetcher<ReplyActionData>();
   const formRef = useRef<HTMLFormElement>(null);
   const revalidator = useRevalidator();
+  const hasContentError = Boolean(fetcher.data?.error?.content);
 
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data?.success) {
@@ -23,24 +27,39 @@ export default function ReplyForm() {
   }, [fetcher.data, fetcher.state, revalidator]);
 
   return (
-    <section className="mt-8 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900/40">
-      <div className="mb-6">
-        <h2 className="text-lg font-bold">추가 문의 남기기</h2>
-        <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
-          같은 문의에 이어서 내용을 남기면 스레드로 계속 확인할 수 있어요.
-        </p>
-      </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>답글/추가 문의 남기기</CardTitle>
+      </CardHeader>
 
-      <fetcher.Form method="post" ref={formRef}>
-        <Textarea label="내용" name="content" rows={4} error={fetcher.data?.error?.content} required />
-        <Button
-          type="submit"
-          text={fetcher.state === "submitting" ? "등록 중..." : "답글 등록하기"}
-          variant="primary"
-          disabled={fetcher.state === "submitting"}
-          icon={fetcher.state === "submitting" ? ArrowPathIcon : undefined}
-        />
+      <fetcher.Form method="post" ref={formRef} className="contents">
+        <CardContent>
+          <FieldGroup>
+            <Field data-invalid={hasContentError || undefined}>
+              <FieldLabel htmlFor="contact-reply-content">내용</FieldLabel>
+              <FieldContent>
+                <Textarea
+                  id="contact-reply-content"
+                  name="content"
+                  rows={4}
+                  placeholder="추가로 전달하고 싶은 내용을 적어주세요"
+                  className="min-h-32 resize-y"
+                  required
+                  aria-invalid={hasContentError || undefined}
+                />
+                <FieldError>{fetcher.data?.error?.content}</FieldError>
+              </FieldContent>
+            </Field>
+          </FieldGroup>
+        </CardContent>
+
+        <CardFooter className="justify-end border-0 bg-transparent">
+          <Button type="submit" size="lg" disabled={fetcher.state === "submitting"}>
+            {fetcher.state === "submitting" ? <LoaderCircleIcon data-icon="inline-start" className="animate-spin" /> : null}
+            {fetcher.state === "submitting" ? "등록 중..." : "답글 등록하기"}
+          </Button>
+        </CardFooter>
       </fetcher.Form>
-    </section>
+    </Card>
   );
 }

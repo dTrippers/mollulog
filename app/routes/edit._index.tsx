@@ -182,7 +182,7 @@ function EditSection({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="gap-0">
+    <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         {description ? <CardDescription>{description}</CardDescription> : null}
@@ -282,14 +282,14 @@ export default function EditProfile() {
           }}
         >
           <input type="hidden" name="intent" value="profile" />
-          <CardContent className="pt-5">
+          <CardContent>
             <ProfileEditor
               students={allStudents}
               initialData={sensei}
               error={profileActionData?.error}
             />
           </CardContent>
-          <CardFooter className="justify-end border-0 bg-transparent pt-0">
+          <CardFooter className="justify-end border-0 bg-transparent">
             <SaveSubmitButton
               idleLabel="프로필 저장"
               isSubmitting={isProfileSubmitting}
@@ -312,7 +312,7 @@ export default function EditProfile() {
           }}
         >
           <input type="hidden" name="intent" value="account" />
-          <CardContent className="pt-5">
+          <CardContent>
             <FieldGroup>
               <Field
                 className="max-w-sm"
@@ -336,7 +336,7 @@ export default function EditProfile() {
               </Field>
             </FieldGroup>
           </CardContent>
-          <CardFooter className="justify-end border-0 bg-transparent pt-0">
+          <CardFooter className="justify-end border-0 bg-transparent">
             <SaveSubmitButton
               idleLabel="계정 정보 저장"
               isSubmitting={isAccountSubmitting}
@@ -347,7 +347,7 @@ export default function EditProfile() {
       </EditSection>
 
       <EditSection title="인증 및 보안">
-        <CardContent className="pt-1">
+        <CardContent>
           <ItemGroup>
             <Item asChild variant="muted" className="rounded-xl">
               <Link to="/edit/passkey">

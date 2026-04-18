@@ -42,6 +42,9 @@ When creating or changing UI, follow these rules before introducing a new patter
 - Save feedback must be immediate and obvious in idle, submitting, and saved states.
 - Saved state must reset as soon as the user changes the form again.
 - Keep validation, descriptions, and error placement structurally consistent across forms.
+- `shadcn/ui` form controls should default to a comfortable density. Prefer the base spacing from `components/ui` over route-level tightening.
+- Do not compress form layouts with ad hoc `gap-0`, `pt-0`, `pt-1`, smaller control heights, or reduced padding unless the screen intentionally uses a compact variant.
+- Prefer `size="sm"` or another explicit compact variant only when density is a real requirement, not as a default styling shortcut.
 
 ## Interactive Controls
 
