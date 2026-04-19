@@ -1,16 +1,9 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import { communityPostTagsTable } from "./community";
 
-export const studentGradingTagsTable = sqliteTable("student_grading_tags", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  gradingUid: text().notNull(),
-  studentUid: text().notNull(), // Denormalized for efficient aggregation
-  tagValue: text().notNull(),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-});
+export const studentGradingTagsTable = communityPostTagsTable;
 
 // Tag constants for better maintainability
 export const STUDENT_GRADING_TAG_CONSTANTS = {
@@ -50,7 +43,7 @@ export function sortStudentGradingTags(tags: StudentGradingTagValue[]) {
 function toModel(tag: typeof studentGradingTagsTable.$inferSelect): StudentGradingTag {
   return {
     uid: tag.uid,
-    gradingUid: tag.gradingUid,
+    gradingUid: tag.postUid,
     studentUid: tag.studentUid,
     tagValue: tag.tagValue as StudentGradingTagValue,
   };
@@ -61,7 +54,7 @@ export async function getGradingTags(env: Env, gradingUid: string): Promise<Stud
   const tags = await db
     .select()
     .from(studentGradingTagsTable)
-    .where(eq(studentGradingTagsTable.gradingUid, gradingUid));
+    .where(eq(studentGradingTagsTable.postUid, gradingUid));
   return tags.map(toModel);
 }
 
@@ -75,7 +68,7 @@ export async function getGradingTagsByGradingUids(
   const tags = await db
     .select()
     .from(studentGradingTagsTable)
-    .where(inArray(studentGradingTagsTable.gradingUid, gradingUids));
+    .where(inArray(studentGradingTagsTable.postUid, gradingUids));
 
   const result: Record<string, StudentGradingTag[]> = {};
   for (const uid of gradingUids) {
@@ -107,9 +100,10 @@ export async function createGradingTags(
   const db = drizzle(env.DB);
   const tagRecords = tagValues.map((tagValue) => ({
     uid: nanoid(8),
-    gradingUid,
+    postUid: gradingUid,
     studentUid,
     tagValue,
+    createdAt: sql`current_timestamp`,
   }));
 
   await db.insert(studentGradingTagsTable).values(tagRecords);
@@ -122,13 +116,13 @@ export async function updateGradingTags(
   tagValues: StudentGradingTagValue[],
 ): Promise<void> {
   const db = drizzle(env.DB);
-  await db.delete(studentGradingTagsTable).where(eq(studentGradingTagsTable.gradingUid, gradingUid));
+  await db.delete(studentGradingTagsTable).where(eq(studentGradingTagsTable.postUid, gradingUid));
   await createGradingTags(env, gradingUid, studentUid, tagValues);
 }
 
 export async function deleteGradingTags(env: Env, gradingUid: string): Promise<void> {
   const db = drizzle(env.DB);
-  await db.delete(studentGradingTagsTable).where(eq(studentGradingTagsTable.gradingUid, gradingUid));
+  await db.delete(studentGradingTagsTable).where(eq(studentGradingTagsTable.postUid, gradingUid));
 }
 
 // Utility functions for tag aggregation and counting

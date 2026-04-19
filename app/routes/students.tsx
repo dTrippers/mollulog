@@ -91,8 +91,8 @@ export default function StudentsLayout() {
           text: "학생 평가 목록",
           description: "최근 작성된 학생 평가",
           Icon: ChatBubbleLeftRightIcon,
-          link: "/students/gradings",
-          active: pathname === "/students/gradings",
+          link: "/community?type=student_review",
+          active: false,
         },
       ]}
     >

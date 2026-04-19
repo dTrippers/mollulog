@@ -1,5 +1,15 @@
+import { and, eq, inArray } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
-import { type Sensei, getSenseisById } from "./sensei";
+import {
+  communityPostsTable,
+  createPlaintextCommunityPostBlocks,
+  deleteCommunityPostByUid,
+  parseCommunityPostBlocks,
+  serializeCommunityPostBlocks,
+  type PartyInfoCommunityPostBlock,
+} from "./community";
+import { type Sensei, getSenseisById, senseisTable } from "./sensei";
 
 export type PartyRaidReference = {
   raidType: string;
@@ -7,16 +17,13 @@ export type PartyRaidReference = {
 };
 
 export type DBParty = {
-  id: number;
   uid: string;
-  name: string;
+  title: string | null;
   userId: number;
-  raidId: string | null;
-  raidType: string | null;
-  seasonIndex: number | null;
-  memo: string | null;
-  showAsRaidTip: number;
-  students: string;
+  subjectRaidType: string | null;
+  subjectSeasonIndex: number | null;
+  visibility: "public" | "unlisted" | "private";
+  blocks: string;
 };
 
 export type Party = {
@@ -74,14 +81,77 @@ export function parsePartyRaidReference(
   return { raidType, seasonIndex };
 }
 
-// Get all parties for a user
-const GET_PARTIES_BY_RAID_QUERY =
-  "select * from parties where raidType = ?1 and seasonIndex = ?2 and showAsRaidTip = true";
+function getPartyInfoBlock(blocks: ReturnType<typeof parseCommunityPostBlocks>): PartyInfoCommunityPostBlock | null {
+  const block = blocks.find((entry): entry is PartyInfoCommunityPostBlock => entry.type === "party_info");
+  return block ?? null;
+}
 
-export async function getUserParties(env: Env, username: string): Promise<Party[]> {
-  const query = "select p.* from parties p, senseis s where p.userId = s.id and s.username = ?1";
-  const result = await env.DB.prepare(query).bind(username).all<DBParty>();
-  return result.results.map(toModel);
+function getPlaintextMemo(blocks: ReturnType<typeof parseCommunityPostBlocks>): string | null {
+  const block = blocks.find((entry) => entry.type === "plaintext" || entry.type === "markdown");
+  if (!block || block.text.trim().length === 0) {
+    return null;
+  }
+
+  return block.text;
+}
+
+function toModel(row: DBParty): Party {
+  const blocks = parseCommunityPostBlocks(row.blocks);
+  const partyInfoBlock = getPartyInfoBlock(blocks);
+  const memo = partyInfoBlock?.memo?.trim() || getPlaintextMemo(blocks);
+
+  return {
+    uid: row.uid,
+    name: row.title ?? partyInfoBlock?.title ?? "이름 없는 공략",
+    studentIds: partyInfoBlock?.units ?? [],
+    raidType: row.subjectRaidType ?? partyInfoBlock?.raidType ?? null,
+    seasonIndex: row.subjectSeasonIndex ?? partyInfoBlock?.seasonIndex ?? null,
+    memo,
+    showAsRaidTip: row.visibility === "public",
+  };
+}
+
+function buildGuideBlocks(fields: PartyCreateFields): string {
+  const blocks = [
+    ...createPlaintextCommunityPostBlocks(fields.memo),
+    {
+      type: "party_info" as const,
+      title: fields.name,
+      memo: fields.memo,
+      raidType: fields.raidType,
+      seasonIndex: fields.seasonIndex,
+      units: fields.studentIds,
+    },
+  ];
+
+  return serializeCommunityPostBlocks(blocks);
+}
+
+export async function getUserParties(
+  env: Env,
+  username: string,
+  { includePrivate = false }: { includePrivate?: boolean } = {},
+): Promise<Party[]> {
+  const db = drizzle(env.DB);
+  const posts = await db
+    .select({
+      uid: communityPostsTable.uid,
+      title: communityPostsTable.title,
+      userId: communityPostsTable.userId,
+      subjectRaidType: communityPostsTable.subjectRaidType,
+      subjectSeasonIndex: communityPostsTable.subjectSeasonIndex,
+      visibility: communityPostsTable.visibility,
+      blocks: communityPostsTable.blocks,
+    })
+    .from(communityPostsTable)
+    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+    .where(and(
+      eq(communityPostsTable.postType, "guide"),
+      eq(senseisTable.username, username),
+      includePrivate ? undefined : inArray(communityPostsTable.visibility, ["public", "unlisted"]),
+    ));
+
+  return posts.map((row) => toModel(row));
 }
 
 export async function getPartiesByRaidReference(
@@ -90,8 +160,25 @@ export async function getPartiesByRaidReference(
   seasonIndex: number,
   includeSensei = false,
 ): Promise<Party[]> {
-  const result = await env.DB.prepare(GET_PARTIES_BY_RAID_QUERY).bind(raidType, seasonIndex).all<DBParty>();
-  const rows = result.results;
+  const db = drizzle(env.DB);
+  const rows = await db
+    .select({
+      uid: communityPostsTable.uid,
+      title: communityPostsTable.title,
+      userId: communityPostsTable.userId,
+      subjectRaidType: communityPostsTable.subjectRaidType,
+      subjectSeasonIndex: communityPostsTable.subjectSeasonIndex,
+      visibility: communityPostsTable.visibility,
+      blocks: communityPostsTable.blocks,
+    })
+    .from(communityPostsTable)
+    .where(and(
+      eq(communityPostsTable.postType, "guide"),
+      eq(communityPostsTable.visibility, "public"),
+      eq(communityPostsTable.subjectRaidType, raidType),
+      eq(communityPostsTable.subjectSeasonIndex, seasonIndex),
+    ));
+
   if (rows.length === 0) {
     return [];
   }
@@ -121,96 +208,78 @@ export async function getPartiesByRaidReference(
   });
 }
 
-// Delete a party by its UID
-const DELETE_PARTY_QUERY = "delete from parties where uid = ?1 and userId = ?2";
-
 export async function removePartyByUid(env: Env, userId: number, uid: string) {
-  return env.DB.prepare(DELETE_PARTY_QUERY).bind(uid, userId).run();
+  await deleteCommunityPostByUid(env, uid, userId);
 }
 
-// Create a party
 type PartyCreateFields = Pick<
   Party,
   "name" | "studentIds" | "raidType" | "seasonIndex" | "showAsRaidTip" | "memo"
 >;
 
-const CREATE_PARTY_QUERY =
-  "insert into parties (uid, name, userId, raidId, raidType, seasonIndex, students, showAsRaidTip, memo) values (?1, ?2, ?3, null, ?4, ?5, ?6, ?7, ?8)";
-
 export async function createParty(env: Env, sensei: Sensei, fields: PartyCreateFields) {
-  const result = await env.DB.prepare(CREATE_PARTY_QUERY)
-    .bind(
-      nanoid(8),
-      fields.name,
-      sensei.id,
-      fields.raidType,
-      fields.seasonIndex,
-      JSON.stringify(fields.studentIds),
-      fields.showAsRaidTip,
-      fields.memo,
-    )
-    .run();
-
-  if (result.error) {
-    console.error(result.error);
-  }
-  return;
+  const db = drizzle(env.DB);
+  await db.insert(communityPostsTable).values({
+    uid: nanoid(8),
+    userId: sensei.id,
+    postType: "guide",
+    title: fields.name,
+    visibility: fields.showAsRaidTip ? "public" : "unlisted",
+    subjectRaidType: fields.raidType,
+    subjectSeasonIndex: fields.seasonIndex,
+    blocks: buildGuideBlocks(fields),
+  });
 }
 
-// Update a party
 type PartyUpdateFields = Partial<PartyCreateFields>;
 
-const UPDATE_PARTY_QUERY =
-  "update parties set name = ?1, raidId = null, raidType = ?2, seasonIndex = ?3, students = ?4, showAsRaidTip = ?5, memo = ?6 where uid = ?7 and userId = ?8";
-
 export async function updateParty(env: Env, sensei: Sensei, uid: string, fields: PartyUpdateFields) {
-  const existingParty = (await getUserParties(env, sensei.username)).find((party) => party.uid === uid);
-  if (!existingParty) {
+  const db = drizzle(env.DB);
+  const existingPost = await db
+    .select({
+      uid: communityPostsTable.uid,
+      title: communityPostsTable.title,
+      subjectRaidType: communityPostsTable.subjectRaidType,
+      subjectSeasonIndex: communityPostsTable.subjectSeasonIndex,
+      visibility: communityPostsTable.visibility,
+      blocks: communityPostsTable.blocks,
+    })
+    .from(communityPostsTable)
+    .where(and(eq(communityPostsTable.uid, uid), eq(communityPostsTable.userId, sensei.id), eq(communityPostsTable.postType, "guide")))
+    .get();
+
+  if (!existingPost) {
     return;
   }
 
-  const nextName = fields.name === undefined ? existingParty.name : fields.name;
-  const nextRaidType = fields.raidType === undefined ? existingParty.raidType : fields.raidType;
-  const nextSeasonIndex = fields.seasonIndex === undefined ? existingParty.seasonIndex : fields.seasonIndex;
-  const nextStudentIds = fields.studentIds === undefined ? existingParty.studentIds : fields.studentIds;
-  const nextShowAsRaidTip =
-    fields.showAsRaidTip === undefined ? existingParty.showAsRaidTip : fields.showAsRaidTip;
-  const nextMemo = fields.memo === undefined ? existingParty.memo : fields.memo;
+  const existingParty = toModel({
+    uid: existingPost.uid,
+    title: existingPost.title,
+    userId: sensei.id,
+    subjectRaidType: existingPost.subjectRaidType,
+    subjectSeasonIndex: existingPost.subjectSeasonIndex,
+    visibility: existingPost.visibility,
+    blocks: existingPost.blocks,
+  });
 
-  const result = await env.DB.prepare(UPDATE_PARTY_QUERY)
-    .bind(
-      nextName,
-      nextRaidType,
-      nextSeasonIndex,
-      JSON.stringify(nextStudentIds),
-      nextShowAsRaidTip,
-      nextMemo,
-      uid,
-      sensei.id,
-    )
-    .run();
-
-  if (result.error) {
-    console.error(result.error);
-  }
-  return;
-}
-
-function toModel(row: DBParty): Party {
-  const parsedSeasonIndex =
-    row.seasonIndex === null
-      ? null
-      : typeof row.seasonIndex === "number"
-        ? row.seasonIndex
-        : Number(row.seasonIndex);
-
-  return {
-    uid: row.uid,
-    name: row.name,
-    studentIds: JSON.parse(row.students),
-    raidType: row.raidType,
-    seasonIndex: parsedSeasonIndex === null || Number.isNaN(parsedSeasonIndex) ? null : parsedSeasonIndex,
-    memo: row.memo,
-    showAsRaidTip: row.showAsRaidTip === 1,
+  const nextFields: PartyCreateFields = {
+    name: fields.name ?? existingParty.name,
+    studentIds: fields.studentIds ?? existingParty.studentIds,
+    raidType: fields.raidType ?? existingParty.raidType,
+    seasonIndex: fields.seasonIndex ?? existingParty.seasonIndex,
+    showAsRaidTip: fields.showAsRaidTip ?? existingParty.showAsRaidTip,
+    memo: fields.memo ?? existingParty.memo,
   };
+
+  await db
+    .update(communityPostsTable)
+    .set({
+      title: nextFields.name,
+      visibility: nextFields.showAsRaidTip ? "public" : "unlisted",
+      subjectRaidType: nextFields.raidType,
+      subjectSeasonIndex: nextFields.seasonIndex,
+      blocks: buildGuideBlocks(nextFields),
+      updatedAt: new Date().toISOString(),
+    })
+    .where(eq(communityPostsTable.uid, uid));
 }

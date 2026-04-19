@@ -18,14 +18,26 @@
 | `user_activities` | 활동 로그 (uid, userId, activityType, payload) |
 | `passkeys` | WebAuthn 인증 정보 |
 
-### 게임 기록
+### 커뮤니티 / 사용자 작성 콘텐츠
+
+현재 사용자 작성 콘텐츠의 canonical 저장소는 `community_*` 계층이다.
+
+| 테이블 | 설명 |
+|--------|------|
+| `community_posts` | 학생 평가, 이벤트 의견, 공략글을 통합 저장하는 본문 테이블. `postType`, `visibility`, `subject*`, `blocks`, `sourceType/sourceUid` 를 가짐 |
+| `community_comments` | 커뮤니티 게시물 댓글/대댓글 |
+| `community_post_likes` | 게시물 좋아요 |
+| `community_post_tags` | 학생 평가 태그 |
+
+### 게임 기록 / 프로필
 
 | 테이블 | 설명 |
 |--------|------|
 | `recruited_students` | 보유 학생 목록 |
-| `parties` | 파티 구성 |
+| `parties` | 레거시 파티 저장소. 현재 앱 런타임의 공략 원본은 `community_posts(postType='guide')`를 사용 |
 | `pickup_histories` | 픽업 이력 |
-| `student_grading_systems` | 학생 평가/별점 |
+| `student_gradings` | 레거시 학생 평가 저장소. 현재 앱 런타임의 학생 평가는 `community_posts(postType='student_review')`를 사용 |
+| `student_grading_tags` | 레거시 학생 평가 태그 저장소. 현재 앱 런타임의 태그 원본은 `community_post_tags`를 사용 |
 | `user_relationship_levels` | 학생 관계 레벨 |
 
 ### 이벤트/콘텐츠
@@ -36,7 +48,7 @@
 | `event_shop_states` | 사용자의 이벤트 상점 상태 (구매할 아이템, 목표 재화 수집량 등) |
 | `content_favorite_students` | 관심 학생 |
 | `content_favorite_counts` | 관심 학생 통계 |
-| `content_comments` | 콘텐츠 의견 |
+| `content_comments` | 레거시 콘텐츠 의견 저장소. 현재 앱 런타임의 이벤트 의견 원본은 `community_posts(postType='event_opinion')` / `community_comments`를 사용 |
 
 ### 플래너
 
@@ -121,3 +133,5 @@ pnpm staging:db:pull
 - 트랜잭션 지원이 제한적 (D1 특성)
 - 마이그레이션은 단방향 (롤백 스크립트 별도 작성 필요)
 - 프로덕션 마이그레이션 전에 반드시 스테이징에서 테스트
+- `db/migrations/0031_create_community.sql` 부터 사용자 작성 콘텐츠의 canonical 저장소가 `community_*` 계층으로 이동했다
+- 구 테이블(`student_gradings`, `student_grading_tags`, `content_comments`, `parties`)은 마이그레이션/호환 목적의 히스토리로 남아 있을 수 있으나, 앱 런타임은 직접 참조하지 않는 방향을 유지한다

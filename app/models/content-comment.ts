@@ -1,14 +1,20 @@
-import { and, eq, inArray, isNull, not, or, sql, type SQLWrapper } from "drizzle-orm";
+import { and, eq, inArray, or, type SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import {
+  communityCommentsTable,
+  communityPostsTable,
+  createCommunityComment,
+  deleteCommunityComment,
+  deleteCommunityPostByUid,
+  getPrimaryPlaintextBlockText,
+  parseCommunityPostBlocks,
+  serializeCommunityPostBlocks,
+} from "./community";
 import { senseisTable } from "./sensei";
 
-// ============================================================
-// Schema
-// ============================================================
-
 type ContentCommentVisibility = "private" | "public";
+const IN_QUERY_BATCH_SIZE = 90;
 
 type ContentComment = {
   id: number;
@@ -28,159 +34,350 @@ type ContentCommentWithSensei = ContentComment & {
   };
 };
 
-export const contentComments = sqliteTable("content_comments", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  contentId: text().notNull(),
-  parentCommentId: int(),
-  body: text().notNull(),
-  visibility: text().notNull().default("private"),
-  pinned: int().notNull().default(0),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-});
+export const contentComments = communityPostsTable;
 
-const SELECT_USER_COMMENTS_COLUMNS = {
-  id: contentComments.id,
-  uid: contentComments.uid,
-  contentId: contentComments.contentId,
-  body: contentComments.body,
-  visibility: contentComments.visibility,
-  parentCommentId: contentComments.parentCommentId,
-  pinned: contentComments.pinned,
-  createdAt: contentComments.createdAt,
-};
+function splitIntoBatches<T>(values: T[], batchSize = IN_QUERY_BATCH_SIZE): T[][] {
+  const batches: T[][] = [];
+  for (let start = 0; start < values.length; start += batchSize) {
+    batches.push(values.slice(start, start + batchSize));
+  }
+  return batches;
+}
 
-const SELECT_CONTENT_COMMENTS_COLUMNS = {
-  ...SELECT_USER_COMMENTS_COLUMNS,
-  sensei: {
-    username: senseisTable.username,
-    profileStudentId: senseisTable.profileStudentId,
-  },
-};
-
-function toModel<T extends { visibility: string; parentCommentId: number | null; pinned: number; createdAt: string; id: number }>(rows: T): (T & { visibility: ContentCommentVisibility; parentCommentId?: number | null; pinned: boolean }) {
+function toContentCommentFromPost(row: {
+  id: number;
+  uid: string;
+  subjectContentUid: string | null;
+  blocks: string;
+  visibility: "public" | "private" | "unlisted";
+  pinned: number;
+  createdAt: string;
+}): ContentComment {
   return {
-    ...rows,
-    visibility: rows.visibility as ContentCommentVisibility,
-    pinned: rows.pinned === 1,
+    id: row.id,
+    uid: row.uid,
+    contentId: row.subjectContentUid ?? "",
+    body: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(row.blocks)) ?? "",
+    visibility: row.visibility === "private" ? "private" : "public",
+    parentCommentId: null,
+    pinned: row.pinned === 1,
+    createdAt: row.createdAt,
   };
 }
 
-function visibilityFilter(userId?: number): SQLWrapper[] {
-  const filters: SQLWrapper[] = [eq(contentComments.visibility, "public")];
-  if (userId) {
-    filters.push(eq(contentComments.userId, userId));
+function visibilityFilter(userId?: number): SQLWrapper {
+  const publicCondition = eq(communityPostsTable.visibility, "public");
+  if (!userId) {
+    return publicCondition;
   }
-  return filters;
+
+  return or(
+    publicCondition,
+    and(eq(communityPostsTable.visibility, "private"), eq(communityPostsTable.userId, userId)),
+  ) ?? publicCondition;
 }
 
-// ============================================================
-// Queries
-// ============================================================
+function commentVisibilityFilter(userId?: number): SQLWrapper {
+  const publicCondition = eq(communityCommentsTable.visibility, "public");
+  if (!userId) {
+    return publicCondition;
+  }
+
+  return or(
+    publicCondition,
+    and(eq(communityCommentsTable.visibility, "private"), eq(communityCommentsTable.userId, userId)),
+  ) ?? publicCondition;
+}
 
 export async function getUserComments(env: Env, userId: number): Promise<ContentComment[]> {
   const db = drizzle(env.DB);
-  const results = await db.select(SELECT_USER_COMMENTS_COLUMNS)
-    .from(contentComments)
-    .where(eq(contentComments.userId, userId))
-    .all();
+  const rows = await db
+    .select({
+      id: communityPostsTable.id,
+      uid: communityPostsTable.uid,
+      subjectContentUid: communityPostsTable.subjectContentUid,
+      blocks: communityPostsTable.blocks,
+      visibility: communityPostsTable.visibility,
+      pinned: communityPostsTable.pinned,
+      createdAt: communityPostsTable.createdAt,
+    })
+    .from(communityPostsTable)
+    .where(and(eq(communityPostsTable.userId, userId), eq(communityPostsTable.postType, "event_opinion")));
 
-  return results.map(toModel);
+  return rows.map((row) => toContentCommentFromPost(row));
 }
 
-export async function getContentComments(env: Env, contentId: string, userId?: number): Promise<ContentCommentWithSensei[]> {
+export async function getContentComments(
+  env: Env,
+  contentId: string,
+  userId?: number,
+): Promise<ContentCommentWithSensei[]> {
   return (await getContentsComments(env, [contentId], userId))[contentId] ?? [];
 }
 
-export async function getContentsComments(env: Env, contentIds: string[], userId?: number): Promise<Record<string, ContentCommentWithSensei[]>> {
-  const db = drizzle(env.DB);
-  const results = await db.select(SELECT_CONTENT_COMMENTS_COLUMNS)
-    .from(contentComments)
-    .where(and(
-      not(eq(contentComments.body, "")),
-      inArray(contentComments.contentId, contentIds),
-      or(...visibilityFilter(userId)),
-    ))
-    .innerJoin(senseisTable, eq(contentComments.userId, senseisTable.id))
-    .orderBy(contentComments.createdAt)
-    .all();
+export async function getContentsComments(
+  env: Env,
+  contentIds: string[],
+  userId?: number,
+): Promise<Record<string, ContentCommentWithSensei[]>> {
+  if (contentIds.length === 0) {
+    return {};
+  }
 
-  return results.reduce((acc, result) => {
-    acc[result.contentId] = [...(acc[result.contentId] ?? []), toModel(result)];
+  const db = drizzle(env.DB);
+  const uniqueContentIds = [...new Set(contentIds)];
+  const postBatches = splitIntoBatches(uniqueContentIds);
+  const postBatchResults = await Promise.all(
+    postBatches.map((batch) =>
+      db
+        .select({
+          id: communityPostsTable.id,
+          uid: communityPostsTable.uid,
+          subjectContentUid: communityPostsTable.subjectContentUid,
+          blocks: communityPostsTable.blocks,
+          visibility: communityPostsTable.visibility,
+          pinned: communityPostsTable.pinned,
+          createdAt: communityPostsTable.createdAt,
+          username: senseisTable.username,
+          profileStudentId: senseisTable.profileStudentId,
+        })
+        .from(communityPostsTable)
+        .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+        .where(and(
+          eq(communityPostsTable.postType, "event_opinion"),
+          inArray(communityPostsTable.subjectContentUid, batch),
+          visibilityFilter(userId),
+        )),
+    ),
+  );
+  const posts = postBatchResults.flat();
+
+  const result = uniqueContentIds.reduce<Record<string, ContentCommentWithSensei[]>>((acc, contentUid) => {
+    acc[contentUid] = [];
     return acc;
-  }, {} as Record<string, ContentCommentWithSensei[]>);
+  }, {});
+
+  const postMap = new Map(
+    posts.map((post) => [
+      post.uid,
+      {
+        id: post.id,
+        contentId: post.subjectContentUid ?? "",
+      },
+    ]),
+  );
+
+  for (const post of posts) {
+    const contentUid = post.subjectContentUid ?? "";
+    result[contentUid] = [
+      ...(result[contentUid] ?? []),
+      {
+        ...toContentCommentFromPost(post),
+        sensei: {
+          username: post.username,
+          profileStudentId: post.profileStudentId,
+        },
+      },
+    ];
+  }
+
+  const comments = posts.length === 0
+    ? []
+    : (
+        await Promise.all(
+          splitIntoBatches(posts.map((post) => post.uid)).map((batch) =>
+            db
+              .select({
+                id: communityCommentsTable.id,
+                uid: communityCommentsTable.uid,
+                postUid: communityCommentsTable.postUid,
+                parentUid: communityCommentsTable.parentUid,
+                body: communityCommentsTable.body,
+                visibility: communityCommentsTable.visibility,
+                createdAt: communityCommentsTable.createdAt,
+                username: senseisTable.username,
+                profileStudentId: senseisTable.profileStudentId,
+              })
+              .from(communityCommentsTable)
+              .innerJoin(senseisTable, eq(communityCommentsTable.userId, senseisTable.id))
+              .where(and(
+                inArray(communityCommentsTable.postUid, batch),
+                commentVisibilityFilter(userId),
+              )),
+          ),
+        )
+      ).flat();
+
+  for (const comment of comments) {
+    const post = postMap.get(comment.postUid);
+    if (!post) {
+      continue;
+    }
+
+    result[post.contentId] = [
+      ...(result[post.contentId] ?? []),
+      {
+        id: comment.id,
+        uid: comment.uid,
+        contentId: post.contentId,
+        body: comment.body,
+        visibility: comment.visibility,
+        parentCommentId: post.id,
+        pinned: false,
+        createdAt: comment.createdAt,
+        sensei: {
+          username: comment.username,
+          profileStudentId: comment.profileStudentId,
+        },
+      },
+    ];
+  }
+
+  return result;
 }
 
-export async function createComment(env: Env, userId: number, contentId: string, body: string, visibility: ContentCommentVisibility = "private"): Promise<string> {
+export async function createComment(
+  env: Env,
+  userId: number,
+  contentId: string,
+  body: string,
+  visibility: ContentCommentVisibility = "private",
+): Promise<string> {
   const db = drizzle(env.DB);
-
-  // Check if this is the user's first comment for this content
-  const existingComment = await db.select({ id: contentComments.id })
-    .from(contentComments)
+  const existingPost = await db
+    .select({ uid: communityPostsTable.uid })
+    .from(communityPostsTable)
     .where(and(
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-      isNull(contentComments.parentCommentId),
+      eq(communityPostsTable.userId, userId),
+      eq(communityPostsTable.postType, "event_opinion"),
+      eq(communityPostsTable.subjectContentUid, contentId),
     ))
     .limit(1)
     .get();
-  const isFirstComment = existingComment === undefined;
 
+  const isFirstComment = existingPost === undefined;
   const uid = nanoid(8);
-  await db.insert(contentComments).values({ uid, userId, contentId, body, visibility, parentCommentId: null, pinned: isFirstComment ? 1 : 0 });
+  await db.insert(communityPostsTable).values({
+    uid,
+    userId,
+    postType: "event_opinion",
+    visibility,
+    pinned: isFirstComment ? 1 : 0,
+    subjectContentUid: contentId,
+    blocks: serializeCommunityPostBlocks([{ type: "plaintext", text: body }]),
+  });
+
   return uid;
 }
 
-export async function createSubcomment(env: Env, userId: number, contentId: string, parentCommentId: number, body: string, visibility: ContentCommentVisibility = "private"): Promise<string> {
+export async function createSubcomment(
+  env: Env,
+  userId: number,
+  contentId: string,
+  parentCommentUid: string,
+  body: string,
+  visibility: ContentCommentVisibility = "private",
+): Promise<string> {
   const db = drizzle(env.DB);
-
-  // Validate that parent comment exists and is a top-level comment (not a subcomment)
-  const parent = await db.select({ parentCommentId: contentComments.parentCommentId })
-    .from(contentComments)
-    .where(eq(contentComments.id, parentCommentId))
+  const parentPost = await db
+    .select({
+      uid: communityPostsTable.uid,
+      subjectContentUid: communityPostsTable.subjectContentUid,
+    })
+    .from(communityPostsTable)
+    .where(and(
+      eq(communityPostsTable.uid, parentCommentUid),
+      eq(communityPostsTable.postType, "event_opinion"),
+    ))
     .get();
 
-  if (!parent) {
+  if (!parentPost || parentPost.subjectContentUid !== contentId) {
     throw new Error("Parent comment not found");
   }
-  if (parent.parentCommentId !== null) {
-    throw new Error("Cannot reply to a subcomment (max depth is 1)");
-  }
 
-  const uid = nanoid(8);
-  await db.insert(contentComments).values({ uid, userId, contentId, parentCommentId, body, visibility });
-  return uid;
+  return createCommunityComment(env, userId, parentPost.uid, body, visibility, parentPost.uid);
 }
 
-export async function updateComment(env: Env, userId: number, commentUid: string, body: string, visibility: ContentCommentVisibility): Promise<void> {
+export async function updateComment(
+  env: Env,
+  userId: number,
+  commentUid: string,
+  body: string,
+  visibility: ContentCommentVisibility,
+): Promise<void> {
   const db = drizzle(env.DB);
-  await db.update(contentComments)
-    .set({ body, visibility, updatedAt: sql`current_timestamp` })
+  const post = await db
+    .select({ uid: communityPostsTable.uid })
+    .from(communityPostsTable)
     .where(and(
-      eq(contentComments.uid, commentUid),
-      eq(contentComments.userId, userId),
-    ));
+      eq(communityPostsTable.uid, commentUid),
+      eq(communityPostsTable.userId, userId),
+      eq(communityPostsTable.postType, "event_opinion"),
+    ))
+    .get();
+
+  if (post) {
+    await db
+      .update(communityPostsTable)
+      .set({
+        visibility,
+        blocks: serializeCommunityPostBlocks([{ type: "plaintext", text: body }]),
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(communityPostsTable.uid, commentUid));
+    return;
+  }
+
+  await db
+    .update(communityCommentsTable)
+    .set({
+      body,
+      visibility,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(and(eq(communityCommentsTable.uid, commentUid), eq(communityCommentsTable.userId, userId)));
 }
 
 export async function deleteComment(env: Env, userId: number, commentUid: string): Promise<void> {
   const db = drizzle(env.DB);
-  await db.delete(contentComments)
+  const post = await db
+    .select({ uid: communityPostsTable.uid })
+    .from(communityPostsTable)
     .where(and(
-      eq(contentComments.uid, commentUid),
-      eq(contentComments.userId, userId),
-    ));
+      eq(communityPostsTable.uid, commentUid),
+      eq(communityPostsTable.userId, userId),
+      eq(communityPostsTable.postType, "event_opinion"),
+    ))
+    .get();
+
+  if (post) {
+    await deleteCommunityPostByUid(env, commentUid, userId);
+    return;
+  }
+
+  await deleteCommunityComment(env, userId, commentUid);
 }
 
 export async function getCommentIdByUid(env: Env, commentUid: string, userId?: number): Promise<number | null> {
   const db = drizzle(env.DB);
-  const comment = await db.select({ id: contentComments.id })
-    .from(contentComments)
+  const post = await db
+    .select({ id: communityPostsTable.id })
+    .from(communityPostsTable)
     .where(and(
-      eq(contentComments.uid, commentUid),
-      or(...visibilityFilter(userId)),
+      eq(communityPostsTable.uid, commentUid),
+      eq(communityPostsTable.postType, "event_opinion"),
+      visibilityFilter(userId),
     ))
+    .get();
+
+  if (post) {
+    return post.id;
+  }
+
+  const comment = await db
+    .select({ id: communityCommentsTable.id })
+    .from(communityCommentsTable)
+    .where(and(eq(communityCommentsTable.uid, commentUid), commentVisibilityFilter(userId)))
     .get();
 
   return comment?.id ?? null;
@@ -188,68 +385,92 @@ export async function getCommentIdByUid(env: Env, commentUid: string, userId?: n
 
 export async function pinComment(env: Env, userId: number, contentId: string, commentUid: string): Promise<void> {
   const db = drizzle(env.DB);
-
-  // First, unpin any existing pinned comment for this user/content
-  await db.update(contentComments)
-    .set({ pinned: 0, updatedAt: sql`current_timestamp` })
+  await db
+    .update(communityPostsTable)
+    .set({ pinned: 0, updatedAt: new Date().toISOString() })
     .where(and(
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-      eq(contentComments.pinned, 1),
+      eq(communityPostsTable.userId, userId),
+      eq(communityPostsTable.postType, "event_opinion"),
+      eq(communityPostsTable.subjectContentUid, contentId),
+      eq(communityPostsTable.pinned, 1),
     ));
 
-  // Then, pin the specified comment (only if it belongs to the user and is a top-level comment)
-  const comment = await db.select({ id: contentComments.id, parentCommentId: contentComments.parentCommentId })
-    .from(contentComments)
+  const post = await db
+    .select({
+      uid: communityPostsTable.uid,
+      subjectContentUid: communityPostsTable.subjectContentUid,
+    })
+    .from(communityPostsTable)
     .where(and(
-      eq(contentComments.uid, commentUid),
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
+      eq(communityPostsTable.uid, commentUid),
+      eq(communityPostsTable.userId, userId),
+      eq(communityPostsTable.postType, "event_opinion"),
     ))
     .get();
 
-  if (!comment) {
+  if (!post || post.subjectContentUid !== contentId) {
     throw new Error("Comment not found or does not belong to user");
   }
-  if (comment.parentCommentId !== null) {
-    throw new Error("Cannot pin subcomments");
-  }
 
-  await db.update(contentComments)
-    .set({ pinned: 1, updatedAt: sql`current_timestamp` })
-    .where(eq(contentComments.uid, commentUid));
+  await db
+    .update(communityPostsTable)
+    .set({ pinned: 1, updatedAt: new Date().toISOString() })
+    .where(eq(communityPostsTable.uid, commentUid));
 }
 
 export async function unpinComment(env: Env, userId: number, contentId: string): Promise<void> {
   const db = drizzle(env.DB);
-  await db.update(contentComments)
-    .set({ pinned: 0, updatedAt: sql`current_timestamp` })
+  await db
+    .update(communityPostsTable)
+    .set({ pinned: 0, updatedAt: new Date().toISOString() })
     .where(and(
-      eq(contentComments.userId, userId),
-      eq(contentComments.contentId, contentId),
-      eq(contentComments.pinned, 1),
+      eq(communityPostsTable.userId, userId),
+      eq(communityPostsTable.postType, "event_opinion"),
+      eq(communityPostsTable.subjectContentUid, contentId),
+      eq(communityPostsTable.pinned, 1),
     ));
 }
 
-export async function getPinnedComment(env: Env, contentId: string, userId: number): Promise<ContentCommentWithSensei | null> {
+export async function getPinnedComment(
+  env: Env,
+  contentId: string,
+  userId: number,
+): Promise<ContentCommentWithSensei | null> {
   const db = drizzle(env.DB);
-  const result = await db.select(SELECT_CONTENT_COMMENTS_COLUMNS)
-    .from(contentComments)
+  const result = await db
+    .select({
+      id: communityPostsTable.id,
+      uid: communityPostsTable.uid,
+      subjectContentUid: communityPostsTable.subjectContentUid,
+      blocks: communityPostsTable.blocks,
+      visibility: communityPostsTable.visibility,
+      pinned: communityPostsTable.pinned,
+      createdAt: communityPostsTable.createdAt,
+      username: senseisTable.username,
+      profileStudentId: senseisTable.profileStudentId,
+    })
+    .from(communityPostsTable)
+    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
     .where(and(
-      eq(contentComments.contentId, contentId),
-      eq(contentComments.userId, userId),
-      eq(contentComments.pinned, 1),
-      isNull(contentComments.parentCommentId),
+      eq(communityPostsTable.subjectContentUid, contentId),
+      eq(communityPostsTable.userId, userId),
+      eq(communityPostsTable.postType, "event_opinion"),
+      eq(communityPostsTable.pinned, 1),
     ))
-    .innerJoin(senseisTable, eq(contentComments.userId, senseisTable.id))
     .get();
 
-  return result ? toModel(result) : null;
-}
+  if (!result) {
+    return null;
+  }
 
-// ============================================================
-// Nested comments
-// ============================================================
+  return {
+    ...toContentCommentFromPost(result),
+    sensei: {
+      username: result.username,
+      profileStudentId: result.profileStudentId,
+    },
+  };
+}
 
 export type NestedComment = {
   uid: string;
@@ -265,15 +486,23 @@ export type NestedComment = {
   subcomments?: NestedComment[];
 };
 
-export async function getNestedContentComments(env: Env, contentUid: string, currentUser: { id: number; username: string } | null): Promise<NestedComment[]> {
+export async function getNestedContentComments(
+  env: Env,
+  contentUid: string,
+  currentUser: { id: number; username: string } | null,
+): Promise<NestedComment[]> {
   const comments = await getContentComments(env, contentUid, currentUser?.id);
   return nestComments(comments, currentUser);
 }
 
-export function nestComments(flatComments: ContentCommentWithSensei[], currentUser: { id: number; username: string } | null): NestedComment[] {
+export function nestComments(
+  flatComments: ContentCommentWithSensei[],
+  currentUser: { id: number; username: string } | null,
+): NestedComment[] {
   const topLevelComments = flatComments.filter((comment) => !comment.parentCommentId);
   const subcomments = flatComments.filter((comment) => comment.parentCommentId);
-  const nestedComments = topLevelComments.map((comment) => {
+
+  return topLevelComments.map((comment) => {
     const commentSubcomments = subcomments.filter((subComment) => subComment.parentCommentId === comment.id);
     return {
       uid: comment.uid,
@@ -300,5 +529,4 @@ export function nestComments(flatComments: ContentCommentWithSensei[], currentUs
       })),
     };
   });
-  return nestedComments;
 }

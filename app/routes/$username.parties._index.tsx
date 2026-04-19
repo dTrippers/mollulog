@@ -23,14 +23,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const raidRepository = new RaidRepository(env);
   const sensei = await getRouteSensei(env, params);
   const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const me = sensei.username === currentUser?.username;
 
   const allStudents = await getAllStudents(env, true);
   const recruitedStudentTiers = await getRecruitedStudentTiers(env, sensei.id);
   const allRaids = await raidRepository.getAll();
-  const parties = (await getUserParties(env, sensei.username)).reverse();
+  const parties = (await getUserParties(env, sensei.username, { includePrivate: me })).reverse();
 
   return {
-    me: sensei.username === currentUser?.username,
+    me,
     parties,
     students: allStudents.map((student) => ({
       uid: student.uid,

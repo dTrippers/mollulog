@@ -44,7 +44,7 @@ export default function EventComment({ allComments: initialComments, me, eventUi
       <ContentCommentEditor
         comments={allComments}
         onCreateComment={(body, visibility) => submit({ action: "create", body, visibility })}
-        onCreateSubcomment={(parentCommentId, body, visibility) => submit({ action: "createSubcomment", parentCommentId, body, visibility })}
+        onCreateSubcomment={(parentCommentUid, body, visibility) => submit({ action: "createSubcomment", parentCommentUid, body, visibility })}
         onUpdateComment={(commentUid, body, visibility) => submit({ action: "update", commentUid, body, visibility })}
         onDeleteComment={(commentUid) => submit({ action: "delete", commentUid })}
         signedIn={me !== null}

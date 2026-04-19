@@ -23,9 +23,11 @@ type CommentData = {
 type ContentCommentEditorProps = {
   comments: CommentData[];
   signedIn: boolean;
+  variant?: "default" | "compact";
+  hideVisibilityToggle?: boolean;
   placeholder?: string;
   onCreateComment: (body: string, visibility: "private" | "public") => void;
-  onCreateSubcomment: (parentCommentId: string, body: string, visibility: "private" | "public") => void;
+  onCreateSubcomment?: (parentCommentId: string, body: string, visibility: "private" | "public") => void;
   onUpdateComment?: (commentUid: string, body: string, visibility: "private" | "public") => void;
   onDeleteComment?: (commentUid: string) => void;
   onPinComment?: (commentUid: string) => void;
@@ -33,7 +35,20 @@ type ContentCommentEditorProps = {
   isSubmitting?: boolean;
 };
 
-export default function ContentCommentEditor({ comments, signedIn, placeholder, onCreateComment, onCreateSubcomment, onUpdateComment, onDeleteComment, onPinComment, onUnpinComment, isSubmitting = false }: ContentCommentEditorProps) {
+export default function ContentCommentEditor({
+  comments,
+  signedIn,
+  variant = "default",
+  hideVisibilityToggle = false,
+  placeholder,
+  onCreateComment,
+  onCreateSubcomment,
+  onUpdateComment,
+  onDeleteComment,
+  onPinComment,
+  onUnpinComment,
+  isSubmitting = false,
+}: ContentCommentEditorProps) {
   const { showSignIn } = useSignIn();
   const [newCommentBody, setNewCommentBody] = useState<string>("");
   const [newCommentVisibility, setNewCommentVisibility] = useState<"private" | "public">("public");
@@ -53,6 +68,10 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
   };
 
   const handleCreateSubcomment = (parentCommentId: string) => {
+    if (!onCreateSubcomment) {
+      return;
+    }
+
     if (!isSubmitting && replyBody.trim()) {
       onCreateSubcomment(parentCommentId, replyBody.trim(), replyVisibility);
       setReplyBody("");
@@ -97,18 +116,19 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
   return (
     <>
       <div className="flex-1 overflow-y-auto no-scrollbar">
-        <div className="space-y-1 -mt-3 mb-4">
+        <div className={`${variant === "compact" ? "mb-3 space-y-1" : "-mt-3 mb-4 space-y-1"}`}>
           {comments.length > 0 ?
             comments.map((comment) => (
-              <div key={comment.uid} className="mb-3">
+              <div key={comment.uid} className={variant === "compact" ? "mb-2.5" : "mb-3"}>
                 <div className={editingComment === comment.uid ? "opacity-50" : ""}>
                   <CommentDisplay
                     comment={comment}
                     signedIn={signedIn}
+                    variant={variant}
                     isSubmitting={isSubmitting}
                     isEditing={editingComment === comment.uid}
                     isReplying={replyingTo === comment.uid}
-                    onReply={() => setReplyingTo(comment.uid)}
+                    onReply={onCreateSubcomment ? () => setReplyingTo(comment.uid) : undefined}
                     onEdit={() => handleStartEdit(comment)}
                     onDelete={() => handleDeleteComment(comment.uid)}
                     onPin={onPinComment ? () => onPinComment(comment.uid) : undefined}
@@ -121,6 +141,8 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
                 </div>
                 {editingComment === comment.uid && (
                   <CommentForm
+                    variant={variant}
+                    hideVisibilityToggle={hideVisibilityToggle}
                     body={editBody}
                     onBodyChange={setEditBody}
                     visibility={editVisibility}
@@ -130,9 +152,11 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
                     placeholder={placeholder ?? "의견을 남겨보세요"}
                   />
                 )}
-                {signedIn && (replyingTo === comment.uid) && (
-                  <div className="my-2 ml-2">
+                {signedIn && onCreateSubcomment && replyingTo === comment.uid && (
+                  <div className={variant === "compact" ? "my-1.5 ml-1.5" : "my-2 ml-2"}>
                     <CommentForm
+                      variant={variant}
+                      hideVisibilityToggle={hideVisibilityToggle}
                       body={replyBody}
                       onBodyChange={setReplyBody}
                       visibility={replyVisibility}
@@ -144,13 +168,20 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
                   </div>
                 )}
                 {comment.subcomments && comment.subcomments.length > 0 && (
-                  <div className="ml-2 my-1 space-y-1 border-l-2 border-neutral-200 dark:border-neutral-700 pl-4">
+                  <div
+                    className={
+                      variant === "compact"
+                        ? "ml-1.5 my-1 space-y-1 border-l-2 border-neutral-200 pl-3 dark:border-neutral-700"
+                        : "ml-2 my-1 space-y-1 border-l-2 border-neutral-200 pl-4 dark:border-neutral-700"
+                    }
+                  >
                     {comment.subcomments.map((subcomment) => (
                       <div key={subcomment.uid}>
                         <div className={editingComment === subcomment.uid ? "opacity-50" : ""}>
                           <CommentDisplay
                             comment={subcomment}
                             signedIn={signedIn}
+                            variant={variant}
                             isSubmitting={isSubmitting}
                             isEditing={editingComment === subcomment.uid}
                             isReplying={replyingTo === subcomment.uid}
@@ -164,6 +195,8 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
                         </div>
                         {editingComment === subcomment.uid && (
                           <CommentForm
+                            variant={variant}
+                            hideVisibilityToggle={hideVisibilityToggle}
                             body={editBody}
                             onBodyChange={setEditBody}
                             visibility={editVisibility}
@@ -179,13 +212,15 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
                 )}
               </div>
             )) :
-            <p className="my-16 text-center text-neutral-500 dark:text-neutral-400">공개된 의견이 없어요</p>
+            <p className="my-16 text-sm text-center text-neutral-500 dark:text-neutral-400">작성된 의견이 없어요</p>
           }
         </div>
       </div>
       <div className="shrink-0">
         {signedIn ? (
           <CommentForm
+            variant={variant}
+            hideVisibilityToggle={hideVisibilityToggle}
             body={newCommentBody}
             onBodyChange={setNewCommentBody}
             visibility={newCommentVisibility}
@@ -207,6 +242,8 @@ export default function ContentCommentEditor({ comments, signedIn, placeholder, 
 }
 
 type CommentFormProps = {
+  variant: "default" | "compact";
+  hideVisibilityToggle: boolean;
   body: string;
   onBodyChange: (value: string) => void;
   visibility: "private" | "public";
@@ -216,7 +253,17 @@ type CommentFormProps = {
   placeholder: string;
 };
 
-function CommentForm({ body, onBodyChange, visibility, onVisibilityChange, onSubmit, isSubmitting, placeholder }: CommentFormProps) {
+function CommentForm({
+  variant,
+  hideVisibilityToggle,
+  body,
+  onBodyChange,
+  visibility,
+  onVisibilityChange,
+  onSubmit,
+  isSubmitting,
+  placeholder,
+}: CommentFormProps) {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && !isSubmitting && body.trim()) {
       e.preventDefault();
@@ -224,11 +271,20 @@ function CommentForm({ body, onBodyChange, visibility, onVisibilityChange, onSub
     }
   };
 
+  const compact = variant === "compact";
   return (
-    <div className="pl-4 pr-2 py-1 my-2 border border-neutral-200 dark:border-neutral-700 text-sm rounded-xl bg-white dark:bg-neutral-800">
+    <div
+      className={`my-2 border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-800 ${
+        compact ? "rounded-lg" : "rounded-xl"
+      } ${
+        compact ? "px-3 py-1.5 text-sm" : "pl-4 pr-2 py-1 text-sm"
+      }`}
+    >
       <div className="flex items-center gap-2 min-w-0">
         <input
-          className="flex-1 min-w-0 bg-transparent text-sm xl:text-base text-neutral-700 dark:text-neutral-300 focus:outline-none"
+          className={`flex-1 min-w-0 bg-transparent text-neutral-700 focus:outline-none dark:text-neutral-300 ${
+            compact ? "text-sm leading-5" : "text-sm xl:text-base"
+          }`}
           placeholder={placeholder}
           value={body}
           onChange={(e) => onBodyChange(e.target.value)}
@@ -236,29 +292,32 @@ function CommentForm({ body, onBodyChange, visibility, onVisibilityChange, onSub
           disabled={isSubmitting}
         />
         <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-          {/* Visibility Toggle Button */}
-          <button
-            type="button"
-            className={sanitizeClassName(`
-              flex items-center gap-1 px-2 py-1.5 rounded-lg transition text-sm border shrink-0
-              ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700"}
-              ${visibility === "public"
-                ? "text-blue-500 dark:text-blue-400 border-blue-300 dark:border-blue-600" 
-                : "text-neutral-500 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700"
-              }
-            `)}
-            onClick={() => onVisibilityChange(visibility === "private" ? "public" : "private")}
-            disabled={isSubmitting}
-          >
-            {visibility === "private" ? <LockClosedIcon className="size-4 shrink-0" /> : <LockOpenIcon className="size-4 shrink-0" />}
-            <span className="hidden sm:inline">{visibility === "private" ? "나만 보기" : "전체 공개"}</span>
-          </button>
+          {!hideVisibilityToggle && (
+            <button
+              type="button"
+              className={sanitizeClassName(`
+                flex items-center gap-1 rounded-lg border shrink-0 transition
+                ${compact ? "px-2 py-1 text-xs" : "px-2 py-1.5 text-sm"}
+                ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700"}
+                ${visibility === "public"
+                  ? "text-blue-500 dark:text-blue-400 border-blue-300 dark:border-blue-600" 
+                  : "text-neutral-500 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700"
+                }
+              `)}
+              onClick={() => onVisibilityChange(visibility === "private" ? "public" : "private")}
+              disabled={isSubmitting}
+            >
+              {visibility === "private" ? <LockClosedIcon className="size-4 shrink-0" /> : <LockOpenIcon className="size-4 shrink-0" />}
+              <span className="hidden sm:inline">{visibility === "private" ? "나만 보기" : "전체 공개"}</span>
+            </button>
+          )}
 
           {/* Submit Button */}
           <button
             type="button"
             className={sanitizeClassName(`
-              p-2 rounded-lg transition
+              rounded-lg transition
+              ${compact ? "p-1.5" : "p-2"}
               ${(isSubmitting || !body.trim()) ?
                 "bg-neutral-400 dark:bg-neutral-500 cursor-not-allowed" :
                 "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 cursor-pointer"
@@ -278,6 +337,7 @@ function CommentForm({ body, onBodyChange, visibility, onVisibilityChange, onSub
 type CommentDisplayProps = {
   comment: CommentData;
   signedIn: boolean;
+  variant: "default" | "compact";
   isSubmitting: boolean;
   isEditing: boolean;
   isReplying: boolean;
@@ -292,17 +352,18 @@ type CommentDisplayProps = {
   onCancelReply?: () => void;
 };
 
-function CommentDisplay({ comment, signedIn, isSubmitting, isEditing, isReplying, onReply, onEdit, onDelete, onPin, onUnpin, onUpdateComment, onDeleteComment, onCancelEdit, onCancelReply }: CommentDisplayProps) {
+function CommentDisplay({ comment, signedIn, variant, isSubmitting, isEditing, isReplying, onReply, onEdit, onDelete, onPin, onUnpin, onUpdateComment, onDeleteComment, onCancelEdit, onCancelReply }: CommentDisplayProps) {
   const isSubcomment = (onReply === undefined);
   const showActions = comment.sensei.me && onUpdateComment && onDeleteComment;
   const showPinActions = !isSubcomment && comment.sensei.me && (onPin || onUnpin);
   return (
-    <div className="my-3 flex items-start gap-x-2">
+    <div className={`${variant === "compact" ? "my-2 flex items-start gap-x-2" : "my-3 flex items-start gap-x-2"}`}>
       <div className="flex-1">
         <CommentView
           body={comment.body}
           visibility={comment.visibility}
           createdAt={comment.createdAt}
+          variant={variant}
           sensei={comment.sensei}
         />
       </div>

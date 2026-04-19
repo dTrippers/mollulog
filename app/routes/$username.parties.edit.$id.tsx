@@ -28,7 +28,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   let party = null;
   if (params.id) {
-    party = (await getUserParties(env, sensei.username)).find((p) => p.uid === params.id) ?? null;
+    party = (await getUserParties(env, sensei.username, { includePrivate: true })).find((p) => p.uid === params.id) ?? null;
   }
 
   return {

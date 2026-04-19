@@ -269,9 +269,9 @@ export default function FutureContents() {
           setPendingContentUid(contentUid);
           submitComment(contentUid, { action: "create", body, visibility });
         }}
-        onCommentCreateSubcomment={(contentUid, parentCommentId, body, visibility) => {
+        onCommentCreateSubcomment={(contentUid, parentCommentUid, body, visibility) => {
           setPendingContentUid(contentUid);
-          submitComment(contentUid, { action: "createSubcomment", parentCommentId, body, visibility });
+          submitComment(contentUid, { action: "createSubcomment", parentCommentUid, body, visibility });
         }}
         onCommentUpdate={(contentUid, commentUid, body, visibility) => {
           setPendingContentUid(contentUid);

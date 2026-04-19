@@ -5,6 +5,7 @@ import {
   BoltIcon as BoltIconOutline,
   BookOpenIcon as BookOpenIconOutline,
   CalendarIcon as CalendarIconOutline,
+  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
   ClockIcon as ClockIconOutline,
   Cog6ToothIcon as Cog6ToothIconOutline,
   CreditCardIcon as CreditCardIconOutline,
@@ -22,6 +23,7 @@ import {
   BoltIcon as BoltIconSolid,
   BookOpenIcon as BookOpenIconSolid,
   CalendarIcon as CalendarIconSolid,
+  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
   ClockIcon as ClockIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
   CreditCardIcon as CreditCardIconSolid,
@@ -252,6 +254,15 @@ function MenuContent({
         onItemClick={onMenuClose}
       />
 
+      <MenuItem
+        to="/community"
+        name="커뮤니티"
+        OutlineIcon={ChatBubbleLeftRightIconOutline}
+        SolidIcon={ChatBubbleLeftRightIconSolid}
+        isActive={sectionStates.isCommunityActive}
+        onItemClick={onMenuClose}
+      />
+
       {menuSections.map((section) => (
         <MenuSection
           key={section.name}
@@ -379,6 +390,7 @@ function UtilityLink({
 
 function getMenuSectionStates(pathname: string, upcomingEvent: NavigationBarProps["upcomingEvent"]) {
   return {
+    isCommunityActive: pathname.startsWith("/community"),
     isContentActive:
       pathname.startsWith("/futures") ||
       pathname.startsWith("/events") ||

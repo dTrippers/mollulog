@@ -70,6 +70,7 @@ app/components/
   primitives/
   features/
     auth/
+    community/
     contents/
     coupons/
     editor/
@@ -154,6 +155,30 @@ fetchCached(env, key, fetchFn, ttl?, forceRefresh?)
 3. D1 데이터 업데이트
 4. 필요 시 KV 캐시 무효화
 5. 리다이렉트 또는 응답 반환
+
+## 커뮤니티 도메인
+
+사용자 작성 콘텐츠는 `community_*` 계층을 canonical 저장소로 사용한다.
+
+- `community_posts`
+  - `postType`: `student_review | event_opinion | guide`
+  - `visibility`: `public | unlisted | private`
+  - `subjectStudentUid`, `subjectContentUid`, `subjectRaidType`, `subjectSeasonIndex`
+  - `blocks` JSON 배열 (`plaintext`, `markdown`, `youtube`, `party_info`)
+- `community_comments`
+  - 게시물 댓글과 1단계 대댓글
+- `community_post_likes`
+  - 게시물 좋아요
+- `community_post_tags`
+  - 학생 평가 태그
+
+기존 도메인 모델은 호환 레이어로 남아 있다.
+
+- `student-grading.ts` -> `community_posts(postType='student_review')`
+- `content-comment.ts` -> `community_posts(postType='event_opinion')` / `community_comments`
+- `party.ts` -> `community_posts(postType='guide')`
+
+현재 `/community` 화면에서는 학생 평가와 이벤트 의견만 노출하고, 공략글은 같은 저장소를 사용하지만 피드에서는 숨긴다.
 
 ## 인증 흐름
 

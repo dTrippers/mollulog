@@ -31,7 +31,7 @@ function HomeRecentGradingsSection({ recentGradings }: Pick<HomeRightRailProps, 
           <RecentGradingCard key={grading.uid} grading={grading} />
         ))}
       </div>
-      <Button text="학생 평가 목록" to="/students/gradings" variant="tint" fullWidth shadow="xs" />
+      <Button text="학생 평가 목록" to="/community?type=student_review" variant="tint" fullWidth shadow="xs" />
     </RailSection>
   );
 }

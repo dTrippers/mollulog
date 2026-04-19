@@ -26,6 +26,9 @@ When creating or changing UI, follow these rules before introducing a new patter
 - Use one clear section surface pattern per screen.
 - Avoid unnecessary nested borders, stacked wrappers, and decorative containers.
 - Keep spacing, radius, border, and shadow treatment consistent within the same section.
+- Default surfaces and containers should usually stay within `rounded-md` to `rounded-lg`.
+- Avoid using `rounded-xl`, `rounded-2xl`, or larger on standard cards, panels, and inline containers unless there is a deliberate visual reason.
+- `rounded-full` is acceptable for pills, chips, avatars, and similarly compact UI, but should not become the default shape language for large surfaces.
 - Match component width to content intent. Do not make every control full width by default.
 
 ## Typography And Copy

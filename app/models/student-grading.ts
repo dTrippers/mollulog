@@ -1,7 +1,14 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import {
+  communityPostsTable,
+  createPlaintextCommunityPostBlocks,
+  deleteCommunityPostByUid,
+  getPrimaryPlaintextBlockText,
+  parseCommunityPostBlocks,
+  serializeCommunityPostBlocks,
+} from "./community";
 import { senseisTable } from "./sensei";
 import type { StudentGradingTagValue } from "./student-grading-tag";
 import {
@@ -11,15 +18,7 @@ import {
   updateGradingTags,
 } from "./student-grading-tag";
 
-export const studentGradingsTable = sqliteTable("student_gradings", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  studentUid: text().notNull(),
-  comment: text(),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-});
+export const studentGradingsTable = communityPostsTable;
 
 export type StudentGrading = {
   uid: string;
@@ -27,7 +26,7 @@ export type StudentGrading = {
   comment: string | null;
   createdAt: string;
   updatedAt: string;
-  tags?: StudentGradingTagValue[]; // Optional, loaded separately
+  tags?: StudentGradingTagValue[];
 };
 
 export type StudentGradingWithUser = StudentGrading & {
@@ -45,14 +44,21 @@ export type StudentGradingPageWithUser = {
   totalPages: number;
 };
 
-function toModel(grading: typeof studentGradingsTable.$inferSelect): StudentGrading {
+function toModel(grading: typeof communityPostsTable.$inferSelect): StudentGrading {
   return {
     uid: grading.uid,
-    studentUid: grading.studentUid,
-    comment: grading.comment,
+    studentUid: grading.subjectStudentUid ?? "",
+    comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
     createdAt: grading.createdAt,
     updatedAt: grading.updatedAt,
   };
+}
+
+function studentReviewWhere(studentUid?: string) {
+  return and(
+    eq(communityPostsTable.postType, "student_review"),
+    studentUid ? eq(communityPostsTable.subjectStudentUid, studentUid) : undefined,
+  );
 }
 
 export async function getStudentGrading(
@@ -64,8 +70,8 @@ export async function getStudentGrading(
   const db = drizzle(env.DB);
   const result = await db
     .select()
-    .from(studentGradingsTable)
-    .where(and(eq(studentGradingsTable.userId, senseiId), eq(studentGradingsTable.studentUid, studentUid)))
+    .from(communityPostsTable)
+    .where(and(studentReviewWhere(studentUid), eq(communityPostsTable.userId, senseiId)))
     .limit(1);
 
   if (result.length === 0) return null;
@@ -86,60 +92,58 @@ export async function upsertStudentGrading(
   comment: string | null,
   tags: StudentGradingTagValue[],
 ): Promise<void> {
-  // Validate comment length
   if (comment && comment.length > 100) {
     throw new Error("Comment must be less than 100 characters");
   }
 
   const db = drizzle(env.DB);
-
-  // Check if grading already exists
   const existing = await db
-    .select()
-    .from(studentGradingsTable)
-    .where(and(eq(studentGradingsTable.userId, senseiId), eq(studentGradingsTable.studentUid, studentUid)))
+    .select({ uid: communityPostsTable.uid })
+    .from(communityPostsTable)
+    .where(and(studentReviewWhere(studentUid), eq(communityPostsTable.userId, senseiId)))
     .limit(1);
 
+  const blocks = serializeCommunityPostBlocks(createPlaintextCommunityPostBlocks(comment));
   let gradingUid: string;
 
   if (existing.length > 0) {
-    // Update existing grading
     gradingUid = existing[0].uid;
     await db
-      .update(studentGradingsTable)
-      .set({ comment, updatedAt: sql`current_timestamp` })
-      .where(eq(studentGradingsTable.uid, gradingUid));
+      .update(communityPostsTable)
+      .set({
+        blocks,
+        visibility: "public",
+        updatedAt: sql`current_timestamp`,
+      })
+      .where(eq(communityPostsTable.uid, gradingUid));
   } else {
-    // Create new grading
     gradingUid = nanoid(8);
-    await db.insert(studentGradingsTable).values({
+    await db.insert(communityPostsTable).values({
       uid: gradingUid,
       userId: senseiId,
-      studentUid,
-      comment,
+      postType: "student_review",
+      subjectStudentUid: studentUid,
+      visibility: "public",
+      blocks,
     });
   }
 
-  // Update tags
   await updateGradingTags(env, gradingUid, studentUid, tags);
 }
 
 export async function deleteStudentGrading(env: Env, senseiId: number, studentUid: string): Promise<void> {
   const db = drizzle(env.DB);
   const existing = await db
-    .select({ uid: studentGradingsTable.uid })
-    .from(studentGradingsTable)
-    .where(and(eq(studentGradingsTable.userId, senseiId), eq(studentGradingsTable.studentUid, studentUid)))
+    .select({ uid: communityPostsTable.uid })
+    .from(communityPostsTable)
+    .where(and(studentReviewWhere(studentUid), eq(communityPostsTable.userId, senseiId)))
     .limit(1);
 
   if (existing.length === 0) {
     return;
   }
 
-  await db.transaction(async (tx) => {
-    await tx.delete(studentGradingTagsTable).where(eq(studentGradingTagsTable.gradingUid, existing[0].uid));
-    await tx.delete(studentGradingsTable).where(eq(studentGradingsTable.uid, existing[0].uid));
-  });
+  await deleteCommunityPostByUid(env, existing[0].uid, senseiId);
 }
 
 export async function getStudentGradingsByStudentWithUsers(
@@ -150,22 +154,22 @@ export async function getStudentGradingsByStudentWithUsers(
   const db = drizzle(env.DB);
   const gradings = await db
     .select({
-      uid: studentGradingsTable.uid,
-      studentUid: studentGradingsTable.studentUid,
-      comment: studentGradingsTable.comment,
-      createdAt: studentGradingsTable.createdAt,
-      updatedAt: studentGradingsTable.updatedAt,
+      uid: communityPostsTable.uid,
+      subjectStudentUid: communityPostsTable.subjectStudentUid,
+      blocks: communityPostsTable.blocks,
+      createdAt: communityPostsTable.createdAt,
+      updatedAt: communityPostsTable.updatedAt,
       username: senseisTable.username,
       profileStudentId: senseisTable.profileStudentId,
     })
-    .from(studentGradingsTable)
-    .innerJoin(senseisTable, eq(studentGradingsTable.userId, senseisTable.id))
-    .where(eq(studentGradingsTable.studentUid, studentUid));
+    .from(communityPostsTable)
+    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+    .where(studentReviewWhere(studentUid));
 
   const result: StudentGradingWithUser[] = gradings.map((grading) => ({
     uid: grading.uid,
-    studentUid: grading.studentUid,
-    comment: grading.comment,
+    studentUid: grading.subjectStudentUid ?? studentUid,
+    comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
     createdAt: grading.createdAt,
     updatedAt: grading.updatedAt,
     user: {
@@ -175,12 +179,13 @@ export async function getStudentGradingsByStudentWithUsers(
   }));
 
   if (includeTags) {
-    const gradingUids = result.map((g) => g.uid);
+    const gradingUids = result.map((grading) => grading.uid);
     const tagsMap = await getGradingTagsByGradingUids(env, gradingUids);
     for (const grading of result) {
       grading.tags = tagsMap[grading.uid]?.map((tag) => tag.tagValue) || [];
     }
   }
+
   return result;
 }
 
@@ -188,28 +193,29 @@ export async function getStudentGradingsByUser(env: Env, userId: number): Promis
   const db = drizzle(env.DB);
   const gradings = await db
     .select({
-      uid: studentGradingsTable.uid,
-      studentUid: studentGradingsTable.studentUid,
-      comment: studentGradingsTable.comment,
-      createdAt: studentGradingsTable.createdAt,
-      updatedAt: studentGradingsTable.updatedAt,
+      uid: communityPostsTable.uid,
+      subjectStudentUid: communityPostsTable.subjectStudentUid,
+      blocks: communityPostsTable.blocks,
+      createdAt: communityPostsTable.createdAt,
+      updatedAt: communityPostsTable.updatedAt,
     })
-    .from(studentGradingsTable)
-    .where(eq(studentGradingsTable.userId, userId));
+    .from(communityPostsTable)
+    .where(and(eq(communityPostsTable.userId, userId), eq(communityPostsTable.postType, "student_review")));
 
   const result: StudentGrading[] = gradings.map((grading) => ({
     uid: grading.uid,
-    studentUid: grading.studentUid,
-    comment: grading.comment,
+    studentUid: grading.subjectStudentUid ?? "",
+    comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
     createdAt: grading.createdAt,
     updatedAt: grading.updatedAt,
   }));
 
-  const gradingUids = result.map((g) => g.uid);
+  const gradingUids = result.map((grading) => grading.uid);
   const tagsMap = await getGradingTagsByGradingUids(env, gradingUids);
   for (const grading of result) {
     grading.tags = tagsMap[grading.uid]?.map((tag) => tag.tagValue) || [];
   }
+
   return result;
 }
 
@@ -221,23 +227,24 @@ export async function getRecentStudentGradingsWithUsers(
   const db = drizzle(env.DB);
   const gradings = await db
     .select({
-      uid: studentGradingsTable.uid,
-      studentUid: studentGradingsTable.studentUid,
-      comment: studentGradingsTable.comment,
-      createdAt: studentGradingsTable.createdAt,
-      updatedAt: studentGradingsTable.updatedAt,
+      uid: communityPostsTable.uid,
+      subjectStudentUid: communityPostsTable.subjectStudentUid,
+      blocks: communityPostsTable.blocks,
+      createdAt: communityPostsTable.createdAt,
+      updatedAt: communityPostsTable.updatedAt,
       username: senseisTable.username,
       profileStudentId: senseisTable.profileStudentId,
     })
-    .from(studentGradingsTable)
-    .innerJoin(senseisTable, eq(studentGradingsTable.userId, senseisTable.id))
-    .orderBy(desc(studentGradingsTable.updatedAt), desc(studentGradingsTable.createdAt))
+    .from(communityPostsTable)
+    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+    .where(eq(communityPostsTable.postType, "student_review"))
+    .orderBy(desc(communityPostsTable.updatedAt), desc(communityPostsTable.createdAt))
     .limit(limit);
 
   const result: StudentGradingWithUser[] = gradings.map((grading) => ({
     uid: grading.uid,
-    studentUid: grading.studentUid,
-    comment: grading.comment,
+    studentUid: grading.subjectStudentUid ?? "",
+    comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
     createdAt: grading.createdAt,
     updatedAt: grading.updatedAt,
     user: {
@@ -266,7 +273,10 @@ export async function getRecentStudentGradingsPageWithUsers(
   const db = drizzle(env.DB);
   const safePage = Math.max(1, page);
   const safePageSize = Math.max(1, pageSize);
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(studentGradingsTable);
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(communityPostsTable)
+    .where(eq(communityPostsTable.postType, "student_review"));
 
   const totalCount = Number(count);
   const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
@@ -275,24 +285,25 @@ export async function getRecentStudentGradingsPageWithUsers(
 
   const gradings = await db
     .select({
-      uid: studentGradingsTable.uid,
-      studentUid: studentGradingsTable.studentUid,
-      comment: studentGradingsTable.comment,
-      createdAt: studentGradingsTable.createdAt,
-      updatedAt: studentGradingsTable.updatedAt,
+      uid: communityPostsTable.uid,
+      subjectStudentUid: communityPostsTable.subjectStudentUid,
+      blocks: communityPostsTable.blocks,
+      createdAt: communityPostsTable.createdAt,
+      updatedAt: communityPostsTable.updatedAt,
       username: senseisTable.username,
       profileStudentId: senseisTable.profileStudentId,
     })
-    .from(studentGradingsTable)
-    .innerJoin(senseisTable, eq(studentGradingsTable.userId, senseisTable.id))
-    .orderBy(desc(studentGradingsTable.updatedAt), desc(studentGradingsTable.createdAt))
+    .from(communityPostsTable)
+    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+    .where(eq(communityPostsTable.postType, "student_review"))
+    .orderBy(desc(communityPostsTable.updatedAt), desc(communityPostsTable.createdAt))
     .limit(safePageSize)
     .offset(offset);
 
   const items: StudentGradingWithUser[] = gradings.map((grading) => ({
     uid: grading.uid,
-    studentUid: grading.studentUid,
-    comment: grading.comment,
+    studentUid: grading.subjectStudentUid ?? "",
+    comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
     createdAt: grading.createdAt,
     updatedAt: grading.updatedAt,
     user: {

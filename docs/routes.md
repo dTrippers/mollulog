@@ -12,8 +12,10 @@ React Router v7 파일시스템 라우팅. `app/routes/` 의 파일명 규칙:
 | 파일 | URL | 설명 |
 |------|-----|------|
 | `_index.tsx` | `/` | 홈 (현재 이벤트, 레이드, 픽업) |
+| `community.tsx` | `/community` | 커뮤니티 타임라인 (현재 학생 평가, 이벤트 의견 노출) |
 | `futures.tsx` | `/futures` | 미래시 타임라인 |
 | `students._index.tsx` | `/students` | 학생 목록 |
+| `students.gradings.tsx` | `/students/gradings` | 학생 평가 목록 진입점. 현재 `/community?type=student_review`로 리다이렉트 |
 | `students.$id._index.tsx` | `/students/:id` | 학생 상세 |
 | `students.$id.grade.tsx` | `/students/:id/grade` | 학생 평가 |
 | `raids._index.tsx` | `/raids` | 레이드(총력전/대결전) 목록 (→ 최신 레이드로 리다이렉트) |
@@ -76,11 +78,22 @@ React Router v7 파일시스템 라우팅. `app/routes/` 의 파일명 규칙:
 |------|-----|--------|------|
 | `api.contents.tsx` | `/api/contents` | POST | 콘텐츠 즐겨찾기 |
 | `api.contents.$uid.comments.tsx` | `/api/contents/:uid/comments` | POST/DELETE | 댓글 |
+| `api.community.posts.$uid.comments.tsx` | `/api/community/posts/:uid/comments` | GET/POST | 커뮤니티 댓글 |
+| `api.community.posts.$uid.likes.tsx` | `/api/community/posts/:uid/likes` | GET/POST | 커뮤니티 좋아요 |
 | `api.preference.tsx` | `/api/preference` | POST | 사용자 설정 |
 | `api.followerships.tsx` | `/api/followerships` | POST/DELETE | 팔로우 |
 | `api.students.$uid.items.tsx` | `/api/students/:uid/items` | POST | 학생 아이템 추적 |
 | `api.events.$eventUid.shop-state.tsx` | `/api/events/:eventUid/shop-state` | POST | 이벤트 상점 상태 |
 | `api.caches.$command.tsx` | `/api/caches/:command` | GET | 캐시 관리 |
+
+## 커뮤니티 관련 메모
+
+- `/community`는 `community_posts` 기반의 SNS형 피드다.
+- 현재 커뮤니티 페이지 노출 대상은 `student_review`, `event_opinion` 두 타입이다.
+- `guide` 타입 공략글은 같은 `community_posts` 계층에 저장되지만 현재 `/community`에서는 숨김 처리되어 있다.
+- `/students/gradings`는 별도 목록 화면이 아니라 커뮤니티 학생 평가 필터 화면으로 연결된다.
+- 이벤트 상세/미래시의 의견 UI는 레거시 `content_comments` 인터페이스를 유지하지만, 내부 저장소는 `community_posts` / `community_comments`를 사용한다.
+- 프로필의 `/@/:username/parties` 화면은 여전히 유지되지만, 내부 저장소는 `community_posts(postType='guide')`이다.
 
 ## 유틸리티
 

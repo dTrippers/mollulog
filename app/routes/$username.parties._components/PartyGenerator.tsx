@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { useState } from "react";
-import { Button, Label, SubTitle } from "~/components/primitives";
+import { Button, Label, SubTitle, Toggle } from "~/components/primitives";
 import { AddContentButton, PartyUnitEditor } from "~/components/features/editor";
 import { StudentCards } from "~/components/features/students";
 import { ContentSelectForm, FormGroup, InputForm, TextareaForm } from "~/components/features/forms";
@@ -60,6 +60,11 @@ export default function PartyGenerator({ party, raids, students }: PartyGenerato
           name="memo"
           defaultValue={party?.memo ?? undefined}
           placeholder={"8코 : 정후카 히마리 ..."}
+        />
+        <Toggle
+          name="showAsRaidTip"
+          label="커뮤니티와 레이드 공략 목록에 공개하기"
+          initialState={party?.showAsRaidTip ?? false}
         />
       </FormGroup>
 
