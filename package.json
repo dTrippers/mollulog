@@ -54,6 +54,7 @@
     "react-youtube": "^10.1.0",
     "recharts": "^3.8.1",
     "remix-auth": "^3.7.0",
+    "remix-auth-github": "^2.0.0",
     "remix-auth-google": "^2.0.0",
     "sanitize-html": "^2.17.0",
     "urql": "^4.2.2"

@@ -14,6 +14,7 @@ export const senseisTable = sqliteTable("senseis", {
   bio: text(),
   friendCode: text(),
   googleId: text(),
+  githubId: text(),
   role: text().notNull().$type<SenseiRole>(),
   active: int().notNull().default(0),
 });
@@ -70,6 +71,25 @@ export async function getOrCreateSenseiByGoogleId(env: Env, googleId: string): P
   }
 
   return getOrCreateSenseiByGoogleId(env, googleId);
+}
+
+// Get or create a sensei by githubId
+export async function getOrCreateSenseiByGithubId(env: Env, githubId: string): Promise<Sensei> {
+  const db = drizzle(env.DB);
+  const result = await db.select().from(senseisTable).where(eq(senseisTable.githubId, githubId)).limit(1);
+  if (result.length > 0) {
+    return toModel(result[0]);
+  }
+
+  const createResult = await db
+    .insert(senseisTable)
+    .values({ uid: nanoid(8), username: nanoid(8), githubId, role: "guest" })
+    .onConflictDoNothing();
+  if (createResult.error) {
+    throw createResult.error;
+  }
+
+  return getOrCreateSenseiByGithubId(env, githubId);
 }
 
 // Update a sensei
