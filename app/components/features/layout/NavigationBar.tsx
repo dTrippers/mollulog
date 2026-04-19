@@ -185,7 +185,7 @@ function MenuSection({ name, OutlineIcon, SolidIcon, isActive, children }: MenuS
   const showChildren = isOpen || isActive;
 
   return (
-    <div className="mt-2 mb-4">
+    <div className="my-2">
       <button
         type="button"
         className={sanitizeClassName(
@@ -256,7 +256,7 @@ function MenuContent({
 
       <MenuItem
         to="/community"
-        name="커뮤니티"
+        name="평가/의견"
         OutlineIcon={ChatBubbleLeftRightIconOutline}
         SolidIcon={ChatBubbleLeftRightIconSolid}
         isActive={sectionStates.isCommunityActive}

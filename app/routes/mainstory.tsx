@@ -5,8 +5,13 @@ import { useLoaderData } from "react-router";
 import { BookOpenIcon, CalendarIcon } from "@heroicons/react/24/outline";
 import { FilterButtons } from "~/components/primitives";
 import { Title } from "~/components/primitives";
-import { getMainStories } from "~/models/main-story";
-import type { MainStoriesQuery } from "~/graphql/graphql";
+import {
+  formatMainStorySeasonTitle,
+  getMainStories,
+  type MainStoryChapter,
+  type MainStoryPart,
+  type MainStoryVolume,
+} from "~/models/main-story";
 
 export const meta: MetaFunction = () => {
   const title = "메인 스토리 | 몰루로그";
@@ -27,20 +32,45 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   return { mainStories };
 };
 
-type Volume = MainStoriesQuery["mainStories"][number];
-type Chapter = Volume["chapters"][number];
-type Part = Chapter["parts"][number];
+type Volume = MainStoryVolume;
+type Chapter = MainStoryChapter;
+type Part = MainStoryPart;
 
 type FlatPart = {
   part: Part;
   chapter: Chapter;
   volume: Volume;
   releasedAt: Date | null;
-  confirmed: boolean;
 };
 
 function getGlobalSchedule(part: Part) {
   return part.schedules.find((s) => s.region === "gl") ?? null;
+}
+
+function formatMainStoryPageVolumeTitle(volume: Volume) {
+  return [volume.label, volume.name].filter(Boolean).join(" ");
+}
+
+type SeasonGroup = {
+  season: number;
+  volumes: Volume[];
+};
+
+function groupBySeason(volumes: Volume[]): SeasonGroup[] {
+  const groups = new Map<number, Volume[]>();
+  const sortedVolumes = [...volumes].sort((a, b) => a.season - b.season || a.sortOrder - b.sortOrder);
+
+  for (const volume of sortedVolumes) {
+    if (!groups.has(volume.season)) {
+      groups.set(volume.season, []);
+    }
+    groups.get(volume.season)?.push(volume);
+  }
+
+  return [...groups.entries()].map(([season, seasonVolumes]) => ({
+    season,
+    volumes: seasonVolumes,
+  }));
 }
 
 function flattenByRelease(volumes: Volume[]): FlatPart[] {
@@ -54,7 +84,6 @@ function flattenByRelease(volumes: Volume[]): FlatPart[] {
           chapter,
           volume,
           releasedAt: schedule ? new Date(schedule.releasedAt) : null,
-          confirmed: schedule?.confirmed ?? false,
         });
       }
     }
@@ -62,7 +91,12 @@ function flattenByRelease(volumes: Volume[]): FlatPart[] {
   return parts.sort((a, b) => {
     if (a.releasedAt === null) return 1;
     if (b.releasedAt === null) return -1;
-    return a.releasedAt.getTime() - b.releasedAt.getTime();
+    const releasedAtDiff = a.releasedAt.getTime() - b.releasedAt.getTime();
+    if (releasedAtDiff !== 0) return releasedAtDiff;
+    return a.volume.season - b.volume.season ||
+      a.volume.sortOrder - b.volume.sortOrder ||
+      a.chapter.chapterNumber - b.chapter.chapterNumber ||
+      a.part.sortOrder - b.part.sortOrder;
   });
 }
 
@@ -103,8 +137,8 @@ function EpisodeRange({ start, end }: { start: number | null; end: number | null
   return <span className="text-sm text-neutral-500 dark:text-neutral-400">{start}~{end}화</span>;
 }
 
-function ConfirmedBadge({ confirmed }: { confirmed: boolean }) {
-  if (confirmed) return null;
+function UpcomingBadge({ releasedAt }: { releasedAt: Date | null }) {
+  if (!releasedAt || !dayjs(releasedAt).isAfter(dayjs())) return null;
   return (
     <span className="whitespace-nowrap px-1.5 py-0.5 text-xs rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 font-medium">
       예정
@@ -114,53 +148,63 @@ function ConfirmedBadge({ confirmed }: { confirmed: boolean }) {
 
 // Volume order view
 function VolumeOrderView({ volumes }: { volumes: Volume[] }) {
-  const sorted = [...volumes].sort((a, b) => a.sortOrder - b.sortOrder);
+  const seasonGroups = groupBySeason(volumes);
 
   return (
-    <div className="space-y-10">
-      {sorted.map((volume) => (
-        <div key={volume.uid}>
-          <div className="flex items-center gap-2 mb-4">
-            <BookOpenIcon className="size-5 text-primary-600 dark:text-primary-400 shrink-0" strokeWidth={2} />
-            <h2 className="text-lg font-bold">{volume.label} {volume.name}</h2>
+    <div className="max-w-3xl space-y-10">
+      {seasonGroups.map(({ season, volumes: seasonVolumes }) => (
+        <section key={season} className="space-y-6">
+          <div className="border-b border-neutral-200 pb-2 dark:border-neutral-700">
+            <h2 className="text-xl font-bold">{formatMainStorySeasonTitle(season)}</h2>
           </div>
 
-          <div className="ml-2 space-y-4">
-            {[...volume.chapters]
-              .sort((a, b) => a.chapterNumber - b.chapterNumber)
-              .map((chapter) => (
-                <div key={chapter.uid}>
-                  <h3 className="text-sm font-semibold text-neutral-600 dark:text-neutral-300 mb-2">
-                    제{chapter.chapterNumber}장 {chapter.name}
-                  </h3>
-                  <div className="ml-2 divide-y divide-neutral-100 dark:divide-neutral-800 border border-neutral-100 dark:border-neutral-700 rounded-xl overflow-hidden">
-                    {[...chapter.parts]
-                      .sort((a, b) => a.sortOrder - b.sortOrder)
-                      .map((part) => {
-                        const schedule = getGlobalSchedule(part);
-                        const releasedAt = schedule ? new Date(schedule.releasedAt) : null;
-                        return (
-                          <div
-                            key={part.uid}
-                            className="flex items-center justify-between px-4 py-3 bg-neutral-50 dark:bg-neutral-900"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              {schedule && <ConfirmedBadge confirmed={schedule.confirmed} />}
-                              <span className="font-medium truncate">{part.name ?? "전체"}</span>
-                              <EpisodeRange start={part.episodeStart} end={part.episodeEnd} />
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0 ml-4 text-sm text-neutral-500 dark:text-neutral-400">
-                              <CalendarIcon className="size-4 shrink-0" strokeWidth={2} />
-                              <span>{formatDate(releasedAt)}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                  </div>
+          <div className="space-y-10">
+            {seasonVolumes.map((volume) => (
+              <div key={volume.uid}>
+                <div className="flex items-center gap-2 mb-4">
+                  <BookOpenIcon className="size-5 text-primary-600 dark:text-primary-400 shrink-0" strokeWidth={2} />
+                  <h3 className="text-lg font-bold">{formatMainStoryPageVolumeTitle(volume)}</h3>
                 </div>
-              ))}
+
+                <div className="ml-2 space-y-4">
+                  {[...volume.chapters]
+                    .sort((a, b) => a.chapterNumber - b.chapterNumber)
+                    .map((chapter) => (
+                      <div key={chapter.uid}>
+                        <h4 className="text-sm font-semibold text-neutral-600 dark:text-neutral-300 mb-2">
+                          제{chapter.chapterNumber}장 {chapter.name}
+                        </h4>
+                        <div className="ml-2 divide-y divide-neutral-100 dark:divide-neutral-800 border border-neutral-100 dark:border-neutral-700 rounded-lg overflow-hidden">
+                          {[...chapter.parts]
+                            .sort((a, b) => a.sortOrder - b.sortOrder)
+                            .map((part) => {
+                              const schedule = getGlobalSchedule(part);
+                              const releasedAt = schedule ? new Date(schedule.releasedAt) : null;
+                              return (
+                                <div
+                                  key={part.uid}
+                                  className="flex items-center justify-between px-4 py-3 bg-neutral-50 dark:bg-neutral-900"
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <UpcomingBadge releasedAt={releasedAt} />
+                                    <span className="font-medium truncate">{part.name ?? "전체"}</span>
+                                    <EpisodeRange start={part.episodeStart} end={part.episodeEnd} />
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0 ml-4 text-sm text-neutral-500 dark:text-neutral-400">
+                                    <CalendarIcon className="size-4 shrink-0" strokeWidth={2} />
+                                    <span>{formatDate(releasedAt)}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
+        </section>
       ))}
     </div>
   );
@@ -195,7 +239,7 @@ function ReleaseOrderView({ volumes }: { volumes: Volume[] }) {
 
               {/* Content list */}
               <div className="pl-4 pb-6 flex-1 min-w-0 space-y-1 pt-2">
-                {parts.map(({ part, chapter, volume, releasedAt, confirmed }) => (
+                {parts.map(({ part, chapter, volume, releasedAt }) => (
                   <div
                     key={part.uid}
                     className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-neutral-50 dark:bg-neutral-900 border border-neutral-100 dark:border-neutral-800"
@@ -204,7 +248,7 @@ function ReleaseOrderView({ volumes }: { volumes: Volume[] }) {
                     <div className="flex flex-col min-w-0 flex-1">
                       {/* Label: Vol n. 편명 */}
                       <span className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
-                        {volume.label}{` ${volume.name}`}
+                        {formatMainStoryPageVolumeTitle(volume)}
                       </span>
                       {/* Main: 제m장. 장명 (파트명) */}
                       <span className="text-sm md:text-base font-medium mt-1">
@@ -220,7 +264,7 @@ function ReleaseOrderView({ volumes }: { volumes: Volume[] }) {
                       <span className="text-sm text-neutral-500 dark:text-neutral-400">
                         {releasedAt ? dayjs(releasedAt).format("M/D") : "미정"}
                       </span>
-                      <ConfirmedBadge confirmed={confirmed} />
+                      <UpcomingBadge releasedAt={releasedAt} />
                     </div>
                   </div>
                 ))}

@@ -1,6 +1,6 @@
 import {
   ChatBubbleLeftRightIcon,
-  MegaphoneIcon,
+  UsersIcon,
   Squares2X2Icon,
 } from "@heroicons/react/24/outline";
 import { useNavigate, useSearchParams } from "react-router";
@@ -106,7 +106,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 };
 
 export const meta: MetaFunction = () => {
-  const title = "커뮤니티 | 몰루로그";
+  const title = "평가/의견 | 몰루로그";
   const description = "블루 아카이브의 학생 평가와 이벤트 의견을 확인해보세요.";
   return [
     { title },
@@ -137,7 +137,7 @@ export default function CommunityPage() {
 
   return (
     <Page
-      title="커뮤니티"
+      title="평가/의견"
       description="선생님들의 학생 평가와 이벤트 의견을 한곳에서 확인해보세요"
       layout="vertical"
       screens={[
@@ -151,14 +151,14 @@ export default function CommunityPage() {
         {
           text: "학생 평가",
           description: "학생별 평가 게시물",
-          Icon: ChatBubbleLeftRightIcon,
+          Icon: UsersIcon,
           link: "/community?type=student_review",
           active: postType === "student_review",
         },
         {
           text: "이벤트 의견",
           description: "컨텐츠 관련 의견과 질문",
-          Icon: MegaphoneIcon,
+          Icon: ChatBubbleLeftRightIcon,
           link: "/community?type=event_opinion",
           active: postType === "event_opinion",
         },

@@ -81,7 +81,7 @@ export type IndexRecruitment = {
 export async function getIndexContents(env: Env, forceRefresh = false) {
   return fetchCached(
     env,
-    "index-contents::v4",
+    "index-contents::v5",
     async () => {
       const now = dayjs();
       const nowDate = now.toDate();
@@ -307,7 +307,7 @@ function toRecruitmentInfos(group: Awaited<ReturnType<RecruitmentRepository["get
 }
 
 export async function getFutureContents(env: Env, forceRefresh = false): Promise<FutureContent[]> {
-  const allEnriched = await fetchCached(env, "future-contents::v1", async () => {
+  const allEnriched = await fetchCached(env, "future-contents::v2", async () => {
     const recruitmentRepository = new RecruitmentRepository(env);
     const [contents, upcomingRaidContents] = await Promise.all([
       getTimelineContents(env),

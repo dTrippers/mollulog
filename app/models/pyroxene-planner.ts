@@ -40,7 +40,7 @@ export type PyroxenePlannerContent =
   };
 
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
-  return fetchCached(env, "pyroxene-planner-contents::v4", async () => {
+  return fetchCached(env, "pyroxene-planner-contents::v5", async () => {
     const recruitmentRepository = new RecruitmentRepository(env);
     const raidRepository = new RaidRepository(env);
 

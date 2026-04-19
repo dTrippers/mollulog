@@ -3,7 +3,7 @@ import { runQuery } from "~/lib/baql";
 import { RaidRepository, RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
 import { raidTypeLocale } from "~/locales/ko";
-import { getMainStories } from "./main-story";
+import { formatMainStoryVolumeTitle, getMainStories } from "./main-story";
 import { campaignCategoryLocale, drillTypeLocale, pickupGroupTypeLocale } from "~/locales/ko";
 
 type ContentInput = {
@@ -215,7 +215,7 @@ export async function resolveContentName(env: Env, content: ContentInput): Promi
         for (const chapter of volume.chapters) {
           for (const part of chapter.parts) {
             if (part.uid === candidate) {
-              const volumeTitle = [volume.label, volume.name].filter(Boolean).join(" ");
+              const volumeTitle = formatMainStoryVolumeTitle(volume);
               const chapterTitle = `제${chapter.chapterNumber}장: ${chapter.name}${part.name ? ` (${part.name})` : ""}`;
               return `${volumeTitle}\n${chapterTitle}`;
             }
