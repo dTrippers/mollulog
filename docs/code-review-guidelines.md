@@ -1,74 +1,72 @@
-# Code Review Guidelines
+# 코드 리뷰 가이드
 
-Rules and checklist for reviewing pull requests in this project.
+이 문서는 PR 리뷰 시 무엇을 먼저 보고, 무엇을 나중에 볼지 정리한 체크리스트입니다.
+전체 코드를 다시 읽기보다 실제 변경 범위를 기준으로 리뷰하는 것을 전제로 합니다.
 
----
+## 기본 원칙
 
-## Process
+- 리뷰는 실제 `git diff` 기준으로 시작합니다.
+- 승인 전에는 `필수 수정` 항목부터 해결합니다.
+- 가능하면 inline comment를 남기고, 최종 판단은 한 번의 리뷰로 정리합니다.
+- 스타일 자동 수정은 도구에 맡기고, 리뷰는 동작/구조/회귀 위험에 집중합니다.
 
-- Run `pnpm run typecheck` and `pnpm exec biome check` locally before approving.
-- Leave inline comments where possible. Use a single review submission (not multiple rounds of individual comments).
-- Approve only after all **must-fix** items are resolved.
+## 리뷰 전 확인
 
----
+- `pnpm typecheck`
+- `pnpm exec biome check .`
+- 필요하면 관련 테스트
 
-## Must-Fix Checklist
+모든 PR에서 전체 테스트를 요구하기보다, 변경 범위에 맞는 검증이 있는지를 봅니다.
 
-### Correctness
+## 필수 수정
 
-- [ ] No duplicate utility functions with diverging behavior.
-- [ ] Props added to a component are actually wired into the rendered output. Dead props signal incomplete implementation.
-- [ ] Delete operations verify ownership before executing (e.g. `senseiId` check before deleting a grading).
+### 정확성
 
-### Data & State
+- prop, state, query 필드가 실제 렌더링과 동작에 연결되어 있는가
+- 삭제/수정 액션이 대상 ownership과 권한을 검증하는가
+- 화면에서 사용하는 정렬/조건이 실제 데이터 조회와 일치하는가
 
-- [ ] Timestamps (`createdAt`, `updatedAt`) are included in queries when used for display or sorting.
-- [ ] Sorting is done at the DB level (`.orderBy(desc(...))`) when possible; JS-level sort only when the query doesn't support it.
-- [ ] Loader data is not over-fetched — only what the route and its children actually need.
+### 데이터와 상태
 
-### Auth & Security
+- route와 하위 UI가 실제로 필요한 데이터만 가져오는가
+- 부모가 이미 가진 데이터를 자식이 다시 불러오지 않는가
+- `createdAt`, `updatedAt` 같은 정렬/표시용 필드가 빠지지 않았는가
 
-- [ ] All mutation actions (POST, DELETE) verify the current user is authenticated before proceeding.
-- [ ] Redirect to sign-in (or show sign-in sheet) for unauthenticated access to write surfaces.
-- [ ] No user-controlled data passed directly into SQL without Drizzle parameterization.
+### 인증과 보안
+
+- 쓰기 액션이 모두 인증을 확인하는가
+- 사용자 입력이 안전한 방식으로 DB/서버 로직에 들어가는가
+- 비로그인 사용자 흐름이 명확한가
 
 ### React / React Router
 
-- [ ] `useEffect` dependencies are complete and correct — no missing deps causing stale closures.
-- [ ] `useRef` is used (not `useState`) for values that should not trigger re-renders (e.g. tracking whether an action has started).
-- [ ] Parent route loaders are not duplicated in child routes — use `useOutletContext` for shared data.
-- [ ] `meta` exports exist on all navigable routes so page titles update correctly on navigation.
-- [ ] `Form` `intent` fields are checked server-side before branching action logic.
+- `useEffect` 의존성이 누락되지 않았는가
+- `meta` 가 필요한 화면에 빠지지 않았는가
+- `intent` 기반 액션 분기가 서버에서 검증되는가
+- route-local 과 shared UI의 경계가 무너지지 않았는가
 
----
-
-## Should-Fix Checklist
+## 권장 수정
 
 ### UI / UX
 
-- [ ] Empty strings are not passed for required-looking props (e.g. `description=""`). Either provide a value or confirm the prop is optional.
-- [ ] Tag display order is consistent across all surfaces (declaration order, not alphabetical).
-- [ ] `EmptyView`, `LoadingSkeleton`, and error states are present for async-loaded sections.
-- [ ] `confirm()` dialogs are acceptable for low-frequency destructive actions.
-- [ ] Newly added card styles match the nearest established surface pattern (border, radius, background, shadow) per `ui-ux-guidelines.md`.
+- 비동기 섹션에 loading, empty, error 상태가 있는가
+- 새 카드/폼 패턴이 기존 화면과 과하게 달라지지 않는가
+- 파괴적 액션의 피드백이 충분한가
 
-### TypeScript
+### TypeScript / GraphQL
 
-- [ ] Prefer generated GraphQL types over inline type annotations for query result shapes.
-- [ ] `as` casts are avoided unless there is no safer alternative — prefer type guards or proper typing upstream.
-- [ ] `typeof CONSTANTS` indexed types use `(typeof CONSTANTS)[Key]` syntax (not `typeof CONSTANTS[Key]`).
+- generated GraphQL 타입을 우선 사용했는가
+- 불필요한 `as` 캐스트를 남기지 않았는가
+- codegen으로 해결 가능한 타입 중복을 수작업으로 만들지 않았는가
 
-### Code Quality
+### 구조
 
-- [ ] No logic branching on `undefined` that is actually impossible at runtime — trust TypeScript and framework guarantees.
-- [ ] `forEach` is replaced with `for...of` for iteration with side effects (Biome enforces this).
-- [ ] Shared utility functions are extracted to a common location rather than duplicated per-file.
-- [ ] Route-local components stay in `_components/` subdirectories; reusable UI goes in `features/` per `component-development-guide.md`.
+- route 파일이 화면 조립 이상으로 비대해지지 않았는가
+- 여러 파일에 같은 유틸이 복제되지 않았는가
+- 재사용 근거 없이 너무 빨리 공용화하지 않았는가
 
----
+## 리뷰에서 보통 하지 않는 일
 
-## Won't Fix / Out of Scope
-
-- Reformatting code that Biome handles automatically.
-- Refactoring working logic that is not related to the PR's stated goal.
-- Adding tests unless the PR introduces a bug that a test would have caught.
+- Biome이 자동으로 해결할 formatting 지적
+- PR 목표와 무관한 대규모 리팩터링 요구
+- 회귀 위험과 직접 연결되지 않은 취향 수준의 재작성 요구

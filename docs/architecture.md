@@ -1,210 +1,119 @@
 # 아키텍처 가이드
 
+몰루로그의 문서는 파일 목록보다 오래 유지되는 구조와 규칙을 설명하는 것을 목표로 합니다.
+이 문서도 현재 코드의 세부 나열보다 "어디에 무엇을 두는가"와 "데이터가 어떻게 흐르는가"에 집중합니다.
+
 ## 전체 구조
 
-```
-Browser ←→ Cloudflare Workers (SSR) ←→ BAQL GraphQL API
-                    ↓
-            Cloudflare D1 (DB)
-            Cloudflare KV (Cache/Session)
-```
-
-## React Router v7 (SSR)
-
-파일시스템 라우팅. `app/routes/` 의 파일명이 URL 경로가 된다.
-
-### 라우트 파일 구조 패턴
-
-```typescript
-// app/routes/example.$id.tsx
-
-// 1. 서버 사이드 loader (데이터 fetch)
-export async function loader({ params, context, request }: LoaderFunctionArgs) {
-  const env = context.cloudflare.env;
-  // DB 또는 BAQL 쿼리
-  return { data };
-}
-
-// 2. 서버 사이드 action (폼 제출 처리)
-export async function action({ request, context }: ActionFunctionArgs) {
-  // 폼 데이터 처리, DB 업데이트
-  return { success: true };
-}
-
-// 3. 클라이언트 컴포넌트
-export default function ExamplePage() {
-  const { data } = useLoaderData<typeof loader>();
-  return <div>{/* UI */}</div>;
-}
-
-// 4. SEO 메타 (선택적)
-export function meta({ data }: MetaArgs) {
-  return [{ title: data?.title }];
-}
-```
-
-### context.cloudflare.env 접근
-
-Cloudflare 바인딩은 `context.cloudflare.env`로 접근:
-
-```typescript
-const { DB, KV_SESSION, KV_USERDATA } = context.cloudflare.env;
-```
-
-타입은 `worker-configuration.d.ts`에 자동 생성됨 (`pnpm cf-typegen`).
-
-## 컴포넌트 아키텍처
-
-현재 UI 구조의 단일 소스 오브 트루스는 [component-development-guide.md](./component-development-guide.md) 이다.
-
-아키텍처 관점에서만 요약하면 현재 활성 구조는 세 계층이다.
-
-1. `app/components/primitives`
-2. `app/components/features/<domain>`
-3. `app/routes/*._components` 또는 `app/routes/*/_components`
-
-현재 실제 컴포넌트 디렉터리도 이 구조만 남아 있다.
-
 ```text
-app/components/
-  primitives/
-  features/
-    auth/
-    community/
-    contents/
-    coupons/
-    editor/
-    events/
-    forms/
-    futures/
-    layout/
-    profile/
-    raids/
-    relationship/
-    students/
+브라우저
+  ↕ SSR 요청/응답
+Cloudflare Workers
+  ↕
+BAQL GraphQL API
+  ↕
+Cloudflare D1 / KV
 ```
 
-상세 규칙은 중복을 피하기 위해 이 문서에 다시 쓰지 않는다.
-- 계층 정의, import 규칙, naming/API/styling 규칙:
-  - [component-development-guide.md](./component-development-guide.md)
-- UI/UX 규칙:
-  - [ui-ux-guidelines.md](./ui-ux-guidelines.md)
-- route-local 구성 규칙:
-  - [routes.md](./routes.md)
+- 웹 앱은 React Router v7 기반 SSR 앱으로 Cloudflare Workers에서 실행됩니다.
+- 게임 원천 데이터는 주로 BAQL GraphQL API에서 읽고, 사용자 데이터와 앱 상태는 D1에 저장합니다.
+- 응답 속도와 크론성 선계산 작업에는 KV 캐시를 사용합니다.
 
-## 전역 상태 (Context API)
+## 핵심 디렉터리
 
-### SignInProvider (`app/contexts/SignInProvider.tsx`)
-로그인 모달 가시성 관리.
+- `app/routes`
+  라우트 파일, `loader`/`action`, 메타, 상위 화면 조립을 담당합니다.
+- `app/components/ui`
+  `shadcn/ui` 기반의 저수준 공통 UI입니다.
+- `app/components/primitives`
+  도메인에 묶이지 않는 얇은 앱 공통 UI입니다.
+- `app/components/features/<domain>`
+  여러 화면에서 재사용되는 도메인 UI입니다.
+- `app/routes/*._components`, `app/routes/*/_components`
+  한 라우트 패밀리 안에서만 쓰는 route-local UI와 훅입니다.
+- `app/models`
+  D1 테이블 정의와 앱 도메인 단위의 읽기/쓰기 로직이 위치합니다.
+- `app/repositories`
+  새로 추가되는 BAQL 읽기 조합, 캐싱, 복합 조회 orchestration은 우선 이 계층을 고려합니다.
+- `workers/app.ts`
+  Worker 엔트리와 크론 작업 진입점입니다.
 
-```typescript
-const { showSignIn, hideSignIn } = useSignIn();
-// 인증 필요 시: showSignIn() 호출
-```
+세부 UI 구조 규칙은 아래 문서를 기준으로 합니다.
 
-### StudentCardPopupProvider (`app/contexts/StudentCardPopupProvider.tsx`)
-학생 카드 팝업 상태 관리. 호버/클릭 시 학생 정보 표시.
+- [컴포넌트 개발 가이드](./component-development-guide.md)
+- [라우트 가이드](./routes.md)
+- [UI/UX 가이드](./ui-ux-guidelines.md)
 
-## Cloudflare Workers 엔트리
+## 런타임과 배포
 
-`workers/app.ts` — React Router 앱 핸들러 + Cron 작업 처리.
+- Worker 엔트리: `workers/app.ts`
+- 라우팅 설정: `app/routes.ts` + React Router flat routes
+- 배포 설정: `wrangler.jsonc`
+- 정적 에셋: `build/client`
+- 주요 바인딩:
+  - `DB`: Cloudflare D1
+  - `KV_USERDATA`: 캐시 저장소
+  - `KV_SESSION`: 세션 및 인증 관련 임시 데이터
 
-```typescript
-export default {
-  fetch: createRequestHandler({ build, getLoadContext }),
-  async scheduled(event, env, ctx) {
-    // Cron 기반 백그라운드 작업
-    // "*/10 * * * *" — 타임라인 콘텐츠 동기화
-  }
-};
-```
+프로덕션 크론은 현재 아래처럼 운영됩니다.
 
-### Cron 스케줄 (`wrangler.jsonc`)
-- `* * * * *` — 매분
-- `*/10 * * * *` — 10분마다 (타임라인 동기화)
-- `0 * * * *` — 매시간
-
-## 캐싱 전략
-
-### Cloudflare KV 캐시 (`app/lib/cache.ts`)
-
-```typescript
-fetchCached(env, key, fetchFn, ttl?, forceRefresh?)
-```
-
-- 키 접두사: `cache::`
-- TTL 예시: 레이드 90분, 최신 레이드 10분
-- 캐시 무효화: `deleteCache()`, `flushCacheAll()`
-- 캐시 갱신 API: `GET /api/caches/flush-all`
-
-### 세션 캐시 (KV_SESSION)
-사용자 세션 저장. 쿠키 기반으로 30일 만료.
+- `* * * * *`
+  UI용 단기 캐시 워밍
+- `*/10 * * * *`
+  타임라인 동기화, 학생/레이드/모집 데이터 갱신
+- `0 * * * *`
+  장기 캐시 재생성
 
 ## 데이터 흐름
 
-### 읽기 (데이터 표시)
-1. 브라우저 → Worker (SSR 요청)
-2. `loader()` 실행
-3. KV 캐시 확인
-4. 캐시 미스 → BAQL API 쿼리 또는 D1 쿼리
-5. 결과 → `useLoaderData()` → 컴포넌트 렌더링
+### 읽기
 
-### 쓰기 (사용자 입력)
-1. 폼 제출 또는 Fetcher API 호출
-2. `action()` 실행
-3. D1 데이터 업데이트
-4. 필요 시 KV 캐시 무효화
-5. 리다이렉트 또는 응답 반환
+1. 브라우저가 라우트를 요청합니다.
+2. route `loader`가 실행됩니다.
+3. 필요하면 KV 캐시를 먼저 확인합니다.
+4. 캐시 미스 시 BAQL 또는 D1을 조회합니다.
+5. `useLoaderData()`로 화면을 렌더링합니다.
 
-## 커뮤니티 도메인
+### 쓰기
 
-사용자 작성 콘텐츠는 `community_*` 계층을 canonical 저장소로 사용한다.
+1. 사용자가 `Form` 또는 fetcher를 통해 요청합니다.
+2. route `action`이 실행됩니다.
+3. D1 또는 인증/세션 상태를 갱신합니다.
+4. 필요하면 캐시를 비웁니다.
+5. 응답 또는 리다이렉트를 반환합니다.
 
-- `community_posts`
-  - `postType`: `student_review | event_opinion | guide`
-  - `visibility`: `public | unlisted | private`
-  - `subjectStudentUid`, `subjectContentUid`, `subjectRaidType`, `subjectSeasonIndex`
-  - `blocks` JSON 배열 (`plaintext`, `markdown`, `youtube`, `party_info`)
-- `community_comments`
-  - 게시물 댓글과 1단계 대댓글
-- `community_post_likes`
-  - 게시물 좋아요
-- `community_post_tags`
-  - 학생 평가 태그
+## 캐싱 원칙
 
-기존 도메인 모델은 호환 레이어로 남아 있다.
+- 공통 캐시 유틸리티는 `app/models/base.ts`의 `fetchCached`를 사용합니다.
+- 캐시 키는 `cache::` 접두사 아래에 저장됩니다.
+- 화면 단위에서 임의로 캐시 정책을 만들기보다, 재사용되는 조회 로직 안에서 캐시를 결정합니다.
+- 강제 새로고침이 필요한 경우 `forceRefresh` 패턴을 사용합니다.
 
-- `student-grading.ts` -> `community_posts(postType='student_review')`
-- `content-comment.ts` -> `community_posts(postType='event_opinion')` / `community_comments`
-- `party.ts` -> `community_posts(postType='guide')`
+## 인증 원칙
 
-현재 `/community` 화면에서는 학생 평가와 이벤트 의견만 노출하고, 공략글은 같은 저장소를 사용하지만 피드에서는 숨긴다.
+- 인증 진입점은 `app/auth/authenticator.server.ts`입니다.
+- 현재 로그인 수단은 Google OAuth와 Passkey입니다.
+- 인증이 필요한 라우트는 route `loader`/`action`에서 직접 검사합니다.
+- 세션 저장은 쿠키 세션을 사용하며, 임시 Passkey challenge 등은 `KV_SESSION`을 사용합니다.
 
-## 인증 흐름
+## 도메인 규칙
 
-```
-Google OAuth:
-  /auth/google/signin → Google → /auth/google/callback → 세션 생성
+### 커뮤니티
 
-Passkey:
-  /auth/passkey/register (등록) → KV에 credential 저장
-  /auth/passkey/signin (로그인) → credential 검증 → 세션 생성
-```
+- 사용자 작성 콘텐츠의 canonical 저장소는 `community_*` 계층입니다.
+- 학생 평가, 이벤트 의견, 공략글은 저장소를 따로 늘리기보다 이 계층 안에서 타입으로 구분합니다.
+- 레거시 테이블이 남아 있어도 새 기능은 canonical 저장소 기준으로 판단합니다.
 
-인증 상태 확인:
-```typescript
-const sensei = await authenticator.isAuthenticated(request);
-if (!sensei) return redirect("/");
-```
+### UI 구조
 
-## 다국어/지역화
+- 새 저수준 UI는 `shadcn/ui`를 우선 사용합니다.
+- 공용화가 검증되기 전에는 route-local 구성을 먼저 선택합니다.
+- 화면 설명보다 구조 규칙을 우선 문서화합니다.
 
-- `app/locales/` — 한국어 기준 텍스트
-- BAQL API는 ko/ja/en 지원 (기본값: 한국어)
-- 날짜: `dayjs` 라이브러리 사용
+## 문서 역할 분리
 
-## 에셋 관리
-
-- 게임 이미지: `assets.mollulog.net` CDN
-- 빌드 에셋: Cloudflare Assets (`./build/client`)
-- Go Lambda + OpenTofu로 S3 → Cloudflare 배포 자동화
+- 이 문서: 전체 구조와 데이터 흐름
+- [라우트 가이드](./routes.md): 파일명 규칙, route 책임, route-local 규칙
+- [컴포넌트 개발 가이드](./component-development-guide.md): UI 계층과 승격 기준
+- [데이터베이스 가이드](./database.md): D1/Drizzle 모델링과 마이그레이션 규칙
+- [BAQL API 가이드](./baql-api.md): GraphQL 조회와 codegen 규칙

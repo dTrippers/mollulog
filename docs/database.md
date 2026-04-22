@@ -1,137 +1,91 @@
 # 데이터베이스 가이드
 
-## 스택
+이 문서는 테이블 전체 목록을 나열하지 않습니다.
+대신 D1/Drizzle 기반의 모델링 규칙, canonical 저장소 원칙, 마이그레이션 절차만 정리합니다.
 
-- **DB**: Cloudflare D1 (SQLite 호환)
-- **ORM**: Drizzle ORM
-- **마이그레이션**: `db/migrations/` 디렉토리의 SQL 파일
+## 기본 스택
 
-## 주요 테이블
+- DB: Cloudflare D1
+- ORM: Drizzle ORM
+- 마이그레이션: `db/migrations/*.sql`
 
-### 사용자
+## 모델 정의 위치
 
-| 테이블 | 설명 |
-|--------|------|
-| `senseis` | 사용자 계정 (id, uid, username, friendCode, googleId, profileStudentId, active) |
-| `sensei_privacies` | 사용자 비공개 정보 (userId, memberCode) |
-| `followerships` | 팔로우 관계 (followerId, followeeId) |
-| `user_activities` | 활동 로그 (uid, userId, activityType, payload) |
-| `passkeys` | WebAuthn 인증 정보 |
+몰루로그는 중앙 `schema.ts` 파일 하나를 두기보다, 테이블 정의와 도메인 로직을 `app/models/*.ts` 에 분산해 둡니다.
 
-### 커뮤니티 / 사용자 작성 콘텐츠
+예:
 
-현재 사용자 작성 콘텐츠의 canonical 저장소는 `community_*` 계층이다.
+- `sqliteTable(...)` 정의
+- D1 조회/삽입/수정 함수
+- 캐시와 결합된 읽기 로직
 
-| 테이블 | 설명 |
-|--------|------|
-| `community_posts` | 학생 평가, 이벤트 의견, 공략글을 통합 저장하는 본문 테이블. `postType`, `visibility`, `subject*`, `blocks`, `sourceType/sourceUid` 를 가짐 |
-| `community_comments` | 커뮤니티 게시물 댓글/대댓글 |
-| `community_post_likes` | 게시물 좋아요 |
-| `community_post_tags` | 학생 평가 태그 |
+새 DB 작업은 보통 아래 흐름으로 진행합니다.
 
-### 게임 기록 / 프로필
+1. `db/migrations` 에 SQL 추가
+2. 관련 `app/models/*.ts` 에 테이블/함수 추가
+3. route, feature, repository에서 해당 모델 사용
 
-| 테이블 | 설명 |
-|--------|------|
-| `recruited_students` | 보유 학생 목록 |
-| `parties` | 레거시 파티 저장소. 현재 앱 런타임의 공략 원본은 `community_posts(postType='guide')`를 사용 |
-| `pickup_histories` | 픽업 이력 |
-| `student_gradings` | 레거시 학생 평가 저장소. 현재 앱 런타임의 학생 평가는 `community_posts(postType='student_review')`를 사용 |
-| `student_grading_tags` | 레거시 학생 평가 태그 저장소. 현재 앱 런타임의 태그 원본은 `community_post_tags`를 사용 |
-| `user_relationship_levels` | 학생 관계 레벨 |
+## 네이밍과 책임 분리
 
-### 이벤트/콘텐츠
+- 테이블 변수는 보통 `*Table` suffix를 사용합니다.
+- DB 접근 함수는 도메인 의도가 드러나는 이름을 사용합니다.
+- route에서 직접 SQL 성격의 분기를 늘리기보다 `models` 또는 `repositories` 로 내립니다.
+- 새 canonical 저장소가 이미 정해진 영역에는 레거시 테이블을 다시 확장하지 않습니다.
 
-| 테이블 | 설명 |
-|--------|------|
-| `timeline_contents` | 사이트에서 보여줄 컨텐츠 및 메타 데이터 목록. BAQL의 Event, MainStory, RecruitmentGroup의 레퍼런스 키를 가짐 |
-| `event_shop_states` | 사용자의 이벤트 상점 상태 (구매할 아이템, 목표 재화 수집량 등) |
-| `content_favorite_students` | 관심 학생 |
-| `content_favorite_counts` | 관심 학생 통계 |
-| `content_comments` | 레거시 콘텐츠 의견 저장소. 현재 앱 런타임의 이벤트 의견 원본은 `community_posts(postType='event_opinion')` / `community_comments`를 사용 |
+## canonical 저장소 원칙
 
-### 플래너
+### 커뮤니티
 
-| 테이블 | 설명 |
-|--------|------|
-| `pyroxene_planner_options` | 청휘석 플래너 메타 설정값 |
-| `pyroxene_event_data` | 청휘석 플래너 이벤트별 설정값 (모집 목표, 완료 여부 등) |
+- 사용자 작성 콘텐츠의 canonical 저장소는 `community_*` 계층입니다.
+- 학생 평가, 이벤트 의견, 공략글은 저장 테이블을 새로 나누기보다 canonical 모델 안에서 타입으로 구분합니다.
+- 예전 테이블이 남아 있어도 새 기능의 기준은 canonical 저장소입니다.
 
-### 기타
+### 기타 도메인
 
-| 테이블 | 설명 |
-|--------|------|
-| `posts` | 공지사항 게시물 |
-| `feedback_submissions` | 버그 제보/기능 제안 제출 |
-| `coupons` | 게임 쿠폰 |
-| `coupon_registrations` | 사용자별 게임 쿠폰 등록 기록 |
+- 같은 책임의 데이터를 중복 테이블에 동시에 저장하지 않습니다.
+- 새 기능을 만들 때는 "현재 런타임이 실제로 참조하는 저장소"를 먼저 확인합니다.
 
-## 마이그레이션 추가
+## Drizzle 사용 패턴
 
-1. `db/migrations/` 에 새 SQL 파일 추가 (순서 번호 사용)
-   ```
-   db/migrations/0024_your_migration_name.sql
-   ```
-
-2. 로컬 적용:
-   ```bash
-   pnpm dev:db:migrate
-   ```
-
-3. 프로덕션 적용:
-   ```bash
-   pnpm prod:db:migrate
-   ```
-
-## Drizzle ORM 사용 패턴
-
-스키마 정의는 `app/models/` 또는 관련 모델 파일 참고.
-
-```typescript
+```ts
 import { drizzle } from "drizzle-orm/d1";
 
-// loader 또는 action에서
-const db = drizzle(context.cloudflare.env.DB);
-
-// 조회
-const users = await db.select().from(senseis).where(eq(senseis.uid, uid));
-
-// 삽입
-await db.insert(parties).values({ userId: sensei.id, name: "My Party" });
-
-// 업데이트
-await db.update(senseis).set({ username }).where(eq(senseis.id, id));
-
-// 삭제
-await db.delete(followerships).where(eq(followerships.followerId, id));
+export async function getSomething(env: Env) {
+  const db = drizzle(env.DB);
+  return db.select();
+}
 ```
 
-## 로컬 개발 DB
+- `loader`/`action` 에서 바로 긴 DB 로직을 작성하기보다 모델 함수로 분리합니다.
+- 정렬과 필터는 가능하면 DB 레벨에서 처리합니다.
+- D1 특성을 고려해 한 번에 너무 큰 쿼리나 과도한 `IN` 절을 만들지 않도록 주의합니다.
+
+## 마이그레이션 절차
+
+### 로컬 적용
 
 ```bash
-# 로컬 DB 초기화 (마이그레이션 적용)
 pnpm dev:db:migrate
 ```
 
-## 원격 D1 데이터를 로컬로 덮어쓰기
+### 프로덕션 적용
 
 ```bash
-# 프로덕션 D1 export 후 로컬 DB 덮어쓰기
-pnpm prod:db:pull
-
-# 스테이징 D1 export 후 로컬 DB 덮어쓰기
-pnpm staging:db:pull
+pnpm prod:db:migrate
 ```
 
-- 원격 D1을 SQL로 export한 뒤 로컬 D1 상태 디렉터리를 비우고 다시 import합니다.
-- export 파일은 `tmp/` 아래에 생성되고, 실행 후 `.wrangler/state/v3/d1/miniflare-D1DatabaseObject` 아래 로컬 DB가 원격 기준으로 재생성됩니다.
-- 로컬 DB 데이터는 완전히 덮어써지므로 필요하면 실행 전에 별도 백업이 필요합니다.
+### 프로덕션 D1을 로컬로 가져오기
 
-## 중요 주의사항
+```bash
+pnpm prod:db:pull
+```
 
-- D1은 SQLite 기반이므로 JSON 컬럼은 TEXT로 저장 후 파싱 필요
-- 트랜잭션 지원이 제한적 (D1 특성)
-- 마이그레이션은 단방향 (롤백 스크립트 별도 작성 필요)
-- 프로덕션 마이그레이션 전에 반드시 스테이징에서 테스트
-- `db/migrations/0031_create_community.sql` 부터 사용자 작성 콘텐츠의 canonical 저장소가 `community_*` 계층으로 이동했다
-- 구 테이블(`student_gradings`, `student_grading_tags`, `content_comments`, `parties`)은 마이그레이션/호환 목적의 히스토리로 남아 있을 수 있으나, 앱 런타임은 직접 참조하지 않는 방향을 유지한다
+이 명령은 원격 D1을 export한 뒤 로컬 상태를 덮어씁니다.
+로컬 데이터를 유지해야 한다면 실행 전 별도 백업이 필요합니다.
+
+## 주의사항
+
+- D1은 SQLite 기반이므로 데이터 타입과 SQL 기능 차이를 고려합니다.
+- 마이그레이션은 기본적으로 단방향으로 관리합니다.
+- 큰 구조 변경은 먼저 staging 또는 로컬 복제본에서 검증합니다.
+- 문서에는 전체 테이블 목록을 유지하지 않습니다. 정확한 현재 상태는 `db/migrations/` 와 `app/models/` 를 기준으로 확인합니다.

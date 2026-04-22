@@ -1,74 +1,75 @@
 # BAQL API 가이드
 
-BAQL은 Blue Archive 게임 데이터를 제공하는 GraphQL API.
+이 문서는 BAQL GraphQL 조회를 몰루로그 코드베이스 안에서 어떻게 다루는지 정리합니다.
+쿼리 목록을 유지하기보다, 조회 위치와 codegen 규칙을 설명하는 데 집중합니다.
 
-- 엔드포인트: `https://baql.mollulog.net/graphql`
-- 개발 환경 오버라이드: `VITE_BAQL_URL` 환경 변수
+## 기본 정보
 
-## 클라이언트 설정
+- 기본 엔드포인트: `https://baql.mollulog.net/graphql`
+- 개발 환경 override: `VITE_BAQL_URL`
+- 공통 실행 함수: `app/lib/baql/index.ts` 의 `runQuery`
 
-`app/lib/baql/index.ts` — urql 기반 클라이언트. 서버사이드 렌더링에서만 사용.
+## 쿼리 작성 규칙
 
-```typescript
-import { runQuery } from "~/lib/baql";
-```
+- GraphQL 쿼리는 `app/**/*.{ts,tsx}` 안에서 `graphql(...)` 로 정의합니다.
+- 쿼리를 추가하거나 수정한 뒤에는 반드시 `pnpm codegen` 을 실행합니다.
+- `app/graphql/` 아래 생성 파일은 직접 수정하지 않습니다.
 
-## 코드젠 워크플로우
+현재 codegen 산출물은 아래 디렉터리에 모입니다.
 
-1. `app/**/*.{ts,tsx}` 파일에 `graphql(...)` 태그로 쿼리 정의
-2. `pnpm codegen` 실행
-3. `app/graphql/graphql.ts` 자동 갱신 (수동 수정 금지)
+- `app/graphql/gql.ts`
+- `app/graphql/graphql.ts`
+- `app/graphql/fragment-masking.ts`
 
-타입 매핑: `ISO8601DateTime` → `Date`, `ISO8601Date` → `any`
+## 타입 규칙
 
-## 자주 쓰는 패턴
+- codegen이 만들어준 타입 추론을 우선 사용합니다.
+- 결과 shape를 route나 component에서 다시 손으로 타입 선언하지 않습니다.
+- 현재 scalar 매핑에서 `ISO8601DateTime` 은 `Date` 로 취급합니다.
 
-### Route Loader에서 에러 처리
+## 조회 위치 규칙
 
-```typescript
+- route 안에서 한 번만 쓰는 단순 조회는 해당 route에서 직접 사용할 수 있습니다.
+- 여러 화면이 공유하는 조회이거나 캐시 정책이 붙는다면 `models` 또는 `repositories` 로 올립니다.
+- 새 cross-cutting BAQL orchestration은 `app/repositories` 를 우선 검토합니다.
+
+## loader 패턴
+
+```ts
 export async function loader({ params }: LoaderFunctionArgs) {
-  const { data, error } = await runQuery(eventDetailQuery, { uid: params.uid });
+  const { data, error } = await runQuery(query, { uid: params.uid! });
+
   if (error) {
-    console.error("BAQL error:", error);
     throw new Response("Failed to fetch", { status: 503 });
   }
-  if (!data?.event) throw new Response("Not Found", { status: 404 });
+
+  if (!data?.event) {
+    throw new Response("Not Found", { status: 404 });
+  }
+
   return { event: data.event };
 }
 ```
 
-### 캐싱과 함께 사용
+- BAQL 오류와 데이터 부재를 구분해서 처리합니다.
+- UI가 반복적으로 쓰는 조회는 route 안에 그대로 두지 않습니다.
 
-```typescript
-export async function loader({ context }: LoaderFunctionArgs) {
-  const data = await fetchCached(context.cloudflare.env, "raids-list", async () => {
-    const { data } = await runQuery(raidListQuery, {});
-    return data?.raids.nodes ?? [];
-  }, 60 * 60); // 1시간 캐시
-  return { raids: data };
-}
-```
+## 캐싱 규칙
 
-### 타임라인 동기화 (Background Job)
+- BAQL 조회 결과를 재사용해야 하면 `fetchCached` 패턴을 사용합니다.
+- 캐시 전략은 route보다 조회 책임이 있는 모델/리포지토리 쪽에 둡니다.
+- 강제 갱신이 필요한 크론/백그라운드 작업은 `forceRefresh` 패턴을 사용합니다.
 
-백그라운드 크론 작업에서 BAQL을 직접 쿼리하여 `timeline_contents` 테이블 갱신:
+## 백그라운드 작업
 
-```typescript
-// app/jobs/sync-timeline-contents.ts
-await runQuery(contentsForSync, { endAfter: new Date() });
-```
+- Worker 크론은 `workers/app.ts` 에서 분기합니다.
+- BAQL 기반의 동기화 작업은 `app/jobs/` 와 `models`/`repositories` 조합으로 처리합니다.
+- 대표 예시는 `app/jobs/sync-timeline-contents.ts` 입니다.
 
-## 주요 타입 참고
+## 체크리스트
 
-| GraphQL 타입 | 설명 |
-|---|---|
-| `Raid` | 레이드 (총력전/대결전/제약해제결전/연합작전) |
-| `EventContent` | 이벤트 모델 |
-| `Student` | 학생(캐릭터) |
-| `RecruitmentGroup` | 학생 모집(가챠) 그룹 |
-| `Recruitment` | 개별 학생 모집(가챠) 항목 |
-| `Campaign` | 재화 드랍률 캠페인 |
-| `JointFiringDrill` | 종합전술시험 |
-| `MiniEventContent` | 미니 이벤트 |
-| `MainStoryVolume` | 메인 스토리 |
-| `Item`, `Currency`, `Equipment`, `Furniture` | 게임 아이템 (ResourceInterface) |
+1. 쿼리를 `graphql(...)` 로 정의했는가
+2. `pnpm codegen` 을 실행했는가
+3. 생성 타입을 그대로 활용하고 있는가
+4. 재사용되는 조회를 route 안에 고정하지 않았는가
+5. 캐시 책임이 route가 아니라 조회 계층에 있는가

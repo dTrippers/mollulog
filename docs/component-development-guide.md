@@ -1,199 +1,132 @@
-# Component Development Guide
+# 컴포넌트 개발 가이드
 
-This document defines the final component and route composition structure for ongoing development.
-Use it as the default rule when adding, moving, or refactoring UI code.
+이 문서는 새 UI 코드를 어디에 둘지 판단하는 기준입니다.
+컴포넌트 목록을 유지하는 대신, 오래 가는 계층 규칙과 승격 기준만 정리합니다.
 
-## Source Of Truth
+## 소스 오브 트루스
 
-The project should be treated as having three application layers plus one reserved base layer:
+현재 UI 구조의 기준 계층은 아래 네 가지입니다.
 
 1. `app/components/ui`
 2. `app/components/primitives`
 3. `app/components/features/<domain>`
-4. `app/routes/*._components` or `app/routes/*/_components`
+4. `app/routes/*._components`, `app/routes/*/_components`
 
-Use these layers directly. Do not recreate `atoms`, `molecules`, `organisms`, or `navigation`.
-`app/components/ui` is reserved for `shadcn/ui` source and low-level shared UI building blocks. Do not create another parallel generic UI layer.
+새 작업은 이 구조를 강화하는 방향으로 진행합니다.
+예전 계층(`atoms`, `molecules`, `organisms`, `navigation`)은 다시 만들지 않습니다.
 
-### `components/ui`
-- Reserved for `shadcn/ui` source files and low-level design-system components.
-- Use this layer when adopting, extending, or composing `shadcn/ui` primitives.
-- Keep this layer generic and domain-agnostic.
-- Do not move route-specific or domain-specific UI into this layer.
+## 계층별 역할
 
-## Layer Rules
+### `app/components/ui`
 
-### `components/primitives`
-- Thin app-level abstractions built on top of `components/ui` when the project needs shared presentation or behavior that is still generic.
-- Must remain domain-agnostic, but should not duplicate `shadcn/ui` base controls without a clear project-specific reason.
-- Typical examples:
-  - `Title`
-  - `ProfileImage`
-  - `ClickableSurface`
-  - `EmptyView`
-  - `Section`
+- `shadcn/ui` 기반의 저수준 공통 UI
+- 버튼, 입력, 카드, 필드, 콤보박스 같은 기본 인터랙션 레이어
+- 도메인 지식 없이 재사용 가능한 UI만 둡니다
 
-Use `primitives` when:
-- the component is reused across multiple domains
-- the project needs a shared abstraction above `shadcn/ui`
-- the component expresses MolluLog-specific presentation or interaction rules that should stay consistent across screens
+이 계층에서는:
 
-Do not put into `primitives`:
-- direct reimplementations of `shadcn/ui` controls such as generic `Button`, `Input`, `Textarea`, `Field`, or `Card`
-- student-specific, raid-specific, or event-specific rendering
-- route-only composition
-- business logic tied to one domain
+- 공통 variant
+- 일관된 기본 spacing
+- 프로젝트 공통 field/input 밀도
 
-### `components/features/<domain>`
-- Reusable domain UI composed from primitives and domain models.
-- Own domain-specific layout, wording, state flow, and transformations.
-- Should be the default location for reusable screen sections within a domain.
+를 관리합니다.
 
-Current domains should continue to grow here:
-- `auth`
-- `contents`
-- `coupons`
-- `editor`
-- `events`
-- `forms`
-- `futures`
-- `layout`
-- `profile`
-- `raids`
-- `relationship`
-- `students`
+### `app/components/primitives`
 
-Use `features` when:
-- the component is reused in multiple routes within the same domain
-- the UI needs domain terms or domain state
-- the component is bigger than a primitive but still not route-specific
+- 도메인에 속하지 않는 얇은 앱 공통 UI
+- `ui` 위에서 한 단계 추상화한 표현 컴포넌트
+- 여러 도메인에서 반복되는 표시 패턴
 
-Do not put into `features`:
-- new base button, field, panel, sheet, tab, or generic card styles
-- one-off route orchestration that is only used once
+예:
 
-### `routes/*._components` or `routes/*/_components`
-- Route-local composition only.
-- Use this for screen-only helpers, view-specific hooks, and presentation split out of a route file.
-- The route should stay responsible for loader/action wiring, while route-local components handle screen composition.
+- 페이지 제목
+- 빈 상태
+- 프로필 이미지
+- 공통 section/panel 래퍼
 
-Use route-local components when:
-- a component is only used by one route or route family
-- the component exists mainly to keep a route file readable
-- the component combines feature components in a way that is unique to one screen
+주의:
 
-Promote route-local code to `features` only after reuse is real.
+- `shadcn/ui`와 책임이 같은 generic control을 다시 만들지 않습니다.
+- 도메인 용어가 들어가면 대개 `features`가 더 맞습니다.
 
-## Import Rules
+### `app/components/features/<domain>`
 
-- Prefer importing from `~/components/ui` when you need existing `shadcn/ui` building blocks.
-- Prefer importing from `~/components/primitives`.
-- Prefer importing from `~/components/features/<domain>`.
-- Prefer importing route-local components with relative imports from the route directory.
-- Do not introduce new imports from removed legacy layers such as:
-  - `~/components/atoms`
-  - `~/components/molecules`
-  - `~/components/organisms`
-  - `~/components/navigation`
-- Inside `features`, prefer importing sibling domain code through that domain's public entrypoint when it keeps imports clear.
-- Inside a route family, prefer relative imports for route-local files and feature imports for shared domain UI.
+- 여러 라우트에서 재사용되는 도메인 UI
+- 도메인 용어, 문구, 상태 흐름을 포함할 수 있습니다
+- 화면 조합 일부를 공유할 때 기본 선택지입니다
 
-## Naming Rules
+예:
 
-- Name by responsibility, not by size.
-- Prefer `StudentCard`, `StudentFilter`, `RelationshipStudentPicker`.
-- Avoid parallel names that describe style drift instead of responsibility.
-- Examples to avoid:
-  - `SmallButton`
-  - `MiniButton`
-  - `ButtonForm`
-- If variants solve the difference, keep one component.
-- If two components share a name but do different jobs, rename them until their role is obvious.
+- 프로필 편집 UI
+- 레이드 선택기
+- 커뮤니티 피드
+- 이벤트 정보 카드
 
-## API Rules
+### route-local 컴포넌트
 
-- Prefer `components/ui` directly for low-level controls.
-- Primitive APIs should be small and predictable.
-- Prefer props like `variant`, `size`, `tone`, `disabled`, `loading`, `fullWidth`.
-- Feature APIs should express domain intent clearly.
-- Avoid leaking layout-only wrapper props through many layers.
-- Avoid one-off booleans that create unclear combinations.
-- Keep hidden form field serialization and route action wiring inside form-oriented feature components instead of scattering it through routes.
+- 한 화면이나 한 라우트 패밀리 안에서만 쓰는 UI
+- 라우트 파일을 짧게 유지하기 위한 분리
+- 화면 전용 훅과 보조 유틸도 함께 둘 수 있습니다
 
-When a component is getting complex:
-- split internal rendering helpers first
-- extract route-local composition second
-- promote to a shared feature only if reuse is confirmed
+기본 성향은 "일단 route-local, 재사용이 확인되면 승격"입니다.
 
-## Styling Rules
+## 승격 기준
 
-- Shared base styling belongs in `components/ui`.
-- `primitives` should compose `components/ui` instead of redefining base controls.
-- Feature components should compose `components/ui` and `primitives` instead of redefining base look-and-feel.
-- Keep spacing, radius, border, and surface treatment consistent.
-- Do not create a second visual pattern for the same interaction without a strong reason.
-- Treat spacing in `components/ui` as the source of truth for `shadcn/ui` form density.
-- Do not locally compress `Card`, `Field`, `Input`, `Textarea`, `Button`, `InputGroup`, or similar `shadcn/ui` controls with one-off `gap-0`, `pt-0`, `pt-1`, `h-8`, or reduced padding overrides unless the component is intentionally using a compact variant.
-- If a compact form is truly needed, add or use an explicit variant instead of tightening layout ad hoc in routes or feature components.
+새 UI를 만들 때는 아래 순서로 판단합니다.
 
-## Interaction Rules
+1. 기존 `ui` 또는 `primitives` 조합으로 해결 가능한가
+2. 저수준 공통 variant 추가로 해결 가능한가
+3. 같은 도메인 여러 화면에서 재사용되는가
+4. 그렇다면 `features/<domain>` 으로 둔다
+5. 아니라면 route-local 로 둔다
 
-- Interactive UI must use semantic `button` or `Link`.
-- Do not rely on clickable `div` or `span` for core actions.
-- Reuse shared interaction surfaces such as `ClickableSurface`, `Button`, `BottomSheet`, and shared toggle patterns.
-- Keep modal, sheet, card-click, and selection behavior consistent across screens.
-- Prefer route-local hooks for screen-specific async UI state such as infinite scroll feeds or temporary comparison state.
+너무 이른 공용화보다, 재사용이 확인된 뒤 승격하는 편을 기본으로 합니다.
 
-## Promotion Rules
+## import 규칙
 
-Use this decision order before creating a component:
+- 저수준 UI는 `~/components/ui`
+- 앱 공통 표현은 `~/components/primitives`
+- 도메인 공유 UI는 `~/components/features/<domain>`
+- route-local 코드는 상대 경로 import
 
-1. Can an existing primitive solve this?
-2. If not, can a primitive be extended with variants?
-3. If not, is this reusable within one domain?
-4. If yes, place it in `features/<domain>`.
-5. If not, keep it route-local.
+route-local 코드를 억지로 `features`로 올리지 않습니다.
+반대로 여러 화면에서 재사용되는 UI를 계속 route-local 로 복붙하지도 않습니다.
 
-This project should bias toward route-local first, then promote upward only when reuse becomes clear.
+## 네이밍 규칙
 
-## Route File Rules
+- 크기보다 책임을 이름에 드러냅니다.
+- 스타일 차이보다 역할 차이를 이름에 반영합니다.
+- `Small`, `Mini`, `New`, `Custom` 같은 접두사는 마지막 수단입니다.
+- 같은 역할을 variant로 해결할 수 있으면 하나의 컴포넌트를 유지합니다.
 
-- Keep route files focused on loader, action, params, and high-level screen assembly.
-- Move bulky view sections into route-local components.
-- Move route-only client hooks into the same route-local area when they are not shared elsewhere.
-- Do not move route-only orchestration into `features` just to avoid a local file.
-- If a route-family shares a screen section, route-local components under that family are acceptable.
-- Route-local directory naming should follow the route family:
-  - `app/routes/students.$id._components`
-  - `app/routes/events.$uid._components`
-  - `app/routes/raids.$id._components`
+좋은 예:
 
-## Legacy Rules
+- `StudentCard`
+- `RaidSelector`
+- `ProfileEditor`
 
-- The old `atoms / molecules / organisms / navigation` layers are no longer part of the active architecture.
-- `app/components/ui` is the active `shadcn/ui` base layer and is the explicit exception.
-- Do not recreate those directories.
-- If an external reference or old branch reintroduces them, migrate that code immediately into `primitives`, `features`, or route-local components instead of extending the legacy shape.
+## API 규칙
 
-## Practical Checklist
+- 저수준 컴포넌트는 작고 예측 가능한 prop API를 유지합니다.
+- 도메인 컴포넌트는 layout prop보다 도메인 의도를 드러내는 prop를 선호합니다.
+- route `action`과 숨은 form serialization은 가능한 한 화면 가까운 컴포넌트 안에 캡슐화합니다.
+- one-off boolean 조합으로 의미가 모호해지면 컴포넌트를 다시 나누는 쪽을 먼저 검토합니다.
 
-Before adding new UI code, verify:
+## 스타일링 규칙
 
-1. The file is going into the correct layer.
-2. The import path points to the new structure, not a legacy wrapper.
-3. The component name describes responsibility clearly.
-4. The interaction uses semantic elements.
-5. The visual pattern matches an existing primitive where possible.
-6. The code is not being promoted too early out of a route.
+- 기본 시각 언어는 `components/ui`에서 맞춥니다.
+- `primitives`와 `features`는 base control을 다시 꾸미기보다 조합합니다.
+- 같은 상호작용에 두 개의 시각 패턴이 생기지 않게 합니다.
+- 폼 밀도는 route 수준에서 임의로 조이지 말고, 필요하면 명시적 variant로 해결합니다.
 
-## Current Architectural Baseline
+상세 시각 규칙은 [UI/UX 가이드](./ui-ux-guidelines.md)를 따릅니다.
 
-The following should be treated as the intended final state:
+## 체크리스트
 
-- shared low-level `shadcn/ui` building blocks live in `app/components/ui`
-- thin app-level shared abstractions live in `app/components/primitives`
-- reusable domain UI lives in `app/components/features/<domain>`
-- route-only composition lives next to routes
-- route-only hooks and screen helpers also live next to routes when they are not shared
-- form orchestration components live in `app/components/features/forms`
-- new development should reinforce this structure instead of bypassing it
+새 UI 코드를 추가하기 전에 아래를 확인합니다.
+
+1. 올바른 계층에 두고 있는가
+2. 기존 `ui`/`primitives` 재사용으로 해결할 수 없는가
+3. 이름이 책임을 설명하는가
+4. semantic element를 사용했는가
+5. 재사용 근거 없이 너무 빨리 공용화하지 않았는가

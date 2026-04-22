@@ -1,67 +1,57 @@
-# UI/UX Guidelines
+# UI/UX 가이드
 
-This document defines the default UI direction for MolluLog.
-When creating or changing UI, follow these rules before introducing a new pattern.
+몰루로그의 UI는 새 패턴을 많이 만드는 것보다, 이미 정한 시각 언어를 일관되게 유지하는 것을 우선합니다.
 
-## Design Direction
+## 기본 방향
 
-- Prefer `shadcn/ui` as the default design system for new UI work.
-- Before writing custom markup, first check whether an existing `shadcn/ui` component or composition can solve the problem.
-- Treat `shadcn/ui` as the default base layer for buttons, fields, inputs, cards, dialogs, popovers, and similar low-level controls.
-- Reuse existing project patterns before introducing a new one.
-- Keep one visual language per screen. Do not mix competing card, button, field, or list styles in the same area.
-- Preserve MolluLog's product tone, but use `shadcn/ui` as the default interaction and layout baseline.
+- 새 저수준 UI는 `shadcn/ui`를 기본 레이어로 사용합니다.
+- 한 화면 안에서는 하나의 시각 언어를 유지합니다.
+- 장식보다 정보 구조와 작업 흐름을 우선합니다.
+- 같은 종류의 상호작용은 가능한 한 같은 형태로 보이게 합니다.
 
-## Component Strategy
+## 공통 컴포넌트 전략
 
-- Build new UI from shared components, not route-specific ad hoc markup.
-- Do not create new generic primitives when `shadcn/ui` already provides the same responsibility.
-- Keep app-specific abstractions thin. If a wrapper only renames a `shadcn/ui` component without adding real project value, prefer using the `shadcn/ui` component directly.
-- If the same UI appears in more than one route, promote it to a shared component.
-- Remove obsolete components after migration to avoid parallel implementations.
-- Do not create a second generic design system beside the existing `shadcn/ui` base.
+- 먼저 기존 `shadcn/ui`와 현재 프로젝트 패턴으로 해결 가능한지 확인합니다.
+- 같은 책임의 generic UI를 두 벌 만들지 않습니다.
+- route 전용 조합은 route-local 로 두고, 재사용이 확인되면 공용 컴포넌트로 올립니다.
 
-## Surface And Layout Rules
+## 표면과 레이아웃
 
-- Use one clear section surface pattern per screen.
-- Avoid unnecessary nested borders, stacked wrappers, and decorative containers.
-- Keep spacing, radius, border, and shadow treatment consistent within the same section.
-- Default surfaces and containers should usually stay within `rounded-md` to `rounded-lg`.
-- Avoid using `rounded-xl`, `rounded-2xl`, or larger on standard cards, panels, and inline containers unless there is a deliberate visual reason.
-- `rounded-full` is acceptable for pills, chips, avatars, and similarly compact UI, but should not become the default shape language for large surfaces.
-- Match component width to content intent. Do not make every control full width by default.
+- 불필요한 중첩 카드, 과한 보더, 장식성 래퍼를 늘리지 않습니다.
+- 같은 섹션 안에서는 radius, border, shadow, spacing을 통일합니다.
+- 기본 surface의 radius는 보통 `rounded-md`에서 `rounded-lg` 범위를 유지합니다.
+- `rounded-full`은 pill, chip, avatar처럼 작은 요소에만 주로 사용합니다.
+- 모든 컨트롤을 무조건 full width로 만들지 않습니다. 내용과 맥락에 맞게 폭을 정합니다.
 
-## Typography And Copy
+## 타이포그래피와 문구
 
-- Keep text hierarchy obvious: title, label, description, action.
-- Labels should be visually stronger than descriptions.
-- Use helper text only when it reduces uncertainty.
-- Avoid decorative English labels or filler copy that do not help task completion.
+- 제목, 라벨, 설명, 액션의 위계가 분명해야 합니다.
+- 설명 문구는 실제로 사용자의 판단에 도움이 될 때만 둡니다.
+- 장식용 영어 문구나 의미 없는 filler text는 넣지 않습니다.
+- 한국어 사용자를 기준으로 자연스럽고 짧은 문장을 우선합니다.
 
-## Form Rules
+## 폼 규칙
 
-- Use explicit submit flows for settings and account forms by default.
-- Do not auto-save on change unless the interaction clearly benefits from it.
-- Save feedback must be immediate and obvious in idle, submitting, and saved states.
-- Saved state must reset as soon as the user changes the form again.
-- Keep validation, descriptions, and error placement structurally consistent across forms.
-- `shadcn/ui` form controls should default to a comfortable density. Prefer the base spacing from `components/ui` over route-level tightening.
-- Do not compress form layouts with ad hoc `gap-0`, `pt-0`, `pt-1`, smaller control heights, or reduced padding unless the screen intentionally uses a compact variant.
-- Prefer `size="sm"` or another explicit compact variant only when density is a real requirement, not as a default styling shortcut.
+- 설정/계정 화면은 기본적으로 명시적 저장 방식을 사용합니다.
+- 자동 저장은 정말 이득이 큰 경우에만 씁니다.
+- 저장 상태는 `대기`, `저장 중`, `저장됨` 이 분명하게 보여야 합니다.
+- 사용자가 다시 수정하면 `저장됨` 상태는 즉시 초기화되어야 합니다.
+- 에러, 설명, 도움말 텍스트 위치는 폼 전체에서 일관되게 유지합니다.
+- 기본 폼 밀도는 `components/ui` 기준을 따르고, 화면마다 임의로 압축하지 않습니다.
 
-## Interactive Controls
+## 인터랙션 규칙
 
-- Controls with visual identity should preserve that identity in both closed and open states.
-- Dropdowns, popovers, and selectors should align with their trigger width unless there is a strong reason not to.
-- Adjacent controls in the same row should align in height and rhythm.
-- Avoid interactions that block navigation or make the UI feel unresponsive.
+- 클릭 가능한 핵심 요소는 semantic `button` 또는 `Link` 를 사용합니다.
+- 드롭다운, 팝오버, 선택기는 트리거와 시각적으로 잘 이어져야 합니다.
+- 같은 행의 컨트롤은 높이와 리듬을 맞춥니다.
+- 반응이 느리거나 상태가 모호한 인터랙션은 피합니다.
 
-## Agent Checklist
+## 체크리스트
 
-Before adding UI, check:
+새 UI를 만들기 전에 아래를 확인합니다.
 
-1. Can this be built with existing `shadcn/ui` components?
-2. Does this match an existing screen pattern in the project?
-3. Is this shared UI or only route-local composition?
-4. Is the visual hierarchy clear without extra decoration?
-5. Does the interaction give clear feedback without extra noise?
+1. 기존 `shadcn/ui`와 프로젝트 패턴으로 해결 가능한가
+2. 이 UI가 shared인지 route-local 인지 분명한가
+3. 불필요한 장식 없이 정보 위계가 보이는가
+4. 저장/실행 결과가 즉시 드러나는가
+5. 기존 화면과 다른 두 번째 시각 언어를 만들고 있지 않은가

@@ -1,161 +1,110 @@
-# 라우트 구조
+# 라우트 가이드
 
-React Router v7 파일시스템 라우팅. `app/routes/` 의 파일명 규칙:
+이 문서는 라우트 파일을 전부 나열하지 않습니다.
+라우트는 자주 변하므로, 오래 유지되는 파일명 규칙과 책임 분리에만 집중합니다.
 
-- `_index.tsx` — 부모 경로의 인덱스
-- `$param` — URL 파라미터
-- `_layout` — 레이아웃 래퍼 (URL에 포함 안 됨)
-- `.` → `/` (파일명의 점이 URL 슬래시로 변환)
+## 파일명 규칙
 
-## 공개 페이지
+몰루로그는 React Router flat routes를 사용합니다.
 
-| 파일 | URL | 설명 |
-|------|-----|------|
-| `_index.tsx` | `/` | 홈 (현재 이벤트, 레이드, 픽업) |
-| `community.tsx` | `/community` | 커뮤니티 타임라인 (현재 학생 평가, 이벤트 의견 노출) |
-| `futures.tsx` | `/futures` | 미래시 타임라인 |
-| `students._index.tsx` | `/students` | 학생 목록 |
-| `students.gradings.tsx` | `/students/gradings` | 학생 평가 목록 진입점. 현재 `/community?type=student_review`로 리다이렉트 |
-| `students.$id._index.tsx` | `/students/:id` | 학생 상세 |
-| `students.$id.grade.tsx` | `/students/:id/grade` | 학생 평가 |
-| `raids._index.tsx` | `/raids` | 레이드(총력전/대결전) 목록 (→ 최신 레이드로 리다이렉트) |
-| `raids.$id.tsx` | `/raids/:id` | 레이드 레이아웃 |
-| `raids.$id._index.tsx` | `/raids/:id` | 레이드 개요 |
-| `raids.$id.ranks.tsx` | `/raids/:id/ranks` | 레이드 랭킹 |
-| `raids.$id.statistics.tsx` | `/raids/:id/statistics` | 레이드 통계 |
-| `raids.$id.videos.tsx` | `/raids/:id/videos` | 레이드 공략 영상 |
-| `raids.$id.compare.tsx` | `/raids/:id/compare` | 동일 보스에 대한 레이드 비교 |
-| `events.$uid.tsx` | `/events/:uid` | 이벤트 레이아웃 |
-| `events.$uid._index.tsx` | `/events/:uid` | 이벤트 개요 |
-| `events.$uid.shop.tsx` | `/events/:uid/shop` | 이벤트 상점 플래너 |
-| `mainstory.tsx` | `/mainstory` | 메인 스토리 |
-| `news.tsx` | `/news` | 뉴스/공지 |
-| `contact.tsx` | `/contact` | 문의/피드백 |
-| `coupons.tsx` | `/coupons` | 쿠폰 목록 |
-| `[sitemap.xml].tsx` | `/sitemap.xml` | SEO 사이트맵 |
+- `.` 은 URL의 `/` 로 변환됩니다.
+  - 예: `students.$id.grade.tsx` → `/students/:id/grade`
+- `_index.tsx` 는 부모 경로의 인덱스 라우트입니다.
+  - 예: `students._index.tsx` → `/students`
+- `$param` 은 URL 파라미터입니다.
+  - 예: `events.$uid.tsx` → `/events/:uid`
+- 부모 레이아웃 라우트는 같은 prefix의 파일이 담당합니다.
+  - 예: `raids.$raidType.$seasonIndex.tsx` 가 레이아웃, 그 아래 `...statistics.tsx`, `...videos.tsx` 가 자식 라우트입니다.
 
-## 유저 프로필
+정확한 현재 라우트 목록이 필요하면 `app/routes/` 디렉터리를 직접 확인합니다.
+문서에는 전체 목록을 유지하지 않습니다.
 
-| 파일 | URL | 설명 |
-|------|-----|------|
-| `$username.tsx` | `/@/:username` | 유저 레이아웃 |
-| `$username._index.tsx` | `/@/:username` | 유저 메인 프로필 |
-| `$username.students.tsx` | `/@/:username/students` | 보유 학생 |
-| `$username.parties._index.tsx` | `/@/:username/parties` | 파티 목록 |
-| `$username.parties.edit.$id.tsx` | `/@/:username/parties/edit/:id` | 파티 편집 |
-| `$username.pickups._index.tsx` | `/@/:username/pickups` | 픽업 이력 |
-| `$username.pickups.edit.$id.tsx` | `/@/:username/pickups/edit/:id` | 픽업 편집 |
-| `$username.futures.tsx` | `/@/:username/futures` | 미래 콘텐츠 뷰 |
-| `$username.friends.tsx` | `/@/:username/friends` | 팔로우/팔로워 |
+## 라우트 파일의 책임
 
-## 설정 (인증 필요)
+라우트 파일은 아래 역할까지만 맡는 것을 기본으로 합니다.
 
-| 파일 | URL | 설명 |
-|------|-----|------|
-| `my.tsx` | `/my` | 내 대시보드 |
-| `edit._index.tsx` | `/edit` | 편집 허브 |
-| `edit.profile.tsx` | `/edit/profile` | 프로필 설정 |
-| `edit.security.tsx` | `/edit/security` | 보안 설정 |
-| `edit.passkey.tsx` | `/edit/passkey` | Passkey 레이아웃 |
-| `edit.passkey._index.tsx` | `/edit/passkey` | Passkey 목록 |
-| `edit.passkey.$uid.tsx` | `/edit/passkey/:uid` | Passkey 상세 |
+- `loader`
+- `action`
+- 파라미터 해석
+- 접근 제어
+- `meta`
+- 상위 화면 조립
 
-## 인증
+반대로 아래는 라우트 파일 안에 오래 쌓아두지 않는 편이 좋습니다.
 
-| 파일 | URL | 설명 |
-|------|-----|------|
-| `auth.google.signin.tsx` | `/auth/google/signin` | Google 로그인 시작 |
-| `auth.google.callback.tsx` | `/auth/google/callback` | Google OAuth 콜백 |
-| `auth.passkey.signin.tsx` | `/auth/passkey/signin` | Passkey 로그인 |
-| `auth.passkey.register.tsx` | `/auth/passkey/register` | Passkey 등록 |
-| `register.tsx` | `/register` | 회원가입 |
-| `signout.tsx` | `/signout` | 로그아웃 |
-| `unauthorized.tsx` | `/unauthorized` | 미인증 오류 |
+- 큰 화면 조각
+- 한 화면에서만 쓰는 클라이언트 훅
+- 반복 렌더링 블록
+- 도메인 재사용 UI
 
-## API 라우트
+## route-local 구성 규칙
 
-| 파일 | URL | 메서드 | 설명 |
-|------|-----|--------|------|
-| `api.contents.tsx` | `/api/contents` | POST | 콘텐츠 즐겨찾기 |
-| `api.contents.$uid.comments.tsx` | `/api/contents/:uid/comments` | POST/DELETE | 댓글 |
-| `api.community.posts.$uid.comments.tsx` | `/api/community/posts/:uid/comments` | GET/POST | 커뮤니티 댓글 |
-| `api.community.posts.$uid.likes.tsx` | `/api/community/posts/:uid/likes` | GET/POST | 커뮤니티 좋아요 |
-| `api.preference.tsx` | `/api/preference` | POST | 사용자 설정 |
-| `api.followerships.tsx` | `/api/followerships` | POST/DELETE | 팔로우 |
-| `api.students.$uid.items.tsx` | `/api/students/:uid/items` | POST | 학생 아이템 추적 |
-| `api.events.$eventUid.shop-state.tsx` | `/api/events/:eventUid/shop-state` | POST | 이벤트 상점 상태 |
-| `api.caches.$command.tsx` | `/api/caches/:command` | GET | 캐시 관리 |
+한 라우트 또는 라우트 패밀리에서만 쓰는 코드는 라우트 옆에 둡니다.
 
-## 커뮤니티 관련 메모
+- `app/routes/<route>._components/*`
+- `app/routes/<route>/_components/*`
 
-- `/community`는 `community_posts` 기반의 SNS형 피드다.
-- 현재 커뮤니티 페이지 노출 대상은 `student_review`, `event_opinion` 두 타입이다.
-- `guide` 타입 공략글은 같은 `community_posts` 계층에 저장되지만 현재 `/community`에서는 숨김 처리되어 있다.
-- `/students/gradings`는 별도 목록 화면이 아니라 커뮤니티 학생 평가 필터 화면으로 연결된다.
-- 이벤트 상세/미래시의 의견 UI는 레거시 `content_comments` 인터페이스를 유지하지만, 내부 저장소는 `community_posts` / `community_comments`를 사용한다.
-- 프로필의 `/@/:username/parties` 화면은 여전히 유지되지만, 내부 저장소는 `community_posts(postType='guide')`이다.
+사용 기준은 아래와 같습니다.
 
-## 유틸리티
+- 한 화면에서만 쓰는 UI 조각이면 route-local
+- 해당 라우트 전용 훅이면 route-local
+- 여러 라우트에서 재사용되면 `app/components/features/<domain>` 으로 승격
 
-| 파일 | URL | 설명 |
-|------|-----|------|
-| `utils.growth.tsx` | `/utils/growth` | 성장 플래너 레이아웃 |
-| `utils.growth._index.tsx` | `/utils/growth` | `/utils/growth/students`로 리다이렉트 |
-| `utils.growth.students.tsx` | `/utils/growth/students` | 학생 성장/재화 플래너 |
-| `utils.pyroxene.tsx` | `/utils/pyroxene` | 파이록신 계획 도구 |
-| `utils.raidscore.tsx` | `/utils/raidscore` | 레이드 점수 계산 |
-| `utils.relationship.tsx` | `/utils/relationship` | 관계 추적 도구 |
-| `raids.data.$id.videos.tsx` | `/raids/data/:id/videos` | 레이드 영상 데이터 API |
+## 인증 패턴
 
-## 라우트 작성 컨벤션
+인증이 필요한 라우트는 `loader` 와 `action` 양쪽에서 직접 검사합니다.
 
-### 화면 조립 위치
-
-- 라우트 파일은 `loader`, `action`, `meta`, 파라미터 처리, 상위 화면 조립까지만 담당한다.
-- 한 화면에서만 쓰는 UI 조각은 같은 라우트 패밀리의 `._components` 또는 `/_components` 디렉터리로 분리한다.
-- 라우트 전용 훅도 재사용되지 않으면 같은 route-local 디렉터리에 둔다.
-- 여러 라우트에서 재사용되는 도메인 UI는 `app/components/features/<domain>`로 올리고, 범용 UI는 `app/components/primitives`를 사용한다.
-
-예시:
-
-- `app/routes/students.$id._components/*`
-- `app/routes/events.$uid._components/*`
-- `app/routes/raids.$id._components/*`
-- `app/routes/$username.parties._components/*`
-
-### 인증이 필요한 라우트
-
-```typescript
+```ts
 export async function loader({ request, context }: LoaderFunctionArgs) {
-  const sensei = await authenticator.isAuthenticated(request);
-  if (!sensei) return redirect("/");
-  // ...
+  const env = context.cloudflare.env;
+  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  if (!sensei) {
+    return redirect("/unauthorized");
+  }
 }
 ```
 
-### 메타 태그
+- 읽기 제한이 있는 페이지는 `loader` 에서 막습니다.
+- 쓰기 액션은 `action` 에서 다시 검사합니다.
+- 클라이언트 조건부 렌더링만으로 권한을 대신하지 않습니다.
 
-```typescript
-export function meta({ data }: MetaArgs<typeof loader>) {
-  return [
-    { title: `${data?.name} | MolluLog` },
-    { name: "description", content: data?.description },
-  ];
-}
+## 부모/자식 라우트 데이터 공유
+
+- 부모에서 이미 읽은 데이터를 자식이 다시 불러오지 않도록 우선 설계합니다.
+- 부모 레이아웃이 공통 데이터를 가진다면 `Outlet context` 또는 route 구조 재조정으로 해결합니다.
+- `shouldRevalidate` 는 성능 최적화가 필요한 화면에서만 명시적으로 둡니다.
+
+## 메타 태그 규칙
+
+- 이동 가능한 화면은 기본적으로 `meta` 를 둡니다.
+- 제목과 설명은 route 데이터 기준으로 계산합니다.
+- 제목 문자열은 한국어 사용자 경험을 우선합니다.
+
+```ts
+export const meta: MetaFunction<typeof loader> = ({ data }) => [
+  { title: data?.title ? `${data.title} | 몰루로그` : "몰루로그" },
+];
 ```
 
-### 중첩 라우트 레이아웃
+## API 라우트 규칙
 
-레이아웃 파일 (예: `raids.$id.tsx`)은 `<Outlet />`을 포함해야 함:
+- 내부 API 라우트는 `api.` prefix를 사용합니다.
+- 가능하면 route 수준의 얇은 입력 검증과 응답 조립만 두고, 실제 로직은 `models` 또는 `repositories` 로 내립니다.
+- 캐시 flush, 좋아요, 댓글, 설정 저장처럼 브라우저 상호작용에 직접 연결되는 엔드포인트를 여기에 둡니다.
 
-```typescript
-export default function RaidLayout() {
-  const { raid } = useLoaderData<typeof loader>();
-  return (
-    <div>
-      <RaidHeader raid={raid} />
-      <Outlet />
-    </div>
-  );
-}
-```
+## 네이밍 기준
+
+- URL 구조가 먼저 보이도록 파일명을 짓습니다.
+- 축약보다 의미가 드러나는 파라미터 이름을 선호합니다.
+  - 예: `$raidType`, `$seasonIndex`, `$uid`
+- route-local 디렉터리 이름은 해당 라우트 prefix를 그대로 따릅니다.
+
+## 체크리스트
+
+새 라우트를 만들기 전에 아래를 확인합니다.
+
+1. 이 기능이 새 라우트가 필요한가, 기존 route-local 분리로 충분한가
+2. 인증 검사가 `loader`/`action` 에 모두 필요한가
+3. 메타 태그가 필요한 화면인가
+4. 큰 화면 조각을 route-local 로 분리해야 하는가
+5. 자식 라우트가 부모 데이터를 중복 조회하지 않는가
