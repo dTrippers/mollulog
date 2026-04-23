@@ -1,5 +1,5 @@
-import type { ShopResource } from "~/components/features/events/shop/types";
 import type { MinigameConfig } from "~/components/features/events/shop/constants";
+import type { ShopResource } from "~/components/features/events/shop/types";
 import { graphql } from "~/graphql";
 import type { EventContentShopContentQuery, RecruitmentGroupsListQuery } from "~/graphql/graphql";
 import { RunTypeEnum } from "~/graphql/graphql";
@@ -30,8 +30,11 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
     since: content.startAt,
     until: content.endAt,
     contentUid: content.contentUid,
+    shopContentUid: content.shopContentUid,
     recruitmentGroupUid: content.recruitmentGroupUid,
-    shopAvailable: content.contentType === "event" && content.contentUid != null && content.runType !== "permanent",
+    shopAvailable:
+      content.shopContentUid != null ||
+      (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
   };
 }
 
@@ -133,9 +136,7 @@ function hasShopResourceAndPaymentResource(
   return resource.resource !== null && resource.paymentResource !== null;
 }
 
-function transformShopResources(
-  shopResources: NonNullable<EventContentData>["shopResources"],
-): ShopResource[] {
+function transformShopResources(shopResources: NonNullable<EventContentData>["shopResources"]): ShopResource[] {
   return shopResources.filter(hasShopResourceAndPaymentResource).map((r) => ({
     uid: r.uid,
     resourceAmount: r.resourceAmount,
@@ -187,9 +188,7 @@ function resolveRounds(condition: ServerCondition): MinigameConfig["rewardGroups
   return "subsequent";
 }
 
-function transformMinigameConfigs(
-  configs: NonNullable<EventContentData>["minigameConfigs"],
-): MinigameConfig | null {
+function transformMinigameConfigs(configs: NonNullable<EventContentData>["minigameConfigs"]): MinigameConfig | null {
   if (configs.length === 0) return null;
   const serverConfig = configs[0];
   const paymentResource = serverConfig.payment.resource;
@@ -207,7 +206,14 @@ function transformMinigameConfigs(
       rounds: resolveRounds(group.condition),
       rewards: group.rewards.flatMap((r) =>
         r.resource
-          ? [{ resourceType: r.resource.type, resourceUid: r.resource.uid, quantity: r.quantity, rarity: r.resource.rarity ?? undefined }]
+          ? [
+              {
+                resourceType: r.resource.type,
+                resourceUid: r.resource.uid,
+                quantity: r.quantity,
+                rarity: r.resource.rarity ?? undefined,
+              },
+            ]
           : [],
       ),
     })),
@@ -216,18 +222,23 @@ function transformMinigameConfigs(
 
 export async function getEventShopContent(env: Env, timelineUid: string) {
   const metadata = await getEventMetadata(env, timelineUid);
-  if (!metadata?.contentUid) {
+  if (!metadata) {
     return null;
   }
 
-  const { contentUid, runType } = metadata;
+  const shopContentUid = metadata.shopContentUid ?? metadata.contentUid;
+  if (!shopContentUid) {
+    return null;
+  }
+
+  const { runType } = metadata;
 
   return fetchCached(
     env,
     `event-content::shop::v1::${timelineUid}`,
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
-        eventUid: contentUid,
+        eventUid: shopContentUid,
         runType: toRunTypeEnum(runType),
       });
       if (error || !data?.eventContent) {

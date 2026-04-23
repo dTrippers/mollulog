@@ -1,13 +1,14 @@
-import { memo, useMemo, useState } from "react";
-import { ResourceTypeEnum } from "~/graphql/graphql";
-import { NumberInput, ResourceCard } from "~/components/primitives";
-import type { Stage, CollectableResource, ShopResource } from "./types";
-import type { ShopState, ShopActions } from "./hooks";
-import { resourceCountLabel, calculateMinigameRewards } from "./utils";
-import type { MinigameConfig } from "./constants";
 import { Transition } from "@headlessui/react";
+import { memo, useMemo, useState } from "react";
+import { NumberInput, ResourceCard } from "~/components/primitives";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import BugReportModal from "./BugReportModal";
+import { calculateBoughtItemQuantities, calculateBoughtResourceQuantities } from "./calculations/shop-rewards";
+import type { MinigameConfig } from "./constants";
+import type { ShopActions, ShopState } from "./hooks";
 import type { CalculationResult } from "./hooks/useShopCalculations";
+import type { CollectableResource, ShopResource, Stage } from "./types";
+import { calculateMinigameRewards, resourceCountLabel } from "./utils";
 
 type CollectedTotalsSectionProps = {
   stages: Stage[];
@@ -141,8 +142,15 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     [fromFirstRun, fromRepeatedRuns, toBuyShopItems, toPlayMinigame, fromMinigame],
   );
 
-  // Get shop resources that are being bought (items exchanged with payment items)
-  // Merge same resources and calculate total quantity (itemQuantities * resourceAmount)
+  const boughtShopResources = useMemo(
+    () => calculateBoughtResourceQuantities(shopResources, state.itemQuantities),
+    [shopResources, state.itemQuantities],
+  );
+  const boughtItemQuantities = useMemo(
+    () => calculateBoughtItemQuantities(shopResources, state.itemQuantities),
+    [shopResources, state.itemQuantities],
+  );
+
   // Also include minigame rewards as bought resources
   const mergedBoughtResources = useMemo(() => {
     const resourceMap = new Map<
@@ -171,11 +179,8 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     };
 
     // Add shop resources
-    for (const { uid, resource, resourceAmount } of shopResources) {
-      const shopItemQuantity = state.itemQuantities[uid] || 0;
-      if (shopItemQuantity > 0) {
-        addResource(resource.type, resource.uid, shopItemQuantity * resourceAmount, resource.rarity, resource.name);
-      }
+    for (const { resource, totalQuantity } of boughtShopResources) {
+      addResource(resource.type, resource.uid, totalQuantity, resource.rarity, resource.name);
     }
 
     // Add minigame rewards
@@ -187,7 +192,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     }
 
     return Array.from(resourceMap.values());
-  }, [minigameConfig, shopResources, state.itemQuantities, state.minigamePlayCount]);
+  }, [boughtShopResources, minigameConfig, state.minigamePlayCount]);
 
   const apBreakdown = useMemo(
     () => [
@@ -230,13 +235,11 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
             </p>
           )}
           {collectableResources.map(({ uid: itemUid, name: itemName }) => {
-            const shopItemUid = shopResources.find(({ resource }) => resource.uid === itemUid)?.uid;
-
             // Gather all counts
             const existingCount = state.existingPaymentItemQuantities[itemUid] || 0;
             const firstRunCount = fromFirstRun[itemUid] || 0;
             const fromMinigameCount = fromMinigame[itemUid] || 0;
-            const fromShopCount = shopItemUid ? state.itemQuantities[shopItemUid] || 0 : 0;
+            const fromShopCount = boughtItemQuantities[itemUid] || 0;
             const repeatedRunsCount = fromRepeatedRuns[itemUid] || 0;
             const toPlayMinigameCount = toPlayMinigame[itemUid] || 0;
             const toBuyCount = toBuyShopItems[itemUid] || 0;

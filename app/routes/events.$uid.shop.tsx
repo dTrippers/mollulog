@@ -2,8 +2,8 @@ import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { getEventMetadata, getEventShopContent } from "~/models/event-content";
-import { getRecruitedStudents } from "~/models/recruited-student";
 import { getEventShopState } from "~/models/event-shop-state";
+import { getRecruitedStudents } from "~/models/recruited-student";
 import EventShopContent from "./events.$uid._components/EventShopContent";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -18,7 +18,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
   const shopContent = await getEventShopContent(env, timelineUid);
-  if (metadata.runType === "permanent" || !shopContent || shopContent.shopResources.length === 0) {
+  if (
+    (metadata.runType === "permanent" && !metadata.shopContentUid) ||
+    !shopContent ||
+    shopContent.shopResources.length === 0
+  ) {
     return {
       eventName: metadata.name,
       until: metadata.until,

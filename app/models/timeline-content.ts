@@ -35,6 +35,7 @@ export const timelineContentsTable = sqliteTable("timeline_contents", {
   runType: text("run_type").notNull().default("first"),
   occurrence: int(),
   contentUid: text("content_uid"),
+  shopContentUid: text("shop_content_uid"),
   recruitmentGroupUid: text("recruitment_group_uid"),
   confirmed: int().notNull().default(0),
   isSpoiler: int("is_spoiler").notNull().default(0),
@@ -57,6 +58,7 @@ export type TimelineContent = {
   runType: RunType;
   occurrence: number | null;
   contentUid: string | null;
+  shopContentUid: string | null;
   recruitmentGroupUid: string | null;
   confirmed: boolean;
   isSpoiler: boolean;
@@ -88,6 +90,7 @@ function toRaw(row: typeof timelineContentsTable.$inferSelect): RawTimelineConte
     runType: row.runType as RunType,
     occurrence: row.occurrence ?? null,
     contentUid: row.contentUid ?? null,
+    shopContentUid: row.shopContentUid ?? null,
     recruitmentGroupUid: row.recruitmentGroupUid ?? null,
     confirmed: row.confirmed === 1,
     isSpoiler: row.isSpoiler === 1,
@@ -254,11 +257,7 @@ export async function getTimelineContentsByContentUids(env: Env, contentUids: st
   const rows = (
     await Promise.all(
       splitIntoBatches([...new Set(contentUids)]).map((batch) =>
-        db
-          .select()
-          .from(timelineContentsTable)
-          .where(inArray(timelineContentsTable.contentUid, batch))
-          .all(),
+        db.select().from(timelineContentsTable).where(inArray(timelineContentsTable.contentUid, batch)).all(),
       ),
     )
   ).flat();
@@ -274,11 +273,7 @@ export async function getTimelineContentsByRecruitmentGroupUids(
   const rows = (
     await Promise.all(
       splitIntoBatches([...new Set(recruitmentGroupUids)]).map((batch) =>
-        db
-          .select()
-          .from(timelineContentsTable)
-          .where(inArray(timelineContentsTable.recruitmentGroupUid, batch))
-          .all(),
+        db.select().from(timelineContentsTable).where(inArray(timelineContentsTable.recruitmentGroupUid, batch)).all(),
       ),
     )
   ).flat();
@@ -361,6 +356,7 @@ export async function upsertTimelineContent(env: Env, input: Omit<TimelineConten
     runType: input.runType,
     occurrence: input.occurrence,
     contentUid: input.contentUid,
+    shopContentUid: input.shopContentUid,
     recruitmentGroupUid: input.recruitmentGroupUid,
     confirmed: input.confirmed ? 1 : 0,
     tags: JSON.stringify(input.tags),
