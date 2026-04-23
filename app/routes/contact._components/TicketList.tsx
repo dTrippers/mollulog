@@ -1,9 +1,7 @@
 import dayjs from "dayjs";
-import { Link } from "react-router";
 import { ChevronRightIcon, MessageSquareTextIcon } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemHeader, ItemTitle } from "~/components/ui/item";
+import { Link } from "react-router";
+import { Callout } from "~/components/primitives";
 import type { FeedbackTicket } from "~/models/feedback";
 import FeedbackStatusBadge from "./FeedbackStatusBadge";
 
@@ -18,42 +16,41 @@ function getPreview(content: string): string {
 
 export default function TicketList({ tickets }: { tickets: FeedbackTicket[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>내 문의 내역</CardTitle>
-      </CardHeader>
+    <section className="rounded-xl border border-border bg-card p-5 text-card-foreground">
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold">내 문의 내역</h2>
+      </div>
 
-      <CardContent>
-        {tickets.length === 0 ? (
-          <Alert className="rounded-xl border-dashed bg-muted/20">
-            <MessageSquareTextIcon />
-            <AlertTitle>등록된 문의가 아직 없어요.</AlertTitle>
-            <AlertDescription>아래 폼에서 첫 문의를 남겨보세요.</AlertDescription>
-          </Alert>
-        ) : (
-          <ItemGroup className="gap-3">
-            {tickets.map((ticket) => (
-              <Item key={ticket.uid} asChild variant="muted" className="rounded-xl">
-                <Link to={`/contact/${ticket.uid}`}>
-                  <ItemContent className="min-w-0 gap-2">
-                    <ItemHeader className="min-w-0 items-start">
-                      <ItemTitle className="min-w-0 max-w-full flex-1">{ticket.title}</ItemTitle>
-                      <FeedbackStatusBadge status={ticket.status} />
-                    </ItemHeader>
-                    <ItemDescription>{getPreview(ticket.content)}</ItemDescription>
-                    <p className="text-xs text-muted-foreground">
-                      {dayjs(ticket.createdAt).format("YYYY-MM-DD HH:mm")}
-                    </p>
-                  </ItemContent>
-                  <ItemActions className="text-muted-foreground">
-                    <ChevronRightIcon />
-                  </ItemActions>
-                </Link>
-              </Item>
-            ))}
-          </ItemGroup>
-        )}
-      </CardContent>
-    </Card>
+      {tickets.length === 0 ? (
+        <Callout
+          Icon={MessageSquareTextIcon}
+          title="등록된 문의가 아직 없어요."
+          description="아래 폼에서 첫 문의를 남겨보세요."
+          tone="info"
+        />
+      ) : (
+        <div className="space-y-3">
+          {tickets.map((ticket) => (
+            <Link
+              key={ticket.uid}
+              to={`/contact/${ticket.uid}`}
+              className="block rounded-xl border border-border bg-background px-4 py-4 transition-colors hover:bg-muted/60"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-foreground">{ticket.title}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{getPreview(ticket.content)}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">{dayjs(ticket.createdAt).format("YYYY-MM-DD HH:mm")}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <FeedbackStatusBadge status={ticket.status} />
+                  <ChevronRightIcon className="size-4 text-muted-foreground" />
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

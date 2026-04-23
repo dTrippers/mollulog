@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 import { Link } from "react-router";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type PrimitiveButtonProps = {
   text?: string;
@@ -54,59 +54,53 @@ export default function PrimitiveButton({
   const ResolvedIcon = Icon ?? LegacyIcon;
 
   const variantClass = {
-    default:
-      "border-neutral-200 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-700 shadow-neutral-200 dark:shadow-neutral-900",
-    primary:
-      "bg-blue-500 enabled:hover:bg-blue-400 disabled:bg-blue-300 text-white border-transparent shadow-blue-200/60 dark:shadow-blue-950/40",
-    danger:
-      "bg-red-500 enabled:hover:bg-red-400 disabled:bg-red-300 text-white border-transparent shadow-red-200/60 dark:shadow-red-950/40",
-    inverse:
-      "bg-neutral-900 enabled:hover:bg-neutral-700 disabled:bg-neutral-500 text-white border-transparent shadow-neutral-300/40 dark:shadow-black/40",
-    tint: "text-neutral-600 dark:text-neutral-300 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border-neutral-200 dark:border-neutral-800",
-    "tint-blue":
-      "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border-blue-200 dark:border-blue-800",
-    "tint-red":
-      "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border-red-200 dark:border-red-800",
-    list: "border-transparent shadow-none hover:bg-neutral-100 dark:hover:bg-neutral-800",
+    default: "border-border bg-background text-foreground hover:bg-muted hover:text-foreground",
+    primary: "border-transparent bg-primary text-primary-foreground hover:bg-primary/90",
+    danger: "border-transparent bg-destructive text-white hover:bg-destructive/90",
+    inverse: "border-transparent bg-foreground text-background hover:opacity-90",
+    tint: "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+    "tint-blue": "border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300",
+    "tint-red": "border-red-500/20 bg-red-500/10 text-red-700 hover:bg-red-500/15 dark:text-red-300",
+    list: "border-transparent bg-transparent shadow-none hover:bg-muted",
   }[resolvedVariant];
 
   const sizeClass = {
-    md: "px-4 py-1.5 rounded-lg text-sm",
-    sm: "px-3 py-1 rounded-lg text-sm",
-    xs: `${compact ? "px-1" : "px-2.5"} py-1 rounded-md text-xs font-medium whitespace-nowrap`,
-    list: "w-full p-4 rounded-lg text-sm",
+    md: "min-h-10 px-4 py-2 rounded-md text-sm",
+    sm: "min-h-9 px-3 py-1.5 rounded-md text-sm",
+    xs: `${compact ? "px-1.5" : "px-2.5"} min-h-8 py-1 rounded-sm text-xs font-medium whitespace-nowrap`,
+    list: "w-full min-h-12 p-4 rounded-md text-sm",
   }[size];
 
   const justifyClass = justify === "start" ? "justify-start text-left" : "justify-center text-center";
   const widthClass = fullWidth ? "w-full" : "w-fit";
-  const disabledClass = disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer";
-  const shadowClass =
-    shadow === "none" ? "" : shadow === "xs" ? "shadow-xs" : variant === "list" || size === "xs" ? "" : "shadow-xs";
-  const buttonClassName = sanitizeClassName(`
-    inline-flex items-center border transition
-    ${widthClass}
-    ${justifyClass}
-    ${sizeClass}
-    ${variantClass}
-    ${shadowClass}
-    ${disabledClass}
-    ${className ?? ""}
-  `);
+  const shadowClass = shadow === "none" ? "" : shadow === "xs" ? "shadow-xs" : variant === "list" || size === "xs" ? "" : "shadow-xs";
+  const buttonClassName = cn(
+    "inline-flex items-center gap-2 border font-medium whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
+    widthClass,
+    justifyClass,
+    sizeClass,
+    variantClass,
+    shadowClass,
+    className,
+  );
+
   const content =
     children ??
-    (Icon ? (
+    (ResolvedIcon ? (
       <div className="flex items-center gap-2">
-        <Icon className="size-3.5 shrink-0" strokeWidth={2} />
+        <ResolvedIcon className="size-4 shrink-0" strokeWidth={2} />
         <span>{text}</span>
       </div>
     ) : (
       text
     ));
+
   const handleClick = (event: MouseEvent<HTMLElement>) => {
     if (disabled) {
       event.preventDefault();
       return;
     }
+
     onClick?.(event);
   };
 

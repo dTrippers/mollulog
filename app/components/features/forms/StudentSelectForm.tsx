@@ -1,9 +1,9 @@
 import { ChevronDownIcon, XMarkIcon } from "@heroicons/react/20/solid";
 import hangul from "hangul-js";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Field } from "~/components/primitives";
+import { cn } from "~/lib/utils";
 import { studentImageUrl } from "~/models/assets";
-import { sanitizeClassName } from "~/prophandlers";
 import { useFormGroup } from "./FormGroup";
 
 type Student = {
@@ -16,7 +16,7 @@ function StudentImage({ student, size }: { student: Student; size: string }) {
     <img
       src={studentImageUrl(student.uid)}
       alt={student.name}
-      className={`${size} rounded-full object-cover`}
+      className={cn(size, "rounded-full border border-border bg-muted object-cover")}
       loading="lazy"
     />
   );
@@ -26,14 +26,16 @@ type SearchInputProps = {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   searchPlaceholder?: string;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
 };
 
-function SearchInput({ searchQuery, setSearchQuery, searchPlaceholder }: SearchInputProps) {
+function SearchInput({ searchQuery, setSearchQuery, searchPlaceholder, inputRef }: SearchInputProps) {
   return (
-    <div className="sticky top-0 z-10 border-b border-neutral-200 bg-white/95 p-2 backdrop-blur-sm dark:border-neutral-800 dark:bg-neutral-950/95">
+    <div className="sticky top-0 z-10 border-b border-border bg-popover/95 p-1.5 backdrop-blur-sm">
       <input
+        ref={inputRef}
         type="text"
-        className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700 outline-none transition placeholder:text-neutral-400 focus:border-blue-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:focus:border-blue-700"
+        className="min-h-10 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
         placeholder={searchPlaceholder ?? "검색해서 찾기..."}
         value={searchQuery}
         onChange={(event) => {
@@ -65,7 +67,7 @@ export default function StudentSelectForm({
   description,
   name,
   students,
-  initialStudentUids = [],
+  initialStudentUids,
   placeholder,
   searchPlaceholder,
   multiple = false,
@@ -74,10 +76,14 @@ export default function StudentSelectForm({
   containerClassName,
 }: StudentSelectFormProps) {
   const { submitFormGroup } = useFormGroup();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
-  const [selectedUids, setSelectedUids] = useState<string[]>(initialStudentUids);
+  const [selectedUids, setSelectedUids] = useState<string[]>(() => [...(initialStudentUids ?? [])]);
+  const buttonId = useId();
+  const listboxId = useId();
 
   const selectedStudents = selectedUids
     .map((uid) => students.find((student) => student.uid === uid))
@@ -85,7 +91,17 @@ export default function StudentSelectForm({
   const filteredStudents = students.filter((student) => hangul.search(student.name, debouncedSearchQuery) >= 0);
 
   useEffect(() => {
-    setSelectedUids(initialStudentUids);
+    const nextSelectedUids = initialStudentUids ?? [];
+    setSelectedUids((previousSelectedUids) => {
+      if (
+        previousSelectedUids.length === nextSelectedUids.length &&
+        previousSelectedUids.every((uid, index) => uid === nextSelectedUids[index])
+      ) {
+        return previousSelectedUids;
+      }
+
+      return [...nextSelectedUids];
+    });
   }, [initialStudentUids]);
 
   useEffect(() => {
@@ -95,6 +111,36 @@ export default function StudentSelectForm({
 
     return () => clearTimeout(timer);
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    searchInputRef.current?.focus();
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+        setSearchQuery("");
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsOpen(false);
+        setSearchQuery("");
+      }
+    };
+
+    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen]);
 
   const updateSelection = (newSelectedValues: string[]) => {
     setSelectedUids(newSelectedValues);
@@ -119,7 +165,7 @@ export default function StudentSelectForm({
 
   const renderSelectedDisplay = () => {
     if (selectedStudents.length === 0) {
-      return placeholder ? <p className="text-neutral-400 dark:text-neutral-500">{placeholder}</p> : null;
+      return placeholder ? <p className="text-muted-foreground">{placeholder}</p> : null;
     }
 
     if (multiple) {
@@ -128,17 +174,17 @@ export default function StudentSelectForm({
           {selectedStudents.map((student) => (
             <div
               key={student.uid}
-              className="flex cursor-pointer items-center gap-x-2 rounded-full bg-blue-100 transition-colors hover:bg-blue-200 dark:bg-blue-950 dark:hover:bg-blue-900"
+              className="flex cursor-pointer items-center gap-x-2 rounded-full border border-primary/20 bg-primary/10 transition-colors hover:bg-primary/15"
             >
               <StudentImage student={student} size="size-8" />
-              <span className="text-sm text-blue-900 dark:text-blue-100">{student.name}</span>
+              <span className="text-sm text-primary">{student.name}</span>
               <button
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
                   handleRemove(student.uid);
                 }}
-                className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-200"
+                className="text-primary/70 hover:text-primary"
               >
                 <XMarkIcon className="mr-2 size-4" />
               </button>
@@ -151,7 +197,7 @@ export default function StudentSelectForm({
     const student = selectedStudents[0];
 
     return (
-      <div className="flex items-center gap-3 text-neutral-700 dark:text-neutral-300">
+      <div className="flex items-center gap-3 text-foreground">
         <StudentImage student={student} size="size-6" />
         <p>{student.name}</p>
       </div>
@@ -165,48 +211,56 @@ export default function StudentSelectForm({
         description={description}
         containerClassName={containerClassName ?? "mt-2 mb-8 last:mb-2"}
       >
-        <div className="relative">
+        <div className="relative" ref={rootRef}>
           <button
+            id={buttonId}
             type="button"
-            className={sanitizeClassName(`
-              flex w-full items-center justify-between gap-3 rounded-lg border border-neutral-200
-              bg-white px-3 py-2 text-left transition hover:border-neutral-300 hover:bg-neutral-50
-              dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:hover:bg-neutral-900/80
-              ${className ?? ""}
-            `)}
+            className={cn(
+              "flex min-h-10 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2 text-left text-foreground transition-colors hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none",
+              className,
+            )}
             onClick={() => setIsOpen((prev) => !prev)}
+            aria-controls={listboxId}
+            aria-expanded={isOpen}
+            aria-haspopup="dialog"
           >
             <div className="min-w-0 flex-1">{renderSelectedDisplay()}</div>
-            <ChevronDownIcon
-              className={sanitizeClassName(`
-                size-5 shrink-0 text-neutral-400 transition-transform
-                ${isOpen ? "rotate-180" : ""}
-              `)}
-            />
+            <ChevronDownIcon className={cn("size-5 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
           </button>
           {isOpen && (
-            <div className="absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-neutral-200 bg-white shadow-lg shadow-neutral-950/10 dark:border-neutral-700 dark:bg-neutral-950">
+            <div
+              id={listboxId}
+              aria-labelledby={buttonId}
+              className="absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg shadow-foreground/10"
+            >
               <SearchInput
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
                 searchPlaceholder={searchPlaceholder}
+                inputRef={searchInputRef}
               />
               {filteredStudents.length > 0 ? (
-                filteredStudents.slice(0, 10).map((student) => (
-                  <button
-                    type="button"
-                    key={student.uid}
-                    className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-neutral-50 dark:hover:bg-neutral-900"
-                    onClick={() => handleSelect(student.uid)}
-                  >
-                    <div className="flex w-full items-center gap-x-3 px-3 py-2.5">
-                      <StudentImage student={student} size="size-8" />
-                      <p className="grow text-sm text-neutral-700 dark:text-neutral-200">{student.name}</p>
-                    </div>
-                  </button>
-                ))
+                <ul className="py-0.5">
+                  {filteredStudents.slice(0, 10).map((student) => (
+                    <li key={student.uid}>
+                      <button
+                        type="button"
+                        className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-muted/60"
+                        onClick={() => handleSelect(student.uid)}
+                      >
+                        <div className="flex w-full items-center gap-x-3 px-3 py-2">
+                          <StudentImage student={student} size="size-8" />
+                          <p className="grow text-sm text-foreground">{student.name}</p>
+                          {selectedUids.includes(student.uid) && (
+                            <span className="text-xs font-medium text-primary">선택됨</span>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               ) : (
-                <div className="p-4 text-center text-sm text-neutral-500 dark:text-neutral-400">검색 결과가 없어요</div>
+                <div className="p-4 text-center text-sm text-muted-foreground">검색 결과가 없어요</div>
               )}
             </div>
           )}

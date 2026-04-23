@@ -1,4 +1,5 @@
 import { UserIcon } from "@heroicons/react/24/outline";
+import { cn } from "~/lib/utils";
 import { studentImageUrl } from "~/models/assets";
 
 type ProfileImageProps = {
@@ -22,11 +23,15 @@ export default function ProfileImage({ studentUid, imageSize }: ProfileImageProp
       [imageSizeClass, iconSizeClass] = ["size-8", "size-6"];
   }
 
-  return studentUid ?
-    <img className={`${imageSizeClass} dark:opacity-90 inline rounded-full object-cover`} src={studentImageUrl(studentUid)} alt="학생 프로필" /> :
-    (
-      <div className={`${imageSizeClass} flex items-center justify-center rounded-full border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300`}>
-        <UserIcon className={iconSizeClass} />
-      </div>
-    );
+  return studentUid ? (
+    <img
+      className={cn(imageSizeClass, "inline rounded-full border border-border bg-muted object-cover dark:opacity-90")}
+      src={studentImageUrl(studentUid)}
+      alt="학생 프로필"
+    />
+  ) : (
+    <div className={cn(imageSizeClass, "flex items-center justify-center rounded-full border border-border bg-muted text-muted-foreground")}>
+      <UserIcon className={iconSizeClass} />
+    </div>
+  );
 }

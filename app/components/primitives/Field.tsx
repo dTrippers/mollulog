@@ -1,5 +1,5 @@
-import type { ReactNode } from "react";
-import { sanitizeClassName } from "~/prophandlers";
+import { cloneElement, isValidElement, type ReactElement, type ReactNode } from "react";
+import { cn } from "~/lib/utils";
 
 type FieldProps = {
   label?: string;
@@ -24,20 +24,45 @@ export default function Field({
   descriptionClassName,
   errorClassName,
 }: FieldProps) {
+  const descriptionId = htmlFor && description ? `${htmlFor}-description` : undefined;
+  const errorId = htmlFor && error ? `${htmlFor}-error` : undefined;
+  const describedBy = [descriptionId, errorId].filter(Boolean).join(" ") || undefined;
+
+  const content =
+    htmlFor &&
+    isValidElement(children) &&
+    typeof children.type !== "symbol"
+      ? cloneElement(children as ReactElement<Record<string, unknown>>, {
+          id: (children.props as { id?: string }).id ?? htmlFor,
+          "aria-describedby": [
+            (children.props as { "aria-describedby"?: string })["aria-describedby"],
+            describedBy,
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined,
+          "aria-invalid":
+            error ? true : (children.props as { "aria-invalid"?: boolean })["aria-invalid"],
+        })
+      : children;
+
   return (
-    <div className={sanitizeClassName(containerClassName ?? "")}>
+    <div className={cn("space-y-2", containerClassName)}>
       {label && (
-        <label className={sanitizeClassName(`mb-2 block text-sm font-bold ${labelClassName ?? ""}`)} htmlFor={htmlFor}>
+        <label className={cn("block text-sm font-semibold text-foreground", labelClassName)} htmlFor={htmlFor}>
           {label}
         </label>
       )}
       {description && (
-        <p className={sanitizeClassName(`text-sm text-neutral-500 dark:text-neutral-400 ${descriptionClassName ?? ""}`)}>
+        <p id={descriptionId} className={cn("text-sm text-muted-foreground", descriptionClassName)}>
           {description}
         </p>
       )}
-      {children}
-      {error && <p className={sanitizeClassName(`text-red-500 text-sm mt-2 ${errorClassName ?? ""}`)}>{error}</p>}
+      {content}
+      {error && (
+        <p id={errorId} className={cn("text-sm font-medium text-destructive", errorClassName)}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

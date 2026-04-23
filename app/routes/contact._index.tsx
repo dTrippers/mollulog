@@ -1,11 +1,9 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, isRouteErrorResponse, redirect, useActionData, useLoaderData, useNavigation, useRouteError } from "react-router";
 import { MailIcon } from "lucide-react";
-
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { ErrorPage } from "~/components/features/layout";
-import { Title } from "~/components/primitives";
-import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
+import { Callout, Title } from "~/components/primitives";
 import { getLogger } from "~/lib/observability.server";
 import { createFeedbackTicket, getFeedbackTicketsByUserId } from "~/models/feedback";
 import TicketForm from "./contact._components/TicketForm";
@@ -37,9 +35,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const logger = getLogger(env, ctx, {
-    route: "contact",
-  });
+  const logger = getLogger(env, ctx, { route: "contact" });
   const currentUser = await getAuthenticator(env, ctx).isAuthenticated(request);
   if (!currentUser) {
     return redirect("/unauthorized");
@@ -60,24 +56,11 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 
   if (Object.keys(error).length > 0) {
-    return data<ContactActionData>(
-      {
-        error,
-        values: { title, content },
-      },
-      { status: 400 },
-    );
+    return data<ContactActionData>({ error, values: { title, content } }, { status: 400 });
   }
 
   try {
-    const ticketUid = await createFeedbackTicket(
-      env,
-      currentUser.id,
-      trimmedTitle,
-      trimmedContent,
-      null,
-    );
-
+    const ticketUid = await createFeedbackTicket(env, currentUser.id, trimmedTitle, trimmedContent, null);
     return redirect(`/contact/${ticketUid}`);
   } catch (error) {
     logger.error("Error creating feedback ticket", error, {
@@ -96,15 +79,13 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 };
 
-export const meta: MetaFunction = () => {
-  return [
-    { title: "제안/문의 | 몰루로그" },
-    {
-      name: "description",
-      content: "컨텐츠 및 기능 제안, 오류 신고, 기타 문의 사항과 답변 내역을 확인해보세요.",
-    },
-  ];
-};
+export const meta: MetaFunction = () => [
+  { title: "제안/문의 | 몰루로그" },
+  {
+    name: "description",
+    content: "컨텐츠 및 기능 제안, 오류 신고, 기타 문의 사항과 답변 내역을 확인해보세요.",
+  },
+];
 
 export function ErrorBoundary() {
   const error = useRouteError();
@@ -128,16 +109,21 @@ export default function Contact() {
       />
 
       {!loaderData.authenticated ? (
-        <Alert className="rounded-xl">
-          <MailIcon />
-          <AlertTitle>문의 등록에는 로그인이 필요해요.</AlertTitle>
-          <AlertDescription>
-            <p>계정이 없으신 경우 메일로도 문의를 남기실 수 있어요.</p>
-            <p>
-              <a href="mailto:contact@mollulog.net">contact@mollulog.net</a>
-            </p>
-          </AlertDescription>
-        </Alert>
+        <Callout
+          Icon={MailIcon}
+          title="문의 등록에는 로그인이 필요해요."
+          description={
+            <>
+              <p>계정이 없으신 경우 메일로도 문의를 남기실 수 있어요.</p>
+              <p>
+                <a className="underline underline-offset-4 hover:text-foreground" href="mailto:contact@mollulog.net">
+                  contact@mollulog.net
+                </a>
+              </p>
+            </>
+          }
+          tone="info"
+        />
       ) : (
         <div className="flex flex-col gap-8">
           <TicketList tickets={loaderData.tickets} />

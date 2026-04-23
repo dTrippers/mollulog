@@ -1,50 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ElementType, type ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
-import { getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
-import { getSenseiById, updateSensei } from "~/models/sensei";
-import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
-import { getAllStudents } from "~/models/student";
-import { getPasskeysBySensei } from "~/models/passkey";
-import { cn } from "~/lib/utils";
+import { CheckCircle2Icon, ChevronRightIcon, KeyRoundIcon, LoaderCircleIcon, LogOutIcon } from "lucide-react";
+import { getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
-import { Title } from "~/components/primitives";
-import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import {
-  Field,
-  FieldContent,
-  FieldDescription,
-  FieldError,
-  FieldGroup,
-  FieldLabel,
-} from "~/components/ui/field";
-import { Input } from "~/components/ui/input";
-import {
-  CheckCircle2Icon,
-  ChevronRightIcon,
-  KeyRoundIcon,
-  LoaderCircleIcon,
-  LogOutIcon,
-} from "lucide-react";
-import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from "~/components/ui/item";
+import { Button, Input, Title } from "~/components/primitives";
+import { cn } from "~/lib/utils";
+import { getPasskeysBySensei } from "~/models/passkey";
+import { getSenseiById, updateSensei } from "~/models/sensei";
+import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
+import { getAllStudents } from "~/models/student";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-export const meta: MetaFunction = () => [
-  { title: "프로필 관리 | 몰루로그" },
-];
+export const meta: MetaFunction = () => [{ title: "프로필 관리 | 몰루로그" }];
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -66,11 +39,13 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       friendCode: senseiData.friendCode,
       memberCode: senseiPrivacy?.memberCode ?? null,
     },
-    allStudents: (await getAllStudents(env, true)).map((student) => ({
-      uid: student.uid,
-      name: student.name,
-      order: student.order,
-    })).sort((a, b) => a.order - b.order),
+    allStudents: (await getAllStudents(env, true))
+      .map((student) => ({
+        uid: student.uid,
+        name: student.name,
+        order: student.order,
+      }))
+      .sort((a, b) => a.order - b.order),
     passkeyCount: (await getPasskeysBySensei(env, sensei)).length,
   };
 };
@@ -110,10 +85,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
 
   const intent = formData.get("intent");
   if (intent !== "profile" && intent !== "account") {
-    return data<ActionData>(
-      { error: { form: "잘못된 요청이에요. 다시 시도해주세요." } },
-      { status: 400 },
-    );
+    return data<ActionData>({ error: { form: "잘못된 요청이에요. 다시 시도해주세요." } }, { status: 400 });
   }
 
   if (intent === "profile") {
@@ -124,10 +96,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     const friendCode = typeof friendCodeInput === "string" ? friendCodeInput.toUpperCase() : friendCodeInput;
 
     if (!username) {
-      return data<ActionData>(
-        { intent, error: { username: "닉네임을 입력해주세요." } },
-        { status: 400 },
-      );
+      return data<ActionData>({ intent, error: { username: "닉네임을 입력해주세요." } }, { status: 400 });
     }
     if (!/^[a-zA-Z0-9_]{4,20}$/.test(username)) {
       return data<ActionData>(
@@ -136,16 +105,10 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       );
     }
     if (typeof bio === "string" && bio.length > 100) {
-      return data<ActionData>(
-        { intent, error: { bio: "100자 이하로 작성해주세요." } },
-        { status: 400 },
-      );
+      return data<ActionData>({ intent, error: { bio: "100자 이하로 작성해주세요." } }, { status: 400 });
     }
     if (typeof friendCode === "string" && !/^[A-Z]{8}$/.test(friendCode)) {
-      return data<ActionData>(
-        { intent, error: { friendCode: "친구 코드는 알파벳 8글자에요." } },
-        { status: 400 },
-      );
+      return data<ActionData>({ intent, error: { friendCode: "친구 코드는 알파벳 8글자에요." } }, { status: 400 });
     }
 
     const result = await updateSensei(env, sensei.id, { username, bio, profileStudentId, friendCode });
@@ -179,16 +142,16 @@ function EditSection({
 }: {
   title: string;
   description?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        {description ? <CardDescription>{description}</CardDescription> : null}
-      </CardHeader>
+    <section className="space-y-5 rounded-xl border border-border bg-card p-5 text-card-foreground">
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+      </div>
       {children}
-    </Card>
+    </section>
   );
 }
 
@@ -201,31 +164,55 @@ function SaveSubmitButton({
   isSubmitting: boolean;
   isSaved: boolean;
 }) {
-  const state = isSubmitting ? "submitting" : isSaved ? "saved" : "idle";
-
   return (
     <Button
       type="submit"
-      size="lg"
+      variant="primary"
+      size="sm"
       disabled={isSubmitting}
       className={cn(
-        "self-start min-w-32 transition-colors",
+        "min-w-32 self-start transition-colors",
         isSaved &&
-          "border-green-600 bg-green-600 text-white hover:bg-green-600 dark:border-green-500 dark:bg-green-500 dark:text-green-950 dark:hover:bg-green-500",
+          "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-600 dark:border-emerald-500 dark:bg-emerald-500 dark:text-emerald-950",
       )}
     >
-      <span
-        key={state}
-        aria-live="polite"
-        className="flex items-center gap-1.5 animate-in fade-in-0 zoom-in-95 duration-200"
-      >
-        {isSubmitting ? (
-          <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
-        ) : null}
-        {isSaved ? <CheckCircle2Icon data-icon="inline-start" /> : null}
-        {isSubmitting ? "저장 중..." : isSaved ? "저장됨" : idleLabel}
-      </span>
+      {isSubmitting ? <LoaderCircleIcon className="size-4 animate-spin" /> : null}
+      {isSaved && !isSubmitting ? <CheckCircle2Icon className="size-4" /> : null}
+      {isSubmitting ? "저장 중..." : isSaved ? "저장됨" : idleLabel}
     </Button>
+  );
+}
+
+function SettingsLink({
+  to,
+  title,
+  description,
+  Icon,
+  tone = "default",
+}: {
+  to: string;
+  title: string;
+  description?: string;
+  Icon: ElementType;
+  tone?: "default" | "destructive";
+}) {
+  const destructive = tone === "destructive";
+
+  return (
+    <Link
+      to={to}
+      className={cn(
+        "flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-foreground transition-colors hover:bg-muted/60",
+        destructive && "text-destructive",
+      )}
+    >
+      <Icon className={cn("size-4 shrink-0", destructive ? "text-destructive" : "text-muted-foreground")} />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">{title}</p>
+        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
+      </div>
+      <ChevronRightIcon className={cn("size-4 shrink-0", destructive ? "text-destructive" : "text-muted-foreground")} />
+    </Link>
   );
 }
 
@@ -269,115 +256,68 @@ export default function EditProfile() {
     <div className="space-y-8">
       <Title text="프로필 관리" />
 
-      <EditSection
-        title="프로필 정보"
-        description="프로필 정보는 다른 사람에게 표시돼요"
-      >
+      <EditSection title="프로필 정보" description="프로필 정보는 다른 사람에게 표시돼요">
         <Form
           method="put"
-          className="contents"
+          className="space-y-6"
           onChange={() => {
             setIsProfileDirty(true);
             setIsProfileSaved(false);
           }}
         >
           <input type="hidden" name="intent" value="profile" />
-          <CardContent>
-            <ProfileEditor
-              students={allStudents}
-              initialData={sensei}
-              error={profileActionData?.error}
-            />
-          </CardContent>
-          <CardFooter className="justify-end border-0 bg-transparent">
+          <ProfileEditor students={allStudents} initialData={sensei} error={profileActionData?.error} />
+          <div className="flex justify-end">
             <SaveSubmitButton
               idleLabel="프로필 저장"
               isSubmitting={isProfileSubmitting}
               isSaved={isProfileSaved && !isProfileDirty}
             />
-          </CardFooter>
+          </div>
         </Form>
       </EditSection>
 
-      <EditSection
-        title="블루 아카이브 계정 정보"
-        description="계정 정보는 다른 사람이 확인할 수 없어요"
-      >
+      <EditSection title="블루 아카이브 계정 정보" description="계정 정보는 다른 사람이 확인할 수 없어요">
         <Form
           method="put"
-          className="contents"
+          className="space-y-6"
           onChange={() => {
             setIsAccountDirty(true);
             setIsAccountSaved(false);
           }}
         >
           <input type="hidden" name="intent" value="account" />
-          <CardContent>
-            <FieldGroup>
-              <Field
-                className="max-w-sm"
-                data-invalid={Boolean(accountActionData?.error?.memberCode) || undefined}
-              >
-                <FieldLabel htmlFor="edit-member-code">회원 코드</FieldLabel>
-                <FieldContent>
-                  <Input
-                    id="edit-member-code"
-                    type="text"
-                    name="memberCode"
-                    defaultValue={sensei.memberCode ?? undefined}
-                    placeholder="[메뉴] > [계정] > [고객센터]에서 확인"
-                    aria-invalid={Boolean(accountActionData?.error?.memberCode) || undefined}
-                  />
-                  <FieldDescription>
-                    게임 쿠폰 등록에 사용할 수 있어요
-                  </FieldDescription>
-                  <FieldError>{accountActionData?.error?.memberCode}</FieldError>
-                </FieldContent>
-              </Field>
-            </FieldGroup>
-          </CardContent>
-          <CardFooter className="justify-end border-0 bg-transparent">
+          <Input
+            label="회원 코드"
+            type="text"
+            name="memberCode"
+            description="게임 쿠폰 등록에 사용할 수 있어요"
+            defaultValue={sensei.memberCode ?? undefined}
+            placeholder="[메뉴] > [계정] > [고객센터]에서 확인"
+            error={accountActionData?.error?.memberCode}
+            className="max-w-none md:max-w-md"
+            containerClassName="mt-0 mb-0"
+          />
+          <div className="flex justify-end">
             <SaveSubmitButton
               idleLabel="계정 정보 저장"
               isSubmitting={isAccountSubmitting}
               isSaved={isAccountSaved && !isAccountDirty}
             />
-          </CardFooter>
+          </div>
         </Form>
       </EditSection>
 
       <EditSection title="인증 및 보안">
-        <CardContent>
-          <ItemGroup>
-            <Item asChild variant="muted" className="rounded-xl">
-              <Link to="/edit/passkey">
-                <ItemMedia variant="icon">
-                  <KeyRoundIcon />
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle>Passkey 관리</ItemTitle>
-                  <ItemDescription>{`${passkeyCount}개 등록됨`}</ItemDescription>
-                </ItemContent>
-                <ItemActions>
-                  <ChevronRightIcon />
-                </ItemActions>
-              </Link>
-            </Item>
-            <Item asChild variant="muted" className="rounded-xl text-destructive">
-              <Link to="/signout">
-                <ItemMedia variant="icon">
-                  <LogOutIcon />
-                </ItemMedia>
-                <ItemContent>
-                  <ItemTitle>로그아웃</ItemTitle>
-                </ItemContent>
-                <ItemActions>
-                  <ChevronRightIcon />
-                </ItemActions>
-              </Link>
-            </Item>
-          </ItemGroup>
-        </CardContent>
+        <div className="space-y-3">
+          <SettingsLink
+            to="/edit/passkey"
+            title="Passkey 관리"
+            description={`${passkeyCount}개 등록됨`}
+            Icon={KeyRoundIcon}
+          />
+          <SettingsLink to="/signout" title="로그아웃" Icon={LogOutIcon} tone="destructive" />
+        </div>
       </EditSection>
     </div>
   );

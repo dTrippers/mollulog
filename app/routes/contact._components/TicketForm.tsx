@@ -1,10 +1,6 @@
+import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import { Form } from "react-router";
-import { LoaderCircleIcon } from "lucide-react";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
-import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel } from "~/components/ui/field";
-import { Input } from "~/components/ui/input";
-import { Textarea } from "~/components/ui/textarea";
+import { Button, Input, Textarea } from "~/components/primitives";
 
 type TicketFormProps = {
   errors?: {
@@ -19,60 +15,41 @@ type TicketFormProps = {
 };
 
 export default function TicketForm({ errors, values, submitting = false }: TicketFormProps) {
-  const hasTitleError = Boolean(errors?.title);
-  const hasContentError = Boolean(errors?.content);
-
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>새 문의 작성</CardTitle>
-      </CardHeader>
+    <section className="rounded-xl border border-border bg-card p-5 text-card-foreground">
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold">새 문의 작성</h2>
+      </div>
 
-      <Form method="post" className="contents">
-        <CardContent className="flex flex-col gap-6">
-          <FieldGroup>
-            <Field data-invalid={hasTitleError || undefined}>
-              <FieldLabel htmlFor="contact-title">제목</FieldLabel>
-              <FieldContent>
-                <Input
-                  id="contact-title"
-                  name="title"
-                  defaultValue={values?.title}
-                  required
-                  aria-invalid={hasTitleError || undefined}
-                />
-                <FieldError>{errors?.title}</FieldError>
-              </FieldContent>
-            </Field>
+      <Form method="post">
+        <Input
+          label="제목"
+          name="title"
+          defaultValue={values?.title}
+          error={errors?.title}
+          required
+          className="max-w-none"
+          containerClassName="mt-0 mb-0"
+        />
+        <Textarea
+          label="내용"
+          name="content"
+          rows={6}
+          defaultValue={values?.content}
+          description="제출된 정보는 서비스 개선 등을 위해서만 사용하며, 개인정보 등은 목적 달성 즉시 파기해요."
+          error={errors?.content}
+          required
+          className="min-h-40 resize-y"
+          containerClassName="mt-6 mb-0"
+        />
 
-            <Field data-invalid={hasContentError || undefined}>
-              <FieldLabel htmlFor="contact-content">내용</FieldLabel>
-              <FieldContent>
-                <Textarea
-                  id="contact-content"
-                  name="content"
-                  rows={6}
-                  defaultValue={values?.content}
-                  className="min-h-40 resize-y"
-                  required
-                  aria-invalid={hasContentError || undefined}
-                />
-                <FieldDescription>
-                  제출된 정보는 서비스 개선 등을 위해서만 사용하며, 개인정보 등은 목적 달성 즉시 파기해요.
-                </FieldDescription>
-                <FieldError>{errors?.content}</FieldError>
-              </FieldContent>
-            </Field>
-          </FieldGroup>
-        </CardContent>
-
-        <CardFooter className="justify-end border-0 bg-transparent">
-          <Button type="submit" size="lg" disabled={submitting}>
-            {submitting ? <LoaderCircleIcon data-icon="inline-start" className="animate-spin" /> : null}
+        <div className="mt-6 flex justify-end border-t border-border pt-4">
+          <Button type="submit" variant="primary" disabled={submitting}>
+            {submitting ? <ArrowPathIcon className="size-4 animate-spin" /> : null}
             {submitting ? "제출 중..." : "등록하기"}
           </Button>
-        </CardFooter>
+        </div>
       </Form>
-    </Card>
+    </section>
   );
 }

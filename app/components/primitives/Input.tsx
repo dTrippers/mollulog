@@ -1,17 +1,11 @@
+import type { InputHTMLAttributes } from "react";
+import { cn } from "~/lib/utils";
 import Field from "./Field";
-import { sanitizeClassName } from "~/prophandlers";
 
-type InputProps = {
-  className?: string;
+type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size" | "onChange"> & {
   containerClassName?: string;
-  type?: "text" | "number";
-  name?: string;
   label?: string;
   description?: string;
-  placeholder?: string;
-  required?: boolean;
-  defaultValue?: string;
-  value?: string;
   error?: string;
   size?: "sm" | "md";
   onChange?: (value: string) => void;
@@ -24,38 +18,39 @@ export default function Input({
   name,
   label,
   description,
-  placeholder,
-  required,
-  defaultValue,
-  value,
   error,
   size = "md",
   onChange,
+  id,
+  disabled,
+  ...props
 }: InputProps) {
+  const controlId = id ?? name;
+
   return (
     <Field
       label={label}
       description={description}
       error={error}
-      htmlFor={name}
+      htmlFor={controlId}
       containerClassName={containerClassName ?? (size === "sm" ? "mt-1 mb-1" : "mt-2 mb-8 last:mb-2")}
     >
       <input
-        id={name}
+        id={controlId}
         type={type ?? "text"}
         name={name}
-        placeholder={placeholder}
-        className={sanitizeClassName(`
-          w-full max-w-96 border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-900 rounded-lg transition
-          ${size === "sm" ? "p-1.5 text-sm" : "p-2"}
-          ${error ? "border-red-300 shadow-red-300 dark:border-red-700 dark:shadow-red-700" : ""}
-          ${type === "number" && "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"}
-          ${className ?? ""}
-        `)}
-        required={required}
-        value={value}
-        defaultValue={defaultValue}
-        onChange={(e) => onChange?.(e.target.value)}
+        className={cn(
+          "w-full max-w-96 rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50",
+          size === "sm" ? "min-h-9 py-1.5" : "min-h-10 py-2",
+          type === "number" &&
+            "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
+          error && "border-destructive focus:border-destructive focus:ring-destructive/20",
+          className,
+        )}
+        disabled={disabled}
+        aria-invalid={error ? true : props["aria-invalid"]}
+        onChange={(event) => onChange?.(event.target.value)}
+        {...props}
       />
     </Field>
   );

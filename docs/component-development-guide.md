@@ -7,46 +7,41 @@
 
 현재 UI 구조의 기준 계층은 아래 네 가지입니다.
 
-1. `app/components/ui`
-2. `app/components/primitives`
-3. `app/components/features/<domain>`
-4. `app/routes/*._components`, `app/routes/*/_components`
+1. `app/components/primitives`
+2. `app/components/features/<domain>`
+3. `app/routes/*._components`, `app/routes/*/_components`
 
 새 작업은 이 구조를 강화하는 방향으로 진행합니다.
 예전 계층(`atoms`, `molecules`, `organisms`, `navigation`)은 다시 만들지 않습니다.
 
 ## 계층별 역할
 
-### `app/components/ui`
+### `app/components/primitives`
 
-- `shadcn/ui` 기반의 저수준 공통 UI
-- 버튼, 입력, 카드, 필드, 콤보박스 같은 기본 인터랙션 레이어
-- 도메인 지식 없이 재사용 가능한 UI만 둡니다
+- 도메인에 속하지 않는 얇은 앱 공통 UI
+- 버튼, 입력, 필드, callout, 공통 surface 같은 저수준 인터랙션과 표현 레이어
+- 여러 도메인에서 반복되는 표시 패턴
 
 이 계층에서는:
 
+- semantic token 기반 기본 색상과 surface 역할
 - 공통 variant
 - 일관된 기본 spacing
 - 프로젝트 공통 field/input 밀도
 
 를 관리합니다.
 
-### `app/components/primitives`
-
-- 도메인에 속하지 않는 얇은 앱 공통 UI
-- `ui` 위에서 한 단계 추상화한 표현 컴포넌트
-- 여러 도메인에서 반복되는 표시 패턴
-
 예:
 
 - 페이지 제목
+- 버튼, 입력, textarea, field
 - 빈 상태
 - 프로필 이미지
 - 공통 section/panel 래퍼
 
 주의:
 
-- `shadcn/ui`와 책임이 같은 generic control을 다시 만들지 않습니다.
+- 같은 책임의 generic control을 두 벌 만들지 않습니다.
 - 도메인 용어가 들어가면 대개 `features`가 더 맞습니다.
 
 ### `app/components/features/<domain>`
@@ -74,7 +69,7 @@
 
 새 UI를 만들 때는 아래 순서로 판단합니다.
 
-1. 기존 `ui` 또는 `primitives` 조합으로 해결 가능한가
+1. 기존 `primitives` 또는 `features/forms` 조합으로 해결 가능한가
 2. 저수준 공통 variant 추가로 해결 가능한가
 3. 같은 도메인 여러 화면에서 재사용되는가
 4. 그렇다면 `features/<domain>` 으로 둔다
@@ -84,8 +79,7 @@
 
 ## import 규칙
 
-- 저수준 UI는 `~/components/ui`
-- 앱 공통 표현은 `~/components/primitives`
+- 저수준 UI와 앱 공통 표현은 `~/components/primitives`
 - 도메인 공유 UI는 `~/components/features/<domain>`
 - route-local 코드는 상대 경로 import
 
@@ -114,8 +108,8 @@ route-local 코드를 억지로 `features`로 올리지 않습니다.
 
 ## 스타일링 규칙
 
-- 기본 시각 언어는 `components/ui`에서 맞춥니다.
-- `primitives`와 `features`는 base control을 다시 꾸미기보다 조합합니다.
+- 기본 시각 언어는 `primitives`와 `app/tailwind.css`의 semantic token에서 맞춥니다.
+- `features`는 base control을 다시 꾸미기보다 조합합니다.
 - 같은 상호작용에 두 개의 시각 패턴이 생기지 않게 합니다.
 - 폼 밀도는 route 수준에서 임의로 조이지 말고, 필요하면 명시적 variant로 해결합니다.
 
@@ -126,7 +120,7 @@ route-local 코드를 억지로 `features`로 올리지 않습니다.
 새 UI 코드를 추가하기 전에 아래를 확인합니다.
 
 1. 올바른 계층에 두고 있는가
-2. 기존 `ui`/`primitives` 재사용으로 해결할 수 없는가
+2. 기존 `primitives`/`features/forms` 재사용으로 해결할 수 없는가
 3. 이름이 책임을 설명하는가
 4. semantic element를 사용했는가
 5. 재사용 근거 없이 너무 빨리 공용화하지 않았는가

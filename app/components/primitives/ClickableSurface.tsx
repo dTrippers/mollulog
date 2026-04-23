@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type ClickableSurfaceProps = {
   children: ReactNode;
@@ -10,15 +10,16 @@ type ClickableSurfaceProps = {
 
 export default function ClickableSurface({ children, className, onClick, disabled = false }: ClickableSurfaceProps) {
   if (!onClick) {
-    return <div className={sanitizeClassName(className ?? "")}>{children}</div>;
+    return <div className={cn(className)}>{children}</div>;
   }
 
   return (
     <button
       type="button"
-      className={sanitizeClassName(`block text-left ${className ?? ""}`)}
+      className={cn("block text-left", className)}
       onClick={onClick}
       disabled={disabled}
+      aria-disabled={disabled}
     >
       {children}
     </button>

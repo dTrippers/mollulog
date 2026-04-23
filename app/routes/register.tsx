@@ -1,17 +1,13 @@
+import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
-import { getSenseiById, getSenseiByUsername, updateSensei } from "~/models/sensei";
 import { getAuthenticator, redirectTo, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
-import { Title } from "~/components/primitives";
-import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
+import { Button, Title } from "~/components/primitives";
+import { getSenseiById, getSenseiByUsername, updateSensei } from "~/models/sensei";
 import { getAllStudents } from "~/models/student";
-import { LoaderCircleIcon } from "lucide-react";
 
-export const meta: MetaFunction = () => [
-  { title: "선생님 등록 | 몰루로그" },
-];
+export const meta: MetaFunction = () => [{ title: "선생님 등록 | 몰루로그" }];
 
 type ActionData = {
   error?: {
@@ -39,13 +35,15 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   }
 
   return {
-    allStudents: (await getAllStudents(env, true)).map((student) => ({
-      uid: student.uid,
-      name: student.name,
-      order: student.order,
-    })).sort((a, b) => a.order - b.order),
+    allStudents: (await getAllStudents(env, true))
+      .map((student) => ({
+        uid: student.uid,
+        name: student.name,
+        order: student.order,
+      }))
+      .sort((a, b) => a.order - b.order),
   };
-}
+};
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -102,7 +100,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   return redirect(redirectTo(request) ?? `/@${sensei.username}`, {
     headers: { "Set-Cookie": await commitSession(session) },
   });
-}
+};
 
 export default function Register() {
   const { allStudents } = useLoaderData<typeof loader>();
@@ -113,29 +111,23 @@ export default function Register() {
   return (
     <div className="max-w-3xl">
       <Title text="선생님 등록" />
-      <Card>
-        <CardHeader>
-          <CardTitle>프로필 정보</CardTitle>
-          <CardDescription>프로필 정보는 다른 사람에게 표시돼요</CardDescription>
-        </CardHeader>
-        <Form method="post" className="contents">
-          <CardContent>
-            <ProfileEditor
-              students={allStudents}
-              initialData={actionData?.values}
-              error={actionData?.error}
-            />
-          </CardContent>
-          <CardFooter className="justify-end border-0 bg-transparent">
-            <Button type="submit" size="lg" disabled={isSubmitting} className="self-start">
-              {isSubmitting ? (
-                <LoaderCircleIcon data-icon="inline-start" className="animate-spin" />
-              ) : null}
+      <section className="rounded-xl border border-border bg-card p-5 text-card-foreground">
+        <div className="mb-6 space-y-1">
+          <h2 className="text-lg font-semibold">프로필 정보</h2>
+          <p className="text-sm text-muted-foreground">프로필 정보는 다른 사람에게 표시돼요</p>
+        </div>
+
+        <Form method="post">
+          <ProfileEditor students={allStudents} initialData={actionData?.values} error={actionData?.error} />
+
+          <div className="mt-6 flex justify-end">
+            <Button type="submit" variant="primary" disabled={isSubmitting}>
+              {isSubmitting ? <ArrowPathIcon className="size-4 animate-spin" /> : null}
               {isSubmitting ? "등록 중..." : "선생님 등록하기"}
             </Button>
-          </CardFooter>
+          </div>
         </Form>
-      </Card>
+      </section>
     </div>
   );
 }

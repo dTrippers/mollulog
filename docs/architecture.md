@@ -23,10 +23,8 @@ Cloudflare D1 / KV
 
 - `app/routes`
   라우트 파일, `loader`/`action`, 메타, 상위 화면 조립을 담당합니다.
-- `app/components/ui`
-  `shadcn/ui` 기반의 저수준 공통 UI입니다.
 - `app/components/primitives`
-  도메인에 묶이지 않는 얇은 앱 공통 UI입니다.
+  semantic token을 사용하는 저수준 공통 UI와 얇은 앱 공통 표현 레이어입니다.
 - `app/components/features/<domain>`
   여러 화면에서 재사용되는 도메인 UI입니다.
 - `app/routes/*._components`, `app/routes/*/_components`
@@ -106,7 +104,8 @@ Cloudflare D1 / KV
 
 ### UI 구조
 
-- 새 저수준 UI는 `shadcn/ui`를 우선 사용합니다.
+- 새 저수준 UI는 `primitives`와 `features/forms` 조합을 우선 사용합니다.
+- semantic token은 `app/tailwind.css`에 두고, surface/foreground/border 역할은 그 기준을 따릅니다.
 - 공용화가 검증되기 전에는 route-local 구성을 먼저 선택합니다.
 - 화면 설명보다 구조 규칙을 우선 문서화합니다.
 
