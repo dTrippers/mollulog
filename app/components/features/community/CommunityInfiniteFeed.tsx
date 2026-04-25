@@ -52,17 +52,18 @@ export default function CommunityInfiniteFeed({
       return;
     }
 
-    if (fetcher.data.page <= lastAppliedPageRef.current) {
+    const data = fetcher.data;
+    if (data.page <= lastAppliedPageRef.current) {
       return;
     }
 
-    lastAppliedPageRef.current = fetcher.data.page;
-    setPage(fetcher.data.page);
-    setTotalPages(fetcher.data.totalPages);
-    setStudentsByUid((prev) => ({ ...prev, ...fetcher.data.studentsByUid }));
+    lastAppliedPageRef.current = data.page;
+    setPage(data.page);
+    setTotalPages(data.totalPages);
+    setStudentsByUid((prev) => ({ ...prev, ...data.studentsByUid }));
     setPosts((prev) => {
       const existingUids = new Set(prev.map((post) => post.uid));
-      const nextPosts = fetcher.data.posts.filter((post) => !existingUids.has(post.uid));
+      const nextPosts = data.posts.filter((post) => !existingUids.has(post.uid));
       return [...prev, ...nextPosts];
     });
   }, [fetcher.data, fetcher.state]);

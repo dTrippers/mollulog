@@ -150,7 +150,7 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
         </div>
 
         {/* Content Info */}
-        <div className={`p-4 md:p-6 ${imageUrl ? "absolute bottom-0 left-0 right-0 text-white bg-linear-to-t from-black/80 via-black/60 to-transparent via-75%" : "bg-linear-to-br from-neutral-900 via-neutral-800 to-neutral-700 via-75%"}`}>
+        <div className={`p-4 ${imageUrl ? "absolute bottom-0 left-0 right-0 text-white bg-linear-to-t from-black/80 via-black/60 to-transparent via-75%" : "bg-linear-to-br from-neutral-900 via-neutral-800 to-neutral-700 via-75%"}`}>
           {/* Event Type and Status */}
           <span className="text-sm md:text-base text-white">
             {timelineContentTypeLocale[type]}

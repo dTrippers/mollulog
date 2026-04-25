@@ -20,17 +20,25 @@ type CommunityFeedProps = {
   posts: CommunityFeedPostItem[];
   signedIn: boolean;
   studentsByUid: Record<string, { name: string }>;
+  preview?: boolean;
 };
 
-export default function CommunityFeed({ posts, signedIn, studentsByUid }: CommunityFeedProps) {
+export default function CommunityFeed({ posts, signedIn, studentsByUid, preview = false }: CommunityFeedProps) {
   return (
-    <div className="-mx-4 divide-y divide-neutral-200 dark:divide-neutral-700 sm:mx-0">
+    <div
+      className={
+        preview
+          ? "divide-y divide-neutral-200 dark:divide-neutral-700"
+          : "-mx-4 divide-y divide-neutral-200 dark:divide-neutral-700 sm:mx-0"
+      }
+    >
       {posts.map((post) => (
         <CommunityPostCard
           key={post.uid}
           post={post}
           signedIn={signedIn}
           studentsByUid={studentsByUid}
+          preview={preview}
         />
       ))}
     </div>
@@ -81,10 +89,12 @@ function CommunityPostCard({
   post,
   signedIn,
   studentsByUid,
+  preview,
 }: {
   post: CommunityFeedPostItem;
   signedIn: boolean;
   studentsByUid: Record<string, { name: string }>;
+  preview: boolean;
 }) {
   const { showSignIn } = useSignIn();
   const [comments, setComments] = useState(post.comments);
@@ -159,8 +169,12 @@ function CommunityPostCard({
   };
 
   return (
-    <article className="px-4 py-4 transition-colors sm:px-4 hover:bg-neutral-50/70 dark:hover:bg-neutral-800/60">
-      <div className="flex items-start gap-3">
+    <article
+      className={`transition-colors hover:bg-neutral-50/70 dark:hover:bg-neutral-800/60 ${
+        preview ? "py-3" : "px-4 py-4 sm:px-4"
+      }`}
+    >
+      <div className={`flex items-start ${preview ? "gap-2.5" : "gap-3"}`}>
         <Link to={`/@${post.author.username}`} className="shrink-0">
           <ProfileImage studentUid={post.author.profileStudentId} imageSize={10} />
         </Link>
@@ -186,15 +200,15 @@ function CommunityPostCard({
             )}
           </div>
 
-          <div className="mt-1.5">
+          <div className={preview ? "mt-1" : "mt-1.5"}>
             <PostSubjectMeta post={post} studentsByUid={studentsByUid} />
           </div>
 
-          <div className="mt-3">
+          <div className={preview ? "mt-2" : "mt-3"}>
             <PostContent post={post} studentsByUid={studentsByUid} />
           </div>
 
-          {(canComment || canLike) && (
+          {!preview && (canComment || canLike) && (
             <div className="mt-4 flex max-w-md items-center justify-between text-neutral-500 dark:text-neutral-400">
               {canComment && (
                 <button
@@ -228,7 +242,7 @@ function CommunityPostCard({
             </div>
           )}
 
-          {canComment && !commentEditing && recentComments.length > 0 && (
+          {!preview && canComment && !commentEditing && recentComments.length > 0 && (
             <div className="mt-2 space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
               {commentCount > recentComments.length && (
                 <button
@@ -255,7 +269,7 @@ function CommunityPostCard({
 
         </div>
       </div>
-      {canComment && commentEditing && (
+      {!preview && canComment && commentEditing && (
         <div className="mt-3 rounded-lg bg-neutral-50 px-3 py-3 sm:ml-[52px] dark:bg-neutral-900/50">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">
             <ChatBubbleLeftEllipsisIcon className="size-4" />

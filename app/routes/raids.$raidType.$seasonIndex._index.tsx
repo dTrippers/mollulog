@@ -164,7 +164,7 @@ export default function RaidSummary() {
     <div className="py-4">
       {sameBossRaids.length > 0 && (
         <Section title="역대 개최 이력" description="동일 보스의 최근 총력전/대결전 개최 이력">
-          <HorizontalScroll itemWidth={{ mobile: "w-3/4", desktop: "md:w-2/5" }} gap="gap-2">
+          <HorizontalScroll itemWidth={{ mobile: "w-[86%]", desktop: "md:w-2/5" }} gap="gap-3">
             {sameBossRaids.map((raid) => {
               // Check if current raid and comparison raid have the same defense type as the currently selected one
               const hasMatchingDefenseType = raid.defenseTypes.some(

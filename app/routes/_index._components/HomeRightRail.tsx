@@ -1,37 +1,42 @@
 import dayjs from "dayjs";
-import { Link } from "react-router";
-import { type StudentGradingTimelineItem, formatStudentGradingTimestamp } from "~/components/features/students";
-import { Button, HorizontalScroll, ProfileImage, TagIcon } from "~/components/primitives";
-import {
-  STUDENT_GRADING_TAG_DISPLAY,
-  type StudentGradingTagValue,
-  sortStudentGradingTags,
-} from "~/models/student-grading-tag";
+import { CommunityFeed, type CommunityFeedPostItem } from "~/components/features/community";
+import { Button, HorizontalScroll } from "~/components/primitives";
 import type { HomeYoutubeChannelSection } from "~/models/youtube";
 
 type HomeRightRailProps = {
-  recentGradings: StudentGradingTimelineItem[];
+  recentCommunityPosts: CommunityFeedPostItem[];
+  signedIn: boolean;
+  studentsByUid: Record<string, { name: string }>;
   youtubeSections: HomeYoutubeChannelSection[];
 };
 
-export default function HomeRightRail({ recentGradings, youtubeSections }: HomeRightRailProps) {
+export default function HomeRightRail({
+  recentCommunityPosts,
+  signedIn,
+  studentsByUid,
+  youtubeSections,
+}: HomeRightRailProps) {
   return (
     <aside className="space-y-4 lg:sticky lg:top-24">
-      <HomeRecentGradingsSection recentGradings={recentGradings} />
+      <HomeRecentCommunitySection
+        recentCommunityPosts={recentCommunityPosts}
+        signedIn={signedIn}
+        studentsByUid={studentsByUid}
+      />
       <HomeYoutubeSection youtubeSections={youtubeSections} />
     </aside>
   );
 }
 
-function HomeRecentGradingsSection({ recentGradings }: Pick<HomeRightRailProps, "recentGradings">) {
+function HomeRecentCommunitySection({
+  recentCommunityPosts,
+  signedIn,
+  studentsByUid,
+}: Pick<HomeRightRailProps, "recentCommunityPosts" | "signedIn" | "studentsByUid">) {
   return (
-    <RailSection title="최근 작성된 학생 평가">
-      <div className="space-y-2">
-        {recentGradings.map((grading) => (
-          <RecentGradingCard key={grading.uid} grading={grading} />
-        ))}
-      </div>
-      <Button text="학생 평가 목록" to="/community?type=student_review" variant="tint" fullWidth shadow="xs" />
+    <RailSection title="최근 평가/의견" compact>
+      <CommunityFeed posts={recentCommunityPosts} signedIn={signedIn} studentsByUid={studentsByUid} preview />
+      <Button text="더 보기" to="/community" variant="tint" fullWidth shadow="xs" />
     </RailSection>
   );
 }
@@ -94,65 +99,26 @@ function HomeYoutubeSection({ youtubeSections }: Pick<HomeRightRailProps, "youtu
   );
 }
 
-function RailSection({ title, children }: { title: string; children: React.ReactNode }) {
+function RailSection({
+  title,
+  children,
+  compact = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  compact?: boolean;
+}) {
   return (
-    <section className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50/80 p-4 dark:border-neutral-800 dark:bg-neutral-900/80">
-      <h2 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h2>
-      <div className="mt-4 space-y-4">{children}</div>
-    </section>
-  );
-}
-
-type RecentGradingCardProps = {
-  grading: StudentGradingTimelineItem;
-};
-
-function RecentGradingCard({ grading }: RecentGradingCardProps) {
-  return (
-    <Link
-      to={`/students/${grading.student.uid}`}
-      className="group rounded-lg border border-neutral-200 bg-white transition-colors hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-950 dark:hover:bg-neutral-900 block p-3"
+    <section
+      className={`mt-4 rounded-lg border border-neutral-200 bg-neutral-50/80 dark:border-neutral-800 dark:bg-neutral-900/80 ${
+        compact ? "p-3" : "p-4"
+      }`}
     >
-      <div className="flex items-center gap-2">
-        <ProfileImage studentUid={grading.student.uid} imageSize={8} />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-3">
-            <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-              {grading.student.name}
-            </p>
-            <span className="shrink-0 text-xs text-neutral-400 dark:text-neutral-500">
-              {formatStudentGradingTimestamp(grading.createdAt, grading.updatedAt)}
-            </span>
-          </div>
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">@{grading.user.username}</p>
-        </div>
-      </div>
-
-      {grading.comment && (
-        <p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-700 dark:text-neutral-200">
-          {grading.comment.trim()}
-        </p>
-      )}
-
-      {grading.tags && grading.tags.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {sortStudentGradingTags(grading.tags)
-            .slice(0, 3)
-            .map((tag) => (
-              <TagBadge key={tag} tag={tag} />
-            ))}
-        </div>
-      )}
-    </Link>
-  );
-}
-
-function TagBadge({ tag }: { tag: StudentGradingTagValue }) {
-  return (
-    <div className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
-      <TagIcon tag={tag} size="sm" />
-      <span>{STUDENT_GRADING_TAG_DISPLAY[tag]}</span>
-    </div>
+      <h2 className={`${compact ? "text-base" : "text-lg"} font-semibold text-neutral-900 dark:text-neutral-100`}>
+        {title}
+      </h2>
+      <div className={`${compact ? "mt-3 space-y-3" : "mt-4 space-y-4"}`}>{children}</div>
+    </section>
   );
 }
 

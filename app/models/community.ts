@@ -367,6 +367,7 @@ export async function getCommunityFeedPage(
     postType,
     postTypes,
     authorUserId,
+    includeEngagement = true,
   }: {
     currentUserId?: number | null;
     page?: number;
@@ -374,6 +375,7 @@ export async function getCommunityFeedPage(
     postType?: CommunityPostType;
     postTypes?: CommunityPostType[];
     authorUserId?: number;
+    includeEngagement?: boolean;
   } = {},
 ): Promise<{
   items: CommunityFeedPost[];
@@ -436,11 +438,17 @@ export async function getCommunityFeedPage(
     .offset(offset);
 
   const postUids = rows.map((row) => row.uid);
-  const [commentsByPostUid, likeCounts, likedPostUids] = await Promise.all([
-    getNestedCommunityCommentsByPostUids(env, postUids, currentUserId),
-    getCommunityLikeCountsByPostUids(env, postUids),
-    currentUserId ? getLikedCommunityPostUids(env, currentUserId, postUids) : new Set<string>(),
-  ]);
+  const [commentsByPostUid, likeCounts, likedPostUids]: [
+    Record<string, NestedCommunityComment[]>,
+    Record<string, number>,
+    Set<string>,
+  ] = includeEngagement
+    ? await Promise.all([
+        getNestedCommunityCommentsByPostUids(env, postUids, currentUserId),
+        getCommunityLikeCountsByPostUids(env, postUids),
+        currentUserId ? getLikedCommunityPostUids(env, currentUserId, postUids) : new Set<string>(),
+      ])
+    : [{}, {}, new Set<string>()];
 
   return {
     items: rows.map((row) => ({

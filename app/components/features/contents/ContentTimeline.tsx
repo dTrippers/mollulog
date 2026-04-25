@@ -140,7 +140,7 @@ export default function ContentTimeline({
               <div className="w-3 h-parent flex justify-center shrink-0">
                 <div className="w-px h-full bg-neutral-200 dark:bg-neutral-700" />
               </div>
-              <div className="pl-3 md:pl-5 pb-4 md:pb-8">
+              <div className="min-w-0 flex-1 pl-3 pb-4 md:pl-5 md:pb-8">
                 {group.contents.map((content) => {
                   const showComments = !!onCommentCreate && !!content.recruitments && content.recruitments.length > 0;
                   return (
