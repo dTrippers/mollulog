@@ -130,7 +130,7 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
         })}
 
       <div className="my-4 flex justify-end gap-0.5">
-        <Button text="모두 선택" color="primary" onClick={handleSelectAll} />
+        <Button text="모두 선택" variant="primary" onClick={handleSelectAll} />
         <Button text="초기화" onClick={handleResetAll} />
       </div>
     </Section>

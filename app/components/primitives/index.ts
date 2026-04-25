@@ -16,7 +16,6 @@ export { default as KeyValueTable } from "./KeyValueTable";
 export { default as Label } from "./Label";
 export { default as LoadingSkeleton } from "./LoadingSkeleton";
 export { default as MarkdownText } from "./MarkdownText";
-export { default as MiniButton } from "./MiniButton";
 export { default as MultilineText } from "./MultilineText";
 export { default as NumberInput } from "./NumberInput";
 export { default as OptionBadge } from "./OptionBadge";

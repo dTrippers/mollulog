@@ -90,7 +90,7 @@ export default function SignInBottomSheet() {
           <Button
             className="w-full py-2 cursor-pointer"
             type="submit"
-            color="primary"
+            variant="primary"
             onClick={signInWithGoogle}
             disabled={buttonDisabled}
           >
@@ -99,7 +99,7 @@ export default function SignInBottomSheet() {
           <Button
             className="w-full py-2 cursor-pointer"
             type="button"
-            color="black"
+            variant="inverse"
             onClick={signInWithGithub}
             disabled={buttonDisabled}
           >
@@ -108,7 +108,7 @@ export default function SignInBottomSheet() {
           <Button
             className="w-full py-2 cursor-pointer"
             type="button"
-            color="black"
+            variant="inverse"
             onClick={signInWithPasskey}
             disabled={buttonDisabled}
           >

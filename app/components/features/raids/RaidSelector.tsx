@@ -133,7 +133,7 @@ function RaidSelectorItem({ raid, selected = false }: { raid: SelectableRaid; se
               <p className="truncate text-sm font-bold lg:text-base">{raid.raidBoss.name}</p>
               <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 {raid.startAt ? dayjs(raid.startAt).format("YYYY.MM.DD") : "-"} ~{" "}
-                {raid.endAt ? dayjs(raid.endAt).format("YYYY.MM.DD") : "-"}
+                {raid.endAt ? dayjs(raid.endAt).format("MM.DD") : "-"}
               </p>
             </div>
             <div className="flex flex-col items-start gap-1">

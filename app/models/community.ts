@@ -207,13 +207,7 @@ function communityPostVisibilityFilter(
   }
 
   if (includeOwnHidden && currentUserId) {
-    const hiddenCondition = and(
-      eq(communityPostsTable.userId, currentUserId),
-      inArray(communityPostsTable.visibility, ["private", "unlisted"]),
-    );
-    if (hiddenCondition) {
-      visibleConditions.push(hiddenCondition);
-    }
+    visibleConditions.push(eq(communityPostsTable.userId, currentUserId));
   }
 
   if (visibleConditions.length === 1) {

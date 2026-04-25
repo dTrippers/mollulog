@@ -72,10 +72,6 @@ function getVisibilityLabel(visibility: CommunityFeedPostItem["visibility"]) {
     return "비공개";
   }
 
-  if (visibility === "unlisted") {
-    return "프로필 공개";
-  }
-
   return null;
 }
 

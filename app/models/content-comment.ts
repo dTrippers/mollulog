@@ -73,7 +73,7 @@ function visibilityFilter(userId?: number): SQLWrapper {
 
   return or(
     publicCondition,
-    and(eq(communityPostsTable.visibility, "private"), eq(communityPostsTable.userId, userId)),
+    eq(communityPostsTable.userId, userId),
   ) ?? publicCondition;
 }
 

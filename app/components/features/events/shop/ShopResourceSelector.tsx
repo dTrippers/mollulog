@@ -3,7 +3,7 @@ import { formatResourceAmount } from "~/locales/ko";
 import { Tabs } from "./Tabs";
 import type { ShopResource, CollectableResource } from "./types";
 import type { ShopState, ShopActions } from "./hooks";
-import { Button, MiniButton, NumberInput, ResourceCard, Section } from "~/components/primitives";
+import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
 
 type ShopResourceSelectorProps = {
   shopResources: ShopResource[];
@@ -97,12 +97,12 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
               </div>
 
               <div className="flex items-center gap-1">
-                <MiniButton text="최소" onClick={() => handleSetMinQuantity(uid)} disabled={quantity === 0} minimizeWidth />
+                <Button size="xs" text="최소" onClick={() => handleSetMinQuantity(uid)} disabled={quantity === 0} />
                 <div className="grow">
                   <NumberInput value={quantity} maxValue={shopAmount ?? undefined} onChange={(value) => actions.updateItemQuantity(uid, value)} />
                 </div>
                 {shopAmount && (
-                  <MiniButton text="최대" onClick={() => handleSetMaxQuantity(uid, shopAmount)} disabled={quantity >= shopAmount} color="blue" minimizeWidth />
+                  <Button size="xs" text="최대" onClick={() => handleSetMaxQuantity(uid, shopAmount)} disabled={quantity >= shopAmount} variant="tint-blue" />
                 )}
               </div>
             </div>
@@ -111,7 +111,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
       </div>
 
       <div className="my-2 flex justify-end gap-0.5">
-        <Button text="모두 선택" color="primary" onClick={handleSelectAll} />
+        <Button text="모두 선택" variant="primary" onClick={handleSelectAll} />
         <Button text="초기화" onClick={handleResetAll} />
       </div>
     </Section>

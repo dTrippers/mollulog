@@ -1,7 +1,6 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Await, useFetcher, useRevalidator } from "react-router";
-import { ClickableSurface, LoadingSkeleton, NumberInput, ProfileImage, ResourceCard, SubTitle } from "~/components/primitives";
-import { MiniButton } from "~/components/primitives";
+import { Button, ClickableSurface, LoadingSkeleton, NumberInput, ProfileImage, ResourceCard, SubTitle } from "~/components/primitives";
 import { COMMON_FAVORITE_ITEM_UIDS, type AllStudentsFavoriteItems } from "~/models/resource";
 import type { action } from "~/routes/utils.relationship";
 
@@ -320,13 +319,13 @@ function FavoriteLevelCardEditMode({ levelStudents, activeItem, studentItemsMap,
           </div>
           <div className="flex items-center gap-2">
             {hasChanges && (
-              <MiniButton
+              <Button
                 text={isSaving ? "저장 중..." : "변경 사항 저장"}
                 onClick={onSave}
-                color="blue"
+                variant="primary"
               />
             )}
-            <MiniButton text="닫기" onClick={onCancel} color="default" />
+            <Button text="닫기" onClick={onCancel} />
           </div>
         </div>
       </div>
@@ -370,7 +369,7 @@ function FavoriteLevelCardViewMode({ levelStudents, activeItem, studentItemsMap,
       </div>
       {isAuthenticated && (
         <div className="mt-4 flex justify-end">
-          <MiniButton text="선물 개수 입력" onClick={onEnterEditMode} color="default" />
+          <Button size="xs" text="선물 개수 입력" onClick={onEnterEditMode} />
         </div>
       )}
     </>

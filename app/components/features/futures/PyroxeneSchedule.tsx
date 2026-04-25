@@ -8,8 +8,7 @@ import ResourcesInput from "./planner-input/ResourcesInput";
 import { Transition } from "@headlessui/react";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
-import { EmptyView, MiniButton, MultilineText, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
-import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import { Button, EmptyView, MultilineText, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
 import PyroxeneChart from "./PyroxeneChart";
 
 export type PickupResources = {
@@ -287,8 +286,9 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
                 </p>
               </div>
               {expectedTrials !== null && (
-                <button
+                <Button
                   type="button"
+                  size="xs"
                   onClick={() => {
                     setExpectedTrialsInputValue(0);
                     onUpdateEventData(event.uid, { expectedTrials: null });
@@ -296,12 +296,13 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
                   className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap"
                 >
                   초기화
-                </button>
+                </Button>
               )}
-              <MiniButton
+              <Button
                 text={showExpectedTrialsAction ? "변경 취소" : "목표 변경"}
                 onClick={() => setShowExpectedTrialsAction((prev) => !prev)}
-                color="blue"
+                variant="tint-blue"
+                size="xs"
               />
               <Transition
                 show={showExpectedTrialsAction}

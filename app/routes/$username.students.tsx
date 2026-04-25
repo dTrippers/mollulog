@@ -178,7 +178,7 @@ export default function UserPage() {
             <Toggle label="모집한 학생 일괄 등록" initialState={batchAddMode} onChange={setBatchAddMode} />
             {batchAddMode && (
               <div className="mb-2 flex gap-x-1">
-                <Button color="primary" onClick={() => {
+                <Button variant="primary" onClick={() => {
                   for (const uid of batchAddStudentUids) {
                     const student = unrecruitedStudents.find((currentStudent) => currentStudent.uid === uid);
                     if (student) {

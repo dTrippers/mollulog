@@ -19,7 +19,6 @@ export default function ButtonForm({
       text={label}
       variant="list"
       size="list"
-      justify="start"
       className={color === "blue" ? "text-blue-500" : color === "red" ? "text-red-500" : ""}
       onClick={onClick}
       fullWidth
