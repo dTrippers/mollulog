@@ -5,7 +5,17 @@ import {
   MoonIcon,
   SunIcon,
 } from "@heroicons/react/16/solid";
-import { Cog6ToothIcon } from "@heroicons/react/24/outline";
+import {
+  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
+  Cog6ToothIcon,
+  HomeIcon as HomeIconOutline,
+  UserCircleIcon as UserCircleIconOutline,
+} from "@heroicons/react/24/outline";
+import {
+  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
+  HomeIcon as HomeIconSolid,
+  UserCircleIcon as UserCircleIconSolid,
+} from "@heroicons/react/24/solid";
 import { useEffect, useState } from "react";
 import { Link, useMatches, useSubmit } from "react-router";
 import { useSignIn } from "~/contexts/SignInProvider";
@@ -418,10 +428,6 @@ function DesktopMenuContent({
   sectionStates,
 }: DesktopMenuContentProps) {
   const submit = useSubmit();
-  const topLevelItems = getMobileNavigationItems({ pathname, currentUsername, upcomingEvent });
-  const homeItem = topLevelItems[0];
-  const communityItem = topLevelItems[2];
-  const profileItem = topLevelItems[4];
   const menuSections = getNavigationSections({
     pathname,
     upcomingEvent,
@@ -434,16 +440,16 @@ function DesktopMenuContent({
       <MenuItem
         to="/"
         name="홈"
-        OutlineIcon={homeItem.OutlineIcon}
-        SolidIcon={homeItem.SolidIcon}
+        OutlineIcon={HomeIconOutline}
+        SolidIcon={HomeIconSolid}
         isActive={pathname === "/"}
       />
 
       <MenuItem
         to="/community"
         name="평가/의견"
-        OutlineIcon={communityItem.OutlineIcon}
-        SolidIcon={communityItem.SolidIcon}
+        OutlineIcon={ChatBubbleLeftRightIconOutline}
+        SolidIcon={ChatBubbleLeftRightIconSolid}
         isActive={sectionStates.isCommunityActive}
       />
 
@@ -465,8 +471,8 @@ function DesktopMenuContent({
         <MenuItem
           to={`/@${currentUsername}`}
           name="내 정보"
-          OutlineIcon={profileItem.OutlineIcon}
-          SolidIcon={profileItem.SolidIcon}
+          OutlineIcon={UserCircleIconOutline}
+          SolidIcon={UserCircleIconSolid}
           isActive={sectionStates.isProfileActive}
         />
       ) : (

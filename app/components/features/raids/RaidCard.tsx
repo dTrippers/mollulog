@@ -118,7 +118,7 @@ export default function RaidCard({
                 <div>
                   <p className="md:mb-0.5 text-xs text-neutral-600 dark:text-neutral-300">
                     {raidTypeLocale[raidType as RaidType] ?? raidType}
-                    {seasonIndex ? ` #${seasonIndex}` : ""} · {terrainLocale[terrain]}
+                    {seasonIndex != null ? ` #${seasonIndex}` : ""} · {terrainLocale[terrain]}
                   </p>
                   {showName && <h3 className="text-base font-bold md:text-xl">{raidBoss.name}</h3>}
                   {showDateRange && (

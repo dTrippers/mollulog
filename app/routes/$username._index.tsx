@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useFetcher, useLoaderData } from "react-router";
+import { Link, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { PencilSquareIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
+import { useCallback } from "react";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { ProfileImage } from "~/components/primitives";
@@ -110,6 +111,14 @@ export default function UserIndex() {
 
   const fetcher = useFetcher<ActionData>();
   const { showSignIn } = useSignIn();
+  const [searchParams] = useSearchParams();
+  const getPageUrl = useCallback((nextPage: number) => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set("page", String(nextPage));
+
+    const query = nextSearchParams.toString();
+    return query ? `/@${sensei.username}?${query}` : `/@${sensei.username}`;
+  }, [searchParams, sensei.username]);
 
   return (
     <div className="my-6 space-y-5">
@@ -141,7 +150,7 @@ export default function UserIndex() {
         totalPages={totalPages}
         emptyText="아직 작성한 커뮤니티 게시글이 없어요"
         resetKey={sensei.username}
-        getPageUrl={(nextPage) => `/@${sensei.username}?page=${nextPage}`}
+        getPageUrl={getPageUrl}
       />
     </div>
   );

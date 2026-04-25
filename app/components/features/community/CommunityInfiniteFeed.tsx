@@ -34,17 +34,18 @@ export default function CommunityInfiniteFeed({
   const [totalPages, setTotalPages] = useState(initialTotalPages);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const lastAppliedPageRef = useRef(initialPage);
+  const lastRequestedResetKeyRef = useRef<string | null>(null);
   const loading = fetcher.state !== "idle";
   const hasMore = page < totalPages;
 
   useEffect(() => {
-    const nextResetKey = resetKey;
+    void resetKey;
     setPosts(initialPosts);
     setStudentsByUid(initialStudentsByUid);
     setPage(initialPage);
     setTotalPages(initialTotalPages);
     lastAppliedPageRef.current = initialPage;
-    void nextResetKey;
+    lastRequestedResetKeyRef.current = null;
   }, [initialPage, initialPosts, initialStudentsByUid, initialTotalPages, resetKey]);
 
   useEffect(() => {
@@ -53,6 +54,10 @@ export default function CommunityInfiniteFeed({
     }
 
     const data = fetcher.data;
+    if (lastRequestedResetKeyRef.current !== resetKey) {
+      return;
+    }
+
     if (data.page <= lastAppliedPageRef.current) {
       return;
     }
@@ -66,15 +71,16 @@ export default function CommunityInfiniteFeed({
       const nextPosts = data.posts.filter((post) => !existingUids.has(post.uid));
       return [...prev, ...nextPosts];
     });
-  }, [fetcher.data, fetcher.state]);
+  }, [fetcher.data, fetcher.state, resetKey]);
 
   const loadNextPage = useCallback(() => {
     if (loading || !hasMore) {
       return;
     }
 
+    lastRequestedResetKeyRef.current = resetKey;
     fetcher.load(getPageUrl(page + 1));
-  }, [fetcher, getPageUrl, hasMore, loading, page]);
+  }, [fetcher, getPageUrl, hasMore, loading, page, resetKey]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
