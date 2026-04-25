@@ -1,20 +1,16 @@
-import { ArrowRightIcon, ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
-import { CalendarIcon, IdentificationIcon } from "@heroicons/react/24/outline";
-import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
-import { useState } from "react";
+import { ArrowRightIcon } from "@heroicons/react/16/solid";
+import { BookOpenIcon, FireIcon, IdentificationIcon, TicketIcon } from "@heroicons/react/24/outline";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { EventHeader } from "~/components/features/events";
-import EventList from "~/components/features/events/EventList";
+import { EventHeader, RecruitmentCard } from "~/components/features/events";
 import { RaidCard } from "~/components/features/raids";
-import { ProfileImage, SubTitle, Title } from "~/components/primitives";
-import { recruitmentLabelLocale } from "~/locales/ko";
+import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
 import { type IndexRecruitment, getIndexContents } from "~/models/content";
 import { raidTypeToParam } from "~/models/raid";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { getAllStudentsMap } from "~/models/student";
-import { getRecentStudentGradingsWithUsers } from "~/models/student-grading";
+import { getCommunityFeedPage } from "~/models/community";
+import { COMMUNITY_VISIBLE_POST_TYPES, enrichCommunityFeedPosts } from "~/models/community-feed";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
 import HomeRightRail from "./_index._components/HomeRightRail";
@@ -31,22 +27,26 @@ export const meta: MetaFunction = () => {
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
+  const currentUser = await getAuthenticator(env).isAuthenticated(request);
 
   const [
-    { mainEvent, currentRaids, currentEvents, currentRecruitments, favoritedCounts },
-    recentGradings,
-    allStudentsMap,
+    { mainEvent, currentRaids, currentRecruitments, favoritedCounts },
+    recentCommunityPage,
     youtubeSections,
   ] = await Promise.all([
     getIndexContents(env),
-    getRecentStudentGradingsWithUsers(env, 3, true),
-    getAllStudentsMap(env, true),
+    getCommunityFeedPage(env, {
+      currentUserId: currentUser?.id,
+      postTypes: [...COMMUNITY_VISIBLE_POST_TYPES],
+      pageSize: 4,
+      includeEngagement: false,
+    }),
     getHomeYoutubeSections(env).catch((error) => {
       console.error("Failed to load home youtube sections", error);
       return [];
     }),
   ]);
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const recentCommunityFeed = await enrichCommunityFeedPosts(env, recentCommunityPage.items);
   const favoritedStudentUids = currentUser
     ? (await getUserFavoritedStudents(env, currentUser.id))
         .filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId))
@@ -58,28 +58,14 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const currentUnlimit = currentRaids.find((raid) => raid.raidType === "unlimit");
   return {
     mainEvent,
-    currentEvents: currentEvents
-      .filter((event) => event.uid !== mainEvent?.uid)
-      .map((event) => ({
-        uid: event.uid,
-        name: event.name,
-        type: event.contentType,
-        since: event.startAt,
-        until: event.endAt ?? event.startAt,
-        imageUrl: event.imageUrl,
-      })),
     currentRecruitments,
     favoritedCounts,
     favoritedStudentUids,
     currentTotalAssualt,
     currentUnlimit,
-    recentGradings: recentGradings.map((grading) => ({
-      ...grading,
-      student: {
-        uid: grading.studentUid,
-        name: allStudentsMap[grading.studentUid].name,
-      },
-    })),
+    recentCommunityPosts: recentCommunityFeed.posts,
+    studentsByUid: recentCommunityFeed.studentsByUid,
+    signedIn: currentUser !== null,
     youtubeSections,
   };
 };
@@ -87,26 +73,29 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 export default function Index() {
   const {
     mainEvent,
-    currentEvents,
     currentRecruitments,
     favoritedCounts,
     favoritedStudentUids,
     currentTotalAssualt,
     currentUnlimit,
-    recentGradings,
+    recentCommunityPosts,
+    signedIn,
+    studentsByUid,
     youtubeSections,
   } = useLoaderData<typeof loader>();
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 xl:flex-row xl:items-start">
-      <div className="min-w-0 xl:flex-1">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
+      <div className="min-w-0 lg:flex-1">
         <Title text="진행중인 컨텐츠" />
 
         <MainEvent event={mainEvent} />
-        <EventList events={currentEvents} />
-        <div className="grid grid-cols-2 gap-2 xl:hidden">
-          <LinkCard Icon={CalendarIcon} title="미래시" description="컨텐츠 및 픽업 일정" to="/futures" />
-          <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가 정보" to="/students" />
+
+        <div className="my-4 lg:hidden grid grid-cols-2 gap-2">
+          <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가" to="/students" />
+          <LinkCard Icon={FireIcon} title="총력전/대결전" description="상위권 편성" to="/raids" />
+          <LinkCard Icon={BookOpenIcon} title="메인 스토리" description="공개 일정" to="/mainstory" />
+          <LinkCard Icon={TicketIcon} title="쿠폰" description="인게임 쿠폰" to="/coupons" />
         </div>
 
         {currentRecruitments.length > 0 && (
@@ -114,11 +103,11 @@ export default function Index() {
             recruitments={currentRecruitments}
             favoritedStudentUids={favoritedStudentUids}
             favoritedCounts={favoritedCounts}
+            signedIn={signedIn}
           />
         )}
 
-        <SubTitle text="레이드" />
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+        <div className="my-6 grid grid-cols-1 gap-2 md:grid-cols-2">
           {currentTotalAssualt && (
             <Link to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`} className="hover:opacity-75 transition-opacity">
               <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
@@ -131,8 +120,13 @@ export default function Index() {
           )}
         </div>
       </div>
-      <div className="min-w-0 xl:w-full xl:max-w-xs xl:flex-none">
-        <HomeRightRail recentGradings={recentGradings} youtubeSections={youtubeSections} />
+      <div className="min-w-0 lg:w-full lg:max-w-72 xl:max-w-xs lg:flex-none">
+        <HomeRightRail
+          recentCommunityPosts={recentCommunityPosts}
+          signedIn={signedIn}
+          studentsByUid={studentsByUid}
+          youtubeSections={youtubeSections}
+        />
       </div>
     </div>
   );
@@ -167,63 +161,59 @@ function MainEvent({ event }: { event: TimelineContent | null }) {
 type CurrentRecruitmentsProps = {
   recruitments: { eventUid: string; recruitment: IndexRecruitment }[];
   favoritedStudentUids: string[];
-  favoritedCounts: { studentId: string; count: number }[];
+  favoritedCounts: { studentId: string; contentId: string; count: number }[];
+  signedIn: boolean;
 };
 
-function CurrentRecruitments({ recruitments, favoritedStudentUids, favoritedCounts }: CurrentRecruitmentsProps) {
-  const [showAll, setShowAll] = useState(false);
+function CurrentRecruitments({
+  recruitments,
+  favoritedStudentUids,
+  favoritedCounts,
+  signedIn,
+}: CurrentRecruitmentsProps) {
+  const recruitmentCards = recruitments.map(({ eventUid, recruitment }) => {
+    const student = recruitment.student;
+    if (!student) {
+      return null;
+    }
 
-  const displayedRecruitments = showAll ? recruitments : recruitments.slice(0, 6);
+    const favorited = favoritedStudentUids.includes(student.uid);
+    const favoritedCount = favoritedCounts.find(
+      (favorited) => favorited.studentId === student.uid && favorited.contentId === eventUid,
+    )?.count ?? 0;
+
+    return (
+      <RecruitmentCard
+        key={`${eventUid}-${student.uid}`}
+        recruitment={{
+          ...recruitment,
+          favorited,
+          favoritedCount,
+        }}
+        signedIn={signedIn}
+        favoriteAction="/api/contents"
+        favoriteContentUid={eventUid}
+        className="w-full md:w-28"
+      />
+    );
+  });
 
   return (
     <div className="my-8">
       <SubTitle text="모집중인 학생" />
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        {displayedRecruitments.map(({ recruitment }) => {
-          const student = recruitment.student;
-          if (!student) {
-            return null;
-          }
-
-          const favorited = favoritedStudentUids.includes(student.uid);
-          return (
-            <Link to={`/students/${student.uid}`} key={student.uid} className="block">
-              <div className="p-3 flex items-center gap-3 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors rounded-lg">
-                <div className="relative">
-                  <ProfileImage imageSize={12} studentUid={student.uid} />
-                  <div className="absolute -bottom-1 -right-1">
-                    <div
-                      className={`text-xs relative flex items-center gap-0.5 ${favorited ? "bg-red-500/90" : "bg-neutral-900/90"} text-white rounded-lg px-1.5 border border-white dark:border-transparent`}
-                    >
-                      <FilledHeartIcon className="size-3" />
-                      <span className="font-semibold">
-                        {favoritedCounts.find((favorited) => favorited.studentId === student.uid)?.count ?? 0}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="grow">
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                    {recruitmentLabelLocale(recruitment)}
-                    {recruitment.pickup ? " • 픽업" : ""}
-                  </p>
-                  <p className="text-sm md:text-base font-semibold">{student.name}</p>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-      {recruitments.length > 6 && (
-        <button
-          type="button"
-          className="w-full my-4 py-2 flex items-center justify-center bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors rounded-lg text-neutral-500 dark:text-neutral-400 cursor-pointer"
-          onClick={() => setShowAll(!showAll)}
+      <div className="md:hidden">
+        <HorizontalScroll
+          itemWidth={{ mobile: "w-24", desktop: "md:w-24" }}
+          gap="gap-2"
+          className="-mx-4 px-4"
+          fadeEdges
         >
-          <span className="text-sm mr-1">{showAll ? "접기" : `학생 ${recruitments.length}명 모두 보기`}</span>
-          {showAll ? <ChevronUpIcon className="size-4 inline" /> : <ChevronDownIcon className="size-4 inline" />}
-        </button>
-      )}
+          {recruitmentCards}
+        </HorizontalScroll>
+      </div>
+      <div className="hidden md:flex md:flex-wrap md:gap-3">
+        {recruitmentCards}
+      </div>
     </div>
   );
 }
@@ -237,8 +227,8 @@ type LinkCardProps = {
 
 function LinkCard({ Icon, title, description, to }: LinkCardProps) {
   return (
-    <Link to={to} className="my-4 block group">
-      <div className="flex items-center justify-between p-3 xl:p-4 bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors rounded-lg">
+    <Link to={to} className="block group">
+      <div className="flex items-center justify-between p-3 lg:p-4 bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors rounded-lg">
         <div className="flex items-center gap-2 md:gap-3">
           <div className="p-2 bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg">
             <Icon className="size-5" strokeWidth={2} />

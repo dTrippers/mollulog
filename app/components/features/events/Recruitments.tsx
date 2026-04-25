@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
-import { ChevronRightIcon, ClockIcon, StarIcon, XCircleIcon } from "@heroicons/react/16/solid";
+import { ClockIcon, StarIcon, XCircleIcon } from "@heroicons/react/16/solid";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import dayjs from "dayjs";
-import { SubTitle } from "~/components/primitives";
+import { AttributeBadge, SubTitle } from "~/components/primitives";
 import { studentImageUrl } from "~/models/assets";
 import {
   attackTypeColor,
@@ -18,11 +18,10 @@ import {
 import type { RecruitmentTypeEnum, Attack, Defense } from "~/graphql/graphql";
 import type { Role } from "~/models/content.d";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { OptionBadge } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
 import EventInfoCard from "./EventInfoCard";
 
-type Recruitment = {
+export type Recruitment = {
   recruitmentType: RecruitmentTypeEnum;
   pickup: boolean;
   rerun: boolean;
@@ -45,7 +44,7 @@ type RecruitmentsProps = {
 };
 
 type ActionData = {
-  favorite?: { studentUid: string; favorited: boolean };
+  favorite?: { studentUid: string; contentUid?: string; favorited: boolean };
 };
 
 function getFavoriteButtonClassName(favorited: boolean) {
@@ -56,7 +55,7 @@ function getFavoriteButtonClassName(favorited: boolean) {
   }`);
 }
 
-function useRecruitmentFavorite(recruitment: Recruitment) {
+function useRecruitmentFavorite(recruitment: Recruitment, favoriteAction?: string, favoriteContentUid?: string) {
   const studentUid = recruitment.student?.uid ?? null;
   const fetcher = useFetcher();
   const [favorited, setFavorited] = useState(recruitment.favorited);
@@ -79,8 +78,8 @@ function useRecruitmentFavorite(recruitment: Recruitment) {
     setFavorited(next);
     setFavoritedCount((count) => count + (next ? 1 : -1));
 
-    const data: ActionData = { favorite: { studentUid, favorited: next } };
-    fetcher.submit(data, { method: "post", encType: "application/json" });
+    const data: ActionData = { favorite: { studentUid, contentUid: favoriteContentUid, favorited: next } };
+    fetcher.submit(data, { action: favoriteAction, method: "post", encType: "application/json" });
   };
 
   return {
@@ -195,21 +194,9 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
                 </p>
               )}
 
-              {/* Mobile: vertical list */}
-              <div className="flex flex-col gap-2 md:hidden">
+              <div className="flex flex-wrap gap-3">
                 {group.recruitments.map((recruitment) => (
-                  <MobileRecruitmentRow
-                    key={recruitment.student?.uid ?? recruitment.studentName}
-                    recruitment={recruitment}
-                    signedIn={signedIn}
-                  />
-                ))}
-              </div>
-
-              {/* Desktop: horizontal cards */}
-              <div className="hidden md:flex flex-wrap gap-3">
-                {group.recruitments.map((recruitment) => (
-                  <DesktopRecruitmentCard
+                  <RecruitmentCard
                     key={recruitment.student?.uid ?? recruitment.studentName}
                     recruitment={recruitment}
                     signedIn={signedIn}
@@ -229,18 +216,9 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
             title="모집 포인트(천장) 교환 불가"
             description="아래 학생들은 모집 포인트(천장)로는 교환할 수 없어요"
           />
-          <div className="flex flex-col gap-2 md:hidden">
+          <div className="flex flex-wrap gap-3">
             {limitedRecruitments.map((recruitment) => (
-              <MobileRecruitmentRow
-                key={recruitment.student?.uid ?? recruitment.studentName}
-                recruitment={recruitment}
-                signedIn={signedIn}
-              />
-            ))}
-          </div>
-          <div className="hidden md:flex flex-wrap gap-3">
-            {limitedRecruitments.map((recruitment) => (
-              <DesktopRecruitmentCard
+              <RecruitmentCard
                 key={recruitment.student?.uid ?? recruitment.studentName}
                 recruitment={recruitment}
                 signedIn={signedIn}
@@ -253,63 +231,32 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
   );
 }
 
-function MobileRecruitmentRow({ recruitment, signedIn }: { recruitment: Recruitment; signedIn: boolean }) {
+export function RecruitmentCard({
+  recruitment,
+  signedIn,
+  favoriteAction,
+  favoriteContentUid,
+  className,
+}: {
+  recruitment: Recruitment;
+  signedIn: boolean;
+  favoriteAction?: string;
+  favoriteContentUid?: string;
+  className?: string;
+}) {
   const { attackType, defenseType, role } = recruitment.student ?? {};
   const { showSignIn } = useSignIn();
-  const { studentUid, favorited, favoritedCount, toggleFavorite } = useRecruitmentFavorite(recruitment);
-
-  return (
-    <div className="relative flex items-center gap-4 p-3 bg-neutral-100 dark:bg-neutral-900 rounded-xl pr-20">
-      <div className="w-14 shrink-0">
-        <img
-          src={studentImageUrl(studentUid ?? "unlisted")}
-          alt={recruitment.studentName}
-          className="w-full rounded-lg object-cover"
-          loading="lazy"
-        />
-      </div>
-      <div className="grow min-w-0">
-        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-0.5">
-          {recruitmentLabelLocale(recruitment)}
-        </p>
-        <Link
-          to={`/students/${studentUid}`}
-          className="flex items-center gap-0.5 hover:underline font-semibold"
-        >
-          <span className="truncate">{recruitment.studentName}</span>
-          {studentUid && <ChevronRightIcon className="size-4 shrink-0" />}
-        </Link>
-        {attackType && defenseType && role && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            <OptionBadge text={attackTypeLocale[attackType]} color={attackTypeColor[attackType]} />
-            <OptionBadge text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} />
-            <OptionBadge text={roleLocale[role]} color={roleColor[role]} />
-          </div>
-        )}
-      </div>
-      {studentUid && (
-        <RecruitmentFavoriteButton
-          favorited={favorited}
-          favoritedCount={favoritedCount}
-          className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 rounded-xl"
-          onClick={() => (signedIn ? toggleFavorite() : showSignIn())}
-        />
-      )}
-    </div>
+  const { studentUid, favorited, favoritedCount, toggleFavorite } = useRecruitmentFavorite(
+    recruitment,
+    favoriteAction,
+    favoriteContentUid,
   );
-}
-
-function DesktopRecruitmentCard({ recruitment, signedIn }: { recruitment: Recruitment; signedIn: boolean }) {
-  const { attackType, defenseType, role } = recruitment.student ?? {};
-  const { showSignIn } = useSignIn();
-  const { studentUid, favorited, favoritedCount, toggleFavorite } = useRecruitmentFavorite(recruitment);
 
   const [mainName, skinName] = recruitment.studentName.split("(");
   const trimmedSkinName = skinName?.replace(")", "").trim();
 
   return (
-    <div className="w-32 flex flex-col bg-neutral-100 dark:bg-neutral-900 rounded-xl overflow-hidden">
-      {/* Image with overlay */}
+    <div className={sanitizeClassName(`w-28 flex flex-col bg-neutral-100 dark:bg-neutral-900 rounded-lg overflow-hidden ${className ?? ""}`)}>
       <div className="relative w-full overflow-hidden aspect-200/226">
         <img
           src={studentImageUrl(studentUid ?? "unlisted")}
@@ -318,14 +265,12 @@ function DesktopRecruitmentCard({ recruitment, signedIn }: { recruitment: Recrui
           loading="lazy"
         />
 
-        {/* Label: top-right */}
-        <div className="absolute top-1 right-1.5">
+        <div className="absolute top-0.5 right-0.5">
           <span className="px-1.5 py-0.5 bg-black/60 backdrop-blur-sm text-white text-xs font-medium rounded-md leading-tight">
             {recruitmentLabelLocale(recruitment)}
           </span>
         </div>
 
-        {/* Name: bottom overlay with long gradient */}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-neutral-100 via-neutral-100/75 dark:from-neutral-900 dark:via-neutral-900/75 via-75% to-transparent pt-2 px-2">
           {trimmedSkinName && (
             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-tight">{trimmedSkinName}</p>
@@ -334,13 +279,12 @@ function DesktopRecruitmentCard({ recruitment, signedIn }: { recruitment: Recrui
         </div>
       </div>
 
-      {/* Badges + favorite */}
       <div className="p-1.5 flex flex-col gap-1.5">
         {attackType && defenseType && role && (
           <div className="flex flex-wrap gap-0.5">
-            <OptionBadge text={attackTypeLocale[attackType]} color={attackTypeColor[attackType]} />
-            <OptionBadge text={defenseTypeLocale[defenseType].slice(0, 2)} color={defenseTypeColor[defenseType]} />
-            <OptionBadge text={roleLocale[role]} color={roleColor[role]} />
+            <AttributeBadge text={attackTypeLocale[attackType]} color={attackTypeColor[attackType]} />
+            <AttributeBadge text={defenseTypeLocale[defenseType].slice(0, 2)} color={defenseTypeColor[defenseType]} />
+            <AttributeBadge text={roleLocale[role]} color={roleColor[role]} />
           </div>
         )}
 
@@ -349,7 +293,7 @@ function DesktopRecruitmentCard({ recruitment, signedIn }: { recruitment: Recrui
             to={`/students/${studentUid}`}
             className="inline-flex items-center justify-center w-full py-1 rounded-lg text-xs font-medium transition-all bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-neutral-50 dark:hover:bg-neutral-700"
           >
-            상세 / 통계 정보
+            평가/통계
           </Link>
         )}
 
@@ -357,7 +301,7 @@ function DesktopRecruitmentCard({ recruitment, signedIn }: { recruitment: Recrui
           <RecruitmentFavoriteButton
             favorited={favorited}
             favoritedCount={favoritedCount}
-            className="w-full py-1"
+            className="w-full py-0.5 cursor-pointer"
             onClick={() => (signedIn ? toggleFavorite() : showSignIn())}
           />
         )}

@@ -12,7 +12,7 @@ type RaidStatisticsScreenProps = {
 
 export default function RaidStatisticsScreen({ statistics, allStudents, maxTier }: RaidStatisticsScreenProps) {
   return (
-    <div className="xl:grid xl:grid-cols-2 xl:gap-4">
+    <div className="lg:grid lg:grid-cols-2 lg:gap-4">
       <div>
         <p className="text-lg font-bold">스트라이커 편성 횟수</p>
         <SlotCountInfos

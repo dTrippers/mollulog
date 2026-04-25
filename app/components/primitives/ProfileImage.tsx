@@ -4,7 +4,7 @@ import { studentImageUrl } from "~/models/assets";
 
 type ProfileImageProps = {
   studentUid: string | null;
-  imageSize?: 16 | 12 | 6 | 8;
+  imageSize?: 16 | 12 | 10 | 6 | 8;
 };
 
 export default function ProfileImage({ studentUid, imageSize }: ProfileImageProps) {
@@ -15,6 +15,9 @@ export default function ProfileImage({ studentUid, imageSize }: ProfileImageProp
       break;
     case 12:
       [imageSizeClass, iconSizeClass] = ["size-10 md:size-12", "size-8 md:size-10"];
+      break;
+    case 10:
+      [imageSizeClass, iconSizeClass] = ["size-10", "size-8"];
       break;
     case 6:
       [imageSizeClass, iconSizeClass] = ["size-6", "size-4"];

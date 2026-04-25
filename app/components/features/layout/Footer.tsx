@@ -2,7 +2,7 @@ import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/outline";
 
 export default function Footer() {
   return (
-    <div className="mt-16 py-16">
+    <div className="mt-16 pt-16 pb-[var(--mobile-page-bottom-padding)] lg:pb-16">
       <p className="text-lg text-bold font-ingame"><span className="font-bold">
         몰루</span>로그
       </p>

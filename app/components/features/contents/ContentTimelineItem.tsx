@@ -13,19 +13,14 @@ import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import dayjs from "dayjs";
 import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router";
+import { RaidCard } from "~/components/features/raids";
 import { StudentCards } from "~/components/features/students";
-import { BottomSheet, Button, OptionBadge } from "~/components/primitives";
+import { BottomSheet, Button } from "~/components/primitives";
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
 import {
-  attackTypeColor,
-  attackTypeLocale,
   contentTypeLocale,
-  defenseTypeColor,
-  defenseTypeLocale,
   recruitmentLabelLocale,
-  terrainLocale,
 } from "~/locales/ko";
-import { bossImageUrl } from "~/models/assets";
 import { SHOW_LINK_CONTENT_TYPES } from "~/models/content";
 import type { EventType, RaidType, Role } from "~/models/content.d";
 import ContentCommentEditor from "./ContentCommentEditor";
@@ -173,12 +168,12 @@ export function ContentTimelineItem({
   const headerContent = headerLinked ? (
     <Link to={link} className="block cursor-pointer hover:underline tracking-tight">
       <ContentTitles name={name} showLink={true} />
-      {raidInfo && <RaidInfo raid={raidInfo} />}
+      {raidInfo && <RaidInfo raid={raidInfo} since={since ?? null} until={until} />}
     </Link>
   ) : (
     <>
       <ContentTitles name={name} showLink={false} />
-      {raidInfo && <RaidInfo raid={raidInfo} />}
+      {raidInfo && <RaidInfo raid={raidInfo} since={since ?? null} until={until} />}
     </>
   );
 
@@ -347,7 +342,10 @@ function ContentTag({ Icon, text, color }: ContentTagProps) {
 
 type RaidInfoProps = {
   raid: {
+    raidType: string;
     boss: string;
+    name: string;
+    seasonIndex?: number;
     terrain: Terrain;
     attackType: Attack | null;
     defenseTypes: {
@@ -355,48 +353,30 @@ type RaidInfoProps = {
       difficulty: string | null;
     }[];
   };
+  since: Date | null;
+  until: Date | null;
 };
 
-function RaidInfo({ raid }: RaidInfoProps) {
+function RaidInfo({ raid, since, until }: RaidInfoProps) {
   return (
-    <div className="mt-2 mb-6 relative md:w-96">
-      <img
-        className="md:w-96 rounded-lg bg-linear-to-br from-neutral-50 to-neutral-300 dark:from-neutral-600 dark:to-neutral-800"
-        src={bossImageUrl(raid.boss)}
-        alt={`총력전 보스 ${raid.boss}`}
-        loading="lazy"
+    <div className="mt-2 mb-6 w-full max-w-96">
+      <RaidCard
+        raid={{
+          raidBoss: { uid: raid.boss, name: raid.name },
+          raidType: raid.raidType,
+          seasonIndex: raid.seasonIndex,
+          attackType: raid.attackType,
+          defenseTypes: raid.defenseTypes,
+          startAt: since,
+          endAt: until,
+          terrain: raid.terrain,
+        }}
+        timeLocaleType="relative"
+        showTimeLabel={false}
+        showTitle={false}
+        showAttackType
+        className="w-full"
       />
-      <div className="absolute bottom-0 right-0 flex flex-col items-end gap-y-1 p-1 text-white text-sm">
-        <div className="flex gap-x-1">
-          <OptionBadge text={terrainLocale[raid.terrain]} bgColor="dark" />
-          {raid.attackType && (
-            <OptionBadge
-              text={attackTypeLocale[raid.attackType]}
-              color={attackTypeColor[raid.attackType]}
-              bgColor="dark"
-            />
-          )}
-          {raid.defenseTypes.length === 1 && (
-            <OptionBadge
-              text={defenseTypeLocale[raid.defenseTypes[0].defenseType]}
-              color={defenseTypeColor[raid.defenseTypes[0].defenseType]}
-              bgColor="dark"
-            />
-          )}
-        </div>
-        {raid.defenseTypes.length > 1 && (
-          <div className="flex gap-x-1">
-            {raid.defenseTypes.map(({ defenseType }) => (
-              <OptionBadge
-                key={defenseType}
-                text={defenseTypeLocale[defenseType]}
-                color={defenseTypeColor[defenseType]}
-                bgColor="dark"
-              />
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

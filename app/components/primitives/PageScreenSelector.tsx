@@ -18,7 +18,7 @@ export type PageScreenSelectorItemProps = {
 
 export default function PageScreenSelector({ screens }: PageScreenSelectorProps) {
   return (
-    <div className="hidden xl:block my-4">
+    <div className="hidden lg:block my-4">
       {screens.map((screen) => <PageScreenSelectorItem key={screen.link ?? screen.text} {...screen} />)}
     </div>
   );

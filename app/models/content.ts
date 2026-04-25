@@ -69,7 +69,7 @@ export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
  */
 
 export type IndexRecruitment = {
-  student: { uid: string; name: string } | null;
+  student: { uid: string; name: string; attackType: Attack; defenseType: Defense; role: Role } | null;
   recruitmentType: RecruitmentTypeEnum;
   pickup: boolean;
   rerun: boolean;
@@ -81,7 +81,7 @@ export type IndexRecruitment = {
 export async function getIndexContents(env: Env, forceRefresh = false) {
   return fetchCached(
     env,
-    "index-contents::v5",
+    "index-contents::v7",
     async () => {
       const now = dayjs();
       const nowDate = now.toDate();
@@ -112,6 +112,11 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
 
       // ========== Recruitments (from BAQL) ==========
       const recruitmentGroups = await recruitmentRepository.getActive(nowDate, forceRefresh);
+      const timelineUidByRecruitmentGroupUid = new Map(
+        allEvents
+          .filter((event) => event.recruitmentGroupUid)
+          .map((event) => [event.recruitmentGroupUid as string, event.uid]),
+      );
       const currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[] = recruitmentGroups
         .flatMap((group) =>
           group.recruitments
@@ -123,9 +128,17 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
                 r.recruitmentType !== "encore",
             )
             .map((r) => ({
-              eventUid: group.uid,
+              eventUid: timelineUidByRecruitmentGroupUid.get(group.uid) ?? group.uid,
               recruitment: {
-                student: r.student ? { uid: r.student.uid, name: r.student.name ?? "" } : null,
+                student: r.student
+                  ? {
+                      uid: r.student.uid,
+                      name: r.student.name ?? "",
+                      attackType: r.student.attackType,
+                      defenseType: r.student.defenseType,
+                      role: r.student.role,
+                    }
+                  : null,
                 recruitmentType: r.recruitmentType,
                 pickup: r.pickup,
                 rerun: r.rerun,
@@ -145,12 +158,9 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
         currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId),
       );
 
-      const currentEvents = allEvents.filter((e) => !dayjs(e.startAt).isAfter(now));
-
       return {
         mainEvent,
         currentRaids,
-        currentEvents,
         currentRecruitments,
         favoritedCounts,
       };

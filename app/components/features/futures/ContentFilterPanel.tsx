@@ -41,7 +41,7 @@ export default function ContentFilterPanel({ filter, onFilterChange }: ContentFi
         <p className="mb-2 font-bold">이벤트</p>
         <FilterButtons buttonProps={eventFilterProps} size="sm" />
       </div>
-      <div className="mb-2 xl:mb-8">
+      <div className="mb-2 lg:mb-8">
         <p className="mb-2 font-bold">레이드</p>
         <FilterButtons buttonProps={contentFilterProps} size="sm" />
       </div>

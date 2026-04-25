@@ -84,11 +84,11 @@ export default function FavoritedItemSelector({ items, students, isAuthenticated
         <Await resolve={items}>
           {(items) => {
             const gridCount = Object.keys(activeItem?.favoriteLevels ?? {}).length ?? 0;
-            let gridClass = "xl:grid-cols-2";
+            let gridClass = "lg:grid-cols-2";
             if (gridCount === 1) {
-              gridClass = "xl:grid-cols-1";
+              gridClass = "lg:grid-cols-1";
             } else if (gridCount === 3) {
-              gridClass = "xl:grid-cols-3";
+              gridClass = "lg:grid-cols-3";
             }
 
             return (

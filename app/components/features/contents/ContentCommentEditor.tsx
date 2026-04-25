@@ -231,9 +231,16 @@ export default function ContentCommentEditor({
           />
         ) : (
           <ClickableSurface className="w-full" onClick={() => showSignIn()}>
-            <Callout emoji="💬" className="hover:bg-neutral-200 dark:hover:bg-neutral-900 cursor-pointer transition">
-              <p>로그인 후 의견을 남겨보세요.</p>
-            </Callout>
+            {variant === "compact" ? (
+              <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm text-neutral-500 transition hover:bg-neutral-100 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700">
+                <span>💬</span>
+                <span>로그인 후 의견을 남겨보세요.</span>
+              </div>
+            ) : (
+              <Callout emoji="💬" className="hover:bg-neutral-200 dark:hover:bg-neutral-900 cursor-pointer transition">
+                <p>로그인 후 의견을 남겨보세요.</p>
+              </Callout>
+            )}
           </ClickableSurface>
         )}
       </div>
@@ -283,7 +290,7 @@ function CommentForm({
       <div className="flex items-center gap-2 min-w-0">
         <input
           className={`flex-1 min-w-0 bg-transparent text-neutral-700 focus:outline-none dark:text-neutral-300 ${
-            compact ? "text-sm leading-5" : "text-sm xl:text-base"
+            compact ? "text-sm leading-5" : "text-sm lg:text-base"
           }`}
           placeholder={placeholder}
           value={body}

@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
-import { ChevronRightIcon, MessageSquareTextIcon } from "lucide-react";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router";
 import { Callout } from "~/components/primitives";
 import type { FeedbackTicket } from "~/models/feedback";
@@ -23,7 +24,7 @@ export default function TicketList({ tickets }: { tickets: FeedbackTicket[] }) {
 
       {tickets.length === 0 ? (
         <Callout
-          Icon={MessageSquareTextIcon}
+          Icon={ChatBubbleLeftRightIcon}
           title="등록된 문의가 아직 없어요."
           description="아래 폼에서 첫 문의를 남겨보세요."
           tone="info"

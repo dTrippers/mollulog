@@ -1,5 +1,7 @@
 export { default as Button } from "./Button";
 export { default as PrimitiveButton } from "./Button";
+export { default as AttributeBadge } from "./AttributeBadge";
+export type { AttributeBadgeColor } from "./AttributeBadge";
 export { default as BottomSheet } from "./BottomSheet";
 export { default as Callout } from "./Callout";
 export { default as ClickableSurface } from "./ClickableSurface";

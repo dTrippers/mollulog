@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, isRouteErrorResponse, redirect, useActionData, useLoaderData, useNavigation, useRouteError } from "react-router";
-import { MailIcon } from "lucide-react";
+import { EnvelopeIcon } from "@heroicons/react/24/outline";
 import { getAuthenticator } from "~/auth/authenticator.server";
 import { ErrorPage } from "~/components/features/layout";
 import { Callout, Title } from "~/components/primitives";
@@ -110,7 +110,7 @@ export default function Contact() {
 
       {!loaderData.authenticated ? (
         <Callout
-          Icon={MailIcon}
+          Icon={EnvelopeIcon}
           title="문의 등록에는 로그인이 필요해요."
           description={
             <>

@@ -11,7 +11,7 @@ export default function RequiredGifts({ currentExp: currentExpProp, currentLevel
   const currentExp = currentExpProp ?? getAccumulatedExpForLevel(currentLevel);
   return (
     <Section title="목표 랭크까지 필요한 선물 개수">
-      <div className="grid grid-cols-4 xl:grid-cols-8 gap-1 md:gap-2">
+      <div className="grid grid-cols-4 lg:grid-cols-8 gap-1 md:gap-2">
         {RELATIONSHIP_ITEMS.map(({ type, name, exp, item }) => {
           const remainingExp = getAccumulatedExpForLevel(targetLevel) - currentExp;
           return (

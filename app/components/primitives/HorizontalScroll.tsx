@@ -10,6 +10,7 @@ type HorizontalScrollProps = {
   gap?: string;
   showArrowsOnMobile?: boolean;
   className?: string;
+  fadeEdges?: boolean;
 };
 
 function HorizontalScroll({
@@ -18,6 +19,7 @@ function HorizontalScroll({
   gap = "gap-4",
   showArrowsOnMobile = false,
   className = "",
+  fadeEdges = false,
 }: HorizontalScrollProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -95,6 +97,13 @@ function HorizontalScroll({
         >
           <ChevronRightIcon className="size-5 text-neutral-600 dark:text-neutral-400" />
         </button>
+      )}
+
+      {fadeEdges && canScrollLeft && (
+        <div className="pointer-events-none absolute inset-y-0 left-0 z-5 w-8 bg-linear-to-r from-background" />
+      )}
+      {fadeEdges && canScrollRight && (
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-5 w-8 bg-linear-to-l from-background" />
       )}
 
       {/* Scrollable container */}

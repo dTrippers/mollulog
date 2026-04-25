@@ -121,7 +121,7 @@ export default function EventIndex() {
   const { eventContent, signedIn, allComments, me, eventUid } = useLoaderData<typeof loader>();
   return (
     <div className="w-full">
-      <div className="my-2 xl:my-8">
+      <div className="my-2 lg:my-8">
         <EventHeader
           imageUrl={eventContent.imageUrl}
           name={eventContent.name}

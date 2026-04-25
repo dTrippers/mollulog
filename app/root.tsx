@@ -36,6 +36,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const navigationBarContents = await getNavigationBarContents(env);
   return {
     currentUsername: sensei?.username ?? null,
+    currentProfileStudentId: sensei?.profileStudentId ?? null,
     darkMode: preference.darkMode ?? false,
     navigationBarContents,
     publicEnv: {
@@ -102,7 +103,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const loaderData = useLoaderData<typeof loader>();
-  const { currentUsername, navigationBarContents } = loaderData;
+  const { currentUsername, currentProfileStudentId, navigationBarContents } = loaderData;
 
   const [darkMode, setDarkMode] = useState(loaderData.darkMode);
   const loadingBarRef = useRef<LoadingBarRef>(null);
@@ -145,23 +146,24 @@ export default function App() {
     <div className="text-neutral-900 transition dark:bg-neutral-800 dark:text-neutral-200">
       <LoadingBar ref={loadingBarRef} color="#0ea5e9" height={3} waitingTime={300} />
       <SignInProvider>
-        <div className="flex flex-col xl:flex-row h-dvh">
+        <div className="flex flex-col lg:flex-row h-dvh">
           <NavigationBar
             currentUsername={currentUsername}
+            currentProfileStudentId={currentProfileStudentId}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
             upcomingEvent={navigationBarContents.upcomingEvent}
             hasRecentNews={navigationBarContents.hasRecentNews}
             hasActiveCoupons={navigationBarContents.hasActiveCoupons}
           />
-          <div className="mllg-content-area w-full pt-10 xl:pt-0 overflow-y-scroll">
-            <div className="xl:h-screen mx-auto w-full px-4 md:px-8 py-6">
-              <div className="pb-32">
+          <div className="mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0">
+            <div className="lg:h-screen mx-auto w-full px-4 md:px-8 pt-2 pb-6 lg:py-6">
+              <div>
                 <StudentCardPopupProvider key={pathname}>
                   <Outlet />
                 </StudentCardPopupProvider>
+                <Footer />
               </div>
-              <Footer />
             </div>
           </div>
         </div>

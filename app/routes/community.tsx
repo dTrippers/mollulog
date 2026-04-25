@@ -3,21 +3,19 @@ import {
   UsersIcon,
   Squares2X2Icon,
 } from "@heroicons/react/24/outline";
-import { useNavigate, useSearchParams } from "react-router";
+import { useCallback } from "react";
+import { useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { CommunityFeed } from "~/components/features/community";
+import { CommunityInfiniteFeed } from "~/components/features/community";
 import { Page } from "~/components/features/layout";
-import { EmptyView, Pagination } from "~/components/primitives";
 import { type CommunityPostType, getCommunityFeedPage } from "~/models/community";
-import { getAllStudentsMap } from "~/models/student";
-import { getGradingTagsByGradingUids } from "~/models/student-grading-tag";
-import { getTimelineContentsByUids } from "~/models/timeline-content";
-import { RecruitmentRepository } from "~/repositories";
-
-const PAGE_SIZE = 20;
-const COMMUNITY_VISIBLE_POST_TYPES = ["student_review", "event_opinion"] as const;
+import {
+  COMMUNITY_FEED_PAGE_SIZE,
+  COMMUNITY_VISIBLE_POST_TYPES,
+  enrichCommunityFeedPosts,
+} from "~/models/community-feed";
 
 function parseCommunityPostType(request: Request): CommunityPostType | undefined {
   const url = new URL(request.url);
@@ -41,67 +39,22 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const postType = parseCommunityPostType(request);
   const page = parsePage(request);
 
-  const [feedPage, allStudentsMap] = await Promise.all([
-    getCommunityFeedPage(env, {
-      currentUserId: currentUser?.id,
-      postType,
-      postTypes: postType ? [postType] : [...COMMUNITY_VISIBLE_POST_TYPES],
-      page,
-      pageSize: PAGE_SIZE,
-    }),
-    getAllStudentsMap(env, true),
-  ]);
-
-  const contentUids = feedPage.items
-    .map((post) => post.subjectContentUid)
-    .filter((uid): uid is string => uid !== null);
-  const [timelineContents, gradingTags] = await Promise.all([
-    contentUids.length > 0 ? getTimelineContentsByUids(env, contentUids) : [],
-    getGradingTagsByGradingUids(
-      env,
-      feedPage.items.filter((post) => post.postType === "student_review").map((post) => post.uid),
-    ),
-  ]);
-
-  const timelineContentMap = new Map(timelineContents.map((content) => [content.uid, content]));
-  const recruitmentGroupUids = timelineContents
-    .map((content) => content.recruitmentGroupUid)
-    .filter((uid): uid is string => uid !== null);
-  const recruitmentGroups = recruitmentGroupUids.length > 0
-    ? await new RecruitmentRepository(env).getByUids(recruitmentGroupUids)
-    : [];
-  const recruitmentGroupMap = new Map(recruitmentGroups.map((group) => [group.uid, group]));
+  const feedPage = await getCommunityFeedPage(env, {
+    currentUserId: currentUser?.id,
+    postType,
+    postTypes: postType ? [postType] : [...COMMUNITY_VISIBLE_POST_TYPES],
+    page,
+    pageSize: COMMUNITY_FEED_PAGE_SIZE,
+  });
+  const enrichedFeed = await enrichCommunityFeedPosts(env, feedPage.items);
 
   return {
     postType,
     page: feedPage.page,
     totalPages: feedPage.totalPages,
     signedIn: currentUser !== null,
-    studentsByUid: Object.fromEntries(
-      Object.entries(allStudentsMap).map(([uid, student]) => [
-        uid,
-        {
-          name: student.name,
-        },
-      ]),
-    ),
-    posts: feedPage.items.map((post) => ({
-      ...post,
-      tags: gradingTags[post.uid]?.map((tag) => tag.tagValue) ?? [],
-      subjectStudentName: post.subjectStudentUid ? allStudentsMap[post.subjectStudentUid]?.name ?? null : null,
-      subjectContentName: post.subjectContentUid ? timelineContentMap.get(post.subjectContentUid)?.name ?? null : null,
-      pickupStudents: post.subjectContentUid
-        ? (
-            recruitmentGroupMap
-              .get(timelineContentMap.get(post.subjectContentUid)?.recruitmentGroupUid ?? "")
-              ?.recruitments.filter((recruitment) => recruitment.pickup && recruitment.student)
-              .map((recruitment) => ({
-                uid: recruitment.student?.uid ?? "",
-                name: recruitment.student?.name ?? recruitment.studentName,
-              })) ?? []
-          )
-        : [],
-    })),
+    studentsByUid: enrichedFeed.studentsByUid,
+    posts: enrichedFeed.posts,
   };
 };
 
@@ -120,20 +73,14 @@ export const meta: MetaFunction = () => {
 
 export default function CommunityPage() {
   const { posts, signedIn, studentsByUid, postType, page, totalPages } = useLoaderData<typeof loader>();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-
-  const onPageChange = (nextPage: number) => {
+  const getPageUrl = useCallback((nextPage: number) => {
     const nextSearchParams = new URLSearchParams(searchParams);
-    if (nextPage <= 1) {
-      nextSearchParams.delete("page");
-    } else {
-      nextSearchParams.set("page", String(nextPage));
-    }
+    nextSearchParams.set("page", String(nextPage));
 
     const query = nextSearchParams.toString();
-    navigate(query ? `/community?${query}` : "/community");
-  };
+    return query ? `/community?${query}` : "/community";
+  }, [searchParams]);
 
   return (
     <Page
@@ -164,14 +111,16 @@ export default function CommunityPage() {
         },
       ]}
     >
-      <div className="space-y-6">
-        {posts.length === 0 ? (
-          <EmptyView text="아직 표시할 커뮤니티 게시물이 없어요" />
-        ) : (
-          <CommunityFeed posts={posts} signedIn={signedIn} studentsByUid={studentsByUid} />
-        )}
-        <Pagination currentPage={page} totalPages={totalPages} onPageChange={onPageChange} />
-      </div>
+      <CommunityInfiniteFeed
+        posts={posts}
+        signedIn={signedIn}
+        studentsByUid={studentsByUid}
+        page={page}
+        totalPages={totalPages}
+        emptyText="아직 표시할 커뮤니티 게시물이 없어요"
+        resetKey={postType ?? "all"}
+        getPageUrl={getPageUrl}
+      />
     </Page>
   );
 }
