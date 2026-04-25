@@ -183,7 +183,7 @@ function MobileActionBar({
   onOpenPanel: React.Dispatch<React.SetStateAction<number | null>>;
 }) {
   return (
-    <div className="lg:hidden fixed w-fit bottom-4 right-4 z-30 flex gap-x-2">
+    <div className="lg:hidden fixed w-fit bottom-[var(--mobile-bottom-offset)] right-4 z-30 flex gap-x-2">
       <div className="flex px-2 py-1 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-full shadow-lg">
         {links?.map((link) => (
           <MobileActionLink key={link.title} {...link} />

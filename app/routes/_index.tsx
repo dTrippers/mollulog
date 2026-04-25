@@ -1,5 +1,5 @@
 import { ArrowRightIcon, ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
-import { CalendarIcon, IdentificationIcon } from "@heroicons/react/24/outline";
+import { BookOpenIcon, FireIcon, IdentificationIcon, TicketIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -104,9 +104,11 @@ export default function Index() {
 
         <MainEvent event={mainEvent} />
         <EventList events={currentEvents} />
-        <div className="grid grid-cols-2 gap-2 lg:hidden">
-          <LinkCard Icon={CalendarIcon} title="미래시" description="컨텐츠 및 픽업 일정" to="/futures" />
+        <div className="my-4 grid grid-cols-2 gap-2 lg:hidden">
           <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가 정보" to="/students" />
+          <LinkCard Icon={FireIcon} title="총력전/대결전" description="시즌 및 랭킹 정보" to="/raids" />
+          <LinkCard Icon={BookOpenIcon} title="메인 스토리" description="공개 일정 정보" to="/mainstory" />
+          <LinkCard Icon={TicketIcon} title="쿠폰" description="인게임 쿠폰" to="/coupons" />
         </div>
 
         {currentRecruitments.length > 0 && (
@@ -237,7 +239,7 @@ type LinkCardProps = {
 
 function LinkCard({ Icon, title, description, to }: LinkCardProps) {
   return (
-    <Link to={to} className="my-4 block group">
+    <Link to={to} className="block group">
       <div className="flex items-center justify-between p-3 lg:p-4 bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors rounded-lg">
         <div className="flex items-center gap-2 md:gap-3">
           <div className="p-2 bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg">

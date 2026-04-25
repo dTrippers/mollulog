@@ -4,7 +4,9 @@ import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
-import { CheckCircle2Icon, ChevronRightIcon, KeyRoundIcon, LoaderCircleIcon, LogOutIcon } from "lucide-react";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
+import { ArrowRightStartOnRectangleIcon, KeyIcon } from "@heroicons/react/24/outline";
 import { getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
 import { Button, Input, Title } from "~/components/primitives";
@@ -176,8 +178,8 @@ function SaveSubmitButton({
           "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-600 dark:border-emerald-500 dark:bg-emerald-500 dark:text-emerald-950",
       )}
     >
-      {isSubmitting ? <LoaderCircleIcon className="size-4 animate-spin" /> : null}
-      {isSaved && !isSubmitting ? <CheckCircle2Icon className="size-4" /> : null}
+      {isSubmitting ? <ArrowPathIcon className="size-4 animate-spin" /> : null}
+      {isSaved && !isSubmitting ? <CheckCircleIcon className="size-4" /> : null}
       {isSubmitting ? "저장 중..." : isSaved ? "저장됨" : idleLabel}
     </Button>
   );
@@ -314,9 +316,9 @@ export default function EditProfile() {
             to="/edit/passkey"
             title="Passkey 관리"
             description={`${passkeyCount}개 등록됨`}
-            Icon={KeyRoundIcon}
+            Icon={KeyIcon}
           />
-          <SettingsLink to="/signout" title="로그아웃" Icon={LogOutIcon} tone="destructive" />
+          <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} tone="destructive" />
         </div>
       </EditSection>
     </div>

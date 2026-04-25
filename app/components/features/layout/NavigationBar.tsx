@@ -1,51 +1,28 @@
-import { Transition } from "@headlessui/react";
-import { ChevronDownIcon, EnvelopeIcon, MegaphoneIcon, MoonIcon } from "@heroicons/react/16/solid";
 import {
-  Bars3Icon,
-  BoltIcon as BoltIconOutline,
-  BookOpenIcon as BookOpenIconOutline,
-  CalendarIcon as CalendarIconOutline,
-  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
-  ClockIcon as ClockIconOutline,
-  Cog6ToothIcon as Cog6ToothIconOutline,
-  CreditCardIcon as CreditCardIconOutline,
-  FireIcon as FireIconOutline,
-  GiftIcon as GiftIconOutline,
-  HeartIcon as HeartIconOutline,
-  HomeIcon as HomeIconOutline,
-  IdentificationIcon as IdentificationIconOutline,
-  RectangleGroupIcon as RectangleGroupIconOutline,
-  TableCellsIcon as TableCellsIconOutline,
-  TicketIcon as TicketIconOutline,
-  UserCircleIcon as UserCircleIconOutline,
-} from "@heroicons/react/24/outline";
-import {
-  BoltIcon as BoltIconSolid,
-  BookOpenIcon as BookOpenIconSolid,
-  CalendarIcon as CalendarIconSolid,
-  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
-  ClockIcon as ClockIconSolid,
-  Cog6ToothIcon as Cog6ToothIconSolid,
-  CreditCardIcon as CreditCardIconSolid,
-  FireIcon as FireIconSolid,
-  GiftIcon as GiftIconSolid,
-  HeartIcon as HeartIconSolid,
-  HomeIcon as HomeIconSolid,
-  IdentificationIcon as IdentificationIconSolid,
-  RectangleGroupIcon as RectangleGroupIconSolid,
-  TableCellsIcon as TableCellsIconSolid,
-  TicketIcon as TicketIconSolid,
-  UserCircleIcon as UserCircleIconSolid,
-} from "@heroicons/react/24/solid";
-import dayjs from "dayjs";
-import { useState } from "react";
+  ChevronDownIcon,
+  EnvelopeIcon,
+  MegaphoneIcon,
+  MoonIcon,
+  SunIcon,
+} from "@heroicons/react/16/solid";
+import { Cog6ToothIcon } from "@heroicons/react/24/outline";
+import { useEffect, useState } from "react";
 import { Link, useMatches, useSubmit } from "react-router";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { ProfileImage } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
 import { submitPreference } from "~/routes/api.preference";
+import {
+  getMobileNavigationItems,
+  getNavigationSections,
+  getNavigationSectionStates,
+  type NavigationItem,
+  type NavigationSectionStates,
+} from "./navigation-menu";
 
 type NavigationBarProps = {
   currentUsername: string | null;
+  currentProfileStudentId: string | null;
   darkMode: boolean;
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   upcomingEvent: { uid: string; since: Date; until: Date } | null;
@@ -55,6 +32,7 @@ type NavigationBarProps = {
 
 export default function NavigationBar({
   currentUsername,
+  currentProfileStudentId,
   darkMode,
   setDarkMode,
   upcomingEvent,
@@ -63,91 +41,299 @@ export default function NavigationBar({
 }: NavigationBarProps) {
   const matches = useMatches();
   const pathname = matches[matches.length - 1].pathname;
-
   const { showSignIn } = useSignIn();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  const handleMenuClose = () => {
-    setIsMenuOpen(false);
-  };
+  const sectionStates = getNavigationSectionStates(pathname, upcomingEvent);
 
   return (
-    <div
-      className={sanitizeClassName(`
-      fixed lg:relative w-full lg:w-72 xl:w-84 lg:h-screen bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
-      border-b lg:border-b-0 lg:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30
-      ${isMenuOpen ? "z-200" : "z-100"}
-    `)}
-    >
-      <div className="px-4 py-3">
-        <div className="flex items-center">
-          <button
-            type="button"
-            className="block lg:hidden -m-2 rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-700"
-            onClick={() => setIsMenuOpen((prev) => !prev)}
-            aria-label={isMenuOpen ? "메뉴 닫기" : "메뉴 열기"}
-          >
-            <Bars3Icon className="size-6" strokeWidth={2} />
-          </button>
-          <img
-            src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
-            alt="몰루로그 로고"
-            className="ml-2 mr-1 lg:mr-2 object-cover h-8 lg:h-9 xl:h-10 aspect-4/3"
-          />
-          <h1 className="text-xl lg:text-2xl xl:text-3xl font-ingame">
-            <span className="font-bold">몰루</span>로그
-          </h1>
+    <>
+      <aside
+        className="
+          hidden lg:block lg:relative lg:h-screen lg:w-72 xl:w-84 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
+          lg:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30
+        "
+      >
+        <div className="px-4 py-3">
+          <div className="flex items-center">
+            <img
+              src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
+              alt="몰루로그 로고"
+              className="mr-2 h-9 xl:h-10 aspect-4/3 object-cover"
+            />
+            <h1 className="text-2xl xl:text-3xl font-ingame">
+              <span className="font-bold">몰루</span>로그
+            </h1>
+          </div>
+
+          <div className="mt-6">
+            <DesktopMenuContent
+              currentUsername={currentUsername}
+              pathname={pathname}
+              onShowSignIn={showSignIn}
+              onDarkModeToggle={setDarkMode}
+              hasRecentNews={hasRecentNews}
+              upcomingEvent={upcomingEvent}
+              hasActiveCoupons={hasActiveCoupons}
+              sectionStates={sectionStates}
+            />
+          </div>
         </div>
-        <div className="mt-6 hidden lg:block">
-          <MenuContent
-            currentUsername={currentUsername}
-            pathname={pathname}
-            onMenuClose={handleMenuClose}
-            onShowSignIn={showSignIn}
-            onDarkModeToggle={setDarkMode}
-            hasRecentNews={hasRecentNews}
-            upcomingEvent={upcomingEvent}
-            hasActiveCoupons={hasActiveCoupons}
-          />
-        </div>
-      </div>
-      <div>
-        <Transition
-          show={isMenuOpen}
-          as="div"
-          enter="transition duration-200 ease-out"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="transition duration-100 ease-in"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-          className="px-4 pb-4"
-        >
-          <MenuContent
-            currentUsername={currentUsername}
-            pathname={pathname}
-            onMenuClose={handleMenuClose}
-            onShowSignIn={showSignIn}
-            onDarkModeToggle={setDarkMode}
-            hasRecentNews={hasRecentNews}
-            upcomingEvent={upcomingEvent}
-            hasActiveCoupons={hasActiveCoupons}
-          />
-        </Transition>
-      </div>
-    </div>
+      </aside>
+
+      <MobileBrandHeader
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        hasRecentNews={hasRecentNews}
+      />
+
+      <MobileBottomNavigation
+        currentUsername={currentUsername}
+        currentProfileStudentId={currentProfileStudentId}
+        pathname={pathname}
+        upcomingEvent={upcomingEvent}
+        onShowSignIn={showSignIn}
+      />
+    </>
   );
 }
 
-interface MenuItemProps {
-  to: string;
-  name: string;
-  OutlineIcon: React.ComponentType<React.ComponentProps<"svg">>;
-  SolidIcon: React.ComponentType<React.ComponentProps<"svg">>;
-  isActive?: boolean;
-  onItemClick?: () => void;
+function MobileBrandHeader({
+  darkMode,
+  setDarkMode,
+  hasRecentNews,
+}: {
+  darkMode: boolean;
+  setDarkMode: NavigationBarProps["setDarkMode"];
+  hasRecentNews: boolean;
+}) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const submit = useSubmit();
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return;
+    }
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isMenuOpen]);
+
+  const toggleDarkMode = () => {
+    setDarkMode((prev) => {
+      submitPreference(submit, { darkMode: !prev });
+      return !prev;
+    });
+    setIsMenuOpen(false);
+  };
+  const ModeIcon = darkMode ? SunIcon : MoonIcon;
+
+  return (
+    <header
+      className="
+        lg:hidden fixed inset-x-0 top-0 z-100 flex h-[var(--mobile-header-height)] items-center justify-between
+        border-b border-neutral-200/60 bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-sm
+        dark:border-neutral-700/60 dark:bg-neutral-800/95
+      "
+    >
+      <Link to="/" className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-800">
+        <img
+          src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
+          alt="몰루로그 로고"
+          className="mr-2 h-7 aspect-4/3 object-cover"
+        />
+        <span className="text-lg font-ingame">
+          <span className="font-bold">몰루</span>로그
+        </span>
+      </Link>
+
+      <button
+        type="button"
+        className="
+          relative -mr-1 inline-flex size-9 items-center justify-center rounded-md text-neutral-700
+          transition-colors hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
+          dark:text-neutral-200 dark:hover:bg-neutral-700 dark:focus-visible:ring-offset-neutral-800
+        "
+        onClick={() => setIsMenuOpen((prev) => !prev)}
+        aria-label="설정 메뉴 열기"
+        aria-expanded={isMenuOpen}
+      >
+        <Cog6ToothIcon className="size-5" strokeWidth={2} />
+        {hasRecentNews && (
+          <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-red-500" aria-hidden="true" />
+        )}
+      </button>
+
+      {isMenuOpen && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-100 cursor-default bg-transparent"
+            onClick={() => setIsMenuOpen(false)}
+            aria-label="설정 메뉴 닫기"
+          />
+          <div
+            className="
+              absolute right-3 top-full z-110 mt-2 flex w-56 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg shadow-neutral-200/50
+              dark:border-neutral-700 dark:bg-neutral-800 dark:shadow-neutral-950/30
+            "
+          >
+            <MobileHeaderMenuButton
+              as="button"
+              Icon={ModeIcon}
+              label={darkMode ? "라이트 모드" : "다크 모드"}
+              tone="theme"
+              onClick={toggleDarkMode}
+            />
+            <MobileHeaderMenuButton
+              as="link"
+              to="/contact"
+              Icon={EnvelopeIcon}
+              label="제안/문의"
+              onClick={() => setIsMenuOpen(false)}
+            />
+            <MobileHeaderMenuButton
+              as="link"
+              to="/news"
+              Icon={MegaphoneIcon}
+              label="업데이트 소식"
+              showRedDot={hasRecentNews}
+              onClick={() => setIsMenuOpen(false)}
+            />
+          </div>
+        </>
+      )}
+    </header>
+  );
+}
+
+type MobileHeaderMenuButtonProps = {
+  Icon: React.ComponentType<React.ComponentProps<"svg">>;
+  label: string;
   showRedDot?: boolean;
-  disabled?: boolean;
+  tone?: "default" | "theme";
+  onClick: () => void;
+} & (
+  | {
+      as: "button";
+      to?: never;
+    }
+  | {
+      as: "link";
+      to: string;
+    }
+);
+
+function MobileHeaderMenuButton({
+  as,
+  to,
+  Icon,
+  label,
+  showRedDot = false,
+  tone = "default",
+  onClick,
+}: MobileHeaderMenuButtonProps) {
+  const className = sanitizeClassName(`
+    relative flex min-h-10 w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors
+    hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
+    dark:hover:bg-neutral-700 dark:focus-visible:ring-offset-neutral-800
+    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-neutral-700 dark:text-neutral-200"}
+  `);
+  const iconClassName = sanitizeClassName(`
+    size-4 shrink-0
+    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-neutral-500 dark:text-neutral-400"}
+  `);
+  const content = (
+    <>
+      <Icon className={iconClassName} />
+      <span className="min-w-0 flex-1 text-left">{label}</span>
+      {showRedDot && <span className="size-1.5 rounded-full bg-red-500" aria-hidden="true" />}
+    </>
+  );
+
+  if (as === "link") {
+    return (
+      <Link to={to} className={className} onClick={onClick}>
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <button type="button" className={className} onClick={onClick}>
+      {content}
+    </button>
+  );
+}
+
+function MobileBottomNavigation({
+  currentUsername,
+  currentProfileStudentId,
+  pathname,
+  upcomingEvent,
+  onShowSignIn,
+}: {
+  currentUsername: string | null;
+  currentProfileStudentId: string | null;
+  pathname: string;
+  upcomingEvent: NavigationBarProps["upcomingEvent"];
+  onShowSignIn: () => void;
+}) {
+  const items = getMobileNavigationItems({ pathname, currentUsername, upcomingEvent });
+
+  return (
+    <nav
+      className="
+        lg:hidden fixed inset-x-0 bottom-0 z-100 h-[var(--mobile-nav-height)]
+        border-t border-neutral-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
+        dark:border-neutral-700 dark:bg-neutral-800/95
+      "
+      aria-label="주요 메뉴"
+    >
+      <div className="mx-auto grid h-12 max-w-xl grid-cols-5">
+        {items.map((item) => {
+          const Icon = item.isActive ? item.SolidIcon : item.OutlineIcon;
+          const className = sanitizeClassName(`
+            relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-xs font-medium transition-colors
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-800
+            ${item.isActive ? "font-bold text-neutral-950 dark:text-neutral-50" : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"}
+          `);
+          const content = (
+            <>
+              {currentUsername && item.to.startsWith("/@") && currentProfileStudentId ? (
+                <ProfileImage studentUid={currentProfileStudentId} imageSize={6} />
+              ) : (
+                <Icon className="size-5 shrink-0" strokeWidth={2} />
+              )}
+              <span className="max-w-full truncate">{item.name}</span>
+            </>
+          );
+
+          if (!currentUsername && item.to === "/my") {
+            return (
+              <button key={item.name} type="button" className={className} onClick={onShowSignIn}>
+                {content}
+              </button>
+            );
+          }
+
+          return (
+            <Link key={item.name} to={item.to} className={className}>
+              {content}
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
+interface MenuItemProps extends NavigationItem {
+  onItemClick?: () => void;
 }
 
 function MenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, showRedDot }: MenuItemProps) {
@@ -210,36 +396,36 @@ function MenuSection({ name, OutlineIcon, SolidIcon, isActive, children }: MenuS
   );
 }
 
-interface MenuContentProps {
+interface DesktopMenuContentProps {
   currentUsername: string | null;
   pathname: string;
-  onMenuClose: () => void;
   onShowSignIn: () => void;
   onDarkModeToggle: (fn: (prev: boolean) => boolean) => void;
   hasRecentNews: boolean;
-  upcomingEvent: { uid: string; since: Date; until: Date } | null;
+  upcomingEvent: NavigationBarProps["upcomingEvent"];
   hasActiveCoupons: boolean;
+  sectionStates: NavigationSectionStates;
 }
 
-function MenuContent({
+function DesktopMenuContent({
   currentUsername,
   pathname,
-  onMenuClose,
   onShowSignIn,
   onDarkModeToggle,
   hasRecentNews,
   upcomingEvent,
   hasActiveCoupons,
-}: MenuContentProps) {
+  sectionStates,
+}: DesktopMenuContentProps) {
   const submit = useSubmit();
-  const now = dayjs();
-  const sectionStates = getMenuSectionStates(pathname, upcomingEvent);
-  const menuSections = getMenuSections({
+  const topLevelItems = getMobileNavigationItems({ pathname, currentUsername, upcomingEvent });
+  const homeItem = topLevelItems[0];
+  const communityItem = topLevelItems[2];
+  const profileItem = topLevelItems[4];
+  const menuSections = getNavigationSections({
     pathname,
     upcomingEvent,
-    now,
     hasActiveCoupons,
-    onMenuClose,
     sectionStates,
   });
 
@@ -248,19 +434,17 @@ function MenuContent({
       <MenuItem
         to="/"
         name="홈"
-        OutlineIcon={HomeIconOutline}
-        SolidIcon={HomeIconSolid}
+        OutlineIcon={homeItem.OutlineIcon}
+        SolidIcon={homeItem.SolidIcon}
         isActive={pathname === "/"}
-        onItemClick={onMenuClose}
       />
 
       <MenuItem
         to="/community"
         name="평가/의견"
-        OutlineIcon={ChatBubbleLeftRightIconOutline}
-        SolidIcon={ChatBubbleLeftRightIconSolid}
+        OutlineIcon={communityItem.OutlineIcon}
+        SolidIcon={communityItem.SolidIcon}
         isActive={sectionStates.isCommunityActive}
-        onItemClick={onMenuClose}
       />
 
       {menuSections.map((section) => (
@@ -279,28 +463,17 @@ function MenuContent({
 
       {currentUsername ? (
         <MenuItem
-          to={currentUsername ? `/@${currentUsername}` : "/"}
+          to={`/@${currentUsername}`}
           name="내 정보"
-          OutlineIcon={UserCircleIconOutline}
-          SolidIcon={UserCircleIconSolid}
-          isActive={pathname.startsWith("/@") || pathname.startsWith("/edit")}
-          onItemClick={
-            currentUsername
-              ? onMenuClose
-              : () => {
-                  onShowSignIn();
-                  onMenuClose();
-                }
-          }
+          OutlineIcon={profileItem.OutlineIcon}
+          SolidIcon={profileItem.SolidIcon}
+          isActive={sectionStates.isProfileActive}
         />
       ) : (
         <button
           type="button"
           className="my-4 w-full rounded-full bg-neutral-800 py-3 text-center text-sm text-white transition-opacity hover:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
-          onClick={() => {
-            onShowSignIn();
-            onMenuClose();
-          }}
+          onClick={onShowSignIn}
         >
           로그인 후 내 정보 관리
         </button>
@@ -311,10 +484,9 @@ function MenuContent({
           to="/news"
           text="업데이트 소식"
           Icon={MegaphoneIcon}
-          onClick={onMenuClose}
           showRedDot={hasRecentNews}
         />
-        {currentUsername && <UtilityLink to="/contact" text="제안/문의" Icon={EnvelopeIcon} onClick={onMenuClose} />}
+        {currentUsername && <UtilityLink to="/contact" text="제안/문의" Icon={EnvelopeIcon} />}
         <button
           type="button"
           className="my-1 flex w-fit items-center text-sm px-2 py-1 font-bold text-yellow-600 hover:underline dark:text-yellow-400"
@@ -333,7 +505,7 @@ function MenuContent({
   );
 }
 
-function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, showRedDot, disabled }: MenuItemProps) {
+function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, showRedDot, disabled }: MenuItemProps) {
   const className = sanitizeClassName(
     `my-1 px-2 py-1.5 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 text-sm rounded-lg transition relative ${isActive ? "font-semibold drop-shadow-lg" : ""} ${disabled ? "opacity-40" : ""}`,
   );
@@ -356,7 +528,7 @@ function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, 
   }
 
   return (
-    <Link to={to} onClick={() => onItemClick?.()} className={className}>
+    <Link to={to} className={className}>
       {content}
     </Link>
   );
@@ -366,175 +538,21 @@ function UtilityLink({
   to,
   text,
   Icon,
-  onClick,
   showRedDot = false,
 }: {
   to: string;
   text: string;
   Icon: React.ComponentType<React.ComponentProps<"svg">>;
-  onClick?: () => void;
   showRedDot?: boolean;
 }) {
   return (
     <Link
       to={to}
       className="relative my-1 flex w-fit items-center px-2 py-1 text-sm text-neutral-500 hover:underline dark:text-neutral-400"
-      onClick={onClick}
     >
       <Icon className="size-4" />
       <span className="ml-2">{text}</span>
       {showRedDot && <div className="absolute top-1 -right-1 size-1.5 bg-red-500 rounded-full animate-pulse" />}
     </Link>
   );
-}
-
-function getMenuSectionStates(pathname: string, upcomingEvent: NavigationBarProps["upcomingEvent"]) {
-  return {
-    isCommunityActive: pathname.startsWith("/community"),
-    isContentActive:
-      pathname.startsWith("/futures") ||
-      pathname.startsWith("/events") ||
-      pathname.startsWith("/raids") ||
-      pathname.startsWith("/students") ||
-      pathname.startsWith("/mainstory"),
-    isUtilActive:
-      pathname.startsWith("/utils") || !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
-    isExternalActive: pathname.startsWith("/coupons"),
-  };
-}
-
-function getMenuSections({
-  pathname,
-  upcomingEvent,
-  now,
-  hasActiveCoupons,
-  onMenuClose,
-  sectionStates,
-}: {
-  pathname: string;
-  upcomingEvent: NavigationBarProps["upcomingEvent"];
-  now: dayjs.Dayjs;
-  hasActiveCoupons: boolean;
-  onMenuClose: () => void;
-  sectionStates: ReturnType<typeof getMenuSectionStates>;
-}) {
-  return [
-    {
-      name: "컨텐츠",
-      OutlineIcon: RectangleGroupIconOutline,
-      SolidIcon: RectangleGroupIconSolid,
-      isActive: sectionStates.isContentActive,
-      items: [
-        {
-          to: "/futures",
-          name: "미래시",
-          OutlineIcon: CalendarIconOutline,
-          SolidIcon: CalendarIconSolid,
-          isActive:
-            pathname.startsWith("/futures") ||
-            (pathname.startsWith("/events") && !(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`))),
-          onItemClick: onMenuClose,
-        },
-        {
-          to: "/raids",
-          name: "총력전 / 대결전",
-          OutlineIcon: FireIconOutline,
-          SolidIcon: FireIconSolid,
-          isActive: pathname.startsWith("/raids"),
-          onItemClick: onMenuClose,
-        },
-        {
-          to: "/students",
-          name: "학생부",
-          OutlineIcon: IdentificationIconOutline,
-          SolidIcon: IdentificationIconSolid,
-          isActive: pathname.startsWith("/students"),
-          onItemClick: onMenuClose,
-        },
-        {
-          to: "/mainstory",
-          name: "메인 스토리",
-          OutlineIcon: BookOpenIconOutline,
-          SolidIcon: BookOpenIconSolid,
-          isActive: pathname.startsWith("/mainstory"),
-          onItemClick: onMenuClose,
-        },
-      ],
-    },
-    {
-      name: "플래너 & 계산기",
-      OutlineIcon: Cog6ToothIconOutline,
-      SolidIcon: Cog6ToothIconSolid,
-      isActive: sectionStates.isUtilActive,
-      items: [
-        {
-          to: "/utils/pyroxene",
-          name: "청휘석 플래너",
-          OutlineIcon: CreditCardIconOutline,
-          SolidIcon: CreditCardIconSolid,
-          isActive: pathname.startsWith("/utils/pyroxene"),
-          onItemClick: onMenuClose,
-        },
-        {
-          to: "/utils/growth/students",
-          name: "학생 성장/재화 플래너",
-          OutlineIcon: TableCellsIconOutline,
-          SolidIcon: TableCellsIconSolid,
-          isActive: pathname.startsWith("/utils/growth"),
-          onItemClick: onMenuClose,
-        },
-        upcomingEvent
-          ? {
-              to: `/events/${upcomingEvent.uid}/shop`,
-              name: "이벤트 소탕 계산기",
-              OutlineIcon: BoltIconOutline,
-              SolidIcon: BoltIconSolid,
-              onItemClick: onMenuClose,
-              showRedDot: dayjs(upcomingEvent.since).isBefore(now) && dayjs(upcomingEvent.until).isAfter(now),
-              isActive: pathname.startsWith(`/events/${upcomingEvent.uid}`),
-            }
-          : {
-              to: "/futures",
-              name: "이벤트 소탕 계산기",
-              OutlineIcon: BoltIconOutline,
-              SolidIcon: BoltIconSolid,
-              onItemClick: onMenuClose,
-              disabled: true,
-            },
-        {
-          to: "/utils/relationship",
-          name: "인연 랭크 계산기",
-          OutlineIcon: HeartIconOutline,
-          SolidIcon: HeartIconSolid,
-          isActive: pathname.startsWith("/utils/relationship"),
-          onItemClick: onMenuClose,
-        },
-        {
-          to: "/utils/raidscore",
-          name: "총력전 점수 계산기",
-          OutlineIcon: ClockIconOutline,
-          SolidIcon: ClockIconSolid,
-          isActive: pathname.startsWith("/utils/raidscore"),
-          onItemClick: onMenuClose,
-        },
-      ],
-    },
-    {
-      name: "게임 외 정보",
-      OutlineIcon: GiftIconOutline,
-      SolidIcon: GiftIconSolid,
-      isActive: sectionStates.isExternalActive,
-      items: [
-        {
-          to: "/coupons",
-          name: "쿠폰",
-          OutlineIcon: TicketIconOutline,
-          SolidIcon: TicketIconSolid,
-          isActive: pathname.startsWith("/coupons"),
-          onItemClick: onMenuClose,
-          showRedDot: hasActiveCoupons,
-        },
-      ],
-    },
-  ];
 }

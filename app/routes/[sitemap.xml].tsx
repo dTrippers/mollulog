@@ -22,6 +22,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   const raidRepository = new RaidRepository(env);
   const items: SitemapItem[] = [
     { link: `${HOST}/futures`, lastmod: dayjs(), changefreq: "daily", priority: 1.0 },
+    { link: `${HOST}/utils`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
     { link: `${HOST}/utils/relationship`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
     { link: `${HOST}/coupons`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
     { link: `${HOST}/students`, lastmod: dayjs(), changefreq: "monthly", priority: 0.5 },
