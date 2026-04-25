@@ -145,7 +145,7 @@ export default function App() {
     <div className="text-neutral-900 transition dark:bg-neutral-800 dark:text-neutral-200">
       <LoadingBar ref={loadingBarRef} color="#0ea5e9" height={3} waitingTime={300} />
       <SignInProvider>
-        <div className="flex flex-col xl:flex-row h-dvh">
+        <div className="flex flex-col lg:flex-row h-dvh">
           <NavigationBar
             currentUsername={currentUsername}
             darkMode={darkMode}
@@ -154,8 +154,8 @@ export default function App() {
             hasRecentNews={navigationBarContents.hasRecentNews}
             hasActiveCoupons={navigationBarContents.hasActiveCoupons}
           />
-          <div className="mllg-content-area w-full pt-10 xl:pt-0 overflow-y-scroll">
-            <div className="xl:h-screen mx-auto w-full px-4 md:px-8 py-6">
+          <div className="mllg-content-area w-full pt-10 lg:pt-0 overflow-y-scroll">
+            <div className="lg:h-screen mx-auto w-full px-4 md:px-8 py-6">
               <div className="pb-32">
                 <StudentCardPopupProvider key={pathname}>
                   <Outlet />

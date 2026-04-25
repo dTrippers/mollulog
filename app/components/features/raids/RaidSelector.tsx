@@ -76,7 +76,7 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
         leave="transition duration-100 ease-in"
         leaveFrom="opacity-100 scale-100"
         leaveTo="opacity-0 scale-95"
-        className="mt-4 mb-2 w-full bg-white dark:bg-neutral-800 xl:absolute xl:top-full xl:left-0 xl:z-30"
+        className="mt-4 mb-2 w-full bg-white dark:bg-neutral-800 lg:absolute lg:top-full lg:left-0 lg:z-30"
       >
         <div className="flex items-center justify-between">
           <FilterButtons
@@ -96,7 +96,7 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
             <XMarkIcon className="size-6" strokeWidth={2} />
           </button>
         </div>
-        <div className="max-h-64 xl:max-h-96 overflow-y-auto no-scrollbar mt-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg">
+        <div className="max-h-64 lg:max-h-96 overflow-y-auto no-scrollbar mt-2 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg">
           {selectableRaids.map((raid) => (
             <Link
               to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
@@ -129,14 +129,14 @@ function RaidSelectorItem({ raid }: { raid: SelectableRaid }) {
         alt="보스 이미지"
         className="absolute top-0 right-0 h-full object-cover"
       />
-      <div className="relative p-3 xl:p-4 w-full bg-white/90 dark:bg-neutral-900/80 group-hover:to-neutral-100/90 dark:group-hover:to-neutral-700/80 rounded-lg transition-colors">
+      <div className="relative p-3 lg:p-4 w-full bg-white/90 dark:bg-neutral-900/80 group-hover:to-neutral-100/90 dark:group-hover:to-neutral-700/80 rounded-lg transition-colors">
         <div className="flex items-center justify-between gap-4">
           <div>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
               {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex} ·{" "}
               {terrainLocale[raid.terrain]}
             </p>
-            <p className="font-bold text-sm xl:text-base">{raid.raidBoss.name}</p>
+            <p className="font-bold text-sm lg:text-base">{raid.raidBoss.name}</p>
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
               {raid.startAt ? dayjs(raid.startAt).format("YYYY.MM.DD") : "-"} ~{" "}
               {raid.endAt ? dayjs(raid.endAt).format("YYYY.MM.DD") : "-"}

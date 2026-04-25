@@ -52,7 +52,7 @@ export default function Page({ title, description, belowTitle, screens, panels, 
 
   return (
     <>
-      <div className={`flex flex-col ${layout === "horizontal" ? "xl:flex-row" : ""}`}>
+      <div className={`flex flex-col ${layout === "horizontal" ? "lg:flex-row" : ""}`}>
         <PageSidebar
           title={title}
           description={description}
@@ -65,7 +65,7 @@ export default function Page({ title, description, belowTitle, screens, panels, 
         />
 
         {screens && screens.length > 0 && (
-          <div ref={tabBarSentinelRef} className={layout === "vertical" ? "h-px" : "xl:hidden h-px"} />
+          <div ref={tabBarSentinelRef} className={layout === "vertical" ? "h-px" : "lg:hidden h-px"} />
         )}
 
         {screens && screens.length > 0 && (
@@ -76,7 +76,7 @@ export default function Page({ title, description, belowTitle, screens, panels, 
           <VerticalDesktopTabBar screens={screens} isSticky={isTabBarSticky} />
         )}
 
-        <div className={`relative z-0 grow xl:p-4 ${contentAreaClass}`}>
+        <div className={`relative z-0 grow lg:p-4 ${contentAreaClass}`}>
           {children}
         </div>
       </div>
@@ -112,7 +112,7 @@ function PageSidebar({
   const isVertical = layout === "vertical";
   const containerClass = isVertical
     ? "relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar"
-    : "relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar xl:z-auto xl:h-screen xl:max-w-xs xl:mr-6 xl:sticky xl:top-6 xl:self-start xl:overflow-y-scroll";
+    : "relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar lg:z-auto lg:h-screen lg:max-w-64 xl:max-w-xs lg:mr-4 xl:mr-6 lg:sticky lg:top-6 lg:self-start lg:overflow-y-scroll";
 
   return (
     <div className={containerClass}>
@@ -127,7 +127,7 @@ function PageSidebar({
           {title}
         </h1>
         {description && (
-          <p className="mt-2 text-sm xl:mt-4 text-neutral-500 dark:text-neutral-400">
+          <p className="mt-2 text-sm lg:mt-4 text-neutral-500 dark:text-neutral-400">
             {description}
           </p>
         )}
@@ -135,12 +135,12 @@ function PageSidebar({
       {belowTitle && <div className="my-4">{belowTitle}</div>}
       {!isVertical && screens && <PageScreenSelector screens={screens} />}
       {(panels || links) && (
-        <div className="my-8 hidden xl:block">
+        <div className="my-8 hidden lg:block">
           {panels?.map((panel) => (
             <PagePanel key={panel.title} {...panel} />
           ))}
           {links && links.length > 0 && (
-            <div className="xl:mt-8">
+            <div className="lg:mt-8">
               {links.map((link) => (
                 <PageLink key={link.title} {...link} />
               ))}
@@ -161,7 +161,7 @@ function MobileTabBar({
 }) {
   return (
     <div className={sanitizeClassName(`
-      xl:hidden sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
+      lg:hidden sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
       ${isSticky ? "border-b" : ""}
     `)}>
       <div className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">
@@ -183,7 +183,7 @@ function MobileActionBar({
   onOpenPanel: React.Dispatch<React.SetStateAction<number | null>>;
 }) {
   return (
-    <div className="xl:hidden fixed w-fit bottom-4 right-4 z-30 flex gap-x-2">
+    <div className="lg:hidden fixed w-fit bottom-4 right-4 z-30 flex gap-x-2">
       <div className="flex px-2 py-1 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-full shadow-lg">
         {links?.map((link) => (
           <MobileActionLink key={link.title} {...link} />
@@ -241,7 +241,7 @@ function VerticalDesktopTabBar({
 }) {
   return (
     <div className={sanitizeClassName(`
-      hidden xl:flex sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
+      hidden lg:flex sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
       ${isSticky ? "border-b" : ""}
     `)}>
       <div className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">

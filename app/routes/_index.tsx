@@ -98,13 +98,13 @@ export default function Index() {
   } = useLoaderData<typeof loader>();
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 xl:flex-row xl:items-start">
-      <div className="min-w-0 xl:flex-1">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
+      <div className="min-w-0 lg:flex-1">
         <Title text="진행중인 컨텐츠" />
 
         <MainEvent event={mainEvent} />
         <EventList events={currentEvents} />
-        <div className="grid grid-cols-2 gap-2 xl:hidden">
+        <div className="grid grid-cols-2 gap-2 lg:hidden">
           <LinkCard Icon={CalendarIcon} title="미래시" description="컨텐츠 및 픽업 일정" to="/futures" />
           <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가 정보" to="/students" />
         </div>
@@ -131,7 +131,7 @@ export default function Index() {
           )}
         </div>
       </div>
-      <div className="min-w-0 xl:w-full xl:max-w-xs xl:flex-none">
+      <div className="min-w-0 lg:w-full lg:max-w-72 xl:max-w-xs lg:flex-none">
         <HomeRightRail recentGradings={recentGradings} youtubeSections={youtubeSections} />
       </div>
     </div>
@@ -238,7 +238,7 @@ type LinkCardProps = {
 function LinkCard({ Icon, title, description, to }: LinkCardProps) {
   return (
     <Link to={to} className="my-4 block group">
-      <div className="flex items-center justify-between p-3 xl:p-4 bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors rounded-lg">
+      <div className="flex items-center justify-between p-3 lg:p-4 bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors rounded-lg">
         <div className="flex items-center gap-2 md:gap-3">
           <div className="p-2 bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg">
             <Icon className="size-5" strokeWidth={2} />

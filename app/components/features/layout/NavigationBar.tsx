@@ -74,8 +74,8 @@ export default function NavigationBar({
   return (
     <div
       className={sanitizeClassName(`
-      fixed xl:relative w-full xl:w-84 xl:h-screen bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
-      border-b xl:border-b-0 xl:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30
+      fixed lg:relative w-full lg:w-72 xl:w-84 lg:h-screen bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
+      border-b lg:border-b-0 lg:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30
       ${isMenuOpen ? "z-200" : "z-100"}
     `)}
     >
@@ -83,7 +83,7 @@ export default function NavigationBar({
         <div className="flex items-center">
           <button
             type="button"
-            className="block xl:hidden -m-2 rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+            className="block lg:hidden -m-2 rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-700"
             onClick={() => setIsMenuOpen((prev) => !prev)}
             aria-label={isMenuOpen ? "메뉴 닫기" : "메뉴 열기"}
           >
@@ -92,13 +92,13 @@ export default function NavigationBar({
           <img
             src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
             alt="몰루로그 로고"
-            className="ml-2 mr-1 xl:mr-2 object-cover h-8 xl:h-10 aspect-4/3"
+            className="ml-2 mr-1 lg:mr-2 object-cover h-8 lg:h-9 xl:h-10 aspect-4/3"
           />
-          <h1 className="text-xl xl:text-3xl font-ingame">
+          <h1 className="text-xl lg:text-2xl xl:text-3xl font-ingame">
             <span className="font-bold">몰루</span>로그
           </h1>
         </div>
-        <div className="mt-6 hidden xl:block">
+        <div className="mt-6 hidden lg:block">
           <MenuContent
             currentUsername={currentUsername}
             pathname={pathname}
@@ -189,7 +189,7 @@ function MenuSection({ name, OutlineIcon, SolidIcon, isActive, children }: MenuS
       <button
         type="button"
         className={sanitizeClassName(
-          `w-full px-2 py-1 flex items-center rounded-lg transition xl:cursor-default ${isActive ? "font-bold" : ""}`,
+          `w-full px-2 py-1 flex items-center rounded-lg transition lg:cursor-default ${isActive ? "font-bold" : ""}`,
         )}
         onClick={() => setIsOpen((prev) => !prev)}
       >
@@ -199,10 +199,10 @@ function MenuSection({ name, OutlineIcon, SolidIcon, isActive, children }: MenuS
           <OutlineIcon className="inline-block mr-3 size-6" />
         )}
         <span className="flex-1 text-left">{name}</span>
-        <ChevronDownIcon className={`size-4 transition-transform xl:hidden ${showChildren ? "rotate-180" : ""}`} />
+        <ChevronDownIcon className={`size-4 transition-transform lg:hidden ${showChildren ? "rotate-180" : ""}`} />
       </button>
       <div
-        className={`ml-3 pl-3 border-l border-neutral-200 dark:border-neutral-700 xl:block ${showChildren ? "" : "hidden"}`}
+        className={`ml-3 pl-3 border-l border-neutral-200 dark:border-neutral-700 lg:block ${showChildren ? "" : "hidden"}`}
       >
         {children}
       </div>

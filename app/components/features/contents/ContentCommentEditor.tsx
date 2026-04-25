@@ -290,7 +290,7 @@ function CommentForm({
       <div className="flex items-center gap-2 min-w-0">
         <input
           className={`flex-1 min-w-0 bg-transparent text-neutral-700 focus:outline-none dark:text-neutral-300 ${
-            compact ? "text-sm leading-5" : "text-sm xl:text-base"
+            compact ? "text-sm leading-5" : "text-sm lg:text-base"
           }`}
           placeholder={placeholder}
           value={body}

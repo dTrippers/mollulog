@@ -30,7 +30,7 @@ export default function CommentView({ body, visibility, createdAt, sensei, varia
           <span className="text-neutral-500 dark:text-neutral-400 ml-1">{formattedTime}</span>
           {visibility === "private" && <LockClosedIcon className="size-4 mb-0.5" />}
         </div>
-        <p className={`mt-0.5 whitespace-pre-wrap text-neutral-700 dark:text-neutral-200 ${compact ? "text-sm leading-5" : "text-sm xl:text-base"}`}>
+        <p className={`mt-0.5 whitespace-pre-wrap text-neutral-700 dark:text-neutral-200 ${compact ? "text-sm leading-5" : "text-sm lg:text-base"}`}>
           {body}
         </p>
       </div>
