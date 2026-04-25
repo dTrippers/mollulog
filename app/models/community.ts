@@ -366,12 +366,14 @@ export async function getCommunityFeedPage(
     pageSize = 20,
     postType,
     postTypes,
+    authorUserId,
   }: {
     currentUserId?: number | null;
     page?: number;
     pageSize?: number;
     postType?: CommunityPostType;
     postTypes?: CommunityPostType[];
+    authorUserId?: number;
   } = {},
 ): Promise<{
   items: CommunityFeedPost[];
@@ -387,6 +389,10 @@ export async function getCommunityFeedPage(
     filters.push(inArray(communityPostsTable.postType, postTypes));
   } else if (postType) {
     filters.push(eq(communityPostsTable.postType, postType));
+  }
+
+  if (authorUserId) {
+    filters.push(eq(communityPostsTable.userId, authorUserId));
   }
 
   const where = and(...filters);

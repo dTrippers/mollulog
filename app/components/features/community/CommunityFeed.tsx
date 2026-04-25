@@ -7,19 +7,14 @@ import ContentCommentEditor from "~/components/features/contents/ContentCommentE
 import { useSignIn } from "~/contexts/SignInProvider";
 import { MarkdownText, ProfileImage, TagIcon } from "~/components/primitives";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
+import type { EnrichedCommunityFeedPost } from "~/models/community-feed";
 import {
   STUDENT_GRADING_TAG_DISPLAY,
-  type StudentGradingTagValue,
   sortStudentGradingTags,
 } from "~/models/student-grading-tag";
 import { StudentCards } from "../students";
 
-type CommunityFeedPostItem = CommunityFeedPost & {
-  subjectStudentName?: string | null;
-  subjectContentName?: string | null;
-  tags?: StudentGradingTagValue[];
-  pickupStudents?: { uid: string; name: string }[];
-};
+export type CommunityFeedPostItem = EnrichedCommunityFeedPost;
 
 type CommunityFeedProps = {
   posts: CommunityFeedPostItem[];
@@ -29,7 +24,7 @@ type CommunityFeedProps = {
 
 export default function CommunityFeed({ posts, signedIn, studentsByUid }: CommunityFeedProps) {
   return (
-    <div className="space-y-4">
+    <div className="-mx-4 divide-y divide-neutral-200 dark:divide-neutral-700 sm:mx-0">
       {posts.map((post) => (
         <CommunityPostCard
           key={post.uid}
@@ -42,26 +37,26 @@ export default function CommunityFeed({ posts, signedIn, studentsByUid }: Commun
   );
 }
 
-function formatPostTimestamp(createdAt: string, updatedAt: string) {
+function getPostTimestampMeta(createdAt: string, updatedAt: string) {
   const created = dayjs(createdAt);
   const updated = dayjs(updatedAt);
   if (updated.isAfter(created)) {
-    return `(수정됨) ${updated.format("YYYY.MM.DD")}`;
+    return { text: updated.format("YYYY.MM.DD"), edited: true };
   }
 
-  return created.format("YYYY.MM.DD");
+  return { text: created.format("YYYY.MM.DD"), edited: false };
 }
 
-function getActionLabel(post: CommunityFeedPostItem) {
+function getPostTypeLabel(post: CommunityFeedPostItem) {
   if (post.postType === "student_review") {
-    return "학생 평가를 작성했어요.";
+    return "학생 평가";
   }
 
   if (post.postType === "event_opinion") {
-    return "이벤트 의견을 남겼어요.";
+    return "이벤트 의견";
   }
 
-  return "공략글을 작성했어요.";
+  return "공략";
 }
 
 function getVisibilityLabel(visibility: CommunityFeedPostItem["visibility"]) {
@@ -98,7 +93,7 @@ function CommunityPostCard({
   const [commentEditing, setCommentEditing] = useState(false);
   const commentFetcher = useFetcher();
   const likeFetcher = useFetcher<{ likeCount: number; liked: boolean }>();
-  const timestamp = formatPostTimestamp(post.createdAt, post.updatedAt);
+  const timestamp = getPostTimestampMeta(post.createdAt, post.updatedAt);
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment = post.postType === "event_opinion";
   const canLike = post.postType === "guide";
@@ -164,99 +159,104 @@ function CommunityPostCard({
   };
 
   return (
-    <article className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-800/50">
+    <article className="px-4 py-4 transition-colors sm:px-4 hover:bg-neutral-50/70 dark:hover:bg-neutral-800/60">
       <div className="flex items-start gap-3">
         <Link to={`/@${post.author.username}`} className="shrink-0">
-          <ProfileImage studentUid={post.author.profileStudentId} imageSize={8} />
+          <ProfileImage studentUid={post.author.profileStudentId} imageSize={10} />
         </Link>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="min-w-0 text-sm text-neutral-700 dark:text-neutral-200">
-                  <Link to={`/@${post.author.username}`} className="font-semibold hover:underline">
-                    @{post.author.username}
-                  </Link>{" "}
-                  선생님이 {getActionLabel(post)}
-                </p>
-                {visibilityLabel && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
-                    <LockClosedIcon className="size-3.5" />
-                    {visibilityLabel}
-                  </span>
-                )}
-              </div>
-              <PostSubjectMeta post={post} studentsByUid={studentsByUid} />
-            </div>
-            <span className="shrink-0 pt-0.5 text-xs text-neutral-500 dark:text-neutral-400">{timestamp}</span>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm leading-5">
+            <Link
+              to={`/@${post.author.username}`}
+              className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
+            >
+              @{post.author.username}
+            </Link>
+            <span className="text-neutral-700 dark:text-neutral-300">{getPostTypeLabel(post)}</span>
+            <span className="text-neutral-400 dark:text-neutral-500">·</span>
+            <time className="shrink-0 text-neutral-500 dark:text-neutral-400" dateTime={post.updatedAt}>
+              {timestamp.text}
+            </time>
+            {timestamp.edited && <span className="text-neutral-500 dark:text-neutral-400">(수정됨)</span>}
+            {visibilityLabel && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
+                <LockClosedIcon className="size-3.5" />
+                {visibilityLabel}
+              </span>
+            )}
           </div>
+
+          <div className="mt-1.5">
+            <PostSubjectMeta post={post} studentsByUid={studentsByUid} />
+          </div>
+
+          <div className="mt-3">
+            <PostContent post={post} studentsByUid={studentsByUid} />
+          </div>
+
+          {(canComment || canLike) && (
+            <div className="mt-4 flex max-w-md items-center justify-between text-neutral-500 dark:text-neutral-400">
+              {canComment && (
+                <button
+                  type="button"
+                  className={`group inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ${
+                    commentEditing
+                      ? "bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300"
+                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-neutral-100"
+                  }`}
+                  onClick={() => setCommentEditing((prev) => !prev)}
+                  aria-label={`댓글 ${commentCount}개`}
+                >
+                  <ChatBubbleLeftEllipsisIcon className="size-4" />
+                  <span>{commentCount}</span>
+                </button>
+              )}
+              {canLike && (
+                <button
+                  type="button"
+                  className={`group inline-flex min-w-20 items-center gap-1.5 rounded-full py-1 text-sm transition ${
+                    liked ? "text-rose-600 dark:text-rose-300" : "hover:text-rose-600 dark:hover:text-rose-300"
+                  }`}
+                  onClick={toggleLike}
+                >
+                  <span className="rounded-full p-1 transition group-hover:bg-rose-50 dark:group-hover:bg-rose-950/30">
+                    {liked ? <SolidHeartIcon className="size-5" /> : <HeartIcon className="size-5" />}
+                  </span>
+                  <span>{likeCount}</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {canComment && !commentEditing && recentComments.length > 0 && (
+            <div className="mt-2 space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
+              {commentCount > recentComments.length && (
+                <button
+                  type="button"
+                  className="text-xs text-neutral-500 transition hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                  onClick={() => setCommentEditing(true)}
+                >
+                  댓글 {commentCount}개 모두 보기
+                </button>
+              )}
+              {recentComments.map((comment) => (
+                <button
+                  key={comment.uid}
+                  type="button"
+                  className="block w-full text-left transition hover:text-neutral-900 dark:hover:text-neutral-100"
+                  onClick={() => setCommentEditing(true)}
+                >
+                  <span className="font-medium text-neutral-800 dark:text-neutral-200">@{comment.sensei.username}</span>{" "}
+                  <span className="line-clamp-1 align-middle">{comment.body}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
         </div>
       </div>
-
-      <div className="mt-3 border-t border-neutral-200 pt-3 ml-11 dark:border-neutral-700">
-        <PostContent post={post} studentsByUid={studentsByUid} />
-      </div>
-
-      {(canComment || canLike) && (
-        <div className="mt-3 ml-11 flex items-center gap-1.5">
-          {canComment && (
-            <button
-              type="button"
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition ${
-                commentEditing
-                  ? "border-neutral-300 bg-neutral-100 text-neutral-800 dark:border-neutral-600 dark:bg-neutral-700 dark:text-neutral-100"
-                  : "border-neutral-200 text-neutral-600 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-300 dark:hover:bg-neutral-700"
-              }`}
-              onClick={() => setCommentEditing((prev) => !prev)}
-            >
-              <ChatBubbleLeftEllipsisIcon className="size-4" />
-              <span>{commentCount}</span>
-            </button>
-          )}
-          {canLike && (
-            <button
-              type="button"
-              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition ${
-                liked
-                  ? "bg-rose-50 text-rose-600 dark:bg-rose-950/30 dark:text-rose-300"
-                  : "text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700"
-              }`}
-              onClick={toggleLike}
-            >
-              {liked ? <SolidHeartIcon className="size-4" /> : <HeartIcon className="size-4" />}
-              <span>{likeCount}</span>
-            </button>
-          )}
-        </div>
-      )}
-
-      {canComment && !commentEditing && recentComments.length > 0 && (
-        <div className="mt-2 ml-11 space-y-1">
-          {commentCount > recentComments.length && (
-            <button
-              type="button"
-              className="text-xs text-neutral-500 transition hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
-              onClick={() => setCommentEditing(true)}
-            >
-              댓글 {commentCount}개 모두 보기
-            </button>
-          )}
-          {recentComments.map((comment) => (
-            <button
-              key={comment.uid}
-              type="button"
-              className="block w-full text-left text-sm text-neutral-700 transition hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-neutral-100"
-              onClick={() => setCommentEditing(true)}
-            >
-              <span className="font-semibold">@{comment.sensei.username}</span>{" "}
-              <span className="line-clamp-1 align-middle">{comment.body}</span>
-            </button>
-          ))}
-        </div>
-      )}
-
       {canComment && commentEditing && (
-        <div className="mt-3 w-full rounded-lg bg-neutral-50 px-3 py-3 dark:bg-neutral-900/50">
+        <div className="mt-3 rounded-lg bg-neutral-50 px-3 py-3 sm:ml-[52px] dark:bg-neutral-900/50">
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">
             <ChatBubbleLeftEllipsisIcon className="size-4" />
             <span>댓글</span>
@@ -288,7 +288,7 @@ function PostSubjectMeta({
 }) {
   if (post.postType === "student_review" && post.subjectStudentUid) {
     return (
-      <div className="mt-2">
+      <div>
         <StudentSubjectPill
           uid={post.subjectStudentUid}
           name={post.subjectStudentName ?? studentsByUid[post.subjectStudentUid]?.name ?? "학생 정보"}
@@ -299,7 +299,7 @@ function PostSubjectMeta({
 
   if (post.postType === "event_opinion" && post.subjectContentUid) {
     return (
-      <div className="mt-2 space-y-2">
+      <div className="space-y-2">
         <Link
           to={`/events/${post.subjectContentUid}`}
           className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
@@ -372,7 +372,7 @@ function PostContent({
             {sortStudentGradingTags(post.tags).map((tag) => (
               <div
                 key={tag}
-                className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs text-neutral-700 dark:bg-neutral-900 dark:text-neutral-200"
+                className="inline-flex cursor-default items-center gap-1.5 rounded-md border border-neutral-200 px-2 py-0.5 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
               >
                 <TagIcon tag={tag} size="sm" />
                 <span>{STUDENT_GRADING_TAG_DISPLAY[tag]}</span>
@@ -432,7 +432,7 @@ function BlockView({
       return null;
     }
 
-    return <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-700 dark:text-neutral-200">{block.text}</p>;
+    return <p className="whitespace-pre-wrap text-[15px] leading-6 text-neutral-800 dark:text-neutral-100">{block.text}</p>;
   }
 
   if (block.type === "markdown") {
