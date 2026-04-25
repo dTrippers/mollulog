@@ -42,6 +42,12 @@ export default function SignInBottomSheet() {
     fetcher.submit({}, { action: "/auth/google/signin", method: "post", encType: "application/json" });
   };
 
+  const signInWithGithub = () => {
+    setClientError(null);
+    document.cookie = redirectToCookie;
+    fetcher.submit({}, { action: "/auth/github/signin", method: "post", encType: "application/json" });
+  };
+
   const signInWithPasskey = async () => {
     setClientError(null);
     if (!navigator.credentials) {
@@ -89,6 +95,15 @@ export default function SignInBottomSheet() {
             disabled={buttonDisabled}
           >
             <p>Google 계정으로 로그인</p>
+          </Button>
+          <Button
+            className="w-full py-2 cursor-pointer"
+            type="button"
+            color="black"
+            onClick={signInWithGithub}
+            disabled={buttonDisabled}
+          >
+            <p>GitHub 계정으로 로그인</p>
           </Button>
           <Button
             className="w-full py-2 cursor-pointer"

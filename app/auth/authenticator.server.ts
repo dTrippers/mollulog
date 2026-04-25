@@ -1,11 +1,12 @@
 import type { SessionStorage } from "react-router";
 import { createCookieSessionStorage } from "react-router";
 import { Authenticator, AuthorizationError } from "remix-auth";
+import { GitHubStrategy } from "remix-auth-github";
 import { GoogleStrategy } from "remix-auth-google";
 import { getLogger } from "~/lib/observability.server";
 import { verifyPasskeyAuthentication } from "~/models/passkey";
 import type { Sensei } from "~/models/sensei";
-import { getOrCreateSenseiByGoogleId } from "~/models/sensei";
+import { getOrCreateSenseiByGithubId, getOrCreateSenseiByGoogleId } from "~/models/sensei";
 import { PasskeyStrategy } from "./passkey-strategy.server";
 
 let _sessionStorage: SessionStorage;
@@ -73,6 +74,26 @@ export function getAuthenticator(env: Env, ctx?: ExecutionContext): Authenticato
       },
     ),
     "google",
+  );
+
+  authenticator.use(
+    new GitHubStrategy(
+      {
+        clientId: env.GITHUB_CLIENT_ID,
+        clientSecret: env.GITHUB_CLIENT_SECRET,
+        redirectURI: `${env.HOST}/auth/github/callback`,
+        scopes: ["read:user"],
+      },
+      async ({ profile }) => {
+        try {
+          return await getOrCreateSenseiByGithubId(env, profile.id);
+        } catch (e) {
+          logger.error("GitHub login failed", e);
+          throw e;
+        }
+      },
+    ),
+    "github",
   );
 
   authenticator.use(
