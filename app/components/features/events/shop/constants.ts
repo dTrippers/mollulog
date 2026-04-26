@@ -1,8 +1,13 @@
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 
+export const MINIGAME_PAYMENT_QUANTITY_MODES = ["expected", "min", "max"] as const;
+
+export type MinigamePaymentQuantityMode = (typeof MINIGAME_PAYMENT_QUANTITY_MODES)[number];
+
 export type RewardItem = {
   resourceType: ResourceTypeEnum;
   resourceUid: string;
+  resourceName?: string;
   quantity: number;
   rarity?: number;
 };
@@ -18,12 +23,14 @@ export type GteRoundCondition = {
 
 export type RewardGroup = {
   rounds: number[] | "subsequent" | DivisorRoundCondition | GteRoundCondition;
+  payments: MinigamePaymentRange[];
   rewards: RewardItem[];
 };
 
 export type DiceNodeReward = {
   resourceType: ResourceTypeEnum;
   resourceUid: string;
+  resourceName?: string;
   quantity: number;
 };
 
@@ -43,6 +50,24 @@ export type MinigameConfig = {
     resourceName?: string;
     quantity: number;
   };
+  payments: MinigamePayment[];
   rewardGroups: RewardGroup[];
   dice?: DiceMinigameConfig; // dice 타입일 때만 사용
+};
+
+export type MinigamePayment = {
+  resourceType: ResourceTypeEnum;
+  resourceUid: string;
+  resourceName?: string;
+  quantity: number;
+};
+
+export type MinigamePaymentRange = {
+  resourceType: ResourceTypeEnum;
+  resourceUid: string;
+  resourceName?: string;
+  quantityMin: number;
+  quantityExpected: number;
+  quantityMax: number;
+  quantityVariable: boolean;
 };

@@ -6,7 +6,7 @@ import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
-import { getTimelineContent, getTimelineContentsByContentTypes } from "./timeline-content";
+import { getTimelineContent, getTimelineContents } from "./timeline-content";
 import type { RunType } from "./timeline-content";
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
@@ -45,9 +45,76 @@ export type ShopAvailableEvent = {
   until: Date | null;
 };
 
+const eventContentScheduleQuery = graphql(`
+  query EventContentSchedule($eventUid: String!) {
+    eventContent(uid: $eventUid) {
+      schedules {
+        region
+        runType
+        startAt
+        endAt
+      }
+    }
+  }
+`);
+
+type EventContentSchedule = {
+  startAt: Date;
+  endAt: Date | null;
+};
+
+type CachedEventContentSchedule = {
+  startAt: string;
+  endAt: string | null;
+};
+
+export async function getEventContentSchedule(
+  env: Env,
+  eventUid: string,
+  runType: RunType,
+): Promise<EventContentSchedule | null> {
+  const schedule = await fetchCached<CachedEventContentSchedule | null>(
+    env,
+    `event-content::schedule::gl::v1::${eventUid}::${runType}`,
+    async () => {
+      const { data, error } = await runQuery(eventContentScheduleQuery, { eventUid });
+      if (error || !data?.eventContent) {
+        return null;
+      }
+
+      const schedules = data.eventContent.schedules;
+      const schedule = schedules.find((item) => item.region === "gl" && item.runType === runType) ?? null;
+      if (!schedule) {
+        return null;
+      }
+      return {
+        startAt: new Date(schedule.startAt).toISOString(),
+        endAt: schedule.endAt ? new Date(schedule.endAt).toISOString() : null,
+      };
+    },
+    7 * 24 * 60 * 60,
+  );
+  if (!schedule) {
+    return null;
+  }
+  return {
+    startAt: new Date(schedule.startAt),
+    endAt: schedule.endAt ? new Date(schedule.endAt) : null,
+  };
+}
+
 export async function getShopAvailableEvents(env: Env): Promise<ShopAvailableEvent[]> {
-  const now = new Date();
-  const contents = await getTimelineContentsByContentTypes(env, ["event"], now);
+  const contents = await getTimelineContents(env);
+  const shopScheduleEntries = await Promise.all(
+    contents.map(async (content) => {
+      if (!content.shopContentUid) {
+        return null;
+      }
+      const schedule = await getEventContentSchedule(env, content.shopContentUid, content.runType);
+      return schedule ? ([content.uid, schedule] as const) : null;
+    }),
+  );
+  const shopSchedules = new Map(shopScheduleEntries.filter((entry) => entry !== null));
 
   return contents
     .filter(
@@ -55,13 +122,16 @@ export async function getShopAvailableEvents(env: Env): Promise<ShopAvailableEve
         content.shopContentUid != null ||
         (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
     )
-    .sort((a, b) => a.startAt.getTime() - b.startAt.getTime())
-    .map((content) => ({
-      uid: content.uid,
-      name: content.name,
-      since: content.startAt,
-      until: content.endAt,
-    }));
+    .map((content) => {
+      const shopSchedule = content.shopContentUid ? shopSchedules.get(content.uid) : null;
+      return {
+        uid: content.uid,
+        name: content.name,
+        since: shopSchedule?.startAt ?? content.startAt,
+        until: shopSchedule?.endAt ?? content.endAt,
+      };
+    })
+    .sort((a, b) => a.since.getTime() - b.since.getTime());
 }
 
 //
@@ -119,8 +189,16 @@ const eventContentShopContentQuery = graphql(`
       minigameConfigs(runType: $runType) {
         minigameType
         payment { quantity resource { type uid name } }
+        payments { quantity resource { type uid name } }
         rewardGroups {
           condition { type value values divisor remainders }
+          payments {
+            quantityMin
+            quantityExpected
+            quantityMax
+            quantityVariable
+            resource { type uid name }
+          }
           rewards { quantity resource { type uid name rarity } }
         }
       }
@@ -220,6 +298,19 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
   const paymentResource = serverConfig.payment.resource;
   if (!paymentResource) return null;
 
+  const payments = serverConfig.payments.flatMap((payment) =>
+    payment.resource
+      ? [
+          {
+            resourceType: payment.resource.type,
+            resourceUid: payment.resource.uid,
+            resourceName: payment.resource.name,
+            quantity: payment.quantity,
+          },
+        ]
+      : [],
+  );
+
   return {
     minigameType: serverConfig.minigameType as MinigameConfig["minigameType"],
     payment: {
@@ -228,14 +319,31 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
       resourceName: paymentResource.name,
       quantity: serverConfig.payment.quantity,
     },
+    payments,
     rewardGroups: serverConfig.rewardGroups.map((group) => ({
       rounds: resolveRounds(group.condition),
+      payments: group.payments.flatMap((payment) =>
+        payment.resource
+          ? [
+              {
+                resourceType: payment.resource.type,
+                resourceUid: payment.resource.uid,
+                resourceName: payment.resource.name,
+                quantityMin: payment.quantityMin,
+                quantityExpected: payment.quantityExpected,
+                quantityMax: payment.quantityMax,
+                quantityVariable: payment.quantityVariable,
+              },
+            ]
+          : [],
+      ),
       rewards: group.rewards.flatMap((r) =>
         r.resource
           ? [
               {
                 resourceType: r.resource.type,
                 resourceUid: r.resource.uid,
+                resourceName: r.resource.name,
                 quantity: r.quantity,
                 rarity: r.resource.rarity ?? undefined,
               },
@@ -261,7 +369,7 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
 
   return fetchCached(
     env,
-    `event-content::shop::v1::${timelineUid}`,
+    `event-content::shop::v2::${timelineUid}`,
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,

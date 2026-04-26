@@ -1,7 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
+import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import type { MinigamePaymentQuantityMode } from "~/components/features/events/shop/constants";
 
 export const eventShopStatesTable = sqliteTable("event_shop_states", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -16,6 +17,7 @@ export const eventShopStatesTable = sqliteTable("event_shop_states", {
   includeFirstClear: int().notNull().default(0),
   extraStageRuns: text().notNull().default("{}"),
   minigamePlayCount: int().notNull().default(0),
+  minigamePaymentQuantityMode: text().notNull().default("expected"),
   overriddenRequiredQuantities: text().notNull().default("{}"),
   createdAt: text().notNull().default(sql`current_timestamp`),
   updatedAt: text().notNull().default(sql`current_timestamp`),
@@ -30,8 +32,16 @@ export type EventShopState = {
   includeFirstClear: boolean;
   extraStageRuns: Record<string, number>;
   minigamePlayCount: number;
+  minigamePaymentQuantityMode: MinigamePaymentQuantityMode;
   overriddenRequiredQuantities: Record<string, number>;
 };
+
+function parseMinigamePaymentQuantityMode(mode: string | null): MinigamePaymentQuantityMode {
+  if (mode === "min" || mode === "max") {
+    return mode;
+  }
+  return "expected";
+}
 
 function toModel(state: typeof eventShopStatesTable.$inferSelect): EventShopState {
   return {
@@ -43,15 +53,12 @@ function toModel(state: typeof eventShopStatesTable.$inferSelect): EventShopStat
     includeFirstClear: state.includeFirstClear === 1,
     extraStageRuns: JSON.parse(state.extraStageRuns || "{}"),
     minigamePlayCount: state.minigamePlayCount ?? 0,
+    minigamePaymentQuantityMode: parseMinigamePaymentQuantityMode(state.minigamePaymentQuantityMode),
     overriddenRequiredQuantities: JSON.parse(state.overriddenRequiredQuantities || "{}"),
   };
 }
 
-export async function getEventShopState(
-  env: Env,
-  userId: number,
-  eventUid: string,
-): Promise<EventShopState | null> {
+export async function getEventShopState(env: Env, userId: number, eventUid: string): Promise<EventShopState | null> {
   const db = drizzle(env.DB);
   const states = await db
     .select()
@@ -91,6 +98,7 @@ export async function upsertEventShopState(
       includeFirstClear: state.includeFirstClear ? 1 : 0,
       extraStageRuns: extraStageRunsJson,
       minigamePlayCount: state.minigamePlayCount ?? 0,
+      minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
       overriddenRequiredQuantities: overriddenRequiredQuantitiesJson,
     })
     .onConflictDoUpdate({
@@ -104,6 +112,7 @@ export async function upsertEventShopState(
         includeFirstClear: state.includeFirstClear ? 1 : 0,
         extraStageRuns: extraStageRunsJson,
         minigamePlayCount: state.minigamePlayCount ?? 0,
+        minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
         overriddenRequiredQuantities: overriddenRequiredQuantitiesJson,
         updatedAt: sql`current_timestamp`,
       },
@@ -116,4 +125,3 @@ export async function deleteEventShopState(env: Env, userId: number, eventUid: s
     .delete(eventShopStatesTable)
     .where(and(eq(eventShopStatesTable.userId, userId), eq(eventShopStatesTable.eventUid, eventUid)));
 }
-

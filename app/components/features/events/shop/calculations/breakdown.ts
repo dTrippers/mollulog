@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
-import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
 import { calculateMinigameRewards } from "../utils";
+import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
 
 /**
  * Calculates the final breakdown of items and AP costs.
@@ -18,7 +18,7 @@ export function calculateItemBreakdowns({
   shopResources,
   itemQuantities,
   collectableResources,
-  minigamePaymentResource,
+  minigamePaymentCosts,
 }: ItemBreakdownInput): ItemBreakdownResult {
   const fromFirstRun: Record<string, number> = {};
   const fromRepeatedRuns: Record<string, number> = {};
@@ -39,7 +39,8 @@ export function calculateItemBreakdowns({
         if (rewardRequirement === "first_clear") {
           fromFirstRun[item.uid] = (fromFirstRun[item.uid] || 0) + amount;
           hasFirstClearReward = true;
-        } else if (stage.difficulty === 0) {  // story
+        } else if (stage.difficulty === 0) {
+          // story
           fromFirstRun[item.uid] = (fromFirstRun[item.uid] || 0) + amount;
         }
       }
@@ -106,7 +107,7 @@ export function calculateItemBreakdowns({
       if (paymentResource.uid !== uid) {
         return total;
       }
-      return total + ((itemQuantities[shopResourceUid] || 0) * paymentResourceAmount);
+      return total + (itemQuantities[shopResourceUid] || 0) * paymentResourceAmount;
     }, 0);
 
     if (required > 0) {
@@ -122,9 +123,10 @@ export function calculateItemBreakdowns({
   }
 
   // Calculate items needed to play minigame (total required, not adjusted)
-  if (minigamePaymentResource && minigamePlayCount > 0) {
-    const { resourceUid, quantity } = minigamePaymentResource;
-    toPlayMinigame[resourceUid] = minigamePlayCount * quantity;
+  if (minigamePaymentCosts && minigamePlayCount > 0) {
+    for (const { resourceUid, quantity } of minigamePaymentCosts) {
+      toPlayMinigame[resourceUid] = (toPlayMinigame[resourceUid] || 0) + quantity;
+    }
   }
 
   // Calculate items to buy shop items using original requirement
@@ -172,4 +174,3 @@ export function calculateItemBreakdowns({
     },
   };
 }
-

@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import type { RequiredQuantitiesInput } from "./types";
 import { calculateMinigameRewards } from "../utils";
+import type { RequiredQuantitiesInput } from "./types";
 
 /**
  * Calculates the required quantities of payment items, resolving recursive dependencies (items buying items).
@@ -16,8 +16,7 @@ export function calculateRequiredQuantities({
   minigamePlayCount,
   minigameConfig,
   minigameRewards,
-  minigameCostItemUid,
-  minigameCostAmount = 2000,
+  minigamePaymentCosts,
   enabledStages,
   appliedBonusRatio,
   overriddenRequiredQuantities,
@@ -66,7 +65,7 @@ export function calculateRequiredQuantities({
       if (paymentResource.uid !== uid) {
         return total;
       }
-      return total + ((itemQuantities[shopResourceUid] || 0) * paymentResourceAmount);
+      return total + (itemQuantities[shopResourceUid] || 0) * paymentResourceAmount;
     }, 0);
 
     if (required > 0) {
@@ -76,11 +75,13 @@ export function calculateRequiredQuantities({
 
   // Add minigame cost to requirements (only if not overridden)
   // Note: minigame cost should be added regardless of whether minigameRewards is provided
-  if (minigamePlayCount > 0 && minigameCostItemUid) {
-    // Only add if this item doesn't have an override
-    if (!overriddenRequiredQuantities || overriddenRequiredQuantities[minigameCostItemUid] === undefined) {
-      const current = requirements[minigameCostItemUid] || new Decimal(0);
-      requirements[minigameCostItemUid] = current.plus(minigamePlayCount * minigameCostAmount);
+  if (minigamePlayCount > 0 && minigamePaymentCosts) {
+    for (const { resourceUid, quantity } of minigamePaymentCosts) {
+      // Only add if this item doesn't have an override
+      if (!overriddenRequiredQuantities || overriddenRequiredQuantities[resourceUid] === undefined) {
+        const current = requirements[resourceUid] || new Decimal(0);
+        requirements[resourceUid] = current.plus(quantity);
+      }
     }
   }
 
@@ -99,7 +100,8 @@ export function calculateRequiredQuantities({
         if (!item || item.category !== "coin") {
           continue;
         }
-        if (rewardRequirement === "first_clear" || stage.difficulty === 0) { // first_clear or story
+        if (rewardRequirement === "first_clear" || stage.difficulty === 0) {
+          // first_clear or story
           collected[item.uid] = (collected[item.uid] || new Decimal(0)).plus(amount);
         }
       }
@@ -150,7 +152,9 @@ export function calculateRequiredQuantities({
       // Find shop definitions where 'resource' is this item
       // We need to match on shopResource.resource.uid === reqUid
       // Priority: Infinite stock (shopAmount === null)
-      const shopEntries = shopResources.filter(s => s.resource.uid === reqUid && s.resource.type === ResourceTypeEnum.Item);
+      const shopEntries = shopResources.filter(
+        (s) => s.resource.uid === reqUid && s.resource.type === ResourceTypeEnum.Item,
+      );
       // Note: shopResource.resource.type check is good but might need proper enum import or just string check if simple.
       // Using 'as any' to avoid import issues for now, or just check string.
 

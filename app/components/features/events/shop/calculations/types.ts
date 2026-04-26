@@ -1,7 +1,7 @@
 import type Decimal from "decimal.js";
-import type { Stage, ShopResource, CollectableResource } from "../types";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
-import type { MinigameConfig } from "../constants";
+import type { MinigameConfig, MinigamePayment } from "../constants";
+import type { CollectableResource, ShopResource, Stage } from "../types";
 
 export type StageInfo = {
   uid: string;
@@ -30,7 +30,7 @@ export type ItemBreakdownInput = {
   shopResources: ShopResource[];
   itemQuantities: Record<string, number>;
   collectableResources: CollectableResource[];
-  minigamePaymentResource?: { resourceUid: string; quantity: number };
+  minigamePaymentCosts?: MinigamePayment[];
 };
 
 export type ItemBreakdownResult = {
@@ -60,10 +60,8 @@ export type RequiredQuantitiesInput = {
   minigamePlayCount: number;
   minigameConfig?: MinigameConfig | null;
   minigameRewards?: { resourceType: ResourceTypeEnum; resourceUid: string; quantity: number }[];
-  minigameCostItemUid?: string;
-  minigameCostAmount?: number;
+  minigamePaymentCosts?: MinigamePayment[];
   enabledStages?: Record<string, boolean>;
   appliedBonusRatio?: Record<string, Decimal>;
   overriddenRequiredQuantities?: Record<string, number>;
 };
-

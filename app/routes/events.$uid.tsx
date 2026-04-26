@@ -1,8 +1,8 @@
-import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
 import { InformationCircleIcon, ListBulletIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
-import { Page } from "~/components/features/layout";
+import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
 import { EventSelector } from "~/components/features/events";
-import { getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
+import { Page } from "~/components/features/layout";
+import { getEventContentSchedule, getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const uid = params.uid;
@@ -16,6 +16,22 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   }
   const pathname = new URL(request.url).pathname;
   const shopAvailableEvents = pathname.endsWith("/shop") ? await getShopAvailableEvents(env) : [];
+  if (
+    pathname.endsWith("/shop") &&
+    eventMetadata.shopAvailable &&
+    !shopAvailableEvents.some((event) => event.uid === uid)
+  ) {
+    const shopSchedule = eventMetadata.shopContentUid
+      ? await getEventContentSchedule(env, eventMetadata.shopContentUid, eventMetadata.runType)
+      : null;
+    shopAvailableEvents.push({
+      uid,
+      name: eventMetadata.name,
+      since: shopSchedule?.startAt ?? eventMetadata.since,
+      until: shopSchedule?.endAt ?? eventMetadata.until,
+    });
+    shopAvailableEvents.sort((a, b) => a.since.getTime() - b.since.getTime());
+  }
   return { eventMetadata, shopAvailableEvents };
 };
 

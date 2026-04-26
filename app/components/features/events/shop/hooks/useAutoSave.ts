@@ -15,13 +15,7 @@ type UseAutoSaveParams = {
  * Auto-save hook that periodically saves shop state changes to the server.
  * Handles synchronization and prevents unnecessary saves.
  */
-export function useAutoSave({
-  state,
-  signedIn,
-  eventUid,
-  savedShopState,
-  isInitialLoad,
-}: UseAutoSaveParams) {
+export function useAutoSave({ state, signedIn, eventUid, savedShopState, isInitialLoad }: UseAutoSaveParams) {
   const fetcher = useFetcher();
   const saveIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastSavedStateRef = useRef<EventShopState | null>(null);
@@ -73,10 +67,13 @@ export function useAutoSave({
         includeFirstClear: state.includeFirstClear,
         extraStageRuns: state.extraStageRuns,
         minigamePlayCount: state.minigamePlayCount,
+        minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
         overriddenRequiredQuantities: state.overriddenRequiredQuantities,
       };
 
-      const hasChanged = lastSavedStateRef.current === null || JSON.stringify(lastSavedStateRef.current) !== JSON.stringify(currentState);
+      const hasChanged =
+        lastSavedStateRef.current === null ||
+        JSON.stringify(lastSavedStateRef.current) !== JSON.stringify(currentState);
       if (hasChanged && fetcher.state === "idle") {
         lastSavedStateRef.current = currentState;
         fetcher.submit(

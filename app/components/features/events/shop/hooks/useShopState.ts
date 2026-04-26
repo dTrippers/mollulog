@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { EventShopState } from "~/models/event-shop-state";
+import type { MinigamePaymentQuantityMode } from "../constants";
 import type { Stage } from "../types";
 
 export type ShopState = {
@@ -11,14 +12,13 @@ export type ShopState = {
   includeFirstClear: boolean;
   extraStageRuns: Record<string, number>;
   minigamePlayCount: number;
+  minigamePaymentQuantityMode: MinigamePaymentQuantityMode;
   overriddenRequiredQuantities: Record<string, number>;
 };
 
 export type ShopActions = {
   updateItemQuantity: (uid: string, value: number) => void;
-  updateItemQuantities: (
-    updater: (prev: Record<string, number>) => Record<string, number>,
-  ) => void;
+  updateItemQuantities: (updater: (prev: Record<string, number>) => Record<string, number>) => void;
   toggleBonusStudent: (uid: string) => void;
   setBonusStudents: (uids: string[]) => void;
   setIncludeRecruitedStudents: (value: boolean) => void;
@@ -26,6 +26,7 @@ export type ShopActions = {
   updateExtraRuns: (uid: string, value: number) => void;
   setIncludeFirstClear: (value: boolean) => void;
   setMinigamePlayCount: (count: number) => void;
+  setMinigamePaymentQuantityMode: (mode: MinigamePaymentQuantityMode) => void;
   updateExistingQuantity: (uid: string, value: number) => void;
   updateOverriddenRequired: (uid: string, value: number) => void;
   resetOverriddenRequired: (uid: string) => void;
@@ -48,87 +49,100 @@ function getDefaultEnabledStages(stages: Stage[]) {
 /**
  * Unified state management hook for event shop page.
  */
-export function useShopState({
-  savedShopState,
-  recruitedStudentUids,
-  stages,
-}: UseShopStateParams) {
+export function useShopState({ savedShopState, recruitedStudentUids, stages }: UseShopStateParams) {
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>(savedShopState?.itemQuantities ?? {});
-  const [selectedBonusStudentUids, setSelectedBonusStudentUids] = useState<string[]>(savedShopState?.selectedBonusStudentUids ?? recruitedStudentUids);
-  const [includeRecruitedStudents, setIncludeRecruitedStudents] = useState<boolean>(savedShopState?.includeRecruitedStudents ?? true);
+  const [selectedBonusStudentUids, setSelectedBonusStudentUids] = useState<string[]>(
+    savedShopState?.selectedBonusStudentUids ?? recruitedStudentUids,
+  );
+  const [includeRecruitedStudents, setIncludeRecruitedStudents] = useState<boolean>(
+    savedShopState?.includeRecruitedStudents ?? true,
+  );
 
   const [enabledStages, setEnabledStages] = useState<Record<string, boolean>>(
     savedShopState?.enabledStages ?? getDefaultEnabledStages(stages),
   );
 
-  const [existingPaymentItemQuantities, setExistingPaymentItemQuantities] =
-    useState<Record<string, number>>(savedShopState?.existingPaymentItemQuantities ?? {});
+  const [existingPaymentItemQuantities, setExistingPaymentItemQuantities] = useState<Record<string, number>>(
+    savedShopState?.existingPaymentItemQuantities ?? {},
+  );
 
   const [includeFirstClear, setIncludeFirstClear] = useState<boolean>(savedShopState?.includeFirstClear ?? false);
   const [extraStageRuns, setExtraStageRuns] = useState<Record<string, number>>(savedShopState?.extraStageRuns ?? {});
   const [minigamePlayCount, setMinigamePlayCount] = useState<number>(savedShopState?.minigamePlayCount ?? 0);
+  const [minigamePaymentQuantityMode, setMinigamePaymentQuantityMode] = useState<MinigamePaymentQuantityMode>(
+    savedShopState?.minigamePaymentQuantityMode ?? "expected",
+  );
 
-  const [overriddenRequiredQuantities, setOverriddenRequiredQuantities] = useState<Record<string, number>>(savedShopState?.overriddenRequiredQuantities ?? {});
+  const [overriddenRequiredQuantities, setOverriddenRequiredQuantities] = useState<Record<string, number>>(
+    savedShopState?.overriddenRequiredQuantities ?? {},
+  );
 
   // Actions object with memoized callbacks
-  const actions = useMemo<ShopActions>(() => ({
-    updateItemQuantity: (uid: string, value: number) => {
-      setItemQuantities((prev) => ({ ...prev, [uid]: value }));
-    },
+  const actions = useMemo<ShopActions>(
+    () => ({
+      updateItemQuantity: (uid: string, value: number) => {
+        setItemQuantities((prev) => ({ ...prev, [uid]: value }));
+      },
 
-    updateItemQuantities: (updater: (prev: Record<string, number>) => Record<string, number>) => {
-      setItemQuantities(updater);
-    },
+      updateItemQuantities: (updater: (prev: Record<string, number>) => Record<string, number>) => {
+        setItemQuantities(updater);
+      },
 
-    toggleBonusStudent: (uid: string) => {
-      setSelectedBonusStudentUids((prev) => {
-        if (prev.includes(uid)) {
-          return prev.filter((id) => id !== uid);
-        }
-        return [...prev, uid];
-      });
-    },
+      toggleBonusStudent: (uid: string) => {
+        setSelectedBonusStudentUids((prev) => {
+          if (prev.includes(uid)) {
+            return prev.filter((id) => id !== uid);
+          }
+          return [...prev, uid];
+        });
+      },
 
-    setBonusStudents: (uids: string[]) => {
-      setSelectedBonusStudentUids(uids);
-    },
+      setBonusStudents: (uids: string[]) => {
+        setSelectedBonusStudentUids(uids);
+      },
 
-    setIncludeRecruitedStudents: (value: boolean) => {
-      setIncludeRecruitedStudents(value);
-    },
+      setIncludeRecruitedStudents: (value: boolean) => {
+        setIncludeRecruitedStudents(value);
+      },
 
-    toggleStage: (uid: string, enabled: boolean) => {
-      setEnabledStages((prev) => ({ ...prev, [uid]: enabled }));
-    },
+      toggleStage: (uid: string, enabled: boolean) => {
+        setEnabledStages((prev) => ({ ...prev, [uid]: enabled }));
+      },
 
-    updateExtraRuns: (uid: string, value: number) => {
-      setExtraStageRuns((prev) => ({ ...prev, [uid]: value }));
-    },
+      updateExtraRuns: (uid: string, value: number) => {
+        setExtraStageRuns((prev) => ({ ...prev, [uid]: value }));
+      },
 
-    setIncludeFirstClear: (value: boolean) => {
-      setIncludeFirstClear(value);
-    },
+      setIncludeFirstClear: (value: boolean) => {
+        setIncludeFirstClear(value);
+      },
 
-    setMinigamePlayCount: (count: number) => {
-      setMinigamePlayCount(count);
-    },
+      setMinigamePlayCount: (count: number) => {
+        setMinigamePlayCount(count);
+      },
 
-    updateExistingQuantity: (uid: string, value: number) => {
-      setExistingPaymentItemQuantities((prev) => ({ ...prev, [uid]: value }));
-    },
+      setMinigamePaymentQuantityMode: (mode: MinigamePaymentQuantityMode) => {
+        setMinigamePaymentQuantityMode(mode);
+      },
 
-    updateOverriddenRequired: (uid: string, value: number) => {
-      setOverriddenRequiredQuantities((prev) => ({ ...prev, [uid]: value }));
-    },
+      updateExistingQuantity: (uid: string, value: number) => {
+        setExistingPaymentItemQuantities((prev) => ({ ...prev, [uid]: value }));
+      },
 
-    resetOverriddenRequired: (uid: string) => {
-      setOverriddenRequiredQuantities((prev) => {
-        const newPrev = { ...prev };
-        delete newPrev[uid];
-        return newPrev;
-      });
-    },
-  }), []);
+      updateOverriddenRequired: (uid: string, value: number) => {
+        setOverriddenRequiredQuantities((prev) => ({ ...prev, [uid]: value }));
+      },
+
+      resetOverriddenRequired: (uid: string) => {
+        setOverriddenRequiredQuantities((prev) => {
+          const newPrev = { ...prev };
+          delete newPrev[uid];
+          return newPrev;
+        });
+      },
+    }),
+    [],
+  );
 
   const state: ShopState = {
     itemQuantities,
@@ -139,6 +153,7 @@ export function useShopState({
     includeFirstClear,
     extraStageRuns,
     minigamePlayCount,
+    minigamePaymentQuantityMode,
     overriddenRequiredQuantities,
   };
 

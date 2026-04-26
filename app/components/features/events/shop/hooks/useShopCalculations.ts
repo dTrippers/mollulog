@@ -1,11 +1,16 @@
-import { useMemo, useState, useEffect, useRef } from "react";
 import type Decimal from "decimal.js";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
-import type { Stage, ShopResource, CollectableResource } from "../types";
-import type { ShopState } from "./useShopState";
-import type { MinigameConfig } from "../constants";
-import { calculateStageInfos, optimizeStageRuns, calculateItemBreakdowns, calculateRequiredQuantities } from "../calculations";
+import {
+  calculateItemBreakdowns,
+  calculateRequiredQuantities,
+  calculateStageInfos,
+  optimizeStageRuns,
+} from "../calculations";
 import type { ItemBreakdownResult } from "../calculations";
+import type { MinigameConfig, MinigamePayment } from "../constants";
+import type { CollectableResource, ShopResource, Stage } from "../types";
+import type { ShopState } from "./useShopState";
 
 type UseShopCalculationsParams = {
   state: ShopState;
@@ -13,7 +18,7 @@ type UseShopCalculationsParams = {
   shopResources: ShopResource[];
   collectableResources: CollectableResource[];
   appliedBonusRatio: Record<string, Decimal>;
-  minigamePaymentResource?: { resourceUid: string; quantity: number };
+  minigamePaymentCosts?: MinigamePayment[];
   minigameRewards?: {
     resourceType: ResourceTypeEnum;
     resourceUid: string;
@@ -56,7 +61,7 @@ export function useShopCalculations({
   shopResources,
   collectableResources,
   appliedBonusRatio,
-  minigamePaymentResource,
+  minigamePaymentCosts,
   minigameRewards,
   minigameConfig,
   eventUid,
@@ -85,15 +90,19 @@ export function useShopCalculations({
         minigamePlayCount: state.minigamePlayCount,
         minigameConfig,
         minigameRewards,
-        minigameCostItemUid: minigamePaymentResource?.resourceUid,
-        minigameCostAmount: minigamePaymentResource?.quantity,
+        minigamePaymentCosts,
         enabledStages: state.enabledStages,
         appliedBonusRatio,
         overriddenRequiredQuantities: state.overriddenRequiredQuantities,
       });
 
       const targets = Object.entries(targetRequirements).filter(([, qty]) => (qty || 0) > 0);
-      const stageInfos = calculateStageInfos(stages, state.enabledStages, appliedBonusRatio, targets as [string, number][]);
+      const stageInfos = calculateStageInfos(
+        stages,
+        state.enabledStages,
+        appliedBonusRatio,
+        targets as [string, number][],
+      );
       const optimizationResult = optimizeStageRuns(stageInfos, targets as [string, number][]);
 
       const itemBreakdownResult = calculateItemBreakdowns({
@@ -110,7 +119,7 @@ export function useShopCalculations({
         shopResources,
         itemQuantities: state.itemQuantities,
         collectableResources,
-        minigamePaymentResource,
+        minigamePaymentCosts,
       });
 
       setResult({ stageRuns: optimizationResult.stageRuns, ...itemBreakdownResult });
@@ -134,7 +143,7 @@ export function useShopCalculations({
     shopResources,
     collectableResources,
     appliedBonusRatio,
-    minigamePaymentResource,
+    minigamePaymentCosts,
     minigameRewards,
     minigameConfig,
     eventUid,

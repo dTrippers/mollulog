@@ -1,8 +1,8 @@
+import { ArrowPathIcon, ExclamationCircleIcon, UserIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExclamationCircleIcon, UserIcon, ArrowPathIcon } from "@heroicons/react/16/solid";
-import EventInfoCard from "./EventInfoCard";
 import { useSignIn } from "~/contexts/SignInProvider";
 import type { EventShopState } from "~/models/event-shop-state";
+import EventInfoCard from "./EventInfoCard";
 import {
   CollectedTotalsSection,
   MiniGameSection,
@@ -13,6 +13,7 @@ import {
 import type { CollectableResource, EventRewardBonus, ShopResource, Stage } from "./shop";
 import type { MinigameConfig } from "./shop/constants";
 import { useAutoSave, useBonusCalculation, useShopCalculations, useShopState } from "./shop/hooks";
+import { calculateMinigamePaymentCosts } from "./shop/utils";
 
 type EventDetailShopPageProps = {
   stages: Stage[];
@@ -25,7 +26,16 @@ type EventDetailShopPageProps = {
   minigameConfig?: MinigameConfig | null;
 };
 
-export default function EventDetailShopPage({ stages, shopResources, eventRewardBonus, recruitedStudentUids, eventUid, savedShopState, signedIn, minigameConfig = null }: EventDetailShopPageProps) {
+export default function EventDetailShopPage({
+  stages,
+  shopResources,
+  eventRewardBonus,
+  recruitedStudentUids,
+  eventUid,
+  savedShopState,
+  signedIn,
+  minigameConfig = null,
+}: EventDetailShopPageProps) {
   const collectableResources = useMemo<CollectableResource[]>(() => {
     const items: CollectableResource[] = [];
     for (const { paymentResource } of shopResources) {
@@ -43,13 +53,19 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
     }
 
     if (minigameConfig) {
-      const { resourceUid, resourceName } = minigameConfig.payment;
-      if (!items.some(({ uid }) => uid === resourceUid)) {
-        items.push({ uid: resourceUid, name: resourceName ?? resourceUid, forPayment: false });
+      const minigamePaymentResources = [
+        minigameConfig.payment,
+        ...minigameConfig.payments,
+        ...minigameConfig.rewardGroups.flatMap((group) => group.payments),
+      ];
+      for (const { resourceUid, resourceName } of minigamePaymentResources) {
+        if (!items.some(({ uid }) => uid === resourceUid)) {
+          items.push({ uid: resourceUid, name: resourceName ?? resourceUid, forPayment: false });
+        }
       }
     }
 
-    return items.sort((a, b) => a.uid.localeCompare(b.uid));
+    return items;
   }, [stages, shopResources, minigameConfig]);
 
   const { showSignIn } = useSignIn();
@@ -79,14 +95,10 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
   // Auto-save
   const { isSaving } = useAutoSave({ state, signedIn, eventUid, savedShopState, isInitialLoad });
 
-  // Memoize minigame payment resource to prevent unnecessary recalculations
-  const minigamePaymentResource = useMemo(() => {
+  const minigamePaymentCosts = useMemo(() => {
     if (!minigameConfig) return undefined;
-    return {
-      resourceUid: minigameConfig.payment.resourceUid,
-      quantity: minigameConfig.payment.quantity,
-    };
-  }, [minigameConfig]);
+    return calculateMinigamePaymentCosts(minigameConfig, state.minigamePlayCount, state.minigamePaymentQuantityMode);
+  }, [minigameConfig, state.minigamePaymentQuantityMode, state.minigamePlayCount]);
 
   // Shop calculations
   const stageCalculations = useShopCalculations({
@@ -95,7 +107,7 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
     shopResources,
     collectableResources,
     appliedBonusRatio: appliedBonusRatios,
-    minigamePaymentResource,
+    minigamePaymentCosts,
     minigameRewards: undefined,
     minigameConfig,
     eventUid,
@@ -155,13 +167,7 @@ export default function EventDetailShopPage({ stages, shopResources, eventReward
             />
           )}
 
-          {minigameConfig && (
-            <MiniGameSection
-              config={minigameConfig}
-              state={state}
-              actions={actions}
-            />
-          )}
+          {minigameConfig && <MiniGameSection config={minigameConfig} state={state} actions={actions} />}
           <StageSelector
             stages={stages}
             appliedBonusRatio={appliedBonusRatios}

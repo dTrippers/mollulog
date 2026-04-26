@@ -101,7 +101,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchCached).toHaveBeenCalledWith(
       env,
-      "event-content::shop::v1::main-story-timeline",
+      "event-content::shop::v2::main-story-timeline",
       expect.any(Function),
       7 * 24 * 60 * 60,
     );

@@ -1,4 +1,5 @@
-import { memo } from "react";
+import { memo, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { sanitizeClassName } from "~/prophandlers";
 
@@ -54,8 +55,65 @@ function ResourceCard({
     imageSizeClass = "size-10";
   }
 
+  const cardRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<{
+    top: number;
+    left: number;
+    placement: "top" | "bottom";
+  } | null>(null);
+
+  const showTooltip = () => {
+    if (!name || typeof window === "undefined") {
+      return;
+    }
+
+    const rect = cardRef.current?.getBoundingClientRect();
+    if (!rect) {
+      return;
+    }
+
+    setTooltip({
+      top: rect.top - 8,
+      left: rect.left + rect.width / 2,
+      placement: "top",
+    });
+  };
+
+  const hideTooltip = () => setTooltip(null);
+
+  useLayoutEffect(() => {
+    if (!tooltip || !tooltipRef.current || !cardRef.current || typeof window === "undefined") {
+      return;
+    }
+
+    const tooltipRect = tooltipRef.current.getBoundingClientRect();
+    const cardRect = cardRef.current.getBoundingClientRect();
+    const viewportPadding = 8;
+    const minLeft = viewportPadding + tooltipRect.width / 2;
+    const maxLeft = window.innerWidth - viewportPadding - tooltipRect.width / 2;
+    const nextLeft = Math.min(Math.max(cardRect.left + cardRect.width / 2, minLeft), maxLeft);
+    const placement = cardRect.top - tooltipRect.height - viewportPadding < viewportPadding ? "bottom" : "top";
+    const nextTop = placement === "top" ? cardRect.top - viewportPadding : cardRect.bottom + viewportPadding;
+
+    if (tooltip.left !== nextLeft || tooltip.top !== nextTop || tooltip.placement !== placement) {
+      setTooltip({
+        top: nextTop,
+        left: nextLeft,
+        placement,
+      });
+    }
+  }, [tooltip]);
+
   return (
-    <div className="relative group" title={name}>
+    <div
+      ref={cardRef}
+      className="relative group"
+      onMouseEnter={showTooltip}
+      onMouseLeave={hideTooltip}
+      onFocus={showTooltip}
+      onBlur={hideTooltip}
+    >
       <div
         className={`shrink-0 ${sizeClass} rounded-lg border border-neutral-200 dark:border-neutral-700 ${rarityBgClass(rarity)} flex items-center justify-center overflow-hidden`}
       >
@@ -84,13 +142,33 @@ function ResourceCard({
           loading="lazy"
         />
       )}
-      {name && (
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 px-2 py-1 bg-neutral-900 dark:bg-neutral-800 text-white text-xs rounded border border-neutral-700 dark:border-neutral-600 whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50">
-          {name}
-          <div className="absolute left-1/2 -translate-x-1/2 top-full border-4 border-transparent border-t-neutral-900 dark:border-t-neutral-800" />
-          <div className="absolute left-1/2 -translate-x-1/2 top-full -mt-[1px] border-4 border-transparent border-t-neutral-700 dark:border-t-neutral-600" />
-        </div>
-      )}
+      {name &&
+        tooltip &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={tooltipRef}
+            className={sanitizeClassName(`
+              pointer-events-none fixed z-100 max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-white shadow-lg
+              dark:border-neutral-600 dark:bg-neutral-800
+              ${tooltip.placement === "top" ? "-translate-y-full" : ""}
+            `)}
+            style={{ top: tooltip.top, left: tooltip.left }}
+          >
+            {name}
+            <div
+              className={sanitizeClassName(`
+                absolute left-1/2 -translate-x-1/2 border-4 border-transparent
+                ${
+                  tooltip.placement === "top"
+                    ? "top-full border-t-neutral-900 dark:border-t-neutral-800"
+                    : "bottom-full border-b-neutral-900 dark:border-b-neutral-800"
+                }
+              `)}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

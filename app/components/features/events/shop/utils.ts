@@ -1,4 +1,13 @@
-import type { MinigameConfig, RewardItem, DiceMinigameConfig, DivisorRoundCondition, GteRoundCondition } from "./constants";
+import type {
+  DiceMinigameConfig,
+  DivisorRoundCondition,
+  GteRoundCondition,
+  MinigameConfig,
+  MinigamePayment,
+  MinigamePaymentQuantityMode,
+  RewardGroup,
+  RewardItem,
+} from "./constants";
 
 /**
  * Formats resource count labels with K/M suffixes for large numbers.
@@ -24,6 +33,141 @@ const isDivisorCondition = (rounds: unknown): rounds is DivisorRoundCondition =>
 
 const isGteCondition = (rounds: unknown): rounds is GteRoundCondition =>
   typeof rounds === "object" && rounds !== null && "gte" in rounds;
+
+function getEffectiveMinigameCount(config: MinigameConfig, playCount: number): number {
+  if (config.minigameType === "dice" && config.dice) {
+    return convertRollsToLaps(config.dice, playCount);
+  }
+  return playCount;
+}
+
+function getSpecifiedRounds(rewardGroups: RewardGroup[]): Set<number> {
+  const allSpecifiedRounds = new Set<number>();
+  for (const group of rewardGroups) {
+    if (Array.isArray(group.rounds)) {
+      for (const round of group.rounds) {
+        allSpecifiedRounds.add(round);
+      }
+    }
+  }
+  return allSpecifiedRounds;
+}
+
+function getAppliedRoundCount(group: RewardGroup, effectiveCount: number, allSpecifiedRounds: Set<number>): number {
+  if (group.rounds === "subsequent") {
+    return effectiveCount - Array.from(allSpecifiedRounds).filter((round) => round <= effectiveCount).length;
+  }
+  if (isDivisorCondition(group.rounds)) {
+    const { divisor, remainders } = group.rounds;
+    const fullCycles = Math.floor(effectiveCount / divisor);
+    const remainder = effectiveCount % divisor;
+    return fullCycles * remainders.length + remainders.filter((r) => r !== 0 && r <= remainder).length;
+  }
+  if (isGteCondition(group.rounds)) {
+    return Math.max(0, effectiveCount - group.rounds.gte + 1);
+  }
+  return group.rounds.filter((round) => round <= effectiveCount).length;
+}
+
+function matchesMinigameRound(group: RewardGroup, round: number, allSpecifiedRounds: Set<number>): boolean {
+  if (group.rounds === "subsequent") {
+    return !allSpecifiedRounds.has(round);
+  }
+  if (isDivisorCondition(group.rounds)) {
+    return group.rounds.remainders.includes(round % group.rounds.divisor);
+  }
+  if (isGteCondition(group.rounds)) {
+    return round >= group.rounds.gte;
+  }
+  return group.rounds.includes(round);
+}
+
+export function hasVariableMinigamePayment(config: MinigameConfig): boolean {
+  return config.rewardGroups.some((group) => group.payments.some((payment) => payment.quantityVariable));
+}
+
+export function calculateMinigamePaymentCosts(
+  config: MinigameConfig,
+  playCount: number,
+  quantityMode: MinigamePaymentQuantityMode = "expected",
+): MinigamePayment[] {
+  if (playCount <= 0) {
+    return [];
+  }
+
+  const costMap = new Map<string, MinigamePayment>();
+  const addCost = (payment: MinigamePayment, multiplier: number) => {
+    const { resourceType, resourceUid, resourceName, quantity } = payment;
+    const key = `${payment.resourceType}:${payment.resourceUid}`;
+    const existing = costMap.get(key);
+    if (existing) {
+      existing.quantity += quantity * multiplier;
+    } else {
+      costMap.set(key, {
+        resourceType,
+        resourceUid,
+        resourceName,
+        quantity: quantity * multiplier,
+      });
+    }
+  };
+
+  const effectiveCount = getEffectiveMinigameCount(config, playCount);
+  const specifiedRounds = getSpecifiedRounds(config.rewardGroups);
+  let hasRoundPayments = false;
+
+  if (config.minigameType === "box_gacha") {
+    for (let round = 1; round <= playCount; round++) {
+      const matchingGroup = config.rewardGroups.find(
+        (group) => group.payments.length > 0 && matchesMinigameRound(group, round, specifiedRounds),
+      );
+      if (!matchingGroup) {
+        continue;
+      }
+
+      hasRoundPayments = true;
+      for (const payment of matchingGroup.payments) {
+        const quantity =
+          quantityMode === "min"
+            ? payment.quantityMin
+            : quantityMode === "max"
+              ? payment.quantityMax
+              : payment.quantityExpected;
+        addCost({ ...payment, quantity }, 1);
+      }
+    }
+  } else {
+    for (const group of config.rewardGroups) {
+      if (group.payments.length === 0) {
+        continue;
+      }
+
+      const appliedCount = getAppliedRoundCount(group, effectiveCount, specifiedRounds);
+      if (appliedCount <= 0) {
+        continue;
+      }
+
+      hasRoundPayments = true;
+      for (const payment of group.payments) {
+        const quantity =
+          quantityMode === "min"
+            ? payment.quantityMin
+            : quantityMode === "max"
+              ? payment.quantityMax
+              : payment.quantityExpected;
+        addCost({ ...payment, quantity }, appliedCount);
+      }
+    }
+  }
+
+  if (!hasRoundPayments) {
+    for (const payment of config.payments.length > 0 ? config.payments : [config.payment]) {
+      addCost(payment, playCount);
+    }
+  }
+
+  return Array.from(costMap.values());
+}
 
 export function calculateMinigameRewards(config: MinigameConfig, playCount: number): RewardItem[] {
   if (playCount <= 0) {
@@ -54,23 +198,10 @@ export function calculateMinigameRewards(config: MinigameConfig, playCount: numb
     return Array.from(rewardMap.values());
   }
 
-  // For dice type, convert roll count to lap count
-  let effectiveCount: number;
-  if (config.minigameType === "dice" && config.dice) {
-    effectiveCount = convertRollsToLaps(config.dice, playCount);
-  } else {
-    effectiveCount = playCount;
-  }
+  const effectiveCount = getEffectiveMinigameCount(config, playCount);
 
   // Collect all explicitly specified rounds from all groups (excluding "subsequent" and divisor conditions)
-  const allSpecifiedRounds = new Set<number>();
-  for (const group of config.rewardGroups) {
-    if (Array.isArray(group.rounds)) {
-      for (const round of group.rounds) {
-        allSpecifiedRounds.add(round);
-      }
-    }
-  }
+  const allSpecifiedRounds = getSpecifiedRounds(config.rewardGroups);
 
   // Merge rewards from all groups, combining same items
   const rewardMap = new Map<string, RewardItem>();
@@ -94,25 +225,7 @@ export function calculateMinigameRewards(config: MinigameConfig, playCount: numb
   for (const group of config.rewardGroups) {
     let appliedCount = 0;
 
-    if (group.rounds === "subsequent") {
-      // Count rounds that are not explicitly specified in other groups
-      // This includes all rounds from 1 to effectiveCount, minus the explicitly specified ones
-      appliedCount = effectiveCount - Array.from(allSpecifiedRounds).filter((round) => round <= effectiveCount).length;
-    } else if (isDivisorCondition(group.rounds)) {
-      // Count rounds from 1 to effectiveCount where round % divisor is in remainders
-      const { divisor, remainders } = group.rounds;
-      const fullCycles = Math.floor(effectiveCount / divisor);
-      const remainder = effectiveCount % divisor;
-      appliedCount =
-        fullCycles * remainders.length +
-        remainders.filter((r) => r !== 0 && r <= remainder).length;
-    } else if (isGteCondition(group.rounds)) {
-      // Count rounds from gte to effectiveCount
-      appliedCount = Math.max(0, effectiveCount - group.rounds.gte + 1);
-    } else {
-      // Count how many of the specified rounds are <= effectiveCount
-      appliedCount = group.rounds.filter((round) => round <= effectiveCount).length;
-    }
+    appliedCount = getAppliedRoundCount(group, effectiveCount, allSpecifiedRounds);
 
     if (appliedCount > 0) {
       addRewards(group.rewards, appliedCount);
@@ -146,7 +259,10 @@ export function calculateMinigameRewards(config: MinigameConfig, playCount: numb
  * Calculates dice minigame statistics based on roll count.
  * Uses average dice value to estimate laps completed.
  */
-export function calculateDiceMinigameStats(config: DiceMinigameConfig, rollCount: number): {
+export function calculateDiceMinigameStats(
+  config: DiceMinigameConfig,
+  rollCount: number,
+): {
   totalCost: number;
   estimatedLaps: number;
   rollsPerLap: number;
