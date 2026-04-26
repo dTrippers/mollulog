@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useFetcher } from "react-router";
 import { ClockIcon, StarIcon, XCircleIcon } from "@heroicons/react/16/solid";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
 import dayjs from "dayjs";
-import { AttributeBadge, SubTitle } from "~/components/primitives";
-import { studentImageUrl } from "~/models/assets";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useFetcher } from "react-router";
+import { AttributeBadge, HorizontalScroll, SubTitle } from "~/components/primitives";
+import { useSignIn } from "~/contexts/SignInProvider";
+import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import {
   attackTypeColor,
   attackTypeLocale,
@@ -15,9 +16,8 @@ import {
   roleColor,
   roleLocale,
 } from "~/locales/ko";
-import type { RecruitmentTypeEnum, Attack, Defense } from "~/graphql/graphql";
+import { studentImageUrl } from "~/models/assets";
 import type { Role } from "~/models/content.d";
-import { useSignIn } from "~/contexts/SignInProvider";
 import { sanitizeClassName } from "~/prophandlers";
 import EventInfoCard from "./EventInfoCard";
 
@@ -48,11 +48,13 @@ type ActionData = {
 };
 
 function getFavoriteButtonClassName(favorited: boolean) {
-  return sanitizeClassName(`inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-all ${
-    favorited
-      ? "bg-gradient-to-r from-red-500 to-pink-500 text-white shadow shadow-red-500/25 hover:shadow-red-500/40 hover:brightness-110"
-      : "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-red-50 hover:text-red-500 hover:border-red-200 dark:hover:bg-red-950/40 dark:hover:text-red-400 dark:hover:border-red-800"
-  }`);
+  return sanitizeClassName(
+    `inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-all ${
+      favorited
+        ? "bg-gradient-to-r from-red-500 to-pink-500 text-white shadow shadow-red-500/25 hover:shadow-red-500/40 hover:brightness-110"
+        : "bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700 hover:bg-red-50 hover:text-red-500 hover:border-red-200 dark:hover:bg-red-950/40 dark:hover:text-red-400 dark:hover:border-red-800"
+    }`,
+  );
 }
 
 function useRecruitmentFavorite(recruitment: Recruitment, favoriteAction?: string, favoriteContentUid?: string) {
@@ -194,15 +196,7 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
                 </p>
               )}
 
-              <div className="flex flex-wrap gap-3">
-                {group.recruitments.map((recruitment) => (
-                  <RecruitmentCard
-                    key={recruitment.student?.uid ?? recruitment.studentName}
-                    recruitment={recruitment}
-                    signedIn={signedIn}
-                  />
-                ))}
-              </div>
+              <RecruitmentCardList recruitments={group.recruitments} signedIn={signedIn} />
             </div>
           ))}
         </>
@@ -216,17 +210,42 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
             title="모집 포인트(천장) 교환 불가"
             description="아래 학생들은 모집 포인트(천장)로는 교환할 수 없어요"
           />
-          <div className="flex flex-wrap gap-3">
-            {limitedRecruitments.map((recruitment) => (
-              <RecruitmentCard
-                key={recruitment.student?.uid ?? recruitment.studentName}
-                recruitment={recruitment}
-                signedIn={signedIn}
-              />
-            ))}
-          </div>
+          <RecruitmentCardList recruitments={limitedRecruitments} signedIn={signedIn} />
         </>
       )}
+    </>
+  );
+}
+
+function RecruitmentCardList({
+  recruitments,
+  signedIn,
+}: {
+  recruitments: Recruitment[];
+  signedIn: boolean;
+}) {
+  const recruitmentCards = recruitments.map((recruitment) => (
+    <RecruitmentCard
+      key={recruitment.student?.uid ?? recruitment.studentName}
+      recruitment={recruitment}
+      signedIn={signedIn}
+      className="w-full md:w-28"
+    />
+  ));
+
+  return (
+    <>
+      <div className="md:hidden">
+        <HorizontalScroll
+          itemWidth={{ mobile: "w-28", desktop: "md:w-28" }}
+          gap="gap-2"
+          className="-mx-4 px-4"
+          fadeEdges
+        >
+          {recruitmentCards}
+        </HorizontalScroll>
+      </div>
+      <div className="hidden md:flex md:flex-wrap md:gap-3">{recruitmentCards}</div>
     </>
   );
 }
@@ -256,7 +275,11 @@ export function RecruitmentCard({
   const trimmedSkinName = skinName?.replace(")", "").trim();
 
   return (
-    <div className={sanitizeClassName(`w-28 flex flex-col bg-neutral-100 dark:bg-neutral-900 rounded-lg overflow-hidden ${className ?? ""}`)}>
+    <div
+      className={sanitizeClassName(
+        `w-28 flex flex-col bg-neutral-100 dark:bg-neutral-900 rounded-lg overflow-hidden ${className ?? ""}`,
+      )}
+    >
       <div className="relative w-full overflow-hidden aspect-200/226">
         <img
           src={studentImageUrl(studentUid ?? "unlisted")}
@@ -275,7 +298,9 @@ export function RecruitmentCard({
           {trimmedSkinName && (
             <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-tight">{trimmedSkinName}</p>
           )}
-          <p className="font-bold text-neutral-900 dark:text-neutral-100 text-base leading-tight line-clamp-1">{mainName.trim()}</p>
+          <p className="font-bold text-neutral-900 dark:text-neutral-100 text-base leading-tight line-clamp-1">
+            {mainName.trim()}
+          </p>
         </div>
       </div>
 

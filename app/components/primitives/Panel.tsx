@@ -70,7 +70,7 @@ export default function Panel({
     ? "shrink-0 my-2 p-2 flex items-center justify-center bg-neutral-100 dark:bg-neutral-700 rounded-lg"
     : "";
   const titleElementClass = isCard ? "font-bold text-sm" : "font-semibold text-lg text-neutral-900 dark:text-neutral-100";
-  const descriptionClass = isCard ? "text-sm text-neutral-500 dark:text-neutral-400" : "mt-1 text-sm text-neutral-500 dark:text-neutral-400";
+  const descriptionClass = isCard ? "text-xs text-neutral-500 dark:text-neutral-400" : "mt-1 text-xs text-neutral-500 dark:text-neutral-400";
   const bodySpacingClass = isCard ? "mt-4" : title ? "mt-4" : "";
 
   const content = (

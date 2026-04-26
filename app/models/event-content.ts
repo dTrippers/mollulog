@@ -6,7 +6,7 @@ import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
-import { getTimelineContent } from "./timeline-content";
+import { getTimelineContent, getTimelineContentsByContentTypes } from "./timeline-content";
 import type { RunType } from "./timeline-content";
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
@@ -36,6 +36,32 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
       content.shopContentUid != null ||
       (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
   };
+}
+
+export type ShopAvailableEvent = {
+  uid: string;
+  name: string;
+  since: Date;
+  until: Date | null;
+};
+
+export async function getShopAvailableEvents(env: Env): Promise<ShopAvailableEvent[]> {
+  const now = new Date();
+  const contents = await getTimelineContentsByContentTypes(env, ["event"], now);
+
+  return contents
+    .filter(
+      (content) =>
+        content.shopContentUid != null ||
+        (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
+    )
+    .sort((a, b) => a.startAt.getTime() - b.startAt.getTime())
+    .map((content) => ({
+      uid: content.uid,
+      name: content.name,
+      since: content.startAt,
+      until: content.endAt,
+    }));
 }
 
 //

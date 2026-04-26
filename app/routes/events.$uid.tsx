@@ -1,9 +1,10 @@
 import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
-import { InformationCircleIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
+import { InformationCircleIcon, ListBulletIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
 import { Page } from "~/components/features/layout";
-import { getEventMetadata } from "~/models/event-content";
+import { EventSelector } from "~/components/features/events";
+import { getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
 
-export const loader = async ({ context, params }: LoaderFunctionArgs) => {
+export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const uid = params.uid;
   if (!uid) {
     throw new Response("Not Found", { status: 404 });
@@ -13,18 +14,33 @@ export const loader = async ({ context, params }: LoaderFunctionArgs) => {
   if (!eventMetadata) {
     throw new Response("Not Found", { status: 404 });
   }
-  return { eventMetadata };
+  const pathname = new URL(request.url).pathname;
+  const shopAvailableEvents = pathname.endsWith("/shop") ? await getShopAvailableEvents(env) : [];
+  return { eventMetadata, shopAvailableEvents };
 };
 
 export default function EventPage() {
   const { uid } = useParams();
   const { pathname } = useLocation();
-  const { eventMetadata } = useLoaderData<typeof loader>();
+  const { eventMetadata, shopAvailableEvents } = useLoaderData<typeof loader>();
+  const showEventSelector = pathname === `/events/${uid}/shop` && shopAvailableEvents.length > 1;
   return (
     <Page
       title="이벤트 정보"
       description={eventMetadata.name}
       backward={{ title: "미래시", to: "/futures" }}
+      panels={
+        showEventSelector
+          ? [
+              {
+                title: "이벤트 선택",
+                description: "상점 계산기를 사용할 이벤트 선택",
+                Icon: ListBulletIcon,
+                children: <EventSelector events={shopAvailableEvents} currentEventUid={uid ?? ""} />,
+              },
+            ]
+          : undefined
+      }
       screens={[
         {
           text: "개요",
@@ -35,12 +51,14 @@ export default function EventPage() {
         },
         {
           text: "상점 계산기",
-          description: eventMetadata.shopAvailable ? "상점 아이템 구매에 필요한 AP를 계산할 수 있어요" : "상점이 없는 이벤트이거나 정보를 준비중이에요",
+          description: eventMetadata.shopAvailable
+            ? "상점 아이템 구매에 필요한 AP를 계산할 수 있어요"
+            : "상점이 없는 이벤트이거나 정보를 준비중이에요",
           Icon: ShoppingCartIcon,
           link: `/events/${uid}/shop`,
           active: pathname === `/events/${uid}/shop`,
           disabled: !eventMetadata.shopAvailable,
-        }
+        },
       ]}
     >
       <Outlet />
