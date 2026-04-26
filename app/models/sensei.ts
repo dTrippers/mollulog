@@ -33,6 +33,15 @@ export type Sensei = {
   };
 };
 
+type SenseiCreateFields = {
+  username: string;
+  friendCode: string | null;
+  profileStudentId: string | null;
+  bio: string | null;
+  googleId?: string | null;
+  githubId?: string | null;
+};
+
 // Get a sensei by a single field
 export async function getSenseiById(env: Env, id: number): Promise<Sensei | null> {
   const db = drizzle(env.DB);
@@ -54,42 +63,41 @@ export async function getSenseisById(env: Env, ids: number[]): Promise<Sensei[]>
   return senseis.map((row) => toModel(row));
 }
 
-// Get or create a sensei by googleId
-export async function getOrCreateSenseiByGoogleId(env: Env, googleId: string): Promise<Sensei> {
+export async function createSensei(
+  env: Env,
+  fields: SenseiCreateFields,
+): Promise<{ sensei?: Sensei; error?: { form?: string; username?: string } }> {
   const db = drizzle(env.DB);
-  const result = await db.select().from(senseisTable).where(eq(senseisTable.googleId, googleId)).limit(1);
-  if (result.length > 0) {
-    return toModel(result[0]);
+  const uid = nanoid(8);
+
+  try {
+    await db.insert(senseisTable).values({
+      uid,
+      username: fields.username,
+      friendCode: fields.friendCode,
+      profileStudentId: fields.profileStudentId,
+      bio: fields.bio,
+      googleId: fields.googleId,
+      githubId: fields.githubId,
+      role: "guest",
+      active: 1,
+    });
+  } catch (e) {
+    const err = e as Error;
+    const uniqueError = isUniqueConstraintError(err);
+    if (uniqueError && uniqueError.column === "username") {
+      return { error: { username: "이미 사용중인 닉네임입니다." } };
+    }
+    if (uniqueError && (uniqueError.column === "googleId" || uniqueError.column === "githubId")) {
+      return { error: { form: "이미 다른 계정에 연결된 로그인 계정이에요." } };
+    }
+
+    console.error(e);
+    throw e;
   }
 
-  const createResult = await db
-    .insert(senseisTable)
-    .values({ uid: nanoid(8), username: nanoid(8), googleId, role: "guest" })
-    .onConflictDoNothing();
-  if (createResult.error) {
-    throw createResult.error;
-  }
-
-  return getOrCreateSenseiByGoogleId(env, googleId);
-}
-
-// Get or create a sensei by githubId
-export async function getOrCreateSenseiByGithubId(env: Env, githubId: string): Promise<Sensei> {
-  const db = drizzle(env.DB);
-  const result = await db.select().from(senseisTable).where(eq(senseisTable.githubId, githubId)).limit(1);
-  if (result.length > 0) {
-    return toModel(result[0]);
-  }
-
-  const createResult = await db
-    .insert(senseisTable)
-    .values({ uid: nanoid(8), username: nanoid(8), githubId, role: "guest" })
-    .onConflictDoNothing();
-  if (createResult.error) {
-    throw createResult.error;
-  }
-
-  return getOrCreateSenseiByGithubId(env, githubId);
+  const sensei = await getSenseiByUsername(env, fields.username);
+  return sensei ? { sensei } : {};
 }
 
 // Update a sensei

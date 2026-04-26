@@ -5,7 +5,7 @@ import { getContentsComments, nestComments, getFutureContents } from "~/models/c
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRouteSensei } from "./$username";
 import FuturePlan from "./$username.futures._components/FuturePlan";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import type { NestedComment } from "~/models/content";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentSkillItems } from "~/models/student";
@@ -24,7 +24,7 @@ export const meta: MetaFunction = ({ params }) => {
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const sensei = await getRouteSensei(env, params);
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
 
   const [favoritedStudents, futureContents, studentsMap] = await Promise.all([
     getUserFavoritedStudents(env, sensei.id),

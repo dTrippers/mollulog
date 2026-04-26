@@ -1,7 +1,7 @@
 import { data, Link } from "react-router";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/solid";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import Page from "~/components/features/layout/Page";
 import CouponCard from "~/components/features/coupons/CouponCard";
 import { getAllCoupons, getCouponRegistrations, registerCoupon, unregisterCoupon } from "~/models/coupon";
@@ -19,7 +19,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const coupons = await getAllCoupons(env);
 
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   const currentUserData = sensei ? {
     registeredCouponIds: await getCouponRegistrations(env, sensei.id),
     memberCode: (await getSenseiPrivacyByUserId(env, sensei.id))?.memberCode ?? null,
@@ -33,7 +33,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   if (!sensei) return data({ error: "Unauthorized" }, { status: 401 });
 
   const formData = await request.formData();

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useRef, useMemo } from "react";
 import { useFetcher, useLoaderData, redirect } from "react-router";
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, FilterButtons, ProfileImage, Title } from "~/components/primitives";
 import { FavoriteItemSelector, RequiredGifts, StudentRelationshipLevel, RelationshipStudentPicker, FavoritedItemSelector } from "~/components/features/relationship";
 import { useSignIn } from "~/contexts/SignInProvider";
@@ -46,7 +46,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const allStudents = await getAllStudents(env, true);
 
   // Get saved relationship levels from database if user is authenticated
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   let savedRelationships: Record<string, RelationshipLevel> = {};
   if (currentUser) {
     const relationLevels = await getRelationshipLevels(env, currentUser.id);
@@ -94,7 +94,7 @@ export type ActionData = {
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

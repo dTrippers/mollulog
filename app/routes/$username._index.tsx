@@ -2,7 +2,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { PencilSquareIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
 import { useCallback } from "react";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
@@ -35,7 +35,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const followerIds = await getFollowerIds(env, sensei.id);
 
   const relationship = { followed: false, following: false };
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (currentUser) {
     relationship.followed = followingIds.includes(currentUser.id);
     relationship.following = followerIds.includes(currentUser.id);

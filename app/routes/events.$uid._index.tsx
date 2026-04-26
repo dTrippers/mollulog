@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { redirect } from "react-router";
 import { EventHeader, Recruitments } from "~/components/features/events";
 import { getNestedContentComments } from "~/models/content";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { favoriteStudent, getFavoritedCounts, getUserFavoritedStudents, unfavoriteStudent } from "~/models/favorite-students";
 import { getTimelineContent } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
@@ -36,7 +36,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitments,
   };
 
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
 
   const studentUids = eventContent.recruitments
     .map((r) => r.student?.uid)
@@ -75,7 +75,7 @@ type ActionData = {
 
 export const action = async ({ params, context, request }: ActionFunctionArgs) => {
   const { env } = context.cloudflare;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

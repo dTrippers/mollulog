@@ -1,10 +1,10 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, Form, redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { deletePasskey, getPasskeysBySensei, updatePasskeyMemo } from "~/models/passkey";
 import { Button, Input } from "~/components/primitives";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
-  const sensei = await getAuthenticator(context.cloudflare.env).isAuthenticated(request);
+  const sensei = await getActiveSensei(context.cloudflare.env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -20,7 +20,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
   const { env } = context.cloudflare;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }

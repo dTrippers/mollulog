@@ -1,5 +1,5 @@
 import { type ActionFunctionArgs, redirect } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { favoriteStudent, unfavoriteStudent } from "~/models/favorite-students";
 
 export type ActionData = {
@@ -13,7 +13,7 @@ export type ActionData = {
 // @deprecated use api.contents.$uid.memos and api.contents.$uid.favorites instead
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

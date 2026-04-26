@@ -1,5 +1,5 @@
 import { type ActionFunctionArgs, redirect } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { deleteEventShopState, upsertEventShopState, type EventShopState } from "~/models/event-shop-state";
 
 export type ActionData = {
@@ -9,7 +9,7 @@ export type ActionData = {
 
 export const action = async ({ params, context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

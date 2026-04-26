@@ -1,16 +1,26 @@
 import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
-import { getAuthenticator, redirectTo, sessionStorage } from "~/auth/authenticator.server";
+import {
+  getActiveSensei,
+  getAuthenticator,
+  getPendingSenseiRegistrationUid,
+  pendingSenseiRegistrationSessionKey,
+  redirectTo,
+  sessionStorage,
+} from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
 import { Button, Title } from "~/components/primitives";
-import { getSenseiById, getSenseiByUsername, updateSensei } from "~/models/sensei";
+import { createAuthIdentity, getSenseiByAuthIdentity } from "~/models/auth-identity";
+import { deletePendingSenseiRegistration, getPendingSenseiRegistration } from "~/models/pending-sensei-registration";
+import { createSensei, getSenseiById, getSenseiByUsername } from "~/models/sensei";
 import { getAllStudents } from "~/models/student";
 
 export const meta: MetaFunction = () => [{ title: "선생님 등록 | 몰루로그" }];
 
 type ActionData = {
   error?: {
+    form?: string;
     username?: string;
     friendCode?: string;
     bio?: string;
@@ -25,13 +35,15 @@ type ActionData = {
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
-  if (!sensei) {
-    return redirect("/unauthorized");
-  }
-  if (sensei.active) {
+  const sensei = await getActiveSensei(env, request);
+  if (sensei) {
     const latestSensei = await getSenseiById(env, sensei.id);
     return redirect(redirectTo(request) ?? `/@${latestSensei?.username ?? sensei.username}`);
+  }
+
+  const pendingUid = await getPendingSenseiRegistrationUid(env, request);
+  if (!pendingUid || !(await getPendingSenseiRegistration(env, pendingUid))) {
+    return redirect("/unauthorized");
   }
 
   return {
@@ -48,57 +60,96 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
   const authenticator = getAuthenticator(env);
-  const sensei = await authenticator.isAuthenticated(request);
-  if (!sensei) {
-    return redirect("/unauthorized");
-  }
-  if (sensei.active) {
+  const sensei = await getActiveSensei(env, request);
+  if (sensei) {
     const latestSensei = await getSenseiById(env, sensei.id);
     return redirect(redirectTo(request) ?? `/@${latestSensei?.username ?? sensei.username}`);
   }
 
+  const pendingUid = await getPendingSenseiRegistrationUid(env, request);
+  const pendingRegistration = pendingUid ? await getPendingSenseiRegistration(env, pendingUid) : null;
+  if (!pendingRegistration) {
+    return redirect("/unauthorized");
+  }
+
   const formData = await request.formData();
   const getStringOrNull = (key: string) => formData.get(key) as string | null;
-  sensei.username = formData.get("username") as string;
-  sensei.bio = getStringOrNull("bio");
-  sensei.profileStudentId = getStringOrNull("profileStudentId");
-  sensei.friendCode = getStringOrNull("friendCode")?.toUpperCase() ?? null;
+  const username = formData.get("username") as string;
+  const bio = getStringOrNull("bio");
+  const profileStudentId = getStringOrNull("profileStudentId");
+  const friendCode = getStringOrNull("friendCode")?.toUpperCase() ?? null;
   const values = {
-    username: sensei.username,
-    profileStudentId: sensei.profileStudentId,
-    friendCode: sensei.friendCode,
-    bio: sensei.bio,
+    username,
+    profileStudentId,
+    friendCode,
+    bio,
   };
 
-  if (!/^[a-zA-Z0-9_]{4,20}$/.test(sensei.username)) {
+  if (!/^[a-zA-Z0-9_]{4,20}$/.test(username)) {
     return {
       error: { username: "4~20글자의 영숫자 및 _ 기호만 사용할 수 있어요." },
       values,
     } satisfies ActionData;
   }
 
-  const existingSensei = await getSenseiByUsername(env, sensei.username);
-  if (existingSensei && existingSensei.id !== sensei.id) {
+  const existingSensei = await getSenseiByUsername(env, username);
+  if (existingSensei) {
     return { error: { username: "닉네임이 이미 존재해요." }, values } satisfies ActionData;
   }
-  if (sensei.bio && sensei.bio.length > 100) {
+  if (bio && bio.length > 100) {
     return { error: { bio: "100자 이하로 작성해주세요." }, values } satisfies ActionData;
   }
-  if (sensei.friendCode && !/^[A-Z]{8}$/.test(sensei.friendCode)) {
+  if (friendCode && !/^[A-Z]{8}$/.test(friendCode)) {
     return {
       error: { friendCode: "친구 코드는 알파벳 8글자에요." },
       values,
     } satisfies ActionData;
   }
 
-  sensei.active = true;
-  await updateSensei(env, sensei.id, sensei);
+  const linkedSensei = await getSenseiByAuthIdentity(
+    env,
+    pendingRegistration.provider,
+    pendingRegistration.providerUserId,
+  );
+  if (linkedSensei) {
+    await deletePendingSenseiRegistration(env, pendingRegistration.uid);
+
+    const { getSession, commitSession } = sessionStorage(env);
+    const session = await getSession(request.headers.get("cookie"));
+    session.set(authenticator.sessionKey, linkedSensei);
+    session.unset(pendingSenseiRegistrationSessionKey);
+    return redirect(redirectTo(request) ?? `/@${linkedSensei.username}`, {
+      headers: {
+        "Set-Cookie": await commitSession(session),
+      },
+    });
+  }
+
+  const createResult = await createSensei(env, {
+    ...values,
+    googleId: pendingRegistration.provider === "google" ? pendingRegistration.providerUserId : null,
+    githubId: pendingRegistration.provider === "github" ? pendingRegistration.providerUserId : null,
+  });
+  if (createResult.error || !createResult.sensei) {
+    return { error: createResult.error ?? { form: "선생님 등록에 실패했어요." }, values } satisfies ActionData;
+  }
+
+  await createAuthIdentity(
+    env,
+    createResult.sensei.id,
+    pendingRegistration.provider,
+    pendingRegistration.providerUserId,
+  );
+  await deletePendingSenseiRegistration(env, pendingRegistration.uid);
 
   const { getSession, commitSession } = sessionStorage(env);
   const session = await getSession(request.headers.get("cookie"));
-  session.set(authenticator.sessionKey, sensei);
-  return redirect(redirectTo(request) ?? `/@${sensei.username}`, {
-    headers: { "Set-Cookie": await commitSession(session) },
+  session.set(authenticator.sessionKey, createResult.sensei);
+  session.unset(pendingSenseiRegistrationSessionKey);
+  return redirect(redirectTo(request) ?? `/@${createResult.sensei.username}`, {
+    headers: {
+      "Set-Cookie": await commitSession(session),
+    },
   });
 };
 
@@ -118,6 +169,11 @@ export default function Register() {
         </div>
 
         <Form method="post">
+          {actionData?.error?.form ? (
+            <p className="mb-4 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+              {actionData.error.form}
+            </p>
+          ) : null}
           <ProfileEditor students={allStudents} initialData={actionData?.values} error={actionData?.error} />
 
           <div className="mt-6 flex justify-end">

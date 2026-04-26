@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { deletePickupHistory, getPickupHistories } from "~/models/pickup-history";
 import { redirect, useLoaderData } from "react-router";
 import { AddContentButton } from "~/components/features/editor";
@@ -22,7 +22,7 @@ export const meta: MetaFunction = ({ params }) => {
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -108,7 +108,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     };
   }).sort((a, b) => dayjs(b.event.since).diff(dayjs(a.event.since)));
 
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   return {
     me: sensei.username === currentUser?.username,
     recruitmentHistories: aggregatedHistories,

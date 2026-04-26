@@ -2,7 +2,7 @@ import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { BookOpenIcon, FireIcon, IdentificationIcon, TicketIcon } from "@heroicons/react/24/outline";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, RecruitmentCard } from "~/components/features/events";
 import { RaidCard } from "~/components/features/raids";
 import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
@@ -27,7 +27,7 @@ export const meta: MetaFunction = () => {
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
 
   const [
     { mainEvent, currentRaids, currentRecruitments, favoritedCounts },

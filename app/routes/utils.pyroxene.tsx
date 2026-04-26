@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { type MetaFunction, useFetcher, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { LockClosedIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { PyroxenePlannerInputPanel, PyroxenePlannerOptionsPanel, PyroxeneSchedule } from "~/components/features/futures";
 import type { PickupResources, PyroxeneScheduleItem } from "~/components/features/futures";
 import type { PyroxenePlannerOptions, PyroxeneTimelineItem, PyroxeneEventData } from "~/models/pyroxene-planner";
@@ -34,7 +34,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   // contents와 인증은 서로 무관하므로 병렬 실행
   const [contents, currentUser] = await Promise.all([
     getPyroxenePlannerContents(env),
-    getAuthenticator(env).isAuthenticated(request),
+    getActiveSensei(env, request),
   ]);
 
   if (!currentUser) {
@@ -120,7 +120,7 @@ export type ActionData = {
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return { success: false };
   }

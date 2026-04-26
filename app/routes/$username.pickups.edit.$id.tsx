@@ -2,7 +2,7 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction, re
 import { useLoaderData, useSearchParams, useSubmit } from "react-router";
 import dayjs from "dayjs";
 import { useState } from "react";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { SubTitle, Title } from "~/components/primitives";
 import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
@@ -21,7 +21,7 @@ export const meta: MetaFunction = () => [
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   const recruitmentRepository = new RecruitmentRepository(env);
   if (!sensei) {
     return redirect("/unauthorized");
@@ -94,7 +94,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const data = await request.json<ActionData>();
 
   const env = context.cloudflare.env;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }

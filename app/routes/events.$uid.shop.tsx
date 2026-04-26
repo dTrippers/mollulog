@@ -1,6 +1,6 @@
 import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { getEventMetadata, getEventShopContent } from "~/models/event-content";
 import { getEventShopState } from "~/models/event-shop-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
@@ -41,7 +41,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const { stages, shopResources, eventRewardBonus, minigameConfig } = shopContent;
 
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   let recruitedStudentUids: string[] = [];
   if (currentUser) {
     const recruitedStudents = await getRecruitedStudents(env, currentUser.id);

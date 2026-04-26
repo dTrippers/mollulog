@@ -1,12 +1,12 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 // @ts-ignore
 import type { RegistrationResponseJSON } from "@simplewebauthn/server/script/deps";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { createPasskeyCreationOptions, verifyAndCreatePasskey } from "~/models/passkey";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
@@ -16,7 +16,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

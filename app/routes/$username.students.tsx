@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction, ActionFunctionArgs } from "react-router";
 import { useLoaderData, data, useFetcher, useOutletContext } from "react-router";
 import { StudentCards, TierSelector } from "~/components/features/students";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, Description, SubTitle, Toggle } from "~/components/primitives";
 import { getRouteSensei } from "./$username";
 import { getAllStudents } from "~/models/student";
@@ -12,7 +12,7 @@ import { StudentFilter } from "~/components/features/students";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
 
   const sensei = await getRouteSensei(env, params);
   const recruitedStudents = await getRecruitedStudents(env, sensei.id);
@@ -51,7 +51,7 @@ export const meta: MetaFunction = ({ params }) => {
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data({ error: "Unauthorized" }, { status: 401 });
   }

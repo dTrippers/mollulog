@@ -1,16 +1,17 @@
-import { useEffect, useState, type ElementType, type ReactNode } from "react";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
-import { ArrowRightStartOnRectangleIcon, KeyIcon } from "@heroicons/react/24/outline";
-import { getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
+import { ArrowRightStartOnRectangleIcon, KeyIcon, LinkIcon } from "@heroicons/react/24/outline";
+import dayjs from "dayjs";
+import timezone from "dayjs/plugin/timezone";
+import utc from "dayjs/plugin/utc";
+import { type ElementType, type ReactNode, useEffect, useState } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
 import { Button, Input, Title } from "~/components/primitives";
 import { cn } from "~/lib/utils";
+import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
 import { getPasskeysBySensei } from "~/models/passkey";
 import { getSenseiById, updateSensei } from "~/models/sensei";
 import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
@@ -23,7 +24,8 @@ export const meta: MetaFunction = () => [{ title: "프로필 관리 | 몰루로�
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const url = new URL(request.url);
+  const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -49,8 +51,26 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       }))
       .sort((a, b) => a.order - b.order),
     passkeyCount: (await getPasskeysBySensei(env, sensei)).length,
+    authIdentities: await getAuthIdentityStatuses(env, sensei.id),
+    authMessage: authMessageFromSearchParams(url.searchParams),
   };
 };
+
+function authMessageFromSearchParams(params: URLSearchParams): { tone: "success" | "error"; text: string } | null {
+  if (params.get("auth") === "linked") {
+    return { tone: "success", text: "로그인 계정이 연동됐어요." };
+  }
+  if (params.get("auth_error") === "identity_in_use") {
+    return { tone: "error", text: "이미 다른 선생님 계정에 연결된 로그인 계정이에요." };
+  }
+  if (params.get("auth_error") === "signin_required") {
+    return { tone: "error", text: "로그인 후 다시 시도해주세요." };
+  }
+  if (params.get("auth_error") === "failed") {
+    return { tone: "error", text: "로그인 계정 연동에 실패했어요. 다시 시도해주세요." };
+  }
+  return null;
+}
 
 type ActionData = {
   intent?: "profile" | "account";
@@ -68,7 +88,7 @@ type ActionData = {
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
   const authenticator = getAuthenticator(env);
-  const sensei = await authenticator.isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -204,7 +224,7 @@ function SettingsLink({
     <Link
       to={to}
       className={cn(
-        "flex items-center gap-3 rounded-xl border border-border bg-background px-4 py-3 text-foreground transition-colors hover:bg-muted/60",
+        "flex items-center gap-3 rounded-md border border-border bg-background px-4 py-3 text-foreground transition-colors hover:bg-muted/60",
         destructive && "text-destructive",
       )}
     >
@@ -218,8 +238,39 @@ function SettingsLink({
   );
 }
 
+function AuthIdentityLinkForm({
+  provider,
+  label,
+  linked,
+}: {
+  provider: AuthProvider;
+  label: string;
+  linked: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-md border border-border bg-background px-4 py-3">
+      <LinkIcon className="size-4 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">{label}</p>
+        <p className="text-sm text-muted-foreground">{linked ? "로그인에 사용할 수 있어요" : "연동되지 않음"}</p>
+      </div>
+      {linked ? (
+        <span className="inline-flex w-fit items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-muted/60 px-3 py-1.5 text-center text-sm font-medium text-muted-foreground shadow-xs">
+          연동됨
+        </span>
+      ) : (
+        <Form method="post" action={`/auth/${provider}/link`}>
+          <Button type="submit" size="sm" variant="tint-blue">
+            연동하기
+          </Button>
+        </Form>
+      )}
+    </div>
+  );
+}
+
 export default function EditProfile() {
-  const { sensei, allStudents, passkeyCount } = useLoaderData<typeof loader>();
+  const { sensei, allStudents, passkeyCount, authIdentities, authMessage } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const submittingIntent = navigation.formData?.get("intent");
@@ -312,6 +363,20 @@ export default function EditProfile() {
 
       <EditSection title="인증 및 보안">
         <div className="space-y-3">
+          {authMessage ? (
+            <p
+              className={cn(
+                "rounded-md border px-3 py-2 text-sm",
+                authMessage.tone === "success"
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300",
+              )}
+            >
+              {authMessage.text}
+            </p>
+          ) : null}
+          <AuthIdentityLinkForm provider="google" label="Google" linked={authIdentities.google} />
+          <AuthIdentityLinkForm provider="github" label="GitHub" linked={authIdentities.github} />
           <SettingsLink
             to="/edit/passkey"
             title="Passkey 관리"

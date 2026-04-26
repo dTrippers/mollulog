@@ -14,7 +14,7 @@ import {
 } from "react-router";
 import LoadingBar, { type LoadingBarRef } from "react-top-loading-bar";
 import type { Route } from "./+types/root";
-import { getAuthenticator } from "./auth/authenticator.server";
+import { getActiveSensei } from "./auth/authenticator.server";
 import { getPreference } from "./auth/preference.server";
 import { Footer, NavigationBar } from "./components/features/layout";
 import { SignInProvider } from "./contexts/SignInProvider";
@@ -30,7 +30,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     FRONT_BETTER_STACK_SENTRY_DSN?: string;
   };
 
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   const preference = await getPreference(env, request);
 
   const navigationBarContents = await getNavigationBarContents(env);

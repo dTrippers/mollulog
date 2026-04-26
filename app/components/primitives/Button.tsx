@@ -63,7 +63,7 @@ export default function PrimitiveButton({
   const widthClass = fullWidth ? "w-full" : "w-fit";
   const shadowClass = shadow === "none" ? "" : shadow === "xs" ? "shadow-xs" : variant === "list" || size === "xs" ? "" : "shadow-xs";
   const buttonClassName = cn(
-    "inline-flex items-center gap-2 border font-medium whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
+    "inline-flex cursor-pointer items-center gap-2 border font-medium whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
     widthClass,
     justifyClass,
     sizeClass,

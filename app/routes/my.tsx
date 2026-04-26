@@ -1,11 +1,11 @@
 import type { LoaderFunction } from "react-router";
 import { redirect } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { getSenseiById } from "~/models/sensei";
 
 export const loader: LoaderFunction = async ({ request, context }) => {
   const env = context.cloudflare.env;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   if (sensei) {
     const url = new URL(request.url);
     const latestSensei = await getSenseiById(env, sensei.id);

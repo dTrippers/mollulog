@@ -1,5 +1,5 @@
 import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { createComment, createSubcomment, updateComment, deleteComment, getNestedContentComments, nestComments, getContentComments, pinComment, unpinComment } from "~/models/content";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
@@ -9,7 +9,7 @@ export const loader = async ({ request, params, context }: LoaderFunctionArgs) =
   }
 
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   return nestComments(await getContentComments(env, contentUid, currentUser?.id), currentUser);
 };
 
@@ -28,7 +28,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   }
 
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

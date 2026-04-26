@@ -1,14 +1,14 @@
 import dayjs from "dayjs";
 import { useState } from "react";
 import { type LoaderFunctionArgs, redirect, useLoaderData, useRevalidator } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { getPasskeysBySensei } from "~/models/passkey";
 import { ButtonForm, FormGroup, LinkForm } from "~/components/features/forms";
 import { startRegistration } from "@simplewebauthn/browser";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }

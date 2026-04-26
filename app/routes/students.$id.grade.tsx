@@ -11,7 +11,7 @@ import {
   useRouteError,
   useSubmit,
 } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { ErrorPage } from "~/components/features/layout";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { graphql } from "~/graphql";
@@ -42,7 +42,7 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
       headers: { "Content-Type": "application/json" },
     });
   }
-  const currentUser = await getAuthenticator(env, ctx).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) {
     return redirect(`/students/${studentUid}`);
   }
@@ -95,7 +95,7 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
       headers: { "Content-Type": "application/json" },
     });
   }
-  const currentUser = await getAuthenticator(env, ctx).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) {
     return redirect(`/students/${studentUid}`);
   }

@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, isRouteErrorResponse, redirect, useLoaderData, useRouteError } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { ErrorPage } from "~/components/features/layout";
 import { Title } from "~/components/primitives";
 import { getLogger } from "~/lib/observability.server";
@@ -29,7 +29,7 @@ function notFoundResponse() {
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const sensei = await getAuthenticator(env, ctx).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -52,7 +52,7 @@ export const action = async ({ request, context, params }: ActionFunctionArgs) =
   const logger = getLogger(env, ctx, {
     route: "contact.$uid",
   });
-  const currentUser = await getAuthenticator(env, ctx).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

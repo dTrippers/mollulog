@@ -1,11 +1,11 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { redirect } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { flushCacheAll } from "~/models/base";
 
 export async function loader({ request, context, params }: LoaderFunctionArgs) {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

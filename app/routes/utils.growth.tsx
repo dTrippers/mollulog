@@ -2,7 +2,7 @@ import { ArchiveBoxIcon, UserIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
@@ -41,7 +41,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

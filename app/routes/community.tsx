@@ -7,7 +7,7 @@ import { useCallback } from "react";
 import { useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { Page } from "~/components/features/layout";
 import { type CommunityPostType, getCommunityFeedPage } from "~/models/community";
@@ -35,7 +35,7 @@ function parsePage(request: Request) {
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   const postType = parseCommunityPostType(request);
   const page = parsePage(request);
 

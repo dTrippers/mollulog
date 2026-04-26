@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { AddContentButton } from "~/components/features/editor";
 import PartyView from "./$username.parties._components/PartyView";
 import { getUserParties, removePartyByUid } from "~/models/party";
@@ -22,7 +22,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const env = context.cloudflare.env;
   const raidRepository = new RaidRepository(env);
   const sensei = await getRouteSensei(env, params);
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   const me = sensei.username === currentUser?.username;
 
   const allStudents = await getAllStudents(env, true);
@@ -44,7 +44,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }

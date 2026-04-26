@@ -1,7 +1,7 @@
 import { ArrowTopRightOnSquareIcon, ChatBubbleLeftRightIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, isRouteErrorResponse, useLoaderData, useLocation, useRouteError } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { ErrorPage, Page } from "~/components/features/layout";
 import { StudentInfo } from "~/components/features/students";
 import { graphql } from "~/graphql";
@@ -59,7 +59,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     (recruitment: { recruitmentGroup: { uid: string } }) => recruitment.recruitmentGroup.uid,
   );
   const timelineContents = await getTimelineContentsByRecruitmentGroupUids(env, recruitmentGroupUids);
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   const tagCounts = await getTagCountsByStudent(env, uid);
   const allGradings = await getStudentGradingsByStudentWithUsers(env, uid, true);
   const allRaids = await raidRepository.getAll();

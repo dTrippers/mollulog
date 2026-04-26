@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, isRouteErrorResponse, redirect, useActionData, useLoaderData, useNavigation, useRouteError } from "react-router";
 import { EnvelopeIcon } from "@heroicons/react/24/outline";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { ErrorPage } from "~/components/features/layout";
 import { Callout, Title } from "~/components/primitives";
 import { getLogger } from "~/lib/observability.server";
@@ -22,7 +22,7 @@ type ContactActionData = {
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const sensei = await getAuthenticator(env, ctx).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return { authenticated: false as const, tickets: null };
   }
@@ -36,7 +36,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const logger = getLogger(env, ctx, { route: "contact" });
-  const currentUser = await getAuthenticator(env, ctx).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) {
     return redirect("/unauthorized");
   }

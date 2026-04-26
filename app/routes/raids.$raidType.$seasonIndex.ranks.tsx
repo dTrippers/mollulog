@@ -1,7 +1,7 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { RaidRankScreen } from "~/components/features/raids";
 import RaidRankFilter, {
   mergeFilteredStudents,
@@ -31,7 +31,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     ]),
   );
 
-  const sensei = await getAuthenticator(env).isAuthenticated(request);
+  const sensei = await getActiveSensei(env, request);
   const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
 
   return {

@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { data, useOutletContext } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { getRecruitedStudents, upsertRecruitedStudent } from "~/models/recruited-student";
 import {
   getRelationshipLevel,
@@ -105,7 +105,7 @@ function toGrowthInput(payload: Partial<GrowthActionData>): StudentGrowthInput {
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<GrowthActionResult>({ error: "로그인이 필요해요" }, { status: 401 });
   }

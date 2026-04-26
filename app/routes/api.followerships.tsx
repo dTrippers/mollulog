@@ -1,6 +1,6 @@
 import type { ActionFunction } from "react-router";
 import { redirect } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
 import { follow, unfollow } from "~/models/followership";
 import { getSenseiByUsername } from "~/models/sensei";
@@ -11,7 +11,7 @@ export const action: ActionFunction = async ({ request, context }) => {
     route: "api.followerships",
     method: request.method,
   });
-  const follower = await getAuthenticator(env, ctx).isAuthenticated(request);
+  const follower = await getActiveSensei(env, request, ctx);
   if (!follower) {
     return redirect("/unauthorized");
   }

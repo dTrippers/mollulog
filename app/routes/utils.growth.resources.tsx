@@ -1,7 +1,7 @@
 import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { data, redirect, useLoaderData, useOutletContext } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { EmptyView } from "~/components/primitives";
 import { getGrowthResourceInventoryMap, upsertGrowthResourceInventory } from "~/models/growth-resource-inventory";
 import { aggregateGrowthResourceRequirements } from "~/models/growth-resource";
@@ -34,7 +34,7 @@ function parseOwnedQuantity(value: unknown): number {
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
@@ -46,7 +46,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data({ error: "로그인이 필요해요" }, { status: 401 });
   }

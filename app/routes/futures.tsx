@@ -1,7 +1,7 @@
 import { FunnelIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { ContentTimeline } from "~/components/features/contents";
 import type { ContentTimelineProps } from "~/components/features/contents";
 import { ContentFilterPanel } from "~/components/features/futures";
@@ -44,7 +44,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     .flatMap((content) => content.recruitments.map((r) => r.student?.uid ?? null))
     .filter((uid): uid is string => uid !== null);
 
-  const currentUser = await getAuthenticator(env).isAuthenticated(request);
+  const currentUser = await getActiveSensei(env, request);
   const signedIn = currentUser !== null;
   const flatComments = await getContentsComments(
     env,

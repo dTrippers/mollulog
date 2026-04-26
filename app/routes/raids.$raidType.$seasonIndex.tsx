@@ -9,7 +9,7 @@ import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { Outlet, isRouteErrorResponse, useLoaderData, useLocation, useRouteError } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { getAuthenticator } from "~/auth/authenticator.server";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { ErrorPage, Page } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
@@ -44,7 +44,7 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
   const [currentRaid, allRaidSchedules, sensei] = await Promise.all([
     raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex),
     raidRepository.getAll(),
-    getAuthenticator(env).isAuthenticated(request),
+    getActiveSensei(env, request),
   ]);
 
   if (!currentRaid) {
