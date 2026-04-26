@@ -3,6 +3,9 @@ import Panel from "./Panel";
 type SectionProps = {
   title: string;
   description?: string;
+  className?: string;
+  bodyClassName?: string;
+  titleClassName?: string;
   foldable?: boolean;
   border?: boolean;
   foldStateKey?: string;
@@ -13,6 +16,9 @@ type SectionProps = {
 export default function Section({
   title,
   description,
+  className,
+  bodyClassName,
+  titleClassName,
   foldable = false,
   border = true,
   foldStateKey,
@@ -23,6 +29,9 @@ export default function Section({
     <Panel
       title={title}
       description={description}
+      className={className}
+      bodyClassName={bodyClassName}
+      titleClassName={titleClassName}
       variant="section"
       collapsible={foldable}
       bordered={border}

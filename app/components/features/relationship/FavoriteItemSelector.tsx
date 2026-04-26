@@ -15,11 +15,21 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
   const [filterFavorited, setFilterFavorited] = useState(true);
 
   const fetcher = useFetcher<typeof favoriteItemsLoader>();
+  const [cachedFavoriteItems, setCachedFavoriteItems] = useState<Record<string, NonNullable<typeof fetcher.data>["favoriteItems"]>>({});
   useEffect(() => {
     fetcher.load(`/api/students/${studentUid}/items`);
   }, [fetcher.load, studentUid]);
 
-  const favoriteItems = fetcher.data?.favoriteItems;
+  useEffect(() => {
+    const data = fetcher.data;
+    if (!data?.uid) return;
+    setCachedFavoriteItems((prev) => ({
+      ...prev,
+      [data.uid]: data.favoriteItems,
+    }));
+  }, [fetcher.data]);
+
+  const favoriteItems = fetcher.data?.uid === studentUid ? fetcher.data.favoriteItems : cachedFavoriteItems[studentUid];
   const filteredItems = useMemo(() => {
     if (!favoriteItems) {
       return [];
@@ -47,31 +57,32 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <SubTitle text="선물 목록" />
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <SubTitle text="선물 목록" className="my-0" />
         <Toggle label="좋아하는 선물만 보기" initialState={filterFavorited} onChange={setFilterFavorited} />
       </div>
 
-      {fetcher.state === "loading" ?
+      {!favoriteItems ?
         <LoadingSkeleton /> :
-        <div className="grid grid-cols-3 lg:grid-cols-8 gap-1 lg:gap-2">
+        <div className="grid min-w-0 gap-1 grid-cols-4 md:grid-cols-8 lg:grid-cols-4 xl:grid-cols-8 2xl:grid-cols-12 gap-1">
           {filteredItems.map(({ item, favoriteLevel, exp }) => {
             const quantity = quantities[item.uid] || 0;
             const totalItemExp = exp * quantity;
             return (
-              <div key={item.uid} className="group p-3 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+              <div key={item.uid} className="group min-w-0 overflow-hidden rounded-md border border-neutral-200 bg-white p-2 dark:border-neutral-800 dark:bg-neutral-900">
                 <div className="flex flex-col items-center">
-                  <ResourceCard rarity={item.rarity} favoriteLevel={favoriteLevel} itemUid={item.uid} name={item.name} size="lg" />
+                  <ResourceCard rarity={item.rarity} favoriteLevel={favoriteLevel} itemUid={item.uid} name={item.name} />
                   <div className="mt-0.5 text-center text-xs text-neutral-500 dark:text-neutral-400">{exp} EXP</div>
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-1 flex w-full min-w-0 items-center gap-2 md:mt-3">
                     <NumberInput
                       value={quantity}
+                      compact
                       onChange={(value) => onQuantitiesChange({ ...quantities, [item.uid]: value })}
                     />
                   </div>
                   {quantity > 0 && (
-                    <span className="mt-2 rounded-full bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300 px-2 py-0.5 text-xs border border-green-200 dark:border-green-800">
-                      +{totalItemExp.toLocaleString()} EXP
+                    <span className="mt-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-xs text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300 md:mt-2 md:px-2">
+                      +{totalItemExp.toLocaleString()}
                     </span>
                   )}
                 </div>
