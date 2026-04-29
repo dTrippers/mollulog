@@ -394,7 +394,7 @@ export default function RelationshipUtil() {
   };
 
   return (
-    <div className="max-w-full overflow-x-hidden lg:px-4">
+    <div className="max-w-full lg:px-4">
       <Title text="인연 랭크 계산기" description="학생들의 목표 인연 랭크까지 필요한 선물 개수를 계산할 수 있어요" />
 
       <FilterButtons
@@ -408,7 +408,7 @@ export default function RelationshipUtil() {
       />
 
       {activeTab === "student" ? (
-        <div className="grid min-w-0 grid-cols-1 gap-3 overflow-x-hidden lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
+        <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
           <aside>
             <RelationshipStudentPicker
               students={managedStudents}

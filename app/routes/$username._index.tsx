@@ -188,8 +188,8 @@ function ProfileHeader({
   onUnfollow,
 }: ProfileHeaderProps) {
   return (
-    <section className="rounded-lg bg-neutral-50 p-4 dark:bg-neutral-900/50">
-      <div className="flex items-center gap-3">
+    <section className="rounded-lg bg-neutral-50 p-5 dark:bg-neutral-900/50 md:p-6">
+      <div className="flex items-center gap-4">
         <ProfileImage studentUid={profileStudentId} imageSize={12} />
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-base font-bold text-neutral-900 dark:text-neutral-100">@{username}</h2>
@@ -207,10 +207,10 @@ function ProfileHeader({
         />
       </div>
 
-      <div className="mt-3">
+      <div className="mt-4">
         {bio && <p className="whitespace-pre-wrap text-left text-sm leading-6 text-neutral-800 dark:text-neutral-100">{bio}</p>}
 
-        <div className={`${bio ? "mt-2" : ""} flex flex-wrap items-center gap-x-4 gap-y-2 text-left text-sm`}>
+        <div className={`${bio ? "mt-3" : ""} flex flex-wrap items-center gap-x-4 gap-y-2 text-left text-sm`}>
           <Link to={`/@${username}/friends?tab=following`} className="hover:underline">
             <span className="font-semibold text-neutral-900 dark:text-neutral-100">{followingCount}</span>{" "}
             <span className="text-neutral-500 dark:text-neutral-400">팔로잉</span>
@@ -262,7 +262,7 @@ function RecruitmentSummaryBar({
   return (
     <Link
       to={`/@${username}/students`}
-      className="mt-4 block border-t border-neutral-200/70 pt-3 transition hover:opacity-90 dark:border-neutral-700/70"
+      className="mt-5 block border-t border-neutral-200/70 pt-4 transition hover:opacity-90 dark:border-neutral-700/70"
       aria-label={`모집한 학생 ${recruitedCount}명 보기`}
     >
       <div className="mb-2 flex items-center justify-between gap-3 text-sm">

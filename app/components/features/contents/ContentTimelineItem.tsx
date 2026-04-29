@@ -27,6 +27,8 @@ import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";
 
+const SHOW_LINK_RAID_TYPES: readonly string[] = ["total_assault", "elimination"];
+
 export type ContentTimelineItemProps = {
   uid: string;
   name: string;
@@ -163,7 +165,8 @@ export function ContentTimelineItem({
   }
 
   const headerLinked =
-    ((raidInfo !== undefined && raidInfo.raidType !== "unlimit") || SHOW_LINK_CONTENT_TYPES.includes(contentType)) &&
+    ((raidInfo !== undefined && SHOW_LINK_RAID_TYPES.includes(raidInfo.raidType)) ||
+      SHOW_LINK_CONTENT_TYPES.includes(contentType)) &&
     (!isSpoiler || spoilerVisible);
   const headerContent = headerLinked ? (
     <Link to={link} className="block cursor-pointer hover:underline tracking-tight">

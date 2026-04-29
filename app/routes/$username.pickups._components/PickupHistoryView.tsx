@@ -1,10 +1,9 @@
 import dayjs from "dayjs";
-import { KeyValueTable, SubTitle } from "~/components/primitives";
+import { Form, Link } from "react-router";
+import { Button } from "~/components/primitives";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
-import { ActionCard, type ActionCardAction } from "~/components/features/editor";
 import { StudentCards } from "~/components/features/students";
 import { pickupGroupTypeLocale } from "~/locales/ko";
-import { Link } from "react-router";
 
 type PickupHistoryViewProps = {
   uid: string;
@@ -25,52 +24,107 @@ type PickupHistoryViewProps = {
 };
 
 function formatPercentage(ratio: number) {
+  if (!Number.isFinite(ratio)) {
+    return "0.00 %";
+  }
   return `${(ratio * 100).toFixed(2)} %`;
 }
 
 export default function PickupHistoryView({ uid, event, recruitedStudents, trial, editable }: PickupHistoryViewProps) {
-  const actions: ActionCardAction[] = [];
-  if (editable) {
-    actions.push({ text: "편집", color: "default", link: `/my?path=pickups/edit/${uid}` });
-    actions.push({ text: "삭제", color: "red", form: { method: "delete", hiddenInputs: [{ name: "uid", value: uid }] }, danger: true });
-  }
-
-  const tier3Count = recruitedStudents.filter(({ tier }) => tier === 3).length;
+  const totalTrial = trial ?? 0;
+  const tier3Students = recruitedStudents.filter(({ tier }) => tier === 3);
   const pickupCount = recruitedStudents.filter(({ pickup }) => pickup).length;
-  const keyValueItems = [];
-  if (trial !== undefined) {
-    keyValueItems.push({ key: "총 모집 횟수", value: `${trial} 회` });
-    keyValueItems.push({ key: "★3 모집 횟수", value: `${tier3Count} 회 (${formatPercentage(tier3Count / trial)})` });
-    keyValueItems.push({ key: "★3 픽업 횟수", value: `${pickupCount} 회 (${formatPercentage(pickupCount / trial)})` });
-  }
 
   return (
-    <ActionCard actions={actions}>
-      <Link to={`/events/${event.uid}`} className="-my-4 flex items-center hover:underline">
-        <SubTitle text={event.name} className="whitespace-pre-line" />
-        <ChevronRightIcon className="size-4" />
+    <article className="my-4 rounded-lg bg-neutral-100 p-5 dark:bg-neutral-900">
+      <div className="flex flex-col gap-5 md:flex-row md:gap-6">
+        <div className="min-w-0 flex-1 space-y-4">
+          <PickupHeader event={event} />
+          {tier3Students.length > 0 && <Tier3StudentList students={tier3Students} />}
+        </div>
+
+        <aside className="flex flex-col gap-3 md:w-60">
+          <PickupStats
+            totalTrial={totalTrial}
+            tier3Count={tier3Students.length}
+            pickupCount={pickupCount}
+          />
+          {editable && <PickupActions uid={uid} />}
+        </aside>
+      </div>
+    </article>
+  );
+}
+
+function PickupHeader({ event }: { event: PickupHistoryViewProps["event"] }) {
+  return (
+    <div>
+      <Link to={`/events/${event.uid}`} className="inline-block max-w-full hover:underline">
+        <h2 className="whitespace-pre-line font-bold text-base leading-tight md:text-lg">
+          {event.name}
+          <ChevronRightIcon className="ml-1 inline-block size-4 align-[-0.125em]" />
+        </h2>
       </Link>
-      <p className="text-neutral-500 text-sm">
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {pickupGroupTypeLocale[event.type] ?? "픽업 모집"} | {dayjs(event.since).format("YYYY-MM-DD")}
       </p>
+    </div>
+  );
+}
 
-      {tier3Count > 0 && (
-        <>
-          <p className="mt-4 mb-2 font-bold">모집한 ★3 학생</p>
-          <StudentCards
-            pcGrid={10}
-            students={recruitedStudents.filter(({ tier }) => tier === 3).map(({ uid, name, pickup }) => ({
-              uid,
-              name,
-              label: pickup ? <span className="text-yellow-500">픽업</span> : undefined,
-            }))}
-          />
-        </>
-      )}
+function Tier3StudentList({ students }: { students: PickupHistoryViewProps["recruitedStudents"] }) {
+  const cardStudents = students.map(({ uid, name, pickup }) => ({
+    uid,
+    name,
+    label: pickup ? <span className="text-yellow-500">픽업</span> : undefined,
+  }));
 
-      <div className="mt-4">
-        {keyValueItems.length > 0 && <KeyValueTable keyPrefix={`pickup-stats-${event.uid}`} items={keyValueItems} />}
+  return (
+    <div className="space-y-2.5">
+      <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집한 ★3 학생</p>
+      <StudentCards layout="wrap" cardSize="sm" gap="tight" students={cardStudents} />
+    </div>
+  );
+}
+
+type PickupStatsProps = { totalTrial: number; tier3Count: number; pickupCount: number };
+
+function PickupStats({ totalTrial, tier3Count, pickupCount }: PickupStatsProps) {
+  return (
+    <div className="grid grid-cols-3 divide-x divide-neutral-200 overflow-hidden rounded-md border border-neutral-200/80 bg-white/70 dark:divide-neutral-700 dark:border-neutral-700/80 dark:bg-neutral-950/40 md:block md:divide-x-0 md:divide-y">
+      <PickupStat label="총 모집 횟수" value={`${totalTrial}회`} />
+      <PickupStat label="★3 학생" value={`${tier3Count}회`} detail={formatPercentage(tier3Count / totalTrial)} />
+      <PickupStat label="픽업 학생" value={`${pickupCount}회`} detail={formatPercentage(pickupCount / totalTrial)} />
+    </div>
+  );
+}
+
+function PickupStat({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return (
+    <div className="px-3 py-2">
+      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{label}</p>
+      <div className="mt-0.5 flex items-baseline gap-1.5">
+        <p className="font-bold text-neutral-950 dark:text-neutral-50">{value}</p>
+        {detail && <p className="text-xs text-neutral-500 dark:text-neutral-400">({detail})</p>}
       </div>
-    </ActionCard>
+    </div>
+  );
+}
+
+function PickupActions({ uid }: { uid: string }) {
+  const handleDeleteSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    if (!window.confirm("정말로 이 모집 이력을 삭제할까요?")) {
+      event.preventDefault();
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap justify-end gap-2 md:mt-auto">
+      <Button text="편집" to={`/my?path=pickups/edit/${uid}`} size="xs" variant="tint" />
+      <Form method="delete" onSubmit={handleDeleteSubmit}>
+        <input type="hidden" name="uid" value={uid} />
+        <Button text="삭제" type="submit" size="xs" variant="tint-red" />
+      </Form>
+    </div>
   );
 }

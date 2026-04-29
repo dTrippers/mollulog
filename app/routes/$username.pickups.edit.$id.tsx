@@ -3,15 +3,14 @@ import { useLoaderData, useSearchParams, useSubmit } from "react-router";
 import dayjs from "dayjs";
 import { useState } from "react";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { SubTitle, Title } from "~/components/primitives";
+import { EventSelector } from "~/components/features/events";
+import { FilterButtons, SubTitle, Title } from "~/components/primitives";
 import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
 import { createPickupHistory, getPickupHistory, type PickupHistory, updatePickupHistory } from "~/models/pickup-history";
 import { getAllStudents } from "~/models/student";
 import { resolveContentName } from "~/models/content-name";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
-import { ContentSelectForm, FormGroup } from "~/components/features/forms";
-import { FilterButtons } from "~/components/primitives";
 import { Bars3Icon } from "@heroicons/react/16/solid";
 import { RecruitmentRepository } from "~/repositories";
 
@@ -19,14 +18,30 @@ export const meta: MetaFunction = () => [
   { title: "모집 이력 관리 | 몰루로그" },
 ];
 
+function getRouteUsername(params: { username?: string }) {
+  const usernameParam = params.username;
+  if (!usernameParam?.startsWith("@")) {
+    throw new Response("Not Found", { status: 404 });
+  }
+
+  return usernameParam.replace("@", "");
+}
+
+function redirectToCanonicalEditor(params: { id?: string }) {
+  return redirect(`/my?path=pickups/edit/${params.id ?? "new"}`);
+}
+
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const sensei = await getActiveSensei(env, request);
-  const recruitmentRepository = new RecruitmentRepository(env);
   if (!sensei) {
     return redirect("/unauthorized");
   }
+  if (getRouteUsername(params) !== sensei.username) {
+    return redirectToCanonicalEditor(params);
+  }
 
+  const recruitmentRepository = new RecruitmentRepository(env);
   let currentPickupHistory = null;
   if (params.id && params.id !== "new") {
     currentPickupHistory = await getPickupHistory(env, sensei.id, params.id, true);
@@ -61,7 +76,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         uid: group.uid,
         name,
         since: group.startAt,
-        until: group.endAt ?? undefined,
+        until: group.endAt ?? null,
         recruitments: group.recruitments
           .filter((r) => r.pickup && r.student)
           .map((r) => ({
@@ -91,13 +106,16 @@ type ActionData = {
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const data = await request.json<ActionData>();
-
   const env = context.cloudflare.env;
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }
+  if (getRouteUsername(params) !== sensei.username) {
+    return redirectToCanonicalEditor(params);
+  }
+
+  const data = await request.json<ActionData>();
 
   if (params.id && params.id !== "new") {
     await updatePickupHistory(env, sensei.id, params.id, data.eventUid, data.result, data.rawResult);
@@ -109,12 +127,12 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 export default function EditPickup() {
   const { events, tier3Students, currentPickupHistory } = useLoaderData<typeof loader>();
+  const [searchParams] = useSearchParams();
 
   let initialEventUid = null;
   if (currentPickupHistory) {
     initialEventUid = currentPickupHistory.eventId;
   } else {
-    const [searchParams] = useSearchParams();
     const eventId = searchParams.get("eventId");
     if (eventId) {
       initialEventUid = eventId;
@@ -145,16 +163,16 @@ export default function EditPickup() {
       <Title text="모집 이력 관리" />
 
       <SubTitle text="모집 이벤트" />
-      <FormGroup>
-        <ContentSelectForm
-          label="이벤트"
-          description="모집을 진행한 이벤트를 선택해주세요."
-          name="eventUid"
-          contents={events}
-          initialValue={initialEventUid ?? undefined}
-          onSelect={setEventUid}
-        />
-      </FormGroup>
+      <EventSelector
+        label="이벤트"
+        description="모집을 진행한 이벤트를 선택해주세요."
+        name="eventUid"
+        events={events}
+        currentEventUid={eventUid}
+        placeholder="이벤트 선택"
+        searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
+        onSelect={setEventUid}
+      />
 
       {eventUid && (
         <>

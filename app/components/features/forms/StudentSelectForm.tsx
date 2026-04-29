@@ -57,6 +57,8 @@ export type StudentSelectFormProps = {
   placeholder?: string;
   searchPlaceholder?: string;
   multiple?: boolean;
+  allowDuplicateSelection?: boolean;
+  maxSelectedCount?: number;
   onSelect?: (value: string | string[]) => void;
   className?: string;
   containerClassName?: string;
@@ -71,6 +73,8 @@ export default function StudentSelectForm({
   placeholder,
   searchPlaceholder,
   multiple = false,
+  allowDuplicateSelection = false,
+  maxSelectedCount,
   onSelect,
   className,
   containerClassName,
@@ -148,12 +152,30 @@ export default function StudentSelectForm({
     submitFormGroup();
   };
 
-  const handleSelect = (studentUid: string) => {
-    const newSelectedValues = multiple ? [...selectedUids, studentUid] : [studentUid];
+  const closeOptions = () => {
+    setIsOpen(false);
+    setSearchQuery("");
+  };
 
-    if (!multiple) {
-      setIsOpen(false);
-      setSearchQuery("");
+  const handleSelect = (studentUid: string) => {
+    if (
+      multiple &&
+      maxSelectedCount !== undefined &&
+      (allowDuplicateSelection || !selectedUids.includes(studentUid)) &&
+      selectedUids.length >= maxSelectedCount
+    ) {
+      closeOptions();
+      return;
+    }
+
+    const newSelectedValues = multiple
+      ? selectedUids.includes(studentUid) && !allowDuplicateSelection
+        ? selectedUids
+        : [...selectedUids, studentUid]
+      : [studentUid];
+
+    if (!multiple || (maxSelectedCount !== undefined && newSelectedValues.length >= maxSelectedCount)) {
+      closeOptions();
     }
 
     updateSelection(newSelectedValues);
@@ -161,6 +183,10 @@ export default function StudentSelectForm({
 
   const handleRemove = (studentUid: string) => {
     updateSelection(selectedUids.filter((uid) => uid !== studentUid));
+  };
+
+  const handleRemoveAt = (indexToRemove: number) => {
+    updateSelection(selectedUids.filter((_, index) => index !== indexToRemove));
   };
 
   const renderSelectedDisplay = () => {
@@ -171,9 +197,9 @@ export default function StudentSelectForm({
     if (multiple) {
       return (
         <div className="flex flex-wrap gap-2">
-          {selectedStudents.map((student) => (
+          {selectedStudents.map((student, index) => (
             <div
-              key={student.uid}
+              key={`${student.uid}-${index}`}
               className="flex cursor-pointer items-center gap-x-2 rounded-full border border-primary/20 bg-primary/10 transition-colors hover:bg-primary/15"
             >
               <StudentImage student={student} size="size-8" />
@@ -182,7 +208,11 @@ export default function StudentSelectForm({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
-                  handleRemove(student.uid);
+                  if (allowDuplicateSelection) {
+                    handleRemoveAt(index);
+                  } else {
+                    handleRemove(student.uid);
+                  }
                 }}
                 className="text-primary/70 hover:text-primary"
               >
@@ -231,7 +261,7 @@ export default function StudentSelectForm({
             <div
               id={listboxId}
               aria-labelledby={buttonId}
-              className="absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg shadow-foreground/10"
+              className="no-scrollbar absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg shadow-foreground/10"
             >
               <SearchInput
                 searchQuery={searchQuery}

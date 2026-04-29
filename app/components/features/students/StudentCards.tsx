@@ -25,11 +25,23 @@ type StudentCardsProps = {
   }[];
   mobileGrid?: 4 | 5 | 6 | 8;
   pcGrid?: 4 | 6 | 8 | 10 | 12;
+  layout?: "grid" | "wrap";
+  cardSize?: "xs" | "sm" | "md" | "lg";
+  gap?: "normal" | "tight";
   onSelect?: (uid: string) => void;
   onRef?: (uid: string, ref: HTMLDivElement | null) => void;
 };
 
-export default function StudentCards({ students, mobileGrid, pcGrid, onSelect, onRef }: StudentCardsProps) {
+export default function StudentCards({
+  students,
+  mobileGrid,
+  pcGrid,
+  layout = "grid",
+  cardSize = "md",
+  gap = "normal",
+  onSelect,
+  onRef,
+}: StudentCardsProps) {
   let gridClass = "grid-cols-6";
   if (mobileGrid === 8) {
     gridClass = "grid-cols-8";
@@ -50,8 +62,23 @@ export default function StudentCards({ students, mobileGrid, pcGrid, onSelect, o
     pcGridClass = "md:grid-cols-12";
   }
 
+  const gapClass = gap === "tight" ? "gap-1" : "gap-1 sm:gap-2";
+  const wrapGapClass = gap === "tight" ? "gap-x-1.5 gap-y-2" : "gap-x-2 gap-y-3";
+  const wrapCardSizeClass = {
+    xs: "w-10 sm:w-12",
+    sm: "w-12 sm:w-14",
+    md: "w-14 sm:w-16",
+    lg: "w-16 sm:w-20",
+  }[cardSize];
+  const containerClassName = layout === "wrap"
+    ? `relative flex flex-wrap items-start ${wrapGapClass}`
+    : `relative grid ${gridClass} ${pcGridClass} ${gapClass}`;
+  const itemClassName = layout === "wrap"
+    ? `scroll-mt-20 md:scroll-mt-4 shrink-0 ${wrapCardSizeClass}`
+    : "scroll-mt-20 md:scroll-mt-4";
+
   return (
-    <div className={`relative grid ${gridClass} ${pcGridClass} gap-1 sm:gap-2`}>
+    <div className={containerClassName}>
       {students?.map((student, index) => {
         const { uid } = student;
         return (
@@ -62,7 +89,7 @@ export default function StudentCards({ students, mobileGrid, pcGrid, onSelect, o
                 onRef?.(uid, ref);
               }
             }}
-            className="scroll-mt-20 md:scroll-mt-4"
+            className={itemClassName}
           >
             <StudentCard
               {...student}

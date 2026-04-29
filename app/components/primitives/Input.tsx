@@ -7,6 +7,7 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size" | "onChange
   label?: string;
   description?: string;
   error?: string;
+  descriptionClassName?: string;
   size?: "sm" | "md";
   onChange?: (value: string) => void;
 };
@@ -19,6 +20,7 @@ export default function Input({
   label,
   description,
   error,
+  descriptionClassName,
   size = "md",
   onChange,
   id,
@@ -33,6 +35,7 @@ export default function Input({
       description={description}
       error={error}
       htmlFor={controlId}
+      descriptionClassName={descriptionClassName}
       containerClassName={containerClassName ?? (size === "sm" ? "mt-1 mb-1" : "mt-2 mb-8 last:mb-2")}
     >
       <input

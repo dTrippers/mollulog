@@ -1,14 +1,15 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { deletePickupHistory, getPickupHistories } from "~/models/pickup-history";
-import { redirect, useLoaderData } from "react-router";
+import { data, redirect, useLoaderData } from "react-router";
 import { AddContentButton } from "~/components/features/editor";
 import PickupHistoryView from "./$username.pickups._components/PickupHistoryView";
 import { SubTitle } from "~/components/primitives";
+import { resolveContentName } from "~/models/content-name";
 import { getAllStudentsMap } from "~/models/student";
 import dayjs from "dayjs";
 import { getRouteSensei } from "./$username";
-import { getTimelineContentsByUids } from "~/models/timeline-content";
+import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
 
 export const meta: MetaFunction = ({ params }) => {
@@ -20,11 +21,16 @@ export const meta: MetaFunction = ({ params }) => {
   ];
 };
 
-export const action = async ({ context, request }: ActionFunctionArgs) => {
+export const action = async ({ context, request, params }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
+  }
+
+  const routeSensei = await getRouteSensei(env, params);
+  if (routeSensei.username !== sensei.username) {
+    return data({ error: "Forbidden" }, { status: 403 });
   }
 
   const formData = await request.formData();
@@ -42,6 +48,13 @@ function getPickupStudentUids(event: { recruitments: { pickup: boolean; student:
   return pickupStudentUids;
 };
 
+function fallbackPickupName(name: string | null | undefined, fallbackUids: string[]) {
+  if (!name || fallbackUids.includes(name)) {
+    return "픽업 모집";
+  }
+  return name;
+}
+
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const sensei = await getRouteSensei(env, params);
@@ -55,11 +68,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const [groups, timelineContents] = await Promise.all([
     recruitmentRepository.getByUids(eventUids),
-    getTimelineContentsByUids(env, eventUids),
+    getTimelineContentsByRecruitmentGroupUids(env, eventUids),
   ]);
 
   const groupMap = new Map(groups.map((group) => [group.uid, group] as const));
-  const tcMap = new Map(timelineContents.map((tc) => [tc.uid, tc]));
+  const timelineContentMap = new Map(
+    timelineContents.flatMap((content) =>
+      content.recruitmentGroupUid ? [[content.recruitmentGroupUid, content] as const] : [],
+    ),
+  );
 
   let tier3Count = 0;
   let tier3RateCount = 0;
@@ -67,9 +84,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let pickupRateCount = 0;
   let totalTrial = 0;
 
-  const aggregatedHistories = recruitmentHistories.map((history) => {
+  const aggregatedHistories = (await Promise.all(recruitmentHistories.map(async (history) => {
     const group = groupMap.get(history.eventId);
-    const tc = tcMap.get(history.eventId);
+    const timelineContent = timelineContentMap.get(history.eventId);
     const pickupStudentUids = group ? getPickupStudentUids(group) : new Set<string>();
     const allTier3StudentIds = history.result.flatMap((trial) => trial.tier3StudentIds);
     const students = allTier3StudentIds
@@ -94,19 +111,34 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     pickupRateCount += currentPickupCount * rateMultiplier;
     totalTrial += history.result.length > 0 ? Math.max(...history.result.map((result) => result.trial)) : 0;
 
-    const eventSince = tc?.startAt ?? (group?.startAt ? new Date(group.startAt) : new Date(0));
+    const eventSince = timelineContent?.startAt ?? (group?.startAt ? new Date(group.startAt) : new Date(0));
+    const resolvedEventName =
+      timelineContent?.name ??
+      (group
+        ? await resolveContentName(env, {
+            uid: group.uid,
+            contentType: group.contentType ?? "pickup",
+            contentUid: group.contentUid ?? null,
+          })
+        : null);
+    const eventName = fallbackPickupName(resolvedEventName, [
+      history.eventId,
+      timelineContent?.uid ?? "",
+      group?.uid ?? "",
+    ]);
+
     return {
       uid: history.uid,
       event: {
-        uid: history.eventId,
-        name: tc?.name ?? group?.uid ?? history.eventId,
+        uid: timelineContent?.uid ?? history.eventId,
+        name: eventName,
         type: group?.recruitmentType ?? "pickup",
         since: eventSince,
       },
       trial: history.result.length > 0 ? history.result[history.result.length - 1].trial : 0,
       recruitedStudents: students,
     };
-  }).sort((a, b) => dayjs(b.event.since).diff(dayjs(a.event.since)));
+  }))).sort((a, b) => dayjs(b.event.since).diff(dayjs(a.event.since)));
 
   const currentUser = await getActiveSensei(env, request);
   return {
