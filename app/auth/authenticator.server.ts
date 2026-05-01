@@ -11,9 +11,6 @@ import type { Sensei } from "~/models/sensei";
 import { getSenseiById } from "~/models/sensei";
 import { PasskeyStrategy } from "./passkey-strategy.server";
 
-let _sessionStorage: SessionStorage;
-let _authenticator: Authenticator<Sensei>;
-
 const googleClientId = "129736193789-sqgen372tfq53l483j1v9br36uo4iuua.apps.googleusercontent.com";
 export const pendingSenseiRegistrationSessionKey = "pendingSenseiRegistrationUid";
 
@@ -34,11 +31,7 @@ export function redirectTo(request: Request): string | null {
 }
 
 export function sessionStorage(env: Env): SessionStorage {
-  if (_sessionStorage) {
-    return _sessionStorage;
-  }
-
-  _sessionStorage = createCookieSessionStorage({
+  return createCookieSessionStorage({
     cookie: {
       name: "__session",
       path: "/",
@@ -49,14 +42,9 @@ export function sessionStorage(env: Env): SessionStorage {
       maxAge: 30 * 24 * 60 * 60,
     },
   });
-  return _sessionStorage;
 }
 
 export function getAuthenticator(env: Env, ctx?: ExecutionContext): Authenticator<Sensei> {
-  if (_authenticator) {
-    return _authenticator;
-  }
-
   const logger = getLogger(env, ctx, { scope: "authenticator" });
   const authenticator = new Authenticator<Sensei>(sessionStorage(env));
   authenticator.use(
@@ -118,7 +106,6 @@ export function getAuthenticator(env: Env, ctx?: ExecutionContext): Authenticato
     "passkey",
   );
 
-  _authenticator = authenticator;
   return authenticator;
 }
 
