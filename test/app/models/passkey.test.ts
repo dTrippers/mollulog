@@ -1,5 +1,11 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { advancePasskeyCounterAndGetSensei } from "../../../app/models/passkey";
+import {
+  advancePasskeyCounterAndGetSensei,
+  createPasskeyAuthenticationOptions,
+  createPasskeyCreationOptions,
+  PASSKEY_CHALLENGE_TIMEOUT_MS,
+  PASSKEY_CHALLENGE_TTL_SECONDS,
+} from "../../../app/models/passkey";
 
 type PreparedStatement = {
   sql: string;
@@ -60,13 +66,51 @@ class FakeD1Database {
 
 function createEnv() {
   const db = new FakeD1Database();
+  const kvSession = {
+    put: jest.fn<(...args: unknown[]) => Promise<void>>(async () => {}),
+  };
   return {
     db,
-    env: { DB: db } as unknown as Env,
+    kvSession,
+    env: {
+      DB: db,
+      KV_SESSION: kvSession,
+      HOST: "https://mollulog.net",
+    } as unknown as Env,
   };
 }
 
 describe("passkey", () => {
+  it("keeps registration challenge TTL aligned with the WebAuthn timeout", async () => {
+    const { env, kvSession } = createEnv();
+
+    const options = await createPasskeyCreationOptions(env, {
+      id: 1,
+      uid: "sensei-a",
+      username: "sensei",
+    } as never);
+
+    expect(options.timeout).toBe(PASSKEY_CHALLENGE_TIMEOUT_MS);
+    expect(kvSession.put).toHaveBeenCalledWith(
+      "passkey:creationOptions:1",
+      expect.any(String),
+      { expirationTtl: PASSKEY_CHALLENGE_TTL_SECONDS },
+    );
+  });
+
+  it("keeps authentication challenge TTL aligned with the WebAuthn timeout", async () => {
+    const { env, kvSession } = createEnv();
+
+    const options = await createPasskeyAuthenticationOptions(env);
+
+    expect(options.timeout).toBe(PASSKEY_CHALLENGE_TIMEOUT_MS);
+    expect(kvSession.put).toHaveBeenCalledWith(
+      `passkey:authenticationOptions:${options.challenge}`,
+      expect.any(String),
+      { expirationTtl: PASSKEY_CHALLENGE_TTL_SECONDS },
+    );
+  });
+
   it("advances the passkey counter and reads the sensei in one batch", async () => {
     const { db, env } = createEnv();
 

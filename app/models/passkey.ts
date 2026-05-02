@@ -12,7 +12,8 @@ import { nanoid } from "nanoid/non-secure";
 import { verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
 import { senseisTable, type Sensei, toSenseiModel } from "./sensei";
 
-const PASSKEY_CHALLENGE_TTL_SECONDS = 60;
+export const PASSKEY_CHALLENGE_TTL_SECONDS = 120;
+export const PASSKEY_CHALLENGE_TIMEOUT_MS = PASSKEY_CHALLENGE_TTL_SECONDS * 1000;
 
 export type Passkey = {
   uid: string;
@@ -84,7 +85,7 @@ export async function createPasskeyCreationOptions(env: Env, sensei: Sensei): Pr
       { type: "public-key", alg: -7 },
       { type: "public-key", alg: -257 },
     ],
-    timeout: 60000,
+    timeout: PASSKEY_CHALLENGE_TIMEOUT_MS,
   };
 
   await env.KV_SESSION.put(passkeyCreationOptionKey(sensei), JSON.stringify(creationOptions), {
@@ -149,7 +150,7 @@ export async function createPasskeyAuthenticationOptions(env: Env): Promise<Publ
     challenge,
     rpId: passkeyRelyingParty(env).id,
     userVerification: "preferred",
-    timeout: 60000,
+    timeout: PASSKEY_CHALLENGE_TIMEOUT_MS,
   };
   await env.KV_SESSION.put(passkeyAuthenticationOptionKey(challenge), JSON.stringify(authenticationOptions), {
     expirationTtl: PASSKEY_CHALLENGE_TTL_SECONDS,

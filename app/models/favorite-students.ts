@@ -93,6 +93,7 @@ export async function favoriteStudent(env: Env, userId: number, studentId: strin
       .onConflictDoNothing({
         target: [favoriteStudentsTable.userId, favoriteStudentsTable.contentId, favoriteStudentsTable.studentId],
       }),
+    // D1/SQLite changes() must refer to the immediately preceding favorite insert.
     db.insert(contentFavoriteCountsTable)
       .values({ studentId, contentId, count: sql`changes()` })
       .onConflictDoUpdate({
@@ -113,6 +114,7 @@ export async function unfavoriteStudent(env: Env, userId: number, studentId: str
       eq(favoriteStudentsTable.studentId, studentId),
       eq(favoriteStudentsTable.contentId, contentId),
     )),
+    // D1/SQLite changes() must refer to the immediately preceding favorite delete.
     db.update(contentFavoriteCountsTable)
       .set({
         count: sql`max(${contentFavoriteCountsTable.count} - changes(), 0)`,

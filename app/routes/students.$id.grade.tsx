@@ -7,17 +7,16 @@ import {
   useActionData,
   useLoaderData,
   useNavigation,
-  useRouteError,
   useSubmit,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ErrorPage, Page, ServerErrorPage } from "~/components/features/layout";
+import { createPageErrorBoundary } from "~/components/features/layout";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
+import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
 import type { StudentGradingTagValue } from "~/models/student-grading-tag";
 import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
@@ -29,14 +28,6 @@ const studentDetailQuery = graphql(`
     }
   }
 `);
-
-function isStudentNotFoundError(error: unknown) {
-  const message =
-    error && typeof error === "object" && "message" in error
-      ? String((error as { message?: unknown }).message)
-      : String(error);
-  return message.includes("Cannot return null for non-nullable field Query.student");
-}
 
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -146,34 +137,11 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   ];
 };
 
-export function ErrorBoundary() {
-  const error = useRouteError();
-  const normalized = normalizeRouteError(error);
-
-  if (isServerRouteError(normalized)) {
-    return (
-      <ServerErrorPage
-        status={normalized.status}
-        title={normalized.title}
-        message={normalized.message}
-      />
-    );
-  }
-
-  return (
-    <Page
-      title="학생부"
-      description="학생들의 통계 정보와 선생님들의 평가를 확인해보세요"
-      backward={{ title: "학생 목록", to: "/students" }}
-    >
-      <ErrorPage
-        status={normalized.status}
-        title={normalized.title}
-        message={normalized.message}
-      />
-    </Page>
-  );
-}
+export const ErrorBoundary = createPageErrorBoundary({
+  title: "학생부",
+  description: "학생들의 통계 정보와 선생님들의 평가를 확인해보세요",
+  backward: { title: "학생 목록", to: "/students" },
+});
 
 export default function StudentGrade() {
   const { student, existingGrading } = useLoaderData<typeof loader>();

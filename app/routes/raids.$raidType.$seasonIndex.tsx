@@ -7,15 +7,14 @@ import {
 } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
-import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useLocation } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ErrorPage, Page, ServerErrorPage } from "~/components/features/layout";
+import { createPageErrorBoundary, Page } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
-import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import { raidTypeToParam } from "~/models/raid";
 import { RaidRepository } from "~/repositories";
@@ -75,33 +74,10 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   ];
 };
 
-export function ErrorBoundary() {
-  const error = useRouteError();
-  const normalized = normalizeRouteError(error);
-
-  if (isServerRouteError(normalized)) {
-    return (
-      <ServerErrorPage
-        status={normalized.status}
-        title={normalized.title}
-        message={normalized.message}
-      />
-    );
-  }
-
-  return (
-    <Page
-      title="총력전 정보"
-      description="일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
-    >
-      <ErrorPage
-        status={normalized.status}
-        title={normalized.title}
-        message={normalized.message}
-      />
-    </Page>
-  );
-}
+export const ErrorBoundary = createPageErrorBoundary({
+  title: "총력전 정보",
+  description: "일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요",
+});
 
 export type RaidPageContext = {
   currentRaid: Awaited<ReturnType<typeof loader>>["currentRaid"];
