@@ -1,4 +1,4 @@
-import { and, count, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
@@ -87,43 +87,42 @@ export const contentFavoriteCountsTable = sqliteTable("content_favorite_counts",
 
 export async function favoriteStudent(env: Env, userId: number, studentId: string, contentId: string): Promise<void> {
   const db = drizzle(env.DB);
-  await db.insert(favoriteStudentsTable)
-    .values({ uid: nanoid(8), userId, studentId, contentId })
-    .onConflictDoNothing();
-
-  await updateFavoritedCount(env, studentId, contentId);
+  await db.batch([
+    db.insert(favoriteStudentsTable)
+      .values({ uid: nanoid(8), userId, studentId, contentId })
+      .onConflictDoNothing({
+        target: [favoriteStudentsTable.userId, favoriteStudentsTable.contentId, favoriteStudentsTable.studentId],
+      }),
+    // D1/SQLite changes() must refer to the immediately preceding favorite insert.
+    db.insert(contentFavoriteCountsTable)
+      .values({ studentId, contentId, count: sql`changes()` })
+      .onConflictDoUpdate({
+        target: [contentFavoriteCountsTable.studentId, contentFavoriteCountsTable.contentId],
+        set: {
+          count: sql`${contentFavoriteCountsTable.count} + changes()`,
+          updatedAt: sql`case changes() when 1 then current_timestamp else ${contentFavoriteCountsTable.updatedAt} end`,
+        },
+      }),
+  ]);
 }
 
 export async function unfavoriteStudent(env: Env, userId: number, studentId: string, contentId: string): Promise<void> {
   const db = drizzle(env.DB);
-  await db.delete(favoriteStudentsTable).where(and(
-    eq(favoriteStudentsTable.userId, userId),
-    eq(favoriteStudentsTable.studentId, studentId),
-    eq(favoriteStudentsTable.contentId, contentId),
-  ));
-
-  await updateFavoritedCount(env, studentId, contentId);
-}
-
-async function updateFavoritedCount(env: Env, studentId: string, contentId: string): Promise<void> {
-  const db = drizzle(env.DB);
-  const [result] = await db.select({ count: count().as("count") })
-    .from(favoriteStudentsTable)
-    .where(and(
+  await db.batch([
+    db.delete(favoriteStudentsTable).where(and(
+      eq(favoriteStudentsTable.userId, userId),
       eq(favoriteStudentsTable.studentId, studentId),
       eq(favoriteStudentsTable.contentId, contentId),
-    ))
-    .groupBy(favoriteStudentsTable.studentId)
-    .all();
-
-  const favoriteCount = result?.count ?? 0;
-  await db.insert(contentFavoriteCountsTable)
-    .values({ studentId, contentId, count: favoriteCount })
-    .onConflictDoUpdate({
-      target: [contentFavoriteCountsTable.studentId, contentFavoriteCountsTable.contentId],
-      set: {
-        count: favoriteCount,
-        updatedAt: sql`current_timestamp`,
-      },
-    });
+    )),
+    // D1/SQLite changes() must refer to the immediately preceding favorite delete.
+    db.update(contentFavoriteCountsTable)
+      .set({
+        count: sql`max(${contentFavoriteCountsTable.count} - changes(), 0)`,
+        updatedAt: sql`case changes() when 1 then current_timestamp else ${contentFavoriteCountsTable.updatedAt} end`,
+      })
+      .where(and(
+        eq(contentFavoriteCountsTable.studentId, studentId),
+        eq(contentFavoriteCountsTable.contentId, contentId),
+      )),
+  ]);
 }

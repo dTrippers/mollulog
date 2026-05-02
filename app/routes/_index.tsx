@@ -13,6 +13,7 @@ import { getCommunityFeedPage } from "~/models/community";
 import { COMMUNITY_VISIBLE_POST_TYPES, enrichCommunityFeedPosts } from "~/models/community-feed";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
+import { getLogger } from "~/lib/observability.server";
 import HomeRightRail from "./_index._components/HomeRightRail";
 
 export const meta: MetaFunction = () => {
@@ -26,7 +27,8 @@ export const meta: MetaFunction = () => {
 };
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "_index.loader" });
   const currentUser = await getActiveSensei(env, request);
 
   const [
@@ -42,7 +44,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       includeEngagement: false,
     }),
     getHomeYoutubeSections(env).catch((error) => {
-      console.error("Failed to load home youtube sections", error);
+      logger.error("Failed to load home youtube sections", error);
       return [];
     }),
   ]);

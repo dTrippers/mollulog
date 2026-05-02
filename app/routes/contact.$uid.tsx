@@ -1,8 +1,9 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, isRouteErrorResponse, redirect, useLoaderData, useRouteError } from "react-router";
+import { data, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ErrorPage } from "~/components/features/layout";
+import { RouteErrorBoundary } from "~/components/features/layout";
 import { Title } from "~/components/primitives";
+import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { createFeedbackReply, getFeedbackThreadByUidForUser, getFeedbackTicketByUidForUser } from "~/models/feedback";
 import ReplyForm from "./contact._components/ReplyForm";
@@ -16,15 +17,7 @@ type ContactDetailActionData = {
 };
 
 function notFoundResponse() {
-  return new Response(
-    JSON.stringify({
-      error: { message: "문의 내역을 찾을 수 없어요." },
-    }),
-    {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    },
-  );
+  return routeError(404, "feedback.not_found", "문의 내역을 찾을 수 없어요.");
 }
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
@@ -91,15 +84,7 @@ export const action = async ({ request, context, params }: ActionFunctionArgs) =
       ticketId: ticket.id,
       ticketUid: ticket.uid,
     });
-    throw new Response(
-      JSON.stringify({
-        error: { message: "오류가 발생했어요. 잠시 후 다시 시도해주세요." },
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
+    throw routeError(500, "feedback.reply_failed", "오류가 발생했어요. 잠시 후 다시 시도해주세요.");
   }
 };
 
@@ -116,13 +101,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   ];
 };
 
-export function ErrorBoundary() {
-  const error = useRouteError();
-  if (isRouteErrorResponse(error)) {
-    return <ErrorPage message={error.data.error.message} />;
-  }
-  return <ErrorPage />;
-}
+export const ErrorBoundary = RouteErrorBoundary;
 
 export default function ContactDetail() {
   const { ticket, replies } = useLoaderData<typeof loader>();

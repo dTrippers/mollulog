@@ -102,7 +102,7 @@ export default Sentry.withSentry<ObservabilityEnv>(
     dsn: env.SERVER_BETTER_STACK_SENTRY_DSN,
     enabled: Boolean(env.SERVER_BETTER_STACK_SENTRY_DSN),
     environment: env.STAGE ?? "local",
-    tracesSampleRate: 0,
+    tracesSampleRate: 0.05,
   }),
   handler,
 );

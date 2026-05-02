@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useFetcher, useLocation, useRouteLoaderData } from "react-router";
 import { Button } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { captureClientError } from "~/lib/observability.client";
 
 type RootLoaderData = { currentUsername: string | null };
 
@@ -62,7 +63,10 @@ export default function SignInBottomSheet() {
       const authenticationOptions = await res.json<PublicKeyCredentialRequestOptionsJSON>();
       authenticationResponse = await startAuthentication({ optionsJSON: authenticationOptions });
     } catch (e) {
-      console.error(e);
+      captureClientError(e, {
+        source: "signin.passkey.start",
+        location: location.pathname,
+      });
       setClientError("Passkey 조회에 실패했어요. 다른 방법으로 로그인해주세요.");
       return;
     }

@@ -1,24 +1,22 @@
-import { data } from "react-router";
-import { Outlet, type Params, isRouteErrorResponse, useParams, useRouteError, useLocation } from "react-router";
+import { Outlet, type Params, useParams, useRouteError, useLocation } from "react-router";
 import { ChartBarIcon, DocumentTextIcon, HeartIcon, IdentificationIcon, UserIcon } from "@heroicons/react/24/outline";
-import { ErrorPage, Page } from "~/components/features/layout";
+import { ErrorPage, Page, ServerErrorPage } from "~/components/features/layout";
 import { Title } from "~/components/primitives";
+import { routeError } from "~/lib/http-errors";
+import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
 import { getSenseiByUsername, type Sensei } from "~/models/sensei";
 import { useEffect, useState } from "react";
 
 export async function getRouteSensei(env: Env, params: Params<string>): Promise<Sensei> {
   const usernameParam = params.username;
   if (!usernameParam || !usernameParam.startsWith("@")) {
-    throw new Error("Not found");
+    throw routeError(404, "sensei.not_found", "선생님을 찾을 수 없어요");
   }
 
   const username = usernameParam.replace("@", "");
   const sensei = await getSenseiByUsername(env, username);
   if (!sensei) {
-    throw data(
-      { error: { message: "선생님을 찾을 수 없어요", data: { username } } },
-      { status: 404 },
-    );
+    throw routeError(404, "sensei.not_found", "선생님을 찾을 수 없어요", { username });
   }
 
   return sensei;
@@ -26,17 +24,26 @@ export async function getRouteSensei(env: Env, params: Params<string>): Promise<
 
 export const ErrorBoundary = () => {
   const error = useRouteError();
-  let username: string | undefined;
-  let message: string | undefined;
-  if (isRouteErrorResponse(error)) {
-    username = error.data.error.data.username;
-    message = error.data.error.message;
+  const normalized = normalizeRouteError(error);
+  if (isServerRouteError(normalized)) {
+    return (
+      <ServerErrorPage
+        status={normalized.status}
+        title={normalized.title}
+        message={normalized.message}
+      />
+    );
   }
+
+  const details = normalized.details;
+  const username = typeof details === "object" && details !== null && "username" in details && typeof details.username === "string"
+    ? details.username
+    : undefined;
 
   return (
     <>
       {username && <Title text={`@${username}`} />}
-      <ErrorPage message={message} />
+      <ErrorPage status={normalized.status} title={normalized.title} message={normalized.message} />
     </>
   );
 };

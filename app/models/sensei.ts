@@ -46,13 +46,13 @@ type SenseiCreateFields = {
 export async function getSenseiById(env: Env, id: number): Promise<Sensei | null> {
   const db = drizzle(env.DB);
   const result = await db.select().from(senseisTable).where(eq(senseisTable.id, id)).limit(1);
-  return result.length > 0 ? toModel(result[0]) : null;
+  return result.length > 0 ? toSenseiModel(result[0]) : null;
 }
 
 export async function getSenseiByUsername(env: Env, username: string): Promise<Sensei | null> {
   const db = drizzle(env.DB);
   const result = await db.select().from(senseisTable).where(eq(senseisTable.username, username)).limit(1);
-  return result.length > 0 ? toModel(result[0]) : null;
+  return result.length > 0 ? toSenseiModel(result[0]) : null;
 }
 
 export async function getSenseisById(env: Env, ids: number[]): Promise<Sensei[]> {
@@ -60,7 +60,7 @@ export async function getSenseisById(env: Env, ids: number[]): Promise<Sensei[]>
   const db = drizzle(env.DB);
   const senseis = await db.select().from(senseisTable).where(inArray(senseisTable.id, uniqueIds));
 
-  return senseis.map((row) => toModel(row));
+  return senseis.map((row) => toSenseiModel(row));
 }
 
 export async function createSensei(
@@ -146,7 +146,7 @@ export async function updateSensei(
   return {};
 }
 
-function toModel(row: typeof senseisTable.$inferSelect): Sensei {
+export function toSenseiModel(row: typeof senseisTable.$inferSelect): Sensei {
   return {
     id: row.id,
     uid: row.uid,

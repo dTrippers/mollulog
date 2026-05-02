@@ -5,9 +5,15 @@ import type {
   RegistrationResponseJSON,
   // @ts-ignore
 } from "@simplewebauthn/server/script/deps";
+import { eq, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
+import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
-import { getSenseiById, type Sensei } from "./sensei";
 import { verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
+import { senseisTable, type Sensei, toSenseiModel } from "./sensei";
+
+export const PASSKEY_CHALLENGE_TTL_SECONDS = 120;
+export const PASSKEY_CHALLENGE_TIMEOUT_MS = PASSKEY_CHALLENGE_TTL_SECONDS * 1000;
 
 export type Passkey = {
   uid: string;
@@ -22,6 +28,18 @@ export type DBPasskey = {
   counter: number;
   rawRequest: string;
 } & Passkey;
+
+const passkeysTable = sqliteTable("passkeys", {
+  id: int().primaryKey({ autoIncrement: true }),
+  uid: text().notNull(),
+  userId: int().notNull(),
+  memo: text().notNull(),
+  keyId: text().notNull(),
+  publicKey: text().notNull(),
+  rawRequest: text().notNull(),
+  counter: int().notNull(),
+  createdAt: text().notNull().default(sql`current_timestamp`),
+});
 
 function uint8ArrayToBase64Url(uint8Array: Uint8Array) {
   const base64String = btoa(String.fromCodePoint(...uint8Array));
@@ -67,10 +85,12 @@ export async function createPasskeyCreationOptions(env: Env, sensei: Sensei): Pr
       { type: "public-key", alg: -7 },
       { type: "public-key", alg: -257 },
     ],
-    timeout: 60000,
+    timeout: PASSKEY_CHALLENGE_TIMEOUT_MS,
   };
 
-  await env.KV_SESSION.put(passkeyCreationOptionKey(sensei), JSON.stringify(creationOptions), { expirationTtl: 60000 });
+  await env.KV_SESSION.put(passkeyCreationOptionKey(sensei), JSON.stringify(creationOptions), {
+    expirationTtl: PASSKEY_CHALLENGE_TTL_SECONDS,
+  });
 
   return creationOptions;
 }
@@ -130,9 +150,11 @@ export async function createPasskeyAuthenticationOptions(env: Env): Promise<Publ
     challenge,
     rpId: passkeyRelyingParty(env).id,
     userVerification: "preferred",
-    timeout: 60000,
+    timeout: PASSKEY_CHALLENGE_TIMEOUT_MS,
   };
-  await env.KV_SESSION.put(passkeyAuthenticationOptionKey(challenge), JSON.stringify(authenticationOptions), { expirationTtl: 60000 });
+  await env.KV_SESSION.put(passkeyAuthenticationOptionKey(challenge), JSON.stringify(authenticationOptions), {
+    expirationTtl: PASSKEY_CHALLENGE_TTL_SECONDS,
+  });
 
   return authenticationOptions;
 };
@@ -162,11 +184,26 @@ export async function verifyPasskeyAuthentication(env: Env, response: Authentica
   }
 
   const { newCounter } = verificationResult.authenticationInfo;
-  await env.DB.prepare("update passkeys set counter = ?1 where keyId = ?2").bind(newCounter, passkey.keyId).run();
 
-  return getSenseiById(env, passkey.userId);
+  return advancePasskeyCounterAndGetSensei(env, passkey, newCounter);
 }
 
+export async function advancePasskeyCounterAndGetSensei(
+  env: Env,
+  passkey: Pick<DBPasskey, "keyId" | "userId">,
+  newCounter: number,
+): Promise<Sensei | null> {
+  const db = drizzle(env.DB);
+  const [, senseiRows] = await db.batch([
+    db
+      .update(passkeysTable)
+      .set({ counter: sql`max(${passkeysTable.counter}, ${newCounter})` })
+      .where(eq(passkeysTable.keyId, passkey.keyId)),
+    db.select().from(senseisTable).where(eq(senseisTable.id, passkey.userId)).limit(1),
+  ]);
+
+  return senseiRows.length > 0 ? toSenseiModel(senseiRows[0]) : null;
+}
 
 // Get stored passkeys
 export async function getPasskeysBySensei(env: Env, sensei: Sensei): Promise<Passkey[]> {

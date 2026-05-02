@@ -3,19 +3,19 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import {
   Form,
   Link,
-  isRouteErrorResponse,
   redirect,
   useActionData,
   useLoaderData,
   useNavigation,
-  useRouteError,
   useSubmit,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ErrorPage } from "~/components/features/layout";
+import { createPageErrorBoundary } from "~/components/features/layout";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
+import { isStudentNotFoundError } from "~/lib/baql/errors";
+import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
 import type { StudentGradingTagValue } from "~/models/student-grading-tag";
@@ -37,10 +37,7 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
   });
   const studentUid = params.id;
   if (!studentUid) {
-    throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
   const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) {
@@ -50,28 +47,23 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
   const { data, error } = await runQuery(studentDetailQuery, {
     uid: studentUid,
   });
-  let errorMessage: string | null = null;
-  if (error || !data) {
+  if (error) {
     logger.error("Failed to load student grading detail", error);
-    errorMessage = "학생 정보를 가져오는 중 오류가 발생했어요";
-  } else if (!data.student) {
-    errorMessage = "학생 정보를 찾을 수 없어요";
+    if (isStudentNotFoundError(error)) {
+      throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
+    }
+    throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
   }
 
-  if (errorMessage) {
-    throw new Response(JSON.stringify({ error: { message: errorMessage } }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+  if (!data) {
+    logger.error("Failed to load student grading detail without response data");
+    throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
   }
 
   const existingGrading = await getStudentGrading(env, currentUser.id, studentUid, true);
-  const student = data?.student;
+  const student = data.student;
   if (!student) {
-    throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
   return {
     student,
@@ -90,10 +82,7 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
   });
   const studentUid = params.id;
   if (!studentUid) {
-    throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
   const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) {
@@ -148,16 +137,11 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   ];
 };
 
-export const ErrorBoundary = () => {
-  const error = useRouteError();
-  if (isRouteErrorResponse(error)) {
-    if (error.status === 401) {
-      return <ErrorPage message="로그인이 필요해요" />;
-    }
-    return <ErrorPage message={error.data.error.message} />;
-  }
-  return <ErrorPage />;
-};
+export const ErrorBoundary = createPageErrorBoundary({
+  title: "학생부",
+  description: "학생들의 통계 정보와 선생님들의 평가를 확인해보세요",
+  backward: { title: "학생 목록", to: "/students" },
+});
 
 export default function StudentGrade() {
   const { student, existingGrading } = useLoaderData<typeof loader>();
