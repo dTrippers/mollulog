@@ -3,17 +3,23 @@ import { Link } from "react-router";
 
 type ErrorPageProps = {
   Icon?: typeof ExclamationCircleIcon;
+  status?: number;
+  title?: string;
   message?: string;
-
   showButtons?: boolean;
 };
 
-export default function ErrorPage({ Icon, message, showButtons = true }: ErrorPageProps) {
+export default function ErrorPage({ Icon, status, title, message, showButtons = true }: ErrorPageProps) {
   const ShowingIcon = Icon ?? ExclamationCircleIcon;
+  const displayTitle = title ?? message ?? "알 수 없는 오류가 발생했어요";
+  const displayMessage = title ? message : undefined;
+
   return (
     <div className="my-16 md:my-48 w-full flex flex-col items-center justify-center">
       <ShowingIcon className="my-2 w-16 h-16" strokeWidth={2} />
-      <p className="my-2 text-2xl font-bold">{message ?? "알 수 없는 오류가 발생했어요"}</p>
+      {status && <p className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">{status}</p>}
+      <p className="my-2 text-2xl font-bold">{displayTitle}</p>
+      {displayMessage && <p className="text-sm text-neutral-600 dark:text-neutral-400">{displayMessage}</p>}
 
       {showButtons && (
         <div className="my-4 flex gap-2">
@@ -26,5 +32,5 @@ export default function ErrorPage({ Icon, message, showButtons = true }: ErrorPa
         </div>
       )}
     </div>
-  )
+  );
 }

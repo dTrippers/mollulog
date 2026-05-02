@@ -1,9 +1,10 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, isRouteErrorResponse, redirect, useActionData, useLoaderData, useNavigation, useRouteError } from "react-router";
+import { data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { EnvelopeIcon } from "@heroicons/react/24/outline";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ErrorPage } from "~/components/features/layout";
+import { RouteErrorBoundary } from "~/components/features/layout";
 import { Callout, Title } from "~/components/primitives";
+import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { createFeedbackTicket, getFeedbackTicketsByUserId } from "~/models/feedback";
 import TicketForm from "./contact._components/TicketForm";
@@ -67,15 +68,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       currentUserId: currentUser.id,
       titleLength: trimmedTitle.length,
     });
-    throw new Response(
-      JSON.stringify({
-        error: { message: "오류가 발생했어요. 잠시 후 다시 시도해주세요." },
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
+    throw routeError(500, "feedback.create_failed", "오류가 발생했어요. 잠시 후 다시 시도해주세요.");
   }
 };
 
@@ -87,13 +80,7 @@ export const meta: MetaFunction = () => [
   },
 ];
 
-export function ErrorBoundary() {
-  const error = useRouteError();
-  if (isRouteErrorResponse(error)) {
-    return <ErrorPage message={error.data.error.message} />;
-  }
-  return <ErrorPage />;
-}
+export const ErrorBoundary = RouteErrorBoundary;
 
 export default function Contact() {
   const loaderData = useLoaderData<typeof loader>();

@@ -1,11 +1,14 @@
 import { ArrowTopRightOnSquareIcon, ChatBubbleLeftRightIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Outlet, isRouteErrorResponse, useLoaderData, useLocation, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ErrorPage, Page } from "~/components/features/layout";
+import { ErrorPage, Page, ServerErrorPage } from "~/components/features/layout";
 import { StudentInfo } from "~/components/features/students";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
+import { routeError } from "~/lib/http-errors";
+import { getLogger } from "~/lib/observability.server";
+import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
@@ -23,36 +26,43 @@ const studentDetailQuery = graphql(`
   }
 `);
 
+function isStudentNotFoundError(error: unknown) {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message?: unknown }).message)
+      : String(error);
+  return message.includes("Cannot return null for non-nullable field Query.student");
+}
+
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const uid = params.id;
   if (!uid) {
-    throw new Response("Not Found", { status: 404 });
+    throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, {
+    route: "students.$id.loader",
+    studentUid: uid,
+  });
   const raidRepository = new RaidRepository(env);
 
   const { data, error } = await runQuery(studentDetailQuery, { uid });
-  let errorMessage: string | null = null;
-  if (error || !data) {
-    console.error(error);
-    errorMessage = "학생 정보를 가져오는 중 오류가 발생했어요";
-  } else if (!data.student) {
-    errorMessage = "학생 정보를 찾을 수 없어요";
+  if (error) {
+    logger.error("Failed to load student detail", error);
+    if (isStudentNotFoundError(error)) {
+      throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
+    }
+    throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
   }
 
-  if (errorMessage) {
-    throw new Response(JSON.stringify({ error: { message: errorMessage } }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+  if (!data) {
+    logger.error("Failed to load student detail without response data");
+    throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
   }
 
-  const student = data?.student;
+  const student = data.student;
   if (!student) {
-    throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
 
   const recruitmentGroupUids = student.recruitments.map(
@@ -120,13 +130,34 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   ];
 };
 
-export const ErrorBoundary = () => {
+export function ErrorBoundary() {
   const error = useRouteError();
-  if (isRouteErrorResponse(error)) {
-    return <ErrorPage message={error.data.error.message} />;
+  const normalized = normalizeRouteError(error);
+
+  if (isServerRouteError(normalized)) {
+    return (
+      <ServerErrorPage
+        status={normalized.status}
+        title={normalized.title}
+        message={normalized.message}
+      />
+    );
   }
-  return <ErrorPage />;
-};
+
+  return (
+    <Page
+      title="학생부"
+      description="학생들의 통계 정보와 선생님들의 평가를 확인해보세요"
+      backward={{ title: "학생 목록", to: "/students" }}
+    >
+      <ErrorPage
+        status={normalized.status}
+        title={normalized.title}
+        message={normalized.message}
+      />
+    </Page>
+  );
+}
 
 export type StudentDetailPageContext = Awaited<ReturnType<typeof loader>>;
 

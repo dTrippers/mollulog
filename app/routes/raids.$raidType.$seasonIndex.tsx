@@ -7,13 +7,15 @@ import {
 } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
-import { Outlet, isRouteErrorResponse, useLoaderData, useLocation, useRouteError } from "react-router";
+import { Outlet, useLoaderData, useLocation, useRouteError } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ErrorPage, Page } from "~/components/features/layout";
+import { ErrorPage, Page, ServerErrorPage } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
+import { routeError } from "~/lib/http-errors";
+import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import { raidTypeToParam } from "~/models/raid";
 import { RaidRepository } from "~/repositories";
@@ -27,18 +29,12 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
   const { raidType, seasonIndex } = params;
   const raidRepository = new RaidRepository(env);
   if (!raidType || !seasonIndex) {
-    throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");
   }
 
   const parsedSeasonIndex = Number.parseInt(seasonIndex, 10);
   if (Number.isNaN(parsedSeasonIndex)) {
-    throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");
   }
 
   const [currentRaid, allRaidSchedules, sensei] = await Promise.all([
@@ -48,10 +44,7 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
   ]);
 
   if (!currentRaid) {
-    throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
-      status: 404,
-      headers: { "Content-Type": "application/json" },
-    });
+    throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");
   }
 
   const mergedRaids = new Map(allRaidSchedules.map((raid) => [raidKey(raid), raid]));
@@ -82,17 +75,33 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   ];
 };
 
-export const ErrorBoundary = () => {
+export function ErrorBoundary() {
   const error = useRouteError();
-  if (isRouteErrorResponse(error)) {
-    const message =
-      typeof error.data === "string"
-        ? error.data
-        : (error.data?.error?.message ?? "오류가 발생했어요. 잠시 후 다시 시도해주세요.");
-    return <ErrorPage message={message} />;
+  const normalized = normalizeRouteError(error);
+
+  if (isServerRouteError(normalized)) {
+    return (
+      <ServerErrorPage
+        status={normalized.status}
+        title={normalized.title}
+        message={normalized.message}
+      />
+    );
   }
-  return <ErrorPage />;
-};
+
+  return (
+    <Page
+      title="총력전 정보"
+      description="일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
+    >
+      <ErrorPage
+        status={normalized.status}
+        title={normalized.title}
+        message={normalized.message}
+      />
+    </Page>
+  );
+}
 
 export type RaidPageContext = {
   currentRaid: Awaited<ReturnType<typeof loader>>["currentRaid"];

@@ -7,6 +7,7 @@ import { RecruitmentHistories } from "~/components/features/students";
 import { EmptyView, FilterButtons, LoadingSkeleton, SubTitle } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
 import { type RaidStatistics, fetchRaidStatisticsByStudent } from "~/lib/ranks/stats";
+import { captureClientError } from "~/lib/observability.client";
 import type { RaidType, Terrain } from "~/models/content.d";
 import { getMaxTierAt } from "~/models/student";
 import type { StudentDetailPageContext } from "./students.$id";
@@ -86,7 +87,10 @@ export default function StudentDetail() {
         }
         setStatistics(enrichRaidStatistics(rawStatistics));
       } catch (error) {
-        console.error(error);
+        captureClientError(error, {
+          source: "student.raid_statistics",
+          studentUid: student.uid,
+        });
       } finally {
         if (!cancelled) {
           setStatisticsLoading(false);
