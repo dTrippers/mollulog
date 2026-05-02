@@ -83,11 +83,11 @@ export default function SignInBottomSheet() {
     <>
       <button
         type="button"
-        className="w-screen h-full min-h-screen top-0 left-0 fixed bg-black opacity-50 z-100"
+        className="w-screen h-full min-h-screen top-0 left-0 fixed bg-black opacity-50 z-layer-backdrop"
         onClick={hideSignIn}
         aria-label="로그인 창 닫기"
       />
-      <div className="fixed bottom-0 w-full md:max-w-3xl mx-auto left-1/2 -translate-x-1/2 p-4 md:p-8 bg-white dark:bg-neutral-800 z-200 rounded-t-2xl">
+      <div className="fixed bottom-0 w-full md:max-w-3xl mx-auto left-1/2 -translate-x-1/2 p-4 md:p-8 bg-white dark:bg-neutral-800 z-layer-modal rounded-t-2xl">
         <p className="mt-4 mb-4 md:mb-8 text-2xl md:text-4xl font-black">로그인</p>
         {displayError && <p className="my-4 text-sm md:text-base text-red-500">{displayError}</p>}
         <div className="space-y-3">

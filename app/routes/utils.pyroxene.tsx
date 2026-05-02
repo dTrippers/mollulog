@@ -440,7 +440,7 @@ export default function PyroxenePlanner() {
     <>
       {/* Saving indicator */}
       {isSaving && (
-        <div className="fixed bottom-[var(--mobile-bottom-offset)] right-4 z-50 flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900 md:right-8 lg:bottom-4">
+        <div className="fixed bottom-[var(--mobile-bottom-offset)] right-4 z-layer-toast flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900 md:right-8 lg:bottom-4">
           <ArrowPathIcon className="size-4 animate-spin" />
           <span className="text-sm font-medium">저장중...</span>
         </div>

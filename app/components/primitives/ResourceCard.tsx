@@ -149,7 +149,7 @@ function ResourceCard({
           <div
             ref={tooltipRef}
             className={sanitizeClassName(`
-              pointer-events-none fixed z-100 max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-white shadow-lg
+              pointer-events-none fixed z-layer-navigation max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-white shadow-lg
               dark:border-neutral-600 dark:bg-neutral-800
               ${tooltip.placement === "top" ? "-translate-y-full" : ""}
             `)}

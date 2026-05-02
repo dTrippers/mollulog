@@ -146,7 +146,7 @@ function MobileBrandHeader({
   return (
     <header
       className="
-        lg:hidden fixed inset-x-0 top-0 z-100 flex h-[var(--mobile-header-height)] items-center justify-between
+        lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex h-[var(--mobile-header-height)] items-center justify-between
         border-b border-neutral-200/60 bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-sm
         dark:border-neutral-700/60 dark:bg-neutral-800/95
       "
@@ -183,13 +183,13 @@ function MobileBrandHeader({
         <>
           <button
             type="button"
-            className="fixed inset-0 z-100 cursor-default bg-transparent"
+            className="fixed inset-0 z-layer-navigation cursor-default bg-transparent"
             onClick={() => setIsMenuOpen(false)}
             aria-label="설정 메뉴 닫기"
           />
           <div
             className="
-              absolute right-3 top-full z-110 mt-2 flex w-56 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg shadow-neutral-200/50
+              absolute right-3 top-full z-layer-navigation-menu mt-2 flex w-56 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg shadow-neutral-200/50
               dark:border-neutral-700 dark:bg-neutral-800 dark:shadow-neutral-950/30
             "
           >
@@ -299,7 +299,7 @@ function MobileBottomNavigation({
   return (
     <nav
       className="
-        lg:hidden fixed inset-x-0 bottom-0 z-100 h-[var(--mobile-nav-height)]
+        lg:hidden fixed inset-x-0 bottom-0 z-layer-navigation h-[var(--mobile-nav-height)]
         border-t border-neutral-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
         dark:border-neutral-700 dark:bg-neutral-800/95
       "

@@ -8,7 +8,7 @@ type ServerErrorPageProps = {
 
 export default function ServerErrorPage({ status, title, message }: ServerErrorPageProps) {
   return (
-    <div className="fixed inset-0 z-50 bg-neutral-900 text-neutral-200 min-h-dvh w-screen flex flex-col items-center justify-center px-4">
+    <div className="fixed inset-0 z-layer-modal bg-neutral-900 text-neutral-200 min-h-dvh w-screen flex flex-col items-center justify-center px-4">
       <p className="text-sm font-semibold text-neutral-400">{status}</p>
       <p className="my-2 text-2xl font-bold text-center">{title}</p>
       <p className="text-sm text-neutral-400 text-center">{message}</p>

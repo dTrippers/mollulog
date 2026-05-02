@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useFetcher } from "react-router";
 import { Transition } from "@headlessui/react";
 import { XMarkIcon, CheckCircleIcon } from "@heroicons/react/16/solid";
@@ -71,7 +72,7 @@ export default function BugReportModal({
     });
   };
 
-  return (
+  const modal = (
     <Transition
       show={show}
       as="div"
@@ -81,7 +82,7 @@ export default function BugReportModal({
       leave="transition duration-100 ease-in"
       leaveFrom="opacity-100 scale-100"
       leaveTo="opacity-0 scale-95"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-layer-modal flex items-center justify-center p-4"
     >
       <button type="button" className="fixed inset-0 bg-black/50" onClick={onClose} aria-label="오류 제보 모달 닫기" />
       <div className="relative w-full max-w-2xl bg-white dark:bg-neutral-800 rounded-lg shadow-lg p-6 max-h-[90vh] overflow-y-auto">
@@ -142,4 +143,10 @@ export default function BugReportModal({
       </div>
     </Transition>
   );
+
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(modal, document.body);
 }

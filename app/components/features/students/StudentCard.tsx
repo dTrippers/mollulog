@@ -1,6 +1,7 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { CheckIcon, HeartIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { Transition } from "@headlessui/react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router";
 import { studentImageUrl } from "~/models/assets";
 import type { Role } from "~/models/content.d";
@@ -98,6 +99,7 @@ export default function StudentCard({
 }: StudentCardProps) {
   const { activePopupId, setActivePopupId } = useStudentCardPopup();
   const showPopup = popupId === activePopupId;
+  const [usesMobilePopupPortal, setUsesMobilePopupPortal] = useState(false);
   const interactive = Boolean((onSelect || popups) && uid);
   const handleCardClick = getStudentCardAction({
     uid,
@@ -107,7 +109,36 @@ export default function StudentCard({
     setActivePopupId,
   });
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const updatePortalTarget = () => setUsesMobilePopupPortal(mediaQuery.matches);
+    updatePortalTarget();
+    mediaQuery.addEventListener("change", updatePortalTarget);
+
+    return () => mediaQuery.removeEventListener("change", updatePortalTarget);
+  }, []);
+
   const visibleNames = parseVisibleNames(name ?? "");
+  const popup = uid && name && popups && popups.length > 0 && (
+    <Transition
+      show={showPopup}
+      as="div"
+      enter="transition duration-200 ease-out"
+      enterFrom="opacity-0 scale-95"
+      enterTo="scale-100"
+      leave="transition duration-100 ease-in"
+      leaveFrom="scale-100"
+      leaveTo="opacity-0 scale-95"
+      className="fixed md:absolute left-0 bottom-4 md:top-full md:bottom-auto w-full md:w-auto min-w-72 md:mt-2 z-layer-modal whitespace-nowrap"
+    >
+      <StudentCardPopup
+        student={{ uid, name, attackType, defenseType, role }}
+        popups={popups}
+        onClose={() => setActivePopupId(null)}
+      />
+    </Transition>
+  );
+
   return (
     <div className="relative">
       <StudentCardFrame interactive={interactive} onClick={handleCardClick}>
@@ -164,25 +195,7 @@ export default function StudentCard({
         </div>
       </StudentCardFrame>
 
-      {uid && name && popups && popups.length > 0 && (
-        <Transition
-          show={showPopup}
-          as="div"
-          enter="transition duration-200 ease-out"
-          enterFrom="opacity-0 scale-95"
-          enterTo="scale-100"
-          leave="transition duration-100 ease-in"
-          leaveFrom="scale-100"
-          leaveTo="opacity-0 scale-95"
-          className="fixed md:absolute left-0 bottom-4 md:top-full md:bottom-auto w-full md:w-auto min-w-72 md:mt-2 z-50 whitespace-nowrap"
-        >
-          <StudentCardPopup
-            student={{ uid, name, attackType, defenseType, role }}
-            popups={popups}
-            onClose={() => setActivePopupId(null)}
-          />
-        </Transition>
-      )}
+      {usesMobilePopupPortal && popup ? createPortal(popup, document.body) : popup}
     </div>
   );
 }

@@ -67,6 +67,26 @@
   scrollbar-width: none;
 }
 
+@utility z-layer-toast {
+  z-index: 50;
+}
+
+@utility z-layer-navigation {
+  z-index: 100;
+}
+
+@utility z-layer-navigation-menu {
+  z-index: 110;
+}
+
+@utility z-layer-backdrop {
+  z-index: 150;
+}
+
+@utility z-layer-modal {
+  z-index: 200;
+}
+
 /*
   ---break---
 */
