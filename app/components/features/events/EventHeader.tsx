@@ -1,7 +1,8 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import YouTube from "react-youtube";
-import dayjs from "dayjs";
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/16/solid";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant, isInstantAfter, isInstantBefore, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import { timelineContentTypeLocale, relativeTime } from "~/locales/ko";
 import { sanitizeClassName } from "~/prophandlers";
 import { MultilineText } from "~/components/primitives";
@@ -29,24 +30,23 @@ type EventHeaderProps = {
   name: string;
   type: TimelineContentType;
   runType: "first" | "rerun" | "permanent";
-  since: Date;
-  until: Date | null;
+  since: UtcIsoString;
+  until: UtcIsoString | null;
   endless: boolean;
 
   videos?: Video[];
 };
 
 export default function EventHeader({ imageUrl, name, type, runType, since, until, endless, videos }: EventHeaderProps) {
-  const sinceDayjs = dayjs(since);
-  const untilDayjs = until ? dayjs(until) : null;
-  const now = dayjs();
+  const displayTimeZone = useDisplayTimeZone();
+  const now = nowUtcIso();
 
   // Calculate remaining time
   let timeLabel = null;
-  if (sinceDayjs.isAfter(now)) {
-    timeLabel = `${relativeTime(sinceDayjs)} 시작`;
-  } else if (!endless && untilDayjs && untilDayjs.isAfter(now)) {
-    timeLabel = `${relativeTime(untilDayjs)} 종료`;
+  if (isInstantAfter(since, now)) {
+    timeLabel = `${relativeTime(parseUtcTimestamp(since))} 시작`;
+  } else if (!endless && until && isInstantAfter(until, now)) {
+    timeLabel = `${relativeTime(parseUtcTimestamp(until))} 종료`;
   }
 
   // States about videos
@@ -163,12 +163,16 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
 
           <div className="flex items-end gap-1">
             <p className="grow text-xs md:text-sm text-neutral-300">
-              {endless ? sinceDayjs.format("YYYY-MM-DD") : `${sinceDayjs.format("YYYY-MM-DD")} ~ ${untilDayjs?.format("YYYY-MM-DD") ?? ""}`}
+              {endless
+                ? formatInstant(since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })
+                : `${formatInstant(since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} ~ ${
+                    until ? formatInstant(until, { timeZone: displayTimeZone, format: "YYYY-MM-DD" }) : ""
+                  }`}
             </p>
             {runType === "rerun" && <Label text="복각" />}
             {runType === "permanent" && <Label text="상설" />}
-            {timeLabel && <Label text={timeLabel} showRedDot={sinceDayjs.isBefore(now)} />}
-            {!endless && untilDayjs && untilDayjs.isBefore(now) && <Label text="종료" />}
+            {timeLabel && <Label text={timeLabel} showRedDot={isInstantBefore(since, now)} />}
+            {!endless && until && isInstantBefore(until, now) && <Label text="종료" />}
           </div>
         </div>
       </div>

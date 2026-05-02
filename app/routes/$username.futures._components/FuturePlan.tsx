@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { useFetcher } from "react-router";
 import { Link } from "react-router";
-import dayjs from "dayjs";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { MultilineText, OptionBadge } from "~/components/primitives";
 import { ResourceCards, StudentCard } from "~/components/features/students";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, recruitmentLabelLocale, roleColor, roleLocale, schoolNameLocale } from "~/locales/ko";
 import type { Role } from "~/models/content.d";
 import type { Attack, Defense } from "~/graphql/graphql";
@@ -35,8 +36,8 @@ type FuturePlanProps = {
   event: {
     uid: string;
     name: string;
-    since: Date;
-    until: Date;
+    since: UtcIsoString;
+    until: UtcIsoString;
     recruitments: {
       recruitmentType: RecruitmentTypeEnum;
       rerun: boolean;
@@ -50,6 +51,7 @@ type FuturePlanProps = {
 };
 
 export default function FuturePlan({ event, favoritedStudents, comments }: FuturePlanProps) {
+  const displayTimeZone = useDisplayTimeZone();
   const [allComments, setAllComments] = useState(comments ?? []);
   const fetcher = useFetcher();
 
@@ -90,9 +92,7 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
     return [{ student, ...rest }];
   });
 
-  const since = dayjs(event.since);
-  const until = dayjs(event.until);
-  const dDay = since.startOf("day").diff(dayjs().startOf("day"), "day");
+  const dDay = parseUtcTimestamp(event.since).startOf("day").diff(parseUtcTimestamp(nowUtcIso()).startOf("day"), "day");
 
   // Group resources by student instead of aggregating
   const studentResources: Record<string, {
@@ -133,7 +133,10 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
           <Link to={`/events/${event.uid}`} className="hover:underline">
             <MultilineText className="text-lg md:text-xl font-bold leading-snug" texts={event.name.split("\n")} />
           </Link>
-          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">{since.format("YYYY-MM-DD")} ~ {until.format("YYYY-MM-DD")}</p>
+          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+            {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} ~{" "}
+            {formatInstant(event.until, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
+          </p>
         </div>
         {dDay > 0 && (
           <div className="shrink-0">

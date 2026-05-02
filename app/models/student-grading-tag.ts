@@ -1,6 +1,7 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
+import { nowUtcIso } from "~/lib/date-time";
 import { communityPostTagsTable } from "./community";
 
 export const studentGradingTagsTable = communityPostTagsTable;
@@ -98,12 +99,13 @@ export async function createGradingTags(
   }
 
   const db = drizzle(env.DB);
+  const now = nowUtcIso();
   const tagRecords = tagValues.map((tagValue) => ({
     uid: nanoid(8),
     postUid: gradingUid,
     studentUid,
     tagValue,
-    createdAt: sql`current_timestamp`,
+    createdAt: now,
   }));
 
   await db.insert(studentGradingTagsTable).values(tagRecords);

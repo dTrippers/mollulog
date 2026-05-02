@@ -1,6 +1,7 @@
 import { and, eq, inArray, or, type SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
+import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import {
   communityCommentsTable,
   communityPostsTable,
@@ -8,6 +9,7 @@ import {
   deleteCommunityComment,
   deleteCommunityPostByUid,
   getPrimaryPlaintextBlockText,
+  normalizeCommunityTimestamp,
   parseCommunityPostBlocks,
   serializeCommunityPostBlocks,
 } from "./community";
@@ -24,7 +26,7 @@ type ContentComment = {
   visibility: ContentCommentVisibility;
   parentCommentId?: number | null;
   pinned: boolean;
-  createdAt: string;
+  createdAt: UtcIsoString;
 };
 
 type ContentCommentWithSensei = ContentComment & {
@@ -61,7 +63,7 @@ function toContentCommentFromPost(row: {
     visibility: row.visibility === "private" ? "private" : "public",
     parentCommentId: null,
     pinned: row.pinned === 1,
-    createdAt: row.createdAt,
+    createdAt: normalizeCommunityTimestamp(row.createdAt),
   };
 }
 
@@ -224,7 +226,7 @@ export async function getContentsComments(
         visibility: comment.visibility,
         parentCommentId: post.id,
         pinned: false,
-        createdAt: comment.createdAt,
+        createdAt: normalizeCommunityTimestamp(comment.createdAt),
         sensei: {
           username: comment.username,
           profileStudentId: comment.profileStudentId,
@@ -257,6 +259,7 @@ export async function createComment(
 
   const isFirstComment = existingPost === undefined;
   const uid = nanoid(8);
+  const now = nowUtcIso();
   await db.insert(communityPostsTable).values({
     uid,
     userId,
@@ -265,6 +268,8 @@ export async function createComment(
     pinned: isFirstComment ? 1 : 0,
     subjectContentUid: contentId,
     blocks: serializeCommunityPostBlocks([{ type: "plaintext", text: body }]),
+    createdAt: now,
+    updatedAt: now,
   });
 
   return uid;
@@ -317,12 +322,13 @@ export async function updateComment(
     .get();
 
   if (post) {
+    const now = nowUtcIso();
     await db
       .update(communityPostsTable)
       .set({
         visibility,
         blocks: serializeCommunityPostBlocks([{ type: "plaintext", text: body }]),
-        updatedAt: new Date().toISOString(),
+        updatedAt: now,
       })
       .where(eq(communityPostsTable.uid, commentUid));
     return;
@@ -333,7 +339,7 @@ export async function updateComment(
     .set({
       body,
       visibility,
-      updatedAt: new Date().toISOString(),
+      updatedAt: nowUtcIso(),
     })
     .where(and(eq(communityCommentsTable.uid, commentUid), eq(communityCommentsTable.userId, userId)));
 }
@@ -385,9 +391,10 @@ export async function getCommentIdByUid(env: Env, commentUid: string, userId?: n
 
 export async function pinComment(env: Env, userId: number, contentId: string, commentUid: string): Promise<void> {
   const db = drizzle(env.DB);
+  const now = nowUtcIso();
   await db
     .update(communityPostsTable)
-    .set({ pinned: 0, updatedAt: new Date().toISOString() })
+    .set({ pinned: 0, updatedAt: now })
     .where(and(
       eq(communityPostsTable.userId, userId),
       eq(communityPostsTable.postType, "event_opinion"),
@@ -414,7 +421,7 @@ export async function pinComment(env: Env, userId: number, contentId: string, co
 
   await db
     .update(communityPostsTable)
-    .set({ pinned: 1, updatedAt: new Date().toISOString() })
+    .set({ pinned: 1, updatedAt: nowUtcIso() })
     .where(eq(communityPostsTable.uid, commentUid));
 }
 
@@ -422,7 +429,7 @@ export async function unpinComment(env: Env, userId: number, contentId: string):
   const db = drizzle(env.DB);
   await db
     .update(communityPostsTable)
-    .set({ pinned: 0, updatedAt: new Date().toISOString() })
+    .set({ pinned: 0, updatedAt: nowUtcIso() })
     .where(and(
       eq(communityPostsTable.userId, userId),
       eq(communityPostsTable.postType, "event_opinion"),
@@ -509,7 +516,7 @@ export function nestComments(
       body: comment.body,
       visibility: comment.visibility,
       pinned: comment.pinned && comment.sensei.username === currentUser?.username,
-      createdAt: comment.createdAt,
+      createdAt: normalizeCommunityTimestamp(comment.createdAt),
       sensei: {
         me: currentUser?.username === comment.sensei.username,
         username: comment.sensei.username,
@@ -520,7 +527,7 @@ export function nestComments(
         body: subComment.body,
         visibility: subComment.visibility,
         pinned: false,
-        createdAt: subComment.createdAt,
+        createdAt: normalizeCommunityTimestamp(subComment.createdAt),
         sensei: {
           me: currentUser?.username === subComment.sensei.username,
           username: subComment.sensei.username,

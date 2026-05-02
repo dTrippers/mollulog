@@ -7,6 +7,7 @@ import { RecruitmentHistories } from "~/components/features/students";
 import { EmptyView, FilterButtons, LoadingSkeleton, SubTitle } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
 import { type RaidStatistics, fetchRaidStatisticsByStudent } from "~/lib/ranks/stats";
+import { compareInstantAsc, compareInstantDesc, getInstantTime, type UtcIsoString } from "~/lib/date-time";
 import { captureClientError } from "~/lib/observability.client";
 import type { RaidType, Terrain } from "~/models/content.d";
 import { getMaxTierAt } from "~/models/student";
@@ -19,8 +20,8 @@ type EnrichedRaidStatistics = Omit<RaidStatistics, "raid"> & {
     seasonIndex: number;
     name: string;
     boss: string;
-    startAt: Date;
-    endAt: Date;
+    startAt: UtcIsoString;
+    endAt: UtcIsoString;
     terrain: Terrain;
     defenseType: Defense;
     difficulty: string | null;
@@ -46,9 +47,7 @@ export default function StudentDetail() {
             return null;
           }
 
-          const startAt = raid.startAt instanceof Date ? raid.startAt : new Date(raid.startAt);
-          const endAt = raid.endAt instanceof Date ? raid.endAt : new Date(raid.endAt);
-          if (Number.isNaN(startAt.getTime()) || Number.isNaN(endAt.getTime())) {
+          if (Number.isNaN(getInstantTime(raid.startAt)) || Number.isNaN(getInstantTime(raid.endAt))) {
             return null;
           }
 
@@ -63,8 +62,8 @@ export default function StudentDetail() {
               seasonIndex: raid.seasonIndex,
               name: raid.raidBoss.name,
               boss: raid.raidBoss.uid,
-              startAt,
-              endAt,
+              startAt: raid.startAt,
+              endAt: raid.endAt,
               terrain: raid.terrain as Terrain,
               defenseType: stat.raid.defenseType,
               difficulty,
@@ -106,9 +105,9 @@ export default function StudentDetail() {
   const filteredStatistics = useMemo(() => {
     const sorted = [...statistics].sort((a, b) => {
       if (sort === "recent") {
-        return b.raid.startAt.getTime() - a.raid.startAt.getTime();
+        return compareInstantDesc(a.raid.startAt, b.raid.startAt);
       }
-      return a.raid.startAt.getTime() - b.raid.startAt.getTime();
+      return compareInstantAsc(a.raid.startAt, b.raid.startAt);
     });
     return raidShowMore ? sorted : sorted.slice(0, 5);
   }, [statistics, sort, raidShowMore]);

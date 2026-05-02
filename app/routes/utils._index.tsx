@@ -27,14 +27,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 };
 
 export default function UtilsIndexPage() {
-  const { upcomingEvent: serializedUpcomingEvent } = useLoaderData<typeof loader>();
-  const upcomingEvent = serializedUpcomingEvent
-    ? {
-        ...serializedUpcomingEvent,
-        since: new Date(serializedUpcomingEvent.since),
-        until: new Date(serializedUpcomingEvent.until),
-      }
-    : null;
+  const { upcomingEvent } = useLoaderData<typeof loader>();
   const utilSection = getNavigationSections({
     pathname: "/utils",
     upcomingEvent,

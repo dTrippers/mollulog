@@ -34,8 +34,8 @@ import {
   TicketIcon as TicketIconSolid,
   UserCircleIcon as UserCircleIconSolid,
 } from "@heroicons/react/24/solid";
-import dayjs from "dayjs";
 import type { ComponentProps, ComponentType } from "react";
+import { isInstantAfter, isInstantBefore, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 
 type IconComponent = ComponentType<ComponentProps<"svg">>;
 
@@ -67,7 +67,7 @@ export type NavigationSectionStates = {
   isProfileActive: boolean;
 };
 
-export type UpcomingNavigationEvent = { uid: string; since: Date; until: Date } | null;
+export type UpcomingNavigationEvent = { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
 
 export function getNavigationSectionStates(
   pathname: string,
@@ -91,13 +91,13 @@ export function getNavigationSectionStates(
 export function getNavigationSections({
   pathname,
   upcomingEvent,
-  now = dayjs(),
+  now = nowUtcIso(),
   hasActiveCoupons,
   sectionStates = getNavigationSectionStates(pathname, upcomingEvent),
 }: {
   pathname: string;
   upcomingEvent: UpcomingNavigationEvent;
-  now?: dayjs.Dayjs;
+  now?: UtcIsoString;
   hasActiveCoupons: boolean;
   sectionStates?: NavigationSectionStates;
 }): NavigationSection[] {
@@ -175,7 +175,7 @@ export function getNavigationSections({
               description: "이벤트 효율과 상점을 확인해보세요",
               OutlineIcon: BoltIconOutline,
               SolidIcon: BoltIconSolid,
-              showRedDot: dayjs(upcomingEvent.since).isBefore(now) && dayjs(upcomingEvent.until).isAfter(now),
+              showRedDot: isInstantBefore(upcomingEvent.since, now) && isInstantAfter(upcomingEvent.until, now),
               isActive: pathname.startsWith(`/events/${upcomingEvent.uid}`),
             }
           : {

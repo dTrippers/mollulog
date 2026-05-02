@@ -1,5 +1,13 @@
-import dayjs from "dayjs";
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
+import {
+  compareInstantAsc,
+  getInstantTime,
+  isInstantAfter,
+  isInstantBefore,
+  nowUtcIso,
+  toUtcIso,
+  type UtcIsoString,
+} from "~/lib/date-time";
 import { type RaidSchedule, RecruitmentRepository, RaidRepository } from "~/repositories";
 import { fetchCached } from "./base";
 import type { EventType, RaidType, Role } from "./content.d";
@@ -73,8 +81,8 @@ export type IndexRecruitment = {
   recruitmentType: RecruitmentTypeEnum;
   pickup: boolean;
   rerun: boolean;
-  since: Date;
-  until: Date;
+  since: UtcIsoString;
+  until: UtcIsoString | null;
   studentName: string;
 };
 
@@ -83,23 +91,23 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
     env,
     "index-contents::v7",
     async () => {
-      const now = dayjs();
-      const nowDate = now.toDate();
+      const now = nowUtcIso();
+      const nowDate = new Date(now);
       const recruitmentRepository = new RecruitmentRepository(env);
 
       // ========== Events (from D1) ==========
       const eventContentTypes: TimelineContentType[] = ["event", "main_story", "mini_event", "campaign"];
-      const allEvents = await getTimelineContentsByContentTypes(env, eventContentTypes, nowDate);
+      const allEvents = await getTimelineContentsByContentTypes(env, eventContentTypes, now);
 
       const ongoingEvents = allEvents.filter(
-        (e) => e.contentType === "event" && !dayjs(e.startAt).isAfter(now) && e.endAt && dayjs(e.endAt).isAfter(now),
+        (e) => e.contentType === "event" && !isInstantAfter(e.startAt, now) && e.endAt && isInstantAfter(e.endAt, now),
       );
 
       let mainEvent: (typeof allEvents)[0] | null = null;
       if (ongoingEvents.length > 0) {
         mainEvent = ongoingEvents[0];
       } else {
-        const futureEvents = allEvents.filter((e) => e.contentType === "event" && dayjs(e.startAt).isAfter(now));
+        const futureEvents = allEvents.filter((e) => e.contentType === "event" && isInstantAfter(e.startAt, now));
         if (futureEvents.length > 0) {
           mainEvent = futureEvents[0];
         }
@@ -142,13 +150,16 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
                 recruitmentType: r.recruitmentType,
                 pickup: r.pickup,
                 rerun: r.rerun,
-                since: dayjs(r.since).toDate(),
-                until: dayjs(r.until).toDate(),
+                since: toUtcIso(r.since),
+                until: r.until ? toUtcIso(r.until) : null,
                 studentName: r.studentName,
               } satisfies IndexRecruitment,
             })),
         )
-        .filter(({ recruitment }) => !dayjs(recruitment.since).isAfter(now) && dayjs(recruitment.until).isAfter(now));
+        .filter(
+          ({ recruitment }) =>
+            !isInstantAfter(recruitment.since, now) && recruitment.until !== null && isInstantAfter(recruitment.until, now),
+        );
 
       // Get favorite counts for all students in current pickups
       const allStudentUids = currentRecruitments
@@ -178,8 +189,8 @@ export type RecruitmentInfo = {
   recruitmentType: RecruitmentTypeEnum;
   pickup: boolean;
   rerun: boolean;
-  since: Date;
-  until: Date | null;
+  since: UtcIsoString;
+  until: UtcIsoString | null;
   studentName: string;
   student: {
     uid: string;
@@ -236,7 +247,7 @@ export async function getUpcomingRaidContents(
 ): Promise<TimelineRaidContent[]> {
   const raidRepository = new RaidRepository(env);
   const raidContents = await getFutureRaidContents(env, ["raid"]);
-  const sortedRaidContents = [...raidContents].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+  const sortedRaidContents = [...raidContents].sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
   const selectedRaidContents = limit ? sortedRaidContents.slice(0, limit) : sortedRaidContents;
 
   return Promise.all(
@@ -270,12 +281,12 @@ export async function getUpcomingRaidContentByTypeAndSeason(
     return null;
   }
 
-  const scheduleStartAt = schedule.startAt ? new Date(schedule.startAt).getTime() : null;
+  const scheduleStartAt = schedule.startAt ? getInstantTime(schedule.startAt) : null;
   const raidContents = await getFutureRaidContents(env, ["raid"]);
   const matchingContent =
     raidContents.find((content) => content.contentUid === schedule.uid) ??
     (scheduleStartAt !== null
-      ? raidContents.find((content) => content.startAt.getTime() === scheduleStartAt)
+      ? raidContents.find((content) => getInstantTime(content.startAt) === scheduleStartAt)
       : undefined);
 
   if (!matchingContent) {
@@ -301,8 +312,8 @@ function toRecruitmentInfos(group: Awaited<ReturnType<RecruitmentRepository["get
       recruitmentType: r.recruitmentType,
       pickup: r.pickup,
       rerun: r.rerun,
-      since: new Date(r.since),
-      until: r.until ? new Date(r.until) : null,
+      since: toUtcIso(r.since),
+      until: r.until ? toUtcIso(r.until) : null,
       studentName: r.studentName,
       student: r.student
         ? {
@@ -346,9 +357,9 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
     );
   }, 24 * 60 * 60, forceRefresh);
 
-  const now = new Date();
+  const now = nowUtcIso();
   return allEnriched.map(normalizeFutureContentDates).filter((content) =>
-    content.endAt ? content.endAt > now : content.startAt > now,
+    content.endAt ? isInstantAfter(content.endAt, now) : isInstantAfter(content.startAt, now),
   );
 }
 
@@ -358,8 +369,8 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
 type NavigationBarContents = {
   upcomingEvent: {
     uid: string;
-    since: Date;
-    until: Date;
+    since: UtcIsoString;
+    until: UtcIsoString;
   } | null;
   hasRecentNews: boolean;
   hasActiveCoupons: boolean;
@@ -381,7 +392,7 @@ export async function getNavigationBarContents(env: Env, forceRefresh = false): 
       const hasActiveCouponsValue = await hasActiveCoupons(env);
       return {
         upcomingEvent,
-        hasRecentNews: latestNewsTime !== null && latestNewsTime > threeDaysAgo,
+        hasRecentNews: latestNewsTime !== null && !isInstantBefore(latestNewsTime, threeDaysAgo),
         hasActiveCoupons: hasActiveCouponsValue,
       };
     },

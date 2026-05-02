@@ -1,9 +1,10 @@
-import dayjs from "dayjs";
 import { Fragment } from "react";
 import { Link } from "react-router";
 import type { RaidType, Terrain } from "~/models/content.d";
 import type { Difficulty } from "~/models/raid";
 import { AttributeBadge } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant, isInstantAfter, isInstantBefore, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import { bossImageUrl } from "~/models/assets";
 import {
   attackTypeColor,
@@ -27,8 +28,8 @@ type RaidCardProps = {
       defenseType: Defense;
       difficulty: Difficulty | string | null;
     }[];
-    startAt: string | Date | null;
-    endAt: string | Date | null;
+    startAt: UtcIsoString | null;
+    endAt: UtcIsoString | null;
     terrain: Terrain;
     attackType?: Attack | null;
   };
@@ -63,20 +64,19 @@ export default function RaidCard({
   className,
 }: RaidCardProps) {
   const { raidBoss, raidType, seasonIndex, defenseTypes, startAt, endAt, terrain, attackType } = raid;
+  const displayTimeZone = useDisplayTimeZone();
 
-  const sinceDayjs = startAt ? dayjs(startAt) : null;
-  const untilDayjs = endAt ? dayjs(endAt) : null;
-  const now = dayjs();
+  const now = nowUtcIso();
 
   let timeLabel = null;
   if (timeLocaleType === "relative") {
-    if (sinceDayjs?.isAfter(now)) {
-      timeLabel = `${relativeTime(sinceDayjs)} 시작`;
-    } else if (untilDayjs?.isAfter(now)) {
-      timeLabel = `${relativeTime(untilDayjs)} 종료`;
+    if (startAt && isInstantAfter(startAt, now)) {
+      timeLabel = `${relativeTime(parseUtcTimestamp(startAt))} 시작`;
+    } else if (endAt && isInstantAfter(endAt, now)) {
+      timeLabel = `${relativeTime(parseUtcTimestamp(endAt))} 종료`;
     }
-  } else if (sinceDayjs) {
-    timeLabel = `${sinceDayjs.format("YYYY/M/D")}`;
+  } else if (startAt) {
+    timeLabel = `${formatInstant(startAt, { timeZone: displayTimeZone, format: "YYYY/M/D" })}`;
   }
 
   const hasVisibleDifficulty = showDifficulty && defenseTypes.some(({ difficulty }) => difficulty);
@@ -98,7 +98,7 @@ export default function RaidCard({
           {showTimeLabel && timeLabel && (
             <div className="absolute top-0 left-0 px-3 py-2">
               <div className="flex items-center px-1.5 py-0.5 gap-x-1.5 text-xs text-center bg-neutral-100 dark:bg-neutral-800 rounded-md">
-                {timeLocaleType === "relative" && sinceDayjs?.isBefore(now) && <div className="size-2 bg-red-500 rounded-full animate-pulse" />}
+                {timeLocaleType === "relative" && startAt && isInstantBefore(startAt, now) && <div className="size-2 bg-red-500 rounded-full animate-pulse" />}
                 <p className="text-xs text-neutral-600 md:text-sm dark:text-neutral-300">{timeLabel}</p>
               </div>
             </div>
@@ -123,8 +123,8 @@ export default function RaidCard({
                   {showName && <h3 className="text-base font-bold">{raidBoss.name}</h3>}
                   {showDateRange && (
                     <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                      {sinceDayjs ? sinceDayjs.format("YYYY.MM.DD") : "-"} ~{" "}
-                      {untilDayjs ? untilDayjs.format("MM.DD") : "-"}
+                      {startAt ? formatInstant(startAt, { timeZone: displayTimeZone, format: "YYYY.MM.DD" }) : "-"} ~{" "}
+                      {endAt ? formatInstant(endAt, { timeZone: displayTimeZone, format: "MM.DD" }) : "-"}
                     </p>
                   )}
                   {buttons && buttons.length > 0 && (

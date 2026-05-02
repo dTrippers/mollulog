@@ -13,6 +13,7 @@ import {
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
 import { RaidRepository } from "~/repositories";
+import { compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 
 export const meta: MetaFunction = () => [
   { title: "편성/공략 관리 | 몰루로그" },
@@ -35,7 +36,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     allStudents: (await getAllStudents(env, true)).sort((a, b) => a.order - b.order),
     recruitedStudentTiers: await getRecruitedStudentTiers(env, sensei.id),
     raids: (await raidRepository.getAll()).sort(
-      (a, b) => new Date(b.startAt as Date).getTime() - new Date(a.startAt as Date).getTime(),
+      (a, b) => compareInstantDesc(a.startAt ?? nowUtcIso(), b.startAt ?? nowUtcIso()),
     ),
     party,
   };

@@ -4,6 +4,7 @@ import { graphql } from "~/graphql";
 import type { EventContentShopContentQuery, RecruitmentGroupsListQuery } from "~/graphql/graphql";
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
+import { compareInstantAsc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
 import { getTimelineContent, getTimelineContents } from "./timeline-content";
@@ -41,8 +42,8 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
 export type ShopAvailableEvent = {
   uid: string;
   name: string;
-  since: Date;
-  until: Date | null;
+  since: UtcIsoString;
+  until: UtcIsoString | null;
 };
 
 const eventContentScheduleQuery = graphql(`
@@ -59,8 +60,8 @@ const eventContentScheduleQuery = graphql(`
 `);
 
 type EventContentSchedule = {
-  startAt: Date;
-  endAt: Date | null;
+  startAt: UtcIsoString;
+  endAt: UtcIsoString | null;
 };
 
 type CachedEventContentSchedule = {
@@ -88,8 +89,8 @@ export async function getEventContentSchedule(
         return null;
       }
       return {
-        startAt: new Date(schedule.startAt).toISOString(),
-        endAt: schedule.endAt ? new Date(schedule.endAt).toISOString() : null,
+        startAt: toUtcIso(schedule.startAt),
+        endAt: schedule.endAt ? toUtcIso(schedule.endAt) : null,
       };
     },
     7 * 24 * 60 * 60,
@@ -98,8 +99,8 @@ export async function getEventContentSchedule(
     return null;
   }
   return {
-    startAt: new Date(schedule.startAt),
-    endAt: schedule.endAt ? new Date(schedule.endAt) : null,
+    startAt: toUtcIso(schedule.startAt),
+    endAt: schedule.endAt ? toUtcIso(schedule.endAt) : null,
   };
 }
 
@@ -131,7 +132,7 @@ export async function getShopAvailableEvents(env: Env): Promise<ShopAvailableEve
         until: shopSchedule?.endAt ?? content.endAt,
       };
     })
-    .sort((a, b) => a.since.getTime() - b.since.getTime());
+    .sort((a, b) => compareInstantAsc(a.since, b.since));
 }
 
 //

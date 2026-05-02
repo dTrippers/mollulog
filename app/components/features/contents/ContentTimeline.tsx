@@ -1,5 +1,15 @@
-import dayjs from "dayjs";
 import { useMemo } from "react";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import {
+  compareInstantAsc,
+  formatInstant,
+  formatInstantDateKey,
+  isInstantAfter,
+  isInstantBefore,
+  nowUtcIso,
+  parseUtcTimestamp,
+  type UtcIsoString,
+} from "~/lib/date-time";
 import { CONTENT_ORDER } from "~/models/content";
 import type { EventType, RaidType } from "~/models/content.d";
 import type { ContentTimelineItemProps } from "./ContentTimelineItem";
@@ -8,8 +18,8 @@ import { ContentTimelineItem } from "./ContentTimelineItem";
 export type ContentTimelineProps = {
   contents: {
     name: string;
-    since: Date;
-    until: Date | null;
+    since: UtcIsoString;
+    until: UtcIsoString | null;
     endless: boolean;
     runType: "first" | "rerun" | "permanent";
     uid: string;
@@ -47,22 +57,23 @@ export type ContentTimelineProps = {
 };
 
 type ContentGroup = {
-  groupDate: Date | null;
+  groupDate: UtcIsoString | null;
   contents: ContentTimelineProps["contents"];
 };
 
-function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup[] {
-  const groups: { groupDate: dayjs.Dayjs | null; contents: ContentTimelineProps["contents"] }[] = [];
+function groupContents(contents: ContentTimelineProps["contents"], timeZone: string): ContentGroup[] {
+  const groups: ContentGroup[] = [];
 
-  const now = dayjs();
-  for (const content of contents.sort((a, b) => dayjs(a.since).diff(dayjs(b.since)))) {
-    const since = dayjs(content.since);
-    const until = content.until ? dayjs(content.until) : null;
-    const isCurrent = since.isBefore(now) && (until === null || until.isAfter(now));
+  const now = nowUtcIso();
+  for (const content of [...contents].sort((a, b) => compareInstantAsc(a.since, b.since))) {
+    const isCurrent = isInstantBefore(content.since, now) && (content.until === null || isInstantAfter(content.until, now));
 
-    const groupDate = isCurrent ? null : since.startOf("day");
+    const groupDate = isCurrent ? null : content.since;
     const lastGroup = groups[groups.length - 1];
-    if ((lastGroup?.groupDate === null && isCurrent) || lastGroup?.groupDate?.isSame(groupDate, "day")) {
+    if (
+      (lastGroup?.groupDate === null && isCurrent) ||
+      (lastGroup?.groupDate && groupDate && formatInstantDateKey(lastGroup.groupDate, timeZone) === formatInstantDateKey(groupDate, timeZone))
+    ) {
       lastGroup.contents.push(content);
     } else {
       groups.push({ groupDate, contents: [content] });
@@ -70,7 +81,7 @@ function groupContents(contents: ContentTimelineProps["contents"]): ContentGroup
   }
 
   return groups.map(({ groupDate, contents }) => ({
-    groupDate: groupDate?.toDate() ?? null,
+    groupDate,
     contents: contents.sort((a, b) => CONTENT_ORDER.indexOf(a.contentType) - CONTENT_ORDER.indexOf(b.contentType)),
   }));
 }
@@ -92,7 +103,8 @@ export default function ContentTimeline({
   isSubmittingComment,
   signedIn,
 }: ContentTimelineProps) {
-  const contentGroups = useMemo(() => groupContents(contents), [contents]);
+  const displayTimeZone = useDisplayTimeZone();
+  const contentGroups = useMemo(() => groupContents(contents, displayTimeZone), [contents, displayTimeZone]);
   const favoriteStudentIdsByContents = useMemo(() => {
     const aggregatedResult: Record<string, Record<string, number>> = {};
     for (const { contentUid, studentUid, count } of favoritedCounts) {
@@ -112,14 +124,14 @@ export default function ContentTimeline({
     );
   }
 
-  const today = dayjs();
+  const today = nowUtcIso();
   return (
     <>
       {contentGroups.map((group) => {
         const isCurrent = group.groupDate === null;
-        const groupDate = isCurrent ? dayjs() : dayjs(group.groupDate);
+        const groupDateKey = group.groupDate ? formatInstantDateKey(group.groupDate, displayTimeZone) : "current";
         return (
-          <div key={isCurrent ? "current" : groupDate.format("YYYY-MM-DD")}>
+          <div key={isCurrent ? "current" : groupDateKey}>
             {/* 날짜 구분자 영역 */}
             {isCurrent ? (
               <div className="flex items-center">
@@ -130,7 +142,7 @@ export default function ContentTimeline({
               <div className="flex items-center">
                 <div className="inline-block size-3 bg-neutral-500 dark:bg-neutral-400 rounded-full" />
                 <span className="mx-2 md:mx-4 font-bold text-neutral-500 dark:text-neutral-400 text-sm ">
-                  {groupDate.format("YYYY-MM-DD")}
+                  {group.groupDate ? formatInstant(group.groupDate, { timeZone: displayTimeZone, format: "YYYY-MM-DD" }) : ""}
                 </span>
               </div>
             )}
@@ -194,7 +206,7 @@ export default function ContentTimeline({
         <div className="flex items-center">
           <div className="inline-block size-3 bg-neutral-500 dark:bg-neutral-400 rounded-full" />
           <span className="mx-2 md:mx-4 font-bold text-neutral-500 dark:text-neutral-400 text-sm ">
-            {`남은 미래시까지 D-${dayjs(contents[contents.length - 1].until).diff(today, "day")}`}
+            {`남은 미래시까지 D-${parseUtcTimestamp(contents[contents.length - 1].until ?? today).diff(parseUtcTimestamp(today), "day")}`}
           </span>
         </div>
       )}

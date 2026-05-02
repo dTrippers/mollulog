@@ -8,6 +8,7 @@ import RaidRankFilter, {
   type RaidRankFilterState,
 } from "~/components/features/raids/RaidRankFilter";
 import { Difficulty } from "~/graphql/graphql";
+import { nowUtcIso } from "~/lib/date-time";
 import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import type { RaidType } from "~/models/content.d";
 import type { Difficulty as DifficultyType } from "~/models/raid";
@@ -125,7 +126,7 @@ export default function RaidRanks() {
       <RaidRankScreen
         currentRaid={{
           boss: currentRaid.raidBoss.uid,
-          since: currentRaid.startAt ?? new Date(),
+          since: currentRaid.startAt ?? nowUtcIso(),
           raidType: currentRaid.raidType as RaidType,
           seasonIndex: jpSeasonIndex,
           defenseType,

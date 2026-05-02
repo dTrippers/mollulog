@@ -1,10 +1,11 @@
 import { Transition } from "@headlessui/react";
 import { ChevronDownIcon, XMarkIcon } from "@heroicons/react/16/solid";
-import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { AttributeBadge, FilterButtons } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import type { Attack, Defense } from "~/graphql/graphql";
+import { compareInstantDesc, formatInstant, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType, Terrain } from "~/models/content.d";
@@ -17,8 +18,8 @@ type SelectableRaid = {
   raidType: string;
   raidBoss: { uid: string; name: string };
   seasonIndex: number;
-  startAt: string | Date | null;
-  endAt: string | Date | null;
+  startAt: UtcIsoString | Date | null;
+  endAt: UtcIsoString | Date | null;
   terrain: Terrain;
   attackType: Attack | null;
   jpSchedule: { uid: string; seasonIndex: number } | null;
@@ -35,6 +36,7 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
   const [raidType, setRaidType] = useState<string>(currentRaid?.raidType ?? "total_assault");
 
   const selectableRaids = useMemo(() => {
+    const fallbackNow = nowUtcIso();
     return [...raids]
       .filter(
         (raid) =>
@@ -45,7 +47,7 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
               raid.raidType === currentRaid.raidType &&
               raid.seasonIndex === currentRaid.seasonIndex)),
       )
-      .sort((a, b) => dayjs(b.startAt).diff(dayjs(a.startAt)));
+      .sort((a, b) => compareInstantDesc(a.startAt ?? fallbackNow, b.startAt ?? fallbackNow));
   }, [currentRaid, raids, raidType]);
 
   return (
@@ -114,6 +116,13 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
 }
 
 function RaidSelectorItem({ raid, selected = false }: { raid: SelectableRaid; selected?: boolean }) {
+  const displayTimeZone = useDisplayTimeZone();
+  const normalizedRaid = {
+    ...raid,
+    startAt: raid.startAt ? toUtcIso(raid.startAt) : null,
+    endAt: raid.endAt ? toUtcIso(raid.endAt) : null,
+  };
+
   if (!selected) {
     return (
       <div className="group relative overflow-hidden bg-white transition-colors hover:bg-neutral-100 first:rounded-t-lg last:rounded-b-lg dark:bg-neutral-900 dark:hover:bg-neutral-800">
@@ -132,8 +141,8 @@ function RaidSelectorItem({ raid, selected = false }: { raid: SelectableRaid; se
               </p>
               <p className="truncate text-sm font-bold lg:text-base">{raid.raidBoss.name}</p>
               <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {raid.startAt ? dayjs(raid.startAt).format("YYYY.MM.DD") : "-"} ~{" "}
-                {raid.endAt ? dayjs(raid.endAt).format("MM.DD") : "-"}
+                {raid.startAt ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "YYYY.MM.DD" }) : "-"} ~{" "}
+                {raid.endAt ? formatInstant(raid.endAt, { timeZone: displayTimeZone, format: "MM.DD" }) : "-"}
               </p>
             </div>
             <div className="flex flex-col items-start gap-1">
@@ -157,7 +166,7 @@ function RaidSelectorItem({ raid, selected = false }: { raid: SelectableRaid; se
   return (
     <div>
       <RaidCard
-        raid={raid}
+        raid={normalizedRaid}
         timeLocaleType="absolute"
         showTimeLabel={false}
         showDateRange

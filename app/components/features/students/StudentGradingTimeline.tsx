@@ -1,7 +1,8 @@
 import { PencilSquareIcon } from "@heroicons/react/16/solid";
-import dayjs from "dayjs";
 import { Link } from "react-router";
 import { ProfileImage, TagIcon } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant, parseUtcTimestamp } from "~/lib/date-time";
 import {
   STUDENT_GRADING_TAG_DISPLAY,
   type StudentGradingTagValue,
@@ -26,13 +27,13 @@ type StudentGradingTimelineProps = {
   hideEditAction?: boolean;
 };
 
-export function formatStudentGradingTimestamp(createdAt: string, updatedAt: string) {
-  const created = dayjs(createdAt);
-  const updated = dayjs(updatedAt);
+export function formatStudentGradingTimestamp(createdAt: string, updatedAt: string, timeZone: string) {
+  const created = parseUtcTimestamp(createdAt);
+  const updated = parseUtcTimestamp(updatedAt);
   if (updated.isAfter(created)) {
-    return `(수정됨) ${updated.format("YYYY.MM.DD")}`;
+    return `(수정됨) ${formatInstant(updatedAt, { timeZone })}`;
   }
-  return created.format("YYYY.MM.DD");
+  return formatInstant(createdAt, { timeZone });
 }
 
 function TimelineCard({
@@ -46,6 +47,7 @@ function TimelineCard({
   hideMetaRow: boolean;
   hideEditAction: boolean;
 }) {
+  const displayTimeZone = useDisplayTimeZone();
   const studentName = grading.student.name;
   const authorName = isCurrentUser ? "나의 평가" : grading.user.username;
 
@@ -75,7 +77,7 @@ function TimelineCard({
 
         <div className="flex shrink-0 items-center gap-2">
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            {formatStudentGradingTimestamp(grading.createdAt, grading.updatedAt)}
+            {formatStudentGradingTimestamp(grading.createdAt, grading.updatedAt, displayTimeZone)}
           </p>
 
           {isCurrentUser && !hideEditAction && (

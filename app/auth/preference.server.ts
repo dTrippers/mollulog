@@ -4,10 +4,12 @@ let _preferenceCookie: Cookie;
 
 export type Preference = {
   darkMode?: boolean;
+  timeZone?: string;
 };
 
 const defaultPreference = {
   darkMode: false,
+  timeZone: undefined,
 };
 
 export async function getPreference(env: Env, request: Request): Promise<Preference> {

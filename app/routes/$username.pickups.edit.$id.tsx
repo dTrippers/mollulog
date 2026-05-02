@@ -1,6 +1,5 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction, redirect } from "react-router";
 import { useLoaderData, useSearchParams, useSubmit } from "react-router";
-import dayjs from "dayjs";
 import { useState } from "react";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
@@ -13,6 +12,7 @@ import { resolveContentName } from "~/models/content-name";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { Bars3Icon } from "@heroicons/react/16/solid";
 import { RecruitmentRepository } from "~/repositories";
+import { compareInstantDesc, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
 
 export const meta: MetaFunction = () => [
   { title: "모집 이력 관리 | 몰루로그" },
@@ -47,7 +47,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     currentPickupHistory = await getPickupHistory(env, sensei.id, params.id, true);
   }
 
-  const now = dayjs();
+  const now = nowUtcIso();
 
   const [allGroups, allStudentsList] = await Promise.all([
     recruitmentRepository.getAll(),
@@ -55,7 +55,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   ]);
 
   const pickupGroups = allGroups.filter((g) =>
-    g.recruitments.some((r) => r.pickup && r.student) && dayjs(g.startAt).isBefore(now)
+    g.recruitments.some((r) => r.pickup && r.student) && isInstantBefore(g.startAt, now)
   );
   const timelineContents = await getTimelineContentsByRecruitmentGroupUids(
     env,
@@ -75,8 +75,8 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       return {
         uid: group.uid,
         name,
-        since: group.startAt,
-        until: group.endAt ?? null,
+        since: toUtcIso(group.startAt),
+        until: group.endAt ? toUtcIso(group.endAt) : null,
         recruitments: group.recruitments
           .filter((r) => r.pickup && r.student)
           .map((r) => ({
@@ -87,7 +87,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     })
   );
 
-  events.sort((a, b) => dayjs(b.since).diff(dayjs(a.since)));
+  events.sort((a, b) => compareInstantDesc(a.since, b.since));
 
   return {
     events,

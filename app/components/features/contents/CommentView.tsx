@@ -1,7 +1,8 @@
 import { Link } from "react-router";
-import dayjs from "dayjs";
 import { LockClosedIcon } from "@heroicons/react/16/solid";
 import { ProfileImage } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant } from "~/lib/date-time";
 
 type CommentViewProps = {
   body: string;
@@ -15,7 +16,8 @@ type CommentViewProps = {
 };
 
 export default function CommentView({ body, visibility, createdAt, sensei, variant = "default" }: CommentViewProps) {
-  const formattedTime = dayjs(createdAt).format("YYYY-MM-DD");
+  const displayTimeZone = useDisplayTimeZone();
+  const formattedTime = formatInstant(createdAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" });
   const compact = variant === "compact";
   return (
     <div className="flex gap-x-2 items-begin">

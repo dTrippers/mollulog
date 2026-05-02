@@ -3,7 +3,7 @@ import type { FutureContent } from "../../../app/models/content";
 import { normalizeFutureContentDates } from "../../../app/models/future-content";
 
 describe("normalizeFutureContentDates", () => {
-  it("restores cached ISO date strings back into Date instances", () => {
+  it("keeps cached ISO date strings as normalized UTC ISO strings", () => {
     const cachedContent = {
       uid: "raid-202604-hieronymus",
       name: "히에로니무스",
@@ -46,15 +46,15 @@ describe("normalizeFutureContentDates", () => {
 
     const normalized = normalizeFutureContentDates(cachedContent);
 
-    expect(normalized.startAt).toBeInstanceOf(Date);
-    expect(normalized.endAt).toBeInstanceOf(Date);
-    expect(normalized.syncedAt).toBeInstanceOf(Date);
-    expect(normalized.recruitments[0].since).toBeInstanceOf(Date);
-    expect(normalized.recruitments[0].until).toBeInstanceOf(Date);
+    expect(normalized.startAt).toBe("2026-03-31T02:00:00.000Z");
+    expect(normalized.endAt).toBe("2026-04-06T19:00:00.000Z");
+    expect(normalized.syncedAt).toBe("2026-03-29T09:20:22.385Z");
+    expect(normalized.recruitments[0].since).toBe("2026-03-31T02:00:00.000Z");
+    expect(normalized.recruitments[0].until).toBe("2026-04-07T02:00:00.000Z");
   });
 
   it("keeps cached future contents visible after normalization", () => {
-    const now = new Date("2026-04-05T00:00:00.000Z");
+    const now = "2026-04-05T00:00:00.000Z";
     const normalized = normalizeFutureContentDates({
       uid: "future-event",
       name: "미래 이벤트",

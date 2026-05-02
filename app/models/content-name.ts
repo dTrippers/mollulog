@@ -1,5 +1,6 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
+import type { UtcIsoString } from "~/lib/date-time";
 import { RaidRepository, RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
 import { raidTypeLocale } from "~/locales/ko";
@@ -10,8 +11,8 @@ type ContentInput = {
   uid: string;
   contentType: string;
   contentUid: string | null;
-  startAt?: Date | null;
-  endAt?: Date | null;
+  startAt?: UtcIsoString | Date | null;
+  endAt?: UtcIsoString | Date | null;
 };
 
 // ============================================================
@@ -115,8 +116,8 @@ export type ContentRef = {
   contentType: string;
   contentUid: string | null;
   recruitmentGroupUid?: string | null;
-  startAt?: Date | null;
-  endAt?: Date | null;
+  startAt?: UtcIsoString | Date | null;
+  endAt?: UtcIsoString | Date | null;
 };
 
 type ContentRepositories = {

@@ -1,6 +1,5 @@
 import { Link } from "react-router";
 import { PlayIcon } from "@heroicons/react/24/outline";
-import dayjs from "dayjs";
 import { ArrowsUpDownIcon } from "@heroicons/react/24/outline";
 import type { RefObject } from "react";
 import { EmptyView, FilterButtons, LoadingSkeleton } from "~/components/primitives";
@@ -79,7 +78,7 @@ function VideoCard({ title, channelTitle, score, youtubeId, thumbnailUrl, publis
         <p className="mb-2 line-clamp-1 text-xs text-neutral-500 dark:text-neutral-400">{channelTitle}</p>
         <div className="flex justify-between items-center text-xs text-neutral-500 dark:text-neutral-400">
           <span>{typeof score === "number" ? `${score.toLocaleString()}점` : "점수 정보 없음"}</span>
-          <span>{dayjs(publishedAt.slice(0, 10)).format("YYYY.MM.DD")}</span>
+          <span>{publishedAt.slice(0, 10).replaceAll("-", ".")}</span>
         </div>
       </div>
     </Link>

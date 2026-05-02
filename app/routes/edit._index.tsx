@@ -1,24 +1,19 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
 import { ArrowRightStartOnRectangleIcon, KeyIcon, LinkIcon } from "@heroicons/react/24/outline";
-import dayjs from "dayjs";
-import timezone from "dayjs/plugin/timezone";
-import utc from "dayjs/plugin/utc";
 import { type ElementType, type ReactNode, useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
 import { Button, Input, Title } from "~/components/primitives";
+import { nowUtcIso } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
 import { getPasskeysBySensei } from "~/models/passkey";
 import { getSenseiById, updateSensei } from "~/models/sensei";
 import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
 import { getAllStudents } from "~/models/student";
-
-dayjs.extend(utc);
-dayjs.extend(timezone);
 
 export const meta: MetaFunction = () => [{ title: "프로필 관리 | 몰루로그" }];
 
@@ -147,14 +142,14 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     session.set(authenticator.sessionKey, sensei);
 
     return data<ActionData>(
-      { intent, success: true, savedAt: dayjs().tz("Asia/Seoul").format("HH:mm") },
+      { intent, success: true, savedAt: nowUtcIso() },
       { headers: { "Set-Cookie": await commitSession(session) } },
     );
   }
 
   const memberCode = toNullable(getOptionalString("memberCode"));
   await upsertSenseiPrivacy(env, sensei.id, memberCode ?? null);
-  return data<ActionData>({ intent, success: true, savedAt: dayjs().tz("Asia/Seoul").format("HH:mm") });
+  return data<ActionData>({ intent, success: true, savedAt: nowUtcIso() });
 };
 
 function EditSection({

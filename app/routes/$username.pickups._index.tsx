@@ -7,7 +7,7 @@ import PickupHistoryView from "./$username.pickups._components/PickupHistoryView
 import { SubTitle } from "~/components/primitives";
 import { resolveContentName } from "~/models/content-name";
 import { getAllStudentsMap } from "~/models/student";
-import dayjs from "dayjs";
+import { compareInstantDesc, toUtcIso } from "~/lib/date-time";
 import { getRouteSensei } from "./$username";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
@@ -111,7 +111,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     pickupRateCount += currentPickupCount * rateMultiplier;
     totalTrial += history.result.length > 0 ? Math.max(...history.result.map((result) => result.trial)) : 0;
 
-    const eventSince = timelineContent?.startAt ?? (group?.startAt ? new Date(group.startAt) : new Date(0));
+    const eventSince = timelineContent?.startAt ?? (group?.startAt ? toUtcIso(group.startAt) : toUtcIso(0));
     const resolvedEventName =
       timelineContent?.name ??
       (group
@@ -138,7 +138,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       trial: history.result.length > 0 ? history.result[history.result.length - 1].trial : 0,
       recruitedStudents: students,
     };
-  }))).sort((a, b) => dayjs(b.event.since).diff(dayjs(a.event.since)));
+  }))).sort((a, b) => compareInstantDesc(a.event.since, b.event.since));
 
   const currentUser = await getActiveSensei(env, request);
   return {

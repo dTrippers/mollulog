@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { normalizeInstant, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { resolveContentName } from "./content-name";
 
 export type TimelineContentType =
@@ -49,8 +50,8 @@ export const timelineContentsTable = sqliteTable("timeline_contents", {
 export type TimelineContent = {
   uid: string;
   name: string;
-  startAt: Date;
-  endAt: Date | null;
+  startAt: UtcIsoString;
+  endAt: UtcIsoString | null;
   endless: boolean;
   imageUrl: string | null;
   videos: TimelineContentVideo[];
@@ -64,7 +65,7 @@ export type TimelineContent = {
   isSpoiler: boolean;
   tags: string[];
   earnablePyroxene: number | null;
-  syncedAt: Date | null;
+  syncedAt: UtcIsoString | null;
 };
 
 type RawTimelineContent = Omit<TimelineContent, "name">;
@@ -81,8 +82,8 @@ function splitIntoBatches<T>(values: T[], batchSize = IN_QUERY_BATCH_SIZE): T[][
 function toRaw(row: typeof timelineContentsTable.$inferSelect): RawTimelineContent {
   return {
     uid: row.uid,
-    startAt: new Date(row.startAt),
-    endAt: row.endAt ? new Date(row.endAt) : null,
+    startAt: normalizeInstant(row.startAt),
+    endAt: row.endAt ? normalizeInstant(row.endAt) : null,
     endless: row.endless === 1,
     imageUrl: row.imageUrl ?? null,
     videos: JSON.parse(row.videos) as TimelineContentVideo[],
@@ -96,7 +97,7 @@ function toRaw(row: typeof timelineContentsTable.$inferSelect): RawTimelineConte
     isSpoiler: row.isSpoiler === 1,
     tags: JSON.parse(row.tags) as string[],
     earnablePyroxene: row.earnablePyroxene ?? null,
-    syncedAt: row.syncedAt ? new Date(row.syncedAt) : null,
+    syncedAt: row.syncedAt ? normalizeInstant(row.syncedAt) : null,
   };
 }
 
@@ -117,7 +118,7 @@ export async function getTimelineContent(env: Env, uid: string): Promise<Timelin
 
 export async function getTimelineContents(env: Env): Promise<TimelineContent[]> {
   const db = drizzle(env.DB);
-  const now = new Date().toISOString();
+  const now = nowUtcIso();
   const rows = await db
     .select()
     .from(timelineContentsTable)
@@ -134,7 +135,7 @@ export async function getTimelineContents(env: Env): Promise<TimelineContent[]> 
 
 export async function getUpcomingEvent(env: Env): Promise<TimelineContent | null> {
   const db = drizzle(env.DB);
-  const now = new Date().toISOString();
+  const now = nowUtcIso();
   const row = await db
     .select()
     .from(timelineContentsTable)
@@ -168,7 +169,7 @@ export async function getTimelineContentsByUids(env: Env, uids: string[]): Promi
 export async function getFutureRaidContents(env: Env, contentTypes: TimelineContentType[]): Promise<TimelineContent[]> {
   if (contentTypes.length === 0) return [];
   const db = drizzle(env.DB);
-  const now = new Date().toISOString();
+  const now = nowUtcIso();
   const rows = await db
     .select()
     .from(timelineContentsTable)
@@ -186,16 +187,16 @@ export async function getFutureRaidContents(env: Env, contentTypes: TimelineCont
 export async function getTimelineContentsByContentTypes(
   env: Env,
   contentTypes: TimelineContentType[],
-  endAfter?: Date,
+  endAfter?: Date | UtcIsoString,
 ): Promise<TimelineContent[]> {
   const db = drizzle(env.DB);
-  const now = new Date().toISOString();
+  const now = nowUtcIso();
   const conditions = [
     inArray(timelineContentsTable.contentType, contentTypes),
     or(lte(timelineContentsTable.startAt, now), isNotNull(timelineContentsTable.syncedAt)),
   ];
   if (endAfter) {
-    conditions.push(gte(timelineContentsTable.endAt, endAfter.toISOString()));
+    conditions.push(gte(timelineContentsTable.endAt, toUtcIso(endAfter)));
   }
   const rows = await db
     .select()
@@ -209,7 +210,7 @@ export async function getTimelineContentsByContentTypes(
 export async function getTimelineContentDatesByContentUid(
   env: Env,
   contentUid: string,
-): Promise<{ startAt: Date; endAt: Date | null } | null> {
+): Promise<{ startAt: UtcIsoString; endAt: UtcIsoString | null } | null> {
   const db = drizzle(env.DB);
   const row = await db
     .select({ startAt: timelineContentsTable.startAt, endAt: timelineContentsTable.endAt })
@@ -217,13 +218,13 @@ export async function getTimelineContentDatesByContentUid(
     .where(eq(timelineContentsTable.contentUid, contentUid))
     .get();
   if (!row) return null;
-  return { startAt: new Date(row.startAt), endAt: row.endAt ? new Date(row.endAt) : null };
+  return { startAt: normalizeInstant(row.startAt), endAt: row.endAt ? normalizeInstant(row.endAt) : null };
 }
 
 export async function getTimelineContentDatesByContentUids(
   env: Env,
   contentUids: string[],
-): Promise<Map<string, { startAt: Date; endAt: Date | null }>> {
+): Promise<Map<string, { startAt: UtcIsoString; endAt: UtcIsoString | null }>> {
   if (contentUids.length === 0) return new Map();
   const db = drizzle(env.DB);
   const rows = (
@@ -246,7 +247,7 @@ export async function getTimelineContentDatesByContentUids(
       .filter((r) => r.contentUid)
       .map((r) => [
         r.contentUid as string,
-        { startAt: new Date(r.startAt), endAt: r.endAt ? new Date(r.endAt) : null },
+        { startAt: normalizeInstant(r.startAt), endAt: r.endAt ? normalizeInstant(r.endAt) : null },
       ]),
   );
 }
@@ -304,7 +305,7 @@ export async function getAllTimelineContentsMeta(env: Env): Promise<TimelineCont
 
 export async function getUnsyncedUnstartedContents(env: Env): Promise<RawTimelineContent[]> {
   const db = drizzle(env.DB);
-  const now = new Date().toISOString();
+  const now = nowUtcIso();
   const rows = await db
     .select()
     .from(timelineContentsTable)
@@ -317,7 +318,7 @@ export async function markSyncedAt(env: Env, uid: string): Promise<void> {
   const db = drizzle(env.DB);
   await db
     .update(timelineContentsTable)
-    .set({ syncedAt: sql`current_timestamp`, updatedAt: sql`current_timestamp` })
+    .set({ syncedAt: nowUtcIso(), updatedAt: nowUtcIso() })
     .where(eq(timelineContentsTable.uid, uid));
 }
 
@@ -347,8 +348,8 @@ export async function upsertTimelineContent(env: Env, input: Omit<TimelineConten
     .get();
 
   const values = {
-    startAt: input.startAt.toISOString(),
-    endAt: input.endAt?.toISOString() ?? null,
+    startAt: toUtcIso(input.startAt),
+    endAt: input.endAt ? toUtcIso(input.endAt) : null,
     endless: input.endless ? 1 : 0,
     imageUrl: input.imageUrl,
     videos: JSON.stringify(input.videos),
@@ -365,7 +366,7 @@ export async function upsertTimelineContent(env: Env, input: Omit<TimelineConten
   if (existing) {
     await db
       .update(timelineContentsTable)
-      .set({ ...values, updatedAt: sql`current_timestamp` })
+      .set({ ...values, updatedAt: nowUtcIso() })
       .where(eq(timelineContentsTable.id, existing.id));
   } else {
     await db.insert(timelineContentsTable).values({ ...values, uid: input.uid });

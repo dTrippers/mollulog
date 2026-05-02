@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { Link } from "react-router";
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
-import dayjs from "dayjs";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { timelineContentTypeLocale } from "~/locales/ko";
 import { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES } from "~/models/content";
 import type { TimelineContentType } from "~/models/timeline-content";
@@ -10,8 +11,8 @@ type EventListItem = {
   uid: string;
   name: string;
   type: TimelineContentType;
-  since: Date;
-  until: Date;
+  since: UtcIsoString;
+  until: UtcIsoString;
   imageUrl?: string | null;
 };
 
@@ -22,6 +23,8 @@ type EventListProps = {
 };
 
 export default function EventList({ events, showArrow = true, className = "" }: EventListProps) {
+  const displayTimeZone = useDisplayTimeZone();
+
   if (events.length === 0) {
     return null;
   }
@@ -51,7 +54,8 @@ export default function EventList({ events, showArrow = true, className = "" }: 
                 {event.name}
               </p>
               <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {dayjs(event.since).format("YYYY-MM-DD")} ~ {dayjs(event.until).format("YYYY-MM-DD")}
+                {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} ~{" "}
+                {formatInstant(event.until, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
               </p>
             </div>
             {event.imageUrl && (

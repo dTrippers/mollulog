@@ -1,5 +1,6 @@
-import dayjs from "dayjs";
 import { StudentCards } from "~/components/features/students";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { bossImageUrl } from "~/models/assets";
 import SelectForm, { type SelectFormProps } from "./SelectForm";
 
@@ -7,8 +8,8 @@ type ContentSelectFormProps = Omit<SelectFormProps, "options"> & {
   contents: {
     uid: string;
     name: string;
-    since?: Date;
-    until?: Date;
+    since?: UtcIsoString | Date;
+    until?: UtcIsoString | Date;
     recruitments?: {
       student: {
         uid: string;
@@ -23,6 +24,8 @@ type ContentSelectFormProps = Omit<SelectFormProps, "options"> & {
 };
 
 export default function ContentSelectForm(props: ContentSelectFormProps) {
+  const displayTimeZone = useDisplayTimeZone();
+
   return (
     <SelectForm
       {...props}
@@ -36,7 +39,8 @@ export default function ContentSelectForm(props: ContentSelectFormProps) {
               <p className="font-semibold whitespace-pre-line">{content.name}</p>
               {content.since && content.until && (
                 <p className="text-sm text-neutral-500">
-                  {dayjs(content.since).format("YYYY.MM.DD")} ~ {dayjs(content.until).format("YYYY.MM.DD")}
+                  {formatInstant(content.since, { timeZone: displayTimeZone, format: "YYYY.MM.DD" })} ~{" "}
+                  {formatInstant(content.until, { timeZone: displayTimeZone, format: "YYYY.MM.DD" })}
                 </p>
               )}
               {content.recruitments && (

@@ -10,13 +10,22 @@ import {
 } from "@heroicons/react/16/solid";
 import { HeartIcon as EmptyHeartIcon, IdentificationIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
-import dayjs from "dayjs";
 import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { RaidCard } from "~/components/features/raids";
 import { StudentCards } from "~/components/features/students";
 import { BottomSheet, Button } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
+import {
+  formatInstant,
+  formatInstantDateKey,
+  isInstantAfter,
+  isInstantBefore,
+  nowUtcIso,
+  parseUtcTimestamp,
+  type UtcIsoString,
+} from "~/lib/date-time";
 import {
   contentTypeLocale,
   recruitmentLabelLocale,
@@ -35,8 +44,8 @@ export type ContentTimelineItemProps = {
   contentType: EventType | RaidType;
   runType: "first" | "rerun" | "permanent";
   endless: boolean;
-  since?: Date | null;
-  until: Date | null;
+  since?: UtcIsoString | null;
+  until: UtcIsoString | null;
   link: string;
   confirmed?: boolean;
   isSpoiler?: boolean;
@@ -93,8 +102,8 @@ export type ContentTimelineItemProps = {
       schaleDbId?: string | null;
     } | null;
     studentName: string;
-    since: Date;
-    until: Date | null;
+    since: UtcIsoString;
+    until: UtcIsoString | null;
   }[];
   raidInfo?: {
     raidType: string;
@@ -140,21 +149,20 @@ export function ContentTimelineItem({
   onHideSpoiler,
   signedIn,
 }: ContentTimelineItemProps) {
+  const displayTimeZone = useDisplayTimeZone();
   const showComments = recruitments && recruitments.length > 0;
   const [commentEditing, setCommentEditing] = useState(false);
 
   let daysLabel = null;
-  const now = dayjs();
-  const sinceDayjs = dayjs(since);
-  const untilDayjs = dayjs(until);
+  const now = nowUtcIso();
 
   let finishSoon = false;
-  if (since && until && sinceDayjs.isBefore(now)) {
-    const remainingDays = untilDayjs.startOf("day").diff(now.startOf("day"), "day");
+  if (since && until && isInstantBefore(since, now)) {
+    const remainingDays = parseUtcTimestamp(until).startOf("day").diff(parseUtcTimestamp(now).startOf("day"), "day");
     if (remainingDays >= 2) {
       daysLabel = `${remainingDays}일`;
     } else {
-      const remainingHours = untilDayjs.startOf("hour").diff(now.startOf("hour"), "hour");
+      const remainingHours = parseUtcTimestamp(until).startOf("hour").diff(parseUtcTimestamp(now).startOf("hour"), "hour");
       if (remainingHours > 24) {
         daysLabel = "내일 종료";
       } else {
@@ -192,11 +200,11 @@ export function ContentTimelineItem({
           {!endless && daysLabel && (
             <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />
           )}
-          {confirmed && since && sinceDayjs.isAfter(now) && (
+          {confirmed && since && isInstantAfter(since, now) && (
             <ContentTag Icon={CheckCircleIcon} text="확정" color="green" />
           )}
           {tags.includes("recruit_free_100") &&
-            recruitments?.every(({ until }) => until !== null && dayjs(until).isAfter(now)) && (
+            recruitments?.every(({ until }) => until !== null && isInstantAfter(until, now)) && (
               <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
             )}
           {tags.includes("shop") && <ContentTag Icon={CalculatorIcon} text="이벤트 상점" color="default" />}
@@ -223,6 +231,7 @@ export function ContentTimelineItem({
           link={link}
           eventSince={since ?? null}
           eventUntil={until ?? null}
+          timeZone={displayTimeZone}
         />
       )}
 
@@ -356,8 +365,8 @@ type RaidInfoProps = {
       difficulty: string | null;
     }[];
   };
-  since: Date | null;
-  until: Date | null;
+  since: UtcIsoString | null;
+  until: UtcIsoString | null;
 };
 
 function RaidInfo({ raid, since, until }: RaidInfoProps) {
@@ -398,8 +407,8 @@ type RecruitmentsProps = {
       defenseType?: Defense;
       role?: Role;
     } | null;
-    since: Date;
-    until: Date | null;
+    since: UtcIsoString;
+    until: UtcIsoString | null;
   }[];
 
   favoritedStudents: string[];
@@ -407,8 +416,9 @@ type RecruitmentsProps = {
   onFavorite?: (studentUid: string, favorited: boolean) => void;
   link: string;
 
-  eventSince: Date | null;
-  eventUntil: Date | null;
+  eventSince: UtcIsoString | null;
+  eventUntil: UtcIsoString | null;
+  timeZone: string;
 };
 
 function Recruitments({
@@ -418,15 +428,14 @@ function Recruitments({
   favoritedCounts,
   onFavorite,
   link,
-  eventSince,
-  eventUntil,
+  timeZone,
 }: RecruitmentsProps) {
   // Group pickups by period (since/until dates)
   const recruitmentDateGroups = useMemo(() => {
     return recruitments.reduce(
       (groups, recruitment) => {
-        const sinceKey = dayjs(recruitment.since).format("YYYY-MM-DD");
-        const untilKey = recruitment.until ? dayjs(recruitment.until).format("YYYY-MM-DD") : "null";
+        const sinceKey = formatInstantDateKey(recruitment.since, timeZone);
+        const untilKey = recruitment.until ? formatInstantDateKey(recruitment.until, timeZone) : "null";
         const key = `${sinceKey}-${untilKey}`;
         if (!groups[key]) {
           groups[key] = {
@@ -438,21 +447,12 @@ function Recruitments({
         groups[key].recruitments.push(recruitment);
         return groups;
       },
-      {} as Record<string, { since: Date; until: Date | null; recruitments: RecruitmentsProps["recruitments"] }>,
+      {} as Record<string, { since: UtcIsoString; until: UtcIsoString | null; recruitments: RecruitmentsProps["recruitments"] }>,
     );
-  }, [recruitments]);
+  }, [recruitments, timeZone]);
 
   const recruitDateGroupsArray = Object.values(recruitmentDateGroups);
   const hasMultiplePeriods = recruitDateGroupsArray.length >= 2;
-
-  const firstSince = recruitments[0].since;
-  const firstUntil = recruitments[0].until;
-  const isPickupDayDifferent =
-    firstSince &&
-    firstUntil &&
-    (!dayjs(firstSince).isSame(dayjs(eventSince), "day") || !dayjs(firstUntil).isSame(dayjs(eventUntil), "day"));
-
-  const lastUntil = recruitments[recruitments.length - 1].until;
 
   if (contentType === "fes") {
     return (
@@ -468,8 +468,10 @@ function Recruitments({
         {recruitDateGroupsArray.map((group) => {
           return (
             <RecruitmentStudents
-              key={`${dayjs(group.since).format("YYYY-MM-DD")}-${dayjs(group.until).format("YYYY-MM-DD")}`}
-              title={`${dayjs(group.since).format("MM/DD")} ~ ${dayjs(group.until).format("MM/DD")}`}
+              key={`${formatInstantDateKey(group.since, timeZone)}-${group.until ? formatInstantDateKey(group.until, timeZone) : "null"}`}
+              title={`${formatInstant(group.since, { timeZone, format: "MM/DD" })} ~ ${
+                group.until ? formatInstant(group.until, { timeZone, format: "MM/DD" }) : "미정"
+              }`}
               recruitments={group.recruitments}
               favoritedStudents={favoritedStudents ?? []}
               favoritedCounts={favoritedCounts ?? {}}

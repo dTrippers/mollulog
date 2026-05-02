@@ -1,5 +1,4 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
-import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import { Link, type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
 import { RaidCard } from "~/components/features/raids";
@@ -9,6 +8,7 @@ import RaidStatisticsSlotCount from "~/components/features/raids/RaidStatisticsS
 import { EmptyView, HorizontalScroll, LoadingSkeleton, Section } from "~/components/primitives";
 import { fetchRaidOverview } from "~/lib/ranks/overview";
 import { type RaidStatistics, fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
+import { compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 import type { RaidType } from "~/models/content.d";
 import { raidTypeToParam } from "~/models/raid";
 import { getMaxTierAt } from "~/models/student";
@@ -49,8 +49,11 @@ export default function RaidSummary() {
         (raid) =>
           raid.raidBoss.uid === currentRaid.raidBoss.uid && raid.jpSchedule !== null && raid.uid !== currentRaid.uid,
       )
-      .sort((a, b) => dayjs(b.startAt).diff(dayjs(a.startAt)));
-  }, [allRaids, currentRaid.raidBoss.uid, currentRaid.uid]);
+      .sort((a, b) => {
+        const fallbackNow = currentRaid.startAt ?? nowUtcIso();
+        return compareInstantDesc(a.startAt ?? fallbackNow, b.startAt ?? fallbackNow);
+      });
+  }, [allRaids, currentRaid.raidBoss.uid, currentRaid.startAt, currentRaid.uid]);
 
   const [statistics, setStatistics] = useState<RaidStatistics[] | null>(null);
   const [clearLevels, setClearLevels] = useState<Record<string, number> | null>(null);

@@ -1,11 +1,12 @@
 import { Transition } from "@headlessui/react";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
-import dayjs from "dayjs";
 import hangul from "hangul-js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { StudentCards } from "~/components/features/students";
 import { Field } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import type { ShopAvailableEvent } from "~/models/event-content";
 import { sanitizeClassName } from "~/prophandlers";
 
@@ -218,10 +219,9 @@ function EventSelectorItem({
   event: SelectableEvent;
   placeholder?: string;
 }) {
-  const since = dayjs(event.since);
-  const until = event.until ? dayjs(event.until) : null;
-  const now = dayjs();
-  const status = since.isAfter(now) ? "예정" : until?.isAfter(now) ? "진행중" : "종료";
+  const displayTimeZone = useDisplayTimeZone();
+  const now = nowUtcIso();
+  const status = isInstantAfter(event.since, now) ? "예정" : event.until && isInstantAfter(event.until, now) ? "진행중" : "종료";
   const pickupStudents = event.recruitments
     ?.filter(({ pickup, student }) => pickup && student)
     .map(({ student }) => ({ uid: student?.uid ?? null, name: student?.name, hideName: true }));
@@ -239,7 +239,8 @@ function EventSelectorItem({
           )}
         </div>
         <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-          {since.format("YYYY.MM.DD")} ~ {until ? until.format("MM.DD") : "미정"}
+          {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY.MM.DD" })} ~{" "}
+          {event.until ? formatInstant(event.until, { timeZone: displayTimeZone, format: "MM.DD" }) : "미정"}
         </p>
         {pickupStudents && pickupStudents.length > 0 && (
           <div className="mt-1.5 max-w-72">

@@ -1,5 +1,5 @@
-import dayjs from "dayjs";
 import { getAllRaidSchedules, getRaidSchedule, raidTypeFromParam } from "~/models/raid";
+import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 
 export type RaidSchedule = NonNullable<Awaited<ReturnType<typeof getRaidSchedule>>>;
 export type RaidScheduleListItem = Awaited<ReturnType<typeof getAllRaidSchedules>>[number];
@@ -65,12 +65,12 @@ export class RaidRepository {
   }
 
   async getUpcoming(forceRefresh = false) {
-    const now = dayjs();
+    const now = nowUtcIso();
     const schedules = await this.getAll(forceRefresh);
 
     return schedules
-      .filter((schedule) => schedule.endAt && dayjs(schedule.endAt).isAfter(now))
-      .sort((a, b) => new Date(a.startAt as Date).getTime() - new Date(b.startAt as Date).getTime());
+      .filter((schedule) => schedule.endAt && isInstantAfter(schedule.endAt, now))
+      .sort((a, b) => compareInstantAsc(a.startAt ?? now, b.startAt ?? now));
   }
 
   async getByTypeAndSeason(raidType: string, seasonIndex: number | string, forceRefresh = false) {
@@ -94,12 +94,12 @@ export class RaidRepository {
   }
 
   async refresh() {
-    const now = dayjs();
+    const now = nowUtcIso();
     const schedules = await this.getAll(true);
 
     await Promise.all(
       schedules
-        .filter((schedule) => schedule.endAt && dayjs(schedule.endAt).isAfter(now))
+        .filter((schedule) => schedule.endAt && isInstantAfter(schedule.endAt, now))
         .map((schedule) => this.getSchedule(schedule.uid, true)),
     );
 

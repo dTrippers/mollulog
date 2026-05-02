@@ -1,7 +1,8 @@
-import { and, desc, eq, inArray, or, sql, type SQLWrapper } from "drizzle-orm";
+import { type SQLWrapper, and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import { normalizeUtcTimestamp, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { senseisTable } from "./sensei";
 
 export type CommunityPostType = "student_review" | "event_opinion" | "guide";
@@ -43,7 +44,7 @@ export type NestedCommunityComment = {
   uid: string;
   body: string;
   visibility: CommunityCommentVisibility;
-  createdAt: string;
+  createdAt: UtcIsoString;
   sensei: {
     me: boolean;
     username: string;
@@ -63,8 +64,8 @@ export type CommunityFeedPost = {
   subjectRaidType: string | null;
   subjectSeasonIndex: number | null;
   blocks: CommunityPostBlock[];
-  createdAt: string;
-  updatedAt: string;
+  createdAt: UtcIsoString;
+  updatedAt: UtcIsoString;
   author: {
     id: number;
     username: string;
@@ -192,6 +193,10 @@ export function getPrimaryPlaintextBlockText(blocks: CommunityPostBlock[]): stri
   return null;
 }
 
+export function normalizeCommunityTimestamp(value: string): UtcIsoString {
+  return normalizeUtcTimestamp(value);
+}
+
 function communityPostVisibilityFilter(
   currentUserId?: number | null,
   {
@@ -235,7 +240,7 @@ function toNestedCommunityComment(
     uid: comment.uid,
     body: comment.body,
     visibility: comment.visibility,
-    createdAt: comment.createdAt,
+    createdAt: normalizeCommunityTimestamp(comment.createdAt),
     sensei: {
       me: comment.userId === currentUserId,
       username: comment.username,
@@ -313,7 +318,7 @@ export async function getNestedCommunityCommentsByPostUids(
     .from(communityCommentsTable)
     .innerJoin(senseisTable, eq(communityCommentsTable.userId, senseisTable.id))
     .where(and(inArray(communityCommentsTable.postUid, postUids), communityCommentVisibilityFilter(currentUserId)))
-    .orderBy(communityCommentsTable.createdAt);
+    .orderBy(sql`unixepoch(${communityCommentsTable.createdAt})`, communityCommentsTable.id);
 
   const result = postUids.reduce<Record<string, NestedCommunityComment[]>>((acc, postUid) => {
     acc[postUid] = [];
@@ -427,7 +432,11 @@ export async function getCommunityFeedPage(
     .from(communityPostsTable)
     .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
     .where(where)
-    .orderBy(desc(communityPostsTable.updatedAt), desc(communityPostsTable.createdAt))
+    .orderBy(
+      desc(sql`unixepoch(${communityPostsTable.updatedAt})`),
+      desc(sql`unixepoch(${communityPostsTable.createdAt})`),
+      desc(communityPostsTable.id),
+    )
     .limit(safePageSize)
     .offset(offset);
 
@@ -456,8 +465,8 @@ export async function getCommunityFeedPage(
       subjectRaidType: row.subjectRaidType,
       subjectSeasonIndex: row.subjectSeasonIndex,
       blocks: parseCommunityPostBlocks(row.blocks),
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
+      createdAt: normalizeCommunityTimestamp(row.createdAt),
+      updatedAt: normalizeCommunityTimestamp(row.updatedAt),
       author: {
         id: row.userId,
         username: row.username,
@@ -525,8 +534,8 @@ export async function getCommunityPostByUid(
     subjectRaidType: row.subjectRaidType,
     subjectSeasonIndex: row.subjectSeasonIndex,
     blocks: parseCommunityPostBlocks(row.blocks),
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
+    createdAt: normalizeCommunityTimestamp(row.createdAt),
+    updatedAt: normalizeCommunityTimestamp(row.updatedAt),
     author: {
       id: row.userId,
       username: row.username,
@@ -579,6 +588,7 @@ export async function createCommunityComment(
   }
 
   const uid = nanoid(8);
+  const now = nowUtcIso();
   await db.insert(communityCommentsTable).values({
     uid,
     postUid,
@@ -586,6 +596,8 @@ export async function createCommunityComment(
     parentUid: targetParentUid,
     body,
     visibility,
+    createdAt: now,
+    updatedAt: now,
   });
 
   return uid;
@@ -601,7 +613,7 @@ export async function updateCommunityComment(
   const db = drizzle(env.DB);
   await db
     .update(communityCommentsTable)
-    .set({ body, visibility, updatedAt: sql`current_timestamp` })
+    .set({ body, visibility, updatedAt: nowUtcIso() })
     .where(and(eq(communityCommentsTable.uid, commentUid), eq(communityCommentsTable.userId, userId)));
 }
 
@@ -661,6 +673,7 @@ export async function setCommunityPostLike(
         uid: nanoid(8),
         postUid,
         userId,
+        createdAt: nowUtcIso(),
       })
       .onConflictDoNothing();
     return;

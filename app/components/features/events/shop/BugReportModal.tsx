@@ -3,6 +3,7 @@ import { useFetcher } from "react-router";
 import { Transition } from "@headlessui/react";
 import { XMarkIcon, CheckCircleIcon } from "@heroicons/react/16/solid";
 import { Button, Textarea } from "~/components/primitives";
+import { nowUtcIso } from "~/lib/date-time";
 import type { Stage, ShopResource, CollectableResource } from "./types";
 import type { ShopState } from "./hooks/useShopState";
 import type { CalculationResult } from "./hooks/useShopCalculations";
@@ -43,7 +44,7 @@ export default function BugReportModal({
 
     // Create debug log at submission time
     const debugLog = {
-      timestamp: new Date().toISOString(),
+      timestamp: nowUtcIso(),
       eventUid,
       stages,
       shopResources,

@@ -1,8 +1,9 @@
-import dayjs from "dayjs";
 import { Form, Link } from "react-router";
 import { Button } from "~/components/primitives";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { StudentCards } from "~/components/features/students";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { pickupGroupTypeLocale } from "~/locales/ko";
 
 type PickupHistoryViewProps = {
@@ -11,7 +12,7 @@ type PickupHistoryViewProps = {
     uid: string;
     name: string;
     type: string;
-    since: Date;
+    since: UtcIsoString;
   };
   recruitedStudents: {
     uid: string;
@@ -57,6 +58,8 @@ export default function PickupHistoryView({ uid, event, recruitedStudents, trial
 }
 
 function PickupHeader({ event }: { event: PickupHistoryViewProps["event"] }) {
+  const displayTimeZone = useDisplayTimeZone();
+
   return (
     <div>
       <Link to={`/events/${event.uid}`} className="inline-block max-w-full hover:underline">
@@ -66,7 +69,8 @@ function PickupHeader({ event }: { event: PickupHistoryViewProps["event"] }) {
         </h2>
       </Link>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        {pickupGroupTypeLocale[event.type] ?? "픽업 모집"} | {dayjs(event.since).format("YYYY-MM-DD")}
+        {pickupGroupTypeLocale[event.type] ?? "픽업 모집"} |{" "}
+        {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
       </p>
     </div>
   );

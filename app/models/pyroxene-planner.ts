@@ -10,6 +10,7 @@ import { getTimelineContents, getFutureRaidContents } from "./timeline-content";
 import { getAllStudentsMap } from "./student";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { RaidType } from "./content.d";
+import { compareInstantAsc, compareInstantDesc, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 
 /**
  * Pyroxene Planner Contents
@@ -21,8 +22,8 @@ export type PyroxenePlannerContent =
     kind: "event";
     uid: string;
     name: string;
-    since: Date;
-    until: Date;
+    since: UtcIsoString;
+    until: UtcIsoString;
     earnablePyroxene: number | null;
     recruitments: {
       recruitmentType: RecruitmentTypeEnum;
@@ -35,8 +36,8 @@ export type PyroxenePlannerContent =
     uid: string;
     name: string;
     type: RaidType;
-    since: Date;
-    until: Date;
+    since: UtcIsoString;
+    until: UtcIsoString;
   };
 
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
@@ -53,7 +54,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
     const allContents = [
       ...eventContents.filter((c) => !raidUids.has(c.uid)),
       ...raidContents,
-    ].sort((a, b) => a.startAt.getTime() - b.startAt.getTime());
+    ].sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
 
     const recruitmentGroupUids = allContents.map((c) => c.recruitmentGroupUid).filter((uid) => uid !== null) as string[];
     const [recruitmentGroups, studentsMap] = await Promise.all([
@@ -73,8 +74,8 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
         }));
 
         // endAt이 없는 경우 recruitment의 최대 until 날짜를 사용
-        const until = content.endAt ?? group?.recruitments.reduce<Date | null>(
-          (max, r) => r.until ? (max && max > new Date(r.until) ? max : new Date(r.until)) : max,
+        const until = content.endAt ?? group?.recruitments.reduce<UtcIsoString | null>(
+          (max, r) => (r.until ? (max && compareInstantDesc(max, r.until) < 0 ? max : toUtcIso(r.until)) : max),
           null,
         );
         if (!until) return null;
@@ -92,7 +93,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
       if (content.contentType === "raid") {
         let raidName = content.name;
         let raidType = content.contentType as RaidType;
-        let until: Date | null = content.endAt;
+        let until: UtcIsoString | null = content.endAt;
 
         if (content.contentUid) {
           const schedule = await raidRepository.getSchedule(content.contentUid, forceRefresh);

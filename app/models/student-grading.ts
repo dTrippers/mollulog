@@ -1,11 +1,13 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
+import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import {
   communityPostsTable,
   createPlaintextCommunityPostBlocks,
   deleteCommunityPostByUid,
   getPrimaryPlaintextBlockText,
+  normalizeCommunityTimestamp,
   parseCommunityPostBlocks,
   serializeCommunityPostBlocks,
 } from "./community";
@@ -24,8 +26,8 @@ export type StudentGrading = {
   uid: string;
   studentUid: string;
   comment: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: UtcIsoString;
+  updatedAt: UtcIsoString;
   tags?: StudentGradingTagValue[];
 };
 
@@ -49,8 +51,8 @@ function toModel(grading: typeof communityPostsTable.$inferSelect): StudentGradi
     uid: grading.uid,
     studentUid: grading.subjectStudentUid ?? "",
     comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
-    createdAt: grading.createdAt,
-    updatedAt: grading.updatedAt,
+    createdAt: normalizeCommunityTimestamp(grading.createdAt),
+    updatedAt: normalizeCommunityTimestamp(grading.updatedAt),
   };
 }
 
@@ -104,6 +106,7 @@ export async function upsertStudentGrading(
     .limit(1);
 
   const blocks = serializeCommunityPostBlocks(createPlaintextCommunityPostBlocks(comment));
+  const now = nowUtcIso();
   let gradingUid: string;
 
   if (existing.length > 0) {
@@ -113,7 +116,7 @@ export async function upsertStudentGrading(
       .set({
         blocks,
         visibility: "public",
-        updatedAt: sql`current_timestamp`,
+        updatedAt: now,
       })
       .where(eq(communityPostsTable.uid, gradingUid));
   } else {
@@ -125,6 +128,8 @@ export async function upsertStudentGrading(
       subjectStudentUid: studentUid,
       visibility: "public",
       blocks,
+      createdAt: now,
+      updatedAt: now,
     });
   }
 
@@ -170,8 +175,8 @@ export async function getStudentGradingsByStudentWithUsers(
     uid: grading.uid,
     studentUid: grading.subjectStudentUid ?? studentUid,
     comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
-    createdAt: grading.createdAt,
-    updatedAt: grading.updatedAt,
+    createdAt: normalizeCommunityTimestamp(grading.createdAt),
+    updatedAt: normalizeCommunityTimestamp(grading.updatedAt),
     user: {
       username: grading.username,
       profileStudentId: grading.profileStudentId,
@@ -206,8 +211,8 @@ export async function getStudentGradingsByUser(env: Env, userId: number): Promis
     uid: grading.uid,
     studentUid: grading.subjectStudentUid ?? "",
     comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
-    createdAt: grading.createdAt,
-    updatedAt: grading.updatedAt,
+    createdAt: normalizeCommunityTimestamp(grading.createdAt),
+    updatedAt: normalizeCommunityTimestamp(grading.updatedAt),
   }));
 
   const gradingUids = result.map((grading) => grading.uid);
@@ -238,15 +243,19 @@ export async function getRecentStudentGradingsWithUsers(
     .from(communityPostsTable)
     .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
     .where(eq(communityPostsTable.postType, "student_review"))
-    .orderBy(desc(communityPostsTable.updatedAt), desc(communityPostsTable.createdAt))
+    .orderBy(
+      desc(sql`unixepoch(${communityPostsTable.updatedAt})`),
+      desc(sql`unixepoch(${communityPostsTable.createdAt})`),
+      desc(communityPostsTable.id),
+    )
     .limit(limit);
 
   const result: StudentGradingWithUser[] = gradings.map((grading) => ({
     uid: grading.uid,
     studentUid: grading.subjectStudentUid ?? "",
     comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
-    createdAt: grading.createdAt,
-    updatedAt: grading.updatedAt,
+    createdAt: normalizeCommunityTimestamp(grading.createdAt),
+    updatedAt: normalizeCommunityTimestamp(grading.updatedAt),
     user: {
       username: grading.username,
       profileStudentId: grading.profileStudentId,
@@ -296,7 +305,11 @@ export async function getRecentStudentGradingsPageWithUsers(
     .from(communityPostsTable)
     .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
     .where(eq(communityPostsTable.postType, "student_review"))
-    .orderBy(desc(communityPostsTable.updatedAt), desc(communityPostsTable.createdAt))
+    .orderBy(
+      desc(sql`unixepoch(${communityPostsTable.updatedAt})`),
+      desc(sql`unixepoch(${communityPostsTable.createdAt})`),
+      desc(communityPostsTable.id),
+    )
     .limit(safePageSize)
     .offset(offset);
 
@@ -304,8 +317,8 @@ export async function getRecentStudentGradingsPageWithUsers(
     uid: grading.uid,
     studentUid: grading.subjectStudentUid ?? "",
     comment: getPrimaryPlaintextBlockText(parseCommunityPostBlocks(grading.blocks)),
-    createdAt: grading.createdAt,
-    updatedAt: grading.updatedAt,
+    createdAt: normalizeCommunityTimestamp(grading.createdAt),
+    updatedAt: normalizeCommunityTimestamp(grading.updatedAt),
     user: {
       username: grading.username,
       profileStudentId: grading.profileStudentId,

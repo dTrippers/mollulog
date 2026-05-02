@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
+import { nowUtcIso } from "~/lib/date-time";
 import {
   communityPostsTable,
   createPlaintextCommunityPostBlocks,
@@ -219,6 +220,7 @@ type PartyCreateFields = Pick<
 
 export async function createParty(env: Env, sensei: Sensei, fields: PartyCreateFields) {
   const db = drizzle(env.DB);
+  const now = nowUtcIso();
   await db.insert(communityPostsTable).values({
     uid: nanoid(8),
     userId: sensei.id,
@@ -228,6 +230,8 @@ export async function createParty(env: Env, sensei: Sensei, fields: PartyCreateF
     subjectRaidType: fields.raidType,
     subjectSeasonIndex: fields.seasonIndex,
     blocks: buildGuideBlocks(fields),
+    createdAt: now,
+    updatedAt: now,
   });
 }
 
@@ -279,7 +283,7 @@ export async function updateParty(env: Env, sensei: Sensei, uid: string, fields:
       subjectRaidType: nextFields.raidType,
       subjectSeasonIndex: nextFields.seasonIndex,
       blocks: buildGuideBlocks(nextFields),
-      updatedAt: new Date().toISOString(),
+      updatedAt: nowUtcIso(),
     })
     .where(eq(communityPostsTable.uid, uid));
 }

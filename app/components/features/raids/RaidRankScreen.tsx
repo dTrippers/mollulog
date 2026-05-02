@@ -5,6 +5,7 @@ import { StudentCards } from "~/components/features/students";
 import { EmptyView, Pagination } from "~/components/primitives";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { type ParsedRaidRankDocument, convertTier, fetchRanks } from "~/lib/ranks/ranks";
+import type { UtcIsoString } from "~/lib/date-time";
 import type { RaidType, Role } from "~/models/content.d";
 import { type Boss, scoreToDifficultyAndTime } from "~/models/raid";
 import type { RaidRankFilterState } from "./RaidRankFilter";
@@ -12,7 +13,7 @@ import type { RaidRankFilterState } from "./RaidRankFilter";
 type RaidRankScreenProps = {
   currentRaid: {
     boss: string;
-    since: Date;
+    since: UtcIsoString | Date;
     raidType: RaidType;
     seasonIndex: number;
     defenseType: Defense;
@@ -45,10 +46,11 @@ const maximumLevels: Record<string, number> = {
   "2024-07-23": 90,
 };
 
-function getMaxLevelAt(date: Date): number {
+function getMaxLevelAt(date: UtcIsoString | Date): number {
+  const targetDate = date instanceof Date ? date : new Date(date);
   const dates = Object.keys(maximumLevels).sort();
   for (let i = dates.length - 1; i >= 0; i--) {
-    if (date >= new Date(dates[i])) {
+    if (targetDate >= new Date(dates[i])) {
       return maximumLevels[dates[i]];
     }
   }

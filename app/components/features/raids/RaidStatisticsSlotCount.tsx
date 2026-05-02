@@ -1,10 +1,11 @@
-import dayjs from "dayjs";
 import { useState } from "react";
 import { Link } from "react-router";
 import { ActionCard } from "~/components/features/editor";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { StudentCard, TierCounts } from "~/components/features/students";
 import { FilterButtons, OptionBadge } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { defenseTypeColor } from "~/locales/ko";
 import { raidTypeLocale } from "~/locales/ko";
@@ -22,8 +23,8 @@ type RaidStatisticsSlotCountProps = {
     boss: string;
     defenseType: Defense;
     difficulty: string | null;
-    startAt: Date;
-    endAt: Date;
+    startAt: UtcIsoString;
+    endAt: UtcIsoString;
     terrain: Terrain;
   };
   slotsCount: number;
@@ -37,6 +38,7 @@ type RaidStatisticsSlotCountProps = {
 type SlotMode = "total" | "own" | "assist";
 
 export default function RaidStatisticsSlotCount({ student, raid, slotsCount, assistsCount, slotsByTier, assistsByTier, maxTier = 8 }: RaidStatisticsSlotCountProps) {
+  const displayTimeZone = useDisplayTimeZone();
   const ownedByTierMap = slotsByTier.reduce((acc, { tier, count }) => {
     acc[tier] = count;
     return acc;
@@ -77,7 +79,11 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
               <ChevronRightIcon className="size-4 inline-block" />
             </p>
             <p className="text-xs">
-              {dayjs(raid.startAt).format("YYYY-MM-DD")}<span className="hidden md:inline"> ~ {dayjs(raid.endAt).format("YYYY-MM-DD")}</span>
+              {formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
+              <span className="hidden md:inline">
+                {" "}
+                ~ {formatInstant(raid.endAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
+              </span>
             </p>
           </Link>
           <div

@@ -10,6 +10,7 @@ import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxe
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { Button, EmptyView, MultilineText, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
 import PyroxeneChart from "./PyroxeneChart";
+import type { UtcIsoString } from "~/lib/date-time";
 
 export type PickupResources = {
   pyroxene: number;
@@ -21,8 +22,8 @@ export type PyroxeneScheduleItem = ({
   event?: {
     uid: string;
     name: string;
-    since: Date;
-    until: Date;
+    since: UtcIsoString | Date;
+    until: UtcIsoString | Date;
     earnablePyroxene: number | null;
     recruitments: {
       recruitmentType: RecruitmentTypeEnum;
@@ -36,8 +37,8 @@ export type PyroxeneScheduleItem = ({
     uid: string;
     type: RaidType;
     name: string;
-    since: Date;
-    until: Date;
+    since: UtcIsoString | Date;
+    until: UtcIsoString | Date;
   };
 
   onetimeGain?: {

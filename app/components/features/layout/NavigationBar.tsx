@@ -22,6 +22,7 @@ import { useSignIn } from "~/contexts/SignInProvider";
 import { ProfileImage } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
 import { submitPreference } from "~/routes/api.preference";
+import type { UtcIsoString } from "~/lib/date-time";
 import {
   getMobileNavigationItems,
   getNavigationSections,
@@ -35,7 +36,7 @@ type NavigationBarProps = {
   currentProfileStudentId: string | null;
   darkMode: boolean;
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
-  upcomingEvent: { uid: string; since: Date; until: Date } | null;
+  upcomingEvent: { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
   hasRecentNews: boolean;
   hasActiveCoupons: boolean;
 };

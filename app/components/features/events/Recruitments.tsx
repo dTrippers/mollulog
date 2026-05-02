@@ -1,12 +1,13 @@
 import { ClockIcon, StarIcon, XCircleIcon } from "@heroicons/react/16/solid";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
-import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { AttributeBadge, HorizontalScroll, SubTitle } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
+import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 import {
   attackTypeColor,
   attackTypeLocale,
@@ -25,8 +26,8 @@ export type Recruitment = {
   recruitmentType: RecruitmentTypeEnum;
   pickup: boolean;
   rerun: boolean;
-  since: Date;
-  until: Date | null;
+  since: UtcIsoString;
+  until: UtcIsoString | null;
   studentName: string;
   student: {
     uid: string;
@@ -116,6 +117,7 @@ function RecruitmentFavoriteButton({
 }
 
 export default function Recruitments({ recruitments, signedIn }: RecruitmentsProps) {
+  const displayTimeZone = useDisplayTimeZone();
   const groups = useMemo(() => {
     const pickupRecruitments = recruitments.filter(
       ({ pickup, recruitmentType }) => pickup || recruitmentType === "given",
@@ -123,18 +125,20 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
 
     const grouped = pickupRecruitments.reduce(
       (acc, recruitment) => {
-        const key = `${recruitment.since}-${recruitment.until}`;
+        const key = `${formatInstantDateKey(recruitment.since, displayTimeZone)}-${
+          recruitment.until ? formatInstantDateKey(recruitment.until, displayTimeZone) : "null"
+        }`;
         if (!acc[key]) {
           acc[key] = { since: recruitment.since, until: recruitment.until, recruitments: [] };
         }
         acc[key].recruitments.push(recruitment);
         return acc;
       },
-      {} as Record<string, { since: Date; until: Date | null; recruitments: Recruitment[] }>,
+      {} as Record<string, { since: UtcIsoString; until: UtcIsoString | null; recruitments: Recruitment[] }>,
     );
 
     return Object.values(grouped);
-  }, [recruitments]);
+  }, [displayTimeZone, recruitments]);
 
   const limitedRecruitments = useMemo(
     () => recruitments.filter(({ pickup, recruitmentType }) => !pickup && recruitmentType !== "given"),
@@ -191,8 +195,8 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
             <div key={`${group.since}-${group.until}`} className="mb-6">
               {showDateLabels && (
                 <p className="mb-3 font-semibold text-sm text-neutral-600 dark:text-neutral-400">
-                  {dayjs(group.since).format("M월 D일")}
-                  {group.until ? ` ~ ${dayjs(group.until).format("M월 D일")}` : ""}
+                  {formatInstant(group.since, { timeZone: displayTimeZone, format: "M월 D일" })}
+                  {group.until ? ` ~ ${formatInstant(group.until, { timeZone: displayTimeZone, format: "M월 D일" })}` : ""}
                 </p>
               )}
 

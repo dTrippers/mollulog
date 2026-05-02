@@ -6,6 +6,7 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useFetcher,
   useLoaderData,
   useLocation,
   useNavigation,
@@ -18,6 +19,8 @@ import { ErrorPage, Footer, NavigationBar, ServerErrorPage } from "./components/
 import { SignInProvider } from "./contexts/SignInProvider";
 import { useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
+import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
+import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { getNavigationBarContents } from "./models/content";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
 import styles from "./tailwind.css?url";
@@ -37,6 +40,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     currentUsername: sensei?.username ?? null,
     currentProfileStudentId: sensei?.profileStudentId ?? null,
     darkMode: preference.darkMode ?? false,
+    displayTimeZone: normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE),
     navigationBarContents,
     publicEnv: {
       STAGE: env.STAGE ?? "local",
@@ -105,7 +109,10 @@ export default function App() {
   const { currentUsername, currentProfileStudentId, navigationBarContents } = loaderData;
 
   const [darkMode, setDarkMode] = useState(loaderData.darkMode);
+  const [displayTimeZone, setDisplayTimeZone] = useState(loaderData.displayTimeZone);
   const loadingBarRef = useRef<LoadingBarRef>(null);
+  const submittedTimeZoneRef = useRef<string | null>(null);
+  const preferenceFetcher = useFetcher();
 
   const navigate = useNavigation();
   useEffect(() => {
@@ -119,6 +126,24 @@ export default function App() {
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
   }, [darkMode]);
+
+  useEffect(() => {
+    const browserTimeZone = getBrowserTimeZone();
+    if (
+      !browserTimeZone ||
+      browserTimeZone === loaderData.displayTimeZone ||
+      browserTimeZone === submittedTimeZoneRef.current
+    ) {
+      return;
+    }
+
+    setDisplayTimeZone(browserTimeZone);
+    submittedTimeZoneRef.current = browserTimeZone;
+    preferenceFetcher.submit(
+      { darkMode, timeZone: browserTimeZone },
+      { method: "post", action: "/api/preference", encType: "application/json" },
+    );
+  }, [darkMode, loaderData.displayTimeZone, preferenceFetcher]);
 
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
@@ -158,9 +183,11 @@ export default function App() {
           <div className="mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0">
             <div className="lg:h-screen mx-auto w-full px-4 md:px-8 pt-2 pb-6 lg:py-6">
               <div>
-                <StudentCardPopupProvider key={pathname}>
-                  <Outlet />
-                </StudentCardPopupProvider>
+                <TimeZoneProvider timeZone={displayTimeZone}>
+                  <StudentCardPopupProvider key={pathname}>
+                    <Outlet />
+                  </StudentCardPopupProvider>
+                </TimeZoneProvider>
                 <Footer />
               </div>
             </div>

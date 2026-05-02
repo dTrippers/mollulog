@@ -1,10 +1,37 @@
 import { graphql } from "~/graphql";
-import { fetchCached } from "./base";
 import { runQuery } from "~/lib/baql";
+import { compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { fetchCached } from "./base";
 import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
 export type Boss = "binah" | "chesed" | "hod" | "shirokuro" | "perorozilla" | "goz" | "hieronymus" | "kaiten-fx-mk0" | "gregorius" | "hovercraft" | "myouki-kurokage" | "geburah" | "yesod";
+
+type RawRaidSchedule = NonNullable<Awaited<ReturnType<typeof runRaidScheduleDetailQuery>>>;
+
+export type NormalizedRaidSchedule = Omit<RawRaidSchedule, "startAt" | "endAt" | "jpSchedule"> & {
+  startAt: UtcIsoString | null;
+  endAt: UtcIsoString | null;
+  jpSchedule: RawRaidSchedule["jpSchedule"];
+};
+
+function normalizeRaidSchedule<T extends { startAt: Date | string | null; endAt: Date | string | null }>(
+  schedule: T,
+): Omit<T, "startAt" | "endAt"> & { startAt: UtcIsoString | null; endAt: UtcIsoString | null } {
+  return {
+    ...schedule,
+    startAt: schedule.startAt ? toUtcIso(schedule.startAt) : null,
+    endAt: schedule.endAt ? toUtcIso(schedule.endAt) : null,
+  };
+}
+
+async function runRaidScheduleDetailQuery(env: Env, uid: string) {
+  const { data, error } = await runQuery(raidScheduleDetailQuery, { uid });
+  if (error) {
+    throw "failed to fetch raid schedule";
+  }
+  return data?.raidSchedule ?? null;
+}
 
 // ============================================================
 // RaidSchedule (새 API)
@@ -23,11 +50,8 @@ const raidScheduleDetailQuery = graphql(`
 
 export function getRaidSchedule(env: Env, uid: string, forceRefresh = false) {
   return fetchCached(env, `raids::schedules::uid=${uid}`, async () => {
-    const { data, error } = await runQuery(raidScheduleDetailQuery, { uid });
-    if (error) {
-      throw "failed to fetch raid schedule";
-    }
-    return data?.raidSchedule ?? null;
+    const schedule = await runRaidScheduleDetailQuery(env, uid);
+    return schedule ? normalizeRaidSchedule(schedule) : null;
   }, 24 * 60 * 60, forceRefresh);
 }
 
@@ -53,7 +77,7 @@ export function getRaidScheduleBySeasonIndex(
     if (error) {
       throw "failed to fetch raid schedule by season index";
     }
-    return data?.raidScheduleBySeasonIndex ?? null;
+    return data?.raidScheduleBySeasonIndex ? normalizeRaidSchedule(data.raidScheduleBySeasonIndex) : null;
   }, 24 * 60 * 60, forceRefresh);
 }
 
@@ -76,16 +100,16 @@ export function getAllRaidSchedules(env: Env, forceRefresh = false) {
     if (error || !data) {
       throw error ?? "failed to fetch raid schedules";
     }
-    return data.raidSchedules.nodes;
+    return data.raidSchedules.nodes.map(normalizeRaidSchedule);
   }, 24 * 60 * 60, forceRefresh);
 }
 
 export async function getUpcomingRaidSchedules(env: Env, forceRefresh = false) {
-  const now = new Date();
+  const now = nowUtcIso();
   const schedules = await getAllRaidSchedules(env, forceRefresh);
   return schedules
-    .filter((schedule) => schedule.endAt && new Date(schedule.endAt) >= now)
-    .sort((a, b) => new Date(a.startAt as Date).getTime() - new Date(b.startAt as Date).getTime());
+    .filter((schedule) => schedule.endAt && isInstantAfter(schedule.endAt, now))
+    .sort((a, b) => compareInstantAsc(a.startAt ?? now, b.startAt ?? now));
 }
 
 export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [
@@ -190,7 +214,7 @@ export function scoreToDifficultyAndTime(boss: Boss, score: number): { difficult
 /**
  * RaidSchedule의 startAt/endAt이 null인 경우 timeline_contents DB의 날짜로 fallback
  */
-export async function applyTimelineDateFallback<T extends { uid: string; startAt: Date | null; endAt: Date | null }>(
+export async function applyTimelineDateFallback<T extends { uid: string; startAt: UtcIsoString | null; endAt: UtcIsoString | null }>(
   env: Env,
   schedules: T[],
 ): Promise<T[]> {

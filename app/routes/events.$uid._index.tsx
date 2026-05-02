@@ -2,6 +2,7 @@ import { useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect } from "react-router";
 import { EventHeader, Recruitments } from "~/components/features/events";
+import { toUtcIso } from "~/lib/date-time";
 import { getNestedContentComments } from "~/models/content";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { favoriteStudent, getFavoritedCounts, getUserFavoritedStudents, unfavoriteStudent } from "~/models/favorite-students";
@@ -50,6 +51,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const recruitmentsWithFavorites = eventContent.recruitments.map((recruitment) => ({
     ...recruitment,
+    since: toUtcIso(recruitment.since),
+    until: recruitment.until ? toUtcIso(recruitment.until) : null,
     favorited: favoritedStudents.some((f) => f.studentId === recruitment.student?.uid),
     favoritedCount:
       favoritedCounts.find(

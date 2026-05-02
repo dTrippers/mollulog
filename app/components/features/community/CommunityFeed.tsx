@@ -1,11 +1,12 @@
 import { ChatBubbleLeftEllipsisIcon, HeartIcon, LockClosedIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
-import dayjs from "dayjs";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import ContentCommentEditor from "~/components/features/contents/ContentCommentEditor";
-import { useSignIn } from "~/contexts/SignInProvider";
 import { MarkdownText, ProfileImage, TagIcon } from "~/components/primitives";
+import { useSignIn } from "~/contexts/SignInProvider";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { compareInstantDesc, formatInstant, parseUtcTimestamp } from "~/lib/date-time";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
 import type { EnrichedCommunityFeedPost } from "~/models/community-feed";
 import {
@@ -45,14 +46,14 @@ export default function CommunityFeed({ posts, signedIn, studentsByUid, preview 
   );
 }
 
-function getPostTimestampMeta(createdAt: string, updatedAt: string) {
-  const created = dayjs(createdAt);
-  const updated = dayjs(updatedAt);
+function getPostTimestampMeta(createdAt: string, updatedAt: string, timeZone: string) {
+  const created = parseUtcTimestamp(createdAt);
+  const updated = parseUtcTimestamp(updatedAt);
   if (updated.isAfter(created)) {
-    return { text: updated.format("YYYY.MM.DD"), edited: true };
+    return { dateTime: updated.toISOString(), text: formatInstant(updatedAt, { timeZone }), edited: true };
   }
 
-  return { text: created.format("YYYY.MM.DD"), edited: false };
+  return { dateTime: created.toISOString(), text: formatInstant(createdAt, { timeZone }), edited: false };
 }
 
 function getPostTypeLabel(post: CommunityFeedPostItem) {
@@ -78,7 +79,7 @@ function getVisibilityLabel(visibility: CommunityFeedPostItem["visibility"]) {
 function flattenComments(comments: CommunityFeedPost["comments"]) {
   return comments
     .flatMap((comment) => [comment, ...(comment.subcomments ?? [])])
-    .sort((a, b) => dayjs(a.createdAt).valueOf() - dayjs(b.createdAt).valueOf());
+    .sort((a, b) => -compareInstantDesc(a.createdAt, b.createdAt));
 }
 
 function CommunityPostCard({
@@ -93,13 +94,14 @@ function CommunityPostCard({
   preview: boolean;
 }) {
   const { showSignIn } = useSignIn();
+  const displayTimeZone = useDisplayTimeZone();
   const [comments, setComments] = useState(post.comments);
   const [liked, setLiked] = useState(post.liked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [commentEditing, setCommentEditing] = useState(false);
   const commentFetcher = useFetcher();
   const likeFetcher = useFetcher<{ likeCount: number; liked: boolean }>();
-  const timestamp = getPostTimestampMeta(post.createdAt, post.updatedAt);
+  const timestamp = getPostTimestampMeta(post.createdAt, post.updatedAt, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment = post.postType === "event_opinion";
   const canLike = post.postType === "guide";
@@ -184,7 +186,7 @@ function CommunityPostCard({
             </Link>
             <span className="text-neutral-700 dark:text-neutral-300">{getPostTypeLabel(post)}</span>
             <span className="text-neutral-400 dark:text-neutral-500">·</span>
-            <time className="shrink-0 text-neutral-500 dark:text-neutral-400" dateTime={post.updatedAt}>
+            <time className="shrink-0 text-neutral-500 dark:text-neutral-400" dateTime={timestamp.dateTime}>
               {timestamp.text}
             </time>
             {timestamp.edited && <span className="text-neutral-500 dark:text-neutral-400">(수정됨)</span>}

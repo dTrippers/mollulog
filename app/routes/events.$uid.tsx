@@ -2,6 +2,7 @@ import { InformationCircleIcon, ListBulletIcon, ShoppingCartIcon } from "@heroic
 import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
 import { EventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
+import { compareInstantAsc } from "~/lib/date-time";
 import { getEventContentSchedule, getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
@@ -30,7 +31,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
       since: shopSchedule?.startAt ?? eventMetadata.since,
       until: shopSchedule?.endAt ?? eventMetadata.until,
     });
-    shopAvailableEvents.sort((a, b) => a.since.getTime() - b.since.getTime());
+    shopAvailableEvents.sort((a, b) => compareInstantAsc(a.since, b.since));
   }
   return { eventMetadata, shopAvailableEvents };
 };

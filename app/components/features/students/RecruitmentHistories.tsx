@@ -1,7 +1,8 @@
-import dayjs from "dayjs";
 import { Link } from "react-router";
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { compareInstantDesc, formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { sanitizeClassName } from "~/prophandlers";
 
 type RecruitmentHistoriesProps = {
@@ -9,17 +10,18 @@ type RecruitmentHistoriesProps = {
     uid: string;
     name: string;
     imageUrl: string | null;
-    since: Date;
+    since: UtcIsoString;
   }[];
 };
 
 export default function RecruitmentHistories({ recruitments }: RecruitmentHistoriesProps) {
+  const displayTimeZone = useDisplayTimeZone();
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showLeftBlur, setShowLeftBlur] = useState(false);
   const [showRightBlur, setShowRightBlur] = useState(false);
 
-  const sortedRecruitments = [...recruitments].sort((a, b) => dayjs(b.since).diff(dayjs(a.since)));
+  const sortedRecruitments = [...recruitments].sort((a, b) => compareInstantDesc(a.since, b.since));
 
   const updateBlur = useCallback(() => {
     const container = scrollContainerRef.current;
@@ -117,7 +119,7 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
             >
               <p className="font-bold text-semibold whitespace-pre-line">{event.name}</p>
               <p className="text-xs mt-1">
-                {dayjs(event.since).format("YYYY-MM-DD")}
+                {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
               </p>
             </Link>
           </div>

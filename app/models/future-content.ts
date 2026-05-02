@@ -1,22 +1,24 @@
+import { normalizeInstant } from "~/lib/date-time";
 import type { FutureContent } from "./content";
 
-function normalizeDate(value: Date | string | null | undefined): Date | null {
+function normalizeInstantValue(value: string | Date | null | undefined): string | null {
   if (value == null) {
     return null;
   }
-  return value instanceof Date ? value : new Date(value);
+
+  return normalizeInstant(value instanceof Date ? value.toISOString() : value);
 }
 
 export function normalizeFutureContentDates(content: FutureContent): FutureContent {
   return {
     ...content,
-    startAt: normalizeDate(content.startAt) ?? new Date(content.startAt),
-    endAt: normalizeDate(content.endAt),
-    syncedAt: normalizeDate(content.syncedAt),
+    startAt: normalizeInstantValue(content.startAt) ?? normalizeInstant(content.startAt),
+    endAt: normalizeInstantValue(content.endAt),
+    syncedAt: normalizeInstantValue(content.syncedAt),
     recruitments: content.recruitments.map((recruitment) => ({
       ...recruitment,
-      since: normalizeDate(recruitment.since) ?? new Date(recruitment.since),
-      until: normalizeDate(recruitment.until),
+      since: normalizeInstantValue(recruitment.since) ?? normalizeInstant(recruitment.since),
+      until: normalizeInstantValue(recruitment.until),
     })),
   };
 }
