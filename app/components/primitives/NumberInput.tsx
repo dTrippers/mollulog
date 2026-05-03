@@ -30,6 +30,18 @@ type NullableProps = NumberInputBaseProps & {
 
 type NumberInputProps = NonNullableProps | NullableProps;
 
+export function normalizeNumberInputText(inputValue: string, allowNegative: boolean): string {
+  const negative = allowNegative && inputValue.trimStart().startsWith("-");
+  const digitsOnly = inputValue.replace(/[^0-9]/g, "");
+  const cleanValue = digitsOnly.replace(/^0+(?=\d)/, "") || "0";
+
+  if (negative && cleanValue !== "0") {
+    return `-${cleanValue}`;
+  }
+
+  return cleanValue;
+}
+
 export default function NumberInput({
   label,
   defaultValue,
@@ -47,6 +59,7 @@ export default function NumberInput({
 }: NumberInputProps) {
   const nullable = "nullable" in rest && rest.nullable === true;
   const effectiveMin = minValue ?? (nullable ? undefined : 0);
+  const allowNegative = effectiveMin !== undefined && effectiveMin < 0;
 
   const [internalValue, setInternalValue] = useState<number | null>(defaultValue ?? value ?? (nullable ? null : 0));
 
@@ -107,7 +120,11 @@ export default function NumberInput({
               commitValue(clampValue(base - 1));
             }}
             className={buttonClass}
-            disabled={internalValue != null && effectiveMin !== undefined ? internalValue <= effectiveMin : internalValue != null && internalValue <= 0}
+            disabled={
+              internalValue != null && effectiveMin !== undefined
+                ? internalValue <= effectiveMin
+                : internalValue != null && internalValue <= 0
+            }
             aria-label="감소"
           >
             -
@@ -115,8 +132,8 @@ export default function NumberInput({
         )}
         <input
           type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
+          inputMode={allowNegative ? "decimal" : "numeric"}
+          pattern={allowNegative ? "-?[0-9]*" : "[0-9]*"}
           value={internalValue ?? ""}
           placeholder={nullable ? "" : undefined}
           onChange={(e) => {
@@ -127,8 +144,7 @@ export default function NumberInput({
               return;
             }
 
-            const digitsOnly = inputValue.replace(/[^0-9]/g, "");
-            const cleanValue = digitsOnly.replace(/^0+/, "") || "0";
+            const cleanValue = normalizeNumberInputText(inputValue, allowNegative);
 
             commitValue(clampValue(Number(cleanValue)));
           }}

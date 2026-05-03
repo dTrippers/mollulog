@@ -4,9 +4,10 @@ import { Button, Field, FilterButtons, Input } from "~/components/primitives";
 
 type PackageInputProps = {
   onSavePackage: (startDate: Date, packageType: "half" | "full") => void;
+  disabled?: boolean;
 };
 
-export default function PackageInput({ onSavePackage }: PackageInputProps) {
+export default function PackageInput({ onSavePackage, disabled = false }: PackageInputProps) {
   const [packageType, setPackageType] = useState<"half" | "full">("full");
   const [startDate, setStartDate] = useState(new Date());
 
@@ -53,6 +54,7 @@ export default function PackageInput({ onSavePackage }: PackageInputProps) {
           variant="tint-blue"
           fullWidth
           className="mt-2"
+          disabled={disabled}
           onClick={() => onSavePackage(startDate, packageType)}
         />
       </div>

@@ -1,13 +1,14 @@
 import dayjs from "dayjs";
 import { useState } from "react";
 import { Button, Input } from "~/components/primitives";
+import { DEFAULT_BUY_PYROXENE_QUANTITY } from "~/models/pyroxene-planner-source-config";
 
 type BuyInputProps = {
   onSaveBuy: (quantity: number, date: Date) => void;
 };
 
 export default function BuyInput({ onSaveBuy }: BuyInputProps) {
-  const [quantity, setQuantity] = useState(6600);
+  const [quantity, setQuantity] = useState(DEFAULT_BUY_PYROXENE_QUANTITY);
   const [date, setDate] = useState(new Date());
 
   const quantityError = quantity <= 0 ? "구매 수량은 0보다 커야 해요" : undefined;
@@ -20,7 +21,7 @@ export default function BuyInput({ onSaveBuy }: BuyInputProps) {
           label="구매 수량"
           type="number"
           size="sm"
-          defaultValue="6600"
+          defaultValue={String(DEFAULT_BUY_PYROXENE_QUANTITY)}
           onChange={(value) => setQuantity(Number(value))}
           error={quantityError}
         />

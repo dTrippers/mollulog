@@ -1,7 +1,5 @@
 import dayjs from "dayjs";
-import type { RecruitmentTypeEnum } from "~/graphql/graphql";
-import type { UtcIsoString } from "~/lib/date-time";
-import type { RaidType } from "./content.d";
+import type { PyroxeneScheduleItem } from "~/components/features/futures/types";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "./pyroxene-planner";
 import { calculateDailyApChargePyroxene } from "./pyroxene-planner-source-config";
 
@@ -9,51 +7,6 @@ export type PickupResources = {
   pyroxene: number;
   oneTimeTicket: number;
   tenTimeTicket: number;
-};
-
-export type PyroxeneScheduleItem = {
-  event?: {
-    uid: string;
-    name: string;
-    since: UtcIsoString | Date;
-    until: UtcIsoString | Date;
-    earnablePyroxene: number | null;
-    recruitments: {
-      recruitmentType: RecruitmentTypeEnum;
-      pickup: boolean;
-      rerun: boolean;
-      student: { uid: string; name: string; initialTier: number } | null;
-      favorited: boolean;
-    }[];
-  };
-  raid?: {
-    uid: string;
-    type: RaidType;
-    name: string;
-    since: UtcIsoString | Date;
-    until: UtcIsoString | Date;
-  };
-
-  onetimeGain?: {
-    uid?: string;
-    source: TimelineSourceType;
-    date: Date;
-    description: string;
-    pyroxeneDelta?: number;
-    oneTimeTicketDelta?: number;
-    tenTimeTicketDelta?: number;
-  };
-  repeatedGain?: {
-    uid?: string;
-    source: TimelineSourceType;
-    date: Date;
-    description: string;
-    pyroxeneDelta?: number;
-    oneTimeTicketDelta?: number;
-    tenTimeTicketDelta?: number;
-    repeatIntervalDays: number;
-    repeatCount?: number;
-  };
 };
 
 export type TimelineSource = {

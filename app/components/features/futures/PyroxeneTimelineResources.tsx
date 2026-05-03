@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { PickupResources } from "~/models/pyroxene-timeline";
 import { ResourceCard } from "~/components/primitives";
+import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
 
 type PyroxeneTimelineResourcesProps = {
   date: dayjs.Dayjs;
@@ -50,7 +51,7 @@ export default function PyroxeneTimelineResources({
         {resources.pyroxene !== 0 && (
           <ResourceCard
             resourceType={ResourceTypeEnum.Currency}
-            itemUid="2"
+            itemUid={PYROXENE_RESOURCE_UIDS.pyroxene}
             label={formatResourceDelta(resources.pyroxene)}
             labelColor={labelColor(resources.pyroxene)}
           />
@@ -58,7 +59,7 @@ export default function PyroxeneTimelineResources({
         {resources.oneTimeTicket !== 0 && (
           <ResourceCard
             resourceType={ResourceTypeEnum.Item}
-            itemUid="6998"
+            itemUid={PYROXENE_RESOURCE_UIDS.oneTimeTicket}
             label={formatResourceDelta(resources.oneTimeTicket)}
             labelColor={labelColor(resources.oneTimeTicket)}
           />
@@ -66,7 +67,7 @@ export default function PyroxeneTimelineResources({
         {resources.tenTimeTicket !== 0 && (
           <ResourceCard
             resourceType={ResourceTypeEnum.Item}
-            itemUid="6999"
+            itemUid={PYROXENE_RESOURCE_UIDS.tenTimeTicket}
             label={formatResourceDelta(resources.tenTimeTicket)}
             labelColor={labelColor(resources.tenTimeTicket)}
           />

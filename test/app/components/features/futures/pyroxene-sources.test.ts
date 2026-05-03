@@ -2,7 +2,6 @@ import { describe, expect, it } from "@jest/globals";
 import {
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
   PYROXENE_SOURCE_DEFINITIONS,
-  PYROXENE_SOURCE_ROW_DEFINITIONS,
   createOptimisticAttendanceTimelineItems,
   createOptimisticBuyTimelineItems,
   createOptimisticOtherTimelineItems,
@@ -10,6 +9,11 @@ import {
   calculateDailyApChargePyroxene,
   togglePyroxeneTimelineSourceVisibility,
 } from "../../../../../app/models/pyroxene-sources";
+import { normalizePyroxeneTimelineEventAt } from "../../../../../app/models/pyroxene-planner-source-config";
+import {
+  PYROXENE_PANEL_HIDDEN_SOURCE_TYPES,
+  PYROXENE_SOURCE_ROW_DEFINITIONS,
+} from "../../../../../app/components/features/futures/pyroxene-source-config";
 
 describe("pyroxene-sources", () => {
   it("builds the existing default timeline display set from source metadata", () => {
@@ -24,8 +28,9 @@ describe("pyroxene-sources", () => {
   });
 
   it("defines source rows that cover configurable timeline sources exactly once", () => {
+    const hiddenSourceTypes = new Set<string>(PYROXENE_PANEL_HIDDEN_SOURCE_TYPES);
     const sourceTypes = PYROXENE_SOURCE_DEFINITIONS.map((source) => source.type)
-      .filter((type) => type !== "event")
+      .filter((type) => !hiddenSourceTypes.has(type))
       .sort();
     const rowSourceTypes = PYROXENE_SOURCE_ROW_DEFINITIONS.flatMap((row) =>
       row.visibilityTargets.map((target) => target.type),
@@ -120,6 +125,10 @@ describe("pyroxene-sources", () => {
       }),
     ]);
     expect(items[0].uid.split("::")[0]).toBe(items[1].uid.split("::")[0]);
+    expect(items.map((item) => item.eventAt)).toEqual([
+      normalizePyroxeneTimelineEventAt("2026-05-03T00:00:00.000Z"),
+      normalizePyroxeneTimelineEventAt("2026-05-03T00:00:00.000Z"),
+    ]);
   });
 
   it("creates half package optimistic items with half package amounts", () => {
@@ -160,14 +169,18 @@ describe("pyroxene-sources", () => {
     ]);
     expect(items.map((item) => item.source)).toEqual(["attendance", "attendance"]);
     expect(items[0].uid.split("::")[0]).toBe(items[1].uid.split("::")[0]);
+    expect(items.map((item) => item.eventAt)).toEqual([
+      normalizePyroxeneTimelineEventAt("2026-05-05T00:00:00.000Z"),
+      normalizePyroxeneTimelineEventAt("2026-05-10T00:00:00.000Z"),
+    ]);
   });
 
-  it("creates buy optimistic items with selected date preserved", () => {
+  it("creates buy optimistic items with server-normalized event date", () => {
     const items = createOptimisticBuyTimelineItems(6600, new Date("2026-05-03T12:34:56.000Z"));
 
     expect(items).toEqual([
       expect.objectContaining({
-        eventAt: "2026-05-03T12:34:56.000Z",
+        eventAt: normalizePyroxeneTimelineEventAt("2026-05-03T12:34:56.000Z"),
         source: "buy",
         description: "청휘석 구매",
         pyroxeneDelta: 6600,
@@ -184,6 +197,7 @@ describe("pyroxene-sources", () => {
 
     expect(items).toEqual([
       expect.objectContaining({
+        eventAt: normalizePyroxeneTimelineEventAt("2026-05-03T00:00:00.000Z"),
         source: "other",
         description: "점검 보상",
         pyroxeneDelta: 120,

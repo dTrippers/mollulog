@@ -3,8 +3,6 @@ import { useState, type ElementType } from "react";
 import { BottomSheet, Button, FilterButtons, NumberInput } from "~/components/primitives";
 import {
   calculateDailyApChargePyroxene,
-  PYROXENE_SOURCE_ROW_DEFINITIONS,
-  PYROXENE_SOURCE_ROW_GROUP_LABELS,
   isPyroxeneTimelineSourceVisible,
   togglePyroxeneTimelineSourceVisibility,
 } from "~/models/pyroxene-sources";
@@ -12,6 +10,7 @@ import { PYROXENE_AP_CHARGE_MAX_COUNT } from "~/models/pyroxene-planner-source-c
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import type { PickupResources } from "~/models/pyroxene-timeline";
 import { cn } from "~/lib/utils";
+import { PYROXENE_SOURCE_ROW_DEFINITIONS, PYROXENE_SOURCE_ROW_GROUP_LABELS } from "./pyroxene-source-config";
 import AttendanceInput from "./planner-input/AttendanceInput";
 import BuyInput from "./planner-input/BuyInput";
 import PackageInput from "./planner-input/PackageInput";
@@ -24,6 +23,7 @@ type PyroxenePlannerSourcePanelProps = {
   onSavePackage: (startDate: Date, packageType: "half" | "full") => void;
   onSaveAttendance: (startDate: Date) => void;
   onSaveOther: (resources: PickupResources, description: string, date: Date) => void;
+  savingTimelineItem?: boolean;
 };
 
 const sourceGroupOrder = ["regular", "paid", "consumption"] as const;
@@ -63,6 +63,7 @@ export default function PyroxenePlannerSourcePanel({
   onSavePackage,
   onSaveAttendance,
   onSaveOther,
+  savingTimelineItem = false,
 }: PyroxenePlannerSourcePanelProps) {
   const [openRowId, setOpenRowId] = useState<string | null>(null);
   const openRow = PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === openRowId) ?? null;
@@ -165,6 +166,7 @@ export default function PyroxenePlannerSourcePanel({
               onSaveOther(resources, description, date);
               setOpenRowId(null);
             }}
+            savingTimelineItem={savingTimelineItem}
           />
         </BottomSheet>
       )}
@@ -181,17 +183,18 @@ function SourceSheetContent({
   onSaveAttendance,
   onSaveOther,
   onClose,
+  savingTimelineItem,
 }: PyroxenePlannerSourcePanelProps & { rowId: string; onClose: () => void }) {
   if (rowId === "buy") {
     return <BuyInput onSaveBuy={onSaveBuy} />;
   }
 
   if (rowId === "package") {
-    return <PackageInput onSavePackage={onSavePackage} />;
+    return <PackageInput onSavePackage={onSavePackage} disabled={savingTimelineItem} />;
   }
 
   if (rowId === "attendance") {
-    return <AttendanceInput onSaveAttendance={onSaveAttendance} />;
+    return <AttendanceInput onSaveAttendance={onSaveAttendance} disabled={savingTimelineItem} />;
   }
 
   if (rowId === "other") {

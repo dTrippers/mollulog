@@ -4,9 +4,10 @@ import { Button, Input } from "~/components/primitives";
 
 type AttendanceInputProps = {
   onSaveAttendance: (startDate: Date) => void;
+  disabled?: boolean;
 };
 
-export default function AttendanceInput({ onSaveAttendance }: AttendanceInputProps) {
+export default function AttendanceInput({ onSaveAttendance, disabled = false }: AttendanceInputProps) {
   const [startDate, setStartDate] = useState(new Date());
 
   return (
@@ -28,6 +29,7 @@ export default function AttendanceInput({ onSaveAttendance }: AttendanceInputPro
           variant="tint-blue"
           fullWidth
           className="mt-2"
+          disabled={disabled}
           onClick={() => onSaveAttendance(startDate)}
         />
       </div>

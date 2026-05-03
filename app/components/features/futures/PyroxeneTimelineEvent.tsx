@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { StudentCards } from "~/components/features/students";
 import { Button, NumberInput, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import type { PickupResources, PyroxeneScheduleItem } from "~/models/pyroxene-timeline";
+import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
+import type { PickupResources } from "~/models/pyroxene-timeline";
+import type { PyroxeneScheduleItem } from "./types";
 import ResourcesInput from "./planner-input/ResourcesInput";
 
 type PyroxeneTimelineEventProps = {
@@ -219,20 +221,20 @@ function TimelineResourcesStat({
       <div className="mt-1 space-y-1.5">
         <CompactResource
           resourceType={ResourceTypeEnum.Currency}
-          itemUid="2"
+          itemUid={PYROXENE_RESOURCE_UIDS.pyroxene}
           count={pyroxene}
           diff={pyroxeneDelta}
         />
         <div className="grid grid-cols-2 gap-2">
           <CompactResource
             resourceType={ResourceTypeEnum.Item}
-            itemUid="6999"
+            itemUid={PYROXENE_RESOURCE_UIDS.tenTimeTicket}
             count={tenTimeTicket}
             diff={tenTimeTicketDelta}
           />
           <CompactResource
             resourceType={ResourceTypeEnum.Item}
-            itemUid="6998"
+            itemUid={PYROXENE_RESOURCE_UIDS.oneTimeTicket}
             count={oneTimeTicket}
             diff={oneTimeTicketDelta}
           />

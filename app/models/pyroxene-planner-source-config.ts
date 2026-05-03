@@ -1,9 +1,19 @@
+import dayjs from "~/lib/dayjs";
+
 export const PYROXENE_PACKAGE_CONFIG = {
   half: { name: "하프 패키지", oneTime: 176, daily: 20 },
   full: { name: "월간 패키지", oneTime: 392, daily: 40 },
 } as const;
 
 export type PyroxenePackageType = keyof typeof PYROXENE_PACKAGE_CONFIG;
+
+export const PYROXENE_RESOURCE_UIDS = {
+  pyroxene: "2",
+  oneTimeTicket: "6998",
+  tenTimeTicket: "6999",
+} as const;
+
+export const DEFAULT_BUY_PYROXENE_QUANTITY = 6600;
 
 export const PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS = 1;
 export const PYROXENE_PACKAGE_DAILY_REPEAT_COUNT = 30;
@@ -43,4 +53,12 @@ export function calculateDailyApChargePyroxene(count: number): number {
   }
 
   return total;
+}
+
+export function normalizePyroxeneTimelineEventAt(date: Date | string): string {
+  return dayjs(date).utcOffset(9).hour(4).minute(0).second(0).millisecond(0).toISOString();
+}
+
+export function extractPyroxeneTimelineBaseUid(uid: string): string {
+  return uid.split("::")[0];
 }

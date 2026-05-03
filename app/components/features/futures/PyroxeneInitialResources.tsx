@@ -2,13 +2,29 @@ import { Transition } from "@headlessui/react";
 import { useEffect, useState } from "react";
 import { Button, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
 import type { PickupResources } from "~/models/pyroxene-timeline";
 import ResourcesInput from "./planner-input/ResourcesInput";
 
 const resourceItems = [
-  { type: ResourceTypeEnum.Currency, itemUid: "2", label: "청휘석", resourceKey: "pyroxene" as const },
-  { type: ResourceTypeEnum.Item, itemUid: "6999", label: "10회 모집 티켓", resourceKey: "tenTimeTicket" as const },
-  { type: ResourceTypeEnum.Item, itemUid: "6998", label: "1회 모집 티켓", resourceKey: "oneTimeTicket" as const },
+  {
+    type: ResourceTypeEnum.Currency,
+    itemUid: PYROXENE_RESOURCE_UIDS.pyroxene,
+    label: "청휘석",
+    resourceKey: "pyroxene" as const,
+  },
+  {
+    type: ResourceTypeEnum.Item,
+    itemUid: PYROXENE_RESOURCE_UIDS.tenTimeTicket,
+    label: "10회 모집 티켓",
+    resourceKey: "tenTimeTicket" as const,
+  },
+  {
+    type: ResourceTypeEnum.Item,
+    itemUid: PYROXENE_RESOURCE_UIDS.oneTimeTicket,
+    label: "1회 모집 티켓",
+    resourceKey: "oneTimeTicket" as const,
+  },
 ];
 
 type PyroxeneInitialResourcesProps = {

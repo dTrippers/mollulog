@@ -13,8 +13,9 @@ import {
   PyroxenePlannerOptionsPanel,
   PyroxenePlannerSourcePanel,
   PyroxeneSchedule,
+  usePyroxeneScheduleItems,
 } from "~/components/features/futures";
-import type { PickupResources, PyroxeneScheduleItem } from "~/components/features/futures";
+import type { PickupResources } from "~/components/features/futures";
 import type { PyroxenePlannerOptions, PyroxeneTimelineItem, PyroxeneEventData } from "~/models/pyroxene-planner";
 import Page from "~/components/features/layout/Page";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
@@ -33,6 +34,7 @@ import {
   getAllPyroxeneEventData,
   upsertPyroxeneEventData,
   deletePyroxeneEventData,
+  defaultPyroxenePlannerOptions,
 } from "~/models/pyroxene-planner";
 import { ErrorPage } from "~/components/features/layout";
 import {
@@ -40,60 +42,8 @@ import {
   createOptimisticBuyTimelineItems,
   createOptimisticOtherTimelineItems,
   createOptimisticPackageTimelineItems,
-  DEFAULT_PYROXENE_TIMELINE_DISPLAY,
 } from "~/models/pyroxene-sources";
-
-const defaultOptions: PyroxenePlannerOptions = {
-  event: {
-    pickupChance: "average",
-  },
-  raid: {
-    tier: "platinum",
-  },
-  tactical: {
-    level: "in100",
-  },
-  consumption: {
-    apChargeCount: 0,
-  },
-  timeline: {
-    display: DEFAULT_PYROXENE_TIMELINE_DISPLAY,
-  },
-};
-
-type StoredPyroxenePlannerOptions = Partial<
-  Omit<PyroxenePlannerOptions, "event" | "raid" | "tactical" | "consumption" | "timeline">
-> & {
-  event?: Partial<PyroxenePlannerOptions["event"]>;
-  raid?: Partial<PyroxenePlannerOptions["raid"]>;
-  tactical?: Partial<PyroxenePlannerOptions["tactical"]>;
-  consumption?: Partial<PyroxenePlannerOptions["consumption"]>;
-  timeline?: Partial<PyroxenePlannerOptions["timeline"]>;
-};
-
-function normalizePyroxenePlannerOptions(options: StoredPyroxenePlannerOptions | null): PyroxenePlannerOptions {
-  return {
-    event: {
-      ...defaultOptions.event,
-      ...options?.event,
-    },
-    raid: {
-      ...defaultOptions.raid,
-      ...options?.raid,
-    },
-    tactical: {
-      ...defaultOptions.tactical,
-      ...options?.tactical,
-    },
-    consumption: {
-      ...defaultOptions.consumption,
-      ...options?.consumption,
-    },
-    timeline: {
-      display: options?.timeline?.display ?? defaultOptions.timeline.display,
-    },
-  };
-}
+import { extractPyroxeneTimelineBaseUid } from "~/models/pyroxene-planner-source-config";
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -112,7 +62,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
         inputAt: null,
       },
       timelineItems: [],
-      calcOptions: null,
+      calcOptions: defaultPyroxenePlannerOptions,
       eventData: [],
     };
   }
@@ -155,19 +105,19 @@ export type ActionData = {
     };
     buy?: {
       quantity: number;
-      date: Date;
+      date: string;
     };
     package?: {
-      startDate: Date;
+      startDate: string;
       packageType: "half" | "full";
     };
     attendance?: {
-      startDate: Date;
+      startDate: string;
     };
     other?: {
       resources: PickupResources;
       description: string;
-      date: Date;
+      date: string;
     };
   };
 
@@ -268,6 +218,7 @@ export default function PyroxenePlanner() {
   const [localEventData, setLocalEventData] = useState<PyroxeneEventData[]>(loaderData.eventData ?? []);
 
   const fetcher = useFetcher<typeof action>();
+  const timelineSaveInFlight = useRef(false);
 
   // Sync from loader data after server revalidation
   useEffect(() => {
@@ -284,10 +235,14 @@ export default function PyroxenePlanner() {
   }, [loaderData.eventData]);
 
   useEffect(() => {
-    if (loaderData.calcOptions) {
-      setOptions(normalizePyroxenePlannerOptions(loaderData.calcOptions));
-    }
+    setOptions(loaderData.calcOptions);
   }, [loaderData.calcOptions]);
+
+  useEffect(() => {
+    if (fetcher.state === "idle") {
+      timelineSaveInFlight.current = false;
+    }
+  }, [fetcher.state]);
 
   const handleSaveOwnedResources = (eventUid: string | null, resources: PickupResources) => {
     setInitialResources(resources);
@@ -333,12 +288,16 @@ export default function PyroxenePlanner() {
   };
 
   const handleDeleteItem = (itemUid: string) => {
-    const baseUid = itemUid.split("::")[0];
+    const baseUid = extractPyroxeneTimelineBaseUid(itemUid);
     setLocalTimelineItems((prev) => prev.filter((item) => !item.uid.startsWith(baseUid)));
     fetcher.submit({ deleteData: { itemUid } }, { method: "DELETE", encType: "application/json" });
   };
 
   const handleSaveBuy = (quantity: number, date: Date) => {
+    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
+      return;
+    }
+    timelineSaveInFlight.current = true;
     setLocalTimelineItems((prev) => [...prev, ...createOptimisticBuyTimelineItems(quantity, date)]);
     fetcher.submit(
       { createData: { buy: { quantity, date: date.toISOString() } } },
@@ -347,6 +306,10 @@ export default function PyroxenePlanner() {
   };
 
   const handleSavePackage = (startDate: Date, packageType: "half" | "full") => {
+    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
+      return;
+    }
+    timelineSaveInFlight.current = true;
     setLocalTimelineItems((prev) => [...prev, ...createOptimisticPackageTimelineItems(startDate, packageType)]);
     fetcher.submit(
       { createData: { package: { startDate: startDate.toISOString(), packageType } } },
@@ -355,6 +318,10 @@ export default function PyroxenePlanner() {
   };
 
   const handleSaveAttendance = (startDate: Date) => {
+    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
+      return;
+    }
+    timelineSaveInFlight.current = true;
     setLocalTimelineItems((prev) => {
       const withoutAttendance = prev.filter((item) => item.source !== "attendance");
       return [...withoutAttendance, ...createOptimisticAttendanceTimelineItems(startDate)];
@@ -366,6 +333,10 @@ export default function PyroxenePlanner() {
   };
 
   const handleSaveOther = (resources: PickupResources, description: string, date: Date) => {
+    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
+      return;
+    }
+    timelineSaveInFlight.current = true;
     setLocalTimelineItems((prev) => [...prev, ...createOptimisticOtherTimelineItems(resources, description, date)]);
     fetcher.submit(
       { createData: { other: { resources, description, date: date.toISOString() } } },
@@ -373,9 +344,7 @@ export default function PyroxenePlanner() {
     );
   };
 
-  const [options, setOptions] = useState<PyroxenePlannerOptions>(
-    normalizePyroxenePlannerOptions(loaderData.calcOptions),
-  );
+  const [options, setOptions] = useState<PyroxenePlannerOptions>(loaderData.calcOptions);
   const optionsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleOptionsChange = (newOptions: PyroxenePlannerOptions) => {
@@ -399,95 +368,7 @@ export default function PyroxenePlanner() {
     return map;
   }, [localEventData]);
 
-  const scheduleItems = useMemo(() => {
-    const items: PyroxeneScheduleItem[] = [];
-    for (const content of contents) {
-      if (content.kind === "event") {
-        items.push({
-          event: {
-            uid: content.uid,
-            name: content.name,
-            since: content.since,
-            until: content.until,
-            earnablePyroxene: content.earnablePyroxene ?? null,
-            recruitments: content.recruitments.map((recruitment) => ({
-              ...recruitment,
-              favorited: favoritedStudents.some(
-                ({ contentUid, studentUid }) => contentUid === content.uid && studentUid === recruitment.student?.uid,
-              ),
-            })),
-          },
-        });
-      } else if (content.kind === "raid") {
-        items.push({
-          raid: {
-            uid: content.uid,
-            name: content.name,
-            type: content.type,
-            since: content.since,
-            until: content.until,
-          },
-        });
-      }
-    }
-    for (const item of localTimelineItems) {
-      if (item.source === "buy") {
-        items.push({
-          onetimeGain: {
-            uid: item.uid,
-            source: "buy",
-            description: item.description,
-            date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta,
-          },
-        });
-      } else if (item.source === "package_onetime") {
-        items.push({
-          onetimeGain: {
-            uid: item.uid,
-            source: "package_onetime",
-            description: item.description,
-            date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta,
-          },
-        });
-      } else if (item.source === "package_daily") {
-        items.push({
-          repeatedGain: {
-            source: "package_daily",
-            description: item.description,
-            date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta,
-            repeatIntervalDays: item.repeatIntervalDays ?? 0,
-            repeatCount: item.repeatCount ?? 0,
-          },
-        });
-      } else if (item.source === "attendance") {
-        items.push({
-          repeatedGain: {
-            source: "attendance",
-            description: item.description,
-            date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta,
-            repeatIntervalDays: item.repeatIntervalDays ?? 0,
-          },
-        });
-      } else if (item.source === "other") {
-        items.push({
-          onetimeGain: {
-            uid: item.uid,
-            source: "other",
-            description: item.description,
-            date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta,
-            oneTimeTicketDelta: item.oneTimeTicketDelta,
-            tenTimeTicketDelta: item.tenTimeTicketDelta,
-          },
-        });
-      }
-    }
-    return items;
-  }, [contents, favoritedStudents, localTimelineItems]);
+  const scheduleItems = usePyroxeneScheduleItems(contents, favoritedStudents, localTimelineItems);
 
   const isSaving = fetcher.state === "submitting" || fetcher.state === "loading";
 
@@ -503,7 +384,7 @@ export default function PyroxenePlanner() {
 
       <Page
         title="청휘석 플래너 (β)"
-        description="<재화 수급 계획> 메뉴에서 획득 일정과 수량을 입력하고, 관심 학생 모집 시점의 예상 청휘석을 계산해보세요"
+        description="청휘석 획득/소비 조건을 입력하고 관심 학생 모집 시점의 예상 청휘석을 계산해보세요"
         links={[
           {
             Icon: CalendarIcon,
@@ -526,6 +407,7 @@ export default function PyroxenePlanner() {
                 onSavePackage={(startDate, packageType) => handleSavePackage(startDate, packageType)}
                 onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
                 onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
+                savingTimelineItem={isSaving}
               />
             ),
           },
@@ -533,6 +415,7 @@ export default function PyroxenePlanner() {
             title: "플래너 설정",
             Icon: ChartBarIcon,
             description: "계산 조건을 선택해주세요",
+            disabled: !signedIn,
             foldable: signedIn,
             children: <PyroxenePlannerOptionsPanel options={options} onOptionsChange={handleOptionsChange} />,
           },

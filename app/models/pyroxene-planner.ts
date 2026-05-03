@@ -18,7 +18,13 @@ import {
   PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
   PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
   type PyroxenePackageType,
+  extractPyroxeneTimelineBaseUid,
+  normalizePyroxeneTimelineEventAt,
 } from "./pyroxene-planner-source-config";
+import {
+  DEFAULT_PYROXENE_TIMELINE_DISPLAY,
+  type PyroxeneSourceType,
+} from "./pyroxene-source-definitions";
 
 /**
  * Pyroxene Planner Contents
@@ -239,7 +245,7 @@ export type PyroxeneTimelineItem = {
   uid: string;
   userId: number;
   eventAt: string;
-  source: string;
+  source: TimelineSourceType;
   repeatIntervalDays: number | null;
   repeatCount: number | null;
   description: string;
@@ -253,7 +259,7 @@ function toTimelineItemModel(item: typeof pyroxeneTimelineItemsTable.$inferSelec
     uid: item.uid,
     userId: item.userId,
     eventAt: item.eventAt,
-    source: item.source,
+    source: item.source as TimelineSourceType,
     repeatIntervalDays: item.repeatIntervalDays,
     repeatCount: item.repeatCount,
     description: item.description,
@@ -273,9 +279,9 @@ export async function getPyroxeneTimelineItems(env: Env, userId: number): Promis
   return items.map(toTimelineItemModel);
 }
 
-export async function createBuyPyroxene(env: Env, userId: number, date: Date, quantity: number): Promise<void> {
+export async function createBuyPyroxene(env: Env, userId: number, date: Date | string, quantity: number): Promise<void> {
   const uid = nanoid(8);
-  const eventAt = dayjs(date).utcOffset(9).hour(4).toISOString(); // KST 4:00 on the given date
+  const eventAt = normalizePyroxeneTimelineEventAt(date);
   const db = drizzle(env.DB);
   await db.insert(pyroxeneTimelineItemsTable).values({
     uid,
@@ -291,7 +297,7 @@ export async function createBuyPyroxene(env: Env, userId: number, date: Date, qu
 
 export async function deletePyroxeneTimelineItem(env: Env, userId: number, uid: string): Promise<void> {
   const db = drizzle(env.DB);
-  const parsedUid = uid.split("::")[0];
+  const parsedUid = extractPyroxeneTimelineBaseUid(uid);
   await db
     .delete(pyroxeneTimelineItemsTable)
     .where(
@@ -305,11 +311,11 @@ export async function deletePyroxeneTimelineItem(env: Env, userId: number, uid: 
 export async function createPyroxenePackage(
   env: Env,
   userId: number,
-  startDate: Date,
+  startDate: Date | string,
   packageType: PyroxenePackageType,
 ): Promise<void> {
   const uid = nanoid(8);
-  const eventAt = dayjs(startDate).utcOffset(9).hour(4).toISOString(); // KST 4:00 on the given date
+  const eventAt = normalizePyroxeneTimelineEventAt(startDate);
 
   const { name: packageName, oneTime: oneTimePyroxene, daily: dailyPyroxene } = PYROXENE_PACKAGE_CONFIG[packageType];
 
@@ -340,14 +346,14 @@ export async function createPyroxenePackage(
   ]);
 }
 
-export async function createAttendance(env: Env, userId: number, startDate: Date): Promise<void> {
+export async function createAttendance(env: Env, userId: number, startDate: Date | string): Promise<void> {
   const db = drizzle(env.DB);
   await db
     .delete(pyroxeneTimelineItemsTable)
     .where(and(eq(pyroxeneTimelineItemsTable.userId, userId), eq(pyroxeneTimelineItemsTable.source, "attendance")));
 
   const uid = nanoid(8);
-  const startAt = dayjs(startDate).utcOffset(9).hour(4); // KST 4:00 on the given date
+  const startAt = dayjs(normalizePyroxeneTimelineEventAt(startDate));
   await db.insert(pyroxeneTimelineItemsTable).values(
     PYROXENE_ATTENDANCE_CONFIG.map(({ day, pyroxene }) => ({
       uid: `${uid}::${day}`,
@@ -367,7 +373,7 @@ export async function createAttendance(env: Env, userId: number, startDate: Date
 export async function createOtherPyroxeneGain(
   env: Env,
   userId: number,
-  date: Date,
+  date: Date | string,
   pyroxene: number,
   oneTimeTicket: number,
   tenTimeTicket: number,
@@ -377,7 +383,7 @@ export async function createOtherPyroxeneGain(
   await db.insert(pyroxeneTimelineItemsTable).values({
     uid: nanoid(8),
     userId,
-    eventAt: dayjs(date).utcOffset(9).hour(4).toISOString(),
+    eventAt: normalizePyroxeneTimelineEventAt(date),
     source: "other",
     description,
     pyroxeneDelta: pyroxene,
@@ -389,19 +395,7 @@ export async function createOtherPyroxeneGain(
 /**
  * Pyroxene Planner Options
  */
-export type TimelineSourceType =
-  | "event"
-  | "event_reward"
-  | "raid"
-  | "daily_mission"
-  | "weekly_mission"
-  | "ap_charge"
-  | "buy"
-  | "package_onetime"
-  | "package_daily"
-  | "attendance"
-  | "tactical"
-  | "other";
+export type TimelineSourceType = PyroxeneSourceType;
 export type PyroxenePlannerOptions = {
   event: {
     pickupChance: "ceil" | "average";
@@ -420,6 +414,60 @@ export type PyroxenePlannerOptions = {
   };
 };
 
+export const defaultPyroxenePlannerOptions: PyroxenePlannerOptions = {
+  event: {
+    pickupChance: "average",
+  },
+  raid: {
+    tier: "platinum",
+  },
+  tactical: {
+    level: "in100",
+  },
+  consumption: {
+    apChargeCount: 0,
+  },
+  timeline: {
+    display: DEFAULT_PYROXENE_TIMELINE_DISPLAY,
+  },
+};
+
+export type StoredPyroxenePlannerOptions = Partial<
+  Omit<PyroxenePlannerOptions, "event" | "raid" | "tactical" | "consumption" | "timeline">
+> & {
+  event?: Partial<PyroxenePlannerOptions["event"]>;
+  raid?: Partial<PyroxenePlannerOptions["raid"]>;
+  tactical?: Partial<PyroxenePlannerOptions["tactical"]>;
+  consumption?: Partial<PyroxenePlannerOptions["consumption"]>;
+  timeline?: Partial<PyroxenePlannerOptions["timeline"]>;
+};
+
+export function normalizePyroxenePlannerOptions(
+  options: StoredPyroxenePlannerOptions | null,
+): PyroxenePlannerOptions {
+  return {
+    event: {
+      ...defaultPyroxenePlannerOptions.event,
+      ...options?.event,
+    },
+    raid: {
+      ...defaultPyroxenePlannerOptions.raid,
+      ...options?.raid,
+    },
+    tactical: {
+      ...defaultPyroxenePlannerOptions.tactical,
+      ...options?.tactical,
+    },
+    consumption: {
+      ...defaultPyroxenePlannerOptions.consumption,
+      ...options?.consumption,
+    },
+    timeline: {
+      display: options?.timeline?.display ?? defaultPyroxenePlannerOptions.timeline.display,
+    },
+  };
+}
+
 export const pyroxenePlannerOptionsTable = sqliteTable("pyroxene_planner_options", {
   id: int().primaryKey({ autoIncrement: true }),
   userId: int().notNull(),
@@ -433,7 +481,7 @@ export type PyroxenePlannerOptionsModel = {
   options: string;
 };
 
-export async function getPyroxenePlannerOptions(env: Env, userId: number): Promise<PyroxenePlannerOptions | null> {
+export async function getPyroxenePlannerOptions(env: Env, userId: number): Promise<PyroxenePlannerOptions> {
   const db = drizzle(env.DB);
   const [record] = await db
     .select()
@@ -442,13 +490,13 @@ export async function getPyroxenePlannerOptions(env: Env, userId: number): Promi
     .limit(1);
 
   if (!record) {
-    return null;
+    return defaultPyroxenePlannerOptions;
   }
 
   try {
-    return JSON.parse(record.options) as PyroxenePlannerOptions;
+    return normalizePyroxenePlannerOptions(JSON.parse(record.options) as StoredPyroxenePlannerOptions);
   } catch {
-    return null;
+    return defaultPyroxenePlannerOptions;
   }
 }
 

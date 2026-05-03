@@ -1,11 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import { RecruitmentTypeEnum } from "../../../../../app/graphql/graphql";
 import type { PyroxenePlannerOptions } from "../../../../../app/models/pyroxene-planner";
-import {
-  buildTimeline,
-  type PickupResources,
-  type PyroxeneScheduleItem,
-} from "../../../../../app/models/pyroxene-timeline";
+import type { PyroxeneScheduleItem } from "../../../../../app/components/features/futures/types";
+import { buildTimeline, type PickupResources } from "../../../../../app/models/pyroxene-timeline";
 
 const defaultOptions: PyroxenePlannerOptions = {
   event: { pickupChance: "average" },

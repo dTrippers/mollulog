@@ -15,14 +15,14 @@ export default function PyroxenePlannerOptionsPanel({ options, onOptionsChange }
   return (
     <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
       <div className="rounded-md px-3 py-2 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70 lg:px-2.5 lg:py-1.5">
-        <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
-          <div className="min-w-0 grow">
+        <div className="min-h-8 lg:min-h-7">
+          <div className="min-w-0">
             <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">★3 학생 모집 목표</p>
             <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
               학생 한 명당 목표 모집 횟수 (이벤트 별 설정 가능)
             </p>
           </div>
-          <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
+          <div className="mt-2 flex flex-wrap items-center gap-1">
             {pickupChanceOptions.map(({ label, value, fallback }) => (
               <PickupChanceChip
                 key={value}

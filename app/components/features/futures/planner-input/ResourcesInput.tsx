@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { PickupResources } from "..";
 import { Button, Field, Input, NumberInput, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
 import dayjs from "dayjs";
 
 type ResourcesInputProps = {
@@ -62,7 +63,7 @@ export default function ResourcesInput({ description, onSaveResources, descripti
           <div id={resourceGroupId} className={`${vertical ? "flex flex-col gap-4" : "grid grid-cols-1 md:grid-cols-3 gap-4"}`}>
             <div className="flex items-start gap-3">
               <div className="shrink-0 pt-1">
-                <ResourceCard resourceType={ResourceTypeEnum.Currency} itemUid="2" />
+                <ResourceCard resourceType={ResourceTypeEnum.Currency} itemUid={PYROXENE_RESOURCE_UIDS.pyroxene} />
               </div>
               <div className="flex-1 min-w-0">
                 <NumberInput label="청휘석" value={resources.pyroxene} onChange={(value: number) => setResources((prev) => ({ ...prev, pyroxene: value }))} />
@@ -70,7 +71,7 @@ export default function ResourcesInput({ description, onSaveResources, descripti
             </div>
             <div className="flex items-start gap-3">
               <div className="shrink-0 pt-1">
-                <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6999" />
+                <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid={PYROXENE_RESOURCE_UIDS.tenTimeTicket} />
               </div>
               <div className="flex-1 min-w-0">
                 <NumberInput label="10회 모집 티켓" value={resources.tenTimeTicket} onChange={(value: number) => setResources((prev) => ({ ...prev, tenTimeTicket: value }))} />
@@ -78,7 +79,7 @@ export default function ResourcesInput({ description, onSaveResources, descripti
             </div>
             <div className="flex items-start gap-3">
               <div className="shrink-0 pt-1">
-                <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6998" />
+                <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid={PYROXENE_RESOURCE_UIDS.oneTimeTicket} />
               </div>
               <div className="flex-1 min-w-0">
                 <NumberInput label="1회 모집 티켓" value={resources.oneTimeTicket} onChange={(value: number) => setResources((prev) => ({ ...prev, oneTimeTicket: value }))} />

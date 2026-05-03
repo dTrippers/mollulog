@@ -3,11 +3,12 @@ import { useMemo } from "react";
 import type { PyroxenePlannerOptions } from "~/models/pyroxene-planner";
 import { EmptyView, SubTitle } from "~/components/primitives";
 import PyroxeneChart from "./PyroxeneChart";
-import { buildTimeline, type PickupResources, type PyroxeneScheduleItem } from "~/models/pyroxene-timeline";
+import { buildTimeline, type PickupResources } from "~/models/pyroxene-timeline";
 import PyroxeneAvailableOneTimePackages from "./PyroxeneAvailableOneTimePackages";
 import PyroxeneInitialResources from "./PyroxeneInitialResources";
 import PyroxeneTimelineEvent from "./PyroxeneTimelineEvent";
 import PyroxeneTimelineResources from "./PyroxeneTimelineResources";
+import type { PyroxeneScheduleItem } from "./types";
 
 type PyroxeneScheduleProps = {
   initialDate: Date | null;
@@ -94,7 +95,7 @@ export default function PyroxeneSchedule({
       {timeline.every(({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type)) && (
         <EmptyView text="표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해보세요." />
       )}
-      {timeline.map(({ date, accumulatedResources, resourceDelta, source }) => {
+      {timeline.map(({ date, accumulatedResources, resourceDelta, source }, index) => {
         if (source.type !== "event" && !options.timeline.display.includes(source.type)) {
           return null;
         }
@@ -120,7 +121,7 @@ export default function PyroxeneSchedule({
         if (source.description) {
           return (
             <PyroxeneTimelineResources
-              key={`${source.description}-${date.toISOString()}`}
+              key={source.uid ?? `${source.description}-${date.toISOString()}-${index}`}
               date={date}
               description={source.description}
               resources={resourceDelta}
