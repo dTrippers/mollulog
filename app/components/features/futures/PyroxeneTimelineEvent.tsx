@@ -83,7 +83,7 @@ export default function PyroxeneTimelineEvent({
               <StudentCards
                 students={favoritedStudents}
                 layout="wrap"
-                cardSize="sm"
+                cardSize="md"
                 gap="tight"
                 namePlacement="overlay"
               />

@@ -149,7 +149,7 @@ export default function StudentCard({
   const showsOverlayName = showName && namePlacement === "overlay";
   const overlaySubName = visibleNames.length === 2 ? visibleNames[1] : "";
   const overlayMainName = visibleNames[0] ?? name;
-  const cardAspectClassName = circular ? "aspect-square" : showsOverlayName ? "aspect-[5/6]" : "";
+  const cardAspectClassName = circular ? "aspect-square" : showsOverlayName ? "aspect-5/6" : "";
   const popup = uid && name && popups && popups.length > 0 && (
     <Transition
       show={showPopup}
@@ -193,12 +193,12 @@ export default function StudentCard({
                 )}
                 {showsOverlayName && !label && tier && (
                   <span
-                    className={`px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm leading-tight ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}
+                    className={`inline-flex items-center gap-0.5 px-1.5 rounded-md bg-black/70 backdrop-blur-sm leading-tight ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}
                   >
                     {tier <= 5 ? (
-                      <StarIcon className="size-3.5 mr-0.5 inline-block" />
+                      <StarIcon className="size-3 shrink-0" />
                     ) : (
-                      <img className="size-3.5 mr-0.5 inline-block" src="/icons/exclusive_weapon.png" alt="고유 장비" />
+                      <img className="size-3.5 shrink-0" src="/icons/exclusive_weapon.png" alt="고유 장비" />
                     )}
                     <span>{visibileTier(tier)[0]}</span>
                   </span>
@@ -227,15 +227,11 @@ export default function StudentCard({
               )}
 
               {showsOverlayName ? (
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/45 via-70% to-transparent px-1 pt-4 pb-0.5 text-left">
-                  <p className="whitespace-nowrap text-[0.55rem] leading-tight text-white/70">{overlaySubName}</p>
-                  <p
-                    className={
-                      nameSize === "small"
-                        ? "text-[0.7rem] font-bold leading-tight text-white line-clamp-1"
-                        : "text-xs font-bold leading-tight text-white line-clamp-1"
-                    }
-                  >
+                <div className="absolute inset-0 bg-linear-15 from-black/80 from-10% via-transparent via-50% to-transparent px-1.5 pb-0.5 text-left flex flex-col justify-end">
+                  <p className="whitespace-nowrap text-xs fond-bold scale-75 origin-left leading-none tracking-tighter text-white">
+                    {overlaySubName}
+                  </p>
+                  <p className="text-xs font-bold leading-tight tracking-tighter text-white line-clamp-1">
                     {overlayMainName}
                   </p>
                 </div>

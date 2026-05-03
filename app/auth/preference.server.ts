@@ -8,7 +8,7 @@ export type Preference = {
 };
 
 const defaultPreference = {
-  darkMode: false,
+  darkMode: true,
   timeZone: undefined,
 };
 
@@ -18,7 +18,7 @@ export async function getPreference(env: Env, request: Request): Promise<Prefere
   if (parsed) {
     return {
       ...defaultPreference,
-      ...parsed as Preference
+      ...(parsed as Preference),
     };
   }
   return defaultPreference;

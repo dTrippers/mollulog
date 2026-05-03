@@ -21,11 +21,19 @@ import { useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
-import { getNavigationBarContents } from "./models/content";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
+import { getNavigationBarContents } from "./models/content";
 import styles from "./tailwind.css?url";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
+const themeConfig = {
+  dark: {
+    backgroundColor: "#262626",
+  },
+  light: {
+    backgroundColor: "#ffffff",
+  },
+};
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env as Env & {
@@ -39,7 +47,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   return {
     currentUsername: sensei?.username ?? null,
     currentProfileStudentId: sensei?.profileStudentId ?? null,
-    darkMode: preference.darkMode ?? false,
+    darkMode: preference.darkMode ?? true,
     displayTimeZone: normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE),
     navigationBarContents,
     publicEnv: {
@@ -77,16 +85,18 @@ export const links: LinksFunction = () => [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const loaderData = useLoaderData<typeof loader>();
+  const darkMode = loaderData?.darkMode ?? true;
+  const theme = darkMode ? themeConfig.dark : themeConfig.light;
   return (
-    <html lang="ko" className={loaderData?.darkMode ? "dark" : undefined}>
+    <html lang="ko" className={darkMode ? "dark" : undefined}>
       <head>
         <meta charSet="utf-8" />
         <meta
           name="viewport"
           content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0,viewport-fit=cover"
         />
-        <meta name="theme-color" content={loaderData?.darkMode ? "#262626" : "#ffffff"} />
-        <meta name="background-color" content={loaderData?.darkMode ? "#262626" : "#ffffff"} />
+        <meta name="theme-color" content={theme.backgroundColor} />
+        <meta name="background-color" content={theme.backgroundColor} />
         <meta name="mollulog:stage" content={loaderData?.publicEnv.STAGE ?? "local"} />
         <meta
           name="mollulog:front-better-stack-sentry-dsn"
@@ -219,20 +229,10 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   if (!isServerRouteError(normalized)) {
     return (
       <div className="min-h-dvh w-screen bg-white text-neutral-950 dark:bg-neutral-900 dark:text-neutral-100 flex items-center justify-center px-4">
-        <ErrorPage
-          status={normalized.status}
-          title={normalized.title}
-          message={normalized.message}
-        />
+        <ErrorPage status={normalized.status} title={normalized.title} message={normalized.message} />
       </div>
     );
   }
 
-  return (
-    <ServerErrorPage
-      status={normalized.status}
-      title={normalized.title}
-      message={normalized.message}
-    />
-  );
+  return <ServerErrorPage status={normalized.status} title={normalized.title} message={normalized.message} />;
 }
