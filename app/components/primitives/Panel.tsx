@@ -101,7 +101,7 @@ export default function Panel({
       {clickable ? (
         <button
           type="button"
-          className={sanitizeClassName(`${headerClass} w-full text-left ${titleClassName ?? ""}`)}
+          className={sanitizeClassName(`${headerClass} ${isCard ? "w-[calc(100%+1rem)]" : "w-full"} text-left ${titleClassName ?? ""}`)}
           onClick={() => setExpanded((prev: boolean) => !prev)}
         >
           {content}

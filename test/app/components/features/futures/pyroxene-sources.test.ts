@@ -1,15 +1,69 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
+  PYROXENE_SOURCE_DEFINITIONS,
+  PYROXENE_SOURCE_ROW_DEFINITIONS,
   createOptimisticAttendanceTimelineItems,
   createOptimisticBuyTimelineItems,
   createOptimisticOtherTimelineItems,
   createOptimisticPackageTimelineItems,
+  togglePyroxeneTimelineSourceVisibility,
 } from "../../../../../app/models/pyroxene-sources";
 
 describe("pyroxene-sources", () => {
   it("builds the existing default timeline display set from source metadata", () => {
     expect(DEFAULT_PYROXENE_TIMELINE_DISPLAY).toEqual(["event", "event_reward", "raid", "buy", "package_onetime"]);
+  });
+
+  it("defines source rows that cover configurable timeline sources exactly once", () => {
+    const sourceTypes = PYROXENE_SOURCE_DEFINITIONS.map((source) => source.type)
+      .filter((type) => type !== "event")
+      .sort();
+    const rowSourceTypes = PYROXENE_SOURCE_ROW_DEFINITIONS.flatMap((row) =>
+      row.visibilityTargets.map((target) => target.type),
+    ).sort();
+
+    expect(rowSourceTypes).toEqual(sourceTypes);
+    expect(new Set(rowSourceTypes).size).toBe(rowSourceTypes.length);
+  });
+
+  it("keeps monthly package as one row with one-time and daily detail toggles", () => {
+    const packageRow = PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "package");
+
+    expect(packageRow).toEqual(
+      expect.objectContaining({
+        label: "월간 패키지",
+        group: "paid",
+        action: "add",
+      }),
+    );
+    expect(packageRow?.visibilityTargets).toEqual([
+      { type: "package_onetime", label: "초회" },
+      { type: "package_daily", label: "일간" },
+    ]);
+  });
+
+  it("keeps daily and weekly missions as one row with detail toggles", () => {
+    const missionRow = PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "mission");
+
+    expect(missionRow).toEqual(
+      expect.objectContaining({
+        label: "임무 보상",
+        group: "regular",
+        action: "none",
+      }),
+    );
+    expect(missionRow?.visibilityTargets).toEqual([
+      { type: "daily_mission", label: "일일" },
+      { type: "weekly_mission", label: "주간" },
+    ]);
+  });
+
+  it("toggles one timeline display source without changing others", () => {
+    expect(togglePyroxeneTimelineSourceVisibility(["event", "raid"], "buy")).toEqual(["event", "raid", "buy"]);
+    expect(togglePyroxeneTimelineSourceVisibility(["event", "raid", "buy"], "raid")).toEqual(["event", "buy"]);
+    expect(togglePyroxeneTimelineSourceVisibility(["event", "raid"], "raid", true)).toEqual(["event", "raid"]);
+    expect(togglePyroxeneTimelineSourceVisibility(["event", "raid"], "buy", false)).toEqual(["event", "raid"]);
   });
 
   it("creates full monthly package optimistic items as one-time and daily entries", () => {

@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 import type { PickupResources } from "..";
-import { NumberInput, ResourceCard } from "~/components/primitives";
-import PlannerButtonForm from "./PlannerButtonForm";
-import PlannerInputForm from "./PlannerInputForm";
-import PlannerFormGroup from "./PlannerFormGroup";
+import { Button, Field, Input, NumberInput, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import dayjs from "dayjs";
 
@@ -41,28 +38,27 @@ export default function ResourcesInput({ description, onSaveResources, descripti
   return (
     <>
       {description && <p className="mb-4 text-sm text-neutral-500">{description}</p>}
-      <PlannerFormGroup>
+      <div className="space-y-4">
         {dateInput && (
-          <PlannerInputForm
+          <Input
             label="획득 날짜"
             type="date"
+            size="sm"
             defaultValue={dayjs(date).format("YYYY-MM-DD")}
             onChange={(value) => setDate(new Date(value))}
           />
         )}
         {descriptionInput && (
-          <PlannerInputForm
+          <Input
             label="획득 사유"
             type="text"
+            size="sm"
             placeholder="20자 이하 (예: 점검 보상)"
             onChange={(value) => setDescriptionValue(value)}
             error={descriptionError}
           />
         )}
-        <div>
-          <label htmlFor={resourceGroupId} className="block text-sm font-medium text-neutral-900 dark:text-neutral-100 mb-3">
-            재화 수량
-          </label>
+        <Field label="재화 수량" htmlFor={resourceGroupId}>
           <div id={resourceGroupId} className={`${vertical ? "flex flex-col gap-4" : "grid grid-cols-1 md:grid-cols-3 gap-4"}`}>
             <div className="flex items-start gap-3">
               <div className="shrink-0 pt-1">
@@ -89,14 +85,16 @@ export default function ResourcesInput({ description, onSaveResources, descripti
               </div>
             </div>
           </div>
-        </div>
-        <PlannerButtonForm
-          label="저장"
-          color="blue"
+        </Field>
+        <Button
+          text="저장"
+          variant="tint-blue"
+          fullWidth
+          className="mt-2"
           disabled={!!descriptionError}
           onClick={() => onSaveResources(resources, descriptionInput ? descriptionValue : undefined, dateInput ? date : undefined)}
         />
-      </PlannerFormGroup>
+      </div>
     </>
   );
 }

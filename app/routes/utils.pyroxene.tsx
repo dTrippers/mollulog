@@ -10,8 +10,8 @@ import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outlin
 import { LockClosedIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
-  PyroxenePlannerInputPanel,
   PyroxenePlannerOptionsPanel,
+  PyroxenePlannerSourcePanel,
   PyroxeneSchedule,
 } from "~/components/features/futures";
 import type { PickupResources, PyroxeneScheduleItem } from "~/components/features/futures";
@@ -475,12 +475,14 @@ export default function PyroxenePlanner() {
         ]}
         panels={[
           {
-            title: "재화 수급 계획",
+            title: "수급/소비 계획",
             Icon: PlusIcon,
-            description: "획득 일정과 수량을 입력해주세요",
+            description: "획득과 소비 항목을 관리해주세요",
             disabled: !signedIn,
             children: (
-              <PyroxenePlannerInputPanel
+              <PyroxenePlannerSourcePanel
+                options={options}
+                onOptionsChange={handleOptionsChange}
                 onSaveBuy={(quantity, date) => handleSaveBuy(quantity, date)}
                 onSavePackage={(startDate, packageType) => handleSavePackage(startDate, packageType)}
                 onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
