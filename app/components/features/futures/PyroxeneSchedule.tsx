@@ -23,6 +23,8 @@ type PyroxeneScheduleProps = {
   onUpdateEventData: (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => void;
 };
 
+const deletableTimelineSourceTypes = new Set(["buy", "package_onetime", "package_daily", "attendance", "other"]);
+
 export default function PyroxeneSchedule({
   initialDate,
   initialResources,
@@ -119,13 +121,14 @@ export default function PyroxeneSchedule({
           );
         }
         if (source.description) {
+          const itemUid = source.uid && deletableTimelineSourceTypes.has(source.type) ? source.uid : undefined;
           return (
             <PyroxeneTimelineResources
               key={source.uid ?? `${source.description}-${date.toISOString()}-${index}`}
               date={date}
               description={source.description}
               resources={resourceDelta}
-              itemUid={source.uid}
+              itemUid={itemUid}
               onDeleteItem={onDeleteItem}
             />
           );
