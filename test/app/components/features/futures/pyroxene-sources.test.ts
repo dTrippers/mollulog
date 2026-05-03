@@ -7,12 +7,20 @@ import {
   createOptimisticBuyTimelineItems,
   createOptimisticOtherTimelineItems,
   createOptimisticPackageTimelineItems,
+  calculateDailyApChargePyroxene,
   togglePyroxeneTimelineSourceVisibility,
 } from "../../../../../app/models/pyroxene-sources";
 
 describe("pyroxene-sources", () => {
   it("builds the existing default timeline display set from source metadata", () => {
-    expect(DEFAULT_PYROXENE_TIMELINE_DISPLAY).toEqual(["event", "event_reward", "raid", "buy", "package_onetime"]);
+    expect(DEFAULT_PYROXENE_TIMELINE_DISPLAY).toEqual([
+      "event",
+      "event_reward",
+      "raid",
+      "buy",
+      "package_onetime",
+      "ap_charge",
+    ]);
   });
 
   it("defines source rows that cover configurable timeline sources exactly once", () => {
@@ -57,6 +65,32 @@ describe("pyroxene-sources", () => {
       { type: "daily_mission", label: "일일" },
       { type: "weekly_mission", label: "주간" },
     ]);
+  });
+
+  it("places direct registration under paid sources and AP charge under consumption sources", () => {
+    expect(PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "other")).toEqual(
+      expect.objectContaining({
+        label: "직접 등록",
+        group: "paid",
+        action: "add",
+      }),
+    );
+    expect(PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "ap_charge")).toEqual(
+      expect.objectContaining({
+        label: "AP 충전",
+        group: "consumption",
+        action: "configure",
+        visibilityTargets: [{ type: "ap_charge" }],
+      }),
+    );
+  });
+
+  it("calculates daily AP charge costs by tier", () => {
+    expect(calculateDailyApChargePyroxene(0)).toBe(0);
+    expect(calculateDailyApChargePyroxene(3)).toBe(90);
+    expect(calculateDailyApChargePyroxene(7)).toBe(370);
+    expect(calculateDailyApChargePyroxene(20)).toBe(3120);
+    expect(calculateDailyApChargePyroxene(21)).toBe(3120);
   });
 
   it("toggles one timeline display source without changing others", () => {

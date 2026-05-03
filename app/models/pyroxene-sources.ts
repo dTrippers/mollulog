@@ -7,13 +7,14 @@ import {
   PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
   PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
   type PyroxenePackageType,
+  calculateDailyApChargePyroxene,
 } from "~/models/pyroxene-planner-source-config";
 import type { PyroxeneTimelineItem, TimelineSourceType } from "./pyroxene-planner";
 import type { PickupResources } from "./pyroxene-timeline";
 
 export type PyroxeneSourceCardinality = "single" | "multi" | "automatic";
 export type PyroxeneSourceAction = "add" | "configure" | "none";
-export type PyroxeneSourceRowGroup = "regular" | "paid" | "manual";
+export type PyroxeneSourceRowGroup = "regular" | "paid" | "consumption";
 
 export type PyroxeneSourceDefinition = {
   type: TimelineSourceType;
@@ -33,6 +34,7 @@ export const PYROXENE_SOURCE_DEFINITIONS: PyroxeneSourceDefinition[] = [
   { type: "package_daily", label: "패키지 (일간)", defaultVisible: false, cardinality: "multi", action: "none" },
   { type: "daily_mission", label: "일일 임무", defaultVisible: false, cardinality: "automatic", action: "none" },
   { type: "weekly_mission", label: "주간 임무", defaultVisible: false, cardinality: "automatic", action: "none" },
+  { type: "ap_charge", label: "AP 충전", defaultVisible: true, cardinality: "single", action: "configure" },
   { type: "tactical", label: "전술대회 보상", defaultVisible: false, cardinality: "automatic", action: "configure" },
   { type: "attendance", label: "출석", defaultVisible: false, cardinality: "single", action: "configure" },
   { type: "other", label: "기타", defaultVisible: false, cardinality: "multi", action: "add" },
@@ -58,7 +60,7 @@ export type PyroxeneSourceRowDefinition = {
 export const PYROXENE_SOURCE_ROW_GROUP_LABELS: Record<PyroxeneSourceRowGroup, string> = {
   regular: "게임 내 획득처",
   paid: "유료 구매처",
-  manual: "직접 등록",
+  consumption: "픽업 외 소비처",
 };
 
 export const PYROXENE_SOURCE_ROW_DEFINITIONS: PyroxeneSourceRowDefinition[] = [
@@ -119,12 +121,21 @@ export const PYROXENE_SOURCE_ROW_DEFINITIONS: PyroxeneSourceRowDefinition[] = [
   },
   {
     id: "other",
-    label: "직접 등록하기",
-    group: "manual",
+    label: "직접 등록",
+    group: "paid",
     action: "add",
     visibilityTargets: [{ type: "other" }],
   },
+  {
+    id: "ap_charge",
+    label: "AP 충전",
+    group: "consumption",
+    action: "configure",
+    visibilityTargets: [{ type: "ap_charge" }],
+  },
 ];
+
+export { calculateDailyApChargePyroxene };
 
 export function isPyroxeneTimelineSourceVisible(
   display: TimelineSourceType[],

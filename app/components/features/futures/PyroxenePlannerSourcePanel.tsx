@@ -1,12 +1,14 @@
 import { Cog6ToothIcon, EyeIcon, EyeSlashIcon, PlusIcon } from "@heroicons/react/16/solid";
 import { useState, type ElementType } from "react";
-import { BottomSheet, FilterButtons } from "~/components/primitives";
+import { BottomSheet, Button, FilterButtons, NumberInput } from "~/components/primitives";
 import {
+  calculateDailyApChargePyroxene,
   PYROXENE_SOURCE_ROW_DEFINITIONS,
   PYROXENE_SOURCE_ROW_GROUP_LABELS,
   isPyroxeneTimelineSourceVisible,
   togglePyroxeneTimelineSourceVisibility,
 } from "~/models/pyroxene-sources";
+import { PYROXENE_AP_CHARGE_MAX_COUNT } from "~/models/pyroxene-planner-source-config";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import type { PickupResources } from "~/models/pyroxene-timeline";
 import { cn } from "~/lib/utils";
@@ -24,7 +26,7 @@ type PyroxenePlannerSourcePanelProps = {
   onSaveOther: (resources: PickupResources, description: string, date: Date) => void;
 };
 
-const sourceGroupOrder = ["regular", "paid", "manual"] as const;
+const sourceGroupOrder = ["regular", "paid", "consumption"] as const;
 
 const raidTierOptions = [
   { text: "플래티넘", value: "platinum" as const },
@@ -146,6 +148,7 @@ export default function PyroxenePlannerSourcePanel({
             rowId={openRow.id}
             options={options}
             onOptionsChange={onOptionsChange}
+            onClose={() => setOpenRowId(null)}
             onSaveBuy={(quantity, date) => {
               onSaveBuy(quantity, date);
               setOpenRowId(null);
@@ -177,7 +180,8 @@ function SourceSheetContent({
   onSavePackage,
   onSaveAttendance,
   onSaveOther,
-}: PyroxenePlannerSourcePanelProps & { rowId: string }) {
+  onClose,
+}: PyroxenePlannerSourcePanelProps & { rowId: string; onClose: () => void }) {
   if (rowId === "buy") {
     return <BuyInput onSaveBuy={onSaveBuy} />;
   }
@@ -244,6 +248,10 @@ function SourceSheetContent({
     );
   }
 
+  if (rowId === "ap_charge") {
+    return <ApChargeInput options={options} onOptionsChange={onOptionsChange} onClose={onClose} />;
+  }
+
   return null;
 }
 
@@ -253,6 +261,8 @@ function SelectedOptionText({ rowId, options }: { rowId: string; options: Pyroxe
     text = raidTierLabels[options.raid.tier];
   } else if (rowId === "tactical") {
     text = tacticalLevelLabels[options.tactical.level];
+  } else if (rowId === "ap_charge") {
+    text = options.consumption.apChargeCount === 0 ? "0회" : `매일 ${options.consumption.apChargeCount}회`;
   }
 
   if (!text) {
@@ -260,6 +270,55 @@ function SelectedOptionText({ rowId, options }: { rowId: string; options: Pyroxe
   }
 
   return <p className="mt-0.5 truncate text-xs text-neutral-500 dark:text-neutral-400">{text}</p>;
+}
+
+function ApChargeInput({
+  options,
+  onOptionsChange,
+  onClose,
+}: {
+  options: PyroxenePlannerOptions;
+  onOptionsChange: (options: PyroxenePlannerOptions) => void;
+  onClose: () => void;
+}) {
+  const [apChargeCount, setApChargeCount] = useState(options.consumption.apChargeCount);
+  const dailyPyroxene = calculateDailyApChargePyroxene(apChargeCount);
+
+  const handleSave = () => {
+    const display =
+      apChargeCount > 0 && !options.timeline.display.includes("ap_charge")
+        ? [...options.timeline.display, "ap_charge" as const]
+        : options.timeline.display;
+
+    onOptionsChange({
+      ...options,
+      consumption: { ...options.consumption, apChargeCount },
+      timeline: { ...options.timeline, display },
+    });
+    onClose();
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-neutral-500 dark:text-neutral-400">
+        매일 진행할 AP 충전 횟수를 선택해주세요. 0회로 두면 청휘석을 소비하지 않습니다.
+      </p>
+      <NumberInput
+        label="충전 횟수"
+        size="sm"
+        value={apChargeCount}
+        minValue={0}
+        maxValue={PYROXENE_AP_CHARGE_MAX_COUNT}
+        showMin
+        showMax
+        onChange={setApChargeCount}
+      />
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">
+        매일 {dailyPyroxene.toLocaleString()}개 소비
+      </p>
+      <Button text="저장" variant="tint-blue" fullWidth onClick={handleSave} />
+    </div>
+  );
 }
 
 function IconButton({ label, Icon, onClick }: { label: string; Icon: ElementType; onClick: () => void }) {

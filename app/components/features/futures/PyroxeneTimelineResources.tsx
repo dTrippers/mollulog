@@ -35,6 +35,9 @@ export default function PyroxeneTimelineResources({
     setTimeout(() => setConfirmingDelete(false), 3000);
   };
 
+  const formatResourceDelta = (value: number) => (value > 0 ? value.toLocaleString() : `-${Math.abs(value).toLocaleString()}`);
+  const labelColor = (value: number) => (value < 0 ? "red" : "white");
+
   return (
     <div className="my-3 flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-700">
       <div className="min-w-0 flex-1">
@@ -44,21 +47,28 @@ export default function PyroxeneTimelineResources({
         <p className="line-clamp-1 text-xs text-neutral-500 dark:text-neutral-400">{description}</p>
       </div>
       <div className="ml-3 flex shrink-0 items-center gap-1.5">
-        {resources.pyroxene > 0 && (
-          <ResourceCard resourceType={ResourceTypeEnum.Currency} itemUid="2" label={resources.pyroxene.toLocaleString()} />
+        {resources.pyroxene !== 0 && (
+          <ResourceCard
+            resourceType={ResourceTypeEnum.Currency}
+            itemUid="2"
+            label={formatResourceDelta(resources.pyroxene)}
+            labelColor={labelColor(resources.pyroxene)}
+          />
         )}
-        {resources.oneTimeTicket > 0 && (
+        {resources.oneTimeTicket !== 0 && (
           <ResourceCard
             resourceType={ResourceTypeEnum.Item}
             itemUid="6998"
-            label={resources.oneTimeTicket.toLocaleString()}
+            label={formatResourceDelta(resources.oneTimeTicket)}
+            labelColor={labelColor(resources.oneTimeTicket)}
           />
         )}
-        {resources.tenTimeTicket > 0 && (
+        {resources.tenTimeTicket !== 0 && (
           <ResourceCard
             resourceType={ResourceTypeEnum.Item}
             itemUid="6999"
-            label={resources.tenTimeTicket.toLocaleString()}
+            label={formatResourceDelta(resources.tenTimeTicket)}
+            labelColor={labelColor(resources.tenTimeTicket)}
           />
         )}
       </div>

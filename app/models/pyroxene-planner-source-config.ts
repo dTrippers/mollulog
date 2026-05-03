@@ -14,3 +14,33 @@ export const PYROXENE_ATTENDANCE_CONFIG = [
 ] as const;
 
 export const PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS = 10;
+
+export const PYROXENE_AP_CHARGE_MAX_COUNT = 20;
+
+export const PYROXENE_AP_CHARGE_COST_TIERS = [
+  { until: 3, pyroxene: 30 },
+  { until: 6, pyroxene: 60 },
+  { until: 9, pyroxene: 100 },
+  { until: 12, pyroxene: 150 },
+  { until: 15, pyroxene: 200 },
+  { until: PYROXENE_AP_CHARGE_MAX_COUNT, pyroxene: 300 },
+] as const;
+
+export function calculateDailyApChargePyroxene(count: number): number {
+  const normalizedCount = Math.max(0, Math.min(PYROXENE_AP_CHARGE_MAX_COUNT, Math.floor(count)));
+  let remainingCount = normalizedCount;
+  let previousUntil = 0;
+  let total = 0;
+
+  for (const tier of PYROXENE_AP_CHARGE_COST_TIERS) {
+    const tierCount = Math.min(remainingCount, tier.until - previousUntil);
+    if (tierCount <= 0) {
+      break;
+    }
+    total += tierCount * tier.pyroxene;
+    remainingCount -= tierCount;
+    previousUntil = tier.until;
+  }
+
+  return total;
+}

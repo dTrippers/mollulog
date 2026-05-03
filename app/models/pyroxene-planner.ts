@@ -395,6 +395,7 @@ export type TimelineSourceType =
   | "raid"
   | "daily_mission"
   | "weekly_mission"
+  | "ap_charge"
   | "buy"
   | "package_onetime"
   | "package_daily"
@@ -410,6 +411,9 @@ export type PyroxenePlannerOptions = {
   };
   tactical: {
     level: "in10" | "in100" | "in200" | "over200";
+  };
+  consumption: {
+    apChargeCount: number;
   };
   timeline: {
     display: TimelineSourceType[];

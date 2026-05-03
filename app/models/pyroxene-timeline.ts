@@ -3,6 +3,7 @@ import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { UtcIsoString } from "~/lib/date-time";
 import type { RaidType } from "./content.d";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "./pyroxene-planner";
+import { calculateDailyApChargePyroxene } from "./pyroxene-planner-source-config";
 
 export type PickupResources = {
   pyroxene: number;
@@ -88,6 +89,8 @@ export const PYROXENE = {
   TACTICAL: { in10: 35, in100: 30, in200: 25, over200: 20 },
   PICKUP_TRIAL: { average: 140, ceil: 200 },
 } as const;
+
+export { calculateDailyApChargePyroxene } from "./pyroxene-planner-source-config";
 
 export function buildTimeline(
   initialResources: PickupResources,
@@ -203,6 +206,7 @@ export function buildTimeline(
 
   const dateFrom = dayjs(initialDate);
   const tacticalPyroxene = PYROXENE.TACTICAL[options.tactical.level];
+  const dailyApChargePyroxene = calculateDailyApChargePyroxene(options.consumption.apChargeCount);
 
   let dailyEntryCount = 0;
   for (
@@ -230,6 +234,14 @@ export function buildTimeline(
       source: { type: "tactical", description: "전술대회" },
       resourceDelta: { pyroxene: tacticalPyroxene, oneTimeTicket: 0, tenTimeTicket: 0 },
     });
+
+    if (dailyApChargePyroxene > 0) {
+      timelineDeltas.push({
+        date,
+        source: { type: "ap_charge", description: "AP 충전" },
+        resourceDelta: { pyroxene: -dailyApChargePyroxene, oneTimeTicket: 0, tenTimeTicket: 0 },
+      });
+    }
   }
 
   const initialDateDayjs = dayjs(initialDate);

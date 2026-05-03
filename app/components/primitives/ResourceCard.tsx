@@ -8,7 +8,7 @@ type ResourceCardProps = {
   rarity?: number;
   favoriteLevel?: number;
   label?: number | string;
-  labelColor?: "white" | "yellow";
+  labelColor?: "white" | "yellow" | "red";
   labelBgColor?: "black" | "red";
   name?: string;
   size?: "md" | "lg";
@@ -182,7 +182,10 @@ function labelBadgeBgClass(labelBgColor: "black" | "red"): string {
   return "bg-neutral-900/80";
 }
 
-function labelTextColorClass(labelColor: "white" | "yellow"): string {
+function labelTextColorClass(labelColor: "white" | "yellow" | "red"): string {
+  if (labelColor === "red") {
+    return "text-red-300 dark:text-red-200";
+  }
   if (labelColor === "yellow") {
     return "text-orange-300";
   }

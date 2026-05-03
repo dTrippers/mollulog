@@ -43,6 +43,58 @@ import {
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
 } from "~/models/pyroxene-sources";
 
+const defaultOptions: PyroxenePlannerOptions = {
+  event: {
+    pickupChance: "average",
+  },
+  raid: {
+    tier: "platinum",
+  },
+  tactical: {
+    level: "in100",
+  },
+  consumption: {
+    apChargeCount: 0,
+  },
+  timeline: {
+    display: DEFAULT_PYROXENE_TIMELINE_DISPLAY,
+  },
+};
+
+type StoredPyroxenePlannerOptions = Partial<
+  Omit<PyroxenePlannerOptions, "event" | "raid" | "tactical" | "consumption" | "timeline">
+> & {
+  event?: Partial<PyroxenePlannerOptions["event"]>;
+  raid?: Partial<PyroxenePlannerOptions["raid"]>;
+  tactical?: Partial<PyroxenePlannerOptions["tactical"]>;
+  consumption?: Partial<PyroxenePlannerOptions["consumption"]>;
+  timeline?: Partial<PyroxenePlannerOptions["timeline"]>;
+};
+
+function normalizePyroxenePlannerOptions(options: StoredPyroxenePlannerOptions | null): PyroxenePlannerOptions {
+  return {
+    event: {
+      ...defaultOptions.event,
+      ...options?.event,
+    },
+    raid: {
+      ...defaultOptions.raid,
+      ...options?.raid,
+    },
+    tactical: {
+      ...defaultOptions.tactical,
+      ...options?.tactical,
+    },
+    consumption: {
+      ...defaultOptions.consumption,
+      ...options?.consumption,
+    },
+    timeline: {
+      display: options?.timeline?.display ?? defaultOptions.timeline.display,
+    },
+  };
+}
+
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
 
@@ -233,7 +285,7 @@ export default function PyroxenePlanner() {
 
   useEffect(() => {
     if (loaderData.calcOptions) {
-      setOptions(loaderData.calcOptions);
+      setOptions(normalizePyroxenePlannerOptions(loaderData.calcOptions));
     }
   }, [loaderData.calcOptions]);
 
@@ -321,22 +373,9 @@ export default function PyroxenePlanner() {
     );
   };
 
-  const defaultOptions: PyroxenePlannerOptions = {
-    event: {
-      pickupChance: "average",
-    },
-    raid: {
-      tier: "platinum",
-    },
-    tactical: {
-      level: "in100",
-    },
-    timeline: {
-      display: DEFAULT_PYROXENE_TIMELINE_DISPLAY,
-    },
-  };
-
-  const [options, setOptions] = useState<PyroxenePlannerOptions>(loaderData.calcOptions ?? defaultOptions);
+  const [options, setOptions] = useState<PyroxenePlannerOptions>(
+    normalizePyroxenePlannerOptions(loaderData.calcOptions),
+  );
   const optionsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleOptionsChange = (newOptions: PyroxenePlannerOptions) => {
@@ -477,7 +516,7 @@ export default function PyroxenePlanner() {
           {
             title: "수급/소비 계획",
             Icon: PlusIcon,
-            description: "획득과 소비 항목을 관리해주세요",
+            description: "청휘석 수급/소비처를 등록해주세요",
             disabled: !signedIn,
             children: (
               <PyroxenePlannerSourcePanel

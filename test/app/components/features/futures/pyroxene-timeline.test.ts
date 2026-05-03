@@ -11,7 +11,8 @@ const defaultOptions: PyroxenePlannerOptions = {
   event: { pickupChance: "average" },
   raid: { tier: "platinum" },
   tactical: { level: "in100" },
-  timeline: { display: ["event", "event_reward", "raid", "buy", "package_onetime"] },
+  consumption: { apChargeCount: 0 },
+  timeline: { display: ["event", "event_reward", "raid", "buy", "package_onetime", "ap_charge"] },
 };
 
 const initialResources: PickupResources = {
@@ -254,6 +255,25 @@ describe("pyroxene-timeline", () => {
         .map((entry) => entry.date.format("YYYY-MM-DD")),
     ).toEqual(["2026-01-04", "2026-01-11"]);
     expect(timeline.filter((entry) => entry.source.type === "tactical")).toHaveLength(13);
+  });
+
+  it("subtracts daily AP charge pyroxene using charge cost tiers", () => {
+    const timeline = buildTimeline(
+      initialResources,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Map(),
+      [futureEvent("2026-01-05T00:00:00.000Z")],
+      { ...defaultOptions, consumption: { apChargeCount: 7 } },
+    );
+
+    const apChargeEntries = timeline.filter((entry) => entry.source.type === "ap_charge");
+
+    expect(apChargeEntries).toHaveLength(3);
+    expect(apChargeEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene])).toEqual([
+      ["2026-01-02", -370],
+      ["2026-01-03", -370],
+      ["2026-01-04", -370],
+    ]);
   });
 
   it("caps open-ended repeated gains at the maximum repeated entry count", () => {
