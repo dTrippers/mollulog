@@ -1,37 +1,9 @@
-import { useCallback } from "react";
-import { FilterButtons } from "~/components/primitives";
-import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
+import { cn } from "~/lib/utils";
+import type { PyroxenePlannerOptions } from "~/models/pyroxene-planner";
 
 const pickupChanceOptions = [
-  { text: "평균 (140회)", value: "average" as const, fallback: "ceil" as const },
-  { text: "천장 (200회)", value: "ceil" as const, fallback: "average" as const },
-];
-
-const raidTierOptions = [
-  { text: "플래티넘", value: "platinum" as const },
-  { text: "골드", value: "gold" as const },
-  { text: "실버", value: "silver" as const },
-  { text: "브론즈", value: "bronze" as const },
-];
-
-const tacticalLevelOptions = [
-  { text: "10위 내", value: "in10" as const },
-  { text: "100위 내", value: "in100" as const },
-  { text: "200위 내", value: "in200" as const },
-  { text: "200위 밖", value: "over200" as const },
-];
-
-const timelineDisplayOptions: { text: string; value: TimelineSourceType }[] = [
-  { text: "이벤트 보상", value: "event_reward" },
-  { text: "총력전/대결전", value: "raid" },
-  { text: "청휘석 구매", value: "buy" },
-  { text: "패키지 (초회)", value: "package_onetime" },
-  { text: "패키지 (일간)", value: "package_daily" },
-  { text: "일일 임무", value: "daily_mission" },
-  { text: "주간 임무", value: "weekly_mission" },
-  { text: "전술대회", value: "tactical" },
-  { text: "출석", value: "attendance" },
-  { text: "기타", value: "other" },
+  { label: "평균 (140회)", value: "average" as const, fallback: "ceil" as const },
+  { label: "천장 (200회)", value: "ceil" as const, fallback: "average" as const },
 ];
 
 type PyroxenePlannerOptionsPanelProps = {
@@ -40,79 +12,51 @@ type PyroxenePlannerOptionsPanelProps = {
 };
 
 export default function PyroxenePlannerOptionsPanel({ options, onOptionsChange }: PyroxenePlannerOptionsPanelProps) {
-  const onToggleRaidTier = useCallback((tier: "platinum" | "gold" | "silver" | "bronze") => {
-    onOptionsChange({ ...options, raid: { ...options.raid, tier } });
-  }, [options, onOptionsChange]);
-
-  const onToggleTimelineDisplay = useCallback((type: TimelineSourceType) => {
-    onOptionsChange({
-      ...options,
-      timeline: {
-        ...options.timeline,
-        display: options.timeline.display.includes(type) ? options.timeline.display.filter((t) => t !== type) : [...options.timeline.display, type],
-      },
-    });
-  }, [options, onOptionsChange]);
-
-  const onToggleTacticalLevel = useCallback((level: "in10" | "in100" | "in200" | "over200") => {
-    onOptionsChange({ ...options, tactical: { ...options.tactical, level } });
-  }, [options, onOptionsChange]);
-
   return (
-    <>
-      <PanelLabel title="★3 학생 모집 목표" description="학생 한 명당 목표 모집 횟수 (이벤트 별 설정 가능)" />
-      <FilterButtons
-        exclusive
-        atLeastOne
-        buttonProps={pickupChanceOptions.map(({ text, value, fallback }) => ({
-          text,
-          active: options.event.pickupChance === value,
-          onToggle: (activated) => onOptionsChange({
-            ...options,
-            event: { ...options.event, pickupChance: activated ? value : fallback },
-          }),
-        }))}
-      />
-
-      <PanelLabel title="총력전 등급" />
-      <FilterButtons
-        exclusive
-        atLeastOne
-        buttonProps={raidTierOptions.map(({ text, value }) => ({
-          text,
-          active: options.raid.tier === value,
-          onToggle: () => onToggleRaidTier(value),
-        }))}
-      />
-
-      <PanelLabel title="전술대회 순위" description="매일 보상 수령 시점의 대략적인 순위" />
-      <FilterButtons
-        exclusive
-        atLeastOne
-        buttonProps={tacticalLevelOptions.map(({ text, value }) => ({
-          text,
-          active: options.tactical.level === value,
-          onToggle: () => onToggleTacticalLevel(value),
-        }))}
-      />
-
-      <PanelLabel title="타임라인에 표시할 항목" description="타임라인에서 숨겨도 계산에는 반영돼요" />
-      <FilterButtons
-        buttonProps={timelineDisplayOptions.map(({ text, value }) => ({
-          text,
-          active: options.timeline.display.includes(value),
-          onToggle: () => onToggleTimelineDisplay(value),
-        }))}
-      />
-    </>
+    <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
+      <div className="rounded-md px-3 py-2 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70 lg:px-2.5 lg:py-1.5">
+        <div className="min-h-8 lg:min-h-7">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">★3 학생 모집 목표</p>
+            <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+              학생 한 명당 목표 모집 횟수 (이벤트 별 설정 가능)
+            </p>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {pickupChanceOptions.map(({ label, value, fallback }) => (
+              <PickupChanceChip
+                key={value}
+                label={label}
+                active={options.event.pickupChance === value}
+                onClick={() =>
+                  onOptionsChange({
+                    ...options,
+                    event: { ...options.event, pickupChance: options.event.pickupChance === value ? fallback : value },
+                  })
+                }
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
-function PanelLabel({ title, description }: { title: string, description?: string }) {
+function PickupChanceChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
-    <>
-      <p className="mt-4 font-bold">{title}</p>
-      {description && <p className="mb-2 text-sm text-neutral-500">{description}</p>}
-    </>
+    <button
+      type="button"
+      className={cn(
+        "inline-flex h-8 cursor-pointer items-center rounded-sm border px-2 text-xs font-medium transition lg:h-7 lg:px-1.5",
+        active
+          ? "border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300"
+          : "border-neutral-200 bg-neutral-100/70 text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700",
+      )}
+      aria-pressed={active}
+      onClick={onClick}
+    >
+      {label}
+    </button>
   );
 }
