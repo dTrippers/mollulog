@@ -28,6 +28,7 @@ type StudentCardsProps = {
   layout?: "grid" | "wrap";
   cardSize?: "xs" | "sm" | "md" | "lg";
   gap?: "normal" | "tight";
+  namePlacement?: "below" | "overlay";
   onSelect?: (uid: string) => void;
   onRef?: (uid: string, ref: HTMLDivElement | null) => void;
 };
@@ -39,6 +40,7 @@ export default function StudentCards({
   layout = "grid",
   cardSize = "md",
   gap = "normal",
+  namePlacement = "below",
   onSelect,
   onRef,
 }: StudentCardsProps) {
@@ -51,7 +53,7 @@ export default function StudentCards({
     gridClass = "grid-cols-4";
   }
 
-  let pcGridClass = "md:grid-cols-8"
+  let pcGridClass = "md:grid-cols-8";
   if (pcGrid === 4) {
     pcGridClass = "md:grid-cols-4";
   } else if (pcGrid === 6) {
@@ -70,12 +72,12 @@ export default function StudentCards({
     md: "w-14 sm:w-16",
     lg: "w-16 sm:w-20",
   }[cardSize];
-  const containerClassName = layout === "wrap"
-    ? `relative flex flex-wrap items-start ${wrapGapClass}`
-    : `relative grid ${gridClass} ${pcGridClass} ${gapClass}`;
-  const itemClassName = layout === "wrap"
-    ? `scroll-mt-20 md:scroll-mt-4 shrink-0 ${wrapCardSizeClass}`
-    : "scroll-mt-20 md:scroll-mt-4";
+  const containerClassName =
+    layout === "wrap"
+      ? `relative flex flex-wrap items-start ${wrapGapClass}`
+      : `relative grid ${gridClass} ${pcGridClass} ${gapClass}`;
+  const itemClassName =
+    layout === "wrap" ? `scroll-mt-20 md:scroll-mt-4 shrink-0 ${wrapCardSizeClass}` : "scroll-mt-20 md:scroll-mt-4";
 
   return (
     <div className={containerClassName}>
@@ -93,6 +95,7 @@ export default function StudentCards({
           >
             <StudentCard
               {...student}
+              namePlacement={namePlacement}
               favorited={student.state?.favorited}
               favoritedCount={student.state?.favoritedCount}
               onSelect={onSelect}

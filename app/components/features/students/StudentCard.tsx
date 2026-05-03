@@ -6,7 +6,14 @@ import { Link } from "react-router";
 import { studentImageUrl } from "~/models/assets";
 import type { Role } from "~/models/content.d";
 import type { Attack, Defense } from "~/graphql/graphql";
-import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, roleColor, roleLocale } from "~/locales/ko";
+import {
+  attackTypeColor,
+  attackTypeLocale,
+  defenseTypeColor,
+  defenseTypeLocale,
+  roleColor,
+  roleLocale,
+} from "~/locales/ko";
 import { OptionBadge } from "~/components/primitives";
 import { sanitizeClassName } from "~/prophandlers";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
@@ -16,6 +23,7 @@ type StudentCardProps = {
   uid: string | null;
   name?: string | null;
   nameSize?: "small" | "normal";
+  namePlacement?: "below" | "overlay";
 
   tier?: number | null;
   level?: number | null;
@@ -94,8 +102,26 @@ function StudentCardFrame({
 }
 
 export default function StudentCard({
-  uid, name, nameSize, tier, level, label, isAssist, attackType, defenseType, role,
-  favorited, favoritedCount, grayscale, checked, hideName, circular, onSelect, popups, popupId = uid,
+  uid,
+  name,
+  nameSize,
+  namePlacement = "below",
+  tier,
+  level,
+  label,
+  isAssist,
+  attackType,
+  defenseType,
+  role,
+  favorited,
+  favoritedCount,
+  grayscale,
+  checked,
+  hideName,
+  circular,
+  onSelect,
+  popups,
+  popupId = uid,
 }: StudentCardProps) {
   const { activePopupId, setActivePopupId } = useStudentCardPopup();
   const showPopup = popupId === activePopupId;
@@ -119,6 +145,11 @@ export default function StudentCard({
   }, []);
 
   const visibleNames = parseVisibleNames(name ?? "");
+  const showName = Boolean(name && !hideName);
+  const showsOverlayName = showName && namePlacement === "overlay";
+  const overlaySubName = visibleNames.length === 2 ? visibleNames[1] : "";
+  const overlayMainName = visibleNames[0] ?? name;
+  const cardAspectClassName = circular ? "aspect-square" : showsOverlayName ? "aspect-[5/6]" : "";
   const popup = uid && name && popups && popups.length > 0 && (
     <Transition
       show={showPopup}
@@ -144,19 +175,46 @@ export default function StudentCard({
       <StudentCardFrame interactive={interactive} onClick={handleCardClick}>
         <div className="my-1">
           <div className="relative">
-            <div className={`relative ${circular ? "rounded-full" : "rounded-lg"} overflow-hidden ${circular ? "aspect-square" : ""}`}>
+            <div
+              className={`relative ${circular ? "rounded-full" : "rounded-lg"} overflow-hidden ${cardAspectClassName}`}
+            >
               <img
                 className={`w-full h-full object-cover ${grayscale ? "grayscale opacity-75" : ""} transition`}
                 src={studentImageUrl(uid ?? "unlisted")}
-                alt={name ?? undefined} loading="lazy"
+                alt={name ?? undefined}
+                loading="lazy"
               />
-              {/* 우측 상단 */}
-              <div className="absolute top-0 right-0 text-xs font-bold">
+              <div className="absolute top-0.5 right-0.5 flex flex-col items-end gap-0.5 text-xs font-bold">
                 {level && <span className="px-1.5 bg-neutral-900/90 rounded-lg text-neutral-100">Lv. {level}</span>}
+                {showsOverlayName && label && (
+                  <span className="px-1.5 py-0.5 rounded-md bg-black/70 text-white backdrop-blur-sm leading-tight">
+                    {label}
+                  </span>
+                )}
+                {showsOverlayName && !label && tier && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded-md bg-black/70 backdrop-blur-sm leading-tight ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}
+                  >
+                    {tier <= 5 ? (
+                      <StarIcon className="size-3.5 mr-0.5 inline-block" />
+                    ) : (
+                      <img className="size-3.5 mr-0.5 inline-block" src="/icons/exclusive_weapon.png" alt="고유 장비" />
+                    )}
+                    <span>{visibileTier(tier)[0]}</span>
+                  </span>
+                )}
               </div>
 
+              {showsOverlayName && isAssist && (
+                <div className="absolute top-0.5 left-0.5 px-1 md:px-1.5 rounded-md text-xs font-bold bg-linear-to-br from-cyan-300 to-sky-500 dark:from-cyan-400 dark:to-sky-600 text-white text-center">
+                  A
+                </div>
+              )}
+
               {(favoritedCount || favorited) && (
-                <div className={`px-1 absolute top-0.5 right-0.5 text-white border rounded-lg flex items-center transition ${(favorited === undefined || favorited === true) ? "bg-red-500/90" : "bg-neutral-900/80"}`}>
+                <div
+                  className={`px-1 absolute top-0.5 right-0.5 text-white border rounded-lg flex items-center transition ${favorited === undefined || favorited === true ? "bg-red-500/90" : "bg-neutral-900/80"}`}
+                >
                   <HeartIcon className="size-3.5" />
                   {favoritedCount && <span className="text-xs font-bold">{favoritedCount}</span>}
                 </div>
@@ -168,27 +226,50 @@ export default function StudentCard({
                 </div>
               )}
 
-              {/* 하단 */}
-              <div className="absolute bottom-0 w-full flex justify-center text-xs font-bold bg-black/90">
-                {isAssist && (
-                  <div className="px-1 md:px-1.5 text-xs font-bold bg-linear-to-br from-cyan-300 to-sky-500 dark:from-cyan-400 dark:to-sky-600 text-white text-center">A</div>
-                )}
-                {label}
-                {!label && tier && (
-                  <div className={`flex-grow flex justify-center items-center ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}>
-                    {(tier <= 5) ?
-                      <StarIcon className="size-3.5 mr-0.5 inline-block" /> :
-                      <img className="w-4 h-4 mr-0.5 inline-block" src="/icons/exclusive_weapon.png" alt="고유 장비" />
+              {showsOverlayName ? (
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 via-black/45 via-70% to-transparent px-1 pt-4 pb-0.5 text-left">
+                  <p className="whitespace-nowrap text-[0.55rem] leading-tight text-white/70">{overlaySubName}</p>
+                  <p
+                    className={
+                      nameSize === "small"
+                        ? "text-[0.7rem] font-bold leading-tight text-white line-clamp-1"
+                        : "text-xs font-bold leading-tight text-white line-clamp-1"
                     }
-                    <span>{visibileTier(tier)[0]}</span>
-                  </div>
-                )}
-              </div>
+                  >
+                    {overlayMainName}
+                  </p>
+                </div>
+              ) : (
+                <div className="absolute bottom-0 w-full flex justify-center text-xs font-bold bg-black/90">
+                  {isAssist && (
+                    <div className="px-1 md:px-1.5 text-xs font-bold bg-linear-to-br from-cyan-300 to-sky-500 dark:from-cyan-400 dark:to-sky-600 text-white text-center">
+                      A
+                    </div>
+                  )}
+                  {label}
+                  {!label && tier && (
+                    <div
+                      className={`flex-grow flex justify-center items-center ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}
+                    >
+                      {tier <= 5 ? (
+                        <StarIcon className="size-3.5 mr-0.5 inline-block" />
+                      ) : (
+                        <img
+                          className="w-4 h-4 mr-0.5 inline-block"
+                          src="/icons/exclusive_weapon.png"
+                          alt="고유 장비"
+                        />
+                      )}
+                      <span>{visibileTier(tier)[0]}</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            {name && !hideName && (
+            {showName && namePlacement === "below" && (
               <div className="mt-1 text-center leading-tight tracking-tighter">
                 <p className={nameSize === "small" ? "text-xs" : "text-sm"}>{visibleNames[0]}</p>
-                {(visibleNames.length === 2) && <p className="text-xs">{visibleNames[1]}</p>}
+                {visibleNames.length === 2 && <p className="text-xs">{visibleNames[1]}</p>}
               </div>
             )}
           </div>
@@ -266,7 +347,14 @@ export function StudentCardPopup({ student, popups, onClose }: StudentCardPopupP
           }
           if (popup.link) {
             return (
-              <a key={key} href={popup.link} target="_blank" rel="noopener noreferrer" className={itemClassName} onClick={onClose}>
+              <a
+                key={key}
+                href={popup.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={itemClassName}
+                onClick={onClose}
+              >
                 {content}
               </a>
             );

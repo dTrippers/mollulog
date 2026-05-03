@@ -45,11 +45,7 @@ export default function PickupHistoryView({ uid, event, recruitedStudents, trial
         </div>
 
         <aside className="flex flex-col gap-3 md:w-60">
-          <PickupStats
-            totalTrial={totalTrial}
-            tier3Count={tier3Students.length}
-            pickupCount={pickupCount}
-          />
+          <PickupStats totalTrial={totalTrial} tier3Count={tier3Students.length} pickupCount={pickupCount} />
           {editable && <PickupActions uid={uid} />}
         </aside>
       </div>
@@ -86,7 +82,7 @@ function Tier3StudentList({ students }: { students: PickupHistoryViewProps["recr
   return (
     <div className="space-y-2.5">
       <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집한 ★3 학생</p>
-      <StudentCards layout="wrap" cardSize="sm" gap="tight" students={cardStudents} />
+      <StudentCards layout="wrap" cardSize="md" gap="tight" namePlacement="overlay" students={cardStudents} />
     </div>
   );
 }
