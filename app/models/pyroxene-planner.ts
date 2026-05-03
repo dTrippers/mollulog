@@ -11,6 +11,14 @@ import { getAllStudentsMap } from "./student";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { RaidType } from "./content.d";
 import { compareInstantAsc, compareInstantDesc, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
+import {
+  PYROXENE_ATTENDANCE_CONFIG,
+  PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
+  PYROXENE_PACKAGE_CONFIG,
+  PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
+  PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
+  type PyroxenePackageType,
+} from "./pyroxene-planner-source-config";
 
 /**
  * Pyroxene Planner Contents
@@ -18,108 +26,128 @@ import { compareInstantAsc, compareInstantDesc, nowUtcIso, toUtcIso, type UtcIso
 const EVENT_CONTENT_TYPES: TimelineContentType[] = ["event", "main_story", "pickup"];
 
 export type PyroxenePlannerContent =
-  {
-    kind: "event";
-    uid: string;
-    name: string;
-    since: UtcIsoString;
-    until: UtcIsoString;
-    earnablePyroxene: number | null;
-    recruitments: {
-      recruitmentType: RecruitmentTypeEnum;
-      pickup: boolean;
-      rerun: boolean;
-      student: { uid: string; name: string; initialTier: number } | null;
-    }[];
-  } | {
-    kind: "raid";
-    uid: string;
-    name: string;
-    type: RaidType;
-    since: UtcIsoString;
-    until: UtcIsoString;
-  };
+  | {
+      kind: "event";
+      uid: string;
+      name: string;
+      since: UtcIsoString;
+      until: UtcIsoString;
+      earnablePyroxene: number | null;
+      recruitments: {
+        recruitmentType: RecruitmentTypeEnum;
+        pickup: boolean;
+        rerun: boolean;
+        student: { uid: string; name: string; initialTier: number } | null;
+      }[];
+    }
+  | {
+      kind: "raid";
+      uid: string;
+      name: string;
+      type: RaidType;
+      since: UtcIsoString;
+      until: UtcIsoString;
+    };
 
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
-  return fetchCached(env, "pyroxene-planner-contents::v5", async () => {
-    const recruitmentRepository = new RecruitmentRepository(env);
-    const raidRepository = new RaidRepository(env);
+  return fetchCached(
+    env,
+    "pyroxene-planner-contents::v5",
+    async () => {
+      const recruitmentRepository = new RecruitmentRepository(env);
+      const raidRepository = new RaidRepository(env);
 
-    // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
-    const [eventContents, raidContents] = await Promise.all([
-      getTimelineContents(env),
-      getFutureRaidContents(env, ["raid"]),
-    ]);
-    const raidUids = new Set(raidContents.map((c) => c.uid));
-    const allContents = [
-      ...eventContents.filter((c) => !raidUids.has(c.uid)),
-      ...raidContents,
-    ].sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
+      // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
+      const [eventContents, raidContents] = await Promise.all([
+        getTimelineContents(env),
+        getFutureRaidContents(env, ["raid"]),
+      ]);
+      const raidUids = new Set(raidContents.map((c) => c.uid));
+      const allContents = [...eventContents.filter((c) => !raidUids.has(c.uid)), ...raidContents].sort((a, b) =>
+        compareInstantAsc(a.startAt, b.startAt),
+      );
 
-    const recruitmentGroupUids = allContents.map((c) => c.recruitmentGroupUid).filter((uid) => uid !== null) as string[];
-    const [recruitmentGroups, studentsMap] = await Promise.all([
-      recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh),
-      getAllStudentsMap(env, true),
-    ]);
+      const recruitmentGroupUids = allContents
+        .map((c) => c.recruitmentGroupUid)
+        .filter((uid) => uid !== null) as string[];
+      const [recruitmentGroups, studentsMap] = await Promise.all([
+        recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh),
+        getAllStudentsMap(env, true),
+      ]);
 
-    const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
-    const results = await Promise.all(allContents.map(async (content) => {
-      if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
-        const group = content.recruitmentGroupUid ? recruitmentGroupMap.get(content.recruitmentGroupUid) : undefined;
-        const recruitments = (group?.recruitments ?? []).map((r) => ({
-          recruitmentType: r.recruitmentType,
-          pickup: r.pickup,
-          rerun: r.rerun,
-          student: r.student ? { uid: r.student.uid, name: r.student.name, initialTier: studentsMap[r.student.uid]?.initialTier ?? 0 } : null,
-        }));
+      const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
+      const results = await Promise.all(
+        allContents.map(async (content) => {
+          if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
+            const group = content.recruitmentGroupUid
+              ? recruitmentGroupMap.get(content.recruitmentGroupUid)
+              : undefined;
+            const recruitments = (group?.recruitments ?? []).map((r) => ({
+              recruitmentType: r.recruitmentType,
+              pickup: r.pickup,
+              rerun: r.rerun,
+              student: r.student
+                ? {
+                    uid: r.student.uid,
+                    name: r.student.name,
+                    initialTier: studentsMap[r.student.uid]?.initialTier ?? 0,
+                  }
+                : null,
+            }));
 
-        // endAt이 없는 경우 recruitment의 최대 until 날짜를 사용
-        const until = content.endAt ?? group?.recruitments.reduce<UtcIsoString | null>(
-          (max, r) => (r.until ? (max && compareInstantDesc(max, r.until) < 0 ? max : toUtcIso(r.until)) : max),
-          null,
-        );
-        if (!until) return null;
+            // endAt이 없는 경우 recruitment의 최대 until 날짜를 사용
+            const until =
+              content.endAt ??
+              group?.recruitments.reduce<UtcIsoString | null>(
+                (max, r) => (r.until ? (max && compareInstantDesc(max, r.until) < 0 ? max : toUtcIso(r.until)) : max),
+                null,
+              );
+            if (!until) return null;
 
-        return {
-          kind: "event" as const,
-          uid: content.uid,
-          name: content.name,
-          since: content.startAt,
-          until,
-          earnablePyroxene: content.earnablePyroxene ?? null,
-          recruitments,
-        };
-      }
-      if (content.contentType === "raid") {
-        let raidName = content.name;
-        let raidType = content.contentType as RaidType;
-        let until: UtcIsoString | null = content.endAt;
-
-        if (content.contentUid) {
-          const schedule = await raidRepository.getSchedule(content.contentUid, forceRefresh);
-          if (schedule) {
-            raidName = schedule.raidBoss.name;
-            raidType = schedule.raidType as RaidType;
-            until = until ?? schedule.endAt;
+            return {
+              kind: "event" as const,
+              uid: content.uid,
+              name: content.name,
+              since: content.startAt,
+              until,
+              earnablePyroxene: content.earnablePyroxene ?? null,
+              recruitments,
+            };
           }
-        }
+          if (content.contentType === "raid") {
+            let raidName = content.name;
+            let raidType = content.contentType as RaidType;
+            let until: UtcIsoString | null = content.endAt;
 
-        if (!until) return null;
+            if (content.contentUid) {
+              const schedule = await raidRepository.getSchedule(content.contentUid, forceRefresh);
+              if (schedule) {
+                raidName = schedule.raidBoss.name;
+                raidType = schedule.raidType as RaidType;
+                until = until ?? schedule.endAt;
+              }
+            }
 
-        return {
-          kind: "raid" as const,
-          uid: content.uid,
-          name: raidName,
-          type: raidType,
-          since: content.startAt,
-          until,
-        };
-      }
-      return null;
-    }));
+            if (!until) return null;
 
-    return results.filter((r) => r !== null);
-  }, 60 * 10, forceRefresh);
+            return {
+              kind: "raid" as const,
+              uid: content.uid,
+              name: raidName,
+              type: raidType,
+              since: content.startAt,
+              until,
+            };
+          }
+          return null;
+        }),
+      );
+
+      return results.filter((r) => r !== null);
+    },
+    60 * 10,
+    forceRefresh,
+  );
 }
 
 /**
@@ -170,19 +198,21 @@ export async function getLatestPyroxeneOwnedResource(env: Env, userId: number): 
 }
 
 export async function createPyroxeneOwnedResource(
-  env: Env, userId: number, resources: { pyroxene: number, oneTimeTicket: number, tenTimeTicket: number },
+  env: Env,
+  userId: number,
+  resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
 ): Promise<void> {
   const db = drizzle(env.DB);
   const uid = nanoid(8);
   const inputAt = new Date().toISOString();
   const { pyroxene, oneTimeTicket, tenTimeTicket } = resources;
-  await db.insert(pyroxeneOwnedResourcesTable)
-    .values({ uid, userId, inputAt, pyroxene, oneTimeTicket, tenTimeTicket });
+  await db.insert(pyroxeneOwnedResourcesTable).values({ uid, userId, inputAt, pyroxene, oneTimeTicket, tenTimeTicket });
 }
 
 export async function deletePyroxeneOwnedResourceByUid(env: Env, userId: number, uid: string): Promise<void> {
   const db = drizzle(env.DB);
-  await db.delete(pyroxeneOwnedResourcesTable)
+  await db
+    .delete(pyroxeneOwnedResourcesTable)
     .where(and(eq(pyroxeneOwnedResourcesTable.userId, userId), eq(pyroxeneOwnedResourcesTable.uid, uid)));
 }
 
@@ -247,119 +277,130 @@ export async function createBuyPyroxene(env: Env, userId: number, date: Date, qu
   const uid = nanoid(8);
   const eventAt = dayjs(date).utcOffset(9).hour(4).toISOString(); // KST 4:00 on the given date
   const db = drizzle(env.DB);
-  await db.insert(pyroxeneTimelineItemsTable)
-    .values({
-      uid, userId, eventAt,
-      source: "buy",
-      description: "청휘석 구매",
-      pyroxeneDelta: quantity,
-      oneTimeTicketDelta: 0,
-      tenTimeTicketDelta: 0,
-    });
+  await db.insert(pyroxeneTimelineItemsTable).values({
+    uid,
+    userId,
+    eventAt,
+    source: "buy",
+    description: "청휘석 구매",
+    pyroxeneDelta: quantity,
+    oneTimeTicketDelta: 0,
+    tenTimeTicketDelta: 0,
+  });
 }
 
 export async function deletePyroxeneTimelineItem(env: Env, userId: number, uid: string): Promise<void> {
   const db = drizzle(env.DB);
   const parsedUid = uid.split("::")[0];
-  await db.delete(pyroxeneTimelineItemsTable)
-    .where(and(
-      eq(pyroxeneTimelineItemsTable.userId, userId),
-      or(eq(pyroxeneTimelineItemsTable.uid, parsedUid), like(pyroxeneTimelineItemsTable.uid, `${parsedUid}%`)),
-    ));
+  await db
+    .delete(pyroxeneTimelineItemsTable)
+    .where(
+      and(
+        eq(pyroxeneTimelineItemsTable.userId, userId),
+        or(eq(pyroxeneTimelineItemsTable.uid, parsedUid), like(pyroxeneTimelineItemsTable.uid, `${parsedUid}%`)),
+      ),
+    );
 }
 
-const PACKAGE_CONFIG = {
-  half: { name: "하프 패키지", oneTime: 176, daily: 20 },
-  full: { name: "월간 패키지", oneTime: 392, daily: 40 },
-} as const;
-
-export async function createPyroxenePackage(env: Env, userId: number, startDate: Date, packageType: "half" | "full"): Promise<void> {
+export async function createPyroxenePackage(
+  env: Env,
+  userId: number,
+  startDate: Date,
+  packageType: PyroxenePackageType,
+): Promise<void> {
   const uid = nanoid(8);
   const eventAt = dayjs(startDate).utcOffset(9).hour(4).toISOString(); // KST 4:00 on the given date
 
-  const { name: packageName, oneTime: oneTimePyroxene, daily: dailyPyroxene } = PACKAGE_CONFIG[packageType];
+  const { name: packageName, oneTime: oneTimePyroxene, daily: dailyPyroxene } = PYROXENE_PACKAGE_CONFIG[packageType];
 
   const db = drizzle(env.DB);
-  await db.insert(pyroxeneTimelineItemsTable)
-    .values([
-      {
-        uid: `${uid}::onetime`,
-        userId, eventAt,
-        source: "package_onetime",
-        description: `${packageName} (초회)`,
-        pyroxeneDelta: oneTimePyroxene,
-        oneTimeTicketDelta: 0,
-        tenTimeTicketDelta: 0,
-      },
-      {
-        uid: `${uid}::daily`,
-        userId, eventAt,
-        source: "package_daily",
-        description: `${packageName} (일간)`,
-        pyroxeneDelta: dailyPyroxene,
-        repeatIntervalDays: 1,
-        repeatCount: 30,
-        oneTimeTicketDelta: 0,
-        tenTimeTicketDelta: 0,
-      },
-    ]);
+  await db.insert(pyroxeneTimelineItemsTable).values([
+    {
+      uid: `${uid}::onetime`,
+      userId,
+      eventAt,
+      source: "package_onetime",
+      description: `${packageName} (초회)`,
+      pyroxeneDelta: oneTimePyroxene,
+      oneTimeTicketDelta: 0,
+      tenTimeTicketDelta: 0,
+    },
+    {
+      uid: `${uid}::daily`,
+      userId,
+      eventAt,
+      source: "package_daily",
+      description: `${packageName} (일간)`,
+      pyroxeneDelta: dailyPyroxene,
+      repeatIntervalDays: PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
+      repeatCount: PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
+      oneTimeTicketDelta: 0,
+      tenTimeTicketDelta: 0,
+    },
+  ]);
 }
 
 export async function createAttendance(env: Env, userId: number, startDate: Date): Promise<void> {
   const db = drizzle(env.DB);
-  await db.delete(pyroxeneTimelineItemsTable)
+  await db
+    .delete(pyroxeneTimelineItemsTable)
     .where(and(eq(pyroxeneTimelineItemsTable.userId, userId), eq(pyroxeneTimelineItemsTable.source, "attendance")));
 
   const uid = nanoid(8);
   const startAt = dayjs(startDate).utcOffset(9).hour(4); // KST 4:00 on the given date
-  await db.insert(pyroxeneTimelineItemsTable)
-    .values([
-      {
-        uid: `${uid}::5`,
-        userId,
-        eventAt: startAt.add(4, "day").toISOString(),
-        source: "attendance",
-        description: "출석 5일차",
-        pyroxeneDelta: 50,
-        oneTimeTicketDelta: 0,
-        tenTimeTicketDelta: 0,
-        repeatIntervalDays: 10,
-        repeatCount: null,
-      },
-      {
-        uid: `${uid}::10`,
-        userId,
-        eventAt: startAt.add(9, "day").toISOString(),
-        source: "attendance",
-        description: "출석 10일차",
-        pyroxeneDelta: 100,
-        oneTimeTicketDelta: 0,
-        tenTimeTicketDelta: 0,
-        repeatIntervalDays: 10,
-        repeatCount: null
-      },
-    ]);
+  await db.insert(pyroxeneTimelineItemsTable).values(
+    PYROXENE_ATTENDANCE_CONFIG.map(({ day, pyroxene }) => ({
+      uid: `${uid}::${day}`,
+      userId,
+      eventAt: startAt.add(day - 1, "day").toISOString(),
+      source: "attendance",
+      description: `출석 ${day}일차`,
+      pyroxeneDelta: pyroxene,
+      oneTimeTicketDelta: 0,
+      tenTimeTicketDelta: 0,
+      repeatIntervalDays: PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
+      repeatCount: null,
+    })),
+  );
 }
 
-export async function createOtherPyroxeneGain(env: Env, userId: number, date: Date, pyroxene: number, oneTimeTicket: number, tenTimeTicket: number, description: string): Promise<void> {
+export async function createOtherPyroxeneGain(
+  env: Env,
+  userId: number,
+  date: Date,
+  pyroxene: number,
+  oneTimeTicket: number,
+  tenTimeTicket: number,
+  description: string,
+): Promise<void> {
   const db = drizzle(env.DB);
-  await db.insert(pyroxeneTimelineItemsTable)
-    .values({
-      uid: nanoid(8),
-      userId,
-      eventAt: dayjs(date).utcOffset(9).hour(4).toISOString(),
-      source: "other",
-      description,
-      pyroxeneDelta: pyroxene,
-      oneTimeTicketDelta: oneTimeTicket,
-      tenTimeTicketDelta: tenTimeTicket,
-    });
+  await db.insert(pyroxeneTimelineItemsTable).values({
+    uid: nanoid(8),
+    userId,
+    eventAt: dayjs(date).utcOffset(9).hour(4).toISOString(),
+    source: "other",
+    description,
+    pyroxeneDelta: pyroxene,
+    oneTimeTicketDelta: oneTimeTicket,
+    tenTimeTicketDelta: tenTimeTicket,
+  });
 }
 
 /**
  * Pyroxene Planner Options
  */
-export type TimelineSourceType = "event" | "event_reward" | "raid" | "daily_mission" | "weekly_mission" | "buy" | "package_onetime" | "package_daily" | "attendance" | "tactical" | "other";
+export type TimelineSourceType =
+  | "event"
+  | "event_reward"
+  | "raid"
+  | "daily_mission"
+  | "weekly_mission"
+  | "buy"
+  | "package_onetime"
+  | "package_daily"
+  | "attendance"
+  | "tactical"
+  | "other";
 export type PyroxenePlannerOptions = {
   event: {
     pickupChance: "ceil" | "average";
@@ -407,12 +448,17 @@ export async function getPyroxenePlannerOptions(env: Env, userId: number): Promi
   }
 }
 
-export async function upsertPyroxenePlannerOptions(env: Env, userId: number, options: PyroxenePlannerOptions): Promise<void> {
+export async function upsertPyroxenePlannerOptions(
+  env: Env,
+  userId: number,
+  options: PyroxenePlannerOptions,
+): Promise<void> {
   const db = drizzle(env.DB);
   const optionsJson = JSON.stringify(options);
   const updatedAt = new Date().toISOString();
 
-  await db.insert(pyroxenePlannerOptionsTable)
+  await db
+    .insert(pyroxenePlannerOptionsTable)
     .values({ userId, options: optionsJson, updatedAt })
     .onConflictDoUpdate({
       target: pyroxenePlannerOptionsTable.userId,
@@ -452,7 +498,11 @@ function toEventDataModel(data: typeof pyroxeneEventDataTable.$inferSelect): Pyr
   };
 }
 
-export async function getPyroxeneEventData(env: Env, userId: number, eventUid: string): Promise<PyroxeneEventData | null> {
+export async function getPyroxeneEventData(
+  env: Env,
+  userId: number,
+  eventUid: string,
+): Promise<PyroxeneEventData | null> {
   const db = drizzle(env.DB);
   const [data] = await db
     .select()
@@ -465,10 +515,7 @@ export async function getPyroxeneEventData(env: Env, userId: number, eventUid: s
 
 export async function getAllPyroxeneEventData(env: Env, userId: number): Promise<PyroxeneEventData[]> {
   const db = drizzle(env.DB);
-  const data = await db
-    .select()
-    .from(pyroxeneEventDataTable)
-    .where(eq(pyroxeneEventDataTable.userId, userId));
+  const data = await db.select().from(pyroxeneEventDataTable).where(eq(pyroxeneEventDataTable.userId, userId));
 
   return data.map(toEventDataModel);
 }
@@ -484,7 +531,8 @@ export async function upsertPyroxeneEventData(
   const updatedAt = new Date().toISOString();
 
   // Only overwrite fields that were explicitly provided; omitted fields preserve their existing value on conflict.
-  await db.insert(pyroxeneEventDataTable)
+  await db
+    .insert(pyroxeneEventDataTable)
     .values({
       uid,
       userId,

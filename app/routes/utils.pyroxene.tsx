@@ -1,12 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { type MetaFunction, useFetcher, useLoaderData, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
+import {
+  type MetaFunction,
+  useFetcher,
+  useLoaderData,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+} from "react-router";
 import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { LockClosedIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { PyroxenePlannerInputPanel, PyroxenePlannerOptionsPanel, PyroxeneSchedule } from "~/components/features/futures";
+import {
+  PyroxenePlannerInputPanel,
+  PyroxenePlannerOptionsPanel,
+  PyroxeneSchedule,
+} from "~/components/features/futures";
 import type { PickupResources, PyroxeneScheduleItem } from "~/components/features/futures";
 import type { PyroxenePlannerOptions, PyroxeneTimelineItem, PyroxeneEventData } from "~/models/pyroxene-planner";
-import { nanoid } from "nanoid/non-secure";
 import Page from "~/components/features/layout/Page";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import {
@@ -26,16 +35,19 @@ import {
   deletePyroxeneEventData,
 } from "~/models/pyroxene-planner";
 import { ErrorPage } from "~/components/features/layout";
-
+import {
+  createOptimisticAttendanceTimelineItems,
+  createOptimisticBuyTimelineItems,
+  createOptimisticOtherTimelineItems,
+  createOptimisticPackageTimelineItems,
+  DEFAULT_PYROXENE_TIMELINE_DISPLAY,
+} from "~/models/pyroxene-sources";
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
 
   // contents와 인증은 서로 무관하므로 병렬 실행
-  const [contents, currentUser] = await Promise.all([
-    getPyroxenePlannerContents(env),
-    getActiveSensei(env, request),
-  ]);
+  const [contents, currentUser] = await Promise.all([getPyroxenePlannerContents(env), getActiveSensei(env, request)]);
 
   if (!currentUser) {
     return {
@@ -65,7 +77,10 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   return {
     signedIn: true,
     contents,
-    favoritedStudents: favoritedStudents.map(({ contentId, studentId }) => ({ contentUid: contentId, studentUid: studentId })),
+    favoritedStudents: favoritedStudents.map(({ contentId, studentId }) => ({
+      contentUid: contentId,
+      studentUid: studentId,
+    })),
     latestResources: {
       pyroxene: latestResources?.pyroxene ?? 0,
       oneTimeTicket: latestResources?.oneTimeTicket ?? 0,
@@ -146,7 +161,15 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     }
     if (createData.other?.resources !== undefined) {
       const { pyroxene, oneTimeTicket, tenTimeTicket } = createData.other.resources;
-      await createOtherPyroxeneGain(env, currentUser.id, createData.other.date, pyroxene, oneTimeTicket, tenTimeTicket, createData.other.description);
+      await createOtherPyroxeneGain(
+        env,
+        currentUser.id,
+        createData.other.date,
+        pyroxene,
+        oneTimeTicket,
+        tenTimeTicket,
+        createData.other.description,
+      );
     }
   } else if (request.method === "POST" && eventData) {
     await upsertPyroxeneEventData(env, currentUser.id, eventData.eventUid, {
@@ -183,7 +206,9 @@ export default function PyroxenePlanner() {
   const loaderData = useLoaderData<typeof loader>();
   const { signedIn, contents, favoritedStudents } = loaderData;
 
-  const [initialDate, setInitialDate] = useState<Date | null>(loaderData.latestResources.inputAt ? new Date(loaderData.latestResources.inputAt) : null);
+  const [initialDate, setInitialDate] = useState<Date | null>(
+    loaderData.latestResources.inputAt ? new Date(loaderData.latestResources.inputAt) : null,
+  );
   const [initialResources, setInitialResources] = useState<PickupResources>(loaderData.latestResources);
 
   // Local optimistic state for timeline items and event data
@@ -219,7 +244,7 @@ export default function PyroxenePlanner() {
       setLocalEventData((prev) => {
         const exists = prev.some((d) => d.eventUid === eventUid);
         if (exists) {
-          return prev.map((d) => d.eventUid === eventUid ? { ...d, completed: true } : d);
+          return prev.map((d) => (d.eventUid === eventUid ? { ...d, completed: true } : d));
         }
         return [...prev, { uid: "optimistic", userId: 0, eventUid, completed: true, expectedTrials: null }];
       });
@@ -234,46 +259,35 @@ export default function PyroxenePlanner() {
     setLocalEventData((prev) => {
       const exists = prev.some((d) => d.eventUid === eventUid);
       if (exists) {
-        return prev.map((d) => d.eventUid === eventUid ? { ...d, ...data } : d);
+        return prev.map((d) => (d.eventUid === eventUid ? { ...d, ...data } : d));
       }
-      return [...prev, { uid: "optimistic", userId: 0, eventUid, completed: data.completed ?? false, expectedTrials: data.expectedTrials ?? null }];
+      return [
+        ...prev,
+        {
+          uid: "optimistic",
+          userId: 0,
+          eventUid,
+          completed: data.completed ?? false,
+          expectedTrials: data.expectedTrials ?? null,
+        },
+      ];
     });
-    fetcher.submit(
-      { eventData: { eventUid, ...data } },
-      { method: "POST", encType: "application/json" },
-    );
+    fetcher.submit({ eventData: { eventUid, ...data } }, { method: "POST", encType: "application/json" });
   };
 
   const handleDeletePickupComplete = (eventUid: string) => {
     setLocalEventData((prev) => prev.filter((d) => d.eventUid !== eventUid));
-    fetcher.submit(
-      { deleteData: { eventUid } },
-      { method: "DELETE", encType: "application/json" },
-    );
+    fetcher.submit({ deleteData: { eventUid } }, { method: "DELETE", encType: "application/json" });
   };
 
   const handleDeleteItem = (itemUid: string) => {
     const baseUid = itemUid.split("::")[0];
     setLocalTimelineItems((prev) => prev.filter((item) => !item.uid.startsWith(baseUid)));
-    fetcher.submit(
-      { deleteData: { itemUid } },
-      { method: "DELETE", encType: "application/json" },
-    );
+    fetcher.submit({ deleteData: { itemUid } }, { method: "DELETE", encType: "application/json" });
   };
 
   const handleSaveBuy = (quantity: number, date: Date) => {
-    setLocalTimelineItems((prev) => [...prev, {
-      uid: nanoid(8),
-      userId: 0,
-      eventAt: date.toISOString(),
-      source: "buy",
-      description: "청휘석 구매",
-      pyroxeneDelta: quantity,
-      oneTimeTicketDelta: 0,
-      tenTimeTicketDelta: 0,
-      repeatIntervalDays: null,
-      repeatCount: null,
-    }]);
+    setLocalTimelineItems((prev) => [...prev, ...createOptimisticBuyTimelineItems(quantity, date)]);
     fetcher.submit(
       { createData: { buy: { quantity, date: date.toISOString() } } },
       { method: "POST", encType: "application/json" },
@@ -281,15 +295,7 @@ export default function PyroxenePlanner() {
   };
 
   const handleSavePackage = (startDate: Date, packageType: "half" | "full") => {
-    const uid = nanoid(8);
-    const eventAt = startDate.toISOString();
-    const oneTimePyroxene = packageType === "half" ? 176 : 392;
-    const dailyPyroxene = packageType === "half" ? 20 : 40;
-    const packageName = packageType === "half" ? "하프 패키지" : "월간 패키지";
-    setLocalTimelineItems((prev) => [...prev,
-      { uid: `${uid}::onetime`, userId: 0, eventAt, source: "package_onetime", description: `${packageName} (초회)`, pyroxeneDelta: oneTimePyroxene, oneTimeTicketDelta: 0, tenTimeTicketDelta: 0, repeatIntervalDays: null, repeatCount: null },
-      { uid: `${uid}::daily`, userId: 0, eventAt, source: "package_daily", description: `${packageName} (일간)`, pyroxeneDelta: dailyPyroxene, oneTimeTicketDelta: 0, tenTimeTicketDelta: 0, repeatIntervalDays: 1, repeatCount: 30 },
-    ]);
+    setLocalTimelineItems((prev) => [...prev, ...createOptimisticPackageTimelineItems(startDate, packageType)]);
     fetcher.submit(
       { createData: { package: { startDate: startDate.toISOString(), packageType } } },
       { method: "POST", encType: "application/json" },
@@ -297,15 +303,9 @@ export default function PyroxenePlanner() {
   };
 
   const handleSaveAttendance = (startDate: Date) => {
-    const uid = nanoid(8);
-    const startMs = startDate.getTime();
-    const day = 24 * 60 * 60 * 1000;
     setLocalTimelineItems((prev) => {
       const withoutAttendance = prev.filter((item) => item.source !== "attendance");
-      return [...withoutAttendance,
-        { uid: `${uid}::5`, userId: 0, eventAt: new Date(startMs + 4 * day).toISOString(), source: "attendance", description: "출석 5일차", pyroxeneDelta: 50, oneTimeTicketDelta: 0, tenTimeTicketDelta: 0, repeatIntervalDays: 10, repeatCount: null },
-        { uid: `${uid}::10`, userId: 0, eventAt: new Date(startMs + 9 * day).toISOString(), source: "attendance", description: "출석 10일차", pyroxeneDelta: 100, oneTimeTicketDelta: 0, tenTimeTicketDelta: 0, repeatIntervalDays: 10, repeatCount: null },
-      ];
+      return [...withoutAttendance, ...createOptimisticAttendanceTimelineItems(startDate)];
     });
     fetcher.submit(
       { createData: { attendance: { startDate: startDate.toISOString() } } },
@@ -314,18 +314,7 @@ export default function PyroxenePlanner() {
   };
 
   const handleSaveOther = (resources: PickupResources, description: string, date: Date) => {
-    setLocalTimelineItems((prev) => [...prev, {
-      uid: nanoid(8),
-      userId: 0,
-      eventAt: date.toISOString(),
-      source: "other",
-      description,
-      pyroxeneDelta: resources.pyroxene,
-      oneTimeTicketDelta: resources.oneTimeTicket,
-      tenTimeTicketDelta: resources.tenTimeTicket,
-      repeatIntervalDays: null,
-      repeatCount: null,
-    }]);
+    setLocalTimelineItems((prev) => [...prev, ...createOptimisticOtherTimelineItems(resources, description, date)]);
     fetcher.submit(
       { createData: { other: { resources, description, date: date.toISOString() } } },
       { method: "POST", encType: "application/json" },
@@ -343,13 +332,11 @@ export default function PyroxenePlanner() {
       level: "in100",
     },
     timeline: {
-      display: ["event", "event_reward", "raid", "buy", "package_onetime"],
+      display: DEFAULT_PYROXENE_TIMELINE_DISPLAY,
     },
   };
 
-  const [options, setOptions] = useState<PyroxenePlannerOptions>(
-    loaderData.calcOptions ?? defaultOptions
-  );
+  const [options, setOptions] = useState<PyroxenePlannerOptions>(loaderData.calcOptions ?? defaultOptions);
   const optionsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleOptionsChange = (newOptions: PyroxenePlannerOptions) => {
@@ -358,10 +345,7 @@ export default function PyroxenePlanner() {
       clearTimeout(optionsSaveTimer.current);
     }
     optionsSaveTimer.current = setTimeout(() => {
-      fetcher.submit(
-        { calcOptions: newOptions },
-        { method: "POST", encType: "application/json" },
-      );
+      fetcher.submit({ calcOptions: newOptions }, { method: "POST", encType: "application/json" });
     }, 500);
   };
 
@@ -389,27 +373,51 @@ export default function PyroxenePlanner() {
             earnablePyroxene: content.earnablePyroxene ?? null,
             recruitments: content.recruitments.map((recruitment) => ({
               ...recruitment,
-              favorited: favoritedStudents.some(({ contentUid, studentUid }) => contentUid === content.uid && studentUid === recruitment.student?.uid),
+              favorited: favoritedStudents.some(
+                ({ contentUid, studentUid }) => contentUid === content.uid && studentUid === recruitment.student?.uid,
+              ),
             })),
           },
         });
       } else if (content.kind === "raid") {
-        items.push({ raid: { uid: content.uid, name: content.name, type: content.type, since: content.since, until: content.until } });
+        items.push({
+          raid: {
+            uid: content.uid,
+            name: content.name,
+            type: content.type,
+            since: content.since,
+            until: content.until,
+          },
+        });
       }
     }
     for (const item of localTimelineItems) {
       if (item.source === "buy") {
         items.push({
-          onetimeGain: { uid: item.uid, source: "buy", description: item.description, date: new Date(item.eventAt), pyroxeneDelta: item.pyroxeneDelta },
+          onetimeGain: {
+            uid: item.uid,
+            source: "buy",
+            description: item.description,
+            date: new Date(item.eventAt),
+            pyroxeneDelta: item.pyroxeneDelta,
+          },
         });
       } else if (item.source === "package_onetime") {
         items.push({
-          onetimeGain: { uid: item.uid, source: "package_onetime", description: item.description, date: new Date(item.eventAt), pyroxeneDelta: item.pyroxeneDelta },
+          onetimeGain: {
+            uid: item.uid,
+            source: "package_onetime",
+            description: item.description,
+            date: new Date(item.eventAt),
+            pyroxeneDelta: item.pyroxeneDelta,
+          },
         });
       } else if (item.source === "package_daily") {
         items.push({
           repeatedGain: {
-            source: "package_daily", description: item.description, date: new Date(item.eventAt),
+            source: "package_daily",
+            description: item.description,
+            date: new Date(item.eventAt),
             pyroxeneDelta: item.pyroxeneDelta,
             repeatIntervalDays: item.repeatIntervalDays ?? 0,
             repeatCount: item.repeatCount ?? 0,
@@ -418,15 +426,23 @@ export default function PyroxenePlanner() {
       } else if (item.source === "attendance") {
         items.push({
           repeatedGain: {
-            source: "attendance", description: item.description, date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta, repeatIntervalDays: item.repeatIntervalDays ?? 0,
+            source: "attendance",
+            description: item.description,
+            date: new Date(item.eventAt),
+            pyroxeneDelta: item.pyroxeneDelta,
+            repeatIntervalDays: item.repeatIntervalDays ?? 0,
           },
         });
       } else if (item.source === "other") {
         items.push({
           onetimeGain: {
-            uid: item.uid, source: "other", description: item.description, date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta, oneTimeTicketDelta: item.oneTimeTicketDelta, tenTimeTicketDelta: item.tenTimeTicketDelta
+            uid: item.uid,
+            source: "other",
+            description: item.description,
+            date: new Date(item.eventAt),
+            pyroxeneDelta: item.pyroxeneDelta,
+            oneTimeTicketDelta: item.oneTimeTicketDelta,
+            tenTimeTicketDelta: item.tenTimeTicketDelta,
           },
         });
       }
@@ -463,12 +479,14 @@ export default function PyroxenePlanner() {
             Icon: PlusIcon,
             description: "획득 일정과 수량을 입력해주세요",
             disabled: !signedIn,
-            children: <PyroxenePlannerInputPanel
-              onSaveBuy={(quantity, date) => handleSaveBuy(quantity, date)}
-              onSavePackage={(startDate, packageType) => handleSavePackage(startDate, packageType)}
-              onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
-              onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
-            />,
+            children: (
+              <PyroxenePlannerInputPanel
+                onSaveBuy={(quantity, date) => handleSaveBuy(quantity, date)}
+                onSavePackage={(startDate, packageType) => handleSavePackage(startDate, packageType)}
+                onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
+                onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
+              />
+            ),
           },
           {
             title: "플래너 설정",
@@ -496,5 +514,5 @@ export default function PyroxenePlanner() {
         )}
       </Page>
     </>
-  )
+  );
 }

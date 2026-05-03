@@ -1,67 +1,15 @@
 import dayjs from "dayjs";
 import { ActionCard, type ActionCardAction } from "~/components/features/editor";
 import { StudentCards } from "~/components/features/students";
-import type { RaidType } from "~/models/content.d";
 import { useEffect, useMemo, useState } from "react";
-import { type RecruitmentTypeEnum, ResourceTypeEnum } from "~/graphql/graphql";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";
 import { Transition } from "@headlessui/react";
-import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
+import type { PyroxenePlannerOptions } from "~/models/pyroxene-planner";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { Button, EmptyView, MultilineText, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
 import PyroxeneChart from "./PyroxeneChart";
-import type { UtcIsoString } from "~/lib/date-time";
-
-export type PickupResources = {
-  pyroxene: number;
-  oneTimeTicket: number;
-  tenTimeTicket: number;
-};
-
-export type PyroxeneScheduleItem = ({
-  event?: {
-    uid: string;
-    name: string;
-    since: UtcIsoString | Date;
-    until: UtcIsoString | Date;
-    earnablePyroxene: number | null;
-    recruitments: {
-      recruitmentType: RecruitmentTypeEnum;
-      pickup: boolean;
-      rerun: boolean;
-      student: { uid: string; name: string; initialTier: number } | null;
-      favorited: boolean;
-    }[];
-  };
-  raid?: {
-    uid: string;
-    type: RaidType;
-    name: string;
-    since: UtcIsoString | Date;
-    until: UtcIsoString | Date;
-  };
-
-  onetimeGain?: {
-    uid?: string;
-    source: TimelineSourceType;
-    date: Date;
-    description: string;
-    pyroxeneDelta?: number;
-    oneTimeTicketDelta?: number;
-    tenTimeTicketDelta?: number;
-  };
-  repeatedGain?: {
-    uid?: string;
-    source: TimelineSourceType;
-    date: Date;
-    description: string;
-    pyroxeneDelta?: number;
-    oneTimeTicketDelta?: number;
-    tenTimeTicketDelta?: number;
-    repeatIntervalDays: number;
-    repeatCount?: number;
-  };
-});
+import { buildTimeline, type PickupResources, type PyroxeneScheduleItem } from "~/models/pyroxene-timeline";
 
 type PyroxeneScheduleProps = {
   initialDate: Date | null;
@@ -76,7 +24,17 @@ type PyroxeneScheduleProps = {
   onUpdateEventData: (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => void;
 };
 
-export default function PyroxeneSchedule({ initialDate, initialResources, eventDataMap, scheduleItems, options, onPickupComplete, onDeletePickupComplete, onDeleteItem, onUpdateEventData }: PyroxeneScheduleProps) {
+export default function PyroxeneSchedule({
+  initialDate,
+  initialResources,
+  eventDataMap,
+  scheduleItems,
+  options,
+  onPickupComplete,
+  onDeletePickupComplete,
+  onDeleteItem,
+  onUpdateEventData,
+}: PyroxeneScheduleProps) {
   const timeline = useMemo(() => {
     return buildTimeline(initialResources, initialDate ?? new Date(), eventDataMap, scheduleItems, options);
   }, [initialDate, initialResources, eventDataMap, scheduleItems, options]);
@@ -96,12 +54,14 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
         return [];
       }
 
-      return [{
-        uid: onetimeGain.uid,
-        date: onetimeGain.date,
-        description: onetimeGain.description,
-        pyroxeneDelta: onetimeGain.pyroxeneDelta ?? 0,
-      }];
+      return [
+        {
+          uid: onetimeGain.uid,
+          date: onetimeGain.date,
+          description: onetimeGain.description,
+          pyroxeneDelta: onetimeGain.pyroxeneDelta ?? 0,
+        },
+      ];
     });
   }, [initialDate, scheduleItems]);
 
@@ -109,7 +69,11 @@ export default function PyroxeneSchedule({ initialDate, initialResources, eventD
     <>
       <SubTitle
         text="현재 보유 재화"
-        description={initialDate ? `마지막 입력 : ${dayjs(initialDate).format('YYYY-MM-DD HH:mm')}` : "현재 보유중인 재화 수량을 입력해주세요"}
+        description={
+          initialDate
+            ? `마지막 입력 : ${dayjs(initialDate).format("YYYY-MM-DD HH:mm")}`
+            : "현재 보유중인 재화 수량을 입력해주세요"
+        }
       />
       {!initialDate && (
         <div className="my-4 p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/30 dark:to-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
@@ -195,19 +159,22 @@ function AvailableOneTimePackages({ packages, onDeleteItem }: AvailableOneTimePa
         aria-expanded={show}
       >
         <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">적용중인 월간 패키지</p>
-        <ChevronDownIcon className={`size-4 text-neutral-500 dark:text-neutral-400 transition-transform duration-200 ease-in-out ${show ? "rotate-180" : ""}`} />
+        <ChevronDownIcon
+          className={`size-4 text-neutral-500 dark:text-neutral-400 transition-transform duration-200 ease-in-out ${show ? "rotate-180" : ""}`}
+        />
       </button>
 
-      {show && (packages.map(({ uid, date, description, pyroxeneDelta }) => (
-        <TimelineResources
-          key={uid}
-          date={dayjs(date)}
-          description={description}
-          resources={{ pyroxene: pyroxeneDelta ?? 0, oneTimeTicket: 0, tenTimeTicket: 0 }}
-          itemUid={uid}
-          onDeleteItem={onDeleteItem}
-        />
-      )))}
+      {show &&
+        packages.map(({ uid, date, description, pyroxeneDelta }) => (
+          <TimelineResources
+            key={uid}
+            date={dayjs(date)}
+            description={description}
+            resources={{ pyroxene: pyroxeneDelta ?? 0, oneTimeTicket: 0, tenTimeTicket: 0 }}
+            itemUid={uid}
+            onDeleteItem={onDeleteItem}
+          />
+        ))}
     </>
   );
 }
@@ -225,7 +192,17 @@ type TimelineEventProps = {
   onUpdateEventData: (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => void;
 };
 
-function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, expectedTrials, pickupChance, onDeletePickupComplete, onPickupComplete, onUpdateEventData }: TimelineEventProps) {
+function TimelineEvent({
+  event,
+  accumulatedResources,
+  resourceDelta,
+  completed,
+  expectedTrials,
+  pickupChance,
+  onDeletePickupComplete,
+  onPickupComplete,
+  onUpdateEventData,
+}: TimelineEventProps) {
   if (!event) {
     return null;
   }
@@ -283,7 +260,11 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
               <div className="flex-1">
                 <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-1">모집 목표 횟수</p>
                 <p className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-                  {expectedTrials !== null ? `총 ${expectedTrials}회` : pickupChance === "ceil" ? "★3 학생 당 200회(천장)" : "★3 학생 당 140회(평균)"}
+                  {expectedTrials !== null
+                    ? `총 ${expectedTrials}회`
+                    : pickupChance === "ceil"
+                      ? "★3 학생 당 200회(천장)"
+                      : "★3 학생 당 140회(평균)"}
                 </p>
               </div>
               {expectedTrials !== null && (
@@ -368,9 +349,7 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
           </div>
         )}
 
-        {completed && (
-          <p className="mt-4 text-center text-neutral-500 text-sm">모집 완료</p>
-        )}
+        {completed && <p className="mt-4 text-center text-neutral-500 text-sm">모집 완료</p>}
       </ActionCard>
 
       <Transition
@@ -398,7 +377,10 @@ function TimelineEvent({ event, accumulatedResources, resourceDelta, completed, 
   );
 }
 
-function InitialResources({ resources, onUpdateResources }: { resources: PickupResources, onUpdateResources: (resources: PickupResources) => void }) {
+function InitialResources({
+  resources,
+  onUpdateResources,
+}: { resources: PickupResources; onUpdateResources: (resources: PickupResources) => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedResources, setEditedResources] = useState<PickupResources>(resources);
 
@@ -441,7 +423,11 @@ function InitialResources({ resources, onUpdateResources }: { resources: PickupR
           ))}
           <div className="flex items-center justify-end gap-2 mt-2">
             {isEditing ? (
-              <button type="button" className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap" onClick={handleCancel}>
+              <button
+                type="button"
+                className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap"
+                onClick={handleCancel}
+              >
                 취소
               </button>
             ) : (
@@ -482,7 +468,19 @@ function InitialResources({ resources, onUpdateResources }: { resources: PickupR
   );
 }
 
-function TimelineResources({ date, description, resources, itemUid, onDeleteItem }: { date: dayjs.Dayjs, description: string, resources: PickupResources, itemUid?: string, onDeleteItem?: (itemUid: string) => void }) {
+function TimelineResources({
+  date,
+  description,
+  resources,
+  itemUid,
+  onDeleteItem,
+}: {
+  date: dayjs.Dayjs;
+  description: string;
+  resources: PickupResources;
+  itemUid?: string;
+  onDeleteItem?: (itemUid: string) => void;
+}) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const handleDeleteClick = () => {
@@ -506,9 +504,27 @@ function TimelineResources({ date, description, resources, itemUid, onDeleteItem
         </div>
       </div>
       <div className="flex-1 flex items-center gap-1">
-        {resources.pyroxene > 0 && <ResourceCard resourceType={ResourceTypeEnum.Currency} itemUid="2" label={resources.pyroxene.toLocaleString()} />}
-        {resources.oneTimeTicket > 0 && <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6998" label={resources.oneTimeTicket.toLocaleString()} />}
-        {resources.tenTimeTicket > 0 && <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid="6999" label={resources.tenTimeTicket.toLocaleString()} />}
+        {resources.pyroxene > 0 && (
+          <ResourceCard
+            resourceType={ResourceTypeEnum.Currency}
+            itemUid="2"
+            label={resources.pyroxene.toLocaleString()}
+          />
+        )}
+        {resources.oneTimeTicket > 0 && (
+          <ResourceCard
+            resourceType={ResourceTypeEnum.Item}
+            itemUid="6998"
+            label={resources.oneTimeTicket.toLocaleString()}
+          />
+        )}
+        {resources.tenTimeTicket > 0 && (
+          <ResourceCard
+            resourceType={ResourceTypeEnum.Item}
+            itemUid="6999"
+            label={resources.tenTimeTicket.toLocaleString()}
+          />
+        )}
       </div>
       {itemUid && onDeleteItem && (
         <button
@@ -524,7 +540,7 @@ function TimelineResources({ date, description, resources, itemUid, onDeleteItem
         </button>
       )}
     </div>
-  )
+  );
 }
 
 function remainingResourceValue(count: number, diff: number): React.ReactNode {
@@ -537,224 +553,5 @@ function remainingResourceValue(count: number, diff: number): React.ReactNode {
         ({diff === 0 ? "-" : `${Math.abs(diff).toLocaleString()}개 사용`})
       </p>
     </>
-  )
-}
-
-type TimelineSource = {
-  type: TimelineSourceType;
-  event?: PyroxeneScheduleItem["event"];
-  description?: string;
-  uid?: string;
-};
-
-type TimelineDelta = {
-  date: dayjs.Dayjs;
-  source: TimelineSource;
-
-  pickupTrial?: number;
-  resourceDelta?: PickupResources;
-};
-
-type Timeline = {
-  date: dayjs.Dayjs;
-  source: TimelineSource;
-  accumulatedResources: PickupResources;
-  resourceDelta: PickupResources;
-}[];
-
-const MAX_REPEATED_ENTRIES = 365;
-
-const PYROXENE = {
-  RAID_TOTAL_ASSAULT_BASE: 650,
-  RAID_TOTAL_ASSAULT_TIER: { platinum: 1200, gold: 1000, silver: 800, bronze: 600 },
-  RAID_ELIMINATION_BASE: 650,
-  DAILY_MISSION: 20,
-  WEEKLY_MISSION: 120,
-  TACTICAL: { in10: 35, in100: 30, in200: 25, over200: 20 },
-  PICKUP_TRIAL: { average: 140, ceil: 200 },
-} as const;
-
-function buildTimeline(
-  initialResources: PickupResources,
-  initialDate: Date,
-  eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>,
-  scheduleItems: PyroxeneScheduleItem[],
-  options: PyroxenePlannerOptions,
-): Timeline {
-  const maxDate = scheduleItems.reduce((max, item) => {
-    if (!item.event) {
-      return max;
-    }
-    const eventUntil = dayjs(item.event.until);
-    return max.isAfter(eventUntil) ? max : eventUntil;
-  }, dayjs(initialDate));
-
-  const timelineDeltas: TimelineDelta[] = [];
-  for (const scheduleItem of scheduleItems) {
-    if (scheduleItem.event) {
-      // 픽업 일정
-      const { event } = scheduleItem;
-
-      // 이벤트 보상 청휘석 (픽업 완료 여부와 무관하게 이벤트 종료일에 수급)
-      if (event.earnablePyroxene) {
-        timelineDeltas.push({
-          date: dayjs(event.until),
-          source: { type: "event_reward", description: event.name },
-          resourceDelta: { pyroxene: event.earnablePyroxene, oneTimeTicket: 0, tenTimeTicket: 0 },
-        });
-      }
-
-      const eventData = eventDataMap.get(event.uid);
-      if (eventData?.completed) {
-        // 이미 픽업을 완료한 일정은 계산하지 않음
-        timelineDeltas.push({
-          date: dayjs(event.since),
-          source: { type: "event", event },
-          resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
-        });
-        continue;
-      }
-
-      // Use expectedTrials if set, otherwise calculate from pickupCount
-      let pickupTrial: number;
-      if (eventData?.expectedTrials !== null && eventData?.expectedTrials !== undefined) {
-        pickupTrial = eventData.expectedTrials;
-      } else {
-        const pickupCount = event.recruitments.filter(({ pickup, favorited, recruitmentType }) => pickup && favorited && recruitmentType !== "given").length;
-        if (pickupCount === 0) {
-          continue;
-        }
-        pickupTrial = pickupCount * PYROXENE.PICKUP_TRIAL[options.event.pickupChance];
-      }
-
-      timelineDeltas.push({
-        date: dayjs(event.since),
-        source: { type: "event", event },
-        pickupTrial,
-      });
-    } else if (scheduleItem.raid) {
-      const { raid } = scheduleItem;
-      if (raid.type === "total_assault") {
-        // 총력전 종료일 기준으로 기본 + 등급 보상 청휘석 획득
-        const tierReward = PYROXENE.RAID_TOTAL_ASSAULT_TIER[options.raid.tier];
-        timelineDeltas.push({
-          date: dayjs(raid.until),
-          source: { type: "raid", description: `총력전 ${raid.name}` },
-          resourceDelta: { pyroxene: PYROXENE.RAID_TOTAL_ASSAULT_BASE + tierReward, oneTimeTicket: 0, tenTimeTicket: 0 },
-        });
-      } else if (raid.type === "elimination") {
-        // 대결전 종료일 익일 기준으로 기본 청휘석, 10연차 티켓 1장 획득
-        timelineDeltas.push({
-          date: dayjs(raid.until).add(1, "day"),
-          source: { type: "raid", description: `대결전 ${raid.name}` },
-          resourceDelta: { pyroxene: PYROXENE.RAID_ELIMINATION_BASE, oneTimeTicket: 0, tenTimeTicket: 1 },
-        });
-      }
-    } else if (scheduleItem.onetimeGain) {
-      const { onetimeGain } = scheduleItem;
-      timelineDeltas.push({
-        date: dayjs(onetimeGain.date),
-        source: { type: onetimeGain.source, uid: onetimeGain.uid, description: onetimeGain.description },
-        resourceDelta: { pyroxene: onetimeGain.pyroxeneDelta ?? 0, oneTimeTicket: onetimeGain.oneTimeTicketDelta ?? 0, tenTimeTicket: onetimeGain.tenTimeTicketDelta ?? 0 },
-      });
-    } else if (scheduleItem.repeatedGain) {
-      const { repeatedGain } = scheduleItem;
-      let repeatedGainCount = 0;
-      for (let date = dayjs(repeatedGain.date); date.isBefore(maxDate) && repeatedGainCount < (repeatedGain.repeatCount ?? MAX_REPEATED_ENTRIES); date = date.add(repeatedGain.repeatIntervalDays, "day")) {
-        timelineDeltas.push({
-          date,
-          source: { type: repeatedGain.source, uid: repeatedGain.uid, description: repeatedGain.description },
-          resourceDelta: { pyroxene: repeatedGain.pyroxeneDelta ?? 0, oneTimeTicket: repeatedGain.oneTimeTicketDelta ?? 0, tenTimeTicket: repeatedGain.tenTimeTicketDelta ?? 0 },
-        });
-        repeatedGainCount++;
-      }
-    }
-  }
-
-  // 일별/주간 임무 및 전술대회
-  const dateFrom = dayjs(initialDate);
-  const tacticalPyroxene = PYROXENE.TACTICAL[options.tactical.level];
-
-  let dailyEntryCount = 0;
-  for (let date = dateFrom; date.isBefore(maxDate) && dailyEntryCount < MAX_REPEATED_ENTRIES; date = date.add(1, "day")) {
-    dailyEntryCount++;
-    // 일일 임무
-    timelineDeltas.push({
-      date,
-      source: { type: "daily_mission", description: "일일 임무" },
-      resourceDelta: { pyroxene: PYROXENE.DAILY_MISSION, oneTimeTicket: 0, tenTimeTicket: 0 },
-    });
-
-    // 매주 일요일
-    if (date.day() === 0) {
-      timelineDeltas.push({
-        date,
-        source: { type: "weekly_mission", description: "주간 임무" },
-        resourceDelta: { pyroxene: PYROXENE.WEEKLY_MISSION, oneTimeTicket: 0, tenTimeTicket: 0 },
-      });
-    }
-
-    // 전술대회
-    timelineDeltas.push({
-      date,
-      source: { type: "tactical", description: "전술대회" },
-      resourceDelta: { pyroxene: tacticalPyroxene, oneTimeTicket: 0, tenTimeTicket: 0 },
-    });
-  }
-
-  const initialDateDayjs = dayjs(initialDate);
-  const filteredDeltas = timelineDeltas.filter((delta) => {
-    // Include deltas after initialDate
-    if (delta.date.isAfter(initialDateDayjs)) {
-      return true;
-    }
-    // Include events that haven't ended yet (even if they start on/before initialDate)
-    if (delta.source.event) {
-      return dayjs(delta.source.event.until).isAfter(initialDateDayjs);
-    }
-    // Exclude all other deltas on or before initialDate
-    return false;
-  });
-
-  const timeline: Timeline = [];
-  let currentResources: PickupResources = initialResources;
-  for (const delta of filteredDeltas.sort((a, b) => a.date.diff(b.date))) {
-    let resourceDelta = delta.resourceDelta;
-    if (!resourceDelta && delta.pickupTrial !== undefined) {
-      if (delta.pickupTrial > 0) {
-        resourceDelta = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
-        let remainingTrial = delta.pickupTrial;
-        if (remainingTrial > 10) {
-          resourceDelta.tenTimeTicket = -1 * Math.min(Math.floor(remainingTrial / 10), currentResources.tenTimeTicket);
-          remainingTrial += resourceDelta.tenTimeTicket * 10;
-        }
-        if (remainingTrial > 1) {
-          resourceDelta.oneTimeTicket = -1 * Math.min(remainingTrial, currentResources.oneTimeTicket);
-          remainingTrial += resourceDelta.oneTimeTicket;
-        }
-        resourceDelta.pyroxene = -1 * remainingTrial * 120;
-      } else if (delta.pickupTrial === 0) {
-        // When expectedTrials is 0, still show the event with zero resource consumption
-        resourceDelta = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
-      }
-    }
-
-    if (!resourceDelta) {
-      continue;
-    }
-
-    currentResources = {
-      pyroxene: currentResources.pyroxene + resourceDelta.pyroxene,
-      oneTimeTicket: currentResources.oneTimeTicket + resourceDelta.oneTimeTicket,
-      tenTimeTicket: currentResources.tenTimeTicket + resourceDelta.tenTimeTicket,
-    };
-
-    timeline.push({
-      date: delta.date,
-      source: delta.source,
-      resourceDelta,
-      accumulatedResources: { ...currentResources },
-    });
-  }
-  return timeline;
+  );
 }
