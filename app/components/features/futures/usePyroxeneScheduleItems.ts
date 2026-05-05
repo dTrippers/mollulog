@@ -23,6 +23,7 @@ export function usePyroxeneScheduleItems(
             since: content.since,
             until: content.until,
             earnablePyroxene: content.earnablePyroxene ?? null,
+            tags: content.tags,
             recruitments: content.recruitments.map((recruitment) => ({
               ...recruitment,
               favorited: favoritedStudents.some(

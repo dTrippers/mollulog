@@ -40,10 +40,12 @@ export type PyroxenePlannerContent =
       since: UtcIsoString;
       until: UtcIsoString;
       earnablePyroxene: number | null;
+      tags: string[];
       recruitments: {
         recruitmentType: RecruitmentTypeEnum;
         pickup: boolean;
         rerun: boolean;
+        until: UtcIsoString | null;
         student: { uid: string; name: string; initialTier: number } | null;
       }[];
     }
@@ -59,7 +61,7 @@ export type PyroxenePlannerContent =
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
   return fetchCached(
     env,
-    "pyroxene-planner-contents::v5",
+    "pyroxene-planner-contents::v6",
     async () => {
       const recruitmentRepository = new RecruitmentRepository(env);
       const raidRepository = new RaidRepository(env);
@@ -93,6 +95,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
               recruitmentType: r.recruitmentType,
               pickup: r.pickup,
               rerun: r.rerun,
+              until: r.until ? toUtcIso(r.until) : null,
               student: r.student
                 ? {
                     uid: r.student.uid,
@@ -118,6 +121,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
               since: content.startAt,
               until,
               earnablePyroxene: content.earnablePyroxene ?? null,
+              tags: content.tags,
               recruitments,
             };
           }

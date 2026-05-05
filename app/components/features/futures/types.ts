@@ -10,10 +10,12 @@ export type PyroxeneScheduleItem = {
     since: UtcIsoString | Date;
     until: UtcIsoString | Date;
     earnablePyroxene: number | null;
+    tags: string[];
     recruitments: {
       recruitmentType: RecruitmentTypeEnum;
       pickup: boolean;
       rerun: boolean;
+      until: UtcIsoString | null;
       student: { uid: string; name: string; initialTier: number } | null;
       favorited: boolean;
     }[];

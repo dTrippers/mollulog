@@ -26,6 +26,7 @@ function futureEvent(until = "2026-02-01T00:00:00.000Z"): PyroxeneScheduleItem {
       since: "2026-01-10T00:00:00.000Z",
       until,
       earnablePyroxene: null,
+      tags: [],
       recruitments: [],
     },
   };
@@ -36,6 +37,7 @@ function favoritedPickupRecruitment() {
     recruitmentType: RecruitmentTypeEnum.Usual,
     pickup: true,
     rerun: false,
+    until: "2026-12-31T00:00:00.000Z",
     student: { uid: "student-1", name: "학생", initialTier: 3 },
     favorited: true,
   };
@@ -355,6 +357,7 @@ describe("pyroxene-timeline", () => {
             since: "2026-05-31T00:00:00.000Z",
             until: "2026-06-05T00:00:00.000Z",
             earnablePyroxene: null,
+            tags: [],
             recruitments: [favoritedPickupRecruitment()],
           },
         },
@@ -396,6 +399,7 @@ describe("pyroxene-timeline", () => {
             since: "2026-06-01T00:00:00.000Z",
             until: "2026-06-05T00:00:00.000Z",
             earnablePyroxene: null,
+            tags: [],
             recruitments: [favoritedPickupRecruitment()],
           },
         },
@@ -448,6 +452,7 @@ describe("pyroxene-timeline", () => {
             since: "2026-05-25T00:00:00.000Z",
             until: "2026-06-05T00:00:00.000Z",
             earnablePyroxene: null,
+            tags: [],
             recruitments: [favoritedPickupRecruitment()],
           },
         },
@@ -477,6 +482,7 @@ describe("pyroxene-timeline", () => {
             since: "2026-01-02T00:00:00.000Z",
             until: "2026-01-10T00:00:00.000Z",
             earnablePyroxene: null,
+            tags: [],
             recruitments: [favoritedPickupRecruitment()],
           },
         },
@@ -494,6 +500,68 @@ describe("pyroxene-timeline", () => {
     );
   });
 
+  it("subtracts the first 100 trials from pyroxene spending for free 100 recruitment events", () => {
+    const timeline = buildTimeline(
+      { pyroxene: 24000, oneTimeTicket: 0, tenTimeTicket: 0 },
+      new Date("2026-05-01T00:00:00.000Z"),
+      new Map([["free-100-event", { completed: false, expectedTrials: 200 }]]),
+      [
+        {
+          event: {
+            uid: "free-100-event",
+            name: "100회 무료 모집",
+            since: "2026-05-10T00:00:00.000Z",
+            until: "2026-05-20T00:00:00.000Z",
+            earnablePyroxene: null,
+            tags: ["recruit_free_100"],
+            recruitments: [{ ...favoritedPickupRecruitment(), until: "2030-01-01T00:00:00.000Z" }],
+          },
+        },
+      ],
+      defaultOptions,
+    );
+
+    const pickupEntry = timeline.find((entry) => entry.source.event?.uid === "free-100-event");
+
+    expect(pickupEntry).toEqual(
+      expect.objectContaining({
+        resourceDelta: { pyroxene: -12000, oneTimeTicket: 0, tenTimeTicket: 0 },
+        accumulatedResources: { pyroxene: 12520, oneTimeTicket: 0, tenTimeTicket: 0 },
+      }),
+    );
+  });
+
+  it("does not apply free 100 recruitment reduction when the futures badge condition is not met", () => {
+    const timeline = buildTimeline(
+      { pyroxene: 24000, oneTimeTicket: 0, tenTimeTicket: 0 },
+      new Date("2026-05-01T00:00:00.000Z"),
+      new Map([["expired-free-100-event", { completed: false, expectedTrials: 200 }]]),
+      [
+        {
+          event: {
+            uid: "expired-free-100-event",
+            name: "종료된 무료 모집",
+            since: "2026-05-10T00:00:00.000Z",
+            until: "2026-05-20T00:00:00.000Z",
+            earnablePyroxene: null,
+            tags: ["recruit_free_100"],
+            recruitments: [{ ...favoritedPickupRecruitment(), until: "2020-01-01T00:00:00.000Z" }],
+          },
+        },
+      ],
+      defaultOptions,
+    );
+
+    const pickupEntry = timeline.find((entry) => entry.source.event?.uid === "expired-free-100-event");
+
+    expect(pickupEntry).toEqual(
+      expect.objectContaining({
+        resourceDelta: { pyroxene: -24000, oneTimeTicket: 0, tenTimeTicket: 0 },
+        accumulatedResources: { pyroxene: 520, oneTimeTicket: 0, tenTimeTicket: 0 },
+      }),
+    );
+  });
+
   it("keeps an event row when expected trials is zero", () => {
     const timeline = buildTimeline(
       initialResources,
@@ -507,11 +575,13 @@ describe("pyroxene-timeline", () => {
             since: "2026-01-02T00:00:00.000Z",
             until: "2026-01-10T00:00:00.000Z",
             earnablePyroxene: null,
+            tags: [],
             recruitments: [
               {
                 recruitmentType: RecruitmentTypeEnum.Usual,
                 pickup: true,
                 rerun: false,
+                until: "2026-01-10T00:00:00.000Z",
                 student: { uid: "student-1", name: "학생", initialTier: 3 },
                 favorited: true,
               },
@@ -545,6 +615,7 @@ describe("pyroxene-timeline", () => {
             since: "2026-01-02T00:00:00.000Z",
             until: "2026-01-10T00:00:00.000Z",
             earnablePyroxene: null,
+            tags: [],
             recruitments: [{ ...favoritedPickupRecruitment(), favorited: false }],
           },
         },
@@ -629,6 +700,7 @@ describe("pyroxene-timeline", () => {
             since: "2026-01-02T00:00:00.000Z",
             until: "2026-01-10T00:00:00.000Z",
             earnablePyroxene: 1200,
+            tags: [],
             recruitments: [],
           },
         },
@@ -661,11 +733,13 @@ describe("pyroxene-timeline", () => {
             since: "2026-01-02T00:00:00.000Z",
             until: "2026-01-10T00:00:00.000Z",
             earnablePyroxene: null,
+            tags: [],
             recruitments: [
               {
                 recruitmentType: RecruitmentTypeEnum.Usual,
                 pickup: true,
                 rerun: false,
+                until: "2026-01-10T00:00:00.000Z",
                 student: { uid: "student-1", name: "학생", initialTier: 3 },
                 favorited: true,
               },
@@ -697,6 +771,7 @@ describe("pyroxene-timeline", () => {
             since: "2025-12-25T00:00:00.000Z",
             until: "2026-01-10T00:00:00.000Z",
             earnablePyroxene: null,
+            tags: [],
             recruitments: [favoritedPickupRecruitment()],
           },
         },
@@ -720,11 +795,13 @@ describe("pyroxene-timeline", () => {
             since: "2026-01-02T00:00:00.000Z",
             until: "2026-01-10T00:00:00.000Z",
             earnablePyroxene: null,
+            tags: [],
             recruitments: [
               {
                 recruitmentType: RecruitmentTypeEnum.Usual,
                 pickup: true,
                 rerun: false,
+                until: "2026-01-10T00:00:00.000Z",
                 student: { uid: "student-1", name: "학생", initialTier: 3 },
                 favorited: true,
               },
@@ -732,6 +809,7 @@ describe("pyroxene-timeline", () => {
                 recruitmentType: RecruitmentTypeEnum.Given,
                 pickup: true,
                 rerun: false,
+                until: "2026-01-10T00:00:00.000Z",
                 student: { uid: "student-2", name: "배포 학생", initialTier: 1 },
                 favorited: true,
               },

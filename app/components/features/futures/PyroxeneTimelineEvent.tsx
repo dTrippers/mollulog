@@ -1,11 +1,12 @@
 import { Transition } from "@headlessui/react";
+import { StarIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { StudentCards } from "~/components/features/students";
 import { Button, NumberInput, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
-import type { PickupResources } from "~/models/pyroxene-timeline";
+import { isFreeRecruitment100Event, type PickupResources } from "~/models/pyroxene-timeline";
 import type { PyroxeneScheduleItem } from "./types";
 import ResourcesInput from "./planner-input/ResourcesInput";
 
@@ -48,6 +49,7 @@ export default function PyroxeneTimelineEvent({
   );
 
   const canComplete = !completed && dayjs(event.since).isBefore(dayjs());
+  const freeRecruitment100 = isFreeRecruitment100Event(event);
   const expectedTrialsLabel =
     expectedTrials !== null
       ? `총 ${expectedTrials}회`
@@ -71,9 +73,17 @@ export default function PyroxeneTimelineEvent({
         <div className="flex flex-col gap-4 md:flex-row md:gap-5">
           <div className="min-w-0 flex-1 space-y-3">
             <div className="min-w-0">
-              <p className="mb-1 text-xs text-neutral-500 dark:text-neutral-400">
-                {dayjs(event.since).format("YYYY-MM-DD")} ~ {dayjs(event.until).format("YYYY-MM-DD")}
-              </p>
+              <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                <span>
+                  {dayjs(event.since).format("YYYY-MM-DD")} ~ {dayjs(event.until).format("YYYY-MM-DD")}
+                </span>
+                {freeRecruitment100 && (
+                  <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                    <StarIcon className="mr-1 size-3.5" />
+                    100회 무료
+                  </span>
+                )}
+              </div>
               <h3 className="line-clamp-2 whitespace-pre-line text-base font-semibold leading-tight text-neutral-950 dark:text-neutral-50">
                 {event.name}
               </h3>

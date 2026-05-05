@@ -44,6 +44,7 @@ export const PYROXENE = {
   WEEKLY_MISSION: 120,
   TACTICAL: { in10: 35, in100: 30, in200: 25, over200: 20 },
   PICKUP_TRIAL: { average: 140, ceil: 200 },
+  FREE_RECRUITMENT_TRIAL: 100,
 } as const;
 
 export { calculateDailyApChargePyroxene } from "./pyroxene-planner-source-config";
@@ -115,6 +116,13 @@ function expireTenTimeTicketLot(lots: TenTimeTicketLot[], lotId: string): number
   return expiredCount;
 }
 
+export function isFreeRecruitment100Event(event: NonNullable<PyroxeneScheduleItem["event"]>, now = dayjs()): boolean {
+  return (
+    event.tags.includes("recruit_free_100") &&
+    event.recruitments.every(({ until }) => until !== null && dayjs(until).isAfter(now))
+  );
+}
+
 export function buildTimeline(
   initialResources: PickupResources,
   initialDate: Date,
@@ -173,7 +181,9 @@ export function buildTimeline(
       timelineDeltas.push({
         date: dayjs(event.since),
         source: { type: "event", event },
-        pickupTrial,
+        pickupTrial: isFreeRecruitment100Event(event)
+          ? Math.max(0, pickupTrial - PYROXENE.FREE_RECRUITMENT_TRIAL)
+          : pickupTrial,
       });
     } else if (scheduleItem.raid) {
       const { raid } = scheduleItem;
