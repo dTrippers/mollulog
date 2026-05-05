@@ -427,7 +427,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
             <td className={`${cellBase} w-25 px-1 py-2`}>
               <NumberInput
                 nullable
-                compact
+                size="sm"
                 showMax
                 minValue={1}
                 maxValue={100}
@@ -448,7 +448,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                   <div className="flex flex-col items-center gap-0.5">
                     <NumberInput
                       nullable
-                      compact
+                      size="sm"
                       showMax
                       minValue={min}
                       maxValue={max}
@@ -474,7 +474,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
             <td className={`${cellBase} w-25 px-1 py-2`}>
               <NumberInput
                 nullable
-                compact
+                size="sm"
                 showMax
                 minValue={1}
                 maxValue={100}
@@ -534,7 +534,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
         <td className={targetCellClass}>
           <NumberInput
             nullable
-            compact
+            size="sm"
             showMax
             minValue={1}
             maxValue={100}
@@ -556,7 +556,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                 <div className="flex flex-col items-center gap-0.5">
                   <NumberInput
                     nullable
-                    compact
+                    size="sm"
                     showMax
                     minValue={min}
                     maxValue={max}

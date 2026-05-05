@@ -31,7 +31,7 @@ export default function Textarea({
       description={description}
       error={error}
       htmlFor={controlId}
-      containerClassName={containerClassName ?? "mt-2 mb-8 last:mb-4 mr-1 md:mr-2"}
+      containerClassName={containerClassName}
     >
       <textarea
         id={controlId}

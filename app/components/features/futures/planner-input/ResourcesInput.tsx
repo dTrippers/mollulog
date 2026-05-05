@@ -66,7 +66,7 @@ export default function ResourcesInput({ description, onSaveResources, descripti
                 <ResourceCard resourceType={ResourceTypeEnum.Currency} itemUid={PYROXENE_RESOURCE_UIDS.pyroxene} />
               </div>
               <div className="flex-1 min-w-0">
-                <NumberInput label="청휘석" value={resources.pyroxene} onChange={(value: number) => setResources((prev) => ({ ...prev, pyroxene: value }))} />
+                <NumberInput size="sm" label="청휘석" value={resources.pyroxene} onChange={(value: number) => setResources((prev) => ({ ...prev, pyroxene: value }))} />
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -74,7 +74,7 @@ export default function ResourcesInput({ description, onSaveResources, descripti
                 <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid={PYROXENE_RESOURCE_UIDS.tenTimeTicket} />
               </div>
               <div className="flex-1 min-w-0">
-                <NumberInput label="10회 모집 티켓" value={resources.tenTimeTicket} onChange={(value: number) => setResources((prev) => ({ ...prev, tenTimeTicket: value }))} />
+                <NumberInput size="sm" label="10회 모집 티켓" value={resources.tenTimeTicket} onChange={(value: number) => setResources((prev) => ({ ...prev, tenTimeTicket: value }))} />
               </div>
             </div>
             <div className="flex items-start gap-3">
@@ -82,7 +82,7 @@ export default function ResourcesInput({ description, onSaveResources, descripti
                 <ResourceCard resourceType={ResourceTypeEnum.Item} itemUid={PYROXENE_RESOURCE_UIDS.oneTimeTicket} />
               </div>
               <div className="flex-1 min-w-0">
-                <NumberInput label="1회 모집 티켓" value={resources.oneTimeTicket} onChange={(value: number) => setResources((prev) => ({ ...prev, oneTimeTicket: value }))} />
+                <NumberInput size="sm" label="1회 모집 티켓" value={resources.oneTimeTicket} onChange={(value: number) => setResources((prev) => ({ ...prev, oneTimeTicket: value }))} />
               </div>
             </div>
           </div>

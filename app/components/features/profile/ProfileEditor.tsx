@@ -44,7 +44,6 @@ export default function ProfileEditor({ students, initialData, error }: ProfileE
           error={error?.username}
           required
           className="max-w-none"
-          containerClassName="mt-0 mb-0"
         />
         <StudentSelectForm
           label="프로필 학생"
@@ -68,7 +67,6 @@ export default function ProfileEditor({ students, initialData, error }: ProfileE
         placeholder="[소셜] > [친구] > [ID 카드] 에서 확인"
         error={error?.friendCode}
         className="max-w-none md:max-w-md"
-        containerClassName="mt-0 mb-0"
       />
 
       <Textarea
@@ -80,7 +78,6 @@ export default function ProfileEditor({ students, initialData, error }: ProfileE
         placeholder="자기소개 입력"
         rows={4}
         className="min-h-36 resize-y md:min-h-40"
-        containerClassName="mt-2 mb-0"
       />
     </div>
   );

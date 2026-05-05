@@ -291,7 +291,7 @@ function ExpectedTrialsPopover({
       <div className="min-w-[280px] rounded-lg border border-neutral-200 bg-white/90 p-4 shadow-lg backdrop-blur-sm dark:border-neutral-700 dark:bg-black/80">
         <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">이 이벤트의 목표 모집 횟수를 입력해주세요</p>
         <div className="mb-4">
-          <NumberInput defaultValue={value} onChange={onChange} />
+          <NumberInput size="md" defaultValue={value} onChange={onChange} />
         </div>
         <div className="flex justify-end gap-2">
           <Button text="취소" variant="tint" size="xs" onClick={onCancel} />

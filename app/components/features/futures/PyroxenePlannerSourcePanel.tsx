@@ -308,7 +308,7 @@ function ApChargeInput({
       </p>
       <NumberInput
         label="충전 횟수"
-        size="sm"
+        size="md"
         value={apChargeCount}
         minValue={0}
         maxValue={PYROXENE_AP_CHARGE_MAX_COUNT}

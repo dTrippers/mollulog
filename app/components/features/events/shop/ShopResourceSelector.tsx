@@ -23,16 +23,6 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
     return shopResources.filter(({ paymentResource }) => paymentResource.uid === selectedPaymentResourceUid);
   }, [shopResources, selectedPaymentResourceUid]);
 
-  const handleSetMinQuantity = (uid: string) => {
-    actions.updateItemQuantity(uid, 0);
-  };
-
-  const handleSetMaxQuantity = (uid: string, shopAmount: number | null) => {
-    if (shopAmount) {
-      actions.updateItemQuantity(uid, shopAmount);
-    }
-  };
-
   const handleSelectAll = () => {
     actions.updateItemQuantities((prev) => {
       const newQuantities = { ...prev };
@@ -75,7 +65,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
 
           const formattedResourceAmount = formatResourceAmount(resourceAmount);
           return (
-            <div key={uid} className="px-2 py-3 flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
+            <div key={uid} className="p-2 flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
               <div className="flex items-center justify-center gap-x-1">
                 <ResourceCard itemUid={resource.uid} resourceType={resource.type} rarity={resource.rarity} label={resourceAmount === 1 ? undefined : formattedResourceAmount} name={resource.name} />
                 <div className="grow">
@@ -96,14 +86,15 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                 </div>
               </div>
 
-              <div className="flex items-center gap-1">
-                <Button size="xs" text="최소" onClick={() => handleSetMinQuantity(uid)} disabled={quantity === 0} />
-                <div className="grow">
-                  <NumberInput value={quantity} maxValue={shopAmount ?? undefined} onChange={(value) => actions.updateItemQuantity(uid, value)} />
-                </div>
-                {shopAmount && (
-                  <Button size="xs" text="최대" onClick={() => handleSetMaxQuantity(uid, shopAmount)} disabled={quantity >= shopAmount} variant="tint-blue" />
-                )}
+              <div>
+                <NumberInput
+                  value={quantity}
+                  maxValue={shopAmount ?? undefined}
+                  showMin
+                  showMax={shopAmount !== null}
+                  maxButtonVariant="active"
+                  onChange={(value) => actions.updateItemQuantity(uid, value)}
+                />
               </div>
             </div>
           );

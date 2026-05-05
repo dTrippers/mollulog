@@ -87,7 +87,7 @@ function OwnedQuantityCell({
         minValue={0}
         showDecrease={false}
         showIncrease={false}
-        compact
+        size="sm"
         value={quantity}
         onChange={(value) => {
           onQuantityChange(value);

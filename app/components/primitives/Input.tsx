@@ -36,7 +36,7 @@ export default function Input({
       error={error}
       htmlFor={controlId}
       descriptionClassName={descriptionClassName}
-      containerClassName={containerClassName ?? (size === "sm" ? "mt-1 mb-1" : "mt-2 mb-8 last:mb-2")}
+      containerClassName={containerClassName}
     >
       <input
         id={controlId}

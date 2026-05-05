@@ -76,7 +76,7 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
                   <div className="mt-1 flex w-full min-w-0 items-center gap-2 md:mt-3">
                     <NumberInput
                       value={quantity}
-                      compact
+                      size="sm"
                       onChange={(value) => onQuantitiesChange({ ...quantities, [item.uid]: value })}
                     />
                   </div>
