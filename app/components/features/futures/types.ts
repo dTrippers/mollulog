@@ -34,6 +34,7 @@ export type PyroxeneScheduleItem = {
     pyroxeneDelta?: number;
     oneTimeTicketDelta?: number;
     tenTimeTicketDelta?: number;
+    autoRepurchase?: boolean;
   };
   repeatedGain?: {
     uid?: string;
@@ -45,5 +46,6 @@ export type PyroxeneScheduleItem = {
     tenTimeTicketDelta?: number;
     repeatIntervalDays: number;
     repeatCount?: number;
+    autoRepurchase?: boolean;
   };
 };

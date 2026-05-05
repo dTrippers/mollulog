@@ -14,10 +14,11 @@ import { compareInstantAsc, compareInstantDesc, nowUtcIso, toUtcIso, type UtcIso
 import {
   PYROXENE_ATTENDANCE_CONFIG,
   PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
-  PYROXENE_PACKAGE_CONFIG,
+  PYROXENE_AP_PACKAGE_CONFIG,
   PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
   PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
-  type PyroxenePackageType,
+  PYROXENE_MONTHLY_PACKAGE_CONFIG,
+  type PyroxeneMonthlyPackageType,
   extractPyroxeneTimelineBaseUid,
   normalizePyroxeneTimelineEventAt,
 } from "./pyroxene-planner-source-config";
@@ -233,6 +234,7 @@ export const pyroxeneTimelineItemsTable = sqliteTable("pyroxene_timeline_items",
   source: text().notNull(),
   repeatIntervalDays: int(),
   repeatCount: int(),
+  autoRepurchase: int().notNull().default(0),
   description: text().notNull(),
   pyroxeneDelta: int().notNull(),
   oneTimeTicketDelta: int().notNull(),
@@ -248,6 +250,7 @@ export type PyroxeneTimelineItem = {
   source: TimelineSourceType;
   repeatIntervalDays: number | null;
   repeatCount: number | null;
+  autoRepurchase: boolean;
   description: string;
   pyroxeneDelta: number;
   oneTimeTicketDelta: number;
@@ -262,6 +265,7 @@ function toTimelineItemModel(item: typeof pyroxeneTimelineItemsTable.$inferSelec
     source: item.source as TimelineSourceType,
     repeatIntervalDays: item.repeatIntervalDays,
     repeatCount: item.repeatCount,
+    autoRepurchase: item.autoRepurchase === 1,
     description: item.description,
     pyroxeneDelta: item.pyroxeneDelta,
     oneTimeTicketDelta: item.oneTimeTicketDelta,
@@ -308,42 +312,81 @@ export async function deletePyroxeneTimelineItem(env: Env, userId: number, uid: 
     );
 }
 
-export async function createPyroxenePackage(
+export async function createPyroxeneMonthlyPackage(
   env: Env,
   userId: number,
   startDate: Date | string,
-  packageType: PyroxenePackageType,
+  packageType: PyroxeneMonthlyPackageType,
+  autoRepurchase = false,
 ): Promise<void> {
   const uid = nanoid(8);
   const eventAt = normalizePyroxeneTimelineEventAt(startDate);
 
-  const { name: packageName, oneTime: oneTimePyroxene, daily: dailyPyroxene } = PYROXENE_PACKAGE_CONFIG[packageType];
-
-  const db = drizzle(env.DB);
-  await db.insert(pyroxeneTimelineItemsTable).values([
+  const {
+    name: packageName,
+    oneTime: oneTimePyroxene,
+    daily: dailyPyroxene,
+    repurchaseIntervalDays,
+  } = PYROXENE_MONTHLY_PACKAGE_CONFIG[packageType];
+  const autoRepurchaseValue = autoRepurchase ? 1 : 0;
+  const packageItems: (typeof pyroxeneTimelineItemsTable.$inferInsert)[] = [
     {
       uid: `${uid}::onetime`,
       userId,
       eventAt,
       source: "package_onetime",
+      repeatIntervalDays: autoRepurchase ? repurchaseIntervalDays : null,
+      repeatCount: null,
+      autoRepurchase: autoRepurchaseValue,
       description: `${packageName} (초회)`,
       pyroxeneDelta: oneTimePyroxene,
       oneTimeTicketDelta: 0,
       tenTimeTicketDelta: 0,
     },
-    {
-      uid: `${uid}::daily`,
-      userId,
-      eventAt,
-      source: "package_daily",
-      description: `${packageName} (일간)`,
-      pyroxeneDelta: dailyPyroxene,
-      repeatIntervalDays: PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
-      repeatCount: PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
-      oneTimeTicketDelta: 0,
-      tenTimeTicketDelta: 0,
-    },
-  ]);
+  ];
+
+  packageItems.push({
+    uid: `${uid}::daily`,
+    userId,
+    eventAt,
+    source: "package_daily",
+    repeatIntervalDays: PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
+    repeatCount: autoRepurchase ? null : PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
+    autoRepurchase: autoRepurchaseValue,
+    description: `${packageName} (일간)`,
+    pyroxeneDelta: dailyPyroxene,
+    oneTimeTicketDelta: 0,
+    tenTimeTicketDelta: 0,
+  });
+
+  const db = drizzle(env.DB);
+  await db.insert(pyroxeneTimelineItemsTable).values(packageItems);
+}
+
+export async function createPyroxeneApPackage(
+  env: Env,
+  userId: number,
+  startDate: Date | string,
+  autoRepurchase = false,
+): Promise<void> {
+  const uid = nanoid(8);
+  const eventAt = normalizePyroxeneTimelineEventAt(startDate);
+  const autoRepurchaseValue = autoRepurchase ? 1 : 0;
+
+  const db = drizzle(env.DB);
+  await db.insert(pyroxeneTimelineItemsTable).values({
+    uid: `${uid}::ap`,
+    userId,
+    eventAt,
+    source: "package_ap",
+    repeatIntervalDays: autoRepurchase ? PYROXENE_AP_PACKAGE_CONFIG.repurchaseIntervalDays : null,
+    repeatCount: null,
+    autoRepurchase: autoRepurchaseValue,
+    description: `${PYROXENE_AP_PACKAGE_CONFIG.name} (초회)`,
+    pyroxeneDelta: PYROXENE_AP_PACKAGE_CONFIG.oneTime,
+    oneTimeTicketDelta: 0,
+    tenTimeTicketDelta: 0,
+  });
 }
 
 export async function createAttendance(env: Env, userId: number, startDate: Date | string): Promise<void> {

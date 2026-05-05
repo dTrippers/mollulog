@@ -9,7 +9,7 @@ const defaultOptions: PyroxenePlannerOptions = {
   raid: { tier: "platinum" },
   tactical: { level: "in100" },
   consumption: { apChargeCount: 0 },
-  timeline: { display: ["event", "event_reward", "raid", "buy", "package_onetime", "ap_charge"] },
+  timeline: { display: ["event", "event_reward", "raid", "buy", "package_onetime", "package_ap", "ap_charge"] },
 };
 
 const initialResources: PickupResources = {
@@ -81,7 +81,7 @@ describe("pyroxene-timeline", () => {
             uid: "daily-package",
             source: "package_daily",
             date: new Date("2026-01-02T00:00:00.000Z"),
-            description: "월간 패키지 (일간)",
+            description: "청휘석 패키지 (일간)",
             pyroxeneDelta: 40,
             repeatIntervalDays: 1,
             repeatCount: 3,
@@ -99,6 +99,130 @@ describe("pyroxene-timeline", () => {
       "2026-01-03",
       "2026-01-04",
     ]);
+  });
+
+  it("expands AP package auto repurchase every 14 days", () => {
+    const timeline = buildTimeline(
+      initialResources,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Map(),
+      [
+        futureEvent("2026-02-01T00:00:00.000Z"),
+        {
+          repeatedGain: {
+            uid: "ap-package",
+            source: "package_ap",
+            date: new Date("2026-01-02T00:00:00.000Z"),
+            description: "AP 패키지 (초회)",
+            pyroxeneDelta: 176,
+            repeatIntervalDays: 14,
+            autoRepurchase: true,
+          },
+        },
+      ],
+      defaultOptions,
+    );
+
+    const packageEntries = timeline.filter((entry) => entry.source.uid === "ap-package");
+
+    expect(packageEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene])).toEqual([
+      ["2026-01-02", 176],
+      ["2026-01-16", 176],
+      ["2026-01-30", 176],
+    ]);
+  });
+
+  it("expands monthly package auto repurchase one-time rewards every 30 days", () => {
+    const timeline = buildTimeline(
+      initialResources,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Map(),
+      [
+        futureEvent("2026-03-10T00:00:00.000Z"),
+        {
+          repeatedGain: {
+            uid: "monthly-package-onetime",
+            source: "package_onetime",
+            date: new Date("2026-01-02T00:00:00.000Z"),
+            description: "청휘석 패키지 (초회)",
+            pyroxeneDelta: 392,
+            repeatIntervalDays: 30,
+            autoRepurchase: true,
+          },
+        },
+      ],
+      defaultOptions,
+    );
+
+    const packageEntries = timeline.filter((entry) => entry.source.uid === "monthly-package-onetime");
+
+    expect(packageEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene])).toEqual([
+      ["2026-01-02", 392],
+      ["2026-02-01", 392],
+      ["2026-03-03", 392],
+    ]);
+  });
+
+  it("continues monthly package daily rewards when auto repurchase is enabled", () => {
+    const timeline = buildTimeline(
+      initialResources,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Map(),
+      [
+        futureEvent("2026-02-05T00:00:00.000Z"),
+        {
+          repeatedGain: {
+            uid: "monthly-package-daily",
+            source: "package_daily",
+            date: new Date("2026-01-02T00:00:00.000Z"),
+            description: "청휘석 패키지 (일간)",
+            pyroxeneDelta: 40,
+            repeatIntervalDays: 1,
+            autoRepurchase: true,
+          },
+        },
+      ],
+      defaultOptions,
+    );
+
+    const packageEntries = timeline.filter((entry) => entry.source.uid === "monthly-package-daily");
+
+    expect(packageEntries).toHaveLength(34);
+    expect(packageEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene]).slice(28, 32)).toEqual([
+      ["2026-01-30", 40],
+      ["2026-01-31", 40],
+      ["2026-02-01", 40],
+      ["2026-02-02", 40],
+    ]);
+  });
+
+  it("keeps package daily rewards bounded when auto repurchase is disabled", () => {
+    const timeline = buildTimeline(
+      initialResources,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Map(),
+      [
+        futureEvent("2026-03-10T00:00:00.000Z"),
+        {
+          repeatedGain: {
+            uid: "monthly-package-daily",
+            source: "package_daily",
+            date: new Date("2026-01-02T00:00:00.000Z"),
+            description: "청휘석 패키지 (일간)",
+            pyroxeneDelta: 40,
+            repeatIntervalDays: 1,
+            repeatCount: 30,
+            autoRepurchase: false,
+          },
+        },
+      ],
+      defaultOptions,
+    );
+
+    const packageEntries = timeline.filter((entry) => entry.source.uid === "monthly-package-daily");
+
+    expect(packageEntries).toHaveLength(30);
+    expect(packageEntries.at(-1)?.date.format("YYYY-MM-DD")).toBe("2026-01-31");
   });
 
   it("applies attendance rewards on day 5 and day 10 recurring patterns", () => {

@@ -55,16 +55,32 @@ export function usePyroxeneScheduleItems(
             pyroxeneDelta: item.pyroxeneDelta,
           },
         });
-      } else if (item.source === "package_onetime") {
-        items.push({
-          onetimeGain: {
-            uid: item.uid,
-            source: "package_onetime",
-            description: item.description,
-            date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta,
-          },
-        });
+      } else if (item.source === "package_onetime" || item.source === "package_ap") {
+        if (item.autoRepurchase && item.repeatIntervalDays) {
+          items.push({
+            repeatedGain: {
+              uid: item.uid,
+              source: item.source,
+              description: item.description,
+              date: new Date(item.eventAt),
+              pyroxeneDelta: item.pyroxeneDelta,
+              repeatIntervalDays: item.repeatIntervalDays,
+              repeatCount: item.repeatCount ?? undefined,
+              autoRepurchase: item.autoRepurchase,
+            },
+          });
+        } else {
+          items.push({
+            onetimeGain: {
+              uid: item.uid,
+              source: item.source,
+              description: item.description,
+              date: new Date(item.eventAt),
+              pyroxeneDelta: item.pyroxeneDelta,
+              autoRepurchase: item.autoRepurchase,
+            },
+          });
+        }
       } else if (item.source === "package_daily") {
         items.push({
           repeatedGain: {
@@ -74,7 +90,8 @@ export function usePyroxeneScheduleItems(
             date: new Date(item.eventAt),
             pyroxeneDelta: item.pyroxeneDelta,
             repeatIntervalDays: item.repeatIntervalDays ?? 0,
-            repeatCount: item.repeatCount ?? 0,
+            repeatCount: item.repeatCount ?? undefined,
+            autoRepurchase: item.autoRepurchase,
           },
         });
       } else if (item.source === "attendance") {

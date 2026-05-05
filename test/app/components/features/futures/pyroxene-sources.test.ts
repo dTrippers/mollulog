@@ -2,14 +2,19 @@ import { describe, expect, it } from "@jest/globals";
 import {
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
   PYROXENE_SOURCE_DEFINITIONS,
+  createOptimisticApPackageTimelineItems,
   createOptimisticAttendanceTimelineItems,
   createOptimisticBuyTimelineItems,
+  createOptimisticMonthlyPackageTimelineItems,
   createOptimisticOtherTimelineItems,
-  createOptimisticPackageTimelineItems,
   calculateDailyApChargePyroxene,
   togglePyroxeneTimelineSourceVisibility,
 } from "../../../../../app/models/pyroxene-sources";
-import { normalizePyroxeneTimelineEventAt } from "../../../../../app/models/pyroxene-planner-source-config";
+import dayjs from "../../../../../app/lib/dayjs";
+import {
+  calculatePackageStartDateFromRemainingDays,
+  normalizePyroxeneTimelineEventAt,
+} from "../../../../../app/models/pyroxene-planner-source-config";
 import {
   PYROXENE_PANEL_HIDDEN_SOURCE_TYPES,
   PYROXENE_SOURCE_ROW_DEFINITIONS,
@@ -23,6 +28,7 @@ describe("pyroxene-sources", () => {
       "raid",
       "buy",
       "package_onetime",
+      "package_ap",
       "ap_charge",
     ]);
   });
@@ -45,7 +51,7 @@ describe("pyroxene-sources", () => {
 
     expect(packageRow).toEqual(
       expect.objectContaining({
-        label: "월간 패키지",
+        label: "청휘석 패키지",
         group: "paid",
         action: "add",
       }),
@@ -54,6 +60,19 @@ describe("pyroxene-sources", () => {
       { type: "package_onetime", label: "초회" },
       { type: "package_daily", label: "일간" },
     ]);
+  });
+
+  it("keeps AP package as a separate paid source row", () => {
+    const apPackageRow = PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "ap_package");
+
+    expect(apPackageRow).toEqual(
+      expect.objectContaining({
+        label: "AP 패키지",
+        group: "paid",
+        action: "add",
+        visibilityTargets: [{ type: "package_ap" }],
+      }),
+    );
   });
 
   it("keeps daily and weekly missions as one row with detail toggles", () => {
@@ -98,6 +117,24 @@ describe("pyroxene-sources", () => {
     expect(calculateDailyApChargePyroxene(21)).toBe(3120);
   });
 
+  it("calculates package start date from remaining days using Blue Archive 04:00 reset", () => {
+    expect(
+      dayjs(
+        calculatePackageStartDateFromRemainingDays(22, 30, "2026-05-05T04:00:00+09:00"),
+      ).tz("Asia/Seoul").format("YYYY-MM-DD"),
+    ).toBe("2026-04-28");
+    expect(
+      dayjs(
+        calculatePackageStartDateFromRemainingDays(22, 30, "2026-05-06T03:59:00+09:00"),
+      ).tz("Asia/Seoul").format("YYYY-MM-DD"),
+    ).toBe("2026-04-28");
+    expect(
+      dayjs(
+        calculatePackageStartDateFromRemainingDays(22, 30, "2026-05-06T04:00:00+09:00"),
+      ).tz("Asia/Seoul").format("YYYY-MM-DD"),
+    ).toBe("2026-04-29");
+  });
+
   it("toggles one timeline display source without changing others", () => {
     expect(togglePyroxeneTimelineSourceVisibility(["event", "raid"], "buy")).toEqual(["event", "raid", "buy"]);
     expect(togglePyroxeneTimelineSourceVisibility(["event", "raid", "buy"], "raid")).toEqual(["event", "buy"]);
@@ -106,22 +143,24 @@ describe("pyroxene-sources", () => {
   });
 
   it("creates full monthly package optimistic items as one-time and daily entries", () => {
-    const items = createOptimisticPackageTimelineItems(new Date("2026-05-03T00:00:00.000Z"), "full");
+    const items = createOptimisticMonthlyPackageTimelineItems(new Date("2026-05-03T00:00:00.000Z"), "full");
 
     expect(items).toEqual([
       expect.objectContaining({
         source: "package_onetime",
-        description: "월간 패키지 (초회)",
+        description: "청휘석 패키지 (초회)",
         pyroxeneDelta: 392,
         repeatIntervalDays: null,
         repeatCount: null,
+        autoRepurchase: false,
       }),
       expect.objectContaining({
         source: "package_daily",
-        description: "월간 패키지 (일간)",
+        description: "청휘석 패키지 (일간)",
         pyroxeneDelta: 40,
         repeatIntervalDays: 1,
         repeatCount: 30,
+        autoRepurchase: false,
       }),
     ]);
     expect(items[0].uid.split("::")[0]).toBe(items[1].uid.split("::")[0]);
@@ -132,7 +171,7 @@ describe("pyroxene-sources", () => {
   });
 
   it("creates half package optimistic items with half package amounts", () => {
-    const items = createOptimisticPackageTimelineItems(new Date("2026-05-03T00:00:00.000Z"), "half");
+    const items = createOptimisticMonthlyPackageTimelineItems(new Date("2026-05-03T00:00:00.000Z"), "half");
 
     expect(items).toEqual([
       expect.objectContaining({
@@ -144,6 +183,53 @@ describe("pyroxene-sources", () => {
         source: "package_daily",
         description: "하프 패키지 (일간)",
         pyroxeneDelta: 20,
+      }),
+    ]);
+  });
+
+  it("creates AP package optimistic item with one-time pyroxene only", () => {
+    const items = createOptimisticApPackageTimelineItems(new Date("2026-05-03T00:00:00.000Z"));
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        source: "package_ap",
+        description: "AP 패키지 (초회)",
+        pyroxeneDelta: 176,
+        repeatIntervalDays: null,
+        repeatCount: null,
+        autoRepurchase: false,
+      }),
+    ]);
+  });
+
+  it("marks auto repurchase package optimistic items explicitly", () => {
+    const monthlyItems = createOptimisticMonthlyPackageTimelineItems(
+      new Date("2026-05-03T00:00:00.000Z"),
+      "full",
+      true,
+    );
+    const apItems = createOptimisticApPackageTimelineItems(new Date("2026-05-03T00:00:00.000Z"), true);
+
+    expect(monthlyItems).toEqual([
+      expect.objectContaining({
+        source: "package_onetime",
+        repeatIntervalDays: 30,
+        repeatCount: null,
+        autoRepurchase: true,
+      }),
+      expect.objectContaining({
+        source: "package_daily",
+        repeatIntervalDays: 1,
+        repeatCount: null,
+        autoRepurchase: true,
+      }),
+    ]);
+    expect(apItems).toEqual([
+      expect.objectContaining({
+        source: "package_ap",
+        repeatIntervalDays: 14,
+        repeatCount: null,
+        autoRepurchase: true,
       }),
     ]);
   });

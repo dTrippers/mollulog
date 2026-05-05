@@ -3,10 +3,11 @@ import { nanoid } from "nanoid/non-secure";
 import {
   PYROXENE_ATTENDANCE_CONFIG,
   PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
-  PYROXENE_PACKAGE_CONFIG,
+  PYROXENE_AP_PACKAGE_CONFIG,
   PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
   PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
-  type PyroxenePackageType,
+  PYROXENE_MONTHLY_PACKAGE_CONFIG,
+  type PyroxeneMonthlyPackageType,
   calculateDailyApChargePyroxene,
   normalizePyroxeneTimelineEventAt,
 } from "~/models/pyroxene-planner-source-config";
@@ -57,6 +58,7 @@ type OptimisticTimelineItemInput = {
   tenTimeTicketDelta?: number;
   repeatIntervalDays?: number | null;
   repeatCount?: number | null;
+  autoRepurchase?: boolean;
 };
 
 function createOptimisticTimelineItem(input: OptimisticTimelineItemInput): PyroxeneTimelineItem {
@@ -71,6 +73,7 @@ function createOptimisticTimelineItem(input: OptimisticTimelineItemInput): Pyrox
     tenTimeTicketDelta: input.tenTimeTicketDelta ?? 0,
     repeatIntervalDays: input.repeatIntervalDays ?? null,
     repeatCount: input.repeatCount ?? null,
+    autoRepurchase: input.autoRepurchase ?? false,
   };
 }
 
@@ -85,19 +88,23 @@ export function createOptimisticBuyTimelineItems(quantity: number, date: Date): 
   ];
 }
 
-export function createOptimisticPackageTimelineItems(
+export function createOptimisticMonthlyPackageTimelineItems(
   startDate: Date,
-  packageType: PyroxenePackageType,
+  packageType: PyroxeneMonthlyPackageType,
+  autoRepurchase = false,
 ): PyroxeneTimelineItem[] {
   const uid = nanoid(8);
   const eventAt = normalizePyroxeneTimelineEventAt(startDate);
-  const { name, oneTime, daily } = PYROXENE_PACKAGE_CONFIG[packageType];
+  const { name, oneTime, daily, repurchaseIntervalDays } = PYROXENE_MONTHLY_PACKAGE_CONFIG[packageType];
 
   return [
     createOptimisticTimelineItem({
       uid: `${uid}::onetime`,
       eventAt,
       source: "package_onetime",
+      repeatIntervalDays: autoRepurchase ? repurchaseIntervalDays : null,
+      repeatCount: null,
+      autoRepurchase,
       description: `${name} (초회)`,
       pyroxeneDelta: oneTime,
     }),
@@ -105,10 +112,32 @@ export function createOptimisticPackageTimelineItems(
       uid: `${uid}::daily`,
       eventAt,
       source: "package_daily",
+      autoRepurchase,
       description: `${name} (일간)`,
       pyroxeneDelta: daily,
       repeatIntervalDays: PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
-      repeatCount: PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
+      repeatCount: autoRepurchase ? null : PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
+    }),
+  ];
+}
+
+export function createOptimisticApPackageTimelineItems(
+  startDate: Date,
+  autoRepurchase = false,
+): PyroxeneTimelineItem[] {
+  const uid = nanoid(8);
+  const eventAt = normalizePyroxeneTimelineEventAt(startDate);
+
+  return [
+    createOptimisticTimelineItem({
+      uid: `${uid}::ap`,
+      eventAt,
+      source: "package_ap",
+      repeatIntervalDays: autoRepurchase ? PYROXENE_AP_PACKAGE_CONFIG.repurchaseIntervalDays : null,
+      repeatCount: null,
+      autoRepurchase,
+      description: `${PYROXENE_AP_PACKAGE_CONFIG.name} (초회)`,
+      pyroxeneDelta: PYROXENE_AP_PACKAGE_CONFIG.oneTime,
     }),
   ];
 }

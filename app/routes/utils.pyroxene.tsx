@@ -25,7 +25,8 @@ import {
   deletePyroxeneTimelineItem,
   getLatestPyroxeneOwnedResource,
   getPyroxeneTimelineItems,
-  createPyroxenePackage,
+  createPyroxeneApPackage,
+  createPyroxeneMonthlyPackage,
   createAttendance,
   createOtherPyroxeneGain,
   getPyroxenePlannerOptions,
@@ -41,9 +42,10 @@ import {
   createOptimisticAttendanceTimelineItems,
   createOptimisticBuyTimelineItems,
   createOptimisticOtherTimelineItems,
-  createOptimisticPackageTimelineItems,
+  createOptimisticApPackageTimelineItems,
+  createOptimisticMonthlyPackageTimelineItems,
 } from "~/models/pyroxene-sources";
-import { extractPyroxeneTimelineBaseUid } from "~/models/pyroxene-planner-source-config";
+import { extractPyroxeneTimelineBaseUid, type PyroxeneMonthlyPackageType } from "~/models/pyroxene-planner-source-config";
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -107,9 +109,14 @@ export type ActionData = {
       quantity: number;
       date: string;
     };
-    package?: {
+    monthlyPackage?: {
       startDate: string;
-      packageType: "half" | "full";
+      packageType: PyroxeneMonthlyPackageType;
+      autoRepurchase?: boolean;
+    };
+    apPackage?: {
+      startDate: string;
+      autoRepurchase?: boolean;
     };
     attendance?: {
       startDate: string;
@@ -143,43 +150,62 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 
   const { createData, deleteData, eventData, calcOptions } = await request.json<ActionData>();
-  if (request.method === "POST" && createData) {
-    if (createData.ownedResources !== undefined) {
-      const { eventUid, pyroxene, oneTimeTicket, tenTimeTicket } = createData.ownedResources;
-      await createPyroxeneOwnedResource(env, currentUser.id, { pyroxene, oneTimeTicket, tenTimeTicket });
-      // When completing a pickup, also mark the event as completed
-      if (eventUid) {
-        await upsertPyroxeneEventData(env, currentUser.id, eventUid, { completed: true });
+  if (request.method === "POST") {
+    if (createData) {
+      if (createData.ownedResources !== undefined) {
+        const { eventUid, pyroxene, oneTimeTicket, tenTimeTicket } = createData.ownedResources;
+        await createPyroxeneOwnedResource(env, currentUser.id, { pyroxene, oneTimeTicket, tenTimeTicket });
+        // When completing a pickup, also mark the event as completed
+        if (eventUid) {
+          await upsertPyroxeneEventData(env, currentUser.id, eventUid, { completed: true });
+        }
+      }
+      if (createData.buy?.quantity !== undefined) {
+        await createBuyPyroxene(env, currentUser.id, createData.buy.date, createData.buy.quantity);
+      }
+      if (createData.monthlyPackage?.startDate !== undefined) {
+        await createPyroxeneMonthlyPackage(
+          env,
+          currentUser.id,
+          createData.monthlyPackage.startDate,
+          createData.monthlyPackage.packageType,
+          createData.monthlyPackage.autoRepurchase ?? false,
+        );
+      }
+      if (createData.apPackage?.startDate !== undefined) {
+        await createPyroxeneApPackage(
+          env,
+          currentUser.id,
+          createData.apPackage.startDate,
+          createData.apPackage.autoRepurchase ?? false,
+        );
+      }
+      if (createData.attendance?.startDate !== undefined) {
+        await createAttendance(env, currentUser.id, createData.attendance.startDate);
+      }
+      if (createData.other?.resources !== undefined) {
+        const { pyroxene, oneTimeTicket, tenTimeTicket } = createData.other.resources;
+        await createOtherPyroxeneGain(
+          env,
+          currentUser.id,
+          createData.other.date,
+          pyroxene,
+          oneTimeTicket,
+          tenTimeTicket,
+          createData.other.description,
+        );
       }
     }
-    if (createData.buy?.quantity !== undefined) {
-      await createBuyPyroxene(env, currentUser.id, createData.buy.date, createData.buy.quantity);
+
+    if (eventData) {
+      await upsertPyroxeneEventData(env, currentUser.id, eventData.eventUid, {
+        completed: eventData.completed,
+        expectedTrials: eventData.expectedTrials,
+      });
     }
-    if (createData.package?.startDate !== undefined) {
-      await createPyroxenePackage(env, currentUser.id, createData.package.startDate, createData.package.packageType);
+    if (calcOptions) {
+      await upsertPyroxenePlannerOptions(env, currentUser.id, calcOptions);
     }
-    if (createData.attendance?.startDate !== undefined) {
-      await createAttendance(env, currentUser.id, createData.attendance.startDate);
-    }
-    if (createData.other?.resources !== undefined) {
-      const { pyroxene, oneTimeTicket, tenTimeTicket } = createData.other.resources;
-      await createOtherPyroxeneGain(
-        env,
-        currentUser.id,
-        createData.other.date,
-        pyroxene,
-        oneTimeTicket,
-        tenTimeTicket,
-        createData.other.description,
-      );
-    }
-  } else if (request.method === "POST" && eventData) {
-    await upsertPyroxeneEventData(env, currentUser.id, eventData.eventUid, {
-      completed: eventData.completed,
-      expectedTrials: eventData.expectedTrials,
-    });
-  } else if (request.method === "POST" && calcOptions) {
-    await upsertPyroxenePlannerOptions(env, currentUser.id, calcOptions);
   } else if (request.method === "DELETE" && deleteData) {
     if (deleteData.eventUid) {
       await deletePyroxeneEventData(env, currentUser.id, deleteData.eventUid);
@@ -305,14 +331,38 @@ export default function PyroxenePlanner() {
     );
   };
 
-  const handleSavePackage = (startDate: Date, packageType: "half" | "full") => {
+  const handleSaveMonthlyPackage = (
+    startDate: Date,
+    packageType: PyroxeneMonthlyPackageType,
+    autoRepurchase: boolean,
+  ) => {
     if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
       return;
     }
     timelineSaveInFlight.current = true;
-    setLocalTimelineItems((prev) => [...prev, ...createOptimisticPackageTimelineItems(startDate, packageType)]);
+    setLocalTimelineItems((prev) => [
+      ...prev,
+      ...createOptimisticMonthlyPackageTimelineItems(startDate, packageType, autoRepurchase),
+    ]);
+    const nextOptions = ensureTimelineSourcesVisible(["package_onetime"]);
     fetcher.submit(
-      { createData: { package: { startDate: startDate.toISOString(), packageType } } },
+      {
+        createData: { monthlyPackage: { startDate: startDate.toISOString(), packageType, autoRepurchase } },
+        calcOptions: nextOptions,
+      },
+      { method: "POST", encType: "application/json" },
+    );
+  };
+
+  const handleSaveApPackage = (startDate: Date, autoRepurchase: boolean) => {
+    if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
+      return;
+    }
+    timelineSaveInFlight.current = true;
+    setLocalTimelineItems((prev) => [...prev, ...createOptimisticApPackageTimelineItems(startDate, autoRepurchase)]);
+    const nextOptions = ensureTimelineSourcesVisible(["package_ap"]);
+    fetcher.submit(
+      { createData: { apPackage: { startDate: startDate.toISOString(), autoRepurchase } }, calcOptions: nextOptions },
       { method: "POST", encType: "application/json" },
     );
   };
@@ -346,6 +396,33 @@ export default function PyroxenePlanner() {
 
   const [options, setOptions] = useState<PyroxenePlannerOptions>(loaderData.calcOptions);
   const optionsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const ensureTimelineSourcesVisible = (sourceTypes: PyroxenePlannerOptions["timeline"]["display"]) => {
+    const display = new Set(options.timeline.display);
+    let changed = false;
+    for (const sourceType of sourceTypes) {
+      if (!display.has(sourceType)) {
+        display.add(sourceType);
+        changed = true;
+      }
+    }
+    if (!changed) {
+      return options;
+    }
+    if (optionsSaveTimer.current) {
+      clearTimeout(optionsSaveTimer.current);
+    }
+
+    const nextOptions = {
+      ...options,
+      timeline: {
+        ...options.timeline,
+        display: Array.from(display),
+      },
+    };
+    setOptions(nextOptions);
+    return nextOptions;
+  };
 
   const handleOptionsChange = (newOptions: PyroxenePlannerOptions) => {
     setOptions(newOptions);
@@ -404,7 +481,10 @@ export default function PyroxenePlanner() {
                 options={options}
                 onOptionsChange={handleOptionsChange}
                 onSaveBuy={(quantity, date) => handleSaveBuy(quantity, date)}
-                onSavePackage={(startDate, packageType) => handleSavePackage(startDate, packageType)}
+                onSaveMonthlyPackage={(startDate, packageType, autoRepurchase) =>
+                  handleSaveMonthlyPackage(startDate, packageType, autoRepurchase)
+                }
+                onSaveApPackage={(startDate, autoRepurchase) => handleSaveApPackage(startDate, autoRepurchase)}
                 onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
                 onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
                 savingTimelineItem={isSaving}

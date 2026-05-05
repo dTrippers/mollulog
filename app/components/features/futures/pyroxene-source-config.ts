@@ -72,13 +72,20 @@ export const PYROXENE_SOURCE_ROW_DEFINITIONS = [
   },
   {
     id: "package",
-    label: "월간 패키지",
+    label: "청휘석 패키지",
     group: "paid",
     action: "add",
     visibilityTargets: [
       { type: "package_onetime", label: "초회" },
       { type: "package_daily", label: "일간" },
     ],
+  },
+  {
+    id: "ap_package",
+    label: "AP 패키지",
+    group: "paid",
+    action: "add",
+    visibilityTargets: [{ type: "package_ap" }],
   },
   {
     id: "other",

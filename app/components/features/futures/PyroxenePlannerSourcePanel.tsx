@@ -7,20 +7,26 @@ import {
   togglePyroxeneTimelineSourceVisibility,
 } from "~/models/pyroxene-sources";
 import { PYROXENE_AP_CHARGE_MAX_COUNT } from "~/models/pyroxene-planner-source-config";
+import type { PyroxeneMonthlyPackageType } from "~/models/pyroxene-planner-source-config";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import type { PickupResources } from "~/models/pyroxene-timeline";
 import { cn } from "~/lib/utils";
 import { PYROXENE_SOURCE_ROW_DEFINITIONS, PYROXENE_SOURCE_ROW_GROUP_LABELS } from "./pyroxene-source-config";
 import AttendanceInput from "./planner-input/AttendanceInput";
 import BuyInput from "./planner-input/BuyInput";
-import PackageInput from "./planner-input/PackageInput";
+import PackageInput, { ApPackageInput } from "./planner-input/PackageInput";
 import ResourcesInput from "./planner-input/ResourcesInput";
 
 type PyroxenePlannerSourcePanelProps = {
   options: PyroxenePlannerOptions;
   onOptionsChange: (options: PyroxenePlannerOptions) => void;
   onSaveBuy: (quantity: number, date: Date) => void;
-  onSavePackage: (startDate: Date, packageType: "half" | "full") => void;
+  onSaveMonthlyPackage: (
+    startDate: Date,
+    packageType: PyroxeneMonthlyPackageType,
+    autoRepurchase: boolean,
+  ) => void;
+  onSaveApPackage: (startDate: Date, autoRepurchase: boolean) => void;
   onSaveAttendance: (startDate: Date) => void;
   onSaveOther: (resources: PickupResources, description: string, date: Date) => void;
   savingTimelineItem?: boolean;
@@ -60,7 +66,8 @@ export default function PyroxenePlannerSourcePanel({
   options,
   onOptionsChange,
   onSaveBuy,
-  onSavePackage,
+  onSaveMonthlyPackage,
+  onSaveApPackage,
   onSaveAttendance,
   onSaveOther,
   savingTimelineItem = false,
@@ -154,8 +161,12 @@ export default function PyroxenePlannerSourcePanel({
               onSaveBuy(quantity, date);
               setOpenRowId(null);
             }}
-            onSavePackage={(startDate, packageType) => {
-              onSavePackage(startDate, packageType);
+            onSaveMonthlyPackage={(startDate, packageType, autoRepurchase) => {
+              onSaveMonthlyPackage(startDate, packageType, autoRepurchase);
+              setOpenRowId(null);
+            }}
+            onSaveApPackage={(startDate, autoRepurchase) => {
+              onSaveApPackage(startDate, autoRepurchase);
               setOpenRowId(null);
             }}
             onSaveAttendance={(startDate) => {
@@ -179,7 +190,8 @@ function SourceSheetContent({
   options,
   onOptionsChange,
   onSaveBuy,
-  onSavePackage,
+  onSaveMonthlyPackage,
+  onSaveApPackage,
   onSaveAttendance,
   onSaveOther,
   onClose,
@@ -190,7 +202,11 @@ function SourceSheetContent({
   }
 
   if (rowId === "package") {
-    return <PackageInput onSavePackage={onSavePackage} disabled={savingTimelineItem} />;
+    return <PackageInput onSavePackage={onSaveMonthlyPackage} disabled={savingTimelineItem} />;
+  }
+
+  if (rowId === "ap_package") {
+    return <ApPackageInput onSavePackage={onSaveApPackage} disabled={savingTimelineItem} />;
   }
 
   if (rowId === "attendance") {

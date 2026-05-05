@@ -4,6 +4,7 @@ export { default as AttributeBadge } from "./AttributeBadge";
 export type { AttributeBadgeColor } from "./AttributeBadge";
 export { default as BottomSheet } from "./BottomSheet";
 export { default as Callout } from "./Callout";
+export { default as Checkbox } from "./Checkbox";
 export { default as ClickableSurface } from "./ClickableSurface";
 export { default as Description } from "./Description";
 export { default as EmptyView } from "./EmptyView";

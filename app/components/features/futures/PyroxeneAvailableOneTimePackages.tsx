@@ -23,11 +23,11 @@ export default function PyroxeneAvailableOneTimePackages({
     <>
       <button
         type="button"
-        className="flex w-full items-center justify-center rounded-lg bg-neutral-100 p-3 transition hover:bg-neutral-200/70 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+        className="flex w-full items-center justify-center rounded-lg bg-neutral-100 p-3 transition-colors hover:bg-neutral-200/70 dark:bg-neutral-900 dark:hover:bg-neutral-700/70"
         onClick={() => setShow((prev) => !prev)}
         aria-expanded={show}
       >
-        <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">적용중인 월간 패키지</p>
+        <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">적용중인 패키지</p>
         <ChevronDownIcon
           className={`size-4 text-neutral-500 transition-transform duration-200 ease-in-out dark:text-neutral-400 ${show ? "rotate-180" : ""}`}
         />

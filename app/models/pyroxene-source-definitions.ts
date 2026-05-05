@@ -11,6 +11,7 @@ export const PYROXENE_SOURCE_DEFINITIONS = [
   { type: "buy", label: "청휘석 구매", defaultVisible: true },
   { type: "package_onetime", label: "패키지 (초회)", defaultVisible: true },
   { type: "package_daily", label: "패키지 (일간)", defaultVisible: false },
+  { type: "package_ap", label: "AP 패키지", defaultVisible: true },
   { type: "daily_mission", label: "일일 임무", defaultVisible: false },
   { type: "weekly_mission", label: "주간 임무", defaultVisible: false },
   { type: "ap_charge", label: "AP 충전", defaultVisible: true },

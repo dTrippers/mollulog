@@ -23,7 +23,29 @@ type PyroxeneScheduleProps = {
   onUpdateEventData: (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => void;
 };
 
-const deletableTimelineSourceTypes = new Set(["buy", "package_onetime", "package_daily", "attendance", "other"]);
+const deletableTimelineSourceTypes = new Set(["buy", "package_onetime", "package_daily", "package_ap", "attendance", "other"]);
+const availablePackageSourceTypes = new Set(["package_onetime", "package_ap"]);
+
+function getAvailablePackageDate({
+  date,
+  repeatIntervalDays,
+  autoRepurchase,
+  currentDate,
+}: {
+  date: Date;
+  repeatIntervalDays?: number;
+  autoRepurchase?: boolean;
+  currentDate: dayjs.Dayjs;
+}) {
+  const startDate = dayjs(date);
+  if (!autoRepurchase || !repeatIntervalDays || repeatIntervalDays <= 0 || startDate.isAfter(currentDate)) {
+    return startDate;
+  }
+
+  const elapsedDays = Math.max(0, currentDate.diff(startDate, "day"));
+  const cycleCount = Math.floor(elapsedDays / repeatIntervalDays);
+  return startDate.add(cycleCount * repeatIntervalDays, "day");
+}
 
 export default function PyroxeneSchedule({
   initialDate,
@@ -40,29 +62,46 @@ export default function PyroxeneSchedule({
     return buildTimeline(initialResources, initialDate ?? new Date(), eventDataMap, scheduleItems, options);
   }, [initialDate, initialResources, eventDataMap, scheduleItems, options]);
 
-  // 30일 이내의 월간 패키지는 삭제가 가능하도록 별도 레이아웃에서 표시
+  // 적용 중인 패키지는 삭제가 가능하도록 별도 레이아웃에서 표시
   const availableOneTimePackages = useMemo(() => {
-    const since = dayjs().subtract(30, "day");
     const currentDate = initialDate ? dayjs(initialDate) : dayjs();
     return scheduleItems.flatMap((item) => {
-      const { onetimeGain } = item;
-      if (onetimeGain?.source !== "package_onetime" || !onetimeGain.uid) {
+      const onetimePackageGain =
+        item.onetimeGain && availablePackageSourceTypes.has(item.onetimeGain.source) ? item.onetimeGain : null;
+      const repeatedPackageGain =
+        item.repeatedGain && availablePackageSourceTypes.has(item.repeatedGain.source) ? item.repeatedGain : null;
+      const packageGain = onetimePackageGain ?? repeatedPackageGain;
+
+      if (!packageGain?.uid) {
         return [];
       }
 
-      const packageDate = dayjs(onetimeGain.date);
+      const packageDate = getAvailablePackageDate({
+        date: packageGain.date,
+        repeatIntervalDays: repeatedPackageGain?.uid === packageGain.uid ? repeatedPackageGain.repeatIntervalDays : undefined,
+        autoRepurchase: packageGain.autoRepurchase,
+        currentDate,
+      });
+      const activeDays = packageGain.source === "package_ap" ? 14 : 30;
+      const since = currentDate.subtract(activeDays, "day");
       if (!packageDate.isAfter(since) || !packageDate.isBefore(currentDate)) {
         return [];
       }
 
       return [
         {
-          uid: onetimeGain.uid,
-          date: onetimeGain.date,
-          description: onetimeGain.description,
-          pyroxeneDelta: onetimeGain.pyroxeneDelta ?? 0,
+          uid: packageGain.uid,
+          date: packageDate.toDate(),
+          description: packageGain.description,
+          pyroxeneDelta: packageGain.pyroxeneDelta ?? 0,
         },
       ];
+    }).sort((a, b) => {
+      const dateDiff = a.date.getTime() - b.date.getTime();
+      if (dateDiff !== 0) {
+        return dateDiff;
+      }
+      return a.description.localeCompare(b.description, "ko");
     });
   }, [initialDate, scheduleItems]);
 
@@ -124,7 +163,7 @@ export default function PyroxeneSchedule({
           const itemUid = source.uid && deletableTimelineSourceTypes.has(source.type) ? source.uid : undefined;
           return (
             <PyroxeneTimelineResources
-              key={source.uid ?? `${source.description}-${date.toISOString()}-${index}`}
+              key={source.uid ? `${source.uid}-${date.toISOString()}-${index}` : `${source.description}-${date.toISOString()}-${index}`}
               date={date}
               description={source.description}
               resources={resourceDelta}

@@ -124,7 +124,7 @@ export default function NumberInput({
     >
       <div
         className={cn(
-          "flex w-full items-center overflow-hidden rounded-md border transition-colors",
+          "flex w-full max-w-96 items-center overflow-hidden rounded-md border transition-colors",
           size === "sm" && "border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900",
           size === "md" &&
             "max-w-96 min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
