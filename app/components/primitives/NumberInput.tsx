@@ -6,7 +6,7 @@ type NumberInputBaseProps = {
   label?: string;
   maxValue?: number;
   minValue?: number;
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   showMin?: boolean;
   showMax?: boolean;
   minButtonVariant?: "default" | "active";
@@ -43,6 +43,13 @@ export function normalizeNumberInputText(inputValue: string, allowNegative: bool
   return cleanValue;
 }
 
+export function clampNumberInputValue(nextValue: number, minValue?: number, maxValue?: number): number {
+  let clampedValue = nextValue;
+  if (minValue !== undefined && clampedValue < minValue) clampedValue = minValue;
+  if (maxValue !== undefined && clampedValue > maxValue) clampedValue = maxValue;
+  return clampedValue;
+}
+
 export default function NumberInput({
   label,
   defaultValue,
@@ -62,59 +69,67 @@ export default function NumberInput({
   const nullable = "nullable" in rest && rest.nullable === true;
   const effectiveMin = minValue ?? (nullable ? undefined : 0);
   const allowNegative = effectiveMin !== undefined && effectiveMin < 0;
+  const initialValue = defaultValue ?? value ?? (nullable ? null : 0);
 
-  const [internalValue, setInternalValue] = useState<number | null>(defaultValue ?? value ?? (nullable ? null : 0));
+  const [internalValue, setInternalValue] = useState<number | null>(initialValue);
+  const [inputText, setInputText] = useState(initialValue == null ? "" : String(initialValue));
 
   useEffect(() => {
     if (value !== undefined) {
-      setInternalValue(value ?? null);
+      const nextValue = value ?? null;
+      setInternalValue(nextValue);
+      setInputText(nextValue == null ? "" : String(nextValue));
     }
   }, [value]);
 
   const commitValue = (nextValue: number | null) => {
     setInternalValue(nextValue);
+    setInputText(nextValue == null ? "" : String(nextValue));
     (onChange as (v: number | null) => void)(nextValue);
   };
 
   const clampValue = (nextValue: number) => {
-    let clampedValue = nextValue;
-    if (effectiveMin !== undefined && clampedValue < effectiveMin) clampedValue = effectiveMin;
-    if (maxValue !== undefined && clampedValue > maxValue) clampedValue = maxValue;
-    return clampedValue;
+    return clampNumberInputValue(nextValue, effectiveMin, maxValue);
   };
 
   const buttonBaseClass =
-    "self-stretch whitespace-nowrap transition-[background-color,border-color,color,opacity,filter] duration-150 ease-out active:brightness-95 disabled:pointer-events-none disabled:opacity-40";
+    "self-stretch shrink-0 whitespace-nowrap transition-[background-color,border-color,color,opacity,filter] duration-150 ease-out active:brightness-95 disabled:pointer-events-none disabled:opacity-40";
   const buttonClass = cn(
     buttonBaseClass,
-    size === "sm"
-      ? "px-1 py-0.5 text-sm text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-      : "min-h-10 px-3 text-base font-semibold text-muted-foreground hover:bg-muted",
+    size === "sm" &&
+      "px-1 py-0.5 text-sm text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800",
+    size === "md" && "min-h-10 px-3 text-base font-semibold text-muted-foreground hover:bg-muted",
+    size === "lg" && "min-h-10 px-3 text-base font-semibold text-muted-foreground hover:bg-muted md:min-h-11 md:px-4",
   );
-  const shortcutButtonClass = (variant: "default" | "active") => cn(
-    buttonBaseClass,
-    size === "sm"
-      ? "border-l border-neutral-200 px-1 py-0.5 text-[10px] dark:border-neutral-700"
-      : "min-h-10 border-l border-border px-2.5 text-xs font-medium",
-    variant === "active"
-      ? "border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300"
-      : size === "sm"
-        ? "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-        : "text-muted-foreground hover:bg-muted",
-  );
+  const shortcutButtonClass = (variant: "default" | "active") =>
+    cn(
+      buttonBaseClass,
+      size === "sm" && "border-l border-neutral-200 px-1 py-0.5 text-[10px] dark:border-neutral-700",
+      size === "md" && "min-h-10 border-l border-border px-2.5 text-xs font-medium",
+      size === "lg" && "min-h-10 border-l border-border px-2.5 text-xs font-semibold",
+      variant === "active"
+        ? "border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300"
+        : size === "sm"
+          ? "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
+          : "text-muted-foreground hover:bg-muted",
+    );
 
   return (
     <Field
       label={label}
-      containerClassName={size === "sm" ? "space-y-1" : undefined}
-      labelClassName={size === "sm" ? "mb-1 my-0 text-sm text-neutral-700 dark:text-neutral-200 font-medium" : undefined}
+      containerClassName={size === "sm" ? "space-y-1" : size === "lg" ? "space-y-1.5" : undefined}
+      labelClassName={
+        size === "sm" || size === "lg" ? "text-sm font-medium text-neutral-700 dark:text-neutral-200" : undefined
+      }
     >
       <div
         className={cn(
           "flex w-full items-center overflow-hidden rounded-md border transition-colors",
-          size === "sm"
-            ? "border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900"
-            : "max-w-96 min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
+          size === "sm" && "border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900",
+          size === "md" &&
+            "max-w-96 min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
+          size === "lg" &&
+            "min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 md:min-h-11",
         )}
       >
         {showMin && effectiveMin !== undefined && (
@@ -134,7 +149,7 @@ export default function NumberInput({
           <button
             type="button"
             onClick={() => {
-              const base = internalValue ?? (effectiveMin ?? 0);
+              const base = internalValue ?? effectiveMin ?? 0;
               commitValue(clampValue(base - 1));
             }}
             className={buttonClass}
@@ -152,32 +167,39 @@ export default function NumberInput({
           type="text"
           inputMode={allowNegative ? "decimal" : "numeric"}
           pattern={allowNegative ? "-?[0-9]*" : "[0-9]*"}
-          value={internalValue ?? ""}
+          value={inputText}
           placeholder={nullable ? "" : undefined}
           onChange={(e) => {
-            const inputValue = e.target.value;
+            const nextText = e.target.value;
 
-            if (nullable && inputValue === "") {
-              commitValue(null);
+            if (nextText === "") {
+              setInputText("");
+              if (nullable) {
+                commitValue(null);
+              }
               return;
             }
 
-            const cleanValue = normalizeNumberInputText(inputValue, allowNegative);
-
+            const cleanValue = normalizeNumberInputText(nextText, allowNegative);
             commitValue(clampValue(Number(cleanValue)));
           }}
+          onBlur={(e) => {
+            if (!nullable && e.currentTarget.value === "") {
+              commitValue(clampValue(effectiveMin ?? 0));
+            }
+          }}
           className={cn(
-            "w-full shrink appearance-none bg-transparent text-center text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
-            size === "sm"
-              ? "py-0.5 text-neutral-900 dark:text-neutral-100"
-              : "px-3 py-2 text-foreground",
+            "w-full min-w-0 shrink appearance-none bg-transparent text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+            size === "sm" && "py-0.5 text-sm text-neutral-900 dark:text-neutral-100",
+            size === "md" && "px-3 py-2 text-sm text-foreground",
+            size === "lg" && "px-2 py-1 text-base font-semibold text-foreground md:px-3 md:py-1.5",
           )}
         />
         {showIncrease && (
           <button
             type="button"
             onClick={() => {
-              const base = internalValue ?? (effectiveMin ?? 0);
+              const base = internalValue ?? effectiveMin ?? 0;
               commitValue(clampValue(base + 1));
             }}
             className={buttonClass}
