@@ -18,6 +18,8 @@ import {
   getEquipmentTier,
   getEquipmentTypeKey,
   getResourceKindOrder,
+  getSkillMaterialChoiceBoxRarity,
+  getSkillMaterialResourceChoiceBoxUid,
   type AggregatedGrowthResourceRequirements,
 } from "~/models/growth-resource";
 import { getGrowthPlannerCatalogResourceKindOrder, type ItemCatalogResource } from "~/repositories/item-catalog";
@@ -354,6 +356,13 @@ function ResourceGroup({
           draftQuantities={draftQuantities}
           onQuantityChange={onQuantityChange}
         />
+      ) : kindOrder === GROWTH_RESOURCE_KIND_ORDER.bd || kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote ? (
+        <SkillMaterialSubGroups
+          resources={resources}
+          ownedQuantities={ownedQuantities}
+          draftQuantities={draftQuantities}
+          onQuantityChange={onQuantityChange}
+        />
       ) : (
         <div className="flex flex-wrap gap-x-1 gap-y-0 px-3 py-2">
           {resources.map((resource) => (
@@ -391,6 +400,82 @@ function CategoryModeSwitch({
       atLeastOne
       size="sm"
     />
+  );
+}
+
+function SkillMaterialSubGroups({
+  resources,
+  ownedQuantities,
+  draftQuantities,
+  onQuantityChange,
+}: {
+  resources: InventoryResource[];
+  ownedQuantities: Record<string, number>;
+  draftQuantities: Record<string, number>;
+  onQuantityChange: (resourceUid: string, quantity: number) => void;
+}) {
+  const choiceBoxResources = useMemo(
+    () =>
+      resources
+        .filter((resource) => getSkillMaterialChoiceBoxRarity(resource.uid) !== null)
+        .sort(
+          (a, b) =>
+            (getSkillMaterialChoiceBoxRarity(a.uid) ?? Number.MAX_SAFE_INTEGER) -
+            (getSkillMaterialChoiceBoxRarity(b.uid) ?? Number.MAX_SAFE_INTEGER),
+        ),
+    [resources],
+  );
+  const skillMaterialResources = useMemo(
+    () => resources.filter((resource) => getSkillMaterialChoiceBoxRarity(resource.uid) === null),
+    [resources],
+  );
+  const choiceBoxAllocation = useMemo(
+    () => allocateSkillMaterialChoiceBoxes(skillMaterialResources, choiceBoxResources, draftQuantities),
+    [choiceBoxResources, draftQuantities, skillMaterialResources],
+  );
+
+  return (
+    <div className="divide-y divide-border">
+      {choiceBoxResources.length > 0 ? (
+        <div className="px-3 py-2">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">선택 상자</p>
+          <div className="flex flex-wrap">
+            {choiceBoxResources.map((resource) => (
+              <ResourceTile
+                key={resource.uid}
+                resource={resource}
+                currentQuantity={ownedQuantities[resource.uid] ?? 0}
+                draftQuantity={draftQuantities[resource.uid] ?? 0}
+                showRequiredMetrics={false}
+                metrics={choiceBoxAllocation.choiceBoxMetricsByUid.get(resource.uid)}
+                onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {skillMaterialResources.length > 0 ? (
+        <div className="px-3 py-2">
+          <div className="flex flex-wrap">
+            {skillMaterialResources.map((resource) => {
+              const choiceBoxUid = getSkillMaterialResourceChoiceBoxUid(resource);
+              return (
+                <ResourceTile
+                  key={resource.uid}
+                  resource={resource}
+                  currentQuantity={ownedQuantities[resource.uid] ?? 0}
+                  draftQuantity={draftQuantities[resource.uid] ?? 0}
+                  showRequiredMetrics
+                  showRequiredBalance={choiceBoxUid === null}
+                  metrics={choiceBoxAllocation.itemMetricsByUid.get(resource.uid)}
+                  onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -483,6 +568,86 @@ function EquipmentSubGroups({
   );
 }
 
+type SkillMaterialChoiceBoxAllocation = {
+  choiceBoxMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
+  itemMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
+};
+
+function allocateSkillMaterialChoiceBoxes(
+  skillMaterialResources: InventoryResource[],
+  choiceBoxResources: InventoryResource[],
+  quantities: Record<string, number>,
+): SkillMaterialChoiceBoxAllocation {
+  const remainingChoiceBoxesByUid = new Map<string, number>();
+  const totalDeficitByChoiceBoxUid = new Map<string, number>();
+  const itemMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
+
+  for (const choiceBox of choiceBoxResources) {
+    remainingChoiceBoxesByUid.set(choiceBox.uid, Math.max(0, quantities[choiceBox.uid] ?? 0));
+  }
+
+  for (const resource of skillMaterialResources) {
+    const choiceBoxUid = getSkillMaterialResourceChoiceBoxUid(resource);
+    if (choiceBoxUid === null) {
+      continue;
+    }
+
+    if (!remainingChoiceBoxesByUid.has(choiceBoxUid)) {
+      remainingChoiceBoxesByUid.set(choiceBoxUid, Math.max(0, quantities[choiceBoxUid] ?? 0));
+    }
+
+    const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
+    if (directDeficit <= 0) {
+      continue;
+    }
+
+    totalDeficitByChoiceBoxUid.set(choiceBoxUid, (totalDeficitByChoiceBoxUid.get(choiceBoxUid) ?? 0) + directDeficit);
+
+    const remainingChoiceBoxes = remainingChoiceBoxesByUid.get(choiceBoxUid) ?? 0;
+    const choiceBoxAmount = Math.min(directDeficit, remainingChoiceBoxes);
+    remainingChoiceBoxesByUid.set(choiceBoxUid, remainingChoiceBoxes - choiceBoxAmount);
+
+    const metrics: ResourceInventoryTileMetric[] = [];
+    if (choiceBoxAmount > 0) {
+      metrics.push({
+        label: "선택상자",
+        value: choiceBoxAmount.toLocaleString(),
+        valueClassName: "text-emerald-600 dark:text-emerald-400",
+      });
+    }
+
+    const remainingDeficit = directDeficit - choiceBoxAmount;
+    if (remainingDeficit > 0) {
+      metrics.push({
+        label: "부족",
+        value: remainingDeficit.toLocaleString(),
+        valueClassName: "text-red-600 dark:text-red-300",
+      });
+    }
+
+    if (metrics.length > 0) {
+      itemMetricsByUid.set(resource.uid, metrics);
+    }
+  }
+
+  const choiceBoxMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
+  for (const choiceBox of choiceBoxResources) {
+    const balance = Math.max(0, quantities[choiceBox.uid] ?? 0) - (totalDeficitByChoiceBoxUid.get(choiceBox.uid) ?? 0);
+    choiceBoxMetricsByUid.set(choiceBox.uid, [
+      {
+        label: balance >= 0 ? "여유" : "부족",
+        value: Math.abs(balance).toLocaleString(),
+        valueClassName: cn(
+          balance >= 0 && "text-emerald-600 dark:text-emerald-400",
+          balance < 0 && "text-red-600 dark:text-red-300",
+        ),
+      },
+    ]);
+  }
+
+  return { choiceBoxMetricsByUid, itemMetricsByUid };
+}
+
 type EquipmentChoiceBoxAllocation = {
   choiceBoxMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
   itemMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
@@ -531,6 +696,7 @@ function allocateEquipmentChoiceBoxes(
       metrics.push({
         label: "선택상자",
         value: choiceBoxAmount.toLocaleString(),
+        valueClassName: "text-emerald-600 dark:text-emerald-400",
       });
     }
 
@@ -763,6 +929,7 @@ function buildResourceGroups(
           mode === "all" ||
           resource.requiredAmount > 0 ||
           (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null && (quantities[resource.uid] ?? 0) > 0) ||
+          (getSkillMaterialChoiceBoxRarity(resource.uid) !== null && (quantities[resource.uid] ?? 0) > 0) ||
           (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
       );
       const filteredResources = search
@@ -791,11 +958,13 @@ function buildInventoryResources(
   const equipmentCoverageByChoiceBoxUid = new Map(
     calculateEquipmentTierCoverage(requiredItems, {}).map((coverage) => [coverage.choiceBoxUid, coverage]),
   );
+  const skillMaterialChoiceBoxRequiredAmountByUid = getSkillMaterialChoiceBoxRequiredAmounts(requiredItems);
   const inventoryResources = catalogResources.map((resource) => ({
     ...resource,
     requiredAmount:
       requiredItemMap.get(resource.uid)?.amount ??
       equipmentCoverageByChoiceBoxUid.get(resource.uid)?.requiredAmount ??
+      skillMaterialChoiceBoxRequiredAmountByUid.get(resource.uid) ??
       0,
     kindOrder: getGrowthPlannerCatalogResourceKindOrder(resource) ?? 7,
   }));
@@ -822,4 +991,20 @@ function buildInventoryResources(
 
 function calculateOwnedCharacterExp(quantities: Record<string, number>): number {
   return CHARACTER_EXP_REPORTS.reduce((sum, report) => sum + (quantities[report.uid] ?? 0) * report.exp, 0);
+}
+
+function getSkillMaterialChoiceBoxRequiredAmounts(
+  requiredItems: AggregatedGrowthResourceRequirements["items"],
+): Map<string, number> {
+  const requiredAmounts = new Map<string, number>();
+  for (const item of requiredItems) {
+    const choiceBoxUid = getSkillMaterialResourceChoiceBoxUid(item);
+    if (choiceBoxUid === null) {
+      continue;
+    }
+
+    requiredAmounts.set(choiceBoxUid, (requiredAmounts.get(choiceBoxUid) ?? 0) + Math.max(0, item.amount));
+  }
+
+  return requiredAmounts;
 }

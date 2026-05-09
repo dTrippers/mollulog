@@ -27,6 +27,49 @@ describe("item-catalog", () => {
     expect(getGrowthPlannerCatalogResources([choiceBox])).toEqual([choiceBox]);
   });
 
+  it("includes only the first BD and tech note choice box UID set in the growth planner catalog", () => {
+    const resources: ItemCatalogResource[] = [
+      {
+        uid: "150000",
+        name: "초급 기술 노트 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+      {
+        uid: "150004",
+        name: "초급 BD 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+      {
+        uid: "150012",
+        name: "초급 기술 노트 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+      {
+        uid: "150020",
+        name: "초급 BD 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+    ];
+
+    expect(getGrowthPlannerCatalogResourceKindOrder(resources[0])).toBe(GROWTH_RESOURCE_KIND_ORDER.techNote);
+    expect(getGrowthPlannerCatalogResourceKindOrder(resources[1])).toBe(GROWTH_RESOURCE_KIND_ORDER.bd);
+    expect(getGrowthPlannerCatalogResourceKindOrder(resources[2])).toBeNull();
+    expect(getGrowthPlannerCatalogResourceKindOrder(resources[3])).toBeNull();
+    expect(getGrowthPlannerCatalogResources(resources).map((resource) => resource.uid)).toEqual(["150004", "150000"]);
+  });
+
   it("sorts equipment blueprint choice boxes before direct equipment blueprints by tier ascending", () => {
     const resources: ItemCatalogResource[] = [
       {
@@ -109,6 +152,22 @@ describe("item-catalog", () => {
   it("sorts BD and tech notes by uid ascending in the growth planner catalog", () => {
     const resources: ItemCatalogResource[] = [
       {
+        uid: "150000",
+        name: "초급 기술 노트 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+      {
+        uid: "150004",
+        name: "초급 BD 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+      {
         uid: "4033",
         name: "최상급 기술 노트",
         rarity: 4,
@@ -143,8 +202,10 @@ describe("item-catalog", () => {
     ];
 
     expect(getGrowthPlannerCatalogResources(resources).map((resource) => resource.uid)).toEqual([
+      "150004",
       "3030",
       "3033",
+      "150000",
       "4030",
       "4033",
     ]);

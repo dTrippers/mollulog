@@ -16,10 +16,14 @@ import {
   calculateLevelRequiredExp,
   calculateLevelResourceItems,
   calculateTierResourceItems,
+  GROWTH_RESOURCE_KIND_ORDER,
   getEquipmentBlueprintChoiceBoxTier,
   getEquipmentBlueprintChoiceBoxUid,
   getEquipmentResourceTierLabel,
   getEquipmentTierLabel,
+  getSkillMaterialChoiceBoxKindOrder,
+  getSkillMaterialChoiceBoxRarity,
+  getSkillMaterialResourceChoiceBoxUid,
   getStudentGrowthResourceRequirements,
   normalizeStudentGrowthInputForCalculation,
   sortGrowthResourceItems,
@@ -198,6 +202,71 @@ describe("growth-resource", () => {
     expect(getEquipmentBlueprintChoiceBoxTier("150028")).toBe(2);
     expect(getEquipmentBlueprintChoiceBoxTier("150048")).toBe(10);
     expect(getEquipmentBlueprintChoiceBoxTier("999999")).toBeNull();
+  });
+
+  it("maps the first BD and tech note choice box UID set by rarity", () => {
+    expect(getSkillMaterialChoiceBoxKindOrder("150000")).toBe(GROWTH_RESOURCE_KIND_ORDER.techNote);
+    expect(getSkillMaterialChoiceBoxKindOrder("150003")).toBe(GROWTH_RESOURCE_KIND_ORDER.techNote);
+    expect(getSkillMaterialChoiceBoxRarity("150000")).toBe(1);
+    expect(getSkillMaterialChoiceBoxRarity("150003")).toBe(4);
+    expect(getSkillMaterialChoiceBoxKindOrder("150004")).toBe(GROWTH_RESOURCE_KIND_ORDER.bd);
+    expect(getSkillMaterialChoiceBoxKindOrder("150007")).toBe(GROWTH_RESOURCE_KIND_ORDER.bd);
+    expect(getSkillMaterialChoiceBoxRarity("150004")).toBe(1);
+    expect(getSkillMaterialChoiceBoxRarity("150007")).toBe(4);
+    expect(getSkillMaterialChoiceBoxKindOrder("150012")).toBeNull();
+    expect(getSkillMaterialChoiceBoxKindOrder("150020")).toBeNull();
+  });
+
+  it("maps BD and tech note resources to matching same-rarity choice boxes", () => {
+    expect(getSkillMaterialResourceChoiceBoxUid({ uid: "3030", rarity: 1, subCategory: "cd_item" })).toBe("150004");
+    expect(getSkillMaterialResourceChoiceBoxUid({ uid: "3033", rarity: 4, subCategory: "cd_item" })).toBe("150007");
+    expect(getSkillMaterialResourceChoiceBoxUid({ uid: "4030", rarity: 1, subCategory: "book_item" })).toBe("150000");
+    expect(getSkillMaterialResourceChoiceBoxUid({ uid: "4033", rarity: 4, subCategory: "book_item" })).toBe("150003");
+    expect(getSkillMaterialResourceChoiceBoxUid({ uid: "150000", rarity: 1 })).toBeNull();
+    expect(getSkillMaterialResourceChoiceBoxUid({ uid: "9998", rarity: 4 })).toBeNull();
+    expect(getSkillMaterialResourceChoiceBoxUid({ uid: "9999", rarity: 4, subCategory: "book_item" })).toBeNull();
+  });
+
+  it("uses Secret Tech Sheet for non-EX skill level 10 requirements", async () => {
+    const repository = {
+      getSkillCosts: jest.fn(async () => new Map([["10000", { uid: "10000" }]])),
+      getItemMetadata: jest.fn(async () => new Map()),
+      getEquipmentMetadata: jest.fn(async () => new Map()),
+    };
+
+    const requirements = await getStudentGrowthResourceRequirements(
+      repository as never,
+      [
+        {
+          uid: "10000",
+          initialTier: 3,
+          tier: null,
+          level: null,
+          skillEx: null,
+          skillNormal: 9,
+          skillEnhanced: null,
+          skillSub: null,
+          equip1: null,
+          equip2: null,
+          equip3: null,
+          equipSpecial: null,
+          targetLevel: null,
+          targetSkillEx: null,
+          targetSkillNormal: 10,
+          targetSkillEnhanced: null,
+          targetSkillSub: null,
+          targetEquip1: null,
+          targetEquip2: null,
+          targetEquip3: null,
+          targetEquipSpecial: null,
+          targetTier: null,
+        },
+      ],
+      { "10000": { equipments: [] } } as never,
+      new Map(),
+    );
+
+    expect(requirements["10000"].items.map((item) => [item.uid, item.amount])).toEqual([["9999", 1]]);
   });
 
   it("formats equipment blueprint tier labels for resource cards", () => {

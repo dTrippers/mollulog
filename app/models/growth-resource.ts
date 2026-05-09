@@ -261,6 +261,27 @@ const EQUIPMENT_BLUEPRINT_CHOICE_BOX_TIER_BY_UID = Object.fromEntries(
   Object.entries(EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER).map(([tier, uid]) => [uid, Number(tier)]),
 ) as Record<string, number>;
 
+const SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND = {
+  techNote: {
+    1: "150000",
+    2: "150001",
+    3: "150002",
+    4: "150003",
+  },
+  bd: {
+    1: "150004",
+    2: "150005",
+    3: "150006",
+    4: "150007",
+  },
+} as const;
+
+const SKILL_MATERIAL_CHOICE_BOX_BY_UID = Object.fromEntries(
+  Object.entries(SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND).flatMap(([kind, uidsByRarity]) =>
+    Object.entries(uidsByRarity).map(([rarity, uid]) => [uid, { kind, rarity: Number(rarity) }]),
+  ),
+) as Record<string, { kind: keyof typeof SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND; rarity: number }>;
+
 export const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
   hat: "모자",
   gloves: "장갑",
@@ -310,6 +331,58 @@ export function getEquipmentBlueprintChoiceBoxTier(uid: string): number | null {
 
 export function getEquipmentBlueprintChoiceBoxUid(tier: number): string | null {
   return EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER[tier] ?? null;
+}
+
+export function getSkillMaterialChoiceBoxKindOrder(uid: string): number | null {
+  const choiceBox = SKILL_MATERIAL_CHOICE_BOX_BY_UID[uid];
+  if (!choiceBox) {
+    return null;
+  }
+
+  return choiceBox.kind === "bd" ? GROWTH_RESOURCE_KIND_ORDER.bd : GROWTH_RESOURCE_KIND_ORDER.techNote;
+}
+
+export function getSkillMaterialChoiceBoxRarity(uid: string): number | null {
+  return SKILL_MATERIAL_CHOICE_BOX_BY_UID[uid]?.rarity ?? null;
+}
+
+export function getSkillMaterialChoiceBoxUid(kindOrder: number, rarity: number): string | null {
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.bd) {
+    return SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND.bd[rarity as keyof typeof SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND.bd] ?? null;
+  }
+
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote) {
+    return (
+      SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND.techNote[
+        rarity as keyof typeof SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND.techNote
+      ] ?? null
+    );
+  }
+
+  return null;
+}
+
+export function getSkillMaterialResourceChoiceBoxUid(
+  item: Pick<GrowthResourceItem, "uid" | "rarity"> & Partial<Pick<GrowthResourceItem, "subCategory">>,
+): string | null {
+  if (getSkillMaterialChoiceBoxKindOrder(item.uid) !== null) {
+    return null;
+  }
+
+  if (item.uid === "9998" || item.uid === "9999") {
+    return null;
+  }
+
+  const itemUid = Number(item.uid);
+  if (item.subCategory === "cd_item" || isUidInRange(itemUid, 3000, 3999)) {
+    return getSkillMaterialChoiceBoxUid(GROWTH_RESOURCE_KIND_ORDER.bd, item.rarity);
+  }
+
+  if (item.subCategory === "book_item" || isUidInRange(itemUid, 4000, 4999)) {
+    return getSkillMaterialChoiceBoxUid(GROWTH_RESOURCE_KIND_ORDER.techNote, item.rarity);
+  }
+
+  return null;
 }
 
 export type EquipmentTierCoverage = {
@@ -367,9 +440,9 @@ const EQUIPMENT_TIER_RECIPE: Record<number, readonly { tier: number; amount: num
 const EX_SKILL_LEVELS = [2, 3, 4, 5] as const;
 const NORMAL_SKILL_LEVELS = [2, 3, 4, 5, 6, 7, 8, 9] as const;
 
-// BAQL currently omits non-EX level 10 materials. Public references indicate 9->10 uses Secret Tech Sheet.
+// BAQL currently omits non-EX level 10 materials. 9->10 uses Secret Tech Sheet, not Secret Tech Sheet Piece.
 const SECRET_TECH_SHEET = {
-  uid: "9998",
+  uid: "9999",
   rarity: 4,
 };
 
@@ -1103,6 +1176,11 @@ export function getResourceKindOrder(item: GrowthResourceItem): number {
 
   if (getEquipmentBlueprintChoiceBoxTier(item.uid) !== null) {
     return GROWTH_RESOURCE_KIND_ORDER.equipment;
+  }
+
+  const skillMaterialChoiceBoxKindOrder = getSkillMaterialChoiceBoxKindOrder(item.uid);
+  if (skillMaterialChoiceBoxKindOrder !== null) {
+    return skillMaterialChoiceBoxKindOrder;
   }
 
   if (item.category === "character_exp_growth" || isUidInRange(itemUid, 10, 13)) {

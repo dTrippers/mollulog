@@ -8,6 +8,8 @@ import {
   getEquipmentBlueprintChoiceBoxTier,
   getEquipmentTier,
   getEquipmentTypeKey,
+  getSkillMaterialChoiceBoxKindOrder,
+  getSkillMaterialChoiceBoxRarity,
   shouldSortGrowthResourceKindByUid,
 } from "~/models/growth-resource";
 
@@ -86,6 +88,11 @@ export function getGrowthPlannerCatalogResourceKindOrder(resource: ItemCatalogRe
     return GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 
+  const skillMaterialChoiceBoxKindOrder = getSkillMaterialChoiceBoxKindOrder(resource.uid);
+  if (skillMaterialChoiceBoxKindOrder !== null) {
+    return skillMaterialChoiceBoxKindOrder;
+  }
+
   if (resource.category === "secret_stone") {
     return GROWTH_RESOURCE_KIND_ORDER.eleph;
   }
@@ -128,6 +135,23 @@ function compareGrowthPlannerCatalogResources(a: ItemCatalogResource, b: ItemCat
   const kindDelta = compareGrowthResourceKindOrder(kindOrderA, kindOrderB);
   if (kindDelta !== 0) {
     return kindDelta;
+  }
+
+  if (kindOrderA === GROWTH_RESOURCE_KIND_ORDER.bd || kindOrderA === GROWTH_RESOURCE_KIND_ORDER.techNote) {
+    const choiceBoxRarityA = getSkillMaterialChoiceBoxRarity(a.uid);
+    const choiceBoxRarityB = getSkillMaterialChoiceBoxRarity(b.uid);
+
+    if (choiceBoxRarityA !== null && choiceBoxRarityB === null) {
+      return -1;
+    }
+
+    if (choiceBoxRarityA === null && choiceBoxRarityB !== null) {
+      return 1;
+    }
+
+    if (choiceBoxRarityA !== null && choiceBoxRarityB !== null) {
+      return choiceBoxRarityA - choiceBoxRarityB;
+    }
   }
 
   if (shouldSortGrowthResourceKindByUid(kindOrderA) && shouldSortGrowthResourceKindByUid(kindOrderB)) {
