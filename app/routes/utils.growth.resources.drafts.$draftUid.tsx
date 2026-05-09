@@ -9,7 +9,7 @@ import {
   getUserResourceInventoryMapByItemUids,
 } from "~/models/user-resource-inventory";
 import { getItemCatalogResourceMap } from "~/repositories/item-catalog";
-import ResourceInventoryDraftReview from "./edit.resources._components/ResourceInventoryDraftReview";
+import ResourceInventoryDraftReview from "./utils.growth.resources._components/ResourceInventoryDraftReview";
 
 type ActionData = {
   error?: string;
@@ -65,11 +65,11 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   try {
     if (intent === "apply") {
       await applyUserResourceInventoryDraft(env, currentUser.id, draftUid);
-      return redirect("/edit/resources");
+      return redirect("/utils/growth/resources");
     }
     if (intent === "discard") {
       await discardUserResourceInventoryDraft(env, currentUser.id, draftUid);
-      return redirect("/edit/resources");
+      return redirect("/utils/growth/resources");
     }
 
     return data<ActionData>({ error: "지원하지 않는 요청이에요" }, { status: 400 });
@@ -81,7 +81,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   }
 };
 
-export default function EditResourceDraftPage() {
+export default function GrowthResourceDraftPage() {
   const { draft, resourcesByUid, currentQuantities } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 

@@ -11,10 +11,15 @@ import {
   calculateCharacterExpDifference,
   calculateCumulativeTierEleph,
   calculateEquipmentResourceItems,
+  calculateEquipmentTierCoverage,
   calculateGearResourceItems,
   calculateLevelRequiredExp,
   calculateLevelResourceItems,
   calculateTierResourceItems,
+  getEquipmentBlueprintChoiceBoxTier,
+  getEquipmentBlueprintChoiceBoxUid,
+  getEquipmentResourceTierLabel,
+  getEquipmentTierLabel,
   getStudentGrowthResourceRequirements,
   normalizeStudentGrowthInputForCalculation,
   sortGrowthResourceItems,
@@ -182,6 +187,98 @@ describe("growth-resource", () => {
         rarity: 1,
         amount: 10,
         source: "equipment",
+      },
+    ]);
+  });
+
+  it("maps equipment blueprint choice boxes by tier", () => {
+    expect(getEquipmentBlueprintChoiceBoxUid(2)).toBe("150028");
+    expect(getEquipmentBlueprintChoiceBoxUid(10)).toBe("150048");
+    expect(getEquipmentBlueprintChoiceBoxUid(1)).toBeNull();
+    expect(getEquipmentBlueprintChoiceBoxTier("150028")).toBe(2);
+    expect(getEquipmentBlueprintChoiceBoxTier("150048")).toBe(10);
+    expect(getEquipmentBlueprintChoiceBoxTier("999999")).toBeNull();
+  });
+
+  it("formats equipment blueprint tier labels for resource cards", () => {
+    expect(getEquipmentTierLabel("101007")).toBe("T8");
+    expect(getEquipmentTierLabel("108009")).toBe("T10");
+    expect(getEquipmentTierLabel("150041")).toBeNull();
+    expect(getEquipmentTierLabel("999999")).toBeNull();
+    expect(getEquipmentResourceTierLabel("101007")).toBe("T8");
+    expect(getEquipmentResourceTierLabel("150041")).toBe("T8");
+    expect(getEquipmentResourceTierLabel("999999")).toBeNull();
+  });
+
+  it("applies equipment blueprint choice boxes only to same-tier total deficit", () => {
+    expect(
+      calculateEquipmentTierCoverage(
+        [
+          {
+            uid: "101007",
+            type: ResourceTypeEnum.Equipment,
+            amount: 50,
+            source: "equipment",
+          },
+          {
+            uid: "102007",
+            type: ResourceTypeEnum.Equipment,
+            amount: 20,
+            source: "equipment",
+          },
+          {
+            uid: "101006",
+            type: ResourceTypeEnum.Equipment,
+            amount: 30,
+            source: "equipment",
+          },
+          {
+            uid: "150",
+            type: ResourceTypeEnum.Item,
+            amount: 100,
+            source: "skill",
+          },
+        ],
+        {
+          "101007": 30,
+          "102007": 5,
+          "101006": 0,
+          "150041": 10,
+          "150033": 999,
+        },
+      ),
+    ).toEqual([
+      {
+        tier: 7,
+        requiredAmount: 30,
+        directOwnedAmount: 0,
+        directDeficit: 30,
+        choiceBoxUid: "150033",
+        choiceBoxQuantity: 999,
+        finalDeficit: 0,
+      },
+      {
+        tier: 8,
+        requiredAmount: 70,
+        directOwnedAmount: 35,
+        directDeficit: 35,
+        choiceBoxUid: "150041",
+        choiceBoxQuantity: 10,
+        finalDeficit: 25,
+      },
+    ]);
+  });
+
+  it("includes owned equipment blueprint choice boxes even without direct equipment requirements", () => {
+    expect(calculateEquipmentTierCoverage([], { "150048": 3 })).toEqual([
+      {
+        tier: 10,
+        requiredAmount: 0,
+        directOwnedAmount: 0,
+        directDeficit: 0,
+        choiceBoxUid: "150048",
+        choiceBoxQuantity: 3,
+        finalDeficit: 0,
       },
     ]);
   });
@@ -418,7 +515,7 @@ describe("growth-resource", () => {
     ]);
   });
 
-  it("sorts resources by kind order before rarity", () => {
+  it("sorts resources by growth resource display order before rarity", () => {
     expect(
       sortGrowthResourceItems([
         {
@@ -468,16 +565,55 @@ describe("growth-resource", () => {
           source: "skill",
         },
       ]).map((item) => item.uid),
-    ).toEqual(["10000", "13", "3030", "4030", "9998", "150"]);
+    ).toEqual(["13", "150", "3030", "4030", "9998", "10000"]);
   });
 
-  it("sorts items with the same kind by rarity ascending like the game", () => {
+  it("sorts BD and tech notes by uid ascending like the game inventory", () => {
     expect(
       sortGrowthResourceItems([
         {
-          uid: "152",
+          uid: "4033",
           type: ResourceTypeEnum.Item,
-          rarity: 3,
+          rarity: 4,
+          amount: 10,
+          source: "skill",
+          subCategory: "book_item",
+        },
+        {
+          uid: "3033",
+          type: ResourceTypeEnum.Item,
+          rarity: 4,
+          amount: 10,
+          source: "skill",
+          subCategory: "cd_item",
+        },
+        {
+          uid: "4030",
+          type: ResourceTypeEnum.Item,
+          rarity: 1,
+          amount: 10,
+          source: "skill",
+          subCategory: "book_item",
+        },
+        {
+          uid: "3030",
+          type: ResourceTypeEnum.Item,
+          rarity: 1,
+          amount: 10,
+          source: "skill",
+          subCategory: "cd_item",
+        },
+      ]).map((item) => item.uid),
+    ).toEqual(["3030", "3033", "4030", "4033"]);
+  });
+
+  it("sorts artifacts by uid ascending like the game inventory", () => {
+    expect(
+      sortGrowthResourceItems([
+        {
+          uid: "113",
+          type: ResourceTypeEnum.Item,
+          rarity: 4,
           amount: 10,
           source: "skill",
           subCategory: "artifact",
@@ -491,6 +627,30 @@ describe("growth-resource", () => {
           subCategory: "artifact",
         },
         {
+          uid: "112",
+          type: ResourceTypeEnum.Item,
+          rarity: 3,
+          amount: 10,
+          source: "skill",
+          subCategory: "artifact",
+        },
+        {
+          uid: "110",
+          type: ResourceTypeEnum.Item,
+          rarity: 1,
+          amount: 10,
+          source: "skill",
+          subCategory: "artifact",
+        },
+        {
+          uid: "153",
+          type: ResourceTypeEnum.Item,
+          rarity: 4,
+          amount: 10,
+          source: "skill",
+          subCategory: "artifact",
+        },
+        {
           uid: "151",
           type: ResourceTypeEnum.Item,
           rarity: 2,
@@ -499,7 +659,7 @@ describe("growth-resource", () => {
           subCategory: "artifact",
         },
       ]).map((item) => item.uid),
-    ).toEqual(["150", "151", "152"]);
+    ).toEqual(["110", "112", "113", "150", "151", "153"]);
   });
 
   it("keeps the intended kind order even when BAQL category metadata is missing", () => {
@@ -548,10 +708,10 @@ describe("growth-resource", () => {
           source: "level",
         },
       ]).map((item) => item.uid),
-    ).toEqual(["13", "3030", "4030", "9998", "150", "101009"]);
+    ).toEqual(["13", "150", "3030", "4030", "9998", "101009"]);
   });
 
-  it("places favor items before artifacts and equipment", () => {
+  it("places artifacts before favor items and equipment", () => {
     expect(
       sortGrowthResourceItems([
         {
@@ -580,7 +740,7 @@ describe("growth-resource", () => {
           subCategory: null,
         },
       ]).map((item) => item.uid),
-    ).toEqual(["5017", "150", "101009"]);
+    ).toEqual(["150", "5017", "101009"]);
   });
 
   it("aggregates duplicated resource uids across students and keeps the existing sort order", () => {
@@ -625,8 +785,8 @@ describe("growth-resource", () => {
     expect(aggregated.skillUnavailable).toBe(true);
     expect(aggregated.characterExp).toBe(12340);
     expect(aggregated.items.map((item) => [item.uid, item.amount])).toEqual([
-      ["10000", 200],
       ["150", 80],
+      ["10000", 200],
     ]);
   });
 });

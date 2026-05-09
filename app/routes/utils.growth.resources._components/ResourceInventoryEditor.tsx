@@ -2,20 +2,24 @@ import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker, useFetcher } from "react-router";
-import { Button, EmptyView, NumberInput, ResourceCard, Title } from "~/components/primitives";
+import { Button, EmptyView, FilterButtons, NumberInput, ResourceCard, Title } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import {
   CHARACTER_EXP_REPORTS,
   EQUIPMENT_TYPE_LABELS,
   GROWTH_RESOURCE_KIND_LABELS,
+  GROWTH_RESOURCE_KIND_ORDER,
+  calculateEquipmentTierCoverage,
+  compareGrowthResourceKindOrder,
+  getEquipmentBlueprintChoiceBoxTier,
+  getEquipmentBlueprintChoiceBoxUid,
+  getEquipmentResourceTierLabel,
+  getEquipmentTier,
   getEquipmentTypeKey,
   getResourceKindOrder,
   type AggregatedGrowthResourceRequirements,
 } from "~/models/growth-resource";
-import {
-  getGrowthPlannerCatalogResourceKindOrder,
-  type ItemCatalogResource,
-} from "~/repositories/item-catalog";
+import { getGrowthPlannerCatalogResourceKindOrder, type ItemCatalogResource } from "~/repositories/item-catalog";
 
 type ResourceInventoryEditorProps = {
   resources: ItemCatalogResource[];
@@ -59,10 +63,11 @@ const DEFAULT_CATEGORY_POLICY: CategoryDisplayPolicy = {
   modes: ["all", "needed"],
 };
 const CATEGORY_DISPLAY_POLICIES: Record<number, CategoryDisplayPolicy> = {
-  0: { defaultMode: "needed", modes: ["all", "needed"] },
-  1: { defaultMode: "all", modes: ["all"] },
+  [GROWTH_RESOURCE_KIND_ORDER.eleph]: { defaultMode: "needed", modes: ["all", "needed"] },
+  [GROWTH_RESOURCE_KIND_ORDER.characterExp]: { defaultMode: "all", modes: ["all"] },
+  [GROWTH_RESOURCE_KIND_ORDER.favor]: { defaultMode: "all", modes: ["all", "needed"] },
 };
-const CHARACTER_EXP_KIND_ORDER = 1;
+const CHARACTER_EXP_KIND_ORDER = GROWTH_RESOURCE_KIND_ORDER.characterExp;
 
 export default function ResourceInventoryEditor({
   resources,
@@ -96,8 +101,15 @@ export default function ResourceInventoryEditor({
   );
 
   const resourceGroups = useMemo(
-    () => buildResourceGroups(inventoryResources, categoryModes, filter.search, requiredResources.characterExp),
-    [categoryModes, filter.search, inventoryResources, requiredResources.characterExp],
+    () =>
+      buildResourceGroups(
+        inventoryResources,
+        categoryModes,
+        filter.search,
+        requiredResources.characterExp,
+        draftQuantities,
+      ),
+    [categoryModes, draftQuantities, filter.search, inventoryResources, requiredResources.characterExp],
   );
   const filteredResourceCount = useMemo(
     () => resourceGroups.reduce((sum, group) => sum + group.resources.length, 0),
@@ -174,12 +186,7 @@ export default function ResourceInventoryEditor({
   };
 
   return (
-    <div className="space-y-3 pb-28">
-      <Title
-        text="보유 재화 관리"
-        description="보유한 재화 수량을 관리할 수 있어요"
-      />
-
+    <>
       {submitError ? (
         <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
           {submitError}
@@ -236,7 +243,7 @@ export default function ResourceInventoryEditor({
           </div>
         </div>
       ) : null}
-    </div>
+    </>
   );
 }
 
@@ -261,20 +268,20 @@ function ResourceGroup({
   const isCharacterExpGroup = kindOrder === CHARACTER_EXP_KIND_ORDER;
   return (
     <section className="overflow-hidden rounded-md border border-border bg-card">
-      <div className="flex flex-col gap-2 border-b border-border bg-muted/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-b border-border bg-muted/60 px-3 py-2">
         <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold text-foreground">
-            {GROWTH_RESOURCE_KIND_LABELS[kindOrder] ?? "기타"}
-          </h2>
+          <h2 className="text-sm font-semibold text-foreground">{GROWTH_RESOURCE_KIND_LABELS[kindOrder] ?? "기타"}</h2>
         </div>
-        {policy.modes.length > 1 ? (
-          <CategoryModeSwitch kindOrder={kindOrder} mode={mode} onModeChange={onModeChange} />
-        ) : null}
       </div>
       {isCharacterExpGroup && requiredCharacterExp > 0 ? (
         <CharacterExpSummary requiredCharacterExp={requiredCharacterExp} draftQuantities={draftQuantities} />
       ) : null}
-      {kindOrder === 6 ? (
+      {policy.modes.length > 1 ? (
+        <div className="px-3 pt-2">
+          <CategoryModeSwitch kindOrder={kindOrder} mode={mode} onModeChange={onModeChange} />
+        </div>
+      ) : null}
+      {kindOrder === GROWTH_RESOURCE_KIND_ORDER.equipment ? (
         <EquipmentSubGroups
           resources={resources}
           ownedQuantities={ownedQuantities}
@@ -309,28 +316,15 @@ function CategoryModeSwitch({
   onModeChange: (kindOrder: number, mode: ResourceMode) => void;
 }) {
   return (
-    <div className="inline-flex self-start rounded-md border border-border bg-background p-1">
-      <button
-        type="button"
-        onClick={() => onModeChange(kindOrder, "all")}
-        className={cn(
-          "rounded px-2 py-1 text-xs font-medium",
-          mode === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
-        )}
-      >
-        전체
-      </button>
-      <button
-        type="button"
-        onClick={() => onModeChange(kindOrder, "needed")}
-        className={cn(
-          "rounded px-2 py-1 text-xs font-medium",
-          mode === "needed" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
-        )}
-      >
-        필요한 재화
-      </button>
-    </div>
+    <FilterButtons
+      buttonProps={[
+        { text: "전체", active: mode === "all", onToggle: () => onModeChange(kindOrder, "all") },
+        { text: "필요한 재화", active: mode === "needed", onToggle: () => onModeChange(kindOrder, "needed") },
+      ]}
+      exclusive
+      atLeastOne
+      size="sm"
+    />
   );
 }
 
@@ -345,9 +339,24 @@ function EquipmentSubGroups({
   draftQuantities: Record<string, number>;
   onQuantityChange: (resourceUid: string, quantity: number) => void;
 }) {
+  const choiceBoxResources = useMemo(
+    () =>
+      resources
+        .filter((resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null)
+        .sort(
+          (a, b) =>
+            (getEquipmentBlueprintChoiceBoxTier(a.uid) ?? Number.MAX_SAFE_INTEGER) -
+            (getEquipmentBlueprintChoiceBoxTier(b.uid) ?? Number.MAX_SAFE_INTEGER),
+        ),
+    [resources],
+  );
+  const equipmentResources = useMemo(
+    () => resources.filter((resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) === null),
+    [resources],
+  );
   const subGroups = useMemo(() => {
     const grouped = new Map<string, InventoryResource[]>();
-    for (const resource of resources) {
+    for (const resource of equipmentResources) {
       const typeKey = getEquipmentTypeKey(resource.uid) ?? "기타";
       const current = grouped.get(typeKey);
       if (current) {
@@ -356,18 +365,38 @@ function EquipmentSubGroups({
         grouped.set(typeKey, [resource]);
       }
     }
-    return EQUIPMENT_TYPE_ORDER
-      .filter((key) => grouped.has(key))
-      .map((key) => [key, grouped.get(key) as InventoryResource[]] as const);
-  }, [resources]);
+    return EQUIPMENT_TYPE_ORDER.filter((key) => grouped.has(key)).map(
+      (key) => [key, grouped.get(key) as InventoryResource[]] as const,
+    );
+  }, [equipmentResources]);
+  const choiceBoxAllocation = useMemo(
+    () => allocateEquipmentChoiceBoxes(subGroups.flatMap(([, typeResources]) => typeResources), choiceBoxResources, draftQuantities),
+    [choiceBoxResources, draftQuantities, subGroups],
+  );
 
   return (
     <div className="divide-y divide-border">
+      {choiceBoxResources.length > 0 ? (
+        <div className="px-3 py-2">
+          <p className="mb-1 text-xs font-medium text-muted-foreground">선택 상자</p>
+          <div className="flex flex-wrap">
+            {choiceBoxResources.map((resource) => (
+              <ResourceTile
+                key={resource.uid}
+                resource={resource}
+                currentQuantity={ownedQuantities[resource.uid] ?? 0}
+                draftQuantity={draftQuantities[resource.uid] ?? 0}
+                showRequiredMetrics={false}
+                metrics={choiceBoxAllocation.choiceBoxMetricsByUid.get(resource.uid)}
+                onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
       {subGroups.map(([typeKey, typeResources]) => (
         <div key={typeKey} className="px-3 py-2">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">
-            {EQUIPMENT_TYPE_LABELS[typeKey] ?? typeKey}
-          </p>
+          <p className="mb-1 text-xs font-medium text-muted-foreground">{EQUIPMENT_TYPE_LABELS[typeKey] ?? typeKey}</p>
           <div className="flex flex-wrap">
             {typeResources.map((resource) => (
               <ResourceTile
@@ -376,6 +405,8 @@ function EquipmentSubGroups({
                 currentQuantity={ownedQuantities[resource.uid] ?? 0}
                 draftQuantity={draftQuantities[resource.uid] ?? 0}
                 showRequiredMetrics
+                showRequiredBalance={false}
+                metrics={choiceBoxAllocation.itemMetricsByUid.get(resource.uid)}
                 onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
               />
             ))}
@@ -386,17 +417,115 @@ function EquipmentSubGroups({
   );
 }
 
+type EquipmentChoiceBoxAllocation = {
+  choiceBoxMetricsByUid: Map<string, ResourceTileMetric[]>;
+  itemMetricsByUid: Map<string, ResourceTileMetric[]>;
+};
+
+function allocateEquipmentChoiceBoxes(
+  equipmentResources: InventoryResource[],
+  choiceBoxResources: InventoryResource[],
+  quantities: Record<string, number>,
+): EquipmentChoiceBoxAllocation {
+  const remainingChoiceBoxesByTier = new Map<number, number>();
+  const totalDeficitByTier = new Map<number, number>();
+  const itemMetricsByUid = new Map<string, ResourceTileMetric[]>();
+
+  for (const choiceBox of choiceBoxResources) {
+    const tier = getEquipmentBlueprintChoiceBoxTier(choiceBox.uid);
+    if (tier !== null) {
+      remainingChoiceBoxesByTier.set(tier, Math.max(0, quantities[choiceBox.uid] ?? 0));
+    }
+  }
+
+  for (const resource of equipmentResources) {
+    const choiceBoxUid = getEquipmentBlueprintChoiceBoxUid(getEquipmentTier(resource.uid));
+    if (choiceBoxUid === null) {
+      continue;
+    }
+
+    const tier = getEquipmentTier(resource.uid);
+    if (!remainingChoiceBoxesByTier.has(tier)) {
+      remainingChoiceBoxesByTier.set(tier, Math.max(0, quantities[choiceBoxUid] ?? 0));
+    }
+
+    const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
+    if (directDeficit <= 0) {
+      continue;
+    }
+
+    totalDeficitByTier.set(tier, (totalDeficitByTier.get(tier) ?? 0) + directDeficit);
+
+    const remainingChoiceBoxes = remainingChoiceBoxesByTier.get(tier) ?? 0;
+    const choiceBoxAmount = Math.min(directDeficit, remainingChoiceBoxes);
+    remainingChoiceBoxesByTier.set(tier, remainingChoiceBoxes - choiceBoxAmount);
+
+    const metrics: ResourceTileMetric[] = [];
+    if (choiceBoxAmount > 0) {
+      metrics.push({
+        label: "선택상자",
+        value: choiceBoxAmount.toLocaleString(),
+      });
+    }
+
+    const remainingDeficit = directDeficit - choiceBoxAmount;
+    if (remainingDeficit > 0) {
+      metrics.push({
+        label: "부족",
+        value: remainingDeficit.toLocaleString(),
+        valueClassName: "text-red-600 dark:text-red-300",
+      });
+    }
+
+    if (metrics.length > 0) {
+      itemMetricsByUid.set(resource.uid, metrics);
+    }
+  }
+
+  const choiceBoxMetricsByUid = new Map<string, ResourceTileMetric[]>();
+  for (const choiceBox of choiceBoxResources) {
+    const tier = getEquipmentBlueprintChoiceBoxTier(choiceBox.uid);
+    if (tier === null) {
+      continue;
+    }
+
+    const balance = Math.max(0, quantities[choiceBox.uid] ?? 0) - (totalDeficitByTier.get(tier) ?? 0);
+    choiceBoxMetricsByUid.set(choiceBox.uid, [
+      {
+        label: balance >= 0 ? "여유" : "부족",
+        value: Math.abs(balance).toLocaleString(),
+        valueClassName: cn(
+          balance >= 0 && "text-emerald-600 dark:text-emerald-400",
+          balance < 0 && "text-red-600 dark:text-red-300",
+        ),
+      },
+    ]);
+  }
+
+  return { choiceBoxMetricsByUid, itemMetricsByUid };
+}
+
+type ResourceTileMetric = {
+  label: string;
+  value: string;
+  valueClassName?: string;
+};
+
 function ResourceTile({
   resource,
   currentQuantity,
   draftQuantity,
   showRequiredMetrics,
+  showRequiredBalance = true,
+  metrics,
   onQuantityChange,
 }: {
   resource: InventoryResource;
   currentQuantity: number;
   draftQuantity: number;
   showRequiredMetrics: boolean;
+  showRequiredBalance?: boolean;
+  metrics?: ResourceTileMetric[];
   onQuantityChange: (quantity: number) => void;
 }) {
   const diff = draftQuantity - currentQuantity;
@@ -415,10 +544,11 @@ function ResourceTile({
         resourceType={resource.type}
         rarity={resource.rarity}
         name={resource.name}
+        label={getEquipmentResourceTierLabel(resource.uid) ?? undefined}
         size="lg"
       />
       <div className="w-full">
-        <p className="mb-1 text-center text-xs font-medium text-muted-foreground">보유</p>
+        <p className="mb-0.5 text-left text-xs font-medium leading-tight text-muted-foreground">보유</p>
         <NumberInput
           minValue={0}
           showDecrease={false}
@@ -428,20 +558,30 @@ function ResourceTile({
           onChange={onQuantityChange}
         />
       </div>
-      <div className="w-full space-y-0.5 text-xs">
+      <div className="w-full space-y-px text-xs leading-tight">
         {hasRequiredAmount ? (
           <>
             <MetricRow label="필요" value={resource.requiredAmount.toLocaleString()} />
-            <MetricRow
-              label={requiredBalance >= 0 ? "여유" : "부족"}
-              value={Math.abs(requiredBalance).toLocaleString()}
-              valueClassName={cn(
-                requiredBalance >= 0 && "text-emerald-600 dark:text-emerald-400",
-                requiredBalance < 0 && "text-red-600 dark:text-red-300",
-              )}
-            />
+            {showRequiredBalance ? (
+              <MetricRow
+                label={requiredBalance >= 0 ? "여유" : "부족"}
+                value={Math.abs(requiredBalance).toLocaleString()}
+                valueClassName={cn(
+                  requiredBalance >= 0 && "text-emerald-600 dark:text-emerald-400",
+                  requiredBalance < 0 && "text-red-600 dark:text-red-300",
+                )}
+              />
+            ) : null}
           </>
         ) : null}
+        {metrics?.map((metric) => (
+          <MetricRow
+            key={`${metric.label}-${metric.value}`}
+            label={metric.label}
+            value={metric.value}
+            valueClassName={metric.valueClassName}
+          />
+        ))}
       </div>
     </div>
   );
@@ -457,8 +597,8 @@ function MetricRow({
   valueClassName?: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-1">
-      <span className="text-muted-foreground">{label}</span>
+    <div className="flex items-center justify-between gap-0.5">
+      <span className="leading-tight text-muted-foreground">{label}</span>
       <span className={cn("font-semibold tabular-nums text-foreground", valueClassName)}>{value}</span>
     </div>
   );
@@ -526,6 +666,7 @@ function buildResourceGroups(
   categoryModes: Record<number, ResourceMode>,
   searchValue: string,
   requiredCharacterExp: number,
+  quantities: Record<string, number>,
 ): ResourceGroupView[] {
   const grouped = new Map<number, InventoryResource[]>();
   for (const resource of resources) {
@@ -539,13 +680,14 @@ function buildResourceGroups(
 
   const search = searchValue.trim().toLowerCase();
   return Array.from(grouped.entries())
-    .sort(([a], [b]) => a - b)
+    .sort(([a], [b]) => compareGrowthResourceKindOrder(a, b))
     .map(([kindOrder, groupResources]) => {
       const mode = resolveCategoryMode(kindOrder, categoryModes);
       const modeResources = groupResources.filter(
         (resource) =>
           mode === "all" ||
           resource.requiredAmount > 0 ||
+          (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null && (quantities[resource.uid] ?? 0) > 0) ||
           (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
       );
       const filteredResources = search
@@ -568,9 +710,15 @@ function buildInventoryResources(
 ): InventoryResource[] {
   const catalogResourceMap = new Map(catalogResources.map((resource) => [resource.uid, resource]));
   const requiredItemMap = new Map(requiredItems.map((item) => [item.uid, item]));
+  const equipmentCoverageByChoiceBoxUid = new Map(
+    calculateEquipmentTierCoverage(requiredItems, {}).map((coverage) => [coverage.choiceBoxUid, coverage]),
+  );
   const inventoryResources = catalogResources.map((resource) => ({
     ...resource,
-    requiredAmount: requiredItemMap.get(resource.uid)?.amount ?? 0,
+    requiredAmount:
+      requiredItemMap.get(resource.uid)?.amount ??
+      equipmentCoverageByChoiceBoxUid.get(resource.uid)?.requiredAmount ??
+      0,
     kindOrder: getGrowthPlannerCatalogResourceKindOrder(resource) ?? 7,
   }));
 

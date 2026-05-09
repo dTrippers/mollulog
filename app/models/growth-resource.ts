@@ -112,7 +112,6 @@ export type StudentGearData = {
   }[];
 };
 
-
 type GearCostStudent = {
   uid: string;
   gear: {
@@ -233,6 +232,22 @@ const EQUIPMENT_BLUEPRINT_BASE_UID = {
   necklace: 108999,
 } as const;
 
+export const EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER: Record<number, string> = {
+  2: "150028",
+  3: "150029",
+  4: "150030",
+  5: "150031",
+  6: "150032",
+  7: "150033",
+  8: "150041",
+  9: "150045",
+  10: "150048",
+};
+
+const EQUIPMENT_BLUEPRINT_CHOICE_BOX_TIER_BY_UID = Object.fromEntries(
+  Object.entries(EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER).map(([tier, uid]) => [uid, Number(tier)]),
+) as Record<string, number>;
+
 export const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
   hat: "모자",
   gloves: "장갑",
@@ -257,6 +272,45 @@ export function getEquipmentTypeKey(uid: string): string | null {
 export function getEquipmentTier(uid: string): number {
   return (Number(uid) % 1000) + 1;
 }
+
+export function getEquipmentTierLabel(uid: string): string | null {
+  if (getEquipmentTypeKey(uid) === null) {
+    return null;
+  }
+
+  return `T${getEquipmentTier(uid)}`;
+}
+
+export function getEquipmentResourceTierLabel(uid: string): string | null {
+  const equipmentTierLabel = getEquipmentTierLabel(uid);
+  if (equipmentTierLabel !== null) {
+    return equipmentTierLabel;
+  }
+
+  const choiceBoxTier = getEquipmentBlueprintChoiceBoxTier(uid);
+  return choiceBoxTier === null ? null : `T${choiceBoxTier}`;
+}
+
+export function getEquipmentBlueprintChoiceBoxTier(uid: string): number | null {
+  return EQUIPMENT_BLUEPRINT_CHOICE_BOX_TIER_BY_UID[uid] ?? null;
+}
+
+export function getEquipmentBlueprintChoiceBoxUid(tier: number): string | null {
+  return EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER[tier] ?? null;
+}
+
+export type EquipmentTierCoverage = {
+  tier: number;
+  requiredAmount: number;
+  directOwnedAmount: number;
+  directDeficit: number;
+  choiceBoxUid: string;
+  choiceBoxQuantity: number;
+  finalDeficit: number;
+};
+
+type EquipmentCoverageItem = Pick<GrowthResourceItem, "uid" | "type" | "amount"> &
+  Partial<Pick<GrowthResourceItem, "source">>;
 
 const EQUIPMENT_TIER_RECIPE: Record<number, readonly { tier: number; amount: number }[]> = {
   2: [{ tier: 2, amount: 15 }],
@@ -413,9 +467,7 @@ export function calculateCharacterExpDifference(currentLevel: number, targetLeve
   return Math.max(0, targetTotalExp - currentTotalExp);
 }
 
-export function calculateLevelRequiredExp(
-  student: Pick<GrowthResourceStudentInput, "level" | "targetLevel">,
-): number {
+export function calculateLevelRequiredExp(student: Pick<GrowthResourceStudentInput, "level" | "targetLevel">): number {
   if (student.level == null || student.targetLevel == null || student.targetLevel <= student.level) {
     return 0;
   }
@@ -500,6 +552,69 @@ export function calculateEquipmentResourceItems(
   accumulateEquipmentSlot(items, equipmentSlots[2], student.equip3, student.targetEquip3);
 
   return Array.from(items.values());
+}
+
+export function calculateEquipmentTierCoverage(
+  requiredItems: EquipmentCoverageItem[],
+  quantities: Record<string, number>,
+): EquipmentTierCoverage[] {
+  const coverageByTier = new Map<
+    number,
+    Pick<EquipmentTierCoverage, "tier" | "requiredAmount" | "directOwnedAmount" | "directDeficit" | "choiceBoxUid">
+  >();
+
+  for (const item of requiredItems) {
+    if (!isEquipmentBlueprintRequirement(item)) {
+      continue;
+    }
+
+    const tier = getEquipmentTier(item.uid);
+    const choiceBoxUid = getEquipmentBlueprintChoiceBoxUid(tier);
+    if (!choiceBoxUid) {
+      continue;
+    }
+
+    const current = coverageByTier.get(tier) ?? {
+      tier,
+      requiredAmount: 0,
+      directOwnedAmount: 0,
+      directDeficit: 0,
+      choiceBoxUid,
+    };
+    const requiredAmount = Math.max(0, item.amount);
+    const ownedAmount = Math.max(0, quantities[item.uid] ?? 0);
+
+    current.requiredAmount += requiredAmount;
+    current.directOwnedAmount += ownedAmount;
+    current.directDeficit += Math.max(0, requiredAmount - ownedAmount);
+    coverageByTier.set(tier, current);
+  }
+
+  for (const [tier, choiceBoxUid] of Object.entries(EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER)) {
+    const choiceBoxQuantity = Math.max(0, quantities[choiceBoxUid] ?? 0);
+    if (choiceBoxQuantity <= 0 || coverageByTier.has(Number(tier))) {
+      continue;
+    }
+
+    coverageByTier.set(Number(tier), {
+      tier: Number(tier),
+      requiredAmount: 0,
+      directOwnedAmount: 0,
+      directDeficit: 0,
+      choiceBoxUid,
+    });
+  }
+
+  return Array.from(coverageByTier.values())
+    .map((coverage) => {
+      const choiceBoxQuantity = Math.max(0, quantities[coverage.choiceBoxUid] ?? 0);
+      return {
+        ...coverage,
+        choiceBoxQuantity,
+        finalDeficit: Math.max(0, coverage.directDeficit - choiceBoxQuantity),
+      };
+    })
+    .sort((a, b) => a.tier - b.tier);
 }
 
 export function calculateGearResourceItems(
@@ -643,6 +758,14 @@ function addItems(requirement: MutableRequirements, items: GrowthResourceItem[])
   }
 }
 
+function isEquipmentBlueprintRequirement(
+  item: Pick<GrowthResourceItem, "uid" | "type"> & Partial<Pick<GrowthResourceItem, "source">>,
+): boolean {
+  return (
+    (item.source === "equipment" || item.type === ResourceTypeEnum.Equipment) && getEquipmentTypeKey(item.uid) !== null
+  );
+}
+
 function accumulateEquipmentSlot(
   items: Map<string, GrowthResourceItem>,
   equipmentType: string | undefined,
@@ -754,8 +877,7 @@ function findBestExpBookCounts(exp: number): [number, number, number, number] {
 
       for (const normal of new Set([normalBase, normalBase + 1])) {
         const expFromMidBooks = expFromLargeBooks + normal * CHARACTER_EXP_REPORTS[2].exp;
-        const novice =
-          expFromMidBooks >= exp ? 0 : Math.ceil((exp - expFromMidBooks) / CHARACTER_EXP_REPORTS[3].exp);
+        const novice = expFromMidBooks >= exp ? 0 : Math.ceil((exp - expFromMidBooks) / CHARACTER_EXP_REPORTS[3].exp);
         const totalExp = expFromMidBooks + novice * CHARACTER_EXP_REPORTS[3].exp;
         const totalBooks = superior + advanced + normal + novice;
 
@@ -819,7 +941,7 @@ export function sortGrowthResourceItems(items: GrowthResourceItem[]): GrowthReso
   return items.sort((a, b) => {
     const kindOrderA = getResourceKindOrder(a);
     const kindOrderB = getResourceKindOrder(b);
-    const kindDelta = kindOrderA - kindOrderB;
+    const kindDelta = compareGrowthResourceKindOrder(kindOrderA, kindOrderB);
     if (kindDelta !== 0) {
       return kindDelta;
     }
@@ -829,8 +951,12 @@ export function sortGrowthResourceItems(items: GrowthResourceItem[]): GrowthReso
       return subKindDelta;
     }
 
+    if (shouldSortGrowthResourceKindByUid(kindOrderA) && shouldSortGrowthResourceKindByUid(kindOrderB)) {
+      return compareUidAscending(a.uid, b.uid);
+    }
+
     if (a.source === "equipment" && b.source === "equipment") {
-      return Number(b.uid) - Number(a.uid);
+      return Number(a.uid) - Number(b.uid);
     }
 
     if (a.rarity !== b.rarity) {
@@ -870,30 +996,71 @@ export function aggregateGrowthResourceRequirements(
   };
 }
 
+export const GROWTH_RESOURCE_KIND_ORDER = {
+  eleph: 0,
+  characterExp: 1,
+  bd: 2,
+  techNote: 3,
+  favor: 4,
+  artifact: 5,
+  equipment: 6,
+  other: 7,
+} as const;
+
+export type GrowthResourceKindOrder =
+  (typeof GROWTH_RESOURCE_KIND_ORDER)[keyof typeof GROWTH_RESOURCE_KIND_ORDER];
+
 export const GROWTH_RESOURCE_KIND_LABELS: Record<number, string> = {
-  0: "엘레프",
-  1: "활동 보고서",
-  2: "BD",
-  3: "기술 노트",
-  4: "선물",
-  5: "오파츠",
-  6: "장비 설계도",
-  7: "기타",
-};
+  [GROWTH_RESOURCE_KIND_ORDER.eleph]: "엘레프",
+  [GROWTH_RESOURCE_KIND_ORDER.characterExp]: "활동 보고서",
+  [GROWTH_RESOURCE_KIND_ORDER.bd]: "BD",
+  [GROWTH_RESOURCE_KIND_ORDER.techNote]: "기술 노트",
+  [GROWTH_RESOURCE_KIND_ORDER.favor]: "선물",
+  [GROWTH_RESOURCE_KIND_ORDER.artifact]: "오파츠",
+  [GROWTH_RESOURCE_KIND_ORDER.equipment]: "장비 설계도",
+  [GROWTH_RESOURCE_KIND_ORDER.other]: "기타",
+} satisfies Record<GrowthResourceKindOrder, string>;
+
+const GROWTH_RESOURCE_KIND_DISPLAY_ORDER = [
+  GROWTH_RESOURCE_KIND_ORDER.characterExp,
+  GROWTH_RESOURCE_KIND_ORDER.artifact,
+  GROWTH_RESOURCE_KIND_ORDER.bd,
+  GROWTH_RESOURCE_KIND_ORDER.techNote,
+  GROWTH_RESOURCE_KIND_ORDER.favor,
+  GROWTH_RESOURCE_KIND_ORDER.eleph,
+  GROWTH_RESOURCE_KIND_ORDER.equipment,
+  GROWTH_RESOURCE_KIND_ORDER.other,
+] as const;
+
+export function compareGrowthResourceKindOrder(a: number, b: number): number {
+  return getGrowthResourceKindDisplayOrder(a) - getGrowthResourceKindDisplayOrder(b);
+}
+
+export function shouldSortGrowthResourceKindByUid(kindOrder: number): boolean {
+  return (
+    kindOrder === GROWTH_RESOURCE_KIND_ORDER.bd ||
+    kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote ||
+    kindOrder === GROWTH_RESOURCE_KIND_ORDER.artifact
+  );
+}
 
 export function getResourceKindOrder(item: GrowthResourceItem): number {
   const itemUid = Number(item.uid);
 
   if (item.source === "tier") {
-    return 0;
+    return GROWTH_RESOURCE_KIND_ORDER.eleph;
+  }
+
+  if (getEquipmentBlueprintChoiceBoxTier(item.uid) !== null) {
+    return GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 
   if (item.category === "character_exp_growth" || isUidInRange(itemUid, 10, 13)) {
-    return 1;
+    return GROWTH_RESOURCE_KIND_ORDER.characterExp;
   }
 
   if (item.subCategory === "cd_item" || isUidInRange(itemUid, 3000, 3999)) {
-    return 2;
+    return GROWTH_RESOURCE_KIND_ORDER.bd;
   }
 
   if (
@@ -902,36 +1069,36 @@ export function getResourceKindOrder(item: GrowthResourceItem): number {
     item.uid === "9999" ||
     isUidInRange(itemUid, 4000, 4999)
   ) {
-    return 3;
+    return GROWTH_RESOURCE_KIND_ORDER.techNote;
   }
 
   if (item.category === "favor") {
-    return 4;
+    return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 
   if (item.subCategory === "artifact") {
-    return 5;
+    return GROWTH_RESOURCE_KIND_ORDER.artifact;
   }
 
   if (item.source === "equipment" || item.type === ResourceTypeEnum.Equipment) {
-    return 6;
+    return GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 
   if (item.source === "gear") {
-    return 4;
+    return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 
   if (item.source === "skill") {
-    return 5;
+    return GROWTH_RESOURCE_KIND_ORDER.artifact;
   }
 
-  return 7;
+  return GROWTH_RESOURCE_KIND_ORDER.other;
 }
 
 function getResourceWithinKindOrder(item: GrowthResourceItem, kindOrder: number): number {
   const itemUid = Number(item.uid);
 
-  if (kindOrder === 3) {
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote) {
     if (item.subCategory === "book_item" || isUidInRange(itemUid, 4000, 4999)) {
       return 0;
     }
@@ -945,4 +1112,13 @@ function getResourceWithinKindOrder(item: GrowthResourceItem, kindOrder: number)
 
 function isUidInRange(uid: number, start: number, end: number): boolean {
   return Number.isFinite(uid) && uid >= start && uid <= end;
+}
+
+function getGrowthResourceKindDisplayOrder(kindOrder: number): number {
+  const index = GROWTH_RESOURCE_KIND_DISPLAY_ORDER.indexOf(kindOrder as GrowthResourceKindOrder);
+  return index === -1 ? GROWTH_RESOURCE_KIND_DISPLAY_ORDER.length : index;
+}
+
+function compareUidAscending(a: string, b: string): number {
+  return Number(a) - Number(b);
 }

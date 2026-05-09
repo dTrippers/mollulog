@@ -1,7 +1,8 @@
-import { ArrowPathIcon, UserPlusIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
-import { StudentSearchInput, TierSelector } from "~/components/features/students";
+import { StudentSelectForm } from "~/components/features/forms";
+import { TierSelector } from "~/components/features/students";
 import { Button, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
 import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
@@ -140,6 +141,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
   const [enrollError, setEnrollError] = useState<string | null>(null);
 
   const [isPendingSave, setIsPendingSave] = useState(false);
+  const [isResourceRequirementsOpen, setIsResourceRequirementsOpen] = useState(false);
+  const resourceRequirementsContentRef = useRef<HTMLDivElement>(null);
+  const [resourceRequirementsHeight, setResourceRequirementsHeight] = useState(0);
 
   const equipLabels: Partial<Record<CurrentFieldKey | TargetFieldKey, string>> = {
     equip1: EQUIPMENT_TYPE_LABELS[student.equipments[0]] ?? "",
@@ -170,6 +174,27 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     submittedRef.current = null;
     tierSubmittedRef.current = null;
   }, [initialValues, student.targetTier, student.tier, student.initialTier, fetcher.state, fetcher.data]);
+
+  useEffect(() => {
+    if (!isResourceRequirementsOpen) {
+      setResourceRequirementsHeight(0);
+      return;
+    }
+
+    const content = resourceRequirementsContentRef.current;
+    if (!content) return;
+
+    const updateHeight = () => {
+      setResourceRequirementsHeight(content.scrollHeight);
+    };
+    updateHeight();
+
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [isResourceRequirementsOpen]);
 
   useEffect(() => {
     const shouldKeepSubmittedValues =
@@ -371,6 +396,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
   };
 
   const displayedError = enrollError ?? growthError ?? relationshipError;
+  const isCalculatingResources = isPendingSave || fetcher.state !== "idle" || tierFetcher.state !== "idle";
+  const hasResourceRequirements =
+    student.resourceRequirements.items.length > 0 || student.resourceRequirements.characterExp > 0;
 
   return (
     <>
@@ -579,48 +607,67 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
         <td
           className={`${cellBase} w-10 px-1 py-2 text-center text-xs font-medium text-emerald-600 bg-emerald-50/60 dark:text-emerald-400 dark:bg-emerald-950/10`}
         >
-          재화
+          <button
+            type="button"
+            className="flex w-full items-center justify-center gap-0.5"
+            aria-expanded={isResourceRequirementsOpen}
+            onClick={() => setIsResourceRequirementsOpen((open) => !open)}
+          >
+            {isResourceRequirementsOpen ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
+            <span className="whitespace-nowrap">재화</span>
+          </button>
         </td>
         <td
           colSpan={fieldDefinitions.length + 3}
-          className={`relative ${cellBase} w-0 max-w-0 px-3 pt-2 pb-3 bg-emerald-50/20 dark:bg-emerald-950/5`}
+          className={`relative ${cellBase} w-0 max-w-0 px-3 py-2 bg-emerald-50/20 dark:bg-emerald-950/5`}
         >
-          {(() => {
-            const isCalculating = isPendingSave || fetcher.state !== "idle" || tierFetcher.state !== "idle";
-            return (
-              <>
-                <div className={`${isCalculating ? "opacity-40 pointer-events-none" : ""} transition-opacity duration-200`}>
-                  {student.resourceRequirements.items.length > 0 || student.resourceRequirements.characterExp > 0 ? (
-                    <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
-                      {student.resourceRequirements.characterExp > 0 ? (
-                        <CharacterExpRequirementCard characterExp={student.resourceRequirements.characterExp} />
-                      ) : null}
-                      {student.resourceRequirements.items.map((item) => (
-                        <ResourceCard
-                          key={`${student.uid}-${item.uid}`}
-                          itemUid={item.uid}
-                          resourceType={item.type}
-                          rarity={item.rarity}
-                          label={item.amount.toLocaleString()}
-                          name={item.name}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-center font-medium text-neutral-400 dark:text-neutral-500">
-                      필요한 재화가 없어요
-                    </p>
-                  )}
-                </div>
-                {isCalculating && (
-                  <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                    <ArrowPathIcon className="size-4 animate-spin" />
-                    <span>재화 계산 중...</span>
+          <div
+            className={`${isCalculatingResources ? "opacity-40 pointer-events-none" : ""} transition-opacity duration-200`}
+          >
+            {!isResourceRequirementsOpen ? (
+              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                {hasResourceRequirements ? "펼쳐서 필요 재화 확인" : "필요한 재화가 없어요"}
+              </p>
+            ) : null}
+            <div
+              className="overflow-hidden transition-all duration-200 ease-out"
+              style={{
+                maxHeight: isResourceRequirementsOpen ? resourceRequirementsHeight : 0,
+                opacity: isResourceRequirementsOpen ? 1 : 0,
+              }}
+              aria-hidden={!isResourceRequirementsOpen}
+            >
+              <div ref={resourceRequirementsContentRef}>
+                {hasResourceRequirements ? (
+                  <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
+                    {student.resourceRequirements.characterExp > 0 ? (
+                      <CharacterExpRequirementCard characterExp={student.resourceRequirements.characterExp} />
+                    ) : null}
+                    {student.resourceRequirements.items.map((item) => (
+                      <ResourceCard
+                        key={`${student.uid}-${item.uid}`}
+                        itemUid={item.uid}
+                        resourceType={item.type}
+                        rarity={item.rarity}
+                        label={item.amount.toLocaleString()}
+                        name={item.name}
+                      />
+                    ))}
                   </div>
+                ) : (
+                  <p className="text-xs text-center font-medium text-neutral-400 dark:text-neutral-500">
+                    필요한 재화가 없어요
+                  </p>
                 )}
-              </>
-            );
-          })()}
+              </div>
+            </div>
+          </div>
+          {isCalculatingResources && (
+            <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+              <ArrowPathIcon className="size-4 animate-spin" />
+              <span>재화 계산 중...</span>
+            </div>
+          )}
         </td>
       </tr>
     </>
@@ -629,56 +676,55 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
 
 const TOTAL_COLS = 4 + fieldDefinitions.length;
 
-function AddStudentRow({ availableStudents, isFirst }: { availableStudents: GrowthAvailableStudent[]; isFirst: boolean }) {
-  const [isOpen, setIsOpen] = useState(false);
+function AddStudentControl({
+  availableStudents,
+  isEmpty,
+}: {
+  availableStudents: GrowthAvailableStudent[];
+  isEmpty: boolean;
+}) {
   const fetcher = useFetcher();
+  const [selectKey, setSelectKey] = useState(0);
 
   return (
-    <tr>
-      <td colSpan={TOTAL_COLS} className="border-b border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
-        {isFirst && (
-          <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">
-            학생 이름을 검색하여 성장 목표를 관리할 학생을 등록해주세요.
-          </p>
-        )}
-        {isOpen ? (
-          <div className="py-1 max-w-md">
-            <StudentSearchInput
-              placeholder="학생 이름으로 검색해서 추가..."
-              students={availableStudents}
-              grid={6}
-              size="sm"
-              onSelect={(studentUid) => {
-                fetcher.submit({ _intent: "add", studentUid }, { method: "post", encType: "application/json" });
-              }}
-            />
-            <Button size="sm" variant="default" onClick={() => setIsOpen(false)}>
-              취소
-            </Button>
-          </div>
-        ) : (
-          <Button size="sm" variant="inverse" onClick={() => setIsOpen(true)}>
-            <UserPlusIcon className="size-4" />
-            학생 추가
-          </Button>
-        )}
-      </td>
-    </tr>
+    <div className="flex items-start gap-3">
+      <div className="w-full max-w-md">
+        <StudentSelectForm
+          key={selectKey}
+          placeholder="성장 목표에 학생 추가"
+          searchPlaceholder="학생 이름으로 검색"
+          students={availableStudents}
+          className="max-w-none"
+          containerClassName="mt-0 mb-0"
+          onSelect={(value) => {
+            const studentUid = Array.isArray(value) ? value[0] : value;
+            if (!studentUid) return;
+
+            fetcher.submit({ _intent: "add", studentUid }, { method: "post", encType: "application/json" });
+            setSelectKey((key) => key + 1);
+          }}
+        />
+      </div>
+      {isEmpty ? (
+        <p className="pt-8 text-sm text-neutral-500 dark:text-neutral-400">
+          학생 이름을 검색하여 성장 목표를 관리할 학생을 등록해주세요.
+        </p>
+      ) : null}
+    </div>
   );
 }
 
 function CharacterExpRequirementCard({ characterExp }: { characterExp: number }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-white px-2 py-1 dark:border-emerald-900 dark:bg-neutral-950">
+    <div className="flex items-center gap-2 pr-1">
       <ResourceCard
         itemUid={CHARACTER_EXP_REPORTS[0].uid}
         rarity={CHARACTER_EXP_REPORTS[0].rarity}
-        label="EXP"
         name="활동 보고서"
       />
       <div className="min-w-0">
-        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">활동 보고서 경험치</p>
-        <p className="text-sm font-semibold tabular-nums text-neutral-800 dark:text-neutral-100">
+        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">레벨 경험치</p>
+        <p className="text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-200">
           {characterExp.toLocaleString()}
         </p>
       </div>
@@ -696,29 +742,31 @@ export default function GrowthTable({
   onStudentUpdate: (student: GrowthStudent) => void;
 }) {
   return (
-    <div className="max-w-full overflow-x-auto">
-      <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
-        <table className="w-max border-collapse">
-          <thead className="bg-neutral-50 dark:bg-neutral-900">
-            <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-              <th className="px-1 py-3" />
-              <th className="px-2 py-3 text-center">성급</th>
-              <th className="min-w-20 px-2 py-3 text-center">인연 랭크</th>
-              <th className="px-2 py-3 text-center">일괄 적용</th>
-              {fieldDefinitions.map(({ key, label }) => (
-                <th key={key} className="w-16 px-1 py-3 text-center">
-                  {label}
-                </th>
+    <div className="space-y-2">
+      <AddStudentControl availableStudents={availableStudents} isEmpty={students.length === 0} />
+      <div className="max-w-full overflow-x-auto">
+        <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
+          <table className="w-max border-collapse">
+            <thead className="bg-neutral-50 dark:bg-neutral-900">
+              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                <th className="px-1 py-3" />
+                <th className="px-2 py-3 text-center">성급</th>
+                <th className="min-w-20 px-2 py-3 text-center">인연 랭크</th>
+                <th className="px-2 py-3 text-center">일괄 적용</th>
+                {fieldDefinitions.map(({ key, label }) => (
+                  <th key={key} className="w-16 px-1 py-3 text-center">
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((student) => (
+                <GrowthRow key={student.uid} student={student} onStudentUpdate={onStudentUpdate} />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            <AddStudentRow availableStudents={availableStudents} isFirst={students.length === 0} />
-            {students.map((student) => (
-              <GrowthRow key={student.uid} student={student} onStudentUpdate={onStudentUpdate} />
-            ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

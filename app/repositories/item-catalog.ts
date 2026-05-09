@@ -2,7 +2,14 @@ import { graphql } from "~/graphql";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "~/models/base";
-import { getEquipmentTier, getEquipmentTypeKey } from "~/models/growth-resource";
+import {
+  GROWTH_RESOURCE_KIND_ORDER,
+  compareGrowthResourceKindOrder,
+  getEquipmentBlueprintChoiceBoxTier,
+  getEquipmentTier,
+  getEquipmentTypeKey,
+  shouldSortGrowthResourceKindByUid,
+} from "~/models/growth-resource";
 
 const itemCatalogQuery = graphql(`
   query UserResourceInventoryCatalog {
@@ -54,8 +61,7 @@ export async function getItemCatalogResources(env: Env, forceRefresh = false): P
           category: equipment.category,
           subCategory: null,
         })),
-      ]
-        .sort((a, b) => Number(a.uid) - Number(b.uid));
+      ].sort((a, b) => Number(a.uid) - Number(b.uid));
     },
     60 * 60 * 24,
     forceRefresh,
@@ -76,16 +82,20 @@ export function getGrowthPlannerCatalogResources(resources: ItemCatalogResource[
 export function getGrowthPlannerCatalogResourceKindOrder(resource: ItemCatalogResource): number | null {
   const itemUid = Number(resource.uid);
 
+  if (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null) {
+    return GROWTH_RESOURCE_KIND_ORDER.equipment;
+  }
+
   if (resource.category === "secret_stone") {
-    return 0;
+    return GROWTH_RESOURCE_KIND_ORDER.eleph;
   }
 
   if (resource.category === "character_exp_growth" || isUidInRange(itemUid, 10, 13)) {
-    return 1;
+    return GROWTH_RESOURCE_KIND_ORDER.characterExp;
   }
 
   if (resource.subCategory === "cd_item" || isUidInRange(itemUid, 3000, 3999)) {
-    return 2;
+    return GROWTH_RESOURCE_KIND_ORDER.bd;
   }
 
   if (
@@ -94,30 +104,62 @@ export function getGrowthPlannerCatalogResourceKindOrder(resource: ItemCatalogRe
     resource.uid === "9999" ||
     isUidInRange(itemUid, 4000, 4999)
   ) {
-    return 3;
+    return GROWTH_RESOURCE_KIND_ORDER.techNote;
   }
 
   if (resource.category === "favor") {
-    return 4;
+    return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 
   if (resource.subCategory === "artifact") {
-    return 5;
+    return GROWTH_RESOURCE_KIND_ORDER.artifact;
   }
 
   if (resource.type === "equipment") {
-    return 6;
+    return GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 
   return null;
 }
 
 function compareGrowthPlannerCatalogResources(a: ItemCatalogResource, b: ItemCatalogResource): number {
-  const kindOrderA = getGrowthPlannerCatalogResourceKindOrder(a) ?? 7;
-  const kindOrderB = getGrowthPlannerCatalogResourceKindOrder(b) ?? 7;
-  const kindDelta = kindOrderA - kindOrderB;
+  const kindOrderA = getGrowthPlannerCatalogResourceKindOrder(a) ?? GROWTH_RESOURCE_KIND_ORDER.other;
+  const kindOrderB = getGrowthPlannerCatalogResourceKindOrder(b) ?? GROWTH_RESOURCE_KIND_ORDER.other;
+  const kindDelta = compareGrowthResourceKindOrder(kindOrderA, kindOrderB);
   if (kindDelta !== 0) {
     return kindDelta;
+  }
+
+  if (shouldSortGrowthResourceKindByUid(kindOrderA) && shouldSortGrowthResourceKindByUid(kindOrderB)) {
+    return compareUidAscending(a.uid, b.uid);
+  }
+
+  if (kindOrderA === GROWTH_RESOURCE_KIND_ORDER.equipment && kindOrderB === GROWTH_RESOURCE_KIND_ORDER.equipment) {
+    const choiceBoxTierA = getEquipmentBlueprintChoiceBoxTier(a.uid);
+    const choiceBoxTierB = getEquipmentBlueprintChoiceBoxTier(b.uid);
+
+    if (a.type === "equipment" && b.type === "equipment") {
+      const equipmentTypeOrderA = getEquipmentTypeOrder(a.uid);
+      const equipmentTypeOrderB = getEquipmentTypeOrder(b.uid);
+      const equipmentTypeDelta = equipmentTypeOrderA - equipmentTypeOrderB;
+      if (equipmentTypeDelta !== 0) {
+        return equipmentTypeDelta;
+      }
+
+      return getEquipmentTier(a.uid) - getEquipmentTier(b.uid);
+    }
+
+    if (a.type === "equipment" && choiceBoxTierB !== null) {
+      return 1;
+    }
+
+    if (choiceBoxTierA !== null && b.type === "equipment") {
+      return -1;
+    }
+
+    if (choiceBoxTierA !== null && choiceBoxTierB !== null) {
+      return choiceBoxTierA - choiceBoxTierB;
+    }
   }
 
   if (a.type === "equipment" && b.type === "equipment") {
@@ -128,7 +170,7 @@ function compareGrowthPlannerCatalogResources(a: ItemCatalogResource, b: ItemCat
       return equipmentTypeDelta;
     }
 
-    return getEquipmentTier(b.uid) - getEquipmentTier(a.uid);
+    return getEquipmentTier(a.uid) - getEquipmentTier(b.uid);
   }
 
   if (a.rarity !== b.rarity) {
@@ -148,4 +190,8 @@ function getEquipmentTypeOrder(uid: string): number {
 
 function isUidInRange(uid: number, start: number, end: number): boolean {
   return Number.isFinite(uid) && uid >= start && uid <= end;
+}
+
+function compareUidAscending(a: string, b: string): number {
+  return Number(a) - Number(b);
 }

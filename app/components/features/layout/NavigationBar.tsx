@@ -7,7 +7,6 @@ import {
 } from "@heroicons/react/16/solid";
 import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
-  CircleStackIcon as CircleStackIconOutline,
   Cog6ToothIcon,
   HomeIcon as HomeIconOutline,
   IdentificationIcon as IdentificationIconOutline,
@@ -15,7 +14,6 @@ import {
 } from "@heroicons/react/24/outline";
 import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
-  CircleStackIcon as CircleStackIconSolid,
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
   UserCircleIcon as UserCircleIconSolid,
@@ -207,15 +205,6 @@ function MobileBrandHeader({
               tone="theme"
               onClick={toggleDarkMode}
             />
-            {currentUsername && (
-              <MobileHeaderMenuButton
-                as="link"
-                to="/edit/resources"
-                Icon={CircleStackIconOutline}
-                label="보유 재화 관리"
-                onClick={() => setIsMenuOpen(false)}
-              />
-            )}
             <MobileHeaderMenuButton
               as="link"
               to="/contact"
@@ -497,13 +486,6 @@ function DesktopMenuContent({
             OutlineIcon={IdentificationIconOutline}
             SolidIcon={IdentificationIconSolid}
             isActive={pathname.startsWith("/@")}
-          />
-          <SubMenuItem
-            to="/edit/resources"
-            name="보유 재화 관리"
-            OutlineIcon={CircleStackIconOutline}
-            SolidIcon={CircleStackIconSolid}
-            isActive={pathname.startsWith("/edit/resources")}
           />
         </MenuSection>
       ) : (

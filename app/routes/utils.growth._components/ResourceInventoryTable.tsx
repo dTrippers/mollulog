@@ -3,6 +3,8 @@ import { ResourceCard } from "~/components/primitives";
 import {
   EQUIPMENT_TYPE_LABELS,
   GROWTH_RESOURCE_KIND_LABELS,
+  GROWTH_RESOURCE_KIND_ORDER,
+  compareGrowthResourceKindOrder,
   getEquipmentTier,
   getEquipmentTypeKey,
   getResourceKindOrder,
@@ -14,7 +16,8 @@ type ResourceInventoryTableProps = {
   ownedQuantities: Record<string, number>;
 };
 
-const groupContainerClass = "rounded-xl border border-neutral-200 bg-white/80 dark:border-neutral-800 dark:bg-neutral-950/80";
+const groupContainerClass =
+  "rounded-xl border border-neutral-200 bg-white/80 dark:border-neutral-800 dark:bg-neutral-950/80";
 
 function ItemColumn({
   item,
@@ -44,9 +47,7 @@ function ItemColumn({
         </p>
       </div>
       {deficit > 0 ? (
-        <p className="text-xs font-semibold text-red-500 dark:text-red-400">
-          {deficit.toLocaleString()}
-        </p>
+        <p className="text-xs font-semibold text-red-500 dark:text-red-400">{deficit.toLocaleString()}</p>
       ) : (
         <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">충분</p>
       )}
@@ -74,14 +75,12 @@ function EquipmentSubGroups({
         grouped.set(typeKey, [item]);
       }
     }
-    return EQUIPMENT_TYPE_ORDER
-      .filter((key) => grouped.has(key))
-      .map((key) => {
-        const typeItems = (grouped.get(key) as GrowthResourceItem[])
-          .slice()
-          .sort((a, b) => getEquipmentTier(b.uid) - getEquipmentTier(a.uid));
-        return [key, typeItems] as const;
-      });
+    return EQUIPMENT_TYPE_ORDER.filter((key) => grouped.has(key)).map((key) => {
+      const typeItems = (grouped.get(key) as GrowthResourceItem[])
+        .slice()
+        .sort((a, b) => getEquipmentTier(a.uid) - getEquipmentTier(b.uid));
+      return [key, typeItems] as const;
+    });
   }, [items]);
 
   return (
@@ -93,11 +92,7 @@ function EquipmentSubGroups({
           </p>
           <div className="flex flex-wrap gap-x-1 gap-y-0">
             {typeItems.map((item) => (
-              <ItemColumn
-                key={item.uid}
-                item={item}
-                owned={ownedQuantities[item.uid] ?? 0}
-              />
+              <ItemColumn key={item.uid} item={item} owned={ownedQuantities[item.uid] ?? 0} />
             ))}
           </div>
         </div>
@@ -123,19 +118,12 @@ function ResourceGroupTable({
         </h2>
       </div>
 
-      {kindOrder === 6 ? (
-        <EquipmentSubGroups
-          items={items}
-          ownedQuantities={ownedQuantities}
-        />
+      {kindOrder === GROWTH_RESOURCE_KIND_ORDER.equipment ? (
+        <EquipmentSubGroups items={items} ownedQuantities={ownedQuantities} />
       ) : (
         <div className="flex flex-wrap gap-x-1 gap-y-0 px-3">
           {items.map((item) => (
-            <ItemColumn
-              key={item.uid}
-              item={item}
-              owned={ownedQuantities[item.uid] ?? 0}
-            />
+            <ItemColumn key={item.uid} item={item} owned={ownedQuantities[item.uid] ?? 0} />
           ))}
         </div>
       )}
@@ -158,7 +146,7 @@ export default function ResourceInventoryTable({ items, ownedQuantities }: Resou
       grouped.set(kindOrder, [item]);
     }
 
-    return Array.from(grouped.entries()).sort(([a], [b]) => a - b);
+    return Array.from(grouped.entries()).sort(([a], [b]) => compareGrowthResourceKindOrder(a, b));
   }, [items]);
 
   return (

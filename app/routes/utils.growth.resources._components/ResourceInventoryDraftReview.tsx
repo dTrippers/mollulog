@@ -3,6 +3,7 @@ import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import { Form, Link, useNavigation } from "react-router";
 import { Button, EmptyView, ResourceCard, Title } from "~/components/primitives";
 import { cn } from "~/lib/utils";
+import { getEquipmentResourceTierLabel } from "~/models/growth-resource";
 import type { UserResourceInventoryDraft } from "~/models/user-resource-inventory";
 import type { ItemCatalogResource } from "~/repositories/item-catalog";
 
@@ -38,7 +39,7 @@ export default function ResourceInventoryDraftReview({
           description="현재 저장된 보유 수량과 새로 저장할 수량을 비교한 뒤 최종 반영합니다."
           className="my-0"
         />
-        <Link to="/edit/resources" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-300">
+        <Link to="/utils/growth/resources" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-300">
           편집 화면으로 돌아가기
         </Link>
       </div>
@@ -83,6 +84,7 @@ export default function ResourceInventoryDraftReview({
                       resourceType={resource.type}
                       rarity={resource.rarity}
                       name={resource.name}
+                      label={getEquipmentResourceTierLabel(resource.uid) ?? undefined}
                       size="md"
                     />
                   ) : null}
