@@ -17,11 +17,13 @@ export type GrowthResourceItem = {
 
 export type StudentGrowthResourceRequirements = {
   items: GrowthResourceItem[];
+  characterExp: number;
   skillUnavailable: boolean;
 };
 
 export type AggregatedGrowthResourceRequirements = {
   items: GrowthResourceItem[];
+  characterExp: number;
   skillUnavailable: boolean;
 };
 
@@ -54,6 +56,7 @@ export type GrowthResourceStudentInput = {
 
 type MutableRequirements = {
   items: Map<string, GrowthResourceItem>;
+  characterExp: number;
   skillUnavailable: boolean;
 };
 
@@ -211,7 +214,7 @@ const CHARACTER_TOTAL_EXP_BY_LEVEL: Record<number, number> = {
   90: 1249185,
 };
 
-const EXP_BOOKS = [
+export const CHARACTER_EXP_REPORTS = [
   { uid: "13", exp: 10000, rarity: 4 },
   { uid: "12", exp: 2000, rarity: 3 },
   { uid: "11", exp: 500, rarity: 2 },
@@ -323,7 +326,7 @@ export async function getStudentGrowthResourceRequirements(
   const normalizedStudents = students.map(normalizeStudentGrowthInputForCalculation);
   const requirements = students.reduce(
     (acc, student) => {
-      acc[student.uid] = { items: new Map<string, GrowthResourceItem>(), skillUnavailable: false };
+      acc[student.uid] = { items: new Map<string, GrowthResourceItem>(), characterExp: 0, skillUnavailable: false };
       return acc;
     },
     {} as Record<string, MutableRequirements>,
@@ -331,7 +334,7 @@ export async function getStudentGrowthResourceRequirements(
 
   for (const student of normalizedStudents) {
     addItems(requirements[student.uid], calculateTierResourceItems(student));
-    addItems(requirements[student.uid], calculateLevelResourceItems(student));
+    requirements[student.uid].characterExp += calculateLevelRequiredExp(student);
     addItems(
       requirements[student.uid],
       calculateEquipmentResourceItems(student, allStudentsMap[student.uid]?.equipments ?? []),
@@ -394,6 +397,7 @@ export async function getStudentGrowthResourceRequirements(
       studentUid,
       {
         items: sortGrowthResourceItems(Array.from(requirement.items.values())),
+        characterExp: requirement.characterExp,
         skillUnavailable: requirement.skillUnavailable,
       },
     ]),
@@ -409,6 +413,16 @@ export function calculateCharacterExpDifference(currentLevel: number, targetLeve
   return Math.max(0, targetTotalExp - currentTotalExp);
 }
 
+export function calculateLevelRequiredExp(
+  student: Pick<GrowthResourceStudentInput, "level" | "targetLevel">,
+): number {
+  if (student.level == null || student.targetLevel == null || student.targetLevel <= student.level) {
+    return 0;
+  }
+
+  return calculateCharacterExpDifference(student.level, student.targetLevel);
+}
+
 export function breakdownCharacterExpToBooks(exp: number): GrowthResourceItem[] {
   if (exp <= 0) {
     return [];
@@ -416,7 +430,7 @@ export function breakdownCharacterExpToBooks(exp: number): GrowthResourceItem[] 
 
   const bestCounts = findBestExpBookCounts(exp);
   const resources: GrowthResourceItem[] = [];
-  for (const [index, book] of EXP_BOOKS.entries()) {
+  for (const [index, book] of CHARACTER_EXP_REPORTS.entries()) {
     const amount = bestCounts[index];
     if (amount <= 0) {
       continue;
@@ -441,7 +455,7 @@ export function calculateLevelResourceItems(
     return [];
   }
 
-  return breakdownCharacterExpToBooks(calculateCharacterExpDifference(student.level, student.targetLevel));
+  return breakdownCharacterExpToBooks(calculateLevelRequiredExp(student));
 }
 
 export function calculateTierResourceItems(
@@ -729,19 +743,20 @@ function findBestExpBookCounts(exp: number): [number, number, number, number] {
     totalExp: number;
   } | null = null;
 
-  const superiorMax = Math.ceil(exp / EXP_BOOKS[0].exp);
-  const advancedMax = Math.ceil(exp / EXP_BOOKS[1].exp);
+  const superiorMax = Math.ceil(exp / CHARACTER_EXP_REPORTS[0].exp);
+  const advancedMax = Math.ceil(exp / CHARACTER_EXP_REPORTS[1].exp);
 
   for (let superior = 0; superior <= superiorMax; superior++) {
     for (let advanced = 0; advanced <= advancedMax; advanced++) {
-      const expFromLargeBooks = superior * EXP_BOOKS[0].exp + advanced * EXP_BOOKS[1].exp;
+      const expFromLargeBooks = superior * CHARACTER_EXP_REPORTS[0].exp + advanced * CHARACTER_EXP_REPORTS[1].exp;
       const remainingAfterLargeBooks = Math.max(0, exp - expFromLargeBooks);
-      const normalBase = Math.floor(remainingAfterLargeBooks / EXP_BOOKS[2].exp);
+      const normalBase = Math.floor(remainingAfterLargeBooks / CHARACTER_EXP_REPORTS[2].exp);
 
       for (const normal of new Set([normalBase, normalBase + 1])) {
-        const expFromMidBooks = expFromLargeBooks + normal * EXP_BOOKS[2].exp;
-        const novice = expFromMidBooks >= exp ? 0 : Math.ceil((exp - expFromMidBooks) / EXP_BOOKS[3].exp);
-        const totalExp = expFromMidBooks + novice * EXP_BOOKS[3].exp;
+        const expFromMidBooks = expFromLargeBooks + normal * CHARACTER_EXP_REPORTS[2].exp;
+        const novice =
+          expFromMidBooks >= exp ? 0 : Math.ceil((exp - expFromMidBooks) / CHARACTER_EXP_REPORTS[3].exp);
+        const totalExp = expFromMidBooks + novice * CHARACTER_EXP_REPORTS[3].exp;
         const totalBooks = superior + advanced + normal + novice;
 
         if (!best || totalBooks < best.totalBooks || (totalBooks === best.totalBooks && totalExp < best.totalExp)) {
@@ -819,7 +834,7 @@ export function sortGrowthResourceItems(items: GrowthResourceItem[]): GrowthReso
     }
 
     if (a.rarity !== b.rarity) {
-      return b.rarity - a.rarity;
+      return a.rarity - b.rarity;
     }
 
     return Number(a.uid) - Number(b.uid);
@@ -830,8 +845,10 @@ export function aggregateGrowthResourceRequirements(
   requirements: StudentGrowthResourceRequirements[],
 ): AggregatedGrowthResourceRequirements {
   const aggregatedItems = new Map<string, GrowthResourceItem>();
+  let characterExp = 0;
 
   for (const requirement of requirements) {
+    characterExp += requirement.characterExp;
     for (const item of requirement.items) {
       const existing = aggregatedItems.get(item.uid);
       if (existing) {
@@ -848,6 +865,7 @@ export function aggregateGrowthResourceRequirements(
 
   return {
     items: sortGrowthResourceItems(Array.from(aggregatedItems.values())),
+    characterExp,
     skillUnavailable: requirements.some((requirement) => requirement.skillUnavailable),
   };
 }

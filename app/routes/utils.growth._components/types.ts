@@ -1,4 +1,4 @@
-import type { GrowthResourceItem } from "~/models/growth-resource";
+import type { StudentGrowthResourceRequirements } from "~/models/growth-resource";
 
 export type GrowthActionResult =
   | { kind: "studentUpdate"; student: GrowthStudent }
@@ -36,10 +36,7 @@ export type GrowthStudent = {
   targetEquip3: number | null;
   targetEquipSpecial: number | null;
   targetTier: number | null;
-  resourceRequirements: {
-    items: GrowthResourceItem[];
-    skillUnavailable: boolean;
-  };
+  resourceRequirements: StudentGrowthResourceRequirements;
 };
 
 export type GrowthAvailableStudent = {

@@ -12,8 +12,10 @@ import {
   calculateCumulativeTierEleph,
   calculateEquipmentResourceItems,
   calculateGearResourceItems,
+  calculateLevelRequiredExp,
   calculateLevelResourceItems,
   calculateTierResourceItems,
+  getStudentGrowthResourceRequirements,
   normalizeStudentGrowthInputForCalculation,
   sortGrowthResourceItems,
 } from "../../../app/models/growth-resource";
@@ -56,6 +58,57 @@ describe("growth-resource", () => {
         source: "level",
       },
     ]);
+  });
+
+  it("calculates level requirements as character exp", () => {
+    expect(calculateLevelRequiredExp({ level: 1, targetLevel: 3 })).toBe(35);
+    expect(calculateLevelRequiredExp({ level: 30, targetLevel: 30 })).toBe(0);
+  });
+
+  it("stores student level requirements as character exp instead of report counts", async () => {
+    const repository = {
+      getSkillCosts: jest.fn(),
+      getItemMetadata: jest.fn(async () => new Map()),
+      getEquipmentMetadata: jest.fn(async () => new Map()),
+    };
+
+    const requirements = await getStudentGrowthResourceRequirements(
+      repository as never,
+      [
+        {
+          uid: "10000",
+          initialTier: 3,
+          tier: 3,
+          level: 1,
+          skillEx: null,
+          skillNormal: null,
+          skillEnhanced: null,
+          skillSub: null,
+          equip1: null,
+          equip2: null,
+          equip3: null,
+          equipSpecial: null,
+          targetLevel: 3,
+          targetSkillEx: null,
+          targetSkillNormal: null,
+          targetSkillEnhanced: null,
+          targetSkillSub: null,
+          targetEquip1: null,
+          targetEquip2: null,
+          targetEquip3: null,
+          targetEquipSpecial: null,
+          targetTier: null,
+        },
+      ],
+      { "10000": { equipments: [] } } as never,
+      new Map(),
+    );
+
+    expect(requirements["10000"]).toMatchObject({
+      characterExp: 35,
+      items: [],
+      skillUnavailable: false,
+    });
   });
 
   it("treats missing current level as level 1 when a target level exists", () => {
@@ -418,6 +471,37 @@ describe("growth-resource", () => {
     ).toEqual(["10000", "13", "3030", "4030", "9998", "150"]);
   });
 
+  it("sorts items with the same kind by rarity ascending like the game", () => {
+    expect(
+      sortGrowthResourceItems([
+        {
+          uid: "152",
+          type: ResourceTypeEnum.Item,
+          rarity: 3,
+          amount: 10,
+          source: "skill",
+          subCategory: "artifact",
+        },
+        {
+          uid: "150",
+          type: ResourceTypeEnum.Item,
+          rarity: 1,
+          amount: 10,
+          source: "skill",
+          subCategory: "artifact",
+        },
+        {
+          uid: "151",
+          type: ResourceTypeEnum.Item,
+          rarity: 2,
+          amount: 10,
+          source: "skill",
+          subCategory: "artifact",
+        },
+      ]).map((item) => item.uid),
+    ).toEqual(["150", "151", "152"]);
+  });
+
   it("keeps the intended kind order even when BAQL category metadata is missing", () => {
     expect(
       sortGrowthResourceItems([
@@ -502,6 +586,7 @@ describe("growth-resource", () => {
   it("aggregates duplicated resource uids across students and keeps the existing sort order", () => {
     const aggregated = aggregateGrowthResourceRequirements([
       {
+        characterExp: 0,
         skillUnavailable: false,
         items: [
           {
@@ -523,16 +608,9 @@ describe("growth-resource", () => {
         ],
       },
       {
+        characterExp: 12340,
         skillUnavailable: true,
         items: [
-          {
-            uid: "13",
-            type: ResourceTypeEnum.Item,
-            rarity: 4,
-            amount: 2,
-            source: "level",
-            category: "character_exp_growth",
-          },
           {
             uid: "10000",
             type: ResourceTypeEnum.Item,
@@ -545,9 +623,9 @@ describe("growth-resource", () => {
     ]);
 
     expect(aggregated.skillUnavailable).toBe(true);
+    expect(aggregated.characterExp).toBe(12340);
     expect(aggregated.items.map((item) => [item.uid, item.amount])).toEqual([
       ["10000", 200],
-      ["13", 2],
       ["150", 80],
     ]);
   });

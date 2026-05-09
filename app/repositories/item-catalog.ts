@@ -132,7 +132,7 @@ function compareGrowthPlannerCatalogResources(a: ItemCatalogResource, b: ItemCat
   }
 
   if (a.rarity !== b.rarity) {
-    return b.rarity - a.rarity;
+    return a.rarity - b.rarity;
   }
 
   return Number(a.uid) - Number(b.uid);

@@ -1,10 +1,11 @@
 import { ArrowPathIcon } from "@heroicons/react/20/solid";
-import { ArchiveBoxIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useState } from "react";
-import { useBlocker, useNavigation, useSubmit } from "react-router";
+import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useBlocker, useFetcher } from "react-router";
 import { Button, EmptyView, NumberInput, ResourceCard, Title } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import {
+  CHARACTER_EXP_REPORTS,
   EQUIPMENT_TYPE_LABELS,
   GROWTH_RESOURCE_KIND_LABELS,
   getEquipmentTypeKey,
@@ -21,6 +22,12 @@ type ResourceInventoryEditorProps = {
   requiredResources: AggregatedGrowthResourceRequirements;
   ownedQuantities: Record<string, number>;
   error?: string;
+};
+
+type ResourceInventoryEditorActionData = {
+  error?: string;
+  saved?: boolean;
+  savedAt?: number;
 };
 
 type ResourceMode = "needed" | "all";
@@ -55,6 +62,7 @@ const CATEGORY_DISPLAY_POLICIES: Record<number, CategoryDisplayPolicy> = {
   0: { defaultMode: "needed", modes: ["all", "needed"] },
   1: { defaultMode: "all", modes: ["all"] },
 };
+const CHARACTER_EXP_KIND_ORDER = 1;
 
 export default function ResourceInventoryEditor({
   resources,
@@ -62,8 +70,9 @@ export default function ResourceInventoryEditor({
   ownedQuantities,
   error,
 }: ResourceInventoryEditorProps) {
-  const submit = useSubmit();
-  const navigation = useNavigation();
+  const fetcher = useFetcher<ResourceInventoryEditorActionData>();
+  const submittedQuantitiesRef = useRef<Record<string, number> | null>(null);
+  const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>(ownedQuantities);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>(ownedQuantities);
   const [allowNavigation, setAllowNavigation] = useState(false);
   const [filter, setFilter] = useState<ResourceFilter>({ search: "" });
@@ -80,26 +89,23 @@ export default function ResourceInventoryEditor({
         .map((resource) => ({
           itemUid: resource.uid,
           quantity: draftQuantities[resource.uid] ?? 0,
-          currentQuantity: ownedQuantities[resource.uid] ?? 0,
+          currentQuantity: baseQuantities[resource.uid] ?? 0,
         }))
         .filter((item) => item.quantity !== item.currentQuantity),
-    [draftQuantities, inventoryResources, ownedQuantities],
+    [baseQuantities, draftQuantities, inventoryResources],
   );
 
   const resourceGroups = useMemo(
-    () => buildResourceGroups(inventoryResources, categoryModes, filter.search),
-    [categoryModes, filter.search, inventoryResources],
+    () => buildResourceGroups(inventoryResources, categoryModes, filter.search, requiredResources.characterExp),
+    [categoryModes, filter.search, inventoryResources, requiredResources.characterExp],
   );
   const filteredResourceCount = useMemo(
     () => resourceGroups.reduce((sum, group) => sum + group.resources.length, 0),
     [resourceGroups],
   );
-  const displayResourceCount = useMemo(
-    () => resourceGroups.reduce((sum, group) => sum + group.totalCount, 0),
-    [resourceGroups],
-  );
 
-  const isSubmitting = navigation.state === "submitting";
+  const submitError = fetcher.data?.error ?? error;
+  const isSubmitting = fetcher.state !== "idle";
   const hasChanges = changedItems.length > 0;
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
     return hasChanges && !allowNavigation && currentLocation.pathname !== nextLocation.pathname;
@@ -132,21 +138,35 @@ export default function ResourceInventoryEditor({
   }, [allowNavigation, hasChanges]);
 
   useEffect(() => {
-    if (error) {
+    if (submitError) {
       setAllowNavigation(false);
     }
-  }, [error]);
+  }, [submitError]);
 
-  const createDraft = () => {
+  useEffect(() => {
+    if (!fetcher.data?.savedAt) {
+      return;
+    }
+
+    const savedQuantities = submittedQuantitiesRef.current;
+    if (savedQuantities) {
+      setBaseQuantities(savedQuantities);
+      submittedQuantitiesRef.current = null;
+    }
+    setAllowNavigation(false);
+  }, [fetcher.data?.savedAt]);
+
+  const saveChanges = () => {
     setAllowNavigation(true);
-    submit(
+    submittedQuantitiesRef.current = { ...draftQuantities };
+    fetcher.submit(
       { items: changedItems.map(({ itemUid, quantity }) => ({ itemUid, quantity })) },
       { method: "post", encType: "application/json" },
     );
   };
 
   const resetDraft = () => {
-    setDraftQuantities(ownedQuantities);
+    setDraftQuantities(baseQuantities);
   };
 
   const changeCategoryMode = (kindOrder: number, mode: ResourceMode) => {
@@ -160,16 +180,9 @@ export default function ResourceInventoryEditor({
         description="보유한 재화 수량을 관리할 수 있어요"
       />
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <InventoryFilters filter={filter} onFilterChange={setFilter} />
-        <p className="text-xs tabular-nums text-muted-foreground">
-          {filteredResourceCount.toLocaleString()} / {displayResourceCount.toLocaleString()}개 표시
-        </p>
-      </div>
-
-      {error ? (
+      {submitError ? (
         <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-          {error}
+          {submitError}
         </p>
       ) : null}
 
@@ -190,8 +203,9 @@ export default function ResourceInventoryEditor({
               key={group.kindOrder}
               group={group}
               mode={resolveCategoryMode(group.kindOrder, categoryModes)}
-              ownedQuantities={ownedQuantities}
+              ownedQuantities={baseQuantities}
               draftQuantities={draftQuantities}
+              requiredCharacterExp={requiredResources.characterExp}
               onModeChange={changeCategoryMode}
               onQuantityChange={(resourceUid, quantity) => {
                 setDraftQuantities((current) => ({ ...current, [resourceUid]: quantity }));
@@ -207,16 +221,16 @@ export default function ResourceInventoryEditor({
             <div>
               <p className="text-sm font-semibold text-foreground">변경 사항이 있습니다</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                변경된 재화 {changedItems.length.toLocaleString()}개를 확인 화면에서 비교한 뒤 저장합니다.
+                변경된 재화 {changedItems.length.toLocaleString()}개를 저장합니다.
               </p>
             </div>
             <div className="flex gap-2">
               <Button type="button" size="sm" variant="tint" onClick={resetDraft} disabled={isSubmitting}>
                 되돌리기
               </Button>
-              <Button type="button" size="sm" variant="primary" onClick={createDraft} disabled={isSubmitting}>
+              <Button type="button" size="sm" variant="primary" onClick={saveChanges} disabled={isSubmitting}>
                 {isSubmitting ? <ArrowPathIcon className="size-4 animate-spin" /> : null}
-                {isSubmitting ? "변경안 만드는 중..." : "확인 후 저장"}
+                {isSubmitting ? "저장 중..." : "저장"}
               </Button>
             </div>
           </div>
@@ -226,32 +240,12 @@ export default function ResourceInventoryEditor({
   );
 }
 
-function InventoryFilters({
-  filter,
-  onFilterChange,
-}: {
-  filter: ResourceFilter;
-  onFilterChange: (filter: ResourceFilter) => void;
-}) {
-  return (
-    <label className="relative block max-w-md">
-      <MagnifyingGlassIcon className="pointer-events-none absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-      <input
-        type="search"
-        value={filter.search}
-        onChange={(event) => onFilterChange({ search: event.currentTarget.value })}
-        placeholder="재화 이름 검색"
-        className="h-8 w-full rounded-md border border-input bg-background pl-7 pr-2 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-      />
-    </label>
-  );
-}
-
 function ResourceGroup({
   group,
   mode,
   ownedQuantities,
   draftQuantities,
+  requiredCharacterExp,
   onModeChange,
   onQuantityChange,
 }: {
@@ -259,10 +253,12 @@ function ResourceGroup({
   mode: ResourceMode;
   ownedQuantities: Record<string, number>;
   draftQuantities: Record<string, number>;
+  requiredCharacterExp: number;
   onModeChange: (kindOrder: number, mode: ResourceMode) => void;
   onQuantityChange: (resourceUid: string, quantity: number) => void;
 }) {
   const { kindOrder, resources, policy } = group;
+  const isCharacterExpGroup = kindOrder === CHARACTER_EXP_KIND_ORDER;
   return (
     <section className="overflow-hidden rounded-md border border-border bg-card">
       <div className="flex flex-col gap-2 border-b border-border bg-muted/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
@@ -275,6 +271,9 @@ function ResourceGroup({
           <CategoryModeSwitch kindOrder={kindOrder} mode={mode} onModeChange={onModeChange} />
         ) : null}
       </div>
+      {isCharacterExpGroup && requiredCharacterExp > 0 ? (
+        <CharacterExpSummary requiredCharacterExp={requiredCharacterExp} draftQuantities={draftQuantities} />
+      ) : null}
       {kindOrder === 6 ? (
         <EquipmentSubGroups
           resources={resources}
@@ -290,6 +289,7 @@ function ResourceGroup({
               resource={resource}
               currentQuantity={ownedQuantities[resource.uid] ?? 0}
               draftQuantity={draftQuantities[resource.uid] ?? 0}
+              showRequiredMetrics={!isCharacterExpGroup}
               onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
             />
           ))}
@@ -368,13 +368,14 @@ function EquipmentSubGroups({
           <p className="mb-1 text-xs font-medium text-muted-foreground">
             {EQUIPMENT_TYPE_LABELS[typeKey] ?? typeKey}
           </p>
-          <div className="flex flex-wrap gap-x-1 gap-y-0">
+          <div className="flex flex-wrap">
             {typeResources.map((resource) => (
               <ResourceTile
                 key={resource.uid}
                 resource={resource}
                 currentQuantity={ownedQuantities[resource.uid] ?? 0}
                 draftQuantity={draftQuantities[resource.uid] ?? 0}
+                showRequiredMetrics
                 onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
               />
             ))}
@@ -389,21 +390,23 @@ function ResourceTile({
   resource,
   currentQuantity,
   draftQuantity,
+  showRequiredMetrics,
   onQuantityChange,
 }: {
   resource: InventoryResource;
   currentQuantity: number;
   draftQuantity: number;
+  showRequiredMetrics: boolean;
   onQuantityChange: (quantity: number) => void;
 }) {
   const diff = draftQuantity - currentQuantity;
-  const hasRequiredAmount = resource.requiredAmount > 0;
+  const hasRequiredAmount = showRequiredMetrics && resource.requiredAmount > 0;
   const requiredBalance = draftQuantity - resource.requiredAmount;
   return (
     <div
       title={resource.name}
       className={cn(
-        "flex w-24 flex-col items-center gap-1.5 rounded-md px-1 py-2",
+        "flex w-20 flex-col items-center gap-1.5 rounded-md px-1 py-2",
         diff !== 0 && "bg-blue-50/70 dark:bg-blue-950/20",
       )}
     >
@@ -461,6 +464,50 @@ function MetricRow({
   );
 }
 
+function CharacterExpSummary({
+  requiredCharacterExp,
+  draftQuantities,
+}: {
+  requiredCharacterExp: number;
+  draftQuantities: Record<string, number>;
+}) {
+  const ownedCharacterExp = calculateOwnedCharacterExp(draftQuantities);
+  const balance = ownedCharacterExp - requiredCharacterExp;
+  return (
+    <div className="border-b border-border bg-background px-3 py-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <CharacterExpSummaryItem label="필요 경험치" value={requiredCharacterExp.toLocaleString()} />
+        <CharacterExpSummaryItem label="보유 경험치" value={ownedCharacterExp.toLocaleString()} />
+        <CharacterExpSummaryItem
+          label={balance >= 0 ? "여유 경험치" : "부족 경험치"}
+          value={Math.abs(balance).toLocaleString()}
+          valueClassName={cn(
+            balance >= 0 && "text-emerald-600 dark:text-emerald-400",
+            balance < 0 && "text-red-600 dark:text-red-300",
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CharacterExpSummaryItem({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 text-sm font-semibold tabular-nums text-foreground", valueClassName)}>{value}</p>
+    </div>
+  );
+}
+
 function getCategoryDisplayPolicy(kindOrder: number): CategoryDisplayPolicy {
   return CATEGORY_DISPLAY_POLICIES[kindOrder] ?? DEFAULT_CATEGORY_POLICY;
 }
@@ -478,6 +525,7 @@ function buildResourceGroups(
   resources: InventoryResource[],
   categoryModes: Record<number, ResourceMode>,
   searchValue: string,
+  requiredCharacterExp: number,
 ): ResourceGroupView[] {
   const grouped = new Map<number, InventoryResource[]>();
   for (const resource of resources) {
@@ -494,7 +542,12 @@ function buildResourceGroups(
     .sort(([a], [b]) => a - b)
     .map(([kindOrder, groupResources]) => {
       const mode = resolveCategoryMode(kindOrder, categoryModes);
-      const modeResources = groupResources.filter((resource) => mode === "all" || resource.requiredAmount > 0);
+      const modeResources = groupResources.filter(
+        (resource) =>
+          mode === "all" ||
+          resource.requiredAmount > 0 ||
+          (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
+      );
       const filteredResources = search
         ? modeResources.filter((resource) => resource.name.toLowerCase().includes(search))
         : modeResources;
@@ -506,7 +559,7 @@ function buildResourceGroups(
         policy: getCategoryDisplayPolicy(kindOrder),
       };
     })
-    .filter((group) => group.totalCount > 0);
+    .filter((group) => group.resources.length > 0);
 }
 
 function buildInventoryResources(
@@ -539,4 +592,8 @@ function buildInventoryResources(
   }
 
   return inventoryResources;
+}
+
+function calculateOwnedCharacterExp(quantities: Record<string, number>): number {
+  return CHARACTER_EXP_REPORTS.reduce((sum, report) => sum + (quantities[report.uid] ?? 0) * report.exp, 0);
 }

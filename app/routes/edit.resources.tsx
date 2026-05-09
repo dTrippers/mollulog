@@ -2,21 +2,23 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
-  createUserResourceInventoryDraft,
   getUserResourceInventoryMap,
   parseUserResourceInventoryQuantity,
+  upsertUserResourceInventory,
 } from "~/models/user-resource-inventory";
 import { aggregateGrowthResourceRequirements } from "~/models/growth-resource";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/repositories/item-catalog";
 import ResourceInventoryEditor from "./edit.resources._components/ResourceInventoryEditor";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 
-type ResourceInventoryDraftPayload = {
+type ResourceInventorySavePayload = {
   items?: unknown;
 };
 
 type ActionData = {
   error?: string;
+  saved?: boolean;
+  savedAt?: number;
 };
 
 export const meta: MetaFunction = () => [{ title: "보유 재화 관리 | 몰루로그" }];
@@ -56,7 +58,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   }
 
   try {
-    const payload = await request.json<ResourceInventoryDraftPayload>();
+    const payload = await request.json<ResourceInventorySavePayload>();
     if (!Array.isArray(payload.items)) {
       return data<ActionData>({ error: "저장할 재화가 필요해요" }, { status: 400 });
     }
@@ -72,11 +74,14 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       return data<ActionData>({ error: "변경된 보유 재화가 없어요" }, { status: 400 });
     }
 
-    const draftUid = await createUserResourceInventoryDraft(env, currentUser.id, items);
-    return redirect(`/edit/resources/drafts/${draftUid}`);
+    for (const item of items) {
+      await upsertUserResourceInventory(env, currentUser.id, item.itemUid, item.quantity);
+    }
+
+    return data<ActionData>({ saved: true, savedAt: Date.now() });
   } catch (error) {
     return data<ActionData>(
-      { error: error instanceof Error ? error.message : "변경안을 만들지 못했어요" },
+      { error: error instanceof Error ? error.message : "보유 재화를 저장하지 못했어요" },
       { status: 400 },
     );
   }

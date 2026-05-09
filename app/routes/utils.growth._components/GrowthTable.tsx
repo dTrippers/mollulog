@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { StudentSearchInput, TierSelector } from "~/components/features/students";
 import { Button, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
-import { EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
+import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
 
 function extractStudentUpdate(actionData: GrowthActionResult | undefined): GrowthStudent | null {
@@ -590,8 +590,11 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
             return (
               <>
                 <div className={`${isCalculating ? "opacity-40 pointer-events-none" : ""} transition-opacity duration-200`}>
-                  {student.resourceRequirements.items.length > 0 ? (
+                  {student.resourceRequirements.items.length > 0 || student.resourceRequirements.characterExp > 0 ? (
                     <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
+                      {student.resourceRequirements.characterExp > 0 ? (
+                        <CharacterExpRequirementCard characterExp={student.resourceRequirements.characterExp} />
+                      ) : null}
                       {student.resourceRequirements.items.map((item) => (
                         <ResourceCard
                           key={`${student.uid}-${item.uid}`}
@@ -661,6 +664,25 @@ function AddStudentRow({ availableStudents, isFirst }: { availableStudents: Grow
         )}
       </td>
     </tr>
+  );
+}
+
+function CharacterExpRequirementCard({ characterExp }: { characterExp: number }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-emerald-200 bg-white px-2 py-1 dark:border-emerald-900 dark:bg-neutral-950">
+      <ResourceCard
+        itemUid={CHARACTER_EXP_REPORTS[0].uid}
+        rarity={CHARACTER_EXP_REPORTS[0].rarity}
+        label="EXP"
+        name="활동 보고서"
+      />
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">활동 보고서 경험치</p>
+        <p className="text-sm font-semibold tabular-nums text-neutral-800 dark:text-neutral-100">
+          {characterExp.toLocaleString()}
+        </p>
+      </div>
+    </div>
   );
 }
 

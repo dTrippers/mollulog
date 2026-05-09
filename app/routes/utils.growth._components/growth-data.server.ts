@@ -99,7 +99,7 @@ export async function loadStudentRow(
 
   return {
     ...base,
-    resourceRequirements: requirementsMap[studentUid] ?? { items: [], skillUnavailable: false },
+    resourceRequirements: requirementsMap[studentUid] ?? { items: [], characterExp: 0, skillUnavailable: false },
   };
 }
 
@@ -176,7 +176,7 @@ export async function loadGrowthPlannerData(env: Env, userId: number): Promise<G
   );
   const managedStudents = managedStudentsData.map((student) => ({
     ...student,
-    resourceRequirements: growthResourceRequirements[student.uid] ?? { items: [], skillUnavailable: false },
+    resourceRequirements: growthResourceRequirements[student.uid] ?? { items: [], characterExp: 0, skillUnavailable: false },
   }));
 
   const availableStudents = Object.values(allStudentsMap)
