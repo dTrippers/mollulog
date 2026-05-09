@@ -49,7 +49,7 @@ function SearchInput({ searchQuery, setSearchQuery, searchPlaceholder, inputRef 
 }
 
 export type StudentSelectFormProps = {
-  label: string;
+  label?: string;
   description?: string;
   name?: string;
   students: Student[];

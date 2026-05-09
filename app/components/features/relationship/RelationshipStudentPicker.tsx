@@ -32,9 +32,8 @@ export default function RelationshipStudentPicker({
   );
 
   return (
-    <div className="rounded-lg border border-border bg-card p-2.5 md:p-4">
+    <div>
       <StudentSelectForm
-        label="학생 찾기"
         students={students}
         initialStudentUids={selectedStudentUid ? [selectedStudentUid] : undefined}
         placeholder={selectedStudent ? "다른 학생 검색..." : "이름으로 찾기..."}

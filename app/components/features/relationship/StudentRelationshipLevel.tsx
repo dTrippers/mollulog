@@ -57,6 +57,7 @@ export default function StudentRelationshipLevel({
                     value={currentExp}
                     minValue={0}
                     size="lg"
+                    fullWidth
                     onChange={(value) => onCurrentLevelUpdate({ level: getLevelForExp(value), exp: value })}
                   />
                   <p className="mt-1 truncate text-left text-xs text-neutral-500 dark:text-neutral-400 md:text-center">
@@ -71,6 +72,7 @@ export default function StudentRelationshipLevel({
                     minValue={1}
                     maxValue={100}
                     size="lg"
+                    fullWidth
                     onChange={(value) => onCurrentLevelUpdate({ level: value, exp: null })}
                   />
                   <p className="mt-1 truncate text-left text-xs text-neutral-500 dark:text-neutral-400 md:text-center">
@@ -86,6 +88,7 @@ export default function StudentRelationshipLevel({
                 minValue={1}
                 maxValue={100}
                 size="lg"
+                fullWidth
                 onChange={(value) => onTargetLevelUpdate(value)}
               />
             </div>

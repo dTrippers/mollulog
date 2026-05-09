@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
-import { LoadingSkeleton, NumberInput, ResourceCard, SubTitle, Toggle } from "~/components/primitives";
+import { ResourceInventoryGroup, ResourceInventoryTile } from "~/components/features/growth";
+import { LoadingSkeleton, Toggle } from "~/components/primitives";
 import type { loader as favoriteItemsLoader } from "~/routes/api.students.$uid.items";
 
 type FavoriteItemSelectorProps = {
@@ -56,41 +57,50 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
   }, [favoriteItems, onSelectedItemExpChange, quantities]);
 
   return (
-    <>
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <SubTitle text="선물 목록" className="my-0" />
-        <Toggle label="좋아하는 선물만 보기" initialState={filterFavorited} onChange={setFilterFavorited} />
-      </div>
-
+    <ResourceInventoryGroup
+      title="선물 목록"
+      controls={
+        <Toggle
+          label="좋아하는 선물만 보기"
+          initialState={filterFavorited}
+          className="my-0"
+          onChange={setFilterFavorited}
+        />
+      }
+    >
       {!favoriteItems ?
         <LoadingSkeleton /> :
-        <div className="grid min-w-0 gap-1 grid-cols-4 md:grid-cols-8 lg:grid-cols-4 xl:grid-cols-8 2xl:grid-cols-12 gap-1">
+        <>
           {filteredItems.map(({ item, favoriteLevel, exp }) => {
             const quantity = quantities[item.uid] || 0;
             const totalItemExp = exp * quantity;
             return (
-              <div key={item.uid} className="group min-w-0 overflow-hidden rounded-md border border-neutral-200 bg-white p-2 dark:border-neutral-800 dark:bg-neutral-900">
-                <div className="flex flex-col items-center">
-                  <ResourceCard rarity={item.rarity} favoriteLevel={favoriteLevel} itemUid={item.uid} name={item.name} />
-                  <div className="mt-0.5 text-center text-xs text-neutral-500 dark:text-neutral-400">{exp} EXP</div>
-                  <div className="mt-1 flex w-full min-w-0 items-center gap-2 md:mt-3">
-                    <NumberInput
-                      value={quantity}
-                      size="sm"
-                      onChange={(value) => onQuantitiesChange({ ...quantities, [item.uid]: value })}
-                    />
-                  </div>
-                  {quantity > 0 && (
-                    <span className="mt-1 rounded-full border border-green-200 bg-green-50 px-1.5 py-0.5 text-xs text-green-700 dark:border-green-800 dark:bg-green-900/30 dark:text-green-300 md:mt-2 md:px-2">
-                      +{totalItemExp.toLocaleString()}
-                    </span>
-                  )}
-                </div>
-              </div>
+              <ResourceInventoryTile
+                key={item.uid}
+                resource={{
+                  itemUid: item.uid,
+                  rarity: item.rarity,
+                  favoriteLevel,
+                  name: item.name,
+                }}
+                currentQuantity={quantity}
+                draftQuantity={quantity}
+                quantityLabel="목표"
+                metrics={[
+                  { label: "EXP", value: `+${exp.toLocaleString()}` },
+                  ...(quantity > 0
+                    ? [{
+                        value: `+${totalItemExp.toLocaleString()}`,
+                        valueClassName: "text-emerald-600 dark:text-emerald-400",
+                      }]
+                    : []),
+                ]}
+                onQuantityChange={(value) => onQuantitiesChange({ ...quantities, [item.uid]: value })}
+              />
             );
           })}
-        </div>
+        </>
       }
-    </>
+    </ResourceInventoryGroup>
   );
 }

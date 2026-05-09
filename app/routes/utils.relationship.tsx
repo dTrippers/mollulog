@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useState, useRef, useMemo } from "react";
-import { useFetcher, useLoaderData, redirect } from "react-router";
+import { useCallback, useEffect, useState, useRef, useMemo, type Dispatch, type SetStateAction } from "react";
+import { useFetcher, useLoaderData, redirect, useLocation } from "react-router";
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
+import { ArchiveBoxIcon, GiftIcon, MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Button, FilterButtons, ProfileImage, Title } from "~/components/primitives";
+import { Page } from "~/components/features/layout";
 import { FavoriteItemSelector, RequiredGifts, StudentRelationshipLevel, RelationshipStudentPicker, FavoritedItemSelector } from "~/components/features/relationship";
+import { Button, ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { getAllStudents } from "~/models/student";
 import { parseVisibleNames } from "~/models/student";
 import { upsertRelationshipLevel, getRelationshipLevels, removeRelationshipLevel, type RelationshipLevel } from "~/models/relationship-level";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
-import { Bars3Icon } from "@heroicons/react/24/outline";
 
 export const meta: MetaFunction = () => {
   const title = "인연 랭크 계산기 | 몰루로그";
@@ -143,6 +144,9 @@ type RelationshipStudentState = {
   items: Record<string, number>;
 };
 
+const RELATIONSHIP_STUDENT_PATH = "/utils/relationship";
+const RELATIONSHIP_ITEM_PATH = "/utils/relationship/item";
+
 const emptyRelationship: Relationship = {
   currentLevel: 1,
   currentExp: null,
@@ -150,15 +154,12 @@ const emptyRelationship: Relationship = {
   items: {},
 };
 
-
-type TabId = "student" | "gift";
-
 export default function RelationshipUtil() {
   const { students, allStudentsFavoriteItems, isAuthenticated } = useLoaderData<typeof loader>();
+  const { pathname } = useLocation();
   const { showSignIn } = useSignIn();
 
   const saveFetcher = useFetcher<typeof action>();
-  const [activeTab, setActiveTab] = useState<TabId>("student");
   const [managedStudents, setManagedStudents] = useState<RelationshipStudentState[]>(students);
   const studentListKey = students
     .map((student) => `${student.uid}:${student.currentLevel ?? ""}:${student.currentExp ?? ""}:${student.targetLevel ?? ""}:${JSON.stringify(student.items)}`)
@@ -393,80 +394,156 @@ export default function RelationshipUtil() {
     );
   };
 
+  const isItemScreen = pathname === RELATIONSHIP_ITEM_PATH;
+  const studentPicker = (
+    <RelationshipStudentPicker
+      students={managedStudents}
+      selectedStudentUid={selectedStudentUid}
+      onSelectStudentUid={handleSelectStudentUid}
+    />
+  );
+
   return (
-    <div className="max-w-full lg:px-4">
-      <Title text="인연 랭크 계산기" description="학생들의 목표 인연 랭크까지 필요한 선물 개수를 계산할 수 있어요" />
-
-      <FilterButtons
-        Icon={Bars3Icon}
-        buttonProps={[
-          { text: "학생별", active: activeTab === "student", onToggle: () => setActiveTab("student") },
-          { text: "선물별", active: activeTab === "gift", onToggle: () => setActiveTab("gift") },
-        ]}
-        exclusive
-        atLeastOne
-      />
-
-      {activeTab === "student" ? (
-        <div className="grid min-w-0 grid-cols-1 gap-3 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start">
-          <aside>
-            <RelationshipStudentPicker
-              students={managedStudents}
-              selectedStudentUid={selectedStudentUid}
-              onSelectStudentUid={handleSelectStudentUid}
-            />
-          </aside>
-
-          <div className="min-w-0 overflow-x-hidden">
-            {selectedStudentUid && selectedStudent ? (
-              <>
-                <RelationshipActionHeader
-                  student={selectedStudent}
-                  saveState={savePending ? "pending" : saveFetcher.state}
-                  saveError={saveError}
-                  saveSuccess={saveSuccess}
-                  onDelete={handleDelete}
-                  onSave={handleSave}
-                />
-
-                <StudentRelationshipLevel
-                  currentExp={currentRelationship.currentExp}
-                  currentLevel={currentRelationship.currentLevel}
-                  targetLevel={currentRelationship.targetLevel}
-                  selectedItemExp={selectedItemExp}
-                  onCurrentLevelUpdate={({ level, exp }) => setCurrentRelationship({ ...currentRelationship, currentLevel: level, currentExp: exp })}
-                  onTargetLevelUpdate={(value) => setCurrentRelationship({ ...currentRelationship, targetLevel: value })}
-                />
-
-                <RequiredGifts
-                  currentLevel={currentRelationship.currentLevel}
-                  currentExp={currentRelationship.currentExp}
-                  targetLevel={currentRelationship.targetLevel}
-                />
-
-                <FavoriteItemSelector
-                  studentUid={selectedStudentUid}
-                  quantities={currentRelationship.items}
-                  onQuantitiesChange={(quantities) => setCurrentRelationship((prev) => ({ ...prev, items: quantities }))}
-                  onSelectedItemExpChange={setSelectedItemExp}
-                />
-              </>
-            ) : (
-              <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-10 text-center">
-                <p className="font-semibold text-foreground">학생을 선택해 주세요</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  저장된 학생을 고르거나 이름으로 검색하면 계산을 시작할 수 있어요.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
+    <Page
+      title="인연 랭크 계산기"
+      description="학생들의 목표 인연 랭크까지 필요한 선물 개수를 계산할 수 있어요."
+      contentArea="full"
+      screens={[
+        {
+          text: "학생별",
+          description: "학생을 선택하고 목표 인연 랭크 계산",
+          Icon: UserIcon,
+          link: RELATIONSHIP_STUDENT_PATH,
+          active: !isItemScreen,
+        },
+        {
+          text: "선물별",
+          description: "선물별 선호 학생과 입력 수량 확인",
+          Icon: GiftIcon,
+          link: RELATIONSHIP_ITEM_PATH,
+          active: isItemScreen,
+        },
+      ]}
+      panels={
+        isItemScreen
+          ? undefined
+          : [
+              {
+                title: "학생 찾기",
+                description: "인연 랭크를 계산할 학생을 선택해주세요",
+                Icon: MagnifyingGlassIcon,
+                children: studentPicker,
+              },
+            ]
+      }
+      links={
+        [
+			{
+				title: "보유 선물 수량",
+				description: "재화 플래너에서 보유 수량을 관리",
+				Icon: ArchiveBoxIcon,
+				to: "/utils/growth/resources?category=favor",
+				preventScrollReset: true,
+			},
+        ]
+      }
+    >
+      {isItemScreen ? (
+        <FavoritedItemSelector
+          items={allStudentsFavoriteItems}
+          students={managedStudents}
+          isAuthenticated={isAuthenticated}
+        />
       ) : (
-          <FavoritedItemSelector
-            items={allStudentsFavoriteItems}
-            students={managedStudents}
-            isAuthenticated={isAuthenticated}
+        <RelationshipStudentScreen
+          selectedStudentUid={selectedStudentUid}
+          selectedStudent={selectedStudent}
+          currentRelationship={currentRelationship}
+          selectedItemExp={selectedItemExp}
+          saveState={savePending ? "pending" : saveFetcher.state}
+          saveError={saveError}
+          saveSuccess={saveSuccess}
+          onCurrentRelationshipChange={setCurrentRelationship}
+          onSelectedItemExpChange={setSelectedItemExp}
+          onDelete={handleDelete}
+          onSave={handleSave}
+        />
+      )}
+    </Page>
+  );
+}
+
+function RelationshipStudentScreen({
+  selectedStudentUid,
+  selectedStudent,
+  currentRelationship,
+  selectedItemExp,
+  saveState,
+  saveError,
+  saveSuccess,
+  onCurrentRelationshipChange,
+  onSelectedItemExpChange,
+  onDelete,
+  onSave,
+}: {
+  selectedStudentUid: string | null;
+  selectedStudent: RelationshipStudentState | null;
+  currentRelationship: Relationship;
+  selectedItemExp: number;
+  saveState: SaveState;
+  saveError: string | null;
+  saveSuccess: boolean;
+  onCurrentRelationshipChange: Dispatch<SetStateAction<Relationship>>;
+  onSelectedItemExpChange: (exp: number) => void;
+  onDelete: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="min-w-0 overflow-x-hidden">
+      {selectedStudentUid && selectedStudent ? (
+        <>
+          <RelationshipActionHeader
+            student={selectedStudent}
+            saveState={saveState}
+            saveError={saveError}
+            saveSuccess={saveSuccess}
+            onDelete={onDelete}
+            onSave={onSave}
           />
+
+          <StudentRelationshipLevel
+            currentExp={currentRelationship.currentExp}
+            currentLevel={currentRelationship.currentLevel}
+            targetLevel={currentRelationship.targetLevel}
+            selectedItemExp={selectedItemExp}
+            onCurrentLevelUpdate={({ level, exp }) =>
+              onCurrentRelationshipChange({ ...currentRelationship, currentLevel: level, currentExp: exp })
+            }
+            onTargetLevelUpdate={(value) => onCurrentRelationshipChange({ ...currentRelationship, targetLevel: value })}
+          />
+
+          <RequiredGifts
+            currentLevel={currentRelationship.currentLevel}
+            currentExp={currentRelationship.currentExp}
+            targetLevel={currentRelationship.targetLevel}
+          />
+
+          <FavoriteItemSelector
+            studentUid={selectedStudentUid}
+            quantities={currentRelationship.items}
+            onQuantitiesChange={(quantities) =>
+              onCurrentRelationshipChange((prev) => ({ ...prev, items: quantities }))
+            }
+            onSelectedItemExpChange={onSelectedItemExpChange}
+          />
+        </>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-10 text-center">
+          <p className="font-semibold text-foreground">학생을 선택해 주세요</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            학생 찾기에서 저장된 학생을 고르거나 이름으로 검색하면 계산을 시작할 수 있어요.
+          </p>
+        </div>
       )}
     </div>
   );

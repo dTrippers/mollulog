@@ -1,8 +1,9 @@
 import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useBlocker, useFetcher } from "react-router";
-import { Button, EmptyView, FilterButtons, NumberInput, ResourceCard, Title } from "~/components/primitives";
+import { useBlocker, useFetcher, useSearchParams } from "react-router";
+import { ResourceInventoryTile, type ResourceInventoryTileMetric } from "~/components/features/growth";
+import { Button, EmptyView, FilterButtons } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import {
   CHARACTER_EXP_REPORTS,
@@ -48,7 +49,6 @@ type InventoryResource = ItemCatalogResource & {
 type ResourceGroupView = {
   kindOrder: number;
   resources: InventoryResource[];
-  totalCount: number;
   policy: CategoryDisplayPolicy;
 };
 
@@ -68,6 +68,7 @@ const CATEGORY_DISPLAY_POLICIES: Record<number, CategoryDisplayPolicy> = {
   [GROWTH_RESOURCE_KIND_ORDER.favor]: { defaultMode: "all", modes: ["all", "needed"] },
 };
 const CHARACTER_EXP_KIND_ORDER = GROWTH_RESOURCE_KIND_ORDER.characterExp;
+const CATEGORY_SCROLL_OFFSET = 80;
 
 export default function ResourceInventoryEditor({
   resources,
@@ -76,7 +77,11 @@ export default function ResourceInventoryEditor({
   error,
 }: ResourceInventoryEditorProps) {
   const fetcher = useFetcher<ResourceInventoryEditorActionData>();
+  const [searchParams] = useSearchParams();
   const submittedQuantitiesRef = useRef<Record<string, number> | null>(null);
+  const focusedCategoryRef = useRef<string | null>(null);
+  const favorCategoryElementRef = useRef<HTMLDivElement | null>(null);
+  const favorCategoryScrollCleanupRef = useRef<(() => void) | null>(null);
   const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>(ownedQuantities);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>(ownedQuantities);
   const [allowNavigation, setAllowNavigation] = useState(false);
@@ -111,17 +116,50 @@ export default function ResourceInventoryEditor({
       ),
     [categoryModes, draftQuantities, filter.search, inventoryResources, requiredResources.characterExp],
   );
-  const filteredResourceCount = useMemo(
-    () => resourceGroups.reduce((sum, group) => sum + group.resources.length, 0),
-    [resourceGroups],
-  );
-
   const submitError = fetcher.data?.error ?? error;
   const isSubmitting = fetcher.state !== "idle";
   const hasChanges = changedItems.length > 0;
+  const requestedCategory = searchParams.get("category");
+  const shouldFocusFavorCategory = requestedCategory === "favor";
+  const favorCategoryVisible = resourceGroups.some((group) => group.kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor);
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
     return hasChanges && !allowNavigation && currentLocation.pathname !== nextLocation.pathname;
   });
+
+  useEffect(() => {
+    if (!shouldFocusFavorCategory) {
+      focusedCategoryRef.current = null;
+      favorCategoryScrollCleanupRef.current?.();
+      favorCategoryScrollCleanupRef.current = null;
+      return;
+    }
+
+    setCategoryModes((current) => {
+      if (current[GROWTH_RESOURCE_KIND_ORDER.favor] === "all") {
+        return current;
+      }
+      return { ...current, [GROWTH_RESOURCE_KIND_ORDER.favor]: "all" };
+    });
+  }, [shouldFocusFavorCategory]);
+
+  useEffect(() => {
+    if (!shouldFocusFavorCategory || !favorCategoryVisible || focusedCategoryRef.current === requestedCategory) {
+      return;
+    }
+
+    const element = favorCategoryElementRef.current;
+    if (!element) {
+      return;
+    }
+
+    focusedCategoryRef.current = requestedCategory;
+    favorCategoryScrollCleanupRef.current?.();
+    favorCategoryScrollCleanupRef.current = repeatedlyScrollToCategoryElement(element);
+    return () => {
+      favorCategoryScrollCleanupRef.current?.();
+      favorCategoryScrollCleanupRef.current = null;
+    };
+  }, [shouldFocusFavorCategory, favorCategoryVisible, requestedCategory]);
 
   useEffect(() => {
     if (blocker.state !== "blocked") {
@@ -200,24 +238,44 @@ export default function ResourceInventoryEditor({
       ) : null}
 
       <div className="space-y-3">
-        {filteredResourceCount === 0 ? (
+        {resourceGroups.length === 0 ? (
           <div className="rounded-md border border-border bg-card p-8">
             <EmptyView Icon={ArchiveBoxIcon} text="조건에 맞는 재화가 없어요" />
           </div>
         ) : (
           resourceGroups.map((group) => (
-            <ResourceGroup
+            <div
               key={group.kindOrder}
-              group={group}
-              mode={resolveCategoryMode(group.kindOrder, categoryModes)}
-              ownedQuantities={baseQuantities}
-              draftQuantities={draftQuantities}
-              requiredCharacterExp={requiredResources.characterExp}
-              onModeChange={changeCategoryMode}
-              onQuantityChange={(resourceUid, quantity) => {
-                setDraftQuantities((current) => ({ ...current, [resourceUid]: quantity }));
+              ref={(element) => {
+                if (group.kindOrder !== GROWTH_RESOURCE_KIND_ORDER.favor) {
+                  return;
+                }
+
+                if (!element) {
+                  favorCategoryElementRef.current = null;
+                  return;
+                }
+
+                favorCategoryElementRef.current = element;
+                if (shouldFocusFavorCategory && focusedCategoryRef.current !== requestedCategory) {
+                  focusedCategoryRef.current = requestedCategory;
+                  favorCategoryScrollCleanupRef.current?.();
+                  favorCategoryScrollCleanupRef.current = repeatedlyScrollToCategoryElement(element);
+                }
               }}
-            />
+            >
+              <ResourceGroup
+                group={group}
+                mode={resolveCategoryMode(group.kindOrder, categoryModes)}
+                ownedQuantities={baseQuantities}
+                draftQuantities={draftQuantities}
+                requiredCharacterExp={requiredResources.characterExp}
+                onModeChange={changeCategoryMode}
+                onQuantityChange={(resourceUid, quantity) => {
+                  setDraftQuantities((current) => ({ ...current, [resourceUid]: quantity }));
+                }}
+              />
+            </div>
           ))
         )}
       </div>
@@ -266,11 +324,15 @@ function ResourceGroup({
 }) {
   const { kindOrder, resources, policy } = group;
   const isCharacterExpGroup = kindOrder === CHARACTER_EXP_KIND_ORDER;
+  const isFavorGroup = kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor;
   return (
     <section className="overflow-hidden rounded-md border border-border bg-card">
       <div className="border-b border-border bg-muted/60 px-3 py-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-foreground">{GROWTH_RESOURCE_KIND_LABELS[kindOrder] ?? "기타"}</h2>
+          {isFavorGroup ? (
+            <Button text="인연 랭크 계산기" to="/utils/relationship" size="xs" variant="tint-blue" />
+          ) : null}
         </div>
       </div>
       {isCharacterExpGroup && requiredCharacterExp > 0 ? (
@@ -281,7 +343,11 @@ function ResourceGroup({
           <CategoryModeSwitch kindOrder={kindOrder} mode={mode} onModeChange={onModeChange} />
         </div>
       ) : null}
-      {kindOrder === GROWTH_RESOURCE_KIND_ORDER.equipment ? (
+      {resources.length === 0 ? (
+        <div className="px-3 py-6">
+          <EmptyView Icon={ArchiveBoxIcon} text="필요한 재화가 없어요" />
+        </div>
+      ) : kindOrder === GROWTH_RESOURCE_KIND_ORDER.equipment ? (
         <EquipmentSubGroups
           resources={resources}
           ownedQuantities={ownedQuantities}
@@ -418,8 +484,8 @@ function EquipmentSubGroups({
 }
 
 type EquipmentChoiceBoxAllocation = {
-  choiceBoxMetricsByUid: Map<string, ResourceTileMetric[]>;
-  itemMetricsByUid: Map<string, ResourceTileMetric[]>;
+  choiceBoxMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
+  itemMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
 };
 
 function allocateEquipmentChoiceBoxes(
@@ -429,7 +495,7 @@ function allocateEquipmentChoiceBoxes(
 ): EquipmentChoiceBoxAllocation {
   const remainingChoiceBoxesByTier = new Map<number, number>();
   const totalDeficitByTier = new Map<number, number>();
-  const itemMetricsByUid = new Map<string, ResourceTileMetric[]>();
+  const itemMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
 
   for (const choiceBox of choiceBoxResources) {
     const tier = getEquipmentBlueprintChoiceBoxTier(choiceBox.uid);
@@ -460,7 +526,7 @@ function allocateEquipmentChoiceBoxes(
     const choiceBoxAmount = Math.min(directDeficit, remainingChoiceBoxes);
     remainingChoiceBoxesByTier.set(tier, remainingChoiceBoxes - choiceBoxAmount);
 
-    const metrics: ResourceTileMetric[] = [];
+    const metrics: ResourceInventoryTileMetric[] = [];
     if (choiceBoxAmount > 0) {
       metrics.push({
         label: "선택상자",
@@ -482,7 +548,7 @@ function allocateEquipmentChoiceBoxes(
     }
   }
 
-  const choiceBoxMetricsByUid = new Map<string, ResourceTileMetric[]>();
+  const choiceBoxMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
   for (const choiceBox of choiceBoxResources) {
     const tier = getEquipmentBlueprintChoiceBoxTier(choiceBox.uid);
     if (tier === null) {
@@ -505,12 +571,6 @@ function allocateEquipmentChoiceBoxes(
   return { choiceBoxMetricsByUid, itemMetricsByUid };
 }
 
-type ResourceTileMetric = {
-  label: string;
-  value: string;
-  valueClassName?: string;
-};
-
 function ResourceTile({
   resource,
   currentQuantity,
@@ -525,82 +585,43 @@ function ResourceTile({
   draftQuantity: number;
   showRequiredMetrics: boolean;
   showRequiredBalance?: boolean;
-  metrics?: ResourceTileMetric[];
+  metrics?: ResourceInventoryTileMetric[];
   onQuantityChange: (quantity: number) => void;
 }) {
-  const diff = draftQuantity - currentQuantity;
   const hasRequiredAmount = showRequiredMetrics && resource.requiredAmount > 0;
   const requiredBalance = draftQuantity - resource.requiredAmount;
-  return (
-    <div
-      title={resource.name}
-      className={cn(
-        "flex w-20 flex-col items-center gap-1.5 rounded-md px-1 py-2",
-        diff !== 0 && "bg-blue-50/70 dark:bg-blue-950/20",
-      )}
-    >
-      <ResourceCard
-        itemUid={resource.uid}
-        resourceType={resource.type}
-        rarity={resource.rarity}
-        name={resource.name}
-        label={getEquipmentResourceTierLabel(resource.uid) ?? undefined}
-        size="lg"
-      />
-      <div className="w-full">
-        <p className="mb-0.5 text-left text-xs font-medium leading-tight text-muted-foreground">보유</p>
-        <NumberInput
-          minValue={0}
-          showDecrease={false}
-          showIncrease={false}
-          size="sm"
-          value={draftQuantity}
-          onChange={onQuantityChange}
-        />
-      </div>
-      <div className="w-full space-y-px text-xs leading-tight">
-        {hasRequiredAmount ? (
-          <>
-            <MetricRow label="필요" value={resource.requiredAmount.toLocaleString()} />
-            {showRequiredBalance ? (
-              <MetricRow
-                label={requiredBalance >= 0 ? "여유" : "부족"}
-                value={Math.abs(requiredBalance).toLocaleString()}
-                valueClassName={cn(
-                  requiredBalance >= 0 && "text-emerald-600 dark:text-emerald-400",
-                  requiredBalance < 0 && "text-red-600 dark:text-red-300",
-                )}
-              />
-            ) : null}
-          </>
-        ) : null}
-        {metrics?.map((metric) => (
-          <MetricRow
-            key={`${metric.label}-${metric.value}`}
-            label={metric.label}
-            value={metric.value}
-            valueClassName={metric.valueClassName}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
+  const requiredMetrics: ResourceInventoryTileMetric[] = [];
+  if (hasRequiredAmount) {
+    requiredMetrics.push({
+      label: "필요",
+      value: resource.requiredAmount.toLocaleString(),
+    });
+    if (showRequiredBalance) {
+      requiredMetrics.push({
+        label: requiredBalance >= 0 ? "여유" : "부족",
+        value: Math.abs(requiredBalance).toLocaleString(),
+        valueClassName: cn(
+          requiredBalance >= 0 && "text-emerald-600 dark:text-emerald-400",
+          requiredBalance < 0 && "text-red-600 dark:text-red-300",
+        ),
+      });
+    }
+  }
 
-function MetricRow({
-  label,
-  value,
-  valueClassName,
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-}) {
   return (
-    <div className="flex items-center justify-between gap-0.5">
-      <span className="leading-tight text-muted-foreground">{label}</span>
-      <span className={cn("font-semibold tabular-nums text-foreground", valueClassName)}>{value}</span>
-    </div>
+    <ResourceInventoryTile
+      resource={{
+        itemUid: resource.uid,
+        resourceType: resource.type,
+        rarity: resource.rarity,
+        name: resource.name,
+        label: getEquipmentResourceTierLabel(resource.uid) ?? undefined,
+      }}
+      currentQuantity={currentQuantity}
+      draftQuantity={draftQuantity}
+      metrics={[...requiredMetrics, ...(metrics ?? [])]}
+      onQuantityChange={onQuantityChange}
+    />
   );
 }
 
@@ -648,6 +669,59 @@ function CharacterExpSummaryItem({
   );
 }
 
+function repeatedlyScrollToCategoryElement(element: HTMLElement) {
+  const timeoutIds: ReturnType<typeof setTimeout>[] = [];
+  let frameId: number | null = null;
+  let nextFrameId: number | null = null;
+  let intervalId: ReturnType<typeof setInterval> | null = null;
+
+  const scroll = () => scrollToCategoryElement(element);
+  frameId = requestAnimationFrame(() => {
+    nextFrameId = requestAnimationFrame(scroll);
+  });
+  timeoutIds.push(setTimeout(scroll, 120));
+  timeoutIds.push(setTimeout(scroll, 300));
+  timeoutIds.push(setTimeout(scroll, 600));
+  intervalId = setInterval(scroll, 100);
+  timeoutIds.push(setTimeout(() => {
+    if (intervalId !== null) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+  }, 800));
+
+  return () => {
+    if (frameId !== null) {
+      cancelAnimationFrame(frameId);
+    }
+    if (nextFrameId !== null) {
+      cancelAnimationFrame(nextFrameId);
+    }
+    for (const timeoutId of timeoutIds) {
+      clearTimeout(timeoutId);
+    }
+    if (intervalId !== null) {
+      clearInterval(intervalId);
+    }
+  };
+}
+
+function scrollToCategoryElement(element: HTMLElement) {
+  const scrollContainer = document.querySelector(".mllg-content-area");
+  if (scrollContainer instanceof HTMLElement) {
+    const containerRect = scrollContainer.getBoundingClientRect();
+    const elementRect = element.getBoundingClientRect();
+    scrollContainer.scrollTo({
+      top: scrollContainer.scrollTop + elementRect.top - containerRect.top - CATEGORY_SCROLL_OFFSET,
+      behavior: "smooth",
+    });
+    return;
+  }
+
+  const elementTop = element.getBoundingClientRect().top + window.scrollY;
+  window.scrollTo({ top: elementTop - CATEGORY_SCROLL_OFFSET, behavior: "smooth" });
+}
+
 function getCategoryDisplayPolicy(kindOrder: number): CategoryDisplayPolicy {
   return CATEGORY_DISPLAY_POLICIES[kindOrder] ?? DEFAULT_CATEGORY_POLICY;
 }
@@ -683,6 +757,7 @@ function buildResourceGroups(
     .sort(([a], [b]) => compareGrowthResourceKindOrder(a, b))
     .map(([kindOrder, groupResources]) => {
       const mode = resolveCategoryMode(kindOrder, categoryModes);
+      const policy = getCategoryDisplayPolicy(kindOrder);
       const modeResources = groupResources.filter(
         (resource) =>
           mode === "all" ||
@@ -697,11 +772,14 @@ function buildResourceGroups(
       return {
         kindOrder,
         resources: filteredResources,
-        totalCount: modeResources.length,
-        policy: getCategoryDisplayPolicy(kindOrder),
+        policy,
       };
     })
-    .filter((group) => group.resources.length > 0);
+    .filter((group) => {
+      const mode = resolveCategoryMode(group.kindOrder, categoryModes);
+      const hasModeOverride = mode !== group.policy.defaultMode;
+      return group.resources.length > 0 || (!search && hasModeOverride);
+    });
 }
 
 function buildInventoryResources(

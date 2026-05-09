@@ -2,7 +2,7 @@ import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { GrowthResourceRepository } from "~/repositories/growth-resource";
 import type { StudentMap } from "./student";
 
-export type GrowthResourceSource = "level" | "skill" | "equipment" | "tier" | "gear";
+export type GrowthResourceSource = "level" | "skill" | "equipment" | "tier" | "gear" | "relationship";
 
 export type GrowthResourceItem = {
   uid: string;
@@ -19,6 +19,19 @@ export type StudentGrowthResourceRequirements = {
   items: GrowthResourceItem[];
   characterExp: number;
   skillUnavailable: boolean;
+};
+
+export type RelationshipGiftResourceInput = {
+  items: Record<string, number>;
+};
+
+export type RelationshipGiftResourceMetadata = {
+  uid: string;
+  name?: string;
+  rarity: number;
+  type: ResourceTypeEnum;
+  category?: string | null;
+  subCategory?: string | null;
 };
 
 export type AggregatedGrowthResourceRequirements = {
@@ -996,6 +1009,43 @@ export function aggregateGrowthResourceRequirements(
   };
 }
 
+export function buildRelationshipGiftResourceRequirements(
+  relationships: RelationshipGiftResourceInput[],
+  metadata: RelationshipGiftResourceMetadata[],
+): StudentGrowthResourceRequirements {
+  const metadataByUid = new Map(metadata.map((item) => [item.uid, item]));
+  const quantities = new Map<string, number>();
+
+  for (const relationship of relationships) {
+    for (const [itemUid, quantity] of Object.entries(relationship.items)) {
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        continue;
+      }
+      quantities.set(itemUid, (quantities.get(itemUid) ?? 0) + quantity);
+    }
+  }
+
+  return {
+    items: sortGrowthResourceItems(
+      Array.from(quantities.entries()).map(([uid, amount]) => {
+        const itemMetadata = metadataByUid.get(uid);
+        return {
+          uid,
+          type: itemMetadata?.type ?? ResourceTypeEnum.Item,
+          rarity: itemMetadata?.rarity ?? 1,
+          amount,
+          name: itemMetadata?.name,
+          category: itemMetadata?.category ?? "favor",
+          subCategory: itemMetadata?.subCategory ?? null,
+          source: "relationship",
+        };
+      }),
+    ),
+    characterExp: 0,
+    skillUnavailable: false,
+  };
+}
+
 export const GROWTH_RESOURCE_KIND_ORDER = {
   eleph: 0,
   characterExp: 1,
@@ -1085,6 +1135,10 @@ export function getResourceKindOrder(item: GrowthResourceItem): number {
   }
 
   if (item.source === "gear") {
+    return GROWTH_RESOURCE_KIND_ORDER.favor;
+  }
+
+  if (item.source === "relationship") {
     return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 

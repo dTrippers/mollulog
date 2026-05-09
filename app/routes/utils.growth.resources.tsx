@@ -1,7 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { aggregateGrowthResourceRequirements } from "~/models/growth-resource";
+import {
+  aggregateGrowthResourceRequirements,
+  buildRelationshipGiftResourceRequirements,
+} from "~/models/growth-resource";
+import { getRelationshipLevels } from "~/models/relationship-level";
 import {
   getUserResourceInventoryMap,
   parseUserResourceInventoryQuantity,
@@ -30,14 +34,16 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     return redirect("/unauthorized");
   }
 
-  const [catalogResources, ownedQuantities] = await Promise.all([
+  const [catalogResources, ownedQuantities, relationshipLevels] = await Promise.all([
     getItemCatalogResources(env),
     getUserResourceInventoryMap(env, currentUser.id),
+    getRelationshipLevels(env, currentUser.id),
   ]);
 
   return {
     resources: getGrowthPlannerCatalogResources(catalogResources),
     ownedQuantities,
+    relationshipGiftRequirements: buildRelationshipGiftResourceRequirements(relationshipLevels, catalogResources),
   };
 };
 
@@ -83,11 +89,11 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 };
 
 export default function GrowthResourcesPage() {
-  const { resources, ownedQuantities } = useLoaderData<typeof loader>();
+  const { resources, ownedQuantities, relationshipGiftRequirements } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const { managedStudents } = useOutletContext<GrowthLayoutContext>();
   const requiredResources = aggregateGrowthResourceRequirements(
-    managedStudents.map((student) => student.resourceRequirements),
+    [...managedStudents.map((student) => student.resourceRequirements), relationshipGiftRequirements],
   );
 
   return (
