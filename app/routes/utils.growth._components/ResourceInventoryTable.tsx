@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useFetcher } from "react-router";
-import { NumberInput, ResourceCard } from "~/components/primitives";
+import { useMemo } from "react";
+import { ResourceCard } from "~/components/primitives";
 import {
   EQUIPMENT_TYPE_LABELS,
   GROWTH_RESOURCE_KIND_LABELS,
@@ -10,11 +9,6 @@ import {
   type GrowthResourceItem,
 } from "~/models/growth-resource";
 
-type ActionResult = {
-  success?: boolean;
-  error?: string;
-};
-
 type ResourceInventoryTableProps = {
   items: GrowthResourceItem[];
   ownedQuantities: Record<string, number>;
@@ -22,93 +16,12 @@ type ResourceInventoryTableProps = {
 
 const groupContainerClass = "rounded-xl border border-neutral-200 bg-white/80 dark:border-neutral-800 dark:bg-neutral-950/80";
 
-function OwnedQuantityCell({
-  itemUid,
-  quantity,
-  savedQuantity,
-  onQuantityChange,
-}: {
-  itemUid: string;
-  quantity: number;
-  savedQuantity: number;
-  onQuantityChange: (quantity: number) => void;
-}) {
-  const fetcher = useFetcher<ActionResult>();
-  const [error, setError] = useState<string | null>(null);
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const submittedRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    if (fetcher.state !== "idle" || submittedRef.current == null) {
-      return;
-    }
-
-    submittedRef.current = null;
-
-    if (fetcher.data?.success) {
-      setError(null);
-      return;
-    }
-
-    if (fetcher.data?.error) {
-      onQuantityChange(savedQuantity);
-      setError(fetcher.data.error);
-    }
-  }, [fetcher.data, fetcher.state, onQuantityChange, savedQuantity]);
-
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
-    };
-  }, []);
-
-  const scheduleSave = (nextQuantity: number) => {
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-    }
-
-    saveTimerRef.current = setTimeout(() => {
-      saveTimerRef.current = null;
-      submittedRef.current = nextQuantity;
-      setError(null);
-      fetcher.submit(
-        { itemUid, quantity: nextQuantity },
-        { method: "post", encType: "application/json" },
-      );
-    }, 500);
-  };
-
-  return (
-    <div className="space-y-0.5">
-      <p className="text-xs text-neutral-400 dark:text-neutral-500">보유</p>
-      <NumberInput
-        minValue={0}
-        showDecrease={false}
-        showIncrease={false}
-        size="sm"
-        value={quantity}
-        onChange={(value) => {
-          onQuantityChange(value);
-          scheduleSave(value);
-        }}
-      />
-      {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
-    </div>
-  );
-}
-
 function ItemColumn({
   item,
   owned,
-  savedOwned,
-  onOwnedQuantityChange,
 }: {
   item: GrowthResourceItem;
   owned: number;
-  savedOwned: number;
-  onOwnedQuantityChange: (quantity: number) => void;
 }) {
   const deficit = item.amount - owned;
 
@@ -124,12 +37,12 @@ function ItemColumn({
         name={tier !== null ? `${item.name ?? item.uid} (T${tier})` : item.name}
         size="md"
       />
-      <OwnedQuantityCell
-        itemUid={item.uid}
-        quantity={owned}
-        savedQuantity={savedOwned}
-        onQuantityChange={onOwnedQuantityChange}
-      />
+      <div className="space-y-0.5 text-center">
+        <p className="text-xs text-neutral-400 dark:text-neutral-500">보유</p>
+        <p className="text-sm font-semibold tabular-nums text-neutral-700 dark:text-neutral-200">
+          {owned.toLocaleString()}
+        </p>
+      </div>
       {deficit > 0 ? (
         <p className="text-xs font-semibold text-red-500 dark:text-red-400">
           {deficit.toLocaleString()}
@@ -146,13 +59,9 @@ const EQUIPMENT_TYPE_ORDER = ["hat", "gloves", "shoes", "bag", "badge", "hairpin
 function EquipmentSubGroups({
   items,
   ownedQuantities,
-  savedOwnedQuantities,
-  onOwnedQuantityChange,
 }: {
   items: GrowthResourceItem[];
   ownedQuantities: Record<string, number>;
-  savedOwnedQuantities: Record<string, number>;
-  onOwnedQuantityChange: (itemUid: string, quantity: number) => void;
 }) {
   const subGroups = useMemo(() => {
     const grouped = new Map<string, GrowthResourceItem[]>();
@@ -188,8 +97,6 @@ function EquipmentSubGroups({
                 key={item.uid}
                 item={item}
                 owned={ownedQuantities[item.uid] ?? 0}
-                savedOwned={savedOwnedQuantities[item.uid] ?? 0}
-                onOwnedQuantityChange={(quantity) => onOwnedQuantityChange(item.uid, quantity)}
               />
             ))}
           </div>
@@ -203,14 +110,10 @@ function ResourceGroupTable({
   kindOrder,
   items,
   ownedQuantities,
-  savedOwnedQuantities,
-  onOwnedQuantityChange,
 }: {
   kindOrder: number;
   items: GrowthResourceItem[];
   ownedQuantities: Record<string, number>;
-  savedOwnedQuantities: Record<string, number>;
-  onOwnedQuantityChange: (itemUid: string, quantity: number) => void;
 }) {
   return (
     <section className={groupContainerClass}>
@@ -224,8 +127,6 @@ function ResourceGroupTable({
         <EquipmentSubGroups
           items={items}
           ownedQuantities={ownedQuantities}
-          savedOwnedQuantities={savedOwnedQuantities}
-          onOwnedQuantityChange={onOwnedQuantityChange}
         />
       ) : (
         <div className="flex flex-wrap gap-x-1 gap-y-0 px-3">
@@ -234,8 +135,6 @@ function ResourceGroupTable({
               key={item.uid}
               item={item}
               owned={ownedQuantities[item.uid] ?? 0}
-              savedOwned={savedOwnedQuantities[item.uid] ?? 0}
-              onOwnedQuantityChange={(quantity) => onOwnedQuantityChange(item.uid, quantity)}
             />
           ))}
         </div>
@@ -245,27 +144,6 @@ function ResourceGroupTable({
 }
 
 export default function ResourceInventoryTable({ items, ownedQuantities }: ResourceInventoryTableProps) {
-  const [draftOwnedQuantities, setDraftOwnedQuantities] = useState(ownedQuantities);
-  const previousOwnedQuantitiesRef = useRef(ownedQuantities);
-
-  useEffect(() => {
-    setDraftOwnedQuantities((currentQuantities) => {
-      const nextQuantities = { ...currentQuantities };
-
-      for (const item of items) {
-        const previousSavedQuantity = previousOwnedQuantitiesRef.current[item.uid] ?? 0;
-        const currentDraftQuantity = currentQuantities[item.uid] ?? 0;
-
-        if (currentDraftQuantity === previousSavedQuantity) {
-          nextQuantities[item.uid] = ownedQuantities[item.uid] ?? 0;
-        }
-      }
-
-      return nextQuantities;
-    });
-    previousOwnedQuantitiesRef.current = ownedQuantities;
-  }, [items, ownedQuantities]);
-
   const groups = useMemo(() => {
     const grouped = new Map<number, GrowthResourceItem[]>();
 
@@ -283,13 +161,6 @@ export default function ResourceInventoryTable({ items, ownedQuantities }: Resou
     return Array.from(grouped.entries()).sort(([a], [b]) => a - b);
   }, [items]);
 
-  const handleOwnedQuantityChange = (itemUid: string, quantity: number) => {
-    setDraftOwnedQuantities((currentQuantities) => ({
-      ...currentQuantities,
-      [itemUid]: quantity,
-    }));
-  };
-
   return (
     <div className="space-y-5">
       {groups.map(([kindOrder, groupItems]) => (
@@ -297,9 +168,7 @@ export default function ResourceInventoryTable({ items, ownedQuantities }: Resou
           key={kindOrder}
           kindOrder={kindOrder}
           items={groupItems}
-          ownedQuantities={draftOwnedQuantities}
-          savedOwnedQuantities={ownedQuantities}
-          onOwnedQuantityChange={handleOwnedQuantityChange}
+          ownedQuantities={ownedQuantities}
         />
       ))}
     </div>

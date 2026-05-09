@@ -96,10 +96,10 @@ export default function GrowthLayout() {
         },
         {
           text: "재화 관리",
-          description: "현재 보유한 재화와 필요한 재화 수량 계산",
+          description: "현재 보유한 재화와 필요한 재화 수량 관리",
           Icon: ArchiveBoxIcon,
-          link: "/utils/growth/resources",
-          active: pathname === "/utils/growth/resources",
+          link: "/edit/resources",
+          active: pathname === "/edit/resources",
         },
         {
           text: "재화 수급처 (준비중)",

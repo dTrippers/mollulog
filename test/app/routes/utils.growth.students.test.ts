@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockIsAuthenticated = jest.fn();
+const mockGetActiveSensei = jest.fn();
 const mockGetAllStudentsMap = jest.fn();
 const mockGetRelationshipLevel = jest.fn();
 const mockResolveRelationshipLevelInput = jest.fn();
@@ -9,6 +10,7 @@ const mockLoadStudentRow = jest.fn();
 const mockUpsertRecruitedStudent = jest.fn();
 
 jest.mock("~/auth/authenticator.server", () => ({
+  getActiveSensei: mockGetActiveSensei,
   getAuthenticator: jest.fn(() => ({
     isAuthenticated: mockIsAuthenticated,
   })),
@@ -46,6 +48,7 @@ describe("utils.growth.students action", () => {
     jest.clearAllMocks();
 
     mockIsAuthenticated.mockResolvedValue({ id: 1 } as never);
+    mockGetActiveSensei.mockResolvedValue({ id: 1 } as never);
     mockGetAllStudentsMap.mockResolvedValue({
       studentA: {
         uid: "studentA",
