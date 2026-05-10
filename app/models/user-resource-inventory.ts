@@ -1,5 +1,6 @@
+import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
+import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { growthResourceInventoryTable } from "./growth-resource-inventory";
@@ -30,6 +31,11 @@ export type UserResourceInventoryDraftItem = {
 };
 
 export type UserResourceInventoryDraftInput = {
+  itemUid: string;
+  quantity: number;
+};
+
+export type UserResourceInventoryInput = {
   itemUid: string;
   quantity: number;
 };
@@ -153,21 +159,20 @@ export async function upsertUserResourceInventory(env: Env, userId: number, item
   validateUserResourceInventoryQuantity(quantity);
 
   const db = drizzle(env.DB);
-  if (quantity === 0) {
-    await db
-      .delete(growthResourceInventoryTable)
-      .where(and(eq(growthResourceInventoryTable.userId, userId), eq(growthResourceInventoryTable.itemUid, itemUid)));
+  await runInventoryBatch(db, [createUserResourceInventoryStatement(db, userId, itemUid, quantity)]);
+}
+
+export async function upsertUserResourceInventories(env: Env, userId: number, items: UserResourceInventoryInput[]) {
+  const normalizedItems = normalizeInventoryItems(items);
+  if (normalizedItems.length === 0) {
     return;
   }
 
-  const uid = nanoid(8);
-  await db
-    .insert(growthResourceInventoryTable)
-    .values({ uid, userId, itemUid, quantity })
-    .onConflictDoUpdate({
-      target: [growthResourceInventoryTable.userId, growthResourceInventoryTable.itemUid],
-      set: { quantity, updatedAt: sql`current_timestamp` },
-    });
+  const db = drizzle(env.DB);
+  await runInventoryBatch(
+    db,
+    normalizedItems.map((item) => createUserResourceInventoryStatement(db, userId, item.itemUid, item.quantity)),
+  );
 }
 
 export async function createUserResourceInventoryDraft(
@@ -182,19 +187,21 @@ export async function createUserResourceInventoryDraft(
 
   const db = drizzle(env.DB);
   const draftUid = nanoid(12);
-  await db.insert(userResourceInventoryDraftsTable).values({
-    uid: draftUid,
-    userId,
-    status: "pending",
-  });
-  await db.insert(userResourceInventoryDraftItemsTable).values(
-    normalizedItems.map((item) => ({
-      uid: nanoid(8),
-      draftUid,
-      itemUid: item.itemUid,
-      quantity: item.quantity,
-    })),
-  );
+  await runInventoryBatch(db, [
+    db.insert(userResourceInventoryDraftsTable).values({
+      uid: draftUid,
+      userId,
+      status: "pending",
+    }),
+    db.insert(userResourceInventoryDraftItemsTable).values(
+      normalizedItems.map((item) => ({
+        uid: nanoid(8),
+        draftUid,
+        itemUid: item.itemUid,
+        quantity: item.quantity,
+      })),
+    ),
+  ]);
 
   return draftUid;
 }
@@ -239,15 +246,25 @@ export async function applyUserResourceInventoryDraft(env: Env, userId: number, 
     throw new Error("이미 처리된 Draft예요");
   }
 
-  await Promise.all(
-    draft.items.map((item) => upsertUserResourceInventory(env, userId, item.itemUid, item.quantity)),
-  );
+  await env.DB.batch([
+    ...draft.items.map((item) =>
+      createConditionalDraftInventoryStatement(env, userId, draftUid, item.itemUid, item.quantity),
+    ),
+    env.DB.prepare(`
+      update user_resource_inventory_drafts
+      set status = 'applied',
+          updatedAt = current_timestamp,
+          appliedAt = current_timestamp
+      where uid = ?1
+        and userId = ?2
+        and status = 'pending'
+    `).bind(draftUid, userId),
+  ]);
 
-  const db = drizzle(env.DB);
-  await db
-    .update(userResourceInventoryDraftsTable)
-    .set({ status: "applied", updatedAt: sql`current_timestamp`, appliedAt: sql`current_timestamp` })
-    .where(and(eq(userResourceInventoryDraftsTable.uid, draftUid), eq(userResourceInventoryDraftsTable.userId, userId)));
+  const appliedDraft = await getUserResourceInventoryDraft(env, userId, draftUid);
+  if (appliedDraft?.status !== "applied") {
+    throw new Error("이미 처리된 Draft예요");
+  }
 }
 
 export async function discardUserResourceInventoryDraft(env: Env, userId: number, draftUid: string) {
@@ -265,6 +282,50 @@ export async function discardUserResourceInventoryDraft(env: Env, userId: number
 }
 
 function normalizeDraftItems(items: UserResourceInventoryDraftInput[]): UserResourceInventoryDraftInput[] {
+  return normalizeInventoryItems(items);
+}
+
+function createConditionalDraftInventoryStatement(
+  env: Env,
+  userId: number,
+  draftUid: string,
+  itemUid: string,
+  quantity: number,
+): D1PreparedStatement {
+  validateUserResourceInventoryQuantity(quantity);
+
+  if (quantity <= 0) {
+    return env.DB.prepare(`
+      delete from growth_resource_inventory
+      where userId = ?1
+        and itemUid = ?2
+        and exists (
+          select 1
+          from user_resource_inventory_drafts
+          where uid = ?3
+            and userId = ?1
+            and status = 'pending'
+        )
+    `).bind(userId, itemUid, draftUid);
+  }
+
+  return env.DB.prepare(`
+    insert into growth_resource_inventory (uid, userId, itemUid, quantity)
+    select ?1, ?2, ?3, ?4
+    where exists (
+      select 1
+      from user_resource_inventory_drafts
+      where uid = ?5
+        and userId = ?2
+        and status = 'pending'
+    )
+    on conflict(userId, itemUid) do update set
+      quantity = excluded.quantity,
+      updatedAt = current_timestamp
+  `).bind(nanoid(8), userId, itemUid, quantity, draftUid);
+}
+
+function normalizeInventoryItems(items: UserResourceInventoryInput[]): UserResourceInventoryInput[] {
   const itemMap = new Map<string, number>();
   for (const item of items) {
     const itemUid = item.itemUid.trim();
@@ -276,4 +337,33 @@ function normalizeDraftItems(items: UserResourceInventoryDraftInput[]): UserReso
   }
 
   return [...itemMap.entries()].map(([itemUid, quantity]) => ({ itemUid, quantity }));
+}
+
+function createUserResourceInventoryStatement(
+  db: DrizzleD1Database,
+  userId: number,
+  itemUid: string,
+  quantity: number,
+): BatchItem<"sqlite"> {
+  if (quantity === 0) {
+    return db
+      .delete(growthResourceInventoryTable)
+      .where(and(eq(growthResourceInventoryTable.userId, userId), eq(growthResourceInventoryTable.itemUid, itemUid)));
+  }
+
+  return db
+    .insert(growthResourceInventoryTable)
+    .values({ uid: nanoid(8), userId, itemUid, quantity })
+    .onConflictDoUpdate({
+      target: [growthResourceInventoryTable.userId, growthResourceInventoryTable.itemUid],
+      set: { quantity, updatedAt: sql`current_timestamp` },
+    });
+}
+
+async function runInventoryBatch(db: DrizzleD1Database, statements: BatchItem<"sqlite">[]) {
+  if (statements.length === 0) {
+    return;
+  }
+
+  await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
 }

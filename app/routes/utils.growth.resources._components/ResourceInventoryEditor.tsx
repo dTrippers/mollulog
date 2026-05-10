@@ -1,6 +1,15 @@
 import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+} from "react";
 import { useBlocker, useFetcher, useSearchParams } from "react-router";
 import { ResourceInventoryTile, type ResourceInventoryTileMetric } from "~/components/features/growth";
 import { Button, EmptyView, FilterButtons } from "~/components/primitives";
@@ -8,6 +17,7 @@ import { cn } from "~/lib/utils";
 import {
   CHARACTER_EXP_REPORTS,
   EQUIPMENT_TYPE_LABELS,
+  EQUIPMENT_TYPE_ORDER,
   GROWTH_RESOURCE_KIND_LABELS,
   GROWTH_RESOURCE_KIND_ORDER,
   calculateEquipmentTierCoverage,
@@ -59,7 +69,6 @@ type CategoryDisplayPolicy = {
   modes: ResourceMode[];
 };
 
-const EQUIPMENT_TYPE_ORDER = ["hat", "gloves", "shoes", "bag", "badge", "hairpin", "charm", "watch", "necklace"];
 const DEFAULT_CATEGORY_POLICY: CategoryDisplayPolicy = {
   defaultMode: "needed",
   modes: ["all", "needed"],
@@ -81,12 +90,8 @@ export default function ResourceInventoryEditor({
   const fetcher = useFetcher<ResourceInventoryEditorActionData>();
   const [searchParams] = useSearchParams();
   const submittedQuantitiesRef = useRef<Record<string, number> | null>(null);
-  const focusedCategoryRef = useRef<string | null>(null);
-  const favorCategoryElementRef = useRef<HTMLDivElement | null>(null);
-  const favorCategoryScrollCleanupRef = useRef<(() => void) | null>(null);
   const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>(ownedQuantities);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>(ownedQuantities);
-  const [allowNavigation, setAllowNavigation] = useState(false);
   const [filter, setFilter] = useState<ResourceFilter>({ search: "" });
   const [categoryModes, setCategoryModes] = useState<Record<number, ResourceMode>>({});
 
@@ -122,94 +127,23 @@ export default function ResourceInventoryEditor({
   const isSubmitting = fetcher.state !== "idle";
   const hasChanges = changedItems.length > 0;
   const requestedCategory = searchParams.get("category");
-  const shouldFocusFavorCategory = requestedCategory === "favor";
   const favorCategoryVisible = resourceGroups.some((group) => group.kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor);
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
-    return hasChanges && !allowNavigation && currentLocation.pathname !== nextLocation.pathname;
+  const setFavorCategoryElement = useScrollIntoCategoryOnQuery({
+    requestedCategory,
+    targetCategory: "favor",
+    targetKindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    targetVisible: favorCategoryVisible,
+    setCategoryModes,
   });
 
-  useEffect(() => {
-    if (!shouldFocusFavorCategory) {
-      focusedCategoryRef.current = null;
-      favorCategoryScrollCleanupRef.current?.();
-      favorCategoryScrollCleanupRef.current = null;
-      return;
-    }
-
-    setCategoryModes((current) => {
-      if (current[GROWTH_RESOURCE_KIND_ORDER.favor] === "all") {
-        return current;
-      }
-      return { ...current, [GROWTH_RESOURCE_KIND_ORDER.favor]: "all" };
-    });
-  }, [shouldFocusFavorCategory]);
-
-  useEffect(() => {
-    if (!shouldFocusFavorCategory || !favorCategoryVisible || focusedCategoryRef.current === requestedCategory) {
-      return;
-    }
-
-    const element = favorCategoryElementRef.current;
-    if (!element) {
-      return;
-    }
-
-    focusedCategoryRef.current = requestedCategory;
-    favorCategoryScrollCleanupRef.current?.();
-    favorCategoryScrollCleanupRef.current = repeatedlyScrollToCategoryElement(element);
-    return () => {
-      favorCategoryScrollCleanupRef.current?.();
-      favorCategoryScrollCleanupRef.current = null;
-    };
-  }, [shouldFocusFavorCategory, favorCategoryVisible, requestedCategory]);
-
-  useEffect(() => {
-    if (blocker.state !== "blocked") {
-      return;
-    }
-
-    if (window.confirm("저장하지 않은 변경 사항이 있어요. 페이지를 벗어나시겠어요?")) {
-      blocker.proceed();
-      return;
-    }
-
-    blocker.reset();
-  }, [blocker]);
-
-  useEffect(() => {
-    if (!hasChanges || allowNavigation) {
-      return;
-    }
-
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [allowNavigation, hasChanges]);
-
-  useEffect(() => {
-    if (submitError) {
-      setAllowNavigation(false);
-    }
-  }, [submitError]);
-
-  useEffect(() => {
-    if (!fetcher.data?.savedAt) {
-      return;
-    }
-
-    const savedQuantities = submittedQuantitiesRef.current;
-    if (savedQuantities) {
-      setBaseQuantities(savedQuantities);
-      submittedQuantitiesRef.current = null;
-    }
-    setAllowNavigation(false);
-  }, [fetcher.data?.savedAt]);
+  useUnsavedChangesGuard({ hasChanges });
+  useInventorySaveResult({
+    savedAt: fetcher.data?.savedAt,
+    submittedQuantitiesRef,
+    setBaseQuantities,
+  });
 
   const saveChanges = () => {
-    setAllowNavigation(true);
     submittedQuantitiesRef.current = { ...draftQuantities };
     fetcher.submit(
       { items: changedItems.map(({ itemUid, quantity }) => ({ itemUid, quantity })) },
@@ -248,23 +182,7 @@ export default function ResourceInventoryEditor({
           resourceGroups.map((group) => (
             <div
               key={group.kindOrder}
-              ref={(element) => {
-                if (group.kindOrder !== GROWTH_RESOURCE_KIND_ORDER.favor) {
-                  return;
-                }
-
-                if (!element) {
-                  favorCategoryElementRef.current = null;
-                  return;
-                }
-
-                favorCategoryElementRef.current = element;
-                if (shouldFocusFavorCategory && focusedCategoryRef.current !== requestedCategory) {
-                  focusedCategoryRef.current = requestedCategory;
-                  favorCategoryScrollCleanupRef.current?.();
-                  favorCategoryScrollCleanupRef.current = repeatedlyScrollToCategoryElement(element);
-                }
-              }}
+              ref={group.kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor ? setFavorCategoryElement : undefined}
             >
               <ResourceGroup
                 group={group}
@@ -305,6 +223,120 @@ export default function ResourceInventoryEditor({
       ) : null}
     </>
   );
+}
+
+function useUnsavedChangesGuard({
+  hasChanges,
+}: {
+  hasChanges: boolean;
+}) {
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    return hasChanges && currentLocation.pathname !== nextLocation.pathname;
+  });
+
+  useEffect(() => {
+    if (blocker.state !== "blocked") {
+      return;
+    }
+
+    if (window.confirm("저장하지 않은 변경 사항이 있어요. 페이지를 벗어나시겠어요?")) {
+      blocker.proceed();
+      return;
+    }
+
+    blocker.reset();
+  }, [blocker]);
+
+  useEffect(() => {
+    if (!hasChanges) {
+      return;
+    }
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasChanges]);
+}
+
+function useInventorySaveResult({
+  savedAt,
+  submittedQuantitiesRef,
+  setBaseQuantities,
+}: {
+  savedAt?: number;
+  submittedQuantitiesRef: RefObject<Record<string, number> | null>;
+  setBaseQuantities: (quantities: Record<string, number>) => void;
+}) {
+  useEffect(() => {
+    if (!savedAt) {
+      return;
+    }
+
+    const savedQuantities = submittedQuantitiesRef.current;
+    if (savedQuantities) {
+      setBaseQuantities(savedQuantities);
+      submittedQuantitiesRef.current = null;
+    }
+  }, [savedAt, setBaseQuantities, submittedQuantitiesRef]);
+}
+
+function useScrollIntoCategoryOnQuery({
+  requestedCategory,
+  targetCategory,
+  targetKindOrder,
+  targetVisible,
+  setCategoryModes,
+}: {
+  requestedCategory: string | null;
+  targetCategory: string;
+  targetKindOrder: number;
+  targetVisible: boolean;
+  setCategoryModes: Dispatch<SetStateAction<Record<number, ResourceMode>>>;
+}) {
+  const focusedCategoryRef = useRef<string | null>(null);
+  const targetElementRef = useRef<HTMLDivElement | null>(null);
+  const shouldFocusCategory = requestedCategory === targetCategory;
+
+  useEffect(() => {
+    if (!shouldFocusCategory) {
+      return;
+    }
+
+    setCategoryModes((current) => {
+      if (current[targetKindOrder] === "all") {
+        return current;
+      }
+      return { ...current, [targetKindOrder]: "all" };
+    });
+  }, [setCategoryModes, shouldFocusCategory, targetKindOrder]);
+
+  useEffect(() => {
+    if (!shouldFocusCategory) {
+      focusedCategoryRef.current = null;
+      return;
+    }
+    if (!targetVisible || focusedCategoryRef.current === requestedCategory) {
+      return;
+    }
+
+    const element = targetElementRef.current;
+    if (!element) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      focusedCategoryRef.current = requestedCategory;
+      scrollToCategoryElement(element);
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [requestedCategory, shouldFocusCategory, targetVisible]);
+
+  return useCallback((element: HTMLDivElement | null) => {
+    targetElementRef.current = element;
+  }, []);
 }
 
 function ResourceGroup({
@@ -586,19 +618,20 @@ function allocateSkillMaterialChoiceBoxes(
     remainingChoiceBoxesByUid.set(choiceBox.uid, Math.max(0, quantities[choiceBox.uid] ?? 0));
   }
 
-  for (const resource of skillMaterialResources) {
-    const choiceBoxUid = getSkillMaterialResourceChoiceBoxUid(resource);
-    if (choiceBoxUid === null) {
-      continue;
-    }
+  const allocationTargets = skillMaterialResources
+    .map((resource) => {
+      const choiceBoxUid = getSkillMaterialResourceChoiceBoxUid(resource);
+      const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
+      return { resource, choiceBoxUid, directDeficit };
+    })
+    .filter((target): target is { resource: InventoryResource; choiceBoxUid: string; directDeficit: number } =>
+      target.choiceBoxUid !== null && target.directDeficit > 0,
+    )
+    .sort(compareChoiceBoxAllocationTargets);
 
+  for (const { resource, choiceBoxUid, directDeficit } of allocationTargets) {
     if (!remainingChoiceBoxesByUid.has(choiceBoxUid)) {
       remainingChoiceBoxesByUid.set(choiceBoxUid, Math.max(0, quantities[choiceBoxUid] ?? 0));
-    }
-
-    const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
-    if (directDeficit <= 0) {
-      continue;
     }
 
     totalDeficitByChoiceBoxUid.set(choiceBoxUid, (totalDeficitByChoiceBoxUid.get(choiceBoxUid) ?? 0) + directDeficit);
@@ -669,20 +702,21 @@ function allocateEquipmentChoiceBoxes(
     }
   }
 
-  for (const resource of equipmentResources) {
-    const choiceBoxUid = getEquipmentBlueprintChoiceBoxUid(getEquipmentTier(resource.uid));
-    if (choiceBoxUid === null) {
-      continue;
-    }
+  const allocationTargets = equipmentResources
+    .map((resource) => {
+      const tier = getEquipmentTier(resource.uid);
+      const choiceBoxUid = getEquipmentBlueprintChoiceBoxUid(tier);
+      const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
+      return { resource, tier, choiceBoxUid, directDeficit };
+    })
+    .filter((target): target is { resource: InventoryResource; tier: number; choiceBoxUid: string; directDeficit: number } =>
+      target.choiceBoxUid !== null && target.directDeficit > 0,
+    )
+    .sort(compareChoiceBoxAllocationTargets);
 
-    const tier = getEquipmentTier(resource.uid);
+  for (const { resource, tier, choiceBoxUid, directDeficit } of allocationTargets) {
     if (!remainingChoiceBoxesByTier.has(tier)) {
       remainingChoiceBoxesByTier.set(tier, Math.max(0, quantities[choiceBoxUid] ?? 0));
-    }
-
-    const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
-    if (directDeficit <= 0) {
-      continue;
     }
 
     totalDeficitByTier.set(tier, (totalDeficitByTier.get(tier) ?? 0) + directDeficit);
@@ -735,6 +769,22 @@ function allocateEquipmentChoiceBoxes(
   }
 
   return { choiceBoxMetricsByUid, itemMetricsByUid };
+}
+
+function compareChoiceBoxAllocationTargets(
+  a: { resource: InventoryResource; directDeficit: number },
+  b: { resource: InventoryResource; directDeficit: number },
+): number {
+  if (a.directDeficit !== b.directDeficit) {
+    return b.directDeficit - a.directDeficit;
+  }
+
+  const nameComparison = a.resource.name.localeCompare(b.resource.name, "ko");
+  if (nameComparison !== 0) {
+    return nameComparison;
+  }
+
+  return a.resource.uid.localeCompare(b.resource.uid);
 }
 
 function ResourceTile({
@@ -835,57 +885,35 @@ function CharacterExpSummaryItem({
   );
 }
 
-function repeatedlyScrollToCategoryElement(element: HTMLElement) {
-  const timeoutIds: ReturnType<typeof setTimeout>[] = [];
-  let frameId: number | null = null;
-  let nextFrameId: number | null = null;
-  let intervalId: ReturnType<typeof setInterval> | null = null;
-
-  const scroll = () => scrollToCategoryElement(element);
-  frameId = requestAnimationFrame(() => {
-    nextFrameId = requestAnimationFrame(scroll);
-  });
-  timeoutIds.push(setTimeout(scroll, 120));
-  timeoutIds.push(setTimeout(scroll, 300));
-  timeoutIds.push(setTimeout(scroll, 600));
-  intervalId = setInterval(scroll, 100);
-  timeoutIds.push(setTimeout(() => {
-    if (intervalId !== null) {
-      clearInterval(intervalId);
-      intervalId = null;
-    }
-  }, 800));
-
-  return () => {
-    if (frameId !== null) {
-      cancelAnimationFrame(frameId);
-    }
-    if (nextFrameId !== null) {
-      cancelAnimationFrame(nextFrameId);
-    }
-    for (const timeoutId of timeoutIds) {
-      clearTimeout(timeoutId);
-    }
-    if (intervalId !== null) {
-      clearInterval(intervalId);
-    }
-  };
-}
-
 function scrollToCategoryElement(element: HTMLElement) {
-  const scrollContainer = document.querySelector(".mllg-content-area");
-  if (scrollContainer instanceof HTMLElement) {
-    const containerRect = scrollContainer.getBoundingClientRect();
-    const elementRect = element.getBoundingClientRect();
-    scrollContainer.scrollTo({
-      top: scrollContainer.scrollTop + elementRect.top - containerRect.top - CATEGORY_SCROLL_OFFSET,
-      behavior: "smooth",
-    });
+  element.scrollIntoView({ block: "start", inline: "nearest" });
+
+  const scrollContainer = findNearestScrollableAncestor(element);
+  if (scrollContainer) {
+    scrollContainer.scrollBy({ top: -CATEGORY_SCROLL_OFFSET, behavior: "auto" });
     return;
   }
 
-  const elementTop = element.getBoundingClientRect().top + window.scrollY;
-  window.scrollTo({ top: elementTop - CATEGORY_SCROLL_OFFSET, behavior: "smooth" });
+  window.scrollBy({ top: -CATEGORY_SCROLL_OFFSET, behavior: "auto" });
+}
+
+function findNearestScrollableAncestor(element: HTMLElement): HTMLElement | null {
+  let parent = element.parentElement;
+  while (parent) {
+    const style = window.getComputedStyle(parent);
+    const overflowY = `${style.overflowY} ${style.overflow}`;
+    if (/(auto|scroll|overlay)/.test(overflowY) && parent.scrollHeight > parent.clientHeight) {
+      return parent;
+    }
+
+    if (parent === document.body || parent === document.documentElement) {
+      break;
+    }
+
+    parent = parent.parentElement;
+  }
+
+  return document.querySelector(".mllg-content-area");
 }
 
 function getCategoryDisplayPolicy(kindOrder: number): CategoryDisplayPolicy {

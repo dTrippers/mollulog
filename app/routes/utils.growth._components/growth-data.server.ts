@@ -9,6 +9,12 @@ import { type StudentGrowth, getStudentGrowth, getStudentGrowths } from "~/model
 import { GrowthResourceRepository } from "~/repositories/growth-resource";
 import type { GrowthLayoutLoaderData, GrowthStudent } from "./types";
 
+type GrowthDataLoadOptions = {
+  logger?: {
+    error(message: string, error?: unknown, context?: Record<string, unknown>): void;
+  };
+};
+
 type BuildStudentRowDataParams = {
   studentUid: string;
   student: Student | undefined;
@@ -59,6 +65,7 @@ export async function loadStudentRow(
   env: Env,
   userId: number,
   studentUid: string,
+  options: GrowthDataLoadOptions = {},
 ): Promise<GrowthStudent | null> {
   const growthResourceRepository = new GrowthResourceRepository(env);
   const [growth, relationship, recruitedTierMap, allStudentsMap, gearDataMap] = await Promise.all([
@@ -95,6 +102,7 @@ export async function loadStudentRow(
     [base],
     allStudentsMap,
     gearDataMap,
+    { logger: options.logger },
   );
 
   return {
@@ -103,7 +111,11 @@ export async function loadStudentRow(
   };
 }
 
-export async function loadGrowthPlannerData(env: Env, userId: number): Promise<GrowthLayoutLoaderData> {
+export async function loadGrowthPlannerData(
+  env: Env,
+  userId: number,
+  options: GrowthDataLoadOptions = {},
+): Promise<GrowthLayoutLoaderData> {
   const growthResourceRepository = new GrowthResourceRepository(env);
   const [recruitedStudents, growths, relationshipLevels, allStudentsMap] = await Promise.all([
     getRecruitedStudents(env, userId),
@@ -173,6 +185,7 @@ export async function loadGrowthPlannerData(env: Env, userId: number): Promise<G
     managedStudentsData,
     allStudentsMap,
     studentGearDataMap,
+    { logger: options.logger },
   );
   const managedStudents = managedStudentsData.map((student) => ({
     ...student,

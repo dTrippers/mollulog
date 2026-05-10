@@ -2,7 +2,7 @@ import { HeartIcon } from "@heroicons/react/16/solid";
 import { useMemo } from "react";
 import { StudentSelectForm } from "~/components/features/forms";
 import { ProfileImage } from "~/components/primitives";
-import { parseVisibleNames } from "~/models/student";
+import { formatVisibleName } from "~/models/student";
 import { sanitizeClassName } from "~/prophandlers";
 
 type RelationshipStudent = {
@@ -105,13 +105,6 @@ function SavedStudentButton({
   );
 }
 
-function formatVisibleName(name: string): string {
-  const visibleNames = parseVisibleNames(name);
-  if (visibleNames.length === 2) {
-    return `${visibleNames[0]}(${visibleNames[1]})`;
-  }
-  return visibleNames.join(" ");
-}
 
 function sortStudentsByLevel(candidates: RelationshipStudent[], students: RelationshipStudent[]) {
   return [...candidates].sort((a, b) => {

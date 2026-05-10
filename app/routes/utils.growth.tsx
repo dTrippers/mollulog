@@ -4,6 +4,7 @@ import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from 
 import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
+import { getLogger } from "~/lib/observability.server";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
 
@@ -41,12 +42,13 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
+  const logger = getLogger(env, context.cloudflare.ctx, { route: "utils.growth.loader" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
 
-  return loadGrowthPlannerData(env, currentUser.id);
+  return loadGrowthPlannerData(env, currentUser.id, { logger });
 };
 
 export default function GrowthLayout() {

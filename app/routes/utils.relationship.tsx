@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useRef, useMemo, type Dispatch, type SetStateAction } from "react";
-import { useFetcher, useLoaderData, redirect, useLocation } from "react-router";
+import { useFetcher, useLoaderData, redirect, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { ArchiveBoxIcon, GiftIcon, MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -7,9 +7,14 @@ import { Page } from "~/components/features/layout";
 import { FavoriteItemSelector, RequiredGifts, StudentRelationshipLevel, RelationshipStudentPicker, FavoritedItemSelector } from "~/components/features/relationship";
 import { Button, ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { getAllStudents } from "~/models/student";
-import { parseVisibleNames } from "~/models/student";
-import { upsertRelationshipLevel, getRelationshipLevels, removeRelationshipLevel, type RelationshipLevel } from "~/models/relationship-level";
+import { formatVisibleName, getAllStudents } from "~/models/student";
+import {
+  getRelationshipLevelValidationError,
+  upsertRelationshipLevel,
+  getRelationshipLevels,
+  removeRelationshipLevel,
+  type RelationshipLevel,
+} from "~/models/relationship-level";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 
 export const meta: MetaFunction = () => {
@@ -145,7 +150,7 @@ type RelationshipStudentState = {
 };
 
 const RELATIONSHIP_STUDENT_PATH = "/utils/relationship";
-const RELATIONSHIP_ITEM_PATH = "/utils/relationship/item";
+const RELATIONSHIP_ITEM_SEARCH = "?mode=item";
 
 const emptyRelationship: Relationship = {
   currentLevel: 1,
@@ -156,7 +161,7 @@ const emptyRelationship: Relationship = {
 
 export default function RelationshipUtil() {
   const { students, allStudentsFavoriteItems, isAuthenticated } = useLoaderData<typeof loader>();
-  const { pathname } = useLocation();
+  const [searchParams] = useSearchParams();
   const { showSignIn } = useSignIn();
 
   const saveFetcher = useFetcher<typeof action>();
@@ -222,13 +227,10 @@ export default function RelationshipUtil() {
   const processedActionDataRef = useRef<typeof saveFetcher.data | null>(null);
 
   const validateRelationship = useCallback((relationship: Relationship): string | null => {
-    if (relationship.currentLevel < 1 || relationship.currentLevel > 100 || relationship.targetLevel < 1 || relationship.targetLevel > 100) {
-      return "인연 랭크는 1부터 100 사이만 가능해요";
-    }
-    if (relationship.targetLevel < relationship.currentLevel) {
-      return "목표 랭크는 현재 랭크보다 높아야 해요";
-    }
-    return null;
+    return getRelationshipLevelValidationError({
+      currentLevel: relationship.currentLevel,
+      targetLevel: relationship.targetLevel,
+    });
   }, []);
 
   const submitRelationship = useCallback((relationship: Relationship) => {
@@ -394,7 +396,7 @@ export default function RelationshipUtil() {
     );
   };
 
-  const isItemScreen = pathname === RELATIONSHIP_ITEM_PATH;
+  const isItemScreen = searchParams.get("mode") === "item";
   const studentPicker = (
     <RelationshipStudentPicker
       students={managedStudents}
@@ -420,7 +422,7 @@ export default function RelationshipUtil() {
           text: "선물별",
           description: "선물별 선호 학생과 입력 수량 확인",
           Icon: GiftIcon,
-          link: RELATIONSHIP_ITEM_PATH,
+          link: `${RELATIONSHIP_STUDENT_PATH}${RELATIONSHIP_ITEM_SEARCH}`,
           active: isItemScreen,
         },
       ]}
@@ -592,13 +594,6 @@ function RelationshipActionHeader({
   );
 }
 
-function formatVisibleName(name: string): string {
-  const visibleNames = parseVisibleNames(name);
-  if (visibleNames.length === 2) {
-    return `${visibleNames[0]}(${visibleNames[1]})`;
-  }
-  return visibleNames.join(" ");
-}
 
 function relationshipEquals(a: Relationship, b: Relationship): boolean {
   return (

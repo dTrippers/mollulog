@@ -1,5 +1,6 @@
 import { ResourceInventoryGroup, ResourceInventoryTile } from "~/components/features/growth";
-import { RELATIONSHIP_EXP_TABLE, RELATIONSHIP_ITEMS } from "~/models/constants";
+import { RELATIONSHIP_ITEMS } from "~/models/constants";
+import { getAccumulatedRelationshipExpForLevel } from "~/models/relationship-level";
 
 type RequiredGiftsProps = {
   currentExp: number | null;
@@ -8,11 +9,11 @@ type RequiredGiftsProps = {
 };
 
 export default function RequiredGifts({ currentExp: currentExpProp, currentLevel, targetLevel }: RequiredGiftsProps) {
-  const currentExp = currentExpProp ?? getAccumulatedExpForLevel(currentLevel);
+  const currentExp = currentExpProp ?? getAccumulatedRelationshipExpForLevel(currentLevel);
   return (
     <ResourceInventoryGroup title="필요 선물" className="mb-3 md:mb-4">
       {RELATIONSHIP_ITEMS.map(({ type, name, exp, item }) => {
-        const remainingExp = getAccumulatedExpForLevel(targetLevel) - currentExp;
+        const remainingExp = getAccumulatedRelationshipExpForLevel(targetLevel) - currentExp;
         const requiredAmount = Math.max(Math.ceil(remainingExp / exp), 0);
         const imageUrl = getRelationshipItemImageUrl(type, item?.favoriteLevel);
         return (
@@ -35,10 +36,6 @@ export default function RequiredGifts({ currentExp: currentExpProp, currentLevel
       })}
     </ResourceInventoryGroup>
   );
-}
-
-function getAccumulatedExpForLevel(level: number): number {
-  return RELATIONSHIP_EXP_TABLE.find((entry) => entry.level === level)?.accumulatedExp ?? 0;
 }
 
 function getRelationshipItemImageUrl(type: string, favoriteLevel?: number): string {

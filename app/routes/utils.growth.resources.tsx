@@ -9,7 +9,7 @@ import { getRelationshipLevels } from "~/models/relationship-level";
 import {
   getUserResourceInventoryMap,
   parseUserResourceInventoryQuantity,
-  upsertUserResourceInventory,
+  upsertUserResourceInventories,
 } from "~/models/user-resource-inventory";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/repositories/item-catalog";
 import ResourceInventoryEditor from "./utils.growth.resources._components/ResourceInventoryEditor";
@@ -75,9 +75,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       return data<ActionData>({ error: "변경된 보유 재화가 없어요" }, { status: 400 });
     }
 
-    for (const item of items) {
-      await upsertUserResourceInventory(env, currentUser.id, item.itemUid, item.quantity);
-    }
+    await upsertUserResourceInventories(env, currentUser.id, items);
 
     return data<ActionData>({ saved: true, savedAt: Date.now() });
   } catch (error) {

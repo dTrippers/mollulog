@@ -15,6 +15,14 @@ export type GrowthResourceItem = {
   source: GrowthResourceSource;
 };
 
+export type GrowthResourceKindInput = {
+  uid: string;
+  type?: ResourceTypeEnum | string | null;
+  category?: string | null;
+  subCategory?: string | null;
+  source?: GrowthResourceSource | null;
+};
+
 export type StudentGrowthResourceRequirements = {
   items: GrowthResourceItem[];
   characterExp: number;
@@ -71,6 +79,14 @@ type MutableRequirements = {
   items: Map<string, GrowthResourceItem>;
   characterExp: number;
   skillUnavailable: boolean;
+};
+
+type GrowthResourceLogger = {
+  error(message: string, error?: unknown, context?: Record<string, unknown>): void;
+};
+
+type GrowthResourceCalculationOptions = {
+  logger?: GrowthResourceLogger;
 };
 
 type SkillCostItem = {
@@ -294,6 +310,18 @@ export const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
   necklace: "목걸이",
 };
 
+export const EQUIPMENT_TYPE_ORDER = [
+  "hat",
+  "gloves",
+  "shoes",
+  "bag",
+  "badge",
+  "hairpin",
+  "charm",
+  "watch",
+  "necklace",
+];
+
 const EQUIPMENT_UID_PREFIX_TO_TYPE = Object.fromEntries(
   Object.entries(EQUIPMENT_BLUEPRINT_BASE_UID).map(([type, baseUid]) => [Math.floor(baseUid / 1000) + 1, type]),
 ) as Record<number, string>;
@@ -301,6 +329,12 @@ const EQUIPMENT_UID_PREFIX_TO_TYPE = Object.fromEntries(
 export function getEquipmentTypeKey(uid: string): string | null {
   const prefix = Math.floor(Number(uid) / 1000);
   return EQUIPMENT_UID_PREFIX_TO_TYPE[prefix] ?? null;
+}
+
+export function getEquipmentTypeOrder(uid: string): number {
+  const typeKey = getEquipmentTypeKey(uid);
+  const index = typeKey ? EQUIPMENT_TYPE_ORDER.indexOf(typeKey) : -1;
+  return index === -1 ? EQUIPMENT_TYPE_ORDER.length : index;
 }
 
 export function getEquipmentTier(uid: string): number {
@@ -462,6 +496,7 @@ export async function getStudentGrowthResourceRequirements(
   students: GrowthResourceStudentInput[],
   allStudentsMap: StudentMap,
   studentGearDataMap: Map<string, StudentGearData | null>,
+  options: GrowthResourceCalculationOptions = {},
 ): Promise<Record<string, StudentGrowthResourceRequirements>> {
   const normalizedStudents = students.map(normalizeStudentGrowthInputForCalculation);
   const requirements = students.reduce(
@@ -505,9 +540,9 @@ export async function getStudentGrowthResourceRequirements(
     }
   }
 
+  const itemUids = new Set<string>();
+  const equipmentUids = new Set<string>();
   try {
-    const itemUids = new Set<string>();
-    const equipmentUids = new Set<string>();
     for (const requirement of Object.values(requirements)) {
       for (const item of requirement.items.values()) {
         if (item.source === "equipment") {
@@ -528,7 +563,11 @@ export async function getStudentGrowthResourceRequirements(
       applyItemMetadata(requirement.items, itemMetadataMap);
       applyEquipmentMetadata(requirement.items, equipmentMetadataMap);
     }
-  } catch {
+  } catch (error) {
+    options.logger?.error("Failed to enrich growth resource metadata", error, {
+      itemCount: itemUids.size,
+      equipmentCount: equipmentUids.size,
+    });
     // Keep quantities visible even if BAQL item metadata cannot be loaded.
   }
 
@@ -1167,64 +1206,68 @@ export function shouldSortGrowthResourceKindByUid(kindOrder: number): boolean {
   );
 }
 
-export function getResourceKindOrder(item: GrowthResourceItem): number {
-  const itemUid = Number(item.uid);
+export function classifyGrowthResourceKind(resource: GrowthResourceKindInput): number | null {
+  const itemUid = Number(resource.uid);
 
-  if (item.source === "tier") {
+  if (resource.source === "tier" || resource.category === "secret_stone") {
     return GROWTH_RESOURCE_KIND_ORDER.eleph;
   }
 
-  if (getEquipmentBlueprintChoiceBoxTier(item.uid) !== null) {
+  if (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null) {
     return GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 
-  const skillMaterialChoiceBoxKindOrder = getSkillMaterialChoiceBoxKindOrder(item.uid);
+  const skillMaterialChoiceBoxKindOrder = getSkillMaterialChoiceBoxKindOrder(resource.uid);
   if (skillMaterialChoiceBoxKindOrder !== null) {
     return skillMaterialChoiceBoxKindOrder;
   }
 
-  if (item.category === "character_exp_growth" || isUidInRange(itemUid, 10, 13)) {
+  if (resource.category === "character_exp_growth" || isUidInRange(itemUid, 10, 13)) {
     return GROWTH_RESOURCE_KIND_ORDER.characterExp;
   }
 
-  if (item.subCategory === "cd_item" || isUidInRange(itemUid, 3000, 3999)) {
+  if (resource.subCategory === "cd_item" || isUidInRange(itemUid, 3000, 3999)) {
     return GROWTH_RESOURCE_KIND_ORDER.bd;
   }
 
   if (
-    item.subCategory === "book_item" ||
-    item.uid === "9998" ||
-    item.uid === "9999" ||
+    resource.subCategory === "book_item" ||
+    resource.uid === "9998" ||
+    resource.uid === "9999" ||
     isUidInRange(itemUid, 4000, 4999)
   ) {
     return GROWTH_RESOURCE_KIND_ORDER.techNote;
   }
 
-  if (item.category === "favor") {
+  if (resource.category === "favor") {
     return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 
-  if (item.subCategory === "artifact") {
+  if (resource.subCategory === "artifact") {
     return GROWTH_RESOURCE_KIND_ORDER.artifact;
   }
 
-  if (item.source === "equipment" || item.type === ResourceTypeEnum.Equipment) {
+  if (resource.source === "equipment" || resource.type === ResourceTypeEnum.Equipment) {
     return GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 
-  if (item.source === "gear") {
+  if (resource.source === "gear") {
     return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 
-  if (item.source === "relationship") {
+  if (resource.source === "relationship") {
     return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 
-  if (item.source === "skill") {
+  if (resource.source === "skill") {
     return GROWTH_RESOURCE_KIND_ORDER.artifact;
   }
 
-  return GROWTH_RESOURCE_KIND_ORDER.other;
+  return null;
+}
+
+export function getResourceKindOrder(item: GrowthResourceItem): number {
+  return classifyGrowthResourceKind(item) ?? GROWTH_RESOURCE_KIND_ORDER.other;
 }
 
 function getResourceWithinKindOrder(item: GrowthResourceItem, kindOrder: number): number {

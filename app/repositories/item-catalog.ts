@@ -4,11 +4,11 @@ import { runQuery } from "~/lib/baql";
 import { fetchCached } from "~/models/base";
 import {
   GROWTH_RESOURCE_KIND_ORDER,
+  classifyGrowthResourceKind,
   compareGrowthResourceKindOrder,
   getEquipmentBlueprintChoiceBoxTier,
   getEquipmentTier,
-  getEquipmentTypeKey,
-  getSkillMaterialChoiceBoxKindOrder,
+  getEquipmentTypeOrder,
   getSkillMaterialChoiceBoxRarity,
   shouldSortGrowthResourceKindByUid,
 } from "~/models/growth-resource";
@@ -82,51 +82,7 @@ export function getGrowthPlannerCatalogResources(resources: ItemCatalogResource[
 }
 
 export function getGrowthPlannerCatalogResourceKindOrder(resource: ItemCatalogResource): number | null {
-  const itemUid = Number(resource.uid);
-
-  if (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null) {
-    return GROWTH_RESOURCE_KIND_ORDER.equipment;
-  }
-
-  const skillMaterialChoiceBoxKindOrder = getSkillMaterialChoiceBoxKindOrder(resource.uid);
-  if (skillMaterialChoiceBoxKindOrder !== null) {
-    return skillMaterialChoiceBoxKindOrder;
-  }
-
-  if (resource.category === "secret_stone") {
-    return GROWTH_RESOURCE_KIND_ORDER.eleph;
-  }
-
-  if (resource.category === "character_exp_growth" || isUidInRange(itemUid, 10, 13)) {
-    return GROWTH_RESOURCE_KIND_ORDER.characterExp;
-  }
-
-  if (resource.subCategory === "cd_item" || isUidInRange(itemUid, 3000, 3999)) {
-    return GROWTH_RESOURCE_KIND_ORDER.bd;
-  }
-
-  if (
-    resource.subCategory === "book_item" ||
-    resource.uid === "9998" ||
-    resource.uid === "9999" ||
-    isUidInRange(itemUid, 4000, 4999)
-  ) {
-    return GROWTH_RESOURCE_KIND_ORDER.techNote;
-  }
-
-  if (resource.category === "favor") {
-    return GROWTH_RESOURCE_KIND_ORDER.favor;
-  }
-
-  if (resource.subCategory === "artifact") {
-    return GROWTH_RESOURCE_KIND_ORDER.artifact;
-  }
-
-  if (resource.type === "equipment") {
-    return GROWTH_RESOURCE_KIND_ORDER.equipment;
-  }
-
-  return null;
+  return classifyGrowthResourceKind(resource);
 }
 
 function compareGrowthPlannerCatalogResources(a: ItemCatalogResource, b: ItemCatalogResource): number {
@@ -202,18 +158,6 @@ function compareGrowthPlannerCatalogResources(a: ItemCatalogResource, b: ItemCat
   }
 
   return Number(a.uid) - Number(b.uid);
-}
-
-const EQUIPMENT_TYPE_ORDER = ["hat", "gloves", "shoes", "bag", "badge", "hairpin", "charm", "watch", "necklace"];
-
-function getEquipmentTypeOrder(uid: string): number {
-  const typeKey = getEquipmentTypeKey(uid);
-  const index = typeKey ? EQUIPMENT_TYPE_ORDER.indexOf(typeKey) : -1;
-  return index === -1 ? EQUIPMENT_TYPE_ORDER.length : index;
-}
-
-function isUidInRange(uid: number, start: number, end: number): boolean {
-  return Number.isFinite(uid) && uid >= start && uid <= end;
 }
 
 function compareUidAscending(a: string, b: string): number {

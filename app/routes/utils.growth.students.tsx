@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { data, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { getLogger } from "~/lib/observability.server";
 import { getRecruitedStudents, upsertRecruitedStudent } from "~/models/recruited-student";
 import {
   getRelationshipLevel,
@@ -43,27 +44,32 @@ const growthFieldKeys = [
 type GrowthActionData = {
   _intent?: "growth";
   studentUid: string;
+  _submissionId?: string;
 } & StudentGrowthInput;
 
 type TierActionData = {
   _intent: "tier";
   studentUid: string;
   tier: number;
+  _submissionId?: string;
 };
 
 type AddActionData = {
   _intent: "add";
   studentUid: string;
+  _submissionId?: string;
 };
 
 type RemoveActionData = {
   _intent: "remove";
   studentUid: string;
+  _submissionId?: string;
 };
 
 type EnrollActionData = {
   _intent: "enroll";
   studentUid: string;
+  _submissionId?: string;
 };
 
 type RelationshipActionData = {
@@ -71,6 +77,7 @@ type RelationshipActionData = {
   studentUid: string;
   currentLevel: number | null;
   targetLevel: number | null;
+  _submissionId?: string;
 };
 
 function parseNullableInteger(value: unknown): number | null {
@@ -105,6 +112,7 @@ function toGrowthInput(payload: Partial<GrowthActionData>): StudentGrowthInput {
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
+  const logger = getLogger(env, context.cloudflare.ctx, { route: "utils.growth.students.action" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<GrowthActionResult>({ error: "로그인이 필요해요" }, { status: 401 });
@@ -190,11 +198,11 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       );
     }
 
-    const row = await loadStudentRow(env, currentUser.id, payload.studentUid);
+    const row = await loadStudentRow(env, currentUser.id, payload.studentUid, { logger });
     if (!row) {
       return data<GrowthActionResult>({ error: "학생 정보를 다시 불러오지 못했어요" }, { status: 500 });
     }
-    return data<GrowthActionResult>({ kind: "studentUpdate", student: row });
+    return data<GrowthActionResult>({ kind: "studentUpdate", student: row, submissionId: payload._submissionId });
   } catch (error) {
     return data<GrowthActionResult>(
       { error: error instanceof Error ? error.message : "데이터를 저장하지 못했어요" },

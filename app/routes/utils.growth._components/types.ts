@@ -1,7 +1,7 @@
 import type { StudentGrowthResourceRequirements } from "~/models/growth-resource";
 
 export type GrowthActionResult =
-  | { kind: "studentUpdate"; student: GrowthStudent }
+  | { kind: "studentUpdate"; student: GrowthStudent; submissionId?: string }
   | { kind: "listChange"; requiresRevalidation: true }
   | { error: string };
 
