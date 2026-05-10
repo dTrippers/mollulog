@@ -1,9 +1,11 @@
-import { ArrowPathIcon, UserPlusIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowPathIcon, ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
-import { StudentSearchInput, TierSelector } from "~/components/features/students";
+import { StudentSelectForm } from "~/components/features/forms";
+import { TierSelector } from "~/components/features/students";
 import { Button, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
-import { EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
+import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
+import { getRelationshipLevelValidationError } from "~/models/relationship-level";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
 
 function extractStudentUpdate(actionData: GrowthActionResult | undefined): GrowthStudent | null {
@@ -13,6 +15,16 @@ function extractStudentUpdate(actionData: GrowthActionResult | undefined): Growt
 
 function isActionSuccess(actionData: GrowthActionResult | undefined): boolean {
   return Boolean(actionData && "kind" in actionData);
+}
+
+function getActionSubmissionId(actionData: GrowthActionResult | undefined): string | null {
+  if (!actionData || !("kind" in actionData)) {
+    return null;
+  }
+  if (actionData.kind !== "studentUpdate") {
+    return null;
+  }
+  return actionData.submissionId ?? null;
 }
 
 function getActionError(actionData: GrowthActionResult | undefined): string | null {
@@ -80,28 +92,6 @@ function getClientValidationError(values: GrowthValues): string | null {
   return null;
 }
 
-function getRelationshipValidationError(values: RelationshipValues): string | null {
-  const { relationshipCurrentLevel, relationshipTargetLevel } = values;
-
-  if (relationshipCurrentLevel != null && (relationshipCurrentLevel < 1 || relationshipCurrentLevel > 100)) {
-    return "현재 인연 랭크는 1부터 100 사이만 입력할 수 있어요";
-  }
-
-  if (relationshipTargetLevel != null && (relationshipTargetLevel < 1 || relationshipTargetLevel > 100)) {
-    return "목표 인연 랭크는 1부터 100 사이만 입력할 수 있어요";
-  }
-
-  if (
-    relationshipCurrentLevel != null &&
-    relationshipTargetLevel != null &&
-    relationshipTargetLevel < relationshipCurrentLevel
-  ) {
-    return "목표 인연 랭크는 현재 인연 랭크보다 낮을 수 없어요";
-  }
-
-  return null;
-}
-
 const cellBase = "border-b border-neutral-200 dark:border-neutral-700";
 const dataCellClass = `${cellBase} w-25 px-1 py-2`;
 const targetCellClass = `${cellBase} w-25 px-1 py-1.5 bg-blue-50/40 dark:bg-blue-950/10`;
@@ -111,35 +101,203 @@ function isGearField(key: CurrentFieldKey | TargetFieldKey): boolean {
   return key === "equipSpecial" || key === "targetEquipSpecial";
 }
 
+type GrowthSubmission = {
+  id: string;
+  values: GrowthValues;
+  targetTier: number | null;
+  draftRevision: number;
+};
+
+type RelationshipSubmission = {
+  id: string;
+  values: RelationshipValues;
+};
+
+type RowState = {
+  savedValues: GrowthValues;
+  draftValues: GrowthValues;
+  growthError: string | null;
+  targetTierDraft: number | null;
+  targetTierSaved: number | null;
+  growthDraftRevision: number;
+  savedRelationshipValues: RelationshipValues;
+  draftRelationshipValues: RelationshipValues;
+  relationshipError: string | null;
+  tierDraft: number;
+  enrollError: string | null;
+  isPendingSave: boolean;
+};
+
+type RowAction =
+  | { type: "syncGrowth"; values: GrowthValues; targetTier: number | null; tier: number }
+  | { type: "syncRelationship"; values: RelationshipValues }
+  | { type: "setDraftValues"; values: GrowthValues; draftRevision: number }
+  | { type: "setDraftRelationshipValues"; values: RelationshipValues }
+  | { type: "setTargetTierDraft"; targetTier: number | null; draftRevision: number }
+  | { type: "setTierDraft"; tier: number }
+  | { type: "setPendingSave"; pending: boolean }
+  | { type: "setGrowthError"; error: string | null }
+  | { type: "setRelationshipError"; error: string | null }
+  | { type: "clearEnrollError" }
+  | { type: "growthSuccess"; submitted: GrowthSubmission }
+  | { type: "growthFailure"; error: string; submitted: GrowthSubmission }
+  | { type: "relationshipSuccess"; submitted: RelationshipSubmission }
+  | { type: "relationshipFailure"; error: string }
+  | { type: "tierFailure"; tier: number }
+  | { type: "enrollSuccess" }
+  | { type: "enrollFailure"; error: string };
+
+function createRowState(
+  initialValues: GrowthValues,
+  initialRelationshipValues: RelationshipValues,
+  student: GrowthStudent,
+): RowState {
+  return {
+    savedValues: initialValues,
+    draftValues: initialValues,
+    growthError: null,
+    targetTierDraft: student.targetTier,
+    targetTierSaved: student.targetTier,
+    growthDraftRevision: 0,
+    savedRelationshipValues: initialRelationshipValues,
+    draftRelationshipValues: initialRelationshipValues,
+    relationshipError: null,
+    tierDraft: student.tier ?? student.initialTier,
+    enrollError: null,
+    isPendingSave: false,
+  };
+}
+
+function rowReducer(state: RowState, action: RowAction): RowState {
+  switch (action.type) {
+    case "syncGrowth":
+      return {
+        ...state,
+        savedValues: action.values,
+        draftValues: action.values,
+        targetTierDraft: action.targetTier,
+        targetTierSaved: action.targetTier,
+        growthDraftRevision: 0,
+        tierDraft: action.tier,
+        growthError: null,
+        enrollError: null,
+      };
+    case "syncRelationship":
+      return {
+        ...state,
+        savedRelationshipValues: action.values,
+        draftRelationshipValues: action.values,
+        relationshipError: null,
+      };
+    case "setDraftValues":
+      return { ...state, draftValues: action.values, growthDraftRevision: action.draftRevision };
+    case "setDraftRelationshipValues":
+      return { ...state, draftRelationshipValues: action.values };
+    case "setTargetTierDraft":
+      return { ...state, targetTierDraft: action.targetTier, growthDraftRevision: action.draftRevision };
+    case "setTierDraft":
+      return { ...state, tierDraft: action.tier };
+    case "setPendingSave":
+      return { ...state, isPendingSave: action.pending };
+    case "setGrowthError":
+      return { ...state, growthError: action.error };
+    case "setRelationshipError":
+      return { ...state, relationshipError: action.error };
+    case "clearEnrollError":
+      return { ...state, enrollError: null };
+    case "growthSuccess":
+      return {
+        ...state,
+        savedValues: { ...action.submitted.values },
+        draftValues:
+          state.growthDraftRevision === action.submitted.draftRevision
+            ? { ...action.submitted.values }
+            : state.draftValues,
+        targetTierSaved: action.submitted.targetTier,
+        targetTierDraft:
+          state.growthDraftRevision === action.submitted.draftRevision
+            ? action.submitted.targetTier
+            : state.targetTierDraft,
+        growthError: null,
+        isPendingSave: false,
+      };
+    case "growthFailure":
+      return {
+        ...state,
+        growthError: action.error,
+        draftValues:
+          state.growthDraftRevision === action.submitted.draftRevision
+            ? state.savedValues
+            : state.draftValues,
+        targetTierDraft:
+          state.growthDraftRevision === action.submitted.draftRevision
+            ? state.targetTierSaved
+            : state.targetTierDraft,
+        isPendingSave: false,
+      };
+    case "relationshipSuccess":
+      return {
+        ...state,
+        savedRelationshipValues: { ...action.submitted.values },
+        draftRelationshipValues: { ...action.submitted.values },
+        relationshipError: null,
+      };
+    case "relationshipFailure":
+      return {
+        ...state,
+        relationshipError: action.error,
+        draftRelationshipValues: state.savedRelationshipValues,
+      };
+    case "tierFailure":
+      return { ...state, tierDraft: action.tier, isPendingSave: false };
+    case "enrollSuccess":
+      return { ...state, enrollError: null };
+    case "enrollFailure":
+      return { ...state, enrollError: action.error };
+  }
+
+  return state;
+}
+
 function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStudentUpdate: (s: GrowthStudent) => void }) {
   const fetcher = useFetcher<GrowthActionResult>();
   const initialValues = useMemo(() => pickGrowthValues(student), [student]);
-  const [savedValues, setSavedValues] = useState<GrowthValues>(initialValues);
-  const [draftValues, setDraftValues] = useState<GrowthValues>(initialValues);
-  const [growthError, setGrowthError] = useState<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const submittedRef = useRef<{ values: GrowthValues; targetTier: number | null } | null>(null);
-
-  const [targetTierDraft, setTargetTierDraft] = useState<number | null>(student.targetTier);
-  const [targetTierSaved, setTargetTierSaved] = useState<number | null>(student.targetTier);
+  const submittedRef = useRef<GrowthSubmission | null>(null);
 
   const relationshipFetcher = useFetcher<GrowthActionResult>();
   const initialRelationshipValues = useMemo(() => pickRelationshipValues(student), [student]);
-  const [savedRelationshipValues, setSavedRelationshipValues] = useState<RelationshipValues>(initialRelationshipValues);
-  const [draftRelationshipValues, setDraftRelationshipValues] = useState<RelationshipValues>(initialRelationshipValues);
-  const [relationshipError, setRelationshipError] = useState<string | null>(null);
   const relationshipSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const relationshipSubmittedRef = useRef<RelationshipValues | null>(null);
+  const relationshipSubmittedRef = useRef<RelationshipSubmission | null>(null);
 
   const tierFetcher = useFetcher<GrowthActionResult>();
-  const [tierDraft, setTierDraft] = useState(student.tier ?? student.initialTier);
-  const tierSubmittedRef = useRef<number | null>(null);
+  const tierSubmittedRef = useRef<{ id: string; tier: number } | null>(null);
 
   const removeFetcher = useFetcher<GrowthActionResult>();
   const enrollFetcher = useFetcher<GrowthActionResult>();
-  const [enrollError, setEnrollError] = useState<string | null>(null);
+  const enrollSubmittedRef = useRef<{ id: string } | null>(null);
+  const submissionSequenceRef = useRef(0);
+  const growthDraftRevisionRef = useRef(0);
+  const [rowState, dispatchRow] = useReducer(
+    rowReducer,
+    { initialValues, initialRelationshipValues, student },
+    ({ initialValues, initialRelationshipValues, student }) =>
+      createRowState(initialValues, initialRelationshipValues, student),
+  );
+  const {
+    draftValues,
+    growthError,
+    targetTierDraft,
+    draftRelationshipValues,
+    relationshipError,
+    tierDraft,
+    enrollError,
+    isPendingSave,
+  } = rowState;
 
-  const [isPendingSave, setIsPendingSave] = useState(false);
+  const [isResourceRequirementsOpen, setIsResourceRequirementsOpen] = useState(false);
+  const resourceRequirementsContentRef = useRef<HTMLDivElement>(null);
+  const [resourceRequirementsHeight, setResourceRequirementsHeight] = useState(0);
 
   const equipLabels: Partial<Record<CurrentFieldKey | TargetFieldKey, string>> = {
     equip1: EQUIPMENT_TYPE_LABELS[student.equipments[0]] ?? "",
@@ -150,9 +308,19 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     targetEquip3: EQUIPMENT_TYPE_LABELS[student.equipments[2]] ?? "",
   };
 
+  const nextSubmissionId = () => {
+    submissionSequenceRef.current += 1;
+    return `${student.uid}:${submissionSequenceRef.current}`;
+  };
+  const nextGrowthDraftRevision = () => {
+    growthDraftRevisionRef.current += 1;
+    return growthDraftRevisionRef.current;
+  };
+
   useEffect(() => {
     // Always sync tier display
-    setTierDraft(student.tier ?? student.initialTier);
+    const nextTier = student.tier ?? student.initialTier;
+    dispatchRow({ type: "setTierDraft", tier: nextTier });
     const shouldKeepSubmittedValues =
       fetcher.state === "idle" &&
       saveTimerRef.current == null &&
@@ -161,15 +329,32 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     if (shouldKeepSubmittedValues) return;
     // Skip draft reset if growth save is in-flight or pending
     if (fetcher.state !== "idle" || saveTimerRef.current != null) return;
-    setSavedValues(initialValues);
-    setDraftValues(initialValues);
-    setTargetTierDraft(student.targetTier);
-    setTargetTierSaved(student.targetTier);
-    setGrowthError(null);
-    setEnrollError(null);
+    growthDraftRevisionRef.current = 0;
+    dispatchRow({ type: "syncGrowth", values: initialValues, targetTier: student.targetTier, tier: nextTier });
     submittedRef.current = null;
     tierSubmittedRef.current = null;
   }, [initialValues, student.targetTier, student.tier, student.initialTier, fetcher.state, fetcher.data]);
+
+  useEffect(() => {
+    if (!isResourceRequirementsOpen) {
+      setResourceRequirementsHeight(0);
+      return;
+    }
+
+    const content = resourceRequirementsContentRef.current;
+    if (!content) return;
+
+    const updateHeight = () => {
+      setResourceRequirementsHeight(content.scrollHeight);
+    };
+    updateHeight();
+
+    if (typeof ResizeObserver === "undefined") return;
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [isResourceRequirementsOpen]);
 
   useEffect(() => {
     const shouldKeepSubmittedValues =
@@ -179,76 +364,75 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
       isActionSuccess(relationshipFetcher.data);
     if (shouldKeepSubmittedValues) return;
     if (relationshipFetcher.state !== "idle" || relationshipSaveTimerRef.current != null) return;
-    setSavedRelationshipValues(initialRelationshipValues);
-    setDraftRelationshipValues(initialRelationshipValues);
-    setRelationshipError(null);
+    dispatchRow({ type: "syncRelationship", values: initialRelationshipValues });
     relationshipSubmittedRef.current = null;
   }, [initialRelationshipValues, relationshipFetcher.state, relationshipFetcher.data]);
 
   useEffect(() => {
     if (fetcher.state !== "idle") return;
-    setIsPendingSave(false);
+    dispatchRow({ type: "setPendingSave", pending: false });
     if (!submittedRef.current) return;
     const submitted = submittedRef.current;
+    const responseSubmissionId = getActionSubmissionId(fetcher.data);
+    if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     submittedRef.current = null;
     if (isActionSuccess(fetcher.data)) {
-      setSavedValues({ ...submitted.values });
-      setDraftValues({ ...submitted.values });
-      setTargetTierSaved(submitted.targetTier);
-      setTargetTierDraft(submitted.targetTier);
-      setGrowthError(null);
+      dispatchRow({ type: "growthSuccess", submitted });
       const next = extractStudentUpdate(fetcher.data);
       if (next) onStudentUpdate(next);
     } else {
       const err = getActionError(fetcher.data);
       if (err) {
-        setGrowthError(err);
-        setDraftValues(savedValues);
-        setTargetTierDraft(targetTierSaved);
+        dispatchRow({ type: "growthFailure", error: err, submitted });
       }
     }
-  }, [fetcher.state, fetcher.data, savedValues, targetTierSaved, onStudentUpdate]);
+  }, [fetcher.state, fetcher.data, onStudentUpdate]);
 
   useEffect(() => {
     if (relationshipFetcher.state !== "idle" || !relationshipSubmittedRef.current) return;
     const submitted = relationshipSubmittedRef.current;
+    const responseSubmissionId = getActionSubmissionId(relationshipFetcher.data);
+    if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     relationshipSubmittedRef.current = null;
     if (isActionSuccess(relationshipFetcher.data)) {
-      setSavedRelationshipValues({ ...submitted });
-      setDraftRelationshipValues({ ...submitted });
-      setRelationshipError(null);
+      dispatchRow({ type: "relationshipSuccess", submitted });
       const next = extractStudentUpdate(relationshipFetcher.data);
       if (next) onStudentUpdate(next);
     } else {
       const err = getActionError(relationshipFetcher.data);
       if (err) {
-        setRelationshipError(err);
-        setDraftRelationshipValues(savedRelationshipValues);
+        dispatchRow({ type: "relationshipFailure", error: err });
       }
     }
-  }, [relationshipFetcher.state, relationshipFetcher.data, savedRelationshipValues, onStudentUpdate]);
+  }, [relationshipFetcher.state, relationshipFetcher.data, onStudentUpdate]);
 
   useEffect(() => {
     if (tierFetcher.state !== "idle") return;
-    setIsPendingSave(false);
+    dispatchRow({ type: "setPendingSave", pending: false });
     if (tierSubmittedRef.current == null) return;
     const submitted = tierSubmittedRef.current;
+    const responseSubmissionId = getActionSubmissionId(tierFetcher.data);
+    if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     tierSubmittedRef.current = null;
     if (isActionSuccess(tierFetcher.data)) {
       const next = extractStudentUpdate(tierFetcher.data);
       if (next) onStudentUpdate(next);
     } else {
-      void submitted;
-      setTierDraft(student.tier ?? student.initialTier);
+      dispatchRow({ type: "tierFailure", tier: student.tier ?? student.initialTier });
     }
   }, [tierFetcher.state, tierFetcher.data, student.tier, student.initialTier, onStudentUpdate]);
 
   useEffect(() => {
     if (enrollFetcher.state !== "idle") return;
     if (!enrollFetcher.data) return;
+    if (!enrollSubmittedRef.current) return;
+    const submitted = enrollSubmittedRef.current;
+    const responseSubmissionId = getActionSubmissionId(enrollFetcher.data);
+    if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
+    enrollSubmittedRef.current = null;
 
     if (isActionSuccess(enrollFetcher.data)) {
-      setEnrollError(null);
+      dispatchRow({ type: "enrollSuccess" });
       const next = extractStudentUpdate(enrollFetcher.data);
       if (next) onStudentUpdate(next);
       return;
@@ -256,25 +440,26 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
 
     const err = getActionError(enrollFetcher.data);
     if (err) {
-      setEnrollError(err);
+      dispatchRow({ type: "enrollFailure", error: err });
     }
   }, [enrollFetcher.state, enrollFetcher.data, onStudentUpdate]);
 
-  const scheduleAutoSave = (values: GrowthValues, targetTier: number | null) => {
+  const scheduleAutoSave = (values: GrowthValues, targetTier: number | null, draftRevision: number) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    setIsPendingSave(true);
+    dispatchRow({ type: "setPendingSave", pending: true });
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
       const validationError = getClientValidationError(values);
       if (validationError) {
-        setGrowthError(validationError);
-        setIsPendingSave(false);
+        dispatchRow({ type: "setGrowthError", error: validationError });
+        dispatchRow({ type: "setPendingSave", pending: false });
         return;
       }
-      setGrowthError(null);
-      submittedRef.current = { values, targetTier };
+      dispatchRow({ type: "setGrowthError", error: null });
+      const submissionId = nextSubmissionId();
+      submittedRef.current = { id: submissionId, values, targetTier, draftRevision };
       fetcher.submit(
-        { studentUid: student.uid, ...values, targetTier },
+        { studentUid: student.uid, _submissionId: submissionId, ...values, targetTier },
         { method: "post", encType: "application/json" },
       );
     }, 500);
@@ -284,16 +469,21 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     if (relationshipSaveTimerRef.current) clearTimeout(relationshipSaveTimerRef.current);
     relationshipSaveTimerRef.current = setTimeout(() => {
       relationshipSaveTimerRef.current = null;
-      const validationError = getRelationshipValidationError(values);
+      const validationError = getRelationshipLevelValidationError({
+        currentLevel: values.relationshipCurrentLevel,
+        targetLevel: values.relationshipTargetLevel,
+      });
       if (validationError) {
-        setRelationshipError(validationError);
+        dispatchRow({ type: "setRelationshipError", error: validationError });
         return;
       }
-      setRelationshipError(null);
-      relationshipSubmittedRef.current = values;
+      dispatchRow({ type: "setRelationshipError", error: null });
+      const submissionId = nextSubmissionId();
+      relationshipSubmittedRef.current = { id: submissionId, values };
       relationshipFetcher.submit(
         {
           _intent: "relationship",
+          _submissionId: submissionId,
           studentUid: student.uid,
           currentLevel: values.relationshipCurrentLevel,
           targetLevel: values.relationshipTargetLevel,
@@ -306,28 +496,31 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
   const effectiveTier = student.isRecruited ? tierDraft : student.initialTier;
   const handleFieldChange = (field: keyof GrowthValues, nextValue: number | null) => {
     const newValues = { ...draftValues, [field]: nextValue };
-    setDraftValues(newValues);
-    scheduleAutoSave(newValues, targetTierDraft);
+    const draftRevision = nextGrowthDraftRevision();
+    dispatchRow({ type: "setDraftValues", values: newValues, draftRevision });
+    scheduleAutoSave(newValues, targetTierDraft, draftRevision);
   };
 
   const handleRelationshipFieldChange = (field: keyof RelationshipValues, nextValue: number | null) => {
     const newValues = { ...draftRelationshipValues, [field]: nextValue };
-    setDraftRelationshipValues(newValues);
+    dispatchRow({ type: "setDraftRelationshipValues", values: newValues });
     scheduleRelationshipSave(newValues);
   };
 
   const handleTargetTierChange = (newTier: number) => {
     const clamped = Math.max(newTier, effectiveTier);
-    setTargetTierDraft(clamped);
-    scheduleAutoSave(draftValues, clamped);
+    const draftRevision = nextGrowthDraftRevision();
+    dispatchRow({ type: "setTargetTierDraft", targetTier: clamped, draftRevision });
+    scheduleAutoSave(draftValues, clamped, draftRevision);
   };
 
   const handleCurrentTierChange = (newTier: number) => {
-    setTierDraft(newTier);
-    setIsPendingSave(true);
-    tierSubmittedRef.current = newTier;
+    dispatchRow({ type: "setTierDraft", tier: newTier });
+    dispatchRow({ type: "setPendingSave", pending: true });
+    const submissionId = nextSubmissionId();
+    tierSubmittedRef.current = { id: submissionId, tier: newTier };
     tierFetcher.submit(
-      { _intent: "tier", studentUid: student.uid, tier: newTier },
+      { _intent: "tier", _submissionId: submissionId, studentUid: student.uid, tier: newTier },
       { method: "post", encType: "application/json" },
     );
   };
@@ -340,7 +533,8 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
       }
       newValues[key] = max;
     }
-    setDraftValues(newValues);
+    const draftRevision = nextGrowthDraftRevision();
+    dispatchRow({ type: "setDraftValues", values: newValues, draftRevision });
     // Submit growth immediately (no debounce) to avoid race with tier revalidation
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
@@ -348,11 +542,12 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     }
     const validationError = getClientValidationError(newValues);
     if (!validationError) {
-      setGrowthError(null);
-      setIsPendingSave(true);
-      submittedRef.current = { values: newValues, targetTier: targetTierDraft };
+      dispatchRow({ type: "setGrowthError", error: null });
+      dispatchRow({ type: "setPendingSave", pending: true });
+      const submissionId = nextSubmissionId();
+      submittedRef.current = { id: submissionId, values: newValues, targetTier: targetTierDraft, draftRevision };
       fetcher.submit(
-        { studentUid: student.uid, ...newValues, targetTier: targetTierDraft },
+        { studentUid: student.uid, _submissionId: submissionId, ...newValues, targetTier: targetTierDraft },
         { method: "post", encType: "application/json" },
       );
     }
@@ -366,11 +561,15 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
       }
       newValues[targetKey] = max;
     }
-    setDraftValues(newValues);
-    scheduleAutoSave(newValues, targetTierDraft);
+    const draftRevision = nextGrowthDraftRevision();
+    dispatchRow({ type: "setDraftValues", values: newValues, draftRevision });
+    scheduleAutoSave(newValues, targetTierDraft, draftRevision);
   };
 
   const displayedError = enrollError ?? growthError ?? relationshipError;
+  const isCalculatingResources = isPendingSave || fetcher.state !== "idle" || tierFetcher.state !== "idle";
+  const hasResourceRequirements =
+    student.resourceRequirements.items.length > 0 || student.resourceRequirements.characterExp > 0;
 
   return (
     <>
@@ -496,9 +695,11 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                   <Button
                     size="xs"
                     onClick={() => {
-                      setEnrollError(null);
+                      dispatchRow({ type: "clearEnrollError" });
+                      const submissionId = nextSubmissionId();
+                      enrollSubmittedRef.current = { id: submissionId };
                       enrollFetcher.submit(
-                        { _intent: "enroll", studentUid: student.uid },
+                        { _intent: "enroll", _submissionId: submissionId, studentUid: student.uid },
                         { method: "post", encType: "application/json" },
                       );
                     }}
@@ -579,45 +780,67 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
         <td
           className={`${cellBase} w-10 px-1 py-2 text-center text-xs font-medium text-emerald-600 bg-emerald-50/60 dark:text-emerald-400 dark:bg-emerald-950/10`}
         >
-          재화
+          <button
+            type="button"
+            className="flex w-full items-center justify-center gap-0.5"
+            aria-expanded={isResourceRequirementsOpen}
+            onClick={() => setIsResourceRequirementsOpen((open) => !open)}
+          >
+            {isResourceRequirementsOpen ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
+            <span className="whitespace-nowrap">재화</span>
+          </button>
         </td>
         <td
           colSpan={fieldDefinitions.length + 3}
-          className={`relative ${cellBase} w-0 max-w-0 px-3 pt-2 pb-3 bg-emerald-50/20 dark:bg-emerald-950/5`}
+          className={`relative ${cellBase} w-0 max-w-0 px-3 py-2 bg-emerald-50/20 dark:bg-emerald-950/5`}
         >
-          {(() => {
-            const isCalculating = isPendingSave || fetcher.state !== "idle" || tierFetcher.state !== "idle";
-            return (
-              <>
-                <div className={`${isCalculating ? "opacity-40 pointer-events-none" : ""} transition-opacity duration-200`}>
-                  {student.resourceRequirements.items.length > 0 ? (
-                    <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
-                      {student.resourceRequirements.items.map((item) => (
-                        <ResourceCard
-                          key={`${student.uid}-${item.uid}`}
-                          itemUid={item.uid}
-                          resourceType={item.type}
-                          rarity={item.rarity}
-                          label={item.amount.toLocaleString()}
-                          name={item.name}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-center font-medium text-neutral-400 dark:text-neutral-500">
-                      필요한 재화가 없어요
-                    </p>
-                  )}
-                </div>
-                {isCalculating && (
-                  <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                    <ArrowPathIcon className="size-4 animate-spin" />
-                    <span>재화 계산 중...</span>
+          <div
+            className={`${isCalculatingResources ? "opacity-40 pointer-events-none" : ""} transition-opacity duration-200`}
+          >
+            {!isResourceRequirementsOpen ? (
+              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                {hasResourceRequirements ? "펼쳐서 필요 재화 확인" : "필요한 재화가 없어요"}
+              </p>
+            ) : null}
+            <div
+              className="overflow-hidden transition-all duration-200 ease-out"
+              style={{
+                maxHeight: isResourceRequirementsOpen ? resourceRequirementsHeight : 0,
+                opacity: isResourceRequirementsOpen ? 1 : 0,
+              }}
+              aria-hidden={!isResourceRequirementsOpen}
+            >
+              <div ref={resourceRequirementsContentRef}>
+                {hasResourceRequirements ? (
+                  <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
+                    {student.resourceRequirements.characterExp > 0 ? (
+                      <CharacterExpRequirementCard characterExp={student.resourceRequirements.characterExp} />
+                    ) : null}
+                    {student.resourceRequirements.items.map((item) => (
+                      <ResourceCard
+                        key={`${student.uid}-${item.uid}`}
+                        itemUid={item.uid}
+                        resourceType={item.type}
+                        rarity={item.rarity}
+                        label={item.amount.toLocaleString()}
+                        name={item.name}
+                      />
+                    ))}
                   </div>
+                ) : (
+                  <p className="text-xs text-center font-medium text-neutral-400 dark:text-neutral-500">
+                    필요한 재화가 없어요
+                  </p>
                 )}
-              </>
-            );
-          })()}
+              </div>
+            </div>
+          </div>
+          {isCalculatingResources && (
+            <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+              <ArrowPathIcon className="size-4 animate-spin" />
+              <span>재화 계산 중...</span>
+            </div>
+          )}
         </td>
       </tr>
     </>
@@ -626,41 +849,59 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
 
 const TOTAL_COLS = 4 + fieldDefinitions.length;
 
-function AddStudentRow({ availableStudents, isFirst }: { availableStudents: GrowthAvailableStudent[]; isFirst: boolean }) {
-  const [isOpen, setIsOpen] = useState(false);
+function AddStudentControl({
+  availableStudents,
+  isEmpty,
+}: {
+  availableStudents: GrowthAvailableStudent[];
+  isEmpty: boolean;
+}) {
   const fetcher = useFetcher();
+  const [selectKey, setSelectKey] = useState(0);
 
   return (
-    <tr>
-      <td colSpan={TOTAL_COLS} className="border-b border-neutral-200 bg-neutral-50 px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900">
-        {isFirst && (
-          <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">
-            학생 이름을 검색하여 성장 목표를 관리할 학생을 등록해주세요.
-          </p>
-        )}
-        {isOpen ? (
-          <div className="py-1 max-w-md">
-            <StudentSearchInput
-              placeholder="학생 이름으로 검색해서 추가..."
-              students={availableStudents}
-              grid={6}
-              size="sm"
-              onSelect={(studentUid) => {
-                fetcher.submit({ _intent: "add", studentUid }, { method: "post", encType: "application/json" });
-              }}
-            />
-            <Button size="sm" variant="default" onClick={() => setIsOpen(false)}>
-              취소
-            </Button>
-          </div>
-        ) : (
-          <Button size="sm" variant="inverse" onClick={() => setIsOpen(true)}>
-            <UserPlusIcon className="size-4" />
-            학생 추가
-          </Button>
-        )}
-      </td>
-    </tr>
+    <div className="flex items-start gap-3">
+      <div className="w-full max-w-md">
+        <StudentSelectForm
+          key={selectKey}
+          placeholder="성장 목표 학생 추가"
+          searchPlaceholder="학생 이름으로 검색"
+          students={availableStudents}
+          className="max-w-none"
+          containerClassName="mt-0 mb-0"
+          onSelect={(value) => {
+            const studentUid = Array.isArray(value) ? value[0] : value;
+            if (!studentUid) return;
+
+            fetcher.submit({ _intent: "add", studentUid }, { method: "post", encType: "application/json" });
+            setSelectKey((key) => key + 1);
+          }}
+        />
+      </div>
+      {isEmpty ? (
+        <p className="pt-8 text-sm text-neutral-500 dark:text-neutral-400">
+          학생 이름을 검색하여 성장 목표를 관리할 학생을 등록해주세요.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function CharacterExpRequirementCard({ characterExp }: { characterExp: number }) {
+  return (
+    <div className="flex items-center gap-2 pr-1">
+      <ResourceCard
+        itemUid={CHARACTER_EXP_REPORTS[0].uid}
+        rarity={CHARACTER_EXP_REPORTS[0].rarity}
+        name="활동 보고서"
+      />
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">레벨 경험치</p>
+        <p className="text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-200">
+          {characterExp.toLocaleString()}
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -674,29 +915,31 @@ export default function GrowthTable({
   onStudentUpdate: (student: GrowthStudent) => void;
 }) {
   return (
-    <div className="max-w-full overflow-x-auto">
-      <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
-        <table className="w-max border-collapse">
-          <thead className="bg-neutral-50 dark:bg-neutral-900">
-            <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-              <th className="px-1 py-3" />
-              <th className="px-2 py-3 text-center">성급</th>
-              <th className="min-w-20 px-2 py-3 text-center">인연 랭크</th>
-              <th className="px-2 py-3 text-center">일괄 적용</th>
-              {fieldDefinitions.map(({ key, label }) => (
-                <th key={key} className="w-16 px-1 py-3 text-center">
-                  {label}
-                </th>
+    <div className="space-y-2">
+      <AddStudentControl availableStudents={availableStudents} isEmpty={students.length === 0} />
+      <div className="max-w-full overflow-x-auto">
+        <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
+          <table className="w-max border-collapse">
+            <thead className="bg-neutral-50 dark:bg-neutral-900">
+              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                <th className="px-1 py-3" />
+                <th className="px-2 py-3 text-center">성급</th>
+                <th className="min-w-20 px-2 py-3 text-center">인연 랭크</th>
+                <th className="px-2 py-3 text-center">일괄 적용</th>
+                {fieldDefinitions.map(({ key, label }) => (
+                  <th key={key} className="w-16 px-1 py-3 text-center">
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((student) => (
+                <GrowthRow key={student.uid} student={student} onStudentUpdate={onStudentUpdate} />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            <AddStudentRow availableStudents={availableStudents} isFirst={students.length === 0} />
-            {students.map((student) => (
-              <GrowthRow key={student.uid} student={student} onStudentUpdate={onStudentUpdate} />
-            ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

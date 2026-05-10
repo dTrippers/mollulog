@@ -6,9 +6,10 @@ export type PageLinkProps = {
   title: string;
   description: string;
   to: string;
+  preventScrollReset?: boolean;
 };
 
-export default function PageLink({ Icon, title, description, to }: PageLinkProps) {
+export default function PageLink({ Icon, title, description, to, preventScrollReset }: PageLinkProps) {
   const inner = (
     <div className="flex items-center justify-between px-3 md:px-4 py-3 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-lg hover:shadow-md transition-all duration-200">
       <div className="flex items-center gap-3">
@@ -33,7 +34,7 @@ export default function PageLink({ Icon, title, description, to }: PageLinkProps
   }
 
   return (
-    <Link to={to} className="my-4 block group">
+    <Link to={to} preventScrollReset={preventScrollReset} className="my-4 block group">
       {inner}
     </Link>
   );

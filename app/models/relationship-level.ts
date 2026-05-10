@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import { RELATIONSHIP_EXP_TABLE } from "./constants";
 
 export const relationshipLevelsTable = sqliteTable("user_relationship_levels", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -30,6 +31,35 @@ export type RelationshipLevelInput = {
   targetLevel: number | null;
 };
 
+export function getAccumulatedRelationshipExpForLevel(level: number): number {
+  return RELATIONSHIP_EXP_TABLE.find((entry) => entry.level === level)?.accumulatedExp ?? 0;
+}
+
+export function getRelationshipLevelValidationError(input: RelationshipLevelInput): string | null {
+  const { currentLevel, targetLevel } = input;
+
+  if (currentLevel != null && (!Number.isInteger(currentLevel) || currentLevel < 1 || currentLevel > 100)) {
+    return "현재 인연 랭크는 1부터 100 사이만 입력할 수 있어요";
+  }
+
+  if (targetLevel != null && (!Number.isInteger(targetLevel) || targetLevel < 1 || targetLevel > 100)) {
+    return "목표 인연 랭크는 1부터 100 사이만 입력할 수 있어요";
+  }
+
+  if (currentLevel != null && targetLevel != null && targetLevel < currentLevel) {
+    return "목표 인연 랭크는 현재 인연 랭크보다 낮을 수 없어요";
+  }
+
+  return null;
+}
+
+function assertValidRelationshipLevelInput(input: RelationshipLevelInput) {
+  const validationError = getRelationshipLevelValidationError(input);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+}
+
 function toModel(relationshipLevel: typeof relationshipLevelsTable.$inferSelect): RelationshipLevel {
   return {
     uid: relationshipLevel.uid,
@@ -52,17 +82,7 @@ export function resolveRelationshipLevelInput(
   const currentLevel = input.currentLevel ?? 1;
   const targetLevel = input.targetLevel ?? currentLevel;
 
-  if (!Number.isInteger(currentLevel) || currentLevel < 1 || currentLevel > 100) {
-    throw new Error("현재 인연 랭크는 1부터 100 사이만 입력할 수 있어요");
-  }
-
-  if (!Number.isInteger(targetLevel) || targetLevel < 1 || targetLevel > 100) {
-    throw new Error("목표 인연 랭크는 1부터 100 사이만 입력할 수 있어요");
-  }
-
-  if (targetLevel < currentLevel) {
-    throw new Error("목표 인연 랭크는 현재 인연 랭크보다 낮을 수 없어요");
-  }
+  assertValidRelationshipLevelInput({ currentLevel, targetLevel });
 
   const currentExp =
     existingRelationshipLevel?.currentLevel === currentLevel ? existingRelationshipLevel.currentExp : null;
@@ -103,15 +123,7 @@ export async function upsertRelationshipLevel(
   targetLevel: number,
   items: Record<string, number>,
 ) {
-  if (currentLevel < 1 || currentLevel > 100) {
-    throw new Error(`Invalid current level: ${currentLevel}`);
-  }
-  if (targetLevel < 1 || targetLevel > 100) {
-    throw new Error(`Invalid target level: ${targetLevel}`);
-  }
-  if (targetLevel < currentLevel) {
-    throw new Error("Invalid relationship levels");
-  }
+  assertValidRelationshipLevelInput({ currentLevel, targetLevel });
 
   const db = drizzle(env.DB);
   const uid = nanoid(8);

@@ -13,6 +13,7 @@ type NumberInputBaseProps = {
   maxButtonVariant?: "default" | "active";
   showDecrease?: boolean;
   showIncrease?: boolean;
+  fullWidth?: boolean;
 };
 
 type NonNullableProps = NumberInputBaseProps & {
@@ -63,6 +64,7 @@ export default function NumberInput({
   maxButtonVariant = "default",
   showDecrease = true,
   showIncrease = true,
+  fullWidth = false,
   onChange,
   ...rest
 }: NumberInputProps) {
@@ -104,7 +106,7 @@ export default function NumberInput({
   const shortcutButtonClass = (variant: "default" | "active") =>
     cn(
       buttonBaseClass,
-      size === "sm" && "border-l border-neutral-200 px-1 py-0.5 text-[10px] dark:border-neutral-700",
+      size === "sm" && "border-l border-neutral-200 px-1 py-0.5 text-xs dark:border-neutral-700",
       size === "md" && "min-h-10 border-l border-border px-2.5 text-xs font-medium",
       size === "lg" && "min-h-10 border-l border-border px-2.5 text-xs font-semibold",
       variant === "active"
@@ -124,10 +126,11 @@ export default function NumberInput({
     >
       <div
         className={cn(
-          "flex w-full max-w-96 items-center overflow-hidden rounded-md border transition-colors",
+          "flex w-full items-center overflow-hidden rounded-md border transition-colors",
+          fullWidth ? "max-w-none" : "max-w-96",
           size === "sm" && "border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900",
           size === "md" &&
-            "max-w-96 min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
+            "min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
           size === "lg" &&
             "min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 md:min-h-11",
         )}

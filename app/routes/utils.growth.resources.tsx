@@ -1,36 +1,31 @@
-import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { data, redirect, useLoaderData, useOutletContext } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { data, redirect, useActionData, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { EmptyView } from "~/components/primitives";
-import { getGrowthResourceInventoryMap, upsertGrowthResourceInventory } from "~/models/growth-resource-inventory";
-import { aggregateGrowthResourceRequirements } from "~/models/growth-resource";
-import ResourceInventoryTable from "./utils.growth._components/ResourceInventoryTable";
+import {
+  aggregateGrowthResourceRequirements,
+  buildRelationshipGiftResourceRequirements,
+} from "~/models/growth-resource";
+import { getRelationshipLevels } from "~/models/relationship-level";
+import {
+  getUserResourceInventoryMap,
+  parseUserResourceInventoryQuantity,
+  upsertUserResourceInventories,
+} from "~/models/user-resource-inventory";
+import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/repositories/item-catalog";
+import ResourceInventoryEditor from "./utils.growth.resources._components/ResourceInventoryEditor";
 import type { GrowthLayoutContext } from "./utils.growth._components/types";
 
-type ResourceInventoryActionData = {
-  itemUid?: unknown;
-  quantity?: unknown;
+type ResourceInventorySavePayload = {
+  items?: unknown;
 };
 
-function parseOwnedQuantity(value: unknown): number {
-  if (typeof value === "number") {
-    if (!Number.isInteger(value)) {
-      throw new Error("보유 수량은 0 이상의 정수만 입력할 수 있어요");
-    }
-    return value;
-  }
+type ActionData = {
+  error?: string;
+  saved?: boolean;
+  savedAt?: number;
+};
 
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!/^\d+$/.test(trimmed)) {
-      throw new Error("보유 수량은 0 이상의 정수만 입력할 수 있어요");
-    }
-    return Number(trimmed);
-  }
-
-  throw new Error("보유 수량은 0 이상의 정수만 입력할 수 있어요");
-}
+export const meta: MetaFunction = () => [{ title: "보유 재화 관리 | 몰루로그" }];
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -39,8 +34,16 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     return redirect("/unauthorized");
   }
 
+  const [catalogResources, ownedQuantities, relationshipLevels] = await Promise.all([
+    getItemCatalogResources(env),
+    getUserResourceInventoryMap(env, currentUser.id),
+    getRelationshipLevels(env, currentUser.id),
+  ]);
+
   return {
-    ownedQuantities: await getGrowthResourceInventoryMap(env, currentUser.id),
+    resources: getGrowthPlannerCatalogResources(catalogResources),
+    ownedQuantities,
+    relationshipGiftRequirements: buildRelationshipGiftResourceRequirements(relationshipLevels, catalogResources),
   };
 };
 
@@ -48,52 +51,71 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
-    return data({ error: "로그인이 필요해요" }, { status: 401 });
+    return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
   }
 
   if (request.method !== "POST") {
-    return data({ error: "지원하지 않는 요청 방식이에요" }, { status: 405 });
+    return data<ActionData>({ error: "지원하지 않는 요청 방식이에요" }, { status: 405 });
   }
 
   try {
-    const payload = await request.json<ResourceInventoryActionData>();
-    if (typeof payload.itemUid !== "string" || payload.itemUid.length === 0) {
-      return data({ error: "재화 정보가 필요해요" }, { status: 400 });
+    const payload = await request.json<ResourceInventorySavePayload>();
+    if (!Array.isArray(payload.items)) {
+      return data<ActionData>({ error: "저장할 재화가 필요해요" }, { status: 400 });
     }
 
-    const quantity = parseOwnedQuantity(payload.quantity);
-    await upsertGrowthResourceInventory(env, currentUser.id, payload.itemUid, quantity);
+    const resourceUidSet = new Set((await getItemCatalogResources(env)).map((resource) => resource.uid));
+    const ownedQuantities = await getUserResourceInventoryMap(env, currentUser.id);
+    const items = payload.items
+      .map((item) => parseDraftItem(item))
+      .filter((item) => resourceUidSet.has(item.itemUid))
+      .filter((item) => item.quantity !== (ownedQuantities[item.itemUid] ?? 0));
 
-    return data({ success: true });
+    if (items.length === 0) {
+      return data<ActionData>({ error: "변경된 보유 재화가 없어요" }, { status: 400 });
+    }
+
+    await upsertUserResourceInventories(env, currentUser.id, items);
+
+    return data<ActionData>({ saved: true, savedAt: Date.now() });
   } catch (error) {
-    return data({ error: error instanceof Error ? error.message : "보유 재화를 저장하지 못했어요" }, { status: 400 });
+    return data<ActionData>(
+      { error: error instanceof Error ? error.message : "보유 재화를 저장하지 못했어요" },
+      { status: 400 },
+    );
   }
 };
 
 export default function GrowthResourcesPage() {
-  const { ownedQuantities } = useLoaderData<typeof loader>();
+  const { resources, ownedQuantities, relationshipGiftRequirements } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const { managedStudents } = useOutletContext<GrowthLayoutContext>();
-  const aggregatedRequirements = aggregateGrowthResourceRequirements(
-    managedStudents.map((student) => student.resourceRequirements),
+  const requiredResources = aggregateGrowthResourceRequirements(
+    [...managedStudents.map((student) => student.resourceRequirements), relationshipGiftRequirements],
   );
-
-  if (managedStudents.length === 0) {
-    return <EmptyView Icon={ArchiveBoxIcon} text="학생 성장 페이지에서 학생의 성장 목표를 추가해주세요" />;
-  }
-
-  if (aggregatedRequirements.items.length === 0) {
-    return <EmptyView Icon={ArchiveBoxIcon} text="아직 추가로 필요한 재화가 없어요" />;
-  }
 
   return (
-    <div className="space-y-4">
-      {aggregatedRequirements.skillUnavailable && (
-        <p className="text-sm text-amber-600 dark:text-amber-400">
-          일부 학생의 스킬 재화는 BAQL 응답을 불러오지 못해 합계에서 제외됐어요.
-        </p>
-      )}
-
-      <ResourceInventoryTable items={aggregatedRequirements.items} ownedQuantities={ownedQuantities} />
-    </div>
+    <ResourceInventoryEditor
+      resources={resources}
+      requiredResources={requiredResources}
+      ownedQuantities={ownedQuantities}
+      error={actionData?.error}
+    />
   );
+}
+
+function parseDraftItem(item: unknown): { itemUid: string; quantity: number } {
+  if (typeof item !== "object" || item === null || !("itemUid" in item) || !("quantity" in item)) {
+    throw new Error("저장할 재화 형식이 올바르지 않아요");
+  }
+
+  const itemUid = item.itemUid;
+  if (typeof itemUid !== "string" || itemUid.trim().length === 0) {
+    throw new Error("재화 정보가 필요해요");
+  }
+
+  return {
+    itemUid: itemUid.trim(),
+    quantity: parseUserResourceInventoryQuantity(item.quantity),
+  };
 }

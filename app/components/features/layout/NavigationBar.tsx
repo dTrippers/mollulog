@@ -9,11 +9,13 @@ import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
   Cog6ToothIcon,
   HomeIcon as HomeIconOutline,
+  IdentificationIcon as IdentificationIconOutline,
   UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
   HomeIcon as HomeIconSolid,
+  IdentificationIcon as IdentificationIconSolid,
   UserCircleIcon as UserCircleIconSolid,
 } from "@heroicons/react/24/solid";
 import { useEffect, useState } from "react";
@@ -91,6 +93,7 @@ export default function NavigationBar({
       </aside>
 
       <MobileBrandHeader
+        currentUsername={currentUsername}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         hasRecentNews={hasRecentNews}
@@ -108,10 +111,12 @@ export default function NavigationBar({
 }
 
 function MobileBrandHeader({
+  currentUsername,
   darkMode,
   setDarkMode,
   hasRecentNews,
 }: {
+  currentUsername: string | null;
   darkMode: boolean;
   setDarkMode: NavigationBarProps["setDarkMode"];
   hasRecentNews: boolean;
@@ -469,13 +474,20 @@ function DesktopMenuContent({
       ))}
 
       {currentUsername ? (
-        <MenuItem
-          to={`/@${currentUsername}`}
+        <MenuSection
           name="내 정보"
           OutlineIcon={UserCircleIconOutline}
           SolidIcon={UserCircleIconSolid}
           isActive={sectionStates.isProfileActive}
-        />
+        >
+          <SubMenuItem
+            to={`/@${currentUsername}`}
+            name="내 프로필"
+            OutlineIcon={IdentificationIconOutline}
+            SolidIcon={IdentificationIconSolid}
+            isActive={pathname.startsWith("/@")}
+          />
+        </MenuSection>
       ) : (
         <button
           type="button"

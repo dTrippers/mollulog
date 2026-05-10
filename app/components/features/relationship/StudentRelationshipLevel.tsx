@@ -2,6 +2,7 @@ import { HeartIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useState } from "react";
 import { NumberInput, Toggle } from "~/components/primitives";
 import { RELATIONSHIP_EXP_TABLE } from "~/models/constants";
+import { getAccumulatedRelationshipExpForLevel } from "~/models/relationship-level";
 
 type StudentRelationshipLevelProps = {
   currentExp: number | null;
@@ -22,7 +23,7 @@ export default function StudentRelationshipLevel({
   onTargetLevelUpdate,
 }: StudentRelationshipLevelProps) {
   const currentExp = useMemo(
-    () => currentExpProp ?? getAccumulatedExpForLevel(currentLevel),
+    () => currentExpProp ?? getAccumulatedRelationshipExpForLevel(currentLevel),
     [currentExpProp, currentLevel],
   );
 
@@ -34,7 +35,7 @@ export default function StudentRelationshipLevel({
     setUseCurrentExp(currentExpProp !== null);
   }, [currentExpProp]);
 
-  const requiredExp = getAccumulatedExpForLevel(targetLevel) - expectedExp;
+  const requiredExp = getAccumulatedRelationshipExpForLevel(targetLevel) - expectedExp;
 
   return (
     <section className="mb-3 md:mb-4">
@@ -57,6 +58,7 @@ export default function StudentRelationshipLevel({
                     value={currentExp}
                     minValue={0}
                     size="lg"
+                    fullWidth
                     onChange={(value) => onCurrentLevelUpdate({ level: getLevelForExp(value), exp: value })}
                   />
                   <p className="mt-1 truncate text-left text-xs text-neutral-500 dark:text-neutral-400 md:text-center">
@@ -71,10 +73,11 @@ export default function StudentRelationshipLevel({
                     minValue={1}
                     maxValue={100}
                     size="lg"
+                    fullWidth
                     onChange={(value) => onCurrentLevelUpdate({ level: value, exp: null })}
                   />
                   <p className="mt-1 truncate text-left text-xs text-neutral-500 dark:text-neutral-400 md:text-center">
-                    {getAccumulatedExpForLevel(currentLevel).toLocaleString()} EXP
+                    {getAccumulatedRelationshipExpForLevel(currentLevel).toLocaleString()} EXP
                   </p>
                 </>
               )}
@@ -86,6 +89,7 @@ export default function StudentRelationshipLevel({
                 minValue={1}
                 maxValue={100}
                 size="lg"
+                fullWidth
                 onChange={(value) => onTargetLevelUpdate(value)}
               />
             </div>
@@ -105,10 +109,6 @@ function getLevelForExp(exp: number): number {
   return 0;
 }
 
-function getAccumulatedExpForLevel(level: number): number {
-  return RELATIONSHIP_EXP_TABLE.find((entry) => entry.level === level)?.accumulatedExp ?? 0;
-}
-
 function ExpectedLevelSummary({
   expectedLevel,
   expectedExp,
@@ -118,7 +118,8 @@ function ExpectedLevelSummary({
   expectedExp: number;
   requiredExp: number;
 }) {
-  const nextRankExp = expectedLevel === 100 ? 0 : getAccumulatedExpForLevel(expectedLevel + 1) - expectedExp;
+  const nextRankExp =
+    expectedLevel === 100 ? 0 : getAccumulatedRelationshipExpForLevel(expectedLevel + 1) - expectedExp;
 
   return (
     <div className="mt-2 grid grid-cols-3 divide-x divide-border/70 rounded-md border border-border bg-background md:mt-3">

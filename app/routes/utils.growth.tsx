@@ -4,6 +4,7 @@ import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from 
 import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
+import { getLogger } from "~/lib/observability.server";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
 
@@ -41,12 +42,13 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
+  const logger = getLogger(env, context.cloudflare.ctx, { route: "utils.growth.loader" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
 
-  return loadGrowthPlannerData(env, currentUser.id);
+  return loadGrowthPlannerData(env, currentUser.id, { logger });
 };
 
 export default function GrowthLayout() {
@@ -88,26 +90,19 @@ export default function GrowthLayout() {
       layout="vertical"
       screens={[
         {
-          text: "학생 성장 목표",
+          text: "성장 목표",
           description: "학생별 현재 성장 상태와 목표 관리",
           Icon: UserIcon,
           link: "/utils/growth/students",
           active: pathname === "/utils/growth/students",
         },
         {
-          text: "재화 관리",
-          description: "현재 보유한 재화와 필요한 재화 수량 계산",
+          text: "보유 재화 관리",
+          description: "현재 보유한 재화와 필요한 재화 수량 관리",
           Icon: ArchiveBoxIcon,
           link: "/utils/growth/resources",
-          active: pathname === "/utils/growth/resources",
+          active: pathname.startsWith("/utils/growth/resources"),
         },
-        {
-          text: "재화 수급처 (준비중)",
-          description: "재화별 수급처 정보",
-          Icon: ArchiveBoxIcon,
-          link: "/utils/growth/sources",
-          disabled: true,
-        }
       ]}
     >
       <Outlet context={contextValue satisfies GrowthLayoutContext} />

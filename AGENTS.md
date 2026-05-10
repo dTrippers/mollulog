@@ -30,6 +30,12 @@ This project has been deployed to Cloudflare Workers.
 - Before creating or changing UI components, read `docs/ui-ux-guidelines.md` and follow its component structure, naming, reuse, layout, and performance rules.
 - Before adding, moving, or refactoring components, read `docs/component-development-guide.md` and follow its final structure rules for `primitives`, `features`, and route-local components.
 - Before restructuring route files or extracting screen-only UI, read `docs/routes.md` and follow its route-local composition rules.
+- Avoid Tailwind arbitrary values such as `text-[10px]`, `h-[37px]`, `mt-[3px]`, or custom grid sizes unless there is a concrete layout constraint that cannot be expressed with the existing scale.
+- Prefer the project's existing spacing, typography, radius, and color tokens such as `text-xs`, `text-sm`, `gap-1`, `rounded-md`, and semantic color classes.
+- If an arbitrary value is necessary, keep it isolated inside the smallest relevant component and explain why it is necessary in the implementation note.
+- Do not start or stop development servers unless the user explicitly asks for it.
+- Before stopping any server or long-running process, identify the exact PID, working directory, and command, then ask for confirmation.
+- Never assume a process belongs to the current task based only on its command name or port. Multiple MolluLog worktrees may run similar React Router or PNPM commands at the same time.
 - For BAQL GraphQL work, follow these rules:
   - Define queries with `graphql(...)` in `app/**/*.{ts,tsx}` so GraphQL codegen can pick them up.
   - After adding or changing a query, run `pnpm codegen`. Do not manually edit generated files under `app/graphql/`.

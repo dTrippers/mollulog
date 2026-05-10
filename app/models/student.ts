@@ -127,3 +127,11 @@ export function parseVisibleNames(name: string): string[] {
   }
   return visibleNames;
 }
+
+export function formatVisibleName(name: string): string {
+  const visibleNames = parseVisibleNames(name);
+  if (visibleNames.length === 2) {
+    return `${visibleNames[0]}(${visibleNames[1]})`;
+  }
+  return visibleNames.join(" ");
+}

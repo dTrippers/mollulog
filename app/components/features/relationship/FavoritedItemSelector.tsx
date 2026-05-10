@@ -357,7 +357,7 @@ function FavoriteLevelCardViewMode({ levelStudents, activeItem, studentItemsMap,
                 <div key={student.uid} className="relative">
                   <ProfileImage studentUid={student.uid} imageSize={12} />
                   {quantity > 0 && (
-                    <div className="absolute -bottom-1 -right-1 bg-red-500 text-white text-xs font-medium rounded-full min-w-[1.25rem] h-5 flex items-center justify-center px-1 border-2 border-white dark:border-neutral-900">
+                    <div className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-xs font-medium text-white dark:border-neutral-900">
                       {quantity}
                     </div>
                   )}

@@ -2,7 +2,7 @@ import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { GrowthResourceRepository } from "~/repositories/growth-resource";
 import type { StudentMap } from "./student";
 
-export type GrowthResourceSource = "level" | "skill" | "equipment" | "tier" | "gear";
+export type GrowthResourceSource = "level" | "skill" | "equipment" | "tier" | "gear" | "relationship";
 
 export type GrowthResourceItem = {
   uid: string;
@@ -15,13 +15,36 @@ export type GrowthResourceItem = {
   source: GrowthResourceSource;
 };
 
+export type GrowthResourceKindInput = {
+  uid: string;
+  type?: ResourceTypeEnum | string | null;
+  category?: string | null;
+  subCategory?: string | null;
+  source?: GrowthResourceSource | null;
+};
+
 export type StudentGrowthResourceRequirements = {
   items: GrowthResourceItem[];
+  characterExp: number;
   skillUnavailable: boolean;
+};
+
+export type RelationshipGiftResourceInput = {
+  items: Record<string, number>;
+};
+
+export type RelationshipGiftResourceMetadata = {
+  uid: string;
+  name?: string;
+  rarity: number;
+  type: ResourceTypeEnum;
+  category?: string | null;
+  subCategory?: string | null;
 };
 
 export type AggregatedGrowthResourceRequirements = {
   items: GrowthResourceItem[];
+  characterExp: number;
   skillUnavailable: boolean;
 };
 
@@ -54,7 +77,16 @@ export type GrowthResourceStudentInput = {
 
 type MutableRequirements = {
   items: Map<string, GrowthResourceItem>;
+  characterExp: number;
   skillUnavailable: boolean;
+};
+
+type GrowthResourceLogger = {
+  error(message: string, error?: unknown, context?: Record<string, unknown>): void;
+};
+
+type GrowthResourceCalculationOptions = {
+  logger?: GrowthResourceLogger;
 };
 
 type SkillCostItem = {
@@ -108,7 +140,6 @@ export type StudentGearData = {
     item: ItemMetadata;
   }[];
 };
-
 
 type GearCostStudent = {
   uid: string;
@@ -211,7 +242,7 @@ const CHARACTER_TOTAL_EXP_BY_LEVEL: Record<number, number> = {
   90: 1249185,
 };
 
-const EXP_BOOKS = [
+export const CHARACTER_EXP_REPORTS = [
   { uid: "13", exp: 10000, rarity: 4 },
   { uid: "12", exp: 2000, rarity: 3 },
   { uid: "11", exp: 500, rarity: 2 },
@@ -230,6 +261,43 @@ const EQUIPMENT_BLUEPRINT_BASE_UID = {
   necklace: 108999,
 } as const;
 
+export const EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER: Record<number, string> = {
+  2: "150028",
+  3: "150029",
+  4: "150030",
+  5: "150031",
+  6: "150032",
+  7: "150033",
+  8: "150041",
+  9: "150045",
+  10: "150048",
+};
+
+const EQUIPMENT_BLUEPRINT_CHOICE_BOX_TIER_BY_UID = Object.fromEntries(
+  Object.entries(EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER).map(([tier, uid]) => [uid, Number(tier)]),
+) as Record<string, number>;
+
+const SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND = {
+  techNote: {
+    1: "150000",
+    2: "150001",
+    3: "150002",
+    4: "150003",
+  },
+  bd: {
+    1: "150004",
+    2: "150005",
+    3: "150006",
+    4: "150007",
+  },
+} as const;
+
+const SKILL_MATERIAL_CHOICE_BOX_BY_UID = Object.fromEntries(
+  Object.entries(SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND).flatMap(([kind, uidsByRarity]) =>
+    Object.entries(uidsByRarity).map(([rarity, uid]) => [uid, { kind, rarity: Number(rarity) }]),
+  ),
+) as Record<string, { kind: keyof typeof SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND; rarity: number }>;
+
 export const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
   hat: "모자",
   gloves: "장갑",
@@ -242,6 +310,18 @@ export const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
   necklace: "목걸이",
 };
 
+export const EQUIPMENT_TYPE_ORDER = [
+  "hat",
+  "gloves",
+  "shoes",
+  "bag",
+  "badge",
+  "hairpin",
+  "charm",
+  "watch",
+  "necklace",
+];
+
 const EQUIPMENT_UID_PREFIX_TO_TYPE = Object.fromEntries(
   Object.entries(EQUIPMENT_BLUEPRINT_BASE_UID).map(([type, baseUid]) => [Math.floor(baseUid / 1000) + 1, type]),
 ) as Record<number, string>;
@@ -251,9 +331,106 @@ export function getEquipmentTypeKey(uid: string): string | null {
   return EQUIPMENT_UID_PREFIX_TO_TYPE[prefix] ?? null;
 }
 
+export function getEquipmentTypeOrder(uid: string): number {
+  const typeKey = getEquipmentTypeKey(uid);
+  const index = typeKey ? EQUIPMENT_TYPE_ORDER.indexOf(typeKey) : -1;
+  return index === -1 ? EQUIPMENT_TYPE_ORDER.length : index;
+}
+
 export function getEquipmentTier(uid: string): number {
   return (Number(uid) % 1000) + 1;
 }
+
+export function getEquipmentTierLabel(uid: string): string | null {
+  if (getEquipmentTypeKey(uid) === null) {
+    return null;
+  }
+
+  return `T${getEquipmentTier(uid)}`;
+}
+
+export function getEquipmentResourceTierLabel(uid: string): string | null {
+  const equipmentTierLabel = getEquipmentTierLabel(uid);
+  if (equipmentTierLabel !== null) {
+    return equipmentTierLabel;
+  }
+
+  const choiceBoxTier = getEquipmentBlueprintChoiceBoxTier(uid);
+  return choiceBoxTier === null ? null : `T${choiceBoxTier}`;
+}
+
+export function getEquipmentBlueprintChoiceBoxTier(uid: string): number | null {
+  return EQUIPMENT_BLUEPRINT_CHOICE_BOX_TIER_BY_UID[uid] ?? null;
+}
+
+export function getEquipmentBlueprintChoiceBoxUid(tier: number): string | null {
+  return EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER[tier] ?? null;
+}
+
+export function getSkillMaterialChoiceBoxKindOrder(uid: string): number | null {
+  const choiceBox = SKILL_MATERIAL_CHOICE_BOX_BY_UID[uid];
+  if (!choiceBox) {
+    return null;
+  }
+
+  return choiceBox.kind === "bd" ? GROWTH_RESOURCE_KIND_ORDER.bd : GROWTH_RESOURCE_KIND_ORDER.techNote;
+}
+
+export function getSkillMaterialChoiceBoxRarity(uid: string): number | null {
+  return SKILL_MATERIAL_CHOICE_BOX_BY_UID[uid]?.rarity ?? null;
+}
+
+export function getSkillMaterialChoiceBoxUid(kindOrder: number, rarity: number): string | null {
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.bd) {
+    return SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND.bd[rarity as keyof typeof SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND.bd] ?? null;
+  }
+
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote) {
+    return (
+      SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND.techNote[
+        rarity as keyof typeof SKILL_MATERIAL_CHOICE_BOX_UIDS_BY_KIND.techNote
+      ] ?? null
+    );
+  }
+
+  return null;
+}
+
+export function getSkillMaterialResourceChoiceBoxUid(
+  item: Pick<GrowthResourceItem, "uid" | "rarity"> & Partial<Pick<GrowthResourceItem, "subCategory">>,
+): string | null {
+  if (getSkillMaterialChoiceBoxKindOrder(item.uid) !== null) {
+    return null;
+  }
+
+  if (item.uid === "9998" || item.uid === "9999") {
+    return null;
+  }
+
+  const itemUid = Number(item.uid);
+  if (item.subCategory === "cd_item" || isUidInRange(itemUid, 3000, 3999)) {
+    return getSkillMaterialChoiceBoxUid(GROWTH_RESOURCE_KIND_ORDER.bd, item.rarity);
+  }
+
+  if (item.subCategory === "book_item" || isUidInRange(itemUid, 4000, 4999)) {
+    return getSkillMaterialChoiceBoxUid(GROWTH_RESOURCE_KIND_ORDER.techNote, item.rarity);
+  }
+
+  return null;
+}
+
+export type EquipmentTierCoverage = {
+  tier: number;
+  requiredAmount: number;
+  directOwnedAmount: number;
+  directDeficit: number;
+  choiceBoxUid: string;
+  choiceBoxQuantity: number;
+  finalDeficit: number;
+};
+
+type EquipmentCoverageItem = Pick<GrowthResourceItem, "uid" | "type" | "amount"> &
+  Partial<Pick<GrowthResourceItem, "source">>;
 
 const EQUIPMENT_TIER_RECIPE: Record<number, readonly { tier: number; amount: number }[]> = {
   2: [{ tier: 2, amount: 15 }],
@@ -297,9 +474,9 @@ const EQUIPMENT_TIER_RECIPE: Record<number, readonly { tier: number; amount: num
 const EX_SKILL_LEVELS = [2, 3, 4, 5] as const;
 const NORMAL_SKILL_LEVELS = [2, 3, 4, 5, 6, 7, 8, 9] as const;
 
-// BAQL currently omits non-EX level 10 materials. Public references indicate 9->10 uses Secret Tech Sheet.
+// BAQL currently omits non-EX level 10 materials. 9->10 uses Secret Tech Sheet, not Secret Tech Sheet Piece.
 const SECRET_TECH_SHEET = {
-  uid: "9998",
+  uid: "9999",
   rarity: 4,
 };
 
@@ -319,11 +496,12 @@ export async function getStudentGrowthResourceRequirements(
   students: GrowthResourceStudentInput[],
   allStudentsMap: StudentMap,
   studentGearDataMap: Map<string, StudentGearData | null>,
+  options: GrowthResourceCalculationOptions = {},
 ): Promise<Record<string, StudentGrowthResourceRequirements>> {
   const normalizedStudents = students.map(normalizeStudentGrowthInputForCalculation);
   const requirements = students.reduce(
     (acc, student) => {
-      acc[student.uid] = { items: new Map<string, GrowthResourceItem>(), skillUnavailable: false };
+      acc[student.uid] = { items: new Map<string, GrowthResourceItem>(), characterExp: 0, skillUnavailable: false };
       return acc;
     },
     {} as Record<string, MutableRequirements>,
@@ -331,7 +509,7 @@ export async function getStudentGrowthResourceRequirements(
 
   for (const student of normalizedStudents) {
     addItems(requirements[student.uid], calculateTierResourceItems(student));
-    addItems(requirements[student.uid], calculateLevelResourceItems(student));
+    requirements[student.uid].characterExp += calculateLevelRequiredExp(student);
     addItems(
       requirements[student.uid],
       calculateEquipmentResourceItems(student, allStudentsMap[student.uid]?.equipments ?? []),
@@ -362,9 +540,9 @@ export async function getStudentGrowthResourceRequirements(
     }
   }
 
+  const itemUids = new Set<string>();
+  const equipmentUids = new Set<string>();
   try {
-    const itemUids = new Set<string>();
-    const equipmentUids = new Set<string>();
     for (const requirement of Object.values(requirements)) {
       for (const item of requirement.items.values()) {
         if (item.source === "equipment") {
@@ -385,7 +563,11 @@ export async function getStudentGrowthResourceRequirements(
       applyItemMetadata(requirement.items, itemMetadataMap);
       applyEquipmentMetadata(requirement.items, equipmentMetadataMap);
     }
-  } catch {
+  } catch (error) {
+    options.logger?.error("Failed to enrich growth resource metadata", error, {
+      itemCount: itemUids.size,
+      equipmentCount: equipmentUids.size,
+    });
     // Keep quantities visible even if BAQL item metadata cannot be loaded.
   }
 
@@ -394,6 +576,7 @@ export async function getStudentGrowthResourceRequirements(
       studentUid,
       {
         items: sortGrowthResourceItems(Array.from(requirement.items.values())),
+        characterExp: requirement.characterExp,
         skillUnavailable: requirement.skillUnavailable,
       },
     ]),
@@ -409,6 +592,14 @@ export function calculateCharacterExpDifference(currentLevel: number, targetLeve
   return Math.max(0, targetTotalExp - currentTotalExp);
 }
 
+export function calculateLevelRequiredExp(student: Pick<GrowthResourceStudentInput, "level" | "targetLevel">): number {
+  if (student.level == null || student.targetLevel == null || student.targetLevel <= student.level) {
+    return 0;
+  }
+
+  return calculateCharacterExpDifference(student.level, student.targetLevel);
+}
+
 export function breakdownCharacterExpToBooks(exp: number): GrowthResourceItem[] {
   if (exp <= 0) {
     return [];
@@ -416,7 +607,7 @@ export function breakdownCharacterExpToBooks(exp: number): GrowthResourceItem[] 
 
   const bestCounts = findBestExpBookCounts(exp);
   const resources: GrowthResourceItem[] = [];
-  for (const [index, book] of EXP_BOOKS.entries()) {
+  for (const [index, book] of CHARACTER_EXP_REPORTS.entries()) {
     const amount = bestCounts[index];
     if (amount <= 0) {
       continue;
@@ -441,7 +632,7 @@ export function calculateLevelResourceItems(
     return [];
   }
 
-  return breakdownCharacterExpToBooks(calculateCharacterExpDifference(student.level, student.targetLevel));
+  return breakdownCharacterExpToBooks(calculateLevelRequiredExp(student));
 }
 
 export function calculateTierResourceItems(
@@ -486,6 +677,69 @@ export function calculateEquipmentResourceItems(
   accumulateEquipmentSlot(items, equipmentSlots[2], student.equip3, student.targetEquip3);
 
   return Array.from(items.values());
+}
+
+export function calculateEquipmentTierCoverage(
+  requiredItems: EquipmentCoverageItem[],
+  quantities: Record<string, number>,
+): EquipmentTierCoverage[] {
+  const coverageByTier = new Map<
+    number,
+    Pick<EquipmentTierCoverage, "tier" | "requiredAmount" | "directOwnedAmount" | "directDeficit" | "choiceBoxUid">
+  >();
+
+  for (const item of requiredItems) {
+    if (!isEquipmentBlueprintRequirement(item)) {
+      continue;
+    }
+
+    const tier = getEquipmentTier(item.uid);
+    const choiceBoxUid = getEquipmentBlueprintChoiceBoxUid(tier);
+    if (!choiceBoxUid) {
+      continue;
+    }
+
+    const current = coverageByTier.get(tier) ?? {
+      tier,
+      requiredAmount: 0,
+      directOwnedAmount: 0,
+      directDeficit: 0,
+      choiceBoxUid,
+    };
+    const requiredAmount = Math.max(0, item.amount);
+    const ownedAmount = Math.max(0, quantities[item.uid] ?? 0);
+
+    current.requiredAmount += requiredAmount;
+    current.directOwnedAmount += ownedAmount;
+    current.directDeficit += Math.max(0, requiredAmount - ownedAmount);
+    coverageByTier.set(tier, current);
+  }
+
+  for (const [tier, choiceBoxUid] of Object.entries(EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER)) {
+    const choiceBoxQuantity = Math.max(0, quantities[choiceBoxUid] ?? 0);
+    if (choiceBoxQuantity <= 0 || coverageByTier.has(Number(tier))) {
+      continue;
+    }
+
+    coverageByTier.set(Number(tier), {
+      tier: Number(tier),
+      requiredAmount: 0,
+      directOwnedAmount: 0,
+      directDeficit: 0,
+      choiceBoxUid,
+    });
+  }
+
+  return Array.from(coverageByTier.values())
+    .map((coverage) => {
+      const choiceBoxQuantity = Math.max(0, quantities[coverage.choiceBoxUid] ?? 0);
+      return {
+        ...coverage,
+        choiceBoxQuantity,
+        finalDeficit: Math.max(0, coverage.directDeficit - choiceBoxQuantity),
+      };
+    })
+    .sort((a, b) => a.tier - b.tier);
 }
 
 export function calculateGearResourceItems(
@@ -629,6 +883,14 @@ function addItems(requirement: MutableRequirements, items: GrowthResourceItem[])
   }
 }
 
+function isEquipmentBlueprintRequirement(
+  item: Pick<GrowthResourceItem, "uid" | "type"> & Partial<Pick<GrowthResourceItem, "source">>,
+): boolean {
+  return (
+    (item.source === "equipment" || item.type === ResourceTypeEnum.Equipment) && getEquipmentTypeKey(item.uid) !== null
+  );
+}
+
 function accumulateEquipmentSlot(
   items: Map<string, GrowthResourceItem>,
   equipmentType: string | undefined,
@@ -729,19 +991,19 @@ function findBestExpBookCounts(exp: number): [number, number, number, number] {
     totalExp: number;
   } | null = null;
 
-  const superiorMax = Math.ceil(exp / EXP_BOOKS[0].exp);
-  const advancedMax = Math.ceil(exp / EXP_BOOKS[1].exp);
+  const superiorMax = Math.ceil(exp / CHARACTER_EXP_REPORTS[0].exp);
+  const advancedMax = Math.ceil(exp / CHARACTER_EXP_REPORTS[1].exp);
 
   for (let superior = 0; superior <= superiorMax; superior++) {
     for (let advanced = 0; advanced <= advancedMax; advanced++) {
-      const expFromLargeBooks = superior * EXP_BOOKS[0].exp + advanced * EXP_BOOKS[1].exp;
+      const expFromLargeBooks = superior * CHARACTER_EXP_REPORTS[0].exp + advanced * CHARACTER_EXP_REPORTS[1].exp;
       const remainingAfterLargeBooks = Math.max(0, exp - expFromLargeBooks);
-      const normalBase = Math.floor(remainingAfterLargeBooks / EXP_BOOKS[2].exp);
+      const normalBase = Math.floor(remainingAfterLargeBooks / CHARACTER_EXP_REPORTS[2].exp);
 
       for (const normal of new Set([normalBase, normalBase + 1])) {
-        const expFromMidBooks = expFromLargeBooks + normal * EXP_BOOKS[2].exp;
-        const novice = expFromMidBooks >= exp ? 0 : Math.ceil((exp - expFromMidBooks) / EXP_BOOKS[3].exp);
-        const totalExp = expFromMidBooks + novice * EXP_BOOKS[3].exp;
+        const expFromMidBooks = expFromLargeBooks + normal * CHARACTER_EXP_REPORTS[2].exp;
+        const novice = expFromMidBooks >= exp ? 0 : Math.ceil((exp - expFromMidBooks) / CHARACTER_EXP_REPORTS[3].exp);
+        const totalExp = expFromMidBooks + novice * CHARACTER_EXP_REPORTS[3].exp;
         const totalBooks = superior + advanced + normal + novice;
 
         if (!best || totalBooks < best.totalBooks || (totalBooks === best.totalBooks && totalExp < best.totalExp)) {
@@ -804,7 +1066,7 @@ export function sortGrowthResourceItems(items: GrowthResourceItem[]): GrowthReso
   return items.sort((a, b) => {
     const kindOrderA = getResourceKindOrder(a);
     const kindOrderB = getResourceKindOrder(b);
-    const kindDelta = kindOrderA - kindOrderB;
+    const kindDelta = compareGrowthResourceKindOrder(kindOrderA, kindOrderB);
     if (kindDelta !== 0) {
       return kindDelta;
     }
@@ -814,12 +1076,16 @@ export function sortGrowthResourceItems(items: GrowthResourceItem[]): GrowthReso
       return subKindDelta;
     }
 
+    if (shouldSortGrowthResourceKindByUid(kindOrderA) && shouldSortGrowthResourceKindByUid(kindOrderB)) {
+      return compareUidAscending(a.uid, b.uid);
+    }
+
     if (a.source === "equipment" && b.source === "equipment") {
-      return Number(b.uid) - Number(a.uid);
+      return Number(a.uid) - Number(b.uid);
     }
 
     if (a.rarity !== b.rarity) {
-      return b.rarity - a.rarity;
+      return a.rarity - b.rarity;
     }
 
     return Number(a.uid) - Number(b.uid);
@@ -830,8 +1096,10 @@ export function aggregateGrowthResourceRequirements(
   requirements: StudentGrowthResourceRequirements[],
 ): AggregatedGrowthResourceRequirements {
   const aggregatedItems = new Map<string, GrowthResourceItem>();
+  let characterExp = 0;
 
   for (const requirement of requirements) {
+    characterExp += requirement.characterExp;
     for (const item of requirement.items) {
       const existing = aggregatedItems.get(item.uid);
       if (existing) {
@@ -848,72 +1116,164 @@ export function aggregateGrowthResourceRequirements(
 
   return {
     items: sortGrowthResourceItems(Array.from(aggregatedItems.values())),
+    characterExp,
     skillUnavailable: requirements.some((requirement) => requirement.skillUnavailable),
   };
 }
 
+export function buildRelationshipGiftResourceRequirements(
+  relationships: RelationshipGiftResourceInput[],
+  metadata: RelationshipGiftResourceMetadata[],
+): StudentGrowthResourceRequirements {
+  const metadataByUid = new Map(metadata.map((item) => [item.uid, item]));
+  const quantities = new Map<string, number>();
+
+  for (const relationship of relationships) {
+    for (const [itemUid, quantity] of Object.entries(relationship.items)) {
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        continue;
+      }
+      quantities.set(itemUid, (quantities.get(itemUid) ?? 0) + quantity);
+    }
+  }
+
+  return {
+    items: sortGrowthResourceItems(
+      Array.from(quantities.entries()).map(([uid, amount]) => {
+        const itemMetadata = metadataByUid.get(uid);
+        return {
+          uid,
+          type: itemMetadata?.type ?? ResourceTypeEnum.Item,
+          rarity: itemMetadata?.rarity ?? 1,
+          amount,
+          name: itemMetadata?.name,
+          category: itemMetadata?.category ?? "favor",
+          subCategory: itemMetadata?.subCategory ?? null,
+          source: "relationship",
+        };
+      }),
+    ),
+    characterExp: 0,
+    skillUnavailable: false,
+  };
+}
+
+export const GROWTH_RESOURCE_KIND_ORDER = {
+  eleph: 0,
+  characterExp: 1,
+  bd: 2,
+  techNote: 3,
+  favor: 4,
+  artifact: 5,
+  equipment: 6,
+  other: 7,
+} as const;
+
+export type GrowthResourceKindOrder =
+  (typeof GROWTH_RESOURCE_KIND_ORDER)[keyof typeof GROWTH_RESOURCE_KIND_ORDER];
+
 export const GROWTH_RESOURCE_KIND_LABELS: Record<number, string> = {
-  0: "엘레프",
-  1: "활동 보고서",
-  2: "BD",
-  3: "기술 노트",
-  4: "선물",
-  5: "오파츠",
-  6: "장비 설계도",
-  7: "기타",
-};
+  [GROWTH_RESOURCE_KIND_ORDER.eleph]: "엘레프",
+  [GROWTH_RESOURCE_KIND_ORDER.characterExp]: "활동 보고서",
+  [GROWTH_RESOURCE_KIND_ORDER.bd]: "BD",
+  [GROWTH_RESOURCE_KIND_ORDER.techNote]: "기술 노트",
+  [GROWTH_RESOURCE_KIND_ORDER.favor]: "선물",
+  [GROWTH_RESOURCE_KIND_ORDER.artifact]: "오파츠",
+  [GROWTH_RESOURCE_KIND_ORDER.equipment]: "장비 설계도",
+  [GROWTH_RESOURCE_KIND_ORDER.other]: "기타",
+} satisfies Record<GrowthResourceKindOrder, string>;
 
-export function getResourceKindOrder(item: GrowthResourceItem): number {
-  const itemUid = Number(item.uid);
+const GROWTH_RESOURCE_KIND_DISPLAY_ORDER = [
+  GROWTH_RESOURCE_KIND_ORDER.characterExp,
+  GROWTH_RESOURCE_KIND_ORDER.artifact,
+  GROWTH_RESOURCE_KIND_ORDER.bd,
+  GROWTH_RESOURCE_KIND_ORDER.techNote,
+  GROWTH_RESOURCE_KIND_ORDER.favor,
+  GROWTH_RESOURCE_KIND_ORDER.eleph,
+  GROWTH_RESOURCE_KIND_ORDER.equipment,
+  GROWTH_RESOURCE_KIND_ORDER.other,
+] as const;
 
-  if (item.source === "tier") {
-    return 0;
+export function compareGrowthResourceKindOrder(a: number, b: number): number {
+  return getGrowthResourceKindDisplayOrder(a) - getGrowthResourceKindDisplayOrder(b);
+}
+
+export function shouldSortGrowthResourceKindByUid(kindOrder: number): boolean {
+  return (
+    kindOrder === GROWTH_RESOURCE_KIND_ORDER.bd ||
+    kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote ||
+    kindOrder === GROWTH_RESOURCE_KIND_ORDER.artifact
+  );
+}
+
+export function classifyGrowthResourceKind(resource: GrowthResourceKindInput): number | null {
+  const itemUid = Number(resource.uid);
+
+  if (resource.source === "tier" || resource.category === "secret_stone") {
+    return GROWTH_RESOURCE_KIND_ORDER.eleph;
   }
 
-  if (item.category === "character_exp_growth" || isUidInRange(itemUid, 10, 13)) {
-    return 1;
+  if (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null) {
+    return GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 
-  if (item.subCategory === "cd_item" || isUidInRange(itemUid, 3000, 3999)) {
-    return 2;
+  const skillMaterialChoiceBoxKindOrder = getSkillMaterialChoiceBoxKindOrder(resource.uid);
+  if (skillMaterialChoiceBoxKindOrder !== null) {
+    return skillMaterialChoiceBoxKindOrder;
+  }
+
+  if (resource.category === "character_exp_growth" || isUidInRange(itemUid, 10, 13)) {
+    return GROWTH_RESOURCE_KIND_ORDER.characterExp;
+  }
+
+  if (resource.subCategory === "cd_item" || isUidInRange(itemUid, 3000, 3999)) {
+    return GROWTH_RESOURCE_KIND_ORDER.bd;
   }
 
   if (
-    item.subCategory === "book_item" ||
-    item.uid === "9998" ||
-    item.uid === "9999" ||
+    resource.subCategory === "book_item" ||
+    resource.uid === "9998" ||
+    resource.uid === "9999" ||
     isUidInRange(itemUid, 4000, 4999)
   ) {
-    return 3;
+    return GROWTH_RESOURCE_KIND_ORDER.techNote;
   }
 
-  if (item.category === "favor") {
-    return 4;
+  if (resource.category === "favor") {
+    return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 
-  if (item.subCategory === "artifact") {
-    return 5;
+  if (resource.subCategory === "artifact") {
+    return GROWTH_RESOURCE_KIND_ORDER.artifact;
   }
 
-  if (item.source === "equipment" || item.type === ResourceTypeEnum.Equipment) {
-    return 6;
+  if (resource.source === "equipment" || resource.type === ResourceTypeEnum.Equipment) {
+    return GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 
-  if (item.source === "gear") {
-    return 4;
+  if (resource.source === "gear") {
+    return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 
-  if (item.source === "skill") {
-    return 5;
+  if (resource.source === "relationship") {
+    return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 
-  return 7;
+  if (resource.source === "skill") {
+    return GROWTH_RESOURCE_KIND_ORDER.artifact;
+  }
+
+  return null;
+}
+
+export function getResourceKindOrder(item: GrowthResourceItem): number {
+  return classifyGrowthResourceKind(item) ?? GROWTH_RESOURCE_KIND_ORDER.other;
 }
 
 function getResourceWithinKindOrder(item: GrowthResourceItem, kindOrder: number): number {
   const itemUid = Number(item.uid);
 
-  if (kindOrder === 3) {
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote) {
     if (item.subCategory === "book_item" || isUidInRange(itemUid, 4000, 4999)) {
       return 0;
     }
@@ -927,4 +1287,13 @@ function getResourceWithinKindOrder(item: GrowthResourceItem, kindOrder: number)
 
 function isUidInRange(uid: number, start: number, end: number): boolean {
   return Number.isFinite(uid) && uid >= start && uid <= end;
+}
+
+function getGrowthResourceKindDisplayOrder(kindOrder: number): number {
+  const index = GROWTH_RESOURCE_KIND_DISPLAY_ORDER.indexOf(kindOrder as GrowthResourceKindOrder);
+  return index === -1 ? GROWTH_RESOURCE_KIND_DISPLAY_ORDER.length : index;
+}
+
+function compareUidAscending(a: string, b: string): number {
+  return Number(a) - Number(b);
 }
