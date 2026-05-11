@@ -34,7 +34,7 @@ async function runRaidScheduleDetailQuery(env: Env, uid: string) {
 }
 
 // ============================================================
-// RaidSchedule (새 API)
+// RaidSchedule (new API)
 // ============================================================
 
 const raidScheduleDetailQuery = graphql(`
@@ -82,8 +82,8 @@ export function getRaidScheduleBySeasonIndex(
 }
 
 const allRaidSchedulesQuery = graphql(`
-  query AllRaidSchedules($region: String!) {
-    raidSchedules(region: $region) {
+  query AllRaidSchedules($region: String!, $endAfter: ISO8601DateTime) {
+    raidSchedules(region: $region, endAfter: $endAfter) {
       nodes {
         uid raidType seasonIndex region terrain startAt endAt attackType
         raidBoss { uid name }
@@ -93,10 +93,11 @@ const allRaidSchedulesQuery = graphql(`
     }
   }
 `);
-
 export function getAllRaidSchedules(env: Env, forceRefresh = false) {
   return fetchCached(env, "raids::schedules::all", async () => {
-    const { data, error } = await runQuery(allRaidSchedulesQuery, { region: "gl" });
+    // urql fetchExchange + Date.prototype.toJSON serializes this as an ISO 8601 string.
+    const endAfter = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const { data, error } = await runQuery(allRaidSchedulesQuery, { region: "gl", endAfter });
     if (error || !data) {
       throw error ?? "failed to fetch raid schedules";
     }
@@ -212,7 +213,7 @@ export function scoreToDifficultyAndTime(boss: Boss, score: number): { difficult
 // ============================================================
 
 /**
- * RaidSchedule의 startAt/endAt이 null인 경우 timeline_contents DB의 날짜로 fallback
+ * Falls back to dates from timeline_contents when RaidSchedule startAt/endAt is null.
  */
 export async function applyTimelineDateFallback<T extends { uid: string; startAt: UtcIsoString | null; endAt: UtcIsoString | null }>(
   env: Env,

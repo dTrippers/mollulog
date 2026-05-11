@@ -1,5 +1,6 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
+import { DEFAULT_KV_EXPIRATION_TTL } from "~/models/base";
 import type { EquipmentMetadata, ItemMetadata, SkillCostStudent, StudentGearData } from "~/models/growth-resource";
 
 type CacheEnvelope<T> = {
@@ -178,7 +179,9 @@ export class GrowthResourceRepository {
           const data = fetchedMap.get(uid) ?? null;
           cachedDataMap.set(uid, data);
           const envelope: CacheEnvelope<StudentGearData | null> = { _ver: 2, data, cachedAt };
-          return this.env.KV_USERDATA.put(this.buildStudentGearDataCacheKey(uid), JSON.stringify(envelope));
+          return this.env.KV_USERDATA.put(this.buildStudentGearDataCacheKey(uid), JSON.stringify(envelope), {
+            expirationTtl: DEFAULT_KV_EXPIRATION_TTL,
+          });
         }),
       );
     } catch (error) {

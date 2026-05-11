@@ -5,6 +5,7 @@ import { fetchCached } from "~/models/base";
 
 const RECRUITMENT_GROUPS_CACHE_KEY = "repo::recruitment-groups::all";
 const RECRUITMENT_GROUPS_CACHE_TTL = 24 * 60 * 60;
+const BAQL_HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const recruitmentGroupsQuery = graphql(`
   query RecruitmentGroupsList($endAfter: ISO8601DateTime, $uids: [String!]) {
@@ -31,8 +32,10 @@ export class RecruitmentRepository {
       this.env,
       RECRUITMENT_GROUPS_CACHE_KEY,
       async () => {
+        // urql fetchExchange + Date.prototype.toJSON serializes this as an ISO 8601 string.
+        const endAfter = new Date(Date.now() - BAQL_HISTORY_WINDOW_MS);
         const { data, error } = await runQuery(recruitmentGroupsQuery, {
-          endAfter: null,
+          endAfter,
           uids: null,
         });
 

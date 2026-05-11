@@ -42,6 +42,20 @@ afterEach(() => {
 });
 
 describe("RecruitmentRepository.refresh", () => {
+  it("passes a seven-day endAfter bound to BAQL", async () => {
+    jest.spyOn(Date, "now").mockReturnValue(new Date("2026-05-11T00:00:00.000Z").getTime());
+    mockedRunQuery.mockResolvedValueOnce(createResult([]));
+
+    const repository = new RecruitmentRepository(createEnv());
+
+    await expect(repository.refresh()).resolves.toEqual([]);
+
+    expect(runQuery).toHaveBeenCalledWith(expect.anything(), {
+      endAfter: new Date("2026-05-04T00:00:00.000Z"),
+      uids: null,
+    });
+  });
+
   it("refreshes again after a successful refresh completes", async () => {
     const firstGroups = [
       {

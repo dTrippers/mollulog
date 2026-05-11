@@ -87,13 +87,6 @@
           "migrations_dir": "db/migrations"
         }
       ],
-      "triggers": {
-        "crons": [
-          "0 * * * *", // every hour
-          "*/10 * * * *", // every 10 minutes
-          "* * * * *" // every minute
-        ]
-      },
       "logpush": true
     }
   }

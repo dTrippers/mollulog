@@ -5,7 +5,6 @@ import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
 import { RecruitmentRepository, RaidRepository } from "~/repositories";
 import type { TimelineContentType } from "./timeline-content";
-import { fetchCached } from "./base";
 import { getTimelineContents, getFutureRaidContents } from "./timeline-content";
 import { getAllStudentsMap } from "./student";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
@@ -59,106 +58,98 @@ export type PyroxenePlannerContent =
     };
 
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
-  return fetchCached(
-    env,
-    "pyroxene-planner-contents::v6",
-    async () => {
-      const recruitmentRepository = new RecruitmentRepository(env);
-      const raidRepository = new RaidRepository(env);
+  const recruitmentRepository = new RecruitmentRepository(env);
+  const raidRepository = new RaidRepository(env);
 
-      // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
-      const [eventContents, raidContents] = await Promise.all([
-        getTimelineContents(env),
-        getFutureRaidContents(env, ["raid"]),
-      ]);
-      const raidUids = new Set(raidContents.map((c) => c.uid));
-      const allContents = [...eventContents.filter((c) => !raidUids.has(c.uid)), ...raidContents].sort((a, b) =>
-        compareInstantAsc(a.startAt, b.startAt),
-      );
-
-      const recruitmentGroupUids = allContents
-        .map((c) => c.recruitmentGroupUid)
-        .filter((uid) => uid !== null) as string[];
-      const [recruitmentGroups, studentsMap] = await Promise.all([
-        recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh),
-        getAllStudentsMap(env, true),
-      ]);
-
-      const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
-      const results = await Promise.all(
-        allContents.map(async (content) => {
-          if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
-            const group = content.recruitmentGroupUid
-              ? recruitmentGroupMap.get(content.recruitmentGroupUid)
-              : undefined;
-            const recruitments = (group?.recruitments ?? []).map((r) => ({
-              recruitmentType: r.recruitmentType,
-              pickup: r.pickup,
-              rerun: r.rerun,
-              until: r.until ? toUtcIso(r.until) : null,
-              student: r.student
-                ? {
-                    uid: r.student.uid,
-                    name: r.student.name,
-                    initialTier: studentsMap[r.student.uid]?.initialTier ?? 0,
-                  }
-                : null,
-            }));
-
-            // endAt이 없는 경우 recruitment의 최대 until 날짜를 사용
-            const until =
-              content.endAt ??
-              group?.recruitments.reduce<UtcIsoString | null>(
-                (max, r) => (r.until ? (max && compareInstantDesc(max, r.until) < 0 ? max : toUtcIso(r.until)) : max),
-                null,
-              );
-            if (!until) return null;
-
-            return {
-              kind: "event" as const,
-              uid: content.uid,
-              name: content.name,
-              since: content.startAt,
-              until,
-              earnablePyroxene: content.earnablePyroxene ?? null,
-              tags: content.tags,
-              recruitments,
-            };
-          }
-          if (content.contentType === "raid") {
-            let raidName = content.name;
-            let raidType = content.contentType as RaidType;
-            let until: UtcIsoString | null = content.endAt;
-
-            if (content.contentUid) {
-              const schedule = await raidRepository.getSchedule(content.contentUid, forceRefresh);
-              if (schedule) {
-                raidName = schedule.raidBoss.name;
-                raidType = schedule.raidType as RaidType;
-                until = until ?? schedule.endAt;
-              }
-            }
-
-            if (!until) return null;
-
-            return {
-              kind: "raid" as const,
-              uid: content.uid,
-              name: raidName,
-              type: raidType,
-              since: content.startAt,
-              until,
-            };
-          }
-          return null;
-        }),
-      );
-
-      return results.filter((r) => r !== null);
-    },
-    60 * 10,
-    forceRefresh,
+  // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
+  const [eventContents, raidContents] = await Promise.all([
+    getTimelineContents(env),
+    getFutureRaidContents(env, ["raid"]),
+  ]);
+  const raidUids = new Set(raidContents.map((c) => c.uid));
+  const allContents = [...eventContents.filter((c) => !raidUids.has(c.uid)), ...raidContents].sort((a, b) =>
+    compareInstantAsc(a.startAt, b.startAt),
   );
+
+  const recruitmentGroupUids = allContents
+    .map((c) => c.recruitmentGroupUid)
+    .filter((uid) => uid !== null) as string[];
+  const [recruitmentGroups, studentsMap] = await Promise.all([
+    recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh),
+    getAllStudentsMap(env, true),
+  ]);
+
+  const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
+  const results = await Promise.all(
+    allContents.map(async (content) => {
+      if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
+        const group = content.recruitmentGroupUid
+          ? recruitmentGroupMap.get(content.recruitmentGroupUid)
+          : undefined;
+        const recruitments = (group?.recruitments ?? []).map((r) => ({
+          recruitmentType: r.recruitmentType,
+          pickup: r.pickup,
+          rerun: r.rerun,
+          until: r.until ? toUtcIso(r.until) : null,
+          student: r.student
+            ? {
+                uid: r.student.uid,
+                name: r.student.name,
+                initialTier: studentsMap[r.student.uid]?.initialTier ?? 0,
+              }
+            : null,
+        }));
+
+        // Use the latest recruitment until date when endAt is missing.
+        const until =
+          content.endAt ??
+          group?.recruitments.reduce<UtcIsoString | null>(
+            (max, r) => (r.until ? (max && compareInstantDesc(max, r.until) < 0 ? max : toUtcIso(r.until)) : max),
+            null,
+          );
+        if (!until) return null;
+
+        return {
+          kind: "event" as const,
+          uid: content.uid,
+          name: content.name,
+          since: content.startAt,
+          until,
+          earnablePyroxene: content.earnablePyroxene ?? null,
+          tags: content.tags,
+          recruitments,
+        };
+      }
+      if (content.contentType === "raid") {
+        let raidName = content.name;
+        let raidType = content.contentType as RaidType;
+        let until: UtcIsoString | null = content.endAt;
+
+        if (content.contentUid) {
+          const schedule = await raidRepository.getSchedule(content.contentUid, forceRefresh);
+          if (schedule) {
+            raidName = schedule.raidBoss.name;
+            raidType = schedule.raidType as RaidType;
+            until = until ?? schedule.endAt;
+          }
+        }
+
+        if (!until) return null;
+
+        return {
+          kind: "raid" as const,
+          uid: content.uid,
+          name: raidName,
+          type: raidType,
+          since: content.startAt,
+          until,
+        };
+      }
+      return null;
+    }),
+  );
+
+  return results.filter((r) => r !== null);
 }
 
 /**
