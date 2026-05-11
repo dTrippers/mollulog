@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { syncTimelineContents } from "~/jobs/sync-timeline-contents";
+import { flushCacheAll } from "~/models/base";
 import { getFutureContents, getNavigationBarContentsRaw } from "~/models/content";
 import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
@@ -30,6 +31,10 @@ jest.mock("~/jobs/sync-timeline-contents", () => ({
   syncTimelineContents: jest.fn(),
 }));
 
+jest.mock("~/models/base", () => ({
+  flushCacheAll: jest.fn(),
+}));
+
 jest.mock("~/models/main-story", () => ({
   getMainStories: jest.fn(),
 }));
@@ -55,9 +60,10 @@ jest.mock("~/repositories", () => ({
   RaidRepository: jest.fn().mockImplementation(() => ({ refresh: mockRaidRefresh })),
 }));
 
-import { action } from "../../../app/routes/api.caches.$command";
+import { action, loader } from "../../../app/routes/[__manage]";
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
+const mockedFlushCacheAll = flushCacheAll as jest.MockedFunction<typeof flushCacheAll>;
 const mockedSyncTimelineContents = syncTimelineContents as jest.MockedFunction<typeof syncTimelineContents>;
 const mockedSyncRawStudents = syncRawStudents as jest.MockedFunction<typeof syncRawStudents>;
 const mockedGetFutureContents = getFutureContents as jest.MockedFunction<typeof getFutureContents>;
@@ -71,27 +77,61 @@ const mockedGetAllStudentsFavoriteItems = getAllStudentsFavoriteItems as jest.Mo
 const MockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
 const MockedRaidRepository = RaidRepository as jest.MockedClass<typeof RaidRepository>;
 
-type RefreshActionResponse = {
-  ok: boolean;
-  ranAt: string;
-  durations: Record<string, number>;
-  errors?: Record<string, string>;
+type ManageActionResponse = {
+  intent: "cache.refresh" | "cache.flush" | "unknown";
+  result?: {
+    ok: boolean;
+    ranAt: string;
+    durations?: Record<string, number>;
+    errors?: Record<string, string>;
+  };
+  error?: string;
 };
 
+type LoaderArgs = Parameters<typeof loader>[0];
 type ActionArgs = Parameters<typeof action>[0];
+type DataResult<T> = {
+  type: "DataWithResponseInit";
+  data: T;
+  init: ResponseInit | null;
+};
 
-function createActionArgs(command = "refresh"): ActionArgs {
-  // React Router's ActionFunctionArgs includes internal fields such as unstable_*,
-  // but this test only uses request/context/params. Use one unknown bridge to allow a partial mock.
+function createLoaderArgs(): LoaderArgs {
   return {
-    request: new Request(`https://mollulog.net/api/caches/${command}`, { method: "POST" }),
+    request: new Request("https://mollulog.net/__manage", { method: "GET" }),
     context: { cloudflare: { env: {} as Env, ctx: {} as ExecutionContext } },
-    params: { command },
+    params: {},
+  } as unknown as LoaderArgs;
+}
+
+function createActionArgs(intent = "cache.refresh"): ActionArgs {
+  return {
+    request: new Request("https://mollulog.net/__manage", {
+      method: "POST",
+      body: new URLSearchParams({ intent }),
+    }),
+    context: { cloudflare: { env: {} as Env, ctx: {} as ExecutionContext } },
+    params: {},
   } as unknown as ActionArgs;
+}
+
+function expectDataResult<T>(result: unknown): DataResult<T> {
+  expect(result).toMatchObject({ type: "DataWithResponseInit" });
+  return result as DataResult<T>;
+}
+
+function dataStatus(result: DataResult<unknown>): number {
+  return result.init?.status ?? 200;
+}
+
+function expectResponse(result: unknown): Response {
+  expect(result).toBeInstanceOf(Response);
+  return result as Response;
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedFlushCacheAll.mockResolvedValue(undefined);
   mockedSyncTimelineContents.mockResolvedValue(undefined);
   mockedSyncRawStudents.mockResolvedValue([]);
   mockRecruitmentRefresh.mockResolvedValue([]);
@@ -106,28 +146,39 @@ beforeEach(() => {
   });
 });
 
-describe("api.caches refresh action", () => {
+describe("__manage route", () => {
+  it("allows admins to load the manage page", async () => {
+    mockedGetActiveSensei.mockResolvedValue(makeSensei({ id: 1, role: "admin" }));
+
+    const response = expectDataResult(await loader(createLoaderArgs()));
+
+    expect(dataStatus(response)).toBe(200);
+  });
+
   it("runs refresh tasks for admins and returns task durations", async () => {
     mockedGetActiveSensei.mockResolvedValue(makeSensei({ id: 1, role: "admin" }));
 
-    const response = await action(createActionArgs());
-    const body = (await response.json()) as RefreshActionResponse;
+    const response = expectDataResult<ManageActionResponse>(await action(createActionArgs("cache.refresh")));
+    const body = response.data;
 
-    expect(response.status).toBe(200);
+    expect(dataStatus(response)).toBe(200);
     expect(body).toMatchObject({
-      ok: true,
-      durations: {
-        syncTimelineContents: expect.any(Number),
-        syncRawStudents: expect.any(Number),
-        "RecruitmentRepository.refresh": expect.any(Number),
-        "RaidRepository.refresh": expect.any(Number),
-        getMainStories: expect.any(Number),
-        getAllStudentsFavoriteItems: expect.any(Number),
-        getFutureContents: expect.any(Number),
-        getNavigationBarContentsRaw: expect.any(Number),
+      intent: "cache.refresh",
+      result: {
+        ok: true,
+        durations: {
+          syncTimelineContents: expect.any(Number),
+          syncRawStudents: expect.any(Number),
+          "RecruitmentRepository.refresh": expect.any(Number),
+          "RaidRepository.refresh": expect.any(Number),
+          getMainStories: expect.any(Number),
+          getAllStudentsFavoriteItems: expect.any(Number),
+          getFutureContents: expect.any(Number),
+          getNavigationBarContentsRaw: expect.any(Number),
+        },
       },
     });
-    expect(body.ranAt).toEqual(expect.any(String));
+    expect(body.result?.ranAt).toEqual(expect.any(String));
     expect(mockedSyncTimelineContents).toHaveBeenCalledWith(expect.anything(), expect.anything());
     expect(mockedGetMainStories).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(expect.anything(), true);
@@ -146,39 +197,60 @@ describe("api.caches refresh action", () => {
         }),
     );
 
-    const response = await action(createActionArgs());
-    const body = (await response.json()) as RefreshActionResponse;
+    const response = expectDataResult<ManageActionResponse>(await action(createActionArgs("cache.refresh")));
+    const body = response.data;
 
-    expect(response.status).toBe(200);
-    expect(body.ok).toBe(false);
-    expect(body.errors).toEqual({ "RaidRepository.refresh": "raid refresh failed" });
-    expect(body.durations["RaidRepository.refresh"]).toBeGreaterThan(0);
+    expect(dataStatus(response)).toBe(200);
+    expect(body.result?.ok).toBe(false);
+    expect(body.result?.errors).toEqual({ "RaidRepository.refresh": "raid refresh failed" });
+    expect(body.result?.durations?.["RaidRepository.refresh"]).toBeGreaterThan(0);
     expect(mockedGetFutureContents).not.toHaveBeenCalled();
     expect(mockedGetNavigationBarContentsRaw).not.toHaveBeenCalled();
   });
 
-  it("rejects non-admin users", async () => {
-    mockedGetActiveSensei.mockResolvedValue(makeSensei({ id: 2, role: "guest" }));
-
-    const response = await action(createActionArgs());
-
-    expect(response.status).toBe(403);
-  });
-
-  it("redirects anonymous requests", async () => {
-    mockedGetActiveSensei.mockResolvedValue(null);
-
-    const response = await action(createActionArgs());
-
-    expect(response.status).toBe(302);
-    expect(response.headers.get("Location")).toBe("/unauthorized");
-  });
-
-  it("returns 400 for unknown commands", async () => {
+  it("flushes all cache entries for admins", async () => {
     mockedGetActiveSensei.mockResolvedValue(makeSensei({ id: 1, role: "admin" }));
 
-    const response = await action(createActionArgs("unknown"));
+    const response = expectDataResult<ManageActionResponse>(await action(createActionArgs("cache.flush")));
+    const body = response.data;
 
-    expect(response.status).toBe(400);
+    expect(dataStatus(response)).toBe(200);
+    expect(body).toMatchObject({
+      intent: "cache.flush",
+      result: {
+        ok: true,
+        ranAt: expect.any(String),
+      },
+    });
+    expect(mockedFlushCacheAll).toHaveBeenCalledWith(expect.anything());
+  });
+
+  it("rejects non-admin users from loader and action", async () => {
+    mockedGetActiveSensei.mockResolvedValue(makeSensei({ id: 2, role: "guest" }));
+
+    await expect(loader(createLoaderArgs())).resolves.toHaveProperty("status", 403);
+    await expect(action(createActionArgs())).resolves.toHaveProperty("status", 403);
+  });
+
+  it("redirects anonymous requests from loader and action", async () => {
+    mockedGetActiveSensei.mockResolvedValue(null);
+
+    const loaderResponse = expectResponse(await loader(createLoaderArgs()));
+    const actionResponse = expectResponse(await action(createActionArgs()));
+
+    expect(loaderResponse.status).toBe(302);
+    expect(loaderResponse.headers.get("Location")).toBe("/unauthorized");
+    expect(actionResponse.status).toBe(302);
+    expect(actionResponse.headers.get("Location")).toBe("/unauthorized");
+  });
+
+  it("returns 400 for unknown intents", async () => {
+    mockedGetActiveSensei.mockResolvedValue(makeSensei({ id: 1, role: "admin" }));
+
+    const response = expectDataResult<ManageActionResponse>(await action(createActionArgs("unknown")));
+    const body = response.data;
+
+    expect(dataStatus(response)).toBe(400);
+    expect(body).toEqual({ intent: "unknown", error: "Unsupported intent: unknown" });
   });
 });
