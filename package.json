@@ -46,7 +46,7 @@
     "javascript-lp-solver": "^0.4.24",
     "marked": "^15.0.12",
     "nanoid": "^3.3.11",
-    "protobufjs": "^7.5.5",
+    "protobufjs": "^7.5.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-loading-skeleton": "^3.5.0",
