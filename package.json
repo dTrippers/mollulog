@@ -46,7 +46,7 @@
     "javascript-lp-solver": "^0.4.24",
     "marked": "^15.0.12",
     "nanoid": "^3.3.11",
-    "protobufjs": "^7.5.5",
+    "protobufjs": "^7.5.8",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-loading-skeleton": "^3.5.0",
@@ -65,7 +65,7 @@
     "@babel/preset-typescript": "^7.28.5",
     "@biomejs/biome": "^1.9.4",
     "@cloudflare/vite-plugin": "^1.31.1",
-    "@cloudflare/workers-types": "^4.20260409.1",
+    "@cloudflare/workers-types": "^4.20260511.1",
     "@eslint/eslintrc": "^3.3.5",
     "@eslint/js": "^9.39.1",
     "@jest/globals": "^30.3.0",
@@ -85,7 +85,7 @@
     "typescript": "^5.9.3",
     "vite": "^6.4.2",
     "vite-tsconfig-paths": "^5.1.4",
-    "wrangler": "^4.81.0"
+    "wrangler": "^4.90.1"
   },
   "engines": {
     "node": ">=22.14.0"
