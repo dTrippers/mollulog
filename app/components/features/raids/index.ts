@@ -1,6 +1,8 @@
 export { default as RaidCard } from "./RaidCard";
 export { default as RaidClearLevels } from "./RaidClearLevels";
 export { default as RaidDifficultyComparison } from "./RaidDifficultyComparison";
+export { default as RaidListItem } from "./RaidListItem";
+export type { RaidListItemRaid } from "./RaidListItem";
 export { default as RaidOftenUsedParties } from "./RaidOftenUsedParties";
 export { default as RaidRankFilter } from "./RaidRankFilter";
 export type { RaidRankFilterState } from "./RaidRankFilter";

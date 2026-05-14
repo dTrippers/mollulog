@@ -1,14 +1,14 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
-import { RaidCard } from "~/components/features/raids";
+import { RaidListItem } from "~/components/features/raids";
 import RaidClearLevels from "~/components/features/raids/RaidClearLevels";
 import RaidOftenUsedParties from "~/components/features/raids/RaidOftenUsedParties";
 import RaidStatisticsSlotCount from "~/components/features/raids/RaidStatisticsSlotCount";
 import { EmptyView, HorizontalScroll, LoadingSkeleton, Section } from "~/components/primitives";
+import { compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 import { fetchRaidOverview } from "~/lib/ranks/overview";
 import { type RaidStatistics, fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
-import { compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 import type { RaidType } from "~/models/content.d";
 import { raidTypeToParam } from "~/models/raid";
 import { getMaxTierAt } from "~/models/student";
@@ -174,21 +174,22 @@ export default function RaidSummary() {
                 ({ defenseType: raidDt }) => raidDt === defenseType,
               );
 
+              const actions = [
+                { text: "시즌 정보", to: `/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}` },
+              ];
+              if (hasMatchingDefenseType) {
+                actions.push({
+                  text: "비교",
+                  to: `${raidPath}/compare?from=${raid.uid}&defenseType=${defenseType}`,
+                });
+              }
+
               return (
-                <RaidCard
+                <RaidListItem
                   key={raid.uid}
                   raid={raid}
-                  timeLocaleType="absolute"
-                  buttons={
-                    [
-                      { text: "시즌 정보", to: `/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}` },
-                      hasMatchingDefenseType && {
-                        text: "비교",
-                        to: `${raidPath}/compare?from=${raid.uid}&defenseType=${defenseType}`,
-                      },
-                    ].filter(Boolean) as { text: string; to: string }[]
-                  }
-                  showName={false}
+                  actions={actions}
+                  className="border border-neutral-200 shadow-sm dark:border-neutral-700"
                 />
               );
             })}

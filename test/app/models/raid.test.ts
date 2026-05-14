@@ -26,8 +26,7 @@ afterEach(() => {
 });
 
 describe("getAllRaidSchedules", () => {
-  it("passes a seven-day endAfter bound to BAQL", async () => {
-    jest.spyOn(Date, "now").mockReturnValue(new Date("2026-05-11T00:00:00.000Z").getTime());
+  it("does not pass an endAfter bound so historical raid routes stay linkable", async () => {
     mockedRunQuery.mockResolvedValueOnce({
       data: { raidSchedules: { nodes: [] } },
       error: undefined,
@@ -37,7 +36,7 @@ describe("getAllRaidSchedules", () => {
 
     expect(runQuery).toHaveBeenCalledWith(expect.anything(), {
       region: "gl",
-      endAfter: new Date("2026-05-04T00:00:00.000Z"),
+      endAfter: null,
     });
   });
 });

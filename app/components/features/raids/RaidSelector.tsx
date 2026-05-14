@@ -2,16 +2,13 @@ import { Transition } from "@headlessui/react";
 import { ChevronDownIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { AttributeBadge, FilterButtons } from "~/components/primitives";
-import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { FilterButtons } from "~/components/primitives";
 import type { Attack, Defense } from "~/graphql/graphql";
-import { compareInstantDesc, formatInstant, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
-import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
-import { bossImageUrl } from "~/models/assets";
+import { type UtcIsoString, compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 import type { RaidType, Terrain } from "~/models/content.d";
 import { raidTypeToParam } from "~/models/raid";
 import { sanitizeClassName } from "~/prophandlers";
-import RaidCard from "./RaidCard";
+import RaidListItem from "./RaidListItem";
 
 type SelectableRaid = {
   uid: string;
@@ -54,13 +51,19 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
     <div className="relative w-full">
       <button
         type="button"
-        className="group relative w-full rounded-lg text-left shadow-lg"
+        className="group relative w-full text-left"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
       >
         <div className="relative">
-          {currentRaid && <RaidSelectorItem raid={currentRaid} selected />}
+          {currentRaid && (
+            <RaidListItem
+              raid={currentRaid}
+              reserveRightAccessorySpace
+              className="border border-neutral-200 shadow-sm dark:border-neutral-700"
+            />
+          )}
           <ChevronDownIcon
             className={sanitizeClassName(`
               absolute top-1/2 right-3 size-5 -translate-y-1/2 flex-shrink-0 text-neutral-500 transition-transform
@@ -99,79 +102,19 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
             <XMarkIcon className="size-6" strokeWidth={2} />
           </button>
         </div>
-        <div className="max-h-64 lg:max-h-96 overflow-y-auto no-scrollbar mt-2 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+        <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg border border-neutral-200 bg-white shadow-lg no-scrollbar dark:border-neutral-700 dark:bg-neutral-900 lg:max-h-96">
           {selectableRaids.map((raid) => (
             <Link
               to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
               key={raid.uid}
+              className="block rounded-lg"
               onClick={() => setIsOpen(false)}
             >
-              <RaidSelectorItem raid={raid} />
+              <RaidListItem raid={raid} />
             </Link>
           ))}
         </div>
       </Transition>
-    </div>
-  );
-}
-
-function RaidSelectorItem({ raid, selected = false }: { raid: SelectableRaid; selected?: boolean }) {
-  const displayTimeZone = useDisplayTimeZone();
-  const normalizedRaid = {
-    ...raid,
-    startAt: raid.startAt ? toUtcIso(raid.startAt) : null,
-    endAt: raid.endAt ? toUtcIso(raid.endAt) : null,
-  };
-
-  if (!selected) {
-    return (
-      <div className="group relative overflow-hidden bg-white transition-colors hover:bg-neutral-100 first:rounded-t-lg last:rounded-b-lg dark:bg-neutral-900 dark:hover:bg-neutral-800">
-        <img
-          src={bossImageUrl(raid.raidBoss.uid)}
-          alt="보스 이미지"
-          className="absolute top-0 right-0 h-full object-cover opacity-70"
-          loading="lazy"
-        />
-        <div className="relative w-full rounded-lg bg-white/90 p-3 transition-colors dark:bg-neutral-900/80">
-          <div className="flex items-center justify-between gap-4">
-            <div className="min-w-0">
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex} ·{" "}
-                {terrainLocale[raid.terrain]}
-              </p>
-              <p className="truncate text-sm font-bold lg:text-base">{raid.raidBoss.name}</p>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                {raid.startAt ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "YYYY.MM.DD" }) : "-"} ~{" "}
-                {raid.endAt ? formatInstant(raid.endAt, { timeZone: displayTimeZone, format: "MM.DD" }) : "-"}
-              </p>
-            </div>
-            <div className="flex flex-col items-start gap-1">
-              {raid.defenseTypes.map(({ defenseType, difficulty }) => (
-                <div key={`${defenseType}-${difficulty ?? "none"}`} className="flex items-center gap-1.5">
-                  {difficulty && (
-                    <span className="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
-                      {difficultyLocale[difficulty] ?? difficulty}
-                    </span>
-                  )}
-                  <AttributeBadge text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      <RaidCard
-        raid={normalizedRaid}
-        timeLocaleType="absolute"
-        showTimeLabel={false}
-        showDateRange
-        reserveRightAccessorySpace
-      />
     </div>
   );
 }
