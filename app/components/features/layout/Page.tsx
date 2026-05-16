@@ -30,6 +30,59 @@ type PageProps = {
   children: React.ReactNode;
 };
 
+type TabItemState = {
+  active?: boolean;
+  disabled?: boolean;
+};
+
+export function shouldShowMobileTabText(_state: TabItemState) {
+  return true;
+}
+
+export function getVerticalDesktopTabItemClassName({ active, disabled }: TabItemState) {
+  if (active) {
+    return sanitizeClassName(`
+      flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
+      ${
+        disabled
+          ? "bg-neutral-200 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 opacity-50"
+          : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
+      }
+    `);
+  }
+
+  return sanitizeClassName(`
+    flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
+    ${
+      disabled
+        ? "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-600 opacity-50"
+        : "bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+    }
+  `);
+}
+
+export function getMobileTabItemClassName({ active, disabled }: TabItemState) {
+  if (active) {
+    return sanitizeClassName(`
+      flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
+      ${
+        disabled
+          ? "bg-neutral-200 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 opacity-50"
+          : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
+      }
+    `);
+  }
+
+  return sanitizeClassName(`
+    flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
+    ${
+      disabled
+        ? "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-600 opacity-50"
+        : "bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+    }
+  `);
+}
+
 export default function Page({
   title,
   description,
@@ -273,23 +326,7 @@ function VerticalDesktopTabBar({
 }
 
 function VerticalDesktopTabItem({ text, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
-  const className = active
-    ? sanitizeClassName(`
-        flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
-        ${
-          disabled
-            ? "bg-neutral-200 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 opacity-50"
-            : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
-        }
-      `)
-    : sanitizeClassName(`
-        flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
-        ${
-          disabled
-            ? "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-600 opacity-50"
-            : "bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-        }
-      `);
+  const className = getVerticalDesktopTabItemClassName({ active, disabled });
   const inner = (
     <>
       <Icon className="size-5 shrink-0" strokeWidth={2} />
@@ -318,27 +355,13 @@ function VerticalDesktopTabItem({ text, Icon, active, disabled, link, onClick }:
 }
 
 function MobileTabItem({ text, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
-  const className = active
-    ? sanitizeClassName(`
-        flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
-        ${
-          disabled
-            ? "bg-neutral-200 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 opacity-50"
-            : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
-        }
-      `)
-    : sanitizeClassName(`
-        flex items-center justify-center w-10 h-10 rounded-full shrink-0 transition-all duration-200
-        ${
-          disabled
-            ? "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-600 opacity-50"
-            : "bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-        }
-      `);
+  const className = getMobileTabItemClassName({ active, disabled });
   const inner = (
     <>
       <Icon className="size-5 shrink-0" strokeWidth={2} />
-      {active && <span className="text-sm font-semibold whitespace-nowrap">{text}</span>}
+      {shouldShowMobileTabText({ active, disabled }) && (
+        <span className={`text-sm whitespace-nowrap ${active ? "font-semibold" : "font-medium"}`}>{text}</span>
+      )}
     </>
   );
 

@@ -14,6 +14,17 @@ import {
   sortStudentGradingTags,
 } from "~/models/student-grading-tag";
 import { StudentCards } from "../students";
+import {
+  getCommentEditorPanelClassName,
+  getCommentToggleClassName,
+  getCommunityFeedClassName,
+  getCommunityPostBodyOrder,
+  getCommunityPostCardClassName,
+  getGroupedAvatarPlaceholderClassName,
+  getPickupStudentNameClassName,
+  getSubjectMetaClassName,
+  shouldGroupPostWithPrevious,
+} from "./community-feed-presentation";
 
 export type CommunityFeedPostItem = EnrichedCommunityFeedPost;
 
@@ -26,20 +37,16 @@ type CommunityFeedProps = {
 
 export default function CommunityFeed({ posts, signedIn, studentsByUid, preview = false }: CommunityFeedProps) {
   return (
-    <div
-      className={
-        preview
-          ? "divide-y divide-neutral-200 dark:divide-neutral-700"
-          : "-mx-4 divide-y divide-neutral-200 dark:divide-neutral-700 sm:mx-0"
-      }
-    >
-      {posts.map((post) => (
+    <div className={getCommunityFeedClassName({ preview })}>
+      {posts.map((post, index) => (
         <CommunityPostCard
           key={post.uid}
           post={post}
           signedIn={signedIn}
           studentsByUid={studentsByUid}
           preview={preview}
+          firstInFeed={index === 0}
+          groupedWithPrevious={!preview && shouldGroupPostWithPrevious(post, posts[index - 1])}
         />
       ))}
     </div>
@@ -87,11 +94,15 @@ function CommunityPostCard({
   signedIn,
   studentsByUid,
   preview,
+  firstInFeed,
+  groupedWithPrevious,
 }: {
   post: CommunityFeedPostItem;
   signedIn: boolean;
   studentsByUid: Record<string, { name: string }>;
   preview: boolean;
+  firstInFeed: boolean;
+  groupedWithPrevious: boolean;
 }) {
   const { showSignIn } = useSignIn();
   const displayTimeZone = useDisplayTimeZone();
@@ -105,6 +116,7 @@ function CommunityPostCard({
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment = post.postType === "event_opinion";
   const canLike = post.postType === "guide";
+  const bodyOrder = getCommunityPostBodyOrder(post.postType);
 
   useEffect(() => {
     setComments(post.comments);
@@ -167,55 +179,56 @@ function CommunityPostCard({
   };
 
   return (
-    <article
-      className={`transition-colors hover:bg-neutral-50/70 dark:hover:bg-neutral-800/60 ${
-        preview ? "py-3" : "px-4 py-4 sm:px-4"
-      }`}
-    >
+    <article className={getCommunityPostCardClassName({ preview, firstInFeed, groupedWithPrevious })}>
       <div className={`flex items-start ${preview ? "gap-2.5" : "gap-3"}`}>
-        <Link to={`/@${post.author.username}`} className="shrink-0">
-          <ProfileImage studentUid={post.author.profileStudentId} imageSize={10} />
-        </Link>
+        {!groupedWithPrevious && (
+          <Link to={`/@${post.author.username}`} className="shrink-0">
+            <ProfileImage studentUid={post.author.profileStudentId} imageSize={10} />
+          </Link>
+        )}
+        {groupedWithPrevious && <div className={getGroupedAvatarPlaceholderClassName()} aria-hidden />}
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm leading-5">
-            <Link
-              to={`/@${post.author.username}`}
-              className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
-            >
-              @{post.author.username}
-            </Link>
-            <span className="text-neutral-700 dark:text-neutral-300">{getPostTypeLabel(post)}</span>
-            <span className="text-neutral-400 dark:text-neutral-500">·</span>
-            <time className="shrink-0 text-neutral-500 dark:text-neutral-400" dateTime={timestamp.dateTime}>
-              {timestamp.text}
-            </time>
-            {timestamp.edited && <span className="text-neutral-500 dark:text-neutral-400">(수정됨)</span>}
-            {visibilityLabel && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
-                <LockClosedIcon className="size-3.5" />
-                {visibilityLabel}
-              </span>
-            )}
-          </div>
+          {!groupedWithPrevious && (
+            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm leading-5">
+              <Link
+                to={`/@${post.author.username}`}
+                className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
+              >
+                @{post.author.username}
+              </Link>
+              <span className="text-neutral-600 dark:text-neutral-400">{getPostTypeLabel(post)}</span>
+              <span className="text-neutral-400 dark:text-neutral-500">·</span>
+              <time className="shrink-0 text-neutral-500 dark:text-neutral-400" dateTime={timestamp.dateTime}>
+                {timestamp.text}
+              </time>
+              {timestamp.edited && <span className="text-neutral-400 dark:text-neutral-500">수정됨</span>}
+              {visibilityLabel && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
+                  <LockClosedIcon className="size-3.5" />
+                  {visibilityLabel}
+                </span>
+              )}
+            </div>
+          )}
 
-          <div className={preview ? "mt-1" : "mt-1.5"}>
-            <PostSubjectMeta post={post} studentsByUid={studentsByUid} />
-          </div>
-
-          <div className={preview ? "mt-2" : "mt-3"}>
-            <PostContent post={post} studentsByUid={studentsByUid} />
-          </div>
+          {bodyOrder.map((section) =>
+            section === "subject" ? (
+              <div key="subject" className={preview ? "mt-1" : groupedWithPrevious ? "mt-0" : "mt-2"}>
+                <PostSubjectMeta post={post} studentsByUid={studentsByUid} />
+              </div>
+            ) : (
+              <div key="content" className={preview ? "mt-2" : "mt-2.5"}>
+                <PostContent post={post} studentsByUid={studentsByUid} />
+              </div>
+            ),
+          )}
 
           {!preview && (canComment || canLike) && (
-            <div className="mt-4 flex max-w-md items-center justify-between text-neutral-500 dark:text-neutral-400">
+            <div className="mt-4 flex max-w-md items-center gap-6 text-neutral-500 dark:text-neutral-400">
               {canComment && (
                 <button
                   type="button"
-                  className={`group inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition ${
-                    commentEditing
-                      ? "bg-blue-50 text-blue-600 dark:bg-blue-950/30 dark:text-blue-300"
-                      : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-neutral-100"
-                  }`}
+                  className={getCommentToggleClassName({ active: commentEditing })}
                   onClick={() => setCommentEditing((prev) => !prev)}
                   aria-label={`댓글 ${commentCount}개`}
                 >
@@ -226,14 +239,12 @@ function CommunityPostCard({
               {canLike && (
                 <button
                   type="button"
-                  className={`group inline-flex min-w-20 items-center gap-1.5 rounded-full py-1 text-sm transition ${
+                  className={`group inline-flex items-center gap-1 text-xs font-medium transition ${
                     liked ? "text-rose-600 dark:text-rose-300" : "hover:text-rose-600 dark:hover:text-rose-300"
                   }`}
                   onClick={toggleLike}
                 >
-                  <span className="rounded-full p-1 transition group-hover:bg-rose-50 dark:group-hover:bg-rose-950/30">
-                    {liked ? <SolidHeartIcon className="size-5" /> : <HeartIcon className="size-5" />}
-                  </span>
+                  {liked ? <SolidHeartIcon className="size-4" /> : <HeartIcon className="size-4" />}
                   <span>{likeCount}</span>
                 </button>
               )}
@@ -268,7 +279,7 @@ function CommunityPostCard({
         </div>
       </div>
       {!preview && canComment && commentEditing && (
-        <div className="mt-3 rounded-lg bg-neutral-50 px-3 py-3 sm:ml-[52px] dark:bg-neutral-900/50">
+        <div className={getCommentEditorPanelClassName({ groupedWithPrevious })}>
           <div className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">
             <ChatBubbleLeftEllipsisIcon className="size-4" />
             <span>댓글</span>
@@ -300,8 +311,8 @@ function PostSubjectMeta({
 }) {
   if (post.postType === "student_review" && post.subjectStudentUid) {
     return (
-      <div>
-        <StudentSubjectPill
+      <div className={getSubjectMetaClassName(post.postType)}>
+        <StudentSubjectLink
           uid={post.subjectStudentUid}
           name={post.subjectStudentName ?? studentsByUid[post.subjectStudentUid]?.name ?? "학생 정보"}
         />
@@ -311,25 +322,26 @@ function PostSubjectMeta({
 
   if (post.postType === "event_opinion" && post.subjectContentUid) {
     return (
-      <div className="space-y-2">
+      <div className={getSubjectMetaClassName(post.postType)}>
         <Link
           to={`/events/${post.subjectContentUid}`}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+          className="inline-flex max-w-full items-center gap-1.5 text-neutral-500 hover:text-neutral-800 hover:underline dark:text-neutral-400 dark:hover:text-neutral-200"
         >
-          <UserGroupIcon className="size-4" />
-          <span className="max-w-[14rem] truncate sm:max-w-[18rem]">
+          <UserGroupIcon className="size-3.5 shrink-0 text-neutral-400 dark:text-neutral-500" />
+          <span className="max-w-64 truncate sm:max-w-md">
             {post.subjectContentName ?? "이벤트 보기"}
           </span>
         </Link>
         {post.pickupStudents && post.pickupStudents.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="shrink-0 text-neutral-400 dark:text-neutral-500">픽업</span>
             {post.pickupStudents.map((student) => (
-              <StudentSubjectPill
+              <StudentSubjectLink
                 key={`${post.uid}-${student.uid}`}
                 uid={student.uid}
                 name={student.name}
-                showName={false}
-                imageSize={8}
+                imageSize={6}
+                nameClassName={getPickupStudentNameClassName()}
               />
             ))}
           </div>
@@ -341,29 +353,25 @@ function PostSubjectMeta({
   return null;
 }
 
-function StudentSubjectPill({
+function StudentSubjectLink({
   uid,
   name,
-  showName = true,
   imageSize = 6,
+  nameClassName = "min-w-0 truncate",
 }: {
   uid: string;
   name: string;
-  showName?: boolean;
-  imageSize?: 6 | 8;
+  imageSize?: 6;
+  nameClassName?: string;
 }) {
   return (
     <Link
       to={`/students/${uid}`}
       title={name}
-      className={
-        showName
-          ? "inline-flex items-center gap-1.5 overflow-hidden rounded-full bg-neutral-100 pr-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-200 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-          : "inline-flex items-center overflow-hidden rounded-full transition hover:opacity-90"
-      }
+      className="inline-flex min-w-0 items-center gap-1.5 text-neutral-500 transition hover:text-neutral-800 hover:underline dark:text-neutral-400 dark:hover:text-neutral-200"
     >
       <ProfileImage studentUid={uid} imageSize={imageSize} />
-      {showName && <span>{name}</span>}
+      <span className={nameClassName}>{name}</span>
     </Link>
   );
 }
@@ -380,11 +388,11 @@ function PostContent({
       <div className="space-y-3">
         <PostBlocks post={post} studentsByUid={studentsByUid} />
         {post.tags && post.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-x-3 gap-y-1">
             {sortStudentGradingTags(post.tags).map((tag) => (
               <div
                 key={tag}
-                className="inline-flex cursor-default items-center gap-1.5 rounded-md border border-neutral-200 px-2 py-0.5 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
+                className="inline-flex cursor-default items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400"
               >
                 <TagIcon tag={tag} size="sm" />
                 <span>{STUDENT_GRADING_TAG_DISPLAY[tag]}</span>
@@ -444,7 +452,7 @@ function BlockView({
       return null;
     }
 
-    return <p className="whitespace-pre-wrap text-[15px] leading-6 text-neutral-800 dark:text-neutral-100">{block.text}</p>;
+    return <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-900 dark:text-neutral-100 sm:text-base">{block.text}</p>;
   }
 
   if (block.type === "markdown") {
