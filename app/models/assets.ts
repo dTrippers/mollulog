@@ -10,11 +10,11 @@ export function studentImageUrl(uid: string): string {
   if (uid === "unlisted") {
     return "https://assets.mollulog.net/assets/images/students/-1";
   }
-  return `https://baql-assets.mollulog.net/images/students/collection/${uid}`;
+  return `https://assets.baql.net/images/students/collection/${uid}.webp`;
 }
 
 export function studentStandingImageUrl(uid: string): string {
-  return `https://baql-assets.mollulog.net/images/students/standing/${uid}`;
+  return `https://assets.baql.net/images/students/standing/${uid}.webp`;
 }
 
 export function itemImageUrl(item: string): string {

@@ -1,4 +1,4 @@
-import { InformationCircleIcon, ListBulletIcon, ShoppingCartIcon } from "@heroicons/react/24/outline";
+import { InformationCircleIcon, ListBulletIcon, ShoppingCartIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
 import { EventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
@@ -75,6 +75,16 @@ export default function EventPage() {
           link: `/events/${uid}/shop`,
           active: pathname === `/events/${uid}/shop`,
           disabled: !eventMetadata.shopAvailable,
+        },
+        {
+          text: "모집 시뮬레이션",
+          description: eventMetadata.recruitmentGroupUid
+            ? "해당 모집 기간의 픽업 학생으로 모집 결과를 시뮬레이션해보세요"
+            : "모집 정보가 없는 이벤트예요",
+          Icon: SparklesIcon,
+          link: `/events/${uid}/recruitment-simulator`,
+          active: pathname === `/events/${uid}/recruitment-simulator`,
+          disabled: !eventMetadata.recruitmentGroupUid,
         },
       ]}
     >

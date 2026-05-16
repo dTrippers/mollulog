@@ -1,10 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { CheckIcon, HeartIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { Transition } from "@headlessui/react";
+import { CheckIcon, HeartIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
+import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
-import { studentImageUrl } from "~/models/assets";
-import type { Role } from "~/models/content.d";
+import { OptionBadge } from "~/components/primitives";
+import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import type { Attack, Defense } from "~/graphql/graphql";
 import {
   attackTypeColor,
@@ -14,10 +14,10 @@ import {
   roleColor,
   roleLocale,
 } from "~/locales/ko";
-import { OptionBadge } from "~/components/primitives";
-import { sanitizeClassName } from "~/prophandlers";
-import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
+import { studentImageUrl } from "~/models/assets";
+import type { Role } from "~/models/content.d";
 import { parseVisibleNames } from "~/models/student";
+import { sanitizeClassName } from "~/prophandlers";
 
 type StudentCardProps = {
   uid: string | null;
@@ -227,7 +227,7 @@ export default function StudentCard({
               )}
 
               {showsOverlayName ? (
-                <div className="absolute inset-0 bg-linear-15 from-black/80 from-10% via-transparent via-50% to-transparent px-1.5 pb-0.5 text-left flex flex-col justify-end">
+                <div className="absolute inset-0 bg-linear-15 from-black/80 from-10% via-transparent via-50% to-transparent px-1 pb-0.5 md:px-1.5 md:pb-1 text-left flex flex-col justify-end">
                   <p className="whitespace-nowrap text-xs fond-bold scale-75 origin-left leading-none tracking-tighter text-white">
                     {overlaySubName}
                   </p>

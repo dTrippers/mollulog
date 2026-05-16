@@ -1,9 +1,10 @@
 import { graphql } from "~/graphql";
-import type { RecruitmentGroupsListQuery } from "~/graphql/graphql";
+import type { RecruitmentGroupsListQuery, RecruitmentPoolStudentsQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "~/models/base";
 
 const RECRUITMENT_GROUPS_CACHE_KEY = "repo::recruitment-groups::all";
+const RECRUITMENT_POOL_STUDENTS_CACHE_KEY = "repo::recruitment-pool-students::all::v1";
 const RECRUITMENT_GROUPS_CACHE_TTL = 24 * 60 * 60;
 const BAQL_HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -13,13 +14,25 @@ const recruitmentGroupsQuery = graphql(`
       uid contentType contentUid startAt endAt recruitmentType
       recruitments {
         recruitmentType pickup rerun since until studentName
-        student { uid attackType defenseType role name schaleDbId }
+        student { uid attackType defenseType role name schaleDbId initialTier releaseAt archiveAt }
+      }
+    }
+  }
+`);
+
+const recruitmentPoolStudentsQuery = graphql(`
+  query RecruitmentPoolStudents {
+    students {
+      uid name initialTier attackType defenseType role releaseAt archiveAt
+      recruitments {
+        recruitmentType
       }
     }
   }
 `);
 
 export type RecruitmentGroup = NonNullable<RecruitmentGroupsListQuery["recruitmentGroups"][number]>;
+export type RecruitmentPoolStudent = RecruitmentPoolStudentsQuery["students"][number];
 
 export class RecruitmentRepository {
   private allPromise: Promise<RecruitmentGroup[]> | null = null;
@@ -112,5 +125,23 @@ export class RecruitmentRepository {
 
   refresh(): Promise<RecruitmentGroup[]> {
     return this.getAllPromise(true);
+  }
+
+  async getPoolStudents(forceRefresh = false): Promise<RecruitmentPoolStudent[]> {
+    return fetchCached(
+      this.env,
+      RECRUITMENT_POOL_STUDENTS_CACHE_KEY,
+      async () => {
+        const { data, error } = await runQuery(recruitmentPoolStudentsQuery, {});
+
+        if (error || !data) {
+          throw error ?? new Error("failed to fetch recruitment pool students");
+        }
+
+        return data.students;
+      },
+      RECRUITMENT_GROUPS_CACHE_TTL,
+      forceRefresh,
+    );
   }
 }
