@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import {
+  type UtcIsoString,
   compareInstantAsc,
   formatInstant,
   formatInstantDateKey,
@@ -8,9 +9,8 @@ import {
   isInstantBefore,
   nowUtcIso,
   parseUtcTimestamp,
-  type UtcIsoString,
 } from "~/lib/date-time";
-import { CONTENT_ORDER } from "~/models/content";
+import { CONTENT_ORDER } from "~/models/content-rules";
 import type { EventType, RaidType } from "~/models/content.d";
 import type { ContentTimelineItemProps } from "./ContentTimelineItem";
 import { ContentTimelineItem } from "./ContentTimelineItem";
@@ -66,13 +66,16 @@ function groupContents(contents: ContentTimelineProps["contents"], timeZone: str
 
   const now = nowUtcIso();
   for (const content of [...contents].sort((a, b) => compareInstantAsc(a.since, b.since))) {
-    const isCurrent = isInstantBefore(content.since, now) && (content.until === null || isInstantAfter(content.until, now));
+    const isCurrent =
+      isInstantBefore(content.since, now) && (content.until === null || isInstantAfter(content.until, now));
 
     const groupDate = isCurrent ? null : content.since;
     const lastGroup = groups[groups.length - 1];
     if (
       (lastGroup?.groupDate === null && isCurrent) ||
-      (lastGroup?.groupDate && groupDate && formatInstantDateKey(lastGroup.groupDate, timeZone) === formatInstantDateKey(groupDate, timeZone))
+      (lastGroup?.groupDate &&
+        groupDate &&
+        formatInstantDateKey(lastGroup.groupDate, timeZone) === formatInstantDateKey(groupDate, timeZone))
     ) {
       lastGroup.contents.push(content);
     } else {
@@ -142,7 +145,9 @@ export default function ContentTimeline({
               <div className="flex items-center">
                 <div className="inline-block size-3 bg-neutral-500 dark:bg-neutral-400 rounded-full" />
                 <span className="mx-2 md:mx-4 font-bold text-neutral-500 dark:text-neutral-400 text-sm ">
-                  {group.groupDate ? formatInstant(group.groupDate, { timeZone: displayTimeZone, format: "YYYY-MM-DD" }) : ""}
+                  {group.groupDate
+                    ? formatInstant(group.groupDate, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })
+                    : ""}
                 </span>
               </div>
             )}

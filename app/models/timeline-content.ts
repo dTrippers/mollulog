@@ -1,7 +1,7 @@
-import { and, eq, gte, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { normalizeInstant, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, normalizeInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { resolveContentName } from "./content-name";
 
 export type TimelineContentType =
@@ -122,12 +122,7 @@ export async function getTimelineContents(env: Env): Promise<TimelineContent[]> 
   const rows = await db
     .select()
     .from(timelineContentsTable)
-    .where(
-      and(
-        or(isNull(timelineContentsTable.endAt), gte(timelineContentsTable.endAt, now)),
-        or(lte(timelineContentsTable.startAt, now), isNotNull(timelineContentsTable.syncedAt)),
-      ),
-    )
+    .where(or(isNull(timelineContentsTable.endAt), gte(timelineContentsTable.endAt, now)))
     .orderBy(timelineContentsTable.startAt)
     .all();
   return enrichAll(env, rows.map(toRaw));
@@ -144,7 +139,6 @@ export async function getUpcomingEvent(env: Env): Promise<TimelineContent | null
         eq(timelineContentsTable.contentType, "event"),
         sql`${timelineContentsTable.runType} != 'permanent'`,
         gte(timelineContentsTable.endAt, now),
-        or(lte(timelineContentsTable.startAt, now), isNotNull(timelineContentsTable.syncedAt)),
       ),
     )
     .orderBy(timelineContentsTable.startAt)
@@ -190,11 +184,7 @@ export async function getTimelineContentsByContentTypes(
   endAfter?: Date | UtcIsoString,
 ): Promise<TimelineContent[]> {
   const db = drizzle(env.DB);
-  const now = nowUtcIso();
-  const conditions = [
-    inArray(timelineContentsTable.contentType, contentTypes),
-    or(lte(timelineContentsTable.startAt, now), isNotNull(timelineContentsTable.syncedAt)),
-  ];
+  const conditions = [inArray(timelineContentsTable.contentType, contentTypes)];
   if (endAfter) {
     conditions.push(gte(timelineContentsTable.endAt, toUtcIso(endAfter)));
   }

@@ -1,10 +1,10 @@
+import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { useMemo } from "react";
 import { Link } from "react-router";
-import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { formatInstant, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, formatInstant } from "~/lib/date-time";
 import { timelineContentTypeLocale } from "~/locales/ko";
-import { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES } from "~/models/content";
+import { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES } from "~/models/content-rules";
 import type { TimelineContentType } from "~/models/timeline-content";
 
 type EventListItem = {
@@ -49,10 +49,10 @@ export default function EventList({ events, showArrow = true, className = "" }: 
         <Link to={`/events/${event.uid}`} key={event.uid} className="block group">
           <div className="p-3 flex items-center gap-3 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
             <div className={`flex-1 ${event.imageUrl ? "min-w-0" : ""}`}>
-              <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">{timelineContentTypeLocale[event.type]}</p>
-              <p className="font-semibold whitespace-pre-line text-neutral-900 dark:text-neutral-100">
-                {event.name}
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">
+                {timelineContentTypeLocale[event.type]}
               </p>
+              <p className="font-semibold whitespace-pre-line text-neutral-900 dark:text-neutral-100">{event.name}</p>
               <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} ~{" "}
                 {formatInstant(event.until, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}

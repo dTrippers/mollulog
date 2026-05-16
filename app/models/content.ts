@@ -1,26 +1,23 @@
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
 import {
+  type UtcIsoString,
   compareInstantAsc,
   getInstantTime,
   isInstantAfter,
   isInstantBefore,
   nowUtcIso,
   toUtcIso,
-  type UtcIsoString,
 } from "~/lib/date-time";
-import { type RaidSchedule, RecruitmentRepository, RaidRepository } from "~/repositories";
+import { RaidRepository, type RaidSchedule, RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
-import type { EventType, RaidType, Role } from "./content.d";
+import type { RaidType, Role } from "./content.d";
 import { getAllCoupons } from "./coupon";
 import { getFavoritedCounts } from "./favorite-students";
 import { normalizeFutureContentDates } from "./future-content";
 import { getLatestPostTime } from "./post";
-import {
-  getFutureRaidContents,
-  getTimelineContents,
-  getTimelineContentsByContentTypes,
-} from "./timeline-content";
+import { getFutureRaidContents, getTimelineContents, getTimelineContentsByContentTypes } from "./timeline-content";
 import type { TimelineContent, TimelineContentType } from "./timeline-content";
+export { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "./content-rules";
 export {
   contentComments,
   getUserComments,
@@ -38,38 +35,6 @@ export {
   nestComments,
 } from "./content-comment";
 export type { NestedComment } from "./content-comment";
-
-export const CONTENT_ORDER: (EventType | RaidType)[] = [
-  "update",
-  "event",
-  "immortal_event",
-  "main_story",
-  "fes",
-  "pickup",
-  "collab",
-  "allied",
-  "raid",
-  "total_assault",
-  "elimination",
-  "unlimit",
-  "campaign",
-  "joint_firing_drill",
-  "mini_event",
-  "guide_mission",
-  "battle_pass",
-];
-
-export const SHOW_LINK_CONTENT_TYPES: (EventType | RaidType)[] = [
-  "update",
-  "fes",
-  "event",
-  "immortal_event",
-  "main_story",
-  "pickup",
-  "collab",
-  "raid",
-  "battle_pass",
-];
 
 /**
  * Index Contents
@@ -146,7 +111,9 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
     return startAt <= nowTime && (endAt === null || endAt >= nowTime);
   });
   const timelineUidByRecruitmentGroupUid = new Map(
-    allEvents.filter((event) => event.recruitmentGroupUid).map((event) => [event.recruitmentGroupUid as string, event.uid]),
+    allEvents
+      .filter((event) => event.recruitmentGroupUid)
+      .map((event) => [event.recruitmentGroupUid as string, event.uid]),
   );
   const currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[] = recruitmentGroups
     .flatMap((group) =>
@@ -327,39 +294,45 @@ function toRecruitmentInfos(group: Awaited<ReturnType<RecruitmentRepository["get
 }
 
 export async function getFutureContents(env: Env, forceRefresh = false): Promise<FutureContent[]> {
-  const allEnriched = await fetchCached(env, "future-contents::v2", async () => {
-    const recruitmentRepository = new RecruitmentRepository(env);
-    const [contents, upcomingRaidContents] = await Promise.all([
-      getTimelineContents(env),
-      getUpcomingRaidContents(env, { forceRefresh }),
-    ]);
-    const upcomingRaidMap = new Map(upcomingRaidContents.map((content) => [content.uid, content]));
-    const recruitmentGroupUids = contents
-      .map((content) => content.recruitmentGroupUid)
-      .filter((uid) => uid !== null) as string[];
-    const recruitmentGroups = await recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh);
-    const recruitmentGroupMap = new Map(recruitmentGroups.map((group) => [group.uid, group]));
+  const allEnriched = await fetchCached(
+    env,
+    "future-contents::v2",
+    async () => {
+      const recruitmentRepository = new RecruitmentRepository(env);
+      const [contents, upcomingRaidContents] = await Promise.all([
+        getTimelineContents(env),
+        getUpcomingRaidContents(env, { forceRefresh }),
+      ]);
+      const upcomingRaidMap = new Map(upcomingRaidContents.map((content) => [content.uid, content]));
+      const recruitmentGroupUids = contents
+        .map((content) => content.recruitmentGroupUid)
+        .filter((uid) => uid !== null) as string[];
+      const recruitmentGroups = await recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh);
+      const recruitmentGroupMap = new Map(recruitmentGroups.map((group) => [group.uid, group]));
 
-    return Promise.all(
-      contents.map(async (content) => {
-        if (content.contentType === "raid") {
-          return { ...content, recruitments: [], raidInfo: upcomingRaidMap.get(content.uid)?.raidInfo };
-        }
+      return Promise.all(
+        contents.map(async (content) => {
+          if (content.contentType === "raid") {
+            return { ...content, recruitments: [], raidInfo: upcomingRaidMap.get(content.uid)?.raidInfo };
+          }
 
-        if (content.recruitmentGroupUid) {
-          const group = recruitmentGroupMap.get(content.recruitmentGroupUid) ?? null;
-          return { ...content, recruitments: toRecruitmentInfos(group) };
-        }
+          if (content.recruitmentGroupUid) {
+            const group = recruitmentGroupMap.get(content.recruitmentGroupUid) ?? null;
+            return { ...content, recruitments: toRecruitmentInfos(group) };
+          }
 
-        return { ...content, recruitments: [] };
-      }),
-    );
-  }, 24 * 60 * 60, forceRefresh);
+          return { ...content, recruitments: [] };
+        }),
+      );
+    },
+    24 * 60 * 60,
+    forceRefresh,
+  );
 
   const now = nowUtcIso();
-  return allEnriched.map(normalizeFutureContentDates).filter((content) =>
-    content.endAt ? isInstantAfter(content.endAt, now) : isInstantAfter(content.startAt, now),
-  );
+  return allEnriched
+    .map(normalizeFutureContentDates)
+    .filter((content) => (content.endAt ? isInstantAfter(content.endAt, now) : isInstantAfter(content.startAt, now)));
 }
 
 /**
@@ -376,39 +349,47 @@ type NavigationBarContents = {
 };
 
 type NavigationBarContentsRaw = {
-  eventCandidates: { uid: string; startAt: UtcIsoString; endAt: UtcIsoString | null; runType: TimelineContent["runType"] }[];
+  eventCandidates: {
+    uid: string;
+    startAt: UtcIsoString;
+    endAt: UtcIsoString | null;
+    runType: TimelineContent["runType"];
+  }[];
   latestNewsTime: UtcIsoString | null;
   couponActivePeriods: { endAt: UtcIsoString | null }[];
 };
 
-export async function getNavigationBarContentsRaw(
-  env: Env,
-  forceRefresh = false,
-): Promise<NavigationBarContentsRaw> {
-  return fetchCached(env, "navigation-bar-contents-raw::v2", async () => {
-    const now = nowUtcIso();
-    const [contents, latestNewsTime, coupons] = await Promise.all([
-      // Limit D1 results to active and future events (endAt >= now). This also bounds enrichAll fan-out to the active window.
-      getTimelineContentsByContentTypes(env, ["event"], now),
-      getLatestPostTime(env, "news"),
-      getAllCoupons(env),
-    ]);
+export async function getNavigationBarContentsRaw(env: Env, forceRefresh = false): Promise<NavigationBarContentsRaw> {
+  return fetchCached(
+    env,
+    "navigation-bar-contents-raw::v2",
+    async () => {
+      const now = nowUtcIso();
+      const [contents, latestNewsTime, coupons] = await Promise.all([
+        // Limit D1 results to active and future events (endAt >= now). This also bounds enrichAll fan-out to the active window.
+        getTimelineContentsByContentTypes(env, ["event"], now),
+        getLatestPostTime(env, "news"),
+        getAllCoupons(env),
+      ]);
 
-    return {
-      eventCandidates: contents
-        .filter((content) => content.runType !== "permanent")
-        .map((content) => ({
-          uid: content.uid,
-          startAt: content.startAt,
-          endAt: content.endAt,
-          runType: content.runType,
+      return {
+        eventCandidates: contents
+          .filter((content) => content.runType !== "permanent")
+          .map((content) => ({
+            uid: content.uid,
+            startAt: content.startAt,
+            endAt: content.endAt,
+            runType: content.runType,
+          })),
+        latestNewsTime: latestNewsTime ? toUtcIso(latestNewsTime) : null,
+        couponActivePeriods: coupons.map((coupon) => ({
+          endAt: coupon.expiresAt ? toUtcIso(coupon.expiresAt) : null,
         })),
-      latestNewsTime: latestNewsTime ? toUtcIso(latestNewsTime) : null,
-      couponActivePeriods: coupons.map((coupon) => ({
-        endAt: coupon.expiresAt ? toUtcIso(coupon.expiresAt) : null,
-      })),
-    };
-  }, 60 * 60 * 24, forceRefresh);
+      };
+    },
+    60 * 60 * 24,
+    forceRefresh,
+  );
 }
 
 export async function getNavigationBarContents(env: Env, forceRefresh = false): Promise<NavigationBarContents> {
@@ -431,6 +412,8 @@ export async function getNavigationBarContents(env: Env, forceRefresh = false): 
   return {
     upcomingEvent,
     hasRecentNews: raw.latestNewsTime !== null && !isInstantBefore(raw.latestNewsTime, threeDaysAgo),
-    hasActiveCoupons: raw.couponActivePeriods.some((period) => period.endAt === null || isInstantAfter(period.endAt, now)),
+    hasActiveCoupons: raw.couponActivePeriods.some(
+      (period) => period.endAt === null || isInstantAfter(period.endAt, now),
+    ),
   };
 }

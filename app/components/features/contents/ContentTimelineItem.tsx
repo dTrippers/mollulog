@@ -18,25 +18,20 @@ import { BottomSheet, Button } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
 import {
+  type UtcIsoString,
   formatInstant,
   formatInstantDateKey,
   isInstantAfter,
   isInstantBefore,
   nowUtcIso,
   parseUtcTimestamp,
-  type UtcIsoString,
 } from "~/lib/date-time";
-import {
-  contentTypeLocale,
-  recruitmentLabelLocale,
-} from "~/locales/ko";
-import { SHOW_LINK_CONTENT_TYPES } from "~/models/content";
+import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
+import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { EventType, RaidType, Role } from "~/models/content.d";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";
-
-const SHOW_LINK_RAID_TYPES: readonly string[] = ["total_assault", "elimination"];
 
 export type ContentTimelineItemProps = {
   uid: string;
@@ -162,7 +157,9 @@ export function ContentTimelineItem({
     if (remainingDays >= 2) {
       daysLabel = `${remainingDays}일`;
     } else {
-      const remainingHours = parseUtcTimestamp(until).startOf("hour").diff(parseUtcTimestamp(now).startOf("hour"), "hour");
+      const remainingHours = parseUtcTimestamp(until)
+        .startOf("hour")
+        .diff(parseUtcTimestamp(now).startOf("hour"), "hour");
       if (remainingHours > 24) {
         daysLabel = "내일 종료";
       } else {
@@ -298,9 +295,7 @@ function SpoilerHeader({
 
       <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-linear-to-b from-white/86 to-white/78 px-4 text-center shadow-sm backdrop-blur-[2px] dark:from-neutral-800/84 dark:to-neutral-800/76">
         <div className="flex flex-col items-center gap-3">
-          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
-            스포일러가 포함되어 있어요
-          </p>
+          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">스포일러가 포함되어 있어요</p>
           <Button text="내용 보기" size="sm" variant="inverse" onClick={onReveal} />
         </div>
       </div>
@@ -447,7 +442,10 @@ function Recruitments({
         groups[key].recruitments.push(recruitment);
         return groups;
       },
-      {} as Record<string, { since: UtcIsoString; until: UtcIsoString | null; recruitments: RecruitmentsProps["recruitments"] }>,
+      {} as Record<
+        string,
+        { since: UtcIsoString; until: UtcIsoString | null; recruitments: RecruitmentsProps["recruitments"] }
+      >,
     );
   }, [recruitments, timeZone]);
 
