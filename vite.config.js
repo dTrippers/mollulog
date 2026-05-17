@@ -13,6 +13,9 @@ export default defineConfig(({ mode }) => ({
     cloudflare({
       viteEnvironment: { name: "ssr" },
       environment: mode,
+      persistState: {
+        path: process.env.WRANGLER_PERSIST_TO ?? ".",
+      },
     }),
     tailwindcss(),
     reactRouter(),
