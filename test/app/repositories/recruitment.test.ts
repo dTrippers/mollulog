@@ -16,7 +16,7 @@ const mockedRunQuery = runQuery as unknown as {
 function createEnv(disableCache = "true"): RepositoryEnv {
   return {
     DISABLE_CACHE: disableCache,
-    KV_USERDATA: {
+    KV_CACHE: {
       get: jest.fn(async () => null),
       put: jest.fn(async () => undefined),
       delete: jest.fn(async () => undefined),

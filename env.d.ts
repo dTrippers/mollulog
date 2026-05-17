@@ -1,5 +1,5 @@
 interface Env {
-  KV_USERDATA: KVNamespace;
+  KV_CACHE: KVNamespace;
   KV_SESSION: KVNamespace;
   DB: D1Database;
   HOST: string;

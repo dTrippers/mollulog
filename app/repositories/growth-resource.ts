@@ -142,7 +142,7 @@ export class GrowthResourceRepository {
 
     const cachedStates = await Promise.all(
       uniqueStudentUids.map(async (uid) => {
-        const raw = await this.env.KV_USERDATA.get(this.buildStudentGearDataCacheKey(uid));
+        const raw = await this.env.KV_CACHE.get(this.buildStudentGearDataCacheKey(uid));
         return { uid, cached: this.parseCacheEnvelope<StudentGearData | null>(raw) };
       }),
     );
@@ -179,7 +179,7 @@ export class GrowthResourceRepository {
           const data = fetchedMap.get(uid) ?? null;
           cachedDataMap.set(uid, data);
           const envelope: CacheEnvelope<StudentGearData | null> = { _ver: 2, data, cachedAt };
-          return this.env.KV_USERDATA.put(this.buildStudentGearDataCacheKey(uid), JSON.stringify(envelope), {
+          return this.env.KV_CACHE.put(this.buildStudentGearDataCacheKey(uid), JSON.stringify(envelope), {
             expirationTtl: DEFAULT_KV_EXPIRATION_TTL,
           });
         }),

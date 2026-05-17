@@ -11,7 +11,7 @@ const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
 function createEnv(): Env {
   return {
     DISABLE_CACHE: "true",
-    KV_USERDATA: {
+    KV_CACHE: {
       get: jest.fn(async () => null),
       put: jest.fn(async () => undefined),
       delete: jest.fn(async () => undefined),

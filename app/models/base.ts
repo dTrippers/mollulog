@@ -20,7 +20,7 @@ type CacheEnvelope<T> = {
 /**
  * In-flight map for sharing concurrent fetches for the same key inside one isolate.
  *
- * Uses the `env.KV_USERDATA` object reference as the key. This relies on the
+ * Uses the `env.KV_CACHE` object reference as the key. This relies on the
  * Cloudflare Workers runtime keeping the KV binding object reference stable for
  * the lifetime of an isolate. When the isolate is recreated, the WeakMap is also
  * discarded, so this does not leak memory.
@@ -55,7 +55,7 @@ async function fetchCachedInternal<T>(
   forceRefresh = false,
 ): Promise<T> {
   const cacheKey = `${cachePrefix}${dataKey}`;
-  const raw = await env.KV_USERDATA.get(cacheKey);
+  const raw = await env.KV_CACHE.get(cacheKey);
 
   let cachedData: T | undefined;
   let cachedAt = 0;
@@ -89,7 +89,7 @@ async function fetchCachedInternal<T>(
       cachedAt: Date.now(),
     };
 
-    await env.KV_USERDATA.put(cacheKey, serializeCacheValue(envelope), { expirationTtl: DEFAULT_KV_EXPIRATION_TTL });
+    await env.KV_CACHE.put(cacheKey, serializeCacheValue(envelope), { expirationTtl: DEFAULT_KV_EXPIRATION_TTL });
     return data;
   } catch (error) {
     if (cachedData !== undefined) {
@@ -112,10 +112,10 @@ export async function fetchCached<T>(
   }
 
   const cacheKey = `${cachePrefix}${dataKey}`;
-  let namespaceInflightRequests = inflightCacheRequests.get(env.KV_USERDATA);
+  let namespaceInflightRequests = inflightCacheRequests.get(env.KV_CACHE);
   if (!namespaceInflightRequests) {
     namespaceInflightRequests = new Map<string, Promise<unknown>>();
-    inflightCacheRequests.set(env.KV_USERDATA, namespaceInflightRequests);
+    inflightCacheRequests.set(env.KV_CACHE, namespaceInflightRequests);
   }
 
   // A forceRefresh caller must start its own request instead of piggybacking on an in-flight one.
@@ -139,15 +139,15 @@ export async function fetchCached<T>(
 export async function deleteCache(env: Env, ...dataKeys: string[]) {
   await Promise.all(dataKeys.map((key) => {
     const cacheKey = `${cachePrefix}${key}`;
-    return env.KV_USERDATA.delete(cacheKey);
+    return env.KV_CACHE.delete(cacheKey);
   }));
 }
 
 export async function flushCacheAll(env: Env) {
   let cursor: string | undefined;
   do {
-    const caches = await env.KV_USERDATA.list({ prefix: cachePrefix, cursor });
-    await Promise.all(caches.keys.map((key) => env.KV_USERDATA.delete(key.name)));
+    const caches = await env.KV_CACHE.list({ prefix: cachePrefix, cursor });
+    await Promise.all(caches.keys.map((key) => env.KV_CACHE.delete(key.name)));
     cursor = caches.list_complete ? undefined : caches.cursor;
   } while (cursor);
 }

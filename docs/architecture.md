@@ -50,7 +50,7 @@ Cloudflare D1 / KV
 - 정적 에셋: `build/client`
 - 주요 바인딩:
   - `DB`: Cloudflare D1
-  - `KV_USERDATA`: 캐시 저장소
+  - `KV_CACHE`: 캐시 저장소
   - `KV_SESSION`: 세션 및 인증 관련 임시 데이터
 
 프로덕션 크론은 현재 아래처럼 운영됩니다.

@@ -18,7 +18,7 @@ type RepositoryEnv = ConstructorParameters<typeof RaidRepository>[0]
 function createEnv() {
   return {
     env: {
-      KV_USERDATA: {
+      KV_CACHE: {
         get: jest.fn(async () => null),
         put: jest.fn(async () => undefined),
         delete: jest.fn(async () => undefined),

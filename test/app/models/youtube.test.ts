@@ -13,7 +13,7 @@ function createEnv() {
 
   return {
     env: {
-      KV_USERDATA: kv,
+      KV_CACHE: kv,
     } as unknown as YoutubeEnv,
     kv,
   };

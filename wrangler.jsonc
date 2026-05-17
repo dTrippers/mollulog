@@ -19,7 +19,7 @@
   },
 
   "kv_namespaces": [
-    { "binding": "KV_USERDATA", "id": "local_kv_userdata" },
+    { "binding": "KV_CACHE", "id": "local_KV_CACHE" },
     { "binding": "KV_SESSION", "id": "local_kv_session" }
   ],
   "d1_databases": [
@@ -52,7 +52,7 @@
         "STAGE": "staging"
       },
       "kv_namespaces": [
-        { "binding": "KV_USERDATA", "id": "a613bc84ffeb4362b3deaa05c617a7b3" },
+        { "binding": "KV_CACHE", "id": "b957557c116a41168c42136666ef5808" },
         { "binding": "KV_SESSION", "id": "757ca5d838364689af06edc372cd4c56" }
       ],
       "d1_databases": [
@@ -76,7 +76,7 @@
         "STAGE": "prod"
       },
       "kv_namespaces": [
-        { "binding": "KV_USERDATA", "id": "a613bc84ffeb4362b3deaa05c617a7b3"},
+        { "binding": "KV_CACHE", "id": "a613bc84ffeb4362b3deaa05c617a7b3"},
         { "binding": "KV_SESSION", "id": "757ca5d838364689af06edc372cd4c56" }
       ],
       "d1_databases": [

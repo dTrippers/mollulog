@@ -13,7 +13,7 @@ function createEnv(raw: string | null, disableCache?: string) {
 
   return {
     env: {
-      KV_USERDATA: kv,
+      KV_CACHE: kv,
       DISABLE_CACHE: disableCache,
     } as unknown as CacheEnv,
     kv,
