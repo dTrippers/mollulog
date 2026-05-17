@@ -7,8 +7,8 @@ import { getRouteSensei } from "./$username";
 import { getAllStudents } from "~/models/student";
 import { getRecruitedStudents, upsertRecruitedStudent, removeRecruitedStudent } from "~/models/recruited-student";
 import { MinusCircleIcon, IdentificationIcon, PlusCircleIcon, FunnelIcon } from "@heroicons/react/24/outline";
-import { useRef, useEffect, useState, useMemo } from "react";
-import { StudentFilter } from "~/components/features/students";
+import { useEffect, useState, useMemo } from "react";
+import { createStudentFilterState, getFilteredStudentUids, StudentFilter } from "~/components/features/students";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -86,7 +86,8 @@ export default function UserPage() {
   const loaderData = useLoaderData<typeof loader>();
   const { me, noRecruited, students } = loaderData;
 
-  const [filteredUids, setFilteredUids] = useState<string[]>(Object.values(students).sort((a, b) => b.order - a.order).map((student) => student.uid));
+  const [filterState, setFilterState] = useState(() => createStudentFilterState("recent"));
+  const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [recruitedStudents, unrecruitedStudents] = useMemo(() => {
     const filteredStudents = filteredUids.flatMap((uid) => {
@@ -105,13 +106,14 @@ export default function UserPage() {
       children: (
         <StudentFilter
           students={students}
-          onFilterChange={setFilteredUids}
+          state={filterState}
+          onStateChange={setFilterState}
           useFilter useSearch
           sortBy={["recent", "old", "name", "tier"]}
         />
       ),
     });
-  }, [students, setPanel]);
+  }, [filterState, students, setPanel]);
 
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);

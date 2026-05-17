@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { Page } from "~/components/features/layout";
-import { StudentFilter } from "~/components/features/students";
+import { createStudentFilterState, getFilteredStudentUids, StudentFilter } from "~/components/features/students";
 import { getAllStudents } from "~/models/student";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
@@ -47,7 +47,8 @@ export default function StudentsLayout() {
   }
 
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
-  const [filteredUids, setFilteredUids] = useState<string[]>(students.map((student) => student.uid));
+  const [filterState, setFilterState] = useState(() => createStudentFilterState("recent"));
+  const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
   const filteredStudents = useMemo(() => {
     return filteredUids.flatMap((uid) => {
       const student = studentMap.get(uid);
@@ -69,7 +70,8 @@ export default function StudentsLayout() {
                 children: (
                   <StudentFilter
                     students={students}
-                    onFilterChange={setFilteredUids}
+                    state={filterState}
+                    onStateChange={setFilterState}
                     sortBy={["recent", "old", "name"]}
                     useFilter
                     useSearch

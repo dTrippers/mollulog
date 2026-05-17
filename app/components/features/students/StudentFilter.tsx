@@ -1,5 +1,5 @@
 import { ArrowsRightLeftIcon, ArrowsUpDownIcon, BarsArrowDownIcon, FireIcon, MagnifyingGlassIcon, ShieldCheckIcon, UserGroupIcon } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import hangul from "hangul-js";
 import type { Position, Role, TacticRole } from "~/models/content.d";
 import { Attack, Defense } from "~/graphql/graphql";
@@ -16,11 +16,13 @@ export type StudentFilterState = {
   search?: string;
 };
 
-type SortBy = "recent" | "old" | "name" | "tier";
+export type SortBy = "recent" | "old" | "name" | "tier";
 
 type StudentFilterProps = {
   students: (FilterableStudent & { uid: string })[];
-  onFilterChange: (uids: string[]) => void;
+  onFilterChange?: (uids: string[]) => void;
+  state?: StudentFilterState;
+  onStateChange?: (state: StudentFilterState) => void;
 
   useFilter?: boolean;
   sortBy?: SortBy[];
@@ -69,53 +71,81 @@ const sortFilterOptions: Record<SortBy, string> = {
   tier: "★ 등급순",
 };
 
-export default function StudentFilter({ students, onFilterChange, useFilter, sortBy, useSearch }: StudentFilterProps) {
-  const [state, setState] = useState<StudentFilterState>({
+export function createStudentFilterState(sort: SortBy = "recent"): StudentFilterState {
+  return {
     attackTypes: [],
     defenseTypes: [],
     roles: [],
     tacticRoles: [],
     positions: [],
-    sort: sortBy?.[0] || "recent",
-  });
+    sort,
+  };
+}
+
+export function getFilteredStudentUids<T extends FilterableStudent & { uid: string }>(
+  students: T[],
+  state: StudentFilterState,
+): string[] {
+  return applyStudentFilter(students, state).map((student) => student.uid);
+}
+
+export default function StudentFilter({
+  students,
+  onFilterChange,
+  state: controlledState,
+  onStateChange,
+  useFilter,
+  sortBy,
+  useSearch,
+}: StudentFilterProps) {
+  const [internalState, setInternalState] = useState<StudentFilterState>(() =>
+    createStudentFilterState(sortBy?.[0] || "recent"),
+  );
+  const state = controlledState ?? internalState;
+  const setFilterState = useCallback((updater: React.SetStateAction<StudentFilterState>) => {
+    const nextState = typeof updater === "function" ? updater(state) : updater;
+    if (!controlledState) {
+      setInternalState(nextState);
+    }
+    onStateChange?.(nextState);
+  }, [controlledState, onStateChange, state]);
 
   const [localSearch, setLocalSearch] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setState((prev) => ({ ...prev, search: localSearch }));
+      setFilterState((prev) => (prev.search === localSearch ? prev : { ...prev, search: localSearch }));
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [localSearch]);
+  }, [localSearch, setFilterState]);
 
   useEffect(() => {
-    const filtered = applyStudentFilter(students, state);
-    onFilterChange(filtered.map((student) => student.uid));
+    onFilterChange?.(getFilteredStudentUids(students, state));
   }, [students, state, onFilterChange]);
 
   const toggleAttack = (attackType: Attack, activated: boolean) => {
-    updateFilterState("attackTypes", attackType, activated, setState);
+    updateFilterState("attackTypes", attackType, activated, setFilterState);
   };
 
   const toggleDefense = (defenseType: Defense, activated: boolean) => {
-    updateFilterState("defenseTypes", defenseType, activated, setState);
+    updateFilterState("defenseTypes", defenseType, activated, setFilterState);
   };
 
   const toggleRole = (role: Role, activated: boolean) => {
-    updateFilterState("roles", role, activated, setState);
+    updateFilterState("roles", role, activated, setFilterState);
   };
 
   const toggleSort = (sort: SortBy) => {
-    setState((prev) => ({ ...prev, sort }));
+    setFilterState((prev) => ({ ...prev, sort }));
   };
 
   const togglePosition = (position: Position, activated: boolean) => {
-    updateFilterState("positions", position, activated, setState);
+    updateFilterState("positions", position, activated, setFilterState);
   };
 
   const toggleTacticRole = (tacticRole: TacticRole, activated: boolean) => {
-    updateFilterState("tacticRoles", tacticRole, activated, setState);
+    updateFilterState("tacticRoles", tacticRole, activated, setFilterState);
   };
 
   return (
@@ -220,7 +250,7 @@ function updateFilterState<K extends keyof Pick<StudentFilterState, "attackTypes
   key: K,
   value: StudentFilterState[K][number],
   activated: boolean,
-  setState: React.Dispatch<React.SetStateAction<StudentFilterState>>,
+  setState: (updater: React.SetStateAction<StudentFilterState>) => void,
 ) {
   setState((prev) => ({
     ...prev,
