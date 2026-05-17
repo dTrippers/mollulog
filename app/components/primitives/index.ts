@@ -7,6 +7,8 @@ export { default as Callout } from "./Callout";
 export { default as Checkbox } from "./Checkbox";
 export { default as ClickableSurface } from "./ClickableSurface";
 export { default as Description } from "./Description";
+export { default as Dropdown } from "./Dropdown";
+export type { DropdownOption, DropdownProps } from "./Dropdown";
 export { default as EmptyView } from "./EmptyView";
 export { default as Field } from "./Field";
 export { default as FilterButtons } from "./FilterButtons";

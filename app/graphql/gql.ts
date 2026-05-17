@@ -36,7 +36,7 @@ type Documents = {
     "\n  query RecruitmentPoolStudents {\n    students {\n      uid name initialTier attackType defenseType role releaseAt archiveAt\n      recruitments {\n        recruitmentType\n      }\n    }\n  }\n": typeof types.RecruitmentPoolStudentsDocument,
     "\n  query StudentFavoriteItem($uid: String!) {\n    student(uid: $uid) {\n      uid name\n      favoriteItems {\n        favorited favoriteLevel exp\n        item { uid name rarity }\n      }\n    }\n  }\n": typeof types.StudentFavoriteItemDocument,
     "\n  query StudentGradeDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId\n    }\n  }\n": typeof types.StudentGradeDetailDocument,
-    "\n  query StudentDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId\n      recruitments {\n        since rerun\n        recruitmentGroup { uid startAt endAt }\n      }\n    }\n  }\n": typeof types.StudentDetailDocument,
+    "\n  query StudentDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId releaseAt\n      recruitments {\n        since rerun\n        recruitmentGroup { uid startAt endAt }\n      }\n    }\n  }\n": typeof types.StudentDetailDocument,
 };
 const documents: Documents = {
     "\n  query CampaignName($uid: String!) {\n    campaign(uid: $uid) { uid category multiplier }\n  }\n": types.CampaignNameDocument,
@@ -61,7 +61,7 @@ const documents: Documents = {
     "\n  query RecruitmentPoolStudents {\n    students {\n      uid name initialTier attackType defenseType role releaseAt archiveAt\n      recruitments {\n        recruitmentType\n      }\n    }\n  }\n": types.RecruitmentPoolStudentsDocument,
     "\n  query StudentFavoriteItem($uid: String!) {\n    student(uid: $uid) {\n      uid name\n      favoriteItems {\n        favorited favoriteLevel exp\n        item { uid name rarity }\n      }\n    }\n  }\n": types.StudentFavoriteItemDocument,
     "\n  query StudentGradeDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId\n    }\n  }\n": types.StudentGradeDetailDocument,
-    "\n  query StudentDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId\n      recruitments {\n        since rerun\n        recruitmentGroup { uid startAt endAt }\n      }\n    }\n  }\n": types.StudentDetailDocument,
+    "\n  query StudentDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId releaseAt\n      recruitments {\n        since rerun\n        recruitmentGroup { uid startAt endAt }\n      }\n    }\n  }\n": types.StudentDetailDocument,
 };
 
 /**
@@ -169,7 +169,7 @@ export function graphql(source: "\n  query StudentGradeDetail($uid: String!) {\n
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
-export function graphql(source: "\n  query StudentDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId\n      recruitments {\n        since rerun\n        recruitmentGroup { uid startAt endAt }\n      }\n    }\n  }\n"): (typeof documents)["\n  query StudentDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId\n      recruitments {\n        since rerun\n        recruitmentGroup { uid startAt endAt }\n      }\n    }\n  }\n"];
+export function graphql(source: "\n  query StudentDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId releaseAt\n      recruitments {\n        since rerun\n        recruitmentGroup { uid startAt endAt }\n      }\n    }\n  }\n"): (typeof documents)["\n  query StudentDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId releaseAt\n      recruitments {\n        since rerun\n        recruitmentGroup { uid startAt endAt }\n      }\n    }\n  }\n"];
 
 export function graphql(source: string) {
   return (documents as any)[source] ?? {};

@@ -1,4 +1,4 @@
-import { ArrowRightIcon, ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
+import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
 import { BarsArrowDownIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { useOutletContext } from "react-router";
@@ -12,6 +12,7 @@ import { captureClientError } from "~/lib/observability.client";
 import type { RaidType, Terrain } from "~/models/content.d";
 import { getMaxTierAt } from "~/models/student";
 import type { StudentDetailPageContext } from "./students.$id";
+import StudentRaidUsageChart from "./students.$id._components/StudentRaidUsageChart";
 import StudentGradingChart from "./students.$id._components/StudentGradingChart";
 
 type EnrichedRaidStatistics = Omit<RaidStatistics, "raid"> & {
@@ -70,11 +71,11 @@ export default function StudentDetail() {
             },
           };
         })
-        .filter((stat): stat is EnrichedRaidStatistics => stat !== null)
-        .filter((stat) => stat.slotsCount > 100);
+        .filter((stat): stat is EnrichedRaidStatistics => stat !== null);
     };
   }, [allRaids]);
 
+  const [rawStatistics, setRawStatistics] = useState<RaidStatistics[]>([]);
   const [statistics, setStatistics] = useState<EnrichedRaidStatistics[]>([]);
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +85,7 @@ export default function StudentDetail() {
         if (cancelled) {
           return;
         }
+        setRawStatistics(rawStatistics);
         setStatistics(enrichRaidStatistics(rawStatistics));
       } catch (error) {
         captureClientError(error, {
@@ -102,15 +104,19 @@ export default function StudentDetail() {
     };
   }, [enrichRaidStatistics, student.uid]);
 
-  const filteredStatistics = useMemo(() => {
-    const sorted = [...statistics].sort((a, b) => {
+  const listedStatistics = useMemo(() => {
+    return statistics.filter((stat) => stat.slotsCount > 100).sort((a, b) => {
       if (sort === "recent") {
         return compareInstantDesc(a.raid.startAt, b.raid.startAt);
       }
       return compareInstantAsc(a.raid.startAt, b.raid.startAt);
     });
+  }, [statistics, sort]);
+
+  const filteredStatistics = useMemo(() => {
+    const sorted = listedStatistics;
     return raidShowMore ? sorted : sorted.slice(0, 5);
-  }, [statistics, sort, raidShowMore]);
+  }, [listedStatistics, raidShowMore]);
 
   const highlightedGradings = (() => {
     const currentUserGrading = allGradings.find(
@@ -146,26 +152,39 @@ export default function StudentDetail() {
       <div className="mt-4">
         {statisticsLoading ? (
           <LoadingSkeleton />
-        ) : filteredStatistics.length === 0 ? (
+        ) : statistics.length === 0 ? (
           <EmptyView text="편성된 총력전/대결전 정보가 없어요" />
         ) : (
-          <FilterButtons
-            Icon={BarsArrowDownIcon}
-            buttonProps={[
-              {
-                text: "최신순",
-                onToggle: () => setSort("recent"),
-                active: sort === "recent",
-              },
-              {
-                text: "과거순",
-                onToggle: () => setSort("old"),
-                active: sort === "old",
-              },
-            ]}
-            exclusive
-            atLeastOne
-          />
+          <>
+            <StudentRaidUsageChart
+              attackType={student.attackType}
+              releaseAt={student.releaseAt}
+              raids={allRaids}
+              statistics={rawStatistics}
+            />
+            <FilterButtons
+              Icon={BarsArrowDownIcon}
+              buttonProps={[
+                {
+                  text: "최신순",
+                  onToggle: () => setSort("recent"),
+                  active: sort === "recent",
+                },
+                {
+                  text: "과거순",
+                  onToggle: () => setSort("old"),
+                  active: sort === "old",
+                },
+              ]}
+              exclusive
+              atLeastOne
+            />
+          </>
+        )}
+        {!statisticsLoading && statistics.length > 0 && listedStatistics.length === 0 && (
+          <div className="mt-4">
+            <EmptyView text="100회를 초과해 편성된 총력전/대결전 정보가 없어요" />
+          </div>
         )}
         {filteredStatistics.map((stat) => {
           const { raid, slotsByTier, slotsCount, assistsCount, assistsByTier } = stat;
@@ -181,7 +200,7 @@ export default function StudentDetail() {
             />
           );
         })}
-        {statistics.length > 5 && (
+        {listedStatistics.length > 5 && (
           <button
             type="button"
             className="mb-4 flex w-full items-center justify-center py-2 text-center hover:underline"

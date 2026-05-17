@@ -7,6 +7,7 @@ import { StudentInfo } from "~/components/features/students";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
+import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
@@ -17,7 +18,7 @@ import { RaidRepository } from "~/repositories";
 const studentDetailQuery = graphql(`
   query StudentDetail($uid: String!) {
     student(uid: $uid) {
-      name uid attackType defenseType role school schaleDbId
+      name uid attackType defenseType role school schaleDbId releaseAt
       recruitments {
         since rerun
         recruitmentGroup { uid startAt endAt }
@@ -83,6 +84,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       role: student.role,
       school: student.school,
       schaleDbId: student.schaleDbId,
+      releaseAt: student.releaseAt ? toUtcIso(student.releaseAt) : null,
     },
     recruitments: timelineContents.map((content) => ({
       uid: content.uid,
