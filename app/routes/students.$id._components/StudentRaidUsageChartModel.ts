@@ -1,4 +1,4 @@
-import { compareInstantAsc, getInstantTime, isInstantAfter, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { compareInstantAsc, getInstantTime, isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 import { Attack, Defense } from "~/graphql/graphql";
 import type { RaidType } from "~/models/content.d";
 
@@ -46,6 +46,9 @@ export type StudentRaidUsageChartData = {
 const RAID_TYPES = new Set(["total_assault", "elimination"]);
 const DEFAULT_TIER_KEYS = [9, 8, 7, 6, 5, 4, 3].map((tier) => `tier${tier}`);
 const MAX_RAID_USAGE_COUNT = 20000;
+// Temporary cutoff: rank statistics before 2024-10-29 are not available yet.
+// Remove this filter once historical raid usage data is backfilled.
+const RAID_USAGE_DATA_AVAILABLE_FROM: UtcIsoString = "2024-10-29T00:00:00.000Z";
 
 export function getDefaultRaidUsageDefenseFilter(attackType: Attack): StudentRaidUsageDefenseFilter {
   const filterByAttackType: Partial<Record<Attack, StudentRaidUsageDefenseFilter>> = {
@@ -120,13 +123,11 @@ export function buildStudentRaidUsageChartData({
   raids,
   statistics,
   selectedDefenseType,
-  now = nowUtcIso(),
 }: {
   releaseAt: UtcIsoString | null;
   raids: StudentRaidUsageRaid[];
   statistics: StudentRaidUsageStat[];
   selectedDefenseType: StudentRaidUsageDefenseFilter;
-  now?: UtcIsoString;
 }): StudentRaidUsageChartData {
   if (!releaseAt || Number.isNaN(getInstantTime(releaseAt))) {
     return { rows: [], tierKeys: DEFAULT_TIER_KEYS, yAxisMax: 0 };
@@ -150,7 +151,7 @@ export function buildStudentRaidUsageChartData({
       Boolean(raid.startAt && raid.jpSchedule),
     )
     .filter((raid) => !isInstantAfter(releaseAt, raid.startAt))
-    .filter((raid) => !isInstantAfter(raid.startAt, now))
+    .filter((raid) => !isInstantAfter(RAID_USAGE_DATA_AVAILABLE_FROM, raid.startAt))
     .sort((a, b) => compareInstantAsc(a.startAt, b.startAt))
     .flatMap((raid, index, sortedRaids) => {
       const year = new Date(raid.startAt).getUTCFullYear().toString();
