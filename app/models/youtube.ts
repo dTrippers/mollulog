@@ -1,5 +1,9 @@
 import { XMLParser } from "fast-xml-parser";
-import { fetchCached } from "./base";
+import {
+  getCommunityFeedPage,
+  type CommunityFeedPost,
+  upsertYoutubeVideoCommunityPost,
+} from "~/models/community";
 
 const YOUTUBE_CHANNELS = [
   {
@@ -33,43 +37,73 @@ export type HomeYoutubeVideo = {
   isShorts: boolean;
 };
 
+export type YoutubeChannelKey = (typeof YOUTUBE_CHANNELS)[number]["key"];
+
+export type YoutubeFeedVideo = HomeYoutubeVideo & {
+  channelKey: YoutubeChannelKey;
+  channelName: string;
+  channelUrl: string;
+};
+
 export type HomeYoutubeChannelSection = {
-  channelKey: (typeof YOUTUBE_CHANNELS)[number]["key"];
+  channelKey: YoutubeChannelKey;
   channelName: string;
   channelUrl: string;
   videos: HomeYoutubeVideo[];
 };
 
-export async function getHomeYoutubeSections(env: Env, forceRefresh = false): Promise<HomeYoutubeChannelSection[]> {
-  return fetchCached(
-    env,
-    "home-youtube-sections::v2",
-    async () => {
-      const sectionResults = await Promise.allSettled(
-        YOUTUBE_CHANNELS.map(async (channel) => {
-          const videos = await getChannelVideos(channel.channelId);
-          return {
-            channelKey: channel.key,
-            channelName: channel.name,
-            channelUrl: channel.url,
-            videos,
-          } satisfies HomeYoutubeChannelSection;
-        }),
-      );
+export async function getHomeYoutubeSections(env: Env): Promise<HomeYoutubeChannelSection[]> {
+  const page = await getCommunityFeedPage(env, {
+    postTypes: ["youtube_video"],
+    pageSize: 8,
+    includeEngagement: false,
+  });
 
-      const sections = sectionResults
-        .flatMap((result) => (result.status === "fulfilled" ? [result.value] : []))
-        .filter((section) => section.videos.length > 0);
+  const sectionsByKey = new Map<YoutubeChannelKey, HomeYoutubeChannelSection>();
+  for (const post of page.items) {
+    const video = toHomeYoutubeVideo(post);
+    if (!video) continue;
 
-      if (sections.length === 0) {
-        throw new Error("All YouTube channel fetches failed or returned no videos");
-      }
+    const channelKey = video.channelKey;
+    const channel = YOUTUBE_CHANNELS.find((candidate) => candidate.key === channelKey);
+    const section = sectionsByKey.get(channelKey) ?? {
+      channelKey,
+      channelName: post.sourceName ?? channel?.name ?? channelKey,
+      channelUrl: channel?.url ?? "",
+      videos: [],
+    };
+    section.videos.push(video);
+    sectionsByKey.set(channelKey, section);
+  }
 
-      return sections;
-    },
-    60 * 30,
-    forceRefresh,
+  return [...sectionsByKey.values()].filter((section) => section.videos.length > 0);
+}
+
+export async function fetchYoutubeFeedVideos(): Promise<YoutubeFeedVideo[]> {
+  const sectionResults = await Promise.allSettled(
+    YOUTUBE_CHANNELS.map(async (channel) => {
+      const videos = await getChannelVideos(channel.channelId);
+      return videos.map((video) => ({
+        ...video,
+        channelKey: channel.key,
+        channelName: channel.name,
+        channelUrl: channel.url,
+      }));
+    }),
   );
+
+  const videos = sectionResults.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+  if (videos.length === 0) {
+    throw new Error("All YouTube channel fetches failed or returned no videos");
+  }
+
+  return videos;
+}
+
+export async function syncYoutubeCommunityPosts(env: Env): Promise<{ synced: number }> {
+  const videos = await fetchYoutubeFeedVideos();
+  await Promise.all(videos.map((video) => upsertYoutubeVideoCommunityPost(env, video)));
+  return { synced: videos.length };
 }
 
 async function getChannelVideos(channelId: string): Promise<HomeYoutubeVideo[]> {
@@ -83,9 +117,33 @@ async function getChannelVideos(channelId: string): Promise<HomeYoutubeVideo[]> 
   const entries = normalizeEntries(parsed.feed?.entry);
 
   return entries
-    .slice(0, 4)
     .map((entry) => parseEntry(entry))
     .filter((entry): entry is HomeYoutubeVideo => entry !== null);
+}
+
+function toHomeYoutubeVideo(post: CommunityFeedPost): (HomeYoutubeVideo & { channelKey: YoutubeChannelKey }) | null {
+  const youtubeBlock = post.blocks.find((block) => block.type === "youtube");
+  const channelKey = post.sourceMetadata.channelKey;
+  const thumbnailUrl = post.sourceMetadata.thumbnailUrl;
+  const isShorts = post.sourceMetadata.isShorts;
+
+  if (
+    !youtubeBlock ||
+    (channelKey !== "jp" && channelKey !== "kr") ||
+    typeof thumbnailUrl !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id: youtubeBlock.youtubeId,
+    title: post.title ?? "",
+    url: post.sourceUrl ?? `https://www.youtube.com/watch?v=${youtubeBlock.youtubeId}`,
+    thumbnailUrl,
+    publishedAt: post.displayAt,
+    isShorts: typeof isShorts === "boolean" ? isShorts : false,
+    channelKey,
+  };
 }
 
 function parseYoutubeFeed(xml: string, channelId: string): YoutubeFeed {

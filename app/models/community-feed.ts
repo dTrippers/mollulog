@@ -5,7 +5,7 @@ import { getTimelineContentsByUids } from "./timeline-content";
 import { RecruitmentRepository } from "~/repositories/recruitment";
 
 export const COMMUNITY_FEED_PAGE_SIZE = 20;
-export const COMMUNITY_VISIBLE_POST_TYPES = ["student_review", "event_opinion"] as const;
+export const COMMUNITY_VISIBLE_POST_TYPES = ["student_review", "event_opinion", "youtube_video"] as const;
 
 export type EnrichedCommunityFeedPost = CommunityFeedPost & {
   subjectStudentName: string | null;

@@ -1,5 +1,6 @@
 import {
   ChatBubbleLeftRightIcon,
+  PlayCircleIcon,
   UsersIcon,
   Squares2X2Icon,
 } from "@heroicons/react/24/outline";
@@ -20,7 +21,7 @@ import {
 function parseCommunityPostType(request: Request): CommunityPostType | undefined {
   const url = new URL(request.url);
   const type = url.searchParams.get("type");
-  if (type === "student_review" || type === "event_opinion") {
+  if (type === "student_review" || type === "event_opinion" || type === "youtube_video") {
     return type;
   }
 
@@ -108,6 +109,13 @@ export default function CommunityPage() {
           Icon: ChatBubbleLeftRightIcon,
           link: "/community?type=event_opinion",
           active: postType === "event_opinion",
+        },
+        {
+          text: "영상",
+          description: "공식 유튜브 영상",
+          Icon: PlayCircleIcon,
+          link: "/community?type=youtube_video",
+          active: postType === "youtube_video",
         },
       ]}
     >

@@ -10,7 +10,7 @@ import { type IndexRecruitment, getIndexContents } from "~/models/content";
 import { raidTypeToParam } from "~/models/raid";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getCommunityFeedPage } from "~/models/community";
-import { COMMUNITY_VISIBLE_POST_TYPES, enrichCommunityFeedPosts } from "~/models/community-feed";
+import { enrichCommunityFeedPosts } from "~/models/community-feed";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
 import { getLogger } from "~/lib/observability.server";
@@ -39,7 +39,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     getIndexContents(env),
     getCommunityFeedPage(env, {
       currentUserId: currentUser?.id,
-      postTypes: [...COMMUNITY_VISIBLE_POST_TYPES],
+      postTypes: ["student_review", "event_opinion"],
       pageSize: 4,
       includeEngagement: false,
     }),

@@ -5,7 +5,8 @@ import { nanoid } from "nanoid/non-secure";
 import { normalizeUtcTimestamp, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { senseisTable } from "./sensei";
 
-export type CommunityPostType = "student_review" | "event_opinion" | "guide";
+export type CommunityPostType = "student_review" | "event_opinion" | "guide" | "youtube_video";
+export type CommunityPostOrigin = "user" | "curated";
 export type CommunityVisibility = "public" | "unlisted" | "private";
 export type CommunityCommentVisibility = "public" | "private";
 
@@ -56,6 +57,7 @@ export type NestedCommunityComment = {
 export type CommunityFeedPost = {
   uid: string;
   postType: CommunityPostType;
+  origin: CommunityPostOrigin;
   title: string | null;
   visibility: CommunityVisibility;
   pinned: boolean;
@@ -64,13 +66,17 @@ export type CommunityFeedPost = {
   subjectRaidType: string | null;
   subjectSeasonIndex: number | null;
   blocks: CommunityPostBlock[];
+  sourceName: string | null;
+  sourceUrl: string | null;
+  sourceMetadata: Record<string, unknown>;
+  displayAt: UtcIsoString;
   createdAt: UtcIsoString;
   updatedAt: UtcIsoString;
   author: {
     id: number;
     username: string;
     profileStudentId: string | null;
-  };
+  } | null;
   liked: boolean;
   likeCount: number;
   comments: NestedCommunityComment[];
@@ -81,6 +87,7 @@ export const communityPostsTable = sqliteTable("community_posts", {
   uid: text().notNull(),
   userId: int().notNull(),
   postType: text().notNull().$type<CommunityPostType>(),
+  origin: text().notNull().$type<CommunityPostOrigin>().default("user"),
   title: text(),
   visibility: text().notNull().$type<CommunityVisibility>(),
   pinned: int().notNull().default(0),
@@ -92,6 +99,10 @@ export const communityPostsTable = sqliteTable("community_posts", {
   sourceType: text(),
   sourceUid: text(),
   sourceId: int(),
+  sourceName: text(),
+  sourceUrl: text(),
+  sourceMetadata: text().notNull().default("{}"),
+  displayAt: text(),
   migratedAt: text(),
   createdAt: text().notNull().default(sql`current_timestamp`),
   updatedAt: text().notNull().default(sql`current_timestamp`),
@@ -135,6 +146,7 @@ type CommunityPostRow = {
   uid: string;
   userId: number;
   postType: CommunityPostType;
+  origin: CommunityPostOrigin;
   title: string | null;
   visibility: CommunityVisibility;
   pinned: number;
@@ -143,9 +155,13 @@ type CommunityPostRow = {
   subjectRaidType: string | null;
   subjectSeasonIndex: number | null;
   blocks: string;
+  sourceName: string | null;
+  sourceUrl: string | null;
+  sourceMetadata: string;
+  displayAt: string | null;
   createdAt: string;
   updatedAt: string;
-  username: string;
+  username: string | null;
   profileStudentId: string | null;
 };
 
@@ -172,6 +188,19 @@ export function parseCommunityPostBlocks(value: string): CommunityPostBlock[] {
     return Array.isArray(parsed) ? (parsed as CommunityPostBlock[]) : [];
   } catch {
     return [];
+  }
+}
+
+function parseCommunityPostSourceMetadata(value: string | null | undefined): Record<string, unknown> {
+  if (!value) return {};
+
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
   }
 }
 
@@ -416,6 +445,7 @@ export async function getCommunityFeedPage(
       uid: communityPostsTable.uid,
       userId: communityPostsTable.userId,
       postType: communityPostsTable.postType,
+      origin: communityPostsTable.origin,
       title: communityPostsTable.title,
       visibility: communityPostsTable.visibility,
       pinned: communityPostsTable.pinned,
@@ -424,17 +454,20 @@ export async function getCommunityFeedPage(
       subjectRaidType: communityPostsTable.subjectRaidType,
       subjectSeasonIndex: communityPostsTable.subjectSeasonIndex,
       blocks: communityPostsTable.blocks,
+      sourceName: communityPostsTable.sourceName,
+      sourceUrl: communityPostsTable.sourceUrl,
+      sourceMetadata: communityPostsTable.sourceMetadata,
+      displayAt: communityPostsTable.displayAt,
       createdAt: communityPostsTable.createdAt,
       updatedAt: communityPostsTable.updatedAt,
       username: senseisTable.username,
       profileStudentId: senseisTable.profileStudentId,
     })
     .from(communityPostsTable)
-    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+    .leftJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
     .where(where)
     .orderBy(
-      desc(sql`unixepoch(${communityPostsTable.updatedAt})`),
-      desc(sql`unixepoch(${communityPostsTable.createdAt})`),
+      desc(sql`unixepoch(coalesce(${communityPostsTable.displayAt}, ${communityPostsTable.updatedAt}))`),
       desc(communityPostsTable.id),
     )
     .limit(safePageSize)
@@ -457,6 +490,7 @@ export async function getCommunityFeedPage(
     items: rows.map((row) => ({
       uid: row.uid,
       postType: row.postType,
+      origin: row.origin,
       title: row.title,
       visibility: row.visibility,
       pinned: row.pinned === 1,
@@ -465,13 +499,19 @@ export async function getCommunityFeedPage(
       subjectRaidType: row.subjectRaidType,
       subjectSeasonIndex: row.subjectSeasonIndex,
       blocks: parseCommunityPostBlocks(row.blocks),
+      sourceName: row.sourceName,
+      sourceUrl: row.sourceUrl,
+      sourceMetadata: parseCommunityPostSourceMetadata(row.sourceMetadata),
+      displayAt: normalizeCommunityTimestamp(row.displayAt ?? row.updatedAt),
       createdAt: normalizeCommunityTimestamp(row.createdAt),
       updatedAt: normalizeCommunityTimestamp(row.updatedAt),
-      author: {
-        id: row.userId,
-        username: row.username,
-        profileStudentId: row.profileStudentId,
-      },
+      author: row.username
+        ? {
+            id: row.userId,
+            username: row.username,
+            profileStudentId: row.profileStudentId,
+          }
+        : null,
       liked: likedPostUids.has(row.uid),
       likeCount: likeCounts[row.uid] ?? 0,
       comments: commentsByPostUid[row.uid] ?? [],
@@ -495,6 +535,7 @@ export async function getCommunityPostByUid(
       uid: communityPostsTable.uid,
       userId: communityPostsTable.userId,
       postType: communityPostsTable.postType,
+      origin: communityPostsTable.origin,
       title: communityPostsTable.title,
       visibility: communityPostsTable.visibility,
       pinned: communityPostsTable.pinned,
@@ -503,13 +544,17 @@ export async function getCommunityPostByUid(
       subjectRaidType: communityPostsTable.subjectRaidType,
       subjectSeasonIndex: communityPostsTable.subjectSeasonIndex,
       blocks: communityPostsTable.blocks,
+      sourceName: communityPostsTable.sourceName,
+      sourceUrl: communityPostsTable.sourceUrl,
+      sourceMetadata: communityPostsTable.sourceMetadata,
+      displayAt: communityPostsTable.displayAt,
       createdAt: communityPostsTable.createdAt,
       updatedAt: communityPostsTable.updatedAt,
       username: senseisTable.username,
       profileStudentId: senseisTable.profileStudentId,
     })
     .from(communityPostsTable)
-    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+    .leftJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
     .where(and(eq(communityPostsTable.uid, postUid), communityPostVisibilityFilter(currentUserId)))
     .get();
 
@@ -526,6 +571,7 @@ export async function getCommunityPostByUid(
   return {
     uid: row.uid,
     postType: row.postType,
+    origin: row.origin,
     title: row.title,
     visibility: row.visibility,
     pinned: row.pinned === 1,
@@ -534,13 +580,19 @@ export async function getCommunityPostByUid(
     subjectRaidType: row.subjectRaidType,
     subjectSeasonIndex: row.subjectSeasonIndex,
     blocks: parseCommunityPostBlocks(row.blocks),
+    sourceName: row.sourceName,
+    sourceUrl: row.sourceUrl,
+    sourceMetadata: parseCommunityPostSourceMetadata(row.sourceMetadata),
+    displayAt: normalizeCommunityTimestamp(row.displayAt ?? row.updatedAt),
     createdAt: normalizeCommunityTimestamp(row.createdAt),
     updatedAt: normalizeCommunityTimestamp(row.updatedAt),
-    author: {
-      id: row.userId,
-      username: row.username,
-      profileStudentId: row.profileStudentId,
-    },
+    author: row.username
+      ? {
+          id: row.userId,
+          username: row.username,
+          profileStudentId: row.profileStudentId,
+        }
+      : null,
     liked: likedPostUids.has(postUid),
     likeCount: likeCounts[postUid] ?? 0,
     comments,
@@ -682,6 +734,64 @@ export async function setCommunityPostLike(
   await db
     .delete(communityPostLikesTable)
     .where(and(eq(communityPostLikesTable.postUid, postUid), eq(communityPostLikesTable.userId, userId)));
+}
+
+export type YoutubeVideoCommunityPostInput = {
+  id: string;
+  title: string;
+  url: string;
+  thumbnailUrl: string;
+  publishedAt: string;
+  isShorts: boolean;
+  channelKey: "jp" | "kr";
+  channelName: string;
+  channelUrl: string;
+};
+
+export async function upsertYoutubeVideoCommunityPost(
+  env: Env,
+  video: YoutubeVideoCommunityPostInput,
+): Promise<void> {
+  const db = drizzle(env.DB);
+  const now = nowUtcIso();
+  const metadata = JSON.stringify({
+    channelKey: video.channelKey,
+    thumbnailUrl: video.thumbnailUrl,
+    isShorts: video.isShorts,
+  });
+  const blocks = serializeCommunityPostBlocks([{ type: "youtube", youtubeId: video.id }]);
+  const existing = await db
+    .select({ id: communityPostsTable.id })
+    .from(communityPostsTable)
+    .where(and(eq(communityPostsTable.sourceType, "youtube"), eq(communityPostsTable.sourceUid, video.id)))
+    .get();
+  const values = {
+    userId: 0,
+    postType: "youtube_video" as const,
+    origin: "curated" as const,
+    title: video.title,
+    visibility: "public" as const,
+    pinned: 0,
+    blocks,
+    sourceType: "youtube",
+    sourceUid: video.id,
+    sourceName: video.channelName,
+    sourceUrl: video.url,
+    sourceMetadata: metadata,
+    displayAt: video.publishedAt,
+    updatedAt: now,
+  };
+
+  if (existing) {
+    await db.update(communityPostsTable).set(values).where(eq(communityPostsTable.id, existing.id));
+    return;
+  }
+
+  await db.insert(communityPostsTable).values({
+    ...values,
+    uid: `youtube-${video.id}`,
+    createdAt: video.publishedAt,
+  });
 }
 
 export async function deleteCommunityPostByUid(

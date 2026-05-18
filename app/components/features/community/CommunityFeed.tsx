@@ -1,4 +1,10 @@
-import { ChatBubbleLeftEllipsisIcon, HeartIcon, LockClosedIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import {
+  ChatBubbleLeftEllipsisIcon,
+  HeartIcon,
+  LockClosedIcon,
+  PlayCircleIcon,
+  UserGroupIcon,
+} from "@heroicons/react/24/outline";
 import { HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
@@ -72,7 +78,19 @@ function getPostTypeLabel(post: CommunityFeedPostItem) {
     return "이벤트 의견";
   }
 
+  if (post.postType === "youtube_video") {
+    return "영상";
+  }
+
   return "공략";
+}
+
+function getPostSourceName(post: CommunityFeedPostItem) {
+  if (post.origin === "curated") {
+    return post.sourceName ?? "큐레이션";
+  }
+
+  return post.author ? `@${post.author.username}` : "알 수 없음";
 }
 
 function getVisibilityLabel(visibility: CommunityFeedPostItem["visibility"]) {
@@ -114,8 +132,8 @@ function CommunityPostCard({
   const likeFetcher = useFetcher<{ likeCount: number; liked: boolean }>();
   const timestamp = getPostTimestampMeta(post.createdAt, post.updatedAt, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
-  const canComment = post.postType === "event_opinion";
-  const canLike = post.postType === "guide";
+  const canComment = post.postType === "event_opinion" || post.postType === "youtube_video";
+  const canLike = post.postType === "guide" || post.postType === "youtube_video";
   const bodyOrder = getCommunityPostBodyOrder(post.postType);
 
   useEffect(() => {
@@ -181,21 +199,41 @@ function CommunityPostCard({
   return (
     <article className={getCommunityPostCardClassName({ preview, firstInFeed, groupedWithPrevious })}>
       <div className={`flex items-start ${preview ? "gap-2.5" : "gap-3"}`}>
-        {!groupedWithPrevious && (
+        {!groupedWithPrevious && post.author && (
           <Link to={`/@${post.author.username}`} className="shrink-0">
             <ProfileImage studentUid={post.author.profileStudentId} imageSize={10} />
           </Link>
+        )}
+        {!groupedWithPrevious && !post.author && (
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200">
+            <PlayCircleIcon className="size-5" />
+          </div>
         )}
         {groupedWithPrevious && <div className={getGroupedAvatarPlaceholderClassName()} aria-hidden />}
         <div className="min-w-0 flex-1">
           {!groupedWithPrevious && (
             <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm leading-5">
-              <Link
-                to={`/@${post.author.username}`}
-                className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
-              >
-                @{post.author.username}
-              </Link>
+              {post.author ? (
+                <Link
+                  to={`/@${post.author.username}`}
+                  className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
+                >
+                  @{post.author.username}
+                </Link>
+              ) : post.sourceUrl ? (
+                <a
+                  href={post.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
+                >
+                  {getPostSourceName(post)}
+                </a>
+              ) : (
+                <span className="min-w-0 truncate font-semibold text-neutral-900 dark:text-neutral-100">
+                  {getPostSourceName(post)}
+                </span>
+              )}
               <span className="text-neutral-600 dark:text-neutral-400">{getPostTypeLabel(post)}</span>
               <span className="text-neutral-400 dark:text-neutral-500">·</span>
               <time className="shrink-0 text-neutral-500 dark:text-neutral-400" dateTime={timestamp.dateTime}>
