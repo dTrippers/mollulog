@@ -1,20 +1,21 @@
 import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import {
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type Dispatch,
-  type RefObject,
-  type SetStateAction,
 } from "react";
 import { useBlocker, useFetcher, useSearchParams } from "react-router";
 import { ResourceInventoryTile, type ResourceInventoryTileMetric } from "~/components/features/growth";
 import { Button, EmptyView, FilterButtons } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import {
+  type AggregatedGrowthResourceRequirements,
   CHARACTER_EXP_REPORTS,
   EQUIPMENT_TYPE_LABELS,
   EQUIPMENT_TYPE_ORDER,
@@ -30,9 +31,8 @@ import {
   getResourceKindOrder,
   getSkillMaterialChoiceBoxRarity,
   getSkillMaterialResourceChoiceBoxUid,
-  type AggregatedGrowthResourceRequirements,
 } from "~/models/growth-resource";
-import { getGrowthPlannerCatalogResourceKindOrder, type ItemCatalogResource } from "~/repositories/item-catalog";
+import { type ItemCatalogResource, getGrowthPlannerCatalogResourceKindOrder } from "~/repositories/item-catalog";
 
 type ResourceInventoryEditorProps = {
   resources: ItemCatalogResource[];
@@ -62,19 +62,26 @@ type ResourceGroupView = {
   kindOrder: number;
   resources: InventoryResource[];
   policy: CategoryDisplayPolicy;
+  hasNeededResources: boolean;
 };
 
 type CategoryDisplayPolicy = {
   defaultMode: ResourceMode;
   modes: ResourceMode[];
+  emptyNeededDefaultMode?: ResourceMode;
 };
 
 const DEFAULT_CATEGORY_POLICY: CategoryDisplayPolicy = {
   defaultMode: "needed",
   modes: ["all", "needed"],
+  emptyNeededDefaultMode: "all",
 };
 const CATEGORY_DISPLAY_POLICIES: Record<number, CategoryDisplayPolicy> = {
-  [GROWTH_RESOURCE_KIND_ORDER.eleph]: { defaultMode: "needed", modes: ["all", "needed"] },
+  [GROWTH_RESOURCE_KIND_ORDER.eleph]: {
+    defaultMode: "needed",
+    modes: ["all", "needed"],
+    emptyNeededDefaultMode: "needed",
+  },
   [GROWTH_RESOURCE_KIND_ORDER.characterExp]: { defaultMode: "all", modes: ["all"] },
   [GROWTH_RESOURCE_KIND_ORDER.favor]: { defaultMode: "all", modes: ["all", "needed"] },
 };
@@ -186,7 +193,7 @@ export default function ResourceInventoryEditor({
             >
               <ResourceGroup
                 group={group}
-                mode={resolveCategoryMode(group.kindOrder, categoryModes)}
+                mode={resolveCategoryMode(group.kindOrder, categoryModes, group.hasNeededResources)}
                 ownedQuantities={baseQuantities}
                 draftQuantities={draftQuantities}
                 requiredCharacterExp={requiredResources.characterExp}
@@ -378,8 +385,8 @@ function ResourceGroup({
         </div>
       ) : null}
       {resources.length === 0 ? (
-        <div className="px-3 py-6">
-          <EmptyView Icon={ArchiveBoxIcon} text="필요한 재화가 없어요" />
+        <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+          {mode === "needed" ? "학생들의 성장 목표를 선택하여 필요 재화량을 계산해보세요" : "표시할 재화가 없어요"}
         </div>
       ) : kindOrder === GROWTH_RESOURCE_KIND_ORDER.equipment ? (
         <EquipmentSubGroups
@@ -553,7 +560,12 @@ function EquipmentSubGroups({
     );
   }, [equipmentResources]);
   const choiceBoxAllocation = useMemo(
-    () => allocateEquipmentChoiceBoxes(subGroups.flatMap(([, typeResources]) => typeResources), choiceBoxResources, draftQuantities),
+    () =>
+      allocateEquipmentChoiceBoxes(
+        subGroups.flatMap(([, typeResources]) => typeResources),
+        choiceBoxResources,
+        draftQuantities,
+      ),
     [choiceBoxResources, draftQuantities, subGroups],
   );
 
@@ -624,8 +636,9 @@ function allocateSkillMaterialChoiceBoxes(
       const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
       return { resource, choiceBoxUid, directDeficit };
     })
-    .filter((target): target is { resource: InventoryResource; choiceBoxUid: string; directDeficit: number } =>
-      target.choiceBoxUid !== null && target.directDeficit > 0,
+    .filter(
+      (target): target is { resource: InventoryResource; choiceBoxUid: string; directDeficit: number } =>
+        target.choiceBoxUid !== null && target.directDeficit > 0,
     )
     .sort(compareChoiceBoxAllocationTargets);
 
@@ -709,8 +722,9 @@ function allocateEquipmentChoiceBoxes(
       const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
       return { resource, tier, choiceBoxUid, directDeficit };
     })
-    .filter((target): target is { resource: InventoryResource; tier: number; choiceBoxUid: string; directDeficit: number } =>
-      target.choiceBoxUid !== null && target.directDeficit > 0,
+    .filter(
+      (target): target is { resource: InventoryResource; tier: number; choiceBoxUid: string; directDeficit: number } =>
+        target.choiceBoxUid !== null && target.directDeficit > 0,
     )
     .sort(compareChoiceBoxAllocationTargets);
 
@@ -920,11 +934,18 @@ function getCategoryDisplayPolicy(kindOrder: number): CategoryDisplayPolicy {
   return CATEGORY_DISPLAY_POLICIES[kindOrder] ?? DEFAULT_CATEGORY_POLICY;
 }
 
-function resolveCategoryMode(kindOrder: number, categoryModes: Record<number, ResourceMode>): ResourceMode {
+function resolveCategoryMode(
+  kindOrder: number,
+  categoryModes: Record<number, ResourceMode>,
+  hasNeededResources = true,
+): ResourceMode {
   const policy = getCategoryDisplayPolicy(kindOrder);
   const storedMode = categoryModes[kindOrder];
   if (storedMode && policy.modes.includes(storedMode)) {
     return storedMode;
+  }
+  if (!hasNeededResources && policy.emptyNeededDefaultMode && policy.modes.includes(policy.emptyNeededDefaultMode)) {
+    return policy.emptyNeededDefaultMode;
   }
   return policy.defaultMode;
 }
@@ -950,7 +971,8 @@ function buildResourceGroups(
   return Array.from(grouped.entries())
     .sort(([a], [b]) => compareGrowthResourceKindOrder(a, b))
     .map(([kindOrder, groupResources]) => {
-      const mode = resolveCategoryMode(kindOrder, categoryModes);
+      const hasNeededResources = groupResources.some((resource) => resource.requiredAmount > 0);
+      const mode = resolveCategoryMode(kindOrder, categoryModes, hasNeededResources);
       const policy = getCategoryDisplayPolicy(kindOrder);
       const modeResources = groupResources.filter(
         (resource) =>
@@ -968,13 +990,10 @@ function buildResourceGroups(
         kindOrder,
         resources: filteredResources,
         policy,
+        hasNeededResources,
       };
     })
-    .filter((group) => {
-      const mode = resolveCategoryMode(group.kindOrder, categoryModes);
-      const hasModeOverride = mode !== group.policy.defaultMode;
-      return group.resources.length > 0 || (!search && hasModeOverride);
-    });
+    .filter((group) => group.resources.length > 0 || !search);
 }
 
 function buildInventoryResources(

@@ -382,27 +382,26 @@ function getRecruitmentStudentGroup(
     pickup: recruitment.pickup,
     favorited,
     favoritedCount: favoritedCount ?? 0,
-    popups:
-      studentUid && recruitment.student?.schaleDbId
-        ? [
-            favorited
-              ? {
-                  Icon: FilledHeartIcon,
-                  text: "관심 학생에서 해제",
-                  onClick: () => onFavorite?.(group.content.uid, studentUid, false),
-                }
-              : {
-                  Icon: EmptyHeartIcon,
-                  text: "관심 학생에 등록",
-                  onClick: () => onFavorite?.(group.content.uid, studentUid, true),
-                },
-            {
-              Icon: IdentificationIcon,
-              text: "학생부 보기 (평가/통계)",
-              link: `/students/${studentUid}`,
-            },
-          ]
-        : undefined,
+    popups: studentUid
+      ? [
+          favorited
+            ? {
+                Icon: FilledHeartIcon,
+                text: "관심 학생에서 해제",
+                onClick: () => onFavorite?.(group.content.uid, studentUid, false),
+              }
+            : {
+                Icon: EmptyHeartIcon,
+                text: "관심 학생에 등록",
+                onClick: () => onFavorite?.(group.content.uid, studentUid, true),
+              },
+          {
+            Icon: IdentificationIcon,
+            text: "학생부 보기 (평가/통계)",
+            link: `/students/${studentUid}`,
+          },
+        ]
+      : undefined,
   };
 }
 
