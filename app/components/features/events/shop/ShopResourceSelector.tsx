@@ -1,4 +1,5 @@
 import { useMemo, useState, memo } from "react";
+import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { formatResourceAmount } from "~/locales/ko";
 import { Tabs } from "./Tabs";
 import type { ShopResource, CollectableResource } from "./types";
@@ -12,13 +13,28 @@ type ShopResourceSelectorProps = {
   actions: ShopActions;
 };
 
+function resourceImageUrl(resourceType: ResourceTypeEnum, resourceUid: string): string {
+  if (resourceType === "furniture") {
+    return `https://baql-assets.mollulog.net/images/furnitures/${resourceUid}`;
+  }
+  if (resourceType === "equipment") {
+    return `https://baql-assets.mollulog.net/images/equipments/${resourceUid}`;
+  }
+  if (resourceType === "currency") {
+    return `https://baql-assets.mollulog.net/images/currencies/${resourceUid}`;
+  }
+  return `https://baql-assets.mollulog.net/images/items/${resourceUid}`;
+}
+
 export const ShopResourceSelector = memo(function ShopResourceSelector({
   shopResources,
   collectableResources,
   state,
   actions,
 }: ShopResourceSelectorProps) {
-  const [selectedPaymentResourceUid, setSelectedPaymentResourceUid] = useState<string>(collectableResources.find(({ forPayment }) => forPayment)?.uid ?? "");
+  const [selectedPaymentResourceUid, setSelectedPaymentResourceUid] = useState<string>(
+    collectableResources.find(({ forPayment }) => forPayment)?.uid ?? "",
+  );
   const selectedShopResources = useMemo(() => {
     return shopResources.filter(({ paymentResource }) => paymentResource.uid === selectedPaymentResourceUid);
   }, [shopResources, selectedPaymentResourceUid]);
@@ -54,51 +70,61 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
       defaultExpanded={true}
     >
       <Tabs
-        tabs={collectableResources.filter(({ forPayment }) => forPayment).map(({ uid, name }) => ({ tabId: uid, name, imageUrl: `https://baql-assets.mollulog.net/images/items/${uid}` }))}
+        tabs={collectableResources
+          .filter(({ forPayment }) => forPayment)
+          .map(({ type, uid, name }) => ({ tabId: uid, name, imageUrl: resourceImageUrl(type, uid) }))}
         activeTabId={selectedPaymentResourceUid}
         setActiveTabId={setSelectedPaymentResourceUid}
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 md:gap-2">
-        {selectedShopResources.map(({ uid, resource, resourceAmount, paymentResource, paymentResourceAmount, shopAmount }) => {
-          const quantity = state.itemQuantities[uid] || 0;
+        {selectedShopResources.map(
+          ({ uid, resource, resourceAmount, paymentResource, paymentResourceAmount, shopAmount }) => {
+            const quantity = state.itemQuantities[uid] || 0;
 
-          const formattedResourceAmount = formatResourceAmount(resourceAmount);
-          return (
-            <div key={uid} className="p-2 flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
-              <div className="flex items-center justify-center gap-x-1">
-                <ResourceCard itemUid={resource.uid} resourceType={resource.type} rarity={resource.rarity} label={resourceAmount === 1 ? undefined : formattedResourceAmount} name={resource.name} />
-                <div className="grow">
-                  <div className="flex items-center justify-center gap-1">
-                    <img
-                      alt={resource.name}
-                      src={`https://baql-assets.mollulog.net/images/items/${paymentResource.uid}`}
-                      className="-m-1 size-6 md:size-8 object-contain"
-                      loading="lazy"
-                    />
-                    <span className="mr-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      {paymentResourceAmount}
-                    </span>
+            const formattedResourceAmount = formatResourceAmount(resourceAmount);
+            return (
+              <div key={uid} className="p-2 flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
+                <div className="flex items-center justify-center gap-x-1">
+                  <ResourceCard
+                    itemUid={resource.uid}
+                    resourceType={resource.type}
+                    rarity={resource.rarity}
+                    label={resourceAmount === 1 ? undefined : formattedResourceAmount}
+                    name={resource.name}
+                  />
+                  <div className="grow">
+                    <div className="flex items-center justify-center gap-1">
+                      <img
+                        alt={paymentResource.name}
+                        src={resourceImageUrl(paymentResource.type, paymentResource.uid)}
+                        className="-m-1 size-6 md:size-8 object-contain"
+                        loading="lazy"
+                      />
+                      <span className="mr-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                        {paymentResourceAmount}
+                      </span>
+                    </div>
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center">
+                      {shopAmount ? `${shopAmount}회 구매 가능` : "구매 제한 없음"}
+                    </p>
                   </div>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center">
-                    {shopAmount ? `${shopAmount}회 구매 가능` : "구매 제한 없음"}
-                  </p>
+                </div>
+
+                <div>
+                  <NumberInput
+                    value={quantity}
+                    maxValue={shopAmount ?? undefined}
+                    showMin
+                    showMax={shopAmount !== null}
+                    maxButtonVariant="active"
+                    onChange={(value) => actions.updateItemQuantity(uid, value)}
+                  />
                 </div>
               </div>
-
-              <div>
-                <NumberInput
-                  value={quantity}
-                  maxValue={shopAmount ?? undefined}
-                  showMin
-                  showMax={shopAmount !== null}
-                  maxButtonVariant="active"
-                  onChange={(value) => actions.updateItemQuantity(uid, value)}
-                />
-              </div>
-            </div>
-          );
-        })}
+            );
+          },
+        )}
       </div>
 
       <div className="my-2 flex justify-end gap-0.5">

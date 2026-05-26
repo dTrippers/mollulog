@@ -1,7 +1,7 @@
 import { Transition } from "@headlessui/react";
 import { memo, useMemo, useState } from "react";
 import { NumberInput, ResourceCard } from "~/components/primitives";
-import { ResourceTypeEnum } from "~/graphql/graphql";
+import type { ResourceTypeEnum } from "~/graphql/graphql";
 import BugReportModal from "./BugReportModal";
 import { calculateBoughtItemQuantities, calculateBoughtResourceQuantities } from "./calculations/shop-rewards";
 import type { MinigameConfig } from "./constants";
@@ -100,7 +100,8 @@ function BreakdownLines({ lines }: { lines: BreakdownLine[] }) {
       {lines.map(({ label, value }) => (
         <div key={label} className="flex justify-between items-center">
           <span className="text-neutral-500 dark:text-neutral-500">
-            <span className="mr-1.5">·</span>{label}
+            <span className="mr-1.5">·</span>
+            {label}
           </span>
           <span className="text-neutral-500 dark:text-neutral-500">{Math.floor(value).toLocaleString()}</span>
         </div>
@@ -195,11 +196,12 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
   }, [boughtShopResources, minigameConfig, state.minigamePlayCount]);
 
   const apBreakdown = useMemo(
-    () => [
-      { label: "스토리/퀘스트 초회", value: firstClearAp },
-      { label: "퀘스트 소탕", value: questSweepAp },
-      { label: "추가 소탕", value: extraSweepAp },
-    ].filter(({ value }) => value > 0),
+    () =>
+      [
+        { label: "스토리/퀘스트 초회", value: firstClearAp },
+        { label: "퀘스트 소탕", value: questSweepAp },
+        { label: "추가 소탕", value: extraSweepAp },
+      ].filter(({ value }) => value > 0),
     [firstClearAp, questSweepAp, extraSweepAp],
   );
 
@@ -208,209 +210,223 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
       <div className="pb-4 mb-4">
         <div className="mb-4">
           <h2 className="font-semibold text-lg text-neutral-900 dark:text-neutral-100">최종 결과</h2>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">필요한 AP와 아이템 수량을 확인할 수 있어요</p>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+            필요한 AP와 아이템 수량을 확인할 수 있어요
+          </p>
         </div>
         <div>
-        {totalApWithExtras > 0 && (
-          <div className="my-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-teal-950 border border-green-200 dark:border-green-800 rounded-lg">
-            <div className="flex justify-between items-center mb-3 pb-1.5 border-b border-green-200 dark:border-green-800">
-              <h3 className="text-base font-semibold text-green-800 dark:text-green-200">필요한 AP</h3>
-              <span className="text-xl font-bold text-green-700 dark:text-green-300">{totalApWithExtras.toLocaleString()}</span>
+          {totalApWithExtras > 0 && (
+            <div className="my-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-teal-950 border border-green-200 dark:border-green-800 rounded-lg">
+              <div className="flex justify-between items-center mb-3 pb-1.5 border-b border-green-200 dark:border-green-800">
+                <h3 className="text-base font-semibold text-green-800 dark:text-green-200">필요한 AP</h3>
+                <span className="text-xl font-bold text-green-700 dark:text-green-300">
+                  {totalApWithExtras.toLocaleString()}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {apBreakdown.map(({ label, value }) => (
+                  <div key={label} className="flex justify-between text-sm text-green-700 dark:text-green-300">
+                    <span>{label}</span>
+                    <span>{value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              {apBreakdown.map(({ label, value }) => (
-                <div key={label} className="flex justify-between text-sm text-green-700 dark:text-green-300">
-                  <span>{label}</span>
-                  <span>{value.toLocaleString()}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="p-3 border border-neutral-200 dark:border-neutral-700 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
-          {allItemUids.size === 0 && (
-            <p className="w-full py-8 text-neutral-500 dark:text-neutral-400 text-center col-span-2 text-sm">
-              구매할 아이템과 스테이지를 선택하세요
-            </p>
           )}
-          {collectableResources.map(({ uid: itemUid, name: itemName }) => {
-            // Gather all counts
-            const existingCount = state.existingPaymentItemQuantities[itemUid] || 0;
-            const firstRunCount = fromFirstRun[itemUid] || 0;
-            const fromMinigameCount = fromMinigame[itemUid] || 0;
-            const fromShopCount = boughtItemQuantities[itemUid] || 0;
-            const repeatedRunsCount = fromRepeatedRuns[itemUid] || 0;
-            const toPlayMinigameCount = toPlayMinigame[itemUid] || 0;
-            const toBuyCount = toBuyShopItems[itemUid] || 0;
 
-            // Calculate subtotals
-            const acquiredSubtotal = existingCount + firstRunCount + fromMinigameCount + repeatedRunsCount + fromShopCount;
-            const requiredSubtotal = toBuyCount + toPlayMinigameCount;
-            const hasOverride = state.overriddenRequiredQuantities[itemUid] !== undefined;
-            const overrideValue = state.overriddenRequiredQuantities[itemUid];
-            const actualRequired = hasOverride ? overrideValue : requiredSubtotal;
-            const remainingCount = acquiredSubtotal - actualRequired;
+          <div className="p-3 border border-neutral-200 dark:border-neutral-700 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
+            {allItemUids.size === 0 && (
+              <p className="w-full py-8 text-neutral-500 dark:text-neutral-400 text-center col-span-2 text-sm">
+                구매할 아이템과 스테이지를 선택하세요
+              </p>
+            )}
+            {collectableResources.map(({ type: resourceType, uid: itemUid, name: itemName }) => {
+              // Gather all counts
+              const existingCount = state.existingPaymentItemQuantities[itemUid] || 0;
+              const firstRunCount = fromFirstRun[itemUid] || 0;
+              const fromMinigameCount = fromMinigame[itemUid] || 0;
+              const fromShopCount = boughtItemQuantities[itemUid] || 0;
+              const repeatedRunsCount = fromRepeatedRuns[itemUid] || 0;
+              const toPlayMinigameCount = toPlayMinigame[itemUid] || 0;
+              const toBuyCount = toBuyShopItems[itemUid] || 0;
 
-            // Build breakdown lines
-            const acquiredLines: BreakdownLine[] = [
-              existingCount > 0 && { label: "기존 보유", value: existingCount },
-              firstRunCount > 0 && { label: "스토리 / 초회 보상", value: firstRunCount },
-              fromMinigameCount > 0 && { label: "미니게임", value: fromMinigameCount },
-              repeatedRunsCount > 0 && { label: "퀘스트", value: repeatedRunsCount },
-              fromShopCount > 0 && { label: "상점 구매", value: fromShopCount },
-            ].filter(Boolean) as BreakdownLine[];
+              // Calculate subtotals
+              const acquiredSubtotal =
+                existingCount + firstRunCount + fromMinigameCount + repeatedRunsCount + fromShopCount;
+              const requiredSubtotal = toBuyCount + toPlayMinigameCount;
+              const hasOverride = state.overriddenRequiredQuantities[itemUid] !== undefined;
+              const overrideValue = state.overriddenRequiredQuantities[itemUid];
+              const actualRequired = hasOverride ? overrideValue : requiredSubtotal;
+              const remainingCount = acquiredSubtotal - actualRequired;
 
-            const requiredLines: BreakdownLine[] = !hasOverride
-              ? [
-                  toBuyCount > 0 && { label: "상점 구매", value: toBuyCount },
-                  toPlayMinigameCount > 0 && { label: "미니게임", value: toPlayMinigameCount },
-                ].filter(Boolean) as BreakdownLine[]
-              : [];
+              // Build breakdown lines
+              const acquiredLines: BreakdownLine[] = [
+                existingCount > 0 && { label: "기존 보유", value: existingCount },
+                firstRunCount > 0 && { label: "스토리 / 초회 보상", value: firstRunCount },
+                fromMinigameCount > 0 && { label: "미니게임", value: fromMinigameCount },
+                repeatedRunsCount > 0 && { label: "퀘스트", value: repeatedRunsCount },
+                fromShopCount > 0 && { label: "상점 구매", value: fromShopCount },
+              ].filter(Boolean) as BreakdownLine[];
 
-            return (
-              <div key={itemUid} className="p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg flex items-start gap-2 relative">
-                <ResourceCard itemUid={itemUid} resourceType={ResourceTypeEnum.Item} rarity={1} name={itemName} />
-                <div className="grow space-y-3 text-sm relative">
-                  {/* 필요 수량 */}
-                  {(toBuyCount > 0 || toPlayMinigameCount > 0 || hasOverride) && (
+              const requiredLines: BreakdownLine[] = !hasOverride
+                ? ([
+                    toBuyCount > 0 && { label: "상점 구매", value: toBuyCount },
+                    toPlayMinigameCount > 0 && { label: "미니게임", value: toPlayMinigameCount },
+                  ].filter(Boolean) as BreakdownLine[])
+                : [];
+
+              return (
+                <div
+                  key={itemUid}
+                  className="p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg flex items-start gap-2 relative"
+                >
+                  <ResourceCard itemUid={itemUid} resourceType={resourceType} rarity={1} name={itemName} />
+                  <div className="grow space-y-3 text-sm relative">
+                    {/* 필요 수량 */}
+                    {(toBuyCount > 0 || toPlayMinigameCount > 0 || hasOverride) && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-neutral-800 dark:text-neutral-200">필요 수량</span>
+                          <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                            {Math.floor(actualRequired).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="pl-2 space-y-1">
+                          {hasOverride ? (
+                            <p className="text-neutral-500 dark:text-neutral-500 text-xs">입력한 목표 수량</p>
+                          ) : (
+                            <BreakdownLines lines={requiredLines} />
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 획득 수량 */}
                     <div className="space-y-1">
                       <div className="flex justify-between items-center">
-                        <span className="font-medium text-neutral-800 dark:text-neutral-200">필요 수량</span>
-                        <span className="font-semibold text-neutral-800 dark:text-neutral-200">{Math.floor(actualRequired).toLocaleString()}</span>
-                      </div>
-                      <div className="pl-2 space-y-1">
-                        {hasOverride ? (
-                          <p className="text-neutral-500 dark:text-neutral-500 text-xs">입력한 목표 수량</p>
-                        ) : (
-                          <BreakdownLines lines={requiredLines} />
+                        <span className="font-medium text-neutral-800 dark:text-neutral-200">획득 수량</span>
+                        {acquiredSubtotal > 0 && (
+                          <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                            {Math.floor(acquiredSubtotal).toLocaleString()}
+                          </span>
                         )}
                       </div>
+                      <div className="pl-2 space-y-1">
+                        <BreakdownLines lines={acquiredLines} />
+                      </div>
                     </div>
-                  )}
 
-                  {/* 획득 수량 */}
-                  <div className="space-y-1">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-neutral-800 dark:text-neutral-200">획득 수량</span>
-                      {acquiredSubtotal > 0 && (
-                        <span className="font-semibold text-neutral-800 dark:text-neutral-200">{Math.floor(acquiredSubtotal).toLocaleString()}</span>
-                      )}
+                    {/* 남은/부족 수량 */}
+                    <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                          {remainingCount >= 0 ? "남은" : "부족"} 수량
+                        </span>
+                        <span
+                          className={`font-bold ${remainingCount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                        >
+                          {Math.floor(remainingCount).toLocaleString()}
+                        </span>
+                      </div>
                     </div>
-                    <div className="pl-2 space-y-1">
-                      <BreakdownLines lines={acquiredLines} />
-                    </div>
-                  </div>
 
-                  {/* 남은/부족 수량 */}
-                  <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium text-neutral-800 dark:text-neutral-200">{remainingCount >= 0 ? "남은" : "부족"} 수량</span>
-                      <span
-                        className={`font-bold ${remainingCount >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
-                      >
-                        {Math.floor(remainingCount).toLocaleString()}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* 편집 버튼 */}
-                  <div className="flex justify-end gap-2">
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditValue(existingCount);
-                          setEditingItemUid(itemUid);
-                          setEditingRequiredItemUid(null);
-                        }}
-                        className="px-3 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap cursor-pointer"
-                      >
-                        보유 수량 입력
-                      </button>
-                      <EditPopup
-                        show={editingItemUid === itemUid}
-                        title="보유 수량을 입력해주세요"
-                        value={editValue}
-                        onValueChange={setEditValue}
-                        onCancel={() => setEditingItemUid(null)}
-                        onSave={() => {
-                          actions.updateExistingQuantity(itemUid, editValue);
-                          setEditingItemUid(null);
-                        }}
-                        onReset={() => {
-                          actions.updateExistingQuantity(itemUid, 0);
-                          setEditingItemUid(null);
-                        }}
-                        showReset={existingCount > 0}
-                      />
-                    </div>
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentOverride = state.overriddenRequiredQuantities[itemUid];
-                          setEditRequiredValue(currentOverride !== undefined ? currentOverride : requiredSubtotal);
-                          setEditingRequiredItemUid(itemUid);
-                          setEditingItemUid(null);
-                        }}
-                        className="px-3 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap cursor-pointer"
-                      >
-                        목표 수량 입력
-                      </button>
-                      <EditPopup
-                        show={editingRequiredItemUid === itemUid}
-                        title="목표 수량을 입력해주세요"
-                        value={editRequiredValue}
-                        onValueChange={setEditRequiredValue}
-                        onCancel={() => setEditingRequiredItemUid(null)}
-                        onSave={() => {
-                          actions.updateOverriddenRequired(itemUid, editRequiredValue);
-                          setEditingRequiredItemUid(null);
-                        }}
-                        onReset={() => {
-                          actions.resetOverriddenRequired(itemUid);
-                          setEditingRequiredItemUid(null);
-                        }}
-                        showReset={hasOverride}
-                      />
+                    {/* 편집 버튼 */}
+                    <div className="flex justify-end gap-2">
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditValue(existingCount);
+                            setEditingItemUid(itemUid);
+                            setEditingRequiredItemUid(null);
+                          }}
+                          className="px-3 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap cursor-pointer"
+                        >
+                          보유 수량 입력
+                        </button>
+                        <EditPopup
+                          show={editingItemUid === itemUid}
+                          title="보유 수량을 입력해주세요"
+                          value={editValue}
+                          onValueChange={setEditValue}
+                          onCancel={() => setEditingItemUid(null)}
+                          onSave={() => {
+                            actions.updateExistingQuantity(itemUid, editValue);
+                            setEditingItemUid(null);
+                          }}
+                          onReset={() => {
+                            actions.updateExistingQuantity(itemUid, 0);
+                            setEditingItemUid(null);
+                          }}
+                          showReset={existingCount > 0}
+                        />
+                      </div>
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const currentOverride = state.overriddenRequiredQuantities[itemUid];
+                            setEditRequiredValue(currentOverride !== undefined ? currentOverride : requiredSubtotal);
+                            setEditingRequiredItemUid(itemUid);
+                            setEditingItemUid(null);
+                          }}
+                          className="px-3 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap cursor-pointer"
+                        >
+                          목표 수량 입력
+                        </button>
+                        <EditPopup
+                          show={editingRequiredItemUid === itemUid}
+                          title="목표 수량을 입력해주세요"
+                          value={editRequiredValue}
+                          onValueChange={setEditRequiredValue}
+                          onCancel={() => setEditingRequiredItemUid(null)}
+                          onSave={() => {
+                            actions.updateOverriddenRequired(itemUid, editRequiredValue);
+                            setEditingRequiredItemUid(null);
+                          }}
+                          onReset={() => {
+                            actions.resetOverriddenRequired(itemUid);
+                            setEditingRequiredItemUid(null);
+                          }}
+                          showReset={hasOverride}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+
+          {mergedBoughtResources.length > 0 && (
+            <div className="my-4 p-3 border border-neutral-200 dark:border-neutral-700 rounded-lg">
+              <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">획득 보상</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {mergedBoughtResources.map(({ resource, totalQuantity }) => (
+                  <ResourceCard
+                    key={`${resource.type}:${resource.uid}`}
+                    itemUid={resource.uid}
+                    resourceType={resource.type}
+                    rarity={resource.rarity}
+                    label={resourceCountLabel(totalQuantity)}
+                    name={resource.name}
+                  />
+                ))}
               </div>
-            );
-          })}
-        </div>
-
-        {mergedBoughtResources.length > 0 && (
-          <div className="my-4 p-3 border border-neutral-200 dark:border-neutral-700 rounded-lg">
-            <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">획득 보상</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {mergedBoughtResources.map(({ resource, totalQuantity }) => (
-                <ResourceCard
-                  key={`${resource.type}:${resource.uid}`}
-                  itemUid={resource.uid}
-                  resourceType={resource.type}
-                  rarity={resource.rarity}
-                  label={resourceCountLabel(totalQuantity)}
-                  name={resource.name}
-                />
-              ))}
             </div>
-          </div>
-        )}
+          )}
 
-        {signedIn && (
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={() => setShowBugReportModal(true)}
-              className="px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md transition whitespace-nowrap cursor-pointer"
-            >
-              오류 제보
-            </button>
-          </div>
-        )}
+          {signedIn && (
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowBugReportModal(true)}
+                className="px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md transition whitespace-nowrap cursor-pointer"
+              >
+                오류 제보
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

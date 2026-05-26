@@ -17,6 +17,7 @@ function createShopResource(overrides: Partial<ShopResource>): ShopResource {
     },
     resourceAmount: 1,
     paymentResource: {
+      type: ResourceTypeEnum.Item,
       uid: "event-coin",
       name: "이벤트 재화",
     },

@@ -180,7 +180,7 @@ const eventContentShopContentQuery = graphql(`
       shopResources(runType: $runType) {
         uid resourceAmount paymentResourceAmount shopAmount
         resource { type uid name rarity }
-        paymentResource { uid name }
+        paymentResource { type uid name }
       }
       bonuses(runType: $runType) {
         percentage
@@ -370,7 +370,7 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
 
   return fetchCached(
     env,
-    `event-content::shop::v2::${timelineUid}`,
+      `event-content::shop::v3::${timelineUid}`,
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,

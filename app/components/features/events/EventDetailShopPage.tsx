@@ -1,6 +1,7 @@
 import { ArrowPathIcon, ExclamationCircleIcon, UserIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopState } from "~/models/event-shop-state";
 import EventInfoCard from "./EventInfoCard";
 import {
@@ -40,14 +41,19 @@ export default function EventDetailShopPage({
     const items: CollectableResource[] = [];
     for (const { paymentResource } of shopResources) {
       if (!items.some(({ uid }) => uid === paymentResource.uid)) {
-        items.push({ uid: paymentResource.uid, name: paymentResource.name, forPayment: true });
+        items.push({
+          type: paymentResource.type,
+          uid: paymentResource.uid,
+          name: paymentResource.name,
+          forPayment: true,
+        });
       }
     }
 
     for (const stage of stages) {
       for (const { item } of stage.rewards) {
         if (item && item.category === "coin" && !items.some(({ uid }) => uid === item.uid)) {
-          items.push({ uid: item.uid, name: item.name, forPayment: false });
+          items.push({ type: ResourceTypeEnum.Item, uid: item.uid, name: item.name, forPayment: false });
         }
       }
     }
@@ -58,9 +64,9 @@ export default function EventDetailShopPage({
         ...minigameConfig.payments,
         ...minigameConfig.rewardGroups.flatMap((group) => group.payments),
       ];
-      for (const { resourceUid, resourceName } of minigamePaymentResources) {
+      for (const { resourceType, resourceUid, resourceName } of minigamePaymentResources) {
         if (!items.some(({ uid }) => uid === resourceUid)) {
-          items.push({ uid: resourceUid, name: resourceName ?? resourceUid, forPayment: false });
+          items.push({ type: resourceType, uid: resourceUid, name: resourceName ?? resourceUid, forPayment: false });
         }
       }
     }
