@@ -23,6 +23,7 @@ export type SelectableEvent = ShopAvailableEvent & {
 type EventSelectorProps = {
   events: SelectableEvent[];
   currentEventUid?: string | null;
+  maxVisibleEvents?: number;
   label?: string;
   description?: string;
   name?: string;
@@ -35,6 +36,7 @@ type EventSelectorProps = {
 export default function EventSelector({
   events,
   currentEventUid,
+  maxVisibleEvents,
   label,
   description,
   name,
@@ -54,15 +56,8 @@ export default function EventSelector({
   );
   const filteredEvents = useMemo(
     () =>
-      events.filter((event) => {
-        const pickupStudentNames = event.recruitments
-          ?.filter(({ pickup }) => pickup)
-          .map(({ student }) => student?.name)
-          .filter(Boolean)
-          .join(" ");
-        return hangul.search(`${event.name} ${pickupStudentNames ?? ""}`, debouncedSearchQuery) >= 0;
-      }),
-    [debouncedSearchQuery, events],
+      filterSelectableEvents(events, debouncedSearchQuery, maxVisibleEvents),
+    [debouncedSearchQuery, events, maxVisibleEvents],
   );
 
   useEffect(() => {
@@ -210,6 +205,23 @@ export default function EventSelector({
       {selector}
     </Field>
   );
+}
+
+export function filterSelectableEvents(
+  events: SelectableEvent[],
+  searchQuery: string,
+  maxVisibleEvents?: number,
+): SelectableEvent[] {
+  const filteredEvents = events.filter((event) => {
+    const pickupStudentNames = event.recruitments
+      ?.filter(({ pickup }) => pickup)
+      .map(({ student }) => student?.name)
+      .filter(Boolean)
+      .join(" ");
+    return hangul.search(`${event.name} ${pickupStudentNames ?? ""}`, searchQuery) >= 0;
+  });
+
+  return maxVisibleEvents === undefined ? filteredEvents : filteredEvents.slice(0, maxVisibleEvents);
 }
 
 function EventSelectorItem({

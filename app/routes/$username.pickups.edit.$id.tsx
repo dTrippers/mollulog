@@ -14,6 +14,8 @@ import { Bars3Icon } from "@heroicons/react/16/solid";
 import { RecruitmentRepository } from "~/repositories";
 import { compareInstantDesc, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
 
+const PICKUP_EVENT_SELECTOR_LIMIT = 20;
+
 export const meta: MetaFunction = () => [
   { title: "모집 이력 관리 | 몰루로그" },
 ];
@@ -50,7 +52,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const now = nowUtcIso();
 
   const [allGroups, allStudentsList] = await Promise.all([
-    recruitmentRepository.getAll(),
+    recruitmentRepository.getAllHistorical(),
     getAllStudents(env),
   ]);
 
@@ -169,6 +171,7 @@ export default function EditPickup() {
         name="eventUid"
         events={events}
         currentEventUid={eventUid}
+        maxVisibleEvents={PICKUP_EVENT_SELECTOR_LIMIT}
         placeholder="이벤트 선택"
         searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
         onSelect={setEventUid}

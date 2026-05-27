@@ -4,6 +4,7 @@ import { runQuery } from "~/lib/baql";
 import { fetchCached } from "~/models/base";
 
 const RECRUITMENT_GROUPS_CACHE_KEY = "repo::recruitment-groups::all";
+const HISTORICAL_RECRUITMENT_GROUPS_CACHE_KEY = "repo::recruitment-groups::all-historical::v1";
 const RECRUITMENT_POOL_STUDENTS_CACHE_KEY = "repo::recruitment-pool-students::all::v1";
 const RECRUITMENT_GROUPS_CACHE_TTL = 24 * 60 * 60;
 const BAQL_HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
@@ -37,6 +38,8 @@ export type RecruitmentPoolStudent = RecruitmentPoolStudentsQuery["students"][nu
 export class RecruitmentRepository {
   private allPromise: Promise<RecruitmentGroup[]> | null = null;
   private refreshPromise: Promise<RecruitmentGroup[]> | null = null;
+  private historicalPromise: Promise<RecruitmentGroup[]> | null = null;
+  private historicalRefreshPromise: Promise<RecruitmentGroup[]> | null = null;
 
   constructor(private env: Env) {}
 
@@ -54,6 +57,27 @@ export class RecruitmentRepository {
 
         if (error || !data) {
           throw error ?? new Error("failed to fetch recruitment groups");
+        }
+
+        return data.recruitmentGroups;
+      },
+      RECRUITMENT_GROUPS_CACHE_TTL,
+      forceRefresh,
+    );
+  }
+
+  private async fetchAllHistorical(forceRefresh = false): Promise<RecruitmentGroup[]> {
+    return fetchCached(
+      this.env,
+      HISTORICAL_RECRUITMENT_GROUPS_CACHE_KEY,
+      async () => {
+        const { data, error } = await runQuery(recruitmentGroupsQuery, {
+          endAfter: null,
+          uids: null,
+        });
+
+        if (error || !data) {
+          throw error ?? new Error("failed to fetch historical recruitment groups");
         }
 
         return data.recruitmentGroups;
@@ -89,6 +113,32 @@ export class RecruitmentRepository {
     return this.allPromise;
   }
 
+  private getAllHistoricalPromise(forceRefresh = false): Promise<RecruitmentGroup[]> {
+    if (forceRefresh) {
+      if (!this.historicalRefreshPromise) {
+        this.historicalRefreshPromise = this.fetchAllHistorical(true)
+          .then((groups) => {
+            this.historicalPromise = Promise.resolve(groups);
+            return groups;
+          })
+          .finally(() => {
+            this.historicalRefreshPromise = null;
+          });
+      }
+
+      return this.historicalRefreshPromise;
+    }
+
+    if (!this.historicalPromise) {
+      this.historicalPromise = this.fetchAllHistorical(false).catch((error) => {
+        this.historicalPromise = null;
+        throw error;
+      });
+    }
+
+    return this.historicalPromise;
+  }
+
   async getAll(forceRefresh = false): Promise<RecruitmentGroup[]> {
     try {
       return await this.getAllPromise(forceRefresh);
@@ -98,8 +148,17 @@ export class RecruitmentRepository {
     }
   }
 
+  async getAllHistorical(forceRefresh = false): Promise<RecruitmentGroup[]> {
+    try {
+      return await this.getAllHistoricalPromise(forceRefresh);
+    } catch (error) {
+      console.error("[RecruitmentRepository.getAllHistorical] Failed", error);
+      return [];
+    }
+  }
+
   async getByUid(uid: string, forceRefresh = false): Promise<RecruitmentGroup | null> {
-    const groups = await this.getAll(forceRefresh);
+    const groups = await this.getAllHistorical(forceRefresh);
     return groups.find((group) => group.uid === uid) ?? null;
   }
 
@@ -119,7 +178,7 @@ export class RecruitmentRepository {
     }
 
     const uidSet = new Set(uids);
-    const groups = await this.getAll(forceRefresh);
+    const groups = await this.getAllHistorical(forceRefresh);
     return groups.filter((group) => uidSet.has(group.uid));
   }
 
