@@ -6,6 +6,7 @@ jest.mock("~/lib/baql", () => ({
 }));
 
 import {
+  GROWTH_RESOURCE_KIND_ORDER,
   aggregateGrowthResourceRequirements,
   breakdownCharacterExpToBooks,
   calculateCharacterExpDifference,
@@ -16,7 +17,6 @@ import {
   calculateLevelRequiredExp,
   calculateLevelResourceItems,
   calculateTierResourceItems,
-  GROWTH_RESOURCE_KIND_ORDER,
   getEquipmentBlueprintChoiceBoxTier,
   getEquipmentBlueprintChoiceBoxUid,
   getEquipmentResourceTierLabel,

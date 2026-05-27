@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
-import { loader } from "../../../app/routes/$username.pickups.edit.$id";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { resolveContentName } from "~/models/content-name";
 import { getPickupHistory } from "~/models/pickup-history";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
+import { loader } from "../../../app/routes/$username.pickups.edit.$id";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),

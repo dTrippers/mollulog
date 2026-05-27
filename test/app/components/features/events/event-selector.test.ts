@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { filterSelectableEvents, type SelectableEvent } from "~/components/features/events/EventSelector";
+import { type SelectableEvent, filterSelectableEvents } from "~/components/features/events/EventSelector";
 
 jest.mock("~/components/features/students", () => ({
   StudentCards: () => null,
@@ -35,9 +35,9 @@ describe("filterSelectableEvents", () => {
   });
 
   it("searches the full historical list before applying the visible limit", () => {
-    const events = Array.from({ length: 25 }, (_, index) => (
-      index === 24 ? createEvent(index, { name: "오래된 특별 픽업" }) : createEvent(index)
-    ));
+    const events = Array.from({ length: 25 }, (_, index) =>
+      index === 24 ? createEvent(index, { name: "오래된 특별 픽업" }) : createEvent(index),
+    );
 
     const filteredEvents = filterSelectableEvents(events, "특별", 20);
 

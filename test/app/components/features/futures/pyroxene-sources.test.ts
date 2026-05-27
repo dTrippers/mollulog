@@ -1,24 +1,24 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  DEFAULT_PYROXENE_TIMELINE_DISPLAY,
-  PYROXENE_SOURCE_DEFINITIONS,
-  createOptimisticApPackageTimelineItems,
-  createOptimisticAttendanceTimelineItems,
-  createOptimisticBuyTimelineItems,
-  createOptimisticMonthlyPackageTimelineItems,
-  createOptimisticOtherTimelineItems,
-  calculateDailyApChargePyroxene,
-  togglePyroxeneTimelineSourceVisibility,
-} from "../../../../../app/models/pyroxene-sources";
+  PYROXENE_PANEL_HIDDEN_SOURCE_TYPES,
+  PYROXENE_SOURCE_ROW_DEFINITIONS,
+} from "../../../../../app/components/features/futures/pyroxene-source-config";
 import dayjs from "../../../../../app/lib/dayjs";
 import {
   calculatePackageStartDateFromRemainingDays,
   normalizePyroxeneTimelineEventAt,
 } from "../../../../../app/models/pyroxene-planner-source-config";
 import {
-  PYROXENE_PANEL_HIDDEN_SOURCE_TYPES,
-  PYROXENE_SOURCE_ROW_DEFINITIONS,
-} from "../../../../../app/components/features/futures/pyroxene-source-config";
+  DEFAULT_PYROXENE_TIMELINE_DISPLAY,
+  PYROXENE_SOURCE_DEFINITIONS,
+  calculateDailyApChargePyroxene,
+  createOptimisticApPackageTimelineItems,
+  createOptimisticAttendanceTimelineItems,
+  createOptimisticBuyTimelineItems,
+  createOptimisticMonthlyPackageTimelineItems,
+  createOptimisticOtherTimelineItems,
+  togglePyroxeneTimelineSourceVisibility,
+} from "../../../../../app/models/pyroxene-sources";
 
 describe("pyroxene-sources", () => {
   it("builds the existing default timeline display set from source metadata", () => {
@@ -119,19 +119,19 @@ describe("pyroxene-sources", () => {
 
   it("calculates package start date from remaining days using Blue Archive 04:00 reset", () => {
     expect(
-      dayjs(
-        calculatePackageStartDateFromRemainingDays(22, 30, "2026-05-05T04:00:00+09:00"),
-      ).tz("Asia/Seoul").format("YYYY-MM-DD"),
+      dayjs(calculatePackageStartDateFromRemainingDays(22, 30, "2026-05-05T04:00:00+09:00"))
+        .tz("Asia/Seoul")
+        .format("YYYY-MM-DD"),
     ).toBe("2026-04-28");
     expect(
-      dayjs(
-        calculatePackageStartDateFromRemainingDays(22, 30, "2026-05-06T03:59:00+09:00"),
-      ).tz("Asia/Seoul").format("YYYY-MM-DD"),
+      dayjs(calculatePackageStartDateFromRemainingDays(22, 30, "2026-05-06T03:59:00+09:00"))
+        .tz("Asia/Seoul")
+        .format("YYYY-MM-DD"),
     ).toBe("2026-04-28");
     expect(
-      dayjs(
-        calculatePackageStartDateFromRemainingDays(22, 30, "2026-05-06T04:00:00+09:00"),
-      ).tz("Asia/Seoul").format("YYYY-MM-DD"),
+      dayjs(calculatePackageStartDateFromRemainingDays(22, 30, "2026-05-06T04:00:00+09:00"))
+        .tz("Asia/Seoul")
+        .format("YYYY-MM-DD"),
     ).toBe("2026-04-29");
   });
 

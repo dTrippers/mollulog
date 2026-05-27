@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
-import { RecruitmentRepository } from "../../../app/repositories/recruitment";
 import { runQuery } from "~/lib/baql";
+import { RecruitmentRepository } from "../../../app/repositories/recruitment";
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),

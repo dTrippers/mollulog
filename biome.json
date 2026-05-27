@@ -1,6 +1,6 @@
 {
   "files": {
-    "include": ["app/**/*.tsx", "app/**/*.ts"],
+    "include": ["app/**/*.tsx", "app/**/*.ts", "test/**/*.ts"],
     "ignore": ["app/graphql/**/*"]
   },
   "formatter": {

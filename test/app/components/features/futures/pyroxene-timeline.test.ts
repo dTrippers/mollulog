@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
+import type { PyroxeneScheduleItem } from "../../../../../app/components/features/futures/types";
 import { RecruitmentTypeEnum } from "../../../../../app/graphql/graphql";
 import type { PyroxenePlannerOptions } from "../../../../../app/models/pyroxene-planner";
-import type { PyroxeneScheduleItem } from "../../../../../app/components/features/futures/types";
-import { buildTimeline, type PickupResources } from "../../../../../app/models/pyroxene-timeline";
+import { type PickupResources, buildTimeline } from "../../../../../app/models/pyroxene-timeline";
 
 const defaultOptions: PyroxenePlannerOptions = {
   event: { pickupChance: "average" },
@@ -190,7 +190,9 @@ describe("pyroxene-timeline", () => {
     const packageEntries = timeline.filter((entry) => entry.source.uid === "monthly-package-daily");
 
     expect(packageEntries).toHaveLength(34);
-    expect(packageEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene]).slice(28, 32)).toEqual([
+    expect(
+      packageEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene]).slice(28, 32),
+    ).toEqual([
       ["2026-01-30", 40],
       ["2026-01-31", 40],
       ["2026-02-01", 40],

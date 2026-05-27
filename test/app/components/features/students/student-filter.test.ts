@@ -1,10 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
-import { Attack, Defense } from "~/graphql/graphql";
 import {
+  type StudentFilterState,
   createStudentFilterState,
   getFilteredStudentUids,
-  type StudentFilterState,
 } from "~/components/features/students/StudentFilter";
+import { Attack, Defense } from "~/graphql/graphql";
 
 type TestStudent = Parameters<typeof getFilteredStudentUids>[0][number];
 
@@ -16,7 +16,9 @@ const baseStudent = {
   initialTier: 3,
 };
 
-function student(overrides: Partial<TestStudent> & Pick<TestStudent, "uid" | "name" | "attackType" | "order">): TestStudent {
+function student(
+  overrides: Partial<TestStudent> & Pick<TestStudent, "uid" | "name" | "attackType" | "order">,
+): TestStudent {
   return {
     ...baseStudent,
     ...overrides,

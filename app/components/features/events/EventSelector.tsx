@@ -55,8 +55,7 @@ export default function EventSelector({
     [selectedEventUid, events],
   );
   const filteredEvents = useMemo(
-    () =>
-      filterSelectableEvents(events, debouncedSearchQuery, maxVisibleEvents),
+    () => filterSelectableEvents(events, debouncedSearchQuery, maxVisibleEvents),
     [debouncedSearchQuery, events, maxVisibleEvents],
   );
 
@@ -233,7 +232,11 @@ function EventSelectorItem({
 }) {
   const displayTimeZone = useDisplayTimeZone();
   const now = nowUtcIso();
-  const status = isInstantAfter(event.since, now) ? "예정" : event.until && isInstantAfter(event.until, now) ? "진행중" : "종료";
+  const status = isInstantAfter(event.since, now)
+    ? "예정"
+    : event.until && isInstantAfter(event.until, now)
+      ? "진행중"
+      : "종료";
   const pickupStudents = event.recruitments
     ?.filter(({ pickup, student }) => pickup && student)
     .map(({ student }) => ({ uid: student?.uid ?? null, name: student?.name, hideName: true }));

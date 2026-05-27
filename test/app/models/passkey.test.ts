@@ -1,10 +1,10 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import {
+  PASSKEY_CHALLENGE_TIMEOUT_MS,
+  PASSKEY_CHALLENGE_TTL_SECONDS,
   advancePasskeyCounterAndGetSensei,
   createPasskeyAuthenticationOptions,
   createPasskeyCreationOptions,
-  PASSKEY_CHALLENGE_TIMEOUT_MS,
-  PASSKEY_CHALLENGE_TTL_SECONDS,
 } from "../../../app/models/passkey";
 
 type PreparedStatement = {
@@ -36,7 +36,9 @@ class FakeD1Database {
     active: 1,
   };
 
-  readonly batch = jest.fn(async (statements: PreparedStatement[]) => statements.map((statement) => this.execute(statement)));
+  readonly batch = jest.fn(async (statements: PreparedStatement[]) =>
+    statements.map((statement) => this.execute(statement)),
+  );
 
   prepare(sql: string): FakeD1Statement {
     return new FakeD1Statement(sql);
@@ -91,11 +93,9 @@ describe("passkey", () => {
     } as never);
 
     expect(options.timeout).toBe(PASSKEY_CHALLENGE_TIMEOUT_MS);
-    expect(kvSession.put).toHaveBeenCalledWith(
-      "passkey:creationOptions:1",
-      expect.any(String),
-      { expirationTtl: PASSKEY_CHALLENGE_TTL_SECONDS },
-    );
+    expect(kvSession.put).toHaveBeenCalledWith("passkey:creationOptions:1", expect.any(String), {
+      expirationTtl: PASSKEY_CHALLENGE_TTL_SECONDS,
+    });
   });
 
   it("keeps authentication challenge TTL aligned with the WebAuthn timeout", async () => {
