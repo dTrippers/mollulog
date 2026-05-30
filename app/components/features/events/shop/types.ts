@@ -32,7 +32,17 @@ export type ShopResource = {
     uid: string;
     name: string;
   };
-  paymentResourceAmount: number;
+  purchaseTiers: {
+    tierIndex: number;
+    startQuantity: number;
+    quantity: number | null;
+    unitPrice: number;
+    paymentResource: {
+      type: ResourceTypeEnum;
+      uid: string;
+      name: string;
+    };
+  }[];
   shopAmount: number | null;
 };
 

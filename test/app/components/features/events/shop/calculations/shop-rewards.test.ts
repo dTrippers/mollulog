@@ -21,7 +21,19 @@ function createShopResource(overrides: Partial<ShopResource>): ShopResource {
       uid: "event-coin",
       name: "이벤트 재화",
     },
-    paymentResourceAmount: 100,
+    purchaseTiers: [
+      {
+        tierIndex: 0,
+        startQuantity: 1,
+        quantity: 10,
+        unitPrice: 100,
+        paymentResource: {
+          type: ResourceTypeEnum.Item,
+          uid: "event-coin",
+          name: "이벤트 재화",
+        },
+      },
+    ],
     shopAmount: 10,
     ...overrides,
   };
@@ -64,5 +76,43 @@ describe("shop reward calculations", () => {
         totalQuantity: 560,
       },
     ]);
+  });
+
+  it("multiplies daily reset purchases by purchase days", () => {
+    const shopResources = [
+      createShopResource({
+        uid: "daily-ticket",
+        resourceAmount: 1,
+        purchaseTiers: [
+          {
+            tierIndex: 0,
+            startQuantity: 1,
+            quantity: 10,
+            unitPrice: 5,
+            paymentResource: {
+              type: ResourceTypeEnum.Currency,
+              uid: "4",
+              name: "청휘석",
+            },
+          },
+          {
+            tierIndex: 1,
+            startQuantity: 11,
+            quantity: 10,
+            unitPrice: 10,
+            paymentResource: {
+              type: ResourceTypeEnum.Currency,
+              uid: "4",
+              name: "청휘석",
+            },
+          },
+        ],
+        shopAmount: 60,
+      }),
+    ];
+
+    expect(calculateBoughtItemQuantities(shopResources, { "daily-ticket": 20 }, { "daily-ticket": 14 })).toEqual({
+      "reward-item": 280,
+    });
   });
 });

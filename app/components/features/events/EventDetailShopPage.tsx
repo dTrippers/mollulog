@@ -23,6 +23,7 @@ type EventDetailShopPageProps = {
   recruitedStudentUids: string[];
   eventUid: string;
   savedShopState: EventShopState | null;
+  availablePurchaseDays: number;
   signedIn: boolean;
   minigameConfig?: MinigameConfig | null;
 };
@@ -34,13 +35,19 @@ export default function EventDetailShopPage({
   recruitedStudentUids,
   eventUid,
   savedShopState,
+  availablePurchaseDays,
   signedIn,
   minigameConfig = null,
 }: EventDetailShopPageProps) {
   const collectableResources = useMemo<CollectableResource[]>(() => {
     const items: CollectableResource[] = [];
-    for (const { paymentResource } of shopResources) {
-      if (!items.some(({ uid }) => uid === paymentResource.uid)) {
+    for (const { paymentResource, purchaseTiers } of shopResources) {
+      const paymentResources = [paymentResource, ...purchaseTiers.map((tier) => tier.paymentResource)];
+      for (const paymentResource of paymentResources) {
+        if (items.some(({ uid }) => uid === paymentResource.uid)) {
+          continue;
+        }
+
         items.push({
           type: paymentResource.type,
           uid: paymentResource.uid,
@@ -77,7 +84,7 @@ export default function EventDetailShopPage({
   const { showSignIn } = useSignIn();
 
   // Unified state management
-  const { state, actions } = useShopState({ savedShopState, recruitedStudentUids, stages });
+  const { state, actions } = useShopState({ savedShopState, recruitedStudentUids, shopResources, stages });
 
   // Track initial load for auto-save
   const [isInitialLoad, setIsInitialLoad] = useState(() => !savedShopState);
@@ -168,8 +175,10 @@ export default function EventDetailShopPage({
             <ShopResourceSelector
               shopResources={shopResources}
               collectableResources={collectableResources}
+              eventUid={eventUid}
               state={state}
               actions={actions}
+              availablePurchaseDays={availablePurchaseDays}
             />
           )}
 

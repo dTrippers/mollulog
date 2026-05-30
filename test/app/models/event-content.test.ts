@@ -101,13 +101,85 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchCached).toHaveBeenCalledWith(
       env,
-      "event-content::shop::v3::main-story-timeline",
+      "event-content::shop::v4::main-story-timeline",
       expect.any(Function),
       7 * 24 * 60 * 60,
     );
     expect(mockedRunQuery).toHaveBeenCalledWith(expect.any(Object), {
       eventUid: "linked-event",
       runType: "permanent",
+    });
+  });
+
+  it("maps shop purchase tiers from BAQL", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        eventContent: {
+          stages: [],
+          shopResources: [
+            {
+              uid: "8540000",
+              resourceAmount: 1,
+              shopAmount: 60,
+              resource: {
+                type: "currency",
+                uid: "19",
+                name: "연합 작전 티켓",
+                rarity: 1,
+              },
+              paymentResource: {
+                type: "currency",
+                uid: "4",
+                name: "청휘석",
+              },
+              purchaseTiers: [
+                {
+                  tierIndex: 0,
+                  startQuantity: 1,
+                  quantity: 10,
+                  unitPrice: 5,
+                  paymentResource: {
+                    type: "currency",
+                    uid: "4",
+                    name: "청휘석",
+                  },
+                },
+                {
+                  tierIndex: 1,
+                  startQuantity: 11,
+                  quantity: 10,
+                  unitPrice: 10,
+                  paymentResource: {
+                    type: "currency",
+                    uid: "4",
+                    name: "청휘석",
+                  },
+                },
+              ],
+            },
+          ],
+          bonuses: [],
+          minigameConfigs: [],
+        },
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    });
+
+    await expect(getEventShopContent(env, "main-story-timeline")).resolves.toMatchObject({
+      shopResources: [
+        {
+          uid: "8540000",
+          purchaseTiers: [
+            { startQuantity: 1, quantity: 10, unitPrice: 5 },
+            { startQuantity: 11, quantity: 10, unitPrice: 10 },
+          ],
+        },
+      ],
     });
   });
 });

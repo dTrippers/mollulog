@@ -1,10 +1,12 @@
 import { useMemo, useState } from "react";
 import type { EventShopState } from "~/models/event-shop-state";
+import { isDailyResetShopResource } from "../calculations/shop-costs";
 import type { MinigamePaymentQuantityMode } from "../constants";
-import type { Stage } from "../types";
+import type { ShopResource, Stage } from "../types";
 
 export type ShopState = {
   itemQuantities: Record<string, number>;
+  itemPurchaseDays: Record<string, number>;
   selectedBonusStudentUids: string[];
   includeRecruitedStudents: boolean;
   enabledStages: Record<string, boolean>;
@@ -19,6 +21,8 @@ export type ShopState = {
 export type ShopActions = {
   updateItemQuantity: (uid: string, value: number) => void;
   updateItemQuantities: (updater: (prev: Record<string, number>) => Record<string, number>) => void;
+  updateItemPurchaseDay: (uid: string, value: number) => void;
+  updateItemPurchaseDays: (updater: (prev: Record<string, number>) => Record<string, number>) => void;
   toggleBonusStudent: (uid: string) => void;
   setBonusStudents: (uids: string[]) => void;
   setIncludeRecruitedStudents: (value: boolean) => void;
@@ -35,6 +39,7 @@ export type ShopActions = {
 type UseShopStateParams = {
   savedShopState: EventShopState | null;
   recruitedStudentUids: string[];
+  shopResources: ShopResource[];
   stages: Stage[];
 };
 
@@ -46,11 +51,37 @@ function getDefaultEnabledStages(stages: Stage[]) {
   return initialEnabledStages;
 }
 
+export function getInitialItemPurchaseDays(
+  savedShopState: EventShopState | null,
+  shopResources: ShopResource[],
+): Record<string, number> {
+  if (!savedShopState) {
+    return {};
+  }
+
+  const itemPurchaseDays = { ...savedShopState.itemPurchaseDays };
+  for (const shopResource of shopResources) {
+    if (!isDailyResetShopResource(shopResource)) {
+      continue;
+    }
+
+    const savedQuantity = savedShopState.itemQuantities[shopResource.uid] || 0;
+    if (savedQuantity > 0 && itemPurchaseDays[shopResource.uid] === undefined) {
+      itemPurchaseDays[shopResource.uid] = 1;
+    }
+  }
+
+  return itemPurchaseDays;
+}
+
 /**
  * Unified state management hook for event shop page.
  */
-export function useShopState({ savedShopState, recruitedStudentUids, stages }: UseShopStateParams) {
+export function useShopState({ savedShopState, recruitedStudentUids, shopResources, stages }: UseShopStateParams) {
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>(savedShopState?.itemQuantities ?? {});
+  const [itemPurchaseDays, setItemPurchaseDays] = useState<Record<string, number>>(
+    getInitialItemPurchaseDays(savedShopState, shopResources),
+  );
   const [selectedBonusStudentUids, setSelectedBonusStudentUids] = useState<string[]>(
     savedShopState?.selectedBonusStudentUids ?? recruitedStudentUids,
   );
@@ -86,6 +117,14 @@ export function useShopState({ savedShopState, recruitedStudentUids, stages }: U
 
       updateItemQuantities: (updater: (prev: Record<string, number>) => Record<string, number>) => {
         setItemQuantities(updater);
+      },
+
+      updateItemPurchaseDay: (uid: string, value: number) => {
+        setItemPurchaseDays((prev) => ({ ...prev, [uid]: value }));
+      },
+
+      updateItemPurchaseDays: (updater: (prev: Record<string, number>) => Record<string, number>) => {
+        setItemPurchaseDays(updater);
       },
 
       toggleBonusStudent: (uid: string) => {
@@ -146,6 +185,7 @@ export function useShopState({ savedShopState, recruitedStudentUids, stages }: U
 
   const state: ShopState = {
     itemQuantities,
+    itemPurchaseDays,
     selectedBonusStudentUids,
     includeRecruitedStudents,
     enabledStages,

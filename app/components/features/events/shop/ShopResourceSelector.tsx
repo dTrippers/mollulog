@@ -5,12 +5,19 @@ import { Tabs } from "./Tabs";
 import type { ShopResource, CollectableResource } from "./types";
 import type { ShopState, ShopActions } from "./hooks";
 import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
+import {
+  calculateEffectiveShopPurchaseCount,
+  getShopResourcePurchaseDaysLimit,
+  isDailyResetShopResource,
+} from "./calculations";
 
 type ShopResourceSelectorProps = {
   shopResources: ShopResource[];
   collectableResources: CollectableResource[];
+  eventUid: string;
   state: ShopState;
   actions: ShopActions;
+  availablePurchaseDays: number;
 };
 
 function resourceImageUrl(resourceType: ResourceTypeEnum, resourceUid: string): string {
@@ -26,17 +33,34 @@ function resourceImageUrl(resourceType: ResourceTypeEnum, resourceUid: string): 
   return `https://baql-assets.mollulog.net/images/items/${resourceUid}`;
 }
 
+function formatUnitPriceLabel(purchaseTiers: ShopResource["purchaseTiers"]) {
+  const unitPrices = [...new Set(purchaseTiers.map(({ unitPrice }) => unitPrice))];
+  if (unitPrices.length === 0) {
+    return "-";
+  }
+  if (unitPrices.length === 1) {
+    return unitPrices[0].toLocaleString();
+  }
+  return `${Math.min(...unitPrices).toLocaleString()}~${Math.max(...unitPrices).toLocaleString()}`;
+}
+
 export const ShopResourceSelector = memo(function ShopResourceSelector({
   shopResources,
   collectableResources,
+  eventUid,
   state,
   actions,
+  availablePurchaseDays,
 }: ShopResourceSelectorProps) {
   const [selectedPaymentResourceUid, setSelectedPaymentResourceUid] = useState<string>(
     collectableResources.find(({ forPayment }) => forPayment)?.uid ?? "",
   );
   const selectedShopResources = useMemo(() => {
-    return shopResources.filter(({ paymentResource }) => paymentResource.uid === selectedPaymentResourceUid);
+    return shopResources.filter(
+      ({ paymentResource, purchaseTiers }) =>
+        paymentResource.uid === selectedPaymentResourceUid ||
+        purchaseTiers.some((tier) => tier.paymentResource.uid === selectedPaymentResourceUid),
+    );
   }, [shopResources, selectedPaymentResourceUid]);
 
   const handleSelectAll = () => {
@@ -49,6 +73,19 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
       }
       return newQuantities;
     });
+    actions.updateItemPurchaseDays((prev) => {
+      const newPurchaseDays = { ...prev };
+      for (const shopResource of selectedShopResources) {
+        if (isDailyResetShopResource(shopResource)) {
+          newPurchaseDays[shopResource.uid] = getShopResourcePurchaseDaysLimit(
+            eventUid,
+            shopResource.uid,
+            availablePurchaseDays,
+          );
+        }
+      }
+      return newPurchaseDays;
+    });
   };
 
   const handleResetAll = () => {
@@ -58,6 +95,15 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
         newQuantities[uid] = 0;
       }
       return newQuantities;
+    });
+    actions.updateItemPurchaseDays((prev) => {
+      const newPurchaseDays = { ...prev };
+      for (const shopResource of selectedShopResources) {
+        if (isDailyResetShopResource(shopResource)) {
+          newPurchaseDays[shopResource.uid] = 0;
+        }
+      }
+      return newPurchaseDays;
     });
   };
 
@@ -79,10 +125,16 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 md:gap-2">
         {selectedShopResources.map(
-          ({ uid, resource, resourceAmount, paymentResource, paymentResourceAmount, shopAmount }) => {
+          ({ uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount }) => {
+            const shopResource = { uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount };
             const quantity = state.itemQuantities[uid] || 0;
+            const purchaseDays = state.itemPurchaseDays[uid] || 0;
+            const dailyReset = isDailyResetShopResource(shopResource);
+            const purchaseDaysLimit = getShopResourcePurchaseDaysLimit(eventUid, uid, availablePurchaseDays);
+            const totalPurchaseCount = calculateEffectiveShopPurchaseCount(shopResource, quantity, purchaseDays);
 
             const formattedResourceAmount = formatResourceAmount(resourceAmount);
+            const unitPriceLabel = formatUnitPriceLabel(purchaseTiers);
             return (
               <div key={uid} className="p-2 flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
                 <div className="flex items-center justify-center gap-x-1">
@@ -102,25 +154,57 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                         loading="lazy"
                       />
                       <span className="mr-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                        {paymentResourceAmount}
+                        {unitPriceLabel}
                       </span>
                     </div>
                     <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center">
-                      {shopAmount ? `${shopAmount}회 구매 가능` : "구매 제한 없음"}
+                      {shopAmount ? `${dailyReset ? "매일 " : ""}${shopAmount}회 구매 가능` : "구매 제한 없음"}
                     </p>
                   </div>
                 </div>
 
-                <div>
-                  <NumberInput
-                    value={quantity}
-                    maxValue={shopAmount ?? undefined}
-                    showMin
-                    showMax={shopAmount !== null}
-                    maxButtonVariant="active"
-                    onChange={(value) => actions.updateItemQuantity(uid, value)}
-                  />
-                </div>
+                {dailyReset ? (
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-1 gap-1.5">
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-medium leading-tight text-muted-foreground">하루 구매량</p>
+                        <NumberInput
+                          value={quantity}
+                          maxValue={shopAmount ?? undefined}
+                          showMin
+                          showMax={shopAmount !== null}
+                          maxButtonVariant="active"
+                          onChange={(value) => actions.updateItemQuantity(uid, value)}
+                        />
+                      </div>
+                      <div className="space-y-0.5">
+                        <p className="text-xs font-medium leading-tight text-muted-foreground">구매 일수</p>
+                        <NumberInput
+                          value={purchaseDays}
+                          maxValue={purchaseDaysLimit}
+                          showMin
+                          showMax={purchaseDaysLimit > 0}
+                          maxButtonVariant="active"
+                          onChange={(value) => actions.updateItemPurchaseDay(uid, value)}
+                        />
+                      </div>
+                    </div>
+                    <p className="text-center text-xs text-neutral-500 dark:text-neutral-400">
+                      총 {totalPurchaseCount.toLocaleString()}회 구매
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <NumberInput
+                      value={quantity}
+                      maxValue={shopAmount ?? undefined}
+                      showMin
+                      showMax={shopAmount !== null}
+                      maxButtonVariant="active"
+                      onChange={(value) => actions.updateItemQuantity(uid, value)}
+                    />
+                  </div>
+                )}
               </div>
             );
           },

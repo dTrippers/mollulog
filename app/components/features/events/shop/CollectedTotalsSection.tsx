@@ -144,12 +144,12 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
   );
 
   const boughtShopResources = useMemo(
-    () => calculateBoughtResourceQuantities(shopResources, state.itemQuantities),
-    [shopResources, state.itemQuantities],
+    () => calculateBoughtResourceQuantities(shopResources, state.itemQuantities, state.itemPurchaseDays),
+    [shopResources, state.itemQuantities, state.itemPurchaseDays],
   );
   const boughtItemQuantities = useMemo(
-    () => calculateBoughtItemQuantities(shopResources, state.itemQuantities),
-    [shopResources, state.itemQuantities],
+    () => calculateBoughtItemQuantities(shopResources, state.itemQuantities, state.itemPurchaseDays),
+    [shopResources, state.itemQuantities, state.itemPurchaseDays],
   );
 
   // Also include minigame rewards as bought resources

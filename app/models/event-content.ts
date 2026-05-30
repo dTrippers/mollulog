@@ -178,9 +178,16 @@ const eventContentShopContentQuery = graphql(`
         }
       }
       shopResources(runType: $runType) {
-        uid resourceAmount paymentResourceAmount shopAmount
+        uid resourceAmount shopAmount
         resource { type uid name rarity }
         paymentResource { type uid name }
+        purchaseTiers {
+          tierIndex
+          startQuantity
+          quantity
+          unitPrice
+          paymentResource { type uid name }
+        }
       }
       bonuses(runType: $runType) {
         percentage
@@ -245,7 +252,19 @@ function transformShopResources(shopResources: NonNullable<EventContentData>["sh
   return shopResources.filter(hasShopResourceAndPaymentResource).map((r) => ({
     uid: r.uid,
     resourceAmount: r.resourceAmount,
-    paymentResourceAmount: r.paymentResourceAmount,
+    purchaseTiers: r.purchaseTiers.flatMap((tier) =>
+      tier.paymentResource
+        ? [
+            {
+              tierIndex: tier.tierIndex,
+              startQuantity: tier.startQuantity,
+              quantity: tier.quantity,
+              unitPrice: tier.unitPrice,
+              paymentResource: tier.paymentResource,
+            },
+          ]
+        : [],
+    ),
     shopAmount: r.shopAmount,
     resource: r.resource,
     paymentResource: r.paymentResource,
@@ -370,7 +389,7 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
 
   return fetchCached(
     env,
-      `event-content::shop::v3::${timelineUid}`,
+    `event-content::shop::v4::${timelineUid}`,
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,
