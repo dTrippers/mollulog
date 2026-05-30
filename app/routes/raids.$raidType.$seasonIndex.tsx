@@ -7,7 +7,7 @@ import {
 } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
-import { Outlet, useLoaderData, useLocation } from "react-router";
+import { Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { createPageErrorBoundary, Page } from "~/components/features/layout";
@@ -21,6 +21,14 @@ import { RaidRepository } from "~/repositories";
 
 function raidKey(raid: { raidType: string; seasonIndex: number }) {
   return `${raid.raidType}:${raid.seasonIndex}`;
+}
+
+function getAvailableDefenseType(
+  defenseTypes: { defenseType: Defense }[],
+  requestedDefenseType: string | null,
+): Defense {
+  const requestedDefense = defenseTypes.find(({ defenseType }) => defenseType === requestedDefenseType)?.defenseType;
+  return requestedDefense ?? defenseTypes[0].defenseType;
 }
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
@@ -90,6 +98,7 @@ export type RaidPageContext = {
 export default function RaidPage() {
   const { currentRaid, allRaids, signedIn } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
 
   const [panel, setPanel] = useState<PagePanelProps | undefined>(undefined);
@@ -99,12 +108,27 @@ export default function RaidPage() {
     }
   }, [pathname, raidPath]);
 
-  const [selectedDefense, setDefense] = useState<Defense>(currentRaid.defenseTypes[0].defenseType);
+  const [selectedDefense, setDefense] = useState<Defense>(() =>
+    getAvailableDefenseType(currentRaid.defenseTypes, searchParams.get("defenseType")),
+  );
   useEffect(() => {
-    if (!currentRaid.defenseTypes.some(({ defenseType }) => defenseType === selectedDefense)) {
-      setDefense(currentRaid.defenseTypes[0].defenseType);
+    const nextDefense = getAvailableDefenseType(currentRaid.defenseTypes, searchParams.get("defenseType"));
+    if (selectedDefense !== nextDefense) {
+      setDefense(nextDefense);
     }
-  }, [currentRaid.defenseTypes, selectedDefense]);
+  }, [currentRaid.defenseTypes, searchParams, selectedDefense]);
+
+  const selectDefense = (defenseType: Defense) => {
+    setDefense(defenseType);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("defenseType", defenseType);
+        return next;
+      },
+      { replace: true },
+    );
+  };
 
   return (
     <Page
@@ -150,7 +174,7 @@ export default function RaidPage() {
                 text: defenseTypeLocale[defenseType],
                 color: defenseTypeColor[defenseType],
                 active: defenseType === selectedDefense,
-                onToggle: () => setDefense(defenseType),
+                onToggle: () => selectDefense(defenseType),
               }))}
               exclusive
               atLeastOne

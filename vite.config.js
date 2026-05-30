@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => ({
       viteEnvironment: { name: "ssr" },
       environment: mode,
       persistState: {
-        path: process.env.WRANGLER_PERSIST_TO ?? ".",
+        path: process.env.WRANGLER_PERSIST_TO ?? ".wrangler/state",
       },
     }),
     tailwindcss(),

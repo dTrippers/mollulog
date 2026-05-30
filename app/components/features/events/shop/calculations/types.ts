@@ -29,6 +29,7 @@ export type ItemBreakdownInput = {
   minigameRewards?: Record<string, { resourceType: unknown; resourceUid: string; quantity: number }[]>;
   shopResources: ShopResource[];
   itemQuantities: Record<string, number>;
+  itemPurchaseDays: Record<string, number>;
   collectableResources: CollectableResource[];
   minigamePaymentCosts?: MinigamePayment[];
 };
@@ -54,6 +55,7 @@ export type RequiredQuantitiesInput = {
   shopResources: ShopResource[];
   collectableResources: CollectableResource[];
   itemQuantities: Record<string, number>;
+  itemPurchaseDays: Record<string, number>;
   existingPaymentItemQuantities: Record<string, number>;
   stages: Stage[];
   includeFirstClear: boolean;

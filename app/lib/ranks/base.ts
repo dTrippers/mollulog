@@ -1,6 +1,6 @@
 import protobuf from "protobufjs";
 
-export const RANK_API_BASE_URL = 'https://ranks.mollulog.net'
+export const RANK_API_BASE_URL = "https://ranks.baql.net";
 
 export async function decompressGzip(data: ArrayBuffer): Promise<ArrayBuffer> {
   const ds = new DecompressionStream("gzip");

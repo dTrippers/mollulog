@@ -5,7 +5,7 @@
 
 ## 기본 정보
 
-- 기본 엔드포인트: `https://baql.mollulog.net/graphql`
+- 기본 엔드포인트: `https://api.baql.net/graphql`
 - 개발 환경 override: `VITE_BAQL_URL`
 - 공통 실행 함수: `app/lib/baql/index.ts` 의 `runQuery`
 

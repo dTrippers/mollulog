@@ -22,12 +22,14 @@ describe("normalizeRouteError", () => {
   });
 
   it("keeps structured public error messages and codes", () => {
-    const normalized = normalizeRouteError(routeErrorResponse(404, {
-      error: {
-        code: "student.not_found",
-        message: "학생 정보를 찾을 수 없어요",
-      },
-    }));
+    const normalized = normalizeRouteError(
+      routeErrorResponse(404, {
+        error: {
+          code: "student.not_found",
+          message: "학생 정보를 찾을 수 없어요",
+        },
+      }),
+    );
 
     expect(normalized).toMatchObject({
       status: 404,

@@ -2,6 +2,11 @@ import Decimal from "decimal.js";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { calculateMinigameRewards } from "../utils";
 import type { RequiredQuantitiesInput } from "./types";
+import {
+  calculateShopResourcePaymentCosts,
+  calculateShopResourcePaymentCostForResource,
+  isDailyResetShopResource,
+} from "./shop-costs";
 
 /**
  * Calculates the required quantities of payment items, resolving recursive dependencies (items buying items).
@@ -10,6 +15,7 @@ export function calculateRequiredQuantities({
   shopResources,
   collectableResources,
   itemQuantities,
+  itemPurchaseDays,
   existingPaymentItemQuantities,
   stages,
   includeFirstClear,
@@ -61,12 +67,17 @@ export function calculateRequiredQuantities({
       continue;
     }
 
-    const required = shopResources.reduce((total, { uid: shopResourceUid, paymentResourceAmount, paymentResource }) => {
-      if (paymentResource.uid !== uid) {
-        return total;
-      }
-      return total + (itemQuantities[shopResourceUid] || 0) * paymentResourceAmount;
-    }, 0);
+    const required = shopResources.reduce(
+      (total, shopResource) =>
+        total +
+        calculateShopResourcePaymentCostForResource(
+          shopResource,
+          itemQuantities[shopResource.uid] || 0,
+          uid,
+          itemPurchaseDays[shopResource.uid] || 0,
+        ),
+      0,
+    );
 
     if (required > 0) {
       requirements[uid] = (requirements[uid] || new Decimal(0)).plus(required);
@@ -167,15 +178,25 @@ export function calculateRequiredQuantities({
 
       const entry = shopEntries[0];
       if (entry) {
+        // Daily-reset entries need a user-selected purchase day count, so recursive conversion cannot infer a
+        // correct cost here. Keep the original requirement and let the user choose the daily-reset purchase directly.
+        if (isDailyResetShopResource(entry)) {
+          continue;
+        }
+
         // Can convert
         // logic: we need 'reqAmount' of 'reqUid'.
-        // entry sells 'entry.resourceAmount' of 'reqUid' for 'entry.paymentResourceAmount' of 'entry.paymentResource.uid'.
+        // entry sells 'entry.resourceAmount' of 'reqUid' for tiered costs.
 
         // IMPORTANT: Don't convert to farmable items - farm them directly instead!
         // If the payment item is farmable, we should NOT convert. Instead, keep the original requirement
         // and let the optimization algorithm farm the payment item directly.
-        const payUid = entry.paymentResource.uid;
-        if (farmableItems.has(payUid)) {
+        const purchases = reqAmount.div(entry.resourceAmount).ceil().toNumber();
+        const paymentCosts = calculateShopResourcePaymentCosts(entry, purchases);
+        if (paymentCosts.length === 0) {
+          continue;
+        }
+        if (paymentCosts.some(({ resource }) => farmableItems.has(resource.uid))) {
           continue; // Skip this conversion, keep the original requirement
         }
 
@@ -186,22 +207,17 @@ export function calculateRequiredQuantities({
         // For simplicity/MVP as requested: support conversion.
         // If filtered to infinite stock or just taking first:
 
-        const outputAmount = new Decimal(entry.resourceAmount);
-        const inputAmount = new Decimal(entry.paymentResourceAmount);
-
-        // How many purchases needed? ceil(reqAmount / outputAmount)
-        const purchases = reqAmount.div(outputAmount).ceil();
-        const cost = purchases.mul(inputAmount);
-
         // Remove requirement for current item
         // requirements[reqUid] = new Decimal(0); // Fully resolved?
         // What if we want to resolve partial?
         // Let's assume full resolution is intended for "buyable" items.
         delete requirements[reqUid];
 
-        // Add requirement for payment item
-        const oldPayReq = requirements[payUid] || new Decimal(0);
-        requirements[payUid] = oldPayReq.plus(cost);
+        // Add requirement for payment items
+        for (const { resource, amount } of paymentCosts) {
+          const oldPayReq = requirements[resource.uid] || new Decimal(0);
+          requirements[resource.uid] = oldPayReq.plus(amount);
+        }
 
         changed = true;
         // Break to restart loop with new state (avoids modifying iterating object issues)

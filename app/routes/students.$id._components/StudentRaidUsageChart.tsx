@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router";
 import {
   Bar,
   BarChart,
@@ -15,6 +16,7 @@ import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import type { RaidStatistics } from "~/lib/ranks/stats";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
 import type { RaidScheduleListItem } from "~/repositories";
+import { raidTypeToParam } from "~/models/raid";
 import {
   buildStudentRaidUsageChartData,
   getDefaultRaidUsageDefenseFilter,
@@ -80,8 +82,28 @@ function getTooltipPayload(payload: unknown): StudentRaidUsageChartRow | null {
   return item.payload ?? null;
 }
 
+function getBarPayload(entry: unknown): StudentRaidUsageChartRow | null {
+  if (!entry || typeof entry !== "object") {
+    return null;
+  }
+
+  const item = entry as { payload?: StudentRaidUsageChartRow };
+  return item.payload ?? null;
+}
+
+function getRaidDetailPath(row: StudentRaidUsageChartRow) {
+  const path = `/raids/${raidTypeToParam(row.raidType)}/${row.seasonIndex}`;
+  if (row.raidType !== "elimination") {
+    return path;
+  }
+
+  const params = new URLSearchParams({ defenseType: row.defenseType });
+  return `${path}?${params.toString()}`;
+}
+
 export default function StudentRaidUsageChart({ attackType, releaseAt, raids, statistics }: StudentRaidUsageChartProps) {
   const displayTimeZone = useDisplayTimeZone();
+  const navigate = useNavigate();
   const [selectedDefenseType, setSelectedDefenseType] = useState<StudentRaidUsageDefenseFilter>(() =>
     getDefaultRaidUsageDefenseFilter(attackType),
   );
@@ -95,6 +117,14 @@ export default function StudentRaidUsageChart({ attackType, releaseAt, raids, st
       }),
     [releaseAt, raids, statistics, selectedDefenseType],
   );
+  const handleBarClick = (entry: unknown) => {
+    const row = getBarPayload(entry);
+    if (!row) {
+      return;
+    }
+
+    navigate(getRaidDetailPath(row));
+  };
 
   if (chartData.rows.length === 0) {
     return <EmptyView text="표시할 총력전/대결전 통계가 없어요" />;
@@ -147,7 +177,10 @@ export default function StudentRaidUsageChart({ attackType, releaseAt, raids, st
                 }
 
                 return (
-                  <div className="rounded-md border border-neutral-200 bg-white p-3 text-sm shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+                  <Link
+                    to={getRaidDetailPath(item)}
+                    className="block rounded-md border border-neutral-200 bg-white p-3 text-sm shadow-sm transition hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
+                  >
                     <p className="text-xs text-neutral-500 dark:text-neutral-400">
                       {formatInstant(item.startAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
                     </p>
@@ -175,7 +208,7 @@ export default function StudentRaidUsageChart({ attackType, releaseAt, raids, st
                           </div>
                         ))}
                     </div>
-                  </div>
+                  </Link>
                 );
               }}
             />
@@ -187,6 +220,8 @@ export default function StudentRaidUsageChart({ attackType, releaseAt, raids, st
                 fill={TIER_COLORS[tierKey] ?? "#737373"}
                 maxBarSize={32}
                 isAnimationActive={false}
+                className="cursor-pointer"
+                onClick={handleBarClick}
               />
             ))}
           </BarChart>

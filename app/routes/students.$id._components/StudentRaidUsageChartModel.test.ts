@@ -176,6 +176,48 @@ describe("buildStudentRaidUsageChartData", () => {
     expect(result.rows.map((row) => row.bossName)).toEqual(["비나", "헤세드", "호드"]);
   });
 
+  it("temporarily excludes raid rows before the statistics data availability cutoff", () => {
+    const result = buildStudentRaidUsageChartData({
+      releaseAt: "2024-01-01T00:00:00.000Z",
+      selectedDefenseType: Defense.Heavy,
+      raids: [
+        {
+          ...baseRaid,
+          seasonIndex: 1,
+          startAt: "2024-10-28T00:00:00.000Z",
+          jpSchedule: { seasonIndex: 101 },
+        },
+        {
+          ...baseRaid,
+          seasonIndex: 2,
+          startAt: "2024-10-29T00:00:00.000Z",
+          jpSchedule: { seasonIndex: 102 },
+        },
+      ],
+      statistics: [
+        {
+          raid: { raidType: "total_assault", season: 101, defenseType: Defense.Heavy },
+          studentUid: "10085",
+          slotsCount: 10,
+          slotsByTier: [{ tier: 8, count: 10 }],
+          assistsCount: 0,
+          assistsByTier: [],
+        },
+        {
+          raid: { raidType: "total_assault", season: 102, defenseType: Defense.Heavy },
+          studentUid: "10085",
+          slotsCount: 20,
+          slotsByTier: [{ tier: 8, count: 20 }],
+          assistsCount: 0,
+          assistsByTier: [],
+        },
+      ],
+    });
+
+    expect(result.rows.map((row) => row.seasonIndex)).toEqual([2]);
+    expect(result.rows[0]?.totalCount).toBe(20);
+  });
+
   it("prints a year label only once when one raid has multiple defense bars", () => {
     const result = buildStudentRaidUsageChartData({
       releaseAt: "2025-01-01T00:00:00.000Z",
@@ -198,5 +240,39 @@ describe("buildStudentRaidUsageChartData", () => {
     });
 
     expect(result.rows.map((row) => row.xAxisLabel)).toEqual(["2025", "", ""]);
+  });
+
+  it("keeps future raid rows when statistics already exist for them", () => {
+    const result = buildStudentRaidUsageChartData({
+      releaseAt: "2025-01-01T00:00:00.000Z",
+      selectedDefenseType: Defense.Light,
+      raids: [
+        {
+          ...baseRaid,
+          seasonIndex: 4,
+          raidType: "total_assault",
+          startAt: "2026-09-08T00:00:00.000Z",
+          jpSchedule: { seasonIndex: 104 },
+          defenseTypes: [{ defenseType: Defense.Light, difficulty: "torment" }],
+        },
+      ],
+      statistics: [
+        {
+          raid: { raidType: "total_assault", season: 104, defenseType: Defense.Light },
+          studentUid: "10085",
+          slotsCount: 1015,
+          slotsByTier: [{ tier: 6, count: 1015 }],
+          assistsCount: 1,
+          assistsByTier: [{ tier: 8, count: 1 }],
+        },
+      ],
+    });
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      totalCount: 1016,
+      slotCount: 1015,
+      assistCount: 1,
+    });
   });
 });

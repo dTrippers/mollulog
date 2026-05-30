@@ -72,9 +72,7 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
     jest.clearAllMocks();
     // The module mock defines fetchCached as an fn() passthrough, so no separate
     // implementation is needed. clearAllMocks resets it, so reapply the mock behavior.
-    mockedFetchCached.mockImplementation(
-      <T,>(_env: Env, _key: string, fn: () => Promise<T>) => fn(),
-    );
+    mockedFetchCached.mockImplementation(<T>(_env: Env, _key: string, fn: () => Promise<T>) => fn());
     mockedGetLatestPostTime.mockResolvedValue(null);
     mockedGetAllCoupons.mockResolvedValue([]);
   });

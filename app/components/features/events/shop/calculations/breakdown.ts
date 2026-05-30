@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { calculateMinigameRewards } from "../utils";
 import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
+import { calculateShopResourcePaymentCostForResource } from "./shop-costs";
 
 /**
  * Calculates the final breakdown of items and AP costs.
@@ -17,6 +18,7 @@ export function calculateItemBreakdowns({
   minigameRewards,
   shopResources,
   itemQuantities,
+  itemPurchaseDays,
   collectableResources,
   minigamePaymentCosts,
 }: ItemBreakdownInput): ItemBreakdownResult {
@@ -103,12 +105,17 @@ export function calculateItemBreakdowns({
       continue;
     }
 
-    const required = shopResources.reduce((total, { uid: shopResourceUid, paymentResourceAmount, paymentResource }) => {
-      if (paymentResource.uid !== uid) {
-        return total;
-      }
-      return total + (itemQuantities[shopResourceUid] || 0) * paymentResourceAmount;
-    }, 0);
+    const required = shopResources.reduce(
+      (total, shopResource) =>
+        total +
+        calculateShopResourcePaymentCostForResource(
+          shopResource,
+          itemQuantities[shopResource.uid] || 0,
+          uid,
+          itemPurchaseDays[shopResource.uid] || 0,
+        ),
+      0,
+    );
 
     if (required > 0) {
       originalRequirements[uid] = required;

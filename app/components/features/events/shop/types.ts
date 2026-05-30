@@ -28,10 +28,21 @@ export type ShopResource = {
   };
   resourceAmount: number;
   paymentResource: {
+    type: ResourceTypeEnum;
     uid: string;
     name: string;
   };
-  paymentResourceAmount: number;
+  purchaseTiers: {
+    tierIndex: number;
+    startQuantity: number;
+    quantity: number | null;
+    unitPrice: number;
+    paymentResource: {
+      type: ResourceTypeEnum;
+      uid: string;
+      name: string;
+    };
+  }[];
   shopAmount: number | null;
 };
 
@@ -49,8 +60,8 @@ export type EventRewardBonus = {
 };
 
 export type CollectableResource = {
+  type: ResourceTypeEnum;
   uid: string;
   name: string;
   forPayment: boolean;
 };
-

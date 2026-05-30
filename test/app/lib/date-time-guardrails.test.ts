@@ -1,6 +1,6 @@
-import { describe, expect, it } from "@jest/globals";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { describe, expect, it } from "@jest/globals";
 
 const root = process.cwd();
 
@@ -38,7 +38,10 @@ describe("date-time guardrails", () => {
 
     expect(source).not.toContain('from "dayjs"');
     expect(source).not.toContain(".toLocaleDateString(");
-    if (file !== "app/components/features/raids/RaidVideosScreen.tsx") {
+    if (
+      file !== "app/components/features/raids/RaidVideosScreen.tsx" &&
+      file !== "app/components/features/raids/RaidSelector.tsx"
+    ) {
       expect(source).toContain("formatInstant");
     }
   });

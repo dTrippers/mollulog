@@ -116,15 +116,7 @@ describe("utils.growth.students action", () => {
       }),
     } as never);
 
-    expect(mockUpsertRelationshipLevel).toHaveBeenCalledWith(
-      {},
-      1,
-      "studentA",
-      10,
-      123,
-      30,
-      { gift1: 5, gift2: 2 },
-    );
+    expect(mockUpsertRelationshipLevel).toHaveBeenCalledWith({}, 1, "studentA", 10, 123, 30, { gift1: 5, gift2: 2 });
   });
 
   it("initializes relationship items to an empty object when no saved row exists", async () => {

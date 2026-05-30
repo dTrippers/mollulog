@@ -23,6 +23,7 @@ export type SelectableEvent = ShopAvailableEvent & {
 type EventSelectorProps = {
   events: SelectableEvent[];
   currentEventUid?: string | null;
+  maxVisibleEvents?: number;
   label?: string;
   description?: string;
   name?: string;
@@ -35,6 +36,7 @@ type EventSelectorProps = {
 export default function EventSelector({
   events,
   currentEventUid,
+  maxVisibleEvents,
   label,
   description,
   name,
@@ -53,16 +55,8 @@ export default function EventSelector({
     [selectedEventUid, events],
   );
   const filteredEvents = useMemo(
-    () =>
-      events.filter((event) => {
-        const pickupStudentNames = event.recruitments
-          ?.filter(({ pickup }) => pickup)
-          .map(({ student }) => student?.name)
-          .filter(Boolean)
-          .join(" ");
-        return hangul.search(`${event.name} ${pickupStudentNames ?? ""}`, debouncedSearchQuery) >= 0;
-      }),
-    [debouncedSearchQuery, events],
+    () => filterSelectableEvents(events, debouncedSearchQuery, maxVisibleEvents),
+    [debouncedSearchQuery, events, maxVisibleEvents],
   );
 
   useEffect(() => {
@@ -212,6 +206,23 @@ export default function EventSelector({
   );
 }
 
+export function filterSelectableEvents(
+  events: SelectableEvent[],
+  searchQuery: string,
+  maxVisibleEvents?: number,
+): SelectableEvent[] {
+  const filteredEvents = events.filter((event) => {
+    const pickupStudentNames = event.recruitments
+      ?.filter(({ pickup }) => pickup)
+      .map(({ student }) => student?.name)
+      .filter(Boolean)
+      .join(" ");
+    return hangul.search(`${event.name} ${pickupStudentNames ?? ""}`, searchQuery) >= 0;
+  });
+
+  return maxVisibleEvents === undefined ? filteredEvents : filteredEvents.slice(0, maxVisibleEvents);
+}
+
 function EventSelectorItem({
   event,
   placeholder,
@@ -221,7 +232,11 @@ function EventSelectorItem({
 }) {
   const displayTimeZone = useDisplayTimeZone();
   const now = nowUtcIso();
-  const status = isInstantAfter(event.since, now) ? "예정" : event.until && isInstantAfter(event.until, now) ? "진행중" : "종료";
+  const status = isInstantAfter(event.since, now)
+    ? "예정"
+    : event.until && isInstantAfter(event.until, now)
+      ? "진행중"
+      : "종료";
   const pickupStudents = event.recruitments
     ?.filter(({ pickup, student }) => pickup && student)
     .map(({ student }) => ({ uid: student?.uid ?? null, name: student?.name, hideName: true }));

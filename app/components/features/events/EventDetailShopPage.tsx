@@ -1,6 +1,7 @@
 import { ArrowPathIcon, ExclamationCircleIcon, UserIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopState } from "~/models/event-shop-state";
 import EventInfoCard from "./EventInfoCard";
 import {
@@ -22,6 +23,7 @@ type EventDetailShopPageProps = {
   recruitedStudentUids: string[];
   eventUid: string;
   savedShopState: EventShopState | null;
+  availablePurchaseDays: number;
   signedIn: boolean;
   minigameConfig?: MinigameConfig | null;
 };
@@ -33,21 +35,32 @@ export default function EventDetailShopPage({
   recruitedStudentUids,
   eventUid,
   savedShopState,
+  availablePurchaseDays,
   signedIn,
   minigameConfig = null,
 }: EventDetailShopPageProps) {
   const collectableResources = useMemo<CollectableResource[]>(() => {
     const items: CollectableResource[] = [];
-    for (const { paymentResource } of shopResources) {
-      if (!items.some(({ uid }) => uid === paymentResource.uid)) {
-        items.push({ uid: paymentResource.uid, name: paymentResource.name, forPayment: true });
+    for (const { paymentResource, purchaseTiers } of shopResources) {
+      const paymentResources = [paymentResource, ...purchaseTiers.map((tier) => tier.paymentResource)];
+      for (const paymentResource of paymentResources) {
+        if (items.some(({ uid }) => uid === paymentResource.uid)) {
+          continue;
+        }
+
+        items.push({
+          type: paymentResource.type,
+          uid: paymentResource.uid,
+          name: paymentResource.name,
+          forPayment: true,
+        });
       }
     }
 
     for (const stage of stages) {
       for (const { item } of stage.rewards) {
         if (item && item.category === "coin" && !items.some(({ uid }) => uid === item.uid)) {
-          items.push({ uid: item.uid, name: item.name, forPayment: false });
+          items.push({ type: ResourceTypeEnum.Item, uid: item.uid, name: item.name, forPayment: false });
         }
       }
     }
@@ -58,9 +71,9 @@ export default function EventDetailShopPage({
         ...minigameConfig.payments,
         ...minigameConfig.rewardGroups.flatMap((group) => group.payments),
       ];
-      for (const { resourceUid, resourceName } of minigamePaymentResources) {
+      for (const { resourceType, resourceUid, resourceName } of minigamePaymentResources) {
         if (!items.some(({ uid }) => uid === resourceUid)) {
-          items.push({ uid: resourceUid, name: resourceName ?? resourceUid, forPayment: false });
+          items.push({ type: resourceType, uid: resourceUid, name: resourceName ?? resourceUid, forPayment: false });
         }
       }
     }
@@ -71,7 +84,7 @@ export default function EventDetailShopPage({
   const { showSignIn } = useSignIn();
 
   // Unified state management
-  const { state, actions } = useShopState({ savedShopState, recruitedStudentUids, stages });
+  const { state, actions } = useShopState({ savedShopState, recruitedStudentUids, shopResources, stages });
 
   // Track initial load for auto-save
   const [isInitialLoad, setIsInitialLoad] = useState(() => !savedShopState);
@@ -162,8 +175,10 @@ export default function EventDetailShopPage({
             <ShopResourceSelector
               shopResources={shopResources}
               collectableResources={collectableResources}
+              eventUid={eventUid}
               state={state}
               actions={actions}
+              availablePurchaseDays={availablePurchaseDays}
             />
           )}
 

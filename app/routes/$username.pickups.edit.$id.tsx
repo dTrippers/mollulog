@@ -1,22 +1,27 @@
+import { Bars3Icon } from "@heroicons/react/16/solid";
+import { useState } from "react";
 import { type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction, redirect } from "react-router";
 import { useLoaderData, useSearchParams, useSubmit } from "react-router";
-import { useState } from "react";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
 import { FilterButtons, SubTitle, Title } from "~/components/primitives";
+import { compareInstantDesc, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { resolveContentName } from "~/models/content-name";
+import {
+  type PickupHistory,
+  createPickupHistory,
+  getPickupHistory,
+  updatePickupHistory,
+} from "~/models/pickup-history";
+import { getAllStudents } from "~/models/student";
+import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import { RecruitmentRepository } from "~/repositories";
 import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
-import { createPickupHistory, getPickupHistory, type PickupHistory, updatePickupHistory } from "~/models/pickup-history";
-import { getAllStudents } from "~/models/student";
-import { resolveContentName } from "~/models/content-name";
-import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
-import { Bars3Icon } from "@heroicons/react/16/solid";
-import { RecruitmentRepository } from "~/repositories";
-import { compareInstantDesc, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
 
-export const meta: MetaFunction = () => [
-  { title: "모집 이력 관리 | 몰루로그" },
-];
+const PICKUP_EVENT_SELECTOR_LIMIT = 20;
+
+export const meta: MetaFunction = () => [{ title: "모집 이력 관리 | 몰루로그" }];
 
 function getRouteUsername(params: { username?: string }) {
   const usernameParam = params.username;
@@ -50,18 +55,20 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const now = nowUtcIso();
 
   const [allGroups, allStudentsList] = await Promise.all([
-    recruitmentRepository.getAll(),
+    recruitmentRepository.getAllHistorical(),
     getAllStudents(env),
   ]);
 
-  const pickupGroups = allGroups.filter((g) =>
-    g.recruitments.some((r) => r.pickup && r.student) && isInstantBefore(g.startAt, now)
+  const pickupGroups = allGroups.filter(
+    (g) => g.recruitments.some((r) => r.pickup && r.student) && isInstantBefore(g.startAt, now),
   );
   const timelineContents = await getTimelineContentsByRecruitmentGroupUids(
     env,
     pickupGroups.map((group) => group.uid),
   );
-  const timelineContentMap = new Map(timelineContents.map((content) => [content.recruitmentGroupUid, content] as const));
+  const timelineContentMap = new Map(
+    timelineContents.map((content) => [content.recruitmentGroupUid, content] as const),
+  );
 
   const events = await Promise.all(
     pickupGroups.map(async (group) => {
@@ -84,7 +91,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
             pickup: r.pickup,
           })),
       };
-    })
+    }),
   );
 
   events.sort((a, b) => compareInstantDesc(a.since, b.since));
@@ -123,7 +130,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     await createPickupHistory(env, sensei.id, data.eventUid, data.result, data.rawResult ?? null);
   }
   return redirect("/my?path=pickups");
-}
+};
 
 export default function EditPickup() {
   const { events, tier3Students, currentPickupHistory } = useLoaderData<typeof loader>();
@@ -169,6 +176,7 @@ export default function EditPickup() {
         name="eventUid"
         events={events}
         currentEventUid={eventUid}
+        maxVisibleEvents={PICKUP_EVENT_SELECTOR_LIMIT}
         placeholder="이벤트 선택"
         searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
         onSelect={setEventUid}
@@ -185,9 +193,10 @@ export default function EditPickup() {
                   { text: "직접 추가", active: editorMode === "edit", onToggle: () => setEditorMode("edit") },
                   { text: "외부 데이터", active: editorMode === "import", onToggle: () => setEditorMode("import") },
                 ]}
-                exclusive atLeastOne
+                exclusive
+                atLeastOne
               />
-            </div> 
+            </div>
           )}
           {editorMode === "edit" && (
             <PickupHistoryEditor
@@ -195,10 +204,18 @@ export default function EditPickup() {
               initialTotalCount={initialTotalCount}
               initialTier3Count={initialTier3Count}
               initialTier3StudentIds={initialTier3StudentUids}
-              onComplete={(result) => submit({
-                eventUid,
-                result: [{ trial: result.totalCount, tier3Count: result.tier3Count, tier3StudentIds: result.tier3StudentIds }],
-              })}
+              onComplete={(result) =>
+                submit({
+                  eventUid,
+                  result: [
+                    {
+                      trial: result.totalCount,
+                      tier3Count: result.tier3Count,
+                      tier3StudentIds: result.tier3StudentIds,
+                    },
+                  ],
+                })
+              }
             />
           )}
           {editorMode === "import" && (
@@ -208,11 +225,13 @@ export default function EditPickup() {
               initialTier3Count={initialTier3Count}
               initialTier3StudentIds={initialTier3StudentUids}
               initialRawData={currentPickupHistory?.rawResult ?? undefined}
-              onComplete={({ totalCount, tier3Count, tier3StudentIds, rawData }) => submit({
-                eventUid,
-                result: [{ trial: totalCount, tier3Count, tier3StudentIds }],
-                rawResult: rawData,
-              })}
+              onComplete={({ totalCount, tier3Count, tier3StudentIds, rawData }) =>
+                submit({
+                  eventUid,
+                  result: [{ trial: totalCount, tier3Count, tier3StudentIds }],
+                  rawResult: rawData,
+                })
+              }
             />
           )}
         </>

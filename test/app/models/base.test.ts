@@ -42,11 +42,13 @@ describe("fetchCached", () => {
     jest.spyOn(Date, "now").mockReturnValue(now);
 
     const cachedData = ["cached-video"];
-    const { env, kv } = createEnv(JSON.stringify({
-      _ver: 2,
-      data: cachedData,
-      cachedAt: now - 1_000,
-    }));
+    const { env, kv } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: cachedData,
+        cachedAt: now - 1_000,
+      }),
+    );
     const fn = jest.fn(async () => ["new-video"]);
 
     await expect(fetchCached(env, "youtube", fn, 60 * 30)).resolves.toEqual(cachedData);
@@ -59,11 +61,13 @@ describe("fetchCached", () => {
     const now = 1_800_000_000_000;
     jest.spyOn(Date, "now").mockReturnValue(now);
 
-    const { env, kv } = createEnv(JSON.stringify({
-      _ver: 2,
-      data: ["stale-video"],
-      cachedAt: now - 1_900_000,
-    }));
+    const { env, kv } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: ["stale-video"],
+        cachedAt: now - 1_900_000,
+      }),
+    );
     const newData = ["fresh-video"];
     const fn = jest.fn(async () => newData);
 
@@ -86,11 +90,13 @@ describe("fetchCached", () => {
     jest.spyOn(Date, "now").mockReturnValue(now);
 
     const data = [{ publishedAt: "2026-05-01T00:00:00.000Z" }];
-    const { env, kv } = createEnv(JSON.stringify({
-      _ver: 2,
-      data,
-      cachedAt: now - 1_900_000,
-    }));
+    const { env, kv } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data,
+        cachedAt: now - 1_900_000,
+      }),
+    );
     const fn = jest.fn(async () => data);
 
     await expect(fetchCached(env, "youtube", fn, 60 * 30)).resolves.toEqual(data);
@@ -134,11 +140,13 @@ describe("fetchCached", () => {
     jest.spyOn(Date, "now").mockReturnValue(now);
 
     const staleData = ["stale-video"];
-    const { env, kv } = createEnv(JSON.stringify({
-      _ver: 2,
-      data: staleData,
-      cachedAt: now - 1_900_000,
-    }));
+    const { env, kv } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: staleData,
+        cachedAt: now - 1_900_000,
+      }),
+    );
     const fn = jest.fn(async () => {
       throw new Error("refresh failed");
     });

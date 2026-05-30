@@ -84,6 +84,7 @@ export function useShopCalculations({
         shopResources,
         collectableResources,
         itemQuantities: state.itemQuantities,
+        itemPurchaseDays: state.itemPurchaseDays,
         existingPaymentItemQuantities: state.existingPaymentItemQuantities,
         stages,
         includeFirstClear: state.includeFirstClear,
@@ -118,6 +119,7 @@ export function useShopCalculations({
         minigameRewards: minigameRewards ? { [eventUid]: minigameRewards } : undefined,
         shopResources,
         itemQuantities: state.itemQuantities,
+        itemPurchaseDays: state.itemPurchaseDays,
         collectableResources,
         minigamePaymentCosts,
       });
@@ -133,6 +135,7 @@ export function useShopCalculations({
     };
   }, [
     state.itemQuantities,
+    state.itemPurchaseDays,
     state.existingPaymentItemQuantities,
     state.includeFirstClear,
     state.minigamePlayCount,

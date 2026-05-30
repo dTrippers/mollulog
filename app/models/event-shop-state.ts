@@ -10,6 +10,7 @@ export const eventShopStatesTable = sqliteTable("event_shop_states", {
   userId: int().notNull(),
   eventUid: text().notNull(),
   itemQuantities: text().notNull().default("{}"),
+  itemPurchaseDays: text().notNull().default("{}"),
   selectedBonusStudentUids: text().notNull().default("[]"),
   enabledStages: text().notNull().default("{}"),
   includeRecruitedStudents: int().notNull().default(0),
@@ -25,6 +26,7 @@ export const eventShopStatesTable = sqliteTable("event_shop_states", {
 
 export type EventShopState = {
   itemQuantities: Record<string, number>;
+  itemPurchaseDays: Record<string, number>;
   selectedBonusStudentUids: string[];
   enabledStages: Record<string, boolean>;
   includeRecruitedStudents: boolean;
@@ -46,6 +48,7 @@ function parseMinigamePaymentQuantityMode(mode: string | null): MinigamePaymentQ
 function toModel(state: typeof eventShopStatesTable.$inferSelect): EventShopState {
   return {
     itemQuantities: JSON.parse(state.itemQuantities),
+    itemPurchaseDays: JSON.parse(state.itemPurchaseDays || "{}"),
     selectedBonusStudentUids: JSON.parse(state.selectedBonusStudentUids),
     enabledStages: JSON.parse(state.enabledStages),
     includeRecruitedStudents: state.includeRecruitedStudents === 1,
@@ -78,6 +81,7 @@ export async function upsertEventShopState(
   const db = drizzle(env.DB);
   const uid = nanoid(8);
   const itemQuantitiesJson = JSON.stringify(state.itemQuantities);
+  const itemPurchaseDaysJson = JSON.stringify(state.itemPurchaseDays || {});
   const selectedBonusStudentUidsJson = JSON.stringify(state.selectedBonusStudentUids);
   const enabledStagesJson = JSON.stringify(state.enabledStages);
   const existingPaymentItemQuantitiesJson = JSON.stringify(state.existingPaymentItemQuantities || {});
@@ -91,6 +95,7 @@ export async function upsertEventShopState(
       userId,
       eventUid,
       itemQuantities: itemQuantitiesJson,
+      itemPurchaseDays: itemPurchaseDaysJson,
       selectedBonusStudentUids: selectedBonusStudentUidsJson,
       enabledStages: enabledStagesJson,
       includeRecruitedStudents: state.includeRecruitedStudents ? 1 : 0,
@@ -105,6 +110,7 @@ export async function upsertEventShopState(
       target: [eventShopStatesTable.userId, eventShopStatesTable.eventUid],
       set: {
         itemQuantities: itemQuantitiesJson,
+        itemPurchaseDays: itemPurchaseDaysJson,
         selectedBonusStudentUids: selectedBonusStudentUidsJson,
         enabledStages: enabledStagesJson,
         includeRecruitedStudents: state.includeRecruitedStudents ? 1 : 0,

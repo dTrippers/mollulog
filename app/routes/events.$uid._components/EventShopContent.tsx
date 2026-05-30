@@ -13,6 +13,7 @@ type EventShopContentProps =
       recruitedStudentUids: Parameters<typeof EventDetailShopPage>[0]["recruitedStudentUids"];
       eventUid: Parameters<typeof EventDetailShopPage>[0]["eventUid"];
       savedShopState: Parameters<typeof EventDetailShopPage>[0]["savedShopState"];
+      availablePurchaseDays: Parameters<typeof EventDetailShopPage>[0]["availablePurchaseDays"];
       signedIn: Parameters<typeof EventDetailShopPage>[0]["signedIn"];
       minigameConfig: Parameters<typeof EventDetailShopPage>[0]["minigameConfig"];
     };
@@ -30,6 +31,7 @@ export default function EventShopContent(props: EventShopContentProps) {
       recruitedStudentUids={props.recruitedStudentUids}
       eventUid={props.eventUid}
       savedShopState={props.savedShopState}
+      availablePurchaseDays={props.availablePurchaseDays}
       signedIn={props.signedIn}
       minigameConfig={props.minigameConfig}
     />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { parsePickupHistory, type PickupHistory } from "../../../app/models/pickup-history";
+import { type PickupHistory, parsePickupHistory } from "../../../app/models/pickup-history";
 
 const students = [
   { name: "코코나", uid: "10050" },
@@ -43,7 +43,7 @@ const cases: [string, PickupHistory["result"]][] = [
       { trial: 10, tier1Count: 8, tier2Count: 1, tier3Count: 1, tier3StudentIds: ["10055"] },
       { trial: 20, tier1Count: 9, tier2Count: 0, tier3Count: 1, tier3StudentIds: ["10091"] },
       { trial: 30, tier1Count: 7, tier2Count: 3, tier3Count: 0, tier3StudentIds: [] },
-    ]
+    ],
   ],
   [
     "100 2/3/5 드아루 새루나[N]",

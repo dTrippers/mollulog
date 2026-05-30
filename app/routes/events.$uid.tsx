@@ -79,7 +79,7 @@ export default function EventPage() {
         {
           text: "모집 시뮬레이션",
           description: eventMetadata.recruitmentGroupUid
-            ? "해당 모집 기간의 픽업 학생으로 모집 결과를 시뮬레이션해보세요"
+            ? "픽업/모집 결과를 시뮬레이션 해보세요"
             : "모집 정보가 없는 이벤트예요",
           Icon: SparklesIcon,
           link: `/events/${uid}/recruitment-simulator`,

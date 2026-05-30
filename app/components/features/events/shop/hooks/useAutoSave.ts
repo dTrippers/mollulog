@@ -60,6 +60,7 @@ export function useAutoSave({ state, signedIn, eventUid, savedShopState, isIniti
     saveIntervalRef.current = setInterval(() => {
       const currentState: EventShopState = {
         itemQuantities: state.itemQuantities,
+        itemPurchaseDays: state.itemPurchaseDays,
         selectedBonusStudentUids: state.selectedBonusStudentUids,
         enabledStages: state.enabledStages,
         includeRecruitedStudents: state.includeRecruitedStudents,
