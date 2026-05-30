@@ -271,7 +271,7 @@ function CommunityPostCard({
           )}
 
           {!preview && (canComment || canLike) && (
-            <div className="mt-4 flex max-w-md items-center gap-6 text-neutral-500 dark:text-neutral-400">
+            <div className="mt-4 flex max-w-md items-center gap-2 text-neutral-500 dark:text-neutral-400">
               {canComment && (
                 <button
                   type="button"
@@ -286,10 +286,9 @@ function CommunityPostCard({
               {canLike && (
                 <button
                   type="button"
-                  className={`group inline-flex items-center gap-1 text-xs font-medium transition ${
-                    liked ? "text-rose-600 dark:text-rose-300" : "hover:text-rose-600 dark:hover:text-rose-300"
-                  }`}
+                  className={getCommentToggleClassName({ active: liked })}
                   onClick={toggleLike}
+                  aria-label={`좋아요 ${likeCount}개`}
                 >
                   {liked ? <SolidHeartIcon className="size-4" /> : <HeartIcon className="size-4" />}
                   <span>{likeCount}</span>

@@ -4,28 +4,59 @@ import {
   UsersIcon,
   Squares2X2Icon,
 } from "@heroicons/react/24/outline";
-import { useCallback } from "react";
-import { useSearchParams } from "react-router";
+import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import { type ElementType, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { Page } from "~/components/features/layout";
-import { type CommunityPostType, getCommunityFeedPage } from "~/models/community";
+import { getCommunityFeedPage } from "~/models/community";
 import {
   COMMUNITY_FEED_PAGE_SIZE,
   COMMUNITY_VISIBLE_POST_TYPES,
   enrichCommunityFeedPosts,
 } from "~/models/community-feed";
+import { cn } from "~/lib/utils";
 
-function parseCommunityPostType(request: Request): CommunityPostType | undefined {
+type CommunityVisiblePostType = (typeof COMMUNITY_VISIBLE_POST_TYPES)[number];
+
+const COMMUNITY_POST_TYPE_FILTERS: {
+  type: CommunityVisiblePostType;
+  label: string;
+  Icon: ElementType;
+}[] = [
+  {
+    type: "student_review",
+    label: "학생 평가",
+    Icon: UsersIcon,
+  },
+  {
+    type: "event_opinion",
+    label: "이벤트 의견",
+    Icon: ChatBubbleLeftRightIcon,
+  },
+  {
+    type: "youtube_video",
+    label: "영상 컨텐츠",
+    Icon: PlayCircleIcon,
+  },
+];
+
+function isCommunityVisiblePostType(type: string): type is CommunityVisiblePostType {
+  return COMMUNITY_VISIBLE_POST_TYPES.includes(type as CommunityVisiblePostType);
+}
+
+function parseCommunityPostTypes(request: Request): CommunityVisiblePostType[] {
   const url = new URL(request.url);
-  const type = url.searchParams.get("type");
-  if (type === "student_review" || type === "event_opinion" || type === "youtube_video") {
-    return type;
+  const types = url.searchParams.getAll("type").filter(isCommunityVisiblePostType);
+
+  if (types.length > 0) {
+    return Array.from(new Set(types));
   }
 
-  return undefined;
+  return [...COMMUNITY_VISIBLE_POST_TYPES];
 }
 
 function parsePage(request: Request) {
@@ -37,13 +68,12 @@ function parsePage(request: Request) {
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getActiveSensei(env, request);
-  const postType = parseCommunityPostType(request);
+  const postTypes = parseCommunityPostTypes(request);
   const page = parsePage(request);
 
   const feedPage = await getCommunityFeedPage(env, {
     currentUserId: currentUser?.id,
-    postType,
-    postTypes: postType ? [postType] : [...COMMUNITY_VISIBLE_POST_TYPES],
+    postTypes,
     youtubeChannelKey: "kr",
     page,
     pageSize: COMMUNITY_FEED_PAGE_SIZE,
@@ -51,7 +81,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const enrichedFeed = await enrichCommunityFeedPosts(env, feedPage.items);
 
   return {
-    postType,
+    postTypes,
     page: feedPage.page,
     totalPages: feedPage.totalPages,
     signedIn: currentUser !== null,
@@ -74,7 +104,7 @@ export const meta: MetaFunction = () => {
 };
 
 export default function CommunityPage() {
-  const { posts, signedIn, studentsByUid, postType, page, totalPages } = useLoaderData<typeof loader>();
+  const { posts, signedIn, studentsByUid, postTypes, page, totalPages } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const getPageUrl = useCallback((nextPage: number) => {
     const nextSearchParams = new URLSearchParams(searchParams);
@@ -88,37 +118,8 @@ export default function CommunityPage() {
     <Page
       title="평가/의견"
       description="선생님들의 학생 평가와 이벤트 의견을 한곳에서 확인해보세요"
+      belowTitle={<CommunityPostTypeFilter selectedPostTypes={postTypes} />}
       layout="vertical"
-      screens={[
-        {
-          text: "전체",
-          description: "모든 게시물",
-          Icon: Squares2X2Icon,
-          link: "/community",
-          active: postType === undefined,
-        },
-        {
-          text: "학생 평가",
-          description: "학생별 평가 게시물",
-          Icon: UsersIcon,
-          link: "/community?type=student_review",
-          active: postType === "student_review",
-        },
-        {
-          text: "이벤트 의견",
-          description: "컨텐츠 관련 의견과 질문",
-          Icon: ChatBubbleLeftRightIcon,
-          link: "/community?type=event_opinion",
-          active: postType === "event_opinion",
-        },
-        {
-          text: "영상",
-          description: "공식 유튜브 영상",
-          Icon: PlayCircleIcon,
-          link: "/community?type=youtube_video",
-          active: postType === "youtube_video",
-        },
-      ]}
     >
       <CommunityInfiniteFeed
         posts={posts}
@@ -127,9 +128,107 @@ export default function CommunityPage() {
         page={page}
         totalPages={totalPages}
         emptyText="아직 표시할 커뮤니티 게시물이 없어요"
-        resetKey={postType ?? "all"}
+        resetKey={postTypes.join(",")}
         getPageUrl={getPageUrl}
       />
     </Page>
+  );
+}
+
+function CommunityPostTypeFilter({ selectedPostTypes }: { selectedPostTypes: CommunityVisiblePostType[] }) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [isOpen, setIsOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const selectedSet = useMemo(() => new Set(selectedPostTypes), [selectedPostTypes]);
+  const selectedCount = selectedPostTypes.length;
+  const allSelected = selectedCount === COMMUNITY_VISIBLE_POST_TYPES.length;
+  const label = allSelected ? "모든 컨텐츠" : `${selectedCount}개 컨텐츠`;
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isOpen]);
+
+  const getNextUrl = (type: CommunityVisiblePostType, active: boolean) => {
+    const nextTypes = active
+      ? selectedPostTypes.filter((selectedType) => selectedType !== type)
+      : [...selectedPostTypes, type];
+    const normalizedTypes = COMMUNITY_VISIBLE_POST_TYPES.filter((visibleType) => nextTypes.includes(visibleType));
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete("type");
+    nextSearchParams.delete("page");
+
+    if (normalizedTypes.length < COMMUNITY_VISIBLE_POST_TYPES.length) {
+      for (const selectedType of normalizedTypes) {
+        nextSearchParams.append("type", selectedType);
+      }
+    }
+
+    const query = nextSearchParams.toString();
+    return query ? `/community?${query}` : "/community";
+  };
+
+  return (
+    <div ref={rootRef} className="relative z-50 w-fit">
+      <button
+        type="button"
+        className="inline-flex min-h-8 items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-800 shadow-xs transition-colors hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        onClick={() => setIsOpen((prev) => !prev)}
+      >
+        <span className="inline-flex items-center gap-1.5">
+          <Squares2X2Icon className="size-3.5 text-neutral-500 dark:text-neutral-400" />
+          {label}
+        </span>
+        <ChevronDownIcon className={cn("size-4 text-neutral-500 transition-transform", isOpen && "rotate-180")} />
+      </button>
+      {isOpen && (
+        <div className="mt-1 w-64 overflow-hidden rounded-md border border-neutral-200 bg-white py-1 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+          {COMMUNITY_POST_TYPE_FILTERS.map(({ type, label, Icon }) => {
+            const active = selectedSet.has(type);
+            const disabled = active && selectedCount <= 1;
+            return (
+              <button
+                key={type}
+                type="button"
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-neutral-700 transition-colors hover:bg-neutral-50 dark:text-neutral-200 dark:hover:bg-neutral-800",
+                  disabled && "cursor-not-allowed opacity-60",
+                )}
+                role="menuitemcheckbox"
+                aria-checked={active}
+                disabled={disabled}
+                onClick={() => navigate(getNextUrl(type, active))}
+              >
+                <span className="inline-flex min-w-0 items-center gap-2">
+                  <Icon className="size-4 shrink-0 text-neutral-500 dark:text-neutral-400" />
+                  <span className="truncate font-medium">{label}</span>
+                </span>
+                <input
+                  type="checkbox"
+                  className="size-4 shrink-0 rounded border-neutral-300 text-blue-600 focus:ring-2 focus:ring-blue-500/20 dark:border-neutral-600 dark:bg-neutral-900"
+                  checked={active}
+                  disabled={disabled}
+                  readOnly
+                  tabIndex={-1}
+                />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
