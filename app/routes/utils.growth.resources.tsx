@@ -4,6 +4,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import {
   aggregateGrowthResourceRequirements,
   buildRelationshipGiftResourceRequirements,
+  getEquipmentTypeKey,
 } from "~/models/growth-resource";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import {
@@ -12,8 +13,8 @@ import {
   upsertUserResourceInventories,
 } from "~/models/user-resource-inventory";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/repositories/item-catalog";
-import ResourceInventoryEditor from "./utils.growth.resources._components/ResourceInventoryEditor";
 import type { GrowthLayoutContext } from "./utils.growth._components/types";
+import ResourceInventoryEditor from "./utils.growth.resources._components/ResourceInventoryEditor";
 
 type ResourceInventorySavePayload = {
   items?: unknown;
@@ -66,9 +67,10 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 
     const resourceUidSet = new Set((await getItemCatalogResources(env)).map((resource) => resource.uid));
     const ownedQuantities = await getUserResourceInventoryMap(env, currentUser.id);
-    const items = payload.items
-      .map((item) => parseDraftItem(item))
-      .filter((item) => resourceUidSet.has(item.itemUid))
+    const parsedItems = payload.items.map((item) => parseDraftItem(item));
+
+    const items = parsedItems
+      .filter((item) => isKnownResourceUid(resourceUidSet, item.itemUid))
       .filter((item) => item.quantity !== (ownedQuantities[item.itemUid] ?? 0));
 
     if (items.length === 0) {
@@ -90,9 +92,10 @@ export default function GrowthResourcesPage() {
   const { resources, ownedQuantities, relationshipGiftRequirements } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const { managedStudents } = useOutletContext<GrowthLayoutContext>();
-  const requiredResources = aggregateGrowthResourceRequirements(
-    [...managedStudents.map((student) => student.resourceRequirements), relationshipGiftRequirements],
-  );
+  const requiredResources = aggregateGrowthResourceRequirements([
+    ...managedStudents.map((student) => student.resourceRequirements),
+    relationshipGiftRequirements,
+  ]);
 
   return (
     <ResourceInventoryEditor
@@ -118,4 +121,8 @@ function parseDraftItem(item: unknown): { itemUid: string; quantity: number } {
     itemUid: itemUid.trim(),
     quantity: parseUserResourceInventoryQuantity(item.quantity),
   };
+}
+
+function isKnownResourceUid(resourceUidSet: Set<string>, itemUid: string): boolean {
+  return resourceUidSet.has(itemUid) || getEquipmentTypeKey(itemUid) !== null;
 }
