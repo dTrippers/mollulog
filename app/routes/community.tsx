@@ -44,6 +44,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     currentUserId: currentUser?.id,
     postType,
     postTypes: postType ? [postType] : [...COMMUNITY_VISIBLE_POST_TYPES],
+    youtubeChannelKey: "kr",
     page,
     pageSize: COMMUNITY_FEED_PAGE_SIZE,
   });

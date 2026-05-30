@@ -194,6 +194,18 @@ class FakeCommunityD1Database {
     } else if (sql.includes("community_posts.posttype = ?") && postTypes.length > 0) {
       rows = rows.filter((post) => post.postType === postTypes[0]);
     }
+    if (sql.includes("json_extract") && sql.includes("$.channelkey")) {
+      const channelKey = stringParams.find((param) => param === "jp" || param === "kr");
+      rows = rows.filter((post) => {
+        if (post.postType !== "youtube_video") return true;
+
+        try {
+          return JSON.parse(post.sourceMetadata).channelKey === channelKey;
+        } catch (_error) {
+          return false;
+        }
+      });
+    }
     return rows;
   }
 
@@ -319,6 +331,7 @@ function rowFromInsertParams(params: unknown[], nextId: number): FakeCommunityPo
 }
 
 function rowPatchFromUpdateParams(params: unknown[]): Partial<FakeCommunityPostRow> {
+  const hasUpdatedAt = params.length === 15;
   const [
     userId,
     postType,
@@ -333,10 +346,9 @@ function rowPatchFromUpdateParams(params: unknown[]): Partial<FakeCommunityPostR
     sourceUrl,
     sourceMetadata,
     displayAt,
-    updatedAt,
   ] = params;
 
-  return {
+  const patch: Partial<FakeCommunityPostRow> = {
     userId: Number(userId),
     postType: String(postType),
     origin: origin as "user" | "curated",
@@ -350,8 +362,13 @@ function rowPatchFromUpdateParams(params: unknown[]): Partial<FakeCommunityPostR
     sourceUrl: sourceUrl as string | null,
     sourceMetadata: String(sourceMetadata),
     displayAt: String(displayAt),
-    updatedAt: String(updatedAt),
   };
+
+  if (hasUpdatedAt) {
+    patch.updatedAt = String(params[13]);
+  }
+
+  return patch;
 }
 
 function createEnv(db: FakeCommunityD1Database): Env {
@@ -411,6 +428,36 @@ describe("community model feed queries", () => {
         isShorts: false,
       },
     });
+  });
+
+  it("can limit YouTube feed items by channel without hiding user-authored posts", async () => {
+    const db = new FakeCommunityD1Database();
+    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null });
+    db.posts.push(
+      createUserPost({ uid: "post-user-review", updatedAt: "2026-05-09T00:00:00.000Z" }),
+      createYoutubePost({ uid: "youtube-kr", sourceUid: "video-kr", displayAt: "2026-05-10T00:00:00.000Z" }),
+      createYoutubePost({
+        id: 3,
+        uid: "youtube-jp",
+        sourceUid: "video-jp",
+        displayAt: "2026-05-11T00:00:00.000Z",
+        sourceName: "일본 서버",
+        sourceMetadata: JSON.stringify({
+          channelKey: "jp",
+          thumbnailUrl: "https://i.ytimg.com/vi/video-jp/hqdefault.jpg",
+          isShorts: false,
+        }),
+      }),
+    );
+
+    const page = await getCommunityFeedPage(createEnv(db), {
+      postTypes: ["student_review", "youtube_video"],
+      youtubeChannelKey: "kr",
+      pageSize: 20,
+      includeEngagement: false,
+    });
+
+    expect(page.items.map((item) => item.uid)).toEqual(["youtube-kr", "post-user-review"]);
   });
 });
 
@@ -482,7 +529,14 @@ describe("community model YouTube upsert", () => {
 
   it("updates an existing YouTube post without duplicating it", async () => {
     const db = new FakeCommunityD1Database();
-    db.posts.push(createYoutubePost({ id: 7, sourceUid: "video-1", title: "이전 제목" }));
+    db.posts.push(
+      createYoutubePost({
+        id: 7,
+        sourceUid: "video-1",
+        title: "이전 제목",
+        updatedAt: "2026-05-10T00:00:00.000Z",
+      }),
+    );
 
     await upsertYoutubeVideoCommunityPost(createEnv(db), {
       id: "video-1",
@@ -503,6 +557,7 @@ describe("community model YouTube upsert", () => {
       title: "수정된 제목",
       sourceName: "일본 서버",
       displayAt: "2026-05-12T00:00:00+00:00",
+      updatedAt: "2026-05-10T00:00:00.000Z",
     });
     expect(JSON.parse(db.posts[0].sourceMetadata)).toMatchObject({
       channelKey: "jp",

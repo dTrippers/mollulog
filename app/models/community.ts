@@ -395,6 +395,7 @@ export async function getCommunityFeedPage(
     postType,
     postTypes,
     authorUserId,
+    youtubeChannelKey,
     includeEngagement = true,
   }: {
     currentUserId?: number | null;
@@ -403,6 +404,7 @@ export async function getCommunityFeedPage(
     postType?: CommunityPostType;
     postTypes?: CommunityPostType[];
     authorUserId?: number;
+    youtubeChannelKey?: "jp" | "kr";
     includeEngagement?: boolean;
   } = {},
 ): Promise<{
@@ -423,6 +425,13 @@ export async function getCommunityFeedPage(
 
   if (authorUserId) {
     filters.push(eq(communityPostsTable.userId, authorUserId));
+  }
+
+  if (youtubeChannelKey) {
+    filters.push(sql`(
+      ${communityPostsTable.postType} <> 'youtube_video'
+      or json_extract(${communityPostsTable.sourceMetadata}, '$.channelKey') = ${youtubeChannelKey}
+    )`);
   }
 
   const where = and(...filters);
@@ -779,7 +788,6 @@ export async function upsertYoutubeVideoCommunityPost(
     sourceUrl: video.url,
     sourceMetadata: metadata,
     displayAt: video.publishedAt,
-    updatedAt: now,
   };
 
   if (existing) {
@@ -791,6 +799,7 @@ export async function upsertYoutubeVideoCommunityPost(
     ...values,
     uid: `youtube-${video.id}`,
     createdAt: video.publishedAt,
+    updatedAt: now,
   });
 }
 

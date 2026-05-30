@@ -5,7 +5,7 @@ import {
   PlayCircleIcon,
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
-import { HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
+import { HeartIcon as SolidHeartIcon, PlayIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import ContentCommentEditor from "~/components/features/contents/ContentCommentEditor";
@@ -59,14 +59,19 @@ export default function CommunityFeed({ posts, signedIn, studentsByUid, preview 
   );
 }
 
-function getPostTimestampMeta(createdAt: string, updatedAt: string, timeZone: string) {
-  const created = parseUtcTimestamp(createdAt);
-  const updated = parseUtcTimestamp(updatedAt);
-  if (updated.isAfter(created)) {
-    return { dateTime: updated.toISOString(), text: formatInstant(updatedAt, { timeZone }), edited: true };
+function getPostTimestampMeta(post: CommunityFeedPostItem, timeZone: string) {
+  if (post.origin === "curated") {
+    const displayAt = parseUtcTimestamp(post.displayAt);
+    return { dateTime: displayAt.toISOString(), text: formatInstant(post.displayAt, { timeZone }), edited: false };
   }
 
-  return { dateTime: created.toISOString(), text: formatInstant(createdAt, { timeZone }), edited: false };
+  const created = parseUtcTimestamp(post.createdAt);
+  const updated = parseUtcTimestamp(post.updatedAt);
+  if (updated.isAfter(created)) {
+    return { dateTime: updated.toISOString(), text: formatInstant(post.updatedAt, { timeZone }), edited: true };
+  }
+
+  return { dateTime: created.toISOString(), text: formatInstant(post.createdAt, { timeZone }), edited: false };
 }
 
 function getPostTypeLabel(post: CommunityFeedPostItem) {
@@ -86,6 +91,10 @@ function getPostTypeLabel(post: CommunityFeedPostItem) {
 }
 
 function getPostSourceName(post: CommunityFeedPostItem) {
+  if (post.postType === "youtube_video") {
+    return "공식 유튜브";
+  }
+
   if (post.origin === "curated") {
     return post.sourceName ?? "큐레이션";
   }
@@ -130,7 +139,7 @@ function CommunityPostCard({
   const [commentEditing, setCommentEditing] = useState(false);
   const commentFetcher = useFetcher();
   const likeFetcher = useFetcher<{ likeCount: number; liked: boolean }>();
-  const timestamp = getPostTimestampMeta(post.createdAt, post.updatedAt, displayTimeZone);
+  const timestamp = getPostTimestampMeta(post, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment = post.postType === "event_opinion" || post.postType === "youtube_video";
   const canLike = post.postType === "guide" || post.postType === "youtube_video";
@@ -452,7 +461,13 @@ function PostContent({
 
   return (
     <div className="space-y-3">
-      {post.title && <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{post.title}</h3>}
+      {post.postType === "youtube_video" && post.title ? (
+        <h3 className="text-base font-semibold leading-6 text-neutral-900 dark:text-neutral-100">
+          {getDisplayYoutubeTitle(post.title)}
+        </h3>
+      ) : (
+        post.title && <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{post.title}</h3>
+      )}
       <PostBlocks post={post} studentsByUid={studentsByUid} />
     </div>
   );
@@ -471,6 +486,7 @@ function PostBlocks({
         <BlockView
           key={`${post.uid}-${block.type}-${index}`}
           block={block}
+          post={post}
           studentsByUid={studentsByUid}
         />
       ))}
@@ -480,9 +496,11 @@ function PostBlocks({
 
 function BlockView({
   block,
+  post,
   studentsByUid,
 }: {
   block: CommunityPostBlock;
+  post: CommunityFeedPostItem;
   studentsByUid: Record<string, { name: string }>;
 }) {
   if (block.type === "plaintext") {
@@ -502,17 +520,7 @@ function BlockView({
   }
 
   if (block.type === "youtube") {
-    return (
-      <div className="overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
-        <iframe
-          className="aspect-video w-full"
-          src={`https://www.youtube.com/embed/${block.youtubeId}${block.startAt ? `?start=${block.startAt}` : ""}`}
-          title="YouTube video"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      </div>
-    );
+    return <YoutubePreviewBlock block={block} post={post} />;
   }
 
   return (
@@ -551,5 +559,74 @@ function BlockView({
         ))}
       </div>
     </div>
+  );
+}
+
+function getYoutubeThumbnailUrl(post: CommunityFeedPostItem): string | null {
+  const thumbnailUrl = post.sourceMetadata.thumbnailUrl;
+  return typeof thumbnailUrl === "string" && thumbnailUrl.length > 0 ? thumbnailUrl : null;
+}
+
+function getDisplayYoutubeTitle(title: string): string {
+  return title.replace(/^\s*\[블루 아카이브\]\s*/, "").trim();
+}
+
+function getYoutubeEmbedUrl(block: Extract<CommunityPostBlock, { type: "youtube" }>, autoplay: boolean) {
+  const params = new URLSearchParams();
+  if (block.startAt) {
+    params.set("start", String(block.startAt));
+  }
+  if (autoplay) {
+    params.set("autoplay", "1");
+  }
+
+  const query = params.toString();
+  return `https://www.youtube.com/embed/${block.youtubeId}${query ? `?${query}` : ""}`;
+}
+
+function YoutubePreviewBlock({
+  block,
+  post,
+}: {
+  block: Extract<CommunityPostBlock, { type: "youtube" }>;
+  post: CommunityFeedPostItem;
+}) {
+  const [activated, setActivated] = useState(false);
+  const thumbnailUrl = getYoutubeThumbnailUrl(post);
+  const title = post.title ? getDisplayYoutubeTitle(post.title) : "YouTube video";
+
+  if (activated) {
+    return (
+      <div className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700 md:max-w-md">
+        <iframe
+          className="aspect-video w-full"
+          src={getYoutubeEmbedUrl(block, true)}
+          title={title}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="group relative block aspect-video w-full overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 text-left shadow-sm transition hover:border-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:focus-visible:ring-offset-neutral-800 md:max-w-md"
+      aria-label={`동영상 재생: ${title}`}
+      onClick={() => setActivated(true)}
+    >
+      {thumbnailUrl ? (
+        <img src={thumbnailUrl} alt="" className="size-full object-cover" loading="lazy" />
+      ) : (
+        <div className="size-full bg-neutral-200 dark:bg-neutral-800" />
+      )}
+      <div className="absolute inset-0 bg-black/10 transition group-hover:bg-black/15" />
+      <span className="absolute inset-0 flex items-center justify-center">
+        <span className="flex size-11 items-center justify-center rounded-full bg-black/55 text-white shadow-md shadow-black/20 ring-1 ring-white/20 backdrop-blur-sm transition group-hover:scale-105 group-hover:bg-black/65 sm:size-12">
+          <PlayIcon className="ml-0.5 size-5 sm:size-6" />
+        </span>
+      </span>
+    </button>
   );
 }
