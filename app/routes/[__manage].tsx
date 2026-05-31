@@ -15,10 +15,12 @@ import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
 import { syncRawStudents } from "~/models/student";
+import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { RaidRepository, RecruitmentRepository } from "~/repositories";
 
 type RefreshTaskName =
   | "syncTimelineContents"
+  | "syncYoutubeCommunityPosts"
   | "syncRawStudents"
   | "RecruitmentRepository.refresh"
   | "RaidRepository.refresh"
@@ -79,6 +81,7 @@ async function refreshCache(env: Env, ctx: ExecutionContext): Promise<RefreshRes
   const raidRepository = new RaidRepository(env);
   const leafTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
     ["syncTimelineContents", () => syncTimelineContents(env, ctx)],
+    ["syncYoutubeCommunityPosts", () => syncYoutubeCommunityPosts(env)],
     ["syncRawStudents", () => syncRawStudents(env)],
     ["RecruitmentRepository.refresh", () => recruitmentRepository.refresh()],
     ["RaidRepository.refresh", () => raidRepository.refresh()],

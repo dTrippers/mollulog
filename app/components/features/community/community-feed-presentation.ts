@@ -3,9 +3,11 @@ import type { CommunityPostType } from "~/models/community";
 export type CommunityPostBodySection = "subject" | "content";
 
 type GroupableCommunityPost = {
+  origin: "user" | "curated";
   author: {
     username: string;
-  };
+  } | null;
+  sourceName: string | null;
   postType: CommunityPostType;
 };
 
@@ -23,7 +25,15 @@ export function shouldGroupPostWithPrevious(
   post: GroupableCommunityPost,
   previousPost: GroupableCommunityPost | undefined,
 ) {
-  return Boolean(previousPost && post.author.username === previousPost.author.username && post.postType === previousPost.postType);
+  if (!previousPost || post.postType !== previousPost.postType || post.origin !== previousPost.origin) {
+    return false;
+  }
+
+  if (post.origin === "curated") {
+    return post.sourceName === previousPost.sourceName;
+  }
+
+  return Boolean(post.author && previousPost.author && post.author.username === previousPost.author.username);
 }
 
 export function getCommunityPostCardClassName({

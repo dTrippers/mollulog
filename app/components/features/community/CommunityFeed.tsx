@@ -1,5 +1,11 @@
-import { ChatBubbleLeftEllipsisIcon, HeartIcon, LockClosedIcon, UserGroupIcon } from "@heroicons/react/24/outline";
-import { HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
+import {
+  ChatBubbleLeftEllipsisIcon,
+  HeartIcon,
+  LockClosedIcon,
+  PlayCircleIcon,
+  UserGroupIcon,
+} from "@heroicons/react/24/outline";
+import { PlayIcon, HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import ContentCommentEditor from "~/components/features/contents/ContentCommentEditor";
@@ -9,10 +15,7 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { compareInstantDesc, formatInstant, parseUtcTimestamp } from "~/lib/date-time";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
 import type { EnrichedCommunityFeedPost } from "~/models/community-feed";
-import {
-  STUDENT_GRADING_TAG_DISPLAY,
-  sortStudentGradingTags,
-} from "~/models/student-grading-tag";
+import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
 import { StudentCards } from "../students";
 import {
   getCommentEditorPanelClassName,
@@ -53,14 +56,19 @@ export default function CommunityFeed({ posts, signedIn, studentsByUid, preview 
   );
 }
 
-function getPostTimestampMeta(createdAt: string, updatedAt: string, timeZone: string) {
-  const created = parseUtcTimestamp(createdAt);
-  const updated = parseUtcTimestamp(updatedAt);
-  if (updated.isAfter(created)) {
-    return { dateTime: updated.toISOString(), text: formatInstant(updatedAt, { timeZone }), edited: true };
+function getPostTimestampMeta(post: CommunityFeedPostItem, timeZone: string) {
+  if (post.origin === "curated") {
+    const displayAt = parseUtcTimestamp(post.displayAt);
+    return { dateTime: displayAt.toISOString(), text: formatInstant(post.displayAt, { timeZone }), edited: false };
   }
 
-  return { dateTime: created.toISOString(), text: formatInstant(createdAt, { timeZone }), edited: false };
+  const created = parseUtcTimestamp(post.createdAt);
+  const updated = parseUtcTimestamp(post.updatedAt);
+  if (updated.isAfter(created)) {
+    return { dateTime: updated.toISOString(), text: formatInstant(post.updatedAt, { timeZone }), edited: true };
+  }
+
+  return { dateTime: created.toISOString(), text: formatInstant(post.createdAt, { timeZone }), edited: false };
 }
 
 function getPostTypeLabel(post: CommunityFeedPostItem) {
@@ -72,7 +80,23 @@ function getPostTypeLabel(post: CommunityFeedPostItem) {
     return "이벤트 의견";
   }
 
+  if (post.postType === "youtube_video") {
+    return "영상";
+  }
+
   return "공략";
+}
+
+function getPostSourceName(post: CommunityFeedPostItem) {
+  if (post.postType === "youtube_video") {
+    return "공식 유튜브";
+  }
+
+  if (post.origin === "curated") {
+    return post.sourceName ?? "큐레이션";
+  }
+
+  return post.author ? `@${post.author.username}` : "알 수 없음";
 }
 
 function getVisibilityLabel(visibility: CommunityFeedPostItem["visibility"]) {
@@ -112,10 +136,10 @@ function CommunityPostCard({
   const [commentEditing, setCommentEditing] = useState(false);
   const commentFetcher = useFetcher();
   const likeFetcher = useFetcher<{ likeCount: number; liked: boolean }>();
-  const timestamp = getPostTimestampMeta(post.createdAt, post.updatedAt, displayTimeZone);
+  const timestamp = getPostTimestampMeta(post, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
-  const canComment = post.postType === "event_opinion";
-  const canLike = post.postType === "guide";
+  const canComment = post.postType === "event_opinion" || post.postType === "youtube_video";
+  const canLike = post.postType === "guide" || post.postType === "youtube_video";
   const bodyOrder = getCommunityPostBodyOrder(post.postType);
 
   useEffect(() => {
@@ -181,21 +205,41 @@ function CommunityPostCard({
   return (
     <article className={getCommunityPostCardClassName({ preview, firstInFeed, groupedWithPrevious })}>
       <div className={`flex items-start ${preview ? "gap-2.5" : "gap-3"}`}>
-        {!groupedWithPrevious && (
+        {!groupedWithPrevious && post.author && (
           <Link to={`/@${post.author.username}`} className="shrink-0">
             <ProfileImage studentUid={post.author.profileStudentId} imageSize={10} />
           </Link>
+        )}
+        {!groupedWithPrevious && !post.author && (
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-200">
+            <PlayCircleIcon className="size-5" />
+          </div>
         )}
         {groupedWithPrevious && <div className={getGroupedAvatarPlaceholderClassName()} aria-hidden />}
         <div className="min-w-0 flex-1">
           {!groupedWithPrevious && (
             <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm leading-5">
-              <Link
-                to={`/@${post.author.username}`}
-                className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
-              >
-                @{post.author.username}
-              </Link>
+              {post.author ? (
+                <Link
+                  to={`/@${post.author.username}`}
+                  className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
+                >
+                  @{post.author.username}
+                </Link>
+              ) : post.sourceUrl ? (
+                <a
+                  href={post.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
+                >
+                  {getPostSourceName(post)}
+                </a>
+              ) : (
+                <span className="min-w-0 truncate font-semibold text-neutral-900 dark:text-neutral-100">
+                  {getPostSourceName(post)}
+                </span>
+              )}
               <span className="text-neutral-600 dark:text-neutral-400">{getPostTypeLabel(post)}</span>
               <span className="text-neutral-400 dark:text-neutral-500">·</span>
               <time className="shrink-0 text-neutral-500 dark:text-neutral-400" dateTime={timestamp.dateTime}>
@@ -224,7 +268,7 @@ function CommunityPostCard({
           )}
 
           {!preview && (canComment || canLike) && (
-            <div className="mt-4 flex max-w-md items-center gap-6 text-neutral-500 dark:text-neutral-400">
+            <div className="mt-4 flex max-w-md items-center gap-2 text-neutral-500 dark:text-neutral-400">
               {canComment && (
                 <button
                   type="button"
@@ -239,10 +283,9 @@ function CommunityPostCard({
               {canLike && (
                 <button
                   type="button"
-                  className={`group inline-flex items-center gap-1 text-xs font-medium transition ${
-                    liked ? "text-rose-600 dark:text-rose-300" : "hover:text-rose-600 dark:hover:text-rose-300"
-                  }`}
+                  className={getCommentToggleClassName({ active: liked })}
                   onClick={toggleLike}
+                  aria-label={`좋아요 ${likeCount}개`}
                 >
                   {liked ? <SolidHeartIcon className="size-4" /> : <HeartIcon className="size-4" />}
                   <span>{likeCount}</span>
@@ -275,7 +318,6 @@ function CommunityPostCard({
               ))}
             </div>
           )}
-
         </div>
       </div>
       {!preview && canComment && commentEditing && (
@@ -292,7 +334,8 @@ function CommunityPostCard({
             isSubmitting={commentFetcher.state === "submitting"}
             onCreateComment={(body, visibility) => submitComment({ action: "create", body, visibility })}
             onUpdateComment={(commentUid, body, visibility) =>
-              submitComment({ action: "update", commentUid, body, visibility })}
+              submitComment({ action: "update", commentUid, body, visibility })
+            }
             onDeleteComment={(commentUid) => submitComment({ action: "delete", commentUid })}
             placeholder="댓글을 남겨보세요"
           />
@@ -328,9 +371,7 @@ function PostSubjectMeta({
           className="inline-flex max-w-full items-center gap-1.5 text-neutral-500 hover:text-neutral-800 hover:underline dark:text-neutral-400 dark:hover:text-neutral-200"
         >
           <UserGroupIcon className="size-3.5 shrink-0 text-neutral-400 dark:text-neutral-500" />
-          <span className="max-w-64 truncate sm:max-w-md">
-            {post.subjectContentName ?? "이벤트 보기"}
-          </span>
+          <span className="max-w-64 truncate sm:max-w-md">{post.subjectContentName ?? "이벤트 보기"}</span>
         </Link>
         {post.pickupStudents && post.pickupStudents.length > 0 && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -414,7 +455,13 @@ function PostContent({
 
   return (
     <div className="space-y-3">
-      {post.title && <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{post.title}</h3>}
+      {post.postType === "youtube_video" && post.title ? (
+        <h3 className="text-base font-semibold leading-6 text-neutral-900 dark:text-neutral-100">
+          {getDisplayYoutubeTitle(post.title)}
+        </h3>
+      ) : (
+        post.title && <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{post.title}</h3>
+      )}
       <PostBlocks post={post} studentsByUid={studentsByUid} />
     </div>
   );
@@ -430,11 +477,7 @@ function PostBlocks({
   return (
     <div className="space-y-3">
       {post.blocks.map((block, index) => (
-        <BlockView
-          key={`${post.uid}-${block.type}-${index}`}
-          block={block}
-          studentsByUid={studentsByUid}
-        />
+        <BlockView key={`${post.uid}-${block.type}-${index}`} block={block} post={post} studentsByUid={studentsByUid} />
       ))}
     </div>
   );
@@ -442,9 +485,11 @@ function PostBlocks({
 
 function BlockView({
   block,
+  post,
   studentsByUid,
 }: {
   block: CommunityPostBlock;
+  post: CommunityFeedPostItem;
   studentsByUid: Record<string, { name: string }>;
 }) {
   if (block.type === "plaintext") {
@@ -452,7 +497,11 @@ function BlockView({
       return null;
     }
 
-    return <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-900 dark:text-neutral-100 sm:text-base">{block.text}</p>;
+    return (
+      <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-900 dark:text-neutral-100 sm:text-base">
+        {block.text}
+      </p>
+    );
   }
 
   if (block.type === "markdown") {
@@ -464,29 +513,20 @@ function BlockView({
   }
 
   if (block.type === "youtube") {
-    return (
-      <div className="overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
-        <iframe
-          className="aspect-video w-full"
-          src={`https://www.youtube.com/embed/${block.youtubeId}${block.startAt ? `?start=${block.startAt}` : ""}`}
-          title="YouTube video"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      </div>
-    );
+    return <YoutubePreviewBlock block={block} post={post} />;
   }
 
   return (
     <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900/60">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            {block.title ?? "편성 정보"}
-          </p>
+          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{block.title ?? "편성 정보"}</p>
           {(block.raidType || block.seasonIndex !== null) && (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {[block.raidType, block.seasonIndex !== null && block.seasonIndex !== undefined ? `#${block.seasonIndex}` : null]
+              {[
+                block.raidType,
+                block.seasonIndex !== null && block.seasonIndex !== undefined ? `#${block.seasonIndex}` : null,
+              ]
                 .filter((value) => value)
                 .join(" ")}
             </p>
@@ -513,5 +553,59 @@ function BlockView({
         ))}
       </div>
     </div>
+  );
+}
+
+function getYoutubeThumbnailUrl(post: CommunityFeedPostItem): string | null {
+  const thumbnailUrl = post.sourceMetadata.thumbnailUrl;
+  return typeof thumbnailUrl === "string" && thumbnailUrl.length > 0 ? thumbnailUrl : null;
+}
+
+function getDisplayYoutubeTitle(title: string): string {
+  return title.replace(/^\s*\[블루 아카이브\]\s*/, "").trim();
+}
+
+function getYoutubeWatchUrl(block: Extract<CommunityPostBlock, { type: "youtube" }>, sourceUrl: string | null) {
+  const url = sourceUrl ?? `https://www.youtube.com/watch?v=${block.youtubeId}`;
+
+  if (block.startAt) {
+    const params = new URLSearchParams({ t: `${block.startAt}s` });
+    return `${url}${url.includes("?") ? "&" : "?"}${params.toString()}`;
+  }
+
+  return url;
+}
+
+function YoutubePreviewBlock({
+  block,
+  post,
+}: {
+  block: Extract<CommunityPostBlock, { type: "youtube" }>;
+  post: CommunityFeedPostItem;
+}) {
+  const thumbnailUrl = getYoutubeThumbnailUrl(post);
+  const title = post.title ? getDisplayYoutubeTitle(post.title) : "YouTube video";
+  const watchUrl = getYoutubeWatchUrl(block, post.sourceUrl);
+
+  return (
+    <a
+      href={watchUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="group relative block aspect-video w-full overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 text-left shadow-sm transition hover:border-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:focus-visible:ring-offset-neutral-800 md:max-w-md"
+      aria-label={`YouTube에서 동영상 보기: ${title}`}
+    >
+      {thumbnailUrl ? (
+        <img src={thumbnailUrl} alt="" className="size-full object-cover" loading="lazy" />
+      ) : (
+        <div className="size-full bg-neutral-200 dark:bg-neutral-800" />
+      )}
+      <div className="absolute inset-0 bg-black/10 transition group-hover:bg-black/15" />
+      <span className="absolute inset-0 flex items-center justify-center">
+        <span className="flex size-11 items-center justify-center rounded-full bg-black/55 text-white shadow-md shadow-black/20 ring-1 ring-white/20 backdrop-blur-sm transition group-hover:scale-105 group-hover:bg-black/65 sm:size-12">
+          <PlayIcon className="ml-0.5 size-5 sm:size-6" />
+        </span>
+      </span>
+    </a>
   );
 }

@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
+import { runScheduledJobs } from "~/jobs/scheduled";
 
 type ObservabilityEnv = Env & {
   SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
@@ -25,6 +26,9 @@ const handler: ExportedHandler<ObservabilityEnv> = {
     return requestHandler(request, {
       cloudflare: { env, ctx },
     });
+  },
+  scheduled(_controller, env, ctx) {
+    ctx.waitUntil(runScheduledJobs(env, ctx));
   },
 };
 
