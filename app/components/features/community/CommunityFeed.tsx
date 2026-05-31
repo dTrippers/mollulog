@@ -5,7 +5,7 @@ import {
   PlayCircleIcon,
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
-import { HeartIcon as SolidHeartIcon, PlayIcon } from "@heroicons/react/24/solid";
+import { PlayIcon, HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import ContentCommentEditor from "~/components/features/contents/ContentCommentEditor";
@@ -15,10 +15,7 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { compareInstantDesc, formatInstant, parseUtcTimestamp } from "~/lib/date-time";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
 import type { EnrichedCommunityFeedPost } from "~/models/community-feed";
-import {
-  STUDENT_GRADING_TAG_DISPLAY,
-  sortStudentGradingTags,
-} from "~/models/student-grading-tag";
+import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
 import { StudentCards } from "../students";
 import {
   getCommentEditorPanelClassName,
@@ -321,7 +318,6 @@ function CommunityPostCard({
               ))}
             </div>
           )}
-
         </div>
       </div>
       {!preview && canComment && commentEditing && (
@@ -338,7 +334,8 @@ function CommunityPostCard({
             isSubmitting={commentFetcher.state === "submitting"}
             onCreateComment={(body, visibility) => submitComment({ action: "create", body, visibility })}
             onUpdateComment={(commentUid, body, visibility) =>
-              submitComment({ action: "update", commentUid, body, visibility })}
+              submitComment({ action: "update", commentUid, body, visibility })
+            }
             onDeleteComment={(commentUid) => submitComment({ action: "delete", commentUid })}
             placeholder="댓글을 남겨보세요"
           />
@@ -374,9 +371,7 @@ function PostSubjectMeta({
           className="inline-flex max-w-full items-center gap-1.5 text-neutral-500 hover:text-neutral-800 hover:underline dark:text-neutral-400 dark:hover:text-neutral-200"
         >
           <UserGroupIcon className="size-3.5 shrink-0 text-neutral-400 dark:text-neutral-500" />
-          <span className="max-w-64 truncate sm:max-w-md">
-            {post.subjectContentName ?? "이벤트 보기"}
-          </span>
+          <span className="max-w-64 truncate sm:max-w-md">{post.subjectContentName ?? "이벤트 보기"}</span>
         </Link>
         {post.pickupStudents && post.pickupStudents.length > 0 && (
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -482,12 +477,7 @@ function PostBlocks({
   return (
     <div className="space-y-3">
       {post.blocks.map((block, index) => (
-        <BlockView
-          key={`${post.uid}-${block.type}-${index}`}
-          block={block}
-          post={post}
-          studentsByUid={studentsByUid}
-        />
+        <BlockView key={`${post.uid}-${block.type}-${index}`} block={block} post={post} studentsByUid={studentsByUid} />
       ))}
     </div>
   );
@@ -507,7 +497,11 @@ function BlockView({
       return null;
     }
 
-    return <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-900 dark:text-neutral-100 sm:text-base">{block.text}</p>;
+    return (
+      <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-900 dark:text-neutral-100 sm:text-base">
+        {block.text}
+      </p>
+    );
   }
 
   if (block.type === "markdown") {
@@ -526,12 +520,13 @@ function BlockView({
     <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900/60">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            {block.title ?? "편성 정보"}
-          </p>
+          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{block.title ?? "편성 정보"}</p>
           {(block.raidType || block.seasonIndex !== null) && (
             <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {[block.raidType, block.seasonIndex !== null && block.seasonIndex !== undefined ? `#${block.seasonIndex}` : null]
+              {[
+                block.raidType,
+                block.seasonIndex !== null && block.seasonIndex !== undefined ? `#${block.seasonIndex}` : null,
+              ]
                 .filter((value) => value)
                 .join(" ")}
             </p>
@@ -570,17 +565,15 @@ function getDisplayYoutubeTitle(title: string): string {
   return title.replace(/^\s*\[블루 아카이브\]\s*/, "").trim();
 }
 
-function getYoutubeEmbedUrl(block: Extract<CommunityPostBlock, { type: "youtube" }>, autoplay: boolean) {
-  const params = new URLSearchParams();
+function getYoutubeWatchUrl(block: Extract<CommunityPostBlock, { type: "youtube" }>, sourceUrl: string | null) {
+  const url = sourceUrl ?? `https://www.youtube.com/watch?v=${block.youtubeId}`;
+
   if (block.startAt) {
-    params.set("start", String(block.startAt));
-  }
-  if (autoplay) {
-    params.set("autoplay", "1");
+    const params = new URLSearchParams({ t: `${block.startAt}s` });
+    return `${url}${url.includes("?") ? "&" : "?"}${params.toString()}`;
   }
 
-  const query = params.toString();
-  return `https://www.youtube.com/embed/${block.youtubeId}${query ? `?${query}` : ""}`;
+  return url;
 }
 
 function YoutubePreviewBlock({
@@ -590,30 +583,17 @@ function YoutubePreviewBlock({
   block: Extract<CommunityPostBlock, { type: "youtube" }>;
   post: CommunityFeedPostItem;
 }) {
-  const [activated, setActivated] = useState(false);
   const thumbnailUrl = getYoutubeThumbnailUrl(post);
   const title = post.title ? getDisplayYoutubeTitle(post.title) : "YouTube video";
-
-  if (activated) {
-    return (
-      <div className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700 md:max-w-md">
-        <iframe
-          className="aspect-video w-full"
-          src={getYoutubeEmbedUrl(block, true)}
-          title={title}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-        />
-      </div>
-    );
-  }
+  const watchUrl = getYoutubeWatchUrl(block, post.sourceUrl);
 
   return (
-    <button
-      type="button"
+    <a
+      href={watchUrl}
+      target="_blank"
+      rel="noreferrer"
       className="group relative block aspect-video w-full overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 text-left shadow-sm transition hover:border-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:focus-visible:ring-offset-neutral-800 md:max-w-md"
-      aria-label={`동영상 재생: ${title}`}
-      onClick={() => setActivated(true)}
+      aria-label={`YouTube에서 동영상 보기: ${title}`}
     >
       {thumbnailUrl ? (
         <img src={thumbnailUrl} alt="" className="size-full object-cover" loading="lazy" />
@@ -626,6 +606,6 @@ function YoutubePreviewBlock({
           <PlayIcon className="ml-0.5 size-5 sm:size-6" />
         </span>
       </span>
-    </button>
+    </a>
   );
 }
