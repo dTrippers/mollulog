@@ -106,6 +106,11 @@ export type ContentTimelineItemProps = {
     name: string;
     terrain: Terrain;
     attackType: Attack | null;
+    defenseTypeSets?: {
+      difficulty: string | null;
+      defenseTypes: Defense[];
+      primaryDefenseType?: Defense;
+    }[];
     defenseTypes: {
       defenseType: Defense;
       difficulty: string | null;
@@ -355,6 +360,11 @@ type RaidInfoProps = {
     seasonIndex?: number;
     terrain: Terrain;
     attackType: Attack | null;
+    defenseTypeSets?: {
+      difficulty: string | null;
+      defenseTypes: Defense[];
+      primaryDefenseType?: Defense;
+    }[];
     defenseTypes: {
       defenseType: Defense;
       difficulty: string | null;
@@ -373,6 +383,7 @@ function RaidInfo({ raid, since, until }: RaidInfoProps) {
           raidType: raid.raidType,
           seasonIndex: raid.seasonIndex,
           attackType: raid.attackType,
+          defenseTypeSets: raid.defenseTypeSets,
           defenseTypes: raid.defenseTypes,
           startAt: since,
           endAt: until,

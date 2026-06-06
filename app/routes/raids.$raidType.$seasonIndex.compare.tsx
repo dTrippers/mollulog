@@ -4,10 +4,12 @@ import { type LoaderFunctionArgs, useLoaderData } from "react-router";
 import RaidDifficultyComparison from "~/components/features/raids/RaidDifficultyComparison";
 import RaidStudentComparison from "~/components/features/raids/RaidStudentComparison";
 import { EmptyView, LoadingSkeleton, Section } from "~/components/primitives";
+import type { Defense } from "~/graphql/graphql";
 import { fetchRaidOverview } from "~/lib/ranks/overview";
 import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
-import { type defenseTypeColor, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
+import { type defenseTypeColor, defenseTypeLocale, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
 import type { RaidType } from "~/models/content.d";
+import { getRaidDefenseTypeSetKey } from "~/models/raid";
 import { getAllStudentsMap } from "~/models/student";
 import { RaidRepository } from "~/repositories";
 import RaidComparisonHeader from "./raids.$raidType.$seasonIndex._components/RaidComparisonHeader";
@@ -34,6 +36,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   const url = new URL(request.url);
   const fromRaidUid = url.searchParams.get("from");
   const defenseTypeParam = url.searchParams.get("defenseType");
+  const defenseTypeSetParam = url.searchParams.get("defenseTypeSet");
 
   if (!fromRaidUid) {
     throw new Response(JSON.stringify({ error: { message: "비교할 총력전/대결전을 선택해주세요" } }), {
@@ -75,18 +78,25 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   );
 
   if (toSchedule.startAt && fromSchedule.startAt && dayjs(toSchedule.startAt).isAfter(dayjs(fromSchedule.startAt))) {
-    return { toRaid: toSchedule, fromRaid: fromSchedule, allStudents, defenseType: defenseTypeParam };
+    return { toRaid: toSchedule, fromRaid: fromSchedule, allStudents, defenseType: defenseTypeParam, defenseTypeSet: defenseTypeSetParam };
   }
   return {
     toRaid: fromSchedule,
     fromRaid: toSchedule,
     allStudents,
     defenseType: defenseTypeParam,
+    defenseTypeSet: defenseTypeSetParam,
   };
 };
 
 export default function RaidCompare() {
-  const { fromRaid, toRaid, allStudents, defenseType: loaderDefenseType } = useLoaderData<typeof loader>();
+  const {
+    fromRaid,
+    toRaid,
+    allStudents,
+    defenseType: loaderDefenseType,
+    defenseTypeSet: loaderDefenseTypeSet,
+  } = useLoaderData<typeof loader>();
 
   const [currentOverview, setCurrentOverview] = useState<{
     clearLevels: Record<string, number>;
@@ -114,14 +124,12 @@ export default function RaidCompare() {
         setLoading(true);
         setError(null);
 
-        // Use defense type from query parameter
-        const defenseType = loaderDefenseType as (typeof toRaid.defenseTypes)[number]["defenseType"];
+        const defenseType = loaderDefenseType as Defense;
 
-        // Verify defense type exists in both raids
-        const toHasDefenseType = toRaid.defenseTypes.some((dt) => dt.defenseType === defenseType);
-        const fromHasDefenseType = fromRaid.defenseTypes.some((dt) => dt.defenseType === defenseType);
+        const toDefenseTypeSet = getDefenseTypeSet(toRaid, loaderDefenseTypeSet, defenseType);
+        const fromDefenseTypeSet = getDefenseTypeSet(fromRaid, null, defenseType);
 
-        if (!toHasDefenseType || !fromHasDefenseType) {
+        if (!toDefenseTypeSet || !fromDefenseTypeSet) {
           setError("비교할 수 있는 방어 타입이 없어요");
           setLoading(false);
           return;
@@ -196,7 +204,7 @@ export default function RaidCompare() {
     return () => {
       cancelled = true;
     };
-  }, [fromRaid, loaderDefenseType, toRaid]);
+  }, [fromRaid, loaderDefenseType, loaderDefenseTypeSet, toRaid]);
 
   if (loading) {
     return <LoadingSkeleton />;
@@ -210,21 +218,22 @@ export default function RaidCompare() {
     return <EmptyView text="비교 데이터를 준비중이에요" />;
   }
 
-  // Get difficulty for defense type
-  const getDifficultyForDefenseType = (raid: typeof toRaid, defenseType: string) => {
-    const defenseTypeInfo = raid.defenseTypes.find((dt) => dt.defenseType === defenseType);
-    return defenseTypeInfo?.difficulty || null;
-  };
-
-  const currentDifficulty = getDifficultyForDefenseType(toRaid, loaderDefenseType);
-  const fromDifficulty = getDifficultyForDefenseType(fromRaid, loaderDefenseType);
+  const defenseType = loaderDefenseType as Defense;
+  const currentDefenseTypeSet = getDefenseTypeSet(toRaid, loaderDefenseTypeSet, defenseType);
+  const fromDefenseTypeSet = getDefenseTypeSet(fromRaid, null, defenseType);
+  const currentDifficulty = currentDefenseTypeSet?.difficulty ?? null;
+  const fromDifficulty = fromDefenseTypeSet?.difficulty ?? null;
+  const defenseTypeLabel = currentDefenseTypeSet
+    ? currentDefenseTypeSet.defenseTypes.map((dt) => defenseTypeLocale[dt]).join(" / ")
+    : defenseTypeLocale[defenseType];
 
   return (
     <div>
       <RaidComparisonHeader
         fromRaid={fromRaid as typeof fromRaid & { raidType: keyof typeof raidTypeLocale }}
         toRaid={toRaid as typeof toRaid & { raidType: keyof typeof raidTypeLocale }}
-        defenseType={loaderDefenseType as keyof typeof defenseTypeColor}
+        defenseType={defenseType as keyof typeof defenseTypeColor}
+        defenseTypeLabel={defenseTypeLabel}
         fromDifficulty={fromDifficulty}
         currentDifficulty={currentDifficulty}
       />
@@ -244,5 +253,25 @@ export default function RaidCompare() {
         />
       </Section>
     </div>
+  );
+}
+
+type RaidWithDefenseTypeSets = {
+  defenseTypeSets: Array<{
+    difficulty: string | null;
+    defenseTypes: Defense[];
+    primaryDefenseType: Defense;
+  }>;
+};
+
+function getDefenseTypeSet(
+  raid: RaidWithDefenseTypeSets,
+  defenseTypeSetKey: string | null,
+  primaryDefenseType: Defense,
+) {
+  return (
+    raid.defenseTypeSets.find((defenseTypeSet) => getRaidDefenseTypeSetKey(defenseTypeSet) === defenseTypeSetKey) ??
+    raid.defenseTypeSets.find((defenseTypeSet) => defenseTypeSet.primaryDefenseType === primaryDefenseType) ??
+    null
   );
 }

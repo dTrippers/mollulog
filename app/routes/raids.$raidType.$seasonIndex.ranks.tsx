@@ -42,7 +42,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 };
 
 export default function RaidRanks() {
-  const { currentRaid, defenseType, setPanel, signedIn } = useOutletContext<RaidPageContext>();
+  const { currentRaid, defenseType, defenseTypeSet, setPanel, signedIn } = useOutletContext<RaidPageContext>();
   const { allStudents, recruitedStudentTiers } = useLoaderData<typeof loader>();
 
   const jpSeasonIndex = currentRaid.jpSchedule?.seasonIndex ?? null;
@@ -91,7 +91,7 @@ export default function RaidRanks() {
   }, [defenseType]);
 
   const filterableDifficulties = useMemo(() => {
-    const difficulty = currentRaid.defenseTypes.find((dt) => dt.defenseType === defenseType)?.difficulty;
+    const difficulty = defenseTypeSet.difficulty;
     if (difficulty === Difficulty.Lunatic) {
       return ["lunatic", "torment", "insane"] as DifficultyType[];
     }
@@ -102,7 +102,7 @@ export default function RaidRanks() {
       return ["insane", "extreme"] as DifficultyType[];
     }
     return [] as DifficultyType[];
-  }, [currentRaid.defenseTypes, defenseType]);
+  }, [defenseTypeSet.difficulty]);
 
   useEffect(() => {
     setPanel({

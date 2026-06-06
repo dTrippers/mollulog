@@ -15,11 +15,19 @@ type RaidComparisonHeaderProps = {
     raidType: keyof typeof raidTypeLocale;
   };
   defenseType: keyof typeof defenseTypeColor;
+  defenseTypeLabel: string;
   fromDifficulty: keyof typeof difficultyLocale | null;
   currentDifficulty: keyof typeof difficultyLocale | null;
 };
 
-export default function RaidComparisonHeader({ fromRaid, toRaid, defenseType, fromDifficulty, currentDifficulty }: RaidComparisonHeaderProps) {
+export default function RaidComparisonHeader({
+  fromRaid,
+  toRaid,
+  defenseType,
+  defenseTypeLabel,
+  fromDifficulty,
+  currentDifficulty,
+}: RaidComparisonHeaderProps) {
   return (
     <div className="flex items-center gap-2 md:gap-4 mb-6">
       <div className="flex-1 bg-white dark:bg-neutral-900 rounded-lg p-3 md:p-4 border border-neutral-200 dark:border-neutral-700">
@@ -33,6 +41,7 @@ export default function RaidComparisonHeader({ fromRaid, toRaid, defenseType, fr
           <div className="flex mt-2 gap-x-1">
             <OptionBadge text={raidTypeLocale[fromRaid.raidType]} />
             <OptionBadge text={difficultyLocale[fromDifficulty]} color={defenseTypeColor[defenseType]} />
+            <OptionBadge text={defenseTypeLabel} color={defenseTypeColor[defenseType]} />
           </div>
         )}
       </div>
@@ -50,6 +59,7 @@ export default function RaidComparisonHeader({ fromRaid, toRaid, defenseType, fr
           <div className="flex mt-2 gap-x-1">
             <OptionBadge text={raidTypeLocale[toRaid.raidType]} />
             <OptionBadge text={difficultyLocale[currentDifficulty]} color={defenseTypeColor[defenseType]} />
+            <OptionBadge text={defenseTypeLabel} color={defenseTypeColor[defenseType]} />
           </div>
         )}
       </div>

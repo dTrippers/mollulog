@@ -19,6 +19,7 @@ export type StudentRaidUsageRaid = {
   raidBoss: { uid?: string; name: string };
   startAt: UtcIsoString | null;
   jpSchedule: { seasonIndex: number } | null;
+  defenseTypeSets?: { primaryDefenseType: Defense; difficulty?: string | null }[];
   defenseTypes: { defenseType: Defense; difficulty?: string | null }[];
 };
 
@@ -157,7 +158,10 @@ export function buildStudentRaidUsageChartData({
       const year = new Date(raid.startAt).getUTCFullYear().toString();
       const previousRaid = sortedRaids[index - 1];
       const previousYear = previousRaid ? new Date(previousRaid.startAt).getUTCFullYear().toString() : null;
-      const defenseTypes = raid.defenseTypes.filter(
+      const primaryDefenseTypes = raid.defenseTypeSets?.map(({ primaryDefenseType }) => ({
+        defenseType: primaryDefenseType,
+      })) ?? raid.defenseTypes;
+      const defenseTypes = primaryDefenseTypes.filter(
         ({ defenseType }) => selectedDefenseType === "all" || defenseType === selectedDefenseType,
       );
 

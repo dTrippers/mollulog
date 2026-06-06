@@ -28,6 +28,11 @@ type RaidCardProps = {
       defenseType: Defense;
       difficulty: Difficulty | string | null;
     }[];
+    defenseTypeSets?: {
+      difficulty: Difficulty | string | null;
+      defenseTypes: Defense[];
+      primaryDefenseType?: Defense;
+    }[];
     startAt: UtcIsoString | null;
     endAt: UtcIsoString | null;
     terrain: Terrain;
@@ -63,7 +68,8 @@ export default function RaidCard({
   reserveRightAccessorySpace = false,
   className,
 }: RaidCardProps) {
-  const { raidBoss, raidType, seasonIndex, defenseTypes, startAt, endAt, terrain, attackType } = raid;
+  const { raidBoss, raidType, seasonIndex, startAt, endAt, terrain, attackType } = raid;
+  const displayDefenseTypeSets = getDisplayDefenseTypeSets(raid);
   const displayTimeZone = useDisplayTimeZone();
 
   const now = nowUtcIso();
@@ -79,7 +85,7 @@ export default function RaidCard({
     timeLabel = `${formatInstant(startAt, { timeZone: displayTimeZone, format: "YYYY/M/D" })}`;
   }
 
-  const hasVisibleDifficulty = showDifficulty && defenseTypes.some(({ difficulty }) => difficulty);
+  const hasVisibleDifficulty = showDifficulty && displayDefenseTypeSets.some(({ difficulty }) => difficulty);
 
   return (
     <div
@@ -175,9 +181,17 @@ export default function RaidCard({
                 )}
                 {hasVisibleDifficulty ? (
                   <div className="grid grid-cols-[max-content_max-content] items-center gap-x-1.5 gap-y-1 flex-shrink-0">
-                    {defenseTypes.map(({ defenseType, difficulty }) => (
-                      <Fragment key={`${defenseType}-${difficulty ?? "none"}`}>
-                        <AttributeBadge text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} />
+                    {displayDefenseTypeSets.map(({ defenseTypes: setDefenseTypes, difficulty }) => (
+                      <Fragment key={`${difficulty ?? "none"}-${setDefenseTypes.join("-")}`}>
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          {setDefenseTypes.map((defenseType) => (
+                            <AttributeBadge
+                              key={defenseType}
+                              text={defenseTypeLocale[defenseType]}
+                              color={defenseTypeColor[defenseType]}
+                            />
+                          ))}
+                        </div>
                         {difficulty ? (
                           <span className="text-right text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
                             {difficultyLocale[difficulty as Difficulty] ?? difficulty}
@@ -190,13 +204,15 @@ export default function RaidCard({
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {defenseTypes.map(({ defenseType }) => (
-                      <AttributeBadge
-                        key={defenseType}
-                        text={defenseTypeLocale[defenseType]}
-                        color={defenseTypeColor[defenseType]}
-                      />
-                    ))}
+                    {displayDefenseTypeSets.map(({ defenseTypes: setDefenseTypes, primaryDefenseType }) =>
+                      setDefenseTypes.map((defenseType) => (
+                        <AttributeBadge
+                          key={`${primaryDefenseType}-${defenseType}`}
+                          text={defenseTypeLocale[defenseType]}
+                          color={defenseTypeColor[defenseType]}
+                        />
+                      )),
+                    )}
                   </div>
                 )}
               </div>
@@ -206,4 +222,28 @@ export default function RaidCard({
       </div>
     </div>
   );
+}
+
+function getDisplayDefenseTypeSets(raid: RaidCardProps["raid"]) {
+  if (raid.defenseTypeSets && raid.defenseTypeSets.length > 0) {
+    return raid.defenseTypeSets.flatMap(({ difficulty, defenseTypes, primaryDefenseType }) => {
+      const fallbackPrimaryDefenseType = primaryDefenseType ?? defenseTypes[0];
+      if (!fallbackPrimaryDefenseType) {
+        return [];
+      }
+      return [
+        {
+          difficulty,
+          defenseTypes,
+          primaryDefenseType: fallbackPrimaryDefenseType,
+        },
+      ];
+    });
+  }
+
+  return raid.defenseTypes.map(({ defenseType, difficulty }) => ({
+    difficulty,
+    defenseTypes: [defenseType],
+    primaryDefenseType: defenseType,
+  }));
 }

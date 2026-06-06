@@ -15,20 +15,34 @@ import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
-import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
-import { raidTypeToParam } from "~/models/raid";
+import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
+import { type RaidDefenseTypeSet, getRaidDefenseTypeSetKey, raidTypeToParam } from "~/models/raid";
 import { RaidRepository } from "~/repositories";
 
 function raidKey(raid: { raidType: string; seasonIndex: number }) {
   return `${raid.raidType}:${raid.seasonIndex}`;
 }
 
-function getAvailableDefenseType(
-  defenseTypes: { defenseType: Defense }[],
+function getDefenseTypeSetLabel(defenseTypeSet: RaidDefenseTypeSet) {
+  return defenseTypeSet.defenseTypes.map((defenseType) => defenseTypeLocale[defenseType]).join(" / ");
+}
+
+function getAvailableDefenseTypeSet(
+  defenseTypeSets: RaidDefenseTypeSet[],
+  requestedDefenseTypeSet: string | null,
   requestedDefenseType: string | null,
-): Defense {
-  const requestedDefense = defenseTypes.find(({ defenseType }) => defenseType === requestedDefenseType)?.defenseType;
-  return requestedDefense ?? defenseTypes[0].defenseType;
+): RaidDefenseTypeSet {
+  const requestedSet = defenseTypeSets.find(
+    (defenseTypeSet) => getRaidDefenseTypeSetKey(defenseTypeSet) === requestedDefenseTypeSet,
+  );
+  if (requestedSet) {
+    return requestedSet;
+  }
+
+  const requestedPrimaryDefense = defenseTypeSets.find(
+    ({ primaryDefenseType }) => primaryDefenseType === requestedDefenseType,
+  );
+  return requestedPrimaryDefense ?? defenseTypeSets[0];
 }
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
@@ -91,6 +105,7 @@ export type RaidPageContext = {
   currentRaid: Awaited<ReturnType<typeof loader>>["currentRaid"];
   allRaids: Awaited<ReturnType<typeof loader>>["allRaids"];
   defenseType: Defense;
+  defenseTypeSet: RaidDefenseTypeSet;
   setPanel: (panel: PagePanelProps) => void;
   signedIn: boolean;
 };
@@ -108,27 +123,38 @@ export default function RaidPage() {
     }
   }, [pathname, raidPath]);
 
-  const [selectedDefense, setDefense] = useState<Defense>(() =>
-    getAvailableDefenseType(currentRaid.defenseTypes, searchParams.get("defenseType")),
+  const [selectedDefenseTypeSet, setDefenseTypeSet] = useState<RaidDefenseTypeSet>(() =>
+    getAvailableDefenseTypeSet(
+      currentRaid.defenseTypeSets,
+      searchParams.get("defenseTypeSet"),
+      searchParams.get("defenseType"),
+    ),
   );
   useEffect(() => {
-    const nextDefense = getAvailableDefenseType(currentRaid.defenseTypes, searchParams.get("defenseType"));
-    if (selectedDefense !== nextDefense) {
-      setDefense(nextDefense);
+    const nextDefenseTypeSet = getAvailableDefenseTypeSet(
+      currentRaid.defenseTypeSets,
+      searchParams.get("defenseTypeSet"),
+      searchParams.get("defenseType"),
+    );
+    if (getRaidDefenseTypeSetKey(selectedDefenseTypeSet) !== getRaidDefenseTypeSetKey(nextDefenseTypeSet)) {
+      setDefenseTypeSet(nextDefenseTypeSet);
     }
-  }, [currentRaid.defenseTypes, searchParams, selectedDefense]);
+  }, [currentRaid.defenseTypeSets, searchParams, selectedDefenseTypeSet]);
 
-  const selectDefense = (defenseType: Defense) => {
-    setDefense(defenseType);
+  const selectDefenseTypeSet = (defenseTypeSet: RaidDefenseTypeSet) => {
+    setDefenseTypeSet(defenseTypeSet);
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        next.set("defenseType", defenseType);
+        next.set("defenseTypeSet", getRaidDefenseTypeSetKey(defenseTypeSet));
+        next.set("defenseType", defenseTypeSet.primaryDefenseType);
         return next;
       },
       { replace: true },
     );
   };
+  const selectedDefenseTypeSetKey = getRaidDefenseTypeSetKey(selectedDefenseTypeSet);
+  const selectedDefense = selectedDefenseTypeSet.primaryDefenseType;
 
   return (
     <Page
@@ -164,17 +190,18 @@ export default function RaidPage() {
         },
       ]}
     >
-      {currentRaid.defenseTypes.length > 1 && !pathname.endsWith("/compare") && (
+      {currentRaid.defenseTypeSets.length > 1 && !pathname.endsWith("/compare") && (
         <div className="my-4">
           {!pathname.endsWith("/videos") && (
             <FilterButtons
               key={`filters-${currentRaid.uid}`}
               Icon={ShieldCheckIcon}
-              buttonProps={currentRaid.defenseTypes.map(({ defenseType }) => ({
-                text: defenseTypeLocale[defenseType],
-                color: defenseTypeColor[defenseType],
-                active: defenseType === selectedDefense,
-                onToggle: () => selectDefense(defenseType),
+              buttonProps={currentRaid.defenseTypeSets.map((defenseTypeSet) => ({
+                text: getDefenseTypeSetLabel(defenseTypeSet),
+                subText: defenseTypeSet.difficulty ? difficultyLocale[defenseTypeSet.difficulty] : undefined,
+                color: defenseTypeColor[defenseTypeSet.primaryDefenseType],
+                active: getRaidDefenseTypeSetKey(defenseTypeSet) === selectedDefenseTypeSetKey,
+                onToggle: () => selectDefenseTypeSet(defenseTypeSet),
               }))}
               exclusive
               atLeastOne
@@ -183,7 +210,14 @@ export default function RaidPage() {
         </div>
       )}
       <Outlet
-        context={{ currentRaid, allRaids, defenseType: selectedDefense, setPanel, signedIn } satisfies RaidPageContext}
+        context={{
+          currentRaid,
+          allRaids,
+          defenseType: selectedDefense,
+          defenseTypeSet: selectedDefenseTypeSet,
+          setPanel,
+          signedIn,
+        } satisfies RaidPageContext}
       />
     </Page>
   );

@@ -52,10 +52,10 @@ export default function StudentDetail() {
             return null;
           }
 
-          const defenseTypeInfo = raid.defenseTypes.find(
-            (defenseType) => defenseType.defenseType === stat.raid.defenseType,
+          const defenseTypeSet = raid.defenseTypeSets.find(
+            ({ primaryDefenseType }) => primaryDefenseType === stat.raid.defenseType,
           );
-          const difficulty = defenseTypeInfo?.difficulty ?? null;
+          const difficulty = defenseTypeSet?.difficulty ?? null;
           return {
             ...stat,
             raid: {

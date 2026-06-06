@@ -10,7 +10,7 @@ import { compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 import { fetchRaidOverview } from "~/lib/ranks/overview";
 import { type RaidStatistics, fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import type { RaidType } from "~/models/content.d";
-import { raidTypeToParam } from "~/models/raid";
+import { getRaidDefenseTypeSetKey, raidTypeToParam } from "~/models/raid";
 import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
@@ -37,7 +37,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 };
 
 export default function RaidSummary() {
-  const { currentRaid, allRaids, defenseType } = useOutletContext<RaidPageContext>();
+  const { currentRaid, allRaids, defenseType, defenseTypeSet } = useOutletContext<RaidPageContext>();
   const { allStudents } = useLoaderData<typeof loader>();
   const maxTier = currentRaid.startAt ? getMaxTierAt(currentRaid.startAt) : null;
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
@@ -169,9 +169,8 @@ export default function RaidSummary() {
         <Section title="역대 개최 이력" description="동일 보스의 최근 총력전/대결전 개최 이력">
           <HorizontalScroll itemWidth={{ mobile: "w-[86%]", desktop: "md:w-2/5" }} gap="gap-3">
             {sameBossRaids.map((raid) => {
-              // Check if current raid and comparison raid have the same defense type as the currently selected one
-              const hasMatchingDefenseType = raid.defenseTypes.some(
-                ({ defenseType: raidDt }) => raidDt === defenseType,
+              const hasMatchingDefenseType = raid.defenseTypeSets.some(
+                ({ primaryDefenseType }) => primaryDefenseType === defenseType,
               );
 
               const actions = [
@@ -180,7 +179,7 @@ export default function RaidSummary() {
               if (hasMatchingDefenseType) {
                 actions.push({
                   text: "비교",
-                  to: `${raidPath}/compare?from=${raid.uid}&defenseType=${defenseType}`,
+                  to: `${raidPath}/compare?from=${raid.uid}&defenseType=${defenseType}&defenseTypeSet=${getRaidDefenseTypeSetKey(defenseTypeSet)}`,
                 });
               }
 

@@ -193,6 +193,12 @@ export type RaidInfo = {
   seasonIndex?: number;
   terrain: Terrain;
   attackType: Attack | null;
+  defenseTypeSets?: {
+    difficulty: string | null;
+    defenseTypes: Defense[];
+    primaryDefenseType: Defense;
+    secondaryDefenseTypes: Defense[];
+  }[];
   defenseTypes: { defenseType: Defense; difficulty: string | null }[];
 };
 
@@ -211,6 +217,12 @@ function toRaidInfo(schedule: RaidScheduleMeta): RaidInfo {
     seasonIndex: schedule.seasonIndex,
     terrain: schedule.terrain,
     attackType: schedule.attackType,
+    defenseTypeSets: schedule.defenseTypeSets.map((set) => ({
+      difficulty: set.difficulty ?? null,
+      defenseTypes: set.defenseTypes,
+      primaryDefenseType: set.primaryDefenseType,
+      secondaryDefenseTypes: set.secondaryDefenseTypes,
+    })),
     defenseTypes: schedule.defenseTypes.map((d) => ({
       defenseType: d.defenseType,
       difficulty: d.difficulty ?? null,

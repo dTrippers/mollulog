@@ -20,6 +20,11 @@ export type RaidListItemRaid = {
     defenseType: Defense;
     difficulty: Difficulty | string | null;
   }[];
+  defenseTypeSets?: {
+    difficulty: Difficulty | string | null;
+    defenseTypes: Defense[];
+    primaryDefenseType?: Defense;
+  }[];
 };
 
 type RaidListItemAction = {
@@ -41,7 +46,8 @@ export default function RaidListItem({
   className,
 }: RaidListItemProps) {
   const displayTimeZone = useDisplayTimeZone();
-  const { raidBoss, raidType, seasonIndex, defenseTypes, startAt, endAt, terrain } = raid;
+  const { raidBoss, raidType, seasonIndex, startAt, endAt, terrain } = raid;
+  const displayDefenseTypeSets = getDisplayDefenseTypeSets(raid);
 
   return (
     <div
@@ -89,14 +95,22 @@ export default function RaidListItem({
             )}
           </div>
           <div className="flex shrink-0 flex-col items-start gap-1">
-            {defenseTypes.map(({ defenseType, difficulty }) => (
-              <div key={`${defenseType}-${difficulty ?? "none"}`} className="flex items-center gap-1.5">
+            {displayDefenseTypeSets.map(({ defenseTypes: setDefenseTypes, difficulty }) => (
+              <div key={`${difficulty ?? "none"}-${setDefenseTypes.join("-")}`} className="flex items-center gap-1.5">
                 {difficulty && (
                   <span className="whitespace-nowrap text-xs text-neutral-500 dark:text-neutral-400">
                     {difficultyLocale[difficulty] ?? difficulty}
                   </span>
                 )}
-                <AttributeBadge text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} />
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  {setDefenseTypes.map((defenseType) => (
+                    <AttributeBadge
+                      key={defenseType}
+                      text={defenseTypeLocale[defenseType]}
+                      color={defenseTypeColor[defenseType]}
+                    />
+                  ))}
+                </div>
               </div>
             ))}
           </div>
@@ -104,4 +118,28 @@ export default function RaidListItem({
       </div>
     </div>
   );
+}
+
+function getDisplayDefenseTypeSets(raid: RaidListItemRaid) {
+  if (raid.defenseTypeSets && raid.defenseTypeSets.length > 0) {
+    return raid.defenseTypeSets.flatMap(({ difficulty, defenseTypes, primaryDefenseType }) => {
+      const fallbackPrimaryDefenseType = primaryDefenseType ?? defenseTypes[0];
+      if (!fallbackPrimaryDefenseType) {
+        return [];
+      }
+      return [
+        {
+          difficulty,
+          defenseTypes,
+          primaryDefenseType: fallbackPrimaryDefenseType,
+        },
+      ];
+    });
+  }
+
+  return raid.defenseTypes.map(({ defenseType, difficulty }) => ({
+    difficulty,
+    defenseTypes: [defenseType],
+    primaryDefenseType: defenseType,
+  }));
 }

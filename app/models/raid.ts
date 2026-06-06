@@ -1,4 +1,5 @@
 import { graphql } from "~/graphql";
+import type { Defense, Difficulty as GraphqlDifficulty } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { type UtcIsoString, compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { fetchCached } from "./base";
@@ -19,23 +20,88 @@ export type Boss =
   | "myouki-kurokage"
   | "geburah"
   | "yesod";
-const ALL_RAID_SCHEDULES_CACHE_KEY = "raids::schedules::all::v2";
+const ALL_RAID_SCHEDULES_CACHE_KEY = "raids::schedules::all::v3";
+const RAID_SCHEDULE_CACHE_VERSION = "v2";
 
 type RawRaidSchedule = NonNullable<Awaited<ReturnType<typeof runRaidScheduleDetailQuery>>>;
 
-export type NormalizedRaidSchedule = Omit<RawRaidSchedule, "startAt" | "endAt" | "jpSchedule"> & {
+export type RaidDefenseTypeSet = {
+  difficulty: GraphqlDifficulty | null;
+  defenseTypes: Defense[];
+  primaryDefenseType: Defense;
+  secondaryDefenseTypes: Defense[];
+};
+
+export type RaidDefenseType = {
+  defenseType: Defense;
+  difficulty: GraphqlDifficulty | null;
+  primary: boolean;
+  setIndex: number;
+};
+
+export function getRaidDefenseTypeSetKey(defenseTypeSet: { difficulty: string | null; defenseTypes: readonly Defense[] }) {
+  return `${defenseTypeSet.difficulty ?? "none"}:${defenseTypeSet.defenseTypes.join(",")}`;
+}
+
+export type NormalizedRaidSchedule = Omit<RawRaidSchedule, "startAt" | "endAt" | "jpSchedule" | "defenseTypeSets"> & {
   startAt: UtcIsoString | null;
   endAt: UtcIsoString | null;
   jpSchedule: RawRaidSchedule["jpSchedule"];
+  defenseTypeSets: RaidDefenseTypeSet[];
+  defenseTypes: RaidDefenseType[];
 };
 
-function normalizeRaidSchedule<T extends { startAt: Date | string | null; endAt: Date | string | null }>(
+function normalizeDefenseTypeSets(
+  defenseTypeSets: { difficulty: GraphqlDifficulty | null; defenseTypes: readonly Defense[] }[],
+): RaidDefenseTypeSet[] {
+  return defenseTypeSets.flatMap(({ difficulty, defenseTypes }) => {
+    const [primaryDefenseType, ...secondaryDefenseTypes] = defenseTypes;
+    if (!primaryDefenseType) {
+      return [];
+    }
+    return [
+      {
+        difficulty,
+        defenseTypes: [...defenseTypes],
+        primaryDefenseType,
+        secondaryDefenseTypes,
+      },
+    ];
+  });
+}
+
+function flattenDefenseTypeSets(defenseTypeSets: RaidDefenseTypeSet[]): RaidDefenseType[] {
+  return defenseTypeSets.flatMap(({ difficulty, defenseTypes }, setIndex) =>
+    defenseTypes.map((defenseType, defenseTypeIndex) => ({
+      defenseType,
+      difficulty,
+      primary: defenseTypeIndex === 0,
+      setIndex,
+    })),
+  );
+}
+
+function normalizeRaidSchedule<
+  T extends {
+    startAt: Date | string | null;
+    endAt: Date | string | null;
+    defenseTypeSets: { difficulty: GraphqlDifficulty | null; defenseTypes: Defense[] }[];
+  },
+>(
   schedule: T,
-): Omit<T, "startAt" | "endAt"> & { startAt: UtcIsoString | null; endAt: UtcIsoString | null } {
+): Omit<T, "startAt" | "endAt" | "defenseTypeSets"> & {
+  startAt: UtcIsoString | null;
+  endAt: UtcIsoString | null;
+  defenseTypeSets: RaidDefenseTypeSet[];
+  defenseTypes: RaidDefenseType[];
+} {
+  const defenseTypeSets = normalizeDefenseTypeSets(schedule.defenseTypeSets);
   return {
     ...schedule,
     startAt: schedule.startAt ? toUtcIso(schedule.startAt) : null,
     endAt: schedule.endAt ? toUtcIso(schedule.endAt) : null,
+    defenseTypeSets,
+    defenseTypes: flattenDefenseTypeSets(defenseTypeSets),
   };
 }
 
@@ -56,7 +122,7 @@ const raidScheduleDetailQuery = graphql(`
     raidSchedule(uid: $uid) {
       uid raidType seasonIndex region terrain startAt endAt attackType
       raidBoss { uid name }
-      defenseTypes { defenseType difficulty }
+      defenseTypeSets { difficulty defenseTypes }
       jpSchedule { uid seasonIndex }
     }
   }
@@ -65,7 +131,7 @@ const raidScheduleDetailQuery = graphql(`
 export function getRaidSchedule(env: Env, uid: string, forceRefresh = false) {
   return fetchCached(
     env,
-    `raids::schedules::uid=${uid}`,
+    `raids::schedules::${RAID_SCHEDULE_CACHE_VERSION}::uid=${uid}`,
     async () => {
       const schedule = await runRaidScheduleDetailQuery(env, uid);
       return schedule ? normalizeRaidSchedule(schedule) : null;
@@ -80,7 +146,7 @@ const raidScheduleBySeasonIndexQuery = graphql(`
     raidScheduleBySeasonIndex(region: $region, seasonIndex: $seasonIndex) {
       uid raidType seasonIndex region terrain startAt endAt attackType
       raidBoss { uid name }
-      defenseTypes { defenseType difficulty }
+      defenseTypeSets { difficulty defenseTypes }
       jpSchedule { uid seasonIndex }
     }
   }
@@ -108,7 +174,7 @@ const allRaidSchedulesQuery = graphql(`
       nodes {
         uid raidType seasonIndex region terrain startAt endAt attackType
         raidBoss { uid name }
-        defenseTypes { defenseType difficulty }
+        defenseTypeSets { difficulty defenseTypes }
         jpSchedule { uid seasonIndex }
       }
     }
