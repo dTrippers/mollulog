@@ -6,7 +6,7 @@ import type { ShopState } from "./useShopState";
 type UseAutoSaveParams = {
   state: ShopState;
   signedIn: boolean;
-  eventUid: string;
+  shopStateUid: string;
   savedShopState: EventShopState | null;
   isInitialLoad: boolean;
 };
@@ -15,7 +15,7 @@ type UseAutoSaveParams = {
  * Auto-save hook that periodically saves shop state changes to the server.
  * Handles synchronization and prevents unnecessary saves.
  */
-export function useAutoSave({ state, signedIn, eventUid, savedShopState, isInitialLoad }: UseAutoSaveParams) {
+export function useAutoSave({ state, signedIn, shopStateUid, savedShopState, isInitialLoad }: UseAutoSaveParams) {
   const fetcher = useFetcher();
   const saveIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const lastSavedStateRef = useRef<EventShopState | null>(null);
@@ -81,7 +81,7 @@ export function useAutoSave({ state, signedIn, eventUid, savedShopState, isIniti
           { save: currentState },
           {
             method: "post",
-            action: `/api/events/${eventUid}/shop-state`,
+            action: `/api/events/${shopStateUid}/shop-state`,
             encType: "application/json",
           },
         );
@@ -93,7 +93,7 @@ export function useAutoSave({ state, signedIn, eventUid, savedShopState, isIniti
         clearInterval(saveIntervalRef.current);
       }
     };
-  }, [state, signedIn, eventUid, fetcher, isInitialLoad]);
+  }, [state, signedIn, shopStateUid, fetcher, isInitialLoad]);
 
   const isSaving = fetcher.state === "submitting" || fetcher.state === "loading";
   return { isSaving };

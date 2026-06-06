@@ -8,6 +8,7 @@
 - DB: Cloudflare D1
 - ORM: Drizzle ORM
 - 마이그레이션: `db/migrations/*.sql`
+- 운영성 쿼리: `db/operations/*.sql`
 
 ## 모델 정의 위치
 
@@ -24,6 +25,9 @@
 1. `db/migrations` 에 SQL 추가
 2. 관련 `app/models/*.ts` 에 테이블/함수 추가
 3. route, feature, repository에서 해당 모델 사용
+
+단, 스키마 변경이 아니라 특정 운영 데이터 보정, 검증, 재집계처럼 사람이 명시적으로 실행해야 하는 SQL은
+`db/migrations` 가 아니라 `db/operations` 에 둡니다.
 
 ## 네이밍과 책임 분리
 
@@ -47,9 +51,23 @@ export async function getSomething(env: Env) {
 - 정렬과 필터는 가능하면 DB 레벨에서 처리합니다.
 - D1 특성을 고려해 한 번에 너무 큰 쿼리나 과도한 `IN` 절을 만들지 않도록 주의합니다.
 
+## 운영성 쿼리
+
+`db/operations` 는 schema migration 체인에 포함하지 않는 운영성 SQL을 둡니다.
+
+예:
+
+- 특정 배포 순서 이후 1회 실행하는 copy-only 데이터 보정
+- 운영 데이터 검증 또는 집계 쿼리
+- 자동 migration으로 묶기 어려운 수동 복구 쿼리
+
+운영성 쿼리는 `pnpm dev:db:migrate` 나 `pnpm prod:db:migrate` 로 실행하지 않습니다.
+실행이 필요한 경우 `wrangler d1 execute` 처럼 목적과 대상 환경이 드러나는 명령으로 직접 실행합니다.
+파일 상단에는 실행 조건, 재실행 가능 여부, migration이 아니라는 점을 주석으로 남깁니다.
+
 ## 마이그레이션 절차
 
-## 마이그레이션 파일명
+### 마이그레이션 파일명
 
 새 마이그레이션 파일은 `yyyymmddhhmmss_{name}.sql` 형식을 사용합니다.
 

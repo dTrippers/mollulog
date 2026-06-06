@@ -2,13 +2,16 @@ import dayjs from "~/lib/dayjs";
 
 const GAME_RESET_HOUR = 4;
 
+const STEEL_CONTINENT_PURCHASE_DAYS_LIMITS = {
+  "8540000": 14,
+  "8540001": 14,
+  "8540002": 7,
+};
+
 const SHOP_RESOURCE_PURCHASE_DAYS_LIMITS: Record<string, Record<string, number>> = {
   // BAQL shop data does not expose per-ticket sales periods for this event.
-  "steel-continent": {
-    "8540000": 14,
-    "8540001": 14,
-    "8540002": 7,
-  },
+  "steel-continent": STEEL_CONTINENT_PURCHASE_DAYS_LIMITS,
+  "854": STEEL_CONTINENT_PURCHASE_DAYS_LIMITS,
 };
 
 export function calculateShopPurchaseDays(since: Date | string | null | undefined, until: Date | string | null | undefined) {
