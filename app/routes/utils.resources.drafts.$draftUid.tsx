@@ -9,7 +9,7 @@ import {
   getUserResourceInventoryMapByItemUids,
 } from "~/models/user-resource-inventory";
 import { getItemCatalogResourceMap } from "~/repositories/item-catalog";
-import ResourceInventoryDraftReview from "./utils.growth.resources._components/ResourceInventoryDraftReview";
+import ResourceInventoryDraftReview from "./utils.resources._components/ResourceInventoryDraftReview";
 
 type ActionData = {
   error?: string;

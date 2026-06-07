@@ -14,7 +14,7 @@ import {
 } from "~/models/user-resource-inventory";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/repositories/item-catalog";
 import type { GrowthLayoutContext } from "./utils.growth._components/types";
-import ResourceInventoryEditor from "./utils.growth.resources._components/ResourceInventoryEditor";
+import ResourceInventoryEditor from "./utils.resources._components/ResourceInventoryEditor";
 
 type ResourceInventorySavePayload = {
   items?: unknown;

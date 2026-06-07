@@ -151,7 +151,7 @@ export default function ResourcePlannerLayout() {
           description: "학생들의 성장 목표를 입력하면 필요한 재화를 계산할 수 있어요",
           to: "/utils/growth/students",
           Icon: TableCellsIcon,
-        }
+        },
       ]}
     >
       <Outlet context={contextValue satisfies GrowthLayoutContext} />

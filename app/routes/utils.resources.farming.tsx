@@ -28,6 +28,11 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 export default function ResourceFarmingPage() {
   const { ownedQuantities, stages } = useLoaderData<typeof loader>();
   const { farmingStageFilter, managedStudents } = useOutletContext<GrowthLayoutContext>();
+  const stageFilter = farmingStageFilter ?? {
+    showNormal: true,
+    showHard: false,
+    prioritizeHighTier: false,
+  };
   const aggregatedRequirements = aggregateGrowthResourceRequirements(
     managedStudents.map((student) => student.resourceRequirements),
   );
@@ -40,9 +45,9 @@ export default function ResourceFarmingPage() {
       farmingNeeded={farmingNeeded}
       farmingRequirements={farmingRequirements}
       stages={stages}
-      showNormal={farmingStageFilter.showNormal}
-      showHard={farmingStageFilter.showHard}
-      prioritizeHighTier={farmingStageFilter.prioritizeHighTier}
+      showNormal={stageFilter.showNormal}
+      showHard={stageFilter.showHard}
+      prioritizeHighTier={stageFilter.prioritizeHighTier}
     />
   );
 }

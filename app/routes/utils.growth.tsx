@@ -78,11 +78,6 @@ export default function GrowthLayout() {
     managedStudents,
     availableStudents: loaderData.availableStudents,
     updateStudent,
-    farmingStageFilter: {
-      showNormal: true,
-      showHard: true,
-      prioritizeHighTier: false,
-    },
   };
 
   return (
