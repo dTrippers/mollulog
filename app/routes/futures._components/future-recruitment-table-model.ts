@@ -29,6 +29,7 @@ export type FutureRecruitmentTableRecruitment = {
 
 export type FutureRecruitmentTableContent = {
   uid: string;
+  recruitmentGroupUid?: string | null;
   name: string;
   link?: string;
   imageUrl?: string | null;

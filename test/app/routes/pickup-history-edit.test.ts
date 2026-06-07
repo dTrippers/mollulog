@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getPickupHistory } from "~/models/pickup-history";
+import { getRecruitmentResult, getRecruitmentResultComment } from "~/models/recruitment-result";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
@@ -12,8 +13,14 @@ jest.mock("~/auth/authenticator.server", () => ({
 
 jest.mock("~/models/pickup-history", () => ({
   getPickupHistory: jest.fn(),
-  createPickupHistory: jest.fn(),
-  updatePickupHistory: jest.fn(),
+}));
+
+jest.mock("~/models/recruitment-result", () => ({
+  getRecruitmentResult: jest.fn(),
+  getRecruitmentResultComment: jest.fn(),
+  createRecruitmentResultStudentsFromPickupHistory: jest.fn(),
+  getRecruitmentResultTrialFromPickupHistory: jest.fn(),
+  upsertRecruitmentResult: jest.fn(),
 }));
 
 jest.mock("~/models/student", () => ({
@@ -36,6 +43,10 @@ jest.mock("~/repositories", () => ({
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetPickupHistory = getPickupHistory as jest.MockedFunction<typeof getPickupHistory>;
+const mockedGetRecruitmentResult = getRecruitmentResult as jest.MockedFunction<typeof getRecruitmentResult>;
+const mockedGetRecruitmentResultComment = getRecruitmentResultComment as jest.MockedFunction<
+  typeof getRecruitmentResultComment
+>;
 const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
 const mockedGetTimelineContentsByRecruitmentGroupUids =
   getTimelineContentsByRecruitmentGroupUids as jest.MockedFunction<typeof getTimelineContentsByRecruitmentGroupUids>;
@@ -93,6 +104,8 @@ describe("pickup history editor loader", () => {
       uid: "sensei-1",
       username: "sensei",
     } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue(null);
+    mockedGetRecruitmentResultComment.mockResolvedValue(null);
     mockedGetPickupHistory.mockResolvedValue(null);
     mockedGetAllStudents.mockResolvedValue([]);
     mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
@@ -137,6 +150,8 @@ describe("pickup history editor loader", () => {
       uid: "sensei-1",
       username: "sensei",
     } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue(null);
+    mockedGetRecruitmentResultComment.mockResolvedValue(null);
     mockedGetPickupHistory.mockResolvedValue(null);
     mockedGetAllStudents.mockResolvedValue([]);
     mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([]);

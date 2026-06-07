@@ -19,6 +19,7 @@ import type { PickupResources } from "~/components/features/futures";
 import type { PyroxenePlannerOptions, PyroxeneTimelineItem, PyroxeneEventData } from "~/models/pyroxene-planner";
 import Page from "~/components/features/layout/Page";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
 import {
   createPyroxeneOwnedResource,
   createBuyPyroxene,
@@ -66,16 +67,22 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       timelineItems: [],
       calcOptions: defaultPyroxenePlannerOptions,
       eventData: [],
+      recruitmentResultCompletions: [],
     };
   }
 
   // 사용자 데이터 쿼리 5개는 모두 독립적이므로 병렬 실행
-  const [favoritedStudents, latestResources, savedOptions, eventData, timelineItems] = await Promise.all([
+  const recruitmentGroupUids = contents
+    .flatMap((content) => (content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : []));
+
+  const [favoritedStudents, latestResources, savedOptions, eventData, timelineItems, recruitmentResults] =
+    await Promise.all([
     getUserFavoritedStudents(env, currentUser.id),
     getLatestPyroxeneOwnedResource(env, currentUser.id),
     getPyroxenePlannerOptions(env, currentUser.id),
     getAllPyroxeneEventData(env, currentUser.id),
     getPyroxeneTimelineItems(env, currentUser.id),
+    getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
   ]);
 
   return {
@@ -94,6 +101,16 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     timelineItems,
     calcOptions: savedOptions,
     eventData,
+    recruitmentResultCompletions: recruitmentResults.flatMap((result) => {
+      if (!result.completedAt) {
+        return [];
+      }
+
+      const content = contents.find(
+        (content) => content.kind === "event" && content.recruitmentGroupUid === result.recruitmentGroupUid,
+      );
+      return content ? [{ eventUid: content.uid, recruitmentGroupUid: result.recruitmentGroupUid }] : [];
+    }),
   };
 };
 
@@ -442,8 +459,15 @@ export default function PyroxenePlanner() {
         expectedTrials: data.expectedTrials,
       });
     }
+    for (const completion of loaderData.recruitmentResultCompletions ?? []) {
+      const existing = map.get(completion.eventUid);
+      map.set(completion.eventUid, {
+        completed: true,
+        expectedTrials: existing?.expectedTrials ?? null,
+      });
+    }
     return map;
-  }, [localEventData]);
+  }, [loaderData.recruitmentResultCompletions, localEventData]);
 
   const scheduleItems = usePyroxeneScheduleItems(contents, favoritedStudents, localTimelineItems);
 

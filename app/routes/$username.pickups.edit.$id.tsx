@@ -4,15 +4,20 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction, re
 import { useLoaderData, useSearchParams, useSubmit } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
-import { FilterButtons, SubTitle, Title } from "~/components/primitives";
+import { FilterButtons, SubTitle, Textarea, Title } from "~/components/primitives";
 import { compareInstantDesc, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import {
   type PickupHistory,
-  createPickupHistory,
   getPickupHistory,
-  updatePickupHistory,
 } from "~/models/pickup-history";
+import {
+  createRecruitmentResultStudentsFromPickupHistory,
+  getRecruitmentResult,
+  getRecruitmentResultComment,
+  getRecruitmentResultTrialFromPickupHistory,
+  upsertRecruitmentResult,
+} from "~/models/recruitment-result";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
@@ -22,6 +27,15 @@ import PickupHistoryImporter from "./$username.pickups._components/PickupHistory
 const PICKUP_EVENT_SELECTOR_LIMIT = 20;
 
 export const meta: MetaFunction = () => [{ title: "모집 이력 관리 | 몰루로그" }];
+
+type EditablePickupHistory = Omit<PickupHistory, "result"> & {
+  result: {
+    trial: number | null;
+    tier3Count: number;
+    tier3StudentIds: string[];
+  }[];
+  comment?: string | null;
+};
 
 function getRouteUsername(params: { username?: string }) {
   const usernameParam = params.username;
@@ -47,9 +61,28 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   }
 
   const recruitmentRepository = new RecruitmentRepository(env);
-  let currentPickupHistory = null;
+  let currentPickupHistory: EditablePickupHistory | null = null;
   if (params.id && params.id !== "new") {
-    currentPickupHistory = await getPickupHistory(env, sensei.id, params.id, true);
+    const currentRecruitmentResult = await getRecruitmentResult(env, sensei.id, params.id);
+    const currentRecruitmentResultComment = currentRecruitmentResult
+      ? await getRecruitmentResultComment(env, sensei.id, currentRecruitmentResult.commentPostUid)
+      : null;
+    currentPickupHistory = currentRecruitmentResult
+      ? {
+          uid: currentRecruitmentResult.uid,
+          userId: currentRecruitmentResult.userId,
+          eventId: currentRecruitmentResult.recruitmentGroupUid,
+          result: [
+            {
+              trial: currentRecruitmentResult.trial,
+              tier3Count: currentRecruitmentResult.recruitedStudents.length,
+              tier3StudentIds: currentRecruitmentResult.recruitedStudents.map((student) => student.studentUid),
+            },
+          ],
+          rawResult: currentRecruitmentResult.rawResult,
+          comment: currentRecruitmentResultComment,
+        }
+      : await getPickupHistory(env, sensei.id, params.id, true);
   }
 
   const now = nowUtcIso();
@@ -116,6 +149,7 @@ type ActionData = {
   eventUid: string;
   result: PickupHistory["result"];
   rawResult?: string;
+  comment?: string | null;
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
@@ -129,12 +163,18 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   }
 
   const data = await request.json<ActionData>();
+  const timelineContent = (await getTimelineContentsByRecruitmentGroupUids(env, [data.eventUid]))[0];
 
-  if (params.id && params.id !== "new") {
-    await updatePickupHistory(env, sensei.id, params.id, data.eventUid, data.result, data.rawResult);
-  } else {
-    await createPickupHistory(env, sensei.id, data.eventUid, data.result, data.rawResult ?? null);
-  }
+  await upsertRecruitmentResult(env, sensei.id, {
+    uid: params.id && params.id !== "new" ? params.id : undefined,
+    recruitmentGroupUid: data.eventUid,
+    contentUid: timelineContent?.uid ?? null,
+    completedAt: nowUtcIso(),
+    recruitedStudents: createRecruitmentResultStudentsFromPickupHistory({ result: data.result }),
+    trial: getRecruitmentResultTrialFromPickupHistory({ result: data.result }),
+    rawResult: data.rawResult ?? null,
+    comment: data.comment ?? null,
+  });
   return redirect("/my?path=pickups");
 };
 
@@ -156,7 +196,10 @@ export default function EditPickup() {
   let initialTier3Count: number | undefined = undefined;
   let initialTier3StudentUids: string[] | undefined = undefined;
   if (currentPickupHistory?.result) {
-    initialTotalCount = Math.max(...currentPickupHistory.result.map((trial) => trial.trial));
+    const recordedTrials = currentPickupHistory.result
+      .map((trial) => trial.trial)
+      .filter((trial): trial is number => trial !== null);
+    initialTotalCount = recordedTrials.length > 0 ? Math.max(...recordedTrials) : undefined;
     for (const trial of currentPickupHistory.result) {
       initialTier3Count = (initialTier3Count ?? 0) + trial.tier3Count;
       initialTier3StudentUids = (initialTier3StudentUids ?? ([] as string[])).concat(trial.tier3StudentIds);
@@ -167,6 +210,7 @@ export default function EditPickup() {
   const [eventUid, setEventUid] = useState<string | null>(initialEvent?.uid ?? null);
 
   const [editorMode, setEditorMode] = useState<"edit" | "import">(currentPickupHistory?.rawResult ? "import" : "edit");
+  const [comment, setComment] = useState(currentPickupHistory?.comment ?? "");
 
   const rawSubmit = useSubmit();
   const submit = (data: ActionData) => rawSubmit(data, { method: "post", encType: "application/json" });
@@ -220,6 +264,7 @@ export default function EditPickup() {
                       tier3StudentIds: result.tier3StudentIds,
                     },
                   ],
+                  comment: comment.trim() || null,
                 })
               }
             />
@@ -236,10 +281,18 @@ export default function EditPickup() {
                   eventUid,
                   result: [{ trial: totalCount, tier3Count, tier3StudentIds }],
                   rawResult: rawData,
+                  comment: comment.trim() || null,
                 })
               }
             />
           )}
+          <SubTitle text="모집 결과 의견" />
+          <Textarea
+            value={comment}
+            rows={4}
+            placeholder="남긴 의견은 다른 사람에게 공개돼요."
+            onChange={setComment}
+          />
         </>
       )}
     </>

@@ -23,6 +23,7 @@ export type ContentTimelineProps = {
     endless: boolean;
     runType: "first" | "rerun" | "permanent";
     uid: string;
+    recruitmentGroupUid?: string | null;
     link: string;
     contentType: EventType | RaidType;
     confirmed?: boolean;
@@ -36,6 +37,8 @@ export type ContentTimelineProps = {
 
   favoritedStudents?: { contentUid: string; studentUid: string }[];
   favoritedCounts: { contentUid: string; studentUid: string; count: number }[];
+  completedRecruitmentStudents?: { recruitmentGroupUid: string; studentUid: string }[];
+  recruitmentResultEditLinks?: { recruitmentGroupUid: string; link: string }[];
 
   signedIn: boolean;
   revealedSpoilerContentUids?: string[];
@@ -54,6 +57,12 @@ export type ContentTimelineProps = {
   onCommentUnpin?: (contentUid: string) => void;
   isSubmittingComment?: boolean;
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void;
+  onRecruitmentComplete?: (
+    contentUid: string,
+    recruitmentGroupUid: string,
+    studentUid: string,
+    completed: boolean,
+  ) => void;
 };
 
 type ContentGroup = {
@@ -93,6 +102,8 @@ export default function ContentTimeline({
   contents,
   favoritedStudents,
   favoritedCounts,
+  completedRecruitmentStudents = [],
+  recruitmentResultEditLinks = [],
   revealedSpoilerContentUids = [],
   onRevealSpoiler,
   onHideSpoiler,
@@ -103,6 +114,7 @@ export default function ContentTimeline({
   onCommentPin,
   onCommentUnpin,
   onFavorite,
+  onRecruitmentComplete,
   isSubmittingComment,
   signedIn,
 }: ContentTimelineProps) {
@@ -196,6 +208,31 @@ export default function ContentTimeline({
                         .map(({ studentUid }) => studentUid)}
                       favoritedCounts={favoriteStudentIdsByContents[content.uid]}
                       onFavorite={(studentUid, favorited) => onFavorite?.(content.uid, studentUid, favorited)}
+                      completedStudentUids={
+                        content.recruitmentGroupUid
+                          ? completedRecruitmentStudents
+                              .filter((student) => student.recruitmentGroupUid === content.recruitmentGroupUid)
+                              .map((student) => student.studentUid)
+                          : []
+                      }
+                      recruitmentResultEditLink={
+                        content.recruitmentGroupUid
+                          ? recruitmentResultEditLinks.find(
+                              (item) => item.recruitmentGroupUid === content.recruitmentGroupUid,
+                            )?.link
+                          : undefined
+                      }
+                      onRecruitmentComplete={
+                        content.recruitmentGroupUid
+                          ? (studentUid, completed) =>
+                              onRecruitmentComplete?.(
+                                content.uid,
+                                content.recruitmentGroupUid as string,
+                                studentUid,
+                                completed,
+                              )
+                          : undefined
+                      }
                       isSubmittingComment={isSubmittingComment}
                       signedIn={signedIn}
                     />

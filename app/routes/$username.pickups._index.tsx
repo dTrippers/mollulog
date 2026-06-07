@@ -5,7 +5,7 @@ import { AddContentButton } from "~/components/features/editor";
 import { SubTitle } from "~/components/primitives";
 import { compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import { deletePickupHistory, getPickupHistories } from "~/models/pickup-history";
+import { deleteRecruitmentResult, getRecruitmentResults } from "~/models/recruitment-result";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
@@ -34,7 +34,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   }
 
   const formData = await request.formData();
-  await deletePickupHistory(env, sensei.id, formData.get("uid") as string);
+  await deleteRecruitmentResult(env, sensei.id, formData.get("uid") as string);
   return null;
 };
 
@@ -53,18 +53,20 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const sensei = await getRouteSensei(env, params);
   const recruitmentRepository = new RecruitmentRepository(env);
 
-  const [recruitmentHistories, allStudentsMap] = await Promise.all([
-    getPickupHistories(env, sensei.id),
-    getAllStudentsMap(env),
+  const [recruitmentResults, allStudentsMap] = await Promise.all([
+    getRecruitmentResults(env, sensei.id),
+    getAllStudentsMap(env, true),
   ]);
-  const eventUids = recruitmentHistories.map((history) => history.eventId);
+  const eventUids = recruitmentResults.map((result) => result.recruitmentGroupUid);
 
-  const [groups, timelineContents] = await Promise.all([
+  const [groups, timelineContents, poolStudents] = await Promise.all([
     recruitmentRepository.getByUids(eventUids),
     getTimelineContentsByRecruitmentGroupUids(env, eventUids),
+    recruitmentRepository.getPoolStudents(),
   ]);
 
   const groupMap = new Map(groups.map((group) => [group.uid, group] as const));
+  const poolStudentsMap = new Map(poolStudents.map((student) => [student.uid, student] as const));
   const timelineContentMap = new Map(
     timelineContents.flatMap((content) =>
       content.recruitmentGroupUid ? [[content.recruitmentGroupUid, content] as const] : [],
@@ -76,50 +78,68 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let pickupCount = 0;
   let pickupRateCount = 0;
   let totalTrial = 0;
+  let missingTrialCount = 0;
 
-  const aggregatedHistories = recruitmentHistories
-    .map((history) => {
-      const group = groupMap.get(history.eventId);
-      const timelineContent = timelineContentMap.get(history.eventId);
+  const aggregatedHistories = recruitmentResults
+    .filter((result) => result.completedAt !== null || result.recruitedStudents.length > 0)
+    .map((result) => {
+      const group = groupMap.get(result.recruitmentGroupUid);
+      const timelineContent = timelineContentMap.get(result.recruitmentGroupUid);
       if (!timelineContent) {
         throw routeError(500, "pickup_history.timeline_content_missing", "모집 이력 정보를 불러오지 못했어요", {
-          eventId: history.eventId,
+          eventId: result.recruitmentGroupUid,
         });
       }
 
       const pickupStudentUids = group ? getPickupStudentUids(group) : new Set<string>();
-      const allTier3StudentIds = history.result.flatMap((trial) => trial.tier3StudentIds);
-      const students = allTier3StudentIds
-        .filter((studentUid) => studentUid && allStudentsMap[studentUid])
-        .map((studentUid) => {
-          const student = allStudentsMap[studentUid];
+      const groupStudentsMap = new Map(
+        group?.recruitments.flatMap(({ student }) => (student ? [[student.uid, student] as const] : [])) ?? [],
+      );
+      const recruitedStudents = result.recruitedStudents;
+      const students = recruitedStudents
+        .filter(({ studentUid }) => studentUid)
+        .map(({ studentUid, pickup }) => {
+          const student = allStudentsMap[studentUid] ?? poolStudentsMap.get(studentUid) ?? groupStudentsMap.get(studentUid);
+          if (!student) {
+            throw routeError(500, "pickup_history.student_missing", "모집한 학생 정보를 불러오지 못했어요", {
+              recruitmentResultUid: result.uid,
+              recruitmentGroupUid: result.recruitmentGroupUid,
+              studentUid,
+            });
+          }
+
           return {
-            uid: student.uid,
+            uid: studentUid,
             name: student.name,
             tier: student.initialTier,
-            pickup: pickupStudentUids.has(studentUid),
+            pickup: pickup || pickupStudentUids.has(studentUid),
           };
         });
 
-      const currentTier3Count = history.result.reduce((sum, trial) => sum + trial.tier3Count, 0);
-      const currentPickupCount = allTier3StudentIds.filter((uid) => pickupStudentUids.has(uid)).length;
+      const tier3Students = students.filter(({ tier }) => tier === 3);
+      const currentTier3Count = tier3Students.length;
+      const currentPickupCount = tier3Students.filter(({ pickup }) => pickup).length;
       const rateMultiplier = group?.recruitmentType === "fes" ? 0.5 : 1;
 
       tier3Count += currentTier3Count;
       pickupCount += currentPickupCount;
-      tier3RateCount += currentTier3Count * rateMultiplier;
-      pickupRateCount += currentPickupCount * rateMultiplier;
-      totalTrial += history.result.length > 0 ? Math.max(...history.result.map((result) => result.trial)) : 0;
+      if (result.trial === null) {
+        missingTrialCount += 1;
+      } else {
+        tier3RateCount += currentTier3Count * rateMultiplier;
+        pickupRateCount += currentPickupCount * rateMultiplier;
+        totalTrial += result.trial;
+      }
 
       return {
-        uid: history.uid,
+        uid: result.uid,
         event: {
           uid: timelineContent.uid,
           name: timelineContent.name,
           type: group?.recruitmentType ?? "pickup",
           since: timelineContent.startAt,
         },
-        trial: history.result.length > 0 ? history.result[history.result.length - 1].trial : 0,
+        trial: result.trial,
         recruitedStudents: students,
       };
     })
@@ -135,6 +155,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       tier3RateCount,
       pickupCount,
       pickupRateCount,
+      missingTrialCount,
     },
   };
 };
@@ -184,6 +205,7 @@ export default function UserPickups() {
             event={event}
             recruitedStudents={recruitedStudents}
             trial={trial}
+            trialMissing={trial === null}
             editable={me}
           />
         );

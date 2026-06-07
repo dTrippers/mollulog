@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
-import { fetchYoutubeFeedVideos, getHomeYoutubeSections, syncYoutubeCommunityPosts } from "~/models/youtube";
 import { getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community";
+import { fetchYoutubeFeedVideos, getHomeYoutubeSections, syncYoutubeCommunityPosts } from "~/models/youtube";
 
 jest.mock("~/models/community", () => ({
   getCommunityFeedPage: jest.fn(),
@@ -38,9 +38,7 @@ describe("fetchYoutubeFeedVideos", () => {
       throw new Error("youtube unavailable");
     });
 
-    await expect(fetchYoutubeFeedVideos()).rejects.toThrow(
-      "All YouTube channel fetches failed or returned no videos",
-    );
+    await expect(fetchYoutubeFeedVideos()).rejects.toThrow("All YouTube channel fetches failed or returned no videos");
   });
 
   it("returns successful channel videos with channel metadata when one channel fails", async () => {
@@ -81,12 +79,15 @@ describe("fetchYoutubeFeedVideos", () => {
 
 describe("syncYoutubeCommunityPosts", () => {
   it("upserts every fetched video into community posts", async () => {
-    jest.spyOn(global, "fetch").mockImplementation(async () => ({
-      ok: true,
-      status: 200,
-      statusText: "OK",
-      text: async () => createFeedXml("video-1", "Video 1"),
-    }) as Response);
+    jest.spyOn(global, "fetch").mockImplementation(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          text: async () => createFeedXml("video-1", "Video 1"),
+        }) as Response,
+    );
     mockedUpsertYoutubeVideoCommunityPost.mockResolvedValue(undefined);
 
     await expect(syncYoutubeCommunityPosts({} as Env)).resolves.toEqual({ synced: 2 });

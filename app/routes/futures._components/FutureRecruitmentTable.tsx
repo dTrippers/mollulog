@@ -1,5 +1,11 @@
-import { CheckCircleIcon, StarIcon } from "@heroicons/react/16/solid";
-import { HeartIcon as EmptyHeartIcon, IdentificationIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon as CheckCircleSolidIcon, StarIcon } from "@heroicons/react/16/solid";
+import {
+  CheckCircleIcon,
+  HeartIcon as EmptyHeartIcon,
+  IdentificationIcon,
+  PencilSquareIcon,
+  XCircleIcon,
+} from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { useMemo } from "react";
 import { Link } from "react-router";
@@ -23,16 +29,27 @@ type FutureRecruitmentTableProps = {
   contents: FutureRecruitmentTableContent[];
   favoritedStudents: { contentUid: string; studentUid: string }[];
   favoritedCounts: { contentUid: string; studentUid: string; count: number }[];
+  completedRecruitmentStudents: { recruitmentGroupUid: string; studentUid: string }[];
+  recruitmentResultEditLinks: { recruitmentGroupUid: string; link: string }[];
   revealedSpoilerContentUids: string[];
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void;
+  onRecruitmentComplete?: (
+    contentUid: string,
+    recruitmentGroupUid: string,
+    studentUid: string,
+    completed: boolean,
+  ) => void;
 };
 
 export default function FutureRecruitmentTable({
   contents,
   favoritedStudents,
   favoritedCounts,
+  completedRecruitmentStudents,
+  recruitmentResultEditLinks,
   revealedSpoilerContentUids,
   onFavorite,
+  onRecruitmentComplete,
 }: FutureRecruitmentTableProps) {
   const timeZone = useDisplayTimeZone();
   const rows = useMemo(() => buildFutureRecruitmentTableRows(contents, timeZone), [contents, timeZone]);
@@ -46,8 +63,11 @@ export default function FutureRecruitmentTable({
       rows={rows}
       favoritedStudents={favoritedStudents}
       favoritedCounts={favoritedCounts}
+      completedRecruitmentStudents={completedRecruitmentStudents}
+      recruitmentResultEditLinks={recruitmentResultEditLinks}
       revealedSpoilerContentUids={revealedSpoilerContentUids}
       onFavorite={onFavorite}
+      onRecruitmentComplete={onRecruitmentComplete}
     />
   );
 }
@@ -56,14 +76,25 @@ function DesktopRecruitmentTable({
   rows,
   favoritedStudents,
   favoritedCounts,
+  completedRecruitmentStudents,
+  recruitmentResultEditLinks,
   revealedSpoilerContentUids,
   onFavorite,
+  onRecruitmentComplete,
 }: {
   rows: FutureRecruitmentTableRow[];
   favoritedStudents: { contentUid: string; studentUid: string }[];
   favoritedCounts: { contentUid: string; studentUid: string; count: number }[];
+  completedRecruitmentStudents: { recruitmentGroupUid: string; studentUid: string }[];
+  recruitmentResultEditLinks: { recruitmentGroupUid: string; link: string }[];
   revealedSpoilerContentUids: string[];
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void;
+  onRecruitmentComplete?: (
+    contentUid: string,
+    recruitmentGroupUid: string,
+    studentUid: string,
+    completed: boolean,
+  ) => void;
 }) {
   return (
     <div className="hidden lg:block overflow-x-auto rounded-lg border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900">
@@ -95,7 +126,10 @@ function DesktopRecruitmentTable({
                     groups={row.recruitments}
                     favoritedStudents={favoritedStudents}
                     favoritedCounts={favoritedCounts}
+                    completedRecruitmentStudents={completedRecruitmentStudents}
+                    recruitmentResultEditLinks={recruitmentResultEditLinks}
                     onFavorite={onFavorite}
+                    onRecruitmentComplete={onRecruitmentComplete}
                   />
                 </TableCell>
               )}
@@ -148,14 +182,33 @@ function RecruitmentStudents({
   groups,
   favoritedStudents,
   favoritedCounts,
+  completedRecruitmentStudents,
+  recruitmentResultEditLinks,
   onFavorite,
+  onRecruitmentComplete,
 }: {
   groups: FutureRecruitmentTableRecruitmentGroup[];
   favoritedStudents: { contentUid: string; studentUid: string }[];
   favoritedCounts: { contentUid: string; studentUid: string; count: number }[];
+  completedRecruitmentStudents: { recruitmentGroupUid: string; studentUid: string }[];
+  recruitmentResultEditLinks: { recruitmentGroupUid: string; link: string }[];
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void;
+  onRecruitmentComplete?: (
+    contentUid: string,
+    recruitmentGroupUid: string,
+    studentUid: string,
+    completed: boolean,
+  ) => void;
 }) {
-  const groupedStudents = getRecruitmentContentStudentGroups(groups, favoritedStudents, favoritedCounts, onFavorite);
+  const groupedStudents = getRecruitmentContentStudentGroups(
+    groups,
+    favoritedStudents,
+    favoritedCounts,
+    completedRecruitmentStudents,
+    recruitmentResultEditLinks,
+    onFavorite,
+    onRecruitmentComplete,
+  );
   const now = nowUtcIso();
   if (groupedStudents.length === 0) {
     return null;
@@ -251,7 +304,7 @@ function getRecruitmentContentTags(content: FutureRecruitmentTableContent, now: 
   }
 
   if (content.confirmed && isInstantAfter(content.startAt, now)) {
-    tags.push({ Icon: CheckCircleIcon, text: "확정", color: "green" });
+    tags.push({ Icon: CheckCircleSolidIcon, text: "확정", color: "green" });
   }
 
   if (
@@ -296,7 +349,7 @@ function RecruitmentStudentSection({
       {title && <p className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{title}</p>}
       <div className="grid w-fit grid-cols-4 gap-x-1.5 gap-y-2">
         {students.map((student) => {
-          const HeartIcon = student.favorited ? FilledHeartIcon : EmptyHeartIcon;
+          const StatusIcon = student.completed ? CheckCircleIcon : student.favorited ? FilledHeartIcon : EmptyHeartIcon;
 
           return (
             <div key={student.uid ?? student.name} className="w-14 sm:w-16">
@@ -311,9 +364,9 @@ function RecruitmentStudentSection({
                 popups={student.popups}
               />
               <div
-                className={`mt-0.5 flex items-center justify-center gap-0.5 text-xs font-semibold leading-none ${student.favorited ? "text-red-500 dark:text-red-400" : "text-neutral-500 dark:text-neutral-400"}`}
+                className={`mt-0.5 flex items-center justify-center gap-0.5 text-xs font-semibold leading-none ${student.completed ? "text-green-500 dark:text-green-400" : student.favorited ? "text-red-500 dark:text-red-400" : "text-neutral-500 dark:text-neutral-400"}`}
               >
-                <HeartIcon className="size-3" />
+                <StatusIcon className="size-3" />
                 <span>{student.favoritedCount}</span>
               </div>
             </div>
@@ -335,7 +388,15 @@ function getRecruitmentContentStudentGroups(
   groups: FutureRecruitmentTableRecruitmentGroup[],
   favoritedStudents: { contentUid: string; studentUid: string }[],
   favoritedCounts: { contentUid: string; studentUid: string; count: number }[],
+  completedRecruitmentStudents: { recruitmentGroupUid: string; studentUid: string }[],
+  recruitmentResultEditLinks: { recruitmentGroupUid: string; link: string }[],
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void,
+  onRecruitmentComplete?: (
+    contentUid: string,
+    recruitmentGroupUid: string,
+    studentUid: string,
+    completed: boolean,
+  ) => void,
 ) {
   const contentGroups: FutureRecruitmentTableContentStudentGroup[] = [];
 
@@ -349,7 +410,17 @@ function getRecruitmentContentStudentGroups(
       contentGroups.push(contentGroup);
     }
 
-    contentGroup.students.push(getRecruitmentStudentGroup(group, favoritedStudents, favoritedCounts, onFavorite));
+    contentGroup.students.push(
+      getRecruitmentStudentGroup(
+        group,
+        favoritedStudents,
+        favoritedCounts,
+        completedRecruitmentStudents,
+        recruitmentResultEditLinks,
+        onFavorite,
+        onRecruitmentComplete,
+      ),
+    );
   }
 
   return contentGroups;
@@ -359,7 +430,15 @@ function getRecruitmentStudentGroup(
   group: FutureRecruitmentTableRecruitmentGroup,
   favoritedStudents: { contentUid: string; studentUid: string }[],
   favoritedCounts: { contentUid: string; studentUid: string; count: number }[],
+  completedRecruitmentStudents: { recruitmentGroupUid: string; studentUid: string }[],
+  recruitmentResultEditLinks: { recruitmentGroupUid: string; link: string }[],
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void,
+  onRecruitmentComplete?: (
+    contentUid: string,
+    recruitmentGroupUid: string,
+    studentUid: string,
+    completed: boolean,
+  ) => void,
 ) {
   const recruitment = group.recruitment;
   const studentUid = recruitment.student?.uid ?? null;
@@ -370,6 +449,17 @@ function getRecruitmentStudentGroup(
     ? favoritedCounts.find((item) => item.contentUid === group.content.uid && item.studentUid === studentUid)?.count
     : undefined;
   const label = recruitmentLabelLocale(recruitment);
+  const completed = Boolean(
+    group.content.recruitmentGroupUid &&
+      studentUid &&
+      completedRecruitmentStudents.some(
+        (student) =>
+          student.recruitmentGroupUid === group.content.recruitmentGroupUid && student.studentUid === studentUid,
+      ),
+  );
+  const resultEditLink = group.content.recruitmentGroupUid
+    ? recruitmentResultEditLinks.find((item) => item.recruitmentGroupUid === group.content.recruitmentGroupUid)?.link
+    : undefined;
 
   return {
     uid: studentUid,
@@ -379,6 +469,7 @@ function getRecruitmentStudentGroup(
     role: recruitment.student?.role,
     schaleDbId: recruitment.student?.schaleDbId,
     label,
+    completed,
     pickup: recruitment.pickup,
     favorited,
     favoritedCount: favoritedCount ?? 0,
@@ -395,6 +486,32 @@ function getRecruitmentStudentGroup(
                 text: "관심 학생에 등록",
                 onClick: () => onFavorite?.(group.content.uid, studentUid, true),
               },
+          ...(onRecruitmentComplete && group.content.recruitmentGroupUid
+            ? [
+                completed
+                  ? {
+                      Icon: XCircleIcon,
+                      text: "모집 완료 취소",
+                      onClick: () =>
+                        onRecruitmentComplete(group.content.uid, group.content.recruitmentGroupUid as string, studentUid, false),
+                    }
+                  : {
+                      Icon: CheckCircleIcon,
+                      text: "모집 완료로 표시",
+                      onClick: () =>
+                        onRecruitmentComplete(group.content.uid, group.content.recruitmentGroupUid as string, studentUid, true),
+                    },
+              ]
+            : []),
+          ...(resultEditLink
+            ? [
+                {
+                  Icon: PencilSquareIcon,
+                  text: "모집 결과 상세 입력/수정",
+                  link: resultEditLink,
+                },
+              ]
+            : []),
           {
             Icon: IdentificationIcon,
             text: "학생부 보기 (평가/통계)",

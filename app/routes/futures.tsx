@@ -19,8 +19,10 @@ import {
 import type { EventType, RaidType } from "~/models/content.d";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/models/raid";
+import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
+import type { ActionData as RecruitmentResultActionData } from "./api.recruitment-results";
 import FutureRecruitmentTable from "./futures._components/FutureRecruitmentTable";
 import type { FutureRecruitmentTableContent } from "./futures._components/future-recruitment-table-model";
 
@@ -49,6 +51,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
     contentType: content.contentType,
     runType: content.runType,
     contentUid: content.contentUid,
+    recruitmentGroupUid: content.recruitmentGroupUid,
     imageUrl: content.imageUrl,
     confirmed: content.confirmed,
     isSpoiler: content.isSpoiler,
@@ -77,11 +80,18 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
     allComments[content.uid] = nestComments(contentComments, currentUser);
   }
 
+  const recruitmentGroupUids = contents
+    .map((content) => content.recruitmentGroupUid)
+    .filter((uid): uid is string => uid !== null);
+
   return {
     signedIn,
     contents,
     favoritedStudents: signedIn ? await getUserFavoritedStudents(env, currentUser.id) : null,
     favoritedCounts: await getFavoritedCounts(env, allStudentUids),
+    recruitmentResults: signedIn
+      ? await getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids)
+      : [],
     allComments,
   };
 };
@@ -116,7 +126,14 @@ type FutureContentForView = Pick<
   | "recruitments"
   | "raidInfo"
 >;
-type FutureContentsLoaderContent = FutureContentForView & Pick<FutureContent, "contentUid">;
+type FutureContentsLoaderContent = FutureContentForView & Pick<FutureContent, "contentUid" | "recruitmentGroupUid">;
+type RecruitmentResultState = {
+  uid: string;
+  recruitmentGroupUid: string;
+  contentUid: string | null;
+  completedAt: string | null;
+  recruitedStudents: { studentUid: string; tier: number; pickup: boolean }[];
+};
 type FavoriteStudentLoaderData = { contentId: string; studentId: string };
 type FavoritedCountLoaderData = FavoriteStudentLoaderData & { count: number };
 type FutureContentsLoaderData = {
@@ -124,10 +141,13 @@ type FutureContentsLoaderData = {
   contents: FutureContentsLoaderContent[];
   favoritedStudents: FavoriteStudentLoaderData[] | null;
   favoritedCounts: FavoritedCountLoaderData[];
+  recruitmentResults: RecruitmentResultState[];
   allComments: Record<string, NestedComment[]>;
 };
 type AllCommentsState = FutureContentsLoaderData["allComments"];
 type FutureRecruitment = FutureContent["recruitments"][number];
+type CompletedRecruitmentStudentState = { recruitmentGroupUid: string; studentUid: string };
+type RecruitmentResultEditLinkState = { recruitmentGroupUid: string; link: string };
 
 function getContentLink(content: {
   contentType: EventType | RaidType;
@@ -233,6 +253,9 @@ export default function FutureContents() {
     ),
   );
   const [allComments, setAllComments] = useState<AllCommentsState>(initialComments);
+  const [recruitmentResults, setRecruitmentResults] = useState<RecruitmentResultState[]>(
+    loaderData.recruitmentResults,
+  );
 
   const favoriteFetcher = useFetcher();
   const submitFavorite = (data: ContentsActionData) =>
@@ -247,6 +270,34 @@ export default function FutureContents() {
     });
 
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
+
+  const recruitmentResultFetcher = useFetcher();
+  const submitRecruitmentResult = (data: RecruitmentResultActionData) =>
+    recruitmentResultFetcher.submit(data, {
+      action: "/api/recruitment-results",
+      method: "post",
+      encType: "application/json",
+    });
+
+  useEffect(() => {
+    const response = recruitmentResultFetcher.data as
+      | { success?: boolean; result?: RecruitmentResultState | null }
+      | undefined;
+    if (recruitmentResultFetcher.state !== "idle" || !response?.success || !response.result) {
+      return;
+    }
+
+    const nextResult = response.result;
+    setRecruitmentResults((prev) => {
+      const existing = prev.find((result) => result.recruitmentGroupUid === nextResult.recruitmentGroupUid);
+      if (existing) {
+        return prev.map((result) =>
+          result.recruitmentGroupUid === nextResult.recruitmentGroupUid ? nextResult : result,
+        );
+      }
+      return [...prev, nextResult];
+    });
+  }, [recruitmentResultFetcher.state, recruitmentResultFetcher.data]);
 
   useEffect(() => {
     if (
@@ -275,6 +326,66 @@ export default function FutureContents() {
 
   const hideSpoiler = (contentUid: string) => {
     setRevealedSpoilerContentUids((prev) => prev.filter((uid) => uid !== contentUid));
+  };
+
+  const setRecruitmentCompleted = (
+    contentUid: string,
+    recruitmentGroupUid: string,
+    studentUid: string,
+    completed: boolean,
+  ) => {
+    if (!signedIn) {
+      showSignIn();
+      return;
+    }
+
+    submitRecruitmentResult({
+      action: completed ? "completeStudent" : "uncompleteStudent",
+      contentUid,
+      recruitmentGroupUid,
+      studentUid,
+      tier: 3,
+      pickup: true,
+    } as RecruitmentResultActionData);
+
+    setRecruitmentResults((prev) => {
+      const existing = prev.find((result) => result.recruitmentGroupUid === recruitmentGroupUid);
+      if (existing) {
+        return prev.map((result) =>
+          result.recruitmentGroupUid === recruitmentGroupUid
+            ? {
+                ...result,
+                contentUid,
+                completedAt:
+                  completed || result.recruitedStudents.some((student) => student.studentUid !== studentUid)
+                    ? (result.completedAt ?? new Date().toISOString())
+                    : null,
+                recruitedStudents: completed
+                  ? [
+                      ...result.recruitedStudents.filter((student) => student.studentUid !== studentUid),
+                      { studentUid, tier: 3, pickup: true },
+                    ]
+                  : result.recruitedStudents.filter((student) => student.studentUid !== studentUid),
+              }
+            : result,
+        );
+      }
+
+      if (!completed) {
+        return prev;
+      }
+
+      return [
+        ...prev,
+        {
+          uid: `optimistic-${recruitmentGroupUid}`,
+          recruitmentGroupUid,
+          contentUid,
+          completedAt: new Date().toISOString(),
+          recruitedStudents: [{ studentUid, tier: 3, pickup: true }],
+        },
+      ];
+    });
   };
 
   const toggleFavorite = (contentUid: string, studentUid: string, favorited: boolean) => {
@@ -342,6 +453,7 @@ export default function FutureContents() {
         return {
           ...common,
           name: common.raidInfo ? common.raidInfo.name : content.name,
+          recruitmentGroupUid: content.recruitmentGroupUid,
           recruitments: content.recruitments.length > 0 ? content.recruitments : undefined,
           allComments: allComments[content.uid] ?? [],
         };
@@ -356,10 +468,37 @@ export default function FutureContents() {
           ...getCommonContentFields(content),
           name: content.name,
           imageUrl: content.imageUrl,
+          recruitmentGroupUid: content.recruitmentGroupUid,
           recruitments: content.recruitments,
         }),
       ),
     [filteredContents],
+  );
+
+  const completedRecruitmentStudents = useMemo<CompletedRecruitmentStudentState[]>(
+    () =>
+      recruitmentResults
+        .filter((result) => result.completedAt !== null)
+        .flatMap((result) =>
+          result.recruitedStudents.map((student) => ({
+            recruitmentGroupUid: result.recruitmentGroupUid,
+            studentUid: student.studentUid,
+          })),
+        ),
+    [recruitmentResults],
+  );
+
+  const recruitmentResultEditLinks = useMemo<RecruitmentResultEditLinkState[]>(
+    () =>
+      recruitmentResults
+        .filter((result) => result.completedAt !== null || result.recruitedStudents.length > 0)
+        .map((result) => ({
+          recruitmentGroupUid: result.recruitmentGroupUid,
+          link: result.uid.startsWith("optimistic-")
+            ? `/my?path=pickups/edit/new?eventId=${encodeURIComponent(result.recruitmentGroupUid)}`
+            : `/my?path=pickups/edit/${result.uid}`,
+        })),
+    [recruitmentResults],
   );
 
   return (
@@ -396,6 +535,8 @@ export default function FutureContents() {
           contents={timelineContents}
           favoritedStudents={favoritedStudents ?? []}
           favoritedCounts={favoritedCounts}
+          completedRecruitmentStudents={completedRecruitmentStudents}
+          recruitmentResultEditLinks={recruitmentResultEditLinks}
           signedIn={signedIn}
           revealedSpoilerContentUids={revealedSpoilerContentUids}
           onRevealSpoiler={revealSpoiler}
@@ -425,6 +566,7 @@ export default function FutureContents() {
             submitComment(contentUid, { action: "unpin" });
           }}
           onFavorite={toggleFavorite}
+          onRecruitmentComplete={setRecruitmentCompleted}
           isSubmittingComment={commentFetcher.state === "submitting"}
         />
       </div>
@@ -434,8 +576,11 @@ export default function FutureContents() {
             contents={tableContents}
             favoritedStudents={favoritedStudents ?? []}
             favoritedCounts={favoritedCounts}
+            completedRecruitmentStudents={completedRecruitmentStudents}
+            recruitmentResultEditLinks={recruitmentResultEditLinks}
             revealedSpoilerContentUids={revealedSpoilerContentUids}
             onFavorite={toggleFavorite}
+            onRecruitmentComplete={setRecruitmentCompleted}
           />
         </div>
       )}

@@ -1,14 +1,20 @@
 import {
   CalculatorIcon,
   ChatBubbleOvalLeftEllipsisIcon,
-  CheckCircleIcon,
+  CheckCircleIcon as CheckCircleSolidIcon,
   ChevronRightIcon,
   ClockIcon,
   EyeIcon,
   EyeSlashIcon,
   StarIcon,
 } from "@heroicons/react/16/solid";
-import { HeartIcon as EmptyHeartIcon, IdentificationIcon } from "@heroicons/react/24/outline";
+import {
+  CheckCircleIcon,
+  HeartIcon as EmptyHeartIcon,
+  IdentificationIcon,
+  PencilSquareIcon,
+  XCircleIcon,
+} from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -82,6 +88,9 @@ export type ContentTimelineItemProps = {
   favoritedStudents?: string[];
   favoritedCounts?: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
+  completedStudentUids?: string[];
+  recruitmentResultEditLink?: string;
+  onRecruitmentComplete?: (studentUid: string, completed: boolean) => void;
   onRevealSpoiler?: () => void;
   onHideSpoiler?: () => void;
 
@@ -145,6 +154,9 @@ export function ContentTimelineItem({
   favoritedStudents,
   favoritedCounts,
   onFavorite,
+  completedStudentUids = [],
+  recruitmentResultEditLink,
+  onRecruitmentComplete,
   onRevealSpoiler,
   onHideSpoiler,
   signedIn,
@@ -203,7 +215,7 @@ export function ContentTimelineItem({
             <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />
           )}
           {confirmed && since && isInstantAfter(since, now) && (
-            <ContentTag Icon={CheckCircleIcon} text="확정" color="green" />
+            <ContentTag Icon={CheckCircleSolidIcon} text="확정" color="green" />
           )}
           {tags.includes("recruit_free_100") &&
             recruitments?.every(({ until }) => until !== null && isInstantAfter(until, now)) && (
@@ -230,11 +242,24 @@ export function ContentTimelineItem({
           favoritedStudents={favoritedStudents ?? []}
           favoritedCounts={favoritedCounts ?? {}}
           onFavorite={onFavorite}
+          completedStudentUids={completedStudentUids}
+          onRecruitmentComplete={onRecruitmentComplete}
           link={link}
           eventSince={since ?? null}
           eventUntil={until ?? null}
           timeZone={displayTimeZone}
         />
+      )}
+      {completedStudentUids.length > 0 && recruitmentResultEditLink && (
+        <div className="my-2">
+          <Button
+            text="모집 결과 데이터 상세 입력"
+            icon={PencilSquareIcon}
+            to={recruitmentResultEditLink}
+            size="xs"
+            shadow="none"
+          />
+        </div>
       )}
 
       {/* 댓글 */}
@@ -420,6 +445,8 @@ type RecruitmentsProps = {
   favoritedStudents: string[];
   favoritedCounts: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
+  completedStudentUids: string[];
+  onRecruitmentComplete?: (studentUid: string, completed: boolean) => void;
   link: string;
 
   eventSince: UtcIsoString | null;
@@ -433,6 +460,8 @@ function Recruitments({
   favoritedStudents,
   favoritedCounts,
   onFavorite,
+  completedStudentUids,
+  onRecruitmentComplete,
   link,
   timeZone,
 }: RecruitmentsProps) {
@@ -485,6 +514,8 @@ function Recruitments({
               favoritedStudents={favoritedStudents ?? []}
               favoritedCounts={favoritedCounts ?? {}}
               onFavorite={onFavorite}
+              completedStudentUids={completedStudentUids}
+              onRecruitmentComplete={onRecruitmentComplete}
             />
           );
         })}
@@ -501,6 +532,8 @@ function Recruitments({
         favoritedStudents={favoritedStudents ?? []}
         favoritedCounts={favoritedCounts ?? {}}
         onFavorite={onFavorite}
+        completedStudentUids={completedStudentUids}
+        onRecruitmentComplete={onRecruitmentComplete}
       />
 
       {hasNonPickupRecruitments && (
@@ -510,6 +543,8 @@ function Recruitments({
           favoritedStudents={favoritedStudents ?? []}
           favoritedCounts={favoritedCounts ?? {}}
           onFavorite={onFavorite}
+          completedStudentUids={completedStudentUids}
+          onRecruitmentComplete={onRecruitmentComplete}
         />
       )}
     </>
@@ -522,6 +557,8 @@ type RecruitmentStudentsProps = {
   favoritedStudents: string[];
   favoritedCounts: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
+  completedStudentUids: string[];
+  onRecruitmentComplete?: (studentUid: string, completed: boolean) => void;
   showToggle?: boolean;
 };
 
@@ -530,18 +567,23 @@ function getRecruitmentStudentCards({
   favoritedStudents,
   favoritedCounts,
   onFavorite,
+  completedStudentUids,
+  onRecruitmentComplete,
   detailedLinkText,
 }: {
   recruitments: RecruitmentsProps["recruitments"];
   favoritedStudents: string[];
   favoritedCounts: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
+  completedStudentUids: string[];
+  onRecruitmentComplete?: (studentUid: string, completed: boolean) => void;
   detailedLinkText: string;
 }) {
   return recruitments.map((recruitment) => {
     const student = recruitment.student;
     const studentUid = student?.uid;
     const isFavorited = studentUid ? favoritedStudents.includes(studentUid) : false;
+    const recruitmentCompleted = studentUid ? completedStudentUids.includes(studentUid) : false;
     const labelColorClass =
       recruitment.rerun ||
       recruitment.recruitmentType === "archive" ||
@@ -559,6 +601,7 @@ function getRecruitmentStudentCards({
         ? {
             favorited: isFavorited,
             favoritedCount: favoritedCounts[studentUid],
+            completed: recruitmentCompleted,
           }
         : undefined,
       popups: studentUid
@@ -574,6 +617,21 @@ function getRecruitmentStudentCards({
                   text: "관심 학생에 등록",
                   onClick: () => onFavorite?.(studentUid, true),
                 },
+            ...(onRecruitmentComplete
+              ? [
+                  recruitmentCompleted
+                    ? {
+                        Icon: XCircleIcon,
+                        text: "모집 완료 취소",
+                        onClick: () => onRecruitmentComplete(studentUid, false),
+                      }
+                    : {
+                        Icon: CheckCircleIcon,
+                        text: "모집 완료로 표시",
+                        onClick: () => onRecruitmentComplete(studentUid, true),
+                      },
+                ]
+              : []),
             {
               Icon: IdentificationIcon,
               text: detailedLinkText,
@@ -591,6 +649,8 @@ function RecruitmentStudents({
   favoritedStudents,
   favoritedCounts,
   onFavorite,
+  completedStudentUids,
+  onRecruitmentComplete,
   showToggle = false,
 }: RecruitmentStudentsProps) {
   const [showCards, setShowCards] = useState(!showToggle);
@@ -601,9 +661,11 @@ function RecruitmentStudents({
         favoritedStudents,
         favoritedCounts,
         onFavorite,
+        completedStudentUids,
+        onRecruitmentComplete,
         detailedLinkText: "학생부 보기 (평가/통계)",
       }),
-    [favoritedCounts, favoritedStudents, onFavorite, recruitments],
+    [completedStudentUids, favoritedCounts, favoritedStudents, onFavorite, onRecruitmentComplete, recruitments],
   );
 
   if (!showToggle) {

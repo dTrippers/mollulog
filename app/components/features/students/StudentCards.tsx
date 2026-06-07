@@ -21,6 +21,7 @@ type StudentCardsProps = {
     state?: {
       favorited?: boolean;
       favoritedCount?: number;
+      completed?: boolean;
     };
   }[];
   mobileGrid?: 4 | 5 | 6 | 8;
@@ -98,6 +99,7 @@ export default function StudentCards({
               namePlacement={namePlacement}
               favorited={student.state?.favorited}
               favoritedCount={student.state?.favoritedCount}
+              completed={student.state?.completed}
               onSelect={onSelect}
             />
           </div>

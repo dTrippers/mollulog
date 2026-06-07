@@ -54,6 +54,30 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
   });
 }
 
+export async function upsertRecruitedStudentFromRecruitmentResult(
+  env: Env,
+  senseiId: number,
+  studentUid: string,
+  tier: number,
+) {
+  if (tier < 1 || tier > 9) {
+    throw new Error(`Invalid tier: ${tier}`);
+  }
+
+  const db = drizzle(env.DB);
+  const uid = nanoid(8);
+  await db
+    .insert(recruitedStudentsTable)
+    .values({ uid, userId: senseiId, studentUid, tier })
+    .onConflictDoUpdate({
+      target: [recruitedStudentsTable.userId, recruitedStudentsTable.studentUid],
+      set: {
+        tier: sql`max(${recruitedStudentsTable.tier}, ${tier})`,
+        updatedAt: sql`current_timestamp`,
+      },
+    });
+}
+
 export async function removeRecruitedStudent(env: Env, senseiId: number, studentUid: string) {
   const db = drizzle(env.DB);
   await db.delete(recruitedStudentsTable)

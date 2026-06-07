@@ -35,6 +35,7 @@ export type PyroxenePlannerContent =
   | {
       kind: "event";
       uid: string;
+      recruitmentGroupUid: string | null;
       name: string;
       since: UtcIsoString;
       until: UtcIsoString;
@@ -112,6 +113,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
         return {
           kind: "event" as const,
           uid: content.uid,
+          recruitmentGroupUid: content.recruitmentGroupUid,
           name: content.name,
           since: content.startAt,
           until,

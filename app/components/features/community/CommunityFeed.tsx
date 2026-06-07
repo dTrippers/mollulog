@@ -84,6 +84,10 @@ function getPostTypeLabel(post: CommunityFeedPostItem) {
     return "영상";
   }
 
+  if (post.postType === "recruitment_result") {
+    return "모집 결과";
+  }
+
   return "공략";
 }
 
@@ -138,7 +142,8 @@ function CommunityPostCard({
   const likeFetcher = useFetcher<{ likeCount: number; liked: boolean }>();
   const timestamp = getPostTimestampMeta(post, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
-  const canComment = post.postType === "event_opinion" || post.postType === "youtube_video";
+  const canComment =
+    post.postType === "event_opinion" || post.postType === "youtube_video" || post.postType === "recruitment_result";
   const canLike = post.postType === "guide" || post.postType === "youtube_video";
   const bodyOrder = getCommunityPostBodyOrder(post.postType);
 
@@ -363,7 +368,7 @@ function PostSubjectMeta({
     );
   }
 
-  if (post.postType === "event_opinion" && post.subjectContentUid) {
+  if ((post.postType === "event_opinion" || post.postType === "recruitment_result") && post.subjectContentUid) {
     return (
       <div className={getSubjectMetaClassName(post.postType)}>
         <Link
@@ -445,7 +450,7 @@ function PostContent({
     );
   }
 
-  if (post.postType === "event_opinion") {
+  if (post.postType === "event_opinion" || post.postType === "recruitment_result") {
     return (
       <div className="space-y-3">
         <PostBlocks post={post} studentsByUid={studentsByUid} />

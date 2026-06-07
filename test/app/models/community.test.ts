@@ -1,9 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import {
-  getCommunityFeedPage,
-  setCommunityPostLike,
-  upsertYoutubeVideoCommunityPost,
-} from "~/models/community";
+import { getCommunityFeedPage, setCommunityPostLike, upsertYoutubeVideoCommunityPost } from "~/models/community";
 
 type PreparedStatement = {
   sql: string;
@@ -127,15 +123,14 @@ class FakeCommunityD1Database {
     if (normalizedSql.includes("select") && normalizedSql.includes("from community_posts")) {
       const post = this.findPostForSelect(normalizedSql, params);
       if (!post) return [];
-      if (normalizedSql.includes("select community_posts.id") || normalizedSql.includes("select id")) return [[post.id]];
+      if (normalizedSql.includes("select community_posts.id") || normalizedSql.includes("select id"))
+        return [[post.id]];
       return [[post.uid]];
     }
 
     if (normalizedSql.includes("select") && normalizedSql.includes("from community_post_likes")) {
       const userId = Number(params[0]);
-      return [...this.likes]
-        .filter((like) => like.startsWith(`${userId}:`))
-        .map((like) => [like.split(":")[1]]);
+      return [...this.likes].filter((like) => like.startsWith(`${userId}:`)).map((like) => [like.split(":")[1]]);
     }
 
     if (normalizedSql.includes("count(*)") && normalizedSql.includes("from community_post_likes")) {
@@ -187,7 +182,7 @@ class FakeCommunityD1Database {
     let rows = this.posts.filter((post) => post.visibility === "public");
     const stringParams = params.filter((param): param is string => typeof param === "string");
     const postTypes = stringParams.filter((param) =>
-      ["student_review", "event_opinion", "guide", "youtube_video"].includes(param),
+      ["student_review", "event_opinion", "guide", "youtube_video", "recruitment_result"].includes(param),
     );
     if (sql.includes("community_posts.posttype in") && postTypes.length > 0) {
       rows = rows.filter((post) => postTypes.includes(post.postType));
@@ -218,7 +213,9 @@ class FakeCommunityD1Database {
     const uid = params.find((param): param is string => typeof param === "string" && param.startsWith("post-"));
     if (uid) return this.posts.find((post) => post.uid === uid);
 
-    const youtubeUid = params.find((param): param is string => typeof param === "string" && param.startsWith("youtube-"));
+    const youtubeUid = params.find(
+      (param): param is string => typeof param === "string" && param.startsWith("youtube-"),
+    );
     if (youtubeUid) return this.posts.find((post) => post.uid === youtubeUid);
 
     const anyString = params.find((param): param is string => typeof param === "string");
