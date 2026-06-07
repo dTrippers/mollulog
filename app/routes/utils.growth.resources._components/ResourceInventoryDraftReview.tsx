@@ -39,7 +39,10 @@ export default function ResourceInventoryDraftReview({
           description="현재 저장된 보유 수량과 새로 저장할 수량을 비교한 뒤 최종 반영합니다."
           className="my-0"
         />
-        <Link to="/utils/growth/resources" className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-300">
+        <Link
+          to="/utils/resources/inventory"
+          className="text-sm font-medium text-blue-600 hover:underline dark:text-blue-300"
+        >
           편집 화면으로 돌아가기
         </Link>
       </div>
@@ -92,8 +95,12 @@ export default function ResourceInventoryDraftReview({
                     <p className="truncate font-medium text-foreground">{resource?.name ?? "알 수 없는 재화"}</p>
                   </div>
                 </div>
-                <span className="text-right tabular-nums text-muted-foreground">{currentQuantity.toLocaleString()}</span>
-                <span className="text-right font-semibold tabular-nums text-foreground">{item.quantity.toLocaleString()}</span>
+                <span className="text-right tabular-nums text-muted-foreground">
+                  {currentQuantity.toLocaleString()}
+                </span>
+                <span className="text-right font-semibold tabular-nums text-foreground">
+                  {item.quantity.toLocaleString()}
+                </span>
                 <span
                   className={cn(
                     "text-right text-xs font-semibold tabular-nums",

@@ -8,9 +8,15 @@ const farmingStagesQuery = graphql(`
     stages(category: $category) {
       uid name stageNumber area difficulty terrain
       entryCosts { amount resource { uid name type } }
-      rewards {
+      rewards(region: gl) {
         rewardType rewardTag probability
         resource { __typename uid name type rarity ... on Equipment { category } }
+        gachaGroup {
+          items(region: gl) {
+            chance
+            resource { __typename uid name type rarity ... on Equipment { category } }
+          }
+        }
       }
     }
   }
@@ -19,7 +25,7 @@ const farmingStagesQuery = graphql(`
 export async function getCampaignFarmingStages(env: Env, forceRefresh = false): Promise<FarmingStage[]> {
   return fetchCached(
     env,
-    "farming-stages::campaign::v1",
+    "farming-stages::campaign::v2",
     async () => {
       const { data, error } = await runQuery(farmingStagesQuery, { category: "campaign" });
       if (error) {
@@ -52,7 +58,33 @@ function toFarmingStageReward(reward: {
   rewardTag?: string | null;
   probability?: number | string | null;
   resource: { uid: string; name: string | null } | null;
+  gachaGroup?: {
+    items: Array<{
+      chance?: number | string | null;
+      resource: { uid: string; name: string | null; type: string } | null;
+    }>;
+  } | null;
 }): FarmingStageReward[] {
+  if (reward.gachaGroup) {
+    const rewardProbability = parseProbability(reward.probability);
+    return reward.gachaGroup.items.flatMap((item) => {
+      if (!item.resource) {
+        return [];
+      }
+
+      const itemChance = parseProbability(item.chance);
+      return [
+        {
+          uid: item.resource.uid,
+          name: normalizeName(item.resource.name),
+          rewardType: item.resource.type,
+          rewardTag: reward.rewardTag,
+          probability: multiplyProbability(rewardProbability, itemChance),
+        },
+      ];
+    });
+  }
+
   if (!reward.resource) {
     return [];
   }
@@ -75,6 +107,14 @@ function parseProbability(probability: number | string | null | undefined): numb
 
   const parsed = Number(probability);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function multiplyProbability(rewardProbability: number | null, itemChance: number | null): number | null {
+  if (itemChance == null) {
+    return null;
+  }
+
+  return rewardProbability == null ? itemChance : rewardProbability * itemChance;
 }
 
 function normalizeName(name: string | null): string {

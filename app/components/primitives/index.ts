@@ -27,6 +27,7 @@ export { default as Pagination } from "./Pagination";
 export { default as PageLink } from "./PageLink";
 export { default as PagePanel } from "./PagePanel";
 export { default as PageScreenSelector } from "./PageScreenSelector";
+export { PanelOptionChip, PanelOptionGroup, PanelOptionIconButton } from "./PanelOptionGroup";
 export { default as ProfileImage } from "./ProfileImage";
 export { default as Progress } from "./Progress";
 export { default as ResourceCard } from "./ResourceCard";

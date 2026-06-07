@@ -1,31 +1,34 @@
 import { Cog6ToothIcon, EyeIcon, EyeSlashIcon, PlusIcon } from "@heroicons/react/16/solid";
-import { useState, type ElementType } from "react";
-import { BottomSheet, Button, FilterButtons, NumberInput } from "~/components/primitives";
+import { type ElementType, useState } from "react";
+import {
+  BottomSheet,
+  Button,
+  FilterButtons,
+  NumberInput,
+  PanelOptionChip,
+  PanelOptionIconButton,
+} from "~/components/primitives";
+import { cn } from "~/lib/utils";
+import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
+import { PYROXENE_AP_CHARGE_MAX_COUNT } from "~/models/pyroxene-planner-source-config";
+import type { PyroxeneMonthlyPackageType } from "~/models/pyroxene-planner-source-config";
 import {
   calculateDailyApChargePyroxene,
   isPyroxeneTimelineSourceVisible,
   togglePyroxeneTimelineSourceVisibility,
 } from "~/models/pyroxene-sources";
-import { PYROXENE_AP_CHARGE_MAX_COUNT } from "~/models/pyroxene-planner-source-config";
-import type { PyroxeneMonthlyPackageType } from "~/models/pyroxene-planner-source-config";
-import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import type { PickupResources } from "~/models/pyroxene-timeline";
-import { cn } from "~/lib/utils";
-import { PYROXENE_SOURCE_ROW_DEFINITIONS, PYROXENE_SOURCE_ROW_GROUP_LABELS } from "./pyroxene-source-config";
 import AttendanceInput from "./planner-input/AttendanceInput";
 import BuyInput from "./planner-input/BuyInput";
 import PackageInput, { ApPackageInput } from "./planner-input/PackageInput";
 import ResourcesInput from "./planner-input/ResourcesInput";
+import { PYROXENE_SOURCE_ROW_DEFINITIONS, PYROXENE_SOURCE_ROW_GROUP_LABELS } from "./pyroxene-source-config";
 
 type PyroxenePlannerSourcePanelProps = {
   options: PyroxenePlannerOptions;
   onOptionsChange: (options: PyroxenePlannerOptions) => void;
   onSaveBuy: (quantity: number, date: Date) => void;
-  onSaveMonthlyPackage: (
-    startDate: Date,
-    packageType: PyroxeneMonthlyPackageType,
-    autoRepurchase: boolean,
-  ) => void;
+  onSaveMonthlyPackage: (startDate: Date, packageType: PyroxeneMonthlyPackageType, autoRepurchase: boolean) => void;
   onSaveApPackage: (startDate: Date, autoRepurchase: boolean) => void;
   onSaveAttendance: (startDate: Date) => void;
   onSaveOther: (resources: PickupResources, description: string, date: Date) => void;
@@ -102,9 +105,7 @@ export default function PyroxenePlannerSourcePanel({
                     key={row.id}
                     className="rounded-md px-2 py-1 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70"
                   >
-                    <div
-                      className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5"
-                    >
+                    <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
                       <div className="min-w-0 grow">
                         <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{row.label}</p>
                         <SelectedOptionText rowId={row.id} options={options} />
@@ -332,9 +333,7 @@ function ApChargeInput({
         showMax
         onChange={setApChargeCount}
       />
-      <p className="text-xs text-neutral-500 dark:text-neutral-400">
-        매일 {dailyPyroxene.toLocaleString()}개 소비
-      </p>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400">매일 {dailyPyroxene.toLocaleString()}개 소비</p>
       <Button text="저장" variant="tint-blue" fullWidth onClick={handleSave} />
     </div>
   );
@@ -356,41 +355,11 @@ function IconButton({ label, Icon, onClick }: { label: string; Icon: ElementType
 function VisibilityButton({ label, visible, onClick }: { label: string; visible: boolean; onClick: () => void }) {
   const Icon = visible ? EyeIcon : EyeSlashIcon;
 
-  return (
-    <button
-      type="button"
-      className={cn(
-        "inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md border transition lg:size-7",
-        visible
-          ? "border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/30"
-          : "border-neutral-200 bg-neutral-50 text-neutral-400 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-700",
-      )}
-      aria-label={label}
-      aria-pressed={visible}
-      onClick={onClick}
-    >
-      <Icon className="size-4 lg:size-3.5" />
-    </button>
-  );
+  return <PanelOptionIconButton label={label} active={visible} Icon={Icon} onClick={onClick} />;
 }
 
 function VisibilityChip({ label, visible, onClick }: { label: string; visible: boolean; onClick: () => void }) {
   const Icon = visible ? EyeIcon : EyeSlashIcon;
 
-  return (
-    <button
-      type="button"
-      className={cn(
-        "inline-flex h-8 cursor-pointer items-center gap-1 rounded-sm border px-2 text-xs font-medium transition lg:h-7 lg:px-1.5",
-        visible
-          ? "border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300"
-          : "border-neutral-200 bg-neutral-100/70 text-neutral-500 hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-700",
-      )}
-      aria-pressed={visible}
-      onClick={onClick}
-    >
-      <Icon className="size-3.5" />
-      <span>{label}</span>
-    </button>
-  );
+  return <PanelOptionChip label={label} active={visible} Icon={Icon} onClick={onClick} />;
 }

@@ -1,40 +1,47 @@
+import { BoltIcon } from "@heroicons/react/16/solid";
 import { ArchiveBoxIcon, BeakerIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
-import { useMemo, useState } from "react";
-import { EmptyView, Input } from "~/components/primitives";
-import { cn } from "~/lib/utils";
+import { useMemo } from "react";
+import { EmptyView, ResourceCard, SubTitle } from "~/components/primitives";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import {
-  type FarmingDifficultyFilter,
   type FarmingRequirement,
   type FarmingStage,
+  type FarmingStageRecommendation,
   buildFarmingRecommendations,
 } from "~/models/farming-recommendation";
-import { EQUIPMENT_TYPE_LABELS, getEquipmentTierLabel, getEquipmentTypeKey } from "~/models/growth-resource";
+import {
+  EQUIPMENT_TYPE_LABELS,
+  EQUIPMENT_TYPE_ORDER,
+  getEquipmentTierLabel,
+  getEquipmentTypeKey,
+} from "~/models/growth-resource";
 
 type FarmingRecommendationPanelProps = {
   managedStudentCount: number;
   farmingNeeded: Record<string, number>;
   farmingRequirements: FarmingRequirement[];
   stages: FarmingStage[];
+  showNormal: boolean;
+  showHard: boolean;
+  prioritizeHighTier: boolean;
 };
-
-const difficultyOptions = [
-  { value: "all", label: "전체" },
-  { value: "normal", label: "노말" },
-  { value: "hard", label: "하드" },
-] as const satisfies { value: FarmingDifficultyFilter; label: string }[];
 
 export default function FarmingRecommendationPanel({
   managedStudentCount,
   farmingNeeded,
   farmingRequirements,
   stages,
+  showNormal,
+  showHard,
+  prioritizeHighTier,
 }: FarmingRecommendationPanelProps) {
-  const [difficulty, setDifficulty] = useState<FarmingDifficultyFilter>("all");
-  const [dropMultiplierInput, setDropMultiplierInput] = useState("1");
-  const dropMultiplier = parseDropMultiplier(dropMultiplierInput);
+  const filteredStages = useMemo(
+    () => stages.filter((stage) => (showNormal && stage.difficulty === 0) || (showHard && stage.difficulty === 1)),
+    [showHard, showNormal, stages],
+  );
   const recommendations = useMemo(
-    () => buildFarmingRecommendations(farmingNeeded, stages, { difficulty, dropMultiplier }),
-    [difficulty, dropMultiplier, farmingNeeded, stages],
+    () => buildFarmingRecommendations(farmingNeeded, filteredStages, { prioritizeHighTier }),
+    [farmingNeeded, filteredStages, prioritizeHighTier],
   );
 
   if (managedStudentCount === 0) {
@@ -62,62 +69,20 @@ export default function FarmingRecommendationPanel({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-md border border-border bg-card p-5 md:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-foreground">추천 조건</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              파밍 필요 설계도 {farmingRequirements.length.toLocaleString()}종을 기준으로 반복 장비 드랍을 계산합니다.
-            </p>
-          </div>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-            <div>
-              <p className="mb-2 text-sm font-medium text-foreground">난이도</p>
-              <div className="inline-flex rounded-md border border-border bg-muted p-1">
-                {difficultyOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn(
-                      "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                      difficulty === option.value
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                    aria-pressed={difficulty === option.value}
-                    onClick={() => setDifficulty(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <Input
-              type="number"
-              inputMode="decimal"
-              min="0.1"
-              step="0.1"
-              label="드랍 배율"
-              value={dropMultiplierInput}
-              onChange={setDropMultiplierInput}
-              containerClassName="sm:w-36"
-              className="max-w-none"
-            />
-          </div>
-        </div>
+    <div className="space-y-3">
+      <div>
+        <SubTitle
+          text="추천 파밍 임무"
+          description="필요한 장비를 모으기 위해 소탕 우선순위를 추천해요. 우선순위는 판단 기준에 따라 다를 수 있으니 참고로만 사용해주세요."
+        />
       </div>
 
       {recommendations.length === 0 ? (
         <div className="rounded-md border border-border bg-card p-8">
-          <EmptyView
-            Icon={BeakerIcon}
-            text="조건에 맞는 추천 스테이지가 없어요"
-            description="난이도 필터를 바꾸거나 BAQL 스테이지 드랍 데이터가 있는지 확인해 주세요."
-          />
+          <EmptyView Icon={BeakerIcon} text="'학생 성장 플래너'에서 목표를 입력하거나 난이도를 선택해주세요" />
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {recommendations.map((recommendation) => (
             <StageRecommendationRow key={recommendation.stage.uid} recommendation={recommendation} />
           ))}
@@ -130,63 +95,85 @@ export default function FarmingRecommendationPanel({
 function StageRecommendationRow({
   recommendation,
 }: {
-  recommendation: ReturnType<typeof buildFarmingRecommendations>[number];
+  recommendation: FarmingStageRecommendation;
 }) {
-  const { stage, score, matches } = recommendation;
+  const { stage, drops } = recommendation;
+  const dropGroups = groupDropsByEquipmentType(drops);
 
   return (
-    <article className="rounded-md border border-border bg-card p-5 md:p-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-base font-semibold text-foreground">{formatStageLabel(stage)}</h2>
-            <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
-              {formatDifficulty(stage.difficulty)}
-            </span>
-            <span className="rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
-              AP {stage.apCost.toLocaleString()}
-            </span>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">{stage.name}</p>
+    <article className="flex flex-col gap-3 rounded-md border border-border bg-card px-4 py-3 lg:flex-row lg:items-center">
+      <div className="min-w-0 lg:w-52">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold text-foreground">{formatStageLabel(stage)}</h2>
+          <span className="flex items-center gap-0.5 rounded border border-green-600 px-1 text-xs font-medium text-green-600">
+            <BoltIcon className="size-2.5" />
+            <span>{stage.apCost.toLocaleString()}</span>
+          </span>
         </div>
-        <div className="text-left lg:text-right">
-          <p className="text-xs font-medium text-muted-foreground">점수</p>
-          <p className="text-lg font-semibold text-foreground">{formatScore(score)}</p>
-        </div>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{stage.name}</p>
       </div>
 
-      <div className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-        {matches.map((match) => (
-          <div key={match.uid} className="rounded-md border border-border bg-background p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {formatEquipmentLabel(match.uid, match.name)}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">필요 {match.needed.toLocaleString()}개</p>
-              </div>
-              <span className="shrink-0 rounded-md bg-muted px-2 py-1 text-xs font-medium text-muted-foreground">
-                {formatProbability(match.probability)}
-              </span>
+      <div className="flex flex-1 flex-wrap gap-2">
+        {dropGroups.map((group) => (
+          <section key={group.typeKey} className="grid min-w-0 gap-1 rounded-md bg-background px-2 py-1.5">
+            <h3 className="text-xs font-semibold leading-none text-foreground">{group.label}</h3>
+            <div className="flex flex-wrap gap-1">
+              {group.drops.map((drop) => (
+                <ResourceCard
+                  key={drop.uid}
+                  itemUid={drop.uid}
+                  resourceType={ResourceTypeEnum.Equipment}
+                  name={formatEquipmentLabel(drop.uid, drop.name)}
+                  label={formatEquipmentTierBadge(drop.uid)}
+                />
+              ))}
             </div>
-          </div>
+          </section>
         ))}
       </div>
     </article>
   );
 }
 
-function parseDropMultiplier(value: string): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return 1;
+type EquipmentDropGroup = {
+  typeKey: string;
+  label: string;
+  drops: FarmingStageRecommendation["drops"];
+};
+
+function groupDropsByEquipmentType(drops: FarmingStageRecommendation["drops"]): EquipmentDropGroup[] {
+  const groups = new Map<string, EquipmentDropGroup>();
+
+  for (const drop of drops) {
+    const typeKey = getEquipmentTypeKey(drop.uid);
+    if (!typeKey) {
+      continue;
+    }
+
+    const group = groups.get(typeKey) ?? {
+      typeKey,
+      label: EQUIPMENT_TYPE_LABELS[typeKey] ?? typeKey,
+      drops: [],
+    };
+    group.drops.push(drop);
+    groups.set(typeKey, group);
   }
 
-  return parsed;
+  return Array.from(groups.values()).sort((a, b) => {
+    const typeDelta = getEquipmentTypeSortOrder(a.typeKey) - getEquipmentTypeSortOrder(b.typeKey);
+    if (typeDelta !== 0) return typeDelta;
+
+    return a.label.localeCompare(b.label);
+  });
+}
+
+function getEquipmentTypeSortOrder(typeKey: string): number {
+  const index = EQUIPMENT_TYPE_ORDER.indexOf(typeKey);
+  return index === -1 ? EQUIPMENT_TYPE_ORDER.length : index;
 }
 
 function formatStageLabel(stage: FarmingStage): string {
-  return `${stage.area}-${stage.stageNumber}`;
+  return `${formatDifficulty(stage.difficulty)} ${stage.area}-${stage.stageNumber}`;
 }
 
 function formatDifficulty(difficulty: number): string {
@@ -195,13 +182,8 @@ function formatDifficulty(difficulty: number): string {
   return `난이도 ${difficulty}`;
 }
 
-function formatScore(score: number): string {
-  return score.toLocaleString(undefined, { maximumFractionDigits: 2 });
-}
-
-function formatProbability(probability: number): string {
-  const percent = probability <= 1 ? probability * 100 : probability;
-  return `${percent.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`;
+function formatEquipmentTierBadge(uid: string): string | undefined {
+  return getEquipmentTierLabel(uid) ?? undefined;
 }
 
 function formatEquipmentLabel(uid: string, name: string | undefined): string {
