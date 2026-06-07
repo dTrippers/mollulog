@@ -24,6 +24,7 @@ export const recruitmentResultsTable = sqliteTable("recruitment_results", {
   contentUid: text(),
   completedAt: text(),
   recruitedStudents: text().notNull().default("[]"),
+  exchangedStudents: text().notNull().default("[]"),
   trial: int(),
   rawResult: text(),
   commentPostUid: text(),
@@ -44,6 +45,7 @@ export type RecruitmentResult = {
   contentUid: string | null;
   completedAt: UtcIsoString | null;
   recruitedStudents: RecruitmentResultStudent[];
+  exchangedStudents: RecruitmentResultStudent[];
   trial: number | null;
   rawResult: string | null;
   commentPostUid: string | null;
@@ -57,6 +59,7 @@ export type UpsertRecruitmentResultInput = {
   contentUid?: string | null;
   completedAt?: UtcIsoString | null;
   recruitedStudents?: RecruitmentResultStudent[];
+  exchangedStudents?: RecruitmentResultStudent[];
   trial?: number | null;
   rawResult?: string | null;
   comment?: string | null;
@@ -102,6 +105,7 @@ function toModel(row: RecruitmentResultRow): RecruitmentResult {
     contentUid: row.contentUid ?? null,
     completedAt: row.completedAt as UtcIsoString | null,
     recruitedStudents: parseRecruitedStudents(row.recruitedStudents),
+    exchangedStudents: parseRecruitedStudents(row.exchangedStudents),
     trial: row.trial ?? null,
     rawResult: row.rawResult ?? null,
     commentPostUid: row.commentPostUid ?? null,
@@ -311,6 +315,7 @@ export async function upsertRecruitmentResult(
     null;
   const uid = existing?.uid ?? input.uid ?? nanoid(8);
   const recruitedStudents = sanitizeRecruitmentResultStudents(input.recruitedStudents ?? existing?.recruitedStudents);
+  const exchangedStudents = sanitizeRecruitmentResultStudents(input.exchangedStudents ?? existing?.exchangedStudents);
   const completedAt = input.completedAt !== undefined ? input.completedAt : (existing?.completedAt ?? now);
   const contentUid = input.contentUid !== undefined ? input.contentUid : existing?.contentUid;
   const trial = input.trial !== undefined ? input.trial : existing?.trial;
@@ -325,6 +330,7 @@ export async function upsertRecruitmentResult(
       contentUid: contentUid ?? null,
       completedAt,
       recruitedStudents: JSON.stringify(recruitedStudents),
+      exchangedStudents: JSON.stringify(exchangedStudents),
       trial: trial ?? null,
       rawResult: rawResult ?? null,
       commentPostUid: existing?.commentPostUid ?? null,
@@ -336,13 +342,14 @@ export async function upsertRecruitmentResult(
         contentUid: contentUid ?? null,
         completedAt,
         recruitedStudents: JSON.stringify(recruitedStudents),
+        exchangedStudents: JSON.stringify(exchangedStudents),
         trial: trial ?? null,
         rawResult: rawResult ?? null,
         updatedAt: now,
       },
     });
 
-  await syncRecruitedStudents(env, userId, normalizeRecruitmentResultStudents(recruitedStudents));
+  await syncRecruitedStudents(env, userId, normalizeRecruitmentResultStudents([...recruitedStudents, ...exchangedStudents]));
 
   const comment = input.comment?.trim();
   if (comment && contentUid) {
@@ -354,14 +361,22 @@ export async function upsertRecruitmentResult(
           recruitmentResultUid: uid,
           body: comment,
           subjectContentUid: contentUid,
-          subjectStudentUid: input.subjectStudentUid ?? recruitedStudents.find((student) => student.pickup)?.studentUid ?? null,
+          subjectStudentUid:
+            input.subjectStudentUid ??
+            recruitedStudents.find((student) => student.pickup)?.studentUid ??
+            exchangedStudents.find((student) => student.pickup)?.studentUid ??
+            null,
         })
       : await createRecruitmentResultCommunityPost(env, {
           userId,
           recruitmentResultUid: uid,
           body: comment,
           subjectContentUid: contentUid,
-          subjectStudentUid: input.subjectStudentUid ?? recruitedStudents.find((student) => student.pickup)?.studentUid ?? null,
+          subjectStudentUid:
+            input.subjectStudentUid ??
+            recruitedStudents.find((student) => student.pickup)?.studentUid ??
+            exchangedStudents.find((student) => student.pickup)?.studentUid ??
+            null,
         });
 
     await db
@@ -424,6 +439,7 @@ export async function addRecruitedStudentToResult(
       contentUid: contentUid ?? null,
       completedAt,
       recruitedStudents: JSON.stringify(recruitedStudents),
+      exchangedStudents: JSON.stringify(existing?.exchangedStudents ?? []),
       trial: existing?.trial ?? null,
       rawResult: existing?.rawResult ?? null,
       commentPostUid: existing?.commentPostUid ?? null,
@@ -435,6 +451,7 @@ export async function addRecruitedStudentToResult(
         contentUid: contentUid ?? null,
         completedAt,
         recruitedStudents: JSON.stringify(recruitedStudents),
+        exchangedStudents: JSON.stringify(existing?.exchangedStudents ?? []),
         updatedAt: now,
       },
     });
@@ -466,7 +483,7 @@ export async function removeRecruitedStudentFromResult(
   const db = drizzle(env.DB);
   const now = nowUtcIso();
   const recruitedStudents = removeRecruitmentResultStudent(existing.recruitedStudents, studentUid);
-  const completedAt = recruitedStudents.length > 0 ? existing.completedAt : null;
+  const completedAt = recruitedStudents.length > 0 || existing.exchangedStudents.length > 0 ? existing.completedAt : null;
 
   await db
     .update(recruitmentResultsTable)

@@ -21,6 +21,12 @@ type PickupHistoryViewProps = {
     pickup: boolean;
     tier: number;
   }[];
+  exchangedStudents: {
+    uid: string;
+    name: string;
+    pickup: boolean;
+    tier: number;
+  }[];
   trial?: number | null;
   trialMissing?: boolean;
   comment?: {
@@ -46,12 +52,14 @@ export default function PickupHistoryView({
   uid,
   event,
   recruitedStudents,
+  exchangedStudents,
   trial,
   trialMissing,
   comment,
   editable,
 }: PickupHistoryViewProps) {
   const tier3Students = recruitedStudents.filter(({ tier }) => tier === 3);
+  const tier3ExchangedStudents = exchangedStudents.filter(({ tier }) => tier === 3);
   const pickupCount = recruitedStudents.filter(({ pickup }) => pickup).length;
   const visibleComment = comment?.body.trim() ? comment : null;
 
@@ -61,6 +69,7 @@ export default function PickupHistoryView({
         <div className="min-w-0 flex-1 space-y-4">
           <PickupHeader event={event} />
           {tier3Students.length > 0 && <Tier3StudentList students={tier3Students} />}
+          {tier3ExchangedStudents.length > 0 && <ExchangedStudentList students={tier3ExchangedStudents} />}
           {visibleComment && <PickupComment comment={visibleComment} />}
         </div>
 
@@ -131,9 +140,34 @@ function Tier3StudentList({ students }: { students: PickupHistoryViewProps["recr
   );
 }
 
-type PickupStatsProps = { totalTrial: number | null; tier3Count: number; pickupCount: number; trialMissing: boolean };
+function ExchangedStudentList({ students }: { students: PickupHistoryViewProps["exchangedStudents"] }) {
+  const cardStudents = students.map(({ uid, name }) => ({
+    uid,
+    name,
+    label: <span className="text-yellow-500">교환</span>,
+  }));
 
-function PickupStats({ totalTrial, tier3Count, pickupCount, trialMissing }: PickupStatsProps) {
+  return (
+    <div className="space-y-2.5">
+      <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집 포인트 교환 학생</p>
+      <StudentCards layout="wrap" cardSize="md" gap="tight" namePlacement="overlay" students={cardStudents} />
+    </div>
+  );
+}
+
+type PickupStatsProps = {
+  totalTrial: number | null;
+  tier3Count: number;
+  pickupCount: number;
+  trialMissing: boolean;
+};
+
+function PickupStats({
+  totalTrial,
+  tier3Count,
+  pickupCount,
+  trialMissing,
+}: PickupStatsProps) {
   const hasTrial = !trialMissing && totalTrial !== null;
   const statsGridClassName = hasTrial ? "grid-cols-3 divide-x md:divide-y" : "grid-cols-1";
   const stats = [

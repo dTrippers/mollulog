@@ -79,14 +79,16 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   );
 
   let tier3Count = 0;
+  let tier3DrawCount = 0;
   let tier3RateCount = 0;
   let pickupCount = 0;
+  let pickupDrawCount = 0;
   let pickupRateCount = 0;
   let totalTrial = 0;
   let missingTrialCount = 0;
 
   const aggregatedHistories = recruitmentResults
-    .filter((result) => result.completedAt !== null || result.recruitedStudents.length > 0)
+    .filter((result) => result.completedAt !== null || result.recruitedStudents.length > 0 || result.exchangedStudents.length > 0)
     .map((result) => {
       const group = groupMap.get(result.recruitmentGroupUid);
       const timelineContent = timelineContentMap.get(result.recruitmentGroupUid);
@@ -100,8 +102,17 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       const groupStudentsMap = new Map(
         group?.recruitments.flatMap(({ student }) => (student ? [[student.uid, student] as const] : [])) ?? [],
       );
-      const recruitedStudents = result.recruitedStudents;
-      const students = recruitedStudents
+      const recruitedStudents =
+        result.recruitedStudents.length > 0 || !result.completedAt
+          ? result.recruitedStudents
+          : (group?.recruitments.flatMap(({ pickup, student }) => {
+              if (!pickup || !student) {
+                return [];
+              }
+              return [{ studentUid: student.uid, tier: student.initialTier, pickup: true }];
+            }) ?? []);
+      const toDisplayStudents = (studentResults: typeof recruitedStudents) =>
+        studentResults
         .filter(({ studentUid }) => studentUid)
         .map(({ studentUid, pickup }) => {
           const student = allStudentsMap[studentUid] ?? poolStudentsMap.get(studentUid) ?? groupStudentsMap.get(studentUid);
@@ -120,14 +131,21 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
             pickup: pickup || pickupStudentUids.has(studentUid),
           };
         });
+      const students = toDisplayStudents(recruitedStudents);
+      const exchangedStudents = toDisplayStudents(result.exchangedStudents);
 
       const tier3Students = students.filter(({ tier }) => tier === 3);
+      const tier3ExchangedStudents = exchangedStudents.filter(({ tier }) => tier === 3);
       const currentTier3Count = tier3Students.length;
       const currentPickupCount = tier3Students.filter(({ pickup }) => pickup).length;
+      const currentTier3ExchangedCount = tier3ExchangedStudents.length;
+      const currentPickupExchangedCount = tier3ExchangedStudents.filter(({ pickup }) => pickup).length;
       const rateMultiplier = group?.recruitmentType === "fes" ? 0.5 : 1;
 
-      tier3Count += currentTier3Count;
-      pickupCount += currentPickupCount;
+      tier3Count += currentTier3Count + currentTier3ExchangedCount;
+      tier3DrawCount += currentTier3Count;
+      pickupCount += currentPickupCount + currentPickupExchangedCount;
+      pickupDrawCount += currentPickupCount;
       if (result.trial === null) {
         missingTrialCount += 1;
       } else {
@@ -147,6 +165,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         },
         trial: result.trial,
         recruitedStudents: students,
+        exchangedStudents,
         comment: comment
           ? {
               ...comment,
@@ -167,8 +186,10 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     recruitmentStats: {
       trial: totalTrial,
       tier3Count,
+      tier3DrawCount,
       tier3RateCount,
       pickupCount,
+      pickupDrawCount,
       pickupRateCount,
       missingTrialCount,
     },
@@ -187,7 +208,7 @@ export default function UserPickups() {
           <p className="text-lg md:text-2xl font-bold">{recruitmentStats.trial} 번</p>
         </div>
         <div className="text-center">
-          <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 모집 횟수</p>
+          <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 획득 수</p>
           <p className="text-lg md:text-2xl font-bold">{recruitmentStats.tier3Count} 번</p>
           {recruitmentStats.trial > 0 && (
             <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
@@ -196,7 +217,7 @@ export default function UserPickups() {
           )}
         </div>
         <div className="text-center">
-          <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 픽업 횟수</p>
+          <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 픽업 획득 수</p>
           <p className="text-lg md:text-2xl font-bold">{recruitmentStats.pickupCount} 번</p>
           {recruitmentStats.trial > 0 && (
             <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
@@ -206,19 +227,20 @@ export default function UserPickups() {
         </div>
       </div>
       <p className="mt-4 mb-16 text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
-        페스 기간에 모집한 ★3 학생은 확률을 0.5배로 계산했어요.
+        모집 포인트 교환 학생은 획득 수에 포함하고 모집 확률 계산에서는 제외했어요. 페스 기간에 모집한 ★3 학생은 확률을 0.5배로 계산했어요.
       </p>
 
       <SubTitle text="모집 이력" />
       {me && <AddContentButton text="새로운 모집 이력 추가하기" link="/my?path=pickups/edit/new" />}
       {recruitmentHistories.length === 0 && <p className="my-16 text-center">아직 모집 이력이 없어요</p>}
-      {recruitmentHistories.map(({ uid, event, recruitedStudents, trial, comment }) => {
+      {recruitmentHistories.map(({ uid, event, recruitedStudents, exchangedStudents, trial, comment }) => {
         return (
           <PickupHistoryView
             key={uid}
             uid={uid}
             event={event}
             recruitedStudents={recruitedStudents}
+            exchangedStudents={exchangedStudents}
             trial={trial}
             comment={comment}
             trialMissing={trial === null}

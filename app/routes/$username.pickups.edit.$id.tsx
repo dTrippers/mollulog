@@ -29,6 +29,14 @@ const PICKUP_EVENT_SELECTOR_LIMIT = 20;
 
 export const meta: MetaFunction = () => [{ title: "모집 이력 관리 | 몰루로그" }];
 
+function canExchangeRecruitmentStudent<T extends {
+  pickup: boolean;
+  recruitmentType?: string | null;
+  student: { uid: string } | null;
+}>(recruitment: T): recruitment is T & { student: NonNullable<T["student"]> } {
+  return recruitment.pickup && recruitment.recruitmentType !== "given" && recruitment.student !== null;
+}
+
 type EditablePickupHistory = Omit<PickupHistory, "result"> & {
   result: {
     trial: number | null;
@@ -36,6 +44,7 @@ type EditablePickupHistory = Omit<PickupHistory, "result"> & {
     tier3StudentIds: string[];
   }[];
   comment?: string | null;
+  exchangedStudentIds?: string[];
 };
 
 function getRouteUsername(params: { username?: string }) {
@@ -56,11 +65,13 @@ function getSaveUnavailableReason({
   totalCount,
   tier3Count,
   tier3StudentCount,
+  exchangedStudentCount,
 }: {
   eventUid: string | null;
   totalCount?: number;
   tier3Count?: number;
   tier3StudentCount: number;
+  exchangedStudentCount: number;
 }) {
   if (!eventUid) {
     return "모집 이벤트를 선택해주세요.";
@@ -76,6 +87,10 @@ function getSaveUnavailableReason({
   }
   if (tier3StudentCount !== tier3Count) {
     return `모집한 ★3 학생을 ${tier3Count}명 선택해주세요. 현재 ${tier3StudentCount}명이 선택됐어요.`;
+  }
+  const maxExchangedStudentCount = Math.floor(totalCount / 200);
+  if (exchangedStudentCount > maxExchangedStudentCount) {
+    return `모집 포인트 교환 학생은 최대 ${maxExchangedStudentCount}명까지 입력할 수 있어요.`;
   }
 
   return null;
@@ -93,8 +108,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const recruitmentRepository = new RecruitmentRepository(env);
   let currentPickupHistory: EditablePickupHistory | null = null;
+  let currentRecruitmentResult: Awaited<ReturnType<typeof getRecruitmentResult>> = null;
   if (params.id && params.id !== "new") {
-    const currentRecruitmentResult = await getRecruitmentResult(env, sensei.id, params.id);
+    currentRecruitmentResult = await getRecruitmentResult(env, sensei.id, params.id);
     const currentRecruitmentResultComment = currentRecruitmentResult
       ? await getRecruitmentResultComment(env, sensei.id, currentRecruitmentResult.commentPostUid)
       : null;
@@ -112,6 +128,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
           ],
           rawResult: currentRecruitmentResult.rawResult,
           comment: currentRecruitmentResultComment,
+          exchangedStudentIds: currentRecruitmentResult.exchangedStudents.map((student) => student.studentUid),
         }
       : await getPickupHistory(env, sensei.id, params.id, true);
   }
@@ -122,6 +139,31 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     recruitmentRepository.getAllHistorical(),
     getAllStudents(env),
   ]);
+  if (
+    currentRecruitmentResult?.completedAt &&
+    currentRecruitmentResult.recruitedStudents.length === 0 &&
+    currentRecruitmentResult.exchangedStudents.length === 0 &&
+    currentPickupHistory
+  ) {
+    const group = allGroups.find((group) => group.uid === currentRecruitmentResult.recruitmentGroupUid);
+    const tier3PickupStudentIds =
+      group?.recruitments.flatMap(({ pickup, student }) => {
+        if (!pickup || !student || student.initialTier !== 3) {
+          return [];
+        }
+        return [student.uid];
+      }) ?? [];
+    currentPickupHistory = {
+      ...currentPickupHistory,
+      result: [
+        {
+          trial: currentRecruitmentResult.trial,
+          tier3Count: tier3PickupStudentIds.length,
+          tier3StudentIds: tier3PickupStudentIds,
+        },
+      ],
+    };
+  }
 
   const pickupGroups = allGroups.filter(
     (g) => g.recruitments.some((r) => r.pickup && r.student) && isInstantBefore(g.startAt, now),
@@ -160,6 +202,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         .map((r) => ({
           student: r.student ? { uid: r.student.uid, name: r.student.name ?? "" } : null,
           pickup: r.pickup,
+          recruitmentType: r.recruitmentType,
         })),
     };
   });
@@ -179,6 +222,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 type ActionData = {
   eventUid: string;
   result: PickupHistory["result"];
+  exchangedStudentIds?: string[];
   rawResult?: string;
   comment?: string | null;
 };
@@ -194,7 +238,45 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   }
 
   const data = await request.json<ActionData>();
+  const recruitmentGroup = await new RecruitmentRepository(env).getByUid(data.eventUid);
+  if (!recruitmentGroup) {
+    throw routeError(400, "pickup_history.recruitment_group_missing", "모집 이벤트를 찾을 수 없어요", {
+      recruitmentGroupUid: data.eventUid,
+    });
+  }
   const timelineContent = (await getTimelineContentsByRecruitmentGroupUids(env, [data.eventUid]))[0];
+  const exchangeableStudentMap = new Map(
+    recruitmentGroup.recruitments.flatMap((recruitment) => {
+      if (!canExchangeRecruitmentStudent(recruitment)) {
+        return [];
+      }
+      return [[recruitment.student.uid, recruitment.student] as const];
+    }),
+  );
+  const exchangedStudents = (data.exchangedStudentIds ?? []).map((studentUid) => {
+    const student = exchangeableStudentMap.get(studentUid);
+    if (!student) {
+      throw routeError(400, "pickup_history.exchange_student_invalid", "모집 포인트 교환 학생을 확인할 수 없어요", {
+        recruitmentGroupUid: data.eventUid,
+        studentUid,
+      });
+    }
+
+    return {
+      studentUid,
+      tier: student.initialTier,
+      pickup: true,
+    };
+  });
+  const trial = getRecruitmentResultTrialFromPickupHistory({ result: data.result });
+  const exchangeCountLimit = Math.floor((trial ?? 0) / 200);
+  if (exchangedStudents.length > exchangeCountLimit) {
+    throw routeError(400, "pickup_history.exchange_student_count_invalid", "모집 포인트 교환 학생 수가 모집 횟수와 맞지 않아요", {
+      trial,
+      exchangedStudentCount: exchangedStudents.length,
+      exchangeCountLimit,
+    });
+  }
 
   await upsertRecruitmentResult(env, sensei.id, {
     uid: params.id && params.id !== "new" ? params.id : undefined,
@@ -202,7 +284,8 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     contentUid: timelineContent?.uid ?? null,
     completedAt: nowUtcIso(),
     recruitedStudents: createRecruitmentResultStudentsFromPickupHistory({ result: data.result }),
-    trial: getRecruitmentResultTrialFromPickupHistory({ result: data.result }),
+    exchangedStudents,
+    trial,
     rawResult: data.rawResult ?? null,
     comment: data.comment ?? null,
   });
@@ -241,9 +324,11 @@ export default function EditPickup() {
 
   const initialEvent = initialEventUid ? events.find((event) => event.uid === initialEventUid) : null;
   const [eventUid, setEventUid] = useState<string | null>(isEditing ? initialEventUid : (initialEvent?.uid ?? null));
+  const selectedEvent = eventUid ? events.find((event) => event.uid === eventUid) : null;
   const [totalCount, setTotalCount] = useState(initialTotalCount);
   const [tier3Count, setTier3Count] = useState(initialTier3Count);
   const [tier3StudentUids, setTier3StudentUids] = useState(initialTier3StudentUids ?? []);
+  const [exchangedStudentUids, setExchangedStudentUids] = useState(currentPickupHistory?.exchangedStudentIds ?? []);
 
   const [showImporter, setShowImporter] = useState(false);
   const [comment, setComment] = useState(currentPickupHistory?.comment ?? "");
@@ -252,10 +337,18 @@ export default function EditPickup() {
     totalCount,
     tier3Count,
     tier3StudentCount: tier3StudentUids.length,
+    exchangedStudentCount: exchangedStudentUids.length,
   });
 
   const rawSubmit = useSubmit();
   const submit = (data: ActionData) => rawSubmit(data, { method: "post", encType: "application/json" });
+  const handleTotalCountChange = (value?: number) => {
+    setTotalCount(value);
+    const exchangeCountLimit = Math.floor((value ?? 0) / 200);
+    if (exchangedStudentUids.length > exchangeCountLimit) {
+      setExchangedStudentUids((prev) => prev.slice(0, exchangeCountLimit));
+    }
+  };
   const handleTier3CountChange = (value?: number) => {
     setTier3Count(value);
     if (value !== undefined && tier3StudentUids.length > value) {
@@ -276,6 +369,7 @@ export default function EditPickup() {
           tier3StudentIds: tier3StudentUids,
         },
       ],
+      exchangedStudentIds: exchangedStudentUids,
       comment: comment.trim() || null,
     });
   };
@@ -304,7 +398,10 @@ export default function EditPickup() {
           maxVisibleEvents={PICKUP_EVENT_SELECTOR_LIMIT}
           placeholder="이벤트 선택"
           searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
-          onSelect={setEventUid}
+          onSelect={(uid) => {
+            setEventUid(uid);
+            setExchangedStudentUids([]);
+          }}
         />
       )}
 
@@ -334,9 +431,16 @@ export default function EditPickup() {
         totalCount={totalCount}
         tier3Count={tier3Count}
         tier3StudentIds={tier3StudentUids}
-        onTotalCountChange={setTotalCount}
+        exchangedStudentIds={exchangedStudentUids}
+        exchangeableStudents={
+          selectedEvent?.recruitments.flatMap((recruitment) =>
+            canExchangeRecruitmentStudent(recruitment) && recruitment.student ? [recruitment.student] : [],
+          ) ?? []
+        }
+        onTotalCountChange={handleTotalCountChange}
         onTier3CountChange={handleTier3CountChange}
         onTier3StudentIdsChange={setTier3StudentUids}
+        onExchangedStudentIdsChange={setExchangedStudentUids}
       />
 
       <SubTitle text="모집 결과 의견 (선택)" />

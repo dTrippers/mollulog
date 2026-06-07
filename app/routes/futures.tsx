@@ -133,6 +133,7 @@ type RecruitmentResultState = {
   contentUid: string | null;
   completedAt: string | null;
   recruitedStudents: { studentUid: string; tier: number; pickup: boolean }[];
+  exchangedStudents: { studentUid: string; tier: number; pickup: boolean }[];
 };
 type FavoriteStudentLoaderData = { contentId: string; studentId: string };
 type FavoritedCountLoaderData = FavoriteStudentLoaderData & { count: number };
@@ -357,7 +358,9 @@ export default function FutureContents() {
                 ...result,
                 contentUid,
                 completedAt:
-                  completed || result.recruitedStudents.some((student) => student.studentUid !== studentUid)
+                  completed ||
+                  result.recruitedStudents.some((student) => student.studentUid !== studentUid) ||
+                  result.exchangedStudents.length > 0
                     ? (result.completedAt ?? new Date().toISOString())
                     : null,
                 recruitedStudents: completed
@@ -383,6 +386,7 @@ export default function FutureContents() {
           contentUid,
           completedAt: new Date().toISOString(),
           recruitedStudents: [{ studentUid, tier: 3, pickup: true }],
+          exchangedStudents: [],
         },
       ];
     });
@@ -476,22 +480,42 @@ export default function FutureContents() {
   );
 
   const completedRecruitmentStudents = useMemo<CompletedRecruitmentStudentState[]>(
-    () =>
-      recruitmentResults
+    () => {
+      const contentByRecruitmentGroupUid = new Map(
+        filteredContents.flatMap((content) =>
+          content.recruitmentGroupUid ? [[content.recruitmentGroupUid, content] as const] : [],
+        ),
+      );
+
+      return recruitmentResults
         .filter((result) => result.completedAt !== null)
-        .flatMap((result) =>
-          result.recruitedStudents.map((student) => ({
+        .flatMap((result) => {
+          const storedStudents = [...result.recruitedStudents, ...result.exchangedStudents];
+          const completedStudents =
+            storedStudents.length > 0
+              ? storedStudents
+              : (contentByRecruitmentGroupUid
+                  .get(result.recruitmentGroupUid)
+                  ?.recruitments.flatMap((recruitment) =>
+                    recruitment.pickup && recruitment.student ? [{ studentUid: recruitment.student.uid }] : [],
+                  ) ?? []);
+
+          return completedStudents.map((student) => ({
             recruitmentGroupUid: result.recruitmentGroupUid,
             studentUid: student.studentUid,
-          })),
-        ),
-    [recruitmentResults],
+          }));
+        });
+    },
+    [filteredContents, recruitmentResults],
   );
 
   const recruitmentResultEditLinks = useMemo<RecruitmentResultEditLinkState[]>(
     () =>
       recruitmentResults
-        .filter((result) => result.completedAt !== null || result.recruitedStudents.length > 0)
+        .filter(
+          (result) =>
+            result.completedAt !== null || result.recruitedStudents.length > 0 || result.exchangedStudents.length > 0,
+        )
         .map((result) => ({
           recruitmentGroupUid: result.recruitmentGroupUid,
           link: result.uid.startsWith("optimistic-")

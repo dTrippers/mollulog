@@ -22,6 +22,7 @@ export type ActionData =
       rawResult?: string | null;
       comment?: string | null;
       recruitedStudents?: RecruitmentResultStudent[];
+      exchangedStudents?: RecruitmentResultStudent[];
     }
   | {
       action: "completeStudent";
@@ -50,6 +51,7 @@ export type ActionData =
       rawResult?: string | null;
       comment?: string | null;
       recruitedStudents?: RecruitmentResultStudent[];
+      exchangedStudents?: RecruitmentResultStudent[];
     }
   | {
       action: "delete";
@@ -131,6 +133,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     const result = await setRecruitmentResultCompletion(env, currentUser.id, actionData.recruitmentGroupUid, true, {
       contentUid: actionData.contentUid ?? null,
       recruitedStudents: getStudentsFromAction(actionData),
+      exchangedStudents: actionData.exchangedStudents,
       trial: actionData.trial ?? undefined,
       rawResult: actionData.rawResult ?? undefined,
       comment: actionData.comment ?? undefined,
@@ -144,6 +147,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     contentUid: actionData.contentUid ?? null,
     completedAt: actionData.completed === false ? null : undefined,
     recruitedStudents: getStudentsFromAction(actionData),
+    exchangedStudents: actionData.exchangedStudents,
     trial: actionData.trial ?? undefined,
     rawResult: actionData.rawResult ?? undefined,
     comment: actionData.comment ?? undefined,

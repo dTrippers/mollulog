@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getRecruitmentResults } from "~/models/recruitment-result";
+import { getRecruitmentResultComments, getRecruitmentResults } from "~/models/recruitment-result";
 import { getSenseiByUsername } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
@@ -13,6 +13,7 @@ jest.mock("~/auth/authenticator.server", () => ({
 
 jest.mock("~/models/recruitment-result", () => ({
   getRecruitmentResults: jest.fn(),
+  getRecruitmentResultComments: jest.fn(),
   deleteRecruitmentResult: jest.fn(),
 }));
 
@@ -39,6 +40,9 @@ jest.mock("~/repositories", () => ({
 }));
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
+const mockedGetRecruitmentResultComments = getRecruitmentResultComments as jest.MockedFunction<
+  typeof getRecruitmentResultComments
+>;
 const mockedGetRecruitmentResults = getRecruitmentResults as jest.MockedFunction<typeof getRecruitmentResults>;
 const mockedGetSenseiByUsername = getSenseiByUsername as jest.MockedFunction<typeof getSenseiByUsername>;
 const mockedGetAllStudentsMap = getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>;
@@ -58,6 +62,7 @@ function createLoaderArgs() {
 
 beforeEach(() => {
   mockGetPoolStudents.mockResolvedValue([]);
+  mockedGetRecruitmentResultComments.mockResolvedValue(new Map());
 });
 
 afterEach(() => {
@@ -84,6 +89,7 @@ describe("pickup history index loader", () => {
         contentUid: "content-hidden-heritage-rerun",
         completedAt: "2025-03-04T02:00:00.000Z",
         recruitedStudents: [{ studentUid: "101", tier: 3, pickup: true }],
+        exchangedStudents: [],
         trial: 10,
         rawResult: null,
         commentPostUid: null,
@@ -139,6 +145,7 @@ describe("pickup history index loader", () => {
         contentUid: "content-hidden-heritage-rerun",
         completedAt: "2025-03-04T02:00:00.000Z",
         recruitedStudents: [{ studentUid: "101", tier: 5, pickup: true }],
+        exchangedStudents: [],
         trial: 10,
         rawResult: null,
         commentPostUid: null,
@@ -201,6 +208,7 @@ describe("pickup history index loader", () => {
         contentUid: "content-hidden-heritage-rerun",
         completedAt: "2025-03-04T02:00:00.000Z",
         recruitedStudents: [{ studentUid: "101", tier: 3, pickup: true }],
+        exchangedStudents: [],
         trial: 10,
         rawResult: null,
         commentPostUid: null,
@@ -267,6 +275,7 @@ describe("pickup history index loader", () => {
         contentUid: "content-hidden-heritage-rerun",
         completedAt: "2025-03-04T02:00:00.000Z",
         recruitedStudents: [{ studentUid: "missing-student", tier: 3, pickup: false }],
+        exchangedStudents: [],
         trial: 10,
         rawResult: null,
         commentPostUid: null,
@@ -321,6 +330,7 @@ describe("pickup history index loader", () => {
         contentUid: null,
         completedAt: "2025-03-04T02:00:00.000Z",
         recruitedStudents: [],
+        exchangedStudents: [],
         trial: null,
         rawResult: null,
         commentPostUid: null,
@@ -365,6 +375,7 @@ describe("pickup history index loader", () => {
         contentUid: "content-known-trial-group",
         completedAt: "2025-03-04T02:00:00.000Z",
         recruitedStudents: [{ studentUid: "101", tier: 3, pickup: true }],
+        exchangedStudents: [],
         trial: 100,
         rawResult: null,
         commentPostUid: null,
@@ -378,6 +389,7 @@ describe("pickup history index loader", () => {
         contentUid: "content-missing-trial-group",
         completedAt: "2025-03-11T02:00:00.000Z",
         recruitedStudents: [{ studentUid: "102", tier: 3, pickup: true }],
+        exchangedStudents: [],
         trial: null,
         rawResult: null,
         commentPostUid: null,
@@ -435,5 +447,82 @@ describe("pickup history index loader", () => {
       missingTrialCount: 1,
     });
     expect(result.recruitmentHistories.find((history) => history.uid === "history-missing-trial")?.trial).toBeNull();
+  });
+
+  it("includes exchanged students in acquired counts but excludes them from recruitment rates", async () => {
+    mockedGetSenseiByUsername.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getSenseiByUsername>>);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResults.mockResolvedValue([
+      {
+        uid: "history-1",
+        userId: 1,
+        recruitmentGroupUid: "armed-rio-group",
+        contentUid: "content-armed-rio-group",
+        completedAt: "2026-05-26T02:00:00.000Z",
+        recruitedStudents: [{ studentUid: "himari-armed", tier: 3, pickup: true }],
+        exchangedStudents: [{ studentUid: "rio-armed", tier: 3, pickup: true }],
+        trial: 200,
+        rawResult: null,
+        commentPostUid: null,
+        createdAt: "2026-05-26T02:00:00.000Z",
+        updatedAt: "2026-05-26T02:00:00.000Z",
+      },
+    ]);
+    mockedGetAllStudentsMap.mockResolvedValue({
+      "himari-armed": {
+        uid: "himari-armed",
+        name: "히마리(무장)",
+        initialTier: 3,
+      },
+      "rio-armed": {
+        uid: "rio-armed",
+        name: "리오(무장)",
+        initialTier: 3,
+      },
+    } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
+    mockGetByUids.mockResolvedValue([
+      {
+        uid: "armed-rio-group",
+        recruitmentType: "usual",
+        recruitments: [
+          { pickup: true, student: { uid: "himari-armed" } },
+          { pickup: true, student: { uid: "rio-armed" } },
+        ],
+      },
+    ]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-armed-rio-group",
+        name: "1부 Ex. 데카그라마톤 편",
+        recruitmentGroupUid: "armed-rio-group",
+        startAt: "2026-05-26T02:00:00.000Z",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader(createLoaderArgs() as never);
+
+    expect(result.recruitmentStats).toMatchObject({
+      trial: 200,
+      tier3Count: 2,
+      tier3RateCount: 1,
+      pickupCount: 2,
+      pickupRateCount: 1,
+    });
+    expect(result.recruitmentHistories[0].exchangedStudents).toEqual([
+      {
+        uid: "rio-armed",
+        name: "리오(무장)",
+        tier: 3,
+        pickup: true,
+      },
+    ]);
   });
 });

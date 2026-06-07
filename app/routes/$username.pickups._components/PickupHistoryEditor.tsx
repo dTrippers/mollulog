@@ -6,27 +6,38 @@ type PickupHistoryEditorProps = {
     uid: string;
     name: string;
   }[];
+  exchangeableStudents: {
+    uid: string;
+    name: string;
+  }[];
 
   totalCount?: number;
   tier3Count?: number;
   tier3StudentIds: string[];
+  exchangedStudentIds: string[];
 
   onTotalCountChange: (value?: number) => void;
   onTier3CountChange: (value?: number) => void;
   onTier3StudentIdsChange: (value: string[]) => void;
+  onExchangedStudentIdsChange: (value: string[]) => void;
 };
 
 export default function PickupHistoryEditor(
   {
     tier3Students,
+    exchangeableStudents,
     totalCount,
     tier3Count,
     tier3StudentIds,
+    exchangedStudentIds,
     onTotalCountChange,
     onTier3CountChange,
     onTier3StudentIdsChange,
+    onExchangedStudentIdsChange,
   }: PickupHistoryEditorProps,
 ) {
+  const exchangeCountLimit = Math.floor((totalCount ?? 0) / 200);
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
@@ -62,20 +73,38 @@ export default function PickupHistoryEditor(
           containerClassName="mt-0 mb-0"
         />
       </div>
-      {tier3Count !== undefined && tier3Count > 0 && (
-        <StudentSelectForm
-          label="모집한 ★3 학생"
-          description="모집한 ★3 학생을 선택해주세요"
-          students={tier3Students}
-          initialStudentUids={tier3StudentIds}
-          onSelect={(value) => onTier3StudentIdsChange(value as string[])}
-          multiple
-          allowDuplicateSelection
-          maxSelectedCount={tier3Count}
-          className="max-w-none"
-          containerClassName="mt-0 mb-0"
-        />
-      )}
+      <div>
+        {tier3Count !== undefined && tier3Count > 0 && (
+          <StudentSelectForm
+            label="모집한 ★3 학생"
+            description="모집한 ★3 학생을 선택해주세요"
+            students={tier3Students}
+            initialStudentUids={tier3StudentIds}
+            onSelect={(value) => onTier3StudentIdsChange(value as string[])}
+            multiple
+            allowDuplicateSelection
+            maxSelectedCount={tier3Count}
+            className="max-w-none"
+            containerClassName="mt-0 mb-0"
+          />
+        )}
+        {exchangeCountLimit > 0 && exchangeableStudents.length > 0 && (
+          <div className={tier3Count !== undefined && tier3Count > 0 ? "pt-5" : undefined}>
+            <StudentSelectForm
+              label="모집 포인트 교환 학생"
+              description={`${totalCount}회 모집 기준 최대 ${exchangeCountLimit}명까지 선택할 수 있어요`}
+              students={exchangeableStudents}
+              initialStudentUids={exchangedStudentIds}
+              onSelect={(value) => onExchangedStudentIdsChange(value as string[])}
+              multiple
+              allowDuplicateSelection
+              maxSelectedCount={exchangeCountLimit}
+              className="max-w-none"
+              containerClassName="mt-0 mb-0"
+            />
+          </div>
+        )}
+      </div>
     </div>
   );
 };

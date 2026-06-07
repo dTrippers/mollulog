@@ -19,7 +19,7 @@ type PyroxeneTimelineEventProps = {
   pickupChance: "ceil" | "average";
   onDeletePickupComplete: (eventUid: string) => void;
   onPickupComplete: (eventUid: string, resources: PickupResources) => void;
-  onUpdateEventData: (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => void;
+  onUpdateEventData: (eventUid: string, data: { expectedTrials?: number | null }) => void;
 };
 
 export default function PyroxeneTimelineEvent({
@@ -168,6 +168,7 @@ export default function PyroxeneTimelineEvent({
 
       <CompletePickupPopover
         show={showCompleteAction}
+        initialResources={accumulatedResources}
         onSaveResources={(resources) => {
           onPickupComplete(event.uid, resources);
           setShowCompleteAction(false);
@@ -314,9 +315,11 @@ function ExpectedTrialsPopover({
 
 function CompletePickupPopover({
   show,
+  initialResources,
   onSaveResources,
 }: {
   show: boolean;
+  initialResources: PickupResources;
   onSaveResources: (resources: PickupResources) => void;
 }) {
   return (
@@ -332,7 +335,11 @@ function CompletePickupPopover({
       className="absolute top-full left-0 z-10 mt-2 w-full"
     >
       <div className="rounded-lg border border-neutral-200 bg-white/90 p-4 shadow-lg backdrop-blur-sm dark:border-neutral-700 dark:bg-black/80">
-        <ResourcesInput description="모집 완료 시점의 재화 수량을 입력해주세요." onSaveResources={onSaveResources} />
+        <ResourcesInput
+          description="모집 완료 시점의 재화 수량을 입력해주세요."
+          initialResources={initialResources}
+          onSaveResources={onSaveResources}
+        />
       </div>
     </Transition>
   );

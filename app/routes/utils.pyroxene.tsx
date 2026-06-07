@@ -19,7 +19,11 @@ import type { PickupResources } from "~/components/features/futures";
 import type { PyroxenePlannerOptions, PyroxeneTimelineItem, PyroxeneEventData } from "~/models/pyroxene-planner";
 import Page from "~/components/features/layout/Page";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
+import {
+  deleteRecruitmentResult,
+  getRecruitmentResultsByRecruitmentGroupUids,
+  setRecruitmentResultCompletion,
+} from "~/models/recruitment-result";
 import {
   createPyroxeneOwnedResource,
   createBuyPyroxene,
@@ -35,7 +39,6 @@ import {
   getPyroxenePlannerContents,
   getAllPyroxeneEventData,
   upsertPyroxeneEventData,
-  deletePyroxeneEventData,
   defaultPyroxenePlannerOptions,
 } from "~/models/pyroxene-planner";
 import { ErrorPage } from "~/components/features/layout";
@@ -147,12 +150,12 @@ export type ActionData = {
 
   deleteData: {
     eventUid?: string | null;
+    recruitmentGroupUid?: string | null;
     itemUid?: string;
   };
 
   eventData?: {
     eventUid: string;
-    completed?: boolean;
     expectedTrials?: number | null;
   };
 
@@ -172,9 +175,35 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       if (createData.ownedResources !== undefined) {
         const { eventUid, pyroxene, oneTimeTicket, tenTimeTicket } = createData.ownedResources;
         await createPyroxeneOwnedResource(env, currentUser.id, { pyroxene, oneTimeTicket, tenTimeTicket });
-        // When completing a pickup, also mark the event as completed
         if (eventUid) {
-          await upsertPyroxeneEventData(env, currentUser.id, eventUid, { completed: true });
+          const content = (await getPyroxenePlannerContents(env)).find(
+            (content) => content.kind === "event" && content.uid === eventUid,
+          );
+          if (!content || content.kind !== "event" || !content.recruitmentGroupUid) {
+            throw new Error(`Cannot resolve recruitment group for pyroxene completion: eventUid=${eventUid}`);
+          }
+
+          const recruitedStudents = content.recruitments.flatMap((recruitment) => {
+            if (!recruitment.pickup || !recruitment.student) {
+              return [];
+            }
+
+            return [
+              {
+                studentUid: recruitment.student.uid,
+                tier: recruitment.student.initialTier || 3,
+                pickup: true,
+              },
+            ];
+          });
+          if (recruitedStudents.length === 0) {
+            throw new Error(`Cannot resolve pickup students for pyroxene completion: eventUid=${eventUid}`);
+          }
+
+          await setRecruitmentResultCompletion(env, currentUser.id, content.recruitmentGroupUid, true, {
+            contentUid: eventUid,
+            recruitedStudents,
+          });
         }
       }
       if (createData.buy?.quantity !== undefined) {
@@ -216,7 +245,6 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
 
     if (eventData) {
       await upsertPyroxeneEventData(env, currentUser.id, eventData.eventUid, {
-        completed: eventData.completed,
         expectedTrials: eventData.expectedTrials,
       });
     }
@@ -224,8 +252,20 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       await upsertPyroxenePlannerOptions(env, currentUser.id, calcOptions);
     }
   } else if (request.method === "DELETE" && deleteData) {
-    if (deleteData.eventUid) {
-      await deletePyroxeneEventData(env, currentUser.id, deleteData.eventUid);
+    let recruitmentGroupUid = deleteData.recruitmentGroupUid ?? null;
+    if (!recruitmentGroupUid && deleteData.eventUid) {
+      for (const content of await getPyroxenePlannerContents(env)) {
+        if (content.kind === "event" && content.uid === deleteData.eventUid) {
+          recruitmentGroupUid = content.recruitmentGroupUid;
+          break;
+        }
+      }
+    }
+    if (recruitmentGroupUid) {
+      const [recruitmentResult] = await getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, [recruitmentGroupUid]);
+      if (recruitmentResult) {
+        await deleteRecruitmentResult(env, currentUser.id, recruitmentResult.uid);
+      }
     }
     if (deleteData.itemUid) {
       await deletePyroxeneTimelineItem(env, currentUser.id, deleteData.itemUid);
@@ -259,6 +299,11 @@ export default function PyroxenePlanner() {
   // Local optimistic state for timeline items and event data
   const [localTimelineItems, setLocalTimelineItems] = useState<PyroxeneTimelineItem[]>(loaderData.timelineItems ?? []);
   const [localEventData, setLocalEventData] = useState<PyroxeneEventData[]>(loaderData.eventData ?? []);
+  const [localRecruitmentResultCompletions, setLocalRecruitmentResultCompletions] = useState<
+    { eventUid: string; recruitmentGroupUid: string }[]
+  >(
+    loaderData.recruitmentResultCompletions ?? [],
+  );
 
   const fetcher = useFetcher<typeof action>();
   const timelineSaveInFlight = useRef(false);
@@ -278,6 +323,10 @@ export default function PyroxenePlanner() {
   }, [loaderData.eventData]);
 
   useEffect(() => {
+    setLocalRecruitmentResultCompletions(loaderData.recruitmentResultCompletions ?? []);
+  }, [loaderData.recruitmentResultCompletions]);
+
+  useEffect(() => {
     setOptions(loaderData.calcOptions);
   }, [loaderData.calcOptions]);
 
@@ -291,13 +340,16 @@ export default function PyroxenePlanner() {
     setInitialResources(resources);
     setInitialDate(new Date());
     if (eventUid) {
-      setLocalEventData((prev) => {
-        const exists = prev.some((d) => d.eventUid === eventUid);
-        if (exists) {
-          return prev.map((d) => (d.eventUid === eventUid ? { ...d, completed: true } : d));
-        }
-        return [...prev, { uid: "optimistic", userId: 0, eventUid, completed: true, expectedTrials: null }];
-      });
+      const content = contents.find((content) => content.kind === "event" && content.uid === eventUid);
+      if (content?.kind === "event" && content.recruitmentGroupUid) {
+        const recruitmentGroupUid = content.recruitmentGroupUid;
+        setLocalRecruitmentResultCompletions((prev) => {
+          if (prev.some((completion) => completion.eventUid === eventUid)) {
+            return prev;
+          }
+          return [...prev, { eventUid, recruitmentGroupUid }];
+        });
+      }
     }
     fetcher.submit(
       { createData: { ownedResources: { eventUid, ...resources } } },
@@ -305,11 +357,11 @@ export default function PyroxenePlanner() {
     );
   };
 
-  const handleUpdateEventData = (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => {
+  const handleUpdateEventData = (eventUid: string, data: { expectedTrials?: number | null }) => {
     setLocalEventData((prev) => {
       const exists = prev.some((d) => d.eventUid === eventUid);
       if (exists) {
-        return prev.map((d) => (d.eventUid === eventUid ? { ...d, ...data } : d));
+        return prev.map((d) => (d.eventUid === eventUid ? { ...d, expectedTrials: data.expectedTrials ?? null } : d));
       }
       return [
         ...prev,
@@ -317,7 +369,7 @@ export default function PyroxenePlanner() {
           uid: "optimistic",
           userId: 0,
           eventUid,
-          completed: data.completed ?? false,
+          completed: false,
           expectedTrials: data.expectedTrials ?? null,
         },
       ];
@@ -326,8 +378,14 @@ export default function PyroxenePlanner() {
   };
 
   const handleDeletePickupComplete = (eventUid: string) => {
-    setLocalEventData((prev) => prev.filter((d) => d.eventUid !== eventUid));
-    fetcher.submit({ deleteData: { eventUid } }, { method: "DELETE", encType: "application/json" });
+    const recruitmentResultCompletion = localRecruitmentResultCompletions.find(
+      (completion) => completion.eventUid === eventUid,
+    );
+    setLocalRecruitmentResultCompletions((prev) => prev.filter((completion) => completion.eventUid !== eventUid));
+    fetcher.submit(
+      { deleteData: { eventUid, recruitmentGroupUid: recruitmentResultCompletion?.recruitmentGroupUid ?? null } },
+      { method: "DELETE", encType: "application/json" },
+    );
   };
 
   const handleDeleteItem = (itemUid: string) => {
@@ -455,11 +513,11 @@ export default function PyroxenePlanner() {
     const map = new Map<string, { completed: boolean; expectedTrials: number | null }>();
     for (const data of localEventData) {
       map.set(data.eventUid, {
-        completed: data.completed,
+        completed: false,
         expectedTrials: data.expectedTrials,
       });
     }
-    for (const completion of loaderData.recruitmentResultCompletions ?? []) {
+    for (const completion of localRecruitmentResultCompletions) {
       const existing = map.get(completion.eventUid);
       map.set(completion.eventUid, {
         completed: true,
@@ -467,7 +525,7 @@ export default function PyroxenePlanner() {
       });
     }
     return map;
-  }, [loaderData.recruitmentResultCompletions, localEventData]);
+  }, [localEventData, localRecruitmentResultCompletions]);
 
   const scheduleItems = usePyroxeneScheduleItems(contents, favoritedStudents, localTimelineItems);
 
