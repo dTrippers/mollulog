@@ -1,8 +1,7 @@
 import { getLogger } from "~/lib/observability.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { syncTimelineContents } from "./sync-timeline-contents";
 
-type ScheduledJobName = "syncTimelineContents" | "syncYoutubeCommunityPosts";
+type ScheduledJobName = "syncYoutubeCommunityPosts";
 
 type ScheduledJob = {
   name: ScheduledJobName;
@@ -11,10 +10,7 @@ type ScheduledJob = {
 
 export async function runScheduledJobs(env: Env, ctx?: ExecutionContext): Promise<void> {
   const logger = getLogger(env, ctx, { job: "scheduled" });
-  const jobs: ScheduledJob[] = [
-    { name: "syncTimelineContents", run: () => syncTimelineContents(env, ctx) },
-    { name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env) },
-  ];
+  const jobs: ScheduledJob[] = [{ name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env) }];
 
   const results = await Promise.allSettled(
     jobs.map(async (job) => {
@@ -29,7 +25,9 @@ export async function runScheduledJobs(env: Env, ctx?: ExecutionContext): Promis
 
   const failedJobs = results
     .map((result, index) => ({ result, job: jobs[index] }))
-    .filter((entry): entry is { result: PromiseRejectedResult; job: ScheduledJob } => entry.result.status === "rejected");
+    .filter(
+      (entry): entry is { result: PromiseRejectedResult; job: ScheduledJob } => entry.result.status === "rejected",
+    );
 
   for (const failed of failedJobs) {
     logger.error("Scheduled job failed", failed.result.reason, {

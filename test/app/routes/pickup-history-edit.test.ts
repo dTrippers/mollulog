@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { resolveContentName } from "~/models/content-name";
 import { getPickupHistory } from "~/models/pickup-history";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
@@ -9,10 +8,6 @@ import { loader } from "../../../app/routes/$username.pickups.edit.$id";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
-}));
-
-jest.mock("~/models/content-name", () => ({
-  resolveContentName: jest.fn(),
 }));
 
 jest.mock("~/models/pickup-history", () => ({
@@ -44,7 +39,6 @@ const mockedGetPickupHistory = getPickupHistory as jest.MockedFunction<typeof ge
 const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
 const mockedGetTimelineContentsByRecruitmentGroupUids =
   getTimelineContentsByRecruitmentGroupUids as jest.MockedFunction<typeof getTimelineContentsByRecruitmentGroupUids>;
-const mockedResolveContentName = resolveContentName as jest.MockedFunction<typeof resolveContentName>;
 const mockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
 
 const env = {} as Env;
@@ -126,10 +120,44 @@ describe("pickup history editor loader", () => {
     expect(mockedRecruitmentRepository).toHaveBeenCalledWith(env);
     expect(mockGetAllHistorical).toHaveBeenCalledTimes(1);
     expect(mockGetAll).not.toHaveBeenCalled();
-    expect(mockedResolveContentName).not.toHaveBeenCalled();
     expect(result.events.map((event: { uid: string }) => event.uid)).toEqual([
       "gojinraigou-rerun",
       "magical-heavy-caliber",
     ]);
+  });
+
+  it("fails loudly when a historical recruitment group has no timeline content row", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-05-27T00:00:00.000Z").getTime());
+
+    const historicalGroup = createGroup("magical-heavy-caliber", "2026-03-10T02:00:00Z");
+    mockGetAllHistorical.mockResolvedValue([historicalGroup]);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetPickupHistory.mockResolvedValue(null);
+    mockedGetAllStudents.mockResolvedValue([]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([]);
+
+    await expect(
+      loader({
+        context: { cloudflare: { env } },
+        request: new Request("https://mollulog.net/@sensei/pickups/edit/new"),
+        params: { username: "@sensei", id: "new" },
+      } as never),
+    ).rejects.toMatchObject({
+      type: "DataWithResponseInit",
+      data: {
+        error: {
+          code: "pickup_history.timeline_content_missing",
+          details: {
+            recruitmentGroupUids: ["magical-heavy-caliber"],
+          },
+        },
+      },
+      init: { status: 500 },
+    });
   });
 });

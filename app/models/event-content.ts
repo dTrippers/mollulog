@@ -4,7 +4,7 @@ import { graphql } from "~/graphql";
 import type { EventContentShopContentQuery, RecruitmentGroupsListQuery } from "~/graphql/graphql";
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { compareInstantAsc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, compareInstantAsc, toUtcIso } from "~/lib/date-time";
 import { RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
 import { getTimelineContent, getTimelineContents } from "./timeline-content";
@@ -17,7 +17,7 @@ function toRunTypeEnum(runType: RunType): RunTypeEnum {
 }
 
 //
-// Get Event Metadata (from D1 timeline_contents + BAQL for name)
+// Get Event Metadata (from D1 timeline_contents)
 //
 export async function getEventMetadata(env: Env, timelineUid: string) {
   const content = await getTimelineContent(env, timelineUid);

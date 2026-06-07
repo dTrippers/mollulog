@@ -6,7 +6,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
 import { FilterButtons, SubTitle, Title } from "~/components/primitives";
 import { compareInstantDesc, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { resolveContentName } from "~/models/content-name";
+import { routeError } from "~/lib/http-errors";
 import {
   type PickupHistory,
   createPickupHistory,
@@ -70,29 +70,34 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     timelineContents.map((content) => [content.recruitmentGroupUid, content] as const),
   );
 
-  const events = await Promise.all(
-    pickupGroups.map(async (group) => {
-      const name =
-        timelineContentMap.get(group.uid)?.name ??
-        (await resolveContentName(env, {
-          uid: group.uid,
-          contentType: group.contentType ?? "pickup",
-          contentUid: group.contentUid ?? null,
-        }));
-      return {
-        uid: group.uid,
-        name,
-        since: toUtcIso(group.startAt),
-        until: group.endAt ? toUtcIso(group.endAt) : null,
-        recruitments: group.recruitments
-          .filter((r) => r.pickup && r.student)
-          .map((r) => ({
-            student: r.student ? { uid: r.student.uid, name: r.student.name ?? "" } : null,
-            pickup: r.pickup,
-          })),
-      };
-    }),
-  );
+  const missingTimelineGroupUids = pickupGroups
+    .filter((group) => !timelineContentMap.has(group.uid))
+    .map((group) => group.uid);
+  if (missingTimelineGroupUids.length > 0) {
+    throw routeError(500, "pickup_history.timeline_content_missing", "모집 이력 정보를 불러오지 못했어요", {
+      recruitmentGroupUids: missingTimelineGroupUids,
+    });
+  }
+
+  const events = pickupGroups.map((group) => {
+    const timelineContent = timelineContentMap.get(group.uid);
+    if (!timelineContent) {
+      throw new Error(`timeline content is missing for recruitment group: ${group.uid}`);
+    }
+
+    return {
+      uid: group.uid,
+      name: timelineContent.name,
+      since: toUtcIso(group.startAt),
+      until: group.endAt ? toUtcIso(group.endAt) : null,
+      recruitments: group.recruitments
+        .filter((r) => r.pickup && r.student)
+        .map((r) => ({
+          student: r.student ? { uid: r.student.uid, name: r.student.name ?? "" } : null,
+          pickup: r.pickup,
+        })),
+    };
+  });
 
   events.sort((a, b) => compareInstantDesc(a.since, b.since));
 

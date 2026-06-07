@@ -378,7 +378,7 @@ export async function getNavigationBarContentsRaw(env: Env, forceRefresh = false
     async () => {
       const now = nowUtcIso();
       const [contents, latestNewsTime, coupons] = await Promise.all([
-        // Limit D1 results to active and future events (endAt >= now). This also bounds enrichAll fan-out to the active window.
+        // Limit D1 results to active and future events (endAt >= now).
         getTimelineContentsByContentTypes(env, ["event"], now),
         getLatestPostTime(env, "news"),
         getAllCoupons(env),

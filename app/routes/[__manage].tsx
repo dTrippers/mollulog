@@ -1,14 +1,8 @@
-import {
-  ArrowPathIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  TrashIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, TrashIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, Form, redirect, useActionData, useNavigation } from "react-router";
+import { Form, data, redirect, useActionData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Callout, Button, Title } from "~/components/primitives";
-import { syncTimelineContents } from "~/jobs/sync-timeline-contents";
+import { Button, Callout, Title } from "~/components/primitives";
 import { flushCacheAll } from "~/models/base";
 import { getFutureContents, getNavigationBarContentsRaw } from "~/models/content";
 import { getMainStories } from "~/models/main-story";
@@ -19,7 +13,6 @@ import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { RaidRepository, RecruitmentRepository } from "~/repositories";
 
 type RefreshTaskName =
-  | "syncTimelineContents"
   | "syncYoutubeCommunityPosts"
   | "syncRawStudents"
   | "RecruitmentRepository.refresh"
@@ -63,10 +56,7 @@ async function requireAdmin(env: Env, request: Request, ctx: ExecutionContext): 
   return currentUser;
 }
 
-async function runRefreshTask(
-  name: RefreshTaskName,
-  fn: () => Promise<unknown>,
-): Promise<RefreshTaskResult> {
+async function runRefreshTask(name: RefreshTaskName, fn: () => Promise<unknown>): Promise<RefreshTaskResult> {
   const startedAt = Date.now();
   try {
     await fn();
@@ -76,11 +66,10 @@ async function runRefreshTask(
   }
 }
 
-async function refreshCache(env: Env, ctx: ExecutionContext): Promise<RefreshResult> {
+async function refreshCache(env: Env): Promise<RefreshResult> {
   const recruitmentRepository = new RecruitmentRepository(env);
   const raidRepository = new RaidRepository(env);
   const leafTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
-    ["syncTimelineContents", () => syncTimelineContents(env, ctx)],
     ["syncYoutubeCommunityPosts", () => syncYoutubeCommunityPosts(env)],
     ["syncRawStudents", () => syncRawStudents(env)],
     ["RecruitmentRepository.refresh", () => recruitmentRepository.refresh()],
@@ -135,7 +124,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   if (intent === "cache.refresh") {
-    return data<ManageActionData>({ intent, result: await refreshCache(env, ctx) });
+    return data<ManageActionData>({ intent, result: await refreshCache(env) });
   }
   if (intent === "cache.flush") {
     await flushCacheAll(env);
@@ -145,10 +134,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   return data<ManageActionData>({ intent: "unknown", error: `Unsupported intent: ${intent}` }, { status: 400 });
 }
 
-export const meta: MetaFunction = () => [
-  { title: "관리 | 몰루로그" },
-  { name: "robots", content: "noindex,nofollow" },
-];
+export const meta: MetaFunction = () => [{ title: "관리 | 몰루로그" }, { name: "robots", content: "noindex,nofollow" }];
 
 export default function ManagePage() {
   const actionData = useActionData<typeof action>();

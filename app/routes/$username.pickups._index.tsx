@@ -1,16 +1,16 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { getActiveSensei } from "~/auth/authenticator.server";
-import { deletePickupHistory, getPickupHistories } from "~/models/pickup-history";
 import { data, redirect, useLoaderData } from "react-router";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { AddContentButton } from "~/components/features/editor";
-import PickupHistoryView from "./$username.pickups._components/PickupHistoryView";
 import { SubTitle } from "~/components/primitives";
-import { resolveContentName } from "~/models/content-name";
+import { compareInstantDesc } from "~/lib/date-time";
+import { routeError } from "~/lib/http-errors";
+import { deletePickupHistory, getPickupHistories } from "~/models/pickup-history";
 import { getAllStudentsMap } from "~/models/student";
-import { compareInstantDesc, toUtcIso } from "~/lib/date-time";
-import { getRouteSensei } from "./$username";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
+import { getRouteSensei } from "./$username";
+import PickupHistoryView from "./$username.pickups._components/PickupHistoryView";
 
 export const meta: MetaFunction = ({ params }) => {
   return [
@@ -46,13 +46,6 @@ function getPickupStudentUids(event: { recruitments: { pickup: boolean; student:
     }
   }
   return pickupStudentUids;
-};
-
-function fallbackPickupName(name: string | null | undefined, fallbackUids: string[]) {
-  if (!name || fallbackUids.includes(name)) {
-    return "픽업 모집";
-  }
-  return name;
 }
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
@@ -84,61 +77,53 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let pickupRateCount = 0;
   let totalTrial = 0;
 
-  const aggregatedHistories = (await Promise.all(recruitmentHistories.map(async (history) => {
-    const group = groupMap.get(history.eventId);
-    const timelineContent = timelineContentMap.get(history.eventId);
-    const pickupStudentUids = group ? getPickupStudentUids(group) : new Set<string>();
-    const allTier3StudentIds = history.result.flatMap((trial) => trial.tier3StudentIds);
-    const students = allTier3StudentIds
-      .filter((studentUid) => studentUid && allStudentsMap[studentUid])
-      .map((studentUid) => {
-        const student = allStudentsMap[studentUid];
-        return {
-          uid: student.uid,
-          name: student.name,
-          tier: student.initialTier,
-          pickup: pickupStudentUids.has(studentUid),
-        };
-      });
+  const aggregatedHistories = recruitmentHistories
+    .map((history) => {
+      const group = groupMap.get(history.eventId);
+      const timelineContent = timelineContentMap.get(history.eventId);
+      if (!timelineContent) {
+        throw routeError(500, "pickup_history.timeline_content_missing", "모집 이력 정보를 불러오지 못했어요", {
+          eventId: history.eventId,
+        });
+      }
 
-    const currentTier3Count = history.result.reduce((sum, trial) => sum + trial.tier3Count, 0);
-    const currentPickupCount = allTier3StudentIds.filter((uid) => pickupStudentUids.has(uid)).length;
-    const rateMultiplier = group?.recruitmentType === "fes" ? 0.5 : 1;
+      const pickupStudentUids = group ? getPickupStudentUids(group) : new Set<string>();
+      const allTier3StudentIds = history.result.flatMap((trial) => trial.tier3StudentIds);
+      const students = allTier3StudentIds
+        .filter((studentUid) => studentUid && allStudentsMap[studentUid])
+        .map((studentUid) => {
+          const student = allStudentsMap[studentUid];
+          return {
+            uid: student.uid,
+            name: student.name,
+            tier: student.initialTier,
+            pickup: pickupStudentUids.has(studentUid),
+          };
+        });
 
-    tier3Count += currentTier3Count;
-    pickupCount += currentPickupCount;
-    tier3RateCount += currentTier3Count * rateMultiplier;
-    pickupRateCount += currentPickupCount * rateMultiplier;
-    totalTrial += history.result.length > 0 ? Math.max(...history.result.map((result) => result.trial)) : 0;
+      const currentTier3Count = history.result.reduce((sum, trial) => sum + trial.tier3Count, 0);
+      const currentPickupCount = allTier3StudentIds.filter((uid) => pickupStudentUids.has(uid)).length;
+      const rateMultiplier = group?.recruitmentType === "fes" ? 0.5 : 1;
 
-    const eventSince = timelineContent?.startAt ?? (group?.startAt ? toUtcIso(group.startAt) : toUtcIso(0));
-    const resolvedEventName =
-      timelineContent?.name ??
-      (group
-        ? await resolveContentName(env, {
-            uid: group.uid,
-            contentType: group.contentType ?? "pickup",
-            contentUid: group.contentUid ?? null,
-          })
-        : null);
-    const eventName = fallbackPickupName(resolvedEventName, [
-      history.eventId,
-      timelineContent?.uid ?? "",
-      group?.uid ?? "",
-    ]);
+      tier3Count += currentTier3Count;
+      pickupCount += currentPickupCount;
+      tier3RateCount += currentTier3Count * rateMultiplier;
+      pickupRateCount += currentPickupCount * rateMultiplier;
+      totalTrial += history.result.length > 0 ? Math.max(...history.result.map((result) => result.trial)) : 0;
 
-    return {
-      uid: history.uid,
-      event: {
-        uid: timelineContent?.uid ?? history.eventId,
-        name: eventName,
-        type: group?.recruitmentType ?? "pickup",
-        since: eventSince,
-      },
-      trial: history.result.length > 0 ? history.result[history.result.length - 1].trial : 0,
-      recruitedStudents: students,
-    };
-  }))).sort((a, b) => compareInstantDesc(a.event.since, b.event.since));
+      return {
+        uid: history.uid,
+        event: {
+          uid: timelineContent.uid,
+          name: timelineContent.name,
+          type: group?.recruitmentType ?? "pickup",
+          since: timelineContent.startAt,
+        },
+        trial: history.result.length > 0 ? history.result[history.result.length - 1].trial : 0,
+        recruitedStudents: students,
+      };
+    })
+    .sort((a, b) => compareInstantDesc(a.event.since, b.event.since));
 
   const currentUser = await getActiveSensei(env, request);
   return {
@@ -169,14 +154,18 @@ export default function UserPickups() {
           <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 모집 횟수</p>
           <p className="text-lg md:text-2xl font-bold">{recruitmentStats.tier3Count} 번</p>
           {recruitmentStats.trial > 0 && (
-            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">{(recruitmentStats.tier3RateCount / recruitmentStats.trial * 100).toFixed(2)} %</p>
+            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
+              {((recruitmentStats.tier3RateCount / recruitmentStats.trial) * 100).toFixed(2)} %
+            </p>
           )}
         </div>
         <div className="text-center">
           <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 픽업 횟수</p>
           <p className="text-lg md:text-2xl font-bold">{recruitmentStats.pickupCount} 번</p>
           {recruitmentStats.trial > 0 && (
-            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">{(recruitmentStats.pickupRateCount / recruitmentStats.trial * 100).toFixed(2)} %</p>
+            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
+              {((recruitmentStats.pickupRateCount / recruitmentStats.trial) * 100).toFixed(2)} %
+            </p>
           )}
         </div>
       </div>
@@ -186,11 +175,7 @@ export default function UserPickups() {
 
       <SubTitle text="모집 이력" />
       {me && <AddContentButton text="새로운 모집 이력 추가하기" link="/my?path=pickups/edit/new" />}
-      {recruitmentHistories.length === 0 && (
-        <p className="my-16 text-center">
-          아직 모집 이력이 없어요
-        </p>
-      )}
+      {recruitmentHistories.length === 0 && <p className="my-16 text-center">아직 모집 이력이 없어요</p>}
       {recruitmentHistories.map(({ uid, event, recruitedStudents, trial }) => {
         return (
           <PickupHistoryView

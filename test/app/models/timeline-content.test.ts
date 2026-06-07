@@ -1,13 +1,10 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { getTimelineContents, getTimelineContentsByContentTypes, getUpcomingEvent } from "~/models/timeline-content";
 
-jest.mock("~/models/content-name", () => ({
-  resolveContentName: jest.fn(async (_env, raw: { uid: string }) => raw.uid),
-}));
-
 type TimelineContentRow = {
   id: number;
   uid: string;
+  name_i18n: string;
   start_at: string;
   end_at: string | null;
   endless: number;
@@ -93,6 +90,7 @@ function row(overrides: Partial<TimelineContentRow>): TimelineContentRow {
   return {
     id: 1,
     uid: "future-unsynced-event",
+    name_i18n: JSON.stringify({ ko: "미래 이벤트" }),
     start_at: "2099-08-25T02:00:00.000Z",
     end_at: "2099-09-15T02:00:00.000Z",
     endless: 0,
@@ -119,6 +117,7 @@ function rowToArray(row: TimelineContentRow): unknown[] {
   return [
     row.id,
     row.uid,
+    row.name_i18n,
     row.start_at,
     row.end_at,
     row.endless,
@@ -145,12 +144,14 @@ describe("timeline-content synced_at visibility", () => {
     const contents = await getTimelineContents(createEnv([row({})]));
 
     expect(contents.map((content) => content.uid)).toEqual(["future-unsynced-event"]);
+    expect(contents.map((content) => content.name)).toEqual(["미래 이벤트"]);
   });
 
   it("can pick an upcoming event even when synced_at is empty", async () => {
     const content = await getUpcomingEvent(createEnv([row({})]));
 
     expect(content?.uid).toBe("future-unsynced-event");
+    expect(content?.name).toBe("미래 이벤트");
   });
 
   it("includes future content-type results even when synced_at is empty", async () => {
@@ -161,5 +162,11 @@ describe("timeline-content synced_at visibility", () => {
     );
 
     expect(contents.map((content) => content.uid)).toEqual(["future-unsynced-event"]);
+  });
+
+  it("throws when a timeline content has no localized name", async () => {
+    await expect(getTimelineContents(createEnv([row({ name_i18n: "{}" })]))).rejects.toThrow(
+      "timeline content name is missing: uid=future-unsynced-event",
+    );
   });
 });

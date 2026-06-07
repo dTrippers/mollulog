@@ -14,10 +14,6 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
-    "\n  query CampaignName($uid: String!) {\n    campaign(uid: $uid) { uid category multiplier }\n  }\n": typeof types.CampaignNameDocument,
-    "\n  query EventContentName($uid: String!) {\n    eventContent(uid: $uid) { uid name }\n  }\n": typeof types.EventContentNameDocument,
-    "\n  query MiniEventContentName($uid: String!) {\n    miniEventContent(uid: $uid) { uid name }\n  }\n": typeof types.MiniEventContentNameDocument,
-    "\n  query JointFiringDrillName($uid: String!) {\n    jointFiringDrill(uid: $uid) { uid season drillType }\n  }\n": typeof types.JointFiringDrillNameDocument,
     "\n  query EventContentSchedule($eventUid: String!) {\n    eventContent(uid: $eventUid) {\n      schedules {\n        region\n        runType\n        startAt\n        endAt\n      }\n    }\n  }\n": typeof types.EventContentScheduleDocument,
     "\n  query EventContentShopContent($eventUid: String!, $runType: RunTypeEnum!) {\n    eventContent(uid: $eventUid) {\n      stages(runType: $runType) {\n        uid stageNumber stageIndex stageType enterCostAmount\n        rewards {\n          amount probability tag\n          resource { __typename uid name rarity ... on Item { category } }\n        }\n      }\n      shopResources(runType: $runType) {\n        uid resourceAmount shopAmount\n        resource { type uid name rarity }\n        paymentResource { type uid name }\n        purchaseTiers {\n          tierIndex\n          startQuantity\n          quantity\n          unitPrice\n          paymentResource { type uid name }\n        }\n      }\n      bonuses(runType: $runType) {\n        percentage\n        resource { uid name }\n        student { uid name role }\n      }\n      minigameConfigs(runType: $runType) {\n        minigameType\n        payment { quantity resource { type uid name } }\n        payments { quantity resource { type uid name } }\n        rewardGroups {\n          condition { type value values divisor remainders }\n          payments {\n            quantityMin\n            quantityExpected\n            quantityMax\n            quantityVariable\n            resource { type uid name }\n          }\n          rewards { quantity resource { type uid name rarity } }\n        }\n      }\n    }\n  }\n": typeof types.EventContentShopContentDocument,
     "\n  query MainStories {\n    mainStories {\n      uid name label season sortOrder\n      chapters {\n        uid name chapterNumber\n        parts {\n          uid name episodeStart episodeEnd sortOrder\n          schedules { region releasedAt confirmed }\n        }\n      }\n    }\n  }\n": typeof types.MainStoriesDocument,
@@ -39,10 +35,6 @@ type Documents = {
     "\n  query StudentDetail($uid: String!) {\n    student(uid: $uid) {\n      name uid attackType defenseType role school schaleDbId releaseAt\n      recruitments {\n        since rerun\n        recruitmentGroup { uid startAt endAt }\n      }\n    }\n  }\n": typeof types.StudentDetailDocument,
 };
 const documents: Documents = {
-    "\n  query CampaignName($uid: String!) {\n    campaign(uid: $uid) { uid category multiplier }\n  }\n": types.CampaignNameDocument,
-    "\n  query EventContentName($uid: String!) {\n    eventContent(uid: $uid) { uid name }\n  }\n": types.EventContentNameDocument,
-    "\n  query MiniEventContentName($uid: String!) {\n    miniEventContent(uid: $uid) { uid name }\n  }\n": types.MiniEventContentNameDocument,
-    "\n  query JointFiringDrillName($uid: String!) {\n    jointFiringDrill(uid: $uid) { uid season drillType }\n  }\n": types.JointFiringDrillNameDocument,
     "\n  query EventContentSchedule($eventUid: String!) {\n    eventContent(uid: $eventUid) {\n      schedules {\n        region\n        runType\n        startAt\n        endAt\n      }\n    }\n  }\n": types.EventContentScheduleDocument,
     "\n  query EventContentShopContent($eventUid: String!, $runType: RunTypeEnum!) {\n    eventContent(uid: $eventUid) {\n      stages(runType: $runType) {\n        uid stageNumber stageIndex stageType enterCostAmount\n        rewards {\n          amount probability tag\n          resource { __typename uid name rarity ... on Item { category } }\n        }\n      }\n      shopResources(runType: $runType) {\n        uid resourceAmount shopAmount\n        resource { type uid name rarity }\n        paymentResource { type uid name }\n        purchaseTiers {\n          tierIndex\n          startQuantity\n          quantity\n          unitPrice\n          paymentResource { type uid name }\n        }\n      }\n      bonuses(runType: $runType) {\n        percentage\n        resource { uid name }\n        student { uid name role }\n      }\n      minigameConfigs(runType: $runType) {\n        minigameType\n        payment { quantity resource { type uid name } }\n        payments { quantity resource { type uid name } }\n        rewardGroups {\n          condition { type value values divisor remainders }\n          payments {\n            quantityMin\n            quantityExpected\n            quantityMax\n            quantityVariable\n            resource { type uid name }\n          }\n          rewards { quantity resource { type uid name rarity } }\n        }\n      }\n    }\n  }\n": types.EventContentShopContentDocument,
     "\n  query MainStories {\n    mainStories {\n      uid name label season sortOrder\n      chapters {\n        uid name chapterNumber\n        parts {\n          uid name episodeStart episodeEnd sortOrder\n          schedules { region releasedAt confirmed }\n        }\n      }\n    }\n  }\n": types.MainStoriesDocument,
@@ -78,22 +70,6 @@ const documents: Documents = {
  */
 export function graphql(source: string): unknown;
 
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query CampaignName($uid: String!) {\n    campaign(uid: $uid) { uid category multiplier }\n  }\n"): (typeof documents)["\n  query CampaignName($uid: String!) {\n    campaign(uid: $uid) { uid category multiplier }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query EventContentName($uid: String!) {\n    eventContent(uid: $uid) { uid name }\n  }\n"): (typeof documents)["\n  query EventContentName($uid: String!) {\n    eventContent(uid: $uid) { uid name }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query MiniEventContentName($uid: String!) {\n    miniEventContent(uid: $uid) { uid name }\n  }\n"): (typeof documents)["\n  query MiniEventContentName($uid: String!) {\n    miniEventContent(uid: $uid) { uid name }\n  }\n"];
-/**
- * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
- */
-export function graphql(source: "\n  query JointFiringDrillName($uid: String!) {\n    jointFiringDrill(uid: $uid) { uid season drillType }\n  }\n"): (typeof documents)["\n  query JointFiringDrillName($uid: String!) {\n    jointFiringDrill(uid: $uid) { uid season drillType }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

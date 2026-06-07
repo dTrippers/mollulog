@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { syncTimelineContents } from "~/jobs/sync-timeline-contents";
 import { flushCacheAll } from "~/models/base";
 import { getFutureContents, getNavigationBarContentsRaw } from "~/models/content";
 import { getMainStories } from "~/models/main-story";
@@ -26,10 +25,6 @@ function makeSensei(overrides: Partial<Sensei>): Sensei {
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
-}));
-
-jest.mock("~/jobs/sync-timeline-contents", () => ({
-  syncTimelineContents: jest.fn(),
 }));
 
 jest.mock("~/models/base", () => ({
@@ -69,7 +64,6 @@ import { action, loader } from "../../../app/routes/[__manage]";
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedFlushCacheAll = flushCacheAll as jest.MockedFunction<typeof flushCacheAll>;
-const mockedSyncTimelineContents = syncTimelineContents as jest.MockedFunction<typeof syncTimelineContents>;
 const mockedSyncRawStudents = syncRawStudents as jest.MockedFunction<typeof syncRawStudents>;
 const mockedSyncYoutubeCommunityPosts = syncYoutubeCommunityPosts as jest.MockedFunction<
   typeof syncYoutubeCommunityPosts
@@ -140,7 +134,6 @@ function expectResponse(result: unknown): Response {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedFlushCacheAll.mockResolvedValue(undefined);
-  mockedSyncTimelineContents.mockResolvedValue(undefined);
   mockedSyncYoutubeCommunityPosts.mockResolvedValue({ synced: 0 });
   mockedSyncRawStudents.mockResolvedValue([]);
   mockRecruitmentRefresh.mockResolvedValue([]);
@@ -176,7 +169,6 @@ describe("__manage route", () => {
       result: {
         ok: true,
         durations: {
-          syncTimelineContents: expect.any(Number),
           syncYoutubeCommunityPosts: expect.any(Number),
           syncRawStudents: expect.any(Number),
           "RecruitmentRepository.refresh": expect.any(Number),
@@ -189,7 +181,6 @@ describe("__manage route", () => {
       },
     });
     expect(body.result?.ranAt).toEqual(expect.any(String));
-    expect(mockedSyncTimelineContents).toHaveBeenCalledWith(expect.anything(), expect.anything());
     expect(mockedSyncYoutubeCommunityPosts).toHaveBeenCalledWith(expect.anything());
     expect(mockedGetMainStories).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(expect.anything(), true);

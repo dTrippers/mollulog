@@ -48,6 +48,7 @@ function event(uid: string, startAt: string, endAt: string | null, runType: "fir
   return {
     uid,
     name: uid,
+    nameI18n: {},
     startAt,
     endAt,
     endless: false,
