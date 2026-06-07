@@ -4,6 +4,7 @@ import { EnvelopeIcon } from "@heroicons/react/24/outline";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { RouteErrorBoundary } from "~/components/features/layout";
 import { Callout, Title } from "~/components/primitives";
+import { publishEvent } from "~/lib/events.server";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { createFeedbackTicket, getFeedbackTicketsByUserId } from "~/models/feedback";
@@ -62,6 +63,17 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
 
   try {
     const ticketUid = await createFeedbackTicket(env, currentUser.id, trimmedTitle, trimmedContent, null);
+    publishEvent(env, ctx, {
+      type: "feedback.ticket_created",
+      occurredAt: new Date().toISOString(),
+      ticket: {
+        uid: ticketUid,
+        title: trimmedTitle,
+        content: trimmedContent,
+        authorId: currentUser.id,
+        authorUsername: currentUser.username,
+      },
+    });
     return redirect(`/contact/${ticketUid}`);
   } catch (error) {
     logger.error("Error creating feedback ticket", error, {

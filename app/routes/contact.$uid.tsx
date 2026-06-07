@@ -3,6 +3,7 @@ import { data, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { RouteErrorBoundary } from "~/components/features/layout";
 import { Title } from "~/components/primitives";
+import { publishEvent } from "~/lib/events.server";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { createFeedbackReply, getFeedbackThreadByUidForUser, getFeedbackTicketByUidForUser } from "~/models/feedback";
@@ -77,6 +78,19 @@ export const action = async ({ request, context, params }: ActionFunctionArgs) =
 
   try {
     await createFeedbackReply(env, ticket.id, currentUser.id, trimmedContent);
+    publishEvent(env, ctx, {
+      type: "feedback.reply_created",
+      occurredAt: new Date().toISOString(),
+      ticket: {
+        uid: ticket.uid,
+        title: ticket.title,
+      },
+      reply: {
+        content: trimmedContent,
+        authorId: currentUser.id,
+        authorUsername: currentUser.username,
+      },
+    });
     return data<ContactDetailActionData>({ success: true });
   } catch (error) {
     logger.error("Error creating feedback reply", error, {

@@ -33,6 +33,11 @@
       "migrations_dir": "db/migrations"
     }
   ],
+  "queues": {
+    "producers": [
+      { "binding": "EVENTS", "queue": "mollulog-events" }
+    ]
+  },
 
   // Secrets configuration
   // - SESSION_SECRET
@@ -65,7 +70,12 @@
           "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
           "migrations_dir": "db/migrations"
         }
-      ]
+      ],
+      "queues": {
+        "producers": [
+          { "binding": "EVENTS", "queue": "mollulog-events-staging" }
+        ]
+      }
     },
     "production": {
       "routes": [
@@ -90,6 +100,11 @@
           "migrations_dir": "db/migrations"
         }
       ],
+      "queues": {
+        "producers": [
+          { "binding": "EVENTS", "queue": "mollulog-events" }
+        ]
+      },
       "logpush": true
     }
   }

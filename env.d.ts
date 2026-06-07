@@ -2,6 +2,7 @@ interface Env {
   KV_CACHE: KVNamespace;
   KV_SESSION: KVNamespace;
   DB: D1Database;
+  EVENTS?: Queue;
   HOST: string;
   STAGE?: "staging" | "prod";
   DISABLE_CACHE?: string;
