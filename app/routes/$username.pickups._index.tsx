@@ -5,7 +5,7 @@ import { AddContentButton } from "~/components/features/editor";
 import { SubTitle } from "~/components/primitives";
 import { compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import { deleteRecruitmentResult, getRecruitmentResults } from "~/models/recruitment-result";
+import { deleteRecruitmentResult, getRecruitmentResultComments, getRecruitmentResults } from "~/models/recruitment-result";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
@@ -64,6 +64,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     getTimelineContentsByRecruitmentGroupUids(env, eventUids),
     recruitmentRepository.getPoolStudents(),
   ]);
+  const commentMap = await getRecruitmentResultComments(
+    env,
+    sensei.id,
+    recruitmentResults.map((result) => result.commentPostUid),
+  );
 
   const groupMap = new Map(groups.map((group) => [group.uid, group] as const));
   const poolStudentsMap = new Map(poolStudents.map((student) => [student.uid, student] as const));
@@ -130,6 +135,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         pickupRateCount += currentPickupCount * rateMultiplier;
         totalTrial += result.trial;
       }
+      const comment = result.commentPostUid ? (commentMap.get(result.commentPostUid) ?? null) : null;
 
       return {
         uid: result.uid,
@@ -141,6 +147,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         },
         trial: result.trial,
         recruitedStudents: students,
+        comment: comment
+          ? {
+              ...comment,
+              sensei: {
+                username: sensei.username,
+                profileStudentId: sensei.profileStudentId,
+              },
+            }
+          : null,
       };
     })
     .sort((a, b) => compareInstantDesc(a.event.since, b.event.since));
@@ -197,7 +212,7 @@ export default function UserPickups() {
       <SubTitle text="모집 이력" />
       {me && <AddContentButton text="새로운 모집 이력 추가하기" link="/my?path=pickups/edit/new" />}
       {recruitmentHistories.length === 0 && <p className="my-16 text-center">아직 모집 이력이 없어요</p>}
-      {recruitmentHistories.map(({ uid, event, recruitedStudents, trial }) => {
+      {recruitmentHistories.map(({ uid, event, recruitedStudents, trial, comment }) => {
         return (
           <PickupHistoryView
             key={uid}
@@ -205,6 +220,7 @@ export default function UserPickups() {
             event={event}
             recruitedStudents={recruitedStudents}
             trial={trial}
+            comment={comment}
             trialMissing={trial === null}
             editable={me}
           />

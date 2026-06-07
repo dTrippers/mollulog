@@ -255,6 +255,37 @@ export async function getRecruitmentResultComment(
   return post ? getPrimaryPlaintextBlockText(parseCommunityPostBlocks(post.blocks)) : null;
 }
 
+export async function getRecruitmentResultComments(
+  env: Env,
+  userId: number,
+  commentPostUids: (string | null | undefined)[],
+): Promise<Map<string, { uid: string; body: string; createdAt: UtcIsoString }>> {
+  const uniqueUids = [...new Set(commentPostUids.filter((uid): uid is string => Boolean(uid)))];
+  if (uniqueUids.length === 0) {
+    return new Map();
+  }
+
+  const db = drizzle(env.DB);
+  const posts = (
+    await Promise.all(
+      splitIntoBatches(uniqueUids).map((batch) =>
+        db
+          .select({ uid: communityPostsTable.uid, blocks: communityPostsTable.blocks, createdAt: communityPostsTable.createdAt })
+          .from(communityPostsTable)
+          .where(and(eq(communityPostsTable.userId, userId), inArray(communityPostsTable.uid, batch)))
+          .all(),
+      ),
+    )
+  ).flat();
+
+  return new Map(
+    posts.flatMap((post) => {
+      const comment = getPrimaryPlaintextBlockText(parseCommunityPostBlocks(post.blocks))?.trim();
+      return comment ? [[post.uid, { uid: post.uid, body: comment, createdAt: post.createdAt as UtcIsoString }] as const] : [];
+    }),
+  );
+}
+
 async function syncRecruitedStudents(env: Env, userId: number, students: RecruitmentResultStudent[]) {
   // Recruitment results are an additive projection into recruited_students.
   // Cancelling completion or removing a result must not auto-delete from recruited_students,
@@ -337,6 +368,15 @@ export async function upsertRecruitmentResult(
       .update(recruitmentResultsTable)
       .set({ commentPostUid, updatedAt: nowUtcIso() })
       .where(and(eq(recruitmentResultsTable.userId, userId), eq(recruitmentResultsTable.uid, uid)));
+  } else if (input.comment !== undefined) {
+    const current = await getRecruitmentResult(env, userId, uid);
+    if (current?.commentPostUid) {
+      await deleteCommunityPostByUid(env, current.commentPostUid, userId);
+      await db
+        .update(recruitmentResultsTable)
+        .set({ commentPostUid: null, updatedAt: nowUtcIso() })
+        .where(and(eq(recruitmentResultsTable.userId, userId), eq(recruitmentResultsTable.uid, uid)));
+    }
   }
 
   const result = await getRecruitmentResult(env, userId, uid);

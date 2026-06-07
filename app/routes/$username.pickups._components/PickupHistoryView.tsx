@@ -1,6 +1,7 @@
 import { Form, Link } from "react-router";
 import { Button } from "~/components/primitives";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import ContentCommentView from "~/components/features/contents/ContentCommentView";
 import { StudentCards } from "~/components/features/students";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
@@ -22,6 +23,15 @@ type PickupHistoryViewProps = {
   }[];
   trial?: number | null;
   trialMissing?: boolean;
+  comment?: {
+    uid: string;
+    body: string;
+    createdAt: UtcIsoString;
+    sensei: {
+      username: string;
+      profileStudentId: string | null;
+    };
+  } | null;
   editable?: boolean;
 };
 
@@ -38,10 +48,12 @@ export default function PickupHistoryView({
   recruitedStudents,
   trial,
   trialMissing,
+  comment,
   editable,
 }: PickupHistoryViewProps) {
   const tier3Students = recruitedStudents.filter(({ tier }) => tier === 3);
   const pickupCount = recruitedStudents.filter(({ pickup }) => pickup).length;
+  const visibleComment = comment?.body.trim() ? comment : null;
 
   return (
     <article className="my-4 rounded-lg bg-neutral-100 p-5 dark:bg-neutral-900">
@@ -49,6 +61,7 @@ export default function PickupHistoryView({
         <div className="min-w-0 flex-1 space-y-4">
           <PickupHeader event={event} />
           {tier3Students.length > 0 && <Tier3StudentList students={tier3Students} />}
+          {visibleComment && <PickupComment comment={visibleComment} />}
         </div>
 
         <aside className="flex flex-col gap-3 md:w-60">
@@ -62,6 +75,25 @@ export default function PickupHistoryView({
         </aside>
       </div>
     </article>
+  );
+}
+
+function PickupComment({ comment }: { comment: NonNullable<PickupHistoryViewProps["comment"]> }) {
+  return (
+    <div className="mt-2">
+      <ContentCommentView
+        comments={[
+          {
+            uid: comment.uid,
+            body: comment.body,
+            visibility: "public",
+            pinned: true,
+            createdAt: comment.createdAt,
+            sensei: comment.sensei,
+          },
+        ]}
+      />
+    </div>
   );
 }
 

@@ -1,11 +1,12 @@
-import { Bars3Icon } from "@heroicons/react/16/solid";
+import { DocumentArrowDownIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction, redirect } from "react-router";
 import { useLoaderData, useSearchParams, useSubmit } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
-import { FilterButtons, SubTitle, Textarea, Title } from "~/components/primitives";
-import { compareInstantDesc, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
+import { compareInstantDesc, formatInstant, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { routeError } from "~/lib/http-errors";
 import {
   type PickupHistory,
@@ -48,6 +49,36 @@ function getRouteUsername(params: { username?: string }) {
 
 function redirectToCanonicalEditor(params: { id?: string }) {
   return redirect(`/my?path=pickups/edit/${params.id ?? "new"}`);
+}
+
+function getSaveUnavailableReason({
+  eventUid,
+  totalCount,
+  tier3Count,
+  tier3StudentCount,
+}: {
+  eventUid: string | null;
+  totalCount?: number;
+  tier3Count?: number;
+  tier3StudentCount: number;
+}) {
+  if (!eventUid) {
+    return "모집 이벤트를 선택해주세요.";
+  }
+  if (totalCount === undefined || totalCount <= 0) {
+    return "총 모집 횟수를 입력해주세요.";
+  }
+  if (tier3Count === undefined || tier3Count < 0) {
+    return "모집한 ★3 횟수를 입력해주세요.";
+  }
+  if (tier3Count > totalCount) {
+    return "모집한 ★3 횟수는 총 모집 횟수보다 클 수 없어요.";
+  }
+  if (tier3StudentCount !== tier3Count) {
+    return `모집한 ★3 학생을 ${tier3Count}명 선택해주세요. 현재 ${tier3StudentCount}명이 선택됐어요.`;
+  }
+
+  return null;
 }
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
@@ -181,6 +212,8 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 export default function EditPickup() {
   const { events, tier3Students, currentPickupHistory } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
+  const displayTimeZone = useDisplayTimeZone();
+  const isEditing = currentPickupHistory !== null;
 
   let initialEventUid = null;
   if (currentPickupHistory) {
@@ -207,94 +240,117 @@ export default function EditPickup() {
   }
 
   const initialEvent = initialEventUid ? events.find((event) => event.uid === initialEventUid) : null;
-  const [eventUid, setEventUid] = useState<string | null>(initialEvent?.uid ?? null);
+  const [eventUid, setEventUid] = useState<string | null>(isEditing ? initialEventUid : (initialEvent?.uid ?? null));
+  const [totalCount, setTotalCount] = useState(initialTotalCount);
+  const [tier3Count, setTier3Count] = useState(initialTier3Count);
+  const [tier3StudentUids, setTier3StudentUids] = useState(initialTier3StudentUids ?? []);
 
-  const [editorMode, setEditorMode] = useState<"edit" | "import">(currentPickupHistory?.rawResult ? "import" : "edit");
+  const [showImporter, setShowImporter] = useState(false);
   const [comment, setComment] = useState(currentPickupHistory?.comment ?? "");
+  const saveUnavailableReason = getSaveUnavailableReason({
+    eventUid,
+    totalCount,
+    tier3Count,
+    tier3StudentCount: tier3StudentUids.length,
+  });
 
   const rawSubmit = useSubmit();
   const submit = (data: ActionData) => rawSubmit(data, { method: "post", encType: "application/json" });
+  const handleTier3CountChange = (value?: number) => {
+    setTier3Count(value);
+    if (value !== undefined && tier3StudentUids.length > value) {
+      setTier3StudentUids((prev) => prev.slice(0, value));
+    }
+  };
+  const handleSave = () => {
+    if (saveUnavailableReason || !eventUid || totalCount === undefined || tier3Count === undefined) {
+      return;
+    }
+
+    submit({
+      eventUid,
+      result: [
+        {
+          trial: totalCount,
+          tier3Count,
+          tier3StudentIds: tier3StudentUids,
+        },
+      ],
+      comment: comment.trim() || null,
+    });
+  };
 
   return (
     <>
       <Title text="모집 이력 관리" />
 
       <SubTitle text="모집 이벤트" />
-      <EventSelector
-        label="이벤트"
-        description="모집을 진행한 이벤트를 선택해주세요."
-        name="eventUid"
-        events={events}
-        currentEventUid={eventUid}
-        maxVisibleEvents={PICKUP_EVENT_SELECTOR_LIMIT}
-        placeholder="이벤트 선택"
-        searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
-        onSelect={setEventUid}
+      {isEditing ? (
+        initialEvent && (
+          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
+            <p className="whitespace-pre-line font-semibold text-neutral-950 dark:text-neutral-50">{initialEvent.name}</p>
+            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+              {formatInstant(initialEvent.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
+            </p>
+          </div>
+        )
+      ) : (
+        <EventSelector
+          label="이벤트"
+          description="모집을 진행한 이벤트를 선택해주세요."
+          name="eventUid"
+          events={events}
+          currentEventUid={eventUid}
+          maxVisibleEvents={PICKUP_EVENT_SELECTOR_LIMIT}
+          placeholder="이벤트 선택"
+          searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
+          onSelect={setEventUid}
+        />
+      )}
+
+      <SubTitle text="모집 결과" />
+      <div className="mb-4">
+        <Button
+          text={showImporter ? "외부 데이터 닫기" : "외부 데이터 가져오기"}
+          icon={DocumentArrowDownIcon}
+          variant="tint"
+          onClick={() => setShowImporter((prev) => !prev)}
+        />
+      </div>
+      {showImporter && (
+        <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
+          <PickupHistoryImporter
+            tier3Students={tier3Students}
+            onImport={({ totalCount, tier3Count, tier3StudentIds }) => {
+              setTotalCount(totalCount);
+              setTier3Count(tier3Count);
+              setTier3StudentUids(tier3StudentIds);
+            }}
+          />
+        </div>
+      )}
+      <PickupHistoryEditor
+        tier3Students={tier3Students}
+        totalCount={totalCount}
+        tier3Count={tier3Count}
+        tier3StudentIds={tier3StudentUids}
+        onTotalCountChange={setTotalCount}
+        onTier3CountChange={handleTier3CountChange}
+        onTier3StudentIdsChange={setTier3StudentUids}
       />
 
-      {eventUid && (
-        <>
-          <SubTitle text="모집 결과" />
-          {!currentPickupHistory && (
-            <div className="mb-4">
-              <FilterButtons
-                Icon={Bars3Icon}
-                buttonProps={[
-                  { text: "직접 추가", active: editorMode === "edit", onToggle: () => setEditorMode("edit") },
-                  { text: "외부 데이터", active: editorMode === "import", onToggle: () => setEditorMode("import") },
-                ]}
-                exclusive
-                atLeastOne
-              />
-            </div>
-          )}
-          {editorMode === "edit" && (
-            <PickupHistoryEditor
-              tier3Students={tier3Students}
-              initialTotalCount={initialTotalCount}
-              initialTier3Count={initialTier3Count}
-              initialTier3StudentIds={initialTier3StudentUids}
-              onComplete={(result) =>
-                submit({
-                  eventUid,
-                  result: [
-                    {
-                      trial: result.totalCount,
-                      tier3Count: result.tier3Count,
-                      tier3StudentIds: result.tier3StudentIds,
-                    },
-                  ],
-                  comment: comment.trim() || null,
-                })
-              }
-            />
-          )}
-          {editorMode === "import" && (
-            <PickupHistoryImporter
-              tier3Students={tier3Students}
-              initialTotalCount={initialTotalCount}
-              initialTier3Count={initialTier3Count}
-              initialTier3StudentIds={initialTier3StudentUids}
-              initialRawData={currentPickupHistory?.rawResult ?? undefined}
-              onComplete={({ totalCount, tier3Count, tier3StudentIds, rawData }) =>
-                submit({
-                  eventUid,
-                  result: [{ trial: totalCount, tier3Count, tier3StudentIds }],
-                  rawResult: rawData,
-                  comment: comment.trim() || null,
-                })
-              }
-            />
-          )}
-          <SubTitle text="모집 결과 의견" />
-          <Textarea
-            value={comment}
-            rows={4}
-            placeholder="남긴 의견은 다른 사람에게 공개돼요."
-            onChange={setComment}
-          />
-        </>
-      )}
+      <SubTitle text="모집 결과 의견 (선택)" />
+      <Textarea
+        value={comment}
+        rows={4}
+        description="입력하지 않아도 저장할 수 있어요."
+        placeholder="남긴 의견은 다른 사람에게 공개돼요."
+        onChange={setComment}
+      />
+      <div className="mt-8 flex flex-col items-start gap-2">
+        <Button text="모집 결과 저장" variant="primary" disabled={saveUnavailableReason !== null} onClick={handleSave} />
+        {saveUnavailableReason && <p className="text-sm text-neutral-500 dark:text-neutral-400">{saveUnavailableReason}</p>}
+      </div>
     </>
   );
 }
