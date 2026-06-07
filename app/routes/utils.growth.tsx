@@ -1,4 +1,4 @@
-import { ArchiveBoxIcon, UserIcon } from "@heroicons/react/24/outline";
+import { ArchiveBoxIcon, MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
@@ -102,6 +102,13 @@ export default function GrowthLayout() {
           Icon: ArchiveBoxIcon,
           link: "/utils/growth/resources",
           active: pathname.startsWith("/utils/growth/resources"),
+        },
+        {
+          text: "장비 파밍 계산기",
+          description: "필요한 설계도를 기준으로 캠페인 스테이지 추천",
+          Icon: MagnifyingGlassIcon,
+          link: "/utils/growth/farming",
+          active: pathname === "/utils/growth/farming",
         },
       ]}
     >
