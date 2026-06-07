@@ -124,10 +124,3 @@ export async function upsertEventShopState(
       },
     });
 }
-
-export async function deleteEventShopState(env: Env, userId: number, eventUid: string): Promise<void> {
-  const db = drizzle(env.DB);
-  await db
-    .delete(eventShopStatesTable)
-    .where(and(eq(eventShopStatesTable.userId, userId), eq(eventShopStatesTable.eventUid, eventUid)));
-}

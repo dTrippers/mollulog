@@ -1,10 +1,11 @@
 import { type ActionFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { deleteEventShopState, upsertEventShopState, type EventShopState } from "~/models/event-shop-state";
+import { getEventMetadata } from "~/models/event-content";
+import { upsertEventShopState, type EventShopState } from "~/models/event-shop-state";
+import { buildEventShopStateIdentity } from "~/models/event-shop-state-key";
 
 export type ActionData = {
   save?: EventShopState;
-  delete?: boolean;
 };
 
 export const action = async ({ params, context, request }: ActionFunctionArgs) => {
@@ -14,7 +15,14 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     return redirect("/unauthorized");
   }
 
-  const eventUid = params.eventUid as string;
+  const submittedEventUid = params.eventUid as string;
+  const metadata = await getEventMetadata(env, submittedEventUid);
+  const eventUid = metadata
+    ? buildEventShopStateIdentity({
+        timelineUid: submittedEventUid,
+        shopContentUid: metadata.shopContentUid,
+      }).shopStateUid
+    : submittedEventUid;
   const actionData = await request.json<ActionData>();
 
   if (actionData.save) {
@@ -22,11 +30,5 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     return { success: true };
   }
 
-  if (actionData.delete) {
-    await deleteEventShopState(env, currentUser.id, eventUid);
-    return { success: true };
-  }
-
   return { success: false };
 };
-

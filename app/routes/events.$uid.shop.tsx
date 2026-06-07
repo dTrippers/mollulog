@@ -3,8 +3,10 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { calculateShopPurchaseDays } from "~/components/features/events/shop/calculations";
 import { getEventContentSchedule, getEventMetadata, getEventShopContent } from "~/models/event-content";
+import { buildEventShopStateIdentity } from "~/models/event-shop-state-key";
 import { getEventShopState } from "~/models/event-shop-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
+import { getTimelineContentDatesByContentUid } from "~/models/timeline-content";
 import EventShopContent from "./events.$uid._components/EventShopContent";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -22,8 +24,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const shopSchedule = metadata.shopContentUid
     ? await getEventContentSchedule(env, metadata.shopContentUid, metadata.runType)
     : null;
-  const shopSince = shopSchedule?.startAt ?? metadata.since;
-  const shopUntil = shopSchedule?.endAt ?? metadata.until;
+  const canonicalShopDates = metadata.shopContentUid
+    ? await getTimelineContentDatesByContentUid(env, metadata.shopContentUid)
+    : null;
+  const shopSince = shopSchedule?.startAt ?? canonicalShopDates?.startAt ?? metadata.since;
+  const shopUntil = shopSchedule?.endAt ?? canonicalShopDates?.endAt ?? metadata.until;
   if (
     (metadata.runType === "permanent" && !metadata.shopContentUid) ||
     !shopContent ||
@@ -54,7 +59,16 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitedStudentUids = recruitedStudents.map((student) => student.studentUid);
   }
 
-  const savedShopState = currentUser ? await getEventShopState(env, currentUser.id, timelineUid) : null;
+  const shopStateIdentity = buildEventShopStateIdentity({
+    timelineUid,
+    shopContentUid: metadata.shopContentUid,
+  });
+  const savedShopState = currentUser
+    ? ((await getEventShopState(env, currentUser.id, shopStateIdentity.shopStateUid)) ??
+      (shopStateIdentity.fallbackStateUid
+        ? await getEventShopState(env, currentUser.id, shopStateIdentity.fallbackStateUid)
+        : null))
+    : null;
   return {
     eventName: metadata.name,
     until: shopUntil,
@@ -67,6 +81,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     savedShopState,
     availablePurchaseDays: calculateShopPurchaseDays(shopSince, shopUntil),
     eventUid: timelineUid,
+    shopStateUid: shopStateIdentity.shopStateUid,
     signedIn: currentUser !== null,
   };
 };
@@ -94,6 +109,7 @@ export default function EventShop() {
       eventRewardBonus={loaderData.eventRewardBonus}
       recruitedStudentUids={loaderData.recruitedStudentUids}
       eventUid={loaderData.eventUid}
+      shopStateUid={loaderData.shopStateUid}
       savedShopState={loaderData.savedShopState}
       availablePurchaseDays={loaderData.availablePurchaseDays}
       signedIn={loaderData.signedIn}

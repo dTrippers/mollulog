@@ -1,14 +1,17 @@
 import { Transition } from "@headlessui/react";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import hangul from "hangul-js";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { StudentCards } from "~/components/features/students";
 import { Field } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
+import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import type { ShopAvailableEvent } from "~/models/event-content";
 import { sanitizeClassName } from "~/prophandlers";
+
+const SPOILER_EVENT_NAVIGATION_MESSAGE = "스포일러가 포함된 이벤트에요. 이동할까요?";
 
 export type SelectableEvent = ShopAvailableEvent & {
   recruitments?: {
@@ -50,13 +53,14 @@ export default function EventSelector({
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [selectedEventUid, setSelectedEventUid] = useState(currentEventUid ?? null);
+  const [revealedSpoilerContentUids, setRevealedSpoilerContentUids] = useState<string[]>([]);
   const currentEvent = useMemo(
     () => events.find((event) => event.uid === selectedEventUid) ?? null,
     [selectedEventUid, events],
   );
   const filteredEvents = useMemo(
-    () => filterSelectableEvents(events, debouncedSearchQuery, maxVisibleEvents),
-    [debouncedSearchQuery, events, maxVisibleEvents],
+    () => filterSelectableEvents(events, debouncedSearchQuery, maxVisibleEvents, revealedSpoilerContentUids),
+    [debouncedSearchQuery, events, maxVisibleEvents, revealedSpoilerContentUids],
   );
 
   useEffect(() => {
@@ -97,6 +101,10 @@ export default function EventSelector({
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    setRevealedSpoilerContentUids(parseRevealedSpoilerContentUids(localStorage.getItem(futuresRevealedSpoilerKey)));
+  }, []);
+
   if (events.length === 0) {
     return null;
   }
@@ -112,6 +120,15 @@ export default function EventSelector({
     onSelect?.(eventUid);
   };
 
+  const handleLinkClick = (event: SelectableEvent, clickEvent: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (shouldConfirmSelectableEventNavigation(event) && !window.confirm(SPOILER_EVENT_NAVIGATION_MESSAGE)) {
+      clickEvent.preventDefault();
+      return;
+    }
+
+    closeOptions();
+  };
+
   const selector = (
     <div className="relative" ref={rootRef}>
       <button
@@ -122,7 +139,11 @@ export default function EventSelector({
         aria-haspopup="dialog"
       >
         {currentEvent ? (
-          <EventSelectorItem event={currentEvent} placeholder={placeholder} />
+          <EventSelectorItem
+            event={currentEvent}
+            placeholder={placeholder}
+            revealedSpoilerContentUids={revealedSpoilerContentUids}
+          />
         ) : (
           <div className="rounded-lg px-3 py-3">
             <p className="text-sm text-muted-foreground">{placeholder ?? "이벤트 선택"}</p>
@@ -170,19 +191,19 @@ export default function EventSelector({
                     ${index > 0 ? "border-border/70 border-t" : ""}
                   `)}
                 >
-                  <EventSelectorItem event={event} />
+                  <EventSelectorItem event={event} revealedSpoilerContentUids={revealedSpoilerContentUids} />
                 </button>
               ) : (
                 <Link
                   to={getEventHref(event)}
                   key={event.uid}
-                  onClick={closeOptions}
+                  onClick={(clickEvent) => handleLinkClick(event, clickEvent)}
                   className={sanitizeClassName(`
                     block cursor-pointer transition-colors hover:bg-muted/70 dark:hover:bg-neutral-700/70
                     ${index > 0 ? "border-border/70 border-t" : ""}
                   `)}
                 >
-                  <EventSelectorItem event={event} />
+                  <EventSelectorItem event={event} revealedSpoilerContentUids={revealedSpoilerContentUids} />
                 </Link>
               ),
             )
@@ -210,37 +231,61 @@ export function filterSelectableEvents(
   events: SelectableEvent[],
   searchQuery: string,
   maxVisibleEvents?: number,
+  revealedSpoilerContentUids: string[] = [],
 ): SelectableEvent[] {
   const filteredEvents = events.filter((event) => {
+    const eventName = getSelectableEventName(event, revealedSpoilerContentUids);
     const pickupStudentNames = event.recruitments
+      ?.filter(() => !isSelectableEventSpoilerHidden(event, revealedSpoilerContentUids))
       ?.filter(({ pickup }) => pickup)
       .map(({ student }) => student?.name)
       .filter(Boolean)
       .join(" ");
-    return hangul.search(`${event.name} ${pickupStudentNames ?? ""}`, searchQuery) >= 0;
+    return hangul.search(`${eventName} ${pickupStudentNames ?? ""}`, searchQuery) >= 0;
   });
 
   return maxVisibleEvents === undefined ? filteredEvents : filteredEvents.slice(0, maxVisibleEvents);
 }
 
+export function shouldConfirmSelectableEventNavigation(event: SelectableEvent): boolean {
+  return event.isSpoiler;
+}
+
+function isSelectableEventSpoilerHidden(event: SelectableEvent, revealedSpoilerContentUids: string[]): boolean {
+  return event.isSpoiler && !revealedSpoilerContentUids.includes(event.uid);
+}
+
+function getSelectableEventName(event: SelectableEvent, revealedSpoilerContentUids: string[]): string {
+  if (isSelectableEventSpoilerHidden(event, revealedSpoilerContentUids)) {
+    return "???";
+  }
+
+  return !event.name || event.name === event.uid ? "픽업 모집" : event.name;
+}
+
 function EventSelectorItem({
   event,
   placeholder,
+  revealedSpoilerContentUids,
 }: {
   event: SelectableEvent;
   placeholder?: string;
+  revealedSpoilerContentUids: string[];
 }) {
   const displayTimeZone = useDisplayTimeZone();
   const now = nowUtcIso();
+  const spoilerHidden = isSelectableEventSpoilerHidden(event, revealedSpoilerContentUids);
   const status = isInstantAfter(event.since, now)
     ? "예정"
     : event.until && isInstantAfter(event.until, now)
       ? "진행중"
       : "종료";
-  const pickupStudents = event.recruitments
-    ?.filter(({ pickup, student }) => pickup && student)
-    .map(({ student }) => ({ uid: student?.uid ?? null, name: student?.name, hideName: true }));
-  const eventName = !event.name || event.name === event.uid ? "픽업 모집" : event.name;
+  const pickupStudents = spoilerHidden
+    ? undefined
+    : event.recruitments
+        ?.filter(({ pickup, student }) => pickup && student)
+        .map(({ student }) => ({ uid: student?.uid ?? null, name: student?.name, hideName: true }));
+  const eventName = getSelectableEventName(event, revealedSpoilerContentUids);
 
   return (
     <div className="px-3 py-3">

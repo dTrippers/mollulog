@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "~/models/base";
-import { getTimelineContent } from "~/models/timeline-content";
-import { getEventMetadata, getEventShopContent } from "../../../app/models/event-content";
+import { getTimelineContent, getTimelineContents } from "~/models/timeline-content";
+import { getEventMetadata, getEventShopContent, getShopAvailableEvents } from "../../../app/models/event-content";
 
 jest.mock("~/models/timeline-content", () => ({
   getTimelineContent: jest.fn(),
+  getTimelineContents: jest.fn(),
 }));
 
 jest.mock("~/models/base", () => ({
@@ -17,6 +18,7 @@ jest.mock("~/lib/baql", () => ({
 }));
 
 const mockedGetTimelineContent = getTimelineContent as jest.MockedFunction<typeof getTimelineContent>;
+const mockedGetTimelineContents = getTimelineContents as jest.MockedFunction<typeof getTimelineContents>;
 const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
 const mockedFetchCached = fetchCached as jest.MockedFunction<typeof fetchCached>;
 
@@ -48,6 +50,53 @@ function createTimelineContent(overrides: Partial<NonNullable<Awaited<ReturnType
 
 afterEach(() => {
   jest.clearAllMocks();
+});
+
+describe("getShopAvailableEvents", () => {
+  it("keeps the timeline date for shared-shop events in the selector", async () => {
+    mockedGetTimelineContents.mockResolvedValue([
+      createTimelineContent({
+        uid: "steel-continent-malkuth",
+        name: "강철대륙 공략전 ~말쿠트전~",
+        startAt: "2026-06-09T02:00:00.000Z",
+        endAt: "2026-06-23T01:59:59.000Z",
+        contentType: "raid",
+        runType: "first",
+        contentUid: "gl_allied_21",
+        shopContentUid: "854",
+      }),
+    ]);
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        eventContent: {
+          schedules: [
+            {
+              region: "gl",
+              runType: "first",
+              startAt: "2026-05-26T02:00:00.000Z",
+              endAt: "2026-07-08T02:00:00.000Z",
+            },
+          ],
+        },
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    });
+
+    await expect(getShopAvailableEvents(env)).resolves.toEqual([
+      {
+        uid: "steel-continent-malkuth",
+        name: "강철대륙 공략전 ~말쿠트전~",
+        since: "2026-06-09T02:00:00.000Z",
+        until: "2026-06-23T01:59:59.000Z",
+        isSpoiler: false,
+      },
+    ]);
+    expect(mockedRunQuery).not.toHaveBeenCalled();
+  });
 });
 
 describe("getEventMetadata", () => {

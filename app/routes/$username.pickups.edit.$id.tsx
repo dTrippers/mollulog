@@ -90,6 +90,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       name: timelineContent.name,
       since: toUtcIso(group.startAt),
       until: group.endAt ? toUtcIso(group.endAt) : null,
+      isSpoiler: timelineContent.isSpoiler,
       recruitments: group.recruitments
         .filter((r) => r.pickup && r.student)
         .map((r) => ({

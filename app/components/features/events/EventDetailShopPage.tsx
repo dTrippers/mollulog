@@ -22,6 +22,7 @@ type EventDetailShopPageProps = {
   eventRewardBonus: EventRewardBonus[];
   recruitedStudentUids: string[];
   eventUid: string;
+  shopStateUid: string;
   savedShopState: EventShopState | null;
   availablePurchaseDays: number;
   signedIn: boolean;
@@ -34,6 +35,7 @@ export default function EventDetailShopPage({
   eventRewardBonus,
   recruitedStudentUids,
   eventUid,
+  shopStateUid,
   savedShopState,
   availablePurchaseDays,
   signedIn,
@@ -106,7 +108,7 @@ export default function EventDetailShopPage({
   });
 
   // Auto-save
-  const { isSaving } = useAutoSave({ state, signedIn, eventUid, savedShopState, isInitialLoad });
+  const { isSaving } = useAutoSave({ state, signedIn, shopStateUid, savedShopState, isInitialLoad });
 
   const minigamePaymentCosts = useMemo(() => {
     if (!minigameConfig) return undefined;
@@ -175,7 +177,7 @@ export default function EventDetailShopPage({
             <ShopResourceSelector
               shopResources={shopResources}
               collectableResources={collectableResources}
-              eventUid={eventUid}
+              eventUid={shopStateUid}
               state={state}
               actions={actions}
               availablePurchaseDays={availablePurchaseDays}
