@@ -3,7 +3,7 @@ import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams 
 import { EventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
 import { compareInstantAsc } from "~/lib/date-time";
-import { getEventContentSchedule, getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
+import { getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const uid = params.uid;
@@ -22,14 +22,12 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     eventMetadata.shopAvailable &&
     !shopAvailableEvents.some((event) => event.uid === uid)
   ) {
-    const shopSchedule = eventMetadata.shopContentUid
-      ? await getEventContentSchedule(env, eventMetadata.shopContentUid, eventMetadata.runType)
-      : null;
     shopAvailableEvents.push({
       uid,
       name: eventMetadata.name,
-      since: shopSchedule?.startAt ?? eventMetadata.since,
-      until: shopSchedule?.endAt ?? eventMetadata.until,
+      since: eventMetadata.since,
+      until: eventMetadata.until,
+      isSpoiler: eventMetadata.isSpoiler,
     });
     shopAvailableEvents.sort((a, b) => compareInstantAsc(a.since, b.since));
   }

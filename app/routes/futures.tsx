@@ -8,6 +8,7 @@ import { ContentFilterPanel } from "~/components/features/futures";
 import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
 import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import {
   type FutureContent,
   type NestedComment,
@@ -93,7 +94,6 @@ function equalFavorites(
 }
 
 const futuresContentFilterKey = "futures::content-filter";
-const futuresRevealedSpoilerKey = "futures::revealed-spoilers";
 const futuresContentViewKey = "futures::content-view";
 
 type FutureContentView = "timeline" | "table";
@@ -183,15 +183,9 @@ export default function FutureContents() {
     }
 
     const savedSpoilers = localStorage.getItem(futuresRevealedSpoilerKey);
-    if (savedSpoilers) {
-      try {
-        const parsed = JSON.parse(savedSpoilers);
-        if (Array.isArray(parsed)) {
-          setRevealedSpoilerContentUids(parsed.filter((value): value is string => typeof value === "string"));
-        }
-      } catch (e) {
-        console.warn("Failed to parse saved revealed spoilers:", e);
-      }
+    const parsedSpoilers = parseRevealedSpoilerContentUids(savedSpoilers);
+    if (parsedSpoilers.length > 0) {
+      setRevealedSpoilerContentUids(parsedSpoilers);
     }
 
     const savedView = localStorage.getItem(futuresContentViewKey);

@@ -33,6 +33,7 @@ export async function getEventMetadata(env: Env, timelineUid: string) {
     contentUid: content.contentUid,
     shopContentUid: content.shopContentUid,
     recruitmentGroupUid: content.recruitmentGroupUid,
+    isSpoiler: content.isSpoiler,
     shopAvailable:
       content.shopContentUid != null ||
       (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
@@ -44,6 +45,7 @@ export type ShopAvailableEvent = {
   name: string;
   since: UtcIsoString;
   until: UtcIsoString | null;
+  isSpoiler: boolean;
 };
 
 const eventContentScheduleQuery = graphql(`
@@ -106,17 +108,6 @@ export async function getEventContentSchedule(
 
 export async function getShopAvailableEvents(env: Env): Promise<ShopAvailableEvent[]> {
   const contents = await getTimelineContents(env);
-  const shopScheduleEntries = await Promise.all(
-    contents.map(async (content) => {
-      if (!content.shopContentUid) {
-        return null;
-      }
-      const schedule = await getEventContentSchedule(env, content.shopContentUid, content.runType);
-      return schedule ? ([content.uid, schedule] as const) : null;
-    }),
-  );
-  const shopSchedules = new Map(shopScheduleEntries.filter((entry) => entry !== null));
-
   return contents
     .filter(
       (content) =>
@@ -124,12 +115,12 @@ export async function getShopAvailableEvents(env: Env): Promise<ShopAvailableEve
         (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
     )
     .map((content) => {
-      const shopSchedule = content.shopContentUid ? shopSchedules.get(content.uid) : null;
       return {
         uid: content.uid,
         name: content.name,
-        since: shopSchedule?.startAt ?? content.startAt,
-        until: shopSchedule?.endAt ?? content.endAt,
+        since: content.startAt,
+        until: content.endAt,
+        isSpoiler: content.isSpoiler,
       };
     })
     .sort((a, b) => compareInstantAsc(a.since, b.since));

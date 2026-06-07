@@ -293,7 +293,7 @@ function SpoilerHeader({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-neutral-200/70 bg-white/60 dark:border-neutral-700/70 dark:bg-neutral-800/45">
+    <div className="relative min-h-32 overflow-hidden rounded-xl border border-neutral-200/70 bg-white/60 dark:border-neutral-700/70 dark:bg-neutral-800/45">
       <div className="pointer-events-none select-none blur-md opacity-80 dark:opacity-35 dark:saturate-75">
         {children}
       </div>
