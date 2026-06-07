@@ -20,7 +20,7 @@ type PyroxeneScheduleProps = {
   onPickupComplete: (eventUid: string | null, resources: PickupResources) => void;
   onDeletePickupComplete: (eventUid: string) => void;
   onDeleteItem: (itemUid: string) => void;
-  onUpdateEventData: (eventUid: string, data: { completed?: boolean; expectedTrials?: number | null }) => void;
+  onUpdateEventData: (eventUid: string, data: { expectedTrials?: number | null }) => void;
 };
 
 const deletableTimelineSourceTypes = new Set(["buy", "package_onetime", "package_daily", "package_ap", "attendance", "other"]);

@@ -1,6 +1,7 @@
 import { Form, Link } from "react-router";
 import { Button } from "~/components/primitives";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import ContentCommentView from "~/components/features/contents/ContentCommentView";
 import { StudentCards } from "~/components/features/students";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
@@ -20,7 +21,23 @@ type PickupHistoryViewProps = {
     pickup: boolean;
     tier: number;
   }[];
-  trial?: number;
+  exchangedStudents: {
+    uid: string;
+    name: string;
+    pickup: boolean;
+    tier: number;
+  }[];
+  trial?: number | null;
+  trialMissing?: boolean;
+  comment?: {
+    uid: string;
+    body: string;
+    createdAt: UtcIsoString;
+    sensei: {
+      username: string;
+      profileStudentId: string | null;
+    };
+  } | null;
   editable?: boolean;
 };
 
@@ -31,10 +48,20 @@ function formatPercentage(ratio: number) {
   return `${(ratio * 100).toFixed(2)} %`;
 }
 
-export default function PickupHistoryView({ uid, event, recruitedStudents, trial, editable }: PickupHistoryViewProps) {
-  const totalTrial = trial ?? 0;
+export default function PickupHistoryView({
+  uid,
+  event,
+  recruitedStudents,
+  exchangedStudents,
+  trial,
+  trialMissing,
+  comment,
+  editable,
+}: PickupHistoryViewProps) {
   const tier3Students = recruitedStudents.filter(({ tier }) => tier === 3);
+  const tier3ExchangedStudents = exchangedStudents.filter(({ tier }) => tier === 3);
   const pickupCount = recruitedStudents.filter(({ pickup }) => pickup).length;
+  const visibleComment = comment?.body.trim() ? comment : null;
 
   return (
     <article className="my-4 rounded-lg bg-neutral-100 p-5 dark:bg-neutral-900">
@@ -42,14 +69,40 @@ export default function PickupHistoryView({ uid, event, recruitedStudents, trial
         <div className="min-w-0 flex-1 space-y-4">
           <PickupHeader event={event} />
           {tier3Students.length > 0 && <Tier3StudentList students={tier3Students} />}
+          {tier3ExchangedStudents.length > 0 && <ExchangedStudentList students={tier3ExchangedStudents} />}
+          {visibleComment && <PickupComment comment={visibleComment} />}
         </div>
 
         <aside className="flex flex-col gap-3 md:w-60">
-          <PickupStats totalTrial={totalTrial} tier3Count={tier3Students.length} pickupCount={pickupCount} />
+          <PickupStats
+            totalTrial={trial ?? null}
+            tier3Count={tier3Students.length}
+            pickupCount={pickupCount}
+            trialMissing={trialMissing ?? trial == null}
+          />
           {editable && <PickupActions uid={uid} />}
         </aside>
       </div>
     </article>
+  );
+}
+
+function PickupComment({ comment }: { comment: NonNullable<PickupHistoryViewProps["comment"]> }) {
+  return (
+    <div className="mt-2">
+      <ContentCommentView
+        comments={[
+          {
+            uid: comment.uid,
+            body: comment.body,
+            visibility: "public",
+            pinned: true,
+            createdAt: comment.createdAt,
+            sensei: comment.sensei,
+          },
+        ]}
+      />
+    </div>
   );
 }
 
@@ -87,15 +140,65 @@ function Tier3StudentList({ students }: { students: PickupHistoryViewProps["recr
   );
 }
 
-type PickupStatsProps = { totalTrial: number; tier3Count: number; pickupCount: number };
+function ExchangedStudentList({ students }: { students: PickupHistoryViewProps["exchangedStudents"] }) {
+  const cardStudents = students.map(({ uid, name }) => ({
+    uid,
+    name,
+    label: <span className="text-yellow-500">교환</span>,
+  }));
 
-function PickupStats({ totalTrial, tier3Count, pickupCount }: PickupStatsProps) {
   return (
-    <div className="grid grid-cols-3 divide-x divide-neutral-200 overflow-hidden rounded-md border border-neutral-200/80 bg-white/70 dark:divide-neutral-700 dark:border-neutral-700/80 dark:bg-neutral-950/40 md:block md:divide-x-0 md:divide-y">
-      <PickupStat label="총 모집 횟수" value={`${totalTrial}회`} />
-      <PickupStat label="★3 학생" value={`${tier3Count}회`} detail={formatPercentage(tier3Count / totalTrial)} />
-      <PickupStat label="픽업 학생" value={`${pickupCount}회`} detail={formatPercentage(pickupCount / totalTrial)} />
+    <div className="space-y-2.5">
+      <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집 포인트 교환 학생</p>
+      <StudentCards layout="wrap" cardSize="md" gap="tight" namePlacement="overlay" students={cardStudents} />
     </div>
+  );
+}
+
+type PickupStatsProps = {
+  totalTrial: number | null;
+  tier3Count: number;
+  pickupCount: number;
+  trialMissing: boolean;
+};
+
+function PickupStats({
+  totalTrial,
+  tier3Count,
+  pickupCount,
+  trialMissing,
+}: PickupStatsProps) {
+  const hasTrial = !trialMissing && totalTrial !== null;
+  const statsGridClassName = hasTrial ? "grid-cols-3 divide-x md:divide-y" : "grid-cols-1";
+  const stats = [
+    <PickupStat key="total" label="총 모집 횟수" value={totalTrial === null ? "미입력" : `${totalTrial}회`} />,
+  ];
+
+  if (hasTrial) {
+    stats.push(
+      <PickupStat key="tier3" label="★3 학생" value={`${tier3Count}회`} detail={formatPercentage(tier3Count / totalTrial)} />,
+      <PickupStat
+        key="pickup"
+        label="픽업 학생"
+        value={`${pickupCount}회`}
+        detail={formatPercentage(pickupCount / totalTrial)}
+      />,
+    );
+  }
+
+  return (
+    <>
+      {trialMissing && (
+        <div className="inline-flex w-fit items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+          모집 횟수 미입력
+        </div>
+      )}
+      <div
+        className={`grid ${statsGridClassName} divide-neutral-200 overflow-hidden rounded-md border border-neutral-200/80 bg-white/70 dark:divide-neutral-700 dark:border-neutral-700/80 dark:bg-neutral-950/40 md:block md:divide-x-0`}
+      >
+        {stats}
+      </div>
+    </>
   );
 }
 

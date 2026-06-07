@@ -74,7 +74,7 @@ export function getCommentEditorPanelClassName({ groupedWithPrevious = false }: 
 }
 
 export function getSubjectMetaClassName(postType: CommunityPostType) {
-  if (postType === "event_opinion") {
+  if (postType === "event_opinion" || postType === "recruitment_result") {
     return "space-y-1 text-xs text-neutral-500 dark:text-neutral-400";
   }
 

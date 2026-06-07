@@ -1,5 +1,6 @@
 import {
   ChatBubbleLeftRightIcon,
+  SparklesIcon,
   PlayCircleIcon,
   UsersIcon,
   Squares2X2Icon,
@@ -41,6 +42,11 @@ const COMMUNITY_POST_TYPE_FILTERS: {
     type: "youtube_video",
     label: "영상 컨텐츠",
     Icon: PlayCircleIcon,
+  },
+  {
+    type: "recruitment_result",
+    label: "모집 결과",
+    Icon: SparklesIcon,
   },
 ];
 

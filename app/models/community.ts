@@ -5,7 +5,7 @@ import { nanoid } from "nanoid/non-secure";
 import { normalizeUtcTimestamp, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { senseisTable } from "./sensei";
 
-export type CommunityPostType = "student_review" | "event_opinion" | "guide" | "youtube_video";
+export type CommunityPostType = "student_review" | "event_opinion" | "guide" | "youtube_video" | "recruitment_result";
 export type CommunityPostOrigin = "user" | "curated";
 export type CommunityVisibility = "public" | "unlisted" | "private";
 export type CommunityCommentVisibility = "public" | "private";
@@ -800,6 +800,101 @@ export async function upsertYoutubeVideoCommunityPost(
     uid: `youtube-${video.id}`,
     createdAt: video.publishedAt,
     updatedAt: now,
+  });
+}
+
+export async function createRecruitmentResultCommunityPost(
+  env: Env,
+  {
+    userId,
+    recruitmentResultUid,
+    body,
+    subjectContentUid,
+    subjectStudentUid,
+  }: {
+    userId: number;
+    recruitmentResultUid: string;
+    body: string;
+    subjectContentUid: string;
+    subjectStudentUid?: string | null;
+  },
+): Promise<string> {
+  const db = drizzle(env.DB);
+  const uid = nanoid(8);
+  const now = nowUtcIso();
+  await db.insert(communityPostsTable).values({
+    uid,
+    userId,
+    postType: "recruitment_result",
+    origin: "user",
+    title: null,
+    visibility: "public",
+    pinned: 0,
+    subjectStudentUid: subjectStudentUid ?? null,
+    subjectContentUid,
+    blocks: serializeCommunityPostBlocks(createPlaintextCommunityPostBlocks(body)),
+    sourceType: "recruitment_result",
+    sourceUid: recruitmentResultUid,
+    displayAt: now,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  return uid;
+}
+
+export async function upsertRecruitmentResultCommunityPost(
+  env: Env,
+  {
+    postUid,
+    userId,
+    recruitmentResultUid,
+    body,
+    subjectContentUid,
+    subjectStudentUid,
+  }: {
+    postUid: string;
+    userId: number;
+    recruitmentResultUid: string;
+    body: string;
+    subjectContentUid: string;
+    subjectStudentUid?: string | null;
+  },
+): Promise<string> {
+  const db = drizzle(env.DB);
+  const now = nowUtcIso();
+  const values = {
+    userId,
+    postType: "recruitment_result" as const,
+    origin: "user" as const,
+    title: null,
+    visibility: "public" as const,
+    pinned: 0,
+    subjectStudentUid: subjectStudentUid ?? null,
+    subjectContentUid,
+    blocks: serializeCommunityPostBlocks(createPlaintextCommunityPostBlocks(body)),
+    sourceType: "recruitment_result",
+    sourceUid: recruitmentResultUid,
+    updatedAt: now,
+  };
+
+  const existing = await db
+    .select({ uid: communityPostsTable.uid })
+    .from(communityPostsTable)
+    .where(and(eq(communityPostsTable.uid, postUid), eq(communityPostsTable.userId, userId)))
+    .get();
+
+  if (existing) {
+    await db.update(communityPostsTable).set(values).where(eq(communityPostsTable.uid, postUid));
+    return postUid;
+  }
+
+  return createRecruitmentResultCommunityPost(env, {
+    userId,
+    recruitmentResultUid,
+    body,
+    subjectContentUid,
+    subjectStudentUid,
   });
 }
 

@@ -35,6 +35,7 @@ type StudentCardProps = {
 
   favorited?: boolean;
   favoritedCount?: number;
+  completed?: boolean;
   grayscale?: boolean;
   checked?: boolean;
   hideName?: boolean;
@@ -125,6 +126,7 @@ export default function StudentCard({
   role,
   favorited,
   favoritedCount,
+  completed,
   grayscale,
   checked,
   hideName,
@@ -207,6 +209,11 @@ export default function StudentCard({
   const overlayMainName = visibleNames[0] ?? name;
   const cardAspectClassName = circular ? "aspect-square" : showsOverlayName ? "aspect-5/6" : "";
   const showPositionedPopup = showPopup && popupPosition !== null;
+  const statusBadgeColorClass = completed
+    ? "bg-green-600/90 text-white"
+    : favorited === undefined || favorited === true
+      ? "bg-red-500/90 text-white"
+      : "bg-neutral-900/80 text-white";
   const popupStyle: CSSProperties | undefined = usesMobilePopupLayout
     ? undefined
     : {
@@ -278,11 +285,11 @@ export default function StudentCard({
                 </div>
               )}
 
-              {(favoritedCount || favorited) && (
+              {(favoritedCount || favorited || completed) && (
                 <div
-                  className={`px-1 absolute top-0.5 right-0.5 text-white border rounded-lg flex items-center transition ${favorited === undefined || favorited === true ? "bg-red-500/90" : "bg-neutral-900/80"}`}
+                  className={`px-1 absolute top-0.5 right-0.5 rounded-lg flex items-center transition ${statusBadgeColorClass}`}
                 >
-                  <HeartIcon className="size-3.5" />
+                  {completed ? <CheckIcon className="size-3.5" /> : <HeartIcon className="size-3.5" />}
                   {favoritedCount && <span className="text-xs font-bold">{favoritedCount}</span>}
                 </div>
               )}
