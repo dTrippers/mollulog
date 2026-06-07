@@ -174,12 +174,6 @@ export default function ResourceInventoryEditor({
         </p>
       ) : null}
 
-      {requiredResources.skillUnavailable ? (
-        <p className="text-sm text-amber-600 dark:text-amber-400">
-          일부 학생의 스킬 재화는 BAQL 응답을 불러오지 못해 합계에서 제외됐어요.
-        </p>
-      ) : null}
-
       <div className="space-y-3">
         {resourceGroups.length === 0 ? (
           <div className="rounded-md border border-border bg-card p-8">

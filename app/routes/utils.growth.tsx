@@ -1,7 +1,6 @@
-import { ArchiveBoxIcon, UserIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
-import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
+import { Outlet, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
 import { getLogger } from "~/lib/observability.server";
@@ -10,12 +9,12 @@ import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._compone
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "학생 성장/재화 플래너 | 몰루로그" },
+    { title: "학생 성장 플래너 | 몰루로그" },
     {
       name: "description",
       content: "<블루 아카이브> 학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요.",
     },
-    { name: "og:title", content: "학생 성장/재화 플래너 | 몰루로그" },
+    { name: "og:title", content: "학생 성장 플래너 | 몰루로그" },
     {
       name: "og:description",
       content: "<블루 아카이브> 학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요.",
@@ -53,7 +52,6 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export default function GrowthLayout() {
   const loaderData = useLoaderData<typeof loader>();
-  const { pathname } = useLocation();
 
   const [managedStudents, setManagedStudents] = useState(loaderData.managedStudents);
   const managedStudentListKey = loaderData.managedStudents.map((student) => student.uid).join(":");
@@ -84,26 +82,10 @@ export default function GrowthLayout() {
 
   return (
     <Page
-      title="성장/재화 플래너 (β)"
+      title="학생 성장 플래너"
       description="학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요."
       contentArea="full"
       layout="vertical"
-      screens={[
-        {
-          text: "성장 목표",
-          description: "학생별 현재 성장 상태와 목표 관리",
-          Icon: UserIcon,
-          link: "/utils/growth/students",
-          active: pathname === "/utils/growth/students",
-        },
-        {
-          text: "보유 재화 관리",
-          description: "현재 보유한 재화와 필요한 재화 수량 관리",
-          Icon: ArchiveBoxIcon,
-          link: "/utils/growth/resources",
-          active: pathname.startsWith("/utils/growth/resources"),
-        },
-      ]}
     >
       <Outlet context={contextValue satisfies GrowthLayoutContext} />
     </Page>

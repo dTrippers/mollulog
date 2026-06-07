@@ -1,4 +1,5 @@
 import {
+  ArchiveBoxIcon as ArchiveBoxIconOutline,
   BoltIcon as BoltIconOutline,
   BookOpenIcon as BookOpenIconOutline,
   CalendarIcon as CalendarIconOutline,
@@ -17,6 +18,7 @@ import {
   UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
 import {
+  ArchiveBoxIcon as ArchiveBoxIconSolid,
   BoltIcon as BoltIconSolid,
   BookOpenIcon as BookOpenIconSolid,
   CalendarIcon as CalendarIconSolid,
@@ -35,7 +37,7 @@ import {
   UserCircleIcon as UserCircleIconSolid,
 } from "@heroicons/react/24/solid";
 import type { ComponentProps, ComponentType } from "react";
-import { isInstantAfter, isInstantBefore, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
 
 type IconComponent = ComponentType<ComponentProps<"svg">>;
 
@@ -162,11 +164,19 @@ export function getNavigationSections({
         },
         {
           to: "/utils/growth/students",
-          name: "학생 성장/재화 플래너",
+          name: "학생 성장 플래너",
           description: "성장에 필요한 재화를 정리해보세요",
           OutlineIcon: TableCellsIconOutline,
           SolidIcon: TableCellsIconSolid,
-          isActive: pathname.startsWith("/utils/growth"),
+          isActive: pathname === "/utils/growth" || pathname.startsWith("/utils/growth/students"),
+        },
+        {
+          to: "/utils/resources/inventory",
+          name: "재화 관리/파밍 계산기",
+          description: "보유 재화와 장비 파밍 계획을 확인해보세요",
+          OutlineIcon: ArchiveBoxIconOutline,
+          SolidIcon: ArchiveBoxIconSolid,
+          isActive: pathname.startsWith("/utils/resources"),
         },
         upcomingEvent
           ? {

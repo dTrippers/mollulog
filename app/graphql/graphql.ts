@@ -440,6 +440,27 @@ export type Furniture = ResourceInterface & {
   uid: Scalars['String']['output'];
 };
 
+export type GachaGroup = {
+  __typename?: 'GachaGroup';
+  items: Array<GachaGroupItem>;
+  recursive: Scalars['Boolean']['output'];
+  rewardAll: Scalars['Boolean']['output'];
+  uid: Scalars['String']['output'];
+};
+
+
+export type GachaGroupItemsArgs = {
+  region?: InputMaybe<RegionEnum>;
+};
+
+export type GachaGroupItem = {
+  __typename?: 'GachaGroupItem';
+  amountMax: Maybe<Scalars['Int']['output']>;
+  amountMin: Maybe<Scalars['Int']['output']>;
+  chance: Maybe<Scalars['Float']['output']>;
+  resource: Maybe<ResourceInterface>;
+};
+
 export type Gear = {
   __typename?: 'Gear';
   growthItems: Array<GearGrowthItem>;
@@ -669,6 +690,7 @@ export type Query = {
   equipments: Array<Equipment>;
   eventContent: Maybe<EventContent>;
   eventContents: Array<EventContent>;
+  gachaGroup: Maybe<GachaGroup>;
   items: Array<Item>;
   jointFiringDrill: Maybe<JointFiringDrill>;
   jointFiringDrills: Array<JointFiringDrill>;
@@ -682,6 +704,8 @@ export type Query = {
   raidSchedules: RaidScheduleConnection;
   recruitmentGroup: Maybe<RecruitmentGroup>;
   recruitmentGroups: Array<RecruitmentGroup>;
+  stage: Maybe<Stage>;
+  stages: Array<Stage>;
   student: Student;
   students: Array<Student>;
 };
@@ -711,6 +735,11 @@ export type QueryEventContentArgs = {
 
 export type QueryEventContentsArgs = {
   uids: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type QueryGachaGroupArgs = {
+  uid: Scalars['String']['input'];
 };
 
 
@@ -787,6 +816,17 @@ export type QueryRecruitmentGroupArgs = {
 export type QueryRecruitmentGroupsArgs = {
   endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
   startBefore: InputMaybe<Scalars['ISO8601DateTime']['input']>;
+  uids: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type QueryStageArgs = {
+  uid: Scalars['String']['input'];
+};
+
+
+export type QueryStagesArgs = {
+  category: InputMaybe<Scalars['String']['input']>;
   uids: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
@@ -931,6 +971,12 @@ export enum Region {
   Jp = 'jp'
 }
 
+export enum RegionEnum {
+  Cn = 'cn',
+  Gl = 'gl',
+  Jp = 'jp'
+}
+
 export type ResourceInterface = {
   name: Scalars['String']['output'];
   rarity: Scalars['Int']['output'];
@@ -969,6 +1015,53 @@ export type SkillItem = {
   skillLevel: Scalars['Int']['output'];
   skillType: StudentSkillItemTypeEnum;
   student: Student;
+};
+
+export type Stage = {
+  __typename?: 'Stage';
+  area: Maybe<Scalars['Int']['output']>;
+  category: Scalars['String']['output'];
+  challengeConditions: Array<StageCondition>;
+  defenseTypes: Array<Scalars['String']['output']>;
+  difficulty: Maybe<Scalars['Int']['output']>;
+  entryCosts: Array<StageEntryCost>;
+  level: Maybe<Scalars['Int']['output']>;
+  name: Maybe<Scalars['String']['output']>;
+  rewards: Array<StageReward>;
+  stageNumber: Maybe<Scalars['String']['output']>;
+  stageType: Maybe<Scalars['String']['output']>;
+  starCondition: Maybe<StageCondition>;
+  terrain: Maybe<Scalars['String']['output']>;
+  uid: Scalars['String']['output'];
+};
+
+
+export type StageRewardsArgs = {
+  region?: InputMaybe<RegionEnum>;
+};
+
+export type StageCondition = {
+  __typename?: 'StageCondition';
+  type: Scalars['String']['output'];
+  value: Scalars['Int']['output'];
+};
+
+export type StageEntryCost = {
+  __typename?: 'StageEntryCost';
+  amount: Scalars['Int']['output'];
+  resource: ResourceInterface;
+};
+
+export type StageReward = {
+  __typename?: 'StageReward';
+  amount: Maybe<Scalars['Int']['output']>;
+  amountMax: Maybe<Scalars['Int']['output']>;
+  amountMin: Maybe<Scalars['Int']['output']>;
+  gachaGroup: Maybe<GachaGroup>;
+  probability: Maybe<Scalars['Float']['output']>;
+  resource: Maybe<ResourceInterface>;
+  rewardTag: Maybe<Scalars['String']['output']>;
+  rewardType: Scalars['String']['output'];
 };
 
 export type Student = {
@@ -1376,6 +1469,28 @@ export type RecruitmentPoolStudentsQueryVariables = Exact<{ [key: string]: never
 
 export type RecruitmentPoolStudentsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, name: string, initialTier: number, attackType: Attack, defenseType: Defense, role: RoleEnum, releaseAt: Date | null, archiveAt: Date | null, recruitments: Array<{ __typename?: 'Recruitment', recruitmentType: RecruitmentTypeEnum }> }> };
 
+export type FarmingStagesQueryVariables = Exact<{
+  category: InputMaybe<Scalars['String']['input']>;
+}>;
+
+
+export type FarmingStagesQuery = { __typename?: 'Query', stages: Array<{ __typename?: 'Stage', uid: string, name: string | null, stageNumber: string | null, area: number | null, difficulty: number | null, terrain: string | null, entryCosts: Array<{ __typename?: 'StageEntryCost', amount: number, resource:
+        | { __typename?: 'Currency', uid: string, name: string, type: ResourceTypeEnum }
+        | { __typename?: 'Equipment', uid: string, name: string, type: ResourceTypeEnum }
+        | { __typename?: 'Furniture', uid: string, name: string, type: ResourceTypeEnum }
+        | { __typename?: 'Item', uid: string, name: string, type: ResourceTypeEnum }
+       }>, rewards: Array<{ __typename?: 'StageReward', rewardType: string, rewardTag: string | null, probability: number | null, resource:
+        | { __typename: 'Currency', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+        | { __typename: 'Equipment', category: string, uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+        | { __typename: 'Furniture', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+        | { __typename: 'Item', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+       | null, gachaGroup: { __typename?: 'GachaGroup', items: Array<{ __typename?: 'GachaGroupItem', chance: number | null, resource:
+            | { __typename: 'Currency', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+            | { __typename: 'Equipment', category: string, uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+            | { __typename: 'Furniture', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+            | { __typename: 'Item', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+           | null }> } | null }> }> };
+
 export type StudentFavoriteItemQueryVariables = Exact<{
   uid: Scalars['String']['input'];
 }>;
@@ -1414,6 +1529,7 @@ export const GrowthStudentGearsDocument = {"kind":"Document","definitions":[{"ki
 export const UserResourceInventoryCatalogDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"UserResourceInventoryCatalog"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"equipments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"category"}}]}}]}}]} as unknown as DocumentNode<UserResourceInventoryCatalogQuery, UserResourceInventoryCatalogQueryVariables>;
 export const RecruitmentGroupsListDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RecruitmentGroupsList"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"endAfter"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"ISO8601DateTime"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uids"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"recruitmentGroups"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"endAfter"},"value":{"kind":"Variable","name":{"kind":"Name","value":"endAfter"}}},{"kind":"Argument","name":{"kind":"Name","value":"uids"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uids"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"contentType"}},{"kind":"Field","name":{"kind":"Name","value":"contentUid"}},{"kind":"Field","name":{"kind":"Name","value":"startAt"}},{"kind":"Field","name":{"kind":"Name","value":"endAt"}},{"kind":"Field","name":{"kind":"Name","value":"recruitmentType"}},{"kind":"Field","name":{"kind":"Name","value":"recruitments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"recruitmentType"}},{"kind":"Field","name":{"kind":"Name","value":"pickup"}},{"kind":"Field","name":{"kind":"Name","value":"rerun"}},{"kind":"Field","name":{"kind":"Name","value":"since"}},{"kind":"Field","name":{"kind":"Name","value":"until"}},{"kind":"Field","name":{"kind":"Name","value":"studentName"}},{"kind":"Field","name":{"kind":"Name","value":"student"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}},{"kind":"Field","name":{"kind":"Name","value":"initialTier"}},{"kind":"Field","name":{"kind":"Name","value":"releaseAt"}},{"kind":"Field","name":{"kind":"Name","value":"archiveAt"}}]}}]}}]}}]}}]} as unknown as DocumentNode<RecruitmentGroupsListQuery, RecruitmentGroupsListQueryVariables>;
 export const RecruitmentPoolStudentsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"RecruitmentPoolStudents"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"initialTier"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"releaseAt"}},{"kind":"Field","name":{"kind":"Name","value":"archiveAt"}},{"kind":"Field","name":{"kind":"Name","value":"recruitments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"recruitmentType"}}]}}]}}]}}]} as unknown as DocumentNode<RecruitmentPoolStudentsQuery, RecruitmentPoolStudentsQueryVariables>;
+export const FarmingStagesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"FarmingStages"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"category"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stages"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"category"},"value":{"kind":"Variable","name":{"kind":"Name","value":"category"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"stageNumber"}},{"kind":"Field","name":{"kind":"Name","value":"area"}},{"kind":"Field","name":{"kind":"Name","value":"difficulty"}},{"kind":"Field","name":{"kind":"Name","value":"terrain"}},{"kind":"Field","name":{"kind":"Name","value":"entryCosts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"rewards"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"region"},"value":{"kind":"EnumValue","value":"gl"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"rewardType"}},{"kind":"Field","name":{"kind":"Name","value":"rewardTag"}},{"kind":"Field","name":{"kind":"Name","value":"probability"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Equipment"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"gachaGroup"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"region"},"value":{"kind":"EnumValue","value":"gl"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"chance"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Equipment"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}}]}}]}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<FarmingStagesQuery, FarmingStagesQueryVariables>;
 export const StudentFavoriteItemDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentFavoriteItem"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"favoriteItems"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"favorited"}},{"kind":"Field","name":{"kind":"Name","value":"favoriteLevel"}},{"kind":"Field","name":{"kind":"Name","value":"exp"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentFavoriteItemQuery, StudentFavoriteItemQueryVariables>;
 export const StudentGradeDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentGradeDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"school"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}}]}}]}}]} as unknown as DocumentNode<StudentGradeDetailQuery, StudentGradeDetailQueryVariables>;
 export const StudentDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"school"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}},{"kind":"Field","name":{"kind":"Name","value":"releaseAt"}},{"kind":"Field","name":{"kind":"Name","value":"recruitments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"since"}},{"kind":"Field","name":{"kind":"Name","value":"rerun"}},{"kind":"Field","name":{"kind":"Name","value":"recruitmentGroup"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"startAt"}},{"kind":"Field","name":{"kind":"Name","value":"endAt"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentDetailQuery, StudentDetailQueryVariables>;

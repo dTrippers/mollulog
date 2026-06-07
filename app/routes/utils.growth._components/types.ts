@@ -51,4 +51,9 @@ export type GrowthLayoutLoaderData = {
 
 export type GrowthLayoutContext = GrowthLayoutLoaderData & {
   updateStudent: (student: GrowthStudent) => void;
+  farmingStageFilter?: {
+    showNormal: boolean;
+    showHard: boolean;
+    prioritizeHighTier: boolean;
+  };
 };
