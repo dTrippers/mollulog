@@ -5,13 +5,10 @@ import { useLoaderData, useSearchParams, useSubmit } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
 import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
-import { compareInstantDesc, formatInstant, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { compareInstantDesc, formatInstant, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import {
-  type PickupHistory,
-  getPickupHistory,
-} from "~/models/pickup-history";
+import { type PickupHistory, getPickupHistory } from "~/models/pickup-history";
 import {
   createRecruitmentResultStudentsFromPickupHistory,
   getRecruitmentResult,
@@ -29,11 +26,13 @@ const PICKUP_EVENT_SELECTOR_LIMIT = 20;
 
 export const meta: MetaFunction = () => [{ title: "모집 이력 관리 | 몰루로그" }];
 
-function canExchangeRecruitmentStudent<T extends {
-  pickup: boolean;
-  recruitmentType?: string | null;
-  student: { uid: string } | null;
-}>(recruitment: T): recruitment is T & { student: NonNullable<T["student"]> } {
+function canExchangeRecruitmentStudent<
+  T extends {
+    pickup: boolean;
+    recruitmentType?: string | null;
+    student: { uid: string } | null;
+  },
+>(recruitment: T): recruitment is T & { student: NonNullable<T["student"]> } {
   return recruitment.pickup && recruitment.recruitmentType !== "given" && recruitment.student !== null;
 }
 
@@ -139,32 +138,6 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     recruitmentRepository.getAllHistorical(),
     getAllStudents(env),
   ]);
-  if (
-    currentRecruitmentResult?.completedAt &&
-    currentRecruitmentResult.recruitedStudents.length === 0 &&
-    currentRecruitmentResult.exchangedStudents.length === 0 &&
-    currentPickupHistory
-  ) {
-    const group = allGroups.find((group) => group.uid === currentRecruitmentResult.recruitmentGroupUid);
-    const tier3PickupStudentIds =
-      group?.recruitments.flatMap(({ pickup, student }) => {
-        if (!pickup || !student || student.initialTier !== 3) {
-          return [];
-        }
-        return [student.uid];
-      }) ?? [];
-    currentPickupHistory = {
-      ...currentPickupHistory,
-      result: [
-        {
-          trial: currentRecruitmentResult.trial,
-          tier3Count: tier3PickupStudentIds.length,
-          tier3StudentIds: tier3PickupStudentIds,
-        },
-      ],
-    };
-  }
-
   const pickupGroups = allGroups.filter(
     (g) => g.recruitments.some((r) => r.pickup && r.student) && isInstantBefore(g.startAt, now),
   );
@@ -271,11 +244,16 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const trial = getRecruitmentResultTrialFromPickupHistory({ result: data.result });
   const exchangeCountLimit = Math.floor((trial ?? 0) / 200);
   if (exchangedStudents.length > exchangeCountLimit) {
-    throw routeError(400, "pickup_history.exchange_student_count_invalid", "모집 포인트 교환 학생 수가 모집 횟수와 맞지 않아요", {
-      trial,
-      exchangedStudentCount: exchangedStudents.length,
-      exchangeCountLimit,
-    });
+    throw routeError(
+      400,
+      "pickup_history.exchange_student_count_invalid",
+      "모집 포인트 교환 학생 수가 모집 횟수와 맞지 않아요",
+      {
+        trial,
+        exchangedStudentCount: exchangedStudents.length,
+        exchangeCountLimit,
+      },
+    );
   }
 
   await upsertRecruitmentResult(env, sensei.id, {
@@ -382,7 +360,9 @@ export default function EditPickup() {
       {isEditing ? (
         initialEvent && (
           <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
-            <p className="whitespace-pre-line font-semibold text-neutral-950 dark:text-neutral-50">{initialEvent.name}</p>
+            <p className="whitespace-pre-line font-semibold text-neutral-950 dark:text-neutral-50">
+              {initialEvent.name}
+            </p>
             <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
               {formatInstant(initialEvent.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
             </p>
@@ -452,8 +432,15 @@ export default function EditPickup() {
         onChange={setComment}
       />
       <div className="mt-8 flex flex-col items-start gap-2">
-        <Button text="모집 결과 저장" variant="primary" disabled={saveUnavailableReason !== null} onClick={handleSave} />
-        {saveUnavailableReason && <p className="text-sm text-neutral-500 dark:text-neutral-400">{saveUnavailableReason}</p>}
+        <Button
+          text="모집 결과 저장"
+          variant="primary"
+          disabled={saveUnavailableReason !== null}
+          onClick={handleSave}
+        />
+        {saveUnavailableReason && (
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">{saveUnavailableReason}</p>
+        )}
       </div>
     </>
   );

@@ -5,7 +5,11 @@ import { AddContentButton } from "~/components/features/editor";
 import { SubTitle } from "~/components/primitives";
 import { compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import { deleteRecruitmentResult, getRecruitmentResultComments, getRecruitmentResults } from "~/models/recruitment-result";
+import {
+  deleteRecruitmentResult,
+  getRecruitmentResultComments,
+  getRecruitmentResults,
+} from "~/models/recruitment-result";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
@@ -88,7 +92,10 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let missingTrialCount = 0;
 
   const aggregatedHistories = recruitmentResults
-    .filter((result) => result.completedAt !== null || result.recruitedStudents.length > 0 || result.exchangedStudents.length > 0)
+    .filter(
+      (result) =>
+        result.completedAt !== null || result.recruitedStudents.length > 0 || result.exchangedStudents.length > 0,
+    )
     .map((result) => {
       const group = groupMap.get(result.recruitmentGroupUid);
       const timelineContent = timelineContentMap.get(result.recruitmentGroupUid);
@@ -102,35 +109,28 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       const groupStudentsMap = new Map(
         group?.recruitments.flatMap(({ student }) => (student ? [[student.uid, student] as const] : [])) ?? [],
       );
-      const recruitedStudents =
-        result.recruitedStudents.length > 0 || !result.completedAt
-          ? result.recruitedStudents
-          : (group?.recruitments.flatMap(({ pickup, student }) => {
-              if (!pickup || !student) {
-                return [];
-              }
-              return [{ studentUid: student.uid, tier: student.initialTier, pickup: true }];
-            }) ?? []);
+      const recruitedStudents = result.recruitedStudents;
       const toDisplayStudents = (studentResults: typeof recruitedStudents) =>
         studentResults
-        .filter(({ studentUid }) => studentUid)
-        .map(({ studentUid, pickup }) => {
-          const student = allStudentsMap[studentUid] ?? poolStudentsMap.get(studentUid) ?? groupStudentsMap.get(studentUid);
-          if (!student) {
-            throw routeError(500, "pickup_history.student_missing", "모집한 학생 정보를 불러오지 못했어요", {
-              recruitmentResultUid: result.uid,
-              recruitmentGroupUid: result.recruitmentGroupUid,
-              studentUid,
-            });
-          }
+          .filter(({ studentUid }) => studentUid)
+          .map(({ studentUid, pickup }) => {
+            const student =
+              allStudentsMap[studentUid] ?? poolStudentsMap.get(studentUid) ?? groupStudentsMap.get(studentUid);
+            if (!student) {
+              throw routeError(500, "pickup_history.student_missing", "모집한 학생 정보를 불러오지 못했어요", {
+                recruitmentResultUid: result.uid,
+                recruitmentGroupUid: result.recruitmentGroupUid,
+                studentUid,
+              });
+            }
 
-          return {
-            uid: studentUid,
-            name: student.name,
-            tier: student.initialTier,
-            pickup: pickup || pickupStudentUids.has(studentUid),
-          };
-        });
+            return {
+              uid: studentUid,
+              name: student.name,
+              tier: student.initialTier,
+              pickup: pickup || pickupStudentUids.has(studentUid),
+            };
+          });
       const students = toDisplayStudents(recruitedStudents);
       const exchangedStudents = toDisplayStudents(result.exchangedStudents);
 
@@ -227,7 +227,8 @@ export default function UserPickups() {
         </div>
       </div>
       <p className="mt-4 mb-16 text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
-        모집 포인트 교환 학생은 획득 수에 포함하고 모집 확률 계산에서는 제외했어요. 페스 기간에 모집한 ★3 학생은 확률을 0.5배로 계산했어요.
+        모집 포인트 교환 학생은 획득 수에 포함하고 모집 확률 계산에서는 제외했어요. 페스 기간에 모집한 ★3 학생은 확률을
+        0.5배로 계산했어요.
       </p>
 
       <SubTitle text="모집 이력" />

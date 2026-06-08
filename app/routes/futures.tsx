@@ -254,9 +254,7 @@ export default function FutureContents() {
     ),
   );
   const [allComments, setAllComments] = useState<AllCommentsState>(initialComments);
-  const [recruitmentResults, setRecruitmentResults] = useState<RecruitmentResultState[]>(
-    loaderData.recruitmentResults,
-  );
+  const [recruitmentResults, setRecruitmentResults] = useState<RecruitmentResultState[]>(loaderData.recruitmentResults);
 
   const favoriteFetcher = useFetcher();
   const submitFavorite = (data: ContentsActionData) =>
@@ -479,35 +477,17 @@ export default function FutureContents() {
     [filteredContents],
   );
 
-  const completedRecruitmentStudents = useMemo<CompletedRecruitmentStudentState[]>(
-    () => {
-      const contentByRecruitmentGroupUid = new Map(
-        filteredContents.flatMap((content) =>
-          content.recruitmentGroupUid ? [[content.recruitmentGroupUid, content] as const] : [],
-        ),
-      );
-
-      return recruitmentResults
-        .filter((result) => result.completedAt !== null)
-        .flatMap((result) => {
-          const storedStudents = [...result.recruitedStudents, ...result.exchangedStudents];
-          const completedStudents =
-            storedStudents.length > 0
-              ? storedStudents
-              : (contentByRecruitmentGroupUid
-                  .get(result.recruitmentGroupUid)
-                  ?.recruitments.flatMap((recruitment) =>
-                    recruitment.pickup && recruitment.student ? [{ studentUid: recruitment.student.uid }] : [],
-                  ) ?? []);
-
-          return completedStudents.map((student) => ({
-            recruitmentGroupUid: result.recruitmentGroupUid,
-            studentUid: student.studentUid,
-          }));
-        });
-    },
-    [filteredContents, recruitmentResults],
-  );
+  const completedRecruitmentStudents = useMemo<CompletedRecruitmentStudentState[]>(() => {
+    return recruitmentResults
+      .filter((result) => result.completedAt !== null)
+      .flatMap((result) => {
+        const storedStudents = [...result.recruitedStudents, ...result.exchangedStudents];
+        return storedStudents.map((student) => ({
+          recruitmentGroupUid: result.recruitmentGroupUid,
+          studentUid: student.studentUid,
+        }));
+      });
+  }, [recruitmentResults]);
 
   const recruitmentResultEditLinks = useMemo<RecruitmentResultEditLinkState[]>(
     () =>

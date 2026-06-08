@@ -189,6 +189,68 @@ describe("pickup history index loader", () => {
     ]);
   });
 
+  it("keeps explicit zero-tier3 recruitment results out of acquired counts", async () => {
+    mockedGetSenseiByUsername.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getSenseiByUsername>>);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResults.mockResolvedValue([
+      {
+        uid: "history-zero-tier3",
+        userId: 1,
+        recruitmentGroupUid: "decagrammaton-armed",
+        contentUid: "content-decagrammaton-armed",
+        completedAt: "2026-05-26T02:00:00.000Z",
+        recruitedStudents: [],
+        exchangedStudents: [],
+        trial: 100,
+        rawResult: null,
+        commentPostUid: null,
+        createdAt: "2026-05-26T02:00:00.000Z",
+        updatedAt: "2026-05-26T02:00:00.000Z",
+      },
+    ]);
+    mockedGetAllStudentsMap.mockResolvedValue({
+      "101": {
+        uid: "101",
+        name: "히나",
+        initialTier: 3,
+      },
+    } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
+    mockGetByUids.mockResolvedValue([
+      {
+        uid: "decagrammaton-armed",
+        recruitmentType: "usual",
+        recruitments: [{ pickup: true, student: { uid: "101", name: "히나", initialTier: 3 } }],
+      },
+    ]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-decagrammaton-armed",
+        name: "데카그라마톤 무장",
+        recruitmentGroupUid: "decagrammaton-armed",
+        startAt: "2026-05-26T02:00:00.000Z",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader(createLoaderArgs() as never);
+
+    expect(result.recruitmentStats).toMatchObject({
+      trial: 100,
+      tier3Count: 0,
+      tier3DrawCount: 0,
+      pickupCount: 0,
+      pickupDrawCount: 0,
+    });
+    expect(result.recruitmentHistories[0].recruitedStudents).toEqual([]);
+  });
+
   it("resolves stored recruited students from the recruitment pool when the student catalog has no matching row", async () => {
     mockedGetSenseiByUsername.mockResolvedValue({
       id: 1,

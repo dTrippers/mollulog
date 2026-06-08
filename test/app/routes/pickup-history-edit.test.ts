@@ -203,6 +203,59 @@ describe("pickup history editor loader", () => {
     ]);
   });
 
+  it("keeps an explicitly saved zero-tier3 recruitment result empty when editing", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-05-27T00:00:00.000Z").getTime());
+
+    const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
+    mockGetAllHistorical.mockResolvedValue([historicalGroup]);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue({
+      uid: "result-zero-tier3",
+      userId: 1,
+      recruitmentGroupUid: "decagrammaton-armed",
+      contentUid: "content-decagrammaton-armed",
+      completedAt: "2026-05-26T02:00:00.000Z",
+      recruitedStudents: [],
+      exchangedStudents: [],
+      trial: 100,
+      rawResult: null,
+      commentPostUid: null,
+      createdAt: "2026-05-26T02:00:00.000Z",
+      updatedAt: "2026-05-26T02:00:00.000Z",
+    });
+    mockedGetRecruitmentResultComment.mockResolvedValue(null);
+    mockedGetAllStudents.mockResolvedValue([]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-decagrammaton-armed",
+        name: "데카그라마톤 무장",
+        recruitmentGroupUid: "decagrammaton-armed",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/result-zero-tier3"),
+      params: { username: "@sensei", id: "result-zero-tier3" },
+    } as never);
+    if (result instanceof Response) {
+      throw new Error(`Expected pickup history editor data, got redirect to ${result.headers.get("Location")}`);
+    }
+
+    expect(result.currentPickupHistory?.result).toEqual([
+      {
+        trial: 100,
+        tier3Count: 0,
+        tier3StudentIds: [],
+      },
+    ]);
+  });
+
   it("rejects given students submitted as exchange students", async () => {
     const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
     historicalGroup.recruitments.push({
