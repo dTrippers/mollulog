@@ -1,6 +1,6 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
-import { ArrowRightStartOnRectangleIcon, KeyIcon, LinkIcon } from "@heroicons/react/24/outline";
+import { ArrowRightStartOnRectangleIcon, CommandLineIcon, KeyIcon, LinkIcon } from "@heroicons/react/24/outline";
 import { type ElementType, type ReactNode, useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
@@ -10,6 +10,7 @@ import { Button, Input, Title } from "~/components/primitives";
 import { nowUtcIso } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
+import { listConnectApiKeys } from "~/models/connect-api-key";
 import { getPasskeysBySensei } from "~/models/passkey";
 import { getSenseiById, updateSensei } from "~/models/sensei";
 import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
@@ -46,6 +47,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       }))
       .sort((a, b) => a.order - b.order),
     passkeyCount: (await getPasskeysBySensei(env, sensei)).length,
+    connectApiKeyCount: (await listConnectApiKeys(env, sensei.id)).length,
     authIdentities: await getAuthIdentityStatuses(env, sensei.id),
     authMessage: authMessageFromSearchParams(url.searchParams),
   };
@@ -265,7 +267,8 @@ function AuthIdentityLinkForm({
 }
 
 export default function EditProfile() {
-  const { sensei, allStudents, passkeyCount, authIdentities, authMessage } = useLoaderData<typeof loader>();
+  const { sensei, allStudents, passkeyCount, connectApiKeyCount, authIdentities, authMessage } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const submittingIntent = navigation.formData?.get("intent");
@@ -377,6 +380,12 @@ export default function EditProfile() {
             title="Passkey 관리"
             description={`${passkeyCount}개 등록됨`}
             Icon={KeyIcon}
+          />
+          <SettingsLink
+            to="/edit/connect"
+            title="MolluConnect API 키 관리"
+            description={`${connectApiKeyCount}개 등록됨`}
+            Icon={CommandLineIcon}
           />
           <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} tone="destructive" />
         </div>
