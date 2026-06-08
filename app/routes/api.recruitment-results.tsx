@@ -1,6 +1,10 @@
 import type { ActionFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { nowUtcIso } from "~/lib/date-time";
+import { getFutureContents } from "~/models/content";
+import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
 import {
   addRecruitedStudentToResult,
   deleteRecruitmentResult,
@@ -76,6 +80,48 @@ function getStudentsFromAction(actionData: Extract<ActionData, { action: "comple
   return undefined;
 }
 
+type CompleteStudentActionData = Extract<ActionData, { action: "completeStudent" }>;
+
+async function canCompleteRecruitmentAction(env: Env, userId: number, actionData: CompleteStudentActionData) {
+  const [contents, favoritedStudents] = await Promise.all([
+    getFutureContents(env),
+    getUserFavoritedStudents(env, userId),
+  ]);
+
+  for (const content of contents) {
+    if (content.recruitmentGroupUid !== actionData.recruitmentGroupUid) {
+      continue;
+    }
+
+    if (
+      actionData.contentUid &&
+      actionData.contentUid !== content.uid &&
+      actionData.contentUid !== content.contentUid
+    ) {
+      continue;
+    }
+
+    const recruitment = content.recruitments.find(
+      (item) => item.student?.uid === actionData.studentUid,
+    );
+    if (!recruitment) {
+      continue;
+    }
+
+    const favorited = favoritedStudents.some(
+      (favorite) => favorite.contentId === content.uid && favorite.studentId === actionData.studentUid,
+    );
+
+    return canCompleteRecruitmentStudent({
+      recruitmentSince: recruitment.since,
+      favorited,
+      now: nowUtcIso(),
+    });
+  }
+
+  return false;
+}
+
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getActiveSensei(env, request);
@@ -103,6 +149,10 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   if (actionData.action === "completeStudent") {
     if (!actionData.studentUid) {
       return data({ error: "studentUid is required" }, { status: 400 });
+    }
+
+    if (!(await canCompleteRecruitmentAction(env, currentUser.id, actionData))) {
+      return data({ error: "Recruitment completion is not allowed" }, { status: 400 });
     }
 
     const result = await addRecruitedStudentToResult(env, currentUser.id, {

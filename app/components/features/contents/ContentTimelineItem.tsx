@@ -35,6 +35,7 @@ import {
 import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
 import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { EventType, RaidType, Role } from "~/models/content.d";
+import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
@@ -582,11 +583,21 @@ function getRecruitmentStudentCards({
   onRecruitmentComplete?: (studentUid: string, completed: boolean, recruitment: RecruitmentCompletionMeta) => void;
   detailedLinkText: string;
 }) {
+  const now = nowUtcIso();
   return recruitments.map((recruitment) => {
     const student = recruitment.student;
     const studentUid = student?.uid;
     const isFavorited = studentUid ? favoritedStudents.includes(studentUid) : false;
     const recruitmentCompleted = studentUid ? completedStudentUids.includes(studentUid) : false;
+    const showRecruitmentCompleteAction = Boolean(
+      recruitmentCompleted ||
+        (studentUid &&
+          canCompleteRecruitmentStudent({
+            recruitmentSince: recruitment.since,
+            favorited: isFavorited,
+            now,
+          })),
+    );
     const recruitmentResultStudent = {
       tier: student?.initialTier ?? 3,
       pickup: recruitment.pickup && recruitment.recruitmentType !== "given",
@@ -625,7 +636,7 @@ function getRecruitmentStudentCards({
                   text: "관심 학생에 등록",
                   onClick: () => onFavorite?.(studentUid, true),
                 },
-            ...(onRecruitmentComplete
+            ...(onRecruitmentComplete && showRecruitmentCompleteAction
               ? [
                   recruitmentCompleted
                     ? {

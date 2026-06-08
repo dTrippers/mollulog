@@ -1,4 +1,4 @@
-import type { UtcIsoString } from "~/lib/date-time";
+import { isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 import type { RecruitmentCompletionMeta, RecruitmentResultStudent } from "./recruitment-result";
 
 type RecruitmentResultCompletionState = {
@@ -48,4 +48,16 @@ export function applyRecruitmentResultStudentCompletion<T extends RecruitmentRes
     completedAt,
     recruitedStudents,
   };
+}
+
+export function canCompleteRecruitmentStudent({
+  recruitmentSince,
+  favorited,
+  now,
+}: {
+  recruitmentSince: UtcIsoString;
+  favorited: boolean;
+  now: UtcIsoString;
+}): boolean {
+  return favorited && !isInstantAfter(recruitmentSince, now);
 }

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
-import { applyRecruitmentResultStudentCompletion } from "../../../app/models/recruitment-result-completion";
+import {
+  applyRecruitmentResultStudentCompletion,
+  canCompleteRecruitmentStudent,
+} from "../../../app/models/recruitment-result-completion";
 
 describe("recruitment-result-completion", () => {
   it("keeps completedAt when uncompleting one duplicate occurrence leaves another recruited student", () => {
@@ -77,5 +80,47 @@ describe("recruitment-result-completion", () => {
       { studentUid: "hina", tier: 3, pickup: true },
       { studentUid: "aru", tier: 3, pickup: false },
     ]);
+  });
+
+  describe("canCompleteRecruitmentStudent", () => {
+    it("allows completion only for a favorited student after the recruitment starts", () => {
+      expect(
+        canCompleteRecruitmentStudent({
+          recruitmentSince: "2026-06-08T00:00:00.000Z",
+          favorited: true,
+          now: "2026-06-08T00:00:01.000Z",
+        }),
+      ).toBe(true);
+    });
+
+    it("allows completion at the exact recruitment start instant", () => {
+      expect(
+        canCompleteRecruitmentStudent({
+          recruitmentSince: "2026-06-08T00:00:00.000Z",
+          favorited: true,
+          now: "2026-06-08T00:00:00.000Z",
+        }),
+      ).toBe(true);
+    });
+
+    it("rejects completion before the recruitment starts", () => {
+      expect(
+        canCompleteRecruitmentStudent({
+          recruitmentSince: "2026-06-08T00:00:01.000Z",
+          favorited: true,
+          now: "2026-06-08T00:00:00.000Z",
+        }),
+      ).toBe(false);
+    });
+
+    it("rejects completion when the student is not favorited even after the recruitment starts", () => {
+      expect(
+        canCompleteRecruitmentStudent({
+          recruitmentSince: "2026-06-08T00:00:00.000Z",
+          favorited: false,
+          now: "2026-06-08T00:00:01.000Z",
+        }),
+      ).toBe(false);
+    });
   });
 });

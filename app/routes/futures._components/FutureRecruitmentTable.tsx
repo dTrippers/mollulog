@@ -15,6 +15,7 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
 import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
+import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import {
   type FutureRecruitmentTableContent,
@@ -204,16 +205,17 @@ function RecruitmentStudents({
     recruitment: RecruitmentCompletionMeta,
   ) => void;
 }) {
+  const now = nowUtcIso();
   const groupedStudents = getRecruitmentContentStudentGroups(
     groups,
     favoritedStudents,
     favoritedCounts,
     completedRecruitmentStudents,
     recruitmentResultEditLinks,
+    now,
     onFavorite,
     onRecruitmentComplete,
   );
-  const now = nowUtcIso();
   if (groupedStudents.length === 0) {
     return null;
   }
@@ -394,6 +396,7 @@ function getRecruitmentContentStudentGroups(
   favoritedCounts: { contentUid: string; studentUid: string; count: number }[],
   completedRecruitmentStudents: { recruitmentGroupUid: string; studentUid: string }[],
   recruitmentResultEditLinks: { recruitmentGroupUid: string; link: string }[],
+  now: string,
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void,
   onRecruitmentComplete?: (
     contentUid: string,
@@ -422,6 +425,7 @@ function getRecruitmentContentStudentGroups(
         favoritedCounts,
         completedRecruitmentStudents,
         recruitmentResultEditLinks,
+        now,
         onFavorite,
         onRecruitmentComplete,
       ),
@@ -437,6 +441,7 @@ function getRecruitmentStudentGroup(
   favoritedCounts: { contentUid: string; studentUid: string; count: number }[],
   completedRecruitmentStudents: { recruitmentGroupUid: string; studentUid: string }[],
   recruitmentResultEditLinks: { recruitmentGroupUid: string; link: string }[],
+  now: string,
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void,
   onRecruitmentComplete?: (
     contentUid: string,
@@ -462,6 +467,15 @@ function getRecruitmentStudentGroup(
         (student) =>
           student.recruitmentGroupUid === group.content.recruitmentGroupUid && student.studentUid === studentUid,
       ),
+  );
+  const showRecruitmentCompleteAction = Boolean(
+    completed ||
+      (studentUid &&
+        canCompleteRecruitmentStudent({
+          recruitmentSince: recruitment.since,
+          favorited,
+          now,
+        })),
   );
   const resultEditLink = group.content.recruitmentGroupUid
     ? recruitmentResultEditLinks.find((item) => item.recruitmentGroupUid === group.content.recruitmentGroupUid)?.link
@@ -497,7 +511,7 @@ function getRecruitmentStudentGroup(
                 text: "관심 학생에 등록",
                 onClick: () => onFavorite?.(group.content.uid, studentUid, true),
               },
-          ...(onRecruitmentComplete && group.content.recruitmentGroupUid
+          ...(onRecruitmentComplete && group.content.recruitmentGroupUid && showRecruitmentCompleteAction
             ? [
                 completed
                   ? {
