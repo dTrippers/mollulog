@@ -484,8 +484,8 @@ function PostContent({
 function RecruitmentResultStats({ stats }: { stats: NonNullable<CommunityFeedPostItem["recruitmentStats"]> }) {
   const items = [
     { label: "총 모집", value: stats.totalTrial === null ? "미입력" : `${stats.totalTrial}회` },
-    { label: "★3", value: `${stats.tier3Count}명` },
-    { label: "픽업", value: `${stats.pickupCount}명` },
+    { label: "★3", value: `${stats.tier3Count}회` },
+    { label: "픽업", value: `${stats.pickupCount}회` },
   ];
 
   return (

@@ -7,6 +7,7 @@ import {
   recruitmentResultsTable,
   sanitizeRecruitmentResultStudents,
 } from "./recruitment-result";
+import { getRecruitmentResultCountStats } from "./recruitment-result-stats";
 import { getAllStudentsMap } from "./student";
 import { type StudentGradingTagValue, getGradingTagsByGradingUids } from "./student-grading-tag";
 import { getTimelineContentsByUids } from "./timeline-content";
@@ -49,6 +50,11 @@ function parseRecruitmentResultStudents(value: string): RecruitmentResultStudent
 async function getRecruitmentFeedStatsByPostUid(
   env: Env,
   posts: CommunityFeedPost[],
+  options: {
+    allStudentsMap: Awaited<ReturnType<typeof getAllStudentsMap>>;
+    recruitmentGroupMap: Map<string, Awaited<ReturnType<RecruitmentRepository["getByUids"]>>[number]>;
+    timelineContentMap: Map<string, Awaited<ReturnType<typeof getTimelineContentsByUids>>[number]>;
+  },
 ): Promise<Map<string, RecruitmentFeedStats>> {
   const postByUid = new Map(
     posts.flatMap((post) => (post.postType === "recruitment_result" && post.author ? [[post.uid, post] as const] : [])),
@@ -62,7 +68,6 @@ async function getRecruitmentFeedStatsByPostUid(
     .select({
       userId: recruitmentResultsTable.userId,
       recruitedStudents: recruitmentResultsTable.recruitedStudents,
-      exchangedStudents: recruitmentResultsTable.exchangedStudents,
       trial: recruitmentResultsTable.trial,
       commentPostUid: recruitmentResultsTable.commentPostUid,
     })
@@ -79,17 +84,28 @@ async function getRecruitmentFeedStatsByPostUid(
       }
 
       const recruitedStudents = parseRecruitmentResultStudents(row.recruitedStudents);
-      const exchangedStudents = parseRecruitmentResultStudents(row.exchangedStudents);
-      const recruitedTier3Students = recruitedStudents.filter((student) => student.tier === 3);
-      const exchangedTier3Count = exchangedStudents.filter((student) => student.tier === 3).length;
+      const subjectContentUid = post.subjectContentUid;
+      const group = subjectContentUid
+        ? options.recruitmentGroupMap.get(options.timelineContentMap.get(subjectContentUid)?.recruitmentGroupUid ?? "")
+        : null;
+      const stats = getRecruitmentResultCountStats(
+        {
+          recruitedStudents,
+          trial: row.trial ?? null,
+        },
+        {
+          allStudentsMap: options.allStudentsMap,
+          group,
+        },
+      );
 
       return [
         [
           post.uid,
           {
             totalTrial: row.trial ?? null,
-            tier3Count: recruitedTier3Students.length + exchangedTier3Count,
-            pickupCount: recruitedTier3Students.filter((student) => student.pickup).length,
+            tier3Count: stats.tier3Count,
+            pickupCount: stats.pickupCount,
           },
         ] as const,
       ];
@@ -107,13 +123,12 @@ export async function enrichCommunityFeedPosts(
   const allStudentsMap = await getAllStudentsMap(env, true);
   const contentUids = posts.map((post) => post.subjectContentUid).filter((uid): uid is string => uid !== null);
 
-  const [timelineContents, gradingTags, recruitmentStatsByPostUid] = await Promise.all([
+  const [timelineContents, gradingTags] = await Promise.all([
     contentUids.length > 0 ? getTimelineContentsByUids(env, contentUids) : [],
     getGradingTagsByGradingUids(
       env,
       posts.filter((post) => post.postType === "student_review").map((post) => post.uid),
     ),
-    getRecruitmentFeedStatsByPostUid(env, posts),
   ]);
 
   const timelineContentMap = new Map(timelineContents.map((content) => [content.uid, content]));
@@ -123,6 +138,11 @@ export async function enrichCommunityFeedPosts(
   const recruitmentGroups =
     recruitmentGroupUids.length > 0 ? await new RecruitmentRepository(env).getByUids(recruitmentGroupUids) : [];
   const recruitmentGroupMap = new Map(recruitmentGroups.map((group) => [group.uid, group]));
+  const recruitmentStatsByPostUid = await getRecruitmentFeedStatsByPostUid(env, posts, {
+    allStudentsMap,
+    recruitmentGroupMap,
+    timelineContentMap,
+  });
 
   return {
     studentsByUid: Object.fromEntries(
@@ -144,7 +164,9 @@ export async function enrichCommunityFeedPosts(
       pickupStudents: post.subjectContentUid
         ? (recruitmentGroupMap
             .get(timelineContentMap.get(post.subjectContentUid)?.recruitmentGroupUid ?? "")
-            ?.recruitments.filter((recruitment) => recruitment.pickup && recruitment.student)
+            ?.recruitments.filter(
+              (recruitment) => recruitment.pickup && recruitment.recruitmentType !== "given" && recruitment.student,
+            )
             .map((recruitment) => ({
               uid: recruitment.student?.uid ?? "",
               name: recruitment.student?.name ?? recruitment.studentName,

@@ -27,6 +27,11 @@ type PickupHistoryViewProps = {
     pickup: boolean;
     tier: number;
   }[];
+  stats: {
+    totalTrial: number | null;
+    tier3Count: number;
+    pickupCount: number;
+  };
   trial?: number | null;
   trialMissing?: boolean;
   comment?: {
@@ -53,6 +58,7 @@ export default function PickupHistoryView({
   event,
   recruitedStudents,
   exchangedStudents,
+  stats,
   trial,
   trialMissing,
   comment,
@@ -60,7 +66,6 @@ export default function PickupHistoryView({
 }: PickupHistoryViewProps) {
   const tier3Students = recruitedStudents.filter(({ tier }) => tier === 3);
   const tier3ExchangedStudents = exchangedStudents.filter(({ tier }) => tier === 3);
-  const pickupCount = recruitedStudents.filter(({ pickup }) => pickup).length;
   const visibleComment = comment?.body.trim() ? comment : null;
 
   return (
@@ -75,9 +80,9 @@ export default function PickupHistoryView({
 
         <aside className="flex flex-col gap-3 md:w-60">
           <PickupStats
-            totalTrial={trial ?? null}
-            tier3Count={tier3Students.length}
-            pickupCount={pickupCount}
+            totalTrial={stats.totalTrial}
+            tier3Count={stats.tier3Count}
+            pickupCount={stats.pickupCount}
             trialMissing={trialMissing ?? trial == null}
           />
           {editable && <PickupActions uid={uid} />}

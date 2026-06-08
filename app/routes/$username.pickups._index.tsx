@@ -10,6 +10,10 @@ import {
   getRecruitmentResultComments,
   getRecruitmentResults,
 } from "~/models/recruitment-result";
+import {
+  getRecruitmentResultCountStats,
+  resolveRecruitmentResultStudents,
+} from "~/models/recruitment-result-stats";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
@@ -41,16 +45,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   await deleteRecruitmentResult(env, sensei.id, formData.get("uid") as string);
   return null;
 };
-
-function getPickupStudentUids(event: { recruitments: { pickup: boolean; student: { uid: string } | null }[] }) {
-  const pickupStudentUids = new Set<string>();
-  for (const { pickup, student } of event.recruitments) {
-    if (pickup && student) {
-      pickupStudentUids.add(student.uid);
-    }
-  }
-  return pickupStudentUids;
-}
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -105,52 +99,31 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         });
       }
 
-      const pickupStudentUids = group ? getPickupStudentUids(group) : new Set<string>();
-      const groupStudentsMap = new Map(
-        group?.recruitments.flatMap(({ student }) => (student ? [[student.uid, student] as const] : [])) ?? [],
+      const resolveLookup = { allStudentsMap, poolStudentsMap, group };
+      const onMissingStudent = (studentUid: string): never => {
+        throw routeError(500, "pickup_history.student_missing", "모집한 학생 정보를 불러오지 못했어요", {
+          recruitmentResultUid: result.uid,
+          recruitmentGroupUid: result.recruitmentGroupUid,
+          studentUid,
+        });
+      };
+      const students = resolveRecruitmentResultStudents(result.recruitedStudents, resolveLookup, onMissingStudent);
+      const exchangedStudents = resolveRecruitmentResultStudents(
+        result.exchangedStudents,
+        resolveLookup,
+        onMissingStudent,
       );
-      const recruitedStudents = result.recruitedStudents;
-      const toDisplayStudents = (studentResults: typeof recruitedStudents) =>
-        studentResults
-          .filter(({ studentUid }) => studentUid)
-          .map(({ studentUid, pickup }) => {
-            const student =
-              allStudentsMap[studentUid] ?? poolStudentsMap.get(studentUid) ?? groupStudentsMap.get(studentUid);
-            if (!student) {
-              throw routeError(500, "pickup_history.student_missing", "모집한 학생 정보를 불러오지 못했어요", {
-                recruitmentResultUid: result.uid,
-                recruitmentGroupUid: result.recruitmentGroupUid,
-                studentUid,
-              });
-            }
+      const currentStats = getRecruitmentResultCountStats(result, resolveLookup);
 
-            return {
-              uid: studentUid,
-              name: student.name,
-              tier: student.initialTier,
-              pickup: pickup || pickupStudentUids.has(studentUid),
-            };
-          });
-      const students = toDisplayStudents(recruitedStudents);
-      const exchangedStudents = toDisplayStudents(result.exchangedStudents);
-
-      const tier3Students = students.filter(({ tier }) => tier === 3);
-      const tier3ExchangedStudents = exchangedStudents.filter(({ tier }) => tier === 3);
-      const currentTier3Count = tier3Students.length;
-      const currentPickupCount = tier3Students.filter(({ pickup }) => pickup).length;
-      const currentTier3ExchangedCount = tier3ExchangedStudents.length;
-      const currentPickupExchangedCount = tier3ExchangedStudents.filter(({ pickup }) => pickup).length;
-      const rateMultiplier = group?.recruitmentType === "fes" ? 0.5 : 1;
-
-      tier3Count += currentTier3Count + currentTier3ExchangedCount;
-      tier3DrawCount += currentTier3Count;
-      pickupCount += currentPickupCount + currentPickupExchangedCount;
-      pickupDrawCount += currentPickupCount;
+      tier3Count += currentStats.tier3Count;
+      tier3DrawCount += currentStats.tier3DrawCount;
+      pickupCount += currentStats.pickupCount;
+      pickupDrawCount += currentStats.pickupDrawCount;
       if (result.trial === null) {
         missingTrialCount += 1;
       } else {
-        tier3RateCount += currentTier3Count * rateMultiplier;
-        pickupRateCount += currentPickupCount * rateMultiplier;
+        tier3RateCount += currentStats.tier3RateCount;
+        pickupRateCount += currentStats.pickupRateCount;
         totalTrial += result.trial;
       }
       const comment = result.commentPostUid ? (commentMap.get(result.commentPostUid) ?? null) : null;
@@ -166,6 +139,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         trial: result.trial,
         recruitedStudents: students,
         exchangedStudents,
+        stats: {
+          totalTrial: currentStats.totalTrial,
+          tier3Count: currentStats.tier3Count,
+          pickupCount: currentStats.pickupCount,
+        },
         comment: comment
           ? {
               ...comment,
@@ -227,14 +205,13 @@ export default function UserPickups() {
         </div>
       </div>
       <p className="mt-4 mb-16 text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
-        모집 포인트 교환 학생은 획득 수에 포함하고 모집 확률 계산에서는 제외했어요. 페스 기간에 모집한 ★3 학생은 확률을
-        0.5배로 계산했어요.
+        페스 기간에 모집한 ★3 학생은 확률을 0.5배로 계산했어요.
       </p>
 
       <SubTitle text="모집 이력" />
       {me && <AddContentButton text="새로운 모집 이력 추가하기" link="/my?path=pickups/edit/new" />}
       {recruitmentHistories.length === 0 && <p className="my-16 text-center">아직 모집 이력이 없어요</p>}
-      {recruitmentHistories.map(({ uid, event, recruitedStudents, exchangedStudents, trial, comment }) => {
+      {recruitmentHistories.map(({ uid, event, recruitedStudents, exchangedStudents, trial, stats, comment }) => {
         return (
           <PickupHistoryView
             key={uid}
@@ -243,6 +220,7 @@ export default function UserPickups() {
             recruitedStudents={recruitedStudents}
             exchangedStudents={exchangedStudents}
             trial={trial}
+            stats={stats}
             comment={comment}
             trialMissing={trial === null}
             editable={me}

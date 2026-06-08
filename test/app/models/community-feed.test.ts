@@ -89,13 +89,7 @@ class FakeCommunityFeedD1Database {
       const commentPostUids = params.filter((param): param is string => typeof param === "string");
       return this.recruitmentResults
         .filter((result) => result.commentPostUid !== null && commentPostUids.includes(result.commentPostUid))
-        .map((result) => [
-          result.userId,
-          result.recruitedStudents,
-          result.exchangedStudents,
-          result.trial,
-          result.commentPostUid,
-        ]);
+        .map((result) => [result.userId, result.recruitedStudents, result.trial, result.commentPostUid]);
     }
 
     throw new Error(`Unexpected SELECT SQL: ${sql}\nparams: ${JSON.stringify(params)}`);
@@ -146,7 +140,7 @@ afterEach(() => {
 });
 
 describe("enrichCommunityFeedPosts", () => {
-  it("adds recruitment result stats while excluding exchanged students from pickup count", async () => {
+  it("adds recruitment result stats while excluding exchanged students from displayed counts", async () => {
     const db = new FakeCommunityFeedD1Database();
     db.recruitmentResults.push({
       id: 1,
@@ -191,8 +185,87 @@ describe("enrichCommunityFeedPosts", () => {
     expect(mockedRecruitmentRepository).toHaveBeenCalledWith(createEnv(db));
     expect(enriched.posts[0].recruitmentStats).toEqual({
       totalTrial: 120,
-      tier3Count: 3,
+      tier3Count: 2,
       pickupCount: 1,
     });
+  });
+
+  it("uses shared recruitment result counting rules for given pickups and stored tier drift", async () => {
+    const db = new FakeCommunityFeedD1Database();
+    db.recruitmentResults.push({
+      id: 1,
+      uid: "result-1",
+      userId: 1,
+      recruitmentGroupUid: "main-story-decagrammaton-3-2",
+      contentUid: "main-story-decagrammaton-3-2",
+      completedAt: "2026-06-08T00:00:00.000Z",
+      recruitedStudents: JSON.stringify([
+        { studentUid: "20054", tier: 3, pickup: false },
+        { studentUid: "10070", tier: 3, pickup: false },
+        { studentUid: "10127", tier: 3, pickup: false },
+        { studentUid: "10035", tier: 3, pickup: false },
+        { studentUid: "10121", tier: 3, pickup: false },
+        { studentUid: "10036", tier: 3, pickup: false },
+        { studentUid: "20039", tier: 3, pickup: false },
+        { studentUid: "16019", tier: 3, pickup: true },
+      ]),
+      exchangedStudents: JSON.stringify([{ studentUid: "10133", tier: 3, pickup: true }]),
+      trial: 200,
+      rawResult: null,
+      commentPostUid: "post-1",
+      createdAt: "2026-06-08T00:00:00.000Z",
+      updatedAt: "2026-06-08T00:00:00.000Z",
+    });
+    mockedGetAllStudentsMap.mockResolvedValue({
+      "10035": { uid: "10035", name: "우이", initialTier: 3 },
+      "10036": { uid: "10036", name: "히나타", initialTier: 3 },
+      "10070": { uid: "10070", name: "미나", initialTier: 3 },
+      "10121": { uid: "10121", name: "유카리(수영복)", initialTier: 3 },
+      "10127": { uid: "10127", name: "미요", initialTier: 3 },
+      "10133": { uid: "10133", name: "리오(무장)", initialTier: 3 },
+      "16019": { uid: "16019", name: "토키(무장)", initialTier: 1 },
+      "20039": { uid: "20039", name: "키사키", initialTier: 3 },
+      "20054": { uid: "20054", name: "히마리(무장)", initialTier: 3 },
+    } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
+    mockedGetGradingTagsByGradingUids.mockResolvedValue({});
+    mockedGetTimelineContentsByUids.mockResolvedValue([
+      {
+        uid: "content-1",
+        name: "1부 Ex. 데카그라마톤 편",
+        recruitmentGroupUid: "main-story-decagrammaton-3-2",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByUids>>);
+    mockGetByUids.mockResolvedValue([
+      {
+        uid: "main-story-decagrammaton-3-2",
+        recruitmentType: "usual",
+        recruitments: [
+          {
+            pickup: true,
+            recruitmentType: "limited",
+            student: { uid: "10133", name: "리오(무장)", initialTier: 3 },
+          },
+          {
+            pickup: true,
+            recruitmentType: "limited",
+            student: { uid: "20054", name: "히마리(무장)", initialTier: 3 },
+          },
+          {
+            pickup: true,
+            recruitmentType: "given",
+            student: { uid: "16019", name: "토키(무장)", initialTier: 1 },
+          },
+        ],
+      },
+    ]);
+
+    const enriched = await enrichCommunityFeedPosts(createEnv(db), [createRecruitmentResultPost()]);
+
+    expect(enriched.posts[0].recruitmentStats).toEqual({
+      totalTrial: 200,
+      tier3Count: 7,
+      pickupCount: 1,
+    });
+    expect(enriched.posts[0].pickupStudents.map((student) => student.uid)).toEqual(["10133", "20054"]);
   });
 });

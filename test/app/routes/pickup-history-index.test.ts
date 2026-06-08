@@ -511,7 +511,7 @@ describe("pickup history index loader", () => {
     expect(result.recruitmentHistories.find((history) => history.uid === "history-missing-trial")?.trial).toBeNull();
   });
 
-  it("includes exchanged students in acquired counts but excludes them from recruitment rates", async () => {
+  it("excludes exchanged students from acquired counts and recruitment rates", async () => {
     mockedGetSenseiByUsername.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -573,9 +573,9 @@ describe("pickup history index loader", () => {
 
     expect(result.recruitmentStats).toMatchObject({
       trial: 200,
-      tier3Count: 2,
+      tier3Count: 1,
       tier3RateCount: 1,
-      pickupCount: 2,
+      pickupCount: 1,
       pickupRateCount: 1,
     });
     expect(result.recruitmentHistories[0].exchangedStudents).toEqual([
@@ -586,5 +586,103 @@ describe("pickup history index loader", () => {
         pickup: true,
       },
     ]);
+  });
+
+  it("uses shared counting rules for given pickups, stored tier drift, and exchanged students", async () => {
+    mockedGetSenseiByUsername.mockResolvedValue({
+      id: 3211,
+      uid: "sensei-3211",
+      username: "MiddleNymph20",
+    } as Awaited<ReturnType<typeof getSenseiByUsername>>);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 3211,
+      uid: "sensei-3211",
+      username: "MiddleNymph20",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResults.mockResolvedValue([
+      {
+        uid: "meJlgf16",
+        userId: 3211,
+        recruitmentGroupUid: "main-story-decagrammaton-3-2",
+        contentUid: "main-story-decagrammaton-3-2",
+        completedAt: "2026-06-08T02:15:41.690Z",
+        recruitedStudents: [
+          { studentUid: "20054", tier: 3, pickup: false },
+          { studentUid: "10070", tier: 3, pickup: false },
+          { studentUid: "10127", tier: 3, pickup: false },
+          { studentUid: "10035", tier: 3, pickup: false },
+          { studentUid: "10121", tier: 3, pickup: false },
+          { studentUid: "10036", tier: 3, pickup: false },
+          { studentUid: "20039", tier: 3, pickup: false },
+          { studentUid: "16019", tier: 3, pickup: true },
+        ],
+        exchangedStudents: [{ studentUid: "10133", tier: 3, pickup: true }],
+        trial: 200,
+        rawResult: null,
+        commentPostUid: "1AE4Yp1K",
+        createdAt: "2026-06-08T02:15:41.690Z",
+        updatedAt: "2026-06-08T02:15:41.690Z",
+      },
+    ]);
+    mockedGetAllStudentsMap.mockResolvedValue({
+      "10035": { uid: "10035", name: "우이", initialTier: 3 },
+      "10036": { uid: "10036", name: "히나타", initialTier: 3 },
+      "10070": { uid: "10070", name: "미나", initialTier: 3 },
+      "10121": { uid: "10121", name: "유카리(수영복)", initialTier: 3 },
+      "10127": { uid: "10127", name: "미요", initialTier: 3 },
+      "10133": { uid: "10133", name: "리오(무장)", initialTier: 3 },
+      "16019": { uid: "16019", name: "토키(무장)", initialTier: 1 },
+      "20039": { uid: "20039", name: "키사키", initialTier: 3 },
+      "20054": { uid: "20054", name: "히마리(무장)", initialTier: 3 },
+    } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
+    mockGetByUids.mockResolvedValue([
+      {
+        uid: "main-story-decagrammaton-3-2",
+        recruitmentType: "usual",
+        recruitments: [
+          {
+            pickup: true,
+            recruitmentType: "limited",
+            student: { uid: "10133", name: "리오(무장)", initialTier: 3 },
+          },
+          {
+            pickup: true,
+            recruitmentType: "limited",
+            student: { uid: "20054", name: "히마리(무장)", initialTier: 3 },
+          },
+          {
+            pickup: true,
+            recruitmentType: "given",
+            student: { uid: "16019", name: "토키(무장)", initialTier: 1 },
+          },
+        ],
+      },
+    ]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "main-story-decagrammaton-3-2",
+        name: "1부 Ex. 데카그라마톤 편",
+        recruitmentGroupUid: "main-story-decagrammaton-3-2",
+        startAt: "2026-05-27T02:00:00.000Z",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader({
+      ...createLoaderArgs(),
+      request: new Request("https://mollulog.net/@MiddleNymph20/pickups"),
+      params: { username: "@MiddleNymph20" },
+    } as never);
+
+    expect(result.recruitmentStats).toMatchObject({
+      trial: 200,
+      tier3Count: 7,
+      tier3RateCount: 7,
+      pickupCount: 1,
+      pickupRateCount: 1,
+    });
+    expect(result.recruitmentHistories[0].recruitedStudents.find((student) => student.uid === "16019")).toMatchObject({
+      tier: 1,
+      pickup: false,
+    });
   });
 });
