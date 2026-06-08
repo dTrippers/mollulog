@@ -35,6 +35,7 @@ import {
 import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
 import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { EventType, RaidType, Role } from "~/models/content.d";
+import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";
@@ -90,7 +91,7 @@ export type ContentTimelineItemProps = {
   onFavorite?: (studentUid: string, favorited: boolean) => void;
   completedStudentUids?: string[];
   recruitmentResultEditLink?: string;
-  onRecruitmentComplete?: (studentUid: string, completed: boolean) => void;
+  onRecruitmentComplete?: (studentUid: string, completed: boolean, recruitment: RecruitmentCompletionMeta) => void;
   onRevealSpoiler?: () => void;
   onHideSpoiler?: () => void;
 
@@ -104,6 +105,7 @@ export type ContentTimelineItemProps = {
       defenseType?: Defense;
       role?: Role;
       schaleDbId?: string | null;
+      initialTier?: number;
     } | null;
     studentName: string;
     since: UtcIsoString;
@@ -437,6 +439,7 @@ type RecruitmentsProps = {
       attackType?: Attack;
       defenseType?: Defense;
       role?: Role;
+      initialTier?: number;
     } | null;
     since: UtcIsoString;
     until: UtcIsoString | null;
@@ -446,7 +449,7 @@ type RecruitmentsProps = {
   favoritedCounts: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
   completedStudentUids: string[];
-  onRecruitmentComplete?: (studentUid: string, completed: boolean) => void;
+  onRecruitmentComplete?: (studentUid: string, completed: boolean, recruitment: RecruitmentCompletionMeta) => void;
   link: string;
 
   eventSince: UtcIsoString | null;
@@ -558,7 +561,7 @@ type RecruitmentStudentsProps = {
   favoritedCounts: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
   completedStudentUids: string[];
-  onRecruitmentComplete?: (studentUid: string, completed: boolean) => void;
+  onRecruitmentComplete?: (studentUid: string, completed: boolean, recruitment: RecruitmentCompletionMeta) => void;
   showToggle?: boolean;
 };
 
@@ -576,7 +579,7 @@ function getRecruitmentStudentCards({
   favoritedCounts: Record<string, number>;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
   completedStudentUids: string[];
-  onRecruitmentComplete?: (studentUid: string, completed: boolean) => void;
+  onRecruitmentComplete?: (studentUid: string, completed: boolean, recruitment: RecruitmentCompletionMeta) => void;
   detailedLinkText: string;
 }) {
   return recruitments.map((recruitment) => {
@@ -584,6 +587,11 @@ function getRecruitmentStudentCards({
     const studentUid = student?.uid;
     const isFavorited = studentUid ? favoritedStudents.includes(studentUid) : false;
     const recruitmentCompleted = studentUid ? completedStudentUids.includes(studentUid) : false;
+    const recruitmentResultStudent = {
+      tier: student?.initialTier ?? 3,
+      pickup: recruitment.pickup && recruitment.recruitmentType !== "given",
+      recruitmentType: recruitment.recruitmentType,
+    };
     const labelColorClass =
       recruitment.rerun ||
       recruitment.recruitmentType === "archive" ||
@@ -623,12 +631,12 @@ function getRecruitmentStudentCards({
                     ? {
                         Icon: XCircleIcon,
                         text: "모집 완료 취소",
-                        onClick: () => onRecruitmentComplete(studentUid, false),
+                        onClick: () => onRecruitmentComplete(studentUid, false, recruitmentResultStudent),
                       }
                     : {
                         Icon: CheckCircleIcon,
                         text: "모집 완료로 표시",
-                        onClick: () => onRecruitmentComplete(studentUid, true),
+                        onClick: () => onRecruitmentComplete(studentUid, true, recruitmentResultStudent),
                       },
                 ]
               : []),

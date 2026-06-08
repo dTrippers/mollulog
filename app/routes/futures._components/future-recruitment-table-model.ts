@@ -24,6 +24,7 @@ export type FutureRecruitmentTableRecruitment = {
     defenseType?: Defense;
     role?: Role;
     schaleDbId?: string | null;
+    initialTier?: number;
   } | null;
 };
 

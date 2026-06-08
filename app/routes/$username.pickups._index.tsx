@@ -42,8 +42,13 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   }
 
   const formData = await request.formData();
-  await deleteRecruitmentResult(env, sensei.id, formData.get("uid") as string);
-  return null;
+  const uid = formData.get("uid");
+  if (typeof uid !== "string" || uid.length === 0) {
+    throw routeError(400, "pickup_history.uid_missing", "삭제할 모집 이력을 확인할 수 없어요");
+  }
+
+  await deleteRecruitmentResult(env, sensei.id, uid);
+  return redirect(`/@${sensei.username}/pickups`);
 };
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
@@ -183,11 +188,11 @@ export default function UserPickups() {
       <div className="px-2 md:px-4 py-4 md:py-6 flex grid grid-cols-3 border border-neutral-200 dark:border-neutral-700 rounded-lg">
         <div className="text-center">
           <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">총 모집 횟수</p>
-          <p className="text-lg md:text-2xl font-bold">{recruitmentStats.trial} 번</p>
+          <p className="text-lg md:text-2xl font-bold">{recruitmentStats.trial} 회</p>
         </div>
         <div className="text-center">
           <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 획득 수</p>
-          <p className="text-lg md:text-2xl font-bold">{recruitmentStats.tier3Count} 번</p>
+          <p className="text-lg md:text-2xl font-bold">{recruitmentStats.tier3Count} 회</p>
           {recruitmentStats.trial > 0 && (
             <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
               {((recruitmentStats.tier3RateCount / recruitmentStats.trial) * 100).toFixed(2)} %
@@ -196,7 +201,7 @@ export default function UserPickups() {
         </div>
         <div className="text-center">
           <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 픽업 획득 수</p>
-          <p className="text-lg md:text-2xl font-bold">{recruitmentStats.pickupCount} 번</p>
+          <p className="text-lg md:text-2xl font-bold">{recruitmentStats.pickupCount} 회</p>
           {recruitmentStats.trial > 0 && (
             <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
               {((recruitmentStats.pickupRateCount / recruitmentStats.trial) * 100).toFixed(2)} %

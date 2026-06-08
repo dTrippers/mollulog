@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import {
   communityPostsTable,
@@ -12,6 +13,7 @@ import {
   upsertRecruitmentResultCommunityPost,
 } from "./community";
 import type { PickupHistory } from "./pickup-history";
+import { resolveRecruitmentResultStudent, type StudentLookup } from "./recruitment-result-stats";
 import { upsertRecruitedStudentFromRecruitmentResult } from "./recruited-student";
 
 const IN_QUERY_BATCH_SIZE = 90;
@@ -36,6 +38,12 @@ export type RecruitmentResultStudent = {
   studentUid: string;
   tier: number;
   pickup: boolean;
+};
+
+export type RecruitmentCompletionMeta = {
+  tier: number;
+  pickup: boolean;
+  recruitmentType: RecruitmentTypeEnum;
 };
 
 export type RecruitmentResult = {
@@ -136,18 +144,28 @@ export function normalizeRecruitmentResultStudents(
   return [...byStudentUid.values()];
 }
 
-export function mergeRecruitmentResultStudent(
+export function appendRecruitmentResultStudent(
   students: RecruitmentResultStudent[] | undefined,
   student: RecruitmentResultStudent,
 ): RecruitmentResultStudent[] {
-  return normalizeRecruitmentResultStudents([...(students ?? []), student]);
+  return sanitizeRecruitmentResultStudents([...(students ?? []), student]);
 }
 
 export function removeRecruitmentResultStudent(
   students: RecruitmentResultStudent[] | undefined,
   studentUid: string,
 ): RecruitmentResultStudent[] {
-  return normalizeRecruitmentResultStudents((students ?? []).filter((student) => student.studentUid !== studentUid));
+  let removed = false;
+  return sanitizeRecruitmentResultStudents(
+    (students ?? []).filter((student) => {
+      if (!removed && student.studentUid === studentUid) {
+        removed = true;
+        return false;
+      }
+
+      return true;
+    }),
+  );
 }
 
 export function sanitizeRecruitmentResultStudents(
@@ -178,6 +196,43 @@ export function createRecruitmentResultStudentsFromPickupHistory(
       })),
     ),
   );
+}
+
+export function mergeEditableRecruitmentResultStudents({
+  existingStudents,
+  history,
+  lookup,
+  pickupStudentUids = new Set(),
+  studentInitialTiers = {},
+}: {
+  existingStudents: RecruitmentResultStudent[];
+  history: Pick<PickupHistory, "result">;
+  lookup: StudentLookup;
+  pickupStudentUids?: Set<string>;
+  studentInitialTiers?: Record<string, number>;
+}): RecruitmentResultStudent[] {
+  // The edit form owns only ★3 draw rows; non-★3 rows written by quick-complete flows must survive saves.
+  const preservedExistingStudents = sanitizeRecruitmentResultStudents(existingStudents).flatMap((student) => {
+    const resolvedStudent = resolveRecruitmentResultStudent(student, lookup);
+    if (resolvedStudent.tier === 3) {
+      return [];
+    }
+
+    return [
+      {
+        studentUid: student.studentUid,
+        tier: resolvedStudent.tier,
+        pickup: resolvedStudent.pickup,
+      },
+    ];
+  });
+  const editedFormStudents = createRecruitmentResultStudentsFromPickupHistory(
+    history,
+    pickupStudentUids,
+    studentInitialTiers,
+  );
+
+  return sanitizeRecruitmentResultStudents([...preservedExistingStudents, ...editedFormStudents]);
 }
 
 export function getRecruitmentResultTrialFromPickupHistory(history: Pick<PickupHistory, "result">): number | null {
@@ -426,7 +481,7 @@ export async function addRecruitedStudentToResult(
     throw new Error("studentUid is required");
   }
 
-  const recruitedStudents = mergeRecruitmentResultStudent(existing?.recruitedStudents, student);
+  const recruitedStudents = appendRecruitmentResultStudent(existing?.recruitedStudents, student);
   const contentUid = input.contentUid !== undefined ? input.contentUid : existing?.contentUid;
   const completedAt = existing?.completedAt ?? now;
 

@@ -12,6 +12,7 @@ import {
 } from "~/lib/date-time";
 import { CONTENT_ORDER } from "~/models/content-rules";
 import type { EventType, RaidType } from "~/models/content.d";
+import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import type { ContentTimelineItemProps } from "./ContentTimelineItem";
 import { ContentTimelineItem } from "./ContentTimelineItem";
 
@@ -62,6 +63,7 @@ export type ContentTimelineProps = {
     recruitmentGroupUid: string,
     studentUid: string,
     completed: boolean,
+    recruitment: RecruitmentCompletionMeta,
   ) => void;
 };
 
@@ -224,12 +226,13 @@ export default function ContentTimeline({
                       }
                       onRecruitmentComplete={
                         content.recruitmentGroupUid
-                          ? (studentUid, completed) =>
+                          ? (studentUid, completed, recruitment) =>
                               onRecruitmentComplete?.(
                                 content.uid,
                                 content.recruitmentGroupUid as string,
                                 studentUid,
                                 completed,
+                                recruitment,
                               )
                           : undefined
                       }

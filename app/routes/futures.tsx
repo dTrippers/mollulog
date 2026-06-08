@@ -19,7 +19,11 @@ import {
 import type { EventType, RaidType } from "~/models/content.d";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/models/raid";
-import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
+import { applyRecruitmentResultStudentCompletion } from "~/models/recruitment-result-completion";
+import {
+  getRecruitmentResultsByRecruitmentGroupUids,
+  type RecruitmentCompletionMeta,
+} from "~/models/recruitment-result";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
 import type { ActionData as RecruitmentResultActionData } from "./api.recruitment-results";
@@ -332,44 +336,46 @@ export default function FutureContents() {
     recruitmentGroupUid: string,
     studentUid: string,
     completed: boolean,
+    recruitment: RecruitmentCompletionMeta,
   ) => {
     if (!signedIn) {
       showSignIn();
       return;
     }
 
-    submitRecruitmentResult({
-      action: completed ? "completeStudent" : "uncompleteStudent",
-      contentUid,
-      recruitmentGroupUid,
-      studentUid,
-      tier: 3,
-      pickup: true,
-    } as RecruitmentResultActionData);
+    if (completed) {
+      submitRecruitmentResult({
+        action: "completeStudent",
+        contentUid,
+        recruitmentGroupUid,
+        studentUid,
+        tier: recruitment.tier,
+        pickup: recruitment.pickup,
+      });
+    } else {
+      submitRecruitmentResult({
+        action: "uncompleteStudent",
+        recruitmentGroupUid,
+        studentUid,
+      });
+    }
 
     setRecruitmentResults((prev) => {
       const existing = prev.find((result) => result.recruitmentGroupUid === recruitmentGroupUid);
       if (existing) {
-        return prev.map((result) =>
-          result.recruitmentGroupUid === recruitmentGroupUid
-            ? {
-                ...result,
-                contentUid,
-                completedAt:
-                  completed ||
-                  result.recruitedStudents.some((student) => student.studentUid !== studentUid) ||
-                  result.exchangedStudents.length > 0
-                    ? (result.completedAt ?? new Date().toISOString())
-                    : null,
-                recruitedStudents: completed
-                  ? [
-                      ...result.recruitedStudents.filter((student) => student.studentUid !== studentUid),
-                      { studentUid, tier: 3, pickup: true },
-                    ]
-                  : result.recruitedStudents.filter((student) => student.studentUid !== studentUid),
-              }
-            : result,
-        );
+        return prev.map((result) => {
+          if (result.recruitmentGroupUid !== recruitmentGroupUid) {
+            return result;
+          }
+
+          return applyRecruitmentResultStudentCompletion(result, {
+            contentUid,
+            studentUid,
+            completed,
+            recruitment,
+            now: new Date().toISOString(),
+          });
+        });
       }
 
       if (!completed) {
@@ -383,7 +389,7 @@ export default function FutureContents() {
           recruitmentGroupUid,
           contentUid,
           completedAt: new Date().toISOString(),
-          recruitedStudents: [{ studentUid, tier: 3, pickup: true }],
+          recruitedStudents: [{ studentUid, tier: recruitment.tier, pickup: recruitment.pickup }],
           exchangedStudents: [],
         },
       ];

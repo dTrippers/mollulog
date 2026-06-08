@@ -229,7 +229,7 @@ function PickupActions({ uid }: { uid: string }) {
   return (
     <div className="flex flex-wrap justify-end gap-2 md:mt-auto">
       <Button text="편집" to={`/my?path=pickups/edit/${uid}`} size="xs" variant="tint" />
-      <Form method="delete" onSubmit={handleDeleteSubmit}>
+      <Form method="delete" action="?index" onSubmit={handleDeleteSubmit}>
         <input type="hidden" name="uid" value={uid} />
         <Button text="삭제" type="submit" size="xs" variant="tint-red" />
       </Form>

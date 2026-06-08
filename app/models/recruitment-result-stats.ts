@@ -18,7 +18,7 @@ type RecruitmentGroupForStats = Pick<RecruitmentGroup, "recruitmentType"> & {
   recruitments: RecruitmentInfo[];
 };
 
-type StudentLookup = {
+export type StudentLookup = {
   allStudentsMap?: StudentMap | Record<string, StudentInfo | undefined>;
   poolStudentsMap?: Map<string, RecruitmentPoolStudent | StudentInfo>;
   group?: RecruitmentGroupForStats | null;

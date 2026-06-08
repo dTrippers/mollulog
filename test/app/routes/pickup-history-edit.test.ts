@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { Attack, Defense } from "~/graphql/graphql";
 import { getPickupHistory } from "~/models/pickup-history";
 import {
   getRecruitmentResult,
   getRecruitmentResultComment,
+  mergeEditableRecruitmentResultStudents,
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
 import { getAllStudents } from "~/models/student";
@@ -24,6 +26,7 @@ jest.mock("~/models/recruitment-result", () => ({
   getRecruitmentResultComment: jest.fn(),
   createRecruitmentResultStudentsFromPickupHistory: jest.fn(),
   getRecruitmentResultTrialFromPickupHistory: jest.fn(),
+  mergeEditableRecruitmentResultStudents: jest.fn(),
   upsertRecruitmentResult: jest.fn(),
 }));
 
@@ -52,6 +55,9 @@ const mockedGetPickupHistory = getPickupHistory as jest.MockedFunction<typeof ge
 const mockedGetRecruitmentResult = getRecruitmentResult as jest.MockedFunction<typeof getRecruitmentResult>;
 const mockedGetRecruitmentResultComment = getRecruitmentResultComment as jest.MockedFunction<
   typeof getRecruitmentResultComment
+>;
+const mockedMergeEditableRecruitmentResultStudents = mergeEditableRecruitmentResultStudents as jest.MockedFunction<
+  typeof mergeEditableRecruitmentResultStudents
 >;
 const mockedUpsertRecruitmentResult = upsertRecruitmentResult as jest.MockedFunction<typeof upsertRecruitmentResult>;
 const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
@@ -256,6 +262,91 @@ describe("pickup history editor loader", () => {
     ]);
   });
 
+  it("does not count stored tier drift for a given student as an editable tier3 result", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-05-27T00:00:00.000Z").getTime());
+
+    const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
+    historicalGroup.recruitments.push({
+      ...historicalGroup.recruitments[0],
+      recruitmentType: "given",
+      studentName: "토키(무장)",
+      student: {
+        ...historicalGroup.recruitments[0].student,
+        uid: "16019",
+        name: "토키(무장)",
+        initialTier: 1,
+      },
+    });
+    mockGetAllHistorical.mockResolvedValue([historicalGroup]);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue({
+      uid: "result-with-given",
+      userId: 1,
+      recruitmentGroupUid: "decagrammaton-armed",
+      contentUid: "content-decagrammaton-armed",
+      completedAt: "2026-05-26T02:00:00.000Z",
+      recruitedStudents: [
+        { studentUid: "10129", tier: 3, pickup: true },
+        { studentUid: "10129", tier: 3, pickup: true },
+        { studentUid: "16019", tier: 3, pickup: true },
+      ],
+      exchangedStudents: [],
+      trial: 100,
+      rawResult: null,
+      commentPostUid: null,
+      createdAt: "2026-05-26T02:00:00.000Z",
+      updatedAt: "2026-05-26T02:00:00.000Z",
+    });
+    mockedGetRecruitmentResultComment.mockResolvedValue(null);
+    mockedGetAllStudents.mockResolvedValue([
+      {
+        uid: "10129",
+        name: "스즈미(매지컬)",
+        altNames: [],
+        school: "trinity",
+        initialTier: 3,
+        order: 1,
+        attackType: Attack.Explosive,
+        defenseType: Defense.Light,
+        position: "front",
+        tacticRole: "attacker",
+        birthday: new Date("2026-01-01T00:00:00.000Z"),
+        role: "striker",
+        equipments: [],
+        released: true,
+      },
+    ]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-decagrammaton-armed",
+        name: "데카그라마톤 무장",
+        recruitmentGroupUid: "decagrammaton-armed",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/result-with-given"),
+      params: { username: "@sensei", id: "result-with-given" },
+    } as never);
+    if (result instanceof Response) {
+      throw new Error(`Expected pickup history editor data, got redirect to ${result.headers.get("Location")}`);
+    }
+
+    expect(result.currentPickupHistory?.result).toEqual([
+      {
+        trial: 100,
+        tier3Count: 2,
+        tier3StudentIds: ["10129", "10129"],
+      },
+    ]);
+  });
+
   it("rejects given students submitted as exchange students", async () => {
     const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
     historicalGroup.recruitments.push({
@@ -310,6 +401,87 @@ describe("pickup history editor loader", () => {
       init: { status: 400 },
     });
     expect(mockedUpsertRecruitmentResult).not.toHaveBeenCalled();
+  });
+
+  it("preserves existing non-tier3 recruited students when editing an existing result", async () => {
+    const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
+    historicalGroup.recruitments.push({
+      ...historicalGroup.recruitments[0],
+      recruitmentType: "given",
+      studentName: "토키(무장)",
+      student: {
+        ...historicalGroup.recruitments[0].student,
+        uid: "16019",
+        name: "토키(무장)",
+        initialTier: 1,
+      },
+    });
+    mockGetByUid.mockResolvedValue(historicalGroup);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    const existingResult: NonNullable<Awaited<ReturnType<typeof getRecruitmentResult>>> = {
+      uid: "result-with-given",
+      userId: 1,
+      recruitmentGroupUid: "decagrammaton-armed",
+      contentUid: "content-decagrammaton-armed",
+      completedAt: "2026-05-26T02:00:00.000Z",
+      recruitedStudents: [{ studentUid: "16019", tier: 3, pickup: true }],
+      exchangedStudents: [],
+      trial: 100,
+      rawResult: null,
+      commentPostUid: null,
+      createdAt: "2026-05-26T02:00:00.000Z",
+      updatedAt: "2026-05-26T02:00:00.000Z",
+    };
+    mockedGetRecruitmentResult.mockResolvedValue(existingResult);
+    mockedMergeEditableRecruitmentResultStudents.mockReturnValue([
+      { studentUid: "16019", tier: 1, pickup: false },
+      { studentUid: "10129", tier: 3, pickup: true },
+      { studentUid: "10129", tier: 3, pickup: true },
+    ]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-decagrammaton-armed",
+        name: "데카그라마톤 무장",
+        recruitmentGroupUid: "decagrammaton-armed",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    await action({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/result-with-given", {
+        method: "POST",
+        body: JSON.stringify({
+          eventUid: "decagrammaton-armed",
+          result: [{ trial: 100, tier3Count: 2, tier3StudentIds: ["10129", "10129"] }],
+          exchangedStudentIds: [],
+        }),
+      }),
+      params: { username: "@sensei", id: "result-with-given" },
+    } as never);
+
+    const mergeCall = mockedMergeEditableRecruitmentResultStudents.mock.calls[0]?.[0];
+    expect(mergeCall).toMatchObject({
+      existingStudents: existingResult.recruitedStudents,
+      history: { result: [{ trial: 100, tier3Count: 2, tier3StudentIds: ["10129", "10129"] }] },
+      lookup: { group: historicalGroup },
+      studentInitialTiers: { "10129": 3, "16019": 1 },
+    });
+    expect(mergeCall?.pickupStudentUids).toEqual(new Set(["10129"]));
+    expect(mockedUpsertRecruitmentResult).toHaveBeenCalledWith(
+      env,
+      1,
+      expect.objectContaining({
+        recruitedStudents: [
+          { studentUid: "16019", tier: 1, pickup: false },
+          { studentUid: "10129", tier: 3, pickup: true },
+          { studentUid: "10129", tier: 3, pickup: true },
+        ],
+      }),
+    );
   });
 
   it("fails loudly when a historical recruitment group has no timeline content row", async () => {

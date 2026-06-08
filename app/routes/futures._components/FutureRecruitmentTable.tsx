@@ -15,6 +15,7 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
 import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
+import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import {
   type FutureRecruitmentTableContent,
   type FutureRecruitmentTableRecruitmentGroup,
@@ -38,6 +39,7 @@ type FutureRecruitmentTableProps = {
     recruitmentGroupUid: string,
     studentUid: string,
     completed: boolean,
+    recruitment: RecruitmentCompletionMeta,
   ) => void;
 };
 
@@ -94,6 +96,7 @@ function DesktopRecruitmentTable({
     recruitmentGroupUid: string,
     studentUid: string,
     completed: boolean,
+    recruitment: RecruitmentCompletionMeta,
   ) => void;
 }) {
   return (
@@ -198,6 +201,7 @@ function RecruitmentStudents({
     recruitmentGroupUid: string,
     studentUid: string,
     completed: boolean,
+    recruitment: RecruitmentCompletionMeta,
   ) => void;
 }) {
   const groupedStudents = getRecruitmentContentStudentGroups(
@@ -396,6 +400,7 @@ function getRecruitmentContentStudentGroups(
     recruitmentGroupUid: string,
     studentUid: string,
     completed: boolean,
+    recruitment: RecruitmentCompletionMeta,
   ) => void,
 ) {
   const contentGroups: FutureRecruitmentTableContentStudentGroup[] = [];
@@ -438,6 +443,7 @@ function getRecruitmentStudentGroup(
     recruitmentGroupUid: string,
     studentUid: string,
     completed: boolean,
+    recruitment: RecruitmentCompletionMeta,
   ) => void,
 ) {
   const recruitment = group.recruitment;
@@ -460,6 +466,11 @@ function getRecruitmentStudentGroup(
   const resultEditLink = group.content.recruitmentGroupUid
     ? recruitmentResultEditLinks.find((item) => item.recruitmentGroupUid === group.content.recruitmentGroupUid)?.link
     : undefined;
+  const recruitmentResultStudent = {
+    tier: recruitment.student?.initialTier ?? 3,
+    pickup: recruitment.pickup && recruitment.recruitmentType !== "given",
+    recruitmentType: recruitment.recruitmentType,
+  };
 
   return {
     uid: studentUid,
@@ -493,13 +504,25 @@ function getRecruitmentStudentGroup(
                       Icon: XCircleIcon,
                       text: "모집 완료 취소",
                       onClick: () =>
-                        onRecruitmentComplete(group.content.uid, group.content.recruitmentGroupUid as string, studentUid, false),
+                        onRecruitmentComplete(
+                          group.content.uid,
+                          group.content.recruitmentGroupUid as string,
+                          studentUid,
+                          false,
+                          recruitmentResultStudent,
+                        ),
                     }
                   : {
                       Icon: CheckCircleIcon,
                       text: "모집 완료로 표시",
                       onClick: () =>
-                        onRecruitmentComplete(group.content.uid, group.content.recruitmentGroupUid as string, studentUid, true),
+                        onRecruitmentComplete(
+                          group.content.uid,
+                          group.content.recruitmentGroupUid as string,
+                          studentUid,
+                          true,
+                          recruitmentResultStudent,
+                        ),
                     },
               ]
             : []),

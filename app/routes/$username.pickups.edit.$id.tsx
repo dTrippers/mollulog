@@ -14,8 +14,10 @@ import {
   getRecruitmentResult,
   getRecruitmentResultComment,
   getRecruitmentResultTrialFromPickupHistory,
+  mergeEditableRecruitmentResultStudents,
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
+import { resolveRecruitmentResultStudents } from "~/models/recruitment-result-stats";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
@@ -26,7 +28,7 @@ const PICKUP_EVENT_SELECTOR_LIMIT = 20;
 
 export const meta: MetaFunction = () => [{ title: "모집 이력 관리 | 몰루로그" }];
 
-function canExchangeRecruitmentStudent<
+function isPickupRecruitmentStudent<
   T extends {
     pickup: boolean;
     recruitmentType?: string | null;
@@ -34,6 +36,16 @@ function canExchangeRecruitmentStudent<
   },
 >(recruitment: T): recruitment is T & { student: NonNullable<T["student"]> } {
   return recruitment.pickup && recruitment.recruitmentType !== "given" && recruitment.student !== null;
+}
+
+function canExchangeRecruitmentStudent<
+  T extends {
+    pickup: boolean;
+    recruitmentType?: string | null;
+    student: { uid: string } | null;
+  },
+>(recruitment: T): recruitment is T & { student: NonNullable<T["student"]> } {
+  return isPickupRecruitmentStudent(recruitment);
 }
 
 type EditablePickupHistory = Omit<PickupHistory, "result"> & {
@@ -108,28 +120,12 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const recruitmentRepository = new RecruitmentRepository(env);
   let currentPickupHistory: EditablePickupHistory | null = null;
   let currentRecruitmentResult: Awaited<ReturnType<typeof getRecruitmentResult>> = null;
+  let currentRecruitmentResultComment: string | null = null;
   if (params.id && params.id !== "new") {
     currentRecruitmentResult = await getRecruitmentResult(env, sensei.id, params.id);
-    const currentRecruitmentResultComment = currentRecruitmentResult
+    currentRecruitmentResultComment = currentRecruitmentResult
       ? await getRecruitmentResultComment(env, sensei.id, currentRecruitmentResult.commentPostUid)
       : null;
-    currentPickupHistory = currentRecruitmentResult
-      ? {
-          uid: currentRecruitmentResult.uid,
-          userId: currentRecruitmentResult.userId,
-          eventId: currentRecruitmentResult.recruitmentGroupUid,
-          result: [
-            {
-              trial: currentRecruitmentResult.trial,
-              tier3Count: currentRecruitmentResult.recruitedStudents.length,
-              tier3StudentIds: currentRecruitmentResult.recruitedStudents.map((student) => student.studentUid),
-            },
-          ],
-          rawResult: currentRecruitmentResult.rawResult,
-          comment: currentRecruitmentResultComment,
-          exchangedStudentIds: currentRecruitmentResult.exchangedStudents.map((student) => student.studentUid),
-        }
-      : await getPickupHistory(env, sensei.id, params.id, true);
   }
 
   const now = nowUtcIso();
@@ -148,6 +144,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const timelineContentMap = new Map(
     timelineContents.map((content) => [content.recruitmentGroupUid, content] as const),
   );
+  const allStudentsMap = Object.fromEntries(allStudentsList.map((student) => [student.uid, student] as const));
 
   const missingTimelineGroupUids = pickupGroups
     .filter((group) => !timelineContentMap.has(group.uid))
@@ -181,6 +178,35 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   });
 
   events.sort((a, b) => compareInstantDesc(a.since, b.since));
+
+  if (params.id && params.id !== "new") {
+    if (currentRecruitmentResult) {
+      const recruitmentGroup = allGroups.find((group) => group.uid === currentRecruitmentResult.recruitmentGroupUid);
+      const tier3StudentIds = resolveRecruitmentResultStudents(currentRecruitmentResult.recruitedStudents, {
+        allStudentsMap,
+        group: recruitmentGroup,
+      })
+        .filter((student) => student.tier === 3)
+        .map((student) => student.uid);
+      currentPickupHistory = {
+        uid: currentRecruitmentResult.uid,
+        userId: currentRecruitmentResult.userId,
+        eventId: currentRecruitmentResult.recruitmentGroupUid,
+        result: [
+          {
+            trial: currentRecruitmentResult.trial,
+            tier3Count: tier3StudentIds.length,
+            tier3StudentIds,
+          },
+        ],
+        rawResult: currentRecruitmentResult.rawResult,
+        comment: currentRecruitmentResultComment,
+        exchangedStudentIds: currentRecruitmentResult.exchangedStudents.map((student) => student.studentUid),
+      };
+    } else {
+      currentPickupHistory = await getPickupHistory(env, sensei.id, params.id, true);
+    }
+  }
 
   return {
     events,
@@ -256,12 +282,38 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     );
   }
 
+  const pickupStudentUids = new Set(
+    recruitmentGroup.recruitments.flatMap((recruitment) =>
+      isPickupRecruitmentStudent(recruitment) ? [recruitment.student.uid] : [],
+    ),
+  );
+  const groupStudentInitialTiers = Object.fromEntries(
+    recruitmentGroup.recruitments.flatMap((recruitment) =>
+      recruitment.student ? [[recruitment.student.uid, recruitment.student.initialTier] as const] : [],
+    ),
+  );
+  const existingRecruitmentResult =
+    params.id && params.id !== "new" ? await getRecruitmentResult(env, sensei.id, params.id) : null;
+  const recruitedStudents = existingRecruitmentResult
+    ? mergeEditableRecruitmentResultStudents({
+        existingStudents: existingRecruitmentResult.recruitedStudents,
+        history: { result: data.result },
+        lookup: { group: recruitmentGroup },
+        pickupStudentUids,
+        studentInitialTiers: groupStudentInitialTiers,
+      })
+    : createRecruitmentResultStudentsFromPickupHistory(
+        { result: data.result },
+        pickupStudentUids,
+        groupStudentInitialTiers,
+      );
+
   await upsertRecruitmentResult(env, sensei.id, {
     uid: params.id && params.id !== "new" ? params.id : undefined,
     recruitmentGroupUid: data.eventUid,
     contentUid: timelineContent?.uid ?? null,
     completedAt: nowUtcIso(),
-    recruitedStudents: createRecruitmentResultStudentsFromPickupHistory({ result: data.result }),
+    recruitedStudents,
     exchangedStudents,
     trial,
     rawResult: data.rawResult ?? null,

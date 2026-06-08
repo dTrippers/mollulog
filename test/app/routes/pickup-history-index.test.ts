@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getRecruitmentResultComments, getRecruitmentResults } from "~/models/recruitment-result";
+import {
+  deleteRecruitmentResult,
+  getRecruitmentResultComments,
+  getRecruitmentResults,
+} from "~/models/recruitment-result";
 import { getSenseiByUsername } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
-import { loader } from "../../../app/routes/$username.pickups._index";
+import { action, loader } from "../../../app/routes/$username.pickups._index";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
@@ -44,6 +48,7 @@ const mockedGetRecruitmentResultComments = getRecruitmentResultComments as jest.
   typeof getRecruitmentResultComments
 >;
 const mockedGetRecruitmentResults = getRecruitmentResults as jest.MockedFunction<typeof getRecruitmentResults>;
+const mockedDeleteRecruitmentResult = deleteRecruitmentResult as jest.MockedFunction<typeof deleteRecruitmentResult>;
 const mockedGetSenseiByUsername = getSenseiByUsername as jest.MockedFunction<typeof getSenseiByUsername>;
 const mockedGetAllStudentsMap = getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>;
 const mockedGetTimelineContentsByRecruitmentGroupUids =
@@ -56,6 +61,14 @@ function createLoaderArgs() {
   return {
     context: { cloudflare: { env } },
     request: new Request("https://mollulog.net/@sensei/pickups"),
+    params: { username: "@sensei" },
+  };
+}
+
+function createActionArgs(request: Request) {
+  return {
+    context: { cloudflare: { env } },
+    request,
     params: { username: "@sensei" },
   };
 }
@@ -684,5 +697,69 @@ describe("pickup history index loader", () => {
       tier: 1,
       pickup: false,
     });
+  });
+});
+
+describe("pickup history index action", () => {
+  it("deletes the requested pickup history for the route owner", async () => {
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetSenseiByUsername.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getSenseiByUsername>>);
+
+    const formData = new FormData();
+    formData.set("uid", "history-1");
+    const result = await action(
+      createActionArgs(
+        new Request("https://mollulog.net/@sensei/pickups?index", {
+          method: "DELETE",
+          body: formData,
+        }),
+      ) as never,
+    );
+
+    expect(mockedDeleteRecruitmentResult).toHaveBeenCalledWith(env, 1, "history-1");
+    expect(result).toBeInstanceOf(Response);
+    expect((result as Response).status).toBe(302);
+    expect((result as Response).headers.get("Location")).toBe("/@sensei/pickups");
+  });
+
+  it("rejects deletion when uid is missing", async () => {
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetSenseiByUsername.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getSenseiByUsername>>);
+
+    await expect(
+      action(
+        createActionArgs(
+          new Request("https://mollulog.net/@sensei/pickups?index", {
+            method: "DELETE",
+            body: new FormData(),
+          }),
+        ) as never,
+      ),
+    ).rejects.toMatchObject({
+      type: "DataWithResponseInit",
+      data: {
+        error: {
+          code: "pickup_history.uid_missing",
+        },
+      },
+      init: { status: 400 },
+    });
+    expect(mockedDeleteRecruitmentResult).not.toHaveBeenCalled();
   });
 });
