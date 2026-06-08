@@ -379,8 +379,8 @@ function PostSubjectMeta({
           <span className="max-w-64 truncate sm:max-w-md">{post.subjectContentName ?? "이벤트 보기"}</span>
         </Link>
         {post.pickupStudents && post.pickupStudents.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <span className="shrink-0 text-neutral-400 dark:text-neutral-500">픽업</span>
+          <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
+            <span className="mr-0.5 shrink-0 text-neutral-400 dark:text-neutral-500">픽업</span>
             {post.pickupStudents.map((student) => (
               <StudentSubjectLink
                 key={`${post.uid}-${student.uid}`}
@@ -450,7 +450,16 @@ function PostContent({
     );
   }
 
-  if (post.postType === "event_opinion" || post.postType === "recruitment_result") {
+  if (post.postType === "recruitment_result") {
+    return (
+      <div className="space-y-3">
+        {post.recruitmentStats && <RecruitmentResultStats stats={post.recruitmentStats} />}
+        <PostBlocks post={post} studentsByUid={studentsByUid} />
+      </div>
+    );
+  }
+
+  if (post.postType === "event_opinion") {
     return (
       <div className="space-y-3">
         <PostBlocks post={post} studentsByUid={studentsByUid} />
@@ -468,6 +477,25 @@ function PostContent({
         post.title && <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{post.title}</h3>
       )}
       <PostBlocks post={post} studentsByUid={studentsByUid} />
+    </div>
+  );
+}
+
+function RecruitmentResultStats({ stats }: { stats: NonNullable<CommunityFeedPostItem["recruitmentStats"]> }) {
+  const items = [
+    { label: "총 모집", value: stats.totalTrial === null ? "미입력" : `${stats.totalTrial}회` },
+    { label: "★3", value: `${stats.tier3Count}명` },
+    { label: "픽업", value: `${stats.pickupCount}명` },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+      {items.map((item) => (
+        <span key={item.label} className="inline-flex items-baseline gap-1">
+          <span>{item.label}</span>
+          <span className="font-semibold text-neutral-800 dark:text-neutral-100">{item.value}</span>
+        </span>
+      ))}
     </div>
   );
 }
