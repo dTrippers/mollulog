@@ -625,17 +625,6 @@ function getRecruitmentStudentCards({
         : undefined,
       popups: studentUid
         ? [
-            isFavorited
-              ? {
-                  Icon: FilledHeartIcon,
-                  text: "관심 학생에서 해제",
-                  onClick: () => onFavorite?.(studentUid, false),
-                }
-              : {
-                  Icon: EmptyHeartIcon,
-                  text: "관심 학생에 등록",
-                  onClick: () => onFavorite?.(studentUid, true),
-                },
             ...(onRecruitmentComplete && showRecruitmentCompleteAction
               ? [
                   recruitmentCompleted
@@ -651,6 +640,17 @@ function getRecruitmentStudentCards({
                       },
                 ]
               : []),
+            isFavorited
+              ? {
+                  Icon: FilledHeartIcon,
+                  text: "관심 학생에서 해제",
+                  onClick: () => onFavorite?.(studentUid, false),
+                }
+              : {
+                  Icon: EmptyHeartIcon,
+                  text: "관심 학생에 등록",
+                  onClick: () => onFavorite?.(studentUid, true),
+                },
             {
               Icon: IdentificationIcon,
               text: detailedLinkText,

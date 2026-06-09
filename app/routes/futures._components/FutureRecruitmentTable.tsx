@@ -500,17 +500,6 @@ function getRecruitmentStudentGroup(
     favoritedCount: favoritedCount ?? 0,
     popups: studentUid
       ? [
-          favorited
-            ? {
-                Icon: FilledHeartIcon,
-                text: "관심 학생에서 해제",
-                onClick: () => onFavorite?.(group.content.uid, studentUid, false),
-              }
-            : {
-                Icon: EmptyHeartIcon,
-                text: "관심 학생에 등록",
-                onClick: () => onFavorite?.(group.content.uid, studentUid, true),
-              },
           ...(onRecruitmentComplete && group.content.recruitmentGroupUid && showRecruitmentCompleteAction
             ? [
                 completed
@@ -540,6 +529,17 @@ function getRecruitmentStudentGroup(
                     },
               ]
             : []),
+          favorited
+            ? {
+                Icon: FilledHeartIcon,
+                text: "관심 학생에서 해제",
+                onClick: () => onFavorite?.(group.content.uid, studentUid, false),
+              }
+            : {
+                Icon: EmptyHeartIcon,
+                text: "관심 학생에 등록",
+                onClick: () => onFavorite?.(group.content.uid, studentUid, true),
+              },
           ...(resultEditLink
             ? [
                 {
