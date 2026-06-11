@@ -150,7 +150,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchCached).toHaveBeenCalledWith(
       env,
-      "event-content::shop::v4::main-story-timeline",
+      "event-content::shop::v5::linked-event::permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
     );

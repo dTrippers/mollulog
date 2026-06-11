@@ -212,14 +212,7 @@ export async function getTimelineContentDatesByContentUid(
   env: Env,
   contentUid: string,
 ): Promise<{ startAt: UtcIsoString; endAt: UtcIsoString | null } | null> {
-  const db = drizzle(env.DB);
-  const row = await db
-    .select({ startAt: timelineContentsTable.startAt, endAt: timelineContentsTable.endAt })
-    .from(timelineContentsTable)
-    .where(eq(timelineContentsTable.contentUid, contentUid))
-    .get();
-  if (!row) return null;
-  return { startAt: normalizeInstant(row.startAt), endAt: row.endAt ? normalizeInstant(row.endAt) : null };
+  return (await getTimelineContentDatesByContentUids(env, [contentUid])).get(contentUid) ?? null;
 }
 
 export async function getTimelineContentDatesByContentUids(
@@ -243,14 +236,24 @@ export async function getTimelineContentDatesByContentUids(
       ),
     )
   ).flat();
-  return new Map(
-    rows
-      .filter((r) => r.contentUid)
-      .map((r) => [
-        r.contentUid as string,
-        { startAt: normalizeInstant(r.startAt), endAt: r.endAt ? normalizeInstant(r.endAt) : null },
-      ]),
-  );
+  const datesByContentUid = new Map<string, { startAt: UtcIsoString; endAt: UtcIsoString | null }>();
+  for (const row of rows) {
+    if (!row.contentUid) continue;
+
+    const startAt = normalizeInstant(row.startAt);
+    const endAt = row.endAt ? normalizeInstant(row.endAt) : null;
+    const existing = datesByContentUid.get(row.contentUid);
+    if (!existing) {
+      datesByContentUid.set(row.contentUid, { startAt, endAt });
+      continue;
+    }
+
+    datesByContentUid.set(row.contentUid, {
+      startAt: startAt < existing.startAt ? startAt : existing.startAt,
+      endAt: existing.endAt === null || endAt === null ? null : endAt > existing.endAt ? endAt : existing.endAt,
+    });
+  }
+  return datesByContentUid;
 }
 
 export async function getTimelineContentsByContentUids(env: Env, contentUids: string[]): Promise<TimelineContent[]> {

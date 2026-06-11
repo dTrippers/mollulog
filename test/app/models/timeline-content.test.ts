@@ -1,5 +1,11 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { getTimelineContents, getTimelineContentsByContentTypes, getUpcomingEvent } from "~/models/timeline-content";
+import {
+  getTimelineContentDatesByContentUid,
+  getTimelineContentDatesByContentUids,
+  getTimelineContents,
+  getTimelineContentsByContentTypes,
+  getUpcomingEvent,
+} from "~/models/timeline-content";
 
 type TimelineContentRow = {
   id: number;
@@ -39,7 +45,7 @@ class FakeD1Statement {
   }
 
   async raw(): Promise<unknown[][]> {
-    return this.db.selectRows(this.sql, this.params).map(rowToArray);
+    return this.db.selectRows(this.sql, this.params).map((row) => rowToSelectedArray(this.sql, row));
   }
 }
 
@@ -62,6 +68,14 @@ class FakeD1Database {
         (param): param is string => typeof param === "string" && !param.includes("T"),
       );
       rows = rows.filter((row) => contentTypeParams.includes(row.content_type));
+    }
+
+    if (sql.includes('"content_uid" = ?')) {
+      rows = rows.filter((row) => row.content_uid === params[0]);
+    }
+
+    if (sql.includes('"content_uid" in')) {
+      rows = rows.filter((row) => row.content_uid != null && params.includes(row.content_uid));
     }
 
     if (sql.includes("\"run_type\" != 'permanent'")) {
@@ -139,6 +153,18 @@ function rowToArray(row: TimelineContentRow): unknown[] {
   ];
 }
 
+function rowToSelectedArray(sql: string, row: TimelineContentRow): unknown[] {
+  if (
+    !sql.includes('"id"') &&
+    sql.includes('"content_uid"') &&
+    sql.includes('"start_at"') &&
+    sql.includes('"end_at"')
+  ) {
+    return [row.content_uid, row.start_at, row.end_at];
+  }
+  return rowToArray(row);
+}
+
 describe("timeline-content synced_at visibility", () => {
   it("includes future timeline contents even when synced_at is empty", async () => {
     const contents = await getTimelineContents(createEnv([row({})]));
@@ -168,5 +194,63 @@ describe("timeline-content synced_at visibility", () => {
     await expect(getTimelineContents(createEnv([row({ name_i18n: "{}" })]))).rejects.toThrow(
       "timeline content name is missing: uid=future-unsynced-event",
     );
+  });
+});
+
+describe("timeline content dates by content_uid", () => {
+  it("merges split timeline rows that share one content UID", async () => {
+    const env = createEnv([
+      row({
+        id: 1,
+        uid: "steel-continent",
+        content_uid: "854",
+        start_at: "2026-05-26T02:00:00.000Z",
+        end_at: "2026-06-09T02:00:00.000Z",
+      }),
+      row({
+        id: 2,
+        uid: "steel-continent-malkuth",
+        content_uid: "854",
+        start_at: "2026-06-09T02:00:00.000Z",
+        end_at: "2026-06-22T19:00:00.000Z",
+      }),
+      row({
+        id: 3,
+        uid: "decagrammaton",
+        content_uid: "854",
+        start_at: "2026-06-23T02:00:00.000Z",
+        end_at: "2026-06-29T19:00:00.000Z",
+      }),
+    ]);
+
+    await expect(getTimelineContentDatesByContentUid(env, "854")).resolves.toEqual({
+      startAt: "2026-05-26T02:00:00.000Z",
+      endAt: "2026-06-29T19:00:00.000Z",
+    });
+  });
+
+  it("keeps an open-ended date range open when any row has no end", async () => {
+    const dates = await getTimelineContentDatesByContentUids(
+      createEnv([
+        row({
+          id: 1,
+          content_uid: "open-event",
+          start_at: "2026-05-01T02:00:00.000Z",
+          end_at: "2026-05-08T02:00:00.000Z",
+        }),
+        row({
+          id: 2,
+          content_uid: "open-event",
+          start_at: "2026-05-08T02:00:00.000Z",
+          end_at: null,
+        }),
+      ]),
+      ["open-event"],
+    );
+
+    expect(dates.get("open-event")).toEqual({
+      startAt: "2026-05-01T02:00:00.000Z",
+      endAt: null,
+    });
   });
 });

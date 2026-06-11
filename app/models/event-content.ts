@@ -380,7 +380,7 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
 
   return fetchCached(
     env,
-    `event-content::shop::v4::${timelineUid}`,
+    `event-content::shop::v5::${shopContentUid}::${runType}`,
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,
