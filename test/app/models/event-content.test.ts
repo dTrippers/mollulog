@@ -178,6 +178,54 @@ describe("getEventList", () => {
         },
       },
     ]);
+    expect(mockedFetchCached).toHaveBeenCalledWith(env, "event-list::v1", expect.any(Function), 24 * 60 * 60, false);
+    expect(mockedFetchCached).toHaveBeenCalledWith(
+      env,
+      "event-contents::list::v1",
+      expect.any(Function),
+      24 * 60 * 60,
+      false,
+    );
+  });
+
+  it("refreshes the full event list cache and recalculates schedule status per request", async () => {
+    const cachedEvents = [
+      {
+        uid: "20",
+        name: "스무 번째 이벤트",
+        imageUrl: "https://assets.baql.net/images/events/logo/20_kr.webp",
+        fallbackImageUrl: "https://assets.baql.net/images/events/logo/20_jp.webp",
+        latestTimelineUid: "event-20",
+        schedules: {
+          first: {
+            runType: "first",
+            since: "2026-06-10T02:00:00.000Z",
+            until: "2026-06-20T01:59:59.000Z",
+          },
+        },
+      },
+    ];
+    mockedFetchCached.mockImplementationOnce(async () => cachedEvents as never);
+
+    await expect(getEventList(env, "2026-06-13T00:00:00.000Z", true)).resolves.toEqual([
+      {
+        uid: "20",
+        name: "스무 번째 이벤트",
+        imageUrl: "https://assets.baql.net/images/events/logo/20_kr.webp",
+        fallbackImageUrl: "https://assets.baql.net/images/events/logo/20_jp.webp",
+        latestTimelineUid: "event-20",
+        schedules: {
+          first: {
+            runType: "first",
+            since: "2026-06-10T02:00:00.000Z",
+            until: "2026-06-20T01:59:59.000Z",
+            status: "current",
+          },
+        },
+      },
+    ]);
+    expect(mockedFetchCached).toHaveBeenCalledWith(env, "event-list::v1", expect.any(Function), 24 * 60 * 60, true);
+    expect(mockedRunQuery).not.toHaveBeenCalled();
   });
 });
 

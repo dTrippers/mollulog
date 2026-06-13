@@ -1,3 +1,4 @@
+import { CheckIcon } from "@heroicons/react/16/solid";
 import { FunnelIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useMemo, useState } from "react";
 import { Link, useLoaderData } from "react-router";
@@ -99,24 +100,25 @@ function EventSchedulePlaceholder({ runType }: { runType: RunType }) {
 function EventFilterPanel({
   filter,
   onFilterChange,
+  countText,
 }: {
   filter: EventFilterState;
   onFilterChange: (filter: EventFilterState) => void;
+  countText: string;
 }) {
   return (
     <div className="space-y-2">
+      <p className="px-1 text-xs text-neutral-500 dark:text-neutral-400">{countText}</p>
       <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
         <FilterToggleRow
-          title="상설화 이벤트"
-          active={!filter.showPermanentized}
-          label={filter.showPermanentized ? "상설화 이벤트 필터 적용" : "상설화 이벤트 필터 해제"}
-          onClick={() => onFilterChange({ ...filter, showPermanentized: !filter.showPermanentized })}
+          title="상설화 이벤트 숨기기"
+          checked={!filter.showPermanentized}
+          onChange={(checked) => onFilterChange({ ...filter, showPermanentized: !checked })}
         />
         <FilterToggleRow
-          title="다가오는 이벤트"
-          active={filter.onlyUpcoming}
-          label={filter.onlyUpcoming ? "다가오는 이벤트 필터 해제" : "다가오는 이벤트 필터 적용"}
-          onClick={() => onFilterChange({ ...filter, onlyUpcoming: !filter.onlyUpcoming })}
+          title="다가오는 이벤트만 보기"
+          checked={filter.onlyUpcoming}
+          onChange={(checked) => onFilterChange({ ...filter, onlyUpcoming: checked })}
         />
       </div>
 
@@ -141,20 +143,23 @@ function EventFilterPanel({
 
 function FilterToggleRow({
   title,
-  active,
-  label,
-  onClick,
+  checked,
+  onChange,
 }: {
   title: string;
-  active: boolean;
-  label: string;
-  onClick: () => void;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
 }) {
   return (
     <div className="rounded-md px-3 py-2 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70 lg:px-2.5 lg:py-1.5">
       <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
         <p className="min-w-0 grow text-sm font-medium text-neutral-900 dark:text-neutral-100">{title}</p>
-        <PanelOptionIconButton label={label} active={active} Icon={FunnelIcon} onClick={onClick} />
+        <PanelOptionIconButton
+          label={title}
+          active={checked}
+          Icon={CheckIcon}
+          onClick={() => onChange(!checked)}
+        />
       </div>
     </div>
   );
@@ -234,6 +239,10 @@ export default function EventsIndex() {
   const { events, now } = useLoaderData<typeof loader>();
   const [filter, setFilter] = useState<EventFilterState>(defaultFilter);
   const filteredEvents = useMemo(() => filterEventList(events, filter, now), [events, filter, now]);
+  const countText =
+    events.length === filteredEvents.length
+      ? `총 ${events.length.toLocaleString()}개`
+      : `총 ${events.length.toLocaleString()}개 중 ${filteredEvents.length.toLocaleString()}개 표시`;
 
   return (
     <Page
@@ -245,20 +254,19 @@ export default function EventsIndex() {
         {
           title: "이벤트 필터",
           Icon: FunnelIcon,
-          children: <EventFilterPanel filter={filter} onFilterChange={setFilter} />,
+          children: <EventFilterPanel filter={filter} onFilterChange={setFilter} countText={countText} />,
         },
       ]}
     >
-      {filteredEvents.length > 0 ? (
+      {filteredEvents.length > 0 && (
         <div className="grid gap-3 py-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredEvents.map((event) => (
             <EventCard key={event.uid} event={event} />
           ))}
         </div>
-      ) : events.length > 0 ? (
-        <EmptyView text="필터 조건에 맞는 이벤트가 없어요." />
-      ) : (
-        <EmptyView text="표시할 이벤트가 없어요." />
+      )}
+      {filteredEvents.length === 0 && (
+        <EmptyView text={events.length > 0 ? "필터 조건에 맞는 이벤트가 없어요." : "표시할 이벤트가 없어요."} />
       )}
     </Page>
   );

@@ -5,6 +5,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, Callout, Title } from "~/components/primitives";
 import { flushCacheAll } from "~/models/base";
 import { getFutureContents, getNavigationBarContentsRaw } from "~/models/content";
+import { getEventList } from "~/models/event-content";
 import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
@@ -21,6 +22,7 @@ type RefreshTaskName =
   | "getMainStories"
   | "getAllStudentsFavoriteItems"
   | "syncAllTimelineContentsMeta"
+  | "getEventList"
   | "getFutureContents"
   | "getNavigationBarContentsRaw";
 
@@ -81,6 +83,7 @@ async function refreshCache(env: Env): Promise<RefreshResult> {
     ["syncAllTimelineContentsMeta", () => syncAllTimelineContentsMeta(env)],
   ];
   const compositeTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
+    ["getEventList", () => getEventList(env, undefined, true)],
     ["getFutureContents", () => getFutureContents(env, true)],
     ["getNavigationBarContentsRaw", () => getNavigationBarContentsRaw(env, true)],
   ];

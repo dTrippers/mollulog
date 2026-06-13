@@ -164,6 +164,10 @@ export type EventListSchedule = {
   until: UtcIsoString | null;
   status: EventListScheduleStatus;
 };
+type CachedEventListSchedule = Omit<EventListSchedule, "status">;
+type CachedEventListItem = Omit<EventListItem, "schedules"> & {
+  schedules: Partial<Record<RunType, CachedEventListSchedule>>;
+};
 export type EventListItem = {
   uid: string;
   name: string;
@@ -202,9 +206,8 @@ function getScheduleStatus(
 
 function groupEventListSchedules(
   schedules: EventContentListSourceSchedule[],
-  now: UtcIsoString,
-): EventListItem["schedules"] {
-  const grouped: EventListItem["schedules"] = {};
+): CachedEventListItem["schedules"] {
+  const grouped: CachedEventListItem["schedules"] = {};
   for (const schedule of schedules) {
     if (schedule.region !== "gl") continue;
 
@@ -223,7 +226,6 @@ function groupEventListSchedules(
 
     grouped[runType] = {
       ...nextSchedule,
-      status: getScheduleStatus(nextSchedule, now),
     };
   }
 
@@ -239,69 +241,104 @@ function compareEventContentUidAsc(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
-export async function getEventList(env: Env, now: UtcIsoString = nowUtcIso()): Promise<EventListItem[]> {
-  const [eventContents, timelineContents] = await Promise.all([
-    fetchCached<EventContentsListQuery["eventContents"]>(
-      env,
-      "event-contents::list::v1",
-      async () => {
-        const { data, error } = await runQuery(eventContentsListQuery, {});
-        if (error || !data) {
-          throw error ?? new Error("failed to fetch event contents");
+function addEventListScheduleStatuses(event: CachedEventListItem, now: UtcIsoString): EventListItem {
+  const schedules = Object.fromEntries(
+    Object.entries(event.schedules).map(([runType, schedule]) => [
+      runType,
+      {
+        ...schedule,
+        status: getScheduleStatus(schedule, now),
+      },
+    ]),
+  ) as EventListItem["schedules"];
+
+  return {
+    ...event,
+    schedules,
+  };
+}
+
+async function getEventListCachedItems(env: Env, forceRefresh: boolean): Promise<CachedEventListItem[]> {
+  return fetchCached<CachedEventListItem[]>(
+    env,
+    "event-list::v1",
+    async () => {
+      const [eventContents, timelineContents] = await Promise.all([
+        fetchCached<EventContentsListQuery["eventContents"]>(
+          env,
+          "event-contents::list::v1",
+          async () => {
+            const { data, error } = await runQuery(eventContentsListQuery, {});
+            if (error || !data) {
+              throw error ?? new Error("failed to fetch event contents");
+            }
+
+            return data.eventContents;
+          },
+          24 * 60 * 60,
+          forceRefresh,
+        ),
+        getAllTimelineContentsMeta(env),
+      ]);
+
+      const timelineContentByContentUid = new Map<
+        string,
+        {
+          first: { name: string; startAt: UtcIsoString };
+          latest: { uid: string; startAt: UtcIsoString };
+        }
+      >();
+      for (const content of timelineContents) {
+        if (content.contentType !== "event" || !content.contentUid) continue;
+
+        const existing = timelineContentByContentUid.get(content.contentUid);
+        if (!existing) {
+          timelineContentByContentUid.set(content.contentUid, {
+            first: { name: content.name, startAt: content.startAt },
+            latest: { uid: content.uid, startAt: content.startAt },
+          });
+          continue;
         }
 
-        return data.eventContents;
-      },
-      24 * 60 * 60,
-    ),
-    getAllTimelineContentsMeta(env),
-  ]);
+        if (compareInstantAsc(content.startAt, existing.first.startAt) < 0) {
+          existing.first = { name: content.name, startAt: content.startAt };
+        }
 
-  const timelineContentByContentUid = new Map<
-    string,
-    {
-      first: { name: string; startAt: UtcIsoString };
-      latest: { uid: string; startAt: UtcIsoString };
-    }
-  >();
-  for (const content of timelineContents) {
-    if (content.contentType !== "event" || !content.contentUid) continue;
-
-    const existing = timelineContentByContentUid.get(content.contentUid);
-    if (!existing) {
-      timelineContentByContentUid.set(content.contentUid, {
-        first: { name: content.name, startAt: content.startAt },
-        latest: { uid: content.uid, startAt: content.startAt },
-      });
-      continue;
-    }
-
-    if (compareInstantAsc(content.startAt, existing.first.startAt) < 0) {
-      existing.first = { name: content.name, startAt: content.startAt };
-    }
-
-    if (compareInstantDesc(content.startAt, existing.latest.startAt) < 0) {
-      existing.latest = { uid: content.uid, startAt: content.startAt };
-    }
-  }
-
-  return eventContents
-    .flatMap((eventContent) => {
-      const timelineContent = timelineContentByContentUid.get(eventContent.uid) ?? null;
-      if (!timelineContent) {
-        return [];
+        if (compareInstantDesc(content.startAt, existing.latest.startAt) < 0) {
+          existing.latest = { uid: content.uid, startAt: content.startAt };
+        }
       }
 
-      return {
-        uid: eventContent.uid,
-        name: timelineContent.first.name || eventContent.name,
-        imageUrl: getEventLogoImageUrl(eventContent.uid, "kr"),
-        fallbackImageUrl: getEventLogoImageUrl(eventContent.uid, "jp"),
-        latestTimelineUid: timelineContent.latest.uid,
-        schedules: groupEventListSchedules(eventContent.schedules, now),
-      };
-    })
-    .sort((a, b) => compareEventContentUidAsc(a.uid, b.uid));
+      return eventContents
+        .flatMap((eventContent) => {
+          const timelineContent = timelineContentByContentUid.get(eventContent.uid) ?? null;
+          if (!timelineContent) {
+            return [];
+          }
+
+          return {
+            uid: eventContent.uid,
+            name: timelineContent.first.name || eventContent.name,
+            imageUrl: getEventLogoImageUrl(eventContent.uid, "kr"),
+            fallbackImageUrl: getEventLogoImageUrl(eventContent.uid, "jp"),
+            latestTimelineUid: timelineContent.latest.uid,
+            schedules: groupEventListSchedules(eventContent.schedules),
+          };
+        })
+        .sort((a, b) => compareEventContentUidAsc(a.uid, b.uid));
+    },
+    24 * 60 * 60,
+    forceRefresh,
+  );
+}
+
+export async function getEventList(
+  env: Env,
+  now: UtcIsoString = nowUtcIso(),
+  forceRefresh = false,
+): Promise<EventListItem[]> {
+  const cachedEvents = await getEventListCachedItems(env, forceRefresh);
+  return cachedEvents.map((event) => addEventListScheduleStatuses(event, now));
 }
 
 //
