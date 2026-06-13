@@ -2,10 +2,14 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { routeError } from "~/lib/http-errors";
-import { getRecruitedStudentTiers } from "~/models/recruited-student";
+import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
+import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
+import { getStudentGrowths } from "~/models/student-growth";
+import { parseStudentStateDraftValue } from "~/models/student-state-draft-value";
 import {
   type SyncDraft,
+  type SyncDraftEntry,
   type SyncDraftType,
   applySyncDraft,
   discardSyncDraft,
@@ -19,6 +23,10 @@ import SyncDraftReview, {
   type SyncDraftDisplayMetadata,
   type SyncDraftReviewActionData,
 } from "./connect.drafts._components/SyncDraftReview";
+import StudentStateDraftReview, {
+  type StudentStateCurrentValues,
+  type StudentStateProposedValues,
+} from "./connect.drafts._components/StudentStateDraftReview";
 
 type ActionData = SyncDraftReviewActionData;
 
@@ -46,8 +54,10 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     loadDraftMetadata(env, draft),
     loadCurrentValues(env, currentUser.id, draft.type, entryKeys),
   ]);
+  const proposedStudentStateValues =
+    draft.type === "student_state" ? parseStudentStateDraftValues(draft.entries) : undefined;
 
-  return { draft, metadataByKey, currentValues };
+  return { draft, metadataByKey, currentValues, proposedStudentStateValues };
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
@@ -74,13 +84,18 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       if (draft.status !== "pending") {
         return data<ActionData>({ intent, error: "이미 처리된 변경안이에요" }, { status: 400 });
       }
-
-      const { entries, fieldErrors } = parseDraftEntryFormData(draft, formData);
-      if (Object.keys(fieldErrors).length > 0) {
-        return data<ActionData>({ intent, error: "입력값을 확인해주세요.", fieldErrors }, { status: 400 });
+      if (draft.type === "student_state" && intent === "save") {
+        return data<ActionData>({ intent, error: "학생 상태 변경안은 수정할 수 없어요" }, { status: 400 });
       }
 
-      await updateSyncDraftEntries(env, currentUser.id, draftUid, entries);
+      if (draft.type !== "student_state") {
+        const { entries, fieldErrors } = parseDraftEntryFormData(draft, formData);
+        if (Object.keys(fieldErrors).length > 0) {
+          return data<ActionData>({ intent, error: "입력값을 확인해주세요.", fieldErrors }, { status: 400 });
+        }
+
+        await updateSyncDraftEntries(env, currentUser.id, draftUid, entries);
+      }
 
       if (intent === "apply") {
         await applySyncDraft(env, currentUser.id, draftUid);
@@ -108,21 +123,33 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 };
 
 export default function ConnectDraftDetailPage() {
-  const { draft, metadataByKey, currentValues } = useLoaderData<typeof loader>();
+  const { draft, metadataByKey, currentValues, proposedStudentStateValues } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+
+  if (draft.type === "student_state") {
+    return (
+      <StudentStateDraftReview
+        draft={draft}
+        metadataByKey={metadataByKey}
+        currentValues={currentValues as StudentStateCurrentValues}
+        proposedValues={proposedStudentStateValues as StudentStateProposedValues}
+        actionData={actionData}
+      />
+    );
+  }
 
   return (
     <SyncDraftReview
       draft={draft}
       metadataByKey={metadataByKey}
-      currentValues={currentValues}
+      currentValues={currentValues as Record<string, number>}
       actionData={actionData}
     />
   );
 }
 
 async function loadDraftMetadata(env: Env, draft: SyncDraft): Promise<Record<string, SyncDraftDisplayMetadata>> {
-  if (draft.type === "student_tier") {
+  if (draft.type === "student_tier" || draft.type === "student_state") {
     const studentsByUid = await getAllStudentsMap(env);
     return Object.fromEntries(
       draft.entries.map((entry) => [
@@ -152,7 +179,66 @@ async function loadCurrentValues(
   userId: number,
   type: SyncDraftType,
   entryKeys: string[],
-): Promise<Record<string, number>> {
+): Promise<Record<string, number> | StudentStateCurrentValues> {
+  if (type === "student_state") {
+    const [recruitedStudents, relationshipLevels, studentGrowths] = await Promise.all([
+      getRecruitedStudents(env, userId),
+      getRelationshipLevels(env, userId),
+      getStudentGrowths(env, userId),
+    ]);
+    const recruitedStudentsByUid = Object.fromEntries(
+      recruitedStudents.map((student) => [student.studentUid, student]),
+    );
+    const relationshipsByStudentId = Object.fromEntries(
+      relationshipLevels.map((relationship) => [relationship.studentId, relationship]),
+    );
+    const studentGrowthsByUid = Object.fromEntries(
+      studentGrowths.map((growth) => [growth.studentUid, growth]),
+    );
+
+    return Object.fromEntries(
+      entryKeys.map((entryKey) => {
+        const recruitedStudent = recruitedStudentsByUid[entryKey];
+        const relationshipLevel = relationshipsByStudentId[entryKey];
+        const studentGrowth = studentGrowthsByUid[entryKey];
+        return [
+          entryKey,
+          {
+            current: {
+              level: recruitedStudent?.level ?? null,
+              tier: recruitedStudent?.tier ?? null,
+              weaponLevel: recruitedStudent?.weaponLevel ?? null,
+              skillEx: recruitedStudent?.skillEx ?? null,
+              skillNormal: recruitedStudent?.skillNormal ?? null,
+              skillEnhanced: recruitedStudent?.skillEnhanced ?? null,
+              skillSub: recruitedStudent?.skillSub ?? null,
+              equip1: recruitedStudent?.equip1 ?? null,
+              equip2: recruitedStudent?.equip2 ?? null,
+              equip3: recruitedStudent?.equip3 ?? null,
+              equipSpecial: recruitedStudent?.equipSpecial ?? null,
+              abilityHp: recruitedStudent?.abilityHp ?? null,
+              abilityAtk: recruitedStudent?.abilityAtk ?? null,
+              abilityHeal: recruitedStudent?.abilityHeal ?? null,
+              bond: relationshipLevel?.currentLevel ?? null,
+            },
+            target: {
+              targetLevel: studentGrowth?.targetLevel ?? null,
+              targetTier: studentGrowth?.targetTier ?? null,
+              targetSkillEx: studentGrowth?.targetSkillEx ?? null,
+              targetSkillNormal: studentGrowth?.targetSkillNormal ?? null,
+              targetSkillEnhanced: studentGrowth?.targetSkillEnhanced ?? null,
+              targetSkillSub: studentGrowth?.targetSkillSub ?? null,
+              targetEquip1: studentGrowth?.targetEquip1 ?? null,
+              targetEquip2: studentGrowth?.targetEquip2 ?? null,
+              targetEquip3: studentGrowth?.targetEquip3 ?? null,
+              targetEquipSpecial: studentGrowth?.targetEquipSpecial ?? null,
+            },
+          },
+        ];
+      }),
+    );
+  }
+
   if (type === "student_tier") {
     const tiersByStudentUid = await getRecruitedStudentTiers(env, userId);
     return Object.fromEntries(entryKeys.map((entryKey) => [entryKey, tiersByStudentUid[entryKey] ?? 0]));
@@ -178,6 +264,24 @@ function parseDraftEntryFormData(draft: SyncDraft, formData: FormData) {
   }
 
   return { entries, fieldErrors };
+}
+
+function parseStudentStateDraftValues(entries: SyncDraftEntry[]): StudentStateProposedValues {
+  return Object.fromEntries(
+    entries.map((entry) => {
+      try {
+        return [entry.uid, { value: parseStudentStateDraftValue(entry), error: null }];
+      } catch (error) {
+        return [
+          entry.uid,
+          {
+            value: null,
+            error: error instanceof Error ? error.message : "학생 상태 변경안 데이터를 읽을 수 없어요",
+          },
+        ];
+      }
+    }),
+  );
 }
 
 function toActionIntent(intent: string): ActionData["intent"] {

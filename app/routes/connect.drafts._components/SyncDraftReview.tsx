@@ -328,6 +328,8 @@ function syncDraftTypeLabel(type: SyncDraftType): string {
   switch (type) {
     case "student_tier":
       return "학생 보유 등급";
+    case "student_state":
+      return "학생 현재 상태";
     default:
       return "아이템 보유 수량";
   }
@@ -347,7 +349,7 @@ function draftStatusLabel(status: SyncDraft["status"]): string {
 }
 
 function formatDraftValue(type: SyncDraftType, value: number): string {
-  if (type === "student_tier") {
+  if (type === "student_tier" || type === "student_state") {
     return value > 0 ? `${value}성` : "-";
   }
 
@@ -360,7 +362,7 @@ function formatDelta(type: SyncDraftType, delta: number): string {
   }
 
   const prefix = delta > 0 ? "+" : "";
-  if (type === "student_tier") {
+  if (type === "student_tier" || type === "student_state") {
     return `${prefix}${delta}성`;
   }
 

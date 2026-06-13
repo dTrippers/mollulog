@@ -2,6 +2,12 @@ import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import {
+  type StudentStateDraftCurrentValue,
+  type StudentStateDraftTargetValue,
+  type StudentStateDraftValue,
+  parseStudentStateDraftValue,
+} from "./student-state-draft-value";
 
 export const syncDraftsTable = sqliteTable("sync_drafts", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -26,12 +32,13 @@ export const syncDraftEntriesTable = sqliteTable("sync_draft_entries", {
   draftUid: text().notNull(),
   entryKey: text().notNull(),
   value: int().notNull(),
+  valueJson: text(),
   meta: text(),
   createdAt: text().notNull().default(sql`current_timestamp`),
 });
 
 export type SyncDraftSource = "connect" | "web" | "first_party_ocr";
-export type SyncDraftType = "item_inventory" | "student_tier";
+export type SyncDraftType = "item_inventory" | "student_tier" | "student_state";
 export type SyncDraftStatus = "pending" | "applied" | "discarded" | "expired";
 
 export type SyncDraftEntry = {
@@ -39,6 +46,7 @@ export type SyncDraftEntry = {
   draftUid: string;
   entryKey: string;
   value: number;
+  valueJson: string | null;
   meta: string | null;
   createdAt: string;
 };
@@ -77,7 +85,7 @@ export function toSyncDraftSource(source: string): SyncDraftSource {
 }
 
 export function toSyncDraftType(type: string): SyncDraftType {
-  if (type === "item_inventory" || type === "student_tier") {
+  if (type === "item_inventory" || type === "student_tier" || type === "student_state") {
     return type;
   }
 
@@ -98,6 +106,7 @@ export function toSyncDraftEntryModel(entry: typeof syncDraftEntriesTable.$infer
     draftUid: entry.draftUid,
     entryKey: entry.entryKey,
     value: entry.value,
+    valueJson: entry.valueJson,
     meta: entry.meta,
     createdAt: entry.createdAt,
   };
@@ -132,7 +141,7 @@ export function toSyncDraftModel(
 }
 
 export function normalizeSyncDraftEntryValue(type: SyncDraftType, value: unknown): number {
-  if (type === "student_tier") {
+  if (type === "student_tier" || type === "student_state") {
     return normalizeStudentTierValue(value);
   }
 
@@ -196,6 +205,9 @@ export async function updateSyncDraftEntries(
   entries: SyncDraftEntryUpdateInput[],
 ) {
   const draft = await getPendingOwnedSyncDraft(env, userId, draftUid);
+  if (draft.type === "student_state") {
+    throw new Error("학생 상태 변경안은 수정할 수 없어요");
+  }
   const normalizedEntries = normalizeSyncDraftEntryUpdates(draft.type, entries);
   assertEntryKeysMatchDraft(draft.entries, normalizedEntries);
 
@@ -232,12 +244,11 @@ export async function updateSyncDraftEntries(
 
 export async function applySyncDraft(env: Env, userId: number, draftUid: string) {
   const draft = await getPendingOwnedSyncDraft(env, userId, draftUid);
-  const normalizedEntries = normalizeSyncDraftEntryUpdates(draft.type, draft.entries);
+  const normalizedEntries =
+    draft.type === "student_state" ? parseStudentStateDraftEntries(draft.entries) : normalizeSyncDraftEntryUpdates(draft.type, draft.entries);
 
   await env.DB.batch([
-    ...normalizedEntries.map(({ entryKey, value }) =>
-      createConditionalApplyStatement(env, userId, draftUid, draft.type, entryKey, value),
-    ),
+    ...normalizedEntries.flatMap((entry) => createConditionalApplyStatements(env, userId, draftUid, draft.type, entry)),
     env.DB.prepare(`
       update sync_drafts
       set status = 'applied',
@@ -326,19 +337,33 @@ function assertEntryKeysMatchDraft(
   }
 }
 
-function createConditionalApplyStatement(
+function createConditionalApplyStatements(
   env: Env,
   userId: number,
   draftUid: string,
   type: SyncDraftType,
-  entryKey: string,
-  value: number,
-): D1PreparedStatement {
-  if (type === "student_tier") {
-    return createConditionalStudentTierStatement(env, userId, draftUid, entryKey, value);
+  entry: { entryKey: string; value: number } | { entryKey: string; value: StudentStateDraftValue },
+): D1PreparedStatement[] {
+  if (type === "student_state") {
+    const studentState = entry.value as StudentStateDraftValue;
+    const statements: D1PreparedStatement[] = [];
+    if (studentState.current != null) {
+      statements.push(createConditionalStudentStateStatement(env, userId, draftUid, entry.entryKey, studentState.current));
+      if (studentState.current.bond != null) {
+        statements.push(createConditionalStudentStateBondStatement(env, userId, draftUid, entry.entryKey, studentState.current.bond));
+      }
+    }
+    if (studentState.target != null) {
+      statements.push(createConditionalStudentStateGrowthStatement(env, userId, draftUid, entry.entryKey, studentState.target));
+    }
+    return statements;
   }
 
-  return createConditionalItemInventoryStatement(env, userId, draftUid, entryKey, value);
+  if (type === "student_tier") {
+    return [createConditionalStudentTierStatement(env, userId, draftUid, entry.entryKey, entry.value as number)];
+  }
+
+  return [createConditionalItemInventoryStatement(env, userId, draftUid, entry.entryKey, entry.value as number)];
 }
 
 function createConditionalItemInventoryStatement(
@@ -407,6 +432,184 @@ function createConditionalStudentTierStatement(
       tier = excluded.tier,
       updatedAt = current_timestamp
   `).bind(nanoid(8), userId, studentUid, tier, draftUid);
+}
+
+function createConditionalStudentStateStatement(
+  env: Env,
+  userId: number,
+  draftUid: string,
+  studentUid: string,
+  state: StudentStateDraftCurrentValue,
+): D1PreparedStatement {
+  return env.DB.prepare(`
+    insert into recruited_students (
+      uid,
+      userId,
+      studentUid,
+      tier,
+      level,
+      weaponLevel,
+      skillEx,
+      skillNormal,
+      skillEnhanced,
+      skillSub,
+      equip1,
+      equip2,
+      equip3,
+      equipSpecial,
+      abilityHp,
+      abilityAtk,
+      abilityHeal
+    )
+    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
+    where exists (
+      select 1
+      from sync_drafts
+      where uid = ?18
+        and userId = ?2
+        and status = 'pending'
+        and type = 'student_state'
+    )
+    on conflict(userId, studentUid) do update set
+      tier = excluded.tier,
+      level = excluded.level,
+      weaponLevel = excluded.weaponLevel,
+      skillEx = excluded.skillEx,
+      skillNormal = excluded.skillNormal,
+      skillEnhanced = excluded.skillEnhanced,
+      skillSub = excluded.skillSub,
+      equip1 = excluded.equip1,
+      equip2 = excluded.equip2,
+      equip3 = excluded.equip3,
+      equipSpecial = excluded.equipSpecial,
+      abilityHp = excluded.abilityHp,
+      abilityAtk = excluded.abilityAtk,
+      abilityHeal = excluded.abilityHeal,
+      updatedAt = current_timestamp
+  `).bind(
+    nanoid(8),
+    userId,
+    studentUid,
+    state.tier,
+    state.level,
+    state.weaponLevel,
+    state.skillEx,
+    state.skillNormal,
+    state.skillEnhanced,
+    state.skillSub,
+    state.equip1,
+    state.equip2,
+    state.equip3,
+    state.equipSpecial,
+    state.abilityHp,
+    state.abilityAtk,
+    state.abilityHeal,
+    draftUid,
+  );
+}
+
+function createConditionalStudentStateGrowthStatement(
+  env: Env,
+  userId: number,
+  draftUid: string,
+  studentUid: string,
+  target: StudentStateDraftTargetValue,
+): D1PreparedStatement {
+  return env.DB.prepare(`
+    insert into student_growth (
+      uid,
+      userId,
+      studentUid,
+      targetLevel,
+      targetSkillEx,
+      targetSkillNormal,
+      targetSkillEnhanced,
+      targetSkillSub,
+      targetEquip1,
+      targetEquip2,
+      targetEquip3,
+      targetEquipSpecial,
+      targetTier
+    )
+    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
+    where exists (
+      select 1
+      from sync_drafts
+      where uid = ?14
+        and userId = ?2
+        and status = 'pending'
+        and type = 'student_state'
+    )
+    on conflict(userId, studentUid) do update set
+      targetLevel = excluded.targetLevel,
+      targetSkillEx = excluded.targetSkillEx,
+      targetSkillNormal = excluded.targetSkillNormal,
+      targetSkillEnhanced = excluded.targetSkillEnhanced,
+      targetSkillSub = excluded.targetSkillSub,
+      targetEquip1 = excluded.targetEquip1,
+      targetEquip2 = excluded.targetEquip2,
+      targetEquip3 = excluded.targetEquip3,
+      targetEquipSpecial = excluded.targetEquipSpecial,
+      targetTier = excluded.targetTier,
+      updatedAt = current_timestamp
+  `).bind(
+    nanoid(8),
+    userId,
+    studentUid,
+    target.targetLevel,
+    target.targetSkillEx,
+    target.targetSkillNormal,
+    target.targetSkillEnhanced,
+    target.targetSkillSub,
+    target.targetEquip1,
+    target.targetEquip2,
+    target.targetEquip3,
+    target.targetEquipSpecial,
+    target.targetTier,
+    draftUid,
+  );
+}
+
+function createConditionalStudentStateBondStatement(
+  env: Env,
+  userId: number,
+  draftUid: string,
+  studentUid: string,
+  bond: number,
+): D1PreparedStatement {
+  return env.DB.prepare(`
+    insert into user_relationship_levels (
+      uid,
+      userId,
+      studentId,
+      currentLevel,
+      currentExp,
+      targetLevel,
+      items
+    )
+    select ?1, ?2, ?3, ?4, null, ?4, '{}'
+    where exists (
+      select 1
+      from sync_drafts
+      where uid = ?5
+        and userId = ?2
+        and status = 'pending'
+        and type = 'student_state'
+    )
+    on conflict(userId, studentId) do update set
+      currentLevel = excluded.currentLevel,
+      currentExp = null,
+      updatedAt = current_timestamp
+  `).bind(nanoid(8), userId, studentUid, bond, draftUid);
+}
+
+function parseStudentStateDraftEntries(
+  entries: SyncDraftEntry[],
+): { entryKey: string; value: StudentStateDraftValue }[] {
+  return entries.map((entry) => ({
+    entryKey: entry.entryKey,
+    value: parseStudentStateDraftValue(entry),
+  }));
 }
 
 function normalizeItemInventoryValue(value: unknown): number {

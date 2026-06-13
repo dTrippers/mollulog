@@ -4,6 +4,8 @@ interface Env {
   DB: D1Database;
   EVENTS?: Queue;
   HOST: string;
+  CONNECT_API_URL?: string;
+  CONNECT_INTERNAL_TOKEN?: string;
   STAGE?: "staging" | "prod";
   DISABLE_CACHE?: string;
   SESSION_SECRET: string;

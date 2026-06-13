@@ -8,12 +8,14 @@ import {
 import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
   Cog6ToothIcon,
+  ArrowUpTrayIcon as ArrowUpTrayIconOutline,
   HomeIcon as HomeIconOutline,
   IdentificationIcon as IdentificationIconOutline,
   UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
+  ArrowUpTrayIcon as ArrowUpTrayIconSolid,
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
   UserCircleIcon as UserCircleIconSolid,
@@ -486,6 +488,13 @@ function DesktopMenuContent({
             OutlineIcon={IdentificationIconOutline}
             SolidIcon={IdentificationIconSolid}
             isActive={pathname.startsWith("/@")}
+          />
+          <SubMenuItem
+            to="/connect/import"
+            name="데이터 가져오기"
+            OutlineIcon={ArrowUpTrayIconOutline}
+            SolidIcon={ArrowUpTrayIconSolid}
+            isActive={pathname.startsWith("/connect/import")}
           />
         </MenuSection>
       ) : (

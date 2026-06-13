@@ -20,6 +20,10 @@ type RecruitedStudentRow = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
+  weaponLevel: number | null;
+  abilityHp: number | null;
+  abilityAtk: number | null;
+  abilityHeal: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -34,6 +38,10 @@ const currentStateFields = [
   "equip2",
   "equip3",
   "equipSpecial",
+  "weaponLevel",
+  "abilityHp",
+  "abilityAtk",
+  "abilityHeal",
 ] as const;
 
 class FakeD1Statement {
@@ -131,6 +139,10 @@ function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow>): Rec
     equip2: null,
     equip3: null,
     equipSpecial: null,
+    weaponLevel: null,
+    abilityHp: null,
+    abilityAtk: null,
+    abilityHeal: null,
     createdAt: "2026-06-13T00:00:00.000Z",
     updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
@@ -160,6 +172,10 @@ describe("recruited-student current state", () => {
       equip2: 9,
       equip3: 8,
       equipSpecial: 2,
+      weaponLevel: 50,
+      abilityHp: 25,
+      abilityAtk: 26,
+      abilityHeal: 27,
     });
 
     expect(db.rows).toHaveLength(1);
@@ -174,6 +190,10 @@ describe("recruited-student current state", () => {
       equip2: 9,
       equip3: 8,
       equipSpecial: 2,
+      weaponLevel: 50,
+      abilityHp: 25,
+      abilityAtk: 26,
+      abilityHeal: 27,
     });
   });
 
@@ -190,6 +210,10 @@ describe("recruited-student current state", () => {
       equip2: null,
       equip3: null,
       equipSpecial: null,
+      weaponLevel: null,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
     });
 
     expect(db.rows).toHaveLength(0);
@@ -223,13 +247,17 @@ describe("recruited-student current state", () => {
         equip2: null,
         equip3: null,
         equipSpecial: null,
+        weaponLevel: null,
+        abilityHp: null,
+        abilityAtk: null,
+        abilityHeal: null,
       }),
     ).rejects.toThrow("레벨은(는) 1부터 90 사이만 입력할 수 있어요");
   });
 
   it("loads recruited current fields with the tier", async () => {
     const { db, env } = createEnv();
-    db.rows.push(createRecruitedStudentRow({ level: 80, skillEx: 4, equip1: 7 }));
+    db.rows.push(createRecruitedStudentRow({ level: 80, skillEx: 4, equip1: 7, weaponLevel: 50, abilityAtk: 12 }));
 
     await expect(getRecruitedStudents(env, 1)).resolves.toEqual([
       expect.objectContaining({
@@ -238,6 +266,8 @@ describe("recruited-student current state", () => {
         level: 80,
         skillEx: 4,
         equip1: 7,
+        weaponLevel: 50,
+        abilityAtk: 12,
       }),
     ]);
   });

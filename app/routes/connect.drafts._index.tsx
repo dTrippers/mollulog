@@ -42,6 +42,14 @@ export default function ConnectDraftsIndexPage() {
         text="연동 변경안"
         description="외부 도구가 제출한 변경안을 확인하고 직접 수정한 뒤 프로필에 반영할 수 있어요."
       />
+      <div className="flex justify-end">
+        <Link
+          to="/connect/import"
+          className="rounded-md border border-blue-500/20 bg-blue-500/10 px-3 py-1.5 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-500/15 dark:text-blue-300"
+        >
+          데이터 가져오기
+        </Link>
+      </div>
 
       {drafts.length === 0 ? (
         <div className="rounded-lg border border-border bg-card p-8">
@@ -91,6 +99,8 @@ function syncDraftTypeLabel(type: SyncDraftType): string {
   switch (type) {
     case "student_tier":
       return "학생 보유 등급";
+    case "student_state":
+      return "학생 현재 상태";
     default:
       return "아이템 보유 수량";
   }

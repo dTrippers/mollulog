@@ -18,6 +18,10 @@ export const recruitedStudentsTable = sqliteTable("recruited_students", {
   equip2: int(),
   equip3: int(),
   equipSpecial: int(),
+  weaponLevel: int(),
+  abilityHp: int(),
+  abilityAtk: int(),
+  abilityHeal: int(),
   createdAt: text().notNull().default(sql`current_timestamp`),
   updatedAt: text().notNull().default(sql`current_timestamp`),
 });
@@ -32,6 +36,10 @@ export type RecruitedStudentCurrentState = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
+  weaponLevel: number | null;
+  abilityHp: number | null;
+  abilityAtk: number | null;
+  abilityHeal: number | null;
 };
 
 export type RecruitedStudentCurrentStateInput = RecruitedStudentCurrentState;
@@ -52,7 +60,11 @@ const currentStateRanges = {
   equip2: { label: "장비 2", min: 1, max: 10 },
   equip3: { label: "장비 3", min: 1, max: 10 },
   equipSpecial: { label: "애용품", min: 1, max: 2 },
-} satisfies Record<keyof RecruitedStudentCurrentStateInput, { label: string; min: number; max: number }>;
+  weaponLevel: { label: "고유무기 레벨", min: 1 },
+  abilityHp: { label: "능력 해방 HP", min: 1 },
+  abilityAtk: { label: "능력 해방 공격력", min: 1 },
+  abilityHeal: { label: "능력 해방 치유력", min: 1 },
+} satisfies Record<keyof RecruitedStudentCurrentStateInput, { label: string; min: number; max?: number }>;
 
 function toModel(recruitedStudent: typeof recruitedStudentsTable.$inferSelect): RecruitedStudent {
   return {
@@ -68,13 +80,17 @@ function toModel(recruitedStudent: typeof recruitedStudentsTable.$inferSelect): 
     equip2: recruitedStudent.equip2,
     equip3: recruitedStudent.equip3,
     equipSpecial: recruitedStudent.equipSpecial,
+    weaponLevel: recruitedStudent.weaponLevel,
+    abilityHp: recruitedStudent.abilityHp,
+    abilityAtk: recruitedStudent.abilityAtk,
+    abilityHeal: recruitedStudent.abilityHeal,
   };
 }
 
 export function validateRecruitedStudentCurrentStateInput(input: RecruitedStudentCurrentStateInput) {
   for (const [field, range] of Object.entries(currentStateRanges) as [
     keyof RecruitedStudentCurrentStateInput,
-    { label: string; min: number; max: number },
+    { label: string; min: number; max?: number },
   ][]) {
     const value = input[field];
     if (value == null) {
@@ -85,7 +101,10 @@ export function validateRecruitedStudentCurrentStateInput(input: RecruitedStuden
       throw new Error(`${range.label}은(는) 숫자만 입력할 수 있어요`);
     }
 
-    if (value < range.min || value > range.max) {
+    if (value < range.min || (range.max != null && value > range.max)) {
+      if (range.max == null) {
+        throw new Error(`${range.label}은(는) ${range.min} 이상만 입력할 수 있어요`);
+      }
       throw new Error(`${range.label}은(는) ${range.min}부터 ${range.max} 사이만 입력할 수 있어요`);
     }
   }

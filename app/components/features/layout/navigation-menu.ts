@@ -86,7 +86,8 @@ export function getNavigationSectionStates(
     isUtilActive:
       pathname.startsWith("/utils") || !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
     isExternalActive: pathname.startsWith("/coupons"),
-    isProfileActive: pathname.startsWith("/@") || pathname.startsWith("/edit") || pathname.startsWith("/my"),
+    isProfileActive:
+      pathname.startsWith("/@") || pathname.startsWith("/edit") || pathname.startsWith("/my") || pathname.startsWith("/connect"),
   };
 }
 
