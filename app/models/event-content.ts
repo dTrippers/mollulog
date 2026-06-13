@@ -1,13 +1,24 @@
 import type { MinigameConfig } from "~/components/features/events/shop/constants";
 import type { ShopResource } from "~/components/features/events/shop/types";
 import { graphql } from "~/graphql";
-import type { EventContentShopContentQuery, RecruitmentGroupsListQuery } from "~/graphql/graphql";
+import type {
+  EventContentShopContentQuery,
+  EventContentsListQuery,
+  RecruitmentGroupsListQuery,
+} from "~/graphql/graphql";
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { type UtcIsoString, compareInstantAsc, toUtcIso } from "~/lib/date-time";
+import {
+  type UtcIsoString,
+  compareInstantAsc,
+  compareInstantDesc,
+  getInstantTime,
+  nowUtcIso,
+  toUtcIso,
+} from "~/lib/date-time";
 import { RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
-import { getTimelineContent, getTimelineContents } from "./timeline-content";
+import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "./timeline-content";
 import type { RunType } from "./timeline-content";
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
@@ -124,6 +135,161 @@ export async function getShopAvailableEvents(env: Env): Promise<ShopAvailableEve
       };
     })
     .sort((a, b) => compareInstantAsc(a.since, b.since));
+}
+
+//
+// Get Event List
+//
+const eventContentsListQuery = graphql(`
+  query EventContentsList {
+    eventContents {
+      uid
+      name
+      schedules {
+        region
+        runType
+        startAt
+        endAt
+      }
+    }
+  }
+`);
+
+type EventContentListSource = EventContentsListQuery["eventContents"][number];
+type EventContentListSourceSchedule = EventContentListSource["schedules"][number];
+export type EventListScheduleStatus = "past" | "current" | "upcoming";
+export type EventListSchedule = {
+  runType: RunType;
+  since: UtcIsoString;
+  until: UtcIsoString | null;
+  status: EventListScheduleStatus;
+};
+export type EventListItem = {
+  uid: string;
+  name: string;
+  imageUrl: string | null;
+  fallbackImageUrl: string | null;
+  latestTimelineUid: string;
+  schedules: Partial<Record<RunType, EventListSchedule>>;
+};
+
+function getEventLogoImageUrl(eventUid: string, locale: "jp" | "kr"): string {
+  return `https://assets.baql.net/images/events/logo/${encodeURIComponent(eventUid)}_${locale}.webp`;
+}
+
+function parseEventListRunType(runType: string): RunType | null {
+  if (runType === "first" || runType === "rerun" || runType === "permanent") {
+    return runType;
+  }
+  return null;
+}
+
+function getScheduleStatus(
+  schedule: Pick<EventListSchedule, "since" | "until">,
+  now: UtcIsoString,
+): EventListScheduleStatus {
+  const nowTime = getInstantTime(now);
+  if (getInstantTime(schedule.since) > nowTime) {
+    return "upcoming";
+  }
+
+  if (schedule.until === null || getInstantTime(schedule.until) > nowTime) {
+    return "current";
+  }
+
+  return "past";
+}
+
+function groupEventListSchedules(
+  schedules: EventContentListSourceSchedule[],
+  now: UtcIsoString,
+): EventListItem["schedules"] {
+  const grouped: EventListItem["schedules"] = {};
+  for (const schedule of schedules) {
+    if (schedule.region !== "gl") continue;
+
+    const runType = parseEventListRunType(schedule.runType);
+    if (!runType) continue;
+
+    const nextSchedule = {
+      runType,
+      since: toUtcIso(schedule.startAt),
+      until: schedule.endAt ? toUtcIso(schedule.endAt) : null,
+    };
+    const existing = grouped[runType];
+    if (existing && compareInstantDesc(existing.since, nextSchedule.since) <= 0) {
+      continue;
+    }
+
+    grouped[runType] = {
+      ...nextSchedule,
+      status: getScheduleStatus(nextSchedule, now),
+    };
+  }
+
+  return grouped;
+}
+
+function compareEventContentUidAsc(a: string, b: string): number {
+  const numericA = Number(a);
+  const numericB = Number(b);
+  if (Number.isFinite(numericA) && Number.isFinite(numericB)) {
+    return numericA - numericB;
+  }
+  return a.localeCompare(b);
+}
+
+export async function getEventList(env: Env, now: UtcIsoString = nowUtcIso()): Promise<EventListItem[]> {
+  const [eventContents, timelineContents] = await Promise.all([
+    fetchCached<EventContentsListQuery["eventContents"]>(
+      env,
+      "event-contents::list::v1",
+      async () => {
+        const { data, error } = await runQuery(eventContentsListQuery, {});
+        if (error || !data) {
+          throw error ?? new Error("failed to fetch event contents");
+        }
+
+        return data.eventContents;
+      },
+      24 * 60 * 60,
+    ),
+    getAllTimelineContentsMeta(env),
+  ]);
+
+  const latestTimelineContentByContentUid = new Map<string, { uid: string; name: string; startAt: UtcIsoString }>();
+  for (const content of timelineContents) {
+    if (content.contentType !== "event" || !content.contentUid) continue;
+
+    const existing = latestTimelineContentByContentUid.get(content.contentUid);
+    if (existing && compareInstantDesc(existing.startAt, content.startAt) <= 0) {
+      continue;
+    }
+
+    latestTimelineContentByContentUid.set(content.contentUid, {
+      uid: content.uid,
+      name: content.name,
+      startAt: content.startAt,
+    });
+  }
+
+  return eventContents
+    .flatMap((eventContent) => {
+      const latestTimelineContent = latestTimelineContentByContentUid.get(eventContent.uid) ?? null;
+      if (!latestTimelineContent) {
+        return [];
+      }
+
+      return {
+        uid: eventContent.uid,
+        name: latestTimelineContent.name || eventContent.name,
+        imageUrl: getEventLogoImageUrl(eventContent.uid, "kr"),
+        fallbackImageUrl: getEventLogoImageUrl(eventContent.uid, "jp"),
+        latestTimelineUid: latestTimelineContent.uid,
+        schedules: groupEventListSchedules(eventContent.schedules, now),
+      };
+    })
+    .sort((a, b) => compareEventContentUidAsc(a.uid, b.uid));
 }
 
 //

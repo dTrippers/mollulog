@@ -12,6 +12,7 @@ import {
   HeartIcon as HeartIconOutline,
   HomeIcon as HomeIconOutline,
   IdentificationIcon as IdentificationIconOutline,
+  ListBulletIcon as ListBulletIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
   TableCellsIcon as TableCellsIconOutline,
   TicketIcon as TicketIconOutline,
@@ -31,6 +32,7 @@ import {
   HeartIcon as HeartIconSolid,
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
+  ListBulletIcon as ListBulletIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
   TableCellsIcon as TableCellsIconSolid,
   TicketIcon as TicketIconSolid,
@@ -127,9 +129,15 @@ export function getNavigationSections({
           description: "이벤트와 모집 일정을 확인해보세요",
           OutlineIcon: CalendarIconOutline,
           SolidIcon: CalendarIconSolid,
-          isActive:
-            pathname.startsWith("/futures") ||
-            (pathname.startsWith("/events") && !(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`))),
+          isActive: pathname.startsWith("/futures"),
+        },
+        {
+          to: "/events",
+          name: "이벤트 목록",
+          description: "이벤트 개최, 복각, 상설 일정을 확인해보세요",
+          OutlineIcon: ListBulletIconOutline,
+          SolidIcon: ListBulletIconSolid,
+          isActive: pathname.startsWith("/events"),
         },
         {
           to: "/raids",
@@ -299,9 +307,7 @@ export function getMobileNavigationItems({
       name: "미래시",
       OutlineIcon: CalendarIconOutline,
       SolidIcon: CalendarIconSolid,
-      isActive:
-        pathname.startsWith("/futures") ||
-        (pathname.startsWith("/events") && !(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`))),
+      isActive: pathname.startsWith("/futures"),
     },
     {
       to: "/community",
