@@ -34,15 +34,6 @@ export const studentGrowthTable = sqliteTable("student_growth", {
 export type StudentGrowth = {
   uid: string;
   studentUid: string;
-  level: number | null;
-  skillEx: number | null;
-  skillNormal: number | null;
-  skillEnhanced: number | null;
-  skillSub: number | null;
-  equip1: number | null;
-  equip2: number | null;
-  equip3: number | null;
-  equipSpecial: number | null;
   targetLevel: number | null;
   targetSkillEx: number | null;
   targetSkillNormal: number | null;
@@ -58,15 +49,6 @@ export type StudentGrowth = {
 export type StudentGrowthInput = Omit<StudentGrowth, "uid" | "studentUid">;
 
 const growthRanges = {
-  level: { label: "레벨", min: 1, max: 90 },
-  skillEx: { label: "EX 스킬", min: 1, max: 5 },
-  skillNormal: { label: "기본 스킬", min: 1, max: 10 },
-  skillEnhanced: { label: "강화 스킬", min: 1, max: 10 },
-  skillSub: { label: "서브 스킬", min: 1, max: 10 },
-  equip1: { label: "장비 1", min: 1, max: 10 },
-  equip2: { label: "장비 2", min: 1, max: 10 },
-  equip3: { label: "장비 3", min: 1, max: 10 },
-  equipSpecial: { label: "애용품", min: 1, max: 10 },
   targetLevel: { label: "목표 레벨", min: 1, max: 90 },
   targetSkillEx: { label: "목표 EX 스킬", min: 1, max: 5 },
   targetSkillNormal: { label: "목표 기본 스킬", min: 1, max: 10 },
@@ -75,7 +57,7 @@ const growthRanges = {
   targetEquip1: { label: "목표 장비 1", min: 1, max: 10 },
   targetEquip2: { label: "목표 장비 2", min: 1, max: 10 },
   targetEquip3: { label: "목표 장비 3", min: 1, max: 10 },
-  targetEquipSpecial: { label: "목표 애용품", min: 1, max: 10 },
+  targetEquipSpecial: { label: "목표 애용품", min: 1, max: 2 },
   targetTier: { label: "목표 성급", min: 1, max: 9 },
 } satisfies Record<keyof StudentGrowthInput, { label: string; min: number; max: number }>;
 
@@ -83,15 +65,6 @@ function toModel(studentGrowth: typeof studentGrowthTable.$inferSelect): Student
   return {
     uid: studentGrowth.uid,
     studentUid: studentGrowth.studentUid,
-    level: studentGrowth.level,
-    skillEx: studentGrowth.skillEx,
-    skillNormal: studentGrowth.skillNormal,
-    skillEnhanced: studentGrowth.skillEnhanced,
-    skillSub: studentGrowth.skillSub,
-    equip1: studentGrowth.equip1,
-    equip2: studentGrowth.equip2,
-    equip3: studentGrowth.equip3,
-    equipSpecial: studentGrowth.equipSpecial,
     targetLevel: studentGrowth.targetLevel,
     targetSkillEx: studentGrowth.targetSkillEx,
     targetSkillNormal: studentGrowth.targetSkillNormal,
@@ -140,14 +113,53 @@ export async function getStudentGrowth(env: Env, senseiId: number, studentUid: s
 export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid: string, input: StudentGrowthInput) {
   validateStudentGrowthInput(input);
 
-  const db = drizzle(env.DB);
   const uid = nanoid(8);
-  await db.insert(studentGrowthTable)
-    .values({ uid, userId: senseiId, studentUid, ...input })
-    .onConflictDoUpdate({
-      target: [studentGrowthTable.userId, studentGrowthTable.studentUid],
-      set: { ...input, updatedAt: sql`current_timestamp` },
-    });
+  await env.DB.prepare(`
+    insert into student_growth (
+      uid,
+      userId,
+      studentUid,
+      targetLevel,
+      targetSkillEx,
+      targetSkillNormal,
+      targetSkillEnhanced,
+      targetSkillSub,
+      targetEquip1,
+      targetEquip2,
+      targetEquip3,
+      targetEquipSpecial,
+      targetTier
+    )
+    values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+    on conflict(userId, studentUid) do update set
+      targetLevel = excluded.targetLevel,
+      targetSkillEx = excluded.targetSkillEx,
+      targetSkillNormal = excluded.targetSkillNormal,
+      targetSkillEnhanced = excluded.targetSkillEnhanced,
+      targetSkillSub = excluded.targetSkillSub,
+      targetEquip1 = excluded.targetEquip1,
+      targetEquip2 = excluded.targetEquip2,
+      targetEquip3 = excluded.targetEquip3,
+      targetEquipSpecial = excluded.targetEquipSpecial,
+      targetTier = excluded.targetTier,
+      updatedAt = current_timestamp
+  `)
+    .bind(
+      uid,
+      senseiId,
+      studentUid,
+      input.targetLevel,
+      input.targetSkillEx,
+      input.targetSkillNormal,
+      input.targetSkillEnhanced,
+      input.targetSkillSub,
+      input.targetEquip1,
+      input.targetEquip2,
+      input.targetEquip3,
+      input.targetEquipSpecial,
+      input.targetTier,
+    )
+    .run();
 }
 
 export async function removeStudentGrowth(env: Env, senseiId: number, studentUid: string) {
