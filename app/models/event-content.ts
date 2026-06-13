@@ -257,35 +257,47 @@ export async function getEventList(env: Env, now: UtcIsoString = nowUtcIso()): P
     getAllTimelineContentsMeta(env),
   ]);
 
-  const latestTimelineContentByContentUid = new Map<string, { uid: string; name: string; startAt: UtcIsoString }>();
+  const timelineContentByContentUid = new Map<
+    string,
+    {
+      first: { name: string; startAt: UtcIsoString };
+      latest: { uid: string; startAt: UtcIsoString };
+    }
+  >();
   for (const content of timelineContents) {
     if (content.contentType !== "event" || !content.contentUid) continue;
 
-    const existing = latestTimelineContentByContentUid.get(content.contentUid);
-    if (existing && compareInstantDesc(existing.startAt, content.startAt) <= 0) {
+    const existing = timelineContentByContentUid.get(content.contentUid);
+    if (!existing) {
+      timelineContentByContentUid.set(content.contentUid, {
+        first: { name: content.name, startAt: content.startAt },
+        latest: { uid: content.uid, startAt: content.startAt },
+      });
       continue;
     }
 
-    latestTimelineContentByContentUid.set(content.contentUid, {
-      uid: content.uid,
-      name: content.name,
-      startAt: content.startAt,
-    });
+    if (compareInstantAsc(content.startAt, existing.first.startAt) < 0) {
+      existing.first = { name: content.name, startAt: content.startAt };
+    }
+
+    if (compareInstantDesc(content.startAt, existing.latest.startAt) < 0) {
+      existing.latest = { uid: content.uid, startAt: content.startAt };
+    }
   }
 
   return eventContents
     .flatMap((eventContent) => {
-      const latestTimelineContent = latestTimelineContentByContentUid.get(eventContent.uid) ?? null;
-      if (!latestTimelineContent) {
+      const timelineContent = timelineContentByContentUid.get(eventContent.uid) ?? null;
+      if (!timelineContent) {
         return [];
       }
 
       return {
         uid: eventContent.uid,
-        name: latestTimelineContent.name || eventContent.name,
+        name: timelineContent.first.name || eventContent.name,
         imageUrl: getEventLogoImageUrl(eventContent.uid, "kr"),
         fallbackImageUrl: getEventLogoImageUrl(eventContent.uid, "jp"),
-        latestTimelineUid: latestTimelineContent.uid,
+        latestTimelineUid: timelineContent.latest.uid,
         schedules: groupEventListSchedules(eventContent.schedules, now),
       };
     })

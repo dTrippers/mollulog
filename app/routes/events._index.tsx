@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { FunnelIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { useMemo, useState } from "react";
 import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Page } from "~/components/features/layout";
-import { EmptyView } from "~/components/primitives";
-import { formatInstant } from "~/lib/date-time";
+import { EmptyView, PanelOptionIconButton } from "~/components/primitives";
+import { formatInstant, nowUtcIso } from "~/lib/date-time";
 import { type EventListItem, type EventListSchedule, getEventList } from "~/models/event-content";
+import { filterEventList, type EventFilterState } from "~/models/event-list-filter";
 import type { RunType } from "~/models/timeline-content";
 
 const GL_TIME_ZONE = "Asia/Seoul";
@@ -16,9 +18,15 @@ const runTypeLabels: Record<RunType, string> = {
 const scheduleOrder: RunType[] = ["first", "rerun", "permanent"];
 const scheduleRowClassName = "flex items-center gap-x-2 text-xs leading-5";
 
+const defaultFilter: EventFilterState = {
+  showPermanentized: true,
+  onlyUpcoming: false,
+  search: "",
+};
+
 export const meta: MetaFunction = () => {
-  const title = "블루 아카이브 이벤트 목록";
-  const description = "블루 아카이브 한국 서버의 이벤트 개최, 복각, 상설 일정을 확인해보세요";
+  const title = "블루 아카이브 이벤트";
+  const description = "블루 아카이브의 이벤트 개최 일정을 확인해보세요";
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
@@ -31,7 +39,8 @@ export const meta: MetaFunction = () => {
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  return { events: await getEventList(env) };
+  const now = nowUtcIso();
+  return { events: await getEventList(env, now), now };
 };
 
 function formatEventDate(value: string, format = "YY.MM.DD"): string {
@@ -83,6 +92,70 @@ function EventSchedulePlaceholder({ runType }: { runType: RunType }) {
     <div className={`${scheduleRowClassName} invisible`} aria-hidden="true">
       <span className="w-8 shrink-0">{runTypeLabels[runType]}</span>
       <span className="min-w-0 flex-1">00.00.00 ~ 00.00</span>
+    </div>
+  );
+}
+
+function EventFilterPanel({
+  filter,
+  onFilterChange,
+}: {
+  filter: EventFilterState;
+  onFilterChange: (filter: EventFilterState) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
+        <FilterToggleRow
+          title="상설화 이벤트"
+          active={!filter.showPermanentized}
+          label={filter.showPermanentized ? "상설화 이벤트 필터 적용" : "상설화 이벤트 필터 해제"}
+          onClick={() => onFilterChange({ ...filter, showPermanentized: !filter.showPermanentized })}
+        />
+        <FilterToggleRow
+          title="다가오는 이벤트"
+          active={filter.onlyUpcoming}
+          label={filter.onlyUpcoming ? "다가오는 이벤트 필터 해제" : "다가오는 이벤트 필터 적용"}
+          onClick={() => onFilterChange({ ...filter, onlyUpcoming: !filter.onlyUpcoming })}
+        />
+      </div>
+
+      <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
+        <label className="block rounded-md px-3 py-2 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70 lg:px-2.5 lg:py-1.5">
+          <span className="block text-sm font-medium text-neutral-900 dark:text-neutral-100">이름으로 찾기</span>
+          <span className="mt-2 flex h-9 items-center rounded-md border border-neutral-200 bg-white px-2 text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400">
+            <MagnifyingGlassIcon className="mr-2 size-4 shrink-0" />
+            <input
+              type="search"
+              value={filter.search}
+              onChange={(event) => onFilterChange({ ...filter, search: event.currentTarget.value })}
+              placeholder="이벤트 이름"
+              className="min-w-0 flex-1 bg-transparent text-sm text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-neutral-100 dark:placeholder:text-neutral-500"
+            />
+          </span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function FilterToggleRow({
+  title,
+  active,
+  label,
+  onClick,
+}: {
+  title: string;
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <div className="rounded-md px-3 py-2 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70 lg:px-2.5 lg:py-1.5">
+      <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
+        <p className="min-w-0 grow text-sm font-medium text-neutral-900 dark:text-neutral-100">{title}</p>
+        <PanelOptionIconButton label={label} active={active} Icon={FunnelIcon} onClick={onClick} />
+      </div>
     </div>
   );
 }
@@ -158,21 +231,32 @@ function EventCard({ event }: { event: EventListItem }) {
 }
 
 export default function EventsIndex() {
-  const { events } = useLoaderData<typeof loader>();
+  const { events, now } = useLoaderData<typeof loader>();
+  const [filter, setFilter] = useState<EventFilterState>(defaultFilter);
+  const filteredEvents = useMemo(() => filterEventList(events, filter, now), [events, filter, now]);
 
   return (
     <Page
-      title="이벤트 목록"
-      description="블루 아카이브 한국 서버의 일반 이벤트 일정을 확인해보세요"
+      title="이벤트"
+      description="블루 아카이브의 이벤트 개최 일정을 확인해보세요"
       contentArea="4xl"
-      layout="vertical"
+      layout="horizontal"
+      panels={[
+        {
+          title: "이벤트 필터",
+          Icon: FunnelIcon,
+          children: <EventFilterPanel filter={filter} onFilterChange={setFilter} />,
+        },
+      ]}
     >
-      {events.length > 0 ? (
+      {filteredEvents.length > 0 ? (
         <div className="grid gap-3 py-4 md:grid-cols-2 xl:grid-cols-3">
-          {events.map((event) => (
+          {filteredEvents.map((event) => (
             <EventCard key={event.uid} event={event} />
           ))}
         </div>
+      ) : events.length > 0 ? (
+        <EmptyView text="필터 조건에 맞는 이벤트가 없어요." />
       ) : (
         <EmptyView text="표시할 이벤트가 없어요." />
       )}

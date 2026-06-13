@@ -133,7 +133,7 @@ export function getNavigationSections({
         },
         {
           to: "/events",
-          name: "이벤트 목록",
+          name: "이벤트",
           description: "이벤트 개최, 복각, 상설 일정을 확인해보세요",
           OutlineIcon: ListBulletIconOutline,
           SolidIcon: ListBulletIconSolid,

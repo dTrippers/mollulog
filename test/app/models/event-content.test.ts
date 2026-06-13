@@ -119,7 +119,7 @@ describe("getEventList", () => {
     mockedGetAllTimelineContentsMeta.mockResolvedValue([
       createTimelineContent({
         uid: "event-10-first",
-        name: "열 번째 이벤트 복각",
+        name: "열 번째 이벤트",
         startAt: "2025-01-01T02:00:00.000Z",
         endAt: "2025-01-15T01:59:59.000Z",
         contentType: "event",
@@ -152,7 +152,7 @@ describe("getEventList", () => {
     await expect(getEventList(env, "2026-06-13T00:00:00.000Z")).resolves.toEqual([
       {
         uid: "10",
-        name: "열 번째 이벤트 복각",
+        name: "열 번째 이벤트",
         imageUrl: "https://assets.baql.net/images/events/logo/10_kr.webp",
         fallbackImageUrl: "https://assets.baql.net/images/events/logo/10_jp.webp",
         latestTimelineUid: "event-10-rerun",
