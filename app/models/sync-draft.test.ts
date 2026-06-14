@@ -152,6 +152,9 @@ class FakeD1Database {
       return this.upsertRecruitedStudent(params);
     }
     if (normalizedSql.startsWith("insert into user_relationship_levels")) {
+      if (normalizedSql.includes("targetlevel = excluded.targetlevel")) {
+        return this.upsertRelationshipTargetLevel(params);
+      }
       return this.upsertRelationshipLevel(params);
     }
     if (normalizedSql.startsWith("insert into student_growth")) {
@@ -160,7 +163,8 @@ class FakeD1Database {
     if (normalizedSql.startsWith("update sync_drafts")) {
       const [draftUid, userId] = params;
       const draft = this.drafts.find(
-        (candidate) => candidate.uid === draftUid && candidate.userId === Number(userId) && candidate.status === "pending",
+        (candidate) =>
+          candidate.uid === draftUid && candidate.userId === Number(userId) && candidate.status === "pending",
       );
       if (!draft) return 0;
       draft.status = "applied";
@@ -174,7 +178,11 @@ class FakeD1Database {
 
   private hasPendingStudentStateDraft(userId: number, draftUid: string): boolean {
     return this.drafts.some(
-      (draft) => draft.uid === draftUid && draft.userId === userId && draft.status === "pending" && draft.type === "student_state",
+      (draft) =>
+        draft.uid === draftUid &&
+        draft.userId === userId &&
+        draft.status === "pending" &&
+        draft.type === "student_state",
     );
   }
 
@@ -233,6 +241,35 @@ class FakeD1Database {
 
     row.currentLevel = currentLevel;
     row.currentExp = null;
+    row.updatedAt = "current_timestamp";
+
+    if (!this.relationshipLevels.includes(row)) {
+      this.relationshipLevels.push(row);
+    }
+    return 1;
+  }
+
+  private upsertRelationshipTargetLevel(params: unknown[]): number {
+    const userId = Number(params[1]);
+    const studentId = String(params[2]);
+    const targetLevel = Number(params[3]);
+    const draftUid = String(params[4]);
+    if (!this.hasPendingStudentStateDraft(userId, draftUid)) {
+      return 0;
+    }
+
+    const row =
+      this.relationshipLevels.find((candidate) => candidate.userId === userId && candidate.studentId === studentId) ??
+      createRelationshipLevelRow({
+        uid: String(params[0]),
+        userId,
+        studentId,
+        currentLevel: 1,
+        currentExp: null,
+        items: "{}",
+      });
+
+    row.targetLevel = targetLevel;
     row.updatedAt = "current_timestamp";
 
     if (!this.relationshipLevels.includes(row)) {
@@ -521,7 +558,7 @@ describe("sync-draft", () => {
     ]);
   });
 
-  it("applies unowned student_state drafts to growth targets only", async () => {
+  it("applies unowned student_state drafts to growth and relationship targets", async () => {
     const { db, env } = createEnv();
     db.drafts.push(createDraftRow());
     db.entries.push(
@@ -530,6 +567,7 @@ describe("sync-draft", () => {
         valueJson: JSON.stringify({
           current: null,
           target: {
+            targetBond: 20,
             targetLevel: 90,
             targetTier: 7,
             targetSkillEx: 5,
@@ -549,7 +587,14 @@ describe("sync-draft", () => {
 
     expect(db.drafts[0]).toMatchObject({ status: "applied" });
     expect(db.recruitedStudents).toEqual([]);
-    expect(db.relationshipLevels).toEqual([]);
+    expect(db.relationshipLevels).toEqual([
+      expect.objectContaining({
+        studentId: "20048",
+        currentLevel: 1,
+        currentExp: null,
+        targetLevel: 20,
+      }),
+    ]);
     expect(db.studentGrowths).toEqual([
       expect.objectContaining({
         studentUid: "20048",
@@ -559,6 +604,27 @@ describe("sync-draft", () => {
         targetEquipSpecial: 2,
       }),
     ]);
+  });
+
+  it("applies empty student_state drafts without recruiting students", async () => {
+    const { db, env } = createEnv();
+    db.drafts.push(createDraftRow());
+    db.entries.push(
+      createEntryRow({
+        value: 1,
+        valueJson: JSON.stringify({
+          current: null,
+          target: null,
+        }),
+      }),
+    );
+
+    await applySyncDraft(env, 1, "draft-a");
+
+    expect(db.drafts[0]).toMatchObject({ status: "applied" });
+    expect(db.recruitedStudents).toEqual([]);
+    expect(db.relationshipLevels).toEqual([]);
+    expect(db.studentGrowths).toEqual([]);
   });
 
   it("applies owned student_state bond while preserving relationship targets", async () => {

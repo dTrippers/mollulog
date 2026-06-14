@@ -17,6 +17,7 @@ export type StudentStateDraftCurrentValue = {
 };
 
 export type StudentStateDraftTargetValue = {
+  targetBond: number | null;
   targetLevel: number | null;
   targetTier: number;
   targetSkillEx: number | null;
@@ -57,9 +58,6 @@ export function parseStudentStateDraftValue(entry: {
 
   const current = normalizeCurrentValue(parsed.current);
   const target = normalizeTargetValue(parsed.target);
-  if (current === null && target === null) {
-    throw new Error("학생 상태 변경안에는 현재 상태 또는 육성 목표가 필요해요");
-  }
 
   const expectedValue = current?.tier ?? target?.targetTier ?? 1;
   if (expectedValue !== entry.value) {
@@ -108,6 +106,10 @@ function normalizeTargetValue(value: unknown): StudentStateDraftTargetValue | nu
   }
 
   const state: StudentStateDraftTargetValue = {
+    targetBond: normalizeOptionalStudentStateValue(
+      value.targetBond ?? value.bond ?? value.relationshipTargetLevel,
+      "목표 인연 랭크",
+    ),
     targetLevel: normalizeOptionalStudentStateValue(value.targetLevel, "목표 레벨"),
     targetTier: normalizeStudentTierValue(value.targetTier, "목표 등급"),
     targetSkillEx: normalizeOptionalStudentStateValue(value.targetSkillEx, "목표 EX 스킬"),
@@ -151,6 +153,7 @@ function validateCurrentValue(state: StudentStateDraftCurrentValue) {
 }
 
 function validateTargetValue(state: StudentStateDraftTargetValue) {
+  assertOptionalRange(state.targetBond, 1, 100, "목표 인연 랭크");
   assertOptionalRange(state.targetLevel, 1, 90, "목표 레벨");
   assertOptionalRange(state.targetSkillEx, 1, 5, "목표 EX 스킬");
   assertOptionalRange(state.targetSkillNormal, 1, 10, "목표 기본 스킬");

@@ -7,6 +7,7 @@ export type PageScreenSelectorProps = {
 
 export type PageScreenSelectorItemProps = {
   text: string;
+  label?: string;
   description?: string;
   Icon: React.ElementType;
   active?: boolean;
@@ -24,7 +25,7 @@ export default function PageScreenSelector({ screens }: PageScreenSelectorProps)
   );
 }
 
-function PageScreenSelectorItem({ text, description, Icon, active, disabled, onClick, link }: PageScreenSelectorItemProps) {
+function PageScreenSelectorItem({ text, label, description, Icon, active, disabled, onClick, link }: PageScreenSelectorItemProps) {
   const classNames = ["flex items-center justify-between gap-x-3 my-2 w-full py-3 px-4 rounded-lg transition-all duration-200 border text-left"];
   if (disabled) {
     classNames.push("bg-neutral-100 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-700 cursor-not-allowed opacity-60");
@@ -47,6 +48,11 @@ function PageScreenSelectorItem({ text, description, Icon, active, disabled, onC
           </p>
         )}
       </div>
+      {label ? (
+        <span className="flex min-w-5 shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-xs font-bold leading-none text-white dark:bg-rose-400 dark:text-rose-950">
+          {label}
+        </span>
+      ) : null}
     </>
   );
 

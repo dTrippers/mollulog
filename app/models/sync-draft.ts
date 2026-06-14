@@ -74,6 +74,7 @@ export type SyncDraft = SyncDraftSummary & {
 export type SyncDraftEntryUpdateInput = {
   entryKey: string;
   value: unknown;
+  valueJson?: string | null;
 };
 
 export function toSyncDraftSource(source: string): SyncDraftSource {
@@ -205,17 +206,15 @@ export async function updateSyncDraftEntries(
   entries: SyncDraftEntryUpdateInput[],
 ) {
   const draft = await getPendingOwnedSyncDraft(env, userId, draftUid);
-  if (draft.type === "student_state") {
-    throw new Error("학생 상태 변경안은 수정할 수 없어요");
-  }
   const normalizedEntries = normalizeSyncDraftEntryUpdates(draft.type, entries);
   assertEntryKeysMatchDraft(draft.entries, normalizedEntries);
 
   await env.DB.batch([
-    ...normalizedEntries.map(({ entryKey, value }) =>
+    ...normalizedEntries.map(({ entryKey, value, valueJson }) =>
       env.DB.prepare(`
         update sync_draft_entries
-        set value = ?1
+        set value = ?1,
+            valueJson = ?5
         where draftUid = ?2
           and entryKey = ?3
           and exists (
@@ -225,7 +224,7 @@ export async function updateSyncDraftEntries(
               and userId = ?4
               and status = 'pending'
           )
-      `).bind(value, draftUid, entryKey, userId),
+      `).bind(value, draftUid, entryKey, userId, valueJson ?? null),
     ),
     env.DB.prepare(`
       update sync_drafts
@@ -245,7 +244,9 @@ export async function updateSyncDraftEntries(
 export async function applySyncDraft(env: Env, userId: number, draftUid: string) {
   const draft = await getPendingOwnedSyncDraft(env, userId, draftUid);
   const normalizedEntries =
-    draft.type === "student_state" ? parseStudentStateDraftEntries(draft.entries) : normalizeSyncDraftEntryUpdates(draft.type, draft.entries);
+    draft.type === "student_state"
+      ? parseStudentStateDraftEntries(draft.entries)
+      : normalizeSyncDraftEntryUpdates(draft.type, draft.entries);
 
   await env.DB.batch([
     ...normalizedEntries.flatMap((entry) => createConditionalApplyStatements(env, userId, draftUid, draft.type, entry)),
@@ -301,8 +302,8 @@ async function getPendingOwnedSyncDraft(env: Env, userId: number, draftUid: stri
 function normalizeSyncDraftEntryUpdates(
   type: SyncDraftType,
   entries: SyncDraftEntryUpdateInput[],
-): { entryKey: string; value: number }[] {
-  const entryMap = new Map<string, number>();
+): { entryKey: string; value: number; valueJson: string | null }[] {
+  const entryMap = new Map<string, { value: number; valueJson: string | null }>();
 
   for (const entry of entries) {
     const entryKey = entry.entryKey.trim();
@@ -313,16 +314,25 @@ function normalizeSyncDraftEntryUpdates(
       throw new Error("중복된 변경안 항목이 있어요");
     }
 
-    entryMap.set(entryKey, normalizeSyncDraftEntryValue(type, entry.value));
+    const value = normalizeSyncDraftEntryValue(type, entry.value);
+    const valueJson = type === "student_state" ? normalizeStudentStateDraftEntryJson(value, entry.valueJson) : null;
+
+    entryMap.set(entryKey, { value, valueJson });
   }
 
-  return [...entryMap.entries()].map(([entryKey, value]) => ({ entryKey, value }));
+  return [...entryMap.entries()].map(([entryKey, entry]) => ({ entryKey, ...entry }));
 }
 
-function assertEntryKeysMatchDraft(
-  draftEntries: SyncDraftEntry[],
-  normalizedEntries: { entryKey: string; value: number }[],
-) {
+function normalizeStudentStateDraftEntryJson(value: number, valueJson: string | null | undefined): string {
+  if (!valueJson) {
+    throw new Error("학생 상태 변경안 데이터를 찾을 수 없어요");
+  }
+
+  parseStudentStateDraftValue({ value, valueJson });
+  return valueJson;
+}
+
+function assertEntryKeysMatchDraft(draftEntries: SyncDraftEntry[], normalizedEntries: { entryKey: string }[]) {
   const draftKeys = draftEntries.map((entry) => entry.entryKey).sort();
   const updateKeys = normalizedEntries.map((entry) => entry.entryKey).sort();
 
@@ -348,13 +358,30 @@ function createConditionalApplyStatements(
     const studentState = entry.value as StudentStateDraftValue;
     const statements: D1PreparedStatement[] = [];
     if (studentState.current != null) {
-      statements.push(createConditionalStudentStateStatement(env, userId, draftUid, entry.entryKey, studentState.current));
+      statements.push(
+        createConditionalStudentStateStatement(env, userId, draftUid, entry.entryKey, studentState.current),
+      );
       if (studentState.current.bond != null) {
-        statements.push(createConditionalStudentStateBondStatement(env, userId, draftUid, entry.entryKey, studentState.current.bond));
+        statements.push(
+          createConditionalStudentStateBondStatement(env, userId, draftUid, entry.entryKey, studentState.current.bond),
+        );
       }
     }
     if (studentState.target != null) {
-      statements.push(createConditionalStudentStateGrowthStatement(env, userId, draftUid, entry.entryKey, studentState.target));
+      statements.push(
+        createConditionalStudentStateGrowthStatement(env, userId, draftUid, entry.entryKey, studentState.target),
+      );
+      if (studentState.target.targetBond != null) {
+        statements.push(
+          createConditionalStudentStateBondTargetStatement(
+            env,
+            userId,
+            draftUid,
+            entry.entryKey,
+            studentState.target.targetBond,
+          ),
+        );
+      }
     }
     return statements;
   }
@@ -601,6 +628,38 @@ function createConditionalStudentStateBondStatement(
       currentExp = null,
       updatedAt = current_timestamp
   `).bind(nanoid(8), userId, studentUid, bond, draftUid);
+}
+
+function createConditionalStudentStateBondTargetStatement(
+  env: Env,
+  userId: number,
+  draftUid: string,
+  studentUid: string,
+  targetBond: number,
+): D1PreparedStatement {
+  return env.DB.prepare(`
+    insert into user_relationship_levels (
+      uid,
+      userId,
+      studentId,
+      currentLevel,
+      currentExp,
+      targetLevel,
+      items
+    )
+    select ?1, ?2, ?3, 1, null, ?4, '{}'
+    where exists (
+      select 1
+      from sync_drafts
+      where uid = ?5
+        and userId = ?2
+        and status = 'pending'
+        and type = 'student_state'
+    )
+    on conflict(userId, studentId) do update set
+      targetLevel = excluded.targetLevel,
+      updatedAt = current_timestamp
+  `).bind(nanoid(8), userId, studentUid, targetBond, draftUid);
 }
 
 function parseStudentStateDraftEntries(

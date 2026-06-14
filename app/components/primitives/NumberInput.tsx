@@ -1,6 +1,12 @@
+import type { ComponentPropsWithoutRef } from "react";
 import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
 import Field from "./Field";
+
+type NumberInputElementProps = Omit<
+  ComponentPropsWithoutRef<"input">,
+  "type" | "inputMode" | "pattern" | "value" | "defaultValue" | "placeholder" | "onChange"
+>;
 
 type NumberInputBaseProps = {
   label?: string;
@@ -14,6 +20,9 @@ type NumberInputBaseProps = {
   showDecrease?: boolean;
   showIncrease?: boolean;
   fullWidth?: boolean;
+  disabled?: boolean;
+  inputProps?: NumberInputElementProps;
+  controlClassName?: string;
 };
 
 type NonNullableProps = NumberInputBaseProps & {
@@ -65,6 +74,9 @@ export default function NumberInput({
   showDecrease = true,
   showIncrease = true,
   fullWidth = false,
+  disabled = false,
+  inputProps,
+  controlClassName,
   onChange,
   ...rest
 }: NumberInputProps) {
@@ -133,6 +145,7 @@ export default function NumberInput({
             "min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
           size === "lg" &&
             "min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 md:min-h-11",
+          controlClassName,
         )}
       >
         {showMin && effectiveMin !== undefined && (
@@ -142,7 +155,7 @@ export default function NumberInput({
               commitValue(effectiveMin);
             }}
             className={cn(shortcutButtonClass(minButtonVariant), "border-l-0 border-r")}
-            disabled={internalValue === effectiveMin}
+            disabled={disabled || internalValue === effectiveMin}
             aria-label="최소값으로 설정"
           >
             최소
@@ -157,9 +170,10 @@ export default function NumberInput({
             }}
             className={buttonClass}
             disabled={
-              internalValue != null && effectiveMin !== undefined
+              disabled ||
+              (internalValue != null && effectiveMin !== undefined
                 ? internalValue <= effectiveMin
-                : internalValue != null && internalValue <= 0
+                : internalValue != null && internalValue <= 0)
             }
             aria-label="감소"
           >
@@ -167,11 +181,13 @@ export default function NumberInput({
           </button>
         )}
         <input
+          {...inputProps}
           type="text"
           inputMode={allowNegative ? "decimal" : "numeric"}
           pattern={allowNegative ? "-?[0-9]*" : "[0-9]*"}
           value={inputText}
           placeholder={nullable ? "" : undefined}
+          disabled={disabled || inputProps?.disabled}
           onChange={(e) => {
             const nextText = e.target.value;
 
@@ -190,12 +206,15 @@ export default function NumberInput({
             if (!nullable && e.currentTarget.value === "") {
               commitValue(clampValue(effectiveMin ?? 0));
             }
+            inputProps?.onBlur?.(e);
           }}
           className={cn(
             "w-full min-w-0 shrink appearance-none bg-transparent text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
             size === "sm" && "py-0.5 text-sm text-neutral-900 dark:text-neutral-100",
             size === "md" && "px-3 py-2 text-sm text-foreground",
             size === "lg" && "px-2 py-1 text-base font-semibold text-foreground md:px-3 md:py-1.5",
+            disabled && "cursor-not-allowed opacity-60",
+            inputProps?.className,
           )}
         />
         {showIncrease && (
@@ -206,7 +225,7 @@ export default function NumberInput({
               commitValue(clampValue(base + 1));
             }}
             className={buttonClass}
-            disabled={maxValue !== undefined && internalValue != null && internalValue >= maxValue}
+            disabled={disabled || (maxValue !== undefined && internalValue != null && internalValue >= maxValue)}
             aria-label="증가"
           >
             +
@@ -219,7 +238,7 @@ export default function NumberInput({
               commitValue(maxValue);
             }}
             className={shortcutButtonClass(maxButtonVariant)}
-            disabled={internalValue === maxValue}
+            disabled={disabled || internalValue === maxValue}
             aria-label="최대값으로 설정"
           >
             최대

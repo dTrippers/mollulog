@@ -1,9 +1,12 @@
 import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, data, redirect, useActionData, useNavigation } from "react-router";
+import { Form, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Button, Textarea, Title } from "~/components/primitives";
+import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { parseStudentStateImport } from "~/models/student-state-import";
+import { getSyncDraftEntryCounts, listPendingSyncDrafts } from "~/models/sync-draft";
+import ConnectDataPage from "./connect._components/ConnectDataPage";
+import PendingSyncDraftList from "./connect._components/PendingSyncDraftList";
 
 type ActionData = {
   error?: string;
@@ -27,7 +30,17 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     return redirect("/unauthorized");
   }
 
-  return null;
+  const drafts = await listPendingSyncDrafts(env, sensei.id);
+  const entryCounts = await getSyncDraftEntryCounts(
+    env,
+    drafts.map((draft) => draft.uid),
+  );
+  const draftsWithEntryCounts = drafts.map((draft) => ({
+    ...draft,
+    entryCount: entryCounts[draft.uid] ?? 0,
+  }));
+
+  return { drafts: draftsWithEntryCounts };
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
@@ -58,7 +71,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       body: JSON.stringify({
         type: "student_state",
         source: {
-          toolName: parsed.format === "schaledb" ? "SchaleDB 가져오기" : "Justin163 가져오기",
+          toolName: parsed.format === "schaledb" ? "SchaleDB 데이터 가져오기" : "Justin163 데이터 가져오기",
         },
         entries: parsed.entries,
       }),
@@ -74,7 +87,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       throw new Error("변경안 응답을 확인할 수 없어요.");
     }
 
-    return redirect(`/connect/drafts/${body.draftUid}`);
+    return redirect(`/connect/import/${body.draftUid}`);
   } catch (error) {
     const isTimeout = error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError");
     return data<ActionData>(
@@ -92,35 +105,45 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 };
 
 export default function ConnectImportIndexPage() {
+  const { drafts } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isImporting = navigation.state === "submitting";
 
   return (
-    <div className="space-y-6 pb-12">
-      <Title
-        text="데이터 가져오기"
-        description="외부 사이트에서 데이터를 가져오거나 내보낼 수 있어요"
-      />
+    <ConnectDataPage currentScreen="import" pendingDraftCount={drafts.length}>
+      <div className="space-y-8 pb-12">
+        <section>
+          <SubTitle
+            text="데이터 가져오기"
+            description="현재 SchaleDB와 Justin163 플래너를 지원해요"
+          />
+          <Form method="post" className="space-y-4">
+            <Textarea
+              name="payload"
+              rows={14}
+              defaultValue={actionData?.input}
+              placeholder="SchaleDB 또는 Justin163 플래너에서 내보낸 데이터를 이곳에 입력해주세요"
+              error={actionData?.error}
+            />
 
-      <Form method="post" className="space-y-4">
-        <Textarea
-          name="payload"
-          label="학생 데이터"
-          rows={14}
-          defaultValue={actionData?.input}
-          placeholder="SchaleDB 또는 Justin163 플래너의 데이터를 붙여넣어주세요"
-          error={actionData?.error}
-          className="font-mono text-xs leading-5"
-        />
+            <div className="flex justify-end">
+              <Button type="submit" variant="primary" disabled={isImporting}>
+                {isImporting ? <ArrowPathIcon className="size-4 animate-spin" /> : null}
+                {isImporting ? "처리중..." : "가져오기"}
+              </Button>
+            </div>
+          </Form>
+        </section>
 
-        <div className="flex justify-end">
-          <Button type="submit" variant="primary" disabled={isImporting}>
-            {isImporting ? <ArrowPathIcon className="size-4 animate-spin" /> : null}
-            {isImporting ? "가져오는 중..." : "가져오기"}
-          </Button>
-        </div>
-      </Form>
-    </div>
+        <section>
+          <SubTitle
+            text="검토 대상 데이터 목록"
+            description="가져온 데이터를 검토한 후 내 프로필에 반영할 수 있어요."
+          />
+          <PendingSyncDraftList drafts={drafts} />
+        </section>
+      </div>
+    </ConnectDataPage>
   );
 }

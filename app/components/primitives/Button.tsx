@@ -14,6 +14,7 @@ type PrimitiveButtonProps = {
   disabled?: boolean;
   name?: string;
   value?: string;
+  form?: string;
   fullWidth?: boolean;
   shadow?: "auto" | "xs" | "none";
   href?: string;
@@ -34,6 +35,7 @@ export default function PrimitiveButton({
   disabled = false,
   name,
   value,
+  form,
   fullWidth = false,
   shadow = "auto",
   href,
@@ -116,7 +118,15 @@ export default function PrimitiveButton({
   }
 
   return (
-    <button type={type} className={buttonClassName} onClick={handleClick} disabled={disabled} name={name} value={value}>
+    <button
+      type={type}
+      className={buttonClassName}
+      onClick={handleClick}
+      disabled={disabled}
+      name={name}
+      value={value}
+      form={form}
+    >
       {content}
     </button>
   );

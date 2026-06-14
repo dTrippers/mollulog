@@ -1,15 +1,21 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { Page } from "~/components/features/layout";
 import { routeError } from "~/lib/http-errors";
 import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentGrowths } from "~/models/student-growth";
-import { parseStudentStateDraftValue } from "~/models/student-state-draft-value";
+import {
+  type StudentStateDraftCurrentValue,
+  type StudentStateDraftTargetValue,
+  parseStudentStateDraftValue,
+} from "~/models/student-state-draft-value";
 import {
   type SyncDraft,
   type SyncDraftEntry,
+  type SyncDraftEntryUpdateInput,
   type SyncDraftType,
   applySyncDraft,
   discardSyncDraft,
@@ -18,19 +24,18 @@ import {
   updateSyncDraftEntries,
 } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
+import { GrowthResourceRepository } from "~/repositories/growth-resource";
 import { getItemCatalogResourceMap } from "~/repositories/item-catalog";
-import SyncDraftReview, {
-  type SyncDraftDisplayMetadata,
-  type SyncDraftReviewActionData,
-} from "./connect.drafts._components/SyncDraftReview";
+import type { SyncDraftDisplayMetadata, SyncDraftReviewActionData } from "./connect.import._components/DraftReviewView";
+import SyncDraftReview from "./connect.import._components/SyncDraftReview";
 import StudentStateDraftReview, {
   type StudentStateCurrentValues,
   type StudentStateProposedValues,
-} from "./connect.drafts._components/StudentStateDraftReview";
+} from "./connect.import._components/StudentStateDraftReview";
 
 type ActionData = SyncDraftReviewActionData;
 
-export const meta: MetaFunction = () => [{ title: "연동 변경안 확인 | 몰루로그" }];
+export const meta: MetaFunction = () => [{ title: "가져온 데이터 검토 | 몰루로그" }];
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -76,7 +81,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const intent = formData.get("intent");
 
   try {
-    if (intent === "save" || intent === "apply") {
+    if (intent === "apply") {
       const draft = await getSyncDraft(env, currentUser.id, draftUid);
       if (!draft) {
         return data<ActionData>({ intent, error: "변경안을 찾을 수 없어요" }, { status: 404 });
@@ -84,30 +89,23 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       if (draft.status !== "pending") {
         return data<ActionData>({ intent, error: "이미 처리된 변경안이에요" }, { status: 400 });
       }
-      if (draft.type === "student_state" && intent === "save") {
-        return data<ActionData>({ intent, error: "학생 상태 변경안은 수정할 수 없어요" }, { status: 400 });
+      const { entries, fieldErrors } =
+        draft.type === "student_state"
+          ? parseStudentStateDraftFormData(draft, formData)
+          : parseDraftEntryFormData(draft, formData);
+      if (Object.keys(fieldErrors).length > 0) {
+        return data<ActionData>({ intent, error: "입력값을 확인해주세요.", fieldErrors }, { status: 400 });
       }
 
-      if (draft.type !== "student_state") {
-        const { entries, fieldErrors } = parseDraftEntryFormData(draft, formData);
-        if (Object.keys(fieldErrors).length > 0) {
-          return data<ActionData>({ intent, error: "입력값을 확인해주세요.", fieldErrors }, { status: 400 });
-        }
+      await updateSyncDraftEntries(env, currentUser.id, draftUid, entries);
 
-        await updateSyncDraftEntries(env, currentUser.id, draftUid, entries);
-      }
-
-      if (intent === "apply") {
-        await applySyncDraft(env, currentUser.id, draftUid);
-        return redirect("/connect/drafts");
-      }
-
-      return data<ActionData>({ intent, success: "수정값을 저장했어요." });
+      await applySyncDraft(env, currentUser.id, draftUid);
+      return redirect("/connect/import");
     }
 
     if (intent === "discard") {
       await discardSyncDraft(env, currentUser.id, draftUid);
-      return redirect("/connect/drafts");
+      return redirect("/connect/import");
     }
 
     return data<ActionData>({ error: "지원하지 않는 요청이에요" }, { status: 400 });
@@ -126,8 +124,8 @@ export default function ConnectDraftDetailPage() {
   const { draft, metadataByKey, currentValues, proposedStudentStateValues } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
-  if (draft.type === "student_state") {
-    return (
+  const review =
+    draft.type === "student_state" ? (
       <StudentStateDraftReview
         draft={draft}
         metadataByKey={metadataByKey}
@@ -135,42 +133,76 @@ export default function ConnectDraftDetailPage() {
         proposedValues={proposedStudentStateValues as StudentStateProposedValues}
         actionData={actionData}
       />
+    ) : (
+      <SyncDraftReview
+        draft={draft}
+        metadataByKey={metadataByKey}
+        currentValues={currentValues as Record<string, number>}
+        actionData={actionData}
+      />
     );
-  }
 
   return (
-    <SyncDraftReview
-      draft={draft}
-      metadataByKey={metadataByKey}
-      currentValues={currentValues as Record<string, number>}
-      actionData={actionData}
-    />
+    <Page
+      title="가져온 데이터 검토"
+      description="가져온 데이터를 확인하고 잘못된 값을 수정하여 반영할 수 있어요"
+      backward={{ title: "데이터 가져오기", to: "/connect/import" }}
+      contentArea="full"
+      layout="vertical"
+    >
+      {review}
+    </Page>
   );
 }
 
 async function loadDraftMetadata(env: Env, draft: SyncDraft): Promise<Record<string, SyncDraftDisplayMetadata>> {
   if (draft.type === "student_tier" || draft.type === "student_state") {
     const studentsByUid = await getAllStudentsMap(env);
+    const gearDataByUid =
+      draft.type === "student_state"
+        ? await new GrowthResourceRepository(env).getStudentGearData(draft.entries.map((entry) => entry.entryKey))
+        : new Map<string, null>();
     return Object.fromEntries(
-      draft.entries.map((entry) => [
-        entry.entryKey,
-        {
-          label: studentsByUid[entry.entryKey]?.name ?? `알 수 없는 학생 (${entry.entryKey})`,
-          studentUid: entry.entryKey,
-        },
-      ]),
+      draft.entries.flatMap((entry) => {
+        const student = studentsByUid[entry.entryKey];
+        if (!student) {
+          return [];
+        }
+
+        return [
+          [
+            entry.entryKey,
+            {
+              label: student.name,
+              studentUid: entry.entryKey,
+              equipments: student.equipments,
+              hasGear: gearDataByUid.get(entry.entryKey) != null,
+              initialTier: student.initialTier,
+            },
+          ],
+        ];
+      }),
     );
   }
 
   const resourcesByUid = await getItemCatalogResourceMap(env);
   return Object.fromEntries(
-    draft.entries.map((entry) => [
-      entry.entryKey,
-      {
-        label: resourcesByUid[entry.entryKey]?.name ?? `알 수 없는 아이템 (${entry.entryKey})`,
-        item: resourcesByUid[entry.entryKey],
-      },
-    ]),
+    draft.entries.flatMap((entry) => {
+      const resource = resourcesByUid[entry.entryKey];
+      if (!resource) {
+        return [];
+      }
+
+      return [
+        [
+          entry.entryKey,
+          {
+            label: resource.name,
+            item: resource,
+          },
+        ],
+      ];
+    }),
   );
 }
 
@@ -192,9 +224,7 @@ async function loadCurrentValues(
     const relationshipsByStudentId = Object.fromEntries(
       relationshipLevels.map((relationship) => [relationship.studentId, relationship]),
     );
-    const studentGrowthsByUid = Object.fromEntries(
-      studentGrowths.map((growth) => [growth.studentUid, growth]),
-    );
+    const studentGrowthsByUid = Object.fromEntries(studentGrowths.map((growth) => [growth.studentUid, growth]));
 
     return Object.fromEntries(
       entryKeys.map((entryKey) => {
@@ -222,6 +252,7 @@ async function loadCurrentValues(
               bond: relationshipLevel?.currentLevel ?? null,
             },
             target: {
+              targetBond: relationshipLevel?.targetLevel ?? null,
               targetLevel: studentGrowth?.targetLevel ?? null,
               targetTier: studentGrowth?.targetTier ?? null,
               targetSkillEx: studentGrowth?.targetSkillEx ?? null,
@@ -248,7 +279,7 @@ async function loadCurrentValues(
 }
 
 function parseDraftEntryFormData(draft: SyncDraft, formData: FormData) {
-  const entries: { entryKey: string; value: number }[] = [];
+  const entries: SyncDraftEntryUpdateInput[] = [];
   const fieldErrors: Record<string, string> = {};
 
   for (const entry of draft.entries) {
@@ -264,6 +295,86 @@ function parseDraftEntryFormData(draft: SyncDraft, formData: FormData) {
   }
 
   return { entries, fieldErrors };
+}
+
+const studentStateCurrentDraftFields = [
+  "tier",
+  "level",
+  "weaponLevel",
+  "skillEx",
+  "skillNormal",
+  "skillEnhanced",
+  "skillSub",
+  "equip1",
+  "equip2",
+  "equip3",
+  "equipSpecial",
+  "abilityHp",
+  "abilityAtk",
+  "abilityHeal",
+  "bond",
+] as const satisfies readonly (keyof StudentStateDraftCurrentValue)[];
+
+const studentStateTargetDraftFields = [
+  "targetBond",
+  "targetTier",
+  "targetLevel",
+  "targetSkillEx",
+  "targetSkillNormal",
+  "targetSkillEnhanced",
+  "targetSkillSub",
+  "targetEquip1",
+  "targetEquip2",
+  "targetEquip3",
+  "targetEquipSpecial",
+] as const satisfies readonly (keyof StudentStateDraftTargetValue)[];
+
+function parseStudentStateDraftFormData(draft: SyncDraft, formData: FormData) {
+  const entries: SyncDraftEntryUpdateInput[] = [];
+  const fieldErrors: Record<string, string> = {};
+
+  for (const entry of draft.entries) {
+    try {
+      const current = parseStudentStateSectionFlag(formData, `studentState:${entry.uid}:hasCurrent`)
+        ? Object.fromEntries(
+            studentStateCurrentDraftFields.map((field) => [
+              field,
+              parseStudentStateFormValue(formData, `studentState:${entry.uid}:current:${field}`),
+            ]),
+          )
+        : null;
+      const target = parseStudentStateSectionFlag(formData, `studentState:${entry.uid}:hasTarget`)
+        ? Object.fromEntries(
+            studentStateTargetDraftFields.map((field) => [
+              field,
+              parseStudentStateFormValue(formData, `studentState:${entry.uid}:target:${field}`),
+            ]),
+          )
+        : null;
+      const valueJson = JSON.stringify({ current, target });
+      const value = Number(current?.tier ?? target?.targetTier ?? 1);
+
+      parseStudentStateDraftValue({ value, valueJson });
+      entries.push({ entryKey: entry.entryKey, value, valueJson });
+    } catch (error) {
+      fieldErrors[entry.entryKey] = error instanceof Error ? error.message : "입력값을 확인해주세요";
+    }
+  }
+
+  return { entries, fieldErrors };
+}
+
+function parseStudentStateFormValue(formData: FormData, name: string): number | null {
+  const rawValue = formData.get(name);
+  if (typeof rawValue !== "string" || rawValue.trim() === "") {
+    return null;
+  }
+
+  return Number(rawValue);
+}
+
+function parseStudentStateSectionFlag(formData: FormData, name: string): boolean {
+  return formData.get(name) === "1";
 }
 
 function parseStudentStateDraftValues(entries: SyncDraftEntry[]): StudentStateProposedValues {
@@ -285,7 +396,7 @@ function parseStudentStateDraftValues(entries: SyncDraftEntry[]): StudentStatePr
 }
 
 function toActionIntent(intent: string): ActionData["intent"] {
-  if (intent === "save" || intent === "apply" || intent === "discard") {
+  if (intent === "apply" || intent === "discard") {
     return intent;
   }
 

@@ -122,7 +122,7 @@ export default function ResourceInventoryDraftReview({
           <Form method="post">
             <input type="hidden" name="intent" value="discard" />
             <Button type="submit" size="sm" variant="tint" disabled={isSubmitting}>
-              변경안 폐기
+              삭제
             </Button>
           </Form>
           <Form method="post">

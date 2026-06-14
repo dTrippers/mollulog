@@ -2,7 +2,6 @@ import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
 import {
   ArrowRightStartOnRectangleIcon,
-  ArrowUpTrayIcon,
   CommandLineIcon,
   KeyIcon,
   LinkIcon,
@@ -392,12 +391,6 @@ export default function EditProfile() {
             title="MolluConnect API 키 관리"
             description={`${connectApiKeyCount}개 등록됨`}
             Icon={CommandLineIcon}
-          />
-          <SettingsLink
-            to="/connect/import"
-            title="데이터 가져오기"
-            description="SchaleDB 또는 Justin163 학생 데이터를 가져오기"
-            Icon={ArrowUpTrayIcon}
           />
           <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} tone="destructive" />
         </div>

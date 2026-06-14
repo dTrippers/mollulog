@@ -5,11 +5,13 @@ import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 type TierSelectorProps = {
   initialTier: number;
   currentTier: number;
+  iconSize?: "sm" | "md";
   onTierChange: (tier: number) => void;
 };
 
-export default function TierSelector({ initialTier, currentTier, onTierChange }: TierSelectorProps) {
+export default function TierSelector({ initialTier, currentTier, iconSize = "md", onTierChange }: TierSelectorProps) {
   const [tier, setTier] = useState(currentTier);
+  const iconSizeClass = iconSize === "sm" ? "size-4" : "size-5";
 
   useEffect(() => {
     setTier(currentTier);
@@ -53,7 +55,7 @@ export default function TierSelector({ initialTier, currentTier, onTierChange }:
         return (
           <Icon
             key={eachTier}
-            className={`size-5 ${colorClasses.join(" ")} transition`}
+            className={`${iconSizeClass} ${colorClasses.join(" ")} transition`}
             onClick={() => handleTierChange(eachTier)}
           />
         );
