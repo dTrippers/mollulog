@@ -2,11 +2,15 @@ import { and, eq, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { type UtcIsoString, normalizeInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { fetchCached } from "./base";
 import {
   type TimelineContentNameI18n,
   parseTimelineContentNames,
   selectTimelineContentName,
 } from "./timeline-content-name-i18n";
+
+const ALL_TIMELINE_CONTENTS_META_CACHE_KEY = "timeline-contents-meta::v1";
+const ALL_TIMELINE_CONTENTS_META_TTL = 60 * 30; // 30 minutes
 
 export type TimelineContentType =
   | "event"
@@ -301,10 +305,29 @@ export async function getContentUidsByRecruitmentGroup(
   return new Map(rows.map((row) => [row.uid, { contentType: row.contentType, contentUid: row.contentUid ?? null }]));
 }
 
-export async function getAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
+async function fetchAllTimelineContentsMetaFromDb(env: Env): Promise<TimelineContent[]> {
   const db = drizzle(env.DB);
   const rows = await db.select().from(timelineContentsTable).orderBy(timelineContentsTable.startAt).all();
   return rows.map(toRaw).map(toTimelineContent);
+}
+
+export async function syncAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
+  return fetchCached(
+    env,
+    ALL_TIMELINE_CONTENTS_META_CACHE_KEY,
+    () => fetchAllTimelineContentsMetaFromDb(env),
+    ALL_TIMELINE_CONTENTS_META_TTL,
+    true,
+  );
+}
+
+export async function getAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
+  return fetchCached(
+    env,
+    ALL_TIMELINE_CONTENTS_META_CACHE_KEY,
+    () => fetchAllTimelineContentsMetaFromDb(env),
+    ALL_TIMELINE_CONTENTS_META_TTL,
+  );
 }
 
 /**

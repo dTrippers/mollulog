@@ -9,6 +9,7 @@ import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
 import { syncRawStudents } from "~/models/student";
+import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { RaidRepository, RecruitmentRepository } from "~/repositories";
 
@@ -19,6 +20,7 @@ type RefreshTaskName =
   | "RaidRepository.refresh"
   | "getMainStories"
   | "getAllStudentsFavoriteItems"
+  | "syncAllTimelineContentsMeta"
   | "getFutureContents"
   | "getNavigationBarContentsRaw";
 
@@ -76,6 +78,7 @@ async function refreshCache(env: Env): Promise<RefreshResult> {
     ["RaidRepository.refresh", () => raidRepository.refresh()],
     ["getMainStories", () => getMainStories(env, true)],
     ["getAllStudentsFavoriteItems", () => getAllStudentsFavoriteItems(env, true)],
+    ["syncAllTimelineContentsMeta", () => syncAllTimelineContentsMeta(env)],
   ];
   const compositeTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
     ["getFutureContents", () => getFutureContents(env, true)],
