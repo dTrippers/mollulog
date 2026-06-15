@@ -68,6 +68,7 @@ async function getRecruitmentFeedStatsByPostUid(
     .select({
       userId: recruitmentResultsTable.userId,
       recruitedStudents: recruitmentResultsTable.recruitedStudents,
+      tier3Count: recruitmentResultsTable.tier3Count,
       trial: recruitmentResultsTable.trial,
       commentPostUid: recruitmentResultsTable.commentPostUid,
     })
@@ -91,6 +92,7 @@ async function getRecruitmentFeedStatsByPostUid(
       const stats = getRecruitmentResultCountStats(
         {
           recruitedStudents,
+          tier3Count: row.tier3Count ?? null,
           trial: row.trial ?? null,
         },
         {

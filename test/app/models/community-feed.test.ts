@@ -40,6 +40,7 @@ type FakeRecruitmentResultRow = {
   completedAt: string | null;
   recruitedStudents: string;
   exchangedStudents: string;
+  tier3Count?: number | null;
   trial: number | null;
   rawResult: string | null;
   commentPostUid: string | null;
@@ -89,7 +90,13 @@ class FakeCommunityFeedD1Database {
       const commentPostUids = params.filter((param): param is string => typeof param === "string");
       return this.recruitmentResults
         .filter((result) => result.commentPostUid !== null && commentPostUids.includes(result.commentPostUid))
-        .map((result) => [result.userId, result.recruitedStudents, result.trial, result.commentPostUid]);
+        .map((result) => [
+          result.userId,
+          result.recruitedStudents,
+          result.tier3Count ?? null,
+          result.trial,
+          result.commentPostUid,
+        ]);
     }
 
     throw new Error(`Unexpected SELECT SQL: ${sql}\nparams: ${JSON.stringify(params)}`);

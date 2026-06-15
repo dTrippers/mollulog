@@ -13,6 +13,7 @@ import {
   createRecruitmentResultStudentsFromPickupHistory,
   getRecruitmentResult,
   getRecruitmentResultComment,
+  getRecruitmentResultTier3CountFromPickupHistory,
   getRecruitmentResultTrialFromPickupHistory,
   mergeEditableRecruitmentResultStudents,
   upsertRecruitmentResult,
@@ -76,12 +77,14 @@ function getSaveUnavailableReason({
   totalCount,
   tier3Count,
   tier3StudentCount,
+  skipTier3StudentList,
   exchangedStudentCount,
 }: {
   eventUid: string | null;
   totalCount?: number;
   tier3Count?: number;
   tier3StudentCount: number;
+  skipTier3StudentList: boolean;
   exchangedStudentCount: number;
 }) {
   if (!eventUid) {
@@ -96,7 +99,7 @@ function getSaveUnavailableReason({
   if (tier3Count > totalCount) {
     return "모집한 ★3 횟수는 총 모집 횟수보다 클 수 없어요.";
   }
-  if (tier3StudentCount !== tier3Count) {
+  if (!skipTier3StudentList && tier3StudentCount !== tier3Count) {
     return `모집한 ★3 학생을 ${tier3Count}명 선택해주세요. 현재 ${tier3StudentCount}명이 선택됐어요.`;
   }
   const maxExchangedStudentCount = Math.floor(totalCount / 200);
@@ -105,6 +108,18 @@ function getSaveUnavailableReason({
   }
 
   return null;
+}
+
+export function getVisibleTier3StudentUids(studentUids: string[], tier3Count?: number) {
+  if (tier3Count === undefined) {
+    return studentUids;
+  }
+
+  return studentUids.slice(0, Math.max(0, tier3Count));
+}
+
+export function shouldSkipTier3StudentListInitially(tier3Count?: number, tier3StudentUids: string[] = []) {
+  return (tier3Count ?? 0) > 0 && tier3StudentUids.length === 0;
 }
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
@@ -195,7 +210,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         result: [
           {
             trial: currentRecruitmentResult.trial,
-            tier3Count: tier3StudentIds.length,
+            tier3Count: currentRecruitmentResult.tier3Count ?? tier3StudentIds.length,
             tier3StudentIds,
           },
         ],
@@ -307,6 +322,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         pickupStudentUids,
         groupStudentInitialTiers,
       );
+  const tier3Count = getRecruitmentResultTier3CountFromPickupHistory({ result: data.result });
 
   await upsertRecruitmentResult(env, sensei.id, {
     uid: params.id && params.id !== "new" ? params.id : undefined,
@@ -315,6 +331,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     completedAt: nowUtcIso(),
     recruitedStudents,
     exchangedStudents,
+    tier3Count,
     trial,
     rawResult: data.rawResult ?? null,
     comment: data.comment ?? null,
@@ -358,15 +375,21 @@ export default function EditPickup() {
   const [totalCount, setTotalCount] = useState(initialTotalCount);
   const [tier3Count, setTier3Count] = useState(initialTier3Count);
   const [tier3StudentUids, setTier3StudentUids] = useState(initialTier3StudentUids ?? []);
+  const [skipTier3StudentList, setSkipTier3StudentList] = useState(
+    shouldSkipTier3StudentListInitially(initialTier3Count, initialTier3StudentUids),
+  );
   const [exchangedStudentUids, setExchangedStudentUids] = useState(currentPickupHistory?.exchangedStudentIds ?? []);
 
   const [showImporter, setShowImporter] = useState(false);
   const [comment, setComment] = useState(currentPickupHistory?.comment ?? "");
+  const visibleTier3StudentUids = getVisibleTier3StudentUids(tier3StudentUids, tier3Count);
+  const submittedTier3StudentUids = skipTier3StudentList ? [] : visibleTier3StudentUids;
   const saveUnavailableReason = getSaveUnavailableReason({
     eventUid,
     totalCount,
     tier3Count,
-    tier3StudentCount: tier3StudentUids.length,
+    tier3StudentCount: submittedTier3StudentUids.length,
+    skipTier3StudentList,
     exchangedStudentCount: exchangedStudentUids.length,
   });
 
@@ -381,9 +404,6 @@ export default function EditPickup() {
   };
   const handleTier3CountChange = (value?: number) => {
     setTier3Count(value);
-    if (value !== undefined && tier3StudentUids.length > value) {
-      setTier3StudentUids((prev) => prev.slice(0, value));
-    }
   };
   const handleSave = () => {
     if (saveUnavailableReason || !eventUid || totalCount === undefined || tier3Count === undefined) {
@@ -396,7 +416,7 @@ export default function EditPickup() {
         {
           trial: totalCount,
           tier3Count,
-          tier3StudentIds: tier3StudentUids,
+          tier3StudentIds: submittedTier3StudentUids,
         },
       ],
       exchangedStudentIds: exchangedStudentUids,
@@ -462,7 +482,8 @@ export default function EditPickup() {
         tier3Students={tier3Students}
         totalCount={totalCount}
         tier3Count={tier3Count}
-        tier3StudentIds={tier3StudentUids}
+        tier3StudentIds={visibleTier3StudentUids}
+        skipTier3StudentList={skipTier3StudentList}
         exchangedStudentIds={exchangedStudentUids}
         exchangeableStudents={
           selectedEvent?.recruitments.flatMap((recruitment) =>
@@ -472,6 +493,7 @@ export default function EditPickup() {
         onTotalCountChange={handleTotalCountChange}
         onTier3CountChange={handleTier3CountChange}
         onTier3StudentIdsChange={setTier3StudentUids}
+        onSkipTier3StudentListChange={setSkipTier3StudentList}
         onExchangedStudentIdsChange={setExchangedStudentUids}
       />
 

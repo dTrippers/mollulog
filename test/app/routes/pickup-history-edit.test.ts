@@ -11,7 +11,12 @@ import {
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
-import { action, loader } from "../../../app/routes/$username.pickups.edit.$id";
+import {
+  action,
+  getVisibleTier3StudentUids,
+  loader,
+  shouldSkipTier3StudentListInitially,
+} from "../../../app/routes/$username.pickups.edit.$id";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
@@ -24,8 +29,18 @@ jest.mock("~/models/pickup-history", () => ({
 jest.mock("~/models/recruitment-result", () => ({
   getRecruitmentResult: jest.fn(),
   getRecruitmentResultComment: jest.fn(),
-  createRecruitmentResultStudentsFromPickupHistory: jest.fn(),
-  getRecruitmentResultTrialFromPickupHistory: jest.fn(),
+  createRecruitmentResultStudentsFromPickupHistory: jest.fn((history: { result: { tier3StudentIds: string[] }[] }) =>
+    history.result.flatMap((trial) =>
+      trial.tier3StudentIds.map((studentUid) => ({ studentUid, tier: 3, pickup: false })),
+    ),
+  ),
+  getRecruitmentResultTrialFromPickupHistory: jest.fn((history: { result: { trial: number | null }[] }) => {
+    const trials = history.result.map((trial) => trial.trial).filter((trial): trial is number => trial !== null);
+    return trials.length > 0 ? Math.max(...trials) : null;
+  }),
+  getRecruitmentResultTier3CountFromPickupHistory: jest.fn((history: { result: { tier3Count: number }[] }) =>
+    history.result.reduce((sum, trial) => sum + trial.tier3Count, 0),
+  ),
   mergeEditableRecruitmentResultStudents: jest.fn(),
   upsertRecruitmentResult: jest.fn(),
 }));
@@ -102,6 +117,23 @@ function createGroup(uid: string, startAt: string) {
 afterEach(() => {
   jest.useRealTimers();
   jest.clearAllMocks();
+});
+
+describe("pickup history editor state helpers", () => {
+  it("derives visible tier3 students without mutating the preserved selection buffer", () => {
+    const selectedStudentUids = ["hina", "aru", "mika"];
+
+    expect(getVisibleTier3StudentUids(selectedStudentUids, 1)).toEqual(["hina"]);
+    expect(selectedStudentUids).toEqual(["hina", "aru", "mika"]);
+    expect(getVisibleTier3StudentUids(selectedStudentUids, 4)).toEqual(["hina", "aru", "mika"]);
+    expect(getVisibleTier3StudentUids(selectedStudentUids, 0)).toEqual([]);
+  });
+
+  it("only initializes count-only mode for non-zero counts with no student names", () => {
+    expect(shouldSkipTier3StudentListInitially(5, [])).toBe(true);
+    expect(shouldSkipTier3StudentListInitially(5, ["hina", "aru", "mika"])).toBe(false);
+    expect(shouldSkipTier3StudentListInitially(0, [])).toBe(false);
+  });
 });
 
 describe("pickup history editor loader", () => {
@@ -402,6 +434,46 @@ describe("pickup history editor loader", () => {
       init: { status: 400 },
     });
     expect(mockedUpsertRecruitmentResult).not.toHaveBeenCalled();
+  });
+
+  it("saves explicit tier3 count even when tier3 student names are omitted", async () => {
+    const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
+    mockGetByUid.mockResolvedValue(historicalGroup);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue(null);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-decagrammaton-armed",
+        name: "데카그라마톤 무장",
+        recruitmentGroupUid: "decagrammaton-armed",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    await action({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/new", {
+        method: "POST",
+        body: JSON.stringify({
+          eventUid: "decagrammaton-armed",
+          result: [{ trial: 100, tier3Count: 3, tier3StudentIds: [] }],
+          exchangedStudentIds: [],
+        }),
+      }),
+      params: { username: "@sensei", id: "new" },
+    } as never);
+
+    expect(mockedUpsertRecruitmentResult).toHaveBeenCalledWith(
+      env,
+      1,
+      expect.objectContaining({
+        tier3Count: 3,
+        recruitedStudents: [],
+      }),
+    );
   });
 
   it("preserves existing non-tier3 recruited students when editing an existing result", async () => {
