@@ -15,7 +15,6 @@ import {
   MagnifyingGlassIcon,
   RectangleGroupIcon as RectangleGroupIconOutline,
   UserCircleIcon as UserCircleIconOutline,
-  UserIcon,
 } from "@heroicons/react/24/outline";
 import {
   ArrowsRightLeftIcon as ArrowsRightLeftIconSolid,
@@ -30,6 +29,7 @@ import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { type UtcIsoString, parseUtcTimestamp } from "~/lib/date-time";
 import { timelineContentTypeLocale } from "~/locales/ko";
+import { studentImageUrl } from "~/models/assets";
 import { sanitizeClassName } from "~/prophandlers";
 import { submitPreference } from "~/routes/api.preference";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
@@ -78,7 +78,6 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
 
   useEffect(() => {
     if (!debouncedQuery) {
-      setIsPopupOpen(false);
       return;
     }
 
@@ -114,7 +113,8 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
   }, [isPopupOpen]);
 
   const results = fetcher.data?.results ?? [];
-  const showPopup = Boolean(debouncedQuery && isPopupOpen && fetcher.data);
+  const hasQuery = Boolean(query.trim());
+  const showPopup = Boolean(isPopupOpen && (!hasQuery || fetcher.data));
   const isLoading = fetcher.state !== "idle";
 
   return (
@@ -136,16 +136,11 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
         placeholder="검색"
         className="w-full rounded-md bg-neutral-100 py-2 pr-3 pl-9 text-sm outline-none placeholder:text-neutral-400 dark:bg-neutral-700 dark:placeholder:text-neutral-500"
         onChange={(event) => {
-          const nextQuery = event.target.value;
-          setQuery(nextQuery);
-          if (!nextQuery.trim()) {
-            setIsPopupOpen(false);
-          }
+          setQuery(event.target.value);
+          setIsPopupOpen(true);
         }}
         onFocus={() => {
-          if (debouncedQuery) {
-            setIsPopupOpen(true);
-          }
+          setIsPopupOpen(true);
         }}
         aria-label="전역 검색"
       />
@@ -153,6 +148,7 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
       {showPopup && (
         <SearchResultPopup
           results={results}
+          isEmpty={!hasQuery}
           onResultClick={() => setIsPopupOpen(false)}
           className={
             variant === "desktop"
@@ -167,16 +163,20 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
 
 function SearchResultPopup({
   results,
+  isEmpty,
   onResultClick,
   className,
 }: {
   results: SearchResult[];
+  isEmpty: boolean;
   onResultClick: () => void;
   className: string;
 }) {
   return (
     <div className={className}>
-      {results.length > 0 ? (
+      {isEmpty ? (
+        <SearchEmptyView />
+      ) : results.length > 0 ? (
         results.map((result) => (
           <Link
             key={`${result.type}:${result.to}`}
@@ -184,7 +184,7 @@ function SearchResultPopup({
             className="flex items-center gap-2 px-3 py-2 text-sm text-neutral-800 transition-colors hover:bg-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-700"
             onClick={onResultClick}
           >
-            <SearchResultBadge type={result.type} />
+            <SearchResultBadge result={result} />
             <div className="min-w-0 flex-1">
               <div className="text-xs text-neutral-400 dark:text-neutral-500">{getSearchResultLabel(result)}</div>
               <div className="whitespace-pre-line">{result.name}</div>
@@ -198,8 +198,31 @@ function SearchResultPopup({
   );
 }
 
-function SearchResultBadge({ type }: { type: SearchResult["type"] }) {
-  const Icon = type === "menu" ? RectangleGroupIconOutline : type === "student" ? UserIcon : CalendarIconOutline;
+function SearchEmptyView() {
+  return (
+    <div className="px-4 py-4 text-center text-sm">
+      <div className="mx-auto flex size-8 items-center justify-center rounded-md bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300">
+        <MagnifyingGlassIcon className="size-4" strokeWidth={2} />
+      </div>
+      <p className="mt-2 font-medium text-neutral-700 dark:text-neutral-200">학생, 이벤트, 기능을 검색할 수 있어요</p>
+      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">검색어를 입력해 원하는 항목을 찾아보세요</p>
+    </div>
+  );
+}
+
+function SearchResultBadge({ result }: { result: SearchResult }) {
+  if (result.type === "student") {
+    return (
+      <img
+        src={studentImageUrl(result.uid)}
+        alt=""
+        className="size-6 shrink-0 rounded-md bg-neutral-100 object-cover object-center dark:bg-neutral-700 dark:opacity-90"
+        loading="lazy"
+      />
+    );
+  }
+
+  const Icon = result.type === "menu" ? RectangleGroupIconOutline : CalendarIconOutline;
 
   return (
     <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300">
