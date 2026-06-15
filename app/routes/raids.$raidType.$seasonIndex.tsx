@@ -79,12 +79,12 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   if (!data?.currentRaid) {
-    return [{ title: "총력전 / 대결전 | 몰루로그" }];
+    return [{ title: "총력전 정보 | 몰루로그" }];
   }
 
   const { currentRaid } = data;
   const since = dayjs(currentRaid.startAt);
-  const title = `총력전 / 대결전 - ${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} 시즌 #${currentRaid.seasonIndex} ${currentRaid.raidBoss.name}(${since.year()}년 ${since.month() + 1}월)`;
+  const title = `${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} 시즌 #${currentRaid.seasonIndex} ${currentRaid.raidBoss.name}(${since.year()}년 ${since.month() + 1}월) 정보`;
   const description = `${since.year()}년 ${since.month() + 1}월에 진행${dayjs(currentRaid.endAt).isAfter(dayjs()) ? "될" : "된"} ${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} ${currentRaid.raidBoss.name}의 상위권 순위, 학생 통계, 공략 영상 정보 등을 확인해보세요.`;
   return [
     { title: `${title} | 몰루로그` },
@@ -97,7 +97,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
 };
 
 export const ErrorBoundary = createPageErrorBoundary({
-  title: "총력전 / 대결전",
+  title: "총력전 정보",
   description: "일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요",
 });
 
@@ -158,7 +158,7 @@ export default function RaidPage() {
 
   return (
     <Page
-      title="총력전 / 대결전"
+      title={`${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} 정보`}
       description="일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
       belowTitle={<RaidSelector raids={allRaids} currentRaid={currentRaid ?? null} />}
       panels={panel ? [panel] : undefined}

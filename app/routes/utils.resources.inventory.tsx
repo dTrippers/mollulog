@@ -26,7 +26,7 @@ type ActionData = {
   savedAt?: number;
 };
 
-export const meta: MetaFunction = () => [{ title: "재화 관리/파밍 계산기 | 몰루로그" }];
+export const meta: MetaFunction = () => [{ title: "보유 재화 관리 | 몰루로그" }];
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;

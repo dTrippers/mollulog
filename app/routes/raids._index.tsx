@@ -16,6 +16,6 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 };
 
 export const ErrorBoundary = createPageErrorBoundary({
-  title: "총력전 / 대결전",
+  title: "총력전 정보",
   description: "일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요",
 });

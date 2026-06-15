@@ -542,7 +542,7 @@ export default function PyroxenePlanner() {
       )}
 
       <Page
-        title="청휘석 플래너"
+        title="청휘석 플래너 (β)"
         description="청휘석 획득/소비 조건을 입력하고 관심 학생 모집 시점의 예상 청휘석을 계산해보세요"
         links={[
           {
