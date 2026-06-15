@@ -102,7 +102,7 @@ export default function ConnectExportIndexPage() {
               tone="warning"
               Icon={ExclamationTriangleIcon}
               title="외부 사이트의 데이터가 유실될 수 있어요"
-              description="내보낸 데이터를 외부 사이트에 입력하면 해당 사이트의 기존 데이터가 덮어씌워져요. 기존 데이터를 유지하려면 먼저 해당 사이트의 데이터를 몰루로그로 가져온 후 다시 내보내주세요."
+              description="내보낸 데이터를 외부 사이트에 입력하면 해당 사이트의 기존 데이터가 덮어씌워져요. 먼저 해당 사이트의 데이터를 몰루로그로 가져와서 합친 후 다시 내보내주세요."
             />
 
             <div>

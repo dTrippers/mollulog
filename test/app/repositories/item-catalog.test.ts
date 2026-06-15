@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { ResourceTypeEnum } from "../../../app/graphql/graphql";
-import { GROWTH_RESOURCE_KIND_ORDER } from "../../../app/models/growth-resource";
+import { GROWTH_RESOURCE_KIND_LABELS, GROWTH_RESOURCE_KIND_ORDER } from "../../../app/models/growth-resource";
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
@@ -68,6 +68,21 @@ describe("item-catalog", () => {
     expect(getGrowthPlannerCatalogResourceKindOrder(resources[2])).toBeNull();
     expect(getGrowthPlannerCatalogResourceKindOrder(resources[3])).toBeNull();
     expect(getGrowthPlannerCatalogResources(resources).map((resource) => resource.uid)).toEqual(["150004", "150000"]);
+  });
+
+  it("includes ability release WB items in the growth planner catalog", () => {
+    const wbItem: ItemCatalogResource = {
+      uid: "2000",
+      name: "교양 WB",
+      rarity: 1,
+      type: ResourceTypeEnum.Item,
+      category: "material",
+      subCategory: null,
+    };
+
+    expect(getGrowthPlannerCatalogResourceKindOrder(wbItem)).toBe(GROWTH_RESOURCE_KIND_ORDER.ability);
+    expect(GROWTH_RESOURCE_KIND_LABELS[GROWTH_RESOURCE_KIND_ORDER.ability]).toBe("교양 WB");
+    expect(getGrowthPlannerCatalogResources([wbItem])).toEqual([wbItem]);
   });
 
   it("sorts equipment blueprint choice boxes before direct equipment blueprints by tier ascending", () => {

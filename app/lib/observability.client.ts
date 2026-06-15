@@ -16,6 +16,38 @@ declare global {
 
 let initialized = false;
 
+const ignoredClientErrorMessages: Array<string | RegExp> = [
+  /^Script error\.?$/i,
+  "AbortError",
+  "The operation was aborted",
+  "The user aborted a request",
+  "A network error occurred",
+  "Load failed",
+  /Failed to fetch dynamically imported module/i,
+  /Importing a module script failed/i,
+  /Loading chunk [\w-]+ failed/i,
+  /Loading CSS chunk [\w-]+ failed/i,
+  /ChunkLoadError/i,
+  /Unable to preload CSS/i,
+  /Hydration failed/i,
+  /hydrating/i,
+  /hydration/i,
+  /Text content does not match server-rendered HTML/i,
+  /There was an error while hydrating/i,
+  /NetworkError when attempting to fetch resource/i,
+  /The network connection was lost/i,
+  /cancelled/i,
+  /canceled/i,
+];
+
+const deniedClientErrorUrls: Array<string | RegExp> = [
+  /^chrome-extension:\/\//i,
+  /^moz-extension:\/\//i,
+  /^safari-web-extension:\/\//i,
+  /^webkit-masked-url:\/\//i,
+  /extensions\//i,
+];
+
 function getConfig(): PublicObservabilityConfig {
   if (typeof window === "undefined") {
     return {};
@@ -45,6 +77,8 @@ export function initializeClientObservability() {
     enabled: true,
     environment: config.stage ?? "local",
     sendDefaultPii: false,
+    ignoreErrors: ignoredClientErrorMessages,
+    denyUrls: deniedClientErrorUrls,
   });
 
   initialized = true;
@@ -55,6 +89,9 @@ export function captureClientError(error: unknown, context: Record<string, unkno
 
   Sentry.withScope((scope) => {
     scope.setExtras(context);
+    if (typeof context.source === "string") {
+      scope.setTag("source", context.source);
+    }
 
     if (error instanceof Error) {
       Sentry.captureException(error);

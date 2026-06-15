@@ -3,9 +3,14 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { StudentSelectForm } from "~/components/features/forms";
 import { TierSelector } from "~/components/features/students";
-import { Button, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
+import { Button, NumberInput, ProfileImage, ResourceCard, useNumberInputGridNavigation } from "~/components/primitives";
 import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
 import { getRelationshipLevelValidationError } from "~/models/relationship-level";
+import {
+  ABILITY_RELEASE_MAX_LEVEL,
+  WEAPON_LEVEL_MAX_LEVEL,
+  getWeaponLevelMaxByTier,
+} from "~/models/student-growth-state";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
 
 function extractStudentUpdate(actionData: GrowthActionResult | undefined): GrowthStudent | null {
@@ -33,7 +38,8 @@ function getActionError(actionData: GrowthActionResult | undefined): string | nu
 }
 
 const fieldDefinitions = [
-  { key: "level", targetKey: "targetLevel", label: "학생 레벨", min: 1, max: 90 },
+  { key: "level", targetKey: "targetLevel", label: "학생 Lv", min: 1, max: 90 },
+  { key: "weaponLevel", targetKey: "targetWeaponLevel", label: "고유무기 Lv", min: 0, max: WEAPON_LEVEL_MAX_LEVEL },
   { key: "skillEx", targetKey: "targetSkillEx", label: "EX 스킬", min: 1, max: 5 },
   { key: "skillNormal", targetKey: "targetSkillNormal", label: "기본 스킬", min: 1, max: 10 },
   { key: "skillEnhanced", targetKey: "targetSkillEnhanced", label: "강화 스킬", min: 1, max: 10 },
@@ -42,11 +48,15 @@ const fieldDefinitions = [
   { key: "equip2", targetKey: "targetEquip2", label: "장비2", min: 1, max: 10 },
   { key: "equip3", targetKey: "targetEquip3", label: "장비3", min: 1, max: 10 },
   { key: "equipSpecial", targetKey: "targetEquipSpecial", label: "애용품", min: 1, max: 2 },
+  { key: "abilityHp", targetKey: "targetAbilityHp", label: "HP 해방", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  { key: "abilityAtk", targetKey: "targetAbilityAtk", label: "공격력 해방", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  { key: "abilityHeal", targetKey: "targetAbilityHeal", label: "치유력 해방", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
 ] as const;
 
 type CurrentFieldKey = (typeof fieldDefinitions)[number]["key"];
 type TargetFieldKey = (typeof fieldDefinitions)[number]["targetKey"];
 type GrowthValues = Record<CurrentFieldKey | TargetFieldKey, number | null>;
+type NumberInputGridNavigation = ReturnType<typeof useNumberInputGridNavigation>;
 type RelationshipValues = {
   relationshipCurrentLevel: number | null;
   relationshipTargetLevel: number | null;
@@ -55,6 +65,10 @@ type RelationshipValues = {
 function pickGrowthValues(student: GrowthStudent): GrowthValues {
   return {
     level: student.level,
+    weaponLevel: student.weaponLevel,
+    abilityHp: student.abilityHp,
+    abilityAtk: student.abilityAtk,
+    abilityHeal: student.abilityHeal,
     skillEx: student.skillEx,
     skillNormal: student.skillNormal,
     skillEnhanced: student.skillEnhanced,
@@ -64,6 +78,10 @@ function pickGrowthValues(student: GrowthStudent): GrowthValues {
     equip3: student.equip3,
     equipSpecial: student.equipSpecial,
     targetLevel: student.targetLevel,
+    targetWeaponLevel: student.targetWeaponLevel,
+    targetAbilityHp: student.targetAbilityHp,
+    targetAbilityAtk: student.targetAbilityAtk,
+    targetAbilityHeal: student.targetAbilityHeal,
     targetSkillEx: student.targetSkillEx,
     targetSkillNormal: student.targetSkillNormal,
     targetSkillEnhanced: student.targetSkillEnhanced,
@@ -82,12 +100,21 @@ function pickRelationshipValues(student: GrowthStudent): RelationshipValues {
   };
 }
 
-function getClientValidationError(values: GrowthValues): string | null {
+function getClientValidationError(values: GrowthValues, currentTier: number, targetTier: number | null): string | null {
   for (const { key, targetKey, label, min, max } of fieldDefinitions) {
     const v = values[key];
     const t = values[targetKey];
-    if (v != null && (v < min || v > max)) return `${label}은(는) ${min}부터 ${max} 사이만 입력할 수 있어요`;
-    if (t != null && (t < min || t > max)) return `${label} 목표값은 ${min}부터 ${max} 사이만 입력할 수 있어요`;
+    const currentMax = getFieldMax(key, max, currentTier);
+    const effectiveTargetTier = targetTier ?? currentTier;
+    const targetMax = getFieldMax(targetKey, max, effectiveTargetTier);
+    if (isAbilityReleaseDisabled(key, currentTier) && (v ?? 0) > 0) {
+      return "능력 해방은 고유무기 장착 후 입력할 수 있어요";
+    }
+    if (isAbilityReleaseDisabled(targetKey, effectiveTargetTier) && (t ?? 0) > 0) {
+      return "능력 해방 목표값은 고유무기 장착 후 입력할 수 있어요";
+    }
+    if (v != null && (v < min || v > currentMax)) return `${label}은(는) ${min}부터 ${currentMax} 사이만 입력할 수 있어요`;
+    if (t != null && (t < min || t > targetMax)) return `${label} 목표값은 ${min}부터 ${targetMax} 사이만 입력할 수 있어요`;
   }
   return null;
 }
@@ -96,9 +123,50 @@ const cellBase = "border-b border-neutral-200 dark:border-neutral-700";
 const dataCellClass = `${cellBase} w-25 px-1 py-2`;
 const targetCellClass = `${cellBase} w-25 px-1 py-1.5 bg-blue-50/40 dark:bg-blue-950/10`;
 const bulkActionCellClass = `${cellBase} border-l border-neutral-200 px-2 py-2 dark:border-neutral-700`;
+const studentHeaderContentClass =
+  "sticky left-3 z-10 flex w-max max-w-[calc(100vw-2rem)] items-center gap-2 bg-neutral-100 pr-3 dark:bg-neutral-900";
 
 function isGearField(key: CurrentFieldKey | TargetFieldKey): boolean {
   return key === "equipSpecial" || key === "targetEquipSpecial";
+}
+
+function isWeaponLevelField(key: CurrentFieldKey | TargetFieldKey): boolean {
+  return key === "weaponLevel" || key === "targetWeaponLevel";
+}
+
+function isAbilityReleaseField(key: CurrentFieldKey | TargetFieldKey): boolean {
+  return (
+    key === "abilityHp" ||
+    key === "abilityAtk" ||
+    key === "abilityHeal" ||
+    key === "targetAbilityHp" ||
+    key === "targetAbilityAtk" ||
+    key === "targetAbilityHeal"
+  );
+}
+
+function isAbilityReleaseDisabled(key: CurrentFieldKey | TargetFieldKey, tier: number): boolean {
+  return isAbilityReleaseField(key) && tier <= 5;
+}
+
+function getFieldMax(key: CurrentFieldKey | TargetFieldKey, fallbackMax: number, tier: number): number {
+  return isWeaponLevelField(key) ? getWeaponLevelMaxByTier(tier) : fallbackMax;
+}
+
+function normalizeTargetValuesForTier(values: GrowthValues, tier: number): GrowthValues {
+  const nextValues = { ...values };
+  const weaponLevelMax = getWeaponLevelMaxByTier(tier);
+  if (nextValues.targetWeaponLevel != null && nextValues.targetWeaponLevel > weaponLevelMax) {
+    nextValues.targetWeaponLevel = weaponLevelMax;
+  }
+
+  if (tier <= 5) {
+    nextValues.targetAbilityHp = null;
+    nextValues.targetAbilityAtk = null;
+    nextValues.targetAbilityHeal = null;
+  }
+
+  return nextValues;
 }
 
 type GrowthSubmission = {
@@ -259,7 +327,17 @@ function rowReducer(state: RowState, action: RowAction): RowState {
   return state;
 }
 
-function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStudentUpdate: (s: GrowthStudent) => void }) {
+function GrowthRow({
+  student,
+  rowIndexBase,
+  numberInputGridNavigation,
+  onStudentUpdate,
+}: {
+  student: GrowthStudent;
+  rowIndexBase: number;
+  numberInputGridNavigation: NumberInputGridNavigation;
+  onStudentUpdate: (s: GrowthStudent) => void;
+}) {
   const fetcher = useFetcher<GrowthActionResult>();
   const initialValues = useMemo(() => pickGrowthValues(student), [student]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -449,7 +527,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     dispatchRow({ type: "setPendingSave", pending: true });
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
-      const validationError = getClientValidationError(values);
+      const validationError = getClientValidationError(values, tierDraft, targetTier);
       if (validationError) {
         dispatchRow({ type: "setGrowthError", error: validationError });
         dispatchRow({ type: "setPendingSave", pending: false });
@@ -509,9 +587,11 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
 
   const handleTargetTierChange = (newTier: number) => {
     const clamped = Math.max(newTier, effectiveTier);
+    const nextValues = normalizeTargetValuesForTier(draftValues, clamped);
     const draftRevision = nextGrowthDraftRevision();
+    dispatchRow({ type: "setDraftValues", values: nextValues, draftRevision });
     dispatchRow({ type: "setTargetTierDraft", targetTier: clamped, draftRevision });
-    scheduleAutoSave(draftValues, clamped, draftRevision);
+    scheduleAutoSave(nextValues, clamped, draftRevision);
   };
 
   const handleCurrentTierChange = (newTier: number) => {
@@ -531,7 +611,10 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
       if (!student.hasGear && isGearField(key)) {
         continue;
       }
-      newValues[key] = max;
+      if (isAbilityReleaseDisabled(key, tierDraft)) {
+        continue;
+      }
+      newValues[key] = getFieldMax(key, max, tierDraft);
     }
     const draftRevision = nextGrowthDraftRevision();
     dispatchRow({ type: "setDraftValues", values: newValues, draftRevision });
@@ -540,7 +623,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    const validationError = getClientValidationError(newValues);
+    const validationError = getClientValidationError(newValues, tierDraft, targetTierDraft);
     if (!validationError) {
       dispatchRow({ type: "setGrowthError", error: null });
       dispatchRow({ type: "setPendingSave", pending: true });
@@ -555,11 +638,15 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
 
   const handleSetAllMaxTargets = () => {
     const newValues = { ...draftValues };
+    const effectiveTargetTier = targetTierDraft ?? tierDraft;
     for (const { targetKey, max } of fieldDefinitions) {
       if (!student.hasGear && isGearField(targetKey)) {
         continue;
       }
-      newValues[targetKey] = max;
+      if (isAbilityReleaseDisabled(targetKey, effectiveTargetTier)) {
+        continue;
+      }
+      newValues[targetKey] = getFieldMax(targetKey, max, effectiveTargetTier);
     }
     const draftRevision = nextGrowthDraftRevision();
     dispatchRow({ type: "setDraftValues", values: newValues, draftRevision });
@@ -569,14 +656,18 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
   const displayedError = enrollError ?? growthError ?? relationshipError;
   const isCalculatingResources = isPendingSave || fetcher.state !== "idle" || tierFetcher.state !== "idle";
   const hasResourceRequirements =
-    student.resourceRequirements.items.length > 0 || student.resourceRequirements.characterExp > 0;
+    student.resourceRequirements.items.length > 0 ||
+    student.resourceRequirements.characterExp > 0 ||
+    student.resourceRequirements.credit > 0;
+  const currentNavigationRowIndex = rowIndexBase;
+  const targetNavigationRowIndex = rowIndexBase + 1;
 
   return (
     <>
       <tr className="bg-neutral-100 dark:bg-neutral-900">
         <td colSpan={TOTAL_COLS} className={`${cellBase} px-3 py-2`}>
-          <div className="flex items-center gap-2">
-            <div className="flex grow items-center gap-2 min-w-0">
+          <div className={studentHeaderContentClass}>
+            <div className="flex min-w-0 grow items-center gap-2">
               <ProfileImage studentUid={student.uid} />
               <span className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50">{student.name}</span>
               {displayedError && <p className="text-xs text-red-500 dark:text-red-400">{displayedError}</p>}
@@ -605,8 +696,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
         </td>
       </tr>
 
-      <tr className="align-top relative">
+      <GrowthFieldHeaderRow />
 
+      <tr className="relative align-top">
         <td
           className={`${cellBase} w-10 px-1 py-2 text-center text-xs font-medium text-neutral-400 dark:text-neutral-500`}
         >
@@ -631,6 +723,10 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                 minValue={1}
                 maxValue={100}
                 value={draftRelationshipValues.relationshipCurrentLevel}
+                inputProps={numberInputGridNavigation.getInputProps({
+                  rowIndex: currentNavigationRowIndex,
+                  columnIndex: 0,
+                })}
                 onChange={(v) => handleRelationshipFieldChange("relationshipCurrentLevel", v)}
               />
             </td>
@@ -641,28 +737,37 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
               </Button>
             </td>
 
-            {fieldDefinitions.map(({ key, min, max }) => (
-              <td key={key} className={dataCellClass}>
-                {student.hasGear || !isGearField(key) ? (
-                  <div className="flex flex-col items-center gap-0.5">
-                    <NumberInput
-                      nullable
-                      size="sm"
-                      showMax
-                      minValue={min}
-                      maxValue={max}
-                      value={draftValues[key]}
-                      onChange={(v) => handleFieldChange(key, v)}
-                    />
-                    {equipLabels[key] && (
-                      <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
-                        {equipLabels[key]}
-                      </span>
-                    )}
-                  </div>
-                ) : null}
-              </td>
-            ))}
+            {fieldDefinitions.map(({ key, min, max }, fieldIndex) => {
+              const disabled = isAbilityReleaseDisabled(key, tierDraft);
+              return (
+                <td key={key} className={dataCellClass}>
+                  {student.hasGear || !isGearField(key) ? (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <NumberInput
+                        nullable
+                        size="sm"
+                        showMax
+                        minValue={min}
+                        maxValue={getFieldMax(key, max, tierDraft)}
+                        value={draftValues[key]}
+                        disabled={disabled}
+                        inputProps={numberInputGridNavigation.getInputProps({
+                          rowIndex: currentNavigationRowIndex,
+                          columnIndex: fieldIndex + 1,
+                          disabled,
+                        })}
+                        onChange={(v) => handleFieldChange(key, v)}
+                      />
+                      {equipLabels[key] && (
+                        <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+                          {equipLabels[key]}
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
+                </td>
+              );
+            })}
           </>
         ) : (
           <>
@@ -678,6 +783,10 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                 minValue={1}
                 maxValue={100}
                 value={draftRelationshipValues.relationshipCurrentLevel}
+                inputProps={numberInputGridNavigation.getInputProps({
+                  rowIndex: currentNavigationRowIndex,
+                  columnIndex: 0,
+                })}
                 onChange={(v) => handleRelationshipFieldChange("relationshipCurrentLevel", v)}
               />
             </td>
@@ -685,7 +794,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
             <td className={bulkActionCellClass} />
 
             <td colSpan={fieldDefinitions.length} className={`${cellBase} relative px-3 py-2`}>
-              <div className="pointer-events-none select-none opacity-20 blur-sm flex items-center gap-2">
+              <div className="pointer-events-none flex select-none items-center gap-2 opacity-20 blur-sm">
                 {fieldDefinitions.map(({ key }) => (
                   <div key={key} className="h-4 w-10 rounded bg-neutral-400 dark:bg-neutral-500" />
                 ))}
@@ -740,6 +849,10 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
             minValue={1}
             maxValue={100}
             value={draftRelationshipValues.relationshipTargetLevel}
+            inputProps={numberInputGridNavigation.getInputProps({
+              rowIndex: targetNavigationRowIndex,
+              columnIndex: 0,
+            })}
             onChange={(v) => handleRelationshipFieldChange("relationshipTargetLevel", v)}
           />
         </td>
@@ -750,7 +863,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
           </Button>
         </td>
 
-        {fieldDefinitions.map(({ targetKey, min, max }) => {
+        {fieldDefinitions.map(({ targetKey, min, max }, fieldIndex) => {
+          const effectiveTargetTier = targetTierDraft ?? tierDraft;
+          const disabled = isAbilityReleaseDisabled(targetKey, effectiveTargetTier);
           return (
             <td key={targetKey} className={targetCellClass}>
               {student.hasGear || !isGearField(targetKey) ? (
@@ -760,8 +875,14 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                     size="sm"
                     showMax
                     minValue={min}
-                    maxValue={max}
+                    maxValue={getFieldMax(targetKey, max, effectiveTargetTier)}
                     value={draftValues[targetKey]}
+                    disabled={disabled}
+                    inputProps={numberInputGridNavigation.getInputProps({
+                      rowIndex: targetNavigationRowIndex,
+                      columnIndex: fieldIndex + 1,
+                      disabled,
+                    })}
                     onChange={(v) => handleFieldChange(targetKey, v)}
                   />
                   {equipLabels[targetKey] && (
@@ -816,6 +937,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                     {student.resourceRequirements.characterExp > 0 ? (
                       <CharacterExpRequirementCard characterExp={student.resourceRequirements.characterExp} />
                     ) : null}
+                    {student.resourceRequirements.credit > 0 ? (
+                      <CreditRequirementCard credit={student.resourceRequirements.credit} />
+                    ) : null}
                     {student.resourceRequirements.items.map((item) => (
                       <ResourceCard
                         key={`${student.uid}-${item.uid}`}
@@ -844,6 +968,22 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
         </td>
       </tr>
     </>
+  );
+}
+
+function GrowthFieldHeaderRow() {
+  return (
+    <tr className="bg-neutral-50 text-left text-xs font-semibold tracking-wide text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
+      <th className={`${cellBase} px-1 py-3`} />
+      <th className={`${cellBase} px-2 py-3 text-center`}>성급</th>
+      <th className={`${cellBase} min-w-20 px-2 py-3 text-center`}>인연 랭크</th>
+      <th className={`${cellBase} px-2 py-3 text-center`}>일괄 적용</th>
+      {fieldDefinitions.map(({ key, label }) => (
+        <th key={key} className={`${cellBase} w-16 px-1 py-3 text-center`}>
+          {label}
+        </th>
+      ))}
+    </tr>
   );
 }
 
@@ -905,6 +1045,22 @@ function CharacterExpRequirementCard({ characterExp }: { characterExp: number })
   );
 }
 
+function CreditRequirementCard({ credit }: { credit: number }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 dark:border-amber-500/30 dark:bg-amber-500/10">
+      <div className="flex size-8 items-center justify-center rounded-md bg-amber-200 text-xs font-bold text-amber-800 dark:bg-amber-400/20 dark:text-amber-200">
+        Cr
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">크레딧</p>
+        <p className="text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-200">
+          {credit.toLocaleString()}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function GrowthTable({
   students,
   availableStudents,
@@ -914,28 +1070,23 @@ export default function GrowthTable({
   availableStudents: GrowthAvailableStudent[];
   onStudentUpdate: (student: GrowthStudent) => void;
 }) {
+  const numberInputGridNavigation = useNumberInputGridNavigation();
+
   return (
     <div className="space-y-2">
       <AddStudentControl availableStudents={availableStudents} isEmpty={students.length === 0} />
       <div className="max-w-full overflow-x-auto">
-        <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
+        <div className="inline-block align-top rounded-xl border border-neutral-200 dark:border-neutral-700">
           <table className="w-max border-collapse">
-            <thead className="bg-neutral-50 dark:bg-neutral-900">
-              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                <th className="px-1 py-3" />
-                <th className="px-2 py-3 text-center">성급</th>
-                <th className="min-w-20 px-2 py-3 text-center">인연 랭크</th>
-                <th className="px-2 py-3 text-center">일괄 적용</th>
-                {fieldDefinitions.map(({ key, label }) => (
-                  <th key={key} className="w-16 px-1 py-3 text-center">
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
             <tbody>
-              {students.map((student) => (
-                <GrowthRow key={student.uid} student={student} onStudentUpdate={onStudentUpdate} />
+              {students.map((student, studentIndex) => (
+                <GrowthRow
+                  key={student.uid}
+                  student={student}
+                  rowIndexBase={studentIndex * 2}
+                  numberInputGridNavigation={numberInputGridNavigation}
+                  onStudentUpdate={onStudentUpdate}
+                />
               ))}
             </tbody>
           </table>

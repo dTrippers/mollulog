@@ -3,7 +3,7 @@ import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 import type { AppLoadContext, EntryContext } from "react-router";
 import { ServerRouter } from "react-router";
-import { getLogger } from "./lib/observability.server";
+import { captureServerError, getLogger } from "./lib/observability.server";
 
 export default async function handleRequest(
   request: Request,
@@ -23,6 +23,11 @@ export default async function handleRequest(
     onError(error: unknown) {
       // Log streaming rendering errors from inside the shell
       logger.error("SSR streaming render failed", error);
+      captureServerError(error, {
+        handler: "entry.server",
+        method: request.method,
+        url: request.url,
+      });
       statusCode = 500;
     },
   });

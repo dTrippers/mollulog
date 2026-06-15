@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import { parseStudentStateImport } from "./student-state-import";
 
 const justin163OwnedWithTarget =
-  '{"exportVersion":2,"characters":[{"id":"20048","name":"Nagisa (Swimsuit)","current":{"level":"1","ue_level":"0","bond":"1","ex":"1","basic":"2","passive":"3","sub":"4","gear1":"1","gear2":"2","gear3":"3","bond_gear":"0","book_hp":"0","book_atk":"0","book_heal":"0","star":5,"ue":1},"target":{"level":"90","ue_level":"50","bond":"100","ex":"5","basic":"6","passive":"7","sub":"8","gear1":"9","gear2":"10","gear3":"8","bond_gear":"2","book_hp":"25","book_atk":"26","book_heal":"27","star":5,"ue":3},"enabled":true}],"language":"Kr","level_cap":90,"server":"Global","site_version":"1.4.21"}';
+  '{"exportVersion":2,"characters":[{"id":"20048","name":"Nagisa (Swimsuit)","current":{"level":"1","ue_level":"0","bond":"1","ex":"1","basic":"2","passive":"3","sub":"4","gear1":"1","gear2":"2","gear3":"3","bond_gear":"0","book_hp":"0","book_atk":"0","book_heal":"0","star":5,"ue":1},"target":{"level":"90","ue_level":"50","bond":"100","ex":"5","basic":"6","passive":"7","sub":"8","gear1":"9","gear2":"10","gear3":"8","bond_gear":"2","book_hp":"25","book_atk":"24","book_heal":"23","star":5,"ue":3},"enabled":true}],"language":"Kr","level_cap":90,"server":"Global","site_version":"1.4.21"}';
 
 describe("student-state-import", () => {
   it("maps Justin163 owned current state and target plan into nested entries", () => {
@@ -14,6 +14,10 @@ describe("student-state-import", () => {
           current: {
             level: 1,
             tier: 6,
+            weaponLevel: 0,
+            abilityHp: 0,
+            abilityAtk: 0,
+            abilityHeal: 0,
             skillEx: 1,
             skillNormal: 2,
             skillEnhanced: 3,
@@ -28,6 +32,10 @@ describe("student-state-import", () => {
             targetBond: 100,
             targetLevel: 90,
             targetTier: 8,
+            targetWeaponLevel: 50,
+            targetAbilityHp: 25,
+            targetAbilityAtk: 24,
+            targetAbilityHeal: 23,
             targetSkillEx: 5,
             targetSkillNormal: 6,
             targetSkillEnhanced: 7,
@@ -98,6 +106,10 @@ describe("student-state-import", () => {
           current: {
             level: 90,
             tier: 5,
+            weaponLevel: 0,
+            abilityHp: 0,
+            abilityAtk: 0,
+            abilityHeal: 0,
             skillEx: 5,
             skillNormal: 10,
             skillEnhanced: 10,
@@ -164,6 +176,10 @@ describe("student-state-import", () => {
             targetBond: null,
             targetLevel: 90,
             targetTier: 7,
+            targetWeaponLevel: null,
+            targetAbilityHp: null,
+            targetAbilityAtk: null,
+            targetAbilityHeal: null,
             targetSkillEx: 5,
             targetSkillNormal: 10,
             targetSkillEnhanced: 10,
@@ -184,7 +200,7 @@ describe("student-state-import", () => {
         l: 1,
         s: 5,
         ws: 1,
-        wl: 0,
+        wl: 30,
         s1: 1,
         s2: 2,
         s3: 3,
@@ -193,9 +209,9 @@ describe("student-state-import", () => {
         e2: 2,
         e3: 3,
         e4: 0,
-        pm: 0,
-        pa: 0,
-        ph: 0,
+        pm: 10,
+        pa: 15,
+        ph: 20,
         b: 1,
       },
     });
@@ -205,7 +221,13 @@ describe("student-state-import", () => {
       entries: [
         expect.objectContaining({
           studentId: "20048",
-          current: expect.objectContaining({ tier: 6 }),
+          current: expect.objectContaining({
+            tier: 6,
+            weaponLevel: 30,
+            abilityHp: 10,
+            abilityAtk: 15,
+            abilityHeal: 20,
+          }),
           target: null,
         }),
       ],
@@ -282,6 +304,7 @@ describe("student-state-import", () => {
           current: expect.objectContaining({
             level: 90,
             tier: 5,
+            weaponLevel: 50,
             bond: 100,
           }),
           target: null,

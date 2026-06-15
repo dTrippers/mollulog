@@ -1,6 +1,10 @@
 export type StudentStateImportCurrentState = {
   tier: number;
+  weaponLevel: number | null;
   level: number | null;
+  abilityHp: number | null;
+  abilityAtk: number | null;
+  abilityHeal: number | null;
   skillEx: number | null;
   skillNormal: number | null;
   skillEnhanced: number | null;
@@ -15,7 +19,11 @@ export type StudentStateImportCurrentState = {
 export type StudentStateImportTargetState = {
   targetBond: number | null;
   targetTier: number;
+  targetWeaponLevel: number | null;
   targetLevel: number | null;
+  targetAbilityHp: number | null;
+  targetAbilityAtk: number | null;
+  targetAbilityHeal: number | null;
   targetSkillEx: number | null;
   targetSkillNormal: number | null;
   targetSkillEnhanced: number | null;
@@ -122,7 +130,11 @@ function parseJustin163Payload(payload: { characters: unknown[] }): StudentState
     const current = normalizeCurrentCandidate({
       star: character.current.star,
       uniqueWeapon: character.current.ue,
+      weaponLevel: character.current.ue_level,
       level: character.current.level,
+      abilityHp: character.current.book_hp,
+      abilityAtk: character.current.book_atk,
+      abilityHeal: character.current.book_heal,
       skillEx: character.current.ex,
       skillNormal: character.current.basic,
       skillEnhanced: character.current.passive,
@@ -137,7 +149,11 @@ function parseJustin163Payload(payload: { characters: unknown[] }): StudentState
       ? normalizeTargetCandidate({
           star: character.target.star,
           uniqueWeapon: character.target.ue,
+          weaponLevel: character.target.ue_level,
           level: character.target.level,
+          abilityHp: character.target.book_hp,
+          abilityAtk: character.target.book_atk,
+          abilityHeal: character.target.book_heal,
           skillEx: character.target.ex,
           skillNormal: character.target.basic,
           skillEnhanced: character.target.passive,
@@ -169,7 +185,11 @@ function parseSchaleDbPayload(payload: UnknownRecord): StudentStateImportEntry[]
     const current = normalizeCurrentCandidate({
       star: student.s,
       uniqueWeapon: student.ws,
+      weaponLevel: student.wl,
       level: student.l,
+      abilityHp: student.pm,
+      abilityAtk: student.pa,
+      abilityHeal: student.ph,
       skillEx: student.s1,
       skillNormal: student.s2,
       skillEnhanced: student.s3,
@@ -190,7 +210,11 @@ function parseSchaleDbPayload(payload: UnknownRecord): StudentStateImportEntry[]
 function normalizeCurrentCandidate(input: {
   star: unknown;
   uniqueWeapon: unknown;
+  weaponLevel: unknown;
   level: unknown;
+  abilityHp: unknown;
+  abilityAtk: unknown;
+  abilityHeal: unknown;
   skillEx: unknown;
   skillNormal: unknown;
   skillEnhanced: unknown;
@@ -203,7 +227,11 @@ function normalizeCurrentCandidate(input: {
 }): StudentStateImportCurrentState | null {
   const candidate: CurrentCandidate = {
     tier: composeTier(input.star, input.uniqueWeapon),
+    weaponLevel: optionalZeroBasedInteger(input.weaponLevel),
     level: optionalInteger(input.level),
+    abilityHp: optionalZeroBasedInteger(input.abilityHp),
+    abilityAtk: optionalZeroBasedInteger(input.abilityAtk),
+    abilityHeal: optionalZeroBasedInteger(input.abilityHeal),
     skillEx: optionalInteger(input.skillEx),
     skillNormal: optionalInteger(input.skillNormal),
     skillEnhanced: optionalInteger(input.skillEnhanced),
@@ -228,7 +256,11 @@ function normalizeCurrentCandidate(input: {
 function normalizeTargetCandidate(input: {
   star: unknown;
   uniqueWeapon: unknown;
+  weaponLevel: unknown;
   level: unknown;
+  abilityHp: unknown;
+  abilityAtk: unknown;
+  abilityHeal: unknown;
   skillEx: unknown;
   skillNormal: unknown;
   skillEnhanced: unknown;
@@ -242,7 +274,11 @@ function normalizeTargetCandidate(input: {
   const candidate: TargetCandidate = {
     targetBond: optionalInteger(input.bond),
     targetTier: composeTier(input.star, input.uniqueWeapon),
+    targetWeaponLevel: optionalZeroBasedInteger(input.weaponLevel),
     targetLevel: optionalInteger(input.level),
+    targetAbilityHp: optionalZeroBasedInteger(input.abilityHp),
+    targetAbilityAtk: optionalZeroBasedInteger(input.abilityAtk),
+    targetAbilityHeal: optionalZeroBasedInteger(input.abilityHeal),
     targetSkillEx: optionalInteger(input.skillEx),
     targetSkillNormal: optionalInteger(input.skillNormal),
     targetSkillEnhanced: optionalInteger(input.skillEnhanced),
@@ -288,7 +324,11 @@ function toEntry(
 function isBaseCurrentCandidate(candidate: CurrentCandidate): boolean {
   return (
     isBaseProgressionValue(candidate.tier) &&
+    isBaseZeroBasedProgressionValue(candidate.weaponLevel) &&
     isBaseProgressionValue(candidate.level) &&
+    isBaseZeroBasedProgressionValue(candidate.abilityHp) &&
+    isBaseZeroBasedProgressionValue(candidate.abilityAtk) &&
+    isBaseZeroBasedProgressionValue(candidate.abilityHeal) &&
     isBaseProgressionValue(candidate.skillEx) &&
     isBaseProgressionValue(candidate.skillNormal) &&
     isBaseProgressionValue(candidate.skillEnhanced) &&
@@ -305,7 +345,11 @@ function isBaseTargetCandidate(candidate: TargetCandidate): boolean {
   return (
     isBaseProgressionValue(candidate.targetBond) &&
     isBaseProgressionValue(candidate.targetTier) &&
+    isBaseZeroBasedProgressionValue(candidate.targetWeaponLevel) &&
     isBaseProgressionValue(candidate.targetLevel) &&
+    isBaseZeroBasedProgressionValue(candidate.targetAbilityHp) &&
+    isBaseZeroBasedProgressionValue(candidate.targetAbilityAtk) &&
+    isBaseZeroBasedProgressionValue(candidate.targetAbilityHeal) &&
     isBaseProgressionValue(candidate.targetSkillEx) &&
     isBaseProgressionValue(candidate.targetSkillNormal) &&
     isBaseProgressionValue(candidate.targetSkillEnhanced) &&
@@ -324,7 +368,11 @@ function isTargetEqualToCurrent(
   return (
     target.targetBond === current.bond &&
     target.targetTier === current.tier &&
+    target.targetWeaponLevel === current.weaponLevel &&
     target.targetLevel === current.level &&
+    target.targetAbilityHp === current.abilityHp &&
+    target.targetAbilityAtk === current.abilityAtk &&
+    target.targetAbilityHeal === current.abilityHeal &&
     target.targetSkillEx === current.skillEx &&
     target.targetSkillNormal === current.skillNormal &&
     target.targetSkillEnhanced === current.skillEnhanced &&
@@ -338,6 +386,10 @@ function isTargetEqualToCurrent(
 
 function isBaseProgressionValue(value: number | null): boolean {
   return value == null || value <= 1;
+}
+
+function isBaseZeroBasedProgressionValue(value: number | null): boolean {
+  return value == null || value <= 0;
 }
 
 function assertNonEmptyEntries(entries: StudentStateImportEntry[]): StudentStateImportEntry[] {
@@ -363,6 +415,14 @@ function optionalInteger(value: unknown): number | null {
 
   const normalized = requiredInteger(value, "숫자 형식이 아닌 값이 있어요.");
   return normalized === 0 ? null : normalized;
+}
+
+function optionalZeroBasedInteger(value: unknown): number | null {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  return requiredInteger(value, "숫자 형식이 아닌 값이 있어요.");
 }
 
 function requiredInteger(value: unknown, errorMessage: string): number {

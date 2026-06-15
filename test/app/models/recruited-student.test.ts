@@ -20,6 +20,10 @@ type RecruitedStudentRow = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
+  weaponLevel: number | null;
+  abilityHp: number | null;
+  abilityAtk: number | null;
+  abilityHeal: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -34,6 +38,10 @@ const currentStateFields = [
   "equip2",
   "equip3",
   "equipSpecial",
+  "weaponLevel",
+  "abilityHp",
+  "abilityAtk",
+  "abilityHeal",
 ] as const;
 
 class FakeD1Statement {
@@ -73,7 +81,22 @@ class FakeD1Database {
     const normalizedSql = normalizeSql(sql);
     if (normalizedSql.includes("from recruited_students")) {
       const userId = Number(params[0]);
-      return this.rows.filter((row) => row.userId === userId);
+      const rows = this.rows.filter((row) => row.userId === userId);
+      if (normalizedSql.includes("select tier")) {
+        return rows.map((row) => ({ tier: row.tier }) as RecruitedStudentRow);
+      }
+      if (normalizedSql.includes("select weaponlevel")) {
+        return rows.map(
+          (row) =>
+            ({
+              weaponLevel: row.weaponLevel,
+              abilityHp: row.abilityHp,
+              abilityAtk: row.abilityAtk,
+              abilityHeal: row.abilityHeal,
+            }) as RecruitedStudentRow,
+        );
+      }
+      return rows;
     }
 
     throw new Error(`Unexpected SQL: ${sql}`);
@@ -131,6 +154,10 @@ function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow>): Rec
     equip2: null,
     equip3: null,
     equipSpecial: null,
+    weaponLevel: null,
+    abilityHp: null,
+    abilityAtk: null,
+    abilityHeal: null,
     createdAt: "2026-06-13T00:00:00.000Z",
     updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
@@ -148,10 +175,14 @@ function normalizeSql(sql: string): string {
 describe("recruited-student current state", () => {
   it("updates current fields for an existing recruited student without changing tier", async () => {
     const { db, env } = createEnv();
-    db.rows.push(createRecruitedStudentRow({ tier: 4 }));
+    db.rows.push(createRecruitedStudentRow({ tier: 6 }));
 
     await updateRecruitedStudentCurrentState(env, 1, "student-a", {
       level: 87,
+      weaponLevel: 0,
+      abilityHp: 10,
+      abilityAtk: 11,
+      abilityHeal: 12,
       skillEx: 5,
       skillNormal: 10,
       skillEnhanced: 9,
@@ -164,8 +195,12 @@ describe("recruited-student current state", () => {
 
     expect(db.rows).toHaveLength(1);
     expect(db.rows[0]).toMatchObject({
-      tier: 4,
+      tier: 6,
       level: 87,
+      weaponLevel: 0,
+      abilityHp: 10,
+      abilityAtk: 11,
+      abilityHeal: 12,
       skillEx: 5,
       skillNormal: 10,
       skillEnhanced: 9,
@@ -182,6 +217,10 @@ describe("recruited-student current state", () => {
 
     await updateRecruitedStudentCurrentState(env, 1, "student-a", {
       level: 80,
+      weaponLevel: null,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
       skillEx: null,
       skillNormal: null,
       skillEnhanced: null,
@@ -209,12 +248,25 @@ describe("recruited-student current state", () => {
     });
   });
 
+  it("rejects tier updates that would leave ability release levels without a unique weapon", async () => {
+    const { db, env } = createEnv();
+    db.rows.push(createRecruitedStudentRow({ tier: 6, abilityHp: 1 }));
+
+    await expect(upsertRecruitedStudent(env, 1, "student-a", 5)).rejects.toThrow(
+      "능력 해방은(는) 고유무기 장착 후 입력할 수 있어요",
+    );
+  });
+
   it("rejects out-of-range current values", async () => {
     const { env } = createEnv();
 
     await expect(
       updateRecruitedStudentCurrentState(env, 1, "student-a", {
         level: 91,
+        weaponLevel: null,
+        abilityHp: null,
+        abilityAtk: null,
+        abilityHeal: null,
         skillEx: null,
         skillNormal: null,
         skillEnhanced: null,
@@ -225,6 +277,29 @@ describe("recruited-student current state", () => {
         equipSpecial: null,
       }),
     ).rejects.toThrow("레벨은(는) 1부터 90 사이만 입력할 수 있어요");
+  });
+
+  it("rejects ability release levels before the unique weapon is equipped", async () => {
+    const { db, env } = createEnv();
+    db.rows.push(createRecruitedStudentRow({ tier: 5 }));
+
+    await expect(
+      updateRecruitedStudentCurrentState(env, 1, "student-a", {
+        level: null,
+        weaponLevel: 0,
+        abilityHp: 1,
+        abilityAtk: 0,
+        abilityHeal: null,
+        skillEx: null,
+        skillNormal: null,
+        skillEnhanced: null,
+        skillSub: null,
+        equip1: null,
+        equip2: null,
+        equip3: null,
+        equipSpecial: null,
+      }),
+    ).rejects.toThrow("능력 해방은(는) 고유무기 장착 후 입력할 수 있어요");
   });
 
   it("loads recruited current fields with the tier", async () => {

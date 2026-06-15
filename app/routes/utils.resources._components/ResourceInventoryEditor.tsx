@@ -135,6 +135,7 @@ export default function ResourceInventoryEditor({
   const hasChanges = changedItems.length > 0;
   const requestedCategory = searchParams.get("category");
   const favorCategoryVisible = resourceGroups.some((group) => group.kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor);
+  const hasCreditRequirement = requiredResources.credit > 0;
   const setFavorCategoryElement = useScrollIntoCategoryOnQuery({
     requestedCategory,
     targetCategory: "favor",
@@ -175,7 +176,9 @@ export default function ResourceInventoryEditor({
       ) : null}
 
       <div className="space-y-3">
-        {resourceGroups.length === 0 ? (
+        {hasCreditRequirement ? <CreditRequirementSummary credit={requiredResources.credit} /> : null}
+
+        {resourceGroups.length === 0 && !hasCreditRequirement ? (
           <div className="rounded-md border border-border bg-card p-8">
             <EmptyView Icon={ArchiveBoxIcon} text="조건에 맞는 재화가 없어요" />
           </div>
@@ -223,6 +226,20 @@ export default function ResourceInventoryEditor({
         </div>
       ) : null}
     </>
+  );
+}
+
+function CreditRequirementSummary({ credit }: { credit: number }) {
+  return (
+    <section className="overflow-hidden rounded-md border border-border bg-card">
+      <div className="border-b border-border bg-muted/60 px-3 py-2">
+        <h2 className="text-sm font-semibold text-foreground">크레딧</h2>
+      </div>
+      <div className="px-3 py-3">
+        <p className="text-xs font-medium text-muted-foreground">필요 크레딧</p>
+        <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{credit.toLocaleString()}</p>
+      </div>
+    </section>
   );
 }
 

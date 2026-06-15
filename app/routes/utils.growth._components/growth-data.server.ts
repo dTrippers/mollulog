@@ -40,6 +40,10 @@ function buildStudentRowData(params: BuildStudentRowDataParams): Omit<GrowthStud
     relationshipCurrentLevel: relationship?.currentLevel ?? null,
     relationshipTargetLevel: relationship?.targetLevel ?? null,
     level: recruitedStudent?.level ?? null,
+    weaponLevel: recruitedStudent?.weaponLevel ?? null,
+    abilityHp: recruitedStudent?.abilityHp ?? null,
+    abilityAtk: recruitedStudent?.abilityAtk ?? null,
+    abilityHeal: recruitedStudent?.abilityHeal ?? null,
     skillEx: recruitedStudent?.skillEx ?? null,
     skillNormal: recruitedStudent?.skillNormal ?? null,
     skillEnhanced: recruitedStudent?.skillEnhanced ?? null,
@@ -49,6 +53,10 @@ function buildStudentRowData(params: BuildStudentRowDataParams): Omit<GrowthStud
     equip3: recruitedStudent?.equip3 ?? null,
     equipSpecial: gearData ? (recruitedStudent?.equipSpecial ?? null) : null,
     targetLevel: growth?.targetLevel ?? null,
+    targetWeaponLevel: growth?.targetWeaponLevel ?? null,
+    targetAbilityHp: growth?.targetAbilityHp ?? null,
+    targetAbilityAtk: growth?.targetAbilityAtk ?? null,
+    targetAbilityHeal: growth?.targetAbilityHeal ?? null,
     targetSkillEx: growth?.targetSkillEx ?? null,
     targetSkillNormal: growth?.targetSkillNormal ?? null,
     targetSkillEnhanced: growth?.targetSkillEnhanced ?? null,
@@ -105,7 +113,7 @@ export async function loadStudentRow(
 
   return {
     ...base,
-    resourceRequirements: requirementsMap[studentUid] ?? { items: [], characterExp: 0, skillUnavailable: false },
+    resourceRequirements: requirementsMap[studentUid] ?? { items: [], characterExp: 0, credit: 0, skillUnavailable: false },
   };
 }
 
@@ -185,7 +193,7 @@ export async function loadGrowthPlannerData(
   );
   const managedStudents = managedStudentsData.map((student) => ({
     ...student,
-    resourceRequirements: growthResourceRequirements[student.uid] ?? { items: [], characterExp: 0, skillUnavailable: false },
+    resourceRequirements: growthResourceRequirements[student.uid] ?? { items: [], characterExp: 0, credit: 0, skillUnavailable: false },
   }));
 
   const availableStudents = Object.values(allStudentsMap)

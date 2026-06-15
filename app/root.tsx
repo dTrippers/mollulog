@@ -21,6 +21,7 @@ import { useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
+import { captureClientError } from "./lib/observability.client";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
 import { getNavigationBarContents } from "./models/content";
 import styles from "./tailwind.css?url";
@@ -34,6 +35,7 @@ const themeConfig = {
     backgroundColor: "#ffffff",
   },
 };
+const reportedServerRouteErrorKeys = new Set<string>();
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env as Env & {
@@ -225,8 +227,50 @@ function SignInBottomSheetHost() {
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   const normalized = normalizeRouteError(error);
+  const isServerError = isServerRouteError(normalized);
+  const location = useLocation();
 
-  if (!isServerRouteError(normalized)) {
+  useEffect(() => {
+    if (!isServerError || typeof window === "undefined") {
+      return;
+    }
+
+    const reportKey = [
+      location.key,
+      location.pathname,
+      normalized.status,
+      normalized.code ?? "",
+      normalized.title,
+      normalized.message,
+    ].join(":");
+    if (reportedServerRouteErrorKeys.has(reportKey)) {
+      return;
+    }
+    reportedServerRouteErrorKeys.add(reportKey);
+
+    const reportError =
+      error instanceof Error ? error : new Error(`${normalized.status} ${normalized.title}: ${normalized.message}`);
+    captureClientError(reportError, {
+      code: normalized.code,
+      currentUrl: window.location.href,
+      details: normalized.details,
+      location: location.pathname,
+      source: "root.error_boundary.server_error",
+      status: normalized.status,
+    });
+  }, [
+    error,
+    isServerError,
+    location.key,
+    location.pathname,
+    normalized.code,
+    normalized.details,
+    normalized.message,
+    normalized.status,
+    normalized.title,
+  ]);
+
+  if (!isServerError) {
     return (
       <div className="min-h-dvh w-screen bg-white text-neutral-950 dark:bg-neutral-900 dark:text-neutral-100 flex items-center justify-center px-4">
         <ErrorPage status={normalized.status} title={normalized.title} message={normalized.message} />

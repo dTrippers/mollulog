@@ -16,18 +16,18 @@ const skillCostQuery = graphql(`
   query GrowthSkillCosts($uids: [String!]) {
     students(uids: $uids) {
       uid
-      ex2: skillItems(skillType: ex, skillLevel: 2) { amount item { uid rarity } }
-      ex3: skillItems(skillType: ex, skillLevel: 3) { amount item { uid rarity } }
-      ex4: skillItems(skillType: ex, skillLevel: 4) { amount item { uid rarity } }
-      ex5: skillItems(skillType: ex, skillLevel: 5) { amount item { uid rarity } }
-      normal2: skillItems(skillType: normal, skillLevel: 2) { amount item { uid rarity } }
-      normal3: skillItems(skillType: normal, skillLevel: 3) { amount item { uid rarity } }
-      normal4: skillItems(skillType: normal, skillLevel: 4) { amount item { uid rarity } }
-      normal5: skillItems(skillType: normal, skillLevel: 5) { amount item { uid rarity } }
-      normal6: skillItems(skillType: normal, skillLevel: 6) { amount item { uid rarity } }
-      normal7: skillItems(skillType: normal, skillLevel: 7) { amount item { uid rarity } }
-      normal8: skillItems(skillType: normal, skillLevel: 8) { amount item { uid rarity } }
-      normal9: skillItems(skillType: normal, skillLevel: 9) { amount item { uid rarity } }
+      ex2: skillItems(skillType: ex, skillLevel: 2) { amount item { uid rarity ... on Item { category subCategory } } }
+      ex3: skillItems(skillType: ex, skillLevel: 3) { amount item { uid rarity ... on Item { category subCategory } } }
+      ex4: skillItems(skillType: ex, skillLevel: 4) { amount item { uid rarity ... on Item { category subCategory } } }
+      ex5: skillItems(skillType: ex, skillLevel: 5) { amount item { uid rarity ... on Item { category subCategory } } }
+      normal2: skillItems(skillType: normal, skillLevel: 2) { amount item { uid rarity ... on Item { category subCategory } } }
+      normal3: skillItems(skillType: normal, skillLevel: 3) { amount item { uid rarity ... on Item { category subCategory } } }
+      normal4: skillItems(skillType: normal, skillLevel: 4) { amount item { uid rarity ... on Item { category subCategory } } }
+      normal5: skillItems(skillType: normal, skillLevel: 5) { amount item { uid rarity ... on Item { category subCategory } } }
+      normal6: skillItems(skillType: normal, skillLevel: 6) { amount item { uid rarity ... on Item { category subCategory } } }
+      normal7: skillItems(skillType: normal, skillLevel: 7) { amount item { uid rarity ... on Item { category subCategory } } }
+      normal8: skillItems(skillType: normal, skillLevel: 8) { amount item { uid rarity ... on Item { category subCategory } } }
+      normal9: skillItems(skillType: normal, skillLevel: 9) { amount item { uid rarity ... on Item { category subCategory } } }
     }
   }
 `);

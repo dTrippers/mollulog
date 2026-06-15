@@ -19,11 +19,11 @@ type StudentStateDiffOptions = {
 };
 
 const currentComparisonFields = studentStateComparisonFields.flatMap((field) =>
-  field.currentKey ? [{ key: field.currentKey, kind: field.kind, gearOnly: field.gearOnly }] : [],
+  field.currentKey ? [{ key: field.currentKey, kind: field.kind, gearOnly: field.gearOnly, min: field.min }] : [],
 );
 
 const targetComparisonFields = studentStateComparisonFields.flatMap((field) =>
-  field.targetKey ? [{ key: field.targetKey, kind: field.kind, gearOnly: field.gearOnly }] : [],
+  field.targetKey ? [{ key: field.targetKey, kind: field.kind, gearOnly: field.gearOnly, min: field.min }] : [],
 );
 
 export function isStudentStateCurrentChanged(
@@ -97,7 +97,11 @@ export function mergeStudentStateCurrentValueForUpdate(
     tier: isStudentStateCurrentFieldUpdateTarget("tier", imported, existing, options)
       ? imported.tier
       : (existing?.tier ?? options.initialTier),
+    weaponLevel: getMergedCurrentFieldValue("weaponLevel", imported, existing, options),
     level: getMergedCurrentFieldValue("level", imported, existing, options),
+    abilityHp: getMergedCurrentFieldValue("abilityHp", imported, existing, options),
+    abilityAtk: getMergedCurrentFieldValue("abilityAtk", imported, existing, options),
+    abilityHeal: getMergedCurrentFieldValue("abilityHeal", imported, existing, options),
     skillEx: getMergedCurrentFieldValue("skillEx", imported, existing, options),
     skillNormal: getMergedCurrentFieldValue("skillNormal", imported, existing, options),
     skillEnhanced: getMergedCurrentFieldValue("skillEnhanced", imported, existing, options),
@@ -123,8 +127,12 @@ export function mergeStudentStateTargetValueForUpdate(
     targetTier: isStudentStateTargetFieldUpdateTarget("targetTier", imported, existing, options)
       ? imported.targetTier
       : (existing?.targetTier ?? options.initialTier),
+    targetWeaponLevel: getMergedTargetFieldValue("targetWeaponLevel", imported, existing, options),
     targetBond: getMergedTargetFieldValue("targetBond", imported, existing, options),
     targetLevel: getMergedTargetFieldValue("targetLevel", imported, existing, options),
+    targetAbilityHp: getMergedTargetFieldValue("targetAbilityHp", imported, existing, options),
+    targetAbilityAtk: getMergedTargetFieldValue("targetAbilityAtk", imported, existing, options),
+    targetAbilityHeal: getMergedTargetFieldValue("targetAbilityHeal", imported, existing, options),
     targetSkillEx: getMergedTargetFieldValue("targetSkillEx", imported, existing, options),
     targetSkillNormal: getMergedTargetFieldValue("targetSkillNormal", imported, existing, options),
     targetSkillEnhanced: getMergedTargetFieldValue("targetSkillEnhanced", imported, existing, options),
@@ -192,8 +200,8 @@ function getMergedTargetFieldValue(
   return isStudentStateTargetFieldUpdateTarget(key, imported, existing, options) ? imported[key] : (existing?.[key] ?? null);
 }
 
-function getMinimumValue(field: { kind?: "tier" }, initialTier: number): number {
-  return field.kind === "tier" ? initialTier : 1;
+function getMinimumValue(field: { kind?: "tier"; min: number }, initialTier: number): number {
+  return field.kind === "tier" ? initialTier : field.min;
 }
 
 function effectiveValue(value: number | null | undefined, minimumValue: number): number {

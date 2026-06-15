@@ -81,6 +81,10 @@ function captureSentryError(error: unknown, context: LogContext) {
   });
 }
 
+export function captureServerError(error: unknown, context: LogContext = {}) {
+  captureSentryError(error, context);
+}
+
 export function getLogger(env: ObservabilityEnv, ctx?: ExecutionContext, defaults: LogContext = {}) {
   const logtail = getLogtail(env);
   const edgeLogger = ctx && logtail ? logtail.withExecutionContext(ctx) : logtail;
@@ -119,13 +123,6 @@ export function getLogger(env: ObservabilityEnv, ctx?: ExecutionContext, default
       };
 
       emit("error", message, payload);
-
-      if (error !== undefined) {
-        captureSentryError(error, {
-          ...baseContext,
-          ...payload,
-        });
-      }
     },
   };
 }
