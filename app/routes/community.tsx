@@ -1,25 +1,26 @@
+import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import {
   ChatBubbleLeftRightIcon,
-  SparklesIcon,
   PlayCircleIcon,
-  UsersIcon,
+  SparklesIcon,
   Squares2X2Icon,
+  UsersIcon,
 } from "@heroicons/react/24/outline";
-import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { type ElementType, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { Page } from "~/components/features/layout";
+import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community";
+import { isCommunityEngagementActionResult } from "~/models/community-engagement";
 import {
   COMMUNITY_FEED_PAGE_SIZE,
   COMMUNITY_VISIBLE_POST_TYPES,
   enrichCommunityFeedPosts,
 } from "~/models/community-feed";
-import { cn } from "~/lib/utils";
 
 type CommunityVisiblePostType = (typeof COMMUNITY_VISIBLE_POST_TYPES)[number];
 
@@ -96,6 +97,14 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   };
 };
 
+export const shouldRevalidate: ShouldRevalidateFunction = ({ actionResult, defaultShouldRevalidate }) => {
+  if (isCommunityEngagementActionResult(actionResult)) {
+    return false;
+  }
+
+  return defaultShouldRevalidate;
+};
+
 export const meta: MetaFunction = () => {
   const title = "평가/의견 | 몰루로그";
   const description = "블루 아카이브의 학생 평가와 이벤트 의견을 확인해보세요.";
@@ -112,13 +121,16 @@ export const meta: MetaFunction = () => {
 export default function CommunityPage() {
   const { posts, signedIn, studentsByUid, postTypes, page, totalPages } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
-  const getPageUrl = useCallback((nextPage: number) => {
-    const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.set("page", String(nextPage));
+  const getPageUrl = useCallback(
+    (nextPage: number) => {
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.set("page", String(nextPage));
 
-    const query = nextSearchParams.toString();
-    return query ? `/community?${query}` : "/community";
-  }, [searchParams]);
+      const query = nextSearchParams.toString();
+      return query ? `/community?${query}` : "/community";
+    },
+    [searchParams],
+  );
 
   return (
     <Page
