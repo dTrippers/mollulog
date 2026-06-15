@@ -1,6 +1,6 @@
 import { ChevronDownIcon, XMarkIcon } from "@heroicons/react/20/solid";
 import hangul from "hangul-js";
-import { useEffect, useId, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Field } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import { studentImageUrl } from "~/models/assets";
@@ -51,6 +51,7 @@ function SearchInput({ searchQuery, setSearchQuery, searchPlaceholder, inputRef 
 export type StudentSelectFormProps = {
   label?: string;
   description?: string;
+  descriptionAction?: ReactNode;
   name?: string;
   students: Student[];
   initialStudentUids?: string[];
@@ -59,6 +60,7 @@ export type StudentSelectFormProps = {
   multiple?: boolean;
   allowDuplicateSelection?: boolean;
   maxSelectedCount?: number;
+  hideInput?: boolean;
   onSelect?: (value: string | string[]) => void;
   className?: string;
   containerClassName?: string;
@@ -67,6 +69,7 @@ export type StudentSelectFormProps = {
 export default function StudentSelectForm({
   label,
   description,
+  descriptionAction,
   name,
   students,
   initialStudentUids,
@@ -75,6 +78,7 @@ export default function StudentSelectForm({
   multiple = false,
   allowDuplicateSelection = false,
   maxSelectedCount,
+  hideInput = false,
   onSelect,
   className,
   containerClassName,
@@ -117,6 +121,12 @@ export default function StudentSelectForm({
   }, [searchQuery]);
 
   useEffect(() => {
+    if (hideInput) {
+      setIsOpen(false);
+      setSearchQuery("");
+      return;
+    }
+
     if (!isOpen) {
       return;
     }
@@ -144,7 +154,7 @@ export default function StudentSelectForm({
       window.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [hideInput, isOpen]);
 
   const updateSelection = (newSelectedValues: string[]) => {
     setSelectedUids(newSelectedValues);
@@ -236,65 +246,68 @@ export default function StudentSelectForm({
 
   return (
     <>
-      <Field
-        label={label}
-        description={description}
-        containerClassName={containerClassName ?? "mt-2 mb-8 last:mb-2"}
-      >
-        <div className="relative" ref={rootRef}>
-          <button
-            id={buttonId}
-            type="button"
-            className={cn(
-              "flex min-h-10 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2 text-left text-foreground transition-colors hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none",
-              className,
-            )}
-            onClick={() => setIsOpen((prev) => !prev)}
-            aria-controls={listboxId}
-            aria-expanded={isOpen}
-            aria-haspopup="dialog"
-          >
-            <div className="min-w-0 flex-1">{renderSelectedDisplay()}</div>
-            <ChevronDownIcon className={cn("size-5 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
-          </button>
-          {isOpen && (
-            <div
-              id={listboxId}
-              aria-labelledby={buttonId}
-              className="no-scrollbar absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg shadow-foreground/10"
-            >
-              <SearchInput
-                searchQuery={searchQuery}
-                setSearchQuery={setSearchQuery}
-                searchPlaceholder={searchPlaceholder}
-                inputRef={searchInputRef}
-              />
-              {filteredStudents.length > 0 ? (
-                <ul className="py-0.5">
-                  {filteredStudents.slice(0, 10).map((student) => (
-                    <li key={student.uid}>
-                      <button
-                        type="button"
-                        className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-muted/60"
-                        onClick={() => handleSelect(student.uid)}
-                      >
-                        <div className="flex w-full items-center gap-x-3 px-3 py-2">
-                          <StudentImage student={student} size="size-8" />
-                          <p className="grow text-sm text-foreground">{student.name}</p>
-                          {selectedUids.includes(student.uid) && (
-                            <span className="text-xs font-medium text-primary">선택됨</span>
-                          )}
-                        </div>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <div className="p-4 text-center text-sm text-muted-foreground">검색 결과가 없어요</div>
+      <Field label={label} description={description} containerClassName={containerClassName ?? "mt-2 mb-8 last:mb-2"}>
+        <>
+          {descriptionAction}
+          {!hideInput && (
+            <div className="relative" ref={rootRef}>
+              <button
+                id={buttonId}
+                type="button"
+                className={cn(
+                  "flex min-h-10 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2 text-left text-foreground transition-colors hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none",
+                  className,
+                )}
+                onClick={() => setIsOpen((prev) => !prev)}
+                aria-controls={listboxId}
+                aria-expanded={isOpen}
+                aria-haspopup="dialog"
+              >
+                <div className="min-w-0 flex-1">{renderSelectedDisplay()}</div>
+                <ChevronDownIcon
+                  className={cn("size-5 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")}
+                />
+              </button>
+              {isOpen && (
+                <div
+                  id={listboxId}
+                  aria-labelledby={buttonId}
+                  className="no-scrollbar absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg shadow-foreground/10"
+                >
+                  <SearchInput
+                    searchQuery={searchQuery}
+                    setSearchQuery={setSearchQuery}
+                    searchPlaceholder={searchPlaceholder}
+                    inputRef={searchInputRef}
+                  />
+                  {filteredStudents.length > 0 ? (
+                    <ul className="py-0.5">
+                      {filteredStudents.slice(0, 10).map((student) => (
+                        <li key={student.uid}>
+                          <button
+                            type="button"
+                            className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-muted/60"
+                            onClick={() => handleSelect(student.uid)}
+                          >
+                            <div className="flex w-full items-center gap-x-3 px-3 py-2">
+                              <StudentImage student={student} size="size-8" />
+                              <p className="grow text-sm text-foreground">{student.name}</p>
+                              {selectedUids.includes(student.uid) && (
+                                <span className="text-xs font-medium text-primary">선택됨</span>
+                              )}
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="p-4 text-center text-sm text-muted-foreground">검색 결과가 없어요</div>
+                  )}
+                </div>
               )}
             </div>
           )}
-        </div>
+        </>
       </Field>
       <input type="hidden" name={name} value={selectedUids.join(",")} />
     </>

@@ -1,5 +1,5 @@
 import { StudentSelectForm } from "~/components/features/forms";
-import { Checkbox, Input } from "~/components/primitives";
+import { Button, Input } from "~/components/primitives";
 
 type PickupHistoryEditorProps = {
   tier3Students: {
@@ -39,7 +39,6 @@ export default function PickupHistoryEditor({
   onExchangedStudentIdsChange,
 }: PickupHistoryEditorProps) {
   const exchangeCountLimit = Math.floor((totalCount ?? 0) / 200);
-  const canSkipTier3StudentList = tier3Count !== undefined && tier3Count > 0;
 
   return (
     <div className="space-y-6">
@@ -58,36 +57,37 @@ export default function PickupHistoryEditor({
           className="max-w-none"
           containerClassName="mt-0 mb-0"
         />
-        <div className="space-y-2">
-          <Input
-            type="number"
-            label="모집한 ★3 횟수"
-            description="모집한 ★3 학생의 수를 입력해주세요"
-            placeholder="6"
-            value={tier3Count?.toString() ?? ""}
-            onChange={(value) => {
-              const newCount = Number.parseInt(value);
-              onTier3CountChange(Number.isNaN(newCount) ? undefined : newCount);
-            }}
-            descriptionClassName="text-muted-foreground/75"
-            className="max-w-none"
-            containerClassName="mt-0 mb-0"
-          />
-          <Checkbox
-            label="★3 학생 목록 입력하지 않기"
-            checked={canSkipTier3StudentList && skipTier3StudentList}
-            disabled={!canSkipTier3StudentList}
-            onChange={onSkipTier3StudentListChange}
-          />
-        </div>
+        <Input
+          type="number"
+          label="모집한 ★3 횟수"
+          description="모집한 ★3 학생의 수를 입력해주세요"
+          placeholder="6"
+          value={tier3Count?.toString() ?? ""}
+          onChange={(value) => {
+            const newCount = Number.parseInt(value);
+            onTier3CountChange(Number.isNaN(newCount) ? undefined : newCount);
+          }}
+          descriptionClassName="text-muted-foreground/75"
+          className="max-w-none"
+          containerClassName="mt-0 mb-0"
+        />
       </div>
       <div>
-        {tier3Count !== undefined && tier3Count > 0 && !skipTier3StudentList && (
+        {tier3Count !== undefined && tier3Count > 0 && (
           <StudentSelectForm
             label="모집한 ★3 학생"
             description="모집한 ★3 학생을 선택해주세요"
+            descriptionAction={
+              <Button
+                text={skipTier3StudentList ? "★3 학생 목록 입력하기" : "★3 학생 목록 입력하지 않기"}
+                variant="tint"
+                size="xs"
+                onClick={() => onSkipTier3StudentListChange(!skipTier3StudentList)}
+              />
+            }
             students={tier3Students}
             initialStudentUids={tier3StudentIds}
+            hideInput={skipTier3StudentList}
             onSelect={(value) => onTier3StudentIdsChange(value as string[])}
             multiple
             allowDuplicateSelection
