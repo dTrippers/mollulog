@@ -3,7 +3,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { StudentSelectForm } from "~/components/features/forms";
 import { TierSelector } from "~/components/features/students";
-import { Button, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
+import { Button, NumberInput, ProfileImage, ResourceCard, useNumberInputGridNavigation } from "~/components/primitives";
 import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
 import { getRelationshipLevelValidationError } from "~/models/relationship-level";
 import {
@@ -56,6 +56,7 @@ const fieldDefinitions = [
 type CurrentFieldKey = (typeof fieldDefinitions)[number]["key"];
 type TargetFieldKey = (typeof fieldDefinitions)[number]["targetKey"];
 type GrowthValues = Record<CurrentFieldKey | TargetFieldKey, number | null>;
+type NumberInputGridNavigation = ReturnType<typeof useNumberInputGridNavigation>;
 type RelationshipValues = {
   relationshipCurrentLevel: number | null;
   relationshipTargetLevel: number | null;
@@ -122,6 +123,8 @@ const cellBase = "border-b border-neutral-200 dark:border-neutral-700";
 const dataCellClass = `${cellBase} w-25 px-1 py-2`;
 const targetCellClass = `${cellBase} w-25 px-1 py-1.5 bg-blue-50/40 dark:bg-blue-950/10`;
 const bulkActionCellClass = `${cellBase} border-l border-neutral-200 px-2 py-2 dark:border-neutral-700`;
+const studentHeaderContentClass =
+  "sticky left-3 z-10 flex w-max max-w-[calc(100vw-2rem)] items-center gap-2 bg-neutral-100 pr-3 dark:bg-neutral-900";
 
 function isGearField(key: CurrentFieldKey | TargetFieldKey): boolean {
   return key === "equipSpecial" || key === "targetEquipSpecial";
@@ -324,7 +327,17 @@ function rowReducer(state: RowState, action: RowAction): RowState {
   return state;
 }
 
-function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStudentUpdate: (s: GrowthStudent) => void }) {
+function GrowthRow({
+  student,
+  rowIndexBase,
+  numberInputGridNavigation,
+  onStudentUpdate,
+}: {
+  student: GrowthStudent;
+  rowIndexBase: number;
+  numberInputGridNavigation: NumberInputGridNavigation;
+  onStudentUpdate: (s: GrowthStudent) => void;
+}) {
   const fetcher = useFetcher<GrowthActionResult>();
   const initialValues = useMemo(() => pickGrowthValues(student), [student]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -646,13 +659,15 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     student.resourceRequirements.items.length > 0 ||
     student.resourceRequirements.characterExp > 0 ||
     student.resourceRequirements.credit > 0;
+  const currentNavigationRowIndex = rowIndexBase;
+  const targetNavigationRowIndex = rowIndexBase + 1;
 
   return (
     <>
       <tr className="bg-neutral-100 dark:bg-neutral-900">
         <td colSpan={TOTAL_COLS} className={`${cellBase} px-3 py-2`}>
-          <div className="flex items-center gap-2">
-            <div className="flex grow items-center gap-2 min-w-0">
+          <div className={studentHeaderContentClass}>
+            <div className="flex min-w-0 grow items-center gap-2">
               <ProfileImage studentUid={student.uid} />
               <span className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50">{student.name}</span>
               {displayedError && <p className="text-xs text-red-500 dark:text-red-400">{displayedError}</p>}
@@ -681,8 +696,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
         </td>
       </tr>
 
-      <tr className="align-top relative">
+      <GrowthFieldHeaderRow />
 
+      <tr className="relative align-top">
         <td
           className={`${cellBase} w-10 px-1 py-2 text-center text-xs font-medium text-neutral-400 dark:text-neutral-500`}
         >
@@ -707,6 +723,10 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                 minValue={1}
                 maxValue={100}
                 value={draftRelationshipValues.relationshipCurrentLevel}
+                inputProps={numberInputGridNavigation.getInputProps({
+                  rowIndex: currentNavigationRowIndex,
+                  columnIndex: 0,
+                })}
                 onChange={(v) => handleRelationshipFieldChange("relationshipCurrentLevel", v)}
               />
             </td>
@@ -717,29 +737,37 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
               </Button>
             </td>
 
-            {fieldDefinitions.map(({ key, min, max }) => (
-              <td key={key} className={dataCellClass}>
-                {student.hasGear || !isGearField(key) ? (
-                  <div className="flex flex-col items-center gap-0.5">
-                    <NumberInput
-                      nullable
-                      size="sm"
-                      showMax
-                      minValue={min}
-                      maxValue={getFieldMax(key, max, tierDraft)}
-                      value={draftValues[key]}
-                      disabled={isAbilityReleaseDisabled(key, tierDraft)}
-                      onChange={(v) => handleFieldChange(key, v)}
-                    />
-                    {equipLabels[key] && (
-                      <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
-                        {equipLabels[key]}
-                      </span>
-                    )}
-                  </div>
-                ) : null}
-              </td>
-            ))}
+            {fieldDefinitions.map(({ key, min, max }, fieldIndex) => {
+              const disabled = isAbilityReleaseDisabled(key, tierDraft);
+              return (
+                <td key={key} className={dataCellClass}>
+                  {student.hasGear || !isGearField(key) ? (
+                    <div className="flex flex-col items-center gap-0.5">
+                      <NumberInput
+                        nullable
+                        size="sm"
+                        showMax
+                        minValue={min}
+                        maxValue={getFieldMax(key, max, tierDraft)}
+                        value={draftValues[key]}
+                        disabled={disabled}
+                        inputProps={numberInputGridNavigation.getInputProps({
+                          rowIndex: currentNavigationRowIndex,
+                          columnIndex: fieldIndex + 1,
+                          disabled,
+                        })}
+                        onChange={(v) => handleFieldChange(key, v)}
+                      />
+                      {equipLabels[key] && (
+                        <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
+                          {equipLabels[key]}
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
+                </td>
+              );
+            })}
           </>
         ) : (
           <>
@@ -755,6 +783,10 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                 minValue={1}
                 maxValue={100}
                 value={draftRelationshipValues.relationshipCurrentLevel}
+                inputProps={numberInputGridNavigation.getInputProps({
+                  rowIndex: currentNavigationRowIndex,
+                  columnIndex: 0,
+                })}
                 onChange={(v) => handleRelationshipFieldChange("relationshipCurrentLevel", v)}
               />
             </td>
@@ -762,7 +794,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
             <td className={bulkActionCellClass} />
 
             <td colSpan={fieldDefinitions.length} className={`${cellBase} relative px-3 py-2`}>
-              <div className="pointer-events-none select-none opacity-20 blur-sm flex items-center gap-2">
+              <div className="pointer-events-none flex select-none items-center gap-2 opacity-20 blur-sm">
                 {fieldDefinitions.map(({ key }) => (
                   <div key={key} className="h-4 w-10 rounded bg-neutral-400 dark:bg-neutral-500" />
                 ))}
@@ -817,6 +849,10 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
             minValue={1}
             maxValue={100}
             value={draftRelationshipValues.relationshipTargetLevel}
+            inputProps={numberInputGridNavigation.getInputProps({
+              rowIndex: targetNavigationRowIndex,
+              columnIndex: 0,
+            })}
             onChange={(v) => handleRelationshipFieldChange("relationshipTargetLevel", v)}
           />
         </td>
@@ -827,8 +863,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
           </Button>
         </td>
 
-        {fieldDefinitions.map(({ targetKey, min, max }) => {
+        {fieldDefinitions.map(({ targetKey, min, max }, fieldIndex) => {
           const effectiveTargetTier = targetTierDraft ?? tierDraft;
+          const disabled = isAbilityReleaseDisabled(targetKey, effectiveTargetTier);
           return (
             <td key={targetKey} className={targetCellClass}>
               {student.hasGear || !isGearField(targetKey) ? (
@@ -840,7 +877,12 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                     minValue={min}
                     maxValue={getFieldMax(targetKey, max, effectiveTargetTier)}
                     value={draftValues[targetKey]}
-                    disabled={isAbilityReleaseDisabled(targetKey, effectiveTargetTier)}
+                    disabled={disabled}
+                    inputProps={numberInputGridNavigation.getInputProps({
+                      rowIndex: targetNavigationRowIndex,
+                      columnIndex: fieldIndex + 1,
+                      disabled,
+                    })}
                     onChange={(v) => handleFieldChange(targetKey, v)}
                   />
                   {equipLabels[targetKey] && (
@@ -929,6 +971,22 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
   );
 }
 
+function GrowthFieldHeaderRow() {
+  return (
+    <tr className="bg-neutral-50 text-left text-xs font-semibold tracking-wide text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
+      <th className={`${cellBase} px-1 py-3`} />
+      <th className={`${cellBase} px-2 py-3 text-center`}>성급</th>
+      <th className={`${cellBase} min-w-20 px-2 py-3 text-center`}>인연 랭크</th>
+      <th className={`${cellBase} px-2 py-3 text-center`}>일괄 적용</th>
+      {fieldDefinitions.map(({ key, label }) => (
+        <th key={key} className={`${cellBase} w-16 px-1 py-3 text-center`}>
+          {label}
+        </th>
+      ))}
+    </tr>
+  );
+}
+
 const TOTAL_COLS = 4 + fieldDefinitions.length;
 
 function AddStudentControl({
@@ -1012,28 +1070,23 @@ export default function GrowthTable({
   availableStudents: GrowthAvailableStudent[];
   onStudentUpdate: (student: GrowthStudent) => void;
 }) {
+  const numberInputGridNavigation = useNumberInputGridNavigation();
+
   return (
     <div className="space-y-2">
       <AddStudentControl availableStudents={availableStudents} isEmpty={students.length === 0} />
       <div className="max-w-full overflow-x-auto">
-        <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
+        <div className="inline-block align-top rounded-xl border border-neutral-200 dark:border-neutral-700">
           <table className="w-max border-collapse">
-            <thead className="bg-neutral-50 dark:bg-neutral-900">
-              <tr className="text-left text-xs font-semibold tracking-wide text-neutral-500 dark:text-neutral-400">
-                <th className="px-1 py-3" />
-                <th className="px-2 py-3 text-center">성급</th>
-                <th className="min-w-20 px-2 py-3 text-center">인연 랭크</th>
-                <th className="px-2 py-3 text-center">일괄 적용</th>
-                {fieldDefinitions.map(({ key, label }) => (
-                  <th key={key} className="w-16 px-1 py-3 text-center">
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
             <tbody>
-              {students.map((student) => (
-                <GrowthRow key={student.uid} student={student} onStudentUpdate={onStudentUpdate} />
+              {students.map((student, studentIndex) => (
+                <GrowthRow
+                  key={student.uid}
+                  student={student}
+                  rowIndexBase={studentIndex * 2}
+                  numberInputGridNavigation={numberInputGridNavigation}
+                  onStudentUpdate={onStudentUpdate}
+                />
               ))}
             </tbody>
           </table>
