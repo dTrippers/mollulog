@@ -21,6 +21,8 @@ export { default as LoadingSkeleton } from "./LoadingSkeleton";
 export { default as MarkdownText } from "./MarkdownText";
 export { default as MultilineText } from "./MultilineText";
 export { default as NumberInput } from "./NumberInput";
+export { useNumberInputGridNavigation } from "./useNumberInputGridNavigation";
+export type { NumberInputGridNavigationInputProps } from "./useNumberInputGridNavigation";
 export { default as OptionBadge } from "./OptionBadge";
 export { default as Panel } from "./Panel";
 export { default as Pagination } from "./Pagination";

@@ -2,7 +2,12 @@ import type { ActionFunctionArgs } from "react-router";
 import { data, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
-import { getRecruitedStudents, upsertRecruitedStudent } from "~/models/recruited-student";
+import {
+  type RecruitedStudentCurrentStateInput,
+  getRecruitedStudents,
+  updateRecruitedStudentCurrentState,
+  upsertRecruitedStudent,
+} from "~/models/recruited-student";
 import {
   getRelationshipLevel,
   removeRelationshipLevel,
@@ -19,7 +24,7 @@ import { loadStudentRow } from "./utils.growth._components/growth-data.server";
 import GrowthTable from "./utils.growth._components/GrowthTable";
 import type { GrowthActionResult, GrowthLayoutContext } from "./utils.growth._components/types";
 
-const growthFieldKeys = [
+const currentStateFieldKeys = [
   "level",
   "skillEx",
   "skillNormal",
@@ -29,6 +34,9 @@ const growthFieldKeys = [
   "equip2",
   "equip3",
   "equipSpecial",
+] as const satisfies (keyof RecruitedStudentCurrentStateInput)[];
+
+const targetGrowthFieldKeys = [
   "targetLevel",
   "targetSkillEx",
   "targetSkillNormal",
@@ -45,7 +53,7 @@ type GrowthActionData = {
   _intent?: "growth";
   studentUid: string;
   _submissionId?: string;
-} & StudentGrowthInput;
+} & RecruitedStudentCurrentStateInput & StudentGrowthInput;
 
 type TierActionData = {
   _intent: "tier";
@@ -104,10 +112,17 @@ function parseNullableInteger(value: unknown): number | null {
 }
 
 function toGrowthInput(payload: Partial<GrowthActionData>): StudentGrowthInput {
-  return growthFieldKeys.reduce((acc, field) => {
+  return targetGrowthFieldKeys.reduce((acc, field) => {
     acc[field] = parseNullableInteger(payload[field]);
     return acc;
   }, {} as StudentGrowthInput);
+}
+
+function toCurrentStateInput(payload: Partial<GrowthActionData>): RecruitedStudentCurrentStateInput {
+  return currentStateFieldKeys.reduce((acc, field) => {
+    acc[field] = parseNullableInteger(payload[field]);
+    return acc;
+  }, {} as RecruitedStudentCurrentStateInput);
 }
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
@@ -190,12 +205,18 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       }
       await upsertRecruitedStudent(env, currentUser.id, payload.studentUid, tierPayload.tier);
     } else {
-      await upsertStudentGrowth(
-        env,
-        currentUser.id,
-        payload.studentUid,
-        toGrowthInput(payload as Partial<GrowthActionData>),
-      );
+      const recruitedStudents = await getRecruitedStudents(env, currentUser.id);
+      const isRecruited = recruitedStudents.some(({ studentUid }) => studentUid === payload.studentUid);
+      const growthPayload = payload as Partial<GrowthActionData>;
+      if (isRecruited) {
+        await updateRecruitedStudentCurrentState(
+          env,
+          currentUser.id,
+          payload.studentUid,
+          toCurrentStateInput(growthPayload),
+        );
+      }
+      await upsertStudentGrowth(env, currentUser.id, payload.studentUid, toGrowthInput(growthPayload));
     }
 
     const row = await loadStudentRow(env, currentUser.id, payload.studentUid, { logger });

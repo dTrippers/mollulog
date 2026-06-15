@@ -2,7 +2,7 @@ import {
   type StudentGearData,
   getStudentGrowthResourceRequirements,
 } from "~/models/growth-resource";
-import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
+import { type RecruitedStudent, getRecruitedStudents } from "~/models/recruited-student";
 import { getRelationshipLevel, getRelationshipLevels } from "~/models/relationship-level";
 import { type Student, getAllStudentsMap } from "~/models/student";
 import { type StudentGrowth, getStudentGrowth, getStudentGrowths } from "~/models/student-growth";
@@ -19,14 +19,14 @@ type BuildStudentRowDataParams = {
   studentUid: string;
   student: Student | undefined;
   growth: StudentGrowth | undefined;
-  isRecruited: boolean;
-  tier: number | null;
+  recruitedStudent: RecruitedStudent | undefined;
   relationship: { currentLevel: number | null; targetLevel: number | null } | undefined;
   gearData: StudentGearData | null;
 };
 
 function buildStudentRowData(params: BuildStudentRowDataParams): Omit<GrowthStudent, "resourceRequirements"> {
-  const { studentUid, student, growth, isRecruited, tier, relationship, gearData } = params;
+  const { studentUid, student, growth, recruitedStudent, relationship, gearData } = params;
+  const isRecruited = recruitedStudent != null;
   return {
     uid: studentUid,
     name: student?.name ?? studentUid,
@@ -35,19 +35,19 @@ function buildStudentRowData(params: BuildStudentRowDataParams): Omit<GrowthStud
     released: student?.released ?? false,
     hasGear: gearData != null,
     equipments: student?.equipments ?? [],
-    tier: isRecruited ? tier : null,
+    tier: recruitedStudent?.tier ?? null,
     initialTier: student?.initialTier ?? 1,
     relationshipCurrentLevel: relationship?.currentLevel ?? null,
     relationshipTargetLevel: relationship?.targetLevel ?? null,
-    level: growth?.level ?? null,
-    skillEx: growth?.skillEx ?? null,
-    skillNormal: growth?.skillNormal ?? null,
-    skillEnhanced: growth?.skillEnhanced ?? null,
-    skillSub: growth?.skillSub ?? null,
-    equip1: growth?.equip1 ?? null,
-    equip2: growth?.equip2 ?? null,
-    equip3: growth?.equip3 ?? null,
-    equipSpecial: gearData ? (growth?.equipSpecial ?? null) : null,
+    level: recruitedStudent?.level ?? null,
+    skillEx: recruitedStudent?.skillEx ?? null,
+    skillNormal: recruitedStudent?.skillNormal ?? null,
+    skillEnhanced: recruitedStudent?.skillEnhanced ?? null,
+    skillSub: recruitedStudent?.skillSub ?? null,
+    equip1: recruitedStudent?.equip1 ?? null,
+    equip2: recruitedStudent?.equip2 ?? null,
+    equip3: recruitedStudent?.equip3 ?? null,
+    equipSpecial: gearData ? (recruitedStudent?.equipSpecial ?? null) : null,
     targetLevel: growth?.targetLevel ?? null,
     targetSkillEx: growth?.targetSkillEx ?? null,
     targetSkillNormal: growth?.targetSkillNormal ?? null,
@@ -68,10 +68,10 @@ export async function loadStudentRow(
   options: GrowthDataLoadOptions = {},
 ): Promise<GrowthStudent | null> {
   const growthResourceRepository = new GrowthResourceRepository(env);
-  const [growth, relationship, recruitedTierMap, allStudentsMap, gearDataMap] = await Promise.all([
+  const [growth, relationship, recruitedStudents, allStudentsMap, gearDataMap] = await Promise.all([
     getStudentGrowth(env, userId, studentUid),
     getRelationshipLevel(env, userId, studentUid),
-    getRecruitedStudentTiers(env, userId),
+    getRecruitedStudents(env, userId),
     getAllStudentsMap(env, true),
     growthResourceRepository.getStudentGearData([studentUid]),
   ]);
@@ -82,15 +82,13 @@ export async function loadStudentRow(
   }
 
   const gearData = gearDataMap.get(studentUid) ?? null;
-  const tier = recruitedTierMap[studentUid] ?? null;
-  const isRecruited = studentUid in recruitedTierMap;
+  const recruitedStudent = recruitedStudents.find((entry) => entry.studentUid === studentUid);
 
   const base = buildStudentRowData({
     studentUid,
     student,
     growth: growth ?? undefined,
-    isRecruited,
-    tier,
+    recruitedStudent,
     relationship: relationship
       ? { currentLevel: relationship.currentLevel, targetLevel: relationship.targetLevel }
       : undefined,
@@ -140,13 +138,12 @@ export async function loadGrowthPlannerData(
   );
 
   const managedUids = new Set(growths.map((growth) => growth.studentUid));
-  const recruitedUids = new Set(recruitedStudents.map((recruitedStudent) => recruitedStudent.studentUid));
-  const recruitedTierMap = recruitedStudents.reduce(
+  const recruitedStudentMap = recruitedStudents.reduce(
     (acc, recruitedStudent) => {
-      acc[recruitedStudent.studentUid] = recruitedStudent.tier;
+      acc[recruitedStudent.studentUid] = recruitedStudent;
       return acc;
     },
-    {} as Record<string, number>,
+    {} as Record<string, RecruitedStudent>,
   );
 
   const managedStudentsBase = [...managedUids]
@@ -154,7 +151,7 @@ export async function loadGrowthPlannerData(
       studentUid,
       student: allStudentsMap[studentUid],
       growth: growthMap[studentUid],
-      isRecruited: recruitedUids.has(studentUid),
+      recruitedStudent: recruitedStudentMap[studentUid],
     }))
     .sort((a, b) => (b.student?.order ?? -1) - (a.student?.order ?? -1));
 
@@ -163,7 +160,7 @@ export async function loadGrowthPlannerData(
   );
 
   const managedStudentsData = managedStudentsBase.map((entry) => {
-    const { studentUid, student, growth, isRecruited } = entry;
+    const { studentUid, student, growth, recruitedStudent } = entry;
     const gearData = studentGearDataMap.get(studentUid) ?? null;
     const relationship = relationshipMap[studentUid];
 
@@ -171,8 +168,7 @@ export async function loadGrowthPlannerData(
       studentUid,
       student,
       growth,
-      isRecruited,
-      tier: recruitedTierMap[studentUid] ?? null,
+      recruitedStudent,
       relationship: relationship
         ? { currentLevel: relationship.currentLevel, targetLevel: relationship.targetLevel }
         : undefined,

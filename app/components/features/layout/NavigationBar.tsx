@@ -6,6 +6,7 @@ import {
   SunIcon,
 } from "@heroicons/react/16/solid";
 import {
+  ArrowsRightLeftIcon as ArrowsRightLeftIconOutline,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
   Cog6ToothIcon,
   HomeIcon as HomeIconOutline,
@@ -13,6 +14,7 @@ import {
   UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
 import {
+  ArrowsRightLeftIcon as ArrowsRightLeftIconSolid,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
@@ -486,6 +488,13 @@ function DesktopMenuContent({
             OutlineIcon={IdentificationIconOutline}
             SolidIcon={IdentificationIconSolid}
             isActive={pathname.startsWith("/@")}
+          />
+          <SubMenuItem
+            to="/connect/import"
+            name="외부 데이터 연동"
+            OutlineIcon={ArrowsRightLeftIconOutline}
+            SolidIcon={ArrowsRightLeftIconSolid}
+            isActive={pathname.startsWith("/connect")}
           />
         </MenuSection>
       ) : (

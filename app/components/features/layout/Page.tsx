@@ -325,12 +325,17 @@ function VerticalDesktopTabBar({
   );
 }
 
-function VerticalDesktopTabItem({ text, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
+function VerticalDesktopTabItem({ text, label, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
   const className = getVerticalDesktopTabItemClassName({ active, disabled });
   const inner = (
     <>
       <Icon className="size-5 shrink-0" strokeWidth={2} />
       <span className={`text-sm whitespace-nowrap ${active ? "font-semibold" : "font-medium"}`}>{text}</span>
+      {label ? (
+        <span className="flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-xs font-bold leading-none text-white dark:bg-rose-400 dark:text-rose-950">
+          {label}
+        </span>
+      ) : null}
     </>
   );
 
@@ -354,7 +359,7 @@ function VerticalDesktopTabItem({ text, Icon, active, disabled, link, onClick }:
   );
 }
 
-function MobileTabItem({ text, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
+function MobileTabItem({ text, label, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
   const className = getMobileTabItemClassName({ active, disabled });
   const inner = (
     <>
@@ -362,6 +367,11 @@ function MobileTabItem({ text, Icon, active, disabled, link, onClick }: PageScre
       {shouldShowMobileTabText({ active, disabled }) && (
         <span className={`text-sm whitespace-nowrap ${active ? "font-semibold" : "font-medium"}`}>{text}</span>
       )}
+      {label ? (
+        <span className="flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-xs font-bold leading-none text-white dark:bg-rose-400 dark:text-rose-950">
+          {label}
+        </span>
+      ) : null}
     </>
   );
 

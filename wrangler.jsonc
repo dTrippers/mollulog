@@ -38,9 +38,13 @@
       { "binding": "EVENTS", "queue": "mollulog-events" }
     ]
   },
+  "vars": {
+    "CONNECT_API_URL": "http://localhost:8787"
+  },
 
   // Secrets configuration
   // - SESSION_SECRET
+  // - CONNECT_INTERNAL_TOKEN
   // - GOOGLE_CLIENT_SECRET
   // - GITHUB_CLIENT_ID
   // - GITHUB_CLIENT_SECRET
@@ -57,6 +61,7 @@
       ],
       "vars": {
         "HOST": "https://staging.mollulog.net",
+        "CONNECT_API_URL": "https://connect-staging.mollulog.net",
         "STAGE": "staging"
       },
       "kv_namespaces": [
@@ -86,6 +91,7 @@
       ],
       "vars": {
         "HOST": "https://mollulog.net",
+        "CONNECT_API_URL": "https://connect.mollulog.net",
         "STAGE": "prod"
       },
       "kv_namespaces": [
