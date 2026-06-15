@@ -16,7 +16,12 @@ import {
   usePyroxeneScheduleItems,
 } from "~/components/features/futures";
 import type { PickupResources } from "~/components/features/futures";
-import type { PyroxenePlannerOptions, PyroxeneTimelineItem, PyroxeneEventData } from "~/models/pyroxene-planner";
+import type {
+  PyroxenePlannerOptions,
+  PyroxeneTimelineItem,
+  PyroxeneEventData,
+  PyroxeneTimelineRepeatType,
+} from "~/models/pyroxene-planner";
 import Page from "~/components/features/layout/Page";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import {
@@ -128,6 +133,8 @@ export type ActionData = {
     buy?: {
       quantity: number;
       date: string;
+      repeatType?: PyroxeneTimelineRepeatType;
+      monthlyCount?: number;
     };
     monthlyPackage?: {
       startDate: string;
@@ -207,7 +214,10 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
         }
       }
       if (createData.buy?.quantity !== undefined) {
-        await createBuyPyroxene(env, currentUser.id, createData.buy.date, createData.buy.quantity);
+        await createBuyPyroxene(env, currentUser.id, createData.buy.date, createData.buy.quantity, {
+          repeatType: createData.buy.repeatType,
+          monthlyCount: createData.buy.monthlyCount,
+        });
       }
       if (createData.monthlyPackage?.startDate !== undefined) {
         await createPyroxeneMonthlyPackage(
@@ -394,14 +404,18 @@ export default function PyroxenePlanner() {
     fetcher.submit({ deleteData: { itemUid } }, { method: "DELETE", encType: "application/json" });
   };
 
-  const handleSaveBuy = (quantity: number, date: Date) => {
+  const handleSaveBuy = (
+    quantity: number,
+    date: Date,
+    options?: { repeatType?: PyroxeneTimelineRepeatType; monthlyCount?: number },
+  ) => {
     if (fetcher.state !== "idle" || timelineSaveInFlight.current) {
       return;
     }
     timelineSaveInFlight.current = true;
-    setLocalTimelineItems((prev) => [...prev, ...createOptimisticBuyTimelineItems(quantity, date)]);
+    setLocalTimelineItems((prev) => [...prev, ...createOptimisticBuyTimelineItems(quantity, date, options)]);
     fetcher.submit(
-      { createData: { buy: { quantity, date: date.toISOString() } } },
+      { createData: { buy: { quantity, date: date.toISOString(), ...options } } },
       { method: "POST", encType: "application/json" },
     );
   };
@@ -562,7 +576,7 @@ export default function PyroxenePlanner() {
               <PyroxenePlannerSourcePanel
                 options={options}
                 onOptionsChange={handleOptionsChange}
-                onSaveBuy={(quantity, date) => handleSaveBuy(quantity, date)}
+                onSaveBuy={(quantity, date, options) => handleSaveBuy(quantity, date, options)}
                 onSaveMonthlyPackage={(startDate, packageType, autoRepurchase) =>
                   handleSaveMonthlyPackage(startDate, packageType, autoRepurchase)
                 }

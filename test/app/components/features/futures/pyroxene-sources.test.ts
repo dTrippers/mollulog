@@ -274,6 +274,25 @@ describe("pyroxene-sources", () => {
     ]);
   });
 
+  it("creates monthly-first buy optimistic items with multiplied quantity", () => {
+    const items = createOptimisticBuyTimelineItems(6600, new Date("2026-06-15T12:34:56.000Z"), {
+      monthlyCount: 2,
+      repeatType: "monthly_first",
+    });
+
+    expect(items).toEqual([
+      expect.objectContaining({
+        eventAt: normalizePyroxeneTimelineEventAt("2026-06-15T12:34:56.000Z"),
+        source: "buy",
+        description: "청휘석 구매",
+        pyroxeneDelta: 13200,
+        repeatType: "monthly_first",
+        repeatIntervalDays: null,
+        repeatCount: null,
+      }),
+    ]);
+  });
+
   it("creates other optimistic items with all resource deltas", () => {
     const items = createOptimisticOtherTimelineItems(
       { pyroxene: 120, oneTimeTicket: 1, tenTimeTicket: 2 },
