@@ -71,6 +71,11 @@ export type NavigationSectionStates = {
 
 export type UpcomingNavigationEvent = { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
 
+export type SearchableMenuItem = {
+  name: string;
+  to: string;
+};
+
 export function getNavigationSectionStates(
   pathname: string,
   upcomingEvent: UpcomingNavigationEvent,
@@ -233,6 +238,36 @@ export function getNavigationSections({
         },
       ],
     },
+  ];
+}
+
+export function getSearchableMenuItems(): SearchableMenuItem[] {
+  const sections = getNavigationSections({
+    pathname: "",
+    upcomingEvent: null,
+    hasActiveCoupons: false,
+    sectionStates: {
+      isCommunityActive: false,
+      isContentActive: false,
+      isUtilActive: false,
+      isExternalActive: false,
+      isProfileActive: false,
+    },
+  });
+
+  return [
+    { name: "홈", to: "/" },
+    { name: "평가/의견", to: "/community" },
+    ...sections.flatMap((section) =>
+      section.items
+        .filter((item) => item.disabled !== true)
+        .map((item) => ({
+          name: item.name,
+          to: item.to,
+        })),
+    ),
+    { name: "업데이트 소식", to: "/news" },
+    { name: "제안/문의", to: "/contact" },
   ];
 }
 

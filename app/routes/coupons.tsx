@@ -11,7 +11,7 @@ import { IdentificationIcon } from "@heroicons/react/16/solid";
 import CopyField from "~/components/features/coupons/CopyField";
 
 export const meta = () => [
-  { title: "블루 아카이브 쿠폰 목록 | 몰루로그" },
+  { title: "쿠폰 | 몰루로그" },
   { name: "description", content: "블루 아카이브 인게임 재화를 획득할 수 있는 쿠폰 목록" },
 ];
 
