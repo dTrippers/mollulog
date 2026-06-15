@@ -31,7 +31,7 @@ export default function ConnectDataPage({ currentScreen, pendingDraftCount, chil
         },
         {
           text: "데이터 내보내기",
-          description: "추가 예정",
+          description: "외부 사이트로 데이터 내보내기",
           Icon: ArrowUpTrayIcon,
           link: "/connect/export",
           active: currentScreen === "export",

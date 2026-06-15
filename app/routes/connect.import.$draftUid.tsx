@@ -7,6 +7,7 @@ import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruit
 import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentGrowths } from "~/models/student-growth";
+import { mergeStudentStateDraftValueForUpdate } from "~/models/student-state-diff";
 import {
   type StudentStateDraftCurrentValue,
   type StudentStateDraftTargetValue,
@@ -89,13 +90,19 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       if (draft.status !== "pending") {
         return data<ActionData>({ intent, error: "이미 처리된 변경안이에요" }, { status: 400 });
       }
-      const { entries, fieldErrors } =
+      const parsedForm =
         draft.type === "student_state"
           ? parseStudentStateDraftFormData(draft, formData)
           : parseDraftEntryFormData(draft, formData);
+      const { fieldErrors } = parsedForm;
       if (Object.keys(fieldErrors).length > 0) {
         return data<ActionData>({ intent, error: "입력값을 확인해주세요.", fieldErrors }, { status: 400 });
       }
+
+      const entries =
+        draft.type === "student_state"
+          ? await mergeStudentStateDraftFormEntries(env, currentUser.id, draft, parsedForm.entries)
+          : parsedForm.entries;
 
       await updateSyncDraftEntries(env, currentUser.id, draftUid, entries);
 
@@ -393,6 +400,76 @@ function parseStudentStateDraftValues(entries: SyncDraftEntry[]): StudentStatePr
       }
     }),
   );
+}
+
+async function mergeStudentStateDraftFormEntries(
+  env: Env,
+  userId: number,
+  draft: SyncDraft,
+  entries: SyncDraftEntryUpdateInput[],
+): Promise<SyncDraftEntryUpdateInput[]> {
+  const [metadataByKey, currentValues] = await Promise.all([
+    loadDraftMetadata(env, draft),
+    loadCurrentValues(env, userId, draft.type, draft.entries.map((entry) => entry.entryKey)),
+  ]);
+  const currentStateValues = currentValues as StudentStateCurrentValues;
+
+  return entries.map((entry) => {
+    const draftValue = parseStudentStateDraftValue({
+      value: Number(entry.value),
+      valueJson: entry.valueJson ?? null,
+    });
+    const metadata = metadataByKey[entry.entryKey];
+    const mergedValue = mergeStudentStateDraftValueForUpdate(
+      draftValue,
+      currentStateValues[entry.entryKey] ?? emptyStudentStateValue(),
+      {
+        initialTier: metadata?.initialTier ?? 1,
+        hasGear: metadata?.hasGear ?? true,
+      },
+    );
+
+    return {
+      entryKey: entry.entryKey,
+      value: mergedValue.current?.tier ?? mergedValue.target?.targetTier ?? 1,
+      valueJson: JSON.stringify(mergedValue),
+    };
+  });
+}
+
+function emptyStudentStateValue(): StudentStateCurrentValues[string] {
+  return {
+    current: {
+      level: null,
+      tier: null,
+      weaponLevel: null,
+      skillEx: null,
+      skillNormal: null,
+      skillEnhanced: null,
+      skillSub: null,
+      equip1: null,
+      equip2: null,
+      equip3: null,
+      equipSpecial: null,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
+      bond: null,
+    },
+    target: {
+      targetBond: null,
+      targetLevel: null,
+      targetTier: null,
+      targetSkillEx: null,
+      targetSkillNormal: null,
+      targetSkillEnhanced: null,
+      targetSkillSub: null,
+      targetEquip1: null,
+      targetEquip2: null,
+      targetEquip3: null,
+      targetEquipSpecial: null,
+    },
+  };
 }
 
 function toActionIntent(intent: string): ActionData["intent"] {

@@ -29,6 +29,7 @@ describe("student-state-import", () => {
             bond: 1,
           },
           target: {
+            targetBond: 100,
             targetLevel: 90,
             targetTier: 8,
             targetSkillEx: 5,
@@ -40,6 +41,82 @@ describe("student-state-import", () => {
             targetEquip3: 8,
             targetEquipSpecial: 2,
           },
+        },
+      ],
+    });
+  });
+
+  it("drops a Justin163 target that mirrors the current state", () => {
+    // Justin163 requires a target block on every character, so an owned student
+    // with no goal carries a target identical to current. That is not a plan.
+    const payload = JSON.stringify({
+      characters: [
+        {
+          id: "20048",
+          current: {
+            level: "90",
+            ue_level: "0",
+            bond: "100",
+            ex: "5",
+            basic: "10",
+            passive: "10",
+            sub: "10",
+            gear1: "9",
+            gear2: "9",
+            gear3: "9",
+            bond_gear: "2",
+            book_hp: "0",
+            book_atk: "0",
+            book_heal: "0",
+            star: 5,
+            ue: 0,
+          },
+          target: {
+            level: "90",
+            ue_level: "0",
+            bond: "100",
+            ex: "5",
+            basic: "10",
+            passive: "10",
+            sub: "10",
+            gear1: "9",
+            gear2: "9",
+            gear3: "9",
+            bond_gear: "2",
+            book_hp: "0",
+            book_atk: "0",
+            book_heal: "0",
+            star: 5,
+            ue: 0,
+          },
+          enabled: true,
+        },
+      ],
+    });
+
+    expect(parseStudentStateImport(payload)).toEqual({
+      format: "justin163",
+      entries: [
+        {
+          studentId: "20048",
+          current: {
+            level: 90,
+            tier: 5,
+            weaponLevel: null,
+            skillEx: 5,
+            skillNormal: 10,
+            skillEnhanced: 10,
+            skillSub: 10,
+            equip1: 9,
+            equip2: 9,
+            equip3: 9,
+            equipSpecial: 2,
+            abilityHp: null,
+            abilityAtk: null,
+            abilityHeal: null,
+            bond: 100,
+          },
+          target: null,
         },
       ],
     });
@@ -92,6 +169,7 @@ describe("student-state-import", () => {
           studentId: "10001",
           current: null,
           target: {
+            targetBond: null,
             targetLevel: 90,
             targetTier: 7,
             targetSkillEx: 5,
@@ -194,7 +272,7 @@ describe("student-state-import", () => {
         expect.objectContaining({
           studentId: "10001",
           current: null,
-          target: expect.objectContaining({ targetLevel: 2, targetTier: 1 }),
+          target: expect.objectContaining({ targetBond: null, targetLevel: 2, targetTier: 1 }),
         }),
       ],
     });

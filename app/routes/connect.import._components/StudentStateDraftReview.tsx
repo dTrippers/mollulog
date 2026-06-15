@@ -13,6 +13,15 @@ import {
 } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import { EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
+import {
+  type StudentStateCurrentComparisonValue,
+  type StudentStateTargetComparisonValue,
+  isStudentStateCurrentFieldUpdateTarget,
+  isStudentStateCurrentChanged,
+  isStudentStateTargetFieldUpdateTarget,
+  isStudentStateTargetChanged,
+  mergeStudentStateDraftValueForUpdate,
+} from "~/models/student-state-diff";
 import type {
   StudentStateDraftCurrentValue,
   StudentStateDraftTargetValue,
@@ -33,13 +42,9 @@ export type StudentStateStoredValue = {
   target: StudentStateStoredTargetValue;
 };
 
-export type StudentStateStoredCurrentValue = Omit<StudentStateDraftCurrentValue, "tier"> & {
-  tier: number | null;
-};
+export type StudentStateStoredCurrentValue = StudentStateCurrentComparisonValue;
 
-export type StudentStateStoredTargetValue = Omit<StudentStateDraftTargetValue, "targetTier"> & {
-  targetTier: number | null;
-};
+export type StudentStateStoredTargetValue = StudentStateTargetComparisonValue;
 
 export type StudentStateProposedValues = Record<string, { value: StudentStateDraftValue | null; error: string | null }>;
 
@@ -50,6 +55,8 @@ type StudentStateDraftReviewRow = {
   proposed: StudentStateProposedValues[string];
   draftValue: StudentStateDraftValue | null;
   confidence: number | null;
+  currentIsUpdate: boolean;
+  targetIsUpdate: boolean;
 };
 
 type StudentStateDraftReviewProps = {
@@ -153,7 +160,7 @@ const comparisonFields: readonly StudentStateComparisonField[] = [
   { label: "애용품", currentKey: "equipSpecial", targetKey: "targetEquipSpecial", min: 1, max: 2, gearOnly: true },
 ] as const;
 
-const cellBase = "border-b border-neutral-200 dark:border-neutral-700";
+const cellBase = "border-b border-neutral-200 align-middle dark:border-neutral-700";
 const groupTopCellClass = "border-t border-neutral-200 dark:border-neutral-700";
 const studentHeaderCellClass = `${cellBase} px-3 py-2 text-left align-middle`;
 const rowHeaderCellClass = `${cellBase} w-32 px-2 py-1.5 text-left text-xs font-medium whitespace-nowrap text-neutral-400 dark:text-neutral-500`;
@@ -192,6 +199,17 @@ export default function StudentStateDraftReview({
     };
     const draftValue = draftValues[entry.uid] ?? proposed.value;
     const currentValue = currentValues[entry.entryKey] ?? emptyStoredValue();
+    const initialTier = metadata.initialTier ?? 1;
+    const hasGear = metadata.hasGear ?? true;
+    const visibleFields = getVisibleComparisonFields(hasGear);
+    const currentIsUpdate =
+      draftValue?.current != null &&
+      !isMinimumCurrentDraftValue(draftValue.current, visibleFields, initialTier) &&
+      isStudentStateCurrentChanged(draftValue.current, currentValue.current, { initialTier, hasGear });
+    const targetIsUpdate = isStudentStateTargetChanged(draftValue?.target ?? null, currentValue.target, {
+      initialTier,
+      hasGear,
+    });
 
     return [
       {
@@ -201,11 +219,14 @@ export default function StudentStateDraftReview({
         proposed,
         draftValue,
         confidence: parseConfidence(entry.meta),
+        currentIsUpdate,
+        targetIsUpdate,
       },
     ];
   });
+  const visibleRows = rows.filter((row) => row.proposed.error || row.currentIsUpdate || row.targetIsUpdate);
   const errorRows = rows.filter((row) => row.proposed.error);
-  const lowConfidenceRows = rows.filter((row) => row.confidence !== null && row.confidence < 0.7);
+  const lowConfidenceRows = visibleRows.filter((row) => row.confidence !== null && row.confidence < 0.7);
 
   const updateCurrentValue = (entryUid: string, field: keyof StudentStateStoredCurrentValue, value: number | null) => {
     setDraftValues((values) => {
@@ -265,31 +286,34 @@ export default function StudentStateDraftReview({
       actions={isPending ? <DraftReviewActions applyDisabled={errorRows.length > 0} draftFormId={draftFormId} /> : null}
     >
       <Form method="post" id={draftFormId} className="space-y-3">
-        {rows.length === 0 ? (
+        {visibleRows.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-8">
             <EmptyView Icon={ArchiveBoxIcon} text="검토할 항목이 없어요" />
           </div>
         ) : null}
 
-        {rows.map(({ entry, metadata, proposed, draftValue }) =>
+        {rows.map(({ entry, metadata, currentValue, proposed, draftValue, currentIsUpdate, targetIsUpdate }) =>
           proposed.error || draftValue == null ? null : (
             <Fragment key={`hidden:${entry.uid}`}>
               <StudentStateDraftHiddenInputs
                 entryUid={entry.uid}
                 value={draftValue}
-                hasGear={metadata.hasGear ?? true}
+                currentValue={currentValue}
                 initialTier={metadata.initialTier ?? 1}
+                hasGear={metadata.hasGear ?? true}
+                currentIsUpdate={currentIsUpdate}
+                targetIsUpdate={targetIsUpdate}
               />
             </Fragment>
           ),
         )}
 
-        {rows.length > 0 ? (
+        {visibleRows.length > 0 ? (
           <>
             <div className="max-w-full overflow-x-auto">
               <div className="inline-block overflow-hidden rounded-xl border border-neutral-200 align-top dark:border-neutral-700">
                 <StudentStateComparisonTable
-                  rows={rows}
+                  rows={visibleRows}
                   disabled={navigation.state === "submitting" || !isPending}
                   onCurrentChange={updateCurrentValue}
                   onTargetChange={updateTargetValue}
@@ -325,16 +349,13 @@ function StudentStateComparisonTable({
     <table className="w-max border-collapse">
       <tbody>
         {rows.map((row, rowIndex) => {
-          const { entry, metadata, currentValue, proposed, draftValue, confidence } = row;
+          const { entry, metadata, currentValue, proposed, draftValue, confidence, currentIsUpdate, targetIsUpdate } =
+            row;
           const initialTier = metadata.initialTier ?? 1;
-          const rowFields = getVisibleComparisonFields(metadata.hasGear ?? true);
-          const importedCurrentValue =
-            draftValue?.current != null && isMinimumCurrentDraftValue(draftValue.current, rowFields, initialTier)
-              ? null
-              : (draftValue?.current ?? null);
-          const currentNavigationRowIndex = draftValue?.current != null ? navigationRowIndex++ : null;
-          const targetNavigationRowIndex = draftValue?.target != null ? navigationRowIndex++ : null;
-          const visibleRowCount = getVisibleStudentRowCount(draftValue);
+          const importedCurrentValue = draftValue?.current ?? null;
+          const currentNavigationRowIndex = currentIsUpdate ? navigationRowIndex++ : null;
+          const targetNavigationRowIndex = targetIsUpdate ? navigationRowIndex++ : null;
+          const visibleRowCount = getVisibleStudentRowCount(row);
 
           if (proposed.error || draftValue == null || visibleRowCount === 0) {
             return (
@@ -346,7 +367,7 @@ function StudentStateComparisonTable({
                   fields={fields}
                   isFirstRow={rowIndex === 0}
                 />
-                <tr className="align-top">
+                <tr className="align-middle">
                   <td
                     colSpan={fields.length + 1}
                     className={cn(cellBase, "px-3 py-2 text-sm text-red-700 dark:text-red-300")}
@@ -367,7 +388,7 @@ function StudentStateComparisonTable({
                 fields={fields}
                 isFirstRow={rowIndex === 0}
               />
-              {draftValue.current != null ? (
+              {currentIsUpdate && draftValue.current != null ? (
                 <>
                   <ReadonlyStudentStateRow
                     label="현재 육성 상태"
@@ -392,7 +413,7 @@ function StudentStateComparisonTable({
                   />
                 </>
               ) : null}
-              {draftValue.target != null ? (
+              {targetIsUpdate && draftValue.target != null ? (
                 <>
                   <ReadonlyStudentStateRow
                     label="현재 육성 목표"
@@ -473,12 +494,15 @@ function getVisibleComparisonFields(hasGear: boolean): readonly StudentStateComp
   return comparisonFields.filter((field) => hasGear || !field.gearOnly);
 }
 
-function getVisibleStudentRowCount(value: StudentStateDraftValue | null): number {
-  if (!value) {
+function getVisibleStudentRowCount(row: StudentStateDraftReviewRow): number {
+  if (!row.draftValue) {
     return 0;
   }
 
-  return Number(value.current != null) * 2 + Number(value.target != null) * 2;
+  return (
+    Number(row.currentIsUpdate && row.draftValue.current != null) * 2 +
+    Number(row.targetIsUpdate && row.draftValue.target != null) * 2
+  );
 }
 
 function isStudentStateFieldVisible(field: StudentStateComparisonField, hasGear: boolean): boolean {
@@ -494,11 +518,7 @@ function getReadonlyCellClass(field: StudentStateComparisonField): string {
 }
 
 function getTargetCellClass(field: StudentStateComparisonField): string {
-  return cn(
-    cellBase,
-    field.targetCellClassName ?? "w-16 px-0.5 py-1.5",
-    "text-center",
-  );
+  return cn(cellBase, field.targetCellClassName ?? "w-16 px-0.5 py-1.5", "text-center");
 }
 
 function getSkeletonWidth(field: StudentStateComparisonField): string {
@@ -559,7 +579,7 @@ function ReadonlyStudentStateRow({
 }) {
   if (valueType === "current" && getStudentStateValue(value, "tier") == null) {
     return (
-      <tr className="relative align-top">
+      <tr className="relative align-middle">
         <td className={rowHeaderCellClass}>{label}</td>
         <td colSpan={fields.length} className={cn(cellBase, "relative px-3 py-2")}>
           <div className="pointer-events-none flex select-none items-center gap-2 opacity-20 blur-sm">
@@ -579,7 +599,7 @@ function ReadonlyStudentStateRow({
   }
 
   return (
-    <tr className="align-top">
+    <tr className="align-middle">
       <td className={rowHeaderCellClass}>{label}</td>
       {fields.map((field) => {
         const key = valueType === "current" ? field.currentKey : field.targetKey;
@@ -638,10 +658,10 @@ function EditableStudentStateRow({
     | ((entryUid: string, field: keyof StudentStateStoredTargetValue, value: number | null) => void);
 }) {
   return (
-    <tr className="align-top">
+    <tr className="align-middle">
       <td className={importedRowHeaderCellClass}>{label}</td>
       {draftValue == null ? (
-        <td colSpan={fields.length} className={`${cellBase} bg-blue-50/40 px-3 py-2 dark:bg-blue-950/10`}>
+        <td colSpan={fields.length} className={`${cellBase} bg-blue-50/40 px-3 py-2 dark:bg-sky-400/10`}>
           <p className="text-center text-xs font-medium text-neutral-400 dark:text-neutral-500">
             아직 모집하지 않은 학생이에요
           </p>
@@ -654,7 +674,17 @@ function EditableStudentStateRow({
             const isFieldVisible = isStudentStateFieldVisible(field, hasGear);
             const base = key && isFieldVisible ? getStudentStateValue(baseValue, key) : null;
             const imported = key && isFieldVisible ? getStudentStateValue(draftValue, key) : null;
-            const isChanged = key != null && isFieldVisible && base !== imported;
+            const isChanged =
+              key != null &&
+              isFieldVisible &&
+              isStudentStateComparisonFieldUpdateTarget({
+                field,
+                valueType,
+                baseValue,
+                draftValue,
+                initialTier,
+                hasGear,
+              });
             const isDecreased = isChanged && base != null && imported != null && imported < base;
             return (
               <td
@@ -662,7 +692,7 @@ function EditableStudentStateRow({
                 className={cn(
                   getTargetCellClass(field),
                   key == null && "bg-background text-muted-foreground dark:bg-background",
-                  isChanged && "bg-blue-50/70 dark:bg-blue-950/20",
+                  isChanged && "bg-blue-50/70 dark:bg-sky-400/10",
                   isDecreased && "bg-red-100/80 dark:bg-red-950/40",
                 )}
               >
@@ -722,6 +752,46 @@ function getStudentStateValue(value: Record<string, number | null>, key: string)
   return value[key] ?? null;
 }
 
+function isStudentStateComparisonFieldUpdateTarget({
+  field,
+  valueType,
+  baseValue,
+  draftValue,
+  initialTier,
+  hasGear,
+}: {
+  field: StudentStateComparisonField;
+  valueType: "current" | "target";
+  baseValue: StudentStateStoredCurrentValue | StudentStateStoredTargetValue;
+  draftValue: Exclude<EditableStudentStateRowValue, null>;
+  initialTier: number;
+  hasGear: boolean;
+}): boolean {
+  if (valueType === "current") {
+    const key = field.currentKey;
+    if (!key) {
+      return false;
+    }
+    return isStudentStateCurrentFieldUpdateTarget(
+      key,
+      draftValue as StudentStateDraftCurrentValue,
+      baseValue as StudentStateStoredCurrentValue,
+      { initialTier, hasGear },
+    );
+  }
+
+  const key = field.targetKey;
+  if (!key) {
+    return false;
+  }
+  return isStudentStateTargetFieldUpdateTarget(
+    key,
+    draftValue as StudentStateDraftTargetValue,
+    baseValue as StudentStateStoredTargetValue,
+    { initialTier, hasGear },
+  );
+}
+
 function formatFieldValue(field: StudentStateInputDefinition, value: number | null): ReactNode {
   return field.kind === "tier" ? formatTier(value, { muted: true }) : formatPlainValue(value);
 }
@@ -778,7 +848,7 @@ function EditableStudentStateCell({
         }}
         controlClassName={cn(
           !isChanged && "border-neutral-300 bg-white/70 dark:border-neutral-700 dark:bg-neutral-950/60",
-          isChanged && "border-blue-300 bg-white dark:border-blue-800 dark:bg-neutral-950",
+          isChanged && "border-blue-300 bg-white dark:border-sky-500 dark:bg-neutral-950",
           isDecreased && "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/20",
         )}
         onChange={onChange}
@@ -805,41 +875,45 @@ function getEquipmentLabel(field: StudentStateInputDefinition, equipments: strin
 function StudentStateDraftHiddenInputs({
   entryUid,
   value,
-  hasGear,
+  currentValue,
   initialTier,
+  hasGear,
+  currentIsUpdate,
+  targetIsUpdate,
 }: {
   entryUid: string;
   value: StudentStateDraftValue;
-  hasGear: boolean;
+  currentValue: StudentStateStoredValue;
   initialTier: number;
+  hasGear: boolean;
+  currentIsUpdate: boolean;
+  targetIsUpdate: boolean;
 }) {
-  const visibleFields = getVisibleComparisonFields(hasGear);
-  const current =
-    value.current != null && isMinimumCurrentDraftValue(value.current, visibleFields, initialTier)
-      ? null
-      : value.current;
+  const mergedValue = mergeStudentStateDraftValueForUpdate(value, currentValue, { initialTier, hasGear });
+  const submitCurrent = currentIsUpdate && mergedValue.current != null;
+  const submitTarget = targetIsUpdate && mergedValue.target != null;
 
   return (
     <>
-      <input type="hidden" name={`studentState:${entryUid}:hasCurrent`} value={current ? "1" : "0"} />
-      {current
+      <input type="hidden" name={`studentState:${entryUid}:hasCurrent`} value={submitCurrent ? "1" : "0"} />
+      {submitCurrent
         ? currentFields.map(({ key }) => (
             <input
               key={`current:${key}`}
               type="hidden"
               name={`studentState:${entryUid}:current:${key}`}
-              value={formatFormValue(current[key])}
+              value={formatFormValue(mergedValue.current?.[key])}
             />
           ))
         : null}
-      <input type="hidden" name={`studentState:${entryUid}:hasTarget`} value={value.target ? "1" : "0"} />
-      {value.target
+      <input type="hidden" name={`studentState:${entryUid}:hasTarget`} value={submitTarget ? "1" : "0"} />
+      {submitTarget
         ? targetFields.map(({ key }) => (
             <input
               key={`target:${key}`}
               type="hidden"
               name={`studentState:${entryUid}:target:${key}`}
-              value={formatFormValue(value.target?.[key])}
+              value={formatFormValue(mergedValue.target?.[key])}
             />
           ))
         : null}

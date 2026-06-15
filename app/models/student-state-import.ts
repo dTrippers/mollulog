@@ -17,6 +17,7 @@ export type StudentStateImportCurrentState = {
 };
 
 export type StudentStateImportTargetState = {
+  targetBond: number | null;
   targetTier: number;
   targetLevel: number | null;
   targetSkillEx: number | null;
@@ -153,10 +154,15 @@ function parseJustin163Payload(payload: { characters: unknown[] }): StudentState
           equip2: character.target.gear2,
           equip3: character.target.gear3,
           equipSpecial: character.target.bond_gear,
+          bond: character.target.bond,
         })
       : null;
+    // Justin163 requires every character to carry a target block, so the export
+    // emits a target that mirrors the current state when there is no growth goal.
+    // Treat such a target as "no goal" to keep the round-trip symmetric.
+    const growthTarget = current !== null && target !== null && isTargetEqualToCurrent(current, target) ? null : target;
 
-    return toEntry(String(character.id), current, target);
+    return toEntry(String(character.id), current, growthTarget);
   });
 
   return assertNonEmptyEntries(entries);
@@ -251,8 +257,10 @@ function normalizeTargetCandidate(input: {
   equip2: unknown;
   equip3: unknown;
   equipSpecial: unknown;
+  bond: unknown;
 }): StudentStateImportTargetState | null {
   const candidate: TargetCandidate = {
+    targetBond: optionalInteger(input.bond),
     targetTier: composeTier(input.star, input.uniqueWeapon),
     targetLevel: optionalInteger(input.level),
     targetSkillEx: optionalInteger(input.skillEx),
@@ -319,6 +327,7 @@ function isBaseCurrentCandidate(candidate: CurrentCandidate): boolean {
 
 function isBaseTargetCandidate(candidate: TargetCandidate): boolean {
   return (
+    isBaseProgressionValue(candidate.targetBond) &&
     isBaseProgressionValue(candidate.targetTier) &&
     isBaseProgressionValue(candidate.targetLevel) &&
     isBaseProgressionValue(candidate.targetSkillEx) &&
@@ -329,6 +338,25 @@ function isBaseTargetCandidate(candidate: TargetCandidate): boolean {
     isBaseProgressionValue(candidate.targetEquip2) &&
     isBaseProgressionValue(candidate.targetEquip3) &&
     candidate.targetEquipSpecial == null
+  );
+}
+
+function isTargetEqualToCurrent(
+  current: StudentStateImportCurrentState,
+  target: StudentStateImportTargetState,
+): boolean {
+  return (
+    target.targetBond === current.bond &&
+    target.targetTier === current.tier &&
+    target.targetLevel === current.level &&
+    target.targetSkillEx === current.skillEx &&
+    target.targetSkillNormal === current.skillNormal &&
+    target.targetSkillEnhanced === current.skillEnhanced &&
+    target.targetSkillSub === current.skillSub &&
+    target.targetEquip1 === current.equip1 &&
+    target.targetEquip2 === current.equip2 &&
+    target.targetEquip3 === current.equip3 &&
+    target.targetEquipSpecial === current.equipSpecial
   );
 }
 
