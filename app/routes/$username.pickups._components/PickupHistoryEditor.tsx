@@ -78,11 +78,7 @@ export default function PickupHistoryEditor({
             label="모집한 ★3 학생"
             description="모집한 ★3 학생을 선택해주세요"
             descriptionAction={
-              <Checkbox
-                label="★3 학생 목록 입력하지 않기"
-                checked={skipTier3StudentList}
-                onChange={onSkipTier3StudentListChange}
-              />
+              <Checkbox label="선택하지 않기" checked={skipTier3StudentList} onChange={onSkipTier3StudentListChange} />
             }
             students={tier3Students}
             initialStudentUids={tier3StudentIds}
