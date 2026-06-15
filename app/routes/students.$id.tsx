@@ -10,9 +10,9 @@ import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
+import { formatStudentFullName } from "~/models/student";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
-import { formatStudentFullName } from "~/models/student-name";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RaidRepository } from "~/repositories";
 

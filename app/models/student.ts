@@ -1,8 +1,8 @@
-import { runQuery } from "~/lib/baql";
 import { graphql } from "~/graphql";
-import type { Position, TacticRole } from "./content.d";
-import { fetchCached } from "./base";
 import type { Attack, Defense } from "~/graphql/graphql";
+import { runQuery } from "~/lib/baql";
+import { fetchCached } from "./base";
+import type { Position, TacticRole } from "./content.d";
 
 export type Role = "striker" | "special";
 export type Student = {
@@ -38,7 +38,7 @@ export async function getAllStudents(env: Env, includeUnreleased = false): Promi
     return rawStudents;
   }
   return rawStudents.filter(({ released }) => released);
-};
+}
 
 export async function getAllStudentsMap(env: Env, includeUnreleased = false): Promise<StudentMap> {
   const rawStudents = await getRawStudents(env);
@@ -95,16 +95,24 @@ const studentSkillItemsQuery = graphql(`
 
 export type StudentSkillItem = { item: { uid: string; subCategory: string | null; rarity: number } };
 
-export async function getStudentSkillItems(env: Env, uid: string): Promise<{ schaleDbId: string | null; skillItems: StudentSkillItem[] }> {
-  return fetchCached(env, `student-skill-items::v1::${uid}`, async () => {
-    const { data } = await runQuery(studentSkillItemsQuery, { uid });
-    return {
-      schaleDbId: data?.student?.schaleDbId ?? null,
-      skillItems: (data?.student?.skillItems ?? []).map((si) => ({
-        item: { uid: si.item.uid, subCategory: si.item.subCategory ?? null, rarity: si.item.rarity },
-      })),
-    };
-  }, 7 * 24 * 60 * 60);
+export async function getStudentSkillItems(
+  env: Env,
+  uid: string,
+): Promise<{ schaleDbId: string | null; skillItems: StudentSkillItem[] }> {
+  return fetchCached(
+    env,
+    `student-skill-items::v1::${uid}`,
+    async () => {
+      const { data } = await runQuery(studentSkillItemsQuery, { uid });
+      return {
+        schaleDbId: data?.student?.schaleDbId ?? null,
+        skillItems: (data?.student?.skillItems ?? []).map((si) => ({
+          item: { uid: si.item.uid, subCategory: si.item.subCategory ?? null, rarity: si.item.rarity },
+        })),
+      };
+    },
+    7 * 24 * 60 * 60,
+  );
 }
 
 export function parseVisibleNames(name: string): string[] {
@@ -134,4 +142,26 @@ export function formatVisibleName(name: string): string {
     return `${visibleNames[0]}(${visibleNames[1]})`;
   }
   return visibleNames.join(" ");
+}
+
+export function formatStudentFullName({
+  uid,
+  name,
+  familyName,
+}: {
+  uid?: string | null;
+  name: string;
+  familyName?: string | null;
+}): string {
+  const trimmedFamilyName = familyName?.trim();
+  if (!trimmedFamilyName) {
+    return name;
+  }
+  if (uid === "10100" || name === "시로코*테러") {
+    return name;
+  }
+  if (name.startsWith(`${trimmedFamilyName} `)) {
+    return name;
+  }
+  return `${trimmedFamilyName} ${name}`;
 }

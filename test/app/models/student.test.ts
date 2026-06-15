@@ -1,5 +1,9 @@
-import { describe, expect, it } from "@jest/globals";
-import { formatStudentFullName } from "~/models/student-name";
+import { describe, expect, it, jest } from "@jest/globals";
+import { formatStudentFullName } from "~/models/student";
+
+jest.mock("~/lib/baql", () => ({
+  runQuery: jest.fn(),
+}));
 
 describe("formatStudentFullName", () => {
   it("prefixes a regular student name with familyName", () => {

@@ -9,9 +9,9 @@ import { runQuery } from "~/lib/baql";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
+import { formatStudentFullName } from "~/models/student";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
 import type { StudentGradingTagValue } from "~/models/student-grading-tag";
-import { formatStudentFullName } from "~/models/student-name";
 import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
 
 const studentDetailQuery = graphql(`
