@@ -8,7 +8,6 @@ import { EmptyView, FilterButtons, LoadingSkeleton, SubTitle } from "~/component
 import type { Defense } from "~/graphql/graphql";
 import { type RaidStatistics, fetchRaidStatisticsByStudent } from "~/lib/ranks/stats";
 import { compareInstantAsc, compareInstantDesc, getInstantTime, type UtcIsoString } from "~/lib/date-time";
-import { captureClientError } from "~/lib/observability.client";
 import type { RaidType, Terrain } from "~/models/content.d";
 import { getMaxTierAt } from "~/models/student";
 import type { StudentDetailPageContext } from "./students.$id";
@@ -87,11 +86,8 @@ export default function StudentDetail() {
         }
         setRawStatistics(rawStatistics);
         setStatistics(enrichRaidStatistics(rawStatistics));
-      } catch (error) {
-        captureClientError(error, {
-          source: "student.raid_statistics",
-          studentUid: student.uid,
-        });
+      } catch {
+        // Keep the existing graceful empty-state behavior without alerting.
       } finally {
         if (!cancelled) {
           setStatisticsLoading(false);
