@@ -3,6 +3,7 @@ import type { GrowthResourceRepository } from "~/repositories/growth-resource";
 import type { StudentMap } from "./student";
 import {
   ABILITY_RELEASE_COST_BANDS,
+  ABILITY_RELEASE_WB_UIDS,
   TARGET_ABILITY_RELEASE_WB_UIDS,
 } from "./student-growth-state";
 
@@ -825,6 +826,8 @@ type AbilityReleaseRequirements = {
   unavailable: boolean;
 };
 
+type AbilityReleaseArtifactItem = SkillCostItem["item"] | null;
+
 export function calculateAbilityReleaseRequirements(
   student: Pick<
     GrowthResourceStudentInput,
@@ -834,7 +837,6 @@ export function calculateAbilityReleaseRequirements(
 ): AbilityReleaseRequirements {
   const artifactItemsByRarity = getAbilityReleaseArtifactItemsByRarity(skillCost);
   const items = new Map<string, GrowthResourceItem>();
-  let credit = 0;
   let unavailable = false;
 
   for (const { current, target, wbUid } of [
@@ -874,11 +876,10 @@ export function calculateAbilityReleaseRequirements(
         amount: band.wbAmount * levelCount,
         source: "ability",
       });
-      credit += band.credit * levelCount;
     }
   }
 
-  return { items: Array.from(items.values()), credit, unavailable };
+  return { items: Array.from(items.values()), credit: 0, unavailable };
 }
 
 function needsSkillResources(student: GrowthResourceStudentInput): boolean {
@@ -988,8 +989,8 @@ function addItemToMap(items: Map<string, GrowthResourceItem>, item: GrowthResour
 
 function getAbilityReleaseArtifactItemsByRarity(
   skillCost: SkillCostStudent,
-): Map<number, SkillCostItem["item"]> {
-  const artifactItems = new Map<number, SkillCostItem["item"]>();
+): Map<number, AbilityReleaseArtifactItem> {
+  const artifactItems = new Map<number, AbilityReleaseArtifactItem>();
   for (const levelItems of Object.values(skillCost)) {
     if (!Array.isArray(levelItems)) {
       continue;
@@ -997,6 +998,14 @@ function getAbilityReleaseArtifactItemsByRarity(
 
     for (const levelItem of levelItems) {
       if (levelItem.item.subCategory !== "artifact") {
+        continue;
+      }
+      const existingItem = artifactItems.get(levelItem.item.rarity);
+      if (existingItem === null) {
+        continue;
+      }
+      if (existingItem && existingItem.uid !== levelItem.item.uid) {
+        artifactItems.set(levelItem.item.rarity, null);
         continue;
       }
       artifactItems.set(levelItem.item.rarity, levelItem.item);
@@ -1313,7 +1322,7 @@ export const GROWTH_RESOURCE_KIND_LABELS: Record<number, string> = {
   [GROWTH_RESOURCE_KIND_ORDER.techNote]: "기술 노트",
   [GROWTH_RESOURCE_KIND_ORDER.favor]: "선물",
   [GROWTH_RESOURCE_KIND_ORDER.artifact]: "오파츠",
-  [GROWTH_RESOURCE_KIND_ORDER.ability]: "능력 개방",
+  [GROWTH_RESOURCE_KIND_ORDER.ability]: "교양 WB",
   [GROWTH_RESOURCE_KIND_ORDER.equipment]: "장비 설계도",
   [GROWTH_RESOURCE_KIND_ORDER.other]: "기타",
 } satisfies Record<GrowthResourceKindOrder, string>;
@@ -1329,6 +1338,8 @@ const GROWTH_RESOURCE_KIND_DISPLAY_ORDER = [
   GROWTH_RESOURCE_KIND_ORDER.equipment,
   GROWTH_RESOURCE_KIND_ORDER.other,
 ] as const;
+
+const ABILITY_RELEASE_WB_UID_SET = new Set<string>(Object.values(ABILITY_RELEASE_WB_UIDS));
 
 export function compareGrowthResourceKindOrder(a: number, b: number): number {
   return getGrowthResourceKindDisplayOrder(a) - getGrowthResourceKindDisplayOrder(b);
@@ -1383,7 +1394,7 @@ export function classifyGrowthResourceKind(resource: GrowthResourceKindInput): n
     return GROWTH_RESOURCE_KIND_ORDER.artifact;
   }
 
-  if (resource.source === "ability" || resource.uid === "2000" || resource.uid === "2001" || resource.uid === "2002") {
+  if (resource.source === "ability" || ABILITY_RELEASE_WB_UID_SET.has(resource.uid)) {
     return GROWTH_RESOURCE_KIND_ORDER.ability;
   }
 

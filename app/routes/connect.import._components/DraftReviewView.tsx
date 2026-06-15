@@ -3,7 +3,7 @@ import { useId } from "react";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { Form, Link, useNavigation } from "react-router";
-import { Button } from "~/components/primitives";
+import { Button, Callout } from "~/components/primitives";
 import type { SyncDraft, SyncDraftStatus, SyncDraftType } from "~/models/sync-draft";
 import type { ItemCatalogResource } from "~/repositories/item-catalog";
 
@@ -73,6 +73,21 @@ export default function DraftReviewView({
           {actionData.success}
         </p>
       ) : null}
+
+      <Callout
+        tone="warning"
+        Icon={ExclamationTriangleIcon}
+        title="베타 기능 안내"
+        description={
+          <>
+            가져온 데이터에 오류가 있을 수 있어요. 값이 잘못되었거나 반영 중 문제가 있다면{" "}
+            <Link to="/contact" className="font-medium underline underline-offset-2">
+              제안/문의
+            </Link>
+            로 알려주세요.
+          </>
+        }
+      />
 
       {children}
       {actions}

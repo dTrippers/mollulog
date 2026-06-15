@@ -18,7 +18,7 @@ export default function ConnectDataPage({ currentScreen, pendingDraftCount, chil
 
   return (
     <Page
-      title="외부 데이터 연동"
+      title="외부 데이터 연동 (β)"
       description="외부 사이트의 데이터를 가져오거나 내보낼 수 있어요"
       screens={[
         {

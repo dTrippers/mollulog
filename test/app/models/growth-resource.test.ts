@@ -270,7 +270,7 @@ describe("growth-resource", () => {
     expect(requirements["10000"].items.map((item) => [item.uid, item.amount])).toEqual([["9999", 1]]);
   });
 
-  it("calculates ability release artifacts, WB items, and credit from 0 to 25", () => {
+  it("calculates ability release artifacts and WB items from 0 to 25", () => {
     const requirements = calculateAbilityReleaseRequirements(
       {
         abilityHp: 0,
@@ -309,7 +309,7 @@ describe("growth-resource", () => {
 
     expect(requirements).toEqual({
       unavailable: false,
-      credit: 3_500_000,
+      credit: 0,
       items: [
         {
           uid: "150",
@@ -377,7 +377,7 @@ describe("growth-resource", () => {
       },
     );
 
-    expect(requirements.credit).toBe(600_000);
+    expect(requirements.credit).toBe(0);
     expect(requirements.items.map((item) => [item.uid, item.amount])).toEqual([
       ["150", 40],
       ["2000", 4],
@@ -385,6 +385,58 @@ describe("growth-resource", () => {
       ["2001", 4],
       ["2002", 4],
     ]);
+  });
+
+  it("marks ability release artifacts unavailable when one rarity maps to multiple item uids", () => {
+    const requirements = calculateAbilityReleaseRequirements(
+      {
+        abilityHp: 0,
+        targetAbilityHp: 1,
+        abilityAtk: null,
+        targetAbilityAtk: null,
+        abilityHeal: null,
+        targetAbilityHeal: null,
+      },
+      {
+        uid: "10000",
+        normal2: [
+          {
+            amount: 1,
+            item: {
+              uid: "150",
+              rarity: 1,
+              category: "material",
+              subCategory: "artifact",
+            },
+          },
+        ],
+        normal3: [
+          {
+            amount: 1,
+            item: {
+              uid: "999",
+              rarity: 1,
+              category: "material",
+              subCategory: "artifact",
+            },
+          },
+        ],
+      },
+    );
+
+    expect(requirements).toEqual({
+      unavailable: true,
+      credit: 0,
+      items: [
+        {
+          uid: "2000",
+          type: ResourceTypeEnum.Item,
+          rarity: 1,
+          amount: 2,
+          source: "ability",
+        },
+      ],
+    });
   });
 
   it("formats equipment blueprint tier labels for resource cards", () => {
