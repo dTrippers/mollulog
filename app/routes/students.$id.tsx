@@ -116,7 +116,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const { student } = data;
   const studentFullName = formatStudentFullName(student);
   const title = `${studentFullName} - 학생 정보`;
-  const description = `블루 아카이브 ${studentFullName} - 학생의 총력전/대결전 통계 정보, 선생님들의 성능 평가를 확인해보세요.`;
+  const description = `블루 아카이브 ${student.name} - 학생의 총력전/대결전 통계 정보, 선생님들의 성능 평가를 확인해보세요.`;
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },

@@ -120,7 +120,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const { student } = data;
   const studentFullName = formatStudentFullName(student);
   const title = `${studentFullName} - 학생 평가`;
-  const description = `블루 아카이브 ${studentFullName}에 대한 평가를 작성해보세요.`;
+  const description = `블루 아카이브 ${student.name}에 대한 평가를 작성해보세요.`;
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
