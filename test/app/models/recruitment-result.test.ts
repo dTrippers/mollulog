@@ -3,12 +3,14 @@ import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
 import {
   appendRecruitmentResultStudent,
   createRecruitmentResultStudentsFromPickupHistory,
+  getRecruitmentResultTier3CountFromPickupHistory,
   getRecruitmentResultTrialFromPickupHistory,
   mergeEditableRecruitmentResultStudents,
   normalizeRecruitmentResultStudents,
   removeRecruitmentResultStudent,
   sanitizeRecruitmentResultStudents,
 } from "../../../app/models/recruitment-result";
+import { getRecruitmentResultCountStats } from "../../../app/models/recruitment-result-stats";
 
 describe("recruitment-result", () => {
   it("preserves recruited student order and duplicates for pickup history display", () => {
@@ -40,6 +42,35 @@ describe("recruitment-result", () => {
         ],
       }),
     ).toBe(80);
+  });
+
+  it("sums explicit tier3 count from pickup history results", () => {
+    expect(
+      getRecruitmentResultTier3CountFromPickupHistory({
+        result: [
+          { trial: 10, tier3Count: 2, tier3StudentIds: [] },
+          { trial: 20, tier3Count: 1, tier3StudentIds: ["hina"] },
+        ],
+      }),
+    ).toBe(3);
+  });
+
+  it("uses explicit tier3 count for stats when student names are omitted", () => {
+    expect(
+      getRecruitmentResultCountStats(
+        {
+          recruitedStudents: [],
+          tier3Count: 4,
+          trial: 100,
+        },
+        {},
+      ),
+    ).toMatchObject({
+      tier3Count: 4,
+      tier3DrawCount: 4,
+      tier3RateCount: 4,
+      pickupCount: 0,
+    });
   });
 
   it("deduplicates only for recruited_students projection sync", () => {

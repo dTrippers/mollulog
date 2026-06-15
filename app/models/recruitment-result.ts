@@ -3,7 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
-import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, nowUtcIso } from "~/lib/date-time";
 import {
   communityPostsTable,
   createRecruitmentResultCommunityPost,
@@ -13,8 +13,8 @@ import {
   upsertRecruitmentResultCommunityPost,
 } from "./community";
 import type { PickupHistory } from "./pickup-history";
-import { resolveRecruitmentResultStudent, type StudentLookup } from "./recruitment-result-stats";
 import { upsertRecruitedStudentFromRecruitmentResult } from "./recruited-student";
+import { type StudentLookup, resolveRecruitmentResultStudent } from "./recruitment-result-stats";
 
 const IN_QUERY_BATCH_SIZE = 90;
 
@@ -27,6 +27,7 @@ export const recruitmentResultsTable = sqliteTable("recruitment_results", {
   completedAt: text(),
   recruitedStudents: text().notNull().default("[]"),
   exchangedStudents: text().notNull().default("[]"),
+  tier3Count: int(),
   trial: int(),
   rawResult: text(),
   commentPostUid: text(),
@@ -54,6 +55,7 @@ export type RecruitmentResult = {
   completedAt: UtcIsoString | null;
   recruitedStudents: RecruitmentResultStudent[];
   exchangedStudents: RecruitmentResultStudent[];
+  tier3Count?: number | null;
   trial: number | null;
   rawResult: string | null;
   commentPostUid: string | null;
@@ -68,6 +70,7 @@ export type UpsertRecruitmentResultInput = {
   completedAt?: UtcIsoString | null;
   recruitedStudents?: RecruitmentResultStudent[];
   exchangedStudents?: RecruitmentResultStudent[];
+  tier3Count?: number | null;
   trial?: number | null;
   rawResult?: string | null;
   comment?: string | null;
@@ -114,6 +117,7 @@ function toModel(row: RecruitmentResultRow): RecruitmentResult {
     completedAt: row.completedAt as UtcIsoString | null,
     recruitedStudents: parseRecruitedStudents(row.recruitedStudents),
     exchangedStudents: parseRecruitedStudents(row.exchangedStudents),
+    tier3Count: row.tier3Count ?? null,
     trial: row.trial ?? null,
     rawResult: row.rawResult ?? null,
     commentPostUid: row.commentPostUid ?? null,
@@ -243,11 +247,11 @@ export function getRecruitmentResultTrialFromPickupHistory(history: Pick<PickupH
   return Math.max(...history.result.map((trial) => trial.trial));
 }
 
-export async function getRecruitmentResult(
-  env: Env,
-  userId: number,
-  uid: string,
-): Promise<RecruitmentResult | null> {
+export function getRecruitmentResultTier3CountFromPickupHistory(history: Pick<PickupHistory, "result">): number {
+  return history.result.reduce((sum, trial) => sum + trial.tier3Count, 0);
+}
+
+export async function getRecruitmentResult(env: Env, userId: number, uid: string): Promise<RecruitmentResult | null> {
   const db = drizzle(env.DB);
   const row = await db
     .select()
@@ -260,11 +264,7 @@ export async function getRecruitmentResult(
 
 export async function getRecruitmentResults(env: Env, userId: number): Promise<RecruitmentResult[]> {
   const db = drizzle(env.DB);
-  const rows = await db
-    .select()
-    .from(recruitmentResultsTable)
-    .where(eq(recruitmentResultsTable.userId, userId))
-    .all();
+  const rows = await db.select().from(recruitmentResultsTable).where(eq(recruitmentResultsTable.userId, userId)).all();
 
   return rows.map(toModel);
 }
@@ -286,7 +286,12 @@ export async function getRecruitmentResultsByRecruitmentGroupUids(
         db
           .select()
           .from(recruitmentResultsTable)
-          .where(and(eq(recruitmentResultsTable.userId, userId), inArray(recruitmentResultsTable.recruitmentGroupUid, batch)))
+          .where(
+            and(
+              eq(recruitmentResultsTable.userId, userId),
+              inArray(recruitmentResultsTable.recruitmentGroupUid, batch),
+            ),
+          )
           .all(),
       ),
     )
@@ -329,7 +334,11 @@ export async function getRecruitmentResultComments(
     await Promise.all(
       splitIntoBatches(uniqueUids).map((batch) =>
         db
-          .select({ uid: communityPostsTable.uid, blocks: communityPostsTable.blocks, createdAt: communityPostsTable.createdAt })
+          .select({
+            uid: communityPostsTable.uid,
+            blocks: communityPostsTable.blocks,
+            createdAt: communityPostsTable.createdAt,
+          })
           .from(communityPostsTable)
           .where(and(eq(communityPostsTable.userId, userId), inArray(communityPostsTable.uid, batch)))
           .all(),
@@ -340,7 +349,9 @@ export async function getRecruitmentResultComments(
   return new Map(
     posts.flatMap((post) => {
       const comment = getPrimaryPlaintextBlockText(parseCommunityPostBlocks(post.blocks))?.trim();
-      return comment ? [[post.uid, { uid: post.uid, body: comment, createdAt: post.createdAt as UtcIsoString }] as const] : [];
+      return comment
+        ? [[post.uid, { uid: post.uid, body: comment, createdAt: post.createdAt as UtcIsoString }] as const]
+        : [];
     }),
   );
 }
@@ -350,7 +361,9 @@ async function syncRecruitedStudents(env: Env, userId: number, students: Recruit
   // Cancelling completion or removing a result must not auto-delete from recruited_students,
   // because that table is also edited manually and feeds parties, growth, shops, and ranks.
   await Promise.all(
-    students.map((student) => upsertRecruitedStudentFromRecruitmentResult(env, userId, student.studentUid, student.tier)),
+    students.map((student) =>
+      upsertRecruitedStudentFromRecruitmentResult(env, userId, student.studentUid, student.tier),
+    ),
   );
 }
 
@@ -364,13 +377,12 @@ export async function upsertRecruitmentResult(
   const existingByUid = input.uid ? await getRecruitmentResult(env, userId, input.uid) : null;
   const existing =
     existingByUid ??
-    (
-      await getRecruitmentResultsByRecruitmentGroupUids(env, userId, [input.recruitmentGroupUid])
-    )[0] ??
+    (await getRecruitmentResultsByRecruitmentGroupUids(env, userId, [input.recruitmentGroupUid]))[0] ??
     null;
   const uid = existing?.uid ?? input.uid ?? nanoid(8);
   const recruitedStudents = sanitizeRecruitmentResultStudents(input.recruitedStudents ?? existing?.recruitedStudents);
   const exchangedStudents = sanitizeRecruitmentResultStudents(input.exchangedStudents ?? existing?.exchangedStudents);
+  const tier3Count = input.tier3Count !== undefined ? input.tier3Count : existing?.tier3Count;
   const completedAt = input.completedAt !== undefined ? input.completedAt : (existing?.completedAt ?? now);
   const contentUid = input.contentUid !== undefined ? input.contentUid : existing?.contentUid;
   const trial = input.trial !== undefined ? input.trial : existing?.trial;
@@ -386,6 +398,7 @@ export async function upsertRecruitmentResult(
       completedAt,
       recruitedStudents: JSON.stringify(recruitedStudents),
       exchangedStudents: JSON.stringify(exchangedStudents),
+      tier3Count: tier3Count ?? null,
       trial: trial ?? null,
       rawResult: rawResult ?? null,
       commentPostUid: existing?.commentPostUid ?? null,
@@ -398,13 +411,18 @@ export async function upsertRecruitmentResult(
         completedAt,
         recruitedStudents: JSON.stringify(recruitedStudents),
         exchangedStudents: JSON.stringify(exchangedStudents),
+        tier3Count: tier3Count ?? null,
         trial: trial ?? null,
         rawResult: rawResult ?? null,
         updatedAt: now,
       },
     });
 
-  await syncRecruitedStudents(env, userId, normalizeRecruitmentResultStudents([...recruitedStudents, ...exchangedStudents]));
+  await syncRecruitedStudents(
+    env,
+    userId,
+    normalizeRecruitmentResultStudents([...recruitedStudents, ...exchangedStudents]),
+  );
 
   const comment = input.comment?.trim();
   if (comment && contentUid) {
@@ -465,9 +483,7 @@ export async function addRecruitedStudentToResult(
   const db = drizzle(env.DB);
   const now = nowUtcIso();
   const existing =
-    (
-      await getRecruitmentResultsByRecruitmentGroupUids(env, userId, [input.recruitmentGroupUid])
-    )[0] ?? null;
+    (await getRecruitmentResultsByRecruitmentGroupUids(env, userId, [input.recruitmentGroupUid]))[0] ?? null;
   const uid = existing?.uid ?? nanoid(8);
   const student = sanitizeRecruitmentResultStudents([
     {
@@ -495,6 +511,7 @@ export async function addRecruitedStudentToResult(
       completedAt,
       recruitedStudents: JSON.stringify(recruitedStudents),
       exchangedStudents: JSON.stringify(existing?.exchangedStudents ?? []),
+      tier3Count: existing?.tier3Count ?? null,
       trial: existing?.trial ?? null,
       rawResult: existing?.rawResult ?? null,
       commentPostUid: existing?.commentPostUid ?? null,
@@ -507,6 +524,7 @@ export async function addRecruitedStudentToResult(
         completedAt,
         recruitedStudents: JSON.stringify(recruitedStudents),
         exchangedStudents: JSON.stringify(existing?.exchangedStudents ?? []),
+        tier3Count: existing?.tier3Count ?? null,
         updatedAt: now,
       },
     });
@@ -527,10 +545,7 @@ export async function removeRecruitedStudentFromResult(
   recruitmentGroupUid: string,
   studentUid: string,
 ): Promise<RecruitmentResult | null> {
-  const existing =
-    (
-      await getRecruitmentResultsByRecruitmentGroupUids(env, userId, [recruitmentGroupUid])
-    )[0] ?? null;
+  const existing = (await getRecruitmentResultsByRecruitmentGroupUids(env, userId, [recruitmentGroupUid]))[0] ?? null;
   if (!existing) {
     return null;
   }
@@ -538,7 +553,8 @@ export async function removeRecruitedStudentFromResult(
   const db = drizzle(env.DB);
   const now = nowUtcIso();
   const recruitedStudents = removeRecruitmentResultStudent(existing.recruitedStudents, studentUid);
-  const completedAt = recruitedStudents.length > 0 || existing.exchangedStudents.length > 0 ? existing.completedAt : null;
+  const completedAt =
+    recruitedStudents.length > 0 || existing.exchangedStudents.length > 0 ? existing.completedAt : null;
 
   await db
     .update(recruitmentResultsTable)

@@ -1,10 +1,10 @@
-import { Form, Link } from "react-router";
-import { Button } from "~/components/primitives";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import { Form, Link } from "react-router";
 import ContentCommentView from "~/components/features/contents/ContentCommentView";
 import { StudentCards } from "~/components/features/students";
+import { Button } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { formatInstant, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, formatInstant } from "~/lib/date-time";
 import { pickupGroupTypeLocale } from "~/locales/ko";
 
 type PickupHistoryViewProps = {
@@ -66,6 +66,7 @@ export default function PickupHistoryView({
 }: PickupHistoryViewProps) {
   const tier3Students = recruitedStudents.filter(({ tier }) => tier === 3);
   const tier3ExchangedStudents = exchangedStudents.filter(({ tier }) => tier === 3);
+  const tier3StudentListMissing = stats.tier3Count > 0 && tier3Students.length === 0;
   const visibleComment = comment?.body.trim() ? comment : null;
 
   return (
@@ -74,6 +75,7 @@ export default function PickupHistoryView({
         <div className="min-w-0 flex-1 space-y-4">
           <PickupHeader event={event} />
           {tier3Students.length > 0 && <Tier3StudentList students={tier3Students} />}
+          {tier3StudentListMissing && <Tier3StudentListMissing />}
           {tier3ExchangedStudents.length > 0 && <ExchangedStudentList students={tier3ExchangedStudents} />}
           {visibleComment && <PickupComment comment={visibleComment} />}
         </div>
@@ -145,6 +147,15 @@ function Tier3StudentList({ students }: { students: PickupHistoryViewProps["recr
   );
 }
 
+function Tier3StudentListMissing() {
+  return (
+    <div className="space-y-2.5">
+      <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집한 ★3 학생</p>
+      <p className="text-sm text-neutral-500 dark:text-neutral-400">학생 목록 미입력</p>
+    </div>
+  );
+}
+
 function ExchangedStudentList({ students }: { students: PickupHistoryViewProps["exchangedStudents"] }) {
   const cardStudents = students.map(({ uid, name }) => ({
     uid,
@@ -167,12 +178,7 @@ type PickupStatsProps = {
   trialMissing: boolean;
 };
 
-function PickupStats({
-  totalTrial,
-  tier3Count,
-  pickupCount,
-  trialMissing,
-}: PickupStatsProps) {
+function PickupStats({ totalTrial, tier3Count, pickupCount, trialMissing }: PickupStatsProps) {
   const hasTrial = !trialMissing && totalTrial !== null;
   const statsGridClassName = hasTrial ? "grid-cols-3 divide-x md:divide-y" : "grid-cols-1";
   const stats = [
@@ -181,7 +187,12 @@ function PickupStats({
 
   if (hasTrial) {
     stats.push(
-      <PickupStat key="tier3" label="★3 학생" value={`${tier3Count}회`} detail={formatPercentage(tier3Count / totalTrial)} />,
+      <PickupStat
+        key="tier3"
+        label="★3 학생"
+        value={`${tier3Count}회`}
+        detail={formatPercentage(tier3Count / totalTrial)}
+      />,
       <PickupStat
         key="pickup"
         label="픽업 학생"

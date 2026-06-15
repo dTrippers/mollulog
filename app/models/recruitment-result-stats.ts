@@ -103,20 +103,21 @@ export function resolveRecruitmentResultStudents(
 }
 
 export function getRecruitmentResultCountStats(
-  result: Pick<RecruitmentResult, "recruitedStudents" | "trial">,
+  result: Pick<RecruitmentResult, "recruitedStudents" | "tier3Count" | "trial">,
   lookup: StudentLookup,
 ): RecruitmentResultCountStats {
   const recruitedStudents = resolveRecruitmentResultStudents(result.recruitedStudents, lookup);
   const tier3Students = recruitedStudents.filter(({ tier }) => tier === 3);
   const pickupStudents = tier3Students.filter(({ pickup }) => pickup);
+  const tier3Count = result.tier3Count ?? tier3Students.length;
   const rateMultiplier = lookup.group?.recruitmentType === "fes" ? 0.5 : 1;
   const hasTrial = result.trial !== null;
 
   return {
     totalTrial: result.trial,
-    tier3Count: tier3Students.length,
-    tier3DrawCount: tier3Students.length,
-    tier3RateCount: hasTrial ? tier3Students.length * rateMultiplier : 0,
+    tier3Count,
+    tier3DrawCount: tier3Count,
+    tier3RateCount: hasTrial ? tier3Count * rateMultiplier : 0,
     pickupCount: pickupStudents.length,
     pickupDrawCount: pickupStudents.length,
     pickupRateCount: hasTrial ? pickupStudents.length * rateMultiplier : 0,
