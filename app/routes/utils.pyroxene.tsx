@@ -1,13 +1,13 @@
+import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, LockClosedIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
   type MetaFunction,
   useFetcher,
   useLoaderData,
-  type ActionFunctionArgs,
-  type LoaderFunctionArgs,
 } from "react-router";
-import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
-import { LockClosedIcon, ArrowPathIcon } from "@heroicons/react/24/solid";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
   PyroxenePlannerOptionsPanel,
@@ -16,45 +16,48 @@ import {
   usePyroxeneScheduleItems,
 } from "~/components/features/futures";
 import type { PickupResources } from "~/components/features/futures";
-import type {
-  PyroxenePlannerOptions,
-  PyroxeneTimelineItem,
-  PyroxeneEventData,
-  PyroxeneTimelineRepeatType,
-} from "~/models/pyroxene-planner";
+import { ErrorPage } from "~/components/features/layout";
 import Page from "~/components/features/layout/Page";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
+import type {
+  PyroxeneEventData,
+  PyroxenePlannerOptions,
+  PyroxeneTimelineItem,
+  PyroxeneTimelineRepeatType,
+} from "~/models/pyroxene-planner";
+import {
+  createAttendance,
+  createBuyPyroxene,
+  createOtherPyroxeneGain,
+  createPyroxeneApPackage,
+  createPyroxeneMonthlyPackage,
+  createPyroxeneOwnedResource,
+  defaultPyroxenePlannerOptions,
+  deletePyroxeneTimelineItem,
+  getAllPyroxeneEventData,
+  getLatestPyroxeneOwnedResource,
+  getPyroxenePlannerContents,
+  getPyroxenePlannerOptions,
+  getPyroxeneTimelineItems,
+  upsertPyroxeneEventData,
+  upsertPyroxenePlannerOptions,
+} from "~/models/pyroxene-planner";
+import {
+  type PyroxeneMonthlyPackageType,
+  extractPyroxeneTimelineBaseUid,
+} from "~/models/pyroxene-planner-source-config";
+import {
+  createOptimisticApPackageTimelineItems,
+  createOptimisticAttendanceTimelineItems,
+  createOptimisticBuyTimelineItems,
+  createOptimisticMonthlyPackageTimelineItems,
+  createOptimisticOtherTimelineItems,
+} from "~/models/pyroxene-sources";
 import {
   deleteRecruitmentResult,
   getRecruitmentResultsByRecruitmentGroupUids,
   setRecruitmentResultCompletion,
 } from "~/models/recruitment-result";
-import {
-  createPyroxeneOwnedResource,
-  createBuyPyroxene,
-  deletePyroxeneTimelineItem,
-  getLatestPyroxeneOwnedResource,
-  getPyroxeneTimelineItems,
-  createPyroxeneApPackage,
-  createPyroxeneMonthlyPackage,
-  createAttendance,
-  createOtherPyroxeneGain,
-  getPyroxenePlannerOptions,
-  upsertPyroxenePlannerOptions,
-  getPyroxenePlannerContents,
-  getAllPyroxeneEventData,
-  upsertPyroxeneEventData,
-  defaultPyroxenePlannerOptions,
-} from "~/models/pyroxene-planner";
-import { ErrorPage } from "~/components/features/layout";
-import {
-  createOptimisticAttendanceTimelineItems,
-  createOptimisticBuyTimelineItems,
-  createOptimisticOtherTimelineItems,
-  createOptimisticApPackageTimelineItems,
-  createOptimisticMonthlyPackageTimelineItems,
-} from "~/models/pyroxene-sources";
-import { extractPyroxeneTimelineBaseUid, type PyroxeneMonthlyPackageType } from "~/models/pyroxene-planner-source-config";
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -80,18 +83,19 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   }
 
   // 사용자 데이터 쿼리 5개는 모두 독립적이므로 병렬 실행
-  const recruitmentGroupUids = contents
-    .flatMap((content) => (content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : []));
+  const recruitmentGroupUids = contents.flatMap((content) =>
+    content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
+  );
 
   const [favoritedStudents, latestResources, savedOptions, eventData, timelineItems, recruitmentResults] =
     await Promise.all([
-    getUserFavoritedStudents(env, currentUser.id),
-    getLatestPyroxeneOwnedResource(env, currentUser.id),
-    getPyroxenePlannerOptions(env, currentUser.id),
-    getAllPyroxeneEventData(env, currentUser.id),
-    getPyroxeneTimelineItems(env, currentUser.id),
-    getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
-  ]);
+      getUserFavoritedStudents(env, currentUser.id),
+      getLatestPyroxeneOwnedResource(env, currentUser.id),
+      getPyroxenePlannerOptions(env, currentUser.id),
+      getAllPyroxeneEventData(env, currentUser.id),
+      getPyroxeneTimelineItems(env, currentUser.id),
+      getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
+    ]);
 
   return {
     signedIn: true,
@@ -272,7 +276,9 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       }
     }
     if (recruitmentGroupUid) {
-      const [recruitmentResult] = await getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, [recruitmentGroupUid]);
+      const [recruitmentResult] = await getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, [
+        recruitmentGroupUid,
+      ]);
       if (recruitmentResult) {
         await deleteRecruitmentResult(env, currentUser.id, recruitmentResult.uid);
       }
@@ -311,9 +317,7 @@ export default function PyroxenePlanner() {
   const [localEventData, setLocalEventData] = useState<PyroxeneEventData[]>(loaderData.eventData ?? []);
   const [localRecruitmentResultCompletions, setLocalRecruitmentResultCompletions] = useState<
     { eventUid: string; recruitmentGroupUid: string }[]
-  >(
-    loaderData.recruitmentResultCompletions ?? [],
-  );
+  >(loaderData.recruitmentResultCompletions ?? []);
 
   const fetcher = useFetcher<typeof action>();
   const timelineSaveInFlight = useRef(false);
@@ -556,7 +560,7 @@ export default function PyroxenePlanner() {
       )}
 
       <Page
-        title="청휘석 플래너 (β)"
+        title="청휘석 플래너"
         description="청휘석 획득/소비 조건을 입력하고 관심 학생 모집 시점의 예상 청휘석을 계산해보세요"
         links={[
           {

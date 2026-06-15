@@ -49,6 +49,7 @@ export type NavigationItem = {
   SolidIcon: IconComponent;
   isActive?: boolean;
   showRedDot?: boolean;
+  badgeLabel?: string;
   disabled?: boolean;
 };
 
@@ -92,7 +93,10 @@ export function getNavigationSectionStates(
       pathname.startsWith("/utils") || !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
     isExternalActive: pathname.startsWith("/coupons"),
     isProfileActive:
-      pathname.startsWith("/@") || pathname.startsWith("/edit") || pathname.startsWith("/my") || pathname.startsWith("/connect"),
+      pathname.startsWith("/@") ||
+      pathname.startsWith("/edit") ||
+      pathname.startsWith("/my") ||
+      pathname.startsWith("/connect"),
   };
 }
 

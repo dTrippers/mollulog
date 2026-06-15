@@ -1,18 +1,14 @@
-import {
-  ChevronDownIcon,
-  EnvelopeIcon,
-  MegaphoneIcon,
-  MoonIcon,
-  SunIcon,
-} from "@heroicons/react/16/solid";
+import { MoonIcon, SunIcon } from "@heroicons/react/16/solid";
 import {
   ArrowsRightLeftIcon as ArrowsRightLeftIconOutline,
   CalendarIcon as CalendarIconOutline,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
   Cog6ToothIcon,
+  EnvelopeIcon,
   HomeIcon as HomeIconOutline,
   IdentificationIcon as IdentificationIconOutline,
   MagnifyingGlassIcon,
+  MegaphoneIcon,
   RectangleGroupIcon as RectangleGroupIconOutline,
   UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
@@ -117,8 +113,12 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
   const showPopup = Boolean(isPopupOpen && (!hasQuery || fetcher.data));
   const isLoading = fetcher.state !== "idle";
 
+  const inputClassName = sanitizeClassName(`
+    w-full rounded-md bg-neutral-100 py-2 pr-3 pl-9 text-sm outline-none placeholder:text-neutral-400 dark:bg-neutral-700 dark:placeholder:text-neutral-500
+  `);
+
   return (
-    <div ref={rootRef} className={variant === "desktop" ? "relative mb-4" : "relative w-full"}>
+    <div ref={rootRef} className={variant === "desktop" ? "relative" : "relative w-full"}>
       <div className="pointer-events-none absolute left-2.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-neutral-400 dark:text-neutral-500">
         {isLoading ? (
           <span
@@ -134,7 +134,7 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
         type="search"
         value={query}
         placeholder="검색"
-        className="w-full rounded-md bg-neutral-100 py-2 pr-3 pl-9 text-sm outline-none placeholder:text-neutral-400 dark:bg-neutral-700 dark:placeholder:text-neutral-500"
+        className={inputClassName}
         onChange={(event) => {
           setQuery(event.target.value);
           setIsPopupOpen(true);
@@ -263,36 +263,43 @@ export default function NavigationBar({
     <>
       <aside
         className="
-          hidden lg:block lg:relative lg:z-layer-navigation lg:h-screen lg:w-72 xl:w-84 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
-          lg:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30
+          hidden lg:flex lg:relative lg:z-layer-navigation lg:h-screen lg:w-72 xl:w-84 lg:flex-col bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
+          lg:border-r border-neutral-200 dark:border-neutral-700 shadow-sm shadow-neutral-200/30 dark:shadow-neutral-900/30
         "
       >
-        <div className="px-4 py-3">
-          <div className="flex items-center">
-            <img
-              src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
-              alt="몰루로그 로고"
-              className="mr-2 h-9 xl:h-10 aspect-4/3 object-cover"
-            />
-            <h1 className="text-2xl xl:text-3xl font-ingame">
-              <span className="font-bold">몰루</span>로그
-            </h1>
-          </div>
-
-          <div className="mt-6">
-            <DesktopMenuContent
-              currentUsername={currentUsername}
-              pathname={pathname}
-              onShowSignIn={showSignIn}
-              onDarkModeToggle={setDarkMode}
-              hasRecentNews={hasRecentNews}
-              upcomingEvent={upcomingEvent}
-              hasActiveCoupons={hasActiveCoupons}
-              searchResetKey={searchResetKey}
-              sectionStates={sectionStates}
-            />
-          </div>
+        <div className="flex h-16 items-center px-5">
+          <img
+            src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
+            alt="몰루로그 로고"
+            className="mr-2 h-8 xl:h-9 aspect-4/3 object-cover"
+          />
+          <h1 className="text-xl xl:text-2xl font-ingame text-neutral-900 dark:text-neutral-100">
+            <span className="font-semibold">몰루</span>로그
+          </h1>
         </div>
+
+        <div className="px-4 pt-3 pb-2">
+          <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
+        </div>
+
+        <div className="no-scrollbar flex-1 overflow-y-auto px-4 py-2">
+          <DesktopMenuContent
+            currentUsername={currentUsername}
+            pathname={pathname}
+            hasRecentNews={hasRecentNews}
+            upcomingEvent={upcomingEvent}
+            hasActiveCoupons={hasActiveCoupons}
+            sectionStates={sectionStates}
+          />
+        </div>
+
+        <DesktopUtilityFooter
+          currentUsername={currentUsername}
+          currentProfileStudentId={currentProfileStudentId}
+          darkMode={darkMode}
+          onDarkModeToggle={setDarkMode}
+          onShowSignIn={showSignIn}
+        />
       </aside>
 
       <MobileBrandHeader
@@ -364,7 +371,10 @@ function MobileBrandHeader({
       "
     >
       <div className="flex h-[var(--mobile-header-height)] w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
-        <Link to="/" className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-800">
+        <Link
+          to="/"
+          className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-800"
+        >
           <img
             src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
             alt="몰루로그 로고"
@@ -588,203 +598,207 @@ interface MenuItemProps extends NavigationItem {
   onItemClick?: () => void;
 }
 
-function MenuItem({ to, name, OutlineIcon, SolidIcon, isActive, onItemClick, showRedDot }: MenuItemProps) {
-  return (
-    <Link
-      to={to}
-      className={sanitizeClassName(
-        `my-2 px-2 py-1 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded-lg transition relative ${isActive ? "font-bold drop-shadow-lg" : ""}`,
-      )}
-      onClick={() => onItemClick?.()}
-    >
-      {isActive ? (
-        <SolidIcon className="inline-block mr-3 size-6" />
-      ) : (
-        <OutlineIcon className="inline-block mr-3 size-6" />
-      )}
-      <span className="relative">
-        {name}
-        {showRedDot && <div className="absolute top-0 -right-3 size-1.5 bg-red-500 rounded-full animate-pulse" />}
-      </span>
-    </Link>
-  );
+function DesktopMenuGroupLabel({ children }: { children: React.ReactNode }) {
+  return <div className="mt-5 mb-1.5 px-2 text-sm font-medium text-neutral-500 dark:text-neutral-400">{children}</div>;
 }
 
-interface MenuSectionProps {
-  name: string;
-  OutlineIcon: React.ComponentType<React.ComponentProps<"svg">>;
-  SolidIcon: React.ComponentType<React.ComponentProps<"svg">>;
-  isActive: boolean;
-  children: React.ReactNode;
-}
-
-function MenuSection({ name, OutlineIcon, SolidIcon, isActive, children }: MenuSectionProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const showChildren = isOpen || isActive;
-
+function DesktopMenuSectionList({
+  section,
+}: { section: NonNullable<ReturnType<typeof getNavigationSections>[number]> }) {
   return (
-    <div className="my-2">
-      <button
-        type="button"
-        className={sanitizeClassName(
-          `w-full px-2 py-1 flex items-center rounded-lg transition lg:cursor-default ${isActive ? "font-bold" : ""}`,
-        )}
-        onClick={() => setIsOpen((prev) => !prev)}
-      >
-        {isActive ? (
-          <SolidIcon className="inline-block mr-3 size-6" />
-        ) : (
-          <OutlineIcon className="inline-block mr-3 size-6" />
-        )}
-        <span className="flex-1 text-left">{name}</span>
-        <ChevronDownIcon className={`size-4 transition-transform lg:hidden ${showChildren ? "rotate-180" : ""}`} />
-      </button>
-      <div
-        className={`ml-3 pl-3 border-l border-neutral-200 dark:border-neutral-700 lg:block ${showChildren ? "" : "hidden"}`}
-      >
-        {children}
+    <>
+      <DesktopMenuGroupLabel>{section.name}</DesktopMenuGroupLabel>
+      <div className="space-y-0.5">
+        {section.items.map((item) => (
+          <SubMenuItem key={item.name} {...item} />
+        ))}
       </div>
-    </div>
+    </>
   );
 }
 
 interface DesktopMenuContentProps {
   currentUsername: string | null;
   pathname: string;
-  onShowSignIn: () => void;
-  onDarkModeToggle: (fn: (prev: boolean) => boolean) => void;
   hasRecentNews: boolean;
   upcomingEvent: NavigationBarProps["upcomingEvent"];
   hasActiveCoupons: boolean;
-  searchResetKey: string;
   sectionStates: NavigationSectionStates;
 }
 
 function DesktopMenuContent({
   currentUsername,
   pathname,
-  onShowSignIn,
-  onDarkModeToggle,
   hasRecentNews,
   upcomingEvent,
   hasActiveCoupons,
-  searchResetKey,
   sectionStates,
 }: DesktopMenuContentProps) {
-  const submit = useSubmit();
   const menuSections = getNavigationSections({
     pathname,
     upcomingEvent,
     hasActiveCoupons,
     sectionStates,
   });
+  const contentSection = menuSections.find((section) => section.name === "컨텐츠");
+  const utilSection = menuSections.find((section) => section.name === "플래너 & 계산기");
+  const externalSection = menuSections.find((section) => section.name === "게임 외 정보");
 
   return (
-    <>
-      <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
+    <nav aria-label="데스크톱 주요 메뉴">
+      <div className="space-y-0.5">
+        <SubMenuItem
+          to="/"
+          name="홈"
+          OutlineIcon={HomeIconOutline}
+          SolidIcon={HomeIconSolid}
+          isActive={pathname === "/"}
+        />
 
-      <MenuItem
-        to="/"
-        name="홈"
-        OutlineIcon={HomeIconOutline}
-        SolidIcon={HomeIconSolid}
-        isActive={pathname === "/"}
-      />
+        <SubMenuItem
+          to="/community"
+          name="평가/의견"
+          OutlineIcon={ChatBubbleLeftRightIconOutline}
+          SolidIcon={ChatBubbleLeftRightIconSolid}
+          isActive={sectionStates.isCommunityActive}
+        />
+      </div>
 
-      <MenuItem
-        to="/community"
-        name="평가/의견"
-        OutlineIcon={ChatBubbleLeftRightIconOutline}
-        SolidIcon={ChatBubbleLeftRightIconSolid}
-        isActive={sectionStates.isCommunityActive}
-      />
+      {contentSection && <DesktopMenuSectionList section={contentSection} />}
 
-      {menuSections.map((section) => (
-        <MenuSection
-          key={section.name}
-          name={section.name}
-          OutlineIcon={section.OutlineIcon}
-          SolidIcon={section.SolidIcon}
-          isActive={section.isActive}
-        >
-          {section.items.map((item) => (
-            <SubMenuItem key={item.name} {...item} />
-          ))}
-        </MenuSection>
-      ))}
+      {utilSection && <DesktopMenuSectionList section={utilSection} />}
 
-      {currentUsername ? (
-        <MenuSection
-          name="내 정보"
-          OutlineIcon={UserCircleIconOutline}
-          SolidIcon={UserCircleIconSolid}
-          isActive={sectionStates.isProfileActive}
-        >
-          <SubMenuItem
-            to={`/@${currentUsername}`}
-            name="내 프로필"
-            OutlineIcon={IdentificationIconOutline}
-            SolidIcon={IdentificationIconSolid}
-            isActive={pathname.startsWith("/@")}
-          />
-          <SubMenuItem
-            to="/connect/import"
-            name="외부 데이터 연동"
-            OutlineIcon={ArrowsRightLeftIconOutline}
-            SolidIcon={ArrowsRightLeftIconSolid}
-            isActive={pathname.startsWith("/connect")}
-          />
-        </MenuSection>
-      ) : (
-        <button
-          type="button"
-          className="my-4 w-full rounded-full bg-neutral-800 py-3 text-center text-sm text-white transition-opacity hover:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"
-          onClick={onShowSignIn}
-        >
-          로그인 후 내 정보 관리
-        </button>
+      {externalSection && <DesktopMenuSectionList section={externalSection} />}
+
+      {menuSections
+        .filter((section) => section !== contentSection && section !== utilSection && section !== externalSection)
+        .map((section) => (
+          <DesktopMenuSectionList key={section.name} section={section} />
+        ))}
+
+      {currentUsername && (
+        <>
+          <DesktopMenuGroupLabel>내 정보</DesktopMenuGroupLabel>
+          <div className="space-y-0.5">
+            <SubMenuItem
+              to={`/@${currentUsername}`}
+              name="내 프로필"
+              OutlineIcon={IdentificationIconOutline}
+              SolidIcon={IdentificationIconSolid}
+              isActive={pathname.startsWith("/@")}
+            />
+            <SubMenuItem
+              to="/connect/import"
+              name="외부 데이터 연동"
+              badgeLabel="베타"
+              OutlineIcon={ArrowsRightLeftIconOutline}
+              SolidIcon={ArrowsRightLeftIconSolid}
+              isActive={pathname.startsWith("/connect")}
+            />
+          </div>
+        </>
       )}
 
-      <div className="mt-4">
-        <UtilityLink
-          to="/news"
-          text="업데이트 소식"
-          Icon={MegaphoneIcon}
-          showRedDot={hasRecentNews}
-        />
-        {currentUsername && <UtilityLink to="/contact" text="제안/문의" Icon={EnvelopeIcon} />}
+      <DesktopMenuGroupLabel>서비스</DesktopMenuGroupLabel>
+      <div className="space-y-0.5">
+        <DesktopMenuLink to="/news" label="업데이트 소식" Icon={MegaphoneIcon} showRedDot={hasRecentNews} />
+        <DesktopMenuLink to="/contact" label="제안/문의" Icon={EnvelopeIcon} />
+      </div>
+    </nav>
+  );
+}
+
+function DesktopUtilityFooter({
+  currentUsername,
+  currentProfileStudentId,
+  darkMode,
+  onDarkModeToggle,
+  onShowSignIn,
+}: {
+  currentUsername: string | null;
+  currentProfileStudentId: string | null;
+  darkMode: boolean;
+  onDarkModeToggle: (fn: (prev: boolean) => boolean) => void;
+  onShowSignIn: () => void;
+}) {
+  const submit = useSubmit();
+  const ModeIcon = darkMode ? SunIcon : MoonIcon;
+
+  return (
+    <div className="shrink-0 border-neutral-200 border-t px-4 py-2 dark:border-neutral-700">
+      <div className="flex items-center gap-2">
+        {currentUsername ? (
+          <Link
+            to={`/@${currentUsername}`}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700/40 dark:hover:text-neutral-100"
+          >
+            {currentProfileStudentId ? (
+              <ProfileImage studentUid={currentProfileStudentId} imageSize={6} />
+            ) : (
+              <span className="flex size-5 items-center justify-center">
+                <UserCircleIconOutline className="size-4" />
+              </span>
+            )}
+            <span className="min-w-0 truncate">{currentUsername}</span>
+          </Link>
+        ) : (
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700/40 dark:hover:text-neutral-100"
+            onClick={onShowSignIn}
+          >
+            <span className="flex size-5 items-center justify-center">
+              <UserCircleIconOutline className="size-4" />
+            </span>
+            <span className="min-w-0 truncate">로그인</span>
+          </button>
+        )}
         <button
           type="button"
-          className="my-1 flex w-fit items-center text-sm px-2 py-1 font-bold text-yellow-600 hover:underline dark:text-yellow-400"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-neutral-200/70 text-neutral-500 transition-colors hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-neutral-700/80 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:bg-neutral-700/40 dark:hover:text-neutral-200 dark:focus-visible:ring-offset-neutral-800"
           onClick={() => {
             onDarkModeToggle((prev) => {
               submitPreference(submit, { darkMode: !prev });
               return !prev;
             });
           }}
+          aria-label={darkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
+          title={darkMode ? "라이트 모드" : "다크 모드"}
         >
-          <MoonIcon className="size-4" />
-          <span className="ml-2">다크 모드</span>
+          <ModeIcon className="size-4" />
         </button>
       </div>
-    </>
+    </div>
   );
 }
 
-function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, showRedDot, disabled }: MenuItemProps) {
+function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, showRedDot, badgeLabel, disabled }: MenuItemProps) {
   const className = sanitizeClassName(
-    `my-1 px-2 py-1.5 flex items-center hover:bg-neutral-200 dark:hover:bg-neutral-700 text-sm rounded-lg transition relative ${isActive ? "font-semibold drop-shadow-lg" : ""} ${disabled ? "opacity-40" : ""}`,
+    `my-0.5 grid grid-cols-[1.25rem_1fr] items-center gap-3 px-2 py-1 text-sm rounded-md transition-colors relative hover:bg-neutral-100 hover:text-neutral-950 dark:hover:bg-neutral-700 dark:hover:text-neutral-50 ${
+      isActive
+        ? "bg-neutral-100/80 font-medium text-neutral-900 dark:bg-neutral-700/60 dark:text-neutral-50"
+        : "font-normal text-neutral-700 dark:text-neutral-300"
+    } ${disabled ? "opacity-40" : ""}`,
   );
   const content = (
     <>
-      {isActive ? (
-        <SolidIcon className="inline-block mr-3 size-5" />
-      ) : (
-        <OutlineIcon className="inline-block mr-3 size-5" />
-      )}
-      <span className="relative">
-        {name}
-        {showRedDot && <div className="absolute top-0 -right-3 size-1.5 bg-red-500 rounded-full animate-pulse" />}
+      <span className="flex size-5 items-center justify-center">
+        {isActive ? (
+          <SolidIcon className="size-4 text-neutral-800 dark:text-neutral-100" />
+        ) : (
+          <OutlineIcon className="size-4 text-neutral-500 dark:text-neutral-400" />
+        )}
+      </span>
+      <span className="min-w-0">
+        <span className="relative inline-block">
+          {name}
+          {badgeLabel && (
+            <span className="ml-1 inline-block origin-left scale-90 align-super text-xs font-normal leading-none text-neutral-400 dark:text-neutral-500">
+              {badgeLabel}
+            </span>
+          )}
+          {showRedDot && <div className="absolute top-0 -right-3 size-1.5 bg-red-500 rounded-full animate-pulse" />}
+        </span>
       </span>
     </>
   );
@@ -800,25 +814,35 @@ function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, showRedDot, d
   );
 }
 
-function UtilityLink({
-  to,
-  text,
-  Icon,
-  showRedDot = false,
-}: {
-  to: string;
-  text: string;
+type DesktopMenuLinkProps = {
+  label: string;
   Icon: React.ComponentType<React.ComponentProps<"svg">>;
   showRedDot?: boolean;
-}) {
+  to: string;
+};
+
+function DesktopMenuLink({ to, label, Icon, showRedDot = false }: DesktopMenuLinkProps) {
+  const className =
+    "relative my-0.5 grid w-full grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-left text-sm font-normal text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-950 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-neutral-50";
+  const content = (
+    <>
+      <span className="flex size-5 items-center justify-center">
+        <Icon className="size-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="relative inline-block">
+          {label}
+          {showRedDot && (
+            <span className="absolute top-0 -right-3 size-1.5 rounded-full bg-red-500" aria-hidden="true" />
+          )}
+        </span>
+      </span>
+    </>
+  );
+
   return (
-    <Link
-      to={to}
-      className="relative my-1 flex w-fit items-center px-2 py-1 text-sm text-neutral-500 hover:underline dark:text-neutral-400"
-    >
-      <Icon className="size-4" />
-      <span className="ml-2">{text}</span>
-      {showRedDot && <div className="absolute top-1 -right-1 size-1.5 bg-red-500 rounded-full animate-pulse" />}
+    <Link to={to} className={className}>
+      {content}
     </Link>
   );
 }
