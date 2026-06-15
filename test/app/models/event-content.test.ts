@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
 import { fetchCached } from "~/models/base";
-import { getTimelineContent, getTimelineContents } from "~/models/timeline-content";
-import { getEventMetadata, getEventShopContent, getShopAvailableEvents } from "../../../app/models/event-content";
+import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "~/models/timeline-content";
+import {
+  getEventList,
+  getEventMetadata,
+  getEventShopContent,
+  getShopAvailableEvents,
+} from "../../../app/models/event-content";
 
 jest.mock("~/models/timeline-content", () => ({
+  getAllTimelineContentsMeta: jest.fn(),
   getTimelineContent: jest.fn(),
   getTimelineContents: jest.fn(),
 }));
@@ -19,6 +25,9 @@ jest.mock("~/lib/baql", () => ({
 
 const mockedGetTimelineContent = getTimelineContent as jest.MockedFunction<typeof getTimelineContent>;
 const mockedGetTimelineContents = getTimelineContents as jest.MockedFunction<typeof getTimelineContents>;
+const mockedGetAllTimelineContentsMeta = getAllTimelineContentsMeta as jest.MockedFunction<
+  typeof getAllTimelineContentsMeta
+>;
 const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
 const mockedFetchCached = fetchCached as jest.MockedFunction<typeof fetchCached>;
 
@@ -50,6 +59,174 @@ function createTimelineContent(overrides: Partial<NonNullable<Awaited<ReturnType
 
 afterEach(() => {
   jest.clearAllMocks();
+});
+
+describe("getEventList", () => {
+  it("builds GL event catalog rows and omits events without timeline detail pages", async () => {
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        eventContents: [
+          {
+            uid: "10",
+            name: "열 번째 이벤트",
+            schedules: [
+              {
+                region: "jp",
+                runType: "first",
+                startAt: "2024-01-01T02:00:00.000Z",
+                endAt: "2024-01-15T01:59:59.000Z",
+              },
+              {
+                region: "gl",
+                runType: "first",
+                startAt: "2025-01-01T02:00:00.000Z",
+                endAt: "2025-01-15T01:59:59.000Z",
+              },
+              {
+                region: "gl",
+                runType: "rerun",
+                startAt: "2026-06-10T02:00:00.000Z",
+                endAt: "2026-06-20T01:59:59.000Z",
+              },
+              {
+                region: "gl",
+                runType: "permanent",
+                startAt: "2026-07-01T02:00:00.000Z",
+                endAt: null,
+              },
+            ],
+          },
+          {
+            uid: "2",
+            name: "두 번째 이벤트",
+            schedules: [
+              {
+                region: "gl",
+                runType: "first",
+                startAt: "2024-01-01T02:00:00.000Z",
+                endAt: "2024-01-15T01:59:59.000Z",
+              },
+            ],
+          },
+        ],
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    });
+    mockedGetAllTimelineContentsMeta.mockResolvedValue([
+      createTimelineContent({
+        uid: "event-10-first",
+        name: "열 번째 이벤트",
+        startAt: "2025-01-01T02:00:00.000Z",
+        endAt: "2025-01-15T01:59:59.000Z",
+        contentType: "event",
+        runType: "first",
+        contentUid: "10",
+        imageUrl: "https://assets.example/events/10-first.webp",
+      }),
+      createTimelineContent({
+        uid: "event-10-rerun",
+        name: "열 번째 이벤트 복각",
+        startAt: "2026-06-10T02:00:00.000Z",
+        endAt: "2026-06-20T01:59:59.000Z",
+        contentType: "event",
+        runType: "rerun",
+        contentUid: "10",
+        imageUrl: "https://assets.example/events/10-rerun.webp",
+      }),
+      createTimelineContent({
+        uid: "mini-event-10",
+        name: "열 번째 이벤트 미니",
+        startAt: "2026-08-01T02:00:00.000Z",
+        endAt: "2026-08-10T01:59:59.000Z",
+        contentType: "mini_event",
+        runType: "first",
+        contentUid: "10",
+        imageUrl: "https://assets.example/events/10-mini.webp",
+      }),
+    ]);
+
+    await expect(getEventList(env, "2026-06-13T00:00:00.000Z")).resolves.toEqual([
+      {
+        uid: "10",
+        name: "열 번째 이벤트",
+        imageUrl: "https://assets.baql.net/images/events/logo/10_kr.webp",
+        fallbackImageUrl: "https://assets.baql.net/images/events/logo/10_jp.webp",
+        latestTimelineUid: "event-10-rerun",
+        schedules: {
+          first: {
+            runType: "first",
+            since: "2025-01-01T02:00:00.000Z",
+            until: "2025-01-15T01:59:59.000Z",
+            status: "past",
+          },
+          rerun: {
+            runType: "rerun",
+            since: "2026-06-10T02:00:00.000Z",
+            until: "2026-06-20T01:59:59.000Z",
+            status: "current",
+          },
+          permanent: {
+            runType: "permanent",
+            since: "2026-07-01T02:00:00.000Z",
+            until: null,
+            status: "upcoming",
+          },
+        },
+      },
+    ]);
+    expect(mockedFetchCached).toHaveBeenCalledWith(env, "event-list::v1", expect.any(Function), 24 * 60 * 60, false);
+    expect(mockedFetchCached).toHaveBeenCalledWith(
+      env,
+      "event-contents::list::v1",
+      expect.any(Function),
+      24 * 60 * 60,
+      false,
+    );
+  });
+
+  it("refreshes the full event list cache and recalculates schedule status per request", async () => {
+    const cachedEvents = [
+      {
+        uid: "20",
+        name: "스무 번째 이벤트",
+        imageUrl: "https://assets.baql.net/images/events/logo/20_kr.webp",
+        fallbackImageUrl: "https://assets.baql.net/images/events/logo/20_jp.webp",
+        latestTimelineUid: "event-20",
+        schedules: {
+          first: {
+            runType: "first",
+            since: "2026-06-10T02:00:00.000Z",
+            until: "2026-06-20T01:59:59.000Z",
+          },
+        },
+      },
+    ];
+    mockedFetchCached.mockImplementationOnce(async () => cachedEvents as never);
+
+    await expect(getEventList(env, "2026-06-13T00:00:00.000Z", true)).resolves.toEqual([
+      {
+        uid: "20",
+        name: "스무 번째 이벤트",
+        imageUrl: "https://assets.baql.net/images/events/logo/20_kr.webp",
+        fallbackImageUrl: "https://assets.baql.net/images/events/logo/20_jp.webp",
+        latestTimelineUid: "event-20",
+        schedules: {
+          first: {
+            runType: "first",
+            since: "2026-06-10T02:00:00.000Z",
+            until: "2026-06-20T01:59:59.000Z",
+            status: "current",
+          },
+        },
+      },
+    ]);
+    expect(mockedFetchCached).toHaveBeenCalledWith(env, "event-list::v1", expect.any(Function), 24 * 60 * 60, true);
+    expect(mockedRunQuery).not.toHaveBeenCalled();
+  });
 });
 
 describe("getShopAvailableEvents", () => {

@@ -43,7 +43,7 @@ export default function EventPage() {
     <Page
       title="이벤트 정보"
       description={eventMetadata.name}
-      backward={{ title: "미래시", to: "/futures" }}
+      backward={{ title: "이벤트", to: "/events" }}
       panels={
         showEventSelector
           ? [
