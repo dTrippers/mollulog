@@ -307,6 +307,7 @@ describe("pickup history editor loader", () => {
       {
         uid: "10129",
         name: "스즈미(매지컬)",
+        familyName: null,
         altNames: [],
         school: "trinity",
         initialTier: 3,

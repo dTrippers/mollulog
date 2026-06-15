@@ -7,10 +7,13 @@ import {
 } from "@heroicons/react/16/solid";
 import {
   ArrowsRightLeftIcon as ArrowsRightLeftIconOutline,
+  CalendarIcon as CalendarIconOutline,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
   Cog6ToothIcon,
   HomeIcon as HomeIconOutline,
   IdentificationIcon as IdentificationIconOutline,
+  MagnifyingGlassIcon,
+  RectangleGroupIcon as RectangleGroupIconOutline,
   UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
 import {
@@ -20,19 +23,22 @@ import {
   IdentificationIcon as IdentificationIconSolid,
   UserCircleIcon as UserCircleIconSolid,
 } from "@heroicons/react/24/solid";
-import { useEffect, useState } from "react";
-import { Link, useMatches, useSubmit } from "react-router";
-import { useSignIn } from "~/contexts/SignInProvider";
+import { useEffect, useRef, useState } from "react";
+import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
 import { ProfileImage } from "~/components/primitives";
+import { useSignIn } from "~/contexts/SignInProvider";
+import { type UtcIsoString, parseUtcTimestamp } from "~/lib/date-time";
+import { timelineContentTypeLocale } from "~/locales/ko";
+import { studentImageUrl } from "~/models/assets";
 import { sanitizeClassName } from "~/prophandlers";
 import { submitPreference } from "~/routes/api.preference";
-import type { UtcIsoString } from "~/lib/date-time";
+import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import {
-  getMobileNavigationItems,
-  getNavigationSections,
-  getNavigationSectionStates,
   type NavigationItem,
   type NavigationSectionStates,
+  getMobileNavigationItems,
+  getNavigationSectionStates,
+  getNavigationSections,
 } from "./navigation-menu";
 
 type NavigationBarProps = {
@@ -45,6 +51,198 @@ type NavigationBarProps = {
   hasActiveCoupons: boolean;
 };
 
+type NavigationSearchVariant = "desktop" | "mobile";
+
+function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const fetcher = useFetcher<SearchResponse>();
+  const fetcherLoad = fetcher.load;
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [isPopupOpen, setIsPopupOpen] = useState(false);
+
+  useEffect(() => {
+    if (variant === "mobile") {
+      inputRef.current?.focus();
+    }
+  }, [variant]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 200);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    if (!debouncedQuery) {
+      return;
+    }
+
+    fetcherLoad(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
+    setIsPopupOpen(true);
+  }, [debouncedQuery, fetcherLoad]);
+
+  useEffect(() => {
+    if (!isPopupOpen) {
+      return;
+    }
+
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setIsPopupOpen(false);
+      }
+    };
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsPopupOpen(false);
+        inputRef.current?.blur();
+      }
+    };
+
+    window.addEventListener("mousedown", closeOnOutsideClick);
+    window.addEventListener("keydown", closeOnEscape);
+
+    return () => {
+      window.removeEventListener("mousedown", closeOnOutsideClick);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isPopupOpen]);
+
+  const results = fetcher.data?.results ?? [];
+  const hasQuery = Boolean(query.trim());
+  const showPopup = Boolean(isPopupOpen && (!hasQuery || fetcher.data));
+  const isLoading = fetcher.state !== "idle";
+
+  return (
+    <div ref={rootRef} className={variant === "desktop" ? "relative mb-4" : "relative w-full"}>
+      <div className="pointer-events-none absolute left-2.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-neutral-400 dark:text-neutral-500">
+        {isLoading ? (
+          <span
+            className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+            aria-hidden="true"
+          />
+        ) : (
+          <MagnifyingGlassIcon className="size-4" strokeWidth={2} />
+        )}
+      </div>
+      <input
+        ref={inputRef}
+        type="search"
+        value={query}
+        placeholder="검색"
+        className="w-full rounded-md bg-neutral-100 py-2 pr-3 pl-9 text-sm outline-none placeholder:text-neutral-400 dark:bg-neutral-700 dark:placeholder:text-neutral-500"
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setIsPopupOpen(true);
+        }}
+        onFocus={() => {
+          setIsPopupOpen(true);
+        }}
+        aria-label="전역 검색"
+      />
+
+      {showPopup && (
+        <SearchResultPopup
+          results={results}
+          isEmpty={!hasQuery}
+          onResultClick={() => setIsPopupOpen(false)}
+          className={
+            variant === "desktop"
+              ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg shadow-neutral-200/50 dark:border-neutral-700 dark:bg-neutral-800 dark:shadow-neutral-950/30"
+              : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg shadow-neutral-200/50 dark:border-neutral-700 dark:bg-neutral-800 dark:shadow-neutral-950/30"
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function SearchResultPopup({
+  results,
+  isEmpty,
+  onResultClick,
+  className,
+}: {
+  results: SearchResult[];
+  isEmpty: boolean;
+  onResultClick: () => void;
+  className: string;
+}) {
+  return (
+    <div className={className}>
+      {isEmpty ? (
+        <SearchEmptyView />
+      ) : results.length > 0 ? (
+        results.map((result) => (
+          <Link
+            key={`${result.type}:${result.to}`}
+            to={result.to}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-neutral-800 transition-colors hover:bg-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-700"
+            onClick={onResultClick}
+          >
+            <SearchResultBadge result={result} />
+            <div className="min-w-0 flex-1">
+              <div className="text-xs text-neutral-400 dark:text-neutral-500">{getSearchResultLabel(result)}</div>
+              <div className="whitespace-pre-line">{result.name}</div>
+            </div>
+          </Link>
+        ))
+      ) : (
+        <p className="px-3 py-3 text-sm text-neutral-500 dark:text-neutral-400">결과가 없어요</p>
+      )}
+    </div>
+  );
+}
+
+function SearchEmptyView() {
+  return (
+    <div className="px-4 py-4 text-center text-sm">
+      <div className="mx-auto flex size-8 items-center justify-center rounded-md bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300">
+        <MagnifyingGlassIcon className="size-4" strokeWidth={2} />
+      </div>
+      <p className="mt-2 font-medium text-neutral-700 dark:text-neutral-200">학생, 이벤트, 기능을 검색할 수 있어요</p>
+      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">검색어를 입력해 원하는 항목을 찾아보세요</p>
+    </div>
+  );
+}
+
+function SearchResultBadge({ result }: { result: SearchResult }) {
+  if (result.type === "student") {
+    return (
+      <img
+        src={studentImageUrl(result.uid)}
+        alt=""
+        className="size-6 shrink-0 rounded-md bg-neutral-100 object-cover object-center dark:bg-neutral-700 dark:opacity-90"
+        loading="lazy"
+      />
+    );
+  }
+
+  const Icon = result.type === "menu" ? RectangleGroupIconOutline : CalendarIconOutline;
+
+  return (
+    <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300">
+      <Icon className="size-4" strokeWidth={2} />
+    </span>
+  );
+}
+
+function getSearchResultLabel(result: SearchResult): string {
+  if (result.type === "menu") {
+    return "기능";
+  }
+
+  if (result.type === "student") {
+    return "학생";
+  }
+
+  return `${timelineContentTypeLocale[result.contentType]} · ${parseUtcTimestamp(result.startAt).format("YYYY-MM-DD")}`;
+}
+
 export default function NavigationBar({
   currentUsername,
   currentProfileStudentId,
@@ -55,7 +253,9 @@ export default function NavigationBar({
   hasActiveCoupons,
 }: NavigationBarProps) {
   const matches = useMatches();
+  const location = useLocation();
   const pathname = matches[matches.length - 1].pathname;
+  const searchResetKey = `${location.pathname}\n${location.search}`;
   const { showSignIn } = useSignIn();
   const sectionStates = getNavigationSectionStates(pathname, upcomingEvent);
 
@@ -63,7 +263,7 @@ export default function NavigationBar({
     <>
       <aside
         className="
-          hidden lg:block lg:relative lg:h-screen lg:w-72 xl:w-84 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
+          hidden lg:block lg:relative lg:z-layer-navigation lg:h-screen lg:w-72 xl:w-84 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
           lg:border-r border-neutral-200 dark:border-neutral-700 shadow-xl shadow-neutral-200/30 dark:shadow-neutral-900/30
         "
       >
@@ -88,6 +288,7 @@ export default function NavigationBar({
               hasRecentNews={hasRecentNews}
               upcomingEvent={upcomingEvent}
               hasActiveCoupons={hasActiveCoupons}
+              searchResetKey={searchResetKey}
               sectionStates={sectionStates}
             />
           </div>
@@ -99,6 +300,7 @@ export default function NavigationBar({
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         hasRecentNews={hasRecentNews}
+        searchResetKey={searchResetKey}
       />
 
       <MobileBottomNavigation
@@ -117,13 +319,16 @@ function MobileBrandHeader({
   darkMode,
   setDarkMode,
   hasRecentNews,
+  searchResetKey,
 }: {
   currentUsername: string | null;
   darkMode: boolean;
   setDarkMode: NavigationBarProps["setDarkMode"];
   hasRecentNews: boolean;
+  searchResetKey: string;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const submit = useSubmit();
 
   useEffect(() => {
@@ -153,38 +358,67 @@ function MobileBrandHeader({
   return (
     <header
       className="
-        lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex h-[var(--mobile-header-height)] items-center justify-between
-        border-b border-neutral-200/60 bg-white/95 px-4 pt-[env(safe-area-inset-top)] backdrop-blur-sm
+        lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex flex-col
+        border-b border-neutral-200/60 bg-white/95 backdrop-blur-sm
         dark:border-neutral-700/60 dark:bg-neutral-800/95
       "
     >
-      <Link to="/" className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-800">
-        <img
-          src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
-          alt="몰루로그 로고"
-          className="mr-2 h-7 aspect-4/3 object-cover"
-        />
-        <span className="text-lg font-ingame">
-          <span className="font-bold">몰루</span>로그
-        </span>
-      </Link>
+      <div className="flex h-[var(--mobile-header-height)] w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
+        <Link to="/" className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-800">
+          <img
+            src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
+            alt="몰루로그 로고"
+            className="mr-2 h-7 aspect-4/3 object-cover"
+          />
+          <span className="text-lg font-ingame">
+            <span className="font-bold">몰루</span>로그
+          </span>
+        </Link>
 
-      <button
-        type="button"
-        className="
-          relative -mr-1 inline-flex size-9 items-center justify-center rounded-md text-neutral-700
-          transition-colors hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
-          dark:text-neutral-200 dark:hover:bg-neutral-700 dark:focus-visible:ring-offset-neutral-800
-        "
-        onClick={() => setIsMenuOpen((prev) => !prev)}
-        aria-label="설정 메뉴 열기"
-        aria-expanded={isMenuOpen}
-      >
-        <Cog6ToothIcon className="size-5" strokeWidth={2} />
-        {hasRecentNews && (
-          <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-red-500" aria-hidden="true" />
-        )}
-      </button>
+        <div className="-mr-1 flex items-center gap-1">
+          <button
+            type="button"
+            className="
+              inline-flex size-9 items-center justify-center rounded-md text-neutral-700
+              transition-colors hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
+              dark:text-neutral-200 dark:hover:bg-neutral-700 dark:focus-visible:ring-offset-neutral-800
+            "
+            onClick={() => {
+              setIsSearchOpen((prev) => !prev);
+              setIsMenuOpen(false);
+            }}
+            aria-label={isSearchOpen ? "검색 닫기" : "검색 열기"}
+            aria-expanded={isSearchOpen}
+          >
+            <MagnifyingGlassIcon className="size-5" strokeWidth={2} />
+          </button>
+          <button
+            type="button"
+            className="
+              relative inline-flex size-9 items-center justify-center rounded-md text-neutral-700
+              transition-colors hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
+              dark:text-neutral-200 dark:hover:bg-neutral-700 dark:focus-visible:ring-offset-neutral-800
+            "
+            onClick={() => {
+              setIsMenuOpen((prev) => !prev);
+              setIsSearchOpen(false);
+            }}
+            aria-label="설정 메뉴 열기"
+            aria-expanded={isMenuOpen}
+          >
+            <Cog6ToothIcon className="size-5" strokeWidth={2} />
+            {hasRecentNews && (
+              <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-red-500" aria-hidden="true" />
+            )}
+          </button>
+        </div>
+      </div>
+
+      {isSearchOpen && (
+        <div className="relative w-full px-4 pb-3">
+          <NavigationSearch key={`mobile:${searchResetKey}`} variant="mobile" />
+        </div>
+      )}
 
       {isMenuOpen && (
         <>
@@ -422,6 +656,7 @@ interface DesktopMenuContentProps {
   hasRecentNews: boolean;
   upcomingEvent: NavigationBarProps["upcomingEvent"];
   hasActiveCoupons: boolean;
+  searchResetKey: string;
   sectionStates: NavigationSectionStates;
 }
 
@@ -433,6 +668,7 @@ function DesktopMenuContent({
   hasRecentNews,
   upcomingEvent,
   hasActiveCoupons,
+  searchResetKey,
   sectionStates,
 }: DesktopMenuContentProps) {
   const submit = useSubmit();
@@ -445,6 +681,8 @@ function DesktopMenuContent({
 
   return (
     <>
+      <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
+
       <MenuItem
         to="/"
         name="홈"

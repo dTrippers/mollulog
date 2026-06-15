@@ -8,6 +8,7 @@ export type Role = "striker" | "special";
 export type Student = {
   uid: string;
   name: string;
+  familyName: string | null;
   altNames: string[];
   school: string;
   initialTier: number;
@@ -27,7 +28,7 @@ export type StudentMap = { [id: string]: Student };
 const allStudentsQuery = graphql(`
   query AllStudents {
     students {
-      uid name altNames school initialTier order attackType defenseType position tacticRole birthday role equipments released
+      uid name familyName altNames school initialTier order attackType defenseType position tacticRole birthday role equipments released
     }
   }
 `);

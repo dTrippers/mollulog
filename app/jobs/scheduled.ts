@@ -1,7 +1,8 @@
 import { getLogger } from "~/lib/observability.server";
+import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 
-type ScheduledJobName = "syncYoutubeCommunityPosts";
+type ScheduledJobName = "syncYoutubeCommunityPosts" | "syncAllTimelineContentsMeta";
 
 type ScheduledJob = {
   name: ScheduledJobName;
@@ -10,7 +11,10 @@ type ScheduledJob = {
 
 export async function runScheduledJobs(env: Env, ctx?: ExecutionContext): Promise<void> {
   const logger = getLogger(env, ctx, { job: "scheduled" });
-  const jobs: ScheduledJob[] = [{ name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env) }];
+  const jobs: ScheduledJob[] = [
+    { name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env) },
+    { name: "syncAllTimelineContentsMeta", run: () => syncAllTimelineContentsMeta(env) },
+  ];
 
   const results = await Promise.allSettled(
     jobs.map(async (job) => {
