@@ -14,7 +14,6 @@ describe("student-state-import", () => {
           current: {
             level: 1,
             tier: 6,
-            weaponLevel: null,
             skillEx: 1,
             skillNormal: 2,
             skillEnhanced: 3,
@@ -23,9 +22,6 @@ describe("student-state-import", () => {
             equip2: 2,
             equip3: 3,
             equipSpecial: null,
-            abilityHp: null,
-            abilityAtk: null,
-            abilityHeal: null,
             bond: 1,
           },
           target: {
@@ -102,7 +98,6 @@ describe("student-state-import", () => {
           current: {
             level: 90,
             tier: 5,
-            weaponLevel: null,
             skillEx: 5,
             skillNormal: 10,
             skillEnhanced: 10,
@@ -111,9 +106,6 @@ describe("student-state-import", () => {
             equip2: 9,
             equip3: 9,
             equipSpecial: 2,
-            abilityHp: null,
-            abilityAtk: null,
-            abilityHeal: null,
             bond: 100,
           },
           target: null,
@@ -213,7 +205,7 @@ describe("student-state-import", () => {
       entries: [
         expect.objectContaining({
           studentId: "20048",
-          current: expect.objectContaining({ tier: 6, weaponLevel: null, abilityHp: null }),
+          current: expect.objectContaining({ tier: 6 }),
           target: null,
         }),
       ],
@@ -290,7 +282,6 @@ describe("student-state-import", () => {
           current: expect.objectContaining({
             level: 90,
             tier: 5,
-            weaponLevel: 50,
             bond: 100,
           }),
           target: null,

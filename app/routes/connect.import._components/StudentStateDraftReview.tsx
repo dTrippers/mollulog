@@ -27,6 +27,13 @@ import type {
   StudentStateDraftTargetValue,
   StudentStateDraftValue,
 } from "~/models/student-state-draft-value";
+import {
+  type StudentStateComparisonField,
+  type StudentStateFieldDefinition,
+  studentStateComparisonFields,
+  studentStateCurrentFields,
+  studentStateTargetFields,
+} from "~/models/student-state-fields";
 import type { SyncDraft } from "~/models/sync-draft";
 import DraftReviewView, {
   DraftReviewActions,
@@ -67,98 +74,13 @@ type StudentStateDraftReviewProps = {
   actionData?: SyncDraftReviewActionData;
 };
 
-type StudentStateInputDefinition = {
-  label: string;
-  min: number;
-  max?: number;
-  kind?: "tier";
-  dataCellClassName?: string;
-  targetCellClassName?: string;
-  headerClassName?: string;
-  equipmentIndex?: number;
-  gearOnly?: boolean;
-};
-
-type CurrentFieldDefinition = StudentStateInputDefinition & {
-  key: keyof StudentStateStoredCurrentValue;
-};
-
-type TargetFieldDefinition = StudentStateInputDefinition & {
-  key: keyof StudentStateStoredTargetValue;
-};
-
-type StudentStateComparisonField = StudentStateInputDefinition & {
-  currentKey?: keyof StudentStateStoredCurrentValue;
-  targetKey?: keyof StudentStateStoredTargetValue;
-};
-
 type EditableStudentStateRowValue = StudentStateDraftCurrentValue | StudentStateDraftTargetValue | null;
 type NumberInputGridNavigation = ReturnType<typeof useNumberInputGridNavigation>;
 
-const currentFields: readonly CurrentFieldDefinition[] = [
-  { key: "tier", label: "성급", min: 1, max: 9, kind: "tier" },
-  { key: "bond", label: "인연 랭크", min: 1, max: 100 },
-  { key: "level", label: "학생 레벨", min: 1, max: 90 },
-  { key: "weaponLevel", label: "고유무기", min: 1 },
-  { key: "skillEx", label: "EX 스킬", min: 1, max: 5 },
-  { key: "skillNormal", label: "기본 스킬", min: 1, max: 10 },
-  { key: "skillEnhanced", label: "강화 스킬", min: 1, max: 10 },
-  { key: "skillSub", label: "서브 스킬", min: 1, max: 10 },
-  { key: "equip1", label: "장비1", min: 1, max: 10 },
-  { key: "equip2", label: "장비2", min: 1, max: 10 },
-  { key: "equip3", label: "장비3", min: 1, max: 10 },
-  { key: "equipSpecial", label: "애용품", min: 1, max: 2, gearOnly: true },
-  { key: "abilityHp", label: "능력 HP", min: 1 },
-  { key: "abilityAtk", label: "능력 공격", min: 1 },
-  { key: "abilityHeal", label: "능력 치유", min: 1 },
-] as const;
-
-const targetFields: readonly TargetFieldDefinition[] = [
-  { key: "targetTier", label: "성급", min: 1, max: 9, kind: "tier" },
-  { key: "targetBond", label: "인연 랭크", min: 1, max: 100 },
-  { key: "targetLevel", label: "학생 레벨", min: 1, max: 90 },
-  { key: "targetSkillEx", label: "EX 스킬", min: 1, max: 5 },
-  { key: "targetSkillNormal", label: "기본 스킬", min: 1, max: 10 },
-  { key: "targetSkillEnhanced", label: "강화 스킬", min: 1, max: 10 },
-  { key: "targetSkillSub", label: "서브 스킬", min: 1, max: 10 },
-  { key: "targetEquip1", label: "장비1", min: 1, max: 10 },
-  { key: "targetEquip2", label: "장비2", min: 1, max: 10 },
-  { key: "targetEquip3", label: "장비3", min: 1, max: 10 },
-  { key: "targetEquipSpecial", label: "애용품", min: 1, max: 2, gearOnly: true },
-] as const;
-
-const comparisonFields: readonly StudentStateComparisonField[] = [
-  {
-    label: "성급",
-    currentKey: "tier",
-    targetKey: "targetTier",
-    min: 1,
-    max: 9,
-    kind: "tier",
-    dataCellClassName: "min-w-28 px-2 py-2",
-    targetCellClassName: "min-w-28 px-2 py-1.5",
-    headerClassName: "min-w-28 px-2 py-1.5",
-  },
-  {
-    label: "인연 랭크",
-    currentKey: "bond",
-    targetKey: "targetBond",
-    min: 1,
-    max: 100,
-    dataCellClassName: "w-16 px-0.5 py-1.5",
-    targetCellClassName: "w-16 px-0.5 py-1.5",
-    headerClassName: "w-16 px-0.5 py-1.5",
-  },
-  { label: "학생 레벨", currentKey: "level", targetKey: "targetLevel", min: 1, max: 90 },
-  { label: "EX 스킬", currentKey: "skillEx", targetKey: "targetSkillEx", min: 1, max: 5 },
-  { label: "기본 스킬", currentKey: "skillNormal", targetKey: "targetSkillNormal", min: 1, max: 10 },
-  { label: "강화 스킬", currentKey: "skillEnhanced", targetKey: "targetSkillEnhanced", min: 1, max: 10 },
-  { label: "서브 스킬", currentKey: "skillSub", targetKey: "targetSkillSub", min: 1, max: 10 },
-  { label: "장비1", currentKey: "equip1", targetKey: "targetEquip1", min: 1, max: 10, equipmentIndex: 0 },
-  { label: "장비2", currentKey: "equip2", targetKey: "targetEquip2", min: 1, max: 10, equipmentIndex: 1 },
-  { label: "장비3", currentKey: "equip3", targetKey: "targetEquip3", min: 1, max: 10, equipmentIndex: 2 },
-  { label: "애용품", currentKey: "equipSpecial", targetKey: "targetEquipSpecial", min: 1, max: 2, gearOnly: true },
-] as const;
+const currentFields = studentStateCurrentFields;
+const targetFields = studentStateTargetFields;
+const comparisonFields = studentStateComparisonFields;
+type StudentStateDisplayField = Omit<StudentStateFieldDefinition, "key">;
 
 const cellBase = "border-b border-neutral-200 align-middle dark:border-neutral-700";
 const groupTopCellClass = "border-t border-neutral-200 dark:border-neutral-700";
@@ -545,7 +467,7 @@ function isMinimumCurrentDraftValue(
   });
 }
 
-function ColumnHeaderLabel({ field, equipments }: { field: StudentStateInputDefinition; equipments: string[] }) {
+function ColumnHeaderLabel({ field, equipments }: { field: StudentStateDisplayField; equipments: string[] }) {
   if (field.kind === "tier") {
     return <span className="sr-only">{field.label}</span>;
   }
@@ -622,7 +544,7 @@ function StudentStateReadonlyCell({
   field,
   value,
 }: {
-  field: StudentStateInputDefinition;
+  field: StudentStateDisplayField;
   value: number | null;
 }) {
   return <span>{formatFieldValue(field, value)}</span>;
@@ -792,7 +714,7 @@ function isStudentStateComparisonFieldUpdateTarget({
   );
 }
 
-function formatFieldValue(field: StudentStateInputDefinition, value: number | null): ReactNode {
+function formatFieldValue(field: StudentStateDisplayField, value: number | null): ReactNode {
   return field.kind === "tier" ? formatTier(value, { muted: true }) : formatPlainValue(value);
 }
 
@@ -806,7 +728,7 @@ function EditableStudentStateCell({
   inputProps,
   onChange,
 }: {
-  field: StudentStateInputDefinition;
+  field: StudentStateDisplayField;
   value: number | null;
   initialTier: number;
   isChanged: boolean;
@@ -862,7 +784,7 @@ function DecreaseWarningLabel() {
   return <span className="text-xs font-medium text-red-700 dark:text-red-300">기존보다 값이 감소했어요</span>;
 }
 
-function getEquipmentLabel(field: StudentStateInputDefinition, equipments: string[]): string | undefined {
+function getEquipmentLabel(field: StudentStateDisplayField, equipments: string[]): string | undefined {
   const index = field.equipmentIndex;
   if (index == null) {
     return undefined;
@@ -930,7 +852,6 @@ function emptyStoredValue(): StudentStateStoredValue {
     current: {
       level: null,
       tier: null,
-      weaponLevel: null,
       skillEx: null,
       skillNormal: null,
       skillEnhanced: null,
@@ -939,9 +860,6 @@ function emptyStoredValue(): StudentStateStoredValue {
       equip2: null,
       equip3: null,
       equipSpecial: null,
-      abilityHp: null,
-      abilityAtk: null,
-      abilityHeal: null,
       bond: null,
     },
     target: {

@@ -3,6 +3,7 @@ import type {
   StudentStateDraftTargetValue,
   StudentStateDraftValue,
 } from "./student-state-draft-value";
+import { studentStateComparisonFields } from "./student-state-fields";
 
 export type StudentStateCurrentComparisonValue = Omit<StudentStateDraftCurrentValue, "tier"> & {
   tier: number | null;
@@ -17,49 +18,13 @@ type StudentStateDiffOptions = {
   hasGear: boolean;
 };
 
-type CurrentFieldDefinition = {
-  key: keyof StudentStateCurrentComparisonValue;
-  kind?: "tier";
-  gearOnly?: boolean;
-};
+const currentComparisonFields = studentStateComparisonFields.flatMap((field) =>
+  field.currentKey ? [{ key: field.currentKey, kind: field.kind, gearOnly: field.gearOnly }] : [],
+);
 
-type TargetFieldDefinition = {
-  key: keyof StudentStateTargetComparisonValue;
-  kind?: "tier";
-  gearOnly?: boolean;
-};
-
-const currentComparisonFields: readonly CurrentFieldDefinition[] = [
-  { key: "tier", kind: "tier" },
-  { key: "bond" },
-  { key: "level" },
-  { key: "weaponLevel" },
-  { key: "skillEx" },
-  { key: "skillNormal" },
-  { key: "skillEnhanced" },
-  { key: "skillSub" },
-  { key: "equip1" },
-  { key: "equip2" },
-  { key: "equip3" },
-  { key: "equipSpecial", gearOnly: true },
-  { key: "abilityHp" },
-  { key: "abilityAtk" },
-  { key: "abilityHeal" },
-] as const;
-
-const targetComparisonFields: readonly TargetFieldDefinition[] = [
-  { key: "targetTier", kind: "tier" },
-  { key: "targetBond" },
-  { key: "targetLevel" },
-  { key: "targetSkillEx" },
-  { key: "targetSkillNormal" },
-  { key: "targetSkillEnhanced" },
-  { key: "targetSkillSub" },
-  { key: "targetEquip1" },
-  { key: "targetEquip2" },
-  { key: "targetEquip3" },
-  { key: "targetEquipSpecial", gearOnly: true },
-] as const;
+const targetComparisonFields = studentStateComparisonFields.flatMap((field) =>
+  field.targetKey ? [{ key: field.targetKey, kind: field.kind, gearOnly: field.gearOnly }] : [],
+);
 
 export function isStudentStateCurrentChanged(
   imported: StudentStateDraftCurrentValue | null,
@@ -133,7 +98,6 @@ export function mergeStudentStateCurrentValueForUpdate(
       ? imported.tier
       : (existing?.tier ?? options.initialTier),
     level: getMergedCurrentFieldValue("level", imported, existing, options),
-    weaponLevel: getMergedCurrentFieldValue("weaponLevel", imported, existing, options),
     skillEx: getMergedCurrentFieldValue("skillEx", imported, existing, options),
     skillNormal: getMergedCurrentFieldValue("skillNormal", imported, existing, options),
     skillEnhanced: getMergedCurrentFieldValue("skillEnhanced", imported, existing, options),
@@ -142,9 +106,6 @@ export function mergeStudentStateCurrentValueForUpdate(
     equip2: getMergedCurrentFieldValue("equip2", imported, existing, options),
     equip3: getMergedCurrentFieldValue("equip3", imported, existing, options),
     equipSpecial: getMergedCurrentFieldValue("equipSpecial", imported, existing, options),
-    abilityHp: getMergedCurrentFieldValue("abilityHp", imported, existing, options),
-    abilityAtk: getMergedCurrentFieldValue("abilityAtk", imported, existing, options),
-    abilityHeal: getMergedCurrentFieldValue("abilityHeal", imported, existing, options),
     bond: getMergedCurrentFieldValue("bond", imported, existing, options),
   };
 }
@@ -176,7 +137,7 @@ export function mergeStudentStateTargetValueForUpdate(
 }
 
 function isStudentStateCurrentFieldChanged(
-  field: CurrentFieldDefinition,
+  field: (typeof currentComparisonFields)[number],
   imported: StudentStateDraftCurrentValue,
   existing: StudentStateCurrentComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
@@ -195,7 +156,7 @@ function isStudentStateCurrentFieldChanged(
 }
 
 function isStudentStateTargetFieldChanged(
-  field: TargetFieldDefinition,
+  field: (typeof targetComparisonFields)[number],
   imported: StudentStateDraftTargetValue,
   existing: StudentStateTargetComparisonValue | null | undefined,
   options: StudentStateDiffOptions,

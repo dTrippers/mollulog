@@ -57,7 +57,7 @@ export function serializeSchaleDbExport(input: StudentStateExportInput): string 
             s: defaultNumber(star, 1),
             ws: defaultNumber(uniqueWeapon, 0),
             l: defaultNumber(recruitedStudent.level, 1),
-            wl: defaultNumber(recruitedStudent.weaponLevel, 0),
+            wl: 0,
             s1: defaultNumber(recruitedStudent.skillEx, 1),
             s2: defaultNumber(recruitedStudent.skillNormal, 1),
             s3: defaultNumber(recruitedStudent.skillEnhanced, 1),
@@ -66,9 +66,9 @@ export function serializeSchaleDbExport(input: StudentStateExportInput): string 
             e2: defaultNumber(recruitedStudent.equip2, 1),
             e3: defaultNumber(recruitedStudent.equip3, 1),
             e4: defaultNumber(recruitedStudent.equipSpecial, 0),
-            pm: defaultNumber(recruitedStudent.abilityHp, 0),
-            pa: defaultNumber(recruitedStudent.abilityAtk, 0),
-            ph: defaultNumber(recruitedStudent.abilityHeal, 0),
+            pm: 0,
+            pa: 0,
+            ph: 0,
             b: defaultNumber(relationshipLevel?.currentLevel, 1),
           },
         ];
@@ -134,7 +134,7 @@ function toJustin163Current(recruitedStudent: RecruitedStudent | undefined, rela
 
   return {
     level: toExportString(recruitedStudent?.level, 1),
-    ue_level: toExportString(recruitedStudent?.weaponLevel, 0),
+    ue_level: "0",
     bond: toExportString(relationshipLevel?.currentLevel, 1),
     ex: toExportString(recruitedStudent?.skillEx, 1),
     basic: toExportString(recruitedStudent?.skillNormal, 1),
@@ -144,9 +144,9 @@ function toJustin163Current(recruitedStudent: RecruitedStudent | undefined, rela
     gear2: toExportString(recruitedStudent?.equip2, 1),
     gear3: toExportString(recruitedStudent?.equip3, 1),
     bond_gear: toExportString(recruitedStudent?.equipSpecial, 0),
-    book_hp: toExportString(recruitedStudent?.abilityHp, 0),
-    book_atk: toExportString(recruitedStudent?.abilityAtk, 0),
-    book_heal: toExportString(recruitedStudent?.abilityHeal, 0),
+    book_hp: "0",
+    book_atk: "0",
+    book_heal: "0",
     star,
     ue: uniqueWeapon,
   };

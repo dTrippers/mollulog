@@ -35,7 +35,6 @@ type RecruitedStudentRow = {
   studentUid: string;
   tier: number;
   level: number | null;
-  weaponLevel: number | null;
   skillEx: number | null;
   skillNormal: number | null;
   skillEnhanced: number | null;
@@ -44,9 +43,6 @@ type RecruitedStudentRow = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
-  abilityHp: number | null;
-  abilityAtk: number | null;
-  abilityHeal: number | null;
   updatedAt: string;
 };
 
@@ -189,7 +185,7 @@ class FakeD1Database {
   private upsertRecruitedStudent(params: unknown[]): number {
     const userId = Number(params[1]);
     const studentUid = String(params[2]);
-    const draftUid = String(params[17]);
+    const draftUid = String(params[13]);
     if (!this.hasPendingStudentStateDraft(userId, draftUid)) {
       return 0;
     }
@@ -200,18 +196,14 @@ class FakeD1Database {
 
     row.tier = Number(params[3]);
     row.level = toNullableNumber(params[4]);
-    row.weaponLevel = toNullableNumber(params[5]);
-    row.skillEx = toNullableNumber(params[6]);
-    row.skillNormal = toNullableNumber(params[7]);
-    row.skillEnhanced = toNullableNumber(params[8]);
-    row.skillSub = toNullableNumber(params[9]);
-    row.equip1 = toNullableNumber(params[10]);
-    row.equip2 = toNullableNumber(params[11]);
-    row.equip3 = toNullableNumber(params[12]);
-    row.equipSpecial = toNullableNumber(params[13]);
-    row.abilityHp = toNullableNumber(params[14]);
-    row.abilityAtk = toNullableNumber(params[15]);
-    row.abilityHeal = toNullableNumber(params[16]);
+    row.skillEx = toNullableNumber(params[5]);
+    row.skillNormal = toNullableNumber(params[6]);
+    row.skillEnhanced = toNullableNumber(params[7]);
+    row.skillSub = toNullableNumber(params[8]);
+    row.equip1 = toNullableNumber(params[9]);
+    row.equip2 = toNullableNumber(params[10]);
+    row.equip3 = toNullableNumber(params[11]);
+    row.equipSpecial = toNullableNumber(params[12]);
     row.updatedAt = "current_timestamp";
 
     if (!this.recruitedStudents.includes(row)) {
@@ -340,7 +332,6 @@ function createEntryRow(overrides: Partial<SyncDraftEntryRow>): SyncDraftEntryRo
       current: {
         level: 1,
         tier: 6,
-        weaponLevel: null,
         skillEx: 1,
         skillNormal: 2,
         skillEnhanced: 3,
@@ -349,9 +340,6 @@ function createEntryRow(overrides: Partial<SyncDraftEntryRow>): SyncDraftEntryRo
         equip2: 2,
         equip3: 3,
         equipSpecial: null,
-        abilityHp: null,
-        abilityAtk: null,
-        abilityHeal: null,
         bond: 1,
       },
       target: null,
@@ -369,7 +357,6 @@ function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow> = {})
     studentUid: "20048",
     tier: 3,
     level: null,
-    weaponLevel: null,
     skillEx: null,
     skillNormal: null,
     skillEnhanced: null,
@@ -378,9 +365,6 @@ function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow> = {})
     equip2: null,
     equip3: null,
     equipSpecial: null,
-    abilityHp: null,
-    abilityAtk: null,
-    abilityHeal: null,
     updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
   };
@@ -496,7 +480,6 @@ describe("sync-draft", () => {
           current: {
             level: 90,
             tier: 6,
-            weaponLevel: 50,
             skillEx: 5,
             skillNormal: 10,
             skillEnhanced: 10,
@@ -505,9 +488,6 @@ describe("sync-draft", () => {
             equip2: 9,
             equip3: 8,
             equipSpecial: 2,
-            abilityHp: 25,
-            abilityAtk: 26,
-            abilityHeal: 27,
             bond: null,
           },
           target: {
@@ -536,12 +516,8 @@ describe("sync-draft", () => {
           studentUid: "20048",
           tier: 6,
           level: 90,
-          weaponLevel: 50,
           skillEx: 5,
           equipSpecial: 2,
-          abilityHp: 25,
-          abilityAtk: 26,
-          abilityHeal: 27,
         }),
       ]),
     );
@@ -637,7 +613,6 @@ describe("sync-draft", () => {
           current: {
             level: 1,
             tier: 6,
-            weaponLevel: null,
             skillEx: 1,
             skillNormal: 2,
             skillEnhanced: 3,
@@ -646,9 +621,6 @@ describe("sync-draft", () => {
             equip2: 2,
             equip3: 3,
             equipSpecial: null,
-            abilityHp: null,
-            abilityAtk: null,
-            abilityHeal: null,
             bond: 10,
           },
           target: null,

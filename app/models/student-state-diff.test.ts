@@ -51,15 +51,9 @@ describe("student-state-diff", () => {
     expect(isStudentStateCurrentChanged(createImportedCurrent({ tier: 9, level: 50 }), existing, defaultOptions)).toBe(
       true,
     );
-    expect(
-      isStudentStateCurrentChanged(createImportedCurrent({ tier: 9, weaponLevel: 30 }), existing, defaultOptions),
-    ).toBe(true);
     expect(isStudentStateCurrentChanged(createImportedCurrent({ tier: 9, bond: 20 }), existing, defaultOptions)).toBe(
       true,
     );
-    expect(
-      isStudentStateCurrentChanged(createImportedCurrent({ tier: 9, abilityAtk: 25 }), existing, defaultOptions),
-    ).toBe(true);
   });
 
   it("keeps the current unowned guard ahead of diff application", () => {
@@ -150,44 +144,36 @@ const minimumCurrentFields = [
 function createExistingCurrent(
   overrides: Partial<StudentStateCurrentComparisonValue> = {},
 ): StudentStateCurrentComparisonValue {
-  return {
-    level: null,
-    tier: null,
-    weaponLevel: null,
-    skillEx: null,
-    skillNormal: null,
+    return {
+      level: null,
+      tier: null,
+      skillEx: null,
+      skillNormal: null,
     skillEnhanced: null,
     skillSub: null,
     equip1: null,
-    equip2: null,
-    equip3: null,
-    equipSpecial: null,
-    abilityHp: null,
-    abilityAtk: null,
-    abilityHeal: null,
-    bond: null,
-    ...overrides,
+      equip2: null,
+      equip3: null,
+      equipSpecial: null,
+      bond: null,
+      ...overrides,
   };
 }
 
 function createImportedCurrent(overrides: Partial<StudentStateDraftCurrentValue> = {}): StudentStateDraftCurrentValue {
-  return {
-    level: 1,
-    tier: 1,
-    weaponLevel: null,
-    skillEx: 1,
-    skillNormal: 1,
+    return {
+      level: 1,
+      tier: 1,
+      skillEx: 1,
+      skillNormal: 1,
     skillEnhanced: 1,
     skillSub: 1,
     equip1: 1,
-    equip2: 1,
-    equip3: 1,
-    equipSpecial: null,
-    abilityHp: null,
-    abilityAtk: null,
-    abilityHeal: null,
-    bond: 1,
-    ...overrides,
+      equip2: 1,
+      equip3: 1,
+      equipSpecial: null,
+      bond: 1,
+      ...overrides,
   };
 }
 

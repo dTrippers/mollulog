@@ -1,7 +1,6 @@
 export type StudentStateImportCurrentState = {
   tier: number;
   level: number | null;
-  weaponLevel: number | null;
   skillEx: number | null;
   skillNormal: number | null;
   skillEnhanced: number | null;
@@ -10,9 +9,6 @@ export type StudentStateImportCurrentState = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
-  abilityHp: number | null;
-  abilityAtk: number | null;
-  abilityHeal: number | null;
   bond: number | null;
 };
 
@@ -127,7 +123,6 @@ function parseJustin163Payload(payload: { characters: unknown[] }): StudentState
       star: character.current.star,
       uniqueWeapon: character.current.ue,
       level: character.current.level,
-      weaponLevel: character.current.ue_level,
       skillEx: character.current.ex,
       skillNormal: character.current.basic,
       skillEnhanced: character.current.passive,
@@ -136,9 +131,6 @@ function parseJustin163Payload(payload: { characters: unknown[] }): StudentState
       equip2: character.current.gear2,
       equip3: character.current.gear3,
       equipSpecial: character.current.bond_gear,
-      abilityHp: character.current.book_hp,
-      abilityAtk: character.current.book_atk,
-      abilityHeal: character.current.book_heal,
       bond: character.current.bond,
     });
     const target = isRecord(character.target)
@@ -178,7 +170,6 @@ function parseSchaleDbPayload(payload: UnknownRecord): StudentStateImportEntry[]
       star: student.s,
       uniqueWeapon: student.ws,
       level: student.l,
-      weaponLevel: student.wl,
       skillEx: student.s1,
       skillNormal: student.s2,
       skillEnhanced: student.s3,
@@ -187,9 +178,6 @@ function parseSchaleDbPayload(payload: UnknownRecord): StudentStateImportEntry[]
       equip2: student.e2,
       equip3: student.e3,
       equipSpecial: student.e4,
-      abilityHp: student.pm,
-      abilityAtk: student.pa,
-      abilityHeal: student.ph,
       bond: student.b,
     });
 
@@ -203,7 +191,6 @@ function normalizeCurrentCandidate(input: {
   star: unknown;
   uniqueWeapon: unknown;
   level: unknown;
-  weaponLevel: unknown;
   skillEx: unknown;
   skillNormal: unknown;
   skillEnhanced: unknown;
@@ -212,15 +199,11 @@ function normalizeCurrentCandidate(input: {
   equip2: unknown;
   equip3: unknown;
   equipSpecial: unknown;
-  abilityHp: unknown;
-  abilityAtk: unknown;
-  abilityHeal: unknown;
   bond: unknown;
 }): StudentStateImportCurrentState | null {
   const candidate: CurrentCandidate = {
     tier: composeTier(input.star, input.uniqueWeapon),
     level: optionalInteger(input.level),
-    weaponLevel: optionalInteger(input.weaponLevel),
     skillEx: optionalInteger(input.skillEx),
     skillNormal: optionalInteger(input.skillNormal),
     skillEnhanced: optionalInteger(input.skillEnhanced),
@@ -229,9 +212,6 @@ function normalizeCurrentCandidate(input: {
     equip2: optionalInteger(input.equip2),
     equip3: optionalInteger(input.equip3),
     equipSpecial: optionalInteger(input.equipSpecial),
-    abilityHp: optionalInteger(input.abilityHp),
-    abilityAtk: optionalInteger(input.abilityAtk),
-    abilityHeal: optionalInteger(input.abilityHeal),
     bond: optionalInteger(input.bond),
   };
 
@@ -317,10 +297,6 @@ function isBaseCurrentCandidate(candidate: CurrentCandidate): boolean {
     isBaseProgressionValue(candidate.equip2) &&
     isBaseProgressionValue(candidate.equip3) &&
     candidate.equipSpecial == null &&
-    candidate.weaponLevel == null &&
-    candidate.abilityHp == null &&
-    candidate.abilityAtk == null &&
-    candidate.abilityHeal == null &&
     isBaseProgressionValue(candidate.bond)
   );
 }

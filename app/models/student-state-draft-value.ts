@@ -1,7 +1,6 @@
 export type StudentStateDraftCurrentValue = {
   level: number | null;
   tier: number;
-  weaponLevel: number | null;
   skillEx: number | null;
   skillNormal: number | null;
   skillEnhanced: number | null;
@@ -10,9 +9,6 @@ export type StudentStateDraftCurrentValue = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
-  abilityHp: number | null;
-  abilityAtk: number | null;
-  abilityHeal: number | null;
   bond: number | null;
 };
 
@@ -78,7 +74,6 @@ function normalizeCurrentValue(value: unknown): StudentStateDraftCurrentValue | 
   const state: StudentStateDraftCurrentValue = {
     level: normalizeOptionalStudentStateValue(value.level, "레벨"),
     tier: normalizeStudentTierValue(value.tier, "학생 등급"),
-    weaponLevel: normalizeOptionalStudentStateValue(value.weaponLevel, "고유무기 레벨"),
     skillEx: normalizeOptionalStudentStateValue(value.skillEx, "EX 스킬"),
     skillNormal: normalizeOptionalStudentStateValue(value.skillNormal, "기본 스킬"),
     skillEnhanced: normalizeOptionalStudentStateValue(value.skillEnhanced, "강화 스킬"),
@@ -87,9 +82,6 @@ function normalizeCurrentValue(value: unknown): StudentStateDraftCurrentValue | 
     equip2: normalizeOptionalStudentStateValue(value.equip2, "장비 2"),
     equip3: normalizeOptionalStudentStateValue(value.equip3, "장비 3"),
     equipSpecial: normalizeOptionalStudentStateValue(value.equipSpecial, "애용품"),
-    abilityHp: normalizeOptionalStudentStateValue(value.abilityHp, "능력 해방 HP"),
-    abilityAtk: normalizeOptionalStudentStateValue(value.abilityAtk, "능력 해방 공격력"),
-    abilityHeal: normalizeOptionalStudentStateValue(value.abilityHeal, "능력 해방 치유력"),
     bond: normalizeOptionalStudentStateValue(value.bond, "인연 랭크"),
   };
 
@@ -137,7 +129,6 @@ function normalizeOptionalStudentStateValue(value: unknown, label: string): numb
 
 function validateCurrentValue(state: StudentStateDraftCurrentValue) {
   assertOptionalRange(state.level, 1, 90, "레벨");
-  assertOptionalRange(state.weaponLevel, 1, undefined, "고유무기 레벨");
   assertOptionalRange(state.skillEx, 1, 5, "EX 스킬");
   assertOptionalRange(state.skillNormal, 1, 10, "기본 스킬");
   assertOptionalRange(state.skillEnhanced, 1, 10, "강화 스킬");
@@ -146,9 +137,6 @@ function validateCurrentValue(state: StudentStateDraftCurrentValue) {
   assertOptionalRange(state.equip2, 1, 10, "장비 2");
   assertOptionalRange(state.equip3, 1, 10, "장비 3");
   assertOptionalRange(state.equipSpecial, 1, 2, "애용품");
-  assertOptionalRange(state.abilityHp, 1, undefined, "능력 해방 HP");
-  assertOptionalRange(state.abilityAtk, 1, undefined, "능력 해방 공격력");
-  assertOptionalRange(state.abilityHeal, 1, undefined, "능력 해방 치유력");
   assertOptionalRange(state.bond, 1, 100, "인연 랭크");
 }
 

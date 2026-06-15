@@ -13,6 +13,7 @@ import {
   type StudentStateDraftTargetValue,
   parseStudentStateDraftValue,
 } from "~/models/student-state-draft-value";
+import { studentStateCurrentFields, studentStateTargetFields } from "~/models/student-state-fields";
 import {
   type SyncDraft,
   type SyncDraftEntry,
@@ -244,7 +245,6 @@ async function loadCurrentValues(
             current: {
               level: recruitedStudent?.level ?? null,
               tier: recruitedStudent?.tier ?? null,
-              weaponLevel: recruitedStudent?.weaponLevel ?? null,
               skillEx: recruitedStudent?.skillEx ?? null,
               skillNormal: recruitedStudent?.skillNormal ?? null,
               skillEnhanced: recruitedStudent?.skillEnhanced ?? null,
@@ -253,9 +253,6 @@ async function loadCurrentValues(
               equip2: recruitedStudent?.equip2 ?? null,
               equip3: recruitedStudent?.equip3 ?? null,
               equipSpecial: recruitedStudent?.equipSpecial ?? null,
-              abilityHp: recruitedStudent?.abilityHp ?? null,
-              abilityAtk: recruitedStudent?.abilityAtk ?? null,
-              abilityHeal: recruitedStudent?.abilityHeal ?? null,
               bond: relationshipLevel?.currentLevel ?? null,
             },
             target: {
@@ -305,35 +302,11 @@ function parseDraftEntryFormData(draft: SyncDraft, formData: FormData) {
 }
 
 const studentStateCurrentDraftFields = [
-  "tier",
-  "level",
-  "weaponLevel",
-  "skillEx",
-  "skillNormal",
-  "skillEnhanced",
-  "skillSub",
-  "equip1",
-  "equip2",
-  "equip3",
-  "equipSpecial",
-  "abilityHp",
-  "abilityAtk",
-  "abilityHeal",
-  "bond",
+  ...studentStateCurrentFields.map((field) => field.key),
 ] as const satisfies readonly (keyof StudentStateDraftCurrentValue)[];
 
 const studentStateTargetDraftFields = [
-  "targetBond",
-  "targetTier",
-  "targetLevel",
-  "targetSkillEx",
-  "targetSkillNormal",
-  "targetSkillEnhanced",
-  "targetSkillSub",
-  "targetEquip1",
-  "targetEquip2",
-  "targetEquip3",
-  "targetEquipSpecial",
+  ...studentStateTargetFields.map((field) => field.key),
 ] as const satisfies readonly (keyof StudentStateDraftTargetValue)[];
 
 function parseStudentStateDraftFormData(draft: SyncDraft, formData: FormData) {
@@ -439,23 +412,19 @@ async function mergeStudentStateDraftFormEntries(
 
 function emptyStudentStateValue(): StudentStateCurrentValues[string] {
   return {
-    current: {
-      level: null,
-      tier: null,
-      weaponLevel: null,
-      skillEx: null,
-      skillNormal: null,
+      current: {
+        level: null,
+        tier: null,
+        skillEx: null,
+        skillNormal: null,
       skillEnhanced: null,
       skillSub: null,
       equip1: null,
-      equip2: null,
-      equip3: null,
-      equipSpecial: null,
-      abilityHp: null,
-      abilityAtk: null,
-      abilityHeal: null,
-      bond: null,
-    },
+        equip2: null,
+        equip3: null,
+        equipSpecial: null,
+        bond: null,
+      },
     target: {
       targetBond: null,
       targetLevel: null,

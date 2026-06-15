@@ -475,7 +475,6 @@ function createConditionalStudentStateStatement(
       studentUid,
       tier,
       level,
-      weaponLevel,
       skillEx,
       skillNormal,
       skillEnhanced,
@@ -483,16 +482,13 @@ function createConditionalStudentStateStatement(
       equip1,
       equip2,
       equip3,
-      equipSpecial,
-      abilityHp,
-      abilityAtk,
-      abilityHeal
+      equipSpecial
     )
-    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
+    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
     where exists (
       select 1
       from sync_drafts
-      where uid = ?18
+      where uid = ?14
         and userId = ?2
         and status = 'pending'
         and type = 'student_state'
@@ -500,7 +496,6 @@ function createConditionalStudentStateStatement(
     on conflict(userId, studentUid) do update set
       tier = excluded.tier,
       level = excluded.level,
-      weaponLevel = excluded.weaponLevel,
       skillEx = excluded.skillEx,
       skillNormal = excluded.skillNormal,
       skillEnhanced = excluded.skillEnhanced,
@@ -509,9 +504,6 @@ function createConditionalStudentStateStatement(
       equip2 = excluded.equip2,
       equip3 = excluded.equip3,
       equipSpecial = excluded.equipSpecial,
-      abilityHp = excluded.abilityHp,
-      abilityAtk = excluded.abilityAtk,
-      abilityHeal = excluded.abilityHeal,
       updatedAt = current_timestamp
   `).bind(
     nanoid(8),
@@ -519,7 +511,6 @@ function createConditionalStudentStateStatement(
     studentUid,
     state.tier,
     state.level,
-    state.weaponLevel,
     state.skillEx,
     state.skillNormal,
     state.skillEnhanced,
@@ -528,9 +519,6 @@ function createConditionalStudentStateStatement(
     state.equip2,
     state.equip3,
     state.equipSpecial,
-    state.abilityHp,
-    state.abilityAtk,
-    state.abilityHeal,
     draftUid,
   );
 }
