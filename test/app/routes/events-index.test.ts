@@ -6,7 +6,6 @@ import type { RunType } from "../../../app/models/timeline-content";
 const now = "2026-06-13T00:00:00.000Z";
 
 const defaultFilter: EventFilterState = {
-  showPermanentized: true,
   onlyUpcoming: false,
   search: "",
 };
@@ -32,24 +31,6 @@ function event(uid: string, name: string, schedules: EventListItem["schedules"])
 }
 
 describe("filterEventList", () => {
-  it("hides events permanentized more than a week ago when permanentized events are hidden", () => {
-    const events = [
-      event("old", "오래된 상설 이벤트", {
-        permanent: schedule("permanent", "2026-06-05T00:00:00.000Z", "current"),
-      }),
-      event("recent", "최근 상설 이벤트", {
-        permanent: schedule("permanent", "2026-06-07T00:00:00.000Z", "current"),
-      }),
-      event("first", "일반 이벤트", {
-        first: schedule("first", "2026-06-10T00:00:00.000Z", "current"),
-      }),
-    ];
-
-    expect(
-      filterEventList(events, { ...defaultFilter, showPermanentized: false }, now).map((item) => item.uid),
-    ).toEqual(["recent", "first"]);
-  });
-
   it("keeps only current or upcoming schedules while excluding stale permanent events", () => {
     const events = [
       event("past", "지난 이벤트", {

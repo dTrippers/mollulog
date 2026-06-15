@@ -20,7 +20,6 @@ const scheduleOrder: RunType[] = ["first", "rerun", "permanent"];
 const scheduleRowClassName = "flex items-center gap-x-2 text-xs leading-5";
 
 const defaultFilter: EventFilterState = {
-  showPermanentized: true,
   onlyUpcoming: false,
   search: "",
 };
@@ -110,11 +109,6 @@ function EventFilterPanel({
     <div className="space-y-2">
       <p className="px-1 text-xs text-neutral-500 dark:text-neutral-400">{countText}</p>
       <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
-        <FilterToggleRow
-          title="상설화 이벤트 숨기기"
-          checked={!filter.showPermanentized}
-          onChange={(checked) => onFilterChange({ ...filter, showPermanentized: !checked })}
-        />
         <FilterToggleRow
           title="다가오는 이벤트만 보기"
           checked={filter.onlyUpcoming}

@@ -31,7 +31,6 @@ const initialConsonants = [
 ];
 
 export type EventFilterState = {
-  showPermanentized: boolean;
   onlyUpcoming: boolean;
   search: string;
 };
@@ -97,10 +96,6 @@ export function filterEventList(events: EventListItem[], filter: EventFilterStat
   const normalizedSearch = normalizeEventSearchText(filter.search);
 
   return events.filter((event) => {
-    if (!filter.showPermanentized && isPermanentizedBeforeGracePeriod(event, now)) {
-      return false;
-    }
-
     if (
       filter.onlyUpcoming &&
       !scheduleOrder.some((runType) => {
