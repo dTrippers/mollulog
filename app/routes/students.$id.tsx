@@ -2,7 +2,7 @@ import { ArrowTopRightOnSquareIcon, ChatBubbleLeftRightIcon, InformationCircleIc
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { createPageErrorBoundary, Page } from "~/components/features/layout";
+import { Page, createPageErrorBoundary } from "~/components/features/layout";
 import { StudentInfo } from "~/components/features/students";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
@@ -12,13 +12,14 @@ import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
+import { formatStudentFullName } from "~/models/student-name";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RaidRepository } from "~/repositories";
 
 const studentDetailQuery = graphql(`
   query StudentDetail($uid: String!) {
     student(uid: $uid) {
-      name uid attackType defenseType role school schaleDbId releaseAt
+      name familyName uid attackType defenseType role school schaleDbId releaseAt
       recruitments {
         since rerun
         recruitmentGroup { uid startAt endAt }
@@ -79,6 +80,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     student: {
       uid: student.uid,
       name: student.name,
+      familyName: student.familyName,
       attackType: student.attackType,
       defenseType: student.defenseType,
       role: student.role,
@@ -112,8 +114,9 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   }
 
   const { student } = data;
-  const title = `${student.name} - 학생 정보`;
-  const description = `블루 아카이브 ${student.name} - 학생의 총력전/대결전 통계 정보, 선생님들의 성능 평가를 확인해보세요.`;
+  const studentFullName = formatStudentFullName(student);
+  const title = `${studentFullName} - 학생 정보`;
+  const description = `블루 아카이브 ${studentFullName} - 학생의 총력전/대결전 통계 정보, 선생님들의 성능 평가를 확인해보세요.`;
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },

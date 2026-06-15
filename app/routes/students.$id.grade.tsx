@@ -1,14 +1,6 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import {
-  Form,
-  Link,
-  redirect,
-  useActionData,
-  useLoaderData,
-  useNavigation,
-  useSubmit,
-} from "react-router";
+import { Form, Link, redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { createPageErrorBoundary } from "~/components/features/layout";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
@@ -19,12 +11,13 @@ import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
 import type { StudentGradingTagValue } from "~/models/student-grading-tag";
+import { formatStudentFullName } from "~/models/student-name";
 import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
 
 const studentDetailQuery = graphql(`
   query StudentGradeDetail($uid: String!) {
     student(uid: $uid) {
-      name uid attackType defenseType role school schaleDbId
+      name familyName uid attackType defenseType role school schaleDbId
     }
   }
 `);
@@ -125,8 +118,9 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   }
 
   const { student } = data;
-  const title = `${student.name} - 학생 평가`;
-  const description = `블루 아카이브 ${student.name}에 대한 평가를 작성해보세요.`;
+  const studentFullName = formatStudentFullName(student);
+  const title = `${studentFullName} - 학생 평가`;
+  const description = `블루 아카이브 ${studentFullName}에 대한 평가를 작성해보세요.`;
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
