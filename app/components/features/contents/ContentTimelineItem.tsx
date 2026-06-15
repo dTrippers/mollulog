@@ -189,10 +189,7 @@ export function ContentTimelineItem({
     }
   }
 
-  const headerLinked =
-    ((raidInfo !== undefined && SHOW_LINK_RAID_TYPES.includes(raidInfo.raidType)) ||
-      SHOW_LINK_CONTENT_TYPES.includes(contentType)) &&
-    (!isSpoiler || spoilerVisible);
+  const headerLinked = isContentHeaderLinked({ contentType, raidInfo, isSpoiler, spoilerVisible });
   const headerContent = headerLinked ? (
     <Link to={link} className="block cursor-pointer hover:underline tracking-tight">
       <ContentTitles name={name} showLink={true} />
@@ -566,7 +563,25 @@ type RecruitmentStudentsProps = {
   showToggle?: boolean;
 };
 
-function getRecruitmentStudentCards({
+export function isContentHeaderLinked({
+  contentType,
+  raidInfo,
+  isSpoiler = false,
+  spoilerVisible = true,
+}: {
+  contentType: EventType | RaidType;
+  raidInfo?: { raidType: string };
+  isSpoiler?: boolean;
+  spoilerVisible?: boolean;
+}) {
+  return (
+    ((raidInfo !== undefined && SHOW_LINK_RAID_TYPES.includes(raidInfo.raidType)) ||
+      SHOW_LINK_CONTENT_TYPES.includes(contentType)) &&
+    (!isSpoiler || spoilerVisible)
+  );
+}
+
+export function getRecruitmentStudentCards({
   recruitments,
   favoritedStudents,
   favoritedCounts,

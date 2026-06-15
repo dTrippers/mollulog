@@ -1,8 +1,8 @@
-import { FunnelIcon, QueueListIcon, TableCellsIcon } from "@heroicons/react/24/outline";
+import { Bars3BottomLeftIcon, FunnelIcon, QueueListIcon, TableCellsIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ContentTimeline } from "~/components/features/contents";
+import { ContentTimeline, ContentTimelineCompact } from "~/components/features/contents";
 import type { ContentTimelineProps } from "~/components/features/contents";
 import { ContentFilterPanel } from "~/components/features/futures";
 import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
@@ -110,7 +110,7 @@ function equalFavorites(
 const futuresContentFilterKey = "futures::content-filter";
 const futuresContentViewKey = "futures::content-view";
 
-type FutureContentView = "timeline" | "table";
+type FutureContentView = "timeline" | "table" | "compact";
 type CommentVisibility = "private" | "public";
 type FavoritedStudentState = { contentUid: string; studentUid: string };
 type FavoritedCountState = FavoritedStudentState & { count: number };
@@ -214,7 +214,7 @@ export default function FutureContents() {
     }
 
     const savedView = localStorage.getItem(futuresContentViewKey);
-    if (savedView === "timeline" || savedView === "table") {
+    if (savedView === "timeline" || savedView === "table" || savedView === "compact") {
       setView(savedView);
     }
   }, []);
@@ -526,6 +526,12 @@ export default function FutureContents() {
           onClick: () => setView("timeline"),
         },
         {
+          text: "목록",
+          Icon: Bars3BottomLeftIcon,
+          active: view === "compact",
+          onClick: () => setView("compact"),
+        },
+        {
           text: "일정표",
           Icon: TableCellsIcon,
           active: view === "table",
@@ -540,46 +546,60 @@ export default function FutureContents() {
         },
       ]}
     >
-      <div className={view === "table" ? "lg:hidden" : ""}>
-        <ContentTimeline
+      {(view === "timeline" || view === "table") && (
+        <div className={view === "table" ? "lg:hidden" : ""}>
+          <ContentTimeline
+            contents={timelineContents}
+            favoritedStudents={favoritedStudents ?? []}
+            favoritedCounts={favoritedCounts}
+            completedRecruitmentStudents={completedRecruitmentStudents}
+            recruitmentResultEditLinks={recruitmentResultEditLinks}
+            signedIn={signedIn}
+            revealedSpoilerContentUids={revealedSpoilerContentUids}
+            onRevealSpoiler={revealSpoiler}
+            onHideSpoiler={hideSpoiler}
+            onCommentCreate={(contentUid, body, visibility) => {
+              setPendingContentUid(contentUid);
+              submitComment(contentUid, { action: "create", body, visibility });
+            }}
+            onCommentCreateSubcomment={(contentUid, parentCommentUid, body, visibility) => {
+              setPendingContentUid(contentUid);
+              submitComment(contentUid, { action: "createSubcomment", parentCommentUid, body, visibility });
+            }}
+            onCommentUpdate={(contentUid, commentUid, body, visibility) => {
+              setPendingContentUid(contentUid);
+              submitComment(contentUid, { action: "update", commentUid, body, visibility });
+            }}
+            onCommentDelete={(contentUid, commentUid) => {
+              setPendingContentUid(contentUid);
+              submitComment(contentUid, { action: "delete", commentUid });
+            }}
+            onCommentPin={(contentUid, commentUid) => {
+              setPendingContentUid(contentUid);
+              submitComment(contentUid, { action: "pin", commentUid });
+            }}
+            onCommentUnpin={(contentUid) => {
+              setPendingContentUid(contentUid);
+              submitComment(contentUid, { action: "unpin" });
+            }}
+            onFavorite={toggleFavorite}
+            onRecruitmentComplete={setRecruitmentCompleted}
+            isSubmittingComment={commentFetcher.state === "submitting"}
+          />
+        </div>
+      )}
+      {view === "compact" && (
+        <ContentTimelineCompact
           contents={timelineContents}
           favoritedStudents={favoritedStudents ?? []}
           favoritedCounts={favoritedCounts}
           completedRecruitmentStudents={completedRecruitmentStudents}
-          recruitmentResultEditLinks={recruitmentResultEditLinks}
-          signedIn={signedIn}
           revealedSpoilerContentUids={revealedSpoilerContentUids}
           onRevealSpoiler={revealSpoiler}
-          onHideSpoiler={hideSpoiler}
-          onCommentCreate={(contentUid, body, visibility) => {
-            setPendingContentUid(contentUid);
-            submitComment(contentUid, { action: "create", body, visibility });
-          }}
-          onCommentCreateSubcomment={(contentUid, parentCommentUid, body, visibility) => {
-            setPendingContentUid(contentUid);
-            submitComment(contentUid, { action: "createSubcomment", parentCommentUid, body, visibility });
-          }}
-          onCommentUpdate={(contentUid, commentUid, body, visibility) => {
-            setPendingContentUid(contentUid);
-            submitComment(contentUid, { action: "update", commentUid, body, visibility });
-          }}
-          onCommentDelete={(contentUid, commentUid) => {
-            setPendingContentUid(contentUid);
-            submitComment(contentUid, { action: "delete", commentUid });
-          }}
-          onCommentPin={(contentUid, commentUid) => {
-            setPendingContentUid(contentUid);
-            submitComment(contentUid, { action: "pin", commentUid });
-          }}
-          onCommentUnpin={(contentUid) => {
-            setPendingContentUid(contentUid);
-            submitComment(contentUid, { action: "unpin" });
-          }}
           onFavorite={toggleFavorite}
           onRecruitmentComplete={setRecruitmentCompleted}
-          isSubmittingComment={commentFetcher.state === "submitting"}
         />
-      </div>
+      )}
       {view === "table" && (
         <div className="hidden lg:block">
           <FutureRecruitmentTable

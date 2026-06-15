@@ -6,6 +6,7 @@ import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
 import { syncRawStudents } from "~/models/student";
+import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { RaidRepository, RecruitmentRepository } from "~/repositories";
 
@@ -43,6 +44,10 @@ jest.mock("~/models/student", () => ({
   syncRawStudents: jest.fn(),
 }));
 
+jest.mock("~/models/timeline-content", () => ({
+  syncAllTimelineContentsMeta: jest.fn(),
+}));
+
 jest.mock("~/models/youtube", () => ({
   syncYoutubeCommunityPosts: jest.fn(),
 }));
@@ -75,6 +80,9 @@ const mockedGetNavigationBarContentsRaw = getNavigationBarContentsRaw as jest.Mo
 const mockedGetMainStories = getMainStories as jest.MockedFunction<typeof getMainStories>;
 const mockedGetAllStudentsFavoriteItems = getAllStudentsFavoriteItems as jest.MockedFunction<
   typeof getAllStudentsFavoriteItems
+>;
+const mockedSyncAllTimelineContentsMeta = syncAllTimelineContentsMeta as jest.MockedFunction<
+  typeof syncAllTimelineContentsMeta
 >;
 const MockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
 const MockedRaidRepository = RaidRepository as jest.MockedClass<typeof RaidRepository>;
@@ -140,6 +148,7 @@ beforeEach(() => {
   mockRaidRefresh.mockResolvedValue([]);
   mockedGetMainStories.mockResolvedValue([]);
   mockedGetAllStudentsFavoriteItems.mockResolvedValue([]);
+  mockedSyncAllTimelineContentsMeta.mockResolvedValue([]);
   mockedGetFutureContents.mockResolvedValue([]);
   mockedGetNavigationBarContentsRaw.mockResolvedValue({
     eventCandidates: [],
@@ -175,6 +184,7 @@ describe("__manage route", () => {
           "RaidRepository.refresh": expect.any(Number),
           getMainStories: expect.any(Number),
           getAllStudentsFavoriteItems: expect.any(Number),
+          syncAllTimelineContentsMeta: expect.any(Number),
           getFutureContents: expect.any(Number),
           getNavigationBarContentsRaw: expect.any(Number),
         },
@@ -184,6 +194,7 @@ describe("__manage route", () => {
     expect(mockedSyncYoutubeCommunityPosts).toHaveBeenCalledWith(expect.anything());
     expect(mockedGetMainStories).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(expect.anything(), true);
+    expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(expect.anything());
     expect(mockedGetFutureContents).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetNavigationBarContentsRaw).toHaveBeenCalledWith(expect.anything(), true);
     expect(MockedRecruitmentRepository).toHaveBeenCalledWith(expect.anything());
