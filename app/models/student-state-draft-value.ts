@@ -1,6 +1,14 @@
+import {
+  ABILITY_RELEASE_MAX_LEVEL,
+  WEAPON_LEVEL_MAX_LEVEL,
+  assertAbilityReleaseAvailable,
+  assertWeaponLevelRange,
+} from "./student-growth-state";
+
 export type StudentStateDraftCurrentValue = {
   level: number | null;
   tier: number;
+  weaponLevel: number | null;
   skillEx: number | null;
   skillNormal: number | null;
   skillEnhanced: number | null;
@@ -9,6 +17,9 @@ export type StudentStateDraftCurrentValue = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
+  abilityHp: number | null;
+  abilityAtk: number | null;
+  abilityHeal: number | null;
   bond: number | null;
 };
 
@@ -16,6 +27,7 @@ export type StudentStateDraftTargetValue = {
   targetBond: number | null;
   targetLevel: number | null;
   targetTier: number;
+  targetWeaponLevel: number | null;
   targetSkillEx: number | null;
   targetSkillNormal: number | null;
   targetSkillEnhanced: number | null;
@@ -24,6 +36,9 @@ export type StudentStateDraftTargetValue = {
   targetEquip2: number | null;
   targetEquip3: number | null;
   targetEquipSpecial: number | null;
+  targetAbilityHp: number | null;
+  targetAbilityAtk: number | null;
+  targetAbilityHeal: number | null;
 };
 
 export type StudentStateDraftValue = {
@@ -74,6 +89,7 @@ function normalizeCurrentValue(value: unknown): StudentStateDraftCurrentValue | 
   const state: StudentStateDraftCurrentValue = {
     level: normalizeOptionalStudentStateValue(value.level, "레벨"),
     tier: normalizeStudentTierValue(value.tier, "학생 등급"),
+    weaponLevel: normalizeOptionalZeroBasedStudentStateValue(value.weaponLevel, "고유무기 레벨"),
     skillEx: normalizeOptionalStudentStateValue(value.skillEx, "EX 스킬"),
     skillNormal: normalizeOptionalStudentStateValue(value.skillNormal, "기본 스킬"),
     skillEnhanced: normalizeOptionalStudentStateValue(value.skillEnhanced, "강화 스킬"),
@@ -82,6 +98,9 @@ function normalizeCurrentValue(value: unknown): StudentStateDraftCurrentValue | 
     equip2: normalizeOptionalStudentStateValue(value.equip2, "장비 2"),
     equip3: normalizeOptionalStudentStateValue(value.equip3, "장비 3"),
     equipSpecial: normalizeOptionalStudentStateValue(value.equipSpecial, "애용품"),
+    abilityHp: normalizeOptionalZeroBasedStudentStateValue(value.abilityHp, "능력 개방 체력"),
+    abilityAtk: normalizeOptionalZeroBasedStudentStateValue(value.abilityAtk, "능력 개방 공격력"),
+    abilityHeal: normalizeOptionalZeroBasedStudentStateValue(value.abilityHeal, "능력 개방 치유력"),
     bond: normalizeOptionalStudentStateValue(value.bond, "인연 랭크"),
   };
 
@@ -104,6 +123,7 @@ function normalizeTargetValue(value: unknown): StudentStateDraftTargetValue | nu
     ),
     targetLevel: normalizeOptionalStudentStateValue(value.targetLevel, "목표 레벨"),
     targetTier: normalizeStudentTierValue(value.targetTier, "목표 등급"),
+    targetWeaponLevel: normalizeOptionalZeroBasedStudentStateValue(value.targetWeaponLevel, "목표 고유무기 레벨"),
     targetSkillEx: normalizeOptionalStudentStateValue(value.targetSkillEx, "목표 EX 스킬"),
     targetSkillNormal: normalizeOptionalStudentStateValue(value.targetSkillNormal, "목표 기본 스킬"),
     targetSkillEnhanced: normalizeOptionalStudentStateValue(value.targetSkillEnhanced, "목표 강화 스킬"),
@@ -112,6 +132,9 @@ function normalizeTargetValue(value: unknown): StudentStateDraftTargetValue | nu
     targetEquip2: normalizeOptionalStudentStateValue(value.targetEquip2, "목표 장비 2"),
     targetEquip3: normalizeOptionalStudentStateValue(value.targetEquip3, "목표 장비 3"),
     targetEquipSpecial: normalizeOptionalStudentStateValue(value.targetEquipSpecial, "목표 애용품"),
+    targetAbilityHp: normalizeOptionalZeroBasedStudentStateValue(value.targetAbilityHp, "목표 능력 개방 체력"),
+    targetAbilityAtk: normalizeOptionalZeroBasedStudentStateValue(value.targetAbilityAtk, "목표 능력 개방 공격력"),
+    targetAbilityHeal: normalizeOptionalZeroBasedStudentStateValue(value.targetAbilityHeal, "목표 능력 개방 치유력"),
   };
 
   validateTargetValue(state);
@@ -127,8 +150,18 @@ function normalizeOptionalStudentStateValue(value: unknown, label: string): numb
   return normalizedValue === 0 ? null : normalizedValue;
 }
 
+function normalizeOptionalZeroBasedStudentStateValue(value: unknown, label: string): number | null {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  return normalizeIntegerValue(value, `${label}은(는) 정수만 입력할 수 있어요`);
+}
+
 function validateCurrentValue(state: StudentStateDraftCurrentValue) {
   assertOptionalRange(state.level, 1, 90, "레벨");
+  assertOptionalRange(state.weaponLevel, 0, WEAPON_LEVEL_MAX_LEVEL, "고유무기 레벨");
+  assertWeaponLevelRange(state.weaponLevel, state.tier, "고유무기 레벨");
   assertOptionalRange(state.skillEx, 1, 5, "EX 스킬");
   assertOptionalRange(state.skillNormal, 1, 10, "기본 스킬");
   assertOptionalRange(state.skillEnhanced, 1, 10, "강화 스킬");
@@ -137,12 +170,18 @@ function validateCurrentValue(state: StudentStateDraftCurrentValue) {
   assertOptionalRange(state.equip2, 1, 10, "장비 2");
   assertOptionalRange(state.equip3, 1, 10, "장비 3");
   assertOptionalRange(state.equipSpecial, 1, 2, "애용품");
+  assertOptionalRange(state.abilityHp, 0, ABILITY_RELEASE_MAX_LEVEL, "능력 개방 체력");
+  assertOptionalRange(state.abilityAtk, 0, ABILITY_RELEASE_MAX_LEVEL, "능력 개방 공격력");
+  assertOptionalRange(state.abilityHeal, 0, ABILITY_RELEASE_MAX_LEVEL, "능력 개방 치유력");
+  assertAbilityReleaseAvailable([state.abilityHp, state.abilityAtk, state.abilityHeal], state.tier, "능력 해방");
   assertOptionalRange(state.bond, 1, 100, "인연 랭크");
 }
 
 function validateTargetValue(state: StudentStateDraftTargetValue) {
   assertOptionalRange(state.targetBond, 1, 100, "목표 인연 랭크");
   assertOptionalRange(state.targetLevel, 1, 90, "목표 레벨");
+  assertOptionalRange(state.targetWeaponLevel, 0, WEAPON_LEVEL_MAX_LEVEL, "목표 고유무기 레벨");
+  assertWeaponLevelRange(state.targetWeaponLevel, state.targetTier, "목표 고유무기 레벨");
   assertOptionalRange(state.targetSkillEx, 1, 5, "목표 EX 스킬");
   assertOptionalRange(state.targetSkillNormal, 1, 10, "목표 기본 스킬");
   assertOptionalRange(state.targetSkillEnhanced, 1, 10, "목표 강화 스킬");
@@ -151,6 +190,14 @@ function validateTargetValue(state: StudentStateDraftTargetValue) {
   assertOptionalRange(state.targetEquip2, 1, 10, "목표 장비 2");
   assertOptionalRange(state.targetEquip3, 1, 10, "목표 장비 3");
   assertOptionalRange(state.targetEquipSpecial, 1, 2, "목표 애용품");
+  assertOptionalRange(state.targetAbilityHp, 0, ABILITY_RELEASE_MAX_LEVEL, "목표 능력 개방 체력");
+  assertOptionalRange(state.targetAbilityAtk, 0, ABILITY_RELEASE_MAX_LEVEL, "목표 능력 개방 공격력");
+  assertOptionalRange(state.targetAbilityHeal, 0, ABILITY_RELEASE_MAX_LEVEL, "목표 능력 개방 치유력");
+  assertAbilityReleaseAvailable(
+    [state.targetAbilityHp, state.targetAbilityAtk, state.targetAbilityHeal],
+    state.targetTier,
+    "목표 능력 해방",
+  );
 }
 
 function assertOptionalRange(value: number | null, min: number, max: number | undefined, label: string) {

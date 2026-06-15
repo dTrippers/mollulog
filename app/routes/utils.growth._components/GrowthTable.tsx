@@ -6,6 +6,11 @@ import { TierSelector } from "~/components/features/students";
 import { Button, NumberInput, ProfileImage, ResourceCard } from "~/components/primitives";
 import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
 import { getRelationshipLevelValidationError } from "~/models/relationship-level";
+import {
+  ABILITY_RELEASE_MAX_LEVEL,
+  WEAPON_LEVEL_MAX_LEVEL,
+  getWeaponLevelMaxByTier,
+} from "~/models/student-growth-state";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
 
 function extractStudentUpdate(actionData: GrowthActionResult | undefined): GrowthStudent | null {
@@ -33,7 +38,8 @@ function getActionError(actionData: GrowthActionResult | undefined): string | nu
 }
 
 const fieldDefinitions = [
-  { key: "level", targetKey: "targetLevel", label: "학생 레벨", min: 1, max: 90 },
+  { key: "level", targetKey: "targetLevel", label: "학생 Lv", min: 1, max: 90 },
+  { key: "weaponLevel", targetKey: "targetWeaponLevel", label: "고유무기 Lv", min: 0, max: WEAPON_LEVEL_MAX_LEVEL },
   { key: "skillEx", targetKey: "targetSkillEx", label: "EX 스킬", min: 1, max: 5 },
   { key: "skillNormal", targetKey: "targetSkillNormal", label: "기본 스킬", min: 1, max: 10 },
   { key: "skillEnhanced", targetKey: "targetSkillEnhanced", label: "강화 스킬", min: 1, max: 10 },
@@ -42,6 +48,9 @@ const fieldDefinitions = [
   { key: "equip2", targetKey: "targetEquip2", label: "장비2", min: 1, max: 10 },
   { key: "equip3", targetKey: "targetEquip3", label: "장비3", min: 1, max: 10 },
   { key: "equipSpecial", targetKey: "targetEquipSpecial", label: "애용품", min: 1, max: 2 },
+  { key: "abilityHp", targetKey: "targetAbilityHp", label: "HP 해방", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  { key: "abilityAtk", targetKey: "targetAbilityAtk", label: "공격력 해방", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  { key: "abilityHeal", targetKey: "targetAbilityHeal", label: "치유력 해방", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
 ] as const;
 
 type CurrentFieldKey = (typeof fieldDefinitions)[number]["key"];
@@ -55,6 +64,10 @@ type RelationshipValues = {
 function pickGrowthValues(student: GrowthStudent): GrowthValues {
   return {
     level: student.level,
+    weaponLevel: student.weaponLevel,
+    abilityHp: student.abilityHp,
+    abilityAtk: student.abilityAtk,
+    abilityHeal: student.abilityHeal,
     skillEx: student.skillEx,
     skillNormal: student.skillNormal,
     skillEnhanced: student.skillEnhanced,
@@ -64,6 +77,10 @@ function pickGrowthValues(student: GrowthStudent): GrowthValues {
     equip3: student.equip3,
     equipSpecial: student.equipSpecial,
     targetLevel: student.targetLevel,
+    targetWeaponLevel: student.targetWeaponLevel,
+    targetAbilityHp: student.targetAbilityHp,
+    targetAbilityAtk: student.targetAbilityAtk,
+    targetAbilityHeal: student.targetAbilityHeal,
     targetSkillEx: student.targetSkillEx,
     targetSkillNormal: student.targetSkillNormal,
     targetSkillEnhanced: student.targetSkillEnhanced,
@@ -82,12 +99,21 @@ function pickRelationshipValues(student: GrowthStudent): RelationshipValues {
   };
 }
 
-function getClientValidationError(values: GrowthValues): string | null {
+function getClientValidationError(values: GrowthValues, currentTier: number, targetTier: number | null): string | null {
   for (const { key, targetKey, label, min, max } of fieldDefinitions) {
     const v = values[key];
     const t = values[targetKey];
-    if (v != null && (v < min || v > max)) return `${label}은(는) ${min}부터 ${max} 사이만 입력할 수 있어요`;
-    if (t != null && (t < min || t > max)) return `${label} 목표값은 ${min}부터 ${max} 사이만 입력할 수 있어요`;
+    const currentMax = getFieldMax(key, max, currentTier);
+    const effectiveTargetTier = targetTier ?? currentTier;
+    const targetMax = getFieldMax(targetKey, max, effectiveTargetTier);
+    if (isAbilityReleaseDisabled(key, currentTier) && (v ?? 0) > 0) {
+      return "능력 해방은 고유무기 장착 후 입력할 수 있어요";
+    }
+    if (isAbilityReleaseDisabled(targetKey, effectiveTargetTier) && (t ?? 0) > 0) {
+      return "능력 해방 목표값은 고유무기 장착 후 입력할 수 있어요";
+    }
+    if (v != null && (v < min || v > currentMax)) return `${label}은(는) ${min}부터 ${currentMax} 사이만 입력할 수 있어요`;
+    if (t != null && (t < min || t > targetMax)) return `${label} 목표값은 ${min}부터 ${targetMax} 사이만 입력할 수 있어요`;
   }
   return null;
 }
@@ -99,6 +125,45 @@ const bulkActionCellClass = `${cellBase} border-l border-neutral-200 px-2 py-2 d
 
 function isGearField(key: CurrentFieldKey | TargetFieldKey): boolean {
   return key === "equipSpecial" || key === "targetEquipSpecial";
+}
+
+function isWeaponLevelField(key: CurrentFieldKey | TargetFieldKey): boolean {
+  return key === "weaponLevel" || key === "targetWeaponLevel";
+}
+
+function isAbilityReleaseField(key: CurrentFieldKey | TargetFieldKey): boolean {
+  return (
+    key === "abilityHp" ||
+    key === "abilityAtk" ||
+    key === "abilityHeal" ||
+    key === "targetAbilityHp" ||
+    key === "targetAbilityAtk" ||
+    key === "targetAbilityHeal"
+  );
+}
+
+function isAbilityReleaseDisabled(key: CurrentFieldKey | TargetFieldKey, tier: number): boolean {
+  return isAbilityReleaseField(key) && tier <= 5;
+}
+
+function getFieldMax(key: CurrentFieldKey | TargetFieldKey, fallbackMax: number, tier: number): number {
+  return isWeaponLevelField(key) ? getWeaponLevelMaxByTier(tier) : fallbackMax;
+}
+
+function normalizeTargetValuesForTier(values: GrowthValues, tier: number): GrowthValues {
+  const nextValues = { ...values };
+  const weaponLevelMax = getWeaponLevelMaxByTier(tier);
+  if (nextValues.targetWeaponLevel != null && nextValues.targetWeaponLevel > weaponLevelMax) {
+    nextValues.targetWeaponLevel = weaponLevelMax;
+  }
+
+  if (tier <= 5) {
+    nextValues.targetAbilityHp = null;
+    nextValues.targetAbilityAtk = null;
+    nextValues.targetAbilityHeal = null;
+  }
+
+  return nextValues;
 }
 
 type GrowthSubmission = {
@@ -449,7 +514,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
     dispatchRow({ type: "setPendingSave", pending: true });
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
-      const validationError = getClientValidationError(values);
+      const validationError = getClientValidationError(values, tierDraft, targetTier);
       if (validationError) {
         dispatchRow({ type: "setGrowthError", error: validationError });
         dispatchRow({ type: "setPendingSave", pending: false });
@@ -509,9 +574,11 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
 
   const handleTargetTierChange = (newTier: number) => {
     const clamped = Math.max(newTier, effectiveTier);
+    const nextValues = normalizeTargetValuesForTier(draftValues, clamped);
     const draftRevision = nextGrowthDraftRevision();
+    dispatchRow({ type: "setDraftValues", values: nextValues, draftRevision });
     dispatchRow({ type: "setTargetTierDraft", targetTier: clamped, draftRevision });
-    scheduleAutoSave(draftValues, clamped, draftRevision);
+    scheduleAutoSave(nextValues, clamped, draftRevision);
   };
 
   const handleCurrentTierChange = (newTier: number) => {
@@ -531,7 +598,10 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
       if (!student.hasGear && isGearField(key)) {
         continue;
       }
-      newValues[key] = max;
+      if (isAbilityReleaseDisabled(key, tierDraft)) {
+        continue;
+      }
+      newValues[key] = getFieldMax(key, max, tierDraft);
     }
     const draftRevision = nextGrowthDraftRevision();
     dispatchRow({ type: "setDraftValues", values: newValues, draftRevision });
@@ -540,7 +610,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
-    const validationError = getClientValidationError(newValues);
+    const validationError = getClientValidationError(newValues, tierDraft, targetTierDraft);
     if (!validationError) {
       dispatchRow({ type: "setGrowthError", error: null });
       dispatchRow({ type: "setPendingSave", pending: true });
@@ -555,11 +625,15 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
 
   const handleSetAllMaxTargets = () => {
     const newValues = { ...draftValues };
+    const effectiveTargetTier = targetTierDraft ?? tierDraft;
     for (const { targetKey, max } of fieldDefinitions) {
       if (!student.hasGear && isGearField(targetKey)) {
         continue;
       }
-      newValues[targetKey] = max;
+      if (isAbilityReleaseDisabled(targetKey, effectiveTargetTier)) {
+        continue;
+      }
+      newValues[targetKey] = getFieldMax(targetKey, max, effectiveTargetTier);
     }
     const draftRevision = nextGrowthDraftRevision();
     dispatchRow({ type: "setDraftValues", values: newValues, draftRevision });
@@ -569,7 +643,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
   const displayedError = enrollError ?? growthError ?? relationshipError;
   const isCalculatingResources = isPendingSave || fetcher.state !== "idle" || tierFetcher.state !== "idle";
   const hasResourceRequirements =
-    student.resourceRequirements.items.length > 0 || student.resourceRequirements.characterExp > 0;
+    student.resourceRequirements.items.length > 0 ||
+    student.resourceRequirements.characterExp > 0 ||
+    student.resourceRequirements.credit > 0;
 
   return (
     <>
@@ -650,8 +726,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                       size="sm"
                       showMax
                       minValue={min}
-                      maxValue={max}
+                      maxValue={getFieldMax(key, max, tierDraft)}
                       value={draftValues[key]}
+                      disabled={isAbilityReleaseDisabled(key, tierDraft)}
                       onChange={(v) => handleFieldChange(key, v)}
                     />
                     {equipLabels[key] && (
@@ -751,6 +828,7 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
         </td>
 
         {fieldDefinitions.map(({ targetKey, min, max }) => {
+          const effectiveTargetTier = targetTierDraft ?? tierDraft;
           return (
             <td key={targetKey} className={targetCellClass}>
               {student.hasGear || !isGearField(targetKey) ? (
@@ -760,8 +838,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                     size="sm"
                     showMax
                     minValue={min}
-                    maxValue={max}
+                    maxValue={getFieldMax(targetKey, max, effectiveTargetTier)}
                     value={draftValues[targetKey]}
+                    disabled={isAbilityReleaseDisabled(targetKey, effectiveTargetTier)}
                     onChange={(v) => handleFieldChange(targetKey, v)}
                   />
                   {equipLabels[targetKey] && (
@@ -815,6 +894,9 @@ function GrowthRow({ student, onStudentUpdate }: { student: GrowthStudent; onStu
                   <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
                     {student.resourceRequirements.characterExp > 0 ? (
                       <CharacterExpRequirementCard characterExp={student.resourceRequirements.characterExp} />
+                    ) : null}
+                    {student.resourceRequirements.credit > 0 ? (
+                      <CreditRequirementCard credit={student.resourceRequirements.credit} />
                     ) : null}
                     {student.resourceRequirements.items.map((item) => (
                       <ResourceCard
@@ -905,6 +987,22 @@ function CharacterExpRequirementCard({ characterExp }: { characterExp: number })
   );
 }
 
+function CreditRequirementCard({ credit }: { credit: number }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 dark:border-amber-500/30 dark:bg-amber-500/10">
+      <div className="flex size-8 items-center justify-center rounded-md bg-amber-200 text-xs font-bold text-amber-800 dark:bg-amber-400/20 dark:text-amber-200">
+        Cr
+      </div>
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">크레딧</p>
+        <p className="text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-200">
+          {credit.toLocaleString()}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function GrowthTable({
   students,
   availableStudents,
@@ -921,7 +1019,7 @@ export default function GrowthTable({
         <div className="inline-block align-top overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
           <table className="w-max border-collapse">
             <thead className="bg-neutral-50 dark:bg-neutral-900">
-              <tr className="text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+              <tr className="text-left text-xs font-semibold tracking-wide text-neutral-500 dark:text-neutral-400">
                 <th className="px-1 py-3" />
                 <th className="px-2 py-3 text-center">성급</th>
                 <th className="min-w-20 px-2 py-3 text-center">인연 랭크</th>

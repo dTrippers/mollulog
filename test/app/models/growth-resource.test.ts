@@ -9,6 +9,7 @@ import {
   GROWTH_RESOURCE_KIND_ORDER,
   aggregateGrowthResourceRequirements,
   breakdownCharacterExpToBooks,
+  calculateAbilityReleaseRequirements,
   calculateCharacterExpDifference,
   calculateCumulativeTierEleph,
   calculateEquipmentResourceItems,
@@ -267,6 +268,123 @@ describe("growth-resource", () => {
     );
 
     expect(requirements["10000"].items.map((item) => [item.uid, item.amount])).toEqual([["9999", 1]]);
+  });
+
+  it("calculates ability release artifacts, WB items, and credit from 0 to 25", () => {
+    const requirements = calculateAbilityReleaseRequirements(
+      {
+        abilityHp: 0,
+        targetAbilityHp: 25,
+        abilityAtk: null,
+        targetAbilityAtk: null,
+        abilityHeal: null,
+        targetAbilityHeal: null,
+      },
+      {
+        uid: "10000",
+        normal2: [
+          {
+            amount: 1,
+            item: {
+              uid: "150",
+              rarity: 1,
+              category: "material",
+              subCategory: "artifact",
+            },
+          },
+        ],
+        normal5: [
+          {
+            amount: 1,
+            item: {
+              uid: "151",
+              rarity: 2,
+              category: "material",
+              subCategory: "artifact",
+            },
+          },
+        ],
+      },
+    );
+
+    expect(requirements).toEqual({
+      unavailable: false,
+      credit: 3_500_000,
+      items: [
+        {
+          uid: "150",
+          type: ResourceTypeEnum.Item,
+          rarity: 1,
+          amount: 225,
+          category: "material",
+          subCategory: "artifact",
+          source: "ability",
+        },
+        {
+          uid: "2000",
+          type: ResourceTypeEnum.Item,
+          rarity: 1,
+          amount: 70,
+          source: "ability",
+        },
+        {
+          uid: "151",
+          type: ResourceTypeEnum.Item,
+          rarity: 2,
+          amount: 70,
+          category: "material",
+          subCategory: "artifact",
+          source: "ability",
+        },
+      ],
+    });
+  });
+
+  it("calculates ability release requirements for partial ranges and each WB type", () => {
+    const requirements = calculateAbilityReleaseRequirements(
+      {
+        abilityHp: 10,
+        targetAbilityHp: 12,
+        abilityAtk: 20,
+        targetAbilityAtk: 21,
+        abilityHeal: 24,
+        targetAbilityHeal: 25,
+      },
+      {
+        uid: "10000",
+        normal2: [
+          {
+            amount: 1,
+            item: {
+              uid: "150",
+              rarity: 1,
+              category: "material",
+              subCategory: "artifact",
+            },
+          },
+        ],
+        normal5: [
+          {
+            amount: 1,
+            item: {
+              uid: "151",
+              rarity: 2,
+              category: "material",
+              subCategory: "artifact",
+            },
+          },
+        ],
+      },
+    );
+
+    expect(requirements.credit).toBe(600_000);
+    expect(requirements.items.map((item) => [item.uid, item.amount])).toEqual([
+      ["150", 40],
+      ["2000", 4],
+      ["151", 16],
+      ["2001", 4],
+      ["2002", 4],
+    ]);
   });
 
   it("formats equipment blueprint tier labels for resource cards", () => {
@@ -816,6 +934,7 @@ describe("growth-resource", () => {
     const aggregated = aggregateGrowthResourceRequirements([
       {
         characterExp: 0,
+        credit: 0,
         skillUnavailable: false,
         items: [
           {
@@ -838,6 +957,7 @@ describe("growth-resource", () => {
       },
       {
         characterExp: 12340,
+        credit: 5000,
         skillUnavailable: true,
         items: [
           {
@@ -853,6 +973,7 @@ describe("growth-resource", () => {
 
     expect(aggregated.skillUnavailable).toBe(true);
     expect(aggregated.characterExp).toBe(12340);
+    expect(aggregated.credit).toBe(5000);
     expect(aggregated.items.map((item) => [item.uid, item.amount])).toEqual([
       ["150", 80],
       ["10000", 200],

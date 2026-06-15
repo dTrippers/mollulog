@@ -25,6 +25,10 @@ type StudentGrowthRow = {
   targetEquip3: number | null;
   targetEquipSpecial: number | null;
   targetTier: number | null;
+  targetWeaponLevel: number | null;
+  targetAbilityHp: number | null;
+  targetAbilityAtk: number | null;
+  targetAbilityHeal: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -40,6 +44,10 @@ const targetFields = [
   "targetEquip3",
   "targetEquipSpecial",
   "targetTier",
+  "targetWeaponLevel",
+  "targetAbilityHp",
+  "targetAbilityAtk",
+  "targetAbilityHeal",
 ] as const;
 
 class FakeD1Statement {
@@ -144,6 +152,10 @@ function rowFactory(overrides: Partial<StudentGrowthRow>): StudentGrowthRow {
     targetEquip3: null,
     targetEquipSpecial: null,
     targetTier: null,
+    targetWeaponLevel: null,
+    targetAbilityHp: null,
+    targetAbilityAtk: null,
+    targetAbilityHeal: null,
     createdAt: "2026-06-13T00:00:00.000Z",
     updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
@@ -190,7 +202,11 @@ describe("student-growth target state", () => {
       targetEquip2: 9,
       targetEquip3: 8,
       targetEquipSpecial: 2,
-      targetTier: 5,
+      targetTier: 6,
+      targetWeaponLevel: 0,
+      targetAbilityHp: 10,
+      targetAbilityAtk: 11,
+      targetAbilityHeal: 12,
     });
 
     expectNoLegacyCurrentColumnsWritten(db.statements[0] ?? "");
@@ -207,7 +223,11 @@ describe("student-growth target state", () => {
       targetEquip2: 9,
       targetEquip3: 8,
       targetEquipSpecial: 2,
-      targetTier: 5,
+      targetTier: 6,
+      targetWeaponLevel: 0,
+      targetAbilityHp: 10,
+      targetAbilityAtk: 11,
+      targetAbilityHeal: 12,
     });
   });
 
@@ -228,6 +248,10 @@ describe("student-growth target state", () => {
       targetEquip3: null,
       targetEquipSpecial: null,
       targetTier: 5,
+      targetWeaponLevel: null,
+      targetAbilityHp: null,
+      targetAbilityAtk: null,
+      targetAbilityHeal: null,
     });
   });
 
@@ -246,7 +270,57 @@ describe("student-growth target state", () => {
         targetEquip3: null,
         targetEquipSpecial: null,
         targetTier: null,
+        targetWeaponLevel: null,
+        targetAbilityHp: null,
+        targetAbilityAtk: null,
+        targetAbilityHeal: null,
       }),
     ).rejects.toThrow("목표 레벨은(는) 1부터 90 사이만 입력할 수 있어요");
+  });
+
+  it("rejects target weapon levels that exceed the target tier cap", async () => {
+    const { env } = createEnv();
+
+    await expect(
+      upsertStudentGrowth(env, 1, "student-a", {
+        targetLevel: null,
+        targetSkillEx: null,
+        targetSkillNormal: null,
+        targetSkillEnhanced: null,
+        targetSkillSub: null,
+        targetEquip1: null,
+        targetEquip2: null,
+        targetEquip3: null,
+        targetEquipSpecial: null,
+        targetTier: 6,
+        targetWeaponLevel: 40,
+        targetAbilityHp: null,
+        targetAbilityAtk: null,
+        targetAbilityHeal: null,
+      }),
+    ).rejects.toThrow("목표 고유무기 레벨은(는) 현재 성급 기준 0부터 30 사이만 입력할 수 있어요");
+  });
+
+  it("rejects target ability release levels before the unique weapon is equipped", async () => {
+    const { env } = createEnv();
+
+    await expect(
+      upsertStudentGrowth(env, 1, "student-a", {
+        targetLevel: null,
+        targetSkillEx: null,
+        targetSkillNormal: null,
+        targetSkillEnhanced: null,
+        targetSkillSub: null,
+        targetEquip1: null,
+        targetEquip2: null,
+        targetEquip3: null,
+        targetEquipSpecial: null,
+        targetTier: 5,
+        targetWeaponLevel: 0,
+        targetAbilityHp: 1,
+        targetAbilityAtk: null,
+        targetAbilityHeal: null,
+      }),
+    ).rejects.toThrow("목표 능력 해방은(는) 고유무기 장착 후 입력할 수 있어요");
   });
 });

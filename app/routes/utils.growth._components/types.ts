@@ -26,7 +26,15 @@ export type GrowthStudent = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
+  weaponLevel: number | null;
+  abilityHp: number | null;
+  abilityAtk: number | null;
+  abilityHeal: number | null;
   targetLevel: number | null;
+  targetWeaponLevel: number | null;
+  targetAbilityHp: number | null;
+  targetAbilityAtk: number | null;
+  targetAbilityHeal: number | null;
   targetSkillEx: number | null;
   targetSkillNormal: number | null;
   targetSkillEnhanced: number | null;

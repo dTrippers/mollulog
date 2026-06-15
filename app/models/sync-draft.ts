@@ -482,13 +482,17 @@ function createConditionalStudentStateStatement(
       equip1,
       equip2,
       equip3,
-      equipSpecial
+      equipSpecial,
+      weaponLevel,
+      abilityHp,
+      abilityAtk,
+      abilityHeal
     )
-    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
+    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
     where exists (
       select 1
       from sync_drafts
-      where uid = ?14
+      where uid = ?18
         and userId = ?2
         and status = 'pending'
         and type = 'student_state'
@@ -504,6 +508,10 @@ function createConditionalStudentStateStatement(
       equip2 = excluded.equip2,
       equip3 = excluded.equip3,
       equipSpecial = excluded.equipSpecial,
+      weaponLevel = excluded.weaponLevel,
+      abilityHp = excluded.abilityHp,
+      abilityAtk = excluded.abilityAtk,
+      abilityHeal = excluded.abilityHeal,
       updatedAt = current_timestamp
   `).bind(
     nanoid(8),
@@ -519,6 +527,10 @@ function createConditionalStudentStateStatement(
     state.equip2,
     state.equip3,
     state.equipSpecial,
+    state.weaponLevel,
+    state.abilityHp,
+    state.abilityAtk,
+    state.abilityHeal,
     draftUid,
   );
 }
@@ -544,13 +556,17 @@ function createConditionalStudentStateGrowthStatement(
       targetEquip2,
       targetEquip3,
       targetEquipSpecial,
-      targetTier
+      targetTier,
+      targetWeaponLevel,
+      targetAbilityHp,
+      targetAbilityAtk,
+      targetAbilityHeal
     )
-    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13
+    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
     where exists (
       select 1
       from sync_drafts
-      where uid = ?14
+      where uid = ?18
         and userId = ?2
         and status = 'pending'
         and type = 'student_state'
@@ -566,6 +582,10 @@ function createConditionalStudentStateGrowthStatement(
       targetEquip3 = excluded.targetEquip3,
       targetEquipSpecial = excluded.targetEquipSpecial,
       targetTier = excluded.targetTier,
+      targetWeaponLevel = excluded.targetWeaponLevel,
+      targetAbilityHp = excluded.targetAbilityHp,
+      targetAbilityAtk = excluded.targetAbilityAtk,
+      targetAbilityHeal = excluded.targetAbilityHeal,
       updatedAt = current_timestamp
   `).bind(
     nanoid(8),
@@ -581,6 +601,10 @@ function createConditionalStudentStateGrowthStatement(
     target.targetEquip3,
     target.targetEquipSpecial,
     target.targetTier,
+    target.targetWeaponLevel,
+    target.targetAbilityHp,
+    target.targetAbilityAtk,
+    target.targetAbilityHeal,
     draftUid,
   );
 }

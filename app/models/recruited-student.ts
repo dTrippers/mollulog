@@ -2,6 +2,13 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import {
+  ABILITY_RELEASE_MAX_LEVEL,
+  WEAPON_LEVEL_MAX_LEVEL,
+  assertAbilityReleaseAvailable,
+  assertWeaponLevelRange,
+  getWeaponLevelMaxByTier,
+} from "./student-growth-state";
 
 export const recruitedStudentsTable = sqliteTable("recruited_students", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -18,6 +25,10 @@ export const recruitedStudentsTable = sqliteTable("recruited_students", {
   equip2: int(),
   equip3: int(),
   equipSpecial: int(),
+  weaponLevel: int(),
+  abilityHp: int(),
+  abilityAtk: int(),
+  abilityHeal: int(),
   createdAt: text().notNull().default(sql`current_timestamp`),
   updatedAt: text().notNull().default(sql`current_timestamp`),
 });
@@ -32,6 +43,10 @@ export type RecruitedStudentCurrentState = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
+  weaponLevel: number | null;
+  abilityHp: number | null;
+  abilityAtk: number | null;
+  abilityHeal: number | null;
 };
 
 export type RecruitedStudentCurrentStateInput = RecruitedStudentCurrentState;
@@ -52,6 +67,10 @@ const currentStateRanges = {
   equip2: { label: "장비 2", min: 1, max: 10 },
   equip3: { label: "장비 3", min: 1, max: 10 },
   equipSpecial: { label: "애용품", min: 1, max: 2 },
+  weaponLevel: { label: "고유무기 레벨", min: 0, max: WEAPON_LEVEL_MAX_LEVEL },
+  abilityHp: { label: "능력 개방 체력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  abilityAtk: { label: "능력 개방 공격력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  abilityHeal: { label: "능력 개방 치유력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
 } satisfies Record<keyof RecruitedStudentCurrentStateInput, { label: string; min: number; max?: number }>;
 
 function toModel(recruitedStudent: typeof recruitedStudentsTable.$inferSelect): RecruitedStudent {
@@ -68,6 +87,10 @@ function toModel(recruitedStudent: typeof recruitedStudentsTable.$inferSelect): 
     equip2: recruitedStudent.equip2,
     equip3: recruitedStudent.equip3,
     equipSpecial: recruitedStudent.equipSpecial,
+    weaponLevel: recruitedStudent.weaponLevel,
+    abilityHp: recruitedStudent.abilityHp,
+    abilityAtk: recruitedStudent.abilityAtk,
+    abilityHeal: recruitedStudent.abilityHeal,
   };
 }
 
@@ -114,6 +137,25 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
   }
 
   const db = drizzle(env.DB);
+  const [existing] = await db
+    .select({
+      weaponLevel: recruitedStudentsTable.weaponLevel,
+      abilityHp: recruitedStudentsTable.abilityHp,
+      abilityAtk: recruitedStudentsTable.abilityAtk,
+      abilityHeal: recruitedStudentsTable.abilityHeal,
+    })
+    .from(recruitedStudentsTable)
+    .where(and(eq(recruitedStudentsTable.userId, senseiId), eq(recruitedStudentsTable.studentUid, studentUid)))
+    .limit(1);
+  if (existing?.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
+    throw new Error("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
+  }
+  assertAbilityReleaseAvailable(
+    [existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal],
+    tier,
+    "능력 해방",
+  );
+
   const uid = nanoid(8);
   await db.insert(recruitedStudentsTable).values({ uid, userId: senseiId, studentUid, tier }).onConflictDoUpdate({
     target: [recruitedStudentsTable.userId, recruitedStudentsTable.studentUid],
@@ -154,6 +196,18 @@ export async function updateRecruitedStudentCurrentState(
   validateRecruitedStudentCurrentStateInput(input);
 
   const db = drizzle(env.DB);
+  const existing = await db
+    .select({ tier: recruitedStudentsTable.tier })
+    .from(recruitedStudentsTable)
+    .where(and(eq(recruitedStudentsTable.userId, senseiId), eq(recruitedStudentsTable.studentUid, studentUid)))
+    .limit(1);
+  assertWeaponLevelRange(input.weaponLevel, existing[0]?.tier ?? null, "고유무기 레벨");
+  assertAbilityReleaseAvailable(
+    [input.abilityHp, input.abilityAtk, input.abilityHeal],
+    existing[0]?.tier ?? null,
+    "능력 해방",
+  );
+
   await db
     .update(recruitedStudentsTable)
     .set({ ...input, updatedAt: sql`current_timestamp` })

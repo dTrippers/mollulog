@@ -384,7 +384,7 @@ function StudentHeaderRow({
   const equipments = metadata.equipments ?? [];
 
   return (
-    <tr className="bg-neutral-50 text-left text-xs font-semibold uppercase tracking-wide text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
+    <tr className="bg-neutral-50 text-left text-xs font-semibold tracking-wide text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
       <th colSpan={2} className={cn(studentHeaderCellClass, !isFirstRow && groupTopCellClass)}>
         <div className="flex min-w-0 items-center gap-3">
           <ProfileImage studentUid={metadata.studentUid ?? entryKey} />
@@ -852,6 +852,7 @@ function emptyStoredValue(): StudentStateStoredValue {
     current: {
       level: null,
       tier: null,
+      weaponLevel: null,
       skillEx: null,
       skillNormal: null,
       skillEnhanced: null,
@@ -860,12 +861,16 @@ function emptyStoredValue(): StudentStateStoredValue {
       equip2: null,
       equip3: null,
       equipSpecial: null,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
       bond: null,
     },
     target: {
       targetBond: null,
       targetLevel: null,
       targetTier: null,
+      targetWeaponLevel: null,
       targetSkillEx: null,
       targetSkillNormal: null,
       targetSkillEnhanced: null,
@@ -874,6 +879,9 @@ function emptyStoredValue(): StudentStateStoredValue {
       targetEquip2: null,
       targetEquip3: null,
       targetEquipSpecial: null,
+      targetAbilityHp: null,
+      targetAbilityAtk: null,
+      targetAbilityHeal: null,
     },
   };
 }

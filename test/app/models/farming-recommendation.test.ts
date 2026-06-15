@@ -12,6 +12,7 @@ function requirement(items: StudentGrowthResourceRequirements["items"]): Student
   return {
     items,
     characterExp: 0,
+    credit: 0,
     skillUnavailable: false,
   };
 }

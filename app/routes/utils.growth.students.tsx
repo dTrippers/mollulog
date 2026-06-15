@@ -19,6 +19,7 @@ import {
   type StudentGrowthInput,
   removeStudentGrowth,
   upsertStudentGrowth,
+  validateStudentGrowthTargetStateForTier,
 } from "~/models/student-growth";
 import { loadStudentRow } from "./utils.growth._components/growth-data.server";
 import GrowthTable from "./utils.growth._components/GrowthTable";
@@ -26,6 +27,7 @@ import type { GrowthActionResult, GrowthLayoutContext } from "./utils.growth._co
 
 const currentStateFieldKeys = [
   "level",
+  "weaponLevel",
   "skillEx",
   "skillNormal",
   "skillEnhanced",
@@ -34,10 +36,14 @@ const currentStateFieldKeys = [
   "equip2",
   "equip3",
   "equipSpecial",
+  "abilityHp",
+  "abilityAtk",
+  "abilityHeal",
 ] as const satisfies (keyof RecruitedStudentCurrentStateInput)[];
 
 const targetGrowthFieldKeys = [
   "targetLevel",
+  "targetWeaponLevel",
   "targetSkillEx",
   "targetSkillNormal",
   "targetSkillEnhanced",
@@ -47,6 +53,9 @@ const targetGrowthFieldKeys = [
   "targetEquip3",
   "targetEquipSpecial",
   "targetTier",
+  "targetAbilityHp",
+  "targetAbilityAtk",
+  "targetAbilityHeal",
 ] as const satisfies (keyof StudentGrowthInput)[];
 
 type GrowthActionData = {
@@ -206,17 +215,16 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       await upsertRecruitedStudent(env, currentUser.id, payload.studentUid, tierPayload.tier);
     } else {
       const recruitedStudents = await getRecruitedStudents(env, currentUser.id);
-      const isRecruited = recruitedStudents.some(({ studentUid }) => studentUid === payload.studentUid);
+      const recruitedStudent = recruitedStudents.find(({ studentUid }) => studentUid === payload.studentUid);
       const growthPayload = payload as Partial<GrowthActionData>;
-      if (isRecruited) {
-        await updateRecruitedStudentCurrentState(
-          env,
-          currentUser.id,
-          payload.studentUid,
-          toCurrentStateInput(growthPayload),
-        );
+      const currentInput = toCurrentStateInput(growthPayload);
+      const growthInput = toGrowthInput(growthPayload);
+      const effectiveTargetTier = growthInput.targetTier ?? recruitedStudent?.tier ?? allStudentsMap[payload.studentUid]?.initialTier ?? null;
+      validateStudentGrowthTargetStateForTier(growthInput, effectiveTargetTier);
+      if (recruitedStudent) {
+        await updateRecruitedStudentCurrentState(env, currentUser.id, payload.studentUid, currentInput);
       }
-      await upsertStudentGrowth(env, currentUser.id, payload.studentUid, toGrowthInput(growthPayload));
+      await upsertStudentGrowth(env, currentUser.id, payload.studentUid, growthInput);
     }
 
     const row = await loadStudentRow(env, currentUser.id, payload.studentUid, { logger });

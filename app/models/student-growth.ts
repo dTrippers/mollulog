@@ -2,6 +2,12 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import {
+  ABILITY_RELEASE_MAX_LEVEL,
+  WEAPON_LEVEL_MAX_LEVEL,
+  assertAbilityReleaseAvailable,
+  assertWeaponLevelRange,
+} from "./student-growth-state";
 
 export const studentGrowthTable = sqliteTable("student_growth", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -27,6 +33,10 @@ export const studentGrowthTable = sqliteTable("student_growth", {
   targetEquip3: int(),
   targetEquipSpecial: int(),
   targetTier: int(),
+  targetWeaponLevel: int(),
+  targetAbilityHp: int(),
+  targetAbilityAtk: int(),
+  targetAbilityHeal: int(),
   createdAt: text().notNull().default(sql`current_timestamp`),
   updatedAt: text().notNull().default(sql`current_timestamp`),
 });
@@ -44,6 +54,10 @@ export type StudentGrowth = {
   targetEquip3: number | null;
   targetEquipSpecial: number | null;
   targetTier: number | null;
+  targetWeaponLevel: number | null;
+  targetAbilityHp: number | null;
+  targetAbilityAtk: number | null;
+  targetAbilityHeal: number | null;
 };
 
 export type StudentGrowthInput = Omit<StudentGrowth, "uid" | "studentUid">;
@@ -59,6 +73,10 @@ const growthRanges = {
   targetEquip3: { label: "목표 장비 3", min: 1, max: 10 },
   targetEquipSpecial: { label: "목표 애용품", min: 1, max: 2 },
   targetTier: { label: "목표 성급", min: 1, max: 9 },
+  targetWeaponLevel: { label: "목표 고유무기 레벨", min: 0, max: WEAPON_LEVEL_MAX_LEVEL },
+  targetAbilityHp: { label: "목표 능력 개방 체력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  targetAbilityAtk: { label: "목표 능력 개방 공격력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  targetAbilityHeal: { label: "목표 능력 개방 치유력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
 } satisfies Record<keyof StudentGrowthInput, { label: string; min: number; max: number }>;
 
 function toModel(studentGrowth: typeof studentGrowthTable.$inferSelect): StudentGrowth {
@@ -75,6 +93,10 @@ function toModel(studentGrowth: typeof studentGrowthTable.$inferSelect): Student
     targetEquip3: studentGrowth.targetEquip3,
     targetEquipSpecial: studentGrowth.targetEquipSpecial,
     targetTier: studentGrowth.targetTier,
+    targetWeaponLevel: studentGrowth.targetWeaponLevel,
+    targetAbilityHp: studentGrowth.targetAbilityHp,
+    targetAbilityAtk: studentGrowth.targetAbilityAtk,
+    targetAbilityHeal: studentGrowth.targetAbilityHeal,
   };
 }
 
@@ -93,6 +115,22 @@ export function validateStudentGrowthInput(input: StudentGrowthInput) {
       throw new Error(`${range.label}은(는) ${range.min}부터 ${range.max} 사이만 입력할 수 있어요`);
     }
   }
+
+  if (input.targetTier != null) {
+    validateStudentGrowthTargetStateForTier(input, input.targetTier);
+  }
+}
+
+export function validateStudentGrowthTargetStateForTier(
+  input: Pick<StudentGrowthInput, "targetWeaponLevel" | "targetAbilityHp" | "targetAbilityAtk" | "targetAbilityHeal">,
+  targetTier: number | null | undefined,
+) {
+  assertWeaponLevelRange(input.targetWeaponLevel, targetTier, "목표 고유무기 레벨");
+  assertAbilityReleaseAvailable(
+    [input.targetAbilityHp, input.targetAbilityAtk, input.targetAbilityHeal],
+    targetTier,
+    "목표 능력 해방",
+  );
 }
 
 export async function getStudentGrowths(env: Env, senseiId: number): Promise<StudentGrowth[]> {
@@ -128,9 +166,13 @@ export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid
       targetEquip2,
       targetEquip3,
       targetEquipSpecial,
-      targetTier
+      targetTier,
+      targetWeaponLevel,
+      targetAbilityHp,
+      targetAbilityAtk,
+      targetAbilityHeal
     )
-    values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
+    values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
     on conflict(userId, studentUid) do update set
       targetLevel = excluded.targetLevel,
       targetSkillEx = excluded.targetSkillEx,
@@ -142,6 +184,10 @@ export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid
       targetEquip3 = excluded.targetEquip3,
       targetEquipSpecial = excluded.targetEquipSpecial,
       targetTier = excluded.targetTier,
+      targetWeaponLevel = excluded.targetWeaponLevel,
+      targetAbilityHp = excluded.targetAbilityHp,
+      targetAbilityAtk = excluded.targetAbilityAtk,
+      targetAbilityHeal = excluded.targetAbilityHeal,
       updatedAt = current_timestamp
   `)
     .bind(
@@ -158,6 +204,10 @@ export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid
       input.targetEquip3,
       input.targetEquipSpecial,
       input.targetTier,
+      input.targetWeaponLevel,
+      input.targetAbilityHp,
+      input.targetAbilityAtk,
+      input.targetAbilityHeal,
     )
     .run();
 }

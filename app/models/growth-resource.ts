@@ -1,8 +1,12 @@
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { GrowthResourceRepository } from "~/repositories/growth-resource";
 import type { StudentMap } from "./student";
+import {
+  ABILITY_RELEASE_COST_BANDS,
+  TARGET_ABILITY_RELEASE_WB_UIDS,
+} from "./student-growth-state";
 
-export type GrowthResourceSource = "level" | "skill" | "equipment" | "tier" | "gear" | "relationship";
+export type GrowthResourceSource = "level" | "skill" | "equipment" | "tier" | "gear" | "relationship" | "ability";
 
 export type GrowthResourceItem = {
   uid: string;
@@ -26,6 +30,7 @@ export type GrowthResourceKindInput = {
 export type StudentGrowthResourceRequirements = {
   items: GrowthResourceItem[];
   characterExp: number;
+  credit: number;
   skillUnavailable: boolean;
 };
 
@@ -45,6 +50,7 @@ export type RelationshipGiftResourceMetadata = {
 export type AggregatedGrowthResourceRequirements = {
   items: GrowthResourceItem[];
   characterExp: number;
+  credit: number;
   skillUnavailable: boolean;
 };
 
@@ -63,7 +69,15 @@ export type GrowthResourceStudentInput = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
+  weaponLevel?: number | null;
+  abilityHp?: number | null;
+  abilityAtk?: number | null;
+  abilityHeal?: number | null;
   targetLevel: number | null;
+  targetWeaponLevel?: number | null;
+  targetAbilityHp?: number | null;
+  targetAbilityAtk?: number | null;
+  targetAbilityHeal?: number | null;
   targetSkillEx: number | null;
   targetSkillNormal: number | null;
   targetSkillEnhanced: number | null;
@@ -78,6 +92,7 @@ export type GrowthResourceStudentInput = {
 type MutableRequirements = {
   items: Map<string, GrowthResourceItem>;
   characterExp: number;
+  credit: number;
   skillUnavailable: boolean;
 };
 
@@ -94,6 +109,8 @@ type SkillCostItem = {
   item: {
     uid: string;
     rarity: number;
+    category?: string | null;
+    subCategory?: string | null;
   };
 };
 
@@ -501,7 +518,7 @@ export async function getStudentGrowthResourceRequirements(
   const normalizedStudents = students.map(normalizeStudentGrowthInputForCalculation);
   const requirements = students.reduce(
     (acc, student) => {
-      acc[student.uid] = { items: new Map<string, GrowthResourceItem>(), characterExp: 0, skillUnavailable: false };
+      acc[student.uid] = { items: new Map<string, GrowthResourceItem>(), characterExp: 0, credit: 0, skillUnavailable: false };
       return acc;
     },
     {} as Record<string, MutableRequirements>,
@@ -532,6 +549,10 @@ export async function getStudentGrowthResourceRequirements(
         }
 
         addItems(requirements[student.uid], calculateSkillResourceItems(student, skillCost));
+        const abilityRequirements = calculateAbilityReleaseRequirements(student, skillCost);
+        addItems(requirements[student.uid], abilityRequirements.items);
+        requirements[student.uid].credit += abilityRequirements.credit;
+        requirements[student.uid].skillUnavailable ||= abilityRequirements.unavailable;
       }
     } catch {
       for (const student of studentsNeedingSkillCosts) {
@@ -577,6 +598,7 @@ export async function getStudentGrowthResourceRequirements(
       {
         items: sortGrowthResourceItems(Array.from(requirement.items.values())),
         characterExp: requirement.characterExp,
+        credit: requirement.credit,
         skillUnavailable: requirement.skillUnavailable,
       },
     ]),
@@ -797,16 +819,81 @@ function calculateSkillResourceItems(
   return Array.from(items.values());
 }
 
+type AbilityReleaseRequirements = {
+  items: GrowthResourceItem[];
+  credit: number;
+  unavailable: boolean;
+};
+
+export function calculateAbilityReleaseRequirements(
+  student: Pick<
+    GrowthResourceStudentInput,
+    "abilityHp" | "targetAbilityHp" | "abilityAtk" | "targetAbilityAtk" | "abilityHeal" | "targetAbilityHeal"
+  >,
+  skillCost: SkillCostStudent,
+): AbilityReleaseRequirements {
+  const artifactItemsByRarity = getAbilityReleaseArtifactItemsByRarity(skillCost);
+  const items = new Map<string, GrowthResourceItem>();
+  let credit = 0;
+  let unavailable = false;
+
+  for (const { current, target, wbUid } of [
+    { current: student.abilityHp, target: student.targetAbilityHp, wbUid: TARGET_ABILITY_RELEASE_WB_UIDS.targetAbilityHp },
+    { current: student.abilityAtk, target: student.targetAbilityAtk, wbUid: TARGET_ABILITY_RELEASE_WB_UIDS.targetAbilityAtk },
+    { current: student.abilityHeal, target: student.targetAbilityHeal, wbUid: TARGET_ABILITY_RELEASE_WB_UIDS.targetAbilityHeal },
+  ]) {
+    if (!hasTargetIncrease(current, target)) {
+      continue;
+    }
+
+    for (const band of ABILITY_RELEASE_COST_BANDS) {
+      const levelCount = countOverlappingLevels(current as number, target as number, band.minLevel, band.maxLevel);
+      if (levelCount <= 0) {
+        continue;
+      }
+
+      const artifactItem = artifactItemsByRarity.get(band.artifactRarity);
+      if (!artifactItem) {
+        unavailable = true;
+      } else {
+        addItemToMap(items, {
+          uid: artifactItem.uid,
+          type: ResourceTypeEnum.Item,
+          rarity: artifactItem.rarity,
+          amount: band.artifactAmount * levelCount,
+          category: artifactItem.category ?? null,
+          subCategory: artifactItem.subCategory ?? null,
+          source: "ability",
+        });
+      }
+
+      addItemToMap(items, {
+        uid: wbUid,
+        type: ResourceTypeEnum.Item,
+        rarity: 1,
+        amount: band.wbAmount * levelCount,
+        source: "ability",
+      });
+      credit += band.credit * levelCount;
+    }
+  }
+
+  return { items: Array.from(items.values()), credit, unavailable };
+}
+
 function needsSkillResources(student: GrowthResourceStudentInput): boolean {
   return (
     hasTargetIncrease(student.skillEx, student.targetSkillEx) ||
     hasTargetIncrease(student.skillNormal, student.targetSkillNormal) ||
     hasTargetIncrease(student.skillEnhanced, student.targetSkillEnhanced) ||
-    hasTargetIncrease(student.skillSub, student.targetSkillSub)
+    hasTargetIncrease(student.skillSub, student.targetSkillSub) ||
+    hasTargetIncrease(student.abilityHp, student.targetAbilityHp) ||
+    hasTargetIncrease(student.abilityAtk, student.targetAbilityAtk) ||
+    hasTargetIncrease(student.abilityHeal, student.targetAbilityHeal)
   );
 }
 
-function hasTargetIncrease(current: number | null, target: number | null): boolean {
+function hasTargetIncrease(current: number | null | undefined, target: number | null | undefined): boolean {
   return current != null && target != null && target > current;
 }
 
@@ -828,6 +915,9 @@ export function normalizeStudentGrowthInputForCalculation(
       useMinimumCurrentGrowth,
     ),
     skillSub: coerceCurrentGrowthValue(student.skillSub, student.targetSkillSub, 1, useMinimumCurrentGrowth),
+    abilityHp: coerceCurrentGrowthValue(student.abilityHp, student.targetAbilityHp, 0, useMinimumCurrentGrowth),
+    abilityAtk: coerceCurrentGrowthValue(student.abilityAtk, student.targetAbilityAtk, 0, useMinimumCurrentGrowth),
+    abilityHeal: coerceCurrentGrowthValue(student.abilityHeal, student.targetAbilityHeal, 0, useMinimumCurrentGrowth),
     equip1: coerceCurrentGrowthValue(student.equip1, student.targetEquip1, 1, useMinimumCurrentGrowth),
     equip2: coerceCurrentGrowthValue(student.equip2, student.targetEquip2, 1, useMinimumCurrentGrowth),
     equip3: coerceCurrentGrowthValue(student.equip3, student.targetEquip3, 1, useMinimumCurrentGrowth),
@@ -839,8 +929,8 @@ export function normalizeStudentGrowthInputForCalculation(
 }
 
 function coerceCurrentGrowthValue(
-  current: number | null,
-  target: number | null,
+  current: number | null | undefined,
+  target: number | null | undefined,
   minimum: number,
   forceMinimum: boolean,
 ): number | null {
@@ -874,13 +964,52 @@ function normalizeCurrentTierForCalculation(
 
 function addItems(requirement: MutableRequirements, items: GrowthResourceItem[]) {
   for (const item of items) {
-    const existing = requirement.items.get(item.uid);
-    if (existing) {
-      existing.amount += item.amount;
+    addItemToMap(requirement.items, item);
+  }
+}
+
+function addItemToMap(items: Map<string, GrowthResourceItem>, item: GrowthResourceItem) {
+  const existing = items.get(item.uid);
+  if (existing) {
+    existing.amount += item.amount;
+    if (existing.name == null && item.name != null) {
+      existing.name = item.name;
+    }
+    if (existing.category == null && item.category != null) {
+      existing.category = item.category;
+    }
+    if (existing.subCategory == null && item.subCategory != null) {
+      existing.subCategory = item.subCategory;
+    }
+    return;
+  }
+  items.set(item.uid, { ...item });
+}
+
+function getAbilityReleaseArtifactItemsByRarity(
+  skillCost: SkillCostStudent,
+): Map<number, SkillCostItem["item"]> {
+  const artifactItems = new Map<number, SkillCostItem["item"]>();
+  for (const levelItems of Object.values(skillCost)) {
+    if (!Array.isArray(levelItems)) {
       continue;
     }
-    requirement.items.set(item.uid, { ...item });
+
+    for (const levelItem of levelItems) {
+      if (levelItem.item.subCategory !== "artifact") {
+        continue;
+      }
+      artifactItems.set(levelItem.item.rarity, levelItem.item);
+    }
   }
+
+  return artifactItems;
+}
+
+function countOverlappingLevels(currentLevel: number, targetLevel: number, bandMin: number, bandMax: number): number {
+  const from = Math.max(currentLevel + 1, bandMin);
+  const to = Math.min(targetLevel, bandMax);
+  return Math.max(0, to - from + 1);
 }
 
 function isEquipmentBlueprintRequirement(
@@ -1097,9 +1226,11 @@ export function aggregateGrowthResourceRequirements(
 ): AggregatedGrowthResourceRequirements {
   const aggregatedItems = new Map<string, GrowthResourceItem>();
   let characterExp = 0;
+  let credit = 0;
 
   for (const requirement of requirements) {
     characterExp += requirement.characterExp;
+    credit += requirement.credit;
     for (const item of requirement.items) {
       const existing = aggregatedItems.get(item.uid);
       if (existing) {
@@ -1117,6 +1248,7 @@ export function aggregateGrowthResourceRequirements(
   return {
     items: sortGrowthResourceItems(Array.from(aggregatedItems.values())),
     characterExp,
+    credit,
     skillUnavailable: requirements.some((requirement) => requirement.skillUnavailable),
   };
 }
@@ -1154,6 +1286,7 @@ export function buildRelationshipGiftResourceRequirements(
       }),
     ),
     characterExp: 0,
+    credit: 0,
     skillUnavailable: false,
   };
 }
@@ -1165,8 +1298,9 @@ export const GROWTH_RESOURCE_KIND_ORDER = {
   techNote: 3,
   favor: 4,
   artifact: 5,
-  equipment: 6,
-  other: 7,
+  ability: 6,
+  equipment: 7,
+  other: 8,
 } as const;
 
 export type GrowthResourceKindOrder =
@@ -1179,6 +1313,7 @@ export const GROWTH_RESOURCE_KIND_LABELS: Record<number, string> = {
   [GROWTH_RESOURCE_KIND_ORDER.techNote]: "기술 노트",
   [GROWTH_RESOURCE_KIND_ORDER.favor]: "선물",
   [GROWTH_RESOURCE_KIND_ORDER.artifact]: "오파츠",
+  [GROWTH_RESOURCE_KIND_ORDER.ability]: "능력 개방",
   [GROWTH_RESOURCE_KIND_ORDER.equipment]: "장비 설계도",
   [GROWTH_RESOURCE_KIND_ORDER.other]: "기타",
 } satisfies Record<GrowthResourceKindOrder, string>;
@@ -1186,6 +1321,7 @@ export const GROWTH_RESOURCE_KIND_LABELS: Record<number, string> = {
 const GROWTH_RESOURCE_KIND_DISPLAY_ORDER = [
   GROWTH_RESOURCE_KIND_ORDER.characterExp,
   GROWTH_RESOURCE_KIND_ORDER.artifact,
+  GROWTH_RESOURCE_KIND_ORDER.ability,
   GROWTH_RESOURCE_KIND_ORDER.bd,
   GROWTH_RESOURCE_KIND_ORDER.techNote,
   GROWTH_RESOURCE_KIND_ORDER.favor,
@@ -1245,6 +1381,10 @@ export function classifyGrowthResourceKind(resource: GrowthResourceKindInput): n
 
   if (resource.subCategory === "artifact") {
     return GROWTH_RESOURCE_KIND_ORDER.artifact;
+  }
+
+  if (resource.source === "ability" || resource.uid === "2000" || resource.uid === "2001" || resource.uid === "2002") {
+    return GROWTH_RESOURCE_KIND_ORDER.ability;
   }
 
   if (resource.source === "equipment" || resource.type === ResourceTypeEnum.Equipment) {

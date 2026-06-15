@@ -43,6 +43,10 @@ type RecruitedStudentRow = {
   equip2: number | null;
   equip3: number | null;
   equipSpecial: number | null;
+  weaponLevel: number | null;
+  abilityHp: number | null;
+  abilityAtk: number | null;
+  abilityHeal: number | null;
   updatedAt: string;
 };
 
@@ -80,6 +84,10 @@ type StudentGrowthRow = {
   targetEquip3: number | null;
   targetEquipSpecial: number | null;
   targetTier: number | null;
+  targetWeaponLevel: number | null;
+  targetAbilityHp: number | null;
+  targetAbilityAtk: number | null;
+  targetAbilityHeal: number | null;
   updatedAt: string;
 };
 
@@ -185,7 +193,7 @@ class FakeD1Database {
   private upsertRecruitedStudent(params: unknown[]): number {
     const userId = Number(params[1]);
     const studentUid = String(params[2]);
-    const draftUid = String(params[13]);
+    const draftUid = String(params[17]);
     if (!this.hasPendingStudentStateDraft(userId, draftUid)) {
       return 0;
     }
@@ -204,6 +212,10 @@ class FakeD1Database {
     row.equip2 = toNullableNumber(params[10]);
     row.equip3 = toNullableNumber(params[11]);
     row.equipSpecial = toNullableNumber(params[12]);
+    row.weaponLevel = toNullableNumber(params[13]);
+    row.abilityHp = toNullableNumber(params[14]);
+    row.abilityAtk = toNullableNumber(params[15]);
+    row.abilityHeal = toNullableNumber(params[16]);
     row.updatedAt = "current_timestamp";
 
     if (!this.recruitedStudents.includes(row)) {
@@ -273,7 +285,7 @@ class FakeD1Database {
   private upsertStudentGrowth(params: unknown[]): number {
     const userId = Number(params[1]);
     const studentUid = String(params[2]);
-    const draftUid = String(params[13]);
+    const draftUid = String(params[17]);
     if (!this.hasPendingStudentStateDraft(userId, draftUid)) {
       return 0;
     }
@@ -292,6 +304,10 @@ class FakeD1Database {
     row.targetEquip3 = toNullableNumber(params[10]);
     row.targetEquipSpecial = toNullableNumber(params[11]);
     row.targetTier = toNullableNumber(params[12]);
+    row.targetWeaponLevel = toNullableNumber(params[13]);
+    row.targetAbilityHp = toNullableNumber(params[14]);
+    row.targetAbilityAtk = toNullableNumber(params[15]);
+    row.targetAbilityHeal = toNullableNumber(params[16]);
     row.updatedAt = "current_timestamp";
 
     if (!this.studentGrowths.includes(row)) {
@@ -332,6 +348,7 @@ function createEntryRow(overrides: Partial<SyncDraftEntryRow>): SyncDraftEntryRo
       current: {
         level: 1,
         tier: 6,
+        weaponLevel: 30,
         skillEx: 1,
         skillNormal: 2,
         skillEnhanced: 3,
@@ -340,6 +357,9 @@ function createEntryRow(overrides: Partial<SyncDraftEntryRow>): SyncDraftEntryRo
         equip2: 2,
         equip3: 3,
         equipSpecial: null,
+        abilityHp: 0,
+        abilityAtk: 1,
+        abilityHeal: 2,
         bond: 1,
       },
       target: null,
@@ -365,6 +385,10 @@ function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow> = {})
     equip2: null,
     equip3: null,
     equipSpecial: null,
+    weaponLevel: null,
+    abilityHp: null,
+    abilityAtk: null,
+    abilityHeal: null,
     updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
   };
@@ -408,6 +432,10 @@ function createStudentGrowthRow(overrides: Partial<StudentGrowthRow> = {}): Stud
     targetEquip3: null,
     targetEquipSpecial: null,
     targetTier: null,
+    targetWeaponLevel: null,
+    targetAbilityHp: null,
+    targetAbilityAtk: null,
+    targetAbilityHeal: null,
     updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
   };

@@ -131,6 +131,10 @@ function isMinimumVisibleCurrentDraftValue(value: StudentStateDraftCurrentValue,
 const minimumCurrentFields = [
   "bond",
   "level",
+  "weaponLevel",
+  "abilityHp",
+  "abilityAtk",
+  "abilityHeal",
   "skillEx",
   "skillNormal",
   "skillEnhanced",
@@ -147,6 +151,7 @@ function createExistingCurrent(
     return {
       level: null,
       tier: null,
+      weaponLevel: null,
       skillEx: null,
       skillNormal: null,
     skillEnhanced: null,
@@ -155,6 +160,9 @@ function createExistingCurrent(
       equip2: null,
       equip3: null,
       equipSpecial: null,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
       bond: null,
       ...overrides,
   };
@@ -164,6 +172,7 @@ function createImportedCurrent(overrides: Partial<StudentStateDraftCurrentValue>
     return {
       level: 1,
       tier: 1,
+      weaponLevel: null,
       skillEx: 1,
       skillNormal: 1,
     skillEnhanced: 1,
@@ -172,6 +181,9 @@ function createImportedCurrent(overrides: Partial<StudentStateDraftCurrentValue>
       equip2: 1,
       equip3: 1,
       equipSpecial: null,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
       bond: 1,
       ...overrides,
   };
@@ -184,6 +196,7 @@ function createExistingTarget(
     targetBond: null,
     targetLevel: null,
     targetTier: null,
+    targetWeaponLevel: null,
     targetSkillEx: null,
     targetSkillNormal: null,
     targetSkillEnhanced: null,
@@ -192,6 +205,9 @@ function createExistingTarget(
     targetEquip2: null,
     targetEquip3: null,
     targetEquipSpecial: null,
+    targetAbilityHp: null,
+    targetAbilityAtk: null,
+    targetAbilityHeal: null,
     ...overrides,
   };
 }
@@ -201,6 +217,7 @@ function createImportedTarget(overrides: Partial<StudentStateDraftTargetValue> =
     targetBond: 1,
     targetLevel: 1,
     targetTier: 1,
+    targetWeaponLevel: null,
     targetSkillEx: 1,
     targetSkillNormal: 1,
     targetSkillEnhanced: 1,
@@ -209,6 +226,9 @@ function createImportedTarget(overrides: Partial<StudentStateDraftTargetValue> =
     targetEquip2: 1,
     targetEquip3: 1,
     targetEquipSpecial: null,
+    targetAbilityHp: null,
+    targetAbilityAtk: null,
+    targetAbilityHeal: null,
     ...overrides,
   };
 }

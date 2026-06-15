@@ -11,6 +11,7 @@ const mockGetRecruitedStudents = jest.fn();
 const mockUpdateRecruitedStudentCurrentState = jest.fn();
 const mockUpsertRecruitedStudent = jest.fn();
 const mockUpsertStudentGrowth = jest.fn();
+const mockValidateStudentGrowthTargetStateForTier = jest.fn();
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: mockGetActiveSensei,
@@ -32,6 +33,7 @@ jest.mock("~/models/recruited-student", () => ({
 jest.mock("~/models/student-growth", () => ({
   removeStudentGrowth: jest.fn(),
   upsertStudentGrowth: mockUpsertStudentGrowth,
+  validateStudentGrowthTargetStateForTier: mockValidateStudentGrowthTargetStateForTier,
 }));
 
 jest.mock("~/models/relationship-level", () => ({
@@ -62,6 +64,7 @@ describe("utils.growth.students action", () => {
     } as never);
     mockLoadStudentRow.mockResolvedValue({ uid: "studentA" } as never);
     mockGetRecruitedStudents.mockResolvedValue([] as never);
+    mockValidateStudentGrowthTargetStateForTier.mockImplementation(() => undefined);
   });
 
   it("returns the refreshed student row after enrolling a released student", async () => {
@@ -188,6 +191,10 @@ describe("utils.growth.students action", () => {
 
     expect(mockUpdateRecruitedStudentCurrentState).toHaveBeenCalledWith({}, 1, "studentA", {
       level: 80,
+      weaponLevel: null,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
       skillEx: 4,
       skillNormal: 7,
       skillEnhanced: 8,
@@ -199,6 +206,10 @@ describe("utils.growth.students action", () => {
     });
     expect(mockUpsertStudentGrowth).toHaveBeenCalledWith({}, 1, "studentA", {
       targetLevel: 90,
+      targetWeaponLevel: null,
+      targetAbilityHp: null,
+      targetAbilityAtk: null,
+      targetAbilityHeal: null,
       targetSkillEx: 5,
       targetSkillNormal: 10,
       targetSkillEnhanced: 10,
@@ -228,8 +239,19 @@ describe("utils.growth.students action", () => {
     } as never);
 
     expect(mockUpdateRecruitedStudentCurrentState).not.toHaveBeenCalled();
+    expect(mockValidateStudentGrowthTargetStateForTier).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetLevel: 90,
+        targetTier: null,
+      }),
+      3,
+    );
     expect(mockUpsertStudentGrowth).toHaveBeenCalledWith({}, 1, "studentA", {
       targetLevel: 90,
+      targetWeaponLevel: null,
+      targetAbilityHp: null,
+      targetAbilityAtk: null,
+      targetAbilityHeal: null,
       targetSkillEx: null,
       targetSkillNormal: null,
       targetSkillEnhanced: null,
@@ -240,5 +262,34 @@ describe("utils.growth.students action", () => {
       targetEquipSpecial: null,
       targetTier: null,
     });
+  });
+
+  it("does not write growth targets when the effective tier validation fails", async () => {
+    mockValidateStudentGrowthTargetStateForTier.mockImplementation(() => {
+      throw new Error("목표 고유무기 레벨은(는) 현재 성급 기준 0부터 0 사이만 입력할 수 있어요");
+    });
+
+    const response = await action({
+      context: { cloudflare: { env: {} } },
+      request: new Request("http://localhost/utils/growth/students", {
+        method: "POST",
+        body: JSON.stringify({
+          studentUid: "studentA",
+          targetWeaponLevel: 30,
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    } as never);
+
+    expect(response).toMatchObject({
+      data: {
+        error: "목표 고유무기 레벨은(는) 현재 성급 기준 0부터 0 사이만 입력할 수 있어요",
+      },
+      init: { status: 400 },
+    });
+    expect(mockUpdateRecruitedStudentCurrentState).not.toHaveBeenCalled();
+    expect(mockUpsertStudentGrowth).not.toHaveBeenCalled();
   });
 });
