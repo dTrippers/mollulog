@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import type { PyroxeneScheduleItem } from "~/components/features/futures/types";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "./pyroxene-planner";
 import { calculateDailyApChargePyroxene } from "./pyroxene-planner-source-config";
+import { DEFAULT_PICKUP_STUDENT_RATE_BY_TIER } from "./recruitment-simulator";
 
 export type PickupResources = {
   pyroxene: number;
@@ -21,18 +22,26 @@ export type TimelineDelta = {
   source: TimelineSource;
 
   pickupTrial?: number;
+  // 픽업 1회 모집의 가챠 운에 따른 분산(뽑기 횟수²). 신뢰 구간 폭 계산에 누적됩니다.
+  pickupTrialVariance?: number;
   resourceDelta?: PickupResources;
   tenTimeTicketLotId?: string;
   tenTimeTicketExpiresAt?: dayjs.Dayjs;
   priority?: number;
 };
 
-export type Timeline = {
+export type TimelineEntry = {
   date: dayjs.Dayjs;
   source: TimelineSource;
   accumulatedResources: PickupResources;
+  accumulatedResourcesBand?: {
+    optimistic: PickupResources;
+    pessimistic: PickupResources;
+  };
   resourceDelta: PickupResources;
-}[];
+};
+
+export type Timeline = TimelineEntry[];
 
 export const MAX_REPEATED_ENTRIES = 365;
 
@@ -47,6 +56,9 @@ export const PYROXENE = {
   FREE_RECRUITMENT_TRIAL: 100,
 } as const;
 
+// 신뢰 구간 폭의 z-점수. P10~P90(양측 ±1.2816σ)에 해당합니다.
+export const PICKUP_TRIAL_BAND_Z = 1.2816;
+
 export { calculateDailyApChargePyroxene } from "./pyroxene-planner-source-config";
 
 type TenTimeTicketLot = {
@@ -55,11 +67,20 @@ type TenTimeTicketLot = {
   expiresAt?: dayjs.Dayjs;
 };
 
+type TimelineAccumulationState = {
+  currentResources: PickupResources;
+  tenTimeTicketLots: TenTimeTicketLot[];
+};
+
 const TIMELINE_DELTA_PRIORITY = {
   NORMAL: 0,
   PICKUP: 10,
   TICKET_EXPIRY: 20,
 } as const;
+
+function zeroResources(): PickupResources {
+  return { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
+}
 
 function getNextMonthlyFirstDate(date: dayjs.Dayjs): dayjs.Dayjs {
   return date.add(1, "month").startOf("month");
@@ -127,6 +148,130 @@ function expireTenTimeTicketLot(lots: TenTimeTicketLot[], lotId: string): number
   return expiredCount;
 }
 
+function createTimelineAccumulationState(initialResources: PickupResources): TimelineAccumulationState {
+  return {
+    currentResources: initialResources,
+    tenTimeTicketLots: initialResources.tenTimeTicket > 0 ? [{ id: "initial", count: initialResources.tenTimeTicket }] : [],
+  };
+}
+
+function resolvePickupResourceDelta(state: TimelineAccumulationState, pickupTrial: number): PickupResources | undefined {
+  if (pickupTrial > 0) {
+    const resourceDelta = zeroResources();
+    let remainingTrial = pickupTrial;
+    if (remainingTrial >= 10) {
+      const spentTenTimeTickets = spendTenTimeTickets(state.tenTimeTicketLots, Math.floor(remainingTrial / 10));
+      resourceDelta.tenTimeTicket = spentTenTimeTickets > 0 ? -1 * spentTenTimeTickets : 0;
+      remainingTrial -= spentTenTimeTickets * 10;
+    }
+    if (remainingTrial > 1) {
+      const spentOneTimeTickets = Math.min(remainingTrial, state.currentResources.oneTimeTicket);
+      resourceDelta.oneTimeTicket = spentOneTimeTickets > 0 ? -1 * spentOneTimeTickets : 0;
+      remainingTrial -= spentOneTimeTickets;
+    }
+    resourceDelta.pyroxene = remainingTrial > 0 ? -1 * remainingTrial * 120 : 0;
+    return resourceDelta;
+  }
+  if (pickupTrial === 0) {
+    // expectedTrials가 0이면 소비 없이도 이벤트 row를 유지합니다.
+    return zeroResources();
+  }
+  return undefined;
+}
+
+function resolveTimelineResourceDelta(
+  state: TimelineAccumulationState,
+  delta: TimelineDelta,
+  pickupTrial: number | undefined,
+): PickupResources | undefined {
+  if (delta.resourceDelta) {
+    return delta.resourceDelta;
+  }
+  if (pickupTrial !== undefined) {
+    return resolvePickupResourceDelta(state, pickupTrial);
+  }
+  if (delta.tenTimeTicketLotId) {
+    const expiredTicketCount = expireTenTimeTicketLot(state.tenTimeTicketLots, delta.tenTimeTicketLotId);
+    if (expiredTicketCount > 0) {
+      return { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: -expiredTicketCount };
+    }
+  }
+  return undefined;
+}
+
+function applyTimelineResourceDelta(
+  state: TimelineAccumulationState,
+  delta: TimelineDelta,
+  resourceDelta: PickupResources,
+) {
+  if (delta.resourceDelta) {
+    applyTenTimeTicketDelta(state.tenTimeTicketLots, delta, resourceDelta);
+  }
+
+  state.currentResources = {
+    pyroxene: state.currentResources.pyroxene + resourceDelta.pyroxene,
+    oneTimeTicket: state.currentResources.oneTimeTicket + resourceDelta.oneTimeTicket,
+    tenTimeTicket: state.currentResources.tenTimeTicket + resourceDelta.tenTimeTicket,
+  };
+}
+
+// 천장(pity)으로 상한이 걸린 기하분포의 평균/분산을 계산합니다.
+// 한 명의 픽업 학생을 얻기까지 필요한 모집 횟수 N = min(첫 성공까지 시행, 천장).
+const pickupTrialMomentsCache = new Map<number, { mean: number; variance: number }>();
+
+export function calculatePickupTrialMoments(pickupRate: number): { mean: number; variance: number } {
+  const cap = PYROXENE.PICKUP_TRIAL.ceil;
+  if (pickupRate <= 0) {
+    return { mean: cap, variance: 0 };
+  }
+  if (pickupRate >= 1) {
+    return { mean: 1, variance: 0 };
+  }
+
+  const cached = pickupTrialMomentsCache.get(pickupRate);
+  if (cached) {
+    return cached;
+  }
+
+  const q = 1 - pickupRate;
+  let mean = 0;
+  let secondMoment = 0;
+  for (let k = 1; k < cap; k++) {
+    const probability = q ** (k - 1) * pickupRate;
+    mean += k * probability;
+    secondMoment += k * k * probability;
+  }
+  // 천장 도달(N = cap) 확률: 직전까지 모두 실패.
+  const ceilProbability = q ** (cap - 1);
+  mean += cap * ceilProbability;
+  secondMoment += cap * cap * ceilProbability;
+
+  const moments = { mean, variance: Math.max(0, secondMoment - mean * mean) };
+  pickupTrialMomentsCache.set(pickupRate, moments);
+  return moments;
+}
+
+function getPickupRecruitmentRate(recruitment: NonNullable<PyroxeneScheduleItem["event"]>["recruitments"][number]) {
+  return recruitment.student?.initialTier === 2
+    ? DEFAULT_PICKUP_STUDENT_RATE_BY_TIER.tier2
+    : DEFAULT_PICKUP_STUDENT_RATE_BY_TIER.tier3;
+}
+
+// 한 이벤트의 가챠 분산은 픽업 학생별 분산의 합입니다(학생 간 독립 가정).
+// 독립 분산은 더할 수 있으므로, 여러 이벤트에 걸친 누적 표준편차는 √N로 자랍니다.
+function getPickupTrialVariance(
+  pickupRecruitments: NonNullable<PyroxeneScheduleItem["event"]>["recruitments"],
+): number {
+  return pickupRecruitments.reduce(
+    (sum, recruitment) => sum + calculatePickupTrialMoments(getPickupRecruitmentRate(recruitment)).variance,
+    0,
+  );
+}
+
+function subtractFreeRecruitmentTrial(pickupTrial: number): number {
+  return Math.max(0, pickupTrial - PYROXENE.FREE_RECRUITMENT_TRIAL);
+}
+
 export function isFreeRecruitment100Event(event: NonNullable<PyroxeneScheduleItem["event"]>, now = dayjs()): boolean {
   return (
     event.tags.includes("recruit_free_100") &&
@@ -163,9 +308,10 @@ export function buildTimeline(
         });
       }
 
-      const pickupCount = event.recruitments.filter(
+      const pickupRecruitments = event.recruitments.filter(
         ({ pickup, favorited, recruitmentType }) => pickup && favorited && recruitmentType !== "given",
-      ).length;
+      );
+      const pickupCount = pickupRecruitments.length;
       if (pickupCount === 0) {
         continue;
       }
@@ -189,12 +335,20 @@ export function buildTimeline(
         pickupTrial = pickupCount * PYROXENE.PICKUP_TRIAL[options.event.pickupChance];
       }
 
+      // 모집 목표를 수동 입력했더라도 가챠 변동성 밴드는 동일하게 시뮬레이션합니다.
+      // 중앙값(수동/평균/천장)은 그대로 두고, 밴드 폭은 픽업 학생 확률 기반 분산으로 계산합니다.
+      // 무료 100연 이벤트는 중앙값(평균)만 줄이고 분산은 근사적으로 그대로 둡니다.
+      const pickupTrialVariance = getPickupTrialVariance(pickupRecruitments);
+
+      if (isFreeRecruitment100Event(event)) {
+        pickupTrial = subtractFreeRecruitmentTrial(pickupTrial);
+      }
+
       timelineDeltas.push({
         date: dayjs(event.since),
         source: { type: "event", event },
-        pickupTrial: isFreeRecruitment100Event(event)
-          ? Math.max(0, pickupTrial - PYROXENE.FREE_RECRUITMENT_TRIAL)
-          : pickupTrial,
+        pickupTrial,
+        pickupTrialVariance,
       });
     } else if (scheduleItem.raid) {
       const { raid } = scheduleItem;
@@ -319,9 +473,10 @@ export function buildTimeline(
   });
 
   const timeline: Timeline = [];
-  let currentResources: PickupResources = initialResources;
-  const tenTimeTicketLots: TenTimeTicketLot[] =
-    initialResources.tenTimeTicket > 0 ? [{ id: "initial", count: initialResources.tenTimeTicket }] : [];
+  const centralState = createTimelineAccumulationState(initialResources);
+  // 픽업 이벤트를 지날 때마다 가챠 분산(뽑기 횟수²)을 누적합니다.
+  // 밴드 폭은 누적 표준편차에 비례하므로 픽업 개수 N에 대해 √N로 자랍니다.
+  let cumulativePickupVariance = 0;
   for (
     const delta of filteredDeltas.sort((a, b) => {
       const dateDiff = a.date.diff(b.date);
@@ -331,52 +486,34 @@ export function buildTimeline(
       return (a.priority ?? TIMELINE_DELTA_PRIORITY.NORMAL) - (b.priority ?? TIMELINE_DELTA_PRIORITY.NORMAL);
     })
   ) {
-    let resourceDelta = delta.resourceDelta;
-    if (!resourceDelta && delta.pickupTrial !== undefined) {
-      if (delta.pickupTrial > 0) {
-        resourceDelta = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
-        let remainingTrial = delta.pickupTrial;
-        if (remainingTrial >= 10) {
-          const spentTenTimeTickets = spendTenTimeTickets(tenTimeTicketLots, Math.floor(remainingTrial / 10));
-          resourceDelta.tenTimeTicket = spentTenTimeTickets > 0 ? -1 * spentTenTimeTickets : 0;
-          remainingTrial -= spentTenTimeTickets * 10;
-        }
-        if (remainingTrial > 1) {
-          const spentOneTimeTickets = Math.min(remainingTrial, currentResources.oneTimeTicket);
-          resourceDelta.oneTimeTicket = spentOneTimeTickets > 0 ? -1 * spentOneTimeTickets : 0;
-          remainingTrial -= spentOneTimeTickets;
-        }
-        resourceDelta.pyroxene = remainingTrial > 0 ? -1 * remainingTrial * 120 : 0;
-      } else if (delta.pickupTrial === 0) {
-        // expectedTrials가 0이면 소비 없이도 이벤트 row를 유지합니다.
-        resourceDelta = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
-      }
-    } else if (!resourceDelta && delta.tenTimeTicketLotId) {
-      const expiredTicketCount = expireTenTimeTicketLot(tenTimeTicketLots, delta.tenTimeTicketLotId);
-      if (expiredTicketCount > 0) {
-        resourceDelta = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: -expiredTicketCount };
-      }
+    const resourceDelta = resolveTimelineResourceDelta(centralState, delta, delta.pickupTrial);
+
+    if (delta.pickupTrialVariance) {
+      cumulativePickupVariance += delta.pickupTrialVariance;
     }
 
     if (!resourceDelta) {
       continue;
     }
 
-    if (delta.resourceDelta) {
-      applyTenTimeTicketDelta(tenTimeTicketLots, delta, resourceDelta);
-    }
+    applyTimelineResourceDelta(centralState, delta, resourceDelta);
 
-    currentResources = {
-      pyroxene: currentResources.pyroxene + resourceDelta.pyroxene,
-      oneTimeTicket: currentResources.oneTimeTicket + resourceDelta.oneTimeTicket,
-      tenTimeTicket: currentResources.tenTimeTicket + resourceDelta.tenTimeTicket,
-    };
+    // 중앙선을 기준으로 ±z·√(누적 분산)·120청휘석 만큼 대칭 밴드를 그립니다.
+    const bandOffsetPyroxene = PICKUP_TRIAL_BAND_Z * Math.sqrt(cumulativePickupVariance) * 120;
+    const central = centralState.currentResources;
 
     timeline.push({
       date: delta.date,
       source: delta.source,
       resourceDelta,
-      accumulatedResources: { ...currentResources },
+      accumulatedResources: { ...central },
+      accumulatedResourcesBand:
+        bandOffsetPyroxene > 0
+          ? {
+              optimistic: { ...central, pyroxene: central.pyroxene + bandOffsetPyroxene },
+              pessimistic: { ...central, pyroxene: central.pyroxene - bandOffsetPyroxene },
+            }
+          : undefined,
     });
   }
   return timeline;

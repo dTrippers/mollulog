@@ -129,10 +129,15 @@ export default function PyroxeneSchedule({
       )}
 
       <SubTitle
-        text="재화 획득/소비 계획"
-        description="미래시 페이지에서 관심 학생을 등록하면 모집 시점의 예상 청휘석을 계산할 수 있어요"
+        text="청휘석 시뮬레이션"
+        description="설정한 목표와, 상위/하위 10% 범위의 시뮬레이션 결과에요"
       />
       <PyroxeneChart timeline={timeline} />
+
+      <SubTitle
+        text="타임라인"
+        description="미래시 페이지에서 등록한 관심 학생의 모집 시점의 예상 청휘석을 확인할 수 있어요"
+      />
       {timeline.every(({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type)) && (
         <EmptyView text="표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해보세요." />
       )}

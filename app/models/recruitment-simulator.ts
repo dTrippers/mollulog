@@ -54,6 +54,11 @@ export type RecruitmentRateTable = {
   pickupRates: Record<string, number>;
 };
 
+export const DEFAULT_PICKUP_STUDENT_RATE_BY_TIER = {
+  tier2: 0.03,
+  tier3: 0.007,
+} as const;
+
 export type RecruitmentDrawResult = {
   rarity: 1 | 2 | 3;
   pickup: boolean;
@@ -285,7 +290,7 @@ export function createDefaultRecruitmentRateTable(
   const pickupRates = Object.fromEntries(
     getActivePickupStudents(snapshot, activePickupStudentUid).map((student) => [
       student.uid,
-      student.initialTier === 2 ? 0.03 : 0.007,
+      student.initialTier === 2 ? DEFAULT_PICKUP_STUDENT_RATE_BY_TIER.tier2 : DEFAULT_PICKUP_STUDENT_RATE_BY_TIER.tier3,
     ]),
   );
 

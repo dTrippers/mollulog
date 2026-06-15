@@ -31,6 +31,18 @@ type ChartEntry = {
     oneTimeTicket: number;
     tenTimeTicket: number;
   };
+  accumulatedResourcesBand?: {
+    optimistic: {
+      pyroxene: number;
+      oneTimeTicket: number;
+      tenTimeTicket: number;
+    };
+    pessimistic: {
+      pyroxene: number;
+      oneTimeTicket: number;
+      tenTimeTicket: number;
+    };
+  };
 };
 
 type PyroxeneChartProps = {
@@ -75,12 +87,21 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
   }, []);
 
   const { chartData, markers } = useMemo(() => {
-    const dayMap = new Map<string, { ts: number; pyroxene: number }>();
+    const dayMap = new Map<
+      string,
+      { ts: number; pyroxene: number; pyroxeneBand: [number, number] }
+    >();
     for (const entry of timeline) {
       const key = entry.date.format("YYYY-MM-DD");
+      const optimisticPyroxene =
+        entry.accumulatedResourcesBand?.optimistic.pyroxene ?? entry.accumulatedResources.pyroxene;
+      const pessimisticPyroxene =
+        entry.accumulatedResourcesBand?.pessimistic.pyroxene ?? entry.accumulatedResources.pyroxene;
       dayMap.set(key, {
         ts: entry.date.startOf("day").valueOf(),
         pyroxene: entry.accumulatedResources.pyroxene,
+        // recharts 범위 영역: [하단(비관), 상단(낙관)] 튜플로 채움 밴드를 그립니다.
+        pyroxeneBand: [pessimisticPyroxene, optimisticPyroxene],
       });
     }
     const chartData = Array.from(dayMap.values()).sort((a, b) => a.ts - b.ts);
@@ -134,6 +155,7 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
   const tooltipBg = isDark ? "#1f2937" : "#ffffff";
   const tooltipBorder = isDark ? "#374151" : "#e5e7eb";
   const tooltipText = isDark ? "#f9fafb" : "#111827";
+  const bandFillColor = isDark ? "rgba(147, 197, 253, 0.16)" : "rgba(96, 165, 250, 0.18)";
 
   const monthlyTicks = (() => {
     if (chartData.length < 2) return [];
@@ -148,30 +170,18 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
     return ticks;
   })();
 
-  const allValues = chartData.map((d) => d.pyroxene);
+  const allValues = chartData.flatMap((d) => [d.pyroxene, d.pyroxeneBand[0], d.pyroxeneBand[1]]);
   const maxValue = Math.max(...allValues);
   const minValue = Math.min(...allValues);
   const hasNegative = minValue < 0;
 
   const domainMin = Math.min(minValue, 0);
   const domainMax = maxValue;
-  const gradientSplit =
-    domainMax - domainMin > 0
-      ? Math.min(1, Math.max(0, domainMax / (domainMax - domainMin)))
-      : 1;
 
   return (
     <div className="my-4 border border-neutral-200 dark:border-neutral-700 rounded-lg p-2 md:p-3" ref={containerRef}>
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={chartData} margin={{ top: 24, right: 4, bottom: 0, left: 0 }}>
-          <defs>
-            <linearGradient id="pyroxeneChartGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-              <stop offset={gradientSplit} stopColor="#3b82f6" stopOpacity={0.05} />
-              <stop offset={gradientSplit} stopColor="#ef4444" stopOpacity={0.05} />
-              <stop offset="100%" stopColor="#ef4444" stopOpacity={0.3} />
-            </linearGradient>
-          </defs>
           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
           <XAxis
             dataKey="ts"
@@ -197,7 +207,14 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
           <Tooltip
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
-              const item = payload[0].payload as { ts: number; pyroxene: number };
+              const item = payload[0].payload as {
+                ts: number;
+                pyroxene: number;
+                pyroxeneBand: [number, number];
+              };
+              const [pessimistic, optimistic] = item.pyroxeneBand;
+              // 밴드 폭이 있을 때만(픽업 누적 이후) 상·하위 10% 추정치를 함께 표시합니다.
+              const hasBand = optimistic - pessimistic > 1;
               return (
                 <div
                   style={{
@@ -213,6 +230,16 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
                   <p style={{ color: tooltipText, fontSize: 13, fontWeight: 600 }}>
                     {item.pyroxene.toLocaleString()}개
                   </p>
+                  {hasBand && (
+                    <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 1 }}>
+                      <p style={{ color: axisColor, fontSize: 11 }}>
+                        상위 10% {Math.round(optimistic).toLocaleString()}개
+                      </p>
+                      <p style={{ color: axisColor, fontSize: 11 }}>
+                        하위 10% {Math.round(pessimistic).toLocaleString()}개
+                      </p>
+                    </div>
+                  )}
                 </div>
               );
             }}
@@ -249,14 +276,28 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
               )}
             />
           ))}
+          {/* 1. 신뢰 구간 밴드 (낙관~비관) — 옅은 채움, 선 없음 */}
+          <Area
+            type="monotone"
+            dataKey="pyroxeneBand"
+            stroke="none"
+            fill={bandFillColor}
+            fillOpacity={1}
+            dot={false}
+            activeDot={false}
+            isAnimationActive={false}
+            tooltipType="none"
+          />
+          {/* 3. 중앙선 (토글 기준값) — 맨 위, 선만 */}
           <Area
             type="monotone"
             dataKey="pyroxene"
             stroke="#3b82f6"
             strokeWidth={2}
-            fill="url(#pyroxeneChartGradient)"
+            fill="none"
             dot={false}
             activeDot={{ r: 4, fill: "#3b82f6" }}
+            isAnimationActive={false}
           />
         </AreaChart>
       </ResponsiveContainer>
