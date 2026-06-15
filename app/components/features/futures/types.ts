@@ -1,7 +1,7 @@
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { UtcIsoString } from "~/lib/date-time";
 import type { RaidType } from "~/models/content.d";
-import type { TimelineSourceType } from "~/models/pyroxene-planner";
+import type { PyroxeneTimelineRepeatType, TimelineSourceType } from "~/models/pyroxene-planner";
 
 export type PyroxeneScheduleItem = {
   event?: {
@@ -46,7 +46,8 @@ export type PyroxeneScheduleItem = {
     pyroxeneDelta?: number;
     oneTimeTicketDelta?: number;
     tenTimeTicketDelta?: number;
-    repeatIntervalDays: number;
+    repeatType?: PyroxeneTimelineRepeatType;
+    repeatIntervalDays?: number;
     repeatCount?: number;
     autoRepurchase?: boolean;
   };

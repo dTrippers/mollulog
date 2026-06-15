@@ -47,15 +47,29 @@ export function usePyroxeneScheduleItems(
 
     for (const item of timelineItems) {
       if (item.source === "buy") {
-        items.push({
-          onetimeGain: {
-            uid: item.uid,
-            source: "buy",
-            description: item.description,
-            date: new Date(item.eventAt),
-            pyroxeneDelta: item.pyroxeneDelta,
-          },
-        });
+        if (item.repeatType === "monthly_first") {
+          items.push({
+            repeatedGain: {
+              uid: item.uid,
+              source: "buy",
+              description: item.description,
+              date: new Date(item.eventAt),
+              pyroxeneDelta: item.pyroxeneDelta,
+              repeatType: item.repeatType,
+              repeatCount: item.repeatCount ?? undefined,
+            },
+          });
+        } else {
+          items.push({
+            onetimeGain: {
+              uid: item.uid,
+              source: "buy",
+              description: item.description,
+              date: new Date(item.eventAt),
+              pyroxeneDelta: item.pyroxeneDelta,
+            },
+          });
+        }
       } else if (item.source === "package_onetime" || item.source === "package_ap") {
         if (item.autoRepurchase && item.repeatIntervalDays) {
           items.push({
@@ -65,6 +79,7 @@ export function usePyroxeneScheduleItems(
               description: item.description,
               date: new Date(item.eventAt),
               pyroxeneDelta: item.pyroxeneDelta,
+              repeatType: item.repeatType,
               repeatIntervalDays: item.repeatIntervalDays,
               repeatCount: item.repeatCount ?? undefined,
               autoRepurchase: item.autoRepurchase,
@@ -90,6 +105,7 @@ export function usePyroxeneScheduleItems(
             description: item.description,
             date: new Date(item.eventAt),
             pyroxeneDelta: item.pyroxeneDelta,
+            repeatType: item.repeatType,
             repeatIntervalDays: item.repeatIntervalDays ?? 0,
             repeatCount: item.repeatCount ?? undefined,
             autoRepurchase: item.autoRepurchase,
@@ -103,6 +119,7 @@ export function usePyroxeneScheduleItems(
             description: item.description,
             date: new Date(item.eventAt),
             pyroxeneDelta: item.pyroxeneDelta,
+            repeatType: item.repeatType,
             repeatIntervalDays: item.repeatIntervalDays ?? 0,
           },
         });

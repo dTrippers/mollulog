@@ -11,7 +11,7 @@ import {
   calculateDailyApChargePyroxene,
   normalizePyroxeneTimelineEventAt,
 } from "~/models/pyroxene-planner-source-config";
-import type { PyroxeneTimelineItem, TimelineSourceType } from "./pyroxene-planner";
+import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType, TimelineSourceType } from "./pyroxene-planner";
 import type { PickupResources } from "./pyroxene-timeline";
 export {
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
@@ -56,6 +56,7 @@ type OptimisticTimelineItemInput = {
   pyroxeneDelta?: number;
   oneTimeTicketDelta?: number;
   tenTimeTicketDelta?: number;
+  repeatType?: PyroxeneTimelineRepeatType;
   repeatIntervalDays?: number | null;
   repeatCount?: number | null;
   autoRepurchase?: boolean;
@@ -71,19 +72,39 @@ function createOptimisticTimelineItem(input: OptimisticTimelineItemInput): Pyrox
     pyroxeneDelta: input.pyroxeneDelta ?? 0,
     oneTimeTicketDelta: input.oneTimeTicketDelta ?? 0,
     tenTimeTicketDelta: input.tenTimeTicketDelta ?? 0,
+    repeatType: input.repeatType ?? "fixed_days",
     repeatIntervalDays: input.repeatIntervalDays ?? null,
     repeatCount: input.repeatCount ?? null,
     autoRepurchase: input.autoRepurchase ?? false,
   };
 }
 
-export function createOptimisticBuyTimelineItems(quantity: number, date: Date): PyroxeneTimelineItem[] {
+type OptimisticBuyTimelineOptions = {
+  repeatType?: PyroxeneTimelineRepeatType;
+  monthlyCount?: number;
+};
+
+function normalizeMonthlyCount(monthlyCount: number | undefined): number {
+  if (monthlyCount === undefined || !Number.isFinite(monthlyCount)) {
+    return 1;
+  }
+  return Math.max(1, Math.floor(monthlyCount));
+}
+
+export function createOptimisticBuyTimelineItems(
+  quantity: number,
+  date: Date,
+  options: OptimisticBuyTimelineOptions = {},
+): PyroxeneTimelineItem[] {
+  const normalizedMonthlyCount = normalizeMonthlyCount(options.monthlyCount);
+
   return [
     createOptimisticTimelineItem({
       eventAt: date,
       source: "buy",
       description: "청휘석 구매",
-      pyroxeneDelta: quantity,
+      pyroxeneDelta: quantity * normalizedMonthlyCount,
+      repeatType: options.repeatType,
     }),
   ];
 }

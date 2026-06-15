@@ -71,6 +71,66 @@ describe("pyroxene-timeline", () => {
     );
   });
 
+  it("expands monthly-first buy gains from the next month after the purchase date", () => {
+    const timeline = buildTimeline(
+      initialResources,
+      new Date("2026-06-01T00:00:00.000Z"),
+      new Map(),
+      [
+        futureEvent("2026-09-15T00:00:00.000Z"),
+        {
+          repeatedGain: {
+            uid: "monthly-buy",
+            source: "buy",
+            date: new Date("2026-06-15T00:00:00.000Z"),
+            description: "청휘석 구매",
+            pyroxeneDelta: 13200,
+            repeatType: "monthly_first",
+          },
+        },
+      ],
+      defaultOptions,
+    );
+
+    const buyEntries = timeline.filter((entry) => entry.source.uid === "monthly-buy");
+
+    expect(buyEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene])).toEqual([
+      ["2026-06-15", 13200],
+      ["2026-07-01", 13200],
+      ["2026-08-01", 13200],
+      ["2026-09-01", 13200],
+    ]);
+  });
+
+  it("expands monthly-first buy gains from the following month when purchased on the 1st", () => {
+    const timeline = buildTimeline(
+      initialResources,
+      new Date("2026-06-01T00:00:00.000Z"),
+      new Map(),
+      [
+        futureEvent("2026-08-15T00:00:00.000Z"),
+        {
+          repeatedGain: {
+            uid: "monthly-buy-first-day",
+            source: "buy",
+            date: new Date("2026-06-01T00:00:00.000Z"),
+            description: "청휘석 구매",
+            pyroxeneDelta: 6600,
+            repeatType: "monthly_first",
+          },
+        },
+      ],
+      defaultOptions,
+    );
+
+    const buyEntries = timeline.filter((entry) => entry.source.uid === "monthly-buy-first-day");
+
+    expect(buyEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene])).toEqual([
+      ["2026-07-01", 6600],
+      ["2026-08-01", 6600],
+    ]);
+  });
+
   it("expands repeated gains until repeat count within the event horizon", () => {
     const timeline = buildTimeline(
       initialResources,

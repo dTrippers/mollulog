@@ -1,19 +1,26 @@
 import dayjs from "dayjs";
 import { useState } from "react";
 import { CheckIcon } from "@heroicons/react/16/solid";
-import { Button, Field, Input } from "~/components/primitives";
+import { Button, Field, Input, NumberInput, Toggle } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import {
   DEFAULT_BUY_PYROXENE_QUANTITY,
   PYROXENE_BUY_PRESET_GROUPS,
 } from "~/models/pyroxene-planner-source-config";
+import type { PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 
 type BuyInputProps = {
-  onSaveBuy: (quantity: number, date: Date) => void;
+  onSaveBuy: (
+    quantity: number,
+    date: Date,
+    options?: { repeatType?: PyroxeneTimelineRepeatType; monthlyCount?: number },
+  ) => void;
 };
 
 export default function BuyInput({ onSaveBuy }: BuyInputProps) {
+  const [monthlyRepeat, setMonthlyRepeat] = useState(false);
   const [quantity, setQuantity] = useState(DEFAULT_BUY_PYROXENE_QUANTITY);
+  const [monthlyCount, setMonthlyCount] = useState(1);
   const [date, setDate] = useState(new Date());
   const [showMorePresets, setShowMorePresets] = useState(false);
 
@@ -78,12 +85,41 @@ export default function BuyInput({ onSaveBuy }: BuyInputProps) {
             </button>
           )}
         </Field>
+        <Field label="구매 주기">
+          <Toggle
+            label="매월 반복 구매"
+            initialState={monthlyRepeat}
+            className="my-2"
+            onChange={setMonthlyRepeat}
+          />
+        </Field>
+        {monthlyRepeat && (
+          <div className="space-y-2">
+            <NumberInput
+              label="월 구매 횟수"
+              size="sm"
+              minValue={1}
+              value={monthlyCount}
+              onChange={(value) => setMonthlyCount(Math.max(1, Math.floor(value)))}
+            />
+            <p className="text-xs text-muted-foreground">
+              입력한 날짜에 {(quantity * monthlyCount).toLocaleString()}개를 반영하고, 다음 달부터 매월 1일 같은 수량을
+              반복 반영해요
+            </p>
+          </div>
+        )}
         <Button
           text="저장"
           variant="tint-blue"
           fullWidth
           className="mt-2"
-          onClick={() => onSaveBuy(quantity, date)}
+          onClick={() =>
+            onSaveBuy(
+              quantity,
+              date,
+              monthlyRepeat ? { repeatType: "monthly_first", monthlyCount } : undefined,
+            )
+          }
         />
       </div>
     </>

@@ -9,7 +9,11 @@ import {
   PanelOptionIconButton,
 } from "~/components/primitives";
 import { cn } from "~/lib/utils";
-import type { PyroxenePlannerOptions, TimelineSourceType } from "~/models/pyroxene-planner";
+import type {
+  PyroxenePlannerOptions,
+  PyroxeneTimelineRepeatType,
+  TimelineSourceType,
+} from "~/models/pyroxene-planner";
 import { PYROXENE_AP_CHARGE_MAX_COUNT } from "~/models/pyroxene-planner-source-config";
 import type { PyroxeneMonthlyPackageType } from "~/models/pyroxene-planner-source-config";
 import {
@@ -27,7 +31,11 @@ import { PYROXENE_SOURCE_ROW_DEFINITIONS, PYROXENE_SOURCE_ROW_GROUP_LABELS } fro
 type PyroxenePlannerSourcePanelProps = {
   options: PyroxenePlannerOptions;
   onOptionsChange: (options: PyroxenePlannerOptions) => void;
-  onSaveBuy: (quantity: number, date: Date) => void;
+  onSaveBuy: (
+    quantity: number,
+    date: Date,
+    options?: { repeatType?: PyroxeneTimelineRepeatType; monthlyCount?: number },
+  ) => void;
   onSaveMonthlyPackage: (startDate: Date, packageType: PyroxeneMonthlyPackageType, autoRepurchase: boolean) => void;
   onSaveApPackage: (startDate: Date, autoRepurchase: boolean) => void;
   onSaveAttendance: (startDate: Date) => void;
@@ -158,8 +166,8 @@ export default function PyroxenePlannerSourcePanel({
             options={options}
             onOptionsChange={onOptionsChange}
             onClose={() => setOpenRowId(null)}
-            onSaveBuy={(quantity, date) => {
-              onSaveBuy(quantity, date);
+            onSaveBuy={(quantity, date, options) => {
+              onSaveBuy(quantity, date, options);
               setOpenRowId(null);
             }}
             onSaveMonthlyPackage={(startDate, packageType, autoRepurchase) => {

@@ -229,6 +229,7 @@ export const pyroxeneTimelineItemsTable = sqliteTable("pyroxene_timeline_items",
   userId: int().notNull(),
   eventAt: text().notNull(),
   source: text().notNull(),
+  repeatType: text(),
   repeatIntervalDays: int(),
   repeatCount: int(),
   autoRepurchase: int().notNull().default(0),
@@ -240,11 +241,14 @@ export const pyroxeneTimelineItemsTable = sqliteTable("pyroxene_timeline_items",
   updatedAt: text().notNull().default(sql`current_timestamp`),
 });
 
+export type PyroxeneTimelineRepeatType = "fixed_days" | "monthly_first";
+
 export type PyroxeneTimelineItem = {
   uid: string;
   userId: number;
   eventAt: string;
   source: TimelineSourceType;
+  repeatType: PyroxeneTimelineRepeatType;
   repeatIntervalDays: number | null;
   repeatCount: number | null;
   autoRepurchase: boolean;
@@ -254,12 +258,17 @@ export type PyroxeneTimelineItem = {
   tenTimeTicketDelta: number;
 };
 
+function toTimelineRepeatType(repeatType: string | null): PyroxeneTimelineRepeatType {
+  return repeatType === "monthly_first" ? "monthly_first" : "fixed_days";
+}
+
 function toTimelineItemModel(item: typeof pyroxeneTimelineItemsTable.$inferSelect): PyroxeneTimelineItem {
   return {
     uid: item.uid,
     userId: item.userId,
     eventAt: item.eventAt,
     source: item.source as TimelineSourceType,
+    repeatType: toTimelineRepeatType(item.repeatType),
     repeatIntervalDays: item.repeatIntervalDays,
     repeatCount: item.repeatCount,
     autoRepurchase: item.autoRepurchase === 1,
@@ -280,17 +289,39 @@ export async function getPyroxeneTimelineItems(env: Env, userId: number): Promis
   return items.map(toTimelineItemModel);
 }
 
-export async function createBuyPyroxene(env: Env, userId: number, date: Date | string, quantity: number): Promise<void> {
+type CreateBuyPyroxeneOptions = {
+  repeatType?: PyroxeneTimelineRepeatType;
+  monthlyCount?: number;
+};
+
+function normalizeMonthlyCount(monthlyCount: number | undefined): number {
+  if (monthlyCount === undefined || !Number.isFinite(monthlyCount)) {
+    return 1;
+  }
+  return Math.max(1, Math.floor(monthlyCount));
+}
+
+export async function createBuyPyroxene(
+  env: Env,
+  userId: number,
+  date: Date | string,
+  quantity: number,
+  options: CreateBuyPyroxeneOptions = {},
+): Promise<void> {
   const uid = nanoid(8);
   const eventAt = normalizePyroxeneTimelineEventAt(date);
+  const repeatType = options.repeatType ?? "fixed_days";
+  const normalizedMonthlyCount = normalizeMonthlyCount(options.monthlyCount);
+  const pyroxeneDelta = quantity * normalizedMonthlyCount;
   const db = drizzle(env.DB);
   await db.insert(pyroxeneTimelineItemsTable).values({
     uid,
     userId,
     eventAt,
     source: "buy",
+    repeatType: repeatType === "fixed_days" ? null : repeatType,
     description: "청휘석 구매",
-    pyroxeneDelta: quantity,
+    pyroxeneDelta,
     oneTimeTicketDelta: 0,
     tenTimeTicketDelta: 0,
   });

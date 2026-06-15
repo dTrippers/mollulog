@@ -61,6 +61,17 @@ const TIMELINE_DELTA_PRIORITY = {
   TICKET_EXPIRY: 20,
 } as const;
 
+function getNextMonthlyFirstDate(date: dayjs.Dayjs): dayjs.Dayjs {
+  return date.add(1, "month").startOf("month");
+}
+
+function getNextRepeatedGainDate(repeatedGain: NonNullable<PyroxeneScheduleItem["repeatedGain"]>, date: dayjs.Dayjs) {
+  if (repeatedGain.repeatType === "monthly_first") {
+    return getNextMonthlyFirstDate(date);
+  }
+  return date.add(repeatedGain.repeatIntervalDays ?? 0, "day");
+}
+
 function getEliminationTicketExpiresAt(raidUntil: Date | string): dayjs.Dayjs {
   return dayjs(raidUntil).add(1, "month").endOf("month");
 }
@@ -232,11 +243,15 @@ export function buildTimeline(
       });
     } else if (scheduleItem.repeatedGain) {
       const { repeatedGain } = scheduleItem;
+      if (repeatedGain.repeatType !== "monthly_first" && (!repeatedGain.repeatIntervalDays || repeatedGain.repeatIntervalDays <= 0)) {
+        continue;
+      }
+
       let repeatedGainCount = 0;
       for (
         let date = dayjs(repeatedGain.date);
         date.isBefore(maxDate) && repeatedGainCount < (repeatedGain.repeatCount ?? MAX_REPEATED_ENTRIES);
-        date = date.add(repeatedGain.repeatIntervalDays, "day")
+        date = getNextRepeatedGainDate(repeatedGain, date)
       ) {
         timelineDeltas.push({
           date,
