@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { ResourceInventoryGroup, ResourceInventoryTile } from "~/components/features/growth";
-import { LoadingSkeleton, Toggle } from "~/components/primitives";
+import { LoadingSkeleton, Toggle, useNumberInputFlowNavigation } from "~/components/primitives";
 import type { loader as favoriteItemsLoader } from "~/routes/api.students.$uid.items";
 
 type FavoriteItemSelectorProps = {
@@ -14,6 +14,7 @@ type FavoriteItemSelectorProps = {
 
 export default function FavoriteItemSelector({ studentUid, quantities, onQuantitiesChange, onSelectedItemExpChange }: FavoriteItemSelectorProps) {
   const [filterFavorited, setFilterFavorited] = useState(true);
+  const numberInputFlowNavigation = useNumberInputFlowNavigation();
 
   const fetcher = useFetcher<typeof favoriteItemsLoader>();
   const [cachedFavoriteItems, setCachedFavoriteItems] = useState<Record<string, NonNullable<typeof fetcher.data>["favoriteItems"]>>({});
@@ -86,6 +87,7 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
                 currentQuantity={quantity}
                 draftQuantity={quantity}
                 quantityLabel="목표"
+                inputProps={numberInputFlowNavigation.getInputProps()}
                 metrics={[
                   { label: "EXP", value: `+${exp.toLocaleString()}` },
                   ...(quantity > 0

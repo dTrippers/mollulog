@@ -12,7 +12,13 @@ import {
 } from "react";
 import { useBlocker, useFetcher, useSearchParams } from "react-router";
 import { ResourceInventoryTile, type ResourceInventoryTileMetric } from "~/components/features/growth";
-import { Button, EmptyView, FilterButtons } from "~/components/primitives";
+import {
+  Button,
+  EmptyView,
+  FilterButtons,
+  type NumberInputFlowNavigationInputProps,
+  useNumberInputFlowNavigation,
+} from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import {
   type AggregatedGrowthResourceRequirements,
@@ -52,6 +58,7 @@ type ResourceMode = "needed" | "all";
 type ResourceFilter = {
   search: string;
 };
+type NumberInputFlowNavigation = ReturnType<typeof useNumberInputFlowNavigation>;
 
 type InventoryResource = ItemCatalogResource & {
   requiredAmount: number;
@@ -101,6 +108,7 @@ export default function ResourceInventoryEditor({
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>(ownedQuantities);
   const [filter, setFilter] = useState<ResourceFilter>({ search: "" });
   const [categoryModes, setCategoryModes] = useState<Record<number, ResourceMode>>({});
+  const numberInputFlowNavigation = useNumberInputFlowNavigation();
 
   const inventoryResources = useMemo(
     () => buildInventoryResources(resources, requiredResources.items),
@@ -194,6 +202,7 @@ export default function ResourceInventoryEditor({
                 ownedQuantities={baseQuantities}
                 draftQuantities={draftQuantities}
                 requiredCharacterExp={requiredResources.characterExp}
+                numberInputFlowNavigation={numberInputFlowNavigation}
                 onModeChange={changeCategoryMode}
                 onQuantityChange={(resourceUid, quantity) => {
                   setDraftQuantities((current) => ({ ...current, [resourceUid]: quantity }));
@@ -363,6 +372,7 @@ function ResourceGroup({
   ownedQuantities,
   draftQuantities,
   requiredCharacterExp,
+  numberInputFlowNavigation,
   onModeChange,
   onQuantityChange,
 }: {
@@ -371,6 +381,7 @@ function ResourceGroup({
   ownedQuantities: Record<string, number>;
   draftQuantities: Record<string, number>;
   requiredCharacterExp: number;
+  numberInputFlowNavigation: NumberInputFlowNavigation;
   onModeChange: (kindOrder: number, mode: ResourceMode) => void;
   onQuantityChange: (resourceUid: string, quantity: number) => void;
 }) {
@@ -404,6 +415,7 @@ function ResourceGroup({
           resources={resources}
           ownedQuantities={ownedQuantities}
           draftQuantities={draftQuantities}
+          numberInputFlowNavigation={numberInputFlowNavigation}
           onQuantityChange={onQuantityChange}
         />
       ) : kindOrder === GROWTH_RESOURCE_KIND_ORDER.bd || kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote ? (
@@ -411,6 +423,7 @@ function ResourceGroup({
           resources={resources}
           ownedQuantities={ownedQuantities}
           draftQuantities={draftQuantities}
+          numberInputFlowNavigation={numberInputFlowNavigation}
           onQuantityChange={onQuantityChange}
         />
       ) : (
@@ -422,6 +435,7 @@ function ResourceGroup({
               currentQuantity={ownedQuantities[resource.uid] ?? 0}
               draftQuantity={draftQuantities[resource.uid] ?? 0}
               showRequiredMetrics={!isCharacterExpGroup}
+              inputProps={numberInputFlowNavigation.getInputProps()}
               onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
             />
           ))}
@@ -457,11 +471,13 @@ function SkillMaterialSubGroups({
   resources,
   ownedQuantities,
   draftQuantities,
+  numberInputFlowNavigation,
   onQuantityChange,
 }: {
   resources: InventoryResource[];
   ownedQuantities: Record<string, number>;
   draftQuantities: Record<string, number>;
+  numberInputFlowNavigation: NumberInputFlowNavigation;
   onQuantityChange: (resourceUid: string, quantity: number) => void;
 }) {
   const choiceBoxResources = useMemo(
@@ -498,6 +514,7 @@ function SkillMaterialSubGroups({
                 draftQuantity={draftQuantities[resource.uid] ?? 0}
                 showRequiredMetrics={false}
                 metrics={choiceBoxAllocation.choiceBoxMetricsByUid.get(resource.uid)}
+                inputProps={numberInputFlowNavigation.getInputProps()}
                 onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
               />
             ))}
@@ -518,6 +535,7 @@ function SkillMaterialSubGroups({
                   showRequiredMetrics
                   showRequiredBalance={choiceBoxUid === null}
                   metrics={choiceBoxAllocation.itemMetricsByUid.get(resource.uid)}
+                  inputProps={numberInputFlowNavigation.getInputProps()}
                   onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
                 />
               );
@@ -533,11 +551,13 @@ function EquipmentSubGroups({
   resources,
   ownedQuantities,
   draftQuantities,
+  numberInputFlowNavigation,
   onQuantityChange,
 }: {
   resources: InventoryResource[];
   ownedQuantities: Record<string, number>;
   draftQuantities: Record<string, number>;
+  numberInputFlowNavigation: NumberInputFlowNavigation;
   onQuantityChange: (resourceUid: string, quantity: number) => void;
 }) {
   const choiceBoxResources = useMemo(
@@ -594,6 +614,7 @@ function EquipmentSubGroups({
                 draftQuantity={draftQuantities[resource.uid] ?? 0}
                 showRequiredMetrics={false}
                 metrics={choiceBoxAllocation.choiceBoxMetricsByUid.get(resource.uid)}
+                inputProps={numberInputFlowNavigation.getInputProps()}
                 onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
               />
             ))}
@@ -613,6 +634,7 @@ function EquipmentSubGroups({
                 showRequiredMetrics
                 showRequiredBalance={false}
                 metrics={choiceBoxAllocation.itemMetricsByUid.get(resource.uid)}
+                inputProps={numberInputFlowNavigation.getInputProps()}
                 onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
               />
             ))}
@@ -819,6 +841,7 @@ function ResourceTile({
   showRequiredMetrics,
   showRequiredBalance = true,
   metrics,
+  inputProps,
   onQuantityChange,
 }: {
   resource: InventoryResource;
@@ -827,6 +850,7 @@ function ResourceTile({
   showRequiredMetrics: boolean;
   showRequiredBalance?: boolean;
   metrics?: ResourceInventoryTileMetric[];
+  inputProps?: NumberInputFlowNavigationInputProps;
   onQuantityChange: (quantity: number) => void;
 }) {
   const hasRequiredAmount = showRequiredMetrics && resource.requiredAmount > 0;
@@ -860,6 +884,7 @@ function ResourceTile({
       }}
       currentQuantity={currentQuantity}
       draftQuantity={draftQuantity}
+      inputProps={inputProps}
       metrics={[...requiredMetrics, ...(metrics ?? [])]}
       onQuantityChange={onQuantityChange}
     />

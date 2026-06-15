@@ -1,6 +1,6 @@
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
-import { ResourceCard, NumberInput } from "~/components/primitives";
+import { ResourceCard, NumberInput, type NumberInputFlowNavigationInputProps } from "~/components/primitives";
 
 export type ResourceInventoryTileMetric = {
   label?: string;
@@ -32,6 +32,7 @@ type ResourceInventoryTileProps = {
   quantityLabel?: string;
   showQuantityInput?: boolean;
   showName?: boolean;
+  inputProps?: NumberInputFlowNavigationInputProps;
   metrics?: ResourceInventoryTileMetric[];
   onQuantityChange?: (quantity: number) => void;
 };
@@ -42,6 +43,7 @@ export default function ResourceInventoryTile({
   draftQuantity = 0,
   quantityLabel = "보유",
   showName = false,
+  inputProps,
   metrics,
   onQuantityChange,
   showQuantityInput = Boolean(onQuantityChange),
@@ -89,6 +91,7 @@ export default function ResourceInventoryTile({
             showIncrease={false}
             size="sm"
             value={draftQuantity}
+            inputProps={inputProps}
             onChange={onQuantityChange}
           />
         </div>
