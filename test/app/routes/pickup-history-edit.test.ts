@@ -11,7 +11,12 @@ import {
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
-import { action, getVisibleTier3StudentUids, loader } from "../../../app/routes/$username.pickups.edit.$id";
+import {
+  action,
+  getVisibleTier3StudentUids,
+  loader,
+  shouldSkipTier3StudentListInitially,
+} from "../../../app/routes/$username.pickups.edit.$id";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
@@ -122,6 +127,12 @@ describe("pickup history editor state helpers", () => {
     expect(selectedStudentUids).toEqual(["hina", "aru", "mika"]);
     expect(getVisibleTier3StudentUids(selectedStudentUids, 4)).toEqual(["hina", "aru", "mika"]);
     expect(getVisibleTier3StudentUids(selectedStudentUids, 0)).toEqual([]);
+  });
+
+  it("only initializes count-only mode for non-zero counts with no student names", () => {
+    expect(shouldSkipTier3StudentListInitially(5, [])).toBe(true);
+    expect(shouldSkipTier3StudentListInitially(5, ["hina", "aru", "mika"])).toBe(false);
+    expect(shouldSkipTier3StudentListInitially(0, [])).toBe(false);
   });
 });
 

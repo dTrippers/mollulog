@@ -118,6 +118,10 @@ export function getVisibleTier3StudentUids(studentUids: string[], tier3Count?: n
   return studentUids.slice(0, Math.max(0, tier3Count));
 }
 
+export function shouldSkipTier3StudentListInitially(tier3Count?: number, tier3StudentUids: string[] = []) {
+  return (tier3Count ?? 0) > 0 && tier3StudentUids.length === 0;
+}
+
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const sensei = await getActiveSensei(env, request);
@@ -372,7 +376,7 @@ export default function EditPickup() {
   const [tier3Count, setTier3Count] = useState(initialTier3Count);
   const [tier3StudentUids, setTier3StudentUids] = useState(initialTier3StudentUids ?? []);
   const [skipTier3StudentList, setSkipTier3StudentList] = useState(
-    (initialTier3Count ?? 0) > 0 && (initialTier3StudentUids?.length ?? 0) < (initialTier3Count ?? 0),
+    shouldSkipTier3StudentListInitially(initialTier3Count, initialTier3StudentUids),
   );
   const [exchangedStudentUids, setExchangedStudentUids] = useState(currentPickupHistory?.exchangedStudentIds ?? []);
 

@@ -108,6 +108,7 @@ export function getRecruitmentResultCountStats(
 ): RecruitmentResultCountStats {
   const recruitedStudents = resolveRecruitmentResultStudents(result.recruitedStudents, lookup);
   const tier3Students = recruitedStudents.filter(({ tier }) => tier === 3);
+  // Count-only entries intentionally cannot contribute to pickup counts because no student identity is recorded.
   const pickupStudents = tier3Students.filter(({ pickup }) => pickup);
   const tier3Count = result.tier3Count ?? tier3Students.length;
   const rateMultiplier = lookup.group?.recruitmentType === "fes" ? 0.5 : 1;
