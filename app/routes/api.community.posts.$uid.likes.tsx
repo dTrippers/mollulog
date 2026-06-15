@@ -1,6 +1,7 @@
-import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
+import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getCommunityLikeCountsByPostUids, getLikedCommunityPostUids, setCommunityPostLike } from "~/models/community";
+import type { CommunityPostLikeChangedActionResult } from "~/models/community-engagement";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const postUid = params.uid;
@@ -46,7 +47,9 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   ]);
 
   return {
+    kind: "communityPostLikeChanged",
+    postUid,
     likeCount: counts[postUid] ?? 0,
     liked: likedPostUids.has(postUid),
-  };
+  } satisfies CommunityPostLikeChangedActionResult;
 };

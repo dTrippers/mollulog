@@ -1,4 +1,4 @@
-import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
+import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
   createCommunityComment,
@@ -6,6 +6,7 @@ import {
   getNestedCommunityComments,
   updateCommunityComment,
 } from "~/models/community";
+import type { CommunityPostCommentsChangedActionResult } from "~/models/community-engagement";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const postUid = params.uid;
@@ -50,14 +51,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
       throw new Response("Body and parentCommentUid are required", { status: 400 });
     }
 
-    await createCommunityComment(
-      env,
-      currentUser.id,
-      postUid,
-      actionData.body,
-      "public",
-      actionData.parentCommentUid,
-    );
+    await createCommunityComment(env, currentUser.id, postUid, actionData.body, "public", actionData.parentCommentUid);
   } else if (actionData.action === "update") {
     if (!actionData.commentUid || !actionData.body) {
       throw new Response("CommentUid and body are required", { status: 400 });
@@ -80,5 +74,9 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     throw new Response("Invalid action", { status: 400 });
   }
 
-  return getNestedCommunityComments(env, postUid, currentUser.id);
+  return {
+    kind: "communityPostCommentsChanged",
+    postUid,
+    comments: await getNestedCommunityComments(env, postUid, currentUser.id),
+  } satisfies CommunityPostCommentsChangedActionResult;
 };

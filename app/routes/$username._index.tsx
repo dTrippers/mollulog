@@ -1,12 +1,13 @@
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { PencilSquareIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
 import { useCallback } from "react";
+import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
+import { Link, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { getCommunityFeedPage } from "~/models/community";
+import { isCommunityEngagementActionResult } from "~/models/community-engagement";
 import {
   COMMUNITY_FEED_PAGE_SIZE,
   COMMUNITY_VISIBLE_POST_TYPES,
@@ -82,6 +83,14 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   };
 };
 
+export const shouldRevalidate: ShouldRevalidateFunction = ({ actionResult, defaultShouldRevalidate }) => {
+  if (isCommunityEngagementActionResult(actionResult)) {
+    return false;
+  }
+
+  return defaultShouldRevalidate;
+};
+
 export const meta: MetaFunction = ({ params }) => {
   return [
     { title: `${params.username || ""} - 프로필 | 몰루로그`.trim() },
@@ -104,7 +113,9 @@ export default function UserIndex() {
   const loaderData = useLoaderData<typeof loader>();
   const { sensei, currentUsername, posts, signedIn, studentsByUid, page, totalPages } = loaderData;
 
-  let followability: ProfileHeaderProps["followability"] = loaderData.relationship.following ? "following" : "followable";
+  let followability: ProfileHeaderProps["followability"] = loaderData.relationship.following
+    ? "following"
+    : "followable";
   if (currentUsername === sensei.username) {
     followability = "unable";
   }
@@ -112,13 +123,16 @@ export default function UserIndex() {
   const fetcher = useFetcher<ActionData>();
   const { showSignIn } = useSignIn();
   const [searchParams] = useSearchParams();
-  const getPageUrl = useCallback((nextPage: number) => {
-    const nextSearchParams = new URLSearchParams(searchParams);
-    nextSearchParams.set("page", String(nextPage));
+  const getPageUrl = useCallback(
+    (nextPage: number) => {
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.set("page", String(nextPage));
 
-    const query = nextSearchParams.toString();
-    return query ? `/@${sensei.username}?${query}` : `/@${sensei.username}`;
-  }, [searchParams, sensei.username]);
+      const query = nextSearchParams.toString();
+      return query ? `/@${sensei.username}?${query}` : `/@${sensei.username}`;
+    },
+    [searchParams, sensei.username],
+  );
 
   return (
     <div className="my-6 space-y-5">
@@ -208,7 +222,11 @@ function ProfileHeader({
       </div>
 
       <div className="mt-4">
-        {bio && <p className="whitespace-pre-wrap text-left text-sm leading-6 text-neutral-800 dark:text-neutral-100">{bio}</p>}
+        {bio && (
+          <p className="whitespace-pre-wrap text-left text-sm leading-6 text-neutral-800 dark:text-neutral-100">
+            {bio}
+          </p>
+        )}
 
         <div className={`${bio ? "mt-3" : ""} flex flex-wrap items-center gap-x-4 gap-y-2 text-left text-sm`}>
           <Link to={`/@${username}/friends?tab=following`} className="hover:underline">
@@ -274,18 +292,16 @@ function RecruitmentSummaryBar({
         </span>
       </div>
       <div className="flex h-2.5 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
-        {recruitedCount > 0 ? (
-          visibleTiers.map((tier) => (
-            <div
-              key={tier}
-              className={recruitmentTierStyles[tier]}
-              style={{ width: `${((tierCounts[tier] ?? 0) / widthBase) * 100}%` }}
-              title={`${tier <= 5 ? `★${tier}` : `고유 ${tier - 5}`} - ${tierCounts[tier]}명`}
-            />
-          ))
-        ) : (
-          null
-        )}
+        {recruitedCount > 0
+          ? visibleTiers.map((tier) => (
+              <div
+                key={tier}
+                className={recruitmentTierStyles[tier]}
+                style={{ width: `${((tierCounts[tier] ?? 0) / widthBase) * 100}%` }}
+                title={`${tier <= 5 ? `★${tier}` : `고유 ${tier - 5}`} - ${tierCounts[tier]}명`}
+              />
+            ))
+          : null}
         {unrecruitedCount > 0 && (
           <div
             className="bg-neutral-300 dark:bg-neutral-700"

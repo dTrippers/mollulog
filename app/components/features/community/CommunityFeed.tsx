@@ -14,6 +14,10 @@ import { useSignIn } from "~/contexts/SignInProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { compareInstantDesc, formatInstant, parseUtcTimestamp } from "~/lib/date-time";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
+import type {
+  CommunityPostCommentsChangedActionResult,
+  CommunityPostLikeChangedActionResult,
+} from "~/models/community-engagement";
 import type { EnrichedCommunityFeedPost } from "~/models/community-feed";
 import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
 import { StudentCards } from "../students";
@@ -138,8 +142,8 @@ function CommunityPostCard({
   const [liked, setLiked] = useState(post.liked);
   const [likeCount, setLikeCount] = useState(post.likeCount);
   const [commentEditing, setCommentEditing] = useState(false);
-  const commentFetcher = useFetcher();
-  const likeFetcher = useFetcher<{ likeCount: number; liked: boolean }>();
+  const commentFetcher = useFetcher<CommunityPostCommentsChangedActionResult>();
+  const likeFetcher = useFetcher<CommunityPostLikeChangedActionResult>();
   const timestamp = getPostTimestampMeta(post, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment =
@@ -157,13 +161,13 @@ function CommunityPostCard({
   }, [post.liked, post.likeCount]);
 
   useEffect(() => {
-    if (Array.isArray(commentFetcher.data)) {
-      setComments(commentFetcher.data);
+    if (commentFetcher.data?.kind === "communityPostCommentsChanged") {
+      setComments(commentFetcher.data.comments);
     }
   }, [commentFetcher.data]);
 
   useEffect(() => {
-    if (likeFetcher.data) {
+    if (likeFetcher.data?.kind === "communityPostLikeChanged") {
       setLiked(likeFetcher.data.liked);
       setLikeCount(likeFetcher.data.likeCount);
     }
