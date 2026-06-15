@@ -1,5 +1,5 @@
 import { StudentSelectForm } from "~/components/features/forms";
-import { Button, Input } from "~/components/primitives";
+import { Checkbox, Input } from "~/components/primitives";
 
 type PickupHistoryEditorProps = {
   tier3Students: {
@@ -78,11 +78,10 @@ export default function PickupHistoryEditor({
             label="모집한 ★3 학생"
             description="모집한 ★3 학생을 선택해주세요"
             descriptionAction={
-              <Button
-                text={skipTier3StudentList ? "★3 학생 목록 입력하기" : "★3 학생 목록 입력하지 않기"}
-                variant="tint"
-                size="xs"
-                onClick={() => onSkipTier3StudentListChange(!skipTier3StudentList)}
+              <Checkbox
+                label="★3 학생 목록 입력하지 않기"
+                checked={skipTier3StudentList}
+                onChange={onSkipTier3StudentListChange}
               />
             }
             students={tier3Students}
