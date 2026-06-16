@@ -87,8 +87,8 @@ class FakeCommunityD1Database {
     if (normalizedSql.includes("from community_posts") && normalizedSql.includes("left join senseis")) {
       return this.filterPosts(normalizedSql, params)
         .sort((a, b) => {
-          const aDisplayAt = a.displayAt ?? a.updatedAt;
-          const bDisplayAt = b.displayAt ?? b.updatedAt;
+          const aDisplayAt = a.displayAt ?? a.createdAt;
+          const bDisplayAt = b.displayAt ?? b.createdAt;
           const byDate = bDisplayAt.localeCompare(aDisplayAt);
           return byDate !== 0 ? byDate : b.id - a.id;
         })
@@ -373,7 +373,7 @@ function createEnv(db: FakeCommunityD1Database): Env {
 }
 
 describe("community model feed queries", () => {
-  it("keeps existing user-authored posts visible with author data and updated-at fallback displayAt", async () => {
+  it("keeps existing user-authored posts visible with author data and created-at fallback displayAt", async () => {
     const db = new FakeCommunityD1Database();
     db.senseis.push({ id: 1, username: "sensei", profileStudentId: "student-profile" });
     db.posts.push(createUserPost());
@@ -389,7 +389,7 @@ describe("community model feed queries", () => {
       uid: "post-user-review",
       postType: "student_review",
       origin: "user",
-      displayAt: "2026-05-03T00:00:00.000Z",
+      displayAt: "2026-05-01T00:00:00.000Z",
       author: {
         id: 1,
         username: "sensei",
@@ -399,12 +399,16 @@ describe("community model feed queries", () => {
     });
   });
 
-  it("orders curated YouTube posts by displayAt while existing user posts fall back to updatedAt", async () => {
+  it("orders curated YouTube posts by displayAt while existing user posts fall back to createdAt", async () => {
     const db = new FakeCommunityD1Database();
     db.senseis.push({ id: 1, username: "sensei", profileStudentId: null });
     db.posts.push(
       createUserPost({ updatedAt: "2026-05-09T00:00:00.000Z" }),
-      createYoutubePost({ displayAt: "2026-05-10T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z" }),
+      createYoutubePost({
+        displayAt: "2026-05-10T00:00:00.000Z",
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-01T00:00:00.000Z",
+      }),
     );
 
     const page = await getCommunityFeedPage(createEnv(db), {
@@ -425,6 +429,35 @@ describe("community model feed queries", () => {
         isShorts: false,
       },
     });
+  });
+
+  it("does not move old user-authored posts to the top when they are updated", async () => {
+    const db = new FakeCommunityD1Database();
+    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null });
+    db.posts.push(
+      createUserPost({
+        id: 1,
+        uid: "old-updated-review",
+        createdAt: "2026-05-01T00:00:00.000Z",
+        updatedAt: "2026-05-20T00:00:00.000Z",
+      }),
+      createUserPost({
+        id: 2,
+        uid: "new-review",
+        subjectStudentUid: "student-b",
+        createdAt: "2026-05-10T00:00:00.000Z",
+        updatedAt: "2026-05-10T00:00:00.000Z",
+      }),
+    );
+
+    const page = await getCommunityFeedPage(createEnv(db), {
+      postTypes: ["student_review"],
+      pageSize: 20,
+      includeEngagement: false,
+    });
+
+    expect(page.items.map((item) => item.uid)).toEqual(["new-review", "old-updated-review"]);
+    expect(page.items.map((item) => item.displayAt)).toEqual(["2026-05-10T00:00:00.000Z", "2026-05-01T00:00:00.000Z"]);
   });
 
   it("can limit YouTube feed items by channel without hiding user-authored posts", async () => {

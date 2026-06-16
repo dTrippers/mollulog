@@ -6,6 +6,7 @@ const root = process.cwd();
 
 const migratedViewFiles = [
   "app/components/features/community/CommunityFeed.tsx",
+  "app/components/features/community/community-feed-presentation.ts",
   "app/components/features/students/StudentGradingTimeline.tsx",
   "app/components/features/contents/CommentView.tsx",
   "app/components/features/contents/ContentTimeline.tsx",
@@ -40,7 +41,8 @@ describe("date-time guardrails", () => {
     expect(source).not.toContain(".toLocaleDateString(");
     if (
       file !== "app/components/features/raids/RaidVideosScreen.tsx" &&
-      file !== "app/components/features/raids/RaidSelector.tsx"
+      file !== "app/components/features/raids/RaidSelector.tsx" &&
+      file !== "app/components/features/community/CommunityFeed.tsx"
     ) {
       expect(source).toContain("formatInstant");
     }

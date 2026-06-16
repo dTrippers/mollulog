@@ -12,7 +12,7 @@ import ContentCommentEditor from "~/components/features/contents/ContentCommentE
 import { MarkdownText, ProfileImage, TagIcon } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { compareInstantDesc, formatInstant, parseUtcTimestamp } from "~/lib/date-time";
+import { compareInstantDesc } from "~/lib/date-time";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
 import type {
   CommunityPostCommentsChangedActionResult,
@@ -27,6 +27,7 @@ import {
   getCommunityFeedClassName,
   getCommunityPostBodyOrder,
   getCommunityPostCardClassName,
+  getCommunityPostTimestampMeta,
   getGroupedAvatarPlaceholderClassName,
   getPickupStudentNameClassName,
   getSubjectMetaClassName,
@@ -58,21 +59,6 @@ export default function CommunityFeed({ posts, signedIn, studentsByUid, preview 
       ))}
     </div>
   );
-}
-
-function getPostTimestampMeta(post: CommunityFeedPostItem, timeZone: string) {
-  if (post.origin === "curated") {
-    const displayAt = parseUtcTimestamp(post.displayAt);
-    return { dateTime: displayAt.toISOString(), text: formatInstant(post.displayAt, { timeZone }), edited: false };
-  }
-
-  const created = parseUtcTimestamp(post.createdAt);
-  const updated = parseUtcTimestamp(post.updatedAt);
-  if (updated.isAfter(created)) {
-    return { dateTime: updated.toISOString(), text: formatInstant(post.updatedAt, { timeZone }), edited: true };
-  }
-
-  return { dateTime: created.toISOString(), text: formatInstant(post.createdAt, { timeZone }), edited: false };
 }
 
 function getPostTypeLabel(post: CommunityFeedPostItem) {
@@ -144,7 +130,7 @@ function CommunityPostCard({
   const [commentEditing, setCommentEditing] = useState(false);
   const commentFetcher = useFetcher<CommunityPostCommentsChangedActionResult>();
   const likeFetcher = useFetcher<CommunityPostLikeChangedActionResult>();
-  const timestamp = getPostTimestampMeta(post, displayTimeZone);
+  const timestamp = getCommunityPostTimestampMeta(post, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment =
     post.postType === "event_opinion" || post.postType === "youtube_video" || post.postType === "recruitment_result";

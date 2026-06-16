@@ -1,3 +1,4 @@
+import { formatInstant, parseUtcTimestamp } from "~/lib/date-time";
 import type { CommunityPostType } from "~/models/community";
 
 export type CommunityPostBodySection = "subject" | "content";
@@ -11,10 +12,30 @@ type GroupableCommunityPost = {
   postType: CommunityPostType;
 };
 
+type TimestampCommunityPost = {
+  origin: "user" | "curated";
+  displayAt: string;
+  updatedAt: string;
+};
+
 export function getCommunityPostBodyOrder(postType: CommunityPostType): CommunityPostBodySection[] {
   void postType;
 
   return ["subject", "content"];
+}
+
+export function getCommunityPostTimestampMeta(post: TimestampCommunityPost, timeZone: string) {
+  const displayAt = parseUtcTimestamp(post.displayAt);
+  if (post.origin === "curated") {
+    return { dateTime: displayAt.toISOString(), text: formatInstant(post.displayAt, { timeZone }), edited: false };
+  }
+
+  const updated = parseUtcTimestamp(post.updatedAt);
+  return {
+    dateTime: displayAt.toISOString(),
+    text: formatInstant(post.displayAt, { timeZone }),
+    edited: updated.isAfter(displayAt),
+  };
 }
 
 export function getCommunityFeedClassName({ preview }: { preview: boolean }) {
@@ -67,7 +88,9 @@ export function getCommentToggleClassName({ active }: { active: boolean }) {
   return `${base} border-neutral-200 bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-neutral-100`;
 }
 
-export function getCommentEditorPanelClassName({ groupedWithPrevious = false }: { groupedWithPrevious?: boolean } = {}) {
+export function getCommentEditorPanelClassName({
+  groupedWithPrevious = false,
+}: { groupedWithPrevious?: boolean } = {}) {
   return `mt-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 ${
     groupedWithPrevious ? "" : "sm:ml-[52px]"
   }`;

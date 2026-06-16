@@ -1,7 +1,7 @@
-import { and, eq, inArray, or, type SQLWrapper } from "drizzle-orm";
+import { type SQLWrapper, and, eq, inArray, or } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
-import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, nowUtcIso } from "~/lib/date-time";
 import {
   communityCommentsTable,
   communityPostsTable,
@@ -73,10 +73,7 @@ function visibilityFilter(userId?: number): SQLWrapper {
     return publicCondition;
   }
 
-  return or(
-    publicCondition,
-    eq(communityPostsTable.userId, userId),
-  ) ?? publicCondition;
+  return or(publicCondition, eq(communityPostsTable.userId, userId)) ?? publicCondition;
 }
 
 function commentVisibilityFilter(userId?: number): SQLWrapper {
@@ -85,10 +82,12 @@ function commentVisibilityFilter(userId?: number): SQLWrapper {
     return publicCondition;
   }
 
-  return or(
-    publicCondition,
-    and(eq(communityCommentsTable.visibility, "private"), eq(communityCommentsTable.userId, userId)),
-  ) ?? publicCondition;
+  return (
+    or(
+      publicCondition,
+      and(eq(communityCommentsTable.visibility, "private"), eq(communityCommentsTable.userId, userId)),
+    ) ?? publicCondition
+  );
 }
 
 export async function getUserComments(env: Env, userId: number): Promise<ContentComment[]> {
@@ -145,11 +144,13 @@ export async function getContentsComments(
         })
         .from(communityPostsTable)
         .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
-        .where(and(
-          eq(communityPostsTable.postType, "event_opinion"),
-          inArray(communityPostsTable.subjectContentUid, batch),
-          visibilityFilter(userId),
-        )),
+        .where(
+          and(
+            eq(communityPostsTable.postType, "event_opinion"),
+            inArray(communityPostsTable.subjectContentUid, batch),
+            visibilityFilter(userId),
+          ),
+        ),
     ),
   );
   const posts = postBatchResults.flat();
@@ -183,32 +184,30 @@ export async function getContentsComments(
     ];
   }
 
-  const comments = posts.length === 0
-    ? []
-    : (
-        await Promise.all(
-          splitIntoBatches(posts.map((post) => post.uid)).map((batch) =>
-            db
-              .select({
-                id: communityCommentsTable.id,
-                uid: communityCommentsTable.uid,
-                postUid: communityCommentsTable.postUid,
-                parentUid: communityCommentsTable.parentUid,
-                body: communityCommentsTable.body,
-                visibility: communityCommentsTable.visibility,
-                createdAt: communityCommentsTable.createdAt,
-                username: senseisTable.username,
-                profileStudentId: senseisTable.profileStudentId,
-              })
-              .from(communityCommentsTable)
-              .innerJoin(senseisTable, eq(communityCommentsTable.userId, senseisTable.id))
-              .where(and(
-                inArray(communityCommentsTable.postUid, batch),
-                commentVisibilityFilter(userId),
-              )),
-          ),
-        )
-      ).flat();
+  const comments =
+    posts.length === 0
+      ? []
+      : (
+          await Promise.all(
+            splitIntoBatches(posts.map((post) => post.uid)).map((batch) =>
+              db
+                .select({
+                  id: communityCommentsTable.id,
+                  uid: communityCommentsTable.uid,
+                  postUid: communityCommentsTable.postUid,
+                  parentUid: communityCommentsTable.parentUid,
+                  body: communityCommentsTable.body,
+                  visibility: communityCommentsTable.visibility,
+                  createdAt: communityCommentsTable.createdAt,
+                  username: senseisTable.username,
+                  profileStudentId: senseisTable.profileStudentId,
+                })
+                .from(communityCommentsTable)
+                .innerJoin(senseisTable, eq(communityCommentsTable.userId, senseisTable.id))
+                .where(and(inArray(communityCommentsTable.postUid, batch), commentVisibilityFilter(userId))),
+            ),
+          )
+        ).flat();
 
   for (const comment of comments) {
     const post = postMap.get(comment.postUid);
@@ -249,11 +248,13 @@ export async function createComment(
   const existingPost = await db
     .select({ uid: communityPostsTable.uid })
     .from(communityPostsTable)
-    .where(and(
-      eq(communityPostsTable.userId, userId),
-      eq(communityPostsTable.postType, "event_opinion"),
-      eq(communityPostsTable.subjectContentUid, contentId),
-    ))
+    .where(
+      and(
+        eq(communityPostsTable.userId, userId),
+        eq(communityPostsTable.postType, "event_opinion"),
+        eq(communityPostsTable.subjectContentUid, contentId),
+      ),
+    )
     .limit(1)
     .get();
 
@@ -268,6 +269,7 @@ export async function createComment(
     pinned: isFirstComment ? 1 : 0,
     subjectContentUid: contentId,
     blocks: serializeCommunityPostBlocks([{ type: "plaintext", text: body }]),
+    displayAt: now,
     createdAt: now,
     updatedAt: now,
   });
@@ -290,10 +292,7 @@ export async function createSubcomment(
       subjectContentUid: communityPostsTable.subjectContentUid,
     })
     .from(communityPostsTable)
-    .where(and(
-      eq(communityPostsTable.uid, parentCommentUid),
-      eq(communityPostsTable.postType, "event_opinion"),
-    ))
+    .where(and(eq(communityPostsTable.uid, parentCommentUid), eq(communityPostsTable.postType, "event_opinion")))
     .get();
 
   if (!parentPost || parentPost.subjectContentUid !== contentId) {
@@ -314,11 +313,13 @@ export async function updateComment(
   const post = await db
     .select({ uid: communityPostsTable.uid })
     .from(communityPostsTable)
-    .where(and(
-      eq(communityPostsTable.uid, commentUid),
-      eq(communityPostsTable.userId, userId),
-      eq(communityPostsTable.postType, "event_opinion"),
-    ))
+    .where(
+      and(
+        eq(communityPostsTable.uid, commentUid),
+        eq(communityPostsTable.userId, userId),
+        eq(communityPostsTable.postType, "event_opinion"),
+      ),
+    )
     .get();
 
   if (post) {
@@ -349,11 +350,13 @@ export async function deleteComment(env: Env, userId: number, commentUid: string
   const post = await db
     .select({ uid: communityPostsTable.uid })
     .from(communityPostsTable)
-    .where(and(
-      eq(communityPostsTable.uid, commentUid),
-      eq(communityPostsTable.userId, userId),
-      eq(communityPostsTable.postType, "event_opinion"),
-    ))
+    .where(
+      and(
+        eq(communityPostsTable.uid, commentUid),
+        eq(communityPostsTable.userId, userId),
+        eq(communityPostsTable.postType, "event_opinion"),
+      ),
+    )
     .get();
 
   if (post) {
@@ -369,11 +372,13 @@ export async function getCommentIdByUid(env: Env, commentUid: string, userId?: n
   const post = await db
     .select({ id: communityPostsTable.id })
     .from(communityPostsTable)
-    .where(and(
-      eq(communityPostsTable.uid, commentUid),
-      eq(communityPostsTable.postType, "event_opinion"),
-      visibilityFilter(userId),
-    ))
+    .where(
+      and(
+        eq(communityPostsTable.uid, commentUid),
+        eq(communityPostsTable.postType, "event_opinion"),
+        visibilityFilter(userId),
+      ),
+    )
     .get();
 
   if (post) {
@@ -395,12 +400,14 @@ export async function pinComment(env: Env, userId: number, contentId: string, co
   await db
     .update(communityPostsTable)
     .set({ pinned: 0, updatedAt: now })
-    .where(and(
-      eq(communityPostsTable.userId, userId),
-      eq(communityPostsTable.postType, "event_opinion"),
-      eq(communityPostsTable.subjectContentUid, contentId),
-      eq(communityPostsTable.pinned, 1),
-    ));
+    .where(
+      and(
+        eq(communityPostsTable.userId, userId),
+        eq(communityPostsTable.postType, "event_opinion"),
+        eq(communityPostsTable.subjectContentUid, contentId),
+        eq(communityPostsTable.pinned, 1),
+      ),
+    );
 
   const post = await db
     .select({
@@ -408,11 +415,13 @@ export async function pinComment(env: Env, userId: number, contentId: string, co
       subjectContentUid: communityPostsTable.subjectContentUid,
     })
     .from(communityPostsTable)
-    .where(and(
-      eq(communityPostsTable.uid, commentUid),
-      eq(communityPostsTable.userId, userId),
-      eq(communityPostsTable.postType, "event_opinion"),
-    ))
+    .where(
+      and(
+        eq(communityPostsTable.uid, commentUid),
+        eq(communityPostsTable.userId, userId),
+        eq(communityPostsTable.postType, "event_opinion"),
+      ),
+    )
     .get();
 
   if (!post || post.subjectContentUid !== contentId) {
@@ -430,12 +439,14 @@ export async function unpinComment(env: Env, userId: number, contentId: string):
   await db
     .update(communityPostsTable)
     .set({ pinned: 0, updatedAt: nowUtcIso() })
-    .where(and(
-      eq(communityPostsTable.userId, userId),
-      eq(communityPostsTable.postType, "event_opinion"),
-      eq(communityPostsTable.subjectContentUid, contentId),
-      eq(communityPostsTable.pinned, 1),
-    ));
+    .where(
+      and(
+        eq(communityPostsTable.userId, userId),
+        eq(communityPostsTable.postType, "event_opinion"),
+        eq(communityPostsTable.subjectContentUid, contentId),
+        eq(communityPostsTable.pinned, 1),
+      ),
+    );
 }
 
 export async function getPinnedComment(
@@ -458,12 +469,14 @@ export async function getPinnedComment(
     })
     .from(communityPostsTable)
     .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
-    .where(and(
-      eq(communityPostsTable.subjectContentUid, contentId),
-      eq(communityPostsTable.userId, userId),
-      eq(communityPostsTable.postType, "event_opinion"),
-      eq(communityPostsTable.pinned, 1),
-    ))
+    .where(
+      and(
+        eq(communityPostsTable.subjectContentUid, contentId),
+        eq(communityPostsTable.userId, userId),
+        eq(communityPostsTable.postType, "event_opinion"),
+        eq(communityPostsTable.pinned, 1),
+      ),
+    )
     .get();
 
   if (!result) {

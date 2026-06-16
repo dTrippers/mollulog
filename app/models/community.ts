@@ -2,7 +2,7 @@ import { type SQLWrapper, and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
-import { normalizeUtcTimestamp, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, normalizeUtcTimestamp, nowUtcIso } from "~/lib/date-time";
 import { senseisTable } from "./sensei";
 
 export type CommunityPostType = "student_review" | "event_opinion" | "guide" | "youtube_video" | "recruitment_result";
@@ -279,10 +279,7 @@ function toNestedCommunityComment(
   };
 }
 
-export async function getCommunityLikeCountsByPostUids(
-  env: Env,
-  postUids: string[],
-): Promise<Record<string, number>> {
+export async function getCommunityLikeCountsByPostUids(env: Env, postUids: string[]): Promise<Record<string, number>> {
   if (postUids.length === 0) {
     return {};
   }
@@ -303,11 +300,7 @@ export async function getCommunityLikeCountsByPostUids(
   }, {});
 }
 
-export async function getLikedCommunityPostUids(
-  env: Env,
-  userId: number,
-  postUids: string[],
-): Promise<Set<string>> {
+export async function getLikedCommunityPostUids(env: Env, userId: number, postUids: string[]): Promise<Set<string>> {
   if (postUids.length === 0) {
     return new Set();
   }
@@ -438,10 +431,7 @@ export async function getCommunityFeedPage(
   const safePage = Math.max(1, page);
   const safePageSize = Math.max(1, pageSize);
 
-  const [{ count }] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(communityPostsTable)
-    .where(where);
+  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(communityPostsTable).where(where);
 
   const totalCount = Number(count);
   const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
@@ -476,7 +466,7 @@ export async function getCommunityFeedPage(
     .leftJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
     .where(where)
     .orderBy(
-      desc(sql`unixepoch(coalesce(${communityPostsTable.displayAt}, ${communityPostsTable.updatedAt}))`),
+      desc(sql`unixepoch(coalesce(${communityPostsTable.displayAt}, ${communityPostsTable.createdAt}))`),
       desc(communityPostsTable.id),
     )
     .limit(safePageSize)
@@ -511,7 +501,7 @@ export async function getCommunityFeedPage(
       sourceName: row.sourceName,
       sourceUrl: row.sourceUrl,
       sourceMetadata: parseCommunityPostSourceMetadata(row.sourceMetadata),
-      displayAt: normalizeCommunityTimestamp(row.displayAt ?? row.updatedAt),
+      displayAt: normalizeCommunityTimestamp(row.displayAt ?? row.createdAt),
       createdAt: normalizeCommunityTimestamp(row.createdAt),
       updatedAt: normalizeCommunityTimestamp(row.updatedAt),
       author: row.username
@@ -592,7 +582,7 @@ export async function getCommunityPostByUid(
     sourceName: row.sourceName,
     sourceUrl: row.sourceUrl,
     sourceMetadata: parseCommunityPostSourceMetadata(row.sourceMetadata),
-    displayAt: normalizeCommunityTimestamp(row.displayAt ?? row.updatedAt),
+    displayAt: normalizeCommunityTimestamp(row.displayAt ?? row.createdAt),
     createdAt: normalizeCommunityTimestamp(row.createdAt),
     updatedAt: normalizeCommunityTimestamp(row.updatedAt),
     author: row.username
@@ -678,11 +668,7 @@ export async function updateCommunityComment(
     .where(and(eq(communityCommentsTable.uid, commentUid), eq(communityCommentsTable.userId, userId)));
 }
 
-export async function deleteCommunityComment(
-  env: Env,
-  userId: number,
-  commentUid: string,
-): Promise<void> {
+export async function deleteCommunityComment(env: Env, userId: number, commentUid: string): Promise<void> {
   const db = drizzle(env.DB);
   const targetComment = await db
     .select({
@@ -705,17 +691,10 @@ export async function deleteCommunityComment(
     return;
   }
 
-  await db
-    .delete(communityCommentsTable)
-    .where(eq(communityCommentsTable.uid, commentUid));
+  await db.delete(communityCommentsTable).where(eq(communityCommentsTable.uid, commentUid));
 }
 
-export async function setCommunityPostLike(
-  env: Env,
-  userId: number,
-  postUid: string,
-  liked: boolean,
-): Promise<void> {
+export async function setCommunityPostLike(env: Env, userId: number, postUid: string, liked: boolean): Promise<void> {
   const db = drizzle(env.DB);
   const post = await db
     .select({ uid: communityPostsTable.uid })
@@ -757,10 +736,7 @@ export type YoutubeVideoCommunityPostInput = {
   channelUrl: string;
 };
 
-export async function upsertYoutubeVideoCommunityPost(
-  env: Env,
-  video: YoutubeVideoCommunityPostInput,
-): Promise<void> {
+export async function upsertYoutubeVideoCommunityPost(env: Env, video: YoutubeVideoCommunityPostInput): Promise<void> {
   const db = drizzle(env.DB);
   const now = nowUtcIso();
   const metadata = JSON.stringify({
@@ -898,11 +874,7 @@ export async function upsertRecruitmentResultCommunityPost(
   });
 }
 
-export async function deleteCommunityPostByUid(
-  env: Env,
-  postUid: string,
-  userId?: number,
-): Promise<void> {
+export async function deleteCommunityPostByUid(env: Env, postUid: string, userId?: number): Promise<void> {
   const db = drizzle(env.DB);
   const conditions: SQLWrapper[] = [eq(communityPostsTable.uid, postUid)];
 

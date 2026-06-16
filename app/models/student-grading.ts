@@ -1,7 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
-import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, nowUtcIso } from "~/lib/date-time";
 import {
   communityPostsTable,
   createPlaintextCommunityPostBlocks,
@@ -128,6 +128,7 @@ export async function upsertStudentGrading(
       subjectStudentUid: studentUid,
       visibility: "public",
       blocks,
+      displayAt: now,
       createdAt: now,
       updatedAt: now,
     });
