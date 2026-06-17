@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { TimelineSourceType } from "~/models/pyroxene-planner";
+import type { PickupResources } from "~/models/pyroxene-timeline";
 
 type ChartEntry = {
   date: dayjs.Dayjs;
@@ -19,23 +20,12 @@ type ChartEntry = {
         }
       | undefined;
   };
-  accumulatedResources: {
-    pyroxene: number;
-    oneTimeTicket: number;
-    tenTimeTicket: number;
-  };
+  accumulatedResources: PickupResources;
   accumulatedResourcesBand?: {
-    optimistic: {
-      pyroxene: number;
-      oneTimeTicket: number;
-      tenTimeTicket: number;
-    };
-    pessimistic: {
-      pyroxene: number;
-      oneTimeTicket: number;
-      tenTimeTicket: number;
-    };
+    optimistic: PickupResources;
+    pessimistic: PickupResources;
   };
+  resourceDelta: PickupResources;
 };
 
 type PyroxeneChartProps = {
@@ -80,9 +70,20 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
   }, []);
 
   const { chartData, markers } = useMemo(() => {
-    const dayMap = new Map<string, { ts: number; pyroxene: number; pyroxeneBand: [number, number] }>();
+    const dayMap = new Map<
+      string,
+      {
+        ts: number;
+        pyroxene: number;
+        pyroxeneBand: [number, number];
+        consumedOneTimeTicket: number;
+        consumedTenTimeTicket: number;
+      }
+    >();
     for (const entry of timeline) {
       const key = entry.date.format("YYYY-MM-DD");
+      const previous = dayMap.get(key);
+      const isPickupEvent = entry.source.type === "event";
       const optimisticPyroxene =
         entry.accumulatedResourcesBand?.optimistic.pyroxene ?? entry.accumulatedResources.pyroxene;
       const pessimisticPyroxene =
@@ -92,6 +93,10 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
         pyroxene: entry.accumulatedResources.pyroxene,
         // recharts 범위 영역: [하단(비관), 상단(낙관)] 튜플로 채움 밴드를 그립니다.
         pyroxeneBand: [pessimisticPyroxene, optimisticPyroxene],
+        consumedOneTimeTicket:
+          (previous?.consumedOneTimeTicket ?? 0) + (isPickupEvent ? Math.max(0, -entry.resourceDelta.oneTimeTicket) : 0),
+        consumedTenTimeTicket:
+          (previous?.consumedTenTimeTicket ?? 0) + (isPickupEvent ? Math.max(0, -entry.resourceDelta.tenTimeTicket) : 0),
       });
     }
     const chartData = Array.from(dayMap.values()).sort((a, b) => a.ts - b.ts);
@@ -202,10 +207,13 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
                 ts: number;
                 pyroxene: number;
                 pyroxeneBand: [number, number];
+                consumedOneTimeTicket: number;
+                consumedTenTimeTicket: number;
               };
               const [pessimistic, optimistic] = item.pyroxeneBand;
               // 밴드 폭이 있을 때만(픽업 누적 이후) 상·하위 10% 추정치를 함께 표시합니다.
               const hasBand = optimistic - pessimistic > 1;
+              const hasConsumedTickets = item.consumedOneTimeTicket > 0 || item.consumedTenTimeTicket > 0;
               return (
                 <div
                   style={{
@@ -229,6 +237,20 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
                       <p style={{ color: axisColor, fontSize: 11 }}>
                         하위 10% {Math.round(pessimistic).toLocaleString()}개
                       </p>
+                    </div>
+                  )}
+                  {hasConsumedTickets && (
+                    <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 1 }}>
+                      {item.consumedOneTimeTicket > 0 && (
+                        <p style={{ color: axisColor, fontSize: 11 }}>
+                          모집 티켓 {item.consumedOneTimeTicket.toLocaleString()}장 사용 가능
+                        </p>
+                      )}
+                      {item.consumedTenTimeTicket > 0 && (
+                        <p style={{ color: axisColor, fontSize: 11 }}>
+                          10연 모집 티켓 {item.consumedTenTimeTicket.toLocaleString()}장 사용 가능
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

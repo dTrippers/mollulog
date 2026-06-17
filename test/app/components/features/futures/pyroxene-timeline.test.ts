@@ -844,7 +844,7 @@ describe("pyroxene-timeline", () => {
     expect(timeline.find((entry) => entry.source.event?.uid === "ongoing-event")).toBeDefined();
   });
 
-  it("calculates pickup trials from favorited pickup recruitments when expected trials is omitted", () => {
+  it("calculates linear average pickup trials from favorited pickup recruitments when expected trials is omitted", () => {
     const timeline = buildTimeline(
       { pyroxene: 20000, oneTimeTicket: 0, tenTimeTicket: 0 },
       new Date("2026-01-01T00:00:00.000Z"),
@@ -884,9 +884,9 @@ describe("pyroxene-timeline", () => {
 
     const pickupEntry = timeline.find((entry) => entry.source.event?.uid === "favorited-pickup");
 
-    expect(pickupEntry?.resourceDelta.pyroxene).toBe(-12960);
+    expect(pickupEntry?.resourceDelta.pyroxene).toBe(-16800);
     expect(Math.abs(pickupEntry?.resourceDelta.oneTimeTicket ?? Number.NaN)).toBe(0);
     expect(Math.abs(pickupEntry?.resourceDelta.tenTimeTicket ?? Number.NaN)).toBe(0);
-    expect(pickupEntry?.accumulatedResources).toEqual({ pyroxene: 7040, oneTimeTicket: 0, tenTimeTicket: 0 });
+    expect(pickupEntry?.accumulatedResources).toEqual({ pyroxene: 3200, oneTimeTicket: 0, tenTimeTicket: 0 });
   });
 });

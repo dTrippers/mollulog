@@ -594,7 +594,7 @@ export default function PyroxenePlanner() {
           {
             title: "플래너 설정",
             Icon: ChartBarIcon,
-            description: "계산 조건을 선택해주세요",
+            description: "시뮬레이션 조건을 선택해주세요",
             disabled: !signedIn,
             foldable: signedIn,
             children: <PyroxenePlannerOptionsPanel options={options} onOptionsChange={handleOptionsChange} />,

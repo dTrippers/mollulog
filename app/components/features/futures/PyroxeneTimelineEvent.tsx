@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { StudentCards } from "~/components/features/students";
 import { Button, NumberInput, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import type { PyroxenePickupChance } from "~/models/pyroxene-planner";
 import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
 import { isFreeRecruitment100Event, type PickupResources } from "~/models/pyroxene-timeline";
 import type { PyroxeneScheduleItem } from "./types";
@@ -16,7 +17,7 @@ type PyroxeneTimelineEventProps = {
   resourceDelta: PickupResources;
   completed: boolean;
   expectedTrials: number | null;
-  pickupChance: "ceil" | "average";
+  pickupChance: PyroxenePickupChance;
   onDeletePickupComplete: (eventUid: string) => void;
   onPickupComplete: (eventUid: string, resources: PickupResources) => void;
   onUpdateEventData: (eventUid: string, data: { expectedTrials?: number | null }) => void;
@@ -55,7 +56,9 @@ export default function PyroxeneTimelineEvent({
       ? `총 ${expectedTrials}회`
       : pickupChance === "ceil"
         ? "★3 학생 당 200회(천장)"
-        : "★3 학생 당 140회(평균)";
+        : pickupChance === "average_pity"
+          ? "★3 학생 당 기댓값"
+          : "★3 학생 당 140회";
 
   const handleDeletePickupComplete = () => {
     if (confirmingPickupDelete) {

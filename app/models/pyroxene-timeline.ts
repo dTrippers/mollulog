@@ -837,15 +837,20 @@ export function buildTimeline(
       } else {
         // 이벤트별 직접 입력이 없으면 관심 등록된 픽업 학생 수와 전역 모집 목표로 계산합니다.
         pickupTrialCostDistribution = getPickupTrialCostDistribution(event, pickupRecruitments);
-        pickupTrial =
-          options.event.pickupChance === "average"
-            ? Math.round(calculateExpectedTrial(pickupTrialCostDistribution))
-            : pickupCount * PYROXENE.PICKUP_TRIAL.ceil;
+        if (options.event.pickupChance === "average_pity") {
+          pickupTrial = Math.round(calculateExpectedTrial(pickupTrialCostDistribution));
+        } else {
+          pickupTrial =
+            pickupCount *
+            (options.event.pickupChance === "ceil" ? PYROXENE.PICKUP_TRIAL.ceil : PYROXENE.PICKUP_TRIAL.average);
+        }
       }
 
       if (
         isFreeRecruitment100Event(event) &&
-        (manualExpectedTrials !== null || options.event.pickupChance === "ceil")
+        (manualExpectedTrials !== null ||
+          options.event.pickupChance === "average" ||
+          options.event.pickupChance === "ceil")
       ) {
         pickupTrial = subtractFreeRecruitmentTrial(pickupTrial);
       }

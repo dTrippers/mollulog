@@ -479,9 +479,12 @@ export async function createOtherPyroxeneGain(
  * Pyroxene Planner Options
  */
 export type TimelineSourceType = PyroxeneSourceType;
+export const PYROXENE_PICKUP_CHANCES = ["average", "average_pity", "ceil"] as const;
+export type PyroxenePickupChance = (typeof PYROXENE_PICKUP_CHANCES)[number];
+
 export type PyroxenePlannerOptions = {
   event: {
-    pickupChance: "ceil" | "average";
+    pickupChance: PyroxenePickupChance;
   };
   raid: {
     tier: "platinum" | "gold" | "silver" | "bronze";
@@ -496,6 +499,12 @@ export type PyroxenePlannerOptions = {
     display: TimelineSourceType[];
   };
 };
+
+function normalizePyroxenePickupChance(value: unknown): PyroxenePickupChance {
+  return PYROXENE_PICKUP_CHANCES.includes(value as PyroxenePickupChance)
+    ? (value as PyroxenePickupChance)
+    : defaultPyroxenePlannerOptions.event.pickupChance;
+}
 
 // buildTimeline 계산에 실제로 사용하는 옵션 필드들만 추린 타입입니다.
 // timeline.display(표시 필터)는 계산 결과에 영향을 주지 않으므로 제외해,
@@ -535,6 +544,7 @@ export function normalizePyroxenePlannerOptions(options: StoredPyroxenePlannerOp
     event: {
       ...defaultPyroxenePlannerOptions.event,
       ...options?.event,
+      pickupChance: normalizePyroxenePickupChance(options?.event?.pickupChance),
     },
     raid: {
       ...defaultPyroxenePlannerOptions.raid,
