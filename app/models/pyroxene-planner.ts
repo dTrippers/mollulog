@@ -1,30 +1,28 @@
-import { nanoid } from "nanoid/non-secure";
 import dayjs from "dayjs";
 import { and, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
-import { RecruitmentRepository, RaidRepository } from "~/repositories";
-import type { TimelineContentType } from "./timeline-content";
-import { getTimelineContents, getFutureRaidContents } from "./timeline-content";
-import { getAllStudentsMap } from "./student";
+import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { nanoid } from "nanoid/non-secure";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
+import { type UtcIsoString, compareInstantAsc, compareInstantDesc, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { RaidRepository, RecruitmentRepository } from "~/repositories";
 import type { RaidType } from "./content.d";
-import { compareInstantAsc, compareInstantDesc, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import {
+  PYROXENE_AP_PACKAGE_CONFIG,
   PYROXENE_ATTENDANCE_CONFIG,
   PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
-  PYROXENE_AP_PACKAGE_CONFIG,
+  PYROXENE_MONTHLY_PACKAGE_CONFIG,
   PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
   PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
-  PYROXENE_MONTHLY_PACKAGE_CONFIG,
   type PyroxeneMonthlyPackageType,
   extractPyroxeneTimelineBaseUid,
   normalizePyroxeneTimelineEventAt,
 } from "./pyroxene-planner-source-config";
-import {
-  DEFAULT_PYROXENE_TIMELINE_DISPLAY,
-  type PyroxeneSourceType,
-} from "./pyroxene-source-definitions";
+import { DEFAULT_PYROXENE_TIMELINE_DISPLAY, type PyroxeneSourceType } from "./pyroxene-source-definitions";
+import { buildRecruitmentPoolSnapshot } from "./recruitment-simulator";
+import { getAllStudentsMap } from "./student";
+import type { TimelineContentType } from "./timeline-content";
+import { getFutureRaidContents, getTimelineContents } from "./timeline-content";
 
 /**
  * Pyroxene Planner Contents
@@ -48,6 +46,10 @@ export type PyroxenePlannerContent =
         until: UtcIsoString | null;
         student: { uid: string; name: string; initialTier: number } | null;
       }[];
+      recruitmentPool?: {
+        tier2Count: number;
+        tier3Count: number;
+      };
     }
   | {
       kind: "raid";
@@ -72,21 +74,18 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
     compareInstantAsc(a.startAt, b.startAt),
   );
 
-  const recruitmentGroupUids = allContents
-    .map((c) => c.recruitmentGroupUid)
-    .filter((uid) => uid !== null) as string[];
-  const [recruitmentGroups, studentsMap] = await Promise.all([
+  const recruitmentGroupUids = allContents.map((c) => c.recruitmentGroupUid).filter((uid) => uid !== null) as string[];
+  const [recruitmentGroups, studentsMap, recruitmentPoolStudents] = await Promise.all([
     recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh),
     getAllStudentsMap(env, true),
+    recruitmentRepository.getPoolStudents(forceRefresh),
   ]);
 
   const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
   const results = await Promise.all(
     allContents.map(async (content) => {
       if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
-        const group = content.recruitmentGroupUid
-          ? recruitmentGroupMap.get(content.recruitmentGroupUid)
-          : undefined;
+        const group = content.recruitmentGroupUid ? recruitmentGroupMap.get(content.recruitmentGroupUid) : undefined;
         const recruitments = (group?.recruitments ?? []).map((r) => ({
           recruitmentType: r.recruitmentType,
           pickup: r.pickup,
@@ -100,6 +99,18 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
               }
             : null,
         }));
+        const recruitmentPool = group
+          ? (() => {
+              const snapshot = buildRecruitmentPoolSnapshot({
+                recruitmentGroup: group,
+                students: recruitmentPoolStudents,
+              });
+              return {
+                tier2Count: snapshot.nonPickupStudentsByTier.tier2.length,
+                tier3Count: snapshot.nonPickupStudentsByTier.tier3.length,
+              };
+            })()
+          : undefined;
 
         // Use the latest recruitment until date when endAt is missing.
         const until =
@@ -120,6 +131,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
           earnablePyroxene: content.earnablePyroxene ?? null,
           tags: content.tags,
           recruitments,
+          recruitmentPool,
         };
       }
       if (content.contentType === "raid") {
@@ -485,6 +497,11 @@ export type PyroxenePlannerOptions = {
   };
 };
 
+// buildTimeline 계산에 실제로 사용하는 옵션 필드들만 추린 타입입니다.
+// timeline.display(표시 필터)는 계산 결과에 영향을 주지 않으므로 제외해,
+// 표시 토글이 무거운 재계산을 유발하지 않도록 합니다.
+export type PyroxeneCalculationOptions = Pick<PyroxenePlannerOptions, "event" | "raid" | "tactical" | "consumption">;
+
 export const defaultPyroxenePlannerOptions: PyroxenePlannerOptions = {
   event: {
     pickupChance: "average",
@@ -513,9 +530,7 @@ export type StoredPyroxenePlannerOptions = Partial<
   timeline?: Partial<PyroxenePlannerOptions["timeline"]>;
 };
 
-export function normalizePyroxenePlannerOptions(
-  options: StoredPyroxenePlannerOptions | null,
-): PyroxenePlannerOptions {
+export function normalizePyroxenePlannerOptions(options: StoredPyroxenePlannerOptions | null): PyroxenePlannerOptions {
   return {
     event: {
       ...defaultPyroxenePlannerOptions.event,

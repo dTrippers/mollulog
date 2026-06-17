@@ -19,6 +19,10 @@ export type PyroxeneScheduleItem = {
       student: { uid: string; name: string; initialTier: number } | null;
       favorited: boolean;
     }[];
+    recruitmentPool?: {
+      tier2Count: number;
+      tier3Count: number;
+    };
   };
   raid?: {
     uid: string;

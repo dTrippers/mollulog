@@ -884,9 +884,9 @@ describe("pyroxene-timeline", () => {
 
     const pickupEntry = timeline.find((entry) => entry.source.event?.uid === "favorited-pickup");
 
-    expect(pickupEntry?.resourceDelta.pyroxene).toBe(-16800);
+    expect(pickupEntry?.resourceDelta.pyroxene).toBe(-12960);
     expect(Math.abs(pickupEntry?.resourceDelta.oneTimeTicket ?? Number.NaN)).toBe(0);
     expect(Math.abs(pickupEntry?.resourceDelta.tenTimeTicket ?? Number.NaN)).toBe(0);
-    expect(pickupEntry?.accumulatedResources).toEqual({ pyroxene: 3200, oneTimeTicket: 0, tenTimeTicket: 0 });
+    expect(pickupEntry?.accumulatedResources).toEqual({ pyroxene: 7040, oneTimeTicket: 0, tenTimeTicket: 0 });
   });
 });

@@ -21,4 +21,9 @@ export default defineConfig(({ mode }) => ({
     reactRouter(),
     tsconfigPaths(),
   ],
+  // Web Worker 서브번들에도 tsconfig 경로 별칭(~/*)을 적용해 워커가 ~ import를 해석할 수 있게 합니다.
+  worker: {
+    format: "es",
+    plugins: () => [tsconfigPaths()],
+  },
 }));

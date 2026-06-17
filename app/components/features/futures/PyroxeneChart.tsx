@@ -1,15 +1,6 @@
-import { useMemo, useEffect, useState, useRef } from "react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ReferenceLine,
-  ResponsiveContainer,
-} from "recharts";
 import dayjs from "dayjs";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { TimelineSourceType } from "~/models/pyroxene-planner";
 
 type ChartEntry = {
@@ -17,14 +8,16 @@ type ChartEntry = {
   source: {
     type: TimelineSourceType;
     description?: string;
-    event?: {
-      name: string;
-      recruitments?: {
-        pickup: boolean;
-        favorited: boolean;
-        student: { name: string } | null;
-      }[];
-    } | undefined;
+    event?:
+      | {
+          name: string;
+          recruitments?: {
+            pickup: boolean;
+            favorited: boolean;
+            student: { name: string } | null;
+          }[];
+        }
+      | undefined;
   };
   accumulatedResources: {
     pyroxene: number;
@@ -87,10 +80,7 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
   }, []);
 
   const { chartData, markers } = useMemo(() => {
-    const dayMap = new Map<
-      string,
-      { ts: number; pyroxene: number; pyroxeneBand: [number, number] }
-    >();
+    const dayMap = new Map<string, { ts: number; pyroxene: number; pyroxeneBand: [number, number] }>();
     for (const entry of timeline) {
       const key = entry.date.format("YYYY-MM-DD");
       const optimisticPyroxene =
@@ -152,6 +142,7 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
 
   const axisColor = isDark ? "#6b7280" : "#9ca3af";
   const gridColor = isDark ? "#374151" : "#e5e7eb";
+  const zeroAxisColor = isDark ? "#d1d5db" : "#4b5563";
   const tooltipBg = isDark ? "#1f2937" : "#ffffff";
   const tooltipBorder = isDark ? "#374151" : "#e5e7eb";
   const tooltipText = isDark ? "#f9fafb" : "#111827";
@@ -245,19 +236,13 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
             }}
           />
           {monthlyTicks.map((ts) => (
-            <ReferenceLine
-              key={`month-${ts}`}
-              x={ts}
-              stroke={gridColor}
-              strokeDasharray="3 3"
-              strokeWidth={1}
-            />
+            <ReferenceLine key={`month-${ts}`} x={ts} stroke={gridColor} strokeDasharray="3 3" strokeWidth={1} />
           ))}
           <ReferenceLine
             y={0}
-            stroke={gridColor}
-            strokeDasharray={hasNegative ? undefined : "3 3"}
-            strokeWidth={hasNegative ? 1.5 : 1}
+            stroke={zeroAxisColor}
+            strokeOpacity={hasNegative ? 0.95 : 0.8}
+            strokeWidth={hasNegative ? 2 : 1.5}
           />
           {markers.map(({ ts, type, students, yOffset }) => (
             <ReferenceLine
@@ -276,7 +261,7 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
               )}
             />
           ))}
-          {/* 1. 신뢰 구간 밴드 (낙관~비관) — 옅은 채움, 선 없음 */}
+          {/* 1. 확률 분위수 밴드 (낙관~비관) — 옅은 채움, 선 없음 */}
           <Area
             type="monotone"
             dataKey="pyroxeneBand"

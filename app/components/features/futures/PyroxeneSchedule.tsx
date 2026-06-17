@@ -1,14 +1,15 @@
 import dayjs from "dayjs";
 import { useMemo } from "react";
-import type { PyroxenePlannerOptions } from "~/models/pyroxene-planner";
 import { EmptyView, SubTitle } from "~/components/primitives";
-import PyroxeneChart from "./PyroxeneChart";
-import { buildTimeline, type PickupResources } from "~/models/pyroxene-timeline";
+import type { PyroxeneCalculationOptions, PyroxenePlannerOptions } from "~/models/pyroxene-planner";
+import type { PickupResources } from "~/models/pyroxene-timeline";
 import PyroxeneAvailableOneTimePackages from "./PyroxeneAvailableOneTimePackages";
+import PyroxeneChart from "./PyroxeneChart";
 import PyroxeneInitialResources from "./PyroxeneInitialResources";
 import PyroxeneTimelineEvent from "./PyroxeneTimelineEvent";
 import PyroxeneTimelineResources from "./PyroxeneTimelineResources";
 import type { PyroxeneScheduleItem } from "./types";
+import { usePyroxeneTimeline } from "./usePyroxeneTimeline";
 
 type PyroxeneScheduleProps = {
   initialDate: Date | null;
@@ -23,7 +24,14 @@ type PyroxeneScheduleProps = {
   onUpdateEventData: (eventUid: string, data: { expectedTrials?: number | null }) => void;
 };
 
-const deletableTimelineSourceTypes = new Set(["buy", "package_onetime", "package_daily", "package_ap", "attendance", "other"]);
+const deletableTimelineSourceTypes = new Set([
+  "buy",
+  "package_onetime",
+  "package_daily",
+  "package_ap",
+  "attendance",
+  "other",
+]);
 const availablePackageSourceTypes = new Set(["package_onetime", "package_ap"]);
 
 function getAvailablePackageDate({
@@ -58,51 +66,70 @@ export default function PyroxeneSchedule({
   onDeleteItem,
   onUpdateEventData,
 }: PyroxeneScheduleProps) {
-  const timeline = useMemo(() => {
-    return buildTimeline(initialResources, initialDate ?? new Date(), eventDataMap, scheduleItems, options);
-  }, [initialDate, initialResources, eventDataMap, scheduleItems, options]);
+  // 표시 필터(timeline.display)는 계산 결과에 영향을 주지 않으므로 계산 입력에서 제외합니다.
+  // 이렇게 하면 표시 토글이 무거운 재계산을 유발하지 않습니다.
+  const calcOptions = useMemo<PyroxeneCalculationOptions>(
+    () => ({
+      event: options.event,
+      raid: options.raid,
+      tactical: options.tactical,
+      consumption: options.consumption,
+    }),
+    [options.event, options.raid, options.tactical, options.consumption],
+  );
+
+  const { timeline, pending: isTimelinePending } = usePyroxeneTimeline({
+    initialDate,
+    initialResources,
+    eventDataMap,
+    scheduleItems,
+    options: calcOptions,
+  });
 
   // 적용 중인 패키지는 삭제가 가능하도록 별도 레이아웃에서 표시
   const availableOneTimePackages = useMemo(() => {
     const currentDate = initialDate ? dayjs(initialDate) : dayjs();
-    return scheduleItems.flatMap((item) => {
-      const onetimePackageGain =
-        item.onetimeGain && availablePackageSourceTypes.has(item.onetimeGain.source) ? item.onetimeGain : null;
-      const repeatedPackageGain =
-        item.repeatedGain && availablePackageSourceTypes.has(item.repeatedGain.source) ? item.repeatedGain : null;
-      const packageGain = onetimePackageGain ?? repeatedPackageGain;
+    return scheduleItems
+      .flatMap((item) => {
+        const onetimePackageGain =
+          item.onetimeGain && availablePackageSourceTypes.has(item.onetimeGain.source) ? item.onetimeGain : null;
+        const repeatedPackageGain =
+          item.repeatedGain && availablePackageSourceTypes.has(item.repeatedGain.source) ? item.repeatedGain : null;
+        const packageGain = onetimePackageGain ?? repeatedPackageGain;
 
-      if (!packageGain?.uid) {
-        return [];
-      }
+        if (!packageGain?.uid) {
+          return [];
+        }
 
-      const packageDate = getAvailablePackageDate({
-        date: packageGain.date,
-        repeatIntervalDays: repeatedPackageGain?.uid === packageGain.uid ? repeatedPackageGain.repeatIntervalDays : undefined,
-        autoRepurchase: packageGain.autoRepurchase,
-        currentDate,
+        const packageDate = getAvailablePackageDate({
+          date: packageGain.date,
+          repeatIntervalDays:
+            repeatedPackageGain?.uid === packageGain.uid ? repeatedPackageGain.repeatIntervalDays : undefined,
+          autoRepurchase: packageGain.autoRepurchase,
+          currentDate,
+        });
+        const activeDays = packageGain.source === "package_ap" ? 14 : 30;
+        const since = currentDate.subtract(activeDays, "day");
+        if (!packageDate.isAfter(since) || !packageDate.isBefore(currentDate)) {
+          return [];
+        }
+
+        return [
+          {
+            uid: packageGain.uid,
+            date: packageDate.toDate(),
+            description: packageGain.description,
+            pyroxeneDelta: packageGain.pyroxeneDelta ?? 0,
+          },
+        ];
+      })
+      .sort((a, b) => {
+        const dateDiff = a.date.getTime() - b.date.getTime();
+        if (dateDiff !== 0) {
+          return dateDiff;
+        }
+        return a.description.localeCompare(b.description, "ko");
       });
-      const activeDays = packageGain.source === "package_ap" ? 14 : 30;
-      const since = currentDate.subtract(activeDays, "day");
-      if (!packageDate.isAfter(since) || !packageDate.isBefore(currentDate)) {
-        return [];
-      }
-
-      return [
-        {
-          uid: packageGain.uid,
-          date: packageDate.toDate(),
-          description: packageGain.description,
-          pyroxeneDelta: packageGain.pyroxeneDelta ?? 0,
-        },
-      ];
-    }).sort((a, b) => {
-      const dateDiff = a.date.getTime() - b.date.getTime();
-      if (dateDiff !== 0) {
-        return dateDiff;
-      }
-      return a.description.localeCompare(b.description, "ko");
-    });
   }, [initialDate, scheduleItems]);
 
   return (
@@ -128,11 +155,16 @@ export default function PyroxeneSchedule({
         <PyroxeneAvailableOneTimePackages packages={availableOneTimePackages} onDeleteItem={onDeleteItem} />
       )}
 
-      <SubTitle
-        text="청휘석 시뮬레이션"
-        description="설정한 목표와, 상위/하위 10% 범위의 시뮬레이션 결과에요"
-      />
-      <PyroxeneChart timeline={timeline} />
+      <SubTitle text="청휘석 시뮬레이션" description="설정한 목표와, 상위/하위 10% 범위의 시뮬레이션 결과에요" />
+      <div className="relative">
+        {isTimelinePending && (
+          <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white/90 px-2 py-1 text-xs font-medium text-neutral-600 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/90 dark:text-neutral-300">
+            <span className="inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            <span>계산 중...</span>
+          </div>
+        )}
+        <PyroxeneChart timeline={timeline} />
+      </div>
 
       <SubTitle
         text="타임라인"
@@ -168,7 +200,11 @@ export default function PyroxeneSchedule({
           const itemUid = source.uid && deletableTimelineSourceTypes.has(source.type) ? source.uid : undefined;
           return (
             <PyroxeneTimelineResources
-              key={source.uid ? `${source.uid}-${date.toISOString()}-${index}` : `${source.description}-${date.toISOString()}-${index}`}
+              key={
+                source.uid
+                  ? `${source.uid}-${date.toISOString()}-${index}`
+                  : `${source.description}-${date.toISOString()}-${index}`
+              }
               date={date}
               description={source.description}
               resources={resourceDelta}

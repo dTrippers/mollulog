@@ -2,11 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import type { PyroxeneScheduleItem } from "~/components/features/futures/types";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { PyroxenePlannerOptions } from "./pyroxene-planner";
-import {
-  type PickupResources,
-  buildTimeline,
-  calculatePickupTrialMoments,
-} from "./pyroxene-timeline";
+import { type PickupResources, buildTimeline, calculatePickupTrialMoments } from "./pyroxene-timeline";
 
 const defaultOptions: PyroxenePlannerOptions = {
   event: {
@@ -48,11 +44,15 @@ function eventItem({
   since = "2026-07-02T00:00:00.000Z",
   until = "2026-07-03T00:00:00.000Z",
   recruitments = [pickupRecruitment()],
+  recruitmentPool = { tier2Count: 150, tier3Count: 202 },
+  tags = [],
 }: {
   uid: string;
   since?: string;
   until?: string;
   recruitments?: NonNullable<PyroxeneScheduleItem["event"]>["recruitments"];
+  recruitmentPool?: NonNullable<PyroxeneScheduleItem["event"]>["recruitmentPool"];
+  tags?: string[];
 }): PyroxeneScheduleItem {
   return {
     event: {
@@ -61,8 +61,9 @@ function eventItem({
       since,
       until,
       earnablePyroxene: null,
-      tags: [],
+      tags,
       recruitments,
+      recruitmentPool,
     },
   };
 }
@@ -102,7 +103,7 @@ describe("calculatePickupTrialMoments", () => {
 });
 
 describe("buildTimeline pyroxene balance band", () => {
-  it("keeps the optimistic balance above the central balance and the central balance above the pessimistic balance", () => {
+  it("calculates the average-mode central path and band from actual pickup probability", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [
         eventItem({
@@ -111,18 +112,15 @@ describe("buildTimeline pyroxene balance band", () => {
         }),
       ],
     });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
-    for (const entry of timeline) {
-      expect(entry.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThanOrEqual(
-        entry.accumulatedResources.pyroxene,
-      );
-      expect(entry.accumulatedResources.pyroxene).toBeGreaterThanOrEqual(
-        entry.accumulatedResourcesBand?.pessimistic.pyroxene ?? Number.POSITIVE_INFINITY,
-      );
-    }
+    expect(eventEntry?.accumulatedResources.pyroxene).toBe(87_040);
+    expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(87_040);
+    // 3성 픽업의 90분위 모집 횟수는 천장인 200회에 도달합니다.
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(76_000);
   });
 
-  it("keeps the existing central average path resource spending unchanged", () => {
+  it("uses the DP average central path while keeping ticket spending order unchanged", () => {
     const timeline = buildTestTimeline({
       initialResources: {
         pyroxene: 24_000,
@@ -133,56 +131,110 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.resourceDelta).toEqual({
-      pyroxene: -15_000,
+      pyroxene: -11_160,
       oneTimeTicket: -5,
       tenTimeTicket: -1,
     });
     expect(eventEntry?.accumulatedResources).toEqual({
-      pyroxene: 9_000,
+      pyroxene: 12_840,
       oneTimeTicket: 0,
       tenTimeTicket: 0,
     });
-    expect(timeline.map((entry) => entry.accumulatedResources.pyroxene)).toEqual([9_000, 9_020, 9_040]);
+    expect(timeline.map((entry) => entry.accumulatedResources.pyroxene)).toEqual([12_840, 12_860, 12_880]);
   });
 
-  it("grows the band width with the square root of the pickup count, not linearly", () => {
-    const pickupEvent = (uid: string, since: string, until: string) =>
-      eventItem({ uid, since, until, recruitments: [pickupRecruitment({ name: uid })] });
+  it("uses the paid-trial DP expectation for average-mode free recruitment events", () => {
     const timeline = buildTestTimeline({
-      initialResources: { pyroxene: 1_000_000, oneTimeTicket: 0, tenTimeTicket: 0 },
       scheduleItems: [
-        pickupEvent("p1", "2026-07-02T00:00:00.000Z", "2026-07-03T00:00:00.000Z"),
-        pickupEvent("p2", "2026-07-10T00:00:00.000Z", "2026-07-11T00:00:00.000Z"),
-        pickupEvent("p3", "2026-07-18T00:00:00.000Z", "2026-07-19T00:00:00.000Z"),
-        pickupEvent("p4", "2026-07-26T00:00:00.000Z", "2026-07-27T00:00:00.000Z"),
+        eventItem({
+          uid: "event-a",
+          tags: ["recruit_free_100"],
+          until: "2026-07-05T00:00:00.000Z",
+        }),
       ],
     });
-    const bandWidthAt = (uid: string) => {
-      const entry = timeline.find((item) => item.source.event?.uid === uid);
-      return (
-        (entry?.accumulatedResourcesBand?.optimistic.pyroxene ?? 0) -
-        (entry?.accumulatedResourcesBand?.pessimistic.pyroxene ?? 0)
-      );
-    };
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
-    // 동일한 픽업 4개 이후 폭은 1개 이후의 √4 = 2배여야 합니다(선형이면 4배).
-    expect(bandWidthAt("p4") / bandWidthAt("p1")).toBeCloseTo(2, 5);
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(-4_320);
+    expect(eventEntry?.accumulatedResources.pyroxene).toBe(95_680);
   });
 
-  it("still simulates the variance band for a manual expectedTrials event", () => {
+  it("keeps the ceiling-mode pessimistic band at the ceiling baseline", () => {
+    const timeline = buildTestTimeline({
+      options: {
+        ...defaultOptions,
+        event: { pickupChance: "ceil" },
+      },
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    expect(eventEntry?.accumulatedResources.pyroxene).toBe(76_000);
+    expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(76_000);
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(76_000);
+  });
+
+  it("does not add a probability band for a manual expectedTrials event", () => {
     const timeline = buildTestTimeline({
       eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 50 }]]),
     });
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
-    // 수동 입력값(50회 = 6,000 청휘석)이 중앙값으로 유지되어야 합니다.
     expect(eventEntry?.resourceDelta.pyroxene).toBe(-6_000);
-    // 수동 입력 여부와 무관하게 확률 기반 밴드가 펼쳐져야 합니다.
-    expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(
-      eventEntry?.accumulatedResources.pyroxene ?? 0,
-    );
-    expect(eventEntry?.accumulatedResources.pyroxene).toBeGreaterThan(
-      eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene ?? Number.POSITIVE_INFINITY,
-    );
+    expect(eventEntry?.accumulatedResourcesBand).toBeUndefined();
+  });
+
+  it("keeps a ceiling-mode multi-pickup central path inside the probability band", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          recruitments: [pickupRecruitment({ name: "픽업 학생 A" }), pickupRecruitment({ name: "픽업 학생 B" })],
+        }),
+      ],
+      options: {
+        ...defaultOptions,
+        event: { pickupChance: "ceil" },
+      },
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    expect(eventEntry?.accumulatedResources.pyroxene).toBe(52_000);
+    expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(52_000);
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(52_000);
+  });
+
+  it("applies recruitment tickets when calculating the probability band", () => {
+    const timeline = buildTestTimeline({
+      initialResources: {
+        pyroxene: 100_000,
+        oneTimeTicket: 9,
+        tenTimeTicket: 20,
+      },
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    expect(eventEntry?.accumulatedResources).toEqual({
+      pyroxene: 100_000,
+      oneTimeTicket: 1,
+      tenTimeTicket: 10,
+    });
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(100_000);
+  });
+
+  it("uses shared pickup DP for same-banner multi-pickup bands", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          recruitments: [pickupRecruitment({ name: "픽업 학생 A" }), pickupRecruitment({ name: "픽업 학생 B" })],
+          recruitmentPool: { tier2Count: 150, tier3Count: 202 },
+        }),
+      ],
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    expect(eventEntry?.accumulatedResources.pyroxene).toBe(77_080);
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(61_240);
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBeGreaterThan(56_560);
   });
 });

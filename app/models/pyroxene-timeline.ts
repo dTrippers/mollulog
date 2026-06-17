@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import type { PyroxeneScheduleItem } from "~/components/features/futures/types";
-import type { PyroxenePlannerOptions, TimelineSourceType } from "./pyroxene-planner";
+import type { PyroxeneCalculationOptions, TimelineSourceType } from "./pyroxene-planner";
 import { calculateDailyApChargePyroxene } from "./pyroxene-planner-source-config";
 import { DEFAULT_PICKUP_STUDENT_RATE_BY_TIER } from "./recruitment-simulator";
 
@@ -22,8 +22,8 @@ export type TimelineDelta = {
   source: TimelineSource;
 
   pickupTrial?: number;
-  // 픽업 1회 모집의 가챠 운에 따른 분산(뽑기 횟수²). 신뢰 구간 폭 계산에 누적됩니다.
-  pickupTrialVariance?: number;
+  // 이벤트별 직접 입력이 없는 픽업의 실제 유료 모집 횟수 확률분포입니다. 인덱스가 모집 횟수를 뜻합니다.
+  pickupTrialCostDistribution?: TrialDistribution;
   resourceDelta?: PickupResources;
   tenTimeTicketLotId?: string;
   tenTimeTicketExpiresAt?: dayjs.Dayjs;
@@ -56,8 +56,16 @@ export const PYROXENE = {
   FREE_RECRUITMENT_TRIAL: 100,
 } as const;
 
-// 신뢰 구간 폭의 z-점수. P10~P90(양측 ±1.2816σ)에 해당합니다.
-export const PICKUP_TRIAL_BAND_Z = 1.2816;
+const PICKUP_TRIAL_BAND_QUANTILE = {
+  optimistic: 0.9,
+  pessimistic: 0.1,
+} as const;
+
+// P10/P90 밴드에 영향을 주기 어려운 극미세 꼬리 상태를 잘라, 티켓 포함 DP의 상태 폭증을 막습니다.
+const MIN_PROBABILITY = 1e-6;
+const MAX_PICKUP_TRIAL_COST_DISTRIBUTION_CACHE_SIZE = 200;
+
+type TrialDistribution = number[];
 
 export { calculateDailyApChargePyroxene } from "./pyroxene-planner-source-config";
 
@@ -72,11 +80,40 @@ type TimelineAccumulationState = {
   tenTimeTicketLots: TenTimeTicketLot[];
 };
 
+type ResourceStateDistribution = Map<
+  string,
+  {
+    state: TimelineAccumulationState;
+    probability: number;
+  }
+>;
+
+type ResourcePyroxeneQuantiles = {
+  optimistic: number;
+  pessimistic: number;
+};
+
 const TIMELINE_DELTA_PRIORITY = {
   NORMAL: 0,
   PICKUP: 10,
   TICKET_EXPIRY: 20,
 } as const;
+
+type PickupEvent = NonNullable<PyroxeneScheduleItem["event"]>;
+type PickupRecruitment = PickupEvent["recruitments"][number];
+
+type PickupTargetDistributionEntry = {
+  acquiredMask: number;
+  probability: number;
+};
+
+type PickupDpState = {
+  targetIndex: number;
+  acquiredMask: number;
+  sparkPoints: number;
+};
+
+const pickupTrialCostDistributionCache = new Map<string, TrialDistribution>();
 
 function zeroResources(): PickupResources {
   return { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
@@ -151,11 +188,15 @@ function expireTenTimeTicketLot(lots: TenTimeTicketLot[], lotId: string): number
 function createTimelineAccumulationState(initialResources: PickupResources): TimelineAccumulationState {
   return {
     currentResources: initialResources,
-    tenTimeTicketLots: initialResources.tenTimeTicket > 0 ? [{ id: "initial", count: initialResources.tenTimeTicket }] : [],
+    tenTimeTicketLots:
+      initialResources.tenTimeTicket > 0 ? [{ id: "initial", count: initialResources.tenTimeTicket }] : [],
   };
 }
 
-function resolvePickupResourceDelta(state: TimelineAccumulationState, pickupTrial: number): PickupResources | undefined {
+function resolvePickupResourceDelta(
+  state: TimelineAccumulationState,
+  pickupTrial: number,
+): PickupResources | undefined {
   if (pickupTrial > 0) {
     const resourceDelta = zeroResources();
     let remainingTrial = pickupTrial;
@@ -215,40 +256,45 @@ function applyTimelineResourceDelta(
   };
 }
 
-// 천장(pity)으로 상한이 걸린 기하분포의 평균/분산을 계산합니다.
+// 천장(pity)으로 상한이 걸린 기하분포를 계산합니다.
 // 한 명의 픽업 학생을 얻기까지 필요한 모집 횟수 N = min(첫 성공까지 시행, 천장).
-const pickupTrialMomentsCache = new Map<number, { mean: number; variance: number }>();
+const pickupTrialDistributionCache = new Map<number, TrialDistribution>();
 
-export function calculatePickupTrialMoments(pickupRate: number): { mean: number; variance: number } {
+function calculatePickupTrialDistribution(pickupRate: number): TrialDistribution {
   const cap = PYROXENE.PICKUP_TRIAL.ceil;
   if (pickupRate <= 0) {
-    return { mean: cap, variance: 0 };
+    const distribution = Array(cap + 1).fill(0);
+    distribution[cap] = 1;
+    return distribution;
   }
   if (pickupRate >= 1) {
-    return { mean: 1, variance: 0 };
+    const distribution = Array(cap + 1).fill(0);
+    distribution[1] = 1;
+    return distribution;
   }
 
-  const cached = pickupTrialMomentsCache.get(pickupRate);
+  const cached = pickupTrialDistributionCache.get(pickupRate);
   if (cached) {
     return cached;
   }
 
   const q = 1 - pickupRate;
-  let mean = 0;
-  let secondMoment = 0;
+  const distribution = Array(cap + 1).fill(0);
   for (let k = 1; k < cap; k++) {
-    const probability = q ** (k - 1) * pickupRate;
-    mean += k * probability;
-    secondMoment += k * k * probability;
+    distribution[k] = q ** (k - 1) * pickupRate;
   }
   // 천장 도달(N = cap) 확률: 직전까지 모두 실패.
-  const ceilProbability = q ** (cap - 1);
-  mean += cap * ceilProbability;
-  secondMoment += cap * cap * ceilProbability;
+  distribution[cap] = q ** (cap - 1);
 
-  const moments = { mean, variance: Math.max(0, secondMoment - mean * mean) };
-  pickupTrialMomentsCache.set(pickupRate, moments);
-  return moments;
+  pickupTrialDistributionCache.set(pickupRate, distribution);
+  return distribution;
+}
+
+export function calculatePickupTrialMoments(pickupRate: number): { mean: number; variance: number } {
+  const distribution = calculatePickupTrialDistribution(pickupRate);
+  const mean = distribution.reduce((sum, probability, trials) => sum + probability * trials, 0);
+  const secondMoment = distribution.reduce((sum, probability, trials) => sum + probability * trials * trials, 0);
+  return { mean, variance: Math.max(0, secondMoment - mean * mean) };
 }
 
 function getPickupRecruitmentRate(recruitment: NonNullable<PyroxeneScheduleItem["event"]>["recruitments"][number]) {
@@ -257,19 +303,457 @@ function getPickupRecruitmentRate(recruitment: NonNullable<PyroxeneScheduleItem[
     : DEFAULT_PICKUP_STUDENT_RATE_BY_TIER.tier3;
 }
 
-// 한 이벤트의 가챠 분산은 픽업 학생별 분산의 합입니다(학생 간 독립 가정).
-// 독립 분산은 더할 수 있으므로, 여러 이벤트에 걸친 누적 표준편차는 √N로 자랍니다.
-function getPickupTrialVariance(
-  pickupRecruitments: NonNullable<PyroxeneScheduleItem["event"]>["recruitments"],
+function subtractFreeRecruitmentTrial(pickupTrial: number): number {
+  return Math.max(0, pickupTrial - PYROXENE.FREE_RECRUITMENT_TRIAL);
+}
+
+function bitCount(value: number): number {
+  let count = 0;
+  let remaining = value;
+  while (remaining > 0) {
+    count += remaining & 1;
+    remaining >>>= 1;
+  }
+  return count;
+}
+
+function getRecruitmentStudentTier(recruitment: PickupRecruitment): number {
+  return recruitment.student?.initialTier ?? 3;
+}
+
+function getRecruitmentTierSlotRate(recruitment: PickupRecruitment): number {
+  const tier = getRecruitmentStudentTier(recruitment);
+  if (tier === 2) {
+    return 0.185;
+  }
+  if (recruitment.recruitmentType === "fes") {
+    return 0.06;
+  }
+  return 0.03;
+}
+
+function getRecruitmentPoolCountByTier(event: PickupEvent, tier: number): number {
+  if (tier === 2) {
+    return event.recruitmentPool?.tier2Count ?? 1;
+  }
+  if (tier === 3) {
+    return event.recruitmentPool?.tier3Count ?? 1;
+  }
+  return 1;
+}
+
+function addTrialProbability(distribution: TrialDistribution, trial: number, probability: number) {
+  if (probability <= MIN_PROBABILITY) {
+    return;
+  }
+  distribution[trial] = (distribution[trial] ?? 0) + probability;
+}
+
+function calculateExpectedTrial(distribution: TrialDistribution): number {
+  const totalProbability = distribution.reduce((sum, probability) => sum + probability, 0);
+  if (totalProbability <= 0) {
+    return 0;
+  }
+
+  return distribution.reduce((sum, probability, trials) => sum + (probability / totalProbability) * trials, 0);
+}
+
+function convolveTrialDistributions(left: TrialDistribution, right: TrialDistribution): TrialDistribution {
+  const distribution = Array(left.length + right.length - 1).fill(0);
+  for (let leftTrials = 0; leftTrials < left.length; leftTrials++) {
+    const leftProbability = left[leftTrials] ?? 0;
+    if (leftProbability <= MIN_PROBABILITY) {
+      continue;
+    }
+    for (let rightTrials = 0; rightTrials < right.length; rightTrials++) {
+      const rightProbability = right[rightTrials] ?? 0;
+      if (rightProbability <= MIN_PROBABILITY) {
+        continue;
+      }
+      distribution[leftTrials + rightTrials] += leftProbability * rightProbability;
+    }
+  }
+  return distribution;
+}
+
+function getTrialQuantile(distribution: TrialDistribution, quantile: number): number {
+  const totalProbability = distribution.reduce((sum, probability) => sum + probability, 0);
+  if (totalProbability <= 0) {
+    return 0;
+  }
+
+  const target = Math.min(Math.max(quantile, 0), 1);
+  let cumulativeProbability = 0;
+  for (let trials = 0; trials < distribution.length; trials++) {
+    cumulativeProbability += (distribution[trials] ?? 0) / totalProbability;
+    if (cumulativeProbability + Number.EPSILON >= target) {
+      return trials;
+    }
+  }
+  return distribution.length - 1;
+}
+
+function getTrialDistributionPyroxeneQuantiles(
+  distribution: TrialDistribution,
+  pyroxeneOffset: number,
+): ResourcePyroxeneQuantiles {
+  return {
+    optimistic: pyroxeneOffset - getTrialQuantile(distribution, 1 - PICKUP_TRIAL_BAND_QUANTILE.optimistic) * 120,
+    pessimistic: pyroxeneOffset - getTrialQuantile(distribution, 1 - PICKUP_TRIAL_BAND_QUANTILE.pessimistic) * 120,
+  };
+}
+
+function getPickupDpStateKey(state: PickupDpState): string {
+  return `${state.targetIndex}:${state.acquiredMask}:${state.sparkPoints}`;
+}
+
+function getNextTargetIndex(
+  targetRecruitments: PickupRecruitment[],
+  targetIndex: number,
+  acquiredMask: number,
 ): number {
-  return pickupRecruitments.reduce(
-    (sum, recruitment) => sum + calculatePickupTrialMoments(getPickupRecruitmentRate(recruitment)).variance,
-    0,
+  let nextTargetIndex = targetIndex;
+  while (nextTargetIndex < targetRecruitments.length && (acquiredMask & (1 << nextTargetIndex)) !== 0) {
+    nextTargetIndex++;
+  }
+  return nextTargetIndex;
+}
+
+function shouldStopTarget(
+  targetRecruitments: PickupRecruitment[],
+  targetIndex: number,
+  acquiredMask: number,
+  sparkPoints: number,
+) {
+  const targetCount = targetRecruitments.length;
+  if (targetIndex >= targetCount) {
+    return true;
+  }
+
+  const missingTargetCount = targetCount - bitCount(acquiredMask);
+  if (missingTargetCount <= 0) {
+    return true;
+  }
+
+  return Math.floor(sparkPoints / PYROXENE.PICKUP_TRIAL.ceil) >= missingTargetCount;
+}
+
+function applySparkExchange(acquiredMask: number, targetCount: number, sparkPoints: number): number {
+  let result = acquiredMask;
+  let exchangeableCount = Math.floor(sparkPoints / PYROXENE.PICKUP_TRIAL.ceil);
+  for (let targetIndex = 0; targetIndex < targetCount && exchangeableCount > 0; targetIndex++) {
+    const targetMask = 1 << targetIndex;
+    if ((result & targetMask) !== 0) {
+      continue;
+    }
+    result |= targetMask;
+    exchangeableCount--;
+  }
+  return result;
+}
+
+function getTargetSlotDistribution(
+  targetRecruitments: PickupRecruitment[],
+  currentTargetIndex: number,
+  event: PickupEvent,
+): PickupTargetDistributionEntry[] {
+  const currentTarget = targetRecruitments[currentTargetIndex];
+  if (!currentTarget) {
+    return [{ acquiredMask: 0, probability: 1 }];
+  }
+
+  const entries: PickupTargetDistributionEntry[] = [];
+  const currentTier = getRecruitmentStudentTier(currentTarget);
+  const directProbability = getPickupRecruitmentRate(currentTarget);
+  entries.push({ acquiredMask: 1 << currentTargetIndex, probability: directProbability });
+
+  if (currentTier === 2 || currentTier === 3) {
+    const poolCount = Math.max(1, getRecruitmentPoolCountByTier(event, currentTier) - 1);
+    const offRateProbability = Math.max(0, getRecruitmentTierSlotRate(currentTarget) - directProbability);
+    const spookProbability = offRateProbability / poolCount;
+
+    for (let targetIndex = 0; targetIndex < targetRecruitments.length; targetIndex++) {
+      if (targetIndex === currentTargetIndex) {
+        continue;
+      }
+      if (getRecruitmentStudentTier(targetRecruitments[targetIndex]) !== currentTier) {
+        continue;
+      }
+      entries.push({ acquiredMask: 1 << targetIndex, probability: spookProbability });
+    }
+  }
+
+  const hitProbability = entries.reduce((sum, entry) => sum + entry.probability, 0);
+  return [...entries, { acquiredMask: 0, probability: Math.max(0, 1 - hitProbability) }].filter(
+    (entry) => entry.probability > MIN_PROBABILITY,
   );
 }
 
-function subtractFreeRecruitmentTrial(pickupTrial: number): number {
-  return Math.max(0, pickupTrial - PYROXENE.FREE_RECRUITMENT_TRIAL);
+function getPickupTrialCostDistributionCacheKey(event: PickupEvent, pickupRecruitments: PickupRecruitment[]): string {
+  const recruitmentKey = pickupRecruitments
+    .map((recruitment) =>
+      [
+        recruitment.student?.uid ?? "",
+        recruitment.student?.initialTier ?? "",
+        recruitment.recruitmentType,
+        recruitment.pickup ? "p" : "",
+      ].join(":"),
+    )
+    .join("|");
+
+  return [
+    event.uid,
+    isFreeRecruitment100Event(event) ? "free100" : "paid",
+    event.recruitmentPool?.tier2Count ?? "",
+    event.recruitmentPool?.tier3Count ?? "",
+    recruitmentKey,
+  ].join("::");
+}
+
+function getPickupTrialCostDistribution(
+  event: PickupEvent,
+  pickupRecruitments: PickupRecruitment[],
+): TrialDistribution {
+  const targetCount = pickupRecruitments.length;
+  if (targetCount === 0) {
+    return [1];
+  }
+
+  const cacheKey = getPickupTrialCostDistributionCacheKey(event, pickupRecruitments);
+  const cached = pickupTrialCostDistributionCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const distribution: TrialDistribution = [];
+  let activeStates = new Map<string, { state: PickupDpState; probability: number }>();
+  const initialState = { targetIndex: 0, acquiredMask: 0, sparkPoints: 0 };
+  activeStates.set(getPickupDpStateKey(initialState), { state: initialState, probability: 1 });
+
+  while (activeStates.size > 0) {
+    const nextStates = new Map<string, { state: PickupDpState; probability: number }>();
+
+    for (const { state, probability } of activeStates.values()) {
+      const targetIndex = getNextTargetIndex(pickupRecruitments, state.targetIndex, state.acquiredMask);
+      if (shouldStopTarget(pickupRecruitments, targetIndex, state.acquiredMask, state.sparkPoints)) {
+        const acquiredMask = applySparkExchange(state.acquiredMask, targetCount, state.sparkPoints);
+        if (bitCount(acquiredMask) >= targetCount) {
+          addTrialProbability(distribution, state.sparkPoints, probability);
+        }
+        continue;
+      }
+
+      for (const result of getTargetSlotDistribution(pickupRecruitments, targetIndex, event)) {
+        const sparkPoints = state.sparkPoints + 1;
+        const acquiredMask = state.acquiredMask | result.acquiredMask;
+        const nextTargetIndex = getNextTargetIndex(pickupRecruitments, targetIndex, acquiredMask);
+        const nextState = { targetIndex: nextTargetIndex, acquiredMask, sparkPoints };
+        const nextProbability = probability * result.probability;
+        const key = getPickupDpStateKey(nextState);
+        const existing = nextStates.get(key);
+        if (existing) {
+          existing.probability += nextProbability;
+        } else if (nextProbability > MIN_PROBABILITY) {
+          nextStates.set(key, { state: nextState, probability: nextProbability });
+        }
+      }
+    }
+
+    activeStates = nextStates;
+  }
+
+  if (isFreeRecruitment100Event(event)) {
+    const paidDistribution: TrialDistribution = [];
+    for (let trials = 0; trials < distribution.length; trials++) {
+      addTrialProbability(paidDistribution, subtractFreeRecruitmentTrial(trials), distribution[trials] ?? 0);
+    }
+    cachePickupTrialCostDistribution(cacheKey, paidDistribution);
+    return paidDistribution;
+  }
+
+  cachePickupTrialCostDistribution(cacheKey, distribution);
+  return distribution;
+}
+
+function cachePickupTrialCostDistribution(cacheKey: string, distribution: TrialDistribution) {
+  if (pickupTrialCostDistributionCache.size >= MAX_PICKUP_TRIAL_COST_DISTRIBUTION_CACHE_SIZE) {
+    pickupTrialCostDistributionCache.clear();
+  }
+  pickupTrialCostDistributionCache.set(cacheKey, distribution);
+}
+
+function cloneTimelineAccumulationState(state: TimelineAccumulationState): TimelineAccumulationState {
+  return {
+    currentResources: { ...state.currentResources },
+    tenTimeTicketLots: state.tenTimeTicketLots.map((lot) => ({ ...lot })),
+  };
+}
+
+function normalizeTimelineAccumulationState(state: TimelineAccumulationState): TimelineAccumulationState {
+  return {
+    currentResources: { ...state.currentResources },
+    tenTimeTicketLots: state.tenTimeTicketLots
+      .filter((lot) => lot.count > 0)
+      .map((lot) => ({ ...lot }))
+      .sort((a, b) => {
+        const expiresAtDiff =
+          (a.expiresAt?.valueOf() ?? Number.POSITIVE_INFINITY) - (b.expiresAt?.valueOf() ?? Number.POSITIVE_INFINITY);
+        if (expiresAtDiff !== 0) {
+          return expiresAtDiff;
+        }
+        return a.id.localeCompare(b.id);
+      }),
+  };
+}
+
+// state는 이미 normalizeTimelineAccumulationState로 정규화된 상태여야 합니다.
+// (호출부에서 정규화하므로 여기서 중복 정규화하지 않습니다.)
+function getTimelineStateKey(state: TimelineAccumulationState): string {
+  const lotKey = state.tenTimeTicketLots
+    .map((lot) => `${lot.id}:${lot.count}:${lot.expiresAt?.valueOf() ?? ""}`)
+    .join("|");
+  return `${state.currentResources.pyroxene}:${state.currentResources.oneTimeTicket}:${state.currentResources.tenTimeTicket}:${lotKey}`;
+}
+
+function singletonResourceStateDistribution(state: TimelineAccumulationState): ResourceStateDistribution {
+  const distribution: ResourceStateDistribution = new Map();
+  const cloned = normalizeTimelineAccumulationState(cloneTimelineAccumulationState(state));
+  distribution.set(getTimelineStateKey(cloned), { state: cloned, probability: 1 });
+  return distribution;
+}
+
+function mergeResourceState(
+  distribution: ResourceStateDistribution,
+  state: TimelineAccumulationState,
+  probability: number,
+) {
+  if (probability <= MIN_PROBABILITY) {
+    return;
+  }
+
+  const normalized = normalizeTimelineAccumulationState(state);
+  const key = getTimelineStateKey(normalized);
+  const existing = distribution.get(key);
+  if (existing) {
+    existing.probability += probability;
+  } else {
+    distribution.set(key, { state: normalized, probability });
+  }
+}
+
+function applyFixedDeltaToResourceState(
+  state: TimelineAccumulationState,
+  delta: TimelineDelta,
+  pickupTrial: number | undefined,
+): TimelineAccumulationState {
+  const nextState = cloneTimelineAccumulationState(state);
+  const resourceDelta = resolveTimelineResourceDelta(nextState, delta, pickupTrial);
+  if (resourceDelta) {
+    applyTimelineResourceDelta(nextState, delta, resourceDelta);
+  }
+  return nextState;
+}
+
+function applyFixedDeltaToResourceStates(
+  distribution: ResourceStateDistribution,
+  delta: TimelineDelta,
+  pickupTrial: number | undefined,
+): ResourceStateDistribution {
+  const nextDistribution: ResourceStateDistribution = new Map();
+  for (const { state, probability } of distribution.values()) {
+    mergeResourceState(nextDistribution, applyFixedDeltaToResourceState(state, delta, pickupTrial), probability);
+  }
+  return nextDistribution;
+}
+
+function applyPickupTrialCostDistributionToResourceStates(
+  distribution: ResourceStateDistribution,
+  delta: TimelineDelta,
+  trialDistribution: TrialDistribution,
+): ResourceStateDistribution {
+  const nextDistribution: ResourceStateDistribution = new Map();
+  for (const { state, probability } of distribution.values()) {
+    for (let pickupTrial = 0; pickupTrial < trialDistribution.length; pickupTrial++) {
+      const trialProbability = trialDistribution[pickupTrial] ?? 0;
+      if (trialProbability <= MIN_PROBABILITY) {
+        continue;
+      }
+      const nextState = applyFixedDeltaToResourceState(state, delta, pickupTrial);
+      mergeResourceState(nextDistribution, nextState, probability * trialProbability);
+    }
+  }
+  return nextDistribution;
+}
+
+function getDeltaWithPyroxeneExcluded(delta: TimelineDelta): TimelineDelta {
+  if (!delta.resourceDelta || delta.resourceDelta.pyroxene === 0) {
+    return delta;
+  }
+
+  return {
+    ...delta,
+    resourceDelta: {
+      ...delta.resourceDelta,
+      pyroxene: 0,
+    },
+  };
+}
+
+function shouldApplyFixedDeltaToResourceStates(delta: TimelineDelta, pickupTrial: number | undefined): boolean {
+  if (pickupTrial !== undefined) {
+    return true;
+  }
+  if (delta.tenTimeTicketLotId) {
+    return true;
+  }
+  if (!delta.resourceDelta) {
+    return false;
+  }
+  return delta.resourceDelta.oneTimeTicket !== 0 || delta.resourceDelta.tenTimeTicket !== 0;
+}
+
+type SortedResourceStateEntry = {
+  pyroxene: number;
+  probability: number;
+};
+
+function getSortedResourcePyroxeneQuantile(
+  sortedEntries: SortedResourceStateEntry[],
+  totalProbability: number,
+  quantile: number,
+): number {
+  const target = Math.min(Math.max(quantile, 0), 1);
+  let cumulativeProbability = 0;
+
+  for (const entry of sortedEntries) {
+    cumulativeProbability += entry.probability / totalProbability;
+    if (cumulativeProbability + Number.EPSILON >= target) {
+      return entry.pyroxene;
+    }
+  }
+
+  return sortedEntries.at(-1)?.pyroxene ?? 0;
+}
+
+// optimistic/pessimistic 분위수를 위해 분포를 한 번만 정렬·합산해 재사용합니다.
+function getResourcePyroxeneQuantiles(distribution: ResourceStateDistribution): ResourcePyroxeneQuantiles {
+  const sortedEntries: SortedResourceStateEntry[] = [...distribution.values()]
+    .map((entry) => ({ pyroxene: entry.state.currentResources.pyroxene, probability: entry.probability }))
+    .sort((a, b) => a.pyroxene - b.pyroxene);
+  const totalProbability = sortedEntries.reduce((sum, entry) => sum + entry.probability, 0);
+
+  return {
+    optimistic: getSortedResourcePyroxeneQuantile(
+      sortedEntries,
+      totalProbability,
+      PICKUP_TRIAL_BAND_QUANTILE.optimistic,
+    ),
+    pessimistic: getSortedResourcePyroxeneQuantile(
+      sortedEntries,
+      totalProbability,
+      PICKUP_TRIAL_BAND_QUANTILE.pessimistic,
+    ),
+  };
 }
 
 export function isFreeRecruitment100Event(event: NonNullable<PyroxeneScheduleItem["event"]>, now = dayjs()): boolean {
@@ -279,12 +763,30 @@ export function isFreeRecruitment100Event(event: NonNullable<PyroxeneScheduleIte
   );
 }
 
+function hasRecruitmentTicketResourceChanges(initialResources: PickupResources, scheduleItems: PyroxeneScheduleItem[]) {
+  if (initialResources.oneTimeTicket > 0 || initialResources.tenTimeTicket > 0) {
+    return true;
+  }
+
+  return scheduleItems.some((item) => {
+    if (item.raid?.type === "elimination") {
+      return true;
+    }
+    const onetimeGain = item.onetimeGain;
+    if ((onetimeGain?.oneTimeTicketDelta ?? 0) !== 0 || (onetimeGain?.tenTimeTicketDelta ?? 0) !== 0) {
+      return true;
+    }
+    const repeatedGain = item.repeatedGain;
+    return (repeatedGain?.oneTimeTicketDelta ?? 0) !== 0 || (repeatedGain?.tenTimeTicketDelta ?? 0) !== 0;
+  });
+}
+
 export function buildTimeline(
   initialResources: PickupResources,
   initialDate: Date,
   eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>,
   scheduleItems: PyroxeneScheduleItem[],
-  options: PyroxenePlannerOptions,
+  options: PyroxeneCalculationOptions,
 ): Timeline {
   const maxDate = scheduleItems.reduce((max, item) => {
     if (!item.event) {
@@ -327,20 +829,24 @@ export function buildTimeline(
         continue;
       }
 
+      const manualExpectedTrials = eventData?.expectedTrials ?? null;
       let pickupTrial: number;
-      if (eventData?.expectedTrials !== null && eventData?.expectedTrials !== undefined) {
-        pickupTrial = eventData.expectedTrials;
+      let pickupTrialCostDistribution: TrialDistribution | undefined;
+      if (manualExpectedTrials !== null) {
+        pickupTrial = manualExpectedTrials;
       } else {
         // 이벤트별 직접 입력이 없으면 관심 등록된 픽업 학생 수와 전역 모집 목표로 계산합니다.
-        pickupTrial = pickupCount * PYROXENE.PICKUP_TRIAL[options.event.pickupChance];
+        pickupTrialCostDistribution = getPickupTrialCostDistribution(event, pickupRecruitments);
+        pickupTrial =
+          options.event.pickupChance === "average"
+            ? Math.round(calculateExpectedTrial(pickupTrialCostDistribution))
+            : pickupCount * PYROXENE.PICKUP_TRIAL.ceil;
       }
 
-      // 모집 목표를 수동 입력했더라도 가챠 변동성 밴드는 동일하게 시뮬레이션합니다.
-      // 중앙값(수동/평균/천장)은 그대로 두고, 밴드 폭은 픽업 학생 확률 기반 분산으로 계산합니다.
-      // 무료 100연 이벤트는 중앙값(평균)만 줄이고 분산은 근사적으로 그대로 둡니다.
-      const pickupTrialVariance = getPickupTrialVariance(pickupRecruitments);
-
-      if (isFreeRecruitment100Event(event)) {
+      if (
+        isFreeRecruitment100Event(event) &&
+        (manualExpectedTrials !== null || options.event.pickupChance === "ceil")
+      ) {
         pickupTrial = subtractFreeRecruitmentTrial(pickupTrial);
       }
 
@@ -348,7 +854,7 @@ export function buildTimeline(
         date: dayjs(event.since),
         source: { type: "event", event },
         pickupTrial,
-        pickupTrialVariance,
+        pickupTrialCostDistribution,
       });
     } else if (scheduleItem.raid) {
       const { raid } = scheduleItem;
@@ -397,7 +903,10 @@ export function buildTimeline(
       });
     } else if (scheduleItem.repeatedGain) {
       const { repeatedGain } = scheduleItem;
-      if (repeatedGain.repeatType !== "monthly_first" && (!repeatedGain.repeatIntervalDays || repeatedGain.repeatIntervalDays <= 0)) {
+      if (
+        repeatedGain.repeatType !== "monthly_first" &&
+        (!repeatedGain.repeatIntervalDays || repeatedGain.repeatIntervalDays <= 0)
+      ) {
         continue;
       }
 
@@ -474,22 +983,53 @@ export function buildTimeline(
 
   const timeline: Timeline = [];
   const centralState = createTimelineAccumulationState(initialResources);
-  // 픽업 이벤트를 지날 때마다 가챠 분산(뽑기 횟수²)을 누적합니다.
-  // 밴드 폭은 누적 표준편차에 비례하므로 픽업 개수 N에 대해 √N로 자랍니다.
-  let cumulativePickupVariance = 0;
-  for (
-    const delta of filteredDeltas.sort((a, b) => {
-      const dateDiff = a.date.diff(b.date);
-      if (dateDiff !== 0) {
-        return dateDiff;
-      }
-      return (a.priority ?? TIMELINE_DELTA_PRIORITY.NORMAL) - (b.priority ?? TIMELINE_DELTA_PRIORITY.NORMAL);
-    })
-  ) {
+  const useSimplePyroxeneBand = !hasRecruitmentTicketResourceChanges(initialResources, scheduleItems);
+  // 직접 입력이 아닌 픽업 이벤트만 실제 확률분포에 누적합니다.
+  // 밴드는 중앙선 ± 폭이 아니라 누적 자원 상태 분포의 10/90 분위수로 계산합니다.
+  let bandTrialDistribution: TrialDistribution | null = null;
+  let bandStateDistribution: ResourceStateDistribution | null = null;
+  let bandPyroxeneOffset = 0;
+  let bandBasePyroxeneQuantiles: ResourcePyroxeneQuantiles | null = null;
+  for (const delta of filteredDeltas.sort((a, b) => {
+    const dateDiff = a.date.diff(b.date);
+    if (dateDiff !== 0) {
+      return dateDiff;
+    }
+    return (a.priority ?? TIMELINE_DELTA_PRIORITY.NORMAL) - (b.priority ?? TIMELINE_DELTA_PRIORITY.NORMAL);
+  })) {
+    const bandStartState = cloneTimelineAccumulationState(centralState);
     const resourceDelta = resolveTimelineResourceDelta(centralState, delta, delta.pickupTrial);
 
-    if (delta.pickupTrialVariance) {
-      cumulativePickupVariance += delta.pickupTrialVariance;
+    if (useSimplePyroxeneBand && delta.pickupTrialCostDistribution) {
+      if (!bandTrialDistribution) {
+        bandTrialDistribution = [1];
+        bandPyroxeneOffset = bandStartState.currentResources.pyroxene;
+      }
+      bandTrialDistribution = convolveTrialDistributions(bandTrialDistribution, delta.pickupTrialCostDistribution);
+      bandBasePyroxeneQuantiles = getTrialDistributionPyroxeneQuantiles(bandTrialDistribution, 0);
+    } else if (useSimplePyroxeneBand && bandTrialDistribution && resourceDelta?.pyroxene) {
+      bandPyroxeneOffset += resourceDelta.pyroxene;
+      bandBasePyroxeneQuantiles = getTrialDistributionPyroxeneQuantiles(bandTrialDistribution, 0);
+    } else if (delta.pickupTrialCostDistribution) {
+      bandStateDistribution = applyPickupTrialCostDistributionToResourceStates(
+        bandStateDistribution ?? singletonResourceStateDistribution(bandStartState),
+        delta,
+        delta.pickupTrialCostDistribution,
+      );
+      bandBasePyroxeneQuantiles = getResourcePyroxeneQuantiles(bandStateDistribution);
+    } else if (bandStateDistribution) {
+      if (delta.resourceDelta?.pyroxene) {
+        bandPyroxeneOffset += delta.resourceDelta.pyroxene;
+      }
+
+      if (shouldApplyFixedDeltaToResourceStates(delta, delta.pickupTrial)) {
+        bandStateDistribution = applyFixedDeltaToResourceStates(
+          bandStateDistribution,
+          getDeltaWithPyroxeneExcluded(delta),
+          delta.pickupTrial,
+        );
+        bandBasePyroxeneQuantiles = getResourcePyroxeneQuantiles(bandStateDistribution);
+      }
     }
 
     if (!resourceDelta) {
@@ -498,9 +1038,13 @@ export function buildTimeline(
 
     applyTimelineResourceDelta(centralState, delta, resourceDelta);
 
-    // 중앙선을 기준으로 ±z·√(누적 분산)·120청휘석 만큼 대칭 밴드를 그립니다.
-    const bandOffsetPyroxene = PICKUP_TRIAL_BAND_Z * Math.sqrt(cumulativePickupVariance) * 120;
     const central = centralState.currentResources;
+    const optimisticPyroxene = bandBasePyroxeneQuantiles
+      ? bandBasePyroxeneQuantiles.optimistic + bandPyroxeneOffset
+      : null;
+    const pessimisticPyroxene = bandBasePyroxeneQuantiles
+      ? bandBasePyroxeneQuantiles.pessimistic + bandPyroxeneOffset
+      : null;
 
     timeline.push({
       date: delta.date,
@@ -508,10 +1052,16 @@ export function buildTimeline(
       resourceDelta,
       accumulatedResources: { ...central },
       accumulatedResourcesBand:
-        bandOffsetPyroxene > 0
+        optimisticPyroxene !== null && pessimisticPyroxene !== null
           ? {
-              optimistic: { ...central, pyroxene: central.pyroxene + bandOffsetPyroxene },
-              pessimistic: { ...central, pyroxene: central.pyroxene - bandOffsetPyroxene },
+              optimistic: {
+                ...central,
+                pyroxene: Math.max(optimisticPyroxene, central.pyroxene),
+              },
+              pessimistic: {
+                ...central,
+                pyroxene: Math.min(pessimisticPyroxene, central.pyroxene),
+              },
             }
           : undefined,
     });
