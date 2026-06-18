@@ -3,6 +3,10 @@ import { getAllRaidSchedules, getRaidSchedule } from "~/models/raid";
 import { fetchRaidVideos } from "../../../app/lib/ranks/videos";
 import { RaidRepository } from "../../../app/repositories/raid";
 
+jest.mock("../../../app/lib/ranks/base", () => ({
+  RANK_API_BASE_URL: "https://ranks.baql.net",
+}));
+
 jest.mock("~/models/raid", () => ({
   getAllRaidSchedules: jest.fn(),
   getRaidSchedule: jest.fn(),

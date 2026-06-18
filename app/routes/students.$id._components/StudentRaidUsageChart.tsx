@@ -23,6 +23,7 @@ import {
   type StudentRaidUsageChartRow,
   type StudentRaidUsageDefenseFilter,
 } from "./StudentRaidUsageChartModel";
+import { formatTierLabel, TIER_COLORS } from "./raidTierVisual";
 
 type StudentRaidUsageChartProps = {
   attackType: Attack;
@@ -43,18 +44,6 @@ const DEFENSE_FILTERS: Array<{
   { value: Defense.Elastic, label: defenseTypeLocale.elastic, color: defenseTypeColor.elastic },
 ];
 
-const TIER_COLORS: Record<string, string> = {
-  tier9: "#ec4899",
-  tier8: "#d946ef",
-  tier7: "#8b5cf6",
-  tier6: "#3b82f6",
-  tier5: "#06b6d4",
-  tier4: "#22c55e",
-  tier3: "#eab308",
-  tier2: "#f97316",
-  tier1: "#ef4444",
-};
-
 function formatCount(value: number) {
   if (value >= 10000) {
     return `${Math.round(value / 1000)}k`;
@@ -63,14 +52,6 @@ function formatCount(value: number) {
     return `${(value / 1000).toFixed(1)}k`;
   }
   return value.toString();
-}
-
-function formatTierLabel(tierKey: string) {
-  const tier = Number(tierKey.replace("tier", ""));
-  if (tier > 5) {
-    return `고유 ${tier - 5}`;
-  }
-  return `★${tier}`;
 }
 
 function getTooltipPayload(payload: unknown): StudentRaidUsageChartRow | null {
@@ -131,7 +112,7 @@ export default function StudentRaidUsageChart({ attackType, releaseAt, raids, st
   }
 
   return (
-    <div className="mb-6 rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
+    <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
       <div className="mb-3 flex flex-col gap-1">
         <p className="text-base font-bold">역대 편성 횟수</p>
       </div>

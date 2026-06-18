@@ -10,7 +10,8 @@ import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { formatStudentFullName } from "~/models/student";
+import { getRecruitedStudentTiers } from "~/models/recruited-student";
+import { formatStudentFullName, getAllStudentsMap } from "~/models/student";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
@@ -64,6 +65,20 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   );
   const timelineContents = await getTimelineContentsByRecruitmentGroupUids(env, recruitmentGroupUids);
   const currentUser = await getActiveSensei(env, request);
+  const recruitedStudentTiers = currentUser ? await getRecruitedStudentTiers(env, currentUser.id) : {};
+  const myStudentTier = recruitedStudentTiers[student.uid] ?? null;
+  const rawAllStudents = await getAllStudentsMap(env, true);
+  const allStudents = Object.fromEntries(
+    Object.entries(rawAllStudents).map(([uid, student]) => [
+      uid,
+      {
+        name: student.name,
+        attackType: student.attackType,
+        defenseType: student.defenseType,
+        role: student.role,
+      },
+    ]),
+  );
   const tagCounts = await getTagCountsByStudent(env, uid);
   const allGradings = await getStudentGradingsByStudentWithUsers(env, uid, true);
   const allRaids = await raidRepository.getAll();
@@ -104,6 +119,9 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       },
     })),
     currentUser,
+    myStudentTier,
+    recruitedStudentTiers,
+    allStudents,
     allRaids,
   };
 };
