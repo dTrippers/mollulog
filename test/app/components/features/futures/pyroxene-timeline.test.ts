@@ -43,6 +43,13 @@ function favoritedPickupRecruitment() {
   };
 }
 
+function favoritedPickupRecruitmentWithUid(uid: string) {
+  return {
+    ...favoritedPickupRecruitment(),
+    student: { uid, name: `학생 ${uid}`, initialTier: 3 },
+  };
+}
+
 describe("pyroxene-timeline", () => {
   it("accumulates one-time gain after initial resources", () => {
     const timeline = buildTimeline(
@@ -888,5 +895,31 @@ describe("pyroxene-timeline", () => {
     expect(Math.abs(pickupEntry?.resourceDelta.oneTimeTicket ?? Number.NaN)).toBe(0);
     expect(Math.abs(pickupEntry?.resourceDelta.tenTimeTicket ?? Number.NaN)).toBe(0);
     expect(pickupEntry?.accumulatedResources).toEqual({ pyroxene: 3200, oneTimeTicket: 0, tenTimeTicket: 0 });
+  });
+
+  it("keeps the average pickup probability band below the central line after many uncapped targets", () => {
+    const timeline = buildTimeline(
+      { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Map(),
+      Array.from({ length: 9 }, (_, index) => ({
+        event: {
+          uid: `average-pickup-${index + 1}`,
+          name: `관심 픽업 ${index + 1}`,
+          since: `2026-01-${String(index + 2).padStart(2, "0")}T00:00:00.000Z`,
+          until: `2026-01-${String(index + 3).padStart(2, "0")}T00:00:00.000Z`,
+          earnablePyroxene: null,
+          tags: [],
+          recruitments: [favoritedPickupRecruitmentWithUid(`student-${index + 1}`)],
+        },
+      })),
+      defaultOptions,
+    );
+
+    const lastPickupEntry = timeline.find((entry) => entry.source.event?.uid === "average-pickup-9");
+
+    expect(lastPickupEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBeLessThan(
+      lastPickupEntry?.accumulatedResources.pyroxene ?? Number.NEGATIVE_INFINITY,
+    );
   });
 });

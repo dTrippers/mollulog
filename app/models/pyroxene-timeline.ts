@@ -63,6 +63,9 @@ const PICKUP_TRIAL_BAND_QUANTILE = {
 
 // P10/P90 밴드에 영향을 주기 어려운 극미세 꼬리 상태를 잘라, 티켓 포함 DP의 상태 폭증을 막습니다.
 const MIN_PROBABILITY = 1e-6;
+// 이미 계산된 모집 분포를 자원 상태에 합성할 때는 개별 product 확률이 작아도
+// 같은 청휘석/티켓 상태로 합쳐진 뒤 분위수에 영향을 줄 수 있으므로 더 보수적으로 자릅니다.
+const RESOURCE_STATE_MIN_PROBABILITY = 1e-12;
 const MAX_PICKUP_TRIAL_COST_DISTRIBUTION_CACHE_SIZE = 200;
 
 type TrialDistribution = number[];
@@ -93,6 +96,8 @@ type ResourcePyroxeneQuantiles = {
   pessimistic: number;
 };
 
+export type PyroxeneTimelineBandMode = "central_ticket_discount" | "resource_state";
+
 const TIMELINE_DELTA_PRIORITY = {
   NORMAL: 0,
   PICKUP: 10,
@@ -112,6 +117,8 @@ type PickupDpState = {
   acquiredMask: number;
   sparkPoints: number;
 };
+
+type PickupTrialCostDistributionMode = "with_pity" | "without_pity";
 
 const pickupTrialCostDistributionCache = new Map<string, TrialDistribution>();
 
@@ -403,6 +410,13 @@ function getTrialDistributionPyroxeneQuantiles(
   };
 }
 
+function getTicketPyroxeneDiscount(resourceDelta: PickupResources | undefined): number {
+  if (!resourceDelta) {
+    return 0;
+  }
+  return Math.max(0, -resourceDelta.oneTimeTicket) * 120 + Math.max(0, -resourceDelta.tenTimeTicket) * 10 * 120;
+}
+
 function getPickupDpStateKey(state: PickupDpState): string {
   return `${state.targetIndex}:${state.acquiredMask}:${state.sparkPoints}`;
 }
@@ -424,6 +438,7 @@ function shouldStopTarget(
   targetIndex: number,
   acquiredMask: number,
   sparkPoints: number,
+  mode: PickupTrialCostDistributionMode,
 ) {
   const targetCount = targetRecruitments.length;
   if (targetIndex >= targetCount) {
@@ -433,6 +448,10 @@ function shouldStopTarget(
   const missingTargetCount = targetCount - bitCount(acquiredMask);
   if (missingTargetCount <= 0) {
     return true;
+  }
+
+  if (mode === "without_pity") {
+    return false;
   }
 
   return Math.floor(sparkPoints / PYROXENE.PICKUP_TRIAL.ceil) >= missingTargetCount;
@@ -489,7 +508,11 @@ function getTargetSlotDistribution(
   );
 }
 
-function getPickupTrialCostDistributionCacheKey(event: PickupEvent, pickupRecruitments: PickupRecruitment[]): string {
+function getPickupTrialCostDistributionCacheKey(
+  event: PickupEvent,
+  pickupRecruitments: PickupRecruitment[],
+  mode: PickupTrialCostDistributionMode,
+): string {
   const recruitmentKey = pickupRecruitments
     .map((recruitment) =>
       [
@@ -502,6 +525,7 @@ function getPickupTrialCostDistributionCacheKey(event: PickupEvent, pickupRecrui
     .join("|");
 
   return [
+    mode,
     event.uid,
     isFreeRecruitment100Event(event) ? "free100" : "paid",
     event.recruitmentPool?.tier2Count ?? "",
@@ -513,13 +537,14 @@ function getPickupTrialCostDistributionCacheKey(event: PickupEvent, pickupRecrui
 function getPickupTrialCostDistribution(
   event: PickupEvent,
   pickupRecruitments: PickupRecruitment[],
+  mode: PickupTrialCostDistributionMode,
 ): TrialDistribution {
   const targetCount = pickupRecruitments.length;
   if (targetCount === 0) {
     return [1];
   }
 
-  const cacheKey = getPickupTrialCostDistributionCacheKey(event, pickupRecruitments);
+  const cacheKey = getPickupTrialCostDistributionCacheKey(event, pickupRecruitments, mode);
   const cached = pickupTrialCostDistributionCache.get(cacheKey);
   if (cached) {
     return cached;
@@ -535,8 +560,11 @@ function getPickupTrialCostDistribution(
 
     for (const { state, probability } of activeStates.values()) {
       const targetIndex = getNextTargetIndex(pickupRecruitments, state.targetIndex, state.acquiredMask);
-      if (shouldStopTarget(pickupRecruitments, targetIndex, state.acquiredMask, state.sparkPoints)) {
-        const acquiredMask = applySparkExchange(state.acquiredMask, targetCount, state.sparkPoints);
+      if (shouldStopTarget(pickupRecruitments, targetIndex, state.acquiredMask, state.sparkPoints, mode)) {
+        const acquiredMask =
+          mode === "with_pity"
+            ? applySparkExchange(state.acquiredMask, targetCount, state.sparkPoints)
+            : state.acquiredMask;
         if (bitCount(acquiredMask) >= targetCount) {
           addTrialProbability(distribution, state.sparkPoints, probability);
         }
@@ -622,12 +650,20 @@ function singletonResourceStateDistribution(state: TimelineAccumulationState): R
   return distribution;
 }
 
+function hasRecruitmentTickets(state: TimelineAccumulationState): boolean {
+  return (
+    state.currentResources.oneTimeTicket > 0 ||
+    state.currentResources.tenTimeTicket > 0 ||
+    state.tenTimeTicketLots.some((lot) => lot.count > 0)
+  );
+}
+
 function mergeResourceState(
   distribution: ResourceStateDistribution,
   state: TimelineAccumulationState,
   probability: number,
 ) {
-  if (probability <= MIN_PROBABILITY) {
+  if (probability <= RESOURCE_STATE_MIN_PROBABILITY) {
     return;
   }
 
@@ -683,6 +719,32 @@ function applyPickupTrialCostDistributionToResourceStates(
     }
   }
   return nextDistribution;
+}
+
+function convertTrialDistributionToResourceStates(
+  trialDistribution: TrialDistribution | null,
+  state: TimelineAccumulationState,
+  pyroxeneOffset: number,
+): ResourceStateDistribution {
+  if (!trialDistribution) {
+    return singletonResourceStateDistribution(state);
+  }
+
+  const distribution: ResourceStateDistribution = new Map();
+  for (let pickupTrial = 0; pickupTrial < trialDistribution.length; pickupTrial++) {
+    const probability = trialDistribution[pickupTrial] ?? 0;
+    if (probability <= 0) {
+      continue;
+    }
+
+    const nextState = cloneTimelineAccumulationState(state);
+    nextState.currentResources = {
+      ...nextState.currentResources,
+      pyroxene: pyroxeneOffset - pickupTrial * 120,
+    };
+    mergeResourceState(distribution, nextState, probability);
+  }
+  return distribution;
 }
 
 function getDeltaWithPyroxeneExcluded(delta: TimelineDelta): TimelineDelta {
@@ -763,30 +825,13 @@ export function isFreeRecruitment100Event(event: NonNullable<PyroxeneScheduleIte
   );
 }
 
-function hasRecruitmentTicketResourceChanges(initialResources: PickupResources, scheduleItems: PyroxeneScheduleItem[]) {
-  if (initialResources.oneTimeTicket > 0 || initialResources.tenTimeTicket > 0) {
-    return true;
-  }
-
-  return scheduleItems.some((item) => {
-    if (item.raid?.type === "elimination") {
-      return true;
-    }
-    const onetimeGain = item.onetimeGain;
-    if ((onetimeGain?.oneTimeTicketDelta ?? 0) !== 0 || (onetimeGain?.tenTimeTicketDelta ?? 0) !== 0) {
-      return true;
-    }
-    const repeatedGain = item.repeatedGain;
-    return (repeatedGain?.oneTimeTicketDelta ?? 0) !== 0 || (repeatedGain?.tenTimeTicketDelta ?? 0) !== 0;
-  });
-}
-
 export function buildTimeline(
   initialResources: PickupResources,
   initialDate: Date,
   eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>,
   scheduleItems: PyroxeneScheduleItem[],
   options: PyroxeneCalculationOptions,
+  bandMode: PyroxeneTimelineBandMode = "central_ticket_discount",
 ): Timeline {
   const maxDate = scheduleItems.reduce((max, item) => {
     if (!item.event) {
@@ -836,9 +881,15 @@ export function buildTimeline(
         pickupTrial = manualExpectedTrials;
       } else {
         // 이벤트별 직접 입력이 없으면 관심 등록된 픽업 학생 수와 전역 모집 목표로 계산합니다.
-        pickupTrialCostDistribution = getPickupTrialCostDistribution(event, pickupRecruitments);
+        if (options.event.pickupChance !== "ceil") {
+          pickupTrialCostDistribution = getPickupTrialCostDistribution(
+            event,
+            pickupRecruitments,
+            options.event.pickupChance === "average" ? "without_pity" : "with_pity",
+          );
+        }
         if (options.event.pickupChance === "average_pity") {
-          pickupTrial = Math.round(calculateExpectedTrial(pickupTrialCostDistribution));
+          pickupTrial = Math.round(calculateExpectedTrial(pickupTrialCostDistribution ?? [1]));
         } else {
           pickupTrial =
             pickupCount *
@@ -988,7 +1039,7 @@ export function buildTimeline(
 
   const timeline: Timeline = [];
   const centralState = createTimelineAccumulationState(initialResources);
-  const useSimplePyroxeneBand = !hasRecruitmentTicketResourceChanges(initialResources, scheduleItems);
+  const shouldBuildProbabilityBand = options.event.pickupChance !== "ceil";
   // 직접 입력이 아닌 픽업 이벤트만 실제 확률분포에 누적합니다.
   // 밴드는 중앙선 ± 폭이 아니라 누적 자원 상태 분포의 10/90 분위수로 계산합니다.
   let bandTrialDistribution: TrialDistribution | null = null;
@@ -1005,36 +1056,59 @@ export function buildTimeline(
     const bandStartState = cloneTimelineAccumulationState(centralState);
     const resourceDelta = resolveTimelineResourceDelta(centralState, delta, delta.pickupTrial);
 
-    if (useSimplePyroxeneBand && delta.pickupTrialCostDistribution) {
+    if (shouldBuildProbabilityBand && bandMode === "resource_state") {
+      if (bandStateDistribution === null && delta.pickupTrial !== undefined && hasRecruitmentTickets(bandStartState)) {
+        bandStateDistribution = convertTrialDistributionToResourceStates(
+          bandTrialDistribution,
+          bandStartState,
+          bandPyroxeneOffset,
+        );
+        bandTrialDistribution = null;
+        bandPyroxeneOffset = 0;
+      }
+
+      if (bandStateDistribution && delta.pickupTrialCostDistribution) {
+        bandStateDistribution = applyPickupTrialCostDistributionToResourceStates(
+          bandStateDistribution,
+          delta,
+          delta.pickupTrialCostDistribution,
+        );
+        bandBasePyroxeneQuantiles = getResourcePyroxeneQuantiles(bandStateDistribution);
+      } else if (bandStateDistribution) {
+        if (delta.resourceDelta?.pyroxene) {
+          bandPyroxeneOffset += delta.resourceDelta.pyroxene;
+        }
+
+        if (shouldApplyFixedDeltaToResourceStates(delta, delta.pickupTrial)) {
+          bandStateDistribution = applyFixedDeltaToResourceStates(
+            bandStateDistribution,
+            getDeltaWithPyroxeneExcluded(delta),
+            delta.pickupTrial,
+          );
+          bandBasePyroxeneQuantiles = getResourcePyroxeneQuantiles(bandStateDistribution);
+        }
+      } else if (delta.pickupTrialCostDistribution) {
+        if (!bandTrialDistribution) {
+          bandTrialDistribution = [1];
+          bandPyroxeneOffset = bandStartState.currentResources.pyroxene;
+        }
+        bandTrialDistribution = convolveTrialDistributions(bandTrialDistribution, delta.pickupTrialCostDistribution);
+        bandBasePyroxeneQuantiles = getTrialDistributionPyroxeneQuantiles(bandTrialDistribution, 0);
+      } else if (bandTrialDistribution && resourceDelta?.pyroxene) {
+        bandPyroxeneOffset += resourceDelta.pyroxene;
+        bandBasePyroxeneQuantiles = getTrialDistributionPyroxeneQuantiles(bandTrialDistribution, 0);
+      }
+    } else if (shouldBuildProbabilityBand && delta.pickupTrialCostDistribution) {
       if (!bandTrialDistribution) {
         bandTrialDistribution = [1];
         bandPyroxeneOffset = bandStartState.currentResources.pyroxene;
       }
       bandTrialDistribution = convolveTrialDistributions(bandTrialDistribution, delta.pickupTrialCostDistribution);
+      bandPyroxeneOffset += getTicketPyroxeneDiscount(resourceDelta);
       bandBasePyroxeneQuantiles = getTrialDistributionPyroxeneQuantiles(bandTrialDistribution, 0);
-    } else if (useSimplePyroxeneBand && bandTrialDistribution && resourceDelta?.pyroxene) {
+    } else if (shouldBuildProbabilityBand && bandTrialDistribution && resourceDelta?.pyroxene) {
       bandPyroxeneOffset += resourceDelta.pyroxene;
       bandBasePyroxeneQuantiles = getTrialDistributionPyroxeneQuantiles(bandTrialDistribution, 0);
-    } else if (delta.pickupTrialCostDistribution) {
-      bandStateDistribution = applyPickupTrialCostDistributionToResourceStates(
-        bandStateDistribution ?? singletonResourceStateDistribution(bandStartState),
-        delta,
-        delta.pickupTrialCostDistribution,
-      );
-      bandBasePyroxeneQuantiles = getResourcePyroxeneQuantiles(bandStateDistribution);
-    } else if (bandStateDistribution) {
-      if (delta.resourceDelta?.pyroxene) {
-        bandPyroxeneOffset += delta.resourceDelta.pyroxene;
-      }
-
-      if (shouldApplyFixedDeltaToResourceStates(delta, delta.pickupTrial)) {
-        bandStateDistribution = applyFixedDeltaToResourceStates(
-          bandStateDistribution,
-          getDeltaWithPyroxeneExcluded(delta),
-          delta.pickupTrial,
-        );
-        bandBasePyroxeneQuantiles = getResourcePyroxeneQuantiles(bandStateDistribution);
-      }
     }
 
     if (!resourceDelta) {

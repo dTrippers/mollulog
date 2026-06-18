@@ -85,6 +85,10 @@ export default function PyroxeneSchedule({
     scheduleItems,
     options: calcOptions,
   });
+  const simulationDescription =
+    options.event.pickupChance === "ceil"
+      ? "설정한 목표를 모두 천장으로 계산한 시뮬레이션 결과에요"
+      : "설정한 목표와, 상위/하위 10% 범위의 시뮬레이션 결과에요";
 
   // 적용 중인 패키지는 삭제가 가능하도록 별도 레이아웃에서 표시
   const availableOneTimePackages = useMemo(() => {
@@ -155,7 +159,7 @@ export default function PyroxeneSchedule({
         <PyroxeneAvailableOneTimePackages packages={availableOneTimePackages} onDeleteItem={onDeleteItem} />
       )}
 
-      <SubTitle text="청휘석 시뮬레이션" description="설정한 목표와, 상위/하위 10% 범위의 시뮬레이션 결과에요" />
+      <SubTitle text="청휘석 시뮬레이션" description={simulationDescription} />
       <div className="relative">
         {isTimelinePending && (
           <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white/90 px-2 py-1 text-xs font-medium text-neutral-600 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/90 dark:text-neutral-300">
@@ -170,9 +174,10 @@ export default function PyroxeneSchedule({
         text="타임라인"
         description="미래시 페이지에서 등록한 관심 학생의 모집 시점의 예상 청휘석을 확인할 수 있어요"
       />
-      {timeline.every(({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type)) && (
-        <EmptyView text="표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해보세요." />
-      )}
+      {!isTimelinePending &&
+        timeline.every(({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type)) && (
+          <EmptyView text="표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해보세요." />
+        )}
       {timeline.map(({ date, accumulatedResources, resourceDelta, source }, index) => {
         if (source.type !== "event" && !options.timeline.display.includes(source.type)) {
           return null;

@@ -18,8 +18,8 @@ type UsePyroxeneTimelineArgs = {
 
 /**
  * buildTimeline 계산을 Web Worker로 위임해 메인 스레드 블로킹을 막습니다.
- * - 첫 렌더(SSR/하이드레이션)는 동기 계산 결과로 채워 차트가 비지 않게 합니다.
- * - 이후 입력 변경은 워커로 보내고, 가장 최신 요청의 결과만 반영합니다.
+ * - 첫 렌더부터 워커로 보내 라우트 진입/내부 링크 이동을 막지 않습니다.
+ * - 입력 변경은 워커로 보내고, 가장 최신 요청의 결과만 반영합니다.
  * - 워커를 쓸 수 없는 환경에서는 동기 계산으로 폴백합니다.
  */
 export function usePyroxeneTimeline({
@@ -34,11 +34,10 @@ export function usePyroxeneTimeline({
     [initialResources, initialDate, eventDataMap, scheduleItems, options],
   );
 
-  const [timeline, setTimeline] = useState<Timeline>(computeSync);
-  const [pending, setPending] = useState(false);
+  const [timeline, setTimeline] = useState<Timeline>([]);
+  const [pending, setPending] = useState(true);
   const workerRef = useRef<Worker | null>(null);
   const requestIdRef = useRef(0);
-  const skipInitialRecomputeRef = useRef(true);
 
   // 워커 에러 핸들러에서 항상 최신 입력으로 동기 계산할 수 있도록 참조를 갱신합니다.
   const computeSyncRef = useRef(computeSync);
@@ -52,6 +51,8 @@ export function usePyroxeneTimeline({
     try {
       worker = new Worker(new URL("./pyroxene-timeline.worker.ts", import.meta.url), { type: "module" });
     } catch {
+      setTimeline(computeSyncRef.current());
+      setPending(false);
       return;
     }
     workerRef.current = worker;
@@ -76,12 +77,6 @@ export function usePyroxeneTimeline({
   }, []);
 
   useEffect(() => {
-    // 첫 실행은 useState 초기화에서 이미 동기 계산했으므로 건너뜁니다.
-    if (skipInitialRecomputeRef.current) {
-      skipInitialRecomputeRef.current = false;
-      return;
-    }
-
     const worker = workerRef.current;
     if (!worker) {
       setTimeline(computeSync());

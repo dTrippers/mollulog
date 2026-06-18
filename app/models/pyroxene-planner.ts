@@ -513,7 +513,7 @@ export type PyroxeneCalculationOptions = Pick<PyroxenePlannerOptions, "event" | 
 
 export const defaultPyroxenePlannerOptions: PyroxenePlannerOptions = {
   event: {
-    pickupChance: "average",
+    pickupChance: "average_pity",
   },
   raid: {
     tier: "platinum",

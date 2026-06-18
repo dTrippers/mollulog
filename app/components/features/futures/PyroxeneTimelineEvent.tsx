@@ -55,10 +55,10 @@ export default function PyroxeneTimelineEvent({
     expectedTrials !== null
       ? `총 ${expectedTrials}회`
       : pickupChance === "ceil"
-        ? "★3 학생 당 200회(천장)"
+        ? "모든 픽업 천장"
         : pickupChance === "average_pity"
-          ? "★3 학생 당 기댓값"
-          : "★3 학생 당 140회";
+          ? "천장 포함 기댓값"
+          : "픽업 확률 기댓값";
 
   const handleDeletePickupComplete = () => {
     if (confirmingPickupDelete) {

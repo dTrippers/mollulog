@@ -1,8 +1,13 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { PyroxeneScheduleItem } from "~/components/features/futures/types";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
-import { normalizePyroxenePlannerOptions, type PyroxenePlannerOptions } from "./pyroxene-planner";
-import { type PickupResources, buildTimeline, calculatePickupTrialMoments } from "./pyroxene-timeline";
+import { type PyroxenePlannerOptions, normalizePyroxenePlannerOptions } from "./pyroxene-planner";
+import {
+  type PickupResources,
+  type PyroxeneTimelineBandMode,
+  buildTimeline,
+  calculatePickupTrialMoments,
+} from "./pyroxene-timeline";
 
 jest.mock("~/repositories", () => ({ RaidRepository: {}, RecruitmentRepository: {} }));
 jest.mock("./student", () => ({ getAllStudentsMap: jest.fn() }));
@@ -80,13 +85,73 @@ function buildTestTimeline({
   eventDataMap = new Map<string, { completed: boolean; expectedTrials: number | null }>(),
   scheduleItems = [eventItem({ uid: "event-a" })],
   options = defaultOptions,
+  bandMode,
 }: {
   initialResources?: PickupResources;
   eventDataMap?: Map<string, { completed: boolean; expectedTrials: number | null }>;
   scheduleItems?: PyroxeneScheduleItem[];
   options?: PyroxenePlannerOptions;
+  bandMode?: PyroxeneTimelineBandMode;
 } = {}) {
-  return buildTimeline(initialResources, new Date("2026-07-01T00:00:00.000Z"), eventDataMap, scheduleItems, options);
+  return buildTimeline(
+    initialResources,
+    new Date("2026-07-01T00:00:00.000Z"),
+    eventDataMap,
+    scheduleItems,
+    options,
+    bandMode,
+  );
+}
+
+function getMaxBandDelta(left: ReturnType<typeof buildTestTimeline>, right: ReturnType<typeof buildTestTimeline>) {
+  let optimistic = 0;
+  let pessimistic = 0;
+  let central = 0;
+  const count = Math.min(left.length, right.length);
+
+  for (let index = 0; index < count; index++) {
+    central = Math.max(
+      central,
+      Math.abs(left[index].accumulatedResources.pyroxene - right[index].accumulatedResources.pyroxene),
+    );
+
+    const leftOptimistic = left[index].accumulatedResourcesBand?.optimistic.pyroxene;
+    const rightOptimistic = right[index].accumulatedResourcesBand?.optimistic.pyroxene;
+    if (leftOptimistic !== undefined && rightOptimistic !== undefined) {
+      optimistic = Math.max(optimistic, Math.abs(leftOptimistic - rightOptimistic));
+    }
+
+    const leftPessimistic = left[index].accumulatedResourcesBand?.pessimistic.pyroxene;
+    const rightPessimistic = right[index].accumulatedResourcesBand?.pessimistic.pyroxene;
+    if (leftPessimistic !== undefined && rightPessimistic !== undefined) {
+      pessimistic = Math.max(pessimistic, Math.abs(leftPessimistic - rightPessimistic));
+    }
+  }
+
+  return { optimistic, pessimistic, central };
+}
+
+function ticketGainItem({
+  uid = "ticket-gain",
+  date = "2026-07-03T00:00:00.000Z",
+  oneTimeTicketDelta = 0,
+  tenTimeTicketDelta = 1,
+}: {
+  uid?: string;
+  date?: string;
+  oneTimeTicketDelta?: number;
+  tenTimeTicketDelta?: number;
+} = {}): PyroxeneScheduleItem {
+  return {
+    onetimeGain: {
+      uid,
+      source: "other",
+      description: "모집 티켓 획득",
+      date: new Date(date),
+      oneTimeTicketDelta,
+      tenTimeTicketDelta,
+    },
+  };
 }
 
 describe("calculatePickupTrialMoments", () => {
@@ -110,7 +175,9 @@ describe("calculatePickupTrialMoments", () => {
 });
 
 describe("normalizePyroxenePlannerOptions", () => {
-  it("keeps stored pickupChance values and falls back to average for unknown values", () => {
+  it("keeps stored pickupChance values and falls back to average_pity for missing or unknown values", () => {
+    expect(normalizePyroxenePlannerOptions(null).event.pickupChance).toBe("average_pity");
+    expect(normalizePyroxenePlannerOptions({}).event.pickupChance).toBe("average_pity");
     expect(normalizePyroxenePlannerOptions({ event: { pickupChance: "average" } }).event.pickupChance).toBe("average");
     expect(normalizePyroxenePlannerOptions({ event: { pickupChance: "average_pity" } }).event.pickupChance).toBe(
       "average_pity",
@@ -120,12 +187,12 @@ describe("normalizePyroxenePlannerOptions", () => {
       normalizePyroxenePlannerOptions({
         event: { pickupChance: "unexpected" as PyroxenePlannerOptions["event"]["pickupChance"] },
       }).event.pickupChance,
-    ).toBe("average");
+    ).toBe("average_pity");
   });
 });
 
 describe("buildTimeline pyroxene balance band", () => {
-  it("calculates the average-mode linear central path while keeping the DP probability band", () => {
+  it("calculates the average-mode linear central path while keeping the uncapped probability band", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [
         eventItem({
@@ -138,8 +205,8 @@ describe("buildTimeline pyroxene balance band", () => {
 
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(83_200);
     expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(83_200);
-    // 3성 픽업의 90분위 모집 횟수는 천장인 200회에 도달합니다.
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(76_000);
+    // 천장 미반영 모드는 3성 픽업의 90분위가 200회를 넘어섭니다.
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(60_640);
   });
 
   it("uses the average_pity DP central path from actual pickup probability", () => {
@@ -248,7 +315,7 @@ describe("buildTimeline pyroxene balance band", () => {
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(95_680);
   });
 
-  it("keeps the ceiling-mode pessimistic band at the ceiling baseline", () => {
+  it("does not add a probability band for ceiling mode", () => {
     const timeline = buildTestTimeline({
       options: {
         ...defaultOptions,
@@ -258,8 +325,7 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(76_000);
-    expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(76_000);
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(76_000);
+    expect(eventEntry?.accumulatedResourcesBand).toBeUndefined();
   });
 
   it("does not add a probability band for a manual expectedTrials event", () => {
@@ -272,7 +338,7 @@ describe("buildTimeline pyroxene balance band", () => {
     expect(eventEntry?.accumulatedResourcesBand).toBeUndefined();
   });
 
-  it("keeps a ceiling-mode multi-pickup central path inside the probability band", () => {
+  it("does not add a probability band for ceiling-mode multi-pickup events", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [
         eventItem({
@@ -288,11 +354,10 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(52_000);
-    expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(52_000);
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(52_000);
+    expect(eventEntry?.accumulatedResourcesBand).toBeUndefined();
   });
 
-  it("applies recruitment tickets when calculating the average_pity probability band", () => {
+  it("applies central ticket discounts when calculating the default average_pity probability band", () => {
     const timeline = buildTestTimeline({
       initialResources: {
         pyroxene: 100_000,
@@ -311,10 +376,30 @@ describe("buildTimeline pyroxene balance band", () => {
       oneTimeTicket: 1,
       tenTimeTicket: 10,
     });
+    // 기본 밴드는 중앙선에서 사용한 티켓을 deterministic discount로 반영합니다.
+    // 티켓이 많은 단일 이벤트에서는 exact resource-state 밴드보다 비관선이 낮을 수 있습니다.
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(88_960);
+  });
+
+  it("keeps resource-state probability bands available as an exact comparison baseline", () => {
+    const timeline = buildTestTimeline({
+      initialResources: {
+        pyroxene: 100_000,
+        oneTimeTicket: 9,
+        tenTimeTicket: 20,
+      },
+      options: {
+        ...defaultOptions,
+        event: { pickupChance: "average_pity" },
+      },
+      bandMode: "resource_state",
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
     expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(100_000);
   });
 
-  it("uses the average-mode linear central path for same-banner multi-pickup events", () => {
+  it("uses the average-mode linear central path with uncapped bands for same-banner multi-pickup events", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [
         eventItem({
@@ -327,7 +412,118 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(66_400);
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(61_240);
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(34_000);
+  });
+
+  it("keeps uncapped average bands wide when ticket spending requires resource-state tracking", () => {
+    const timeline = buildTestTimeline({
+      initialResources: {
+        pyroxene: 200_000,
+        oneTimeTicket: 20,
+        tenTimeTicket: 1,
+      },
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          since: "2026-07-02T00:00:00.000Z",
+          until: "2026-07-06T00:00:00.000Z",
+          recruitments: [pickupRecruitment({ name: "픽업 학생 A" }), pickupRecruitment({ name: "픽업 학생 B" })],
+        }),
+        eventItem({
+          uid: "event-b",
+          since: "2026-07-03T00:00:00.000Z",
+          until: "2026-07-06T00:00:00.000Z",
+          recruitments: [pickupRecruitment({ name: "픽업 학생 C" }), pickupRecruitment({ name: "픽업 학생 D" })],
+        }),
+        eventItem({
+          uid: "event-c",
+          since: "2026-07-04T00:00:00.000Z",
+          until: "2026-07-06T00:00:00.000Z",
+          recruitments: [pickupRecruitment({ name: "픽업 학생 E" }), pickupRecruitment({ name: "픽업 학생 F" })],
+        }),
+      ],
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-c");
+
+    expect(eventEntry?.accumulatedResources.pyroxene).toBe(102_880);
+    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBeLessThan(60_000);
+  });
+
+  it("switches to ticket-aware bands only after tickets are actually available", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          since: "2026-07-02T00:00:00.000Z",
+          until: "2026-07-06T00:00:00.000Z",
+        }),
+        ticketGainItem(),
+        eventItem({
+          uid: "event-b",
+          since: "2026-07-04T00:00:00.000Z",
+          until: "2026-07-06T00:00:00.000Z",
+        }),
+      ],
+    });
+    const firstEventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+    const secondEventEntry = timeline.find((entry) => entry.source.event?.uid === "event-b");
+
+    expect(firstEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(60_640);
+    expect(secondEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(34_800);
+  });
+
+  it("keeps the simplified ticket band close to resource-state bands on representative fixtures", () => {
+    const fourEvents = [
+      eventItem({ uid: "event-a", since: "2026-07-02T00:00:00.000Z" }),
+      eventItem({ uid: "event-b", since: "2026-07-03T00:00:00.000Z" }),
+      eventItem({ uid: "event-c", since: "2026-07-04T00:00:00.000Z" }),
+      eventItem({ uid: "event-d", since: "2026-07-05T00:00:00.000Z" }),
+    ];
+    const fixtures = [
+      {
+        label: "no tickets",
+        initialResources: { pyroxene: 200_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+        scheduleItems: fourEvents,
+        maxOptimisticDelta: 0,
+      },
+      {
+        label: "one ten-time ticket",
+        initialResources: { pyroxene: 200_000, oneTimeTicket: 0, tenTimeTicket: 1 },
+        scheduleItems: fourEvents,
+        maxOptimisticDelta: 1_200,
+      },
+      {
+        label: "five ten-time tickets",
+        initialResources: { pyroxene: 200_000, oneTimeTicket: 0, tenTimeTicket: 5 },
+        scheduleItems: fourEvents,
+        maxOptimisticDelta: 6_000,
+      },
+      {
+        label: "ticket acquired between events",
+        initialResources: { pyroxene: 200_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+        scheduleItems: [
+          eventItem({ uid: "event-a", since: "2026-07-02T00:00:00.000Z" }),
+          ticketGainItem(),
+          eventItem({ uid: "event-b", since: "2026-07-04T00:00:00.000Z" }),
+          eventItem({ uid: "event-c", since: "2026-07-05T00:00:00.000Z" }),
+          eventItem({ uid: "event-d", since: "2026-07-06T00:00:00.000Z" }),
+        ],
+        maxOptimisticDelta: 1_200,
+      },
+    ];
+
+    for (const pickupChance of ["average", "average_pity"] as const) {
+      for (const fixture of fixtures) {
+        const options = { ...defaultOptions, event: { pickupChance } };
+        const simplified = buildTestTimeline({ ...fixture, options });
+        const resourceState = buildTestTimeline({ ...fixture, options, bandMode: "resource_state" });
+        const delta = getMaxBandDelta(simplified, resourceState);
+
+        expect(delta.central).toBe(0);
+        expect(delta.pessimistic).toBeLessThanOrEqual(1_200);
+        expect(delta.optimistic).toBeLessThanOrEqual(fixture.maxOptimisticDelta);
+      }
+    }
   });
 
   it("uses shared pickup DP for same-banner multi-pickup average_pity central path and bands", () => {
