@@ -6,11 +6,11 @@ import RaidClearLevels from "~/components/features/raids/RaidClearLevels";
 import RaidOftenUsedParties from "~/components/features/raids/RaidOftenUsedParties";
 import RaidStatisticsSlotCount from "~/components/features/raids/RaidStatisticsSlotCount";
 import { EmptyView, HorizontalScroll, LoadingSkeleton, Section } from "~/components/primitives";
-import { compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 import { fetchRaidOverview } from "~/lib/ranks/overview";
 import { type RaidStatistics, fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import type { RaidType } from "~/models/content.d";
 import { getRaidDefenseTypeSetKey, raidTypeToParam } from "~/models/raid";
+import { getSameOccurrenceRaids } from "~/models/raid-group";
 import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
@@ -42,18 +42,8 @@ export default function RaidSummary() {
   const maxTier = currentRaid.startAt ? getMaxTierAt(currentRaid.startAt) : null;
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
 
-  // Filter raids with the same boss (excluding current raid)
-  const sameBossRaids = useMemo(() => {
-    return allRaids
-      .filter(
-        (raid) =>
-          raid.raidBoss.uid === currentRaid.raidBoss.uid && raid.jpSchedule !== null && raid.uid !== currentRaid.uid,
-      )
-      .sort((a, b) => {
-        const fallbackNow = currentRaid.startAt ?? nowUtcIso();
-        return compareInstantDesc(a.startAt ?? fallbackNow, b.startAt ?? fallbackNow);
-      });
-  }, [allRaids, currentRaid.raidBoss.uid, currentRaid.startAt, currentRaid.uid]);
+  // Past hostings of the same boss + terrain (excluding current raid)
+  const sameBossRaids = useMemo(() => getSameOccurrenceRaids(allRaids, currentRaid), [allRaids, currentRaid]);
 
   const [statistics, setStatistics] = useState<RaidStatistics[] | null>(null);
   const [clearLevels, setClearLevels] = useState<Record<string, number> | null>(null);
