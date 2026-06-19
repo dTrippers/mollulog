@@ -6,7 +6,13 @@ import { Title } from "~/components/primitives";
 import { publishEvent } from "~/lib/events.server";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { createFeedbackReply, getFeedbackThreadByUidForUser, getFeedbackTicketByUidForUser } from "~/models/feedback";
+import {
+  createFeedbackReply,
+  getLatestAdminFeedbackReplyId,
+  getFeedbackThreadByUidForUser,
+  getFeedbackTicketByUidForUser,
+  markFeedbackTicketAdminRepliesSeen,
+} from "~/models/feedback";
 import ReplyForm from "./contact._components/ReplyForm";
 import ThreadView from "./contact._components/ThreadView";
 
@@ -37,6 +43,8 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   if (!thread) {
     throw notFoundResponse();
   }
+
+  await markFeedbackTicketAdminRepliesSeen(env, thread.ticket, getLatestAdminFeedbackReplyId(thread.replies));
 
   return thread;
 };

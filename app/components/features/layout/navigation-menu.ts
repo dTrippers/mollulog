@@ -106,13 +106,13 @@ export function getNavigationSections({
   pathname,
   upcomingEvent,
   now = nowUtcIso(),
-  hasActiveCoupons,
+  hasUnconsumedCoupons,
   sectionStates = getNavigationSectionStates(pathname, upcomingEvent),
 }: {
   pathname: string;
   upcomingEvent: UpcomingNavigationEvent;
   now?: UtcIsoString;
-  hasActiveCoupons: boolean;
+  hasUnconsumedCoupons: boolean;
   sectionStates?: NavigationSectionStates;
 }): NavigationSection[] {
   return [
@@ -246,7 +246,7 @@ export function getNavigationSections({
           OutlineIcon: TicketIconOutline,
           SolidIcon: TicketIconSolid,
           isActive: pathname.startsWith("/coupons"),
-          showRedDot: hasActiveCoupons,
+          showRedDot: hasUnconsumedCoupons,
         },
       ],
     },
@@ -257,7 +257,7 @@ export function getSearchableMenuItems(): SearchableMenuItem[] {
   const sections = getNavigationSections({
     pathname: "",
     upcomingEvent: null,
-    hasActiveCoupons: false,
+    hasUnconsumedCoupons: false,
     sectionStates: {
       isCommunityActive: false,
       isContentActive: false,

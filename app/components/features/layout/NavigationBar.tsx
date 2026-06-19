@@ -44,7 +44,8 @@ type NavigationBarProps = {
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   upcomingEvent: { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
   hasRecentNews: boolean;
-  hasActiveCoupons: boolean;
+  hasUnconsumedCoupons: boolean;
+  hasUnreadFeedbackReplies: boolean;
 };
 
 type NavigationSearchVariant = "desktop" | "mobile";
@@ -250,7 +251,8 @@ export default function NavigationBar({
   setDarkMode,
   upcomingEvent,
   hasRecentNews,
-  hasActiveCoupons,
+  hasUnconsumedCoupons,
+  hasUnreadFeedbackReplies,
 }: NavigationBarProps) {
   const matches = useMatches();
   const location = useLocation();
@@ -288,7 +290,8 @@ export default function NavigationBar({
             pathname={pathname}
             hasRecentNews={hasRecentNews}
             upcomingEvent={upcomingEvent}
-            hasActiveCoupons={hasActiveCoupons}
+            hasUnconsumedCoupons={hasUnconsumedCoupons}
+            hasUnreadFeedbackReplies={hasUnreadFeedbackReplies}
             sectionStates={sectionStates}
           />
         </div>
@@ -307,6 +310,7 @@ export default function NavigationBar({
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         hasRecentNews={hasRecentNews}
+        hasUnreadFeedbackReplies={hasUnreadFeedbackReplies}
         searchResetKey={searchResetKey}
       />
 
@@ -326,12 +330,14 @@ function MobileBrandHeader({
   darkMode,
   setDarkMode,
   hasRecentNews,
+  hasUnreadFeedbackReplies,
   searchResetKey,
 }: {
   currentUsername: string | null;
   darkMode: boolean;
   setDarkMode: NavigationBarProps["setDarkMode"];
   hasRecentNews: boolean;
+  hasUnreadFeedbackReplies: boolean;
   searchResetKey: string;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -456,6 +462,7 @@ function MobileBrandHeader({
               to="/contact"
               Icon={EnvelopeIcon}
               label="제안/문의"
+              showRedDot={hasUnreadFeedbackReplies}
               onClick={() => setIsMenuOpen(false)}
             />
             <MobileHeaderMenuButton
@@ -622,7 +629,8 @@ interface DesktopMenuContentProps {
   pathname: string;
   hasRecentNews: boolean;
   upcomingEvent: NavigationBarProps["upcomingEvent"];
-  hasActiveCoupons: boolean;
+  hasUnconsumedCoupons: boolean;
+  hasUnreadFeedbackReplies: boolean;
   sectionStates: NavigationSectionStates;
 }
 
@@ -631,13 +639,14 @@ function DesktopMenuContent({
   pathname,
   hasRecentNews,
   upcomingEvent,
-  hasActiveCoupons,
+  hasUnconsumedCoupons,
+  hasUnreadFeedbackReplies,
   sectionStates,
 }: DesktopMenuContentProps) {
   const menuSections = getNavigationSections({
     pathname,
     upcomingEvent,
-    hasActiveCoupons,
+    hasUnconsumedCoupons,
     sectionStates,
   });
   const contentSection = menuSections.find((section) => section.name === "컨텐츠");
@@ -702,7 +711,7 @@ function DesktopMenuContent({
       <DesktopMenuGroupLabel>서비스</DesktopMenuGroupLabel>
       <div className="space-y-0.5">
         <DesktopMenuLink to="/news" label="업데이트 소식" Icon={MegaphoneIcon} showRedDot={hasRecentNews} />
-        <DesktopMenuLink to="/contact" label="제안/문의" Icon={EnvelopeIcon} />
+        <DesktopMenuLink to="/contact" label="제안/문의" Icon={EnvelopeIcon} showRedDot={hasUnreadFeedbackReplies} />
       </div>
     </nav>
   );
