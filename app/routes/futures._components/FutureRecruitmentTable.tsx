@@ -15,8 +15,8 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
 import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
-import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
+import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
 import {
   type FutureRecruitmentTableContent,
   type FutureRecruitmentTableRecruitmentGroup,
@@ -453,12 +453,13 @@ function getRecruitmentStudentGroup(
 ) {
   const recruitment = group.recruitment;
   const studentUid = recruitment.student?.uid ?? null;
-  const favorited = studentUid
-    ? favoritedStudents.some((item) => item.contentUid === group.content.uid && item.studentUid === studentUid)
-    : false;
-  const favoritedCount = studentUid
-    ? favoritedCounts.find((item) => item.contentUid === group.content.uid && item.studentUid === studentUid)?.count
-    : undefined;
+  const favoriteKey = recruitment.favoriteKey;
+  const favorited = favoritedStudents.some(
+    (item) => item.contentUid === group.content.uid && item.studentUid === favoriteKey,
+  );
+  const favoritedCount = favoritedCounts.find(
+    (item) => item.contentUid === group.content.uid && item.studentUid === favoriteKey,
+  )?.count;
   const label = recruitmentLabelLocale(recruitment);
   const completed = Boolean(
     group.content.recruitmentGroupUid &&
@@ -488,6 +489,7 @@ function getRecruitmentStudentGroup(
 
   return {
     uid: studentUid,
+    popupId: favoriteKey,
     name: recruitment.studentName,
     attackType: recruitment.student?.attackType,
     defenseType: recruitment.student?.defenseType,
@@ -498,9 +500,9 @@ function getRecruitmentStudentGroup(
     pickup: recruitment.pickup,
     favorited,
     favoritedCount: favoritedCount ?? 0,
-    popups: studentUid
+    popups: favoriteKey
       ? [
-          ...(onRecruitmentComplete && group.content.recruitmentGroupUid && showRecruitmentCompleteAction
+          ...(onRecruitmentComplete && group.content.recruitmentGroupUid && studentUid && showRecruitmentCompleteAction
             ? [
                 completed
                   ? {
@@ -533,12 +535,12 @@ function getRecruitmentStudentGroup(
             ? {
                 Icon: FilledHeartIcon,
                 text: "관심 학생에서 해제",
-                onClick: () => onFavorite?.(group.content.uid, studentUid, false),
+                onClick: () => onFavorite?.(group.content.uid, favoriteKey, false),
               }
             : {
                 Icon: EmptyHeartIcon,
                 text: "관심 학생에 등록",
-                onClick: () => onFavorite?.(group.content.uid, studentUid, true),
+                onClick: () => onFavorite?.(group.content.uid, favoriteKey, true),
               },
           ...(resultEditLink
             ? [
@@ -549,11 +551,15 @@ function getRecruitmentStudentGroup(
                 },
               ]
             : []),
-          {
-            Icon: IdentificationIcon,
-            text: "학생부 보기 (평가/통계)",
-            link: `/students/${studentUid}`,
-          },
+          ...(studentUid
+            ? [
+                {
+                  Icon: IdentificationIcon,
+                  text: "학생부 보기 (평가/통계)",
+                  link: `/students/${studentUid}`,
+                },
+              ]
+            : []),
         ]
       : undefined,
   };
