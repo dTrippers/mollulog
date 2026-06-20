@@ -19,11 +19,11 @@ import {
 import type { EventType, RaidType } from "~/models/content.d";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/models/raid";
-import { applyRecruitmentResultStudentCompletion } from "~/models/recruitment-result-completion";
 import {
-  getRecruitmentResultsByRecruitmentGroupUids,
   type RecruitmentCompletionMeta,
+  getRecruitmentResultsByRecruitmentGroupUids,
 } from "~/models/recruitment-result";
+import { applyRecruitmentResultStudentCompletion } from "~/models/recruitment-result-completion";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
 import type { ActionData as RecruitmentResultActionData } from "./api.recruitment-results";
@@ -66,7 +66,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
 
   const allStudentUids = contents
     .flatMap((content: FutureContentsLoaderContent) =>
-      content.recruitments.map((recruitment: FutureRecruitment) => recruitment.student?.uid ?? null),
+      content.recruitments.map((recruitment: FutureRecruitment) => recruitment.favoriteKey),
     )
     .filter((uid): uid is string => uid !== null);
 

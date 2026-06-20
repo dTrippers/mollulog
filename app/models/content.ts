@@ -15,6 +15,7 @@ import { getAllCoupons } from "./coupon";
 import { getFavoritedCounts } from "./favorite-students";
 import { normalizeFutureContentDates } from "./future-content";
 import { getLatestPostTime } from "./post";
+import { getRecruitmentFavoriteKey } from "./recruitment-identity";
 import { getFutureRaidContents, getTimelineContents, getTimelineContentsByContentTypes } from "./timeline-content";
 import type { TimelineContent, TimelineContentType } from "./timeline-content";
 export { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "./content-rules";
@@ -42,6 +43,7 @@ export type { NestedComment } from "./content-comment";
 
 export type IndexRecruitment = {
   student: { uid: string; name: string; attackType: Attack; defenseType: Defense; role: Role } | null;
+  favoriteKey: string;
   recruitmentType: RecruitmentTypeEnum;
   pickup: boolean;
   rerun: boolean;
@@ -120,7 +122,6 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
       group.recruitments
         .filter(
           (recruitment) =>
-            recruitment.student !== null &&
             recruitment.recruitmentType !== "recollect" &&
             recruitment.recruitmentType !== "archive" &&
             recruitment.recruitmentType !== "encore",
@@ -137,6 +138,7 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
                   role: recruitment.student.role,
                 }
               : null,
+            favoriteKey: getRecruitmentFavoriteKey(recruitment),
             recruitmentType: recruitment.recruitmentType,
             pickup: recruitment.pickup,
             rerun: recruitment.rerun,
@@ -151,9 +153,7 @@ export async function getIndexContents(env: Env, forceRefresh = false) {
         !isInstantAfter(recruitment.since, now) && recruitment.until !== null && isInstantAfter(recruitment.until, now),
     );
 
-  const allStudentUids = currentRecruitments
-    .map(({ recruitment }) => recruitment.student?.uid)
-    .filter((uid) => uid !== null) as string[];
+  const allStudentUids = currentRecruitments.map(({ recruitment }) => recruitment.favoriteKey);
   const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) =>
     currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId),
   );
@@ -177,6 +177,7 @@ export type RecruitmentInfo = {
   since: UtcIsoString;
   until: UtcIsoString | null;
   studentName: string;
+  favoriteKey: string;
   student: {
     uid: string;
     attackType?: Attack;
@@ -293,6 +294,7 @@ function toRecruitmentInfos(group: Awaited<ReturnType<RecruitmentRepository["get
       since: toUtcIso(r.since),
       until: r.until ? toUtcIso(r.until) : null,
       studentName: r.studentName,
+      favoriteKey: getRecruitmentFavoriteKey(r),
       student: r.student
         ? {
             uid: r.student.uid,

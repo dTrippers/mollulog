@@ -7,7 +7,7 @@ import { AttributeBadge, HorizontalScroll, SubTitle } from "~/components/primiti
 import { useSignIn } from "~/contexts/SignInProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
-import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
+import { type UtcIsoString, formatInstant, formatInstantDateKey } from "~/lib/date-time";
 import {
   attackTypeColor,
   attackTypeLocale,
@@ -29,6 +29,7 @@ export type Recruitment = {
   since: UtcIsoString;
   until: UtcIsoString | null;
   studentName: string;
+  favoriteKey: string;
   student: {
     uid: string;
     attackType: Attack;
@@ -60,6 +61,7 @@ function getFavoriteButtonClassName(favorited: boolean) {
 
 function useRecruitmentFavorite(recruitment: Recruitment, favoriteAction?: string, favoriteContentUid?: string) {
   const studentUid = recruitment.student?.uid ?? null;
+  const favoriteKey = recruitment.favoriteKey;
   const fetcher = useFetcher();
   const [favorited, setFavorited] = useState(recruitment.favorited);
   const [favoritedCount, setFavoritedCount] = useState(recruitment.favoritedCount);
@@ -73,20 +75,17 @@ function useRecruitmentFavorite(recruitment: Recruitment, favoriteAction?: strin
   }, [recruitment.favoritedCount]);
 
   const toggleFavorite = () => {
-    if (!studentUid) {
-      return;
-    }
-
     const next = !favorited;
     setFavorited(next);
     setFavoritedCount((count) => count + (next ? 1 : -1));
 
-    const data: ActionData = { favorite: { studentUid, contentUid: favoriteContentUid, favorited: next } };
+    const data: ActionData = { favorite: { studentUid: favoriteKey, contentUid: favoriteContentUid, favorited: next } };
     fetcher.submit(data, { action: favoriteAction, method: "post", encType: "application/json" });
   };
 
   return {
     studentUid,
+    favoriteKey,
     favorited,
     favoritedCount,
     toggleFavorite,
@@ -196,7 +195,9 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
               {showDateLabels && (
                 <p className="mb-3 font-semibold text-sm text-neutral-600 dark:text-neutral-400">
                   {formatInstant(group.since, { timeZone: displayTimeZone, format: "M월 D일" })}
-                  {group.until ? ` ~ ${formatInstant(group.until, { timeZone: displayTimeZone, format: "M월 D일" })}` : ""}
+                  {group.until
+                    ? ` ~ ${formatInstant(group.until, { timeZone: displayTimeZone, format: "M월 D일" })}`
+                    : ""}
                 </p>
               )}
 
@@ -230,7 +231,7 @@ function RecruitmentCardList({
 }) {
   const recruitmentCards = recruitments.map((recruitment) => (
     <RecruitmentCard
-      key={recruitment.student?.uid ?? recruitment.studentName}
+      key={recruitment.favoriteKey}
       recruitment={recruitment}
       signedIn={signedIn}
       className="w-full md:w-28"
@@ -269,7 +270,7 @@ export function RecruitmentCard({
 }) {
   const { attackType, defenseType, role } = recruitment.student ?? {};
   const { showSignIn } = useSignIn();
-  const { studentUid, favorited, favoritedCount, toggleFavorite } = useRecruitmentFavorite(
+  const { studentUid, favoriteKey, favorited, favoritedCount, toggleFavorite } = useRecruitmentFavorite(
     recruitment,
     favoriteAction,
     favoriteContentUid,
@@ -326,7 +327,7 @@ export function RecruitmentCard({
           </Link>
         )}
 
-        {studentUid && (
+        {favoriteKey && (
           <RecruitmentFavoriteButton
             favorited={favorited}
             favoritedCount={favoritedCount}
