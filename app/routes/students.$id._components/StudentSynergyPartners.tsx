@@ -1,16 +1,16 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { LoadingSkeleton, ProfileImage } from "~/components/primitives";
-import type { Attack, Defense } from "~/graphql/graphql";
 import type { StudentAnalysisSynergyPartner } from "~/lib/ranks/student-analysis";
-import type { Role } from "~/models/content.d";
+import { cn } from "~/lib/utils";
 import { formatTierLabel } from "./raidTierVisual";
 
 type StudentSynergyPartnersProps = {
   partners: StudentAnalysisSynergyPartner[];
   loading: boolean;
-  allStudents: Record<string, { name: string; attackType: Attack; defenseType: Defense; role: Role }>;
+  allStudents: Record<string, { name: string }>;
   recruitedStudentTiers: Record<string, number>;
+  className?: string;
 };
 
 const percentFormatter = new Intl.NumberFormat("ko-KR", {
@@ -23,10 +23,11 @@ export default function StudentSynergyPartners({
   loading,
   allStudents,
   recruitedStudentTiers,
+  className,
 }: StudentSynergyPartnersProps) {
   if (loading) {
     return (
-      <CardShell>
+      <CardShell className={className}>
         <Header />
         <LoadingSkeleton noOuterMargin className="-mt-4" />
       </CardShell>
@@ -42,7 +43,7 @@ export default function StudentSynergyPartners({
   }
 
   return (
-    <CardShell>
+    <CardShell className={className}>
       <Header />
       <div className="grid gap-3 md:grid-cols-3">
         {visiblePartners.map(({ partner, student }, index) => {
@@ -60,7 +61,9 @@ export default function StudentSynergyPartners({
                   <span className="shrink-0 text-xs font-semibold tabular-nums text-blue-600 dark:text-blue-300">
                     {index + 1}
                   </span>
-                  <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">{student.name}</p>
+                  <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                    {student.name}
+                  </p>
                 </div>
                 <p className="shrink-0 text-sm font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
                   {percentFormatter.format(partner.coRate)}
@@ -75,9 +78,11 @@ export default function StudentSynergyPartners({
                   <div className="space-y-1">
                     <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
                       내 학생{" "}
-                      {tier !== null ?
-                        <span className="font-semibold text-blue-600 dark:text-blue-300">{formatTierLabel(tier)}</span> :
-                        <span className="font-semibold text-blue-600 dark:text-blue-300">미모집</span>}
+                      {tier !== null ? (
+                        <span className="font-semibold text-blue-600 dark:text-blue-300">{formatTierLabel(tier)}</span>
+                      ) : (
+                        <span className="font-semibold text-blue-600 dark:text-blue-300">미모집</span>
+                      )}
                     </p>
                     <p className="mt-1 text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
                       함께 출전{" "}
@@ -108,9 +113,14 @@ function Header() {
   );
 }
 
-function CardShell({ children }: { children: ReactNode }) {
+function CardShell({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
+    <div
+      className={cn(
+        "rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900",
+        className,
+      )}
+    >
       {children}
     </div>
   );

@@ -1,14 +1,12 @@
 import { describe, expect, it } from "@jest/globals";
-import type { UtcIsoString } from "~/lib/date-time";
 import {
+  type StudentRaidSummaryStat,
   buildStudentRaidInvestment,
   buildStudentRaidSummary,
-  type StudentRaidSummaryStat,
 } from "./StudentRaidSummaryModel";
 
-function makeStat(overrides: Partial<StudentRaidSummaryStat> & { startAt: UtcIsoString }): StudentRaidSummaryStat {
+function makeStat(overrides: Partial<StudentRaidSummaryStat>): StudentRaidSummaryStat {
   return {
-    raid: { startAt: overrides.startAt },
     slotsCount: 0,
     slotsByTier: [],
     assistsCount: 0,
@@ -17,21 +15,15 @@ function makeStat(overrides: Partial<StudentRaidSummaryStat> & { startAt: UtcIso
 }
 
 describe("buildStudentRaidSummary", () => {
-  const asOf = new Date("2026-06-19T00:00:00.000Z");
-
   it("uses all provided seasons for the summary", () => {
     const result = buildStudentRaidSummary({
-      asOf,
-      myStudentTier: null,
       statistics: [
         makeStat({
-          startAt: "2024-06-18T23:59:59.000Z" as UtcIsoString,
           slotsCount: 100,
           slotsByTier: [{ tier: 7, count: 100 }],
           assistsCount: 100,
         }),
         makeStat({
-          startAt: "2024-06-19T00:00:00.000Z" as UtcIsoString,
           slotsCount: 60,
           slotsByTier: [{ tier: 7, count: 60 }],
           assistsCount: 40,
@@ -44,13 +36,10 @@ describe("buildStudentRaidSummary", () => {
     expect(result.totalCount).toBe(300);
   });
 
-  it("includes collected statistics even when the mapped schedule is after asOf", () => {
+  it("includes every collected statistic", () => {
     const result = buildStudentRaidSummary({
-      asOf,
-      myStudentTier: null,
       statistics: [
         makeStat({
-          startAt: "2026-09-22T00:00:00.000Z" as UtcIsoString,
           slotsCount: 459,
           slotsByTier: [{ tier: 7, count: 459 }],
           assistsCount: 57,
@@ -63,19 +52,18 @@ describe("buildStudentRaidSummary", () => {
     expect(result.totalCount).toBe(516);
   });
 
-  it("calculates assist ratio and handles empty samples without verdict text", () => {
-    const empty = buildStudentRaidSummary({ asOf, myStudentTier: null, statistics: [] });
+  it("calculates assist ratio and handles empty samples with a low-confidence decision", () => {
+    const empty = buildStudentRaidSummary({ statistics: [] });
     expect(empty.assistRatio).toBeNull();
     expect(empty.sampleInsufficient).toBe(true);
-    expect(empty.sampleMessage).toBe("출전 기록이 없어 판단을 보류하는 편이 좋아요.");
-    expect(empty.verdict).toBeNull();
+    expect(empty.decision).toEqual({
+      value: "지표 부족",
+      description: "판단을 위한 정보가 부족해요",
+    });
 
     const result = buildStudentRaidSummary({
-      asOf,
-      myStudentTier: null,
       statistics: [
         makeStat({
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
           slotsCount: 75,
           slotsByTier: [{ tier: 6, count: 75 }],
           assistsCount: 25,
@@ -83,37 +71,10 @@ describe("buildStudentRaidSummary", () => {
       ],
     });
     expect(result.assistRatio).toBe(0.25);
-    expect(result.verdict).toBe("모집 편성 비중이 높아 직접 보유 가치가 큰 편이에요.");
-  });
-
-  it("aggregates own-slot tier distribution and weighted median tier", () => {
-    const result = buildStudentRaidSummary({
-      asOf,
-      myStudentTier: null,
-      statistics: [
-        makeStat({
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
-          slotsCount: 100,
-          slotsByTier: [
-            { tier: 5, count: 20 },
-            { tier: 6, count: 30 },
-            { tier: 7, count: 50 },
-          ],
-          assistsCount: 80,
-        }),
-        makeStat({
-          startAt: "2026-02-01T00:00:00.000Z" as UtcIsoString,
-          slotsCount: 40,
-          slotsByTier: [{ tier: 8, count: 40 }],
-          assistsCount: 0,
-        }),
-      ],
+    expect(result.decision).toEqual({
+      value: "모집 학생 위주",
+      description: "직접 모집한 학생의 출전 비율이 높아요",
     });
-
-    expect(result.ownCount).toBe(140);
-    expect(result.distribution.find(({ tier }) => tier === 7)).toMatchObject({ count: 50, ratio: 50 / 140 });
-    expect(result.distribution.find(({ tier }) => tier === 8)).toMatchObject({ count: 40, ratio: 40 / 140 });
-    expect(result.medianTier).toBe(7);
   });
 
   it("uses all available seasons for the standalone investment distribution", () => {
@@ -121,13 +82,11 @@ describe("buildStudentRaidSummary", () => {
       myStudentTier: 8,
       statistics: [
         makeStat({
-          startAt: "2023-01-01T00:00:00.000Z" as UtcIsoString,
           slotsCount: 100,
           slotsByTier: [{ tier: 8, count: 100 }],
           assistsCount: 0,
         }),
         makeStat({
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
           slotsCount: 20,
           slotsByTier: [{ tier: 6, count: 20 }],
           assistsCount: 0,
@@ -142,40 +101,10 @@ describe("buildStudentRaidSummary", () => {
     expect(result.myTier).toBe(8);
   });
 
-  it("calculates my tier percentile and branches for owned, missing, and unknown comparison states", () => {
-    const statistics = [
-      makeStat({
-        startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
-        slotsCount: 100,
-        slotsByTier: [
-          { tier: 5, count: 20 },
-          { tier: 6, count: 30 },
-          { tier: 7, count: 50 },
-        ],
-        assistsCount: 0,
-      }),
-    ];
-
-    const ownedLow = buildStudentRaidSummary({ asOf, myStudentTier: 5, statistics });
-    expect(ownedLow.myTierPercentile).toBe(0.2);
-    expect(ownedLow.myTierVerdict).toBe("모집 편성 분포보다 낮은 편이라 추가 투자가 필요할 수 있어요.");
-
-    const ownedHigh = buildStudentRaidSummary({ asOf, myStudentTier: 7, statistics });
-    expect(ownedHigh.myTierPercentile).toBe(1);
-    expect(ownedHigh.myTierVerdict).toBe("모집 편성 분포 기준 충분히 높은 편이에요.");
-
-    const missing = buildStudentRaidSummary({ asOf, myStudentTier: null, statistics });
-    expect(missing.myTierPercentile).toBeNull();
-    expect(missing.myTierVerdict).toBe("미보유 상태예요.");
-  });
-
   it("keeps threshold wording at assist-ratio and sample-size boundaries", () => {
     const smallSample = buildStudentRaidSummary({
-      asOf,
-      myStudentTier: null,
       statistics: [
         makeStat({
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
           slotsCount: 50,
           slotsByTier: [{ tier: 7, count: 50 }],
           assistsCount: 49,
@@ -183,14 +112,14 @@ describe("buildStudentRaidSummary", () => {
       ],
     });
     expect(smallSample.sampleInsufficient).toBe(true);
-    expect(smallSample.verdict).toBeNull();
+    expect(smallSample.decision).toEqual({
+      value: "지표 부족",
+      description: "판단을 위한 정보가 부족해요",
+    });
 
     const balanced = buildStudentRaidSummary({
-      asOf,
-      myStudentTier: null,
       statistics: [
         makeStat({
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
           slotsCount: 65,
           slotsByTier: [{ tier: 7, count: 65 }],
           assistsCount: 35,
@@ -198,20 +127,23 @@ describe("buildStudentRaidSummary", () => {
       ],
     });
     expect(balanced.sampleInsufficient).toBe(false);
-    expect(balanced.verdict).toBe("모집 편성과 조력이 함께 쓰여 보유와 대여를 같이 고려할 만해요.");
+    expect(balanced.decision).toEqual({
+      value: "모집/조력 비슷",
+      description: "모집 학생과 조력 학생이 비슷하게 쓰였어요",
+    });
 
     const assistHeavy = buildStudentRaidSummary({
-      asOf,
-      myStudentTier: null,
       statistics: [
         makeStat({
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
-          slotsCount: 40,
-          slotsByTier: [{ tier: 7, count: 40 }],
-          assistsCount: 60,
+          slotsCount: 35,
+          slotsByTier: [{ tier: 7, count: 35 }],
+          assistsCount: 65,
         }),
       ],
     });
-    expect(assistHeavy.verdict).toBe("조력 비중이 높아 대여로 해결된 사례가 많은 편이에요.");
+    expect(assistHeavy.decision).toEqual({
+      value: "조력 학생 위주",
+      description: "조력 학생으로 클리어 한 비율이 높아요",
+    });
   });
 });

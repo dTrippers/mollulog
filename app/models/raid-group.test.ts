@@ -1,8 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
-import { Defense } from "~/graphql/graphql";
 import type { UtcIsoString } from "~/lib/date-time";
 import type { Terrain } from "~/models/content.d";
-import { getRaidGroupKey, getRaidOccurrenceKey, getSameOccurrenceRaids } from "./raid-group";
+import { getRaidOccurrenceKey, getSameOccurrenceRaids } from "./raid-group";
 
 type TestRaid = {
   uid: string;
@@ -30,14 +29,6 @@ describe("getRaidOccurrenceKey", () => {
   it("distinguishes the same boss on different terrain", () => {
     expect(getRaidOccurrenceKey({ raidBoss: { uid: "binah" }, terrain: "indoor" })).not.toBe(
       getRaidOccurrenceKey({ raidBoss: { uid: "binah" }, terrain: "outdoor" }),
-    );
-  });
-});
-
-describe("getRaidGroupKey", () => {
-  it("appends the defense type to the occurrence key", () => {
-    expect(getRaidGroupKey({ raidBoss: { uid: "binah" }, terrain: "outdoor" }, Defense.Light)).toBe(
-      "binah:outdoor:light",
     );
   });
 });

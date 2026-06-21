@@ -186,10 +186,7 @@ export default function StudentDetail() {
     return raidShowMore ? sorted : sorted.slice(0, 5);
   }, [listedStatistics, raidShowMore]);
 
-  const raidSummary = useMemo(
-    () => buildStudentRaidSummary({ statistics, myStudentTier }),
-    [statistics, myStudentTier],
-  );
+  const raidSummary = useMemo(() => buildStudentRaidSummary({ statistics }), [statistics]);
   const raidInvestment = useMemo(
     () => buildStudentRaidInvestment({ statistics, myStudentTier }),
     [statistics, myStudentTier],
@@ -250,14 +247,13 @@ export default function StudentDetail() {
                 <StudentDifficultyUsageChart rows={difficultyUsage} loading={studentAnalysisLoading} />
               </div>
             </div>
-            <div className="mt-4">
-              <StudentSynergyPartners
-                partners={synergyPartners}
-                loading={studentAnalysisLoading}
-                allStudents={allStudents}
-                recruitedStudentTiers={recruitedStudentTiers}
-              />
-            </div>
+            <StudentSynergyPartners
+              className="mt-4"
+              partners={synergyPartners}
+              loading={studentAnalysisLoading}
+              allStudents={allStudents}
+              recruitedStudentTiers={recruitedStudentTiers}
+            />
             <div className="mt-10">
               <SubTitle text="총력전/대결전 통계" />
               <div className="mt-4">

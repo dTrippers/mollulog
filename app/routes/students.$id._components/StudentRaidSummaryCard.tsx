@@ -6,7 +6,7 @@ type StudentRaidSummaryCardProps = {
 export default function StudentRaidSummaryCard({ summary }: StudentRaidSummaryCardProps) {
   const ownRatio = summary.totalCount > 0 ? summary.ownCount / summary.totalCount : 0;
   const assistRatio = summary.assistRatio ?? 0;
-  const decision = getDecisionText(summary);
+  const { decision } = summary;
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
@@ -43,31 +43,6 @@ export default function StudentRaidSummaryCard({ summary }: StudentRaidSummaryCa
       </p>
     </div>
   );
-}
-
-function getDecisionText(summary: StudentRaidSummary) {
-  if (summary.sampleInsufficient) {
-    return {
-      value: "지표 부족",
-      description: "판단을 위한 정보가 부족해요",
-    };
-  }
-  if (summary.assistRatio != null && summary.assistRatio >= 0.65) {
-    return {
-      value: "조력 학생 위주",
-      description: "조력 학생으로 클리어 한 비율이 높아요",
-    };
-  }
-  if (summary.assistRatio != null && summary.assistRatio >= 0.35) {
-    return {
-      value: "모집/조력 비슷",
-      description: "모집 학생과 조력 학생이 비슷하게 쓰였어요",
-    };
-  }
-  return {
-    value: "모집 학생 위주",
-    description: "직접 모집한 학생의 출전 비율이 높아요",
-  };
 }
 
 function formatPercent(value: number) {

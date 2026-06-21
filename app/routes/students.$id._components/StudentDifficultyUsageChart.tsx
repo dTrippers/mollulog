@@ -1,16 +1,12 @@
 import { difficultyLocale } from "~/locales/ko";
 import type { StudentDifficultyUsage } from "./StudentDifficultyUsageModel";
 import { UsageBarList, UsageChartCard } from "./UsageBarChart";
+import { formatUsagePercent } from "./formatUsagePercent";
 
 type StudentDifficultyUsageChartProps = {
   rows: StudentDifficultyUsage[];
   loading: boolean;
 };
-
-const percentFormatter = new Intl.NumberFormat("ko-KR", {
-  style: "percent",
-  maximumFractionDigits: 1,
-});
 
 export default function StudentDifficultyUsageChart({ rows, loading }: StudentDifficultyUsageChartProps) {
   return (
@@ -32,11 +28,4 @@ export default function StudentDifficultyUsageChart({ rows, loading }: StudentDi
       />
     </UsageChartCard>
   );
-}
-
-function formatUsagePercent(value: number) {
-  if (value > 0 && value < 0.001) {
-    return "<0.1%";
-  }
-  return percentFormatter.format(value);
 }

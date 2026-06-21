@@ -3,6 +3,7 @@ import { Defense } from "~/graphql/graphql";
 import { defenseTypeLocale, terrainLocale } from "~/locales/ko";
 import type { StudentBossUsageSummary } from "./StudentDifficultyUsageModel";
 import { UsageBarList, UsageChartCard } from "./UsageBarChart";
+import { formatUsagePercent } from "./formatUsagePercent";
 
 type StudentBossUsageChartProps = {
   summary: StudentBossUsageSummary | null;
@@ -15,11 +16,6 @@ const DEFENSE_BAR_CLASSES: Partial<Record<Defense, string>> = {
   [Defense.Special]: "bg-blue-500",
   [Defense.Elastic]: "bg-purple-500",
 };
-
-const percentFormatter = new Intl.NumberFormat("ko-KR", {
-  style: "percent",
-  maximumFractionDigits: 1,
-});
 
 export default function StudentBossUsageChart({ summary, loading }: StudentBossUsageChartProps) {
   const [expanded, setExpanded] = useState(false);
@@ -60,11 +56,4 @@ export default function StudentBossUsageChart({ summary, loading }: StudentBossU
       ) : null}
     </UsageChartCard>
   );
-}
-
-function formatUsagePercent(value: number) {
-  if (value > 0 && value < 0.001) {
-    return "<0.1%";
-  }
-  return percentFormatter.format(value);
 }

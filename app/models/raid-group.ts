@@ -1,4 +1,3 @@
-import type { Defense } from "~/graphql/graphql";
 import { type UtcIsoString, compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 import type { Terrain } from "~/models/content.d";
 
@@ -16,15 +15,6 @@ type RaidGroupInput = {
 /** Recurrence unit shared by every hosting of the same fight: boss + terrain. */
 export function getRaidOccurrenceKey(raid: RaidGroupInput): string {
   return `${raid.raidBoss.uid}:${raid.terrain}`;
-}
-
-/**
- * Meta lane key: the unit that actually determines the meta — boss + terrain + defenseType.
- * raidType (total assault / elimination) is metadata, not part of the key, since the scoring
- * system is shared and only the difficulty ceiling differs.
- */
-export function getRaidGroupKey(raid: RaidGroupInput, defenseType: Defense): string {
-  return `${getRaidOccurrenceKey(raid)}:${defenseType}`;
 }
 
 type OccurrenceRaid = RaidGroupInput & {

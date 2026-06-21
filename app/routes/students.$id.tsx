@@ -73,9 +73,6 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       uid,
       {
         name: student.name,
-        attackType: student.attackType,
-        defenseType: student.defenseType,
-        role: student.role,
       },
     ]),
   );

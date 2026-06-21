@@ -200,12 +200,13 @@ export function aggregateBossUsage({
       continue;
     }
 
+    const usageRate = usageCount / sampleSize;
     totalScopeCount += 1;
-    if (usageCount / sampleSize >= MIN_SCOPE_USAGE_RATE) {
+    if (usageRate >= MIN_SCOPE_USAGE_RATE) {
       usedScopeCount += 1;
     }
 
-    if (usageCount / sampleSize < MIN_SCOPE_USAGE_RATE) {
+    if (usageRate < MIN_SCOPE_USAGE_RATE) {
       continue;
     }
 
