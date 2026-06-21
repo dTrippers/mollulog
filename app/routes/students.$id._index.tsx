@@ -19,7 +19,7 @@ import {
   type StudentDifficultyUsage,
   aggregateBossUsage,
   aggregateDifficultyUsage,
-  buildStudentAnalysisScopePlans,
+  buildStudentAnalysisScopeLookup,
 } from "./students.$id._components/StudentDifficultyUsageModel";
 import StudentGradingChart from "./students.$id._components/StudentGradingChart";
 import StudentRaidInvestmentChart from "./students.$id._components/StudentRaidInvestmentChart";
@@ -132,75 +132,23 @@ export default function StudentDetail() {
     };
   }, [enrichRaidStatistics, student.uid]);
 
-  const analysisAsOf = useMemo(() => new Date(), []);
-  const analysisScopePlans = useMemo(() => {
-    const releaseAt = student.releaseAt ? getInstantTime(student.releaseAt) : Number.NaN;
-    const asOf = analysisAsOf.getTime();
-    if (Number.isNaN(releaseAt)) {
-      return [];
-    }
-
-    return buildStudentAnalysisScopePlans({
-      statistics: allRaids.flatMap((raid) => {
-        if (raid.raidType !== "total_assault" && raid.raidType !== "elimination") {
-          return [];
-        }
-        const jpSchedule = raid.jpSchedule;
-        if (!raid.startAt || !jpSchedule) {
-          return [];
-        }
-
-        const startAt = getInstantTime(raid.startAt);
-        if (Number.isNaN(startAt) || startAt < releaseAt || startAt > asOf) {
-          return [];
-        }
-
-        const primaryDefenseTypes =
-          raid.defenseTypeSets?.map(({ primaryDefenseType }) => ({
-            defenseType: primaryDefenseType,
-          })) ?? raid.defenseTypes;
-
-        return primaryDefenseTypes.map(({ defenseType }) => ({
-          raid: {
-            raidType: raid.raidType as RaidType,
-            jpSeasonIndex: jpSchedule.seasonIndex,
-            boss: raid.raidBoss.uid,
-            bossName: raid.raidBoss.name,
-            startAt: raid.startAt as UtcIsoString,
-            defenseType,
-            terrain: raid.terrain,
-          },
-        }));
-      }),
-    });
-  }, [allRaids, analysisAsOf, student.releaseAt]);
+  const analysisScopeLookup = useMemo(() => {
+    return buildStudentAnalysisScopeLookup({ allRaids });
+  }, [allRaids]);
 
   useEffect(() => {
-    if (statisticsLoading) {
-      return;
-    }
-
-    if (analysisScopePlans.length === 0) {
-      setStudentAnalysisLoading(false);
-      setBossUsage(null);
-      setDifficultyUsage([]);
-      setSynergyPartners([]);
-      return;
-    }
-
     let cancelled = false;
     const loadStudentAnalysis = async () => {
       try {
         setStudentAnalysisLoading(true);
         const response = await fetchStudentAnalysis({
           studentUid: student.uid,
-          scopes: analysisScopePlans.map((plan) => plan.request),
         });
         if (cancelled) {
           return;
         }
-        setBossUsage(aggregateBossUsage({ response, scopePlans: analysisScopePlans }));
-        setDifficultyUsage(aggregateDifficultyUsage({ response, scopePlans: analysisScopePlans }));
+        setBossUsage(aggregateBossUsage({ response, scopeLookup: analysisScopeLookup }));
+        setDifficultyUsage(aggregateDifficultyUsage({ response }));
         setSynergyPartners(response.synergy);
       } catch {
         if (cancelled) {
@@ -220,7 +168,7 @@ export default function StudentDetail() {
     return () => {
       cancelled = true;
     };
-  }, [analysisScopePlans, statisticsLoading, student.uid]);
+  }, [analysisScopeLookup, student.uid]);
 
   const listedStatistics = useMemo(() => {
     return statistics

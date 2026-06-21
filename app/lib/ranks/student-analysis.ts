@@ -40,16 +40,8 @@ message SynergyPartner {
 
 const getStudentAnalysisProtobufRoot = createProtobufRootCache();
 
-export type StudentAnalysisScopeRequest = {
-  raidType: RaidType;
-  season: number;
-  defenseType: Defense;
-  bandBounds: number[];
-};
-
 export type StudentAnalysisRequest = {
   studentUid: string;
-  scopes: StudentAnalysisScopeRequest[];
   topSynergy?: number;
 };
 
@@ -108,13 +100,14 @@ export type StudentAnalysisResponse = {
 };
 
 export async function fetchStudentAnalysis(request: StudentAnalysisRequest): Promise<StudentAnalysisResponse> {
+  const searchParams = new URLSearchParams({ studentUid: request.studentUid });
+  if (request.topSynergy !== undefined) {
+    searchParams.set("topSynergy", String(request.topSynergy));
+  }
+
   const response = await fetchProtobuf<ServerStudentAnalysisResponse>({
-    url: `${RANK_API_BASE_URL}/v1/student-analysis`,
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(request),
+    url: `${RANK_API_BASE_URL}/v1/student-analysis?${searchParams.toString()}`,
+    method: "GET",
     schema: STUDENT_ANALYSIS_PROTO_SCHEMA,
     messageType: "student_analysis.StudentAnalysisResponse",
     getRoot: getStudentAnalysisProtobufRoot,

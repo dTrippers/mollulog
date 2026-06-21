@@ -15,7 +15,7 @@ const percentFormatter = new Intl.NumberFormat("ko-KR", {
 export default function StudentDifficultyUsageChart({ rows, loading }: StudentDifficultyUsageChartProps) {
   return (
     <UsageChartCard
-      title="난이도별 출전"
+      title="난이도별 출전 비율"
       description="학생의 총력전/대결전 난이도별 출전 비율"
       loading={loading}
       empty={rows.length === 0}

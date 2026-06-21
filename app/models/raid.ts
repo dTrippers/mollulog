@@ -19,7 +19,8 @@ export type Boss =
   | "hovercraft"
   | "myouki-kurokage"
   | "geburah"
-  | "yesod";
+  | "yesod"
+  | "drumbarka";
 const ALL_RAID_SCHEDULES_CACHE_KEY = "raids::schedules::all::v3";
 const RAID_SCHEDULE_CACHE_VERSION = "v2";
 
@@ -218,6 +219,7 @@ export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [
   "myouki-kurokage",
   "geburah",
   "yesod",
+  "drumbarka",
 ];
 
 const RAID_TIME_SCORE_PER_SECOND = {
@@ -250,11 +252,11 @@ const RAID_HP_SCORE = {
   extreme: { 180: 5392000, 240: 6160000, 270: 6578880 },
   insane: { 180: 12449600, 240: 14216000, 270: 14941016 },
   torment: { 180: 18876000, 240: 19508000, 270: 20302000 },
-  lunatic: { 180: null, 240: 26315000, 270: 26954000 },
+  lunatic: { 180: 25525000, 240: 26315000, 270: 26954000 },
 };
 
 function timeForBoss(boss: Boss): 180 | 240 | 270 {
-  if (boss === "yesod") return 270;
+  if (boss === "yesod" || boss === "drumbarka") return 270;
   if (boss === "binah" || boss === "kaiten-fx-mk0") return 180;
   return 240;
 }

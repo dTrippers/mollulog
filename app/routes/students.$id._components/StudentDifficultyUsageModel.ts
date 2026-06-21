@@ -1,27 +1,30 @@
 import type { Defense } from "~/graphql/graphql";
-import { type UtcIsoString, getInstantTime } from "~/lib/date-time";
-import type { StudentAnalysisResponse, StudentAnalysisScopeRequest } from "~/lib/ranks/student-analysis";
-import type { RaidType } from "~/models/content.d";
-import { ALL_TOTAL_ASSUALT_BOSS, type Boss, type Difficulty, timeToScore } from "~/models/raid";
+import type { StudentAnalysisResponse } from "~/lib/ranks/student-analysis";
+import type { RaidType, Terrain } from "~/models/content.d";
+import type { Difficulty } from "~/models/raid";
 
-export type StudentAnalysisSourceStat = {
-  raid: {
-    raidType: RaidType;
-    jpSeasonIndex: number;
-    boss: string;
-    bossName?: string;
-    startAt: UtcIsoString;
-    defenseType: Defense;
-    terrain?: string;
-  };
+export type StudentAnalysisScopeMetadata = {
+  bossName: string;
+  terrain: Terrain;
+  defenseType: Defense;
+  environmentKey: string;
 };
 
-export type StudentAnalysisScopePlan = {
-  key: string;
-  request: StudentAnalysisScopeRequest;
-  difficulties: Difficulty[];
-  bossName: string;
-  environmentKey: string;
+export type StudentAnalysisScopeLookup = Map<string, StudentAnalysisScopeMetadata>;
+
+export type StudentAnalysisRaidMetadataSource = {
+  raidType: string;
+  terrain: string;
+  raidBoss: {
+    uid: string;
+    name: string;
+  };
+  jpSchedule: {
+    seasonIndex: number;
+  } | null;
+  defenseTypeSets: {
+    primaryDefenseType: Defense;
+  }[];
 };
 
 export type StudentDifficultyUsage = {
@@ -36,6 +39,7 @@ export type StudentDifficultyUsage = {
 export type StudentBossUsage = {
   key: string;
   bossName: string;
+  terrain: Terrain;
   defenseType: Defense;
   usageCount: number;
   sampleSize: number;
@@ -61,74 +65,58 @@ const DIFFICULTIES: Difficulty[] = [
 
 const MIN_SCOPE_USAGE_RATE = 0.01;
 
-export function buildStudentAnalysisScopePlans({
-  statistics,
+export function buildStudentAnalysisScopeLookup({
+  allRaids,
 }: {
-  statistics: StudentAnalysisSourceStat[];
-}): StudentAnalysisScopePlan[] {
-  const seenKeys = new Set<string>();
+  allRaids: StudentAnalysisRaidMetadataSource[];
+}): StudentAnalysisScopeLookup {
+  const lookup = new Map<string, StudentAnalysisScopeMetadata>();
 
-  return statistics
-    .filter((stat) => {
-      const startAt = getInstantTime(stat.raid.startAt);
-      return !Number.isNaN(startAt);
-    })
-    .sort((a, b) => getInstantTime(b.raid.startAt) - getInstantTime(a.raid.startAt))
-    .flatMap((stat) => {
-      const boss = parseBoss(stat.raid.boss);
-      if (!boss) {
-        return [];
-      }
+  for (const raid of allRaids) {
+    if (raid.raidType !== "total_assault" && raid.raidType !== "elimination") {
+      continue;
+    }
+    const jpSchedule = raid.jpSchedule;
+    if (!jpSchedule) {
+      continue;
+    }
 
-      const key = getScopeKey({
-        raidType: stat.raid.raidType,
-        season: stat.raid.jpSeasonIndex,
-        defenseType: stat.raid.defenseType,
+    for (const { primaryDefenseType } of raid.defenseTypeSets) {
+      const defenseType = primaryDefenseType;
+      const key = getStudentAnalysisScopeKey({
+        raidType: raid.raidType as RaidType,
+        season: jpSchedule.seasonIndex,
+        defenseType,
       });
-      if (seenKeys.has(key)) {
-        return [];
-      }
-      seenKeys.add(key);
-
-      const bandPlan = buildBandPlan(boss);
-      if (!bandPlan) {
-        return [];
+      if (lookup.has(key)) {
+        continue;
       }
 
-      return [
-        {
-          key,
-          request: {
-            raidType: stat.raid.raidType,
-            season: stat.raid.jpSeasonIndex,
-            defenseType: stat.raid.defenseType,
-            bandBounds: bandPlan.bandBounds,
-          },
-          difficulties: bandPlan.difficulties,
-          bossName: stat.raid.bossName ?? stat.raid.boss,
-          environmentKey: getEnvironmentKey(stat.raid),
-        },
-      ];
-    });
+      lookup.set(key, {
+        bossName: raid.raidBoss.name,
+        terrain: raid.terrain as Terrain,
+        defenseType,
+        environmentKey: getStudentAnalysisEnvironmentKey({
+          boss: raid.raidBoss.uid,
+          terrain: raid.terrain as Terrain,
+          defenseType,
+        }),
+      });
+    }
+  }
+
+  return lookup;
 }
 
 export function aggregateDifficultyUsage({
   response,
-  scopePlans,
 }: {
   response: StudentAnalysisResponse;
-  scopePlans: StudentAnalysisScopePlan[];
 }): StudentDifficultyUsage[] {
-  const planByKey = new Map(scopePlans.map((plan) => [plan.key, plan]));
   const aggregate = new Map<Difficulty, { ownCount: number; assistCount: number; sampleSize: number }>();
 
   for (const scope of response.scopes) {
     if (!scope.loaded) {
-      continue;
-    }
-
-    const plan = planByKey.get(getScopeKey(scope.raid));
-    if (!plan) {
       continue;
     }
 
@@ -139,7 +127,7 @@ export function aggregateDifficultyUsage({
     }
 
     scope.bands.forEach((band, index) => {
-      const difficulty = plan.difficulties[index];
+      const difficulty = DIFFICULTIES[index];
       if (!difficulty) {
         return;
       }
@@ -178,16 +166,16 @@ export function aggregateDifficultyUsage({
 
 export function aggregateBossUsage({
   response,
-  scopePlans,
+  scopeLookup,
 }: {
   response: StudentAnalysisResponse;
-  scopePlans: StudentAnalysisScopePlan[];
+  scopeLookup: StudentAnalysisScopeLookup;
 }): StudentBossUsageSummary {
-  const planByKey = new Map(scopePlans.map((plan) => [plan.key, plan]));
   const aggregate = new Map<
     string,
     {
       bossName: string;
+      terrain: Terrain;
       defenseType: Defense;
       usageCount: number;
       sampleSize: number;
@@ -201,8 +189,8 @@ export function aggregateBossUsage({
       continue;
     }
 
-    const plan = planByKey.get(getScopeKey(scope.raid));
-    if (!plan) {
+    const metadata = scopeLookup.get(getStudentAnalysisScopeKey(scope.raid));
+    if (!metadata) {
       continue;
     }
 
@@ -213,19 +201,24 @@ export function aggregateBossUsage({
     }
 
     totalScopeCount += 1;
-    if (usageCount > 0) {
+    if (usageCount / sampleSize >= MIN_SCOPE_USAGE_RATE) {
       usedScopeCount += 1;
     }
 
-    const current = aggregate.get(plan.environmentKey) ?? {
-      bossName: plan.bossName,
-      defenseType: plan.request.defenseType,
+    if (usageCount / sampleSize < MIN_SCOPE_USAGE_RATE) {
+      continue;
+    }
+
+    const current = aggregate.get(metadata.environmentKey) ?? {
+      bossName: metadata.bossName,
+      terrain: metadata.terrain,
+      defenseType: metadata.defenseType,
       usageCount: 0,
       sampleSize: 0,
     };
     current.usageCount += usageCount;
     current.sampleSize += sampleSize;
-    aggregate.set(plan.environmentKey, current);
+    aggregate.set(metadata.environmentKey, current);
   }
 
   const rows = Array.from(aggregate.entries())
@@ -238,6 +231,7 @@ export function aggregateBossUsage({
         {
           key,
           bossName: item.bossName,
+          terrain: item.terrain,
           defenseType: item.defenseType,
           usageCount: item.usageCount,
           sampleSize: item.sampleSize,
@@ -254,35 +248,10 @@ export function aggregateBossUsage({
   };
 }
 
-function buildBandPlan(boss: Boss): { difficulties: Difficulty[]; bandBounds: number[] } | null {
-  const bands = DIFFICULTIES.flatMap((difficulty) => {
-    try {
-      return [{ difficulty, floorScore: timeToScore(boss, difficulty, 3600000) }];
-    } catch {
-      return [];
-    }
-  }).sort((a, b) => a.floorScore - b.floorScore);
-
-  const topBand = bands.at(-1);
-  if (!topBand) {
-    return null;
-  }
-
-  const sentinel = timeToScore(boss, topBand.difficulty, 0) + 1;
-  return {
-    difficulties: bands.map((band) => band.difficulty),
-    bandBounds: [...bands.map((band) => band.floorScore), sentinel],
-  };
-}
-
-function parseBoss(boss: string): Boss | null {
-  return ALL_TOTAL_ASSUALT_BOSS.includes(boss as Boss) ? (boss as Boss) : null;
-}
-
-function getScopeKey(scope: { raidType: RaidType; season: number; defenseType: Defense }) {
+export function getStudentAnalysisScopeKey(scope: { raidType: RaidType; season: number; defenseType: Defense }) {
   return `${scope.raidType}:${scope.season}:${scope.defenseType}`;
 }
 
-function getEnvironmentKey(raid: { boss: string; terrain?: string; defenseType: Defense }) {
-  return `${raid.boss}:${raid.terrain ?? "unknown"}:${raid.defenseType}`;
+export function getStudentAnalysisEnvironmentKey(raid: { boss: string; terrain: Terrain; defenseType: Defense }) {
+  return `${raid.boss}:${raid.terrain}:${raid.defenseType}`;
 }

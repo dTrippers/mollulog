@@ -52,13 +52,13 @@ function getDecisionText(summary: StudentRaidSummary) {
       description: "판단을 위한 정보가 부족해요",
     };
   }
-  if (summary.assistRatio != null && summary.assistRatio >= 0.7) {
+  if (summary.assistRatio != null && summary.assistRatio >= 0.65) {
     return {
       value: "조력 학생 위주",
       description: "조력 학생으로 클리어 한 비율이 높아요",
     };
   }
-  if (summary.assistRatio != null && summary.assistRatio >= 0.3) {
+  if (summary.assistRatio != null && summary.assistRatio >= 0.35) {
     return {
       value: "모집/조력 비슷",
       description: "모집 학생과 조력 학생이 비슷하게 쓰였어요",

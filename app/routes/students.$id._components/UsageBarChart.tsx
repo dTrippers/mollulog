@@ -18,6 +18,7 @@ type UsageBarListProps<T> = {
   getRatio: (row: T) => number;
   labelClassName?: string;
   renderLabel: (row: T) => ReactNode;
+  renderDescription?: (row: T) => ReactNode;
   renderSubLabel?: (row: T) => ReactNode;
   renderValue: (row: T) => ReactNode;
   getBarClassName?: (row: T) => string;
@@ -62,6 +63,7 @@ export function UsageBarList<T>({
   getRatio,
   labelClassName,
   renderLabel,
+  renderDescription,
   renderSubLabel,
   renderValue,
   getBarClassName,
@@ -71,16 +73,22 @@ export function UsageBarList<T>({
     <div className="space-y-0.5">
       {rows.map((row) => {
         const ratio = getRatio(row);
+        const description = renderDescription?.(row);
 
         return (
           <div key={getKey(row)} className="flex h-9 items-start gap-1 rounded-md py-1 text-sm">
             <div
               className={cn(
-                "flex h-3 shrink-0 items-center font-medium leading-none text-neutral-700 dark:text-neutral-300",
+                "min-w-0 shrink-0 font-medium leading-none text-neutral-700 dark:text-neutral-300",
                 labelClassName,
               )}
             >
-              {renderLabel(row)}
+              <div className="flex h-3 items-center">{renderLabel(row)}</div>
+              {description ? (
+                <div className="mt-1 truncate text-xs font-normal text-neutral-500 dark:text-neutral-400">
+                  {description}
+                </div>
+              ) : null}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex h-3 items-center">

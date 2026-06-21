@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Defense } from "~/graphql/graphql";
-import { defenseTypeLocale } from "~/locales/ko";
+import { defenseTypeLocale, terrainLocale } from "~/locales/ko";
 import type { StudentBossUsageSummary } from "./StudentDifficultyUsageModel";
 import { UsageBarList, UsageChartCard } from "./UsageBarChart";
 
@@ -29,12 +29,11 @@ export default function StudentBossUsageChart({ summary, loading }: StudentBossU
 
   return (
     <UsageChartCard
-      title="보스별 출전 비율"
-      description="학생 출시 이후 총력전/대결전 환경별 출전 비율"
-      summary={summary ? `${summary.totalScopeCount}곳 중 ${summary.usedScopeCount}곳 출전` : undefined}
+      title="보스별 출전 횟수"
+      description="보스 및 방어타입 별 출전 횟수"
       loading={loading}
       empty={!summary || summary.totalScopeCount === 0 || rows.length === 0}
-      emptyText="보스별로 표시할 출전 기록이 부족해요"
+      emptyText="출전 기록이 부족해요"
     >
       <UsageBarList
         rows={visibleRows}
@@ -43,7 +42,9 @@ export default function StudentBossUsageChart({ summary, loading }: StudentBossU
         labelClassName="w-20"
         renderLabel={(row) => <span className="truncate">{row.bossName}</span>}
         renderSubLabel={(row) => (
-          <span className="text-neutral-500 dark:text-neutral-400">{defenseTypeLocale[row.defenseType]}</span>
+          <span className="text-neutral-500 dark:text-neutral-400">
+            {terrainLocale[row.terrain]} · {defenseTypeLocale[row.defenseType]}
+          </span>
         )}
         renderValue={(row) => `${formatUsagePercent(row.usageRate)} · ${row.usageCount.toLocaleString()}회`}
         getBarClassName={(row) => DEFENSE_BAR_CLASSES[row.defenseType] ?? "bg-neutral-400"}

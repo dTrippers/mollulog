@@ -1,26 +1,61 @@
 import { Bars3Icon, ExclamationCircleIcon } from "@heroicons/react/16/solid";
 import { CalculatorIcon, ClockIcon } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
-import type { MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useLoaderData } from "react-router";
 import { ContentSelectForm, FormGroup, InputForm, SelectForm } from "~/components/features/forms";
 import { FilterButtons, Title } from "~/components/primitives";
-import { bossName, difficultyLocale } from "~/locales/ko";
-import { ALL_TOTAL_ASSUALT_BOSS, type Boss, type Difficulty, scoreToDifficultyAndTime, timeToScore } from "~/models/raid";
+import { routeError } from "~/lib/http-errors";
+import { difficultyLocale } from "~/locales/ko";
+import {
+  ALL_TOTAL_ASSUALT_BOSS,
+  type Boss,
+  type Difficulty,
+  scoreToDifficultyAndTime,
+  timeToScore,
+} from "~/models/raid";
+import { RaidRepository } from "~/repositories";
 
 const STORAGE_KEY_TIME_TO_SCORE = "raid-score-util-timeToScore";
 const STORAGE_KEY_SCORE_TO_TIME = "raid-score-util-scoreToTime";
 
+type RaidScoreBossOption = {
+  uid: Boss;
+  name: string;
+};
+
+export const loader = async ({ context }: LoaderFunctionArgs) => {
+  const { env } = context.cloudflare;
+  const raidRepository = new RaidRepository(env);
+  const allRaids = await raidRepository.getAll();
+  const bossNameByUid = new Map(allRaids.map((raid) => [raid.raidBoss.uid, raid.raidBoss.name]));
+  const missingBosses = ALL_TOTAL_ASSUALT_BOSS.filter((boss) => !bossNameByUid.has(boss));
+
+  if (missingBosses.length > 0) {
+    throw routeError(
+      500,
+      "raid_score.boss_name_missing",
+      `점수 계산기 보스 이름을 불러오지 못했어요: ${missingBosses.join(", ")}`,
+    );
+  }
+
+  return {
+    bossOptions: ALL_TOTAL_ASSUALT_BOSS.map((boss) => ({
+      uid: boss,
+      name: bossNameByUid.get(boss) as string,
+    })),
+  };
+};
+
 export const meta: MetaFunction = () => {
   const title = "총력전/대결전 점수 계산기 | 몰루로그";
   const description = "블루 아카이브 총력전/대결전 시간과 점수를 변환할 수 있어요";
-  return [
-    { title },
-    { name: "description", content: description },
-  ];
+  return [{ title }, { name: "description", content: description }];
 };
 
 export default function RaidScoreUtil() {
   const [mode, setMode] = useState<"timeToScore" | "scoreToTime">("timeToScore");
+  const { bossOptions } = useLoaderData<typeof loader>();
   return (
     <>
       <Title text="총력전 점수 계산기" description="총력전/대결전 시간과 점수를 변환할 수 있어요" />
@@ -34,13 +69,13 @@ export default function RaidScoreUtil() {
         atLeastOne
       />
 
-      {mode === "timeToScore" && <TimeToScore />}
-      {mode === "scoreToTime" && <ScoreToTime />}
+      {mode === "timeToScore" && <TimeToScore bossOptions={bossOptions} />}
+      {mode === "scoreToTime" && <ScoreToTime bossOptions={bossOptions} />}
     </>
   );
 }
 
-function TimeToScore() {
+function TimeToScore({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
   const [boss, setBoss] = useState<Boss | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
   const [timeString, setTimeString] = useState<string | null>(null);
@@ -110,10 +145,10 @@ function TimeToScore() {
           name="boss"
           placeholder="보스를 선택하세요"
           searchPlaceholder="보스 이름으로 찾기..."
-          contents={ALL_TOTAL_ASSUALT_BOSS.map((boss) => ({
-            uid: boss,
-            name: bossName[boss],
-            boss: boss,
+          contents={bossOptions.map((boss) => ({
+            uid: boss.uid,
+            name: boss.name,
+            boss: boss.uid,
           }))}
           initialValue={boss ?? undefined}
           onSelect={(selectedBoss) => setBoss(selectedBoss as Boss)}
@@ -122,10 +157,12 @@ function TimeToScore() {
           label="난이도"
           name="difficulty"
           placeholder="난이도를 선택하세요"
-          options={["lunatic", "torment", "insane", "extreme", "hardcore", "very_hard", "hard", "normal"].map((difficulty) => ({
-            label: difficultyLocale[difficulty as Difficulty],
-            value: difficulty,
-          }))}
+          options={["lunatic", "torment", "insane", "extreme", "hardcore", "very_hard", "hard", "normal"].map(
+            (difficulty) => ({
+              label: difficultyLocale[difficulty as Difficulty],
+              value: difficulty,
+            }),
+          )}
           initialValue={difficulty ?? undefined}
           onSelect={(selectedDifficulty) => setDifficulty(selectedDifficulty as Difficulty)}
         />
@@ -156,10 +193,10 @@ function TimeToScore() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
-function ScoreToTime() {
+function ScoreToTime({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
   const [boss, setBoss] = useState<Boss | null>(null);
   const [scoreString, setScoreString] = useState<string | null>(null);
 
@@ -215,7 +252,9 @@ function ScoreToTime() {
       const second = Math.floor((clearTimeMillisec % 60000) / 1000);
       const millisecond = clearTimeMillisec % 1000;
       setCalculatedDifficulty(difficulty);
-      setCalculatedTimeString(`${minute.toString().padStart(2, "0")}:${second.toString().padStart(2, "0")}.${millisecond.toString().padStart(3, "0")}`);
+      setCalculatedTimeString(
+        `${minute.toString().padStart(2, "0")}:${second.toString().padStart(2, "0")}.${millisecond.toString().padStart(3, "0")}`,
+      );
 
       setError(null);
     } catch (error) {
@@ -233,10 +272,10 @@ function ScoreToTime() {
           name="boss"
           placeholder="보스를 선택하세요"
           searchPlaceholder="보스 이름으로 찾기..."
-          contents={ALL_TOTAL_ASSUALT_BOSS.map((boss) => ({
-            uid: boss,
-            name: bossName[boss],
-            boss: boss,
+          contents={bossOptions.map((boss) => ({
+            uid: boss.uid,
+            name: boss.name,
+            boss: boss.uid,
           }))}
           initialValue={boss ?? undefined}
           onSelect={(selectedBoss) => setBoss(selectedBoss as Boss)}
@@ -268,5 +307,5 @@ function ScoreToTime() {
         </div>
       )}
     </div>
-  )
+  );
 }

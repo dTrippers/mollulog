@@ -1,161 +1,98 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { describe, expect, it } from "@jest/globals";
 import { Defense } from "~/graphql/graphql";
-import type { UtcIsoString } from "~/lib/date-time";
 import type { StudentAnalysisResponse } from "~/lib/ranks/student-analysis";
-import type { RaidType } from "~/models/content.d";
-import { timeToScore } from "~/models/raid";
+import type { RaidType, Terrain } from "~/models/content.d";
 import {
-  type StudentAnalysisSourceStat,
+  type StudentAnalysisScopeMetadata,
   aggregateBossUsage,
   aggregateDifficultyUsage,
-  buildStudentAnalysisScopePlans,
+  buildStudentAnalysisScopeLookup,
+  getStudentAnalysisEnvironmentKey,
+  getStudentAnalysisScopeKey,
 } from "./StudentDifficultyUsageModel";
 
-jest.mock("~/lib/baql", () => ({
-  runQuery: jest.fn(),
-}));
-
-function makeStat(overrides: {
+function makeScopeMetadata(overrides: {
   raidType?: RaidType;
   jpSeasonIndex: number;
   boss?: string;
-  bossName?: string;
-  startAt: UtcIsoString;
+  bossName: string;
   defenseType?: Defense;
-  terrain?: string;
-}): StudentAnalysisSourceStat {
-  return {
-    raid: {
+  terrain?: Terrain;
+}): [string, StudentAnalysisScopeMetadata] {
+  const boss = overrides.boss ?? "chesed";
+  const terrain = overrides.terrain ?? "outdoor";
+  const defenseType = overrides.defenseType ?? Defense.Heavy;
+
+  return [
+    getStudentAnalysisScopeKey({
       raidType: overrides.raidType ?? "total_assault",
-      jpSeasonIndex: overrides.jpSeasonIndex,
-      boss: overrides.boss ?? "chesed",
+      season: overrides.jpSeasonIndex,
+      defenseType,
+    }),
+    {
       bossName: overrides.bossName,
-      startAt: overrides.startAt,
-      defenseType: overrides.defenseType ?? Defense.Heavy,
-      terrain: overrides.terrain,
+      terrain,
+      defenseType,
+      environmentKey: getStudentAnalysisEnvironmentKey({ boss, terrain, defenseType }),
     },
-  };
+  ];
 }
 
-describe("buildStudentAnalysisScopePlans", () => {
-  it("builds difficulty floor bounds with an upper sentinel for the top difficulty", () => {
-    const [scope] = buildStudentAnalysisScopePlans({
-      statistics: [
-        makeStat({
-          jpSeasonIndex: 31,
-          boss: "chesed",
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
-        }),
+describe("buildStudentAnalysisScopeLookup", () => {
+  it("maps server scope keys from all raid metadata without date-based filtering", () => {
+    const result = buildStudentAnalysisScopeLookup({
+      allRaids: [
+        {
+          raidType: "total_assault",
+          terrain: "outdoor",
+          raidBoss: { uid: "goz", name: "고즈" },
+          jpSchedule: { seasonIndex: 87 },
+          defenseTypeSets: [{ primaryDefenseType: Defense.Special }],
+        },
+        {
+          raidType: "elimination",
+          terrain: "street",
+          raidBoss: { uid: "hieronymus", name: "예로니무스" },
+          jpSchedule: { seasonIndex: 31 },
+          defenseTypeSets: [
+            { primaryDefenseType: Defense.Heavy },
+            { primaryDefenseType: Defense.Special },
+          ],
+        },
+        {
+          raidType: "allied",
+          terrain: "indoor",
+          raidBoss: { uid: "binah", name: "비나" },
+          jpSchedule: { seasonIndex: 1 },
+          defenseTypeSets: [{ primaryDefenseType: Defense.Heavy }],
+        },
       ],
     });
 
-    expect(scope.difficulties).toEqual([
-      "normal",
-      "hard",
-      "very_hard",
-      "hardcore",
-      "extreme",
-      "insane",
-      "torment",
-      "lunatic",
-    ]);
-    expect(scope.request.bandBounds).toEqual([
-      timeToScore("chesed", "normal", 3600000),
-      timeToScore("chesed", "hard", 3600000),
-      timeToScore("chesed", "very_hard", 3600000),
-      timeToScore("chesed", "hardcore", 3600000),
-      timeToScore("chesed", "extreme", 3600000),
-      timeToScore("chesed", "insane", 3600000),
-      timeToScore("chesed", "torment", 3600000),
-      timeToScore("chesed", "lunatic", 3600000),
-      timeToScore("chesed", "lunatic", 0) + 1,
-    ]);
-    expect(scope.request.bandBounds).toHaveLength(scope.difficulties.length + 1);
-  });
-
-  it("skips unhosted difficulties and invalid bosses", () => {
-    const scopes = buildStudentAnalysisScopePlans({
-      statistics: [
-        makeStat({
-          jpSeasonIndex: 32,
-          boss: "binah",
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
-        }),
-        makeStat({
-          jpSeasonIndex: 33,
-          boss: "unknown-boss",
-          startAt: "2026-02-01T00:00:00.000Z" as UtcIsoString,
-        }),
-      ],
+    expect(
+      result.get(getStudentAnalysisScopeKey({ raidType: "total_assault", season: 87, defenseType: Defense.Special })),
+    ).toMatchObject({
+      bossName: "고즈",
+      terrain: "outdoor",
+      defenseType: Defense.Special,
+      environmentKey: "goz:outdoor:special",
     });
-
-    expect(scopes).toHaveLength(1);
-    expect(scopes[0].difficulties).not.toContain("lunatic");
-    expect(scopes[0].request.bandBounds.at(-1)).toBe(timeToScore("binah", "torment", 0) + 1);
-  });
-
-  it("sorts newest first, deduplicates keys, and keeps all valid scopes", () => {
-    const statistics = [
-      makeStat({
-        jpSeasonIndex: 1,
-        startAt: "2024-06-18T23:59:59.000Z" as UtcIsoString,
-      }),
-      makeStat({
-        jpSeasonIndex: 2,
-        startAt: "2024-06-19T00:00:00.000Z" as UtcIsoString,
-      }),
-      makeStat({
-        jpSeasonIndex: 2,
-        startAt: "2024-06-20T00:00:00.000Z" as UtcIsoString,
-      }),
-      makeStat({
-        jpSeasonIndex: 99,
-        startAt: "2026-09-22T00:00:00.000Z" as UtcIsoString,
-      }),
-      ...Array.from({ length: 30 }, (_, index) =>
-        makeStat({
-          jpSeasonIndex: 100 + index,
-          startAt: `2026-01-${String(index + 1).padStart(2, "0")}T00:00:00.000Z` as UtcIsoString,
-        }),
-      ),
-    ];
-
-    const scopes = buildStudentAnalysisScopePlans({ statistics });
-
-    expect(scopes).toHaveLength(33);
-    expect(scopes.map((scope) => scope.request.season).slice(0, 3)).toEqual([99, 129, 128]);
-    expect(scopes.some((scope) => scope.request.season === 1)).toBe(true);
-    expect(scopes.filter((scope) => scope.request.season === 2)).toHaveLength(1);
+    expect(
+      result.get(getStudentAnalysisScopeKey({ raidType: "elimination", season: 31, defenseType: Defense.Special })),
+    ).toMatchObject({
+      bossName: "예로니무스",
+      terrain: "street",
+      defenseType: Defense.Special,
+      environmentKey: "hieronymus:street:special",
+    });
+    expect(result.has(getStudentAnalysisScopeKey({ raidType: "allied", season: 1, defenseType: Defense.Heavy }))).toBe(
+      false,
+    );
   });
 });
 
 describe("aggregateDifficultyUsage", () => {
-  it("maps response bands back to planned difficulties and aggregates by difficulty label", () => {
-    const scopePlans = buildStudentAnalysisScopePlans({
-      statistics: [
-        makeStat({
-          raidType: "total_assault",
-          jpSeasonIndex: 31,
-          boss: "chesed",
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
-          defenseType: Defense.Heavy,
-        }),
-        makeStat({
-          raidType: "elimination",
-          jpSeasonIndex: 14,
-          boss: "binah",
-          startAt: "2026-02-01T00:00:00.000Z" as UtcIsoString,
-          defenseType: Defense.Light,
-        }),
-        makeStat({
-          raidType: "total_assault",
-          jpSeasonIndex: 15,
-          boss: "chesed",
-          startAt: "2026-03-01T00:00:00.000Z" as UtcIsoString,
-          defenseType: Defense.Special,
-        }),
-      ],
-    });
+  it("maps response bands by index and aggregates by difficulty label", () => {
     const response: StudentAnalysisResponse = {
       totalEntries: 10,
       synergy: [],
@@ -202,11 +139,6 @@ describe("aggregateDifficultyUsage", () => {
           ],
         },
         {
-          raid: { raidType: "total_assault", season: 99, defenseType: Defense.Heavy },
-          loaded: true,
-          bands: [{ lo: 0, hi: 1, ownCount: 999, assistCount: 999, sampleSize: 999 }],
-        },
-        {
           raid: { raidType: "total_assault", season: 31, defenseType: Defense.Heavy },
           loaded: false,
           bands: [{ lo: 0, hi: 1, ownCount: 999, assistCount: 999, sampleSize: 999 }],
@@ -214,7 +146,7 @@ describe("aggregateDifficultyUsage", () => {
       ],
     };
 
-    const result = aggregateDifficultyUsage({ response, scopePlans });
+    const result = aggregateDifficultyUsage({ response });
 
     expect(result.map((item) => item.difficulty)).toEqual(["insane", "torment", "lunatic"]);
     expect(result.find((item) => item.difficulty === "insane")).toMatchObject({
@@ -243,34 +175,29 @@ describe("aggregateDifficultyUsage", () => {
 
 describe("aggregateBossUsage", () => {
   it("summarizes coverage and usage rate by boss environment", () => {
-    const scopePlans = buildStudentAnalysisScopePlans({
-      statistics: [
-        makeStat({
-          jpSeasonIndex: 31,
-          boss: "chesed",
-          bossName: "헤세드",
-          terrain: "outdoor",
-          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
-          defenseType: Defense.Heavy,
-        }),
-        makeStat({
-          jpSeasonIndex: 32,
-          boss: "chesed",
-          bossName: "헤세드",
-          terrain: "outdoor",
-          startAt: "2026-02-01T00:00:00.000Z" as UtcIsoString,
-          defenseType: Defense.Heavy,
-        }),
-        makeStat({
-          jpSeasonIndex: 33,
-          boss: "binah",
-          bossName: "비나",
-          terrain: "indoor",
-          startAt: "2026-03-01T00:00:00.000Z" as UtcIsoString,
-          defenseType: Defense.Light,
-        }),
-      ],
-    });
+    const scopeLookup = new Map([
+      makeScopeMetadata({
+        jpSeasonIndex: 31,
+        boss: "chesed",
+        bossName: "헤세드",
+        terrain: "outdoor",
+        defenseType: Defense.Heavy,
+      }),
+      makeScopeMetadata({
+        jpSeasonIndex: 32,
+        boss: "chesed",
+        bossName: "헤세드",
+        terrain: "outdoor",
+        defenseType: Defense.Heavy,
+      }),
+      makeScopeMetadata({
+        jpSeasonIndex: 33,
+        boss: "binah",
+        bossName: "비나",
+        terrain: "indoor",
+        defenseType: Defense.Light,
+      }),
+    ]);
     const response: StudentAnalysisResponse = {
       totalEntries: 10,
       synergy: [],
@@ -293,7 +220,7 @@ describe("aggregateBossUsage", () => {
       ],
     };
 
-    const result = aggregateBossUsage({ response, scopePlans });
+    const result = aggregateBossUsage({ response, scopeLookup });
 
     expect(result.totalScopeCount).toBe(3);
     expect(result.usedScopeCount).toBe(2);
@@ -301,6 +228,7 @@ describe("aggregateBossUsage", () => {
       {
         key: "chesed:outdoor:heavy",
         bossName: "헤세드",
+        terrain: "outdoor",
         defenseType: Defense.Heavy,
         usageCount: 150,
         sampleSize: 200,

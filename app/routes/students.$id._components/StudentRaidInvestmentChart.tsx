@@ -17,7 +17,7 @@ type StudentRaidInvestmentChartProps = {
 
 export default function StudentRaidInvestmentChart({ investment, signedIn }: StudentRaidInvestmentChartProps) {
   const rows = buildInvestmentRows(investment);
-  const insight = getInvestmentInsight(investment.medianTier);
+  const insight = getInvestmentInsight(rows);
 
   return (
     <UsageChartCard title="성장도별 출전 비율" description="학생 성장도에 따른 역대 출전 횟수와 비율">
@@ -31,12 +31,21 @@ export default function StudentRaidInvestmentChart({ investment, signedIn }: Stu
             rows={rows}
             getKey={(row) => row.id}
             getRatio={(row) => row.ratio}
-            labelClassName="w-8"
+            labelClassName="w-12"
             renderLabel={(row) => (
               <div className="flex items-center gap-0.5">
                 <TierBadge tier={row.tier} />
               </div>
             )}
+            renderDescription={(row) => {
+              if (row.id === "tier-5-and-unique-1") {
+                return "5성 포함";
+              }
+              if (row.id === "tier-3-or-lower") {
+                return "이하";
+              }
+              return null;
+            }}
             renderSubLabel={(row) => {
               const isMyTier = signedIn && investment.myTier != null && row.includedTiers.includes(investment.myTier);
               return (
@@ -48,7 +57,7 @@ export default function StudentRaidInvestmentChart({ investment, signedIn }: Stu
           />
           {insight ? (
             <p className="mt-3 border-t border-neutral-200 pt-3 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
-              <span className="font-semibold text-neutral-700 dark:text-neutral-300">{insight.value}</span> ·{" "}
+              <span className="font-semibold text-neutral-700 dark:text-neutral-300">{insight.label}</span> ·{" "}
               {insight.description}
             </p>
           ) : null}
@@ -129,15 +138,28 @@ function formatCount(value: number) {
   return value.toLocaleString();
 }
 
-function getInvestmentInsight(tier: number | null) {
-  if (tier == null) {
+function getInvestmentInsight(rows: InvestmentChartRow[]) {
+  const topRow = rows
+    .filter((row) => row.count > 0)
+    .sort((a, b) => b.count - a.count || b.tier - a.tier)[0];
+  if (!topRow) {
     return null;
   }
 
   return {
-    value: formatTierLabel(tier),
-    description: getInvestmentDescription(tier),
+    label: `${formatInvestmentRowLabel(topRow)}로 가장 많이 출전`,
+    description: getInvestmentDescription(topRow.tier),
   };
+}
+
+function formatInvestmentRowLabel(row: InvestmentChartRow) {
+  if (row.id === "tier-5-and-unique-1") {
+    return "고유 ★1";
+  }
+  if (row.id === "tier-3-or-lower") {
+    return "★3 이하";
+  }
+  return formatTierLabel(row.tier);
 }
 
 function getInvestmentDescription(tier: number) {
