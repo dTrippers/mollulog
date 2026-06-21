@@ -6,21 +6,6 @@ import { fetchCached } from "./base";
 import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
-export type Boss =
-  | "binah"
-  | "chesed"
-  | "hod"
-  | "shirokuro"
-  | "perorozilla"
-  | "goz"
-  | "hieronymus"
-  | "kaiten-fx-mk0"
-  | "gregorius"
-  | "hovercraft"
-  | "myouki-kurokage"
-  | "geburah"
-  | "yesod"
-  | "drumbarka";
 const ALL_RAID_SCHEDULES_CACHE_KEY = "raids::schedules::all::v3";
 const RAID_SCHEDULE_CACHE_VERSION = "v2";
 
@@ -40,7 +25,10 @@ export type RaidDefenseType = {
   setIndex: number;
 };
 
-export function getRaidDefenseTypeSetKey(defenseTypeSet: { difficulty: string | null; defenseTypes: readonly Defense[] }) {
+export function getRaidDefenseTypeSetKey(defenseTypeSet: {
+  difficulty: string | null;
+  defenseTypes: readonly Defense[];
+}) {
   return `${defenseTypeSet.difficulty ?? "none"}:${defenseTypeSet.defenseTypes.join(",")}`;
 }
 
@@ -205,22 +193,39 @@ export async function getUpcomingRaidSchedules(env: Env, forceRefresh = false) {
     .sort((a, b) => compareInstantAsc(a.startAt ?? now, b.startAt ?? now));
 }
 
-export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [
+const TOTAL_ASSAULT_BOSS_UIDS = [
   "binah",
   "chesed",
   "hod",
   "shirokuro",
-  "perorozilla",
+  "perorodzilla",
   "goz",
   "hieronymus",
-  "kaiten-fx-mk0",
+  "kaiten",
   "gregorius",
   "hovercraft",
-  "myouki-kurokage",
+  "kurokage",
   "geburah",
   "yesod",
   "drumbarka",
-];
+] as const;
+
+export type Boss = (typeof TOTAL_ASSAULT_BOSS_UIDS)[number];
+
+export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [...TOTAL_ASSAULT_BOSS_UIDS];
+
+const LEGACY_BOSS_UIDS: Partial<Record<string, Boss>> = {
+  perorozilla: "perorodzilla",
+  "kaiten-fx-mk0": "kaiten",
+  "myouki-kurokage": "kurokage",
+};
+
+export function normalizeBossUid(boss: string): Boss | null {
+  if ((TOTAL_ASSAULT_BOSS_UIDS as readonly string[]).includes(boss)) {
+    return boss as Boss;
+  }
+  return LEGACY_BOSS_UIDS[boss] ?? null;
+}
 
 const RAID_TIME_SCORE_PER_SECOND = {
   normal: 120,
@@ -257,7 +262,7 @@ const RAID_HP_SCORE = {
 
 function timeForBoss(boss: Boss): 180 | 240 | 270 {
   if (boss === "yesod" || boss === "drumbarka") return 270;
-  if (boss === "binah" || boss === "kaiten-fx-mk0") return 180;
+  if (boss === "binah" || boss === "kaiten") return 180;
   return 240;
 }
 

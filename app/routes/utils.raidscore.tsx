@@ -5,12 +5,12 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { ContentSelectForm, FormGroup, InputForm, SelectForm } from "~/components/features/forms";
 import { FilterButtons, Title } from "~/components/primitives";
-import { routeError } from "~/lib/http-errors";
 import { difficultyLocale } from "~/locales/ko";
 import {
   ALL_TOTAL_ASSUALT_BOSS,
   type Boss,
   type Difficulty,
+  normalizeBossUid,
   scoreToDifficultyAndTime,
   timeToScore,
 } from "~/models/raid";
@@ -29,21 +29,12 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   const raidRepository = new RaidRepository(env);
   const allRaids = await raidRepository.getAll();
   const bossNameByUid = new Map(allRaids.map((raid) => [raid.raidBoss.uid, raid.raidBoss.name]));
-  const missingBosses = ALL_TOTAL_ASSUALT_BOSS.filter((boss) => !bossNameByUid.has(boss));
-
-  if (missingBosses.length > 0) {
-    throw routeError(
-      500,
-      "raid_score.boss_name_missing",
-      `점수 계산기 보스 이름을 불러오지 못했어요: ${missingBosses.join(", ")}`,
-    );
-  }
 
   return {
-    bossOptions: ALL_TOTAL_ASSUALT_BOSS.map((boss) => ({
-      uid: boss,
-      name: bossNameByUid.get(boss) as string,
-    })),
+    bossOptions: ALL_TOTAL_ASSUALT_BOSS.flatMap((boss) => {
+      const name = bossNameByUid.get(boss);
+      return name ? [{ uid: boss, name }] : [];
+    }),
   };
 };
 
@@ -92,7 +83,10 @@ function TimeToScore({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
       const saved = localStorage.getItem(STORAGE_KEY_TIME_TO_SCORE);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.boss) setBoss(parsed.boss);
+        if (parsed.boss) {
+          const savedBoss = normalizeBossUid(parsed.boss);
+          if (savedBoss) setBoss(savedBoss);
+        }
         if (parsed.difficulty) setDifficulty(parsed.difficulty);
         if (parsed.timeString) setTimeString(parsed.timeString);
       }
@@ -213,7 +207,10 @@ function ScoreToTime({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
       const saved = localStorage.getItem(STORAGE_KEY_SCORE_TO_TIME);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.boss) setBoss(parsed.boss);
+        if (parsed.boss) {
+          const savedBoss = normalizeBossUid(parsed.boss);
+          if (savedBoss) setBoss(savedBoss);
+        }
         if (parsed.scoreString) setScoreString(parsed.scoreString);
       }
     } catch (error) {
