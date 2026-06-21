@@ -6,10 +6,14 @@ import { fetchCached } from "./base";
 import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
-const ALL_RAID_SCHEDULES_CACHE_KEY = "raids::schedules::all::v3";
-const RAID_SCHEDULE_CACHE_VERSION = "v2";
+const ALL_RAID_SCHEDULES_CACHE_KEY = "raids::schedules::all::v4";
+const RAID_SCHEDULE_CACHE_VERSION = "v3";
 
 type RawRaidSchedule = NonNullable<Awaited<ReturnType<typeof runRaidScheduleDetailQuery>>>;
+type RawRaidJpSchedule = NonNullable<RawRaidSchedule["jpSchedule"]>;
+type NormalizedRaidJpSchedule = Omit<RawRaidJpSchedule, "startAt"> & {
+  startAt: UtcIsoString | null;
+};
 
 export type RaidDefenseTypeSet = {
   difficulty: GraphqlDifficulty | null;
@@ -35,7 +39,7 @@ export function getRaidDefenseTypeSetKey(defenseTypeSet: {
 export type NormalizedRaidSchedule = Omit<RawRaidSchedule, "startAt" | "endAt" | "jpSchedule" | "defenseTypeSets"> & {
   startAt: UtcIsoString | null;
   endAt: UtcIsoString | null;
-  jpSchedule: RawRaidSchedule["jpSchedule"];
+  jpSchedule: NormalizedRaidJpSchedule | null;
   defenseTypeSets: RaidDefenseTypeSet[];
   defenseTypes: RaidDefenseType[];
 };
@@ -74,13 +78,15 @@ function normalizeRaidSchedule<
   T extends {
     startAt: Date | string | null;
     endAt: Date | string | null;
+    jpSchedule: ({ startAt: Date | string | null } & RawRaidJpSchedule) | null;
     defenseTypeSets: { difficulty: GraphqlDifficulty | null; defenseTypes: Defense[] }[];
   },
 >(
   schedule: T,
-): Omit<T, "startAt" | "endAt" | "defenseTypeSets"> & {
+): Omit<T, "startAt" | "endAt" | "jpSchedule" | "defenseTypeSets"> & {
   startAt: UtcIsoString | null;
   endAt: UtcIsoString | null;
+  jpSchedule: NormalizedRaidJpSchedule | null;
   defenseTypeSets: RaidDefenseTypeSet[];
   defenseTypes: RaidDefenseType[];
 } {
@@ -89,6 +95,12 @@ function normalizeRaidSchedule<
     ...schedule,
     startAt: schedule.startAt ? toUtcIso(schedule.startAt) : null,
     endAt: schedule.endAt ? toUtcIso(schedule.endAt) : null,
+    jpSchedule: schedule.jpSchedule
+      ? {
+          ...schedule.jpSchedule,
+          startAt: schedule.jpSchedule.startAt ? toUtcIso(schedule.jpSchedule.startAt) : null,
+        }
+      : null,
     defenseTypeSets,
     defenseTypes: flattenDefenseTypeSets(defenseTypeSets),
   };
@@ -112,7 +124,7 @@ const raidScheduleDetailQuery = graphql(`
       uid raidType seasonIndex region terrain startAt endAt attackType
       raidBoss { uid name }
       defenseTypeSets { difficulty defenseTypes }
-      jpSchedule { uid seasonIndex }
+      jpSchedule { uid seasonIndex startAt }
     }
   }
 `);
@@ -136,7 +148,7 @@ const raidScheduleBySeasonIndexQuery = graphql(`
       uid raidType seasonIndex region terrain startAt endAt attackType
       raidBoss { uid name }
       defenseTypeSets { difficulty defenseTypes }
-      jpSchedule { uid seasonIndex }
+      jpSchedule { uid seasonIndex startAt }
     }
   }
 `);
@@ -164,7 +176,7 @@ const allRaidSchedulesQuery = graphql(`
         uid raidType seasonIndex region terrain startAt endAt attackType
         raidBoss { uid name }
         defenseTypeSets { difficulty defenseTypes }
-        jpSchedule { uid seasonIndex }
+        jpSchedule { uid seasonIndex startAt }
       }
     }
   }

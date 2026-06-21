@@ -1,5 +1,5 @@
-import { compareInstantAsc, getInstantTime, isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 import { Attack, Defense } from "~/graphql/graphql";
+import { type UtcIsoString, compareInstantAsc, getInstantTime, isInstantAfter } from "~/lib/date-time";
 import type { RaidType } from "~/models/content.d";
 
 export type StudentRaidUsageDefenseFilter = Defense | "all";
@@ -18,7 +18,7 @@ export type StudentRaidUsageRaid = {
   seasonIndex: number;
   raidBoss: { uid?: string; name: string };
   startAt: UtcIsoString | null;
-  jpSchedule: { seasonIndex: number } | null;
+  jpSchedule: { seasonIndex: number; startAt: UtcIsoString | null } | null;
   defenseTypeSets?: { primaryDefenseType: Defense; difficulty?: string | null }[];
   defenseTypes: { defenseType: Defense; difficulty?: string | null }[];
 };
@@ -47,6 +47,7 @@ export type StudentRaidUsageChartData = {
 const RAID_TYPES = new Set(["total_assault", "elimination"]);
 const DEFAULT_TIER_KEYS = [9, 8, 7, 6, 5, 4, 3].map((tier) => `tier${tier}`);
 const MAX_RAID_USAGE_COUNT = 20000;
+const RANKS_STATISTICS_AVAILABLE_FROM = "2024-03-01T00:00:00.000Z" as UtcIsoString;
 
 export function getDefaultRaidUsageDefenseFilter(attackType: Attack): StudentRaidUsageDefenseFilter {
   const filterByAttackType: Partial<Record<Attack, StudentRaidUsageDefenseFilter>> = {
@@ -144,19 +145,26 @@ export function buildStudentRaidUsageChartData({
 
   const rows = raids
     .filter((raid) => RAID_TYPES.has(raid.raidType))
-    .filter((raid) => raid.startAt && raid.jpSchedule)
-    .filter((raid): raid is StudentRaidUsageRaid & { startAt: UtcIsoString; jpSchedule: { seasonIndex: number } } =>
-      Boolean(raid.startAt && raid.jpSchedule),
+    .filter((raid) => raid.startAt && raid.jpSchedule?.startAt)
+    .filter(
+      (
+        raid,
+      ): raid is StudentRaidUsageRaid & {
+        startAt: UtcIsoString;
+        jpSchedule: { seasonIndex: number; startAt: UtcIsoString };
+      } => Boolean(raid.startAt && raid.jpSchedule?.startAt),
     )
     .filter((raid) => !isInstantAfter(releaseAt, raid.startAt))
+    .filter((raid) => !isInstantAfter(RANKS_STATISTICS_AVAILABLE_FROM, raid.jpSchedule.startAt))
     .sort((a, b) => compareInstantAsc(a.startAt, b.startAt))
     .flatMap((raid, index, sortedRaids) => {
       const year = new Date(raid.startAt).getUTCFullYear().toString();
       const previousRaid = sortedRaids[index - 1];
       const previousYear = previousRaid ? new Date(previousRaid.startAt).getUTCFullYear().toString() : null;
-      const primaryDefenseTypes = raid.defenseTypeSets?.map(({ primaryDefenseType }) => ({
-        defenseType: primaryDefenseType,
-      })) ?? raid.defenseTypes;
+      const primaryDefenseTypes =
+        raid.defenseTypeSets?.map(({ primaryDefenseType }) => ({
+          defenseType: primaryDefenseType,
+        })) ?? raid.defenseTypes;
       const defenseTypes = primaryDefenseTypes.filter(
         ({ defenseType }) => selectedDefenseType === "all" || defenseType === selectedDefenseType,
       );
