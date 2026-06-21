@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import type { PyroxeneScheduleItem } from "~/components/features/futures/types";
+import { collectedSourceKeyForEventReward, collectedSourceKeyForRaid } from "./pyroxene-collected-source";
 import type { PyroxeneCalculationOptions, TimelineSourceType } from "./pyroxene-planner";
 import { calculateDailyApChargePyroxene } from "./pyroxene-planner-source-config";
 import { DEFAULT_PICKUP_STUDENT_RATE_BY_TIER } from "./recruitment-simulator";
@@ -851,7 +852,7 @@ export function buildTimeline(
 
       // 이벤트 보상 청휘석은 픽업 완료 여부와 무관하게 이벤트 종료일에 수급됩니다.
       if (event.earnablePyroxene) {
-        const collectedSourceKey = `event_reward:${event.uid}`;
+        const collectedSourceKey = collectedSourceKeyForEventReward(event.uid);
         timelineDeltas.push({
           date: dayjs(event.until),
           source: { type: "event_reward", uid: event.uid, description: event.name, collectedSourceKey },
@@ -920,7 +921,7 @@ export function buildTimeline(
       });
     } else if (scheduleItem.raid) {
       const { raid } = scheduleItem;
-      const collectedSourceKey = `raid:${raid.uid}`;
+      const collectedSourceKey = collectedSourceKeyForRaid(raid.uid);
       const raidSource = {
         type: "raid" as const,
         uid: raid.uid,

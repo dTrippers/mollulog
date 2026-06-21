@@ -1,6 +1,7 @@
 import dayjs from "dayjs";
 import { useMemo } from "react";
 import { EmptyView, SubTitle } from "~/components/primitives";
+import { collectedSourceKeyForEventReward, collectedSourceKeyForRaid } from "~/models/pyroxene-collected-source";
 import type { PyroxeneCalculationOptions, PyroxenePlannerOptions } from "~/models/pyroxene-planner";
 import type { PickupResources } from "~/models/pyroxene-timeline";
 import PyroxeneAvailableOneTimePackages from "./PyroxeneAvailableOneTimePackages";
@@ -155,7 +156,7 @@ export default function PyroxeneSchedule({
 
     return scheduleItems.flatMap((item) => {
       if (item.event?.earnablePyroxene && isOngoing(item.event.since, item.event.until)) {
-        const sourceKey = `event_reward:${item.event.uid}`;
+        const sourceKey = collectedSourceKeyForEventReward(item.event.uid);
         if (collectedSourceKeySet.has(sourceKey)) {
           return [];
         }
@@ -173,7 +174,7 @@ export default function PyroxeneSchedule({
         (item.raid.type === "total_assault" || item.raid.type === "elimination") &&
         isOngoing(item.raid.since, item.raid.until)
       ) {
-        const sourceKey = `raid:${item.raid.uid}`;
+        const sourceKey = collectedSourceKeyForRaid(item.raid.uid);
         if (collectedSourceKeySet.has(sourceKey)) {
           return [];
         }
