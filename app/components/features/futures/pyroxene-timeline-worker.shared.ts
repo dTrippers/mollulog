@@ -23,6 +23,7 @@ export type PyroxeneTimelineWorkerRequest = {
   eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>;
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxeneCalculationOptions;
+  collectedSourceKeys: string[];
 };
 
 export type PyroxeneTimelineWorkerResponse = {

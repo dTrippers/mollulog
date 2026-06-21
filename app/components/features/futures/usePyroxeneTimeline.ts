@@ -14,6 +14,7 @@ type UsePyroxeneTimelineArgs = {
   eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>;
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxeneCalculationOptions;
+  collectedSourceKeys: string[];
 };
 
 /**
@@ -28,10 +29,20 @@ export function usePyroxeneTimeline({
   eventDataMap,
   scheduleItems,
   options,
+  collectedSourceKeys,
 }: UsePyroxeneTimelineArgs): { timeline: Timeline; pending: boolean } {
   const computeSync = useCallback(
-    () => buildTimeline(initialResources, initialDate ?? new Date(), eventDataMap, scheduleItems, options),
-    [initialResources, initialDate, eventDataMap, scheduleItems, options],
+    () =>
+      buildTimeline(
+        initialResources,
+        initialDate ?? new Date(),
+        eventDataMap,
+        scheduleItems,
+        options,
+        undefined,
+        collectedSourceKeys,
+      ),
+    [initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys],
   );
 
   const [timeline, setTimeline] = useState<Timeline>([]);
@@ -92,9 +103,10 @@ export function usePyroxeneTimeline({
       eventDataMap,
       scheduleItems,
       options,
+      collectedSourceKeys,
     };
     worker.postMessage(request);
-  }, [initialResources, initialDate, eventDataMap, scheduleItems, options, computeSync]);
+  }, [initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys, computeSync]);
 
   return { timeline, pending };
 }

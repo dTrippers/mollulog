@@ -1,8 +1,9 @@
 import type dayjs from "dayjs";
 import { useState } from "react";
+import { Button, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import { cn } from "~/lib/utils";
 import type { PickupResources } from "~/models/pyroxene-timeline";
-import { ResourceCard } from "~/components/primitives";
 import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
 
 type PyroxeneTimelineResourcesProps = {
@@ -11,6 +12,9 @@ type PyroxeneTimelineResourcesProps = {
   resources: PickupResources;
   itemUid?: string;
   onDeleteItem?: (itemUid: string) => void;
+  collectedSourceKey?: string;
+  collected?: boolean;
+  onCollectedSourceChange?: (sourceKey: string, collected: boolean) => void;
 };
 
 export default function PyroxeneTimelineResources({
@@ -19,6 +23,9 @@ export default function PyroxeneTimelineResources({
   resources,
   itemUid,
   onDeleteItem,
+  collectedSourceKey,
+  collected = false,
+  onCollectedSourceChange,
 }: PyroxeneTimelineResourcesProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
@@ -40,12 +47,22 @@ export default function PyroxeneTimelineResources({
   const labelColor = (value: number) => (value < 0 ? "red" : "white");
 
   return (
-    <div className="my-3 flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 dark:border-neutral-700">
+    <div
+      className={cn(
+        "my-3 flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 transition-opacity dark:border-neutral-700",
+        collected && "opacity-60",
+      )}
+    >
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold">
           {date.format("YYYY-MM-DD")}({date.format("ddd")})
         </p>
         <p className="line-clamp-1 text-xs text-neutral-500 dark:text-neutral-400">{description}</p>
+        {collectedSourceKey && (
+          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+            이미 받아 현재 보유 재화에 포함됨 → 그래프에서 중복 제외
+          </p>
+        )}
       </div>
       <div className="ml-3 flex shrink-0 items-center gap-1.5">
         {resources.pyroxene !== 0 && (
@@ -73,6 +90,15 @@ export default function PyroxeneTimelineResources({
           />
         )}
       </div>
+      {collectedSourceKey && onCollectedSourceChange && (
+        <Button
+          text={collected ? "되돌리기" : "수급 완료"}
+          variant={collected ? "tint" : "tint-blue"}
+          size="xs"
+          className="ml-2 shrink-0"
+          onClick={() => onCollectedSourceChange(collectedSourceKey, !collected)}
+        />
+      )}
       {itemUid && onDeleteItem && (
         <button
           type="button"

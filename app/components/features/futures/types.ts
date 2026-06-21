@@ -56,3 +56,9 @@ export type PyroxeneScheduleItem = {
     autoRepurchase?: boolean;
   };
 };
+
+export type PyroxeneCollectedSourceCandidate = {
+  sourceKey: string;
+  title: string;
+  description: string;
+};

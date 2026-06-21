@@ -33,12 +33,15 @@ import {
   createPyroxeneMonthlyPackage,
   createPyroxeneOwnedResource,
   defaultPyroxenePlannerOptions,
+  deleteCollectedSource,
   deletePyroxeneTimelineItem,
   getAllPyroxeneEventData,
+  getCollectedSourceKeys,
   getLatestPyroxeneOwnedResource,
   getPyroxenePlannerContents,
   getPyroxenePlannerOptions,
   getPyroxeneTimelineItems,
+  upsertCollectedSources,
   upsertPyroxeneEventData,
   upsertPyroxenePlannerOptions,
 } from "~/models/pyroxene-planner";
@@ -79,6 +82,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       calcOptions: defaultPyroxenePlannerOptions,
       eventData: [],
       recruitmentResultCompletions: [],
+      collectedSourceKeys: [],
     };
   }
 
@@ -87,7 +91,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
   );
 
-  const [favoritedStudents, latestResources, savedOptions, eventData, timelineItems, recruitmentResults] =
+  const [favoritedStudents, latestResources, savedOptions, eventData, timelineItems, recruitmentResults, collectedSources] =
     await Promise.all([
       getUserFavoritedStudents(env, currentUser.id),
       getLatestPyroxeneOwnedResource(env, currentUser.id),
@@ -95,6 +99,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       getAllPyroxeneEventData(env, currentUser.id),
       getPyroxeneTimelineItems(env, currentUser.id),
       getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
+      getCollectedSourceKeys(env, currentUser.id),
     ]);
 
   return {
@@ -123,6 +128,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       );
       return content ? [{ eventUid: content.uid, recruitmentGroupUid: result.recruitmentGroupUid }] : [];
     }),
+    collectedSourceKeys: [...collectedSources],
   };
 };
 
@@ -171,6 +177,11 @@ export type ActionData = {
   };
 
   calcOptions?: PyroxenePlannerOptions;
+
+  collectedSource?: {
+    sourceKey?: string;
+    sourceKeys?: string[];
+  };
 };
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
@@ -180,7 +191,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     return { success: false };
   }
 
-  const { createData, deleteData, eventData, calcOptions } = await request.json<ActionData>();
+  const { createData, deleteData, eventData, calcOptions, collectedSource } = await request.json<ActionData>();
   if (request.method === "POST") {
     if (createData) {
       if (createData.ownedResources !== undefined) {
@@ -265,7 +276,20 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     if (calcOptions) {
       await upsertPyroxenePlannerOptions(env, currentUser.id, calcOptions);
     }
-  } else if (request.method === "DELETE" && deleteData) {
+    if (collectedSource) {
+      const sourceKeys = [
+        ...(collectedSource.sourceKey ? [collectedSource.sourceKey] : []),
+        ...(collectedSource.sourceKeys ?? []),
+      ];
+      await upsertCollectedSources(env, currentUser.id, sourceKeys);
+    }
+  } else if (request.method === "DELETE") {
+    if (collectedSource?.sourceKey) {
+      await deleteCollectedSource(env, currentUser.id, collectedSource.sourceKey);
+    }
+    if (!deleteData) {
+      return { success: true };
+    }
     let recruitmentGroupUid = deleteData.recruitmentGroupUid ?? null;
     if (!recruitmentGroupUid && deleteData.eventUid) {
       for (const content of await getPyroxenePlannerContents(env)) {
@@ -318,6 +342,9 @@ export default function PyroxenePlanner() {
   const [localRecruitmentResultCompletions, setLocalRecruitmentResultCompletions] = useState<
     { eventUid: string; recruitmentGroupUid: string }[]
   >(loaderData.recruitmentResultCompletions ?? []);
+  const [localCollectedSourceKeys, setLocalCollectedSourceKeys] = useState<string[]>(
+    loaderData.collectedSourceKeys ?? [],
+  );
 
   const fetcher = useFetcher<typeof action>();
   const timelineSaveInFlight = useRef(false);
@@ -341,6 +368,10 @@ export default function PyroxenePlanner() {
   }, [loaderData.recruitmentResultCompletions]);
 
   useEffect(() => {
+    setLocalCollectedSourceKeys(loaderData.collectedSourceKeys ?? []);
+  }, [loaderData.collectedSourceKeys]);
+
+  useEffect(() => {
     setOptions(loaderData.calcOptions);
   }, [loaderData.calcOptions]);
 
@@ -350,9 +381,16 @@ export default function PyroxenePlanner() {
     }
   }, [fetcher.state]);
 
-  const handleSaveOwnedResources = (eventUid: string | null, resources: PickupResources) => {
+  const handleSaveOwnedResources = (
+    eventUid: string | null,
+    resources: PickupResources,
+    collectedSourceKeys: string[] = [],
+  ) => {
     setInitialResources(resources);
     setInitialDate(new Date());
+    if (collectedSourceKeys.length > 0) {
+      setLocalCollectedSourceKeys((prev) => [...new Set([...prev, ...collectedSourceKeys])]);
+    }
     if (eventUid) {
       const content = contents.find((content) => content.kind === "event" && content.uid === eventUid);
       if (content?.kind === "event" && content.recruitmentGroupUid) {
@@ -366,8 +404,24 @@ export default function PyroxenePlanner() {
       }
     }
     fetcher.submit(
-      { createData: { ownedResources: { eventUid, ...resources } } },
+      {
+        createData: { ownedResources: { eventUid, ...resources } },
+        collectedSource: { sourceKeys: collectedSourceKeys },
+      },
       { method: "POST", encType: "application/json" },
+    );
+  };
+
+  const handleCollectedSourceChange = (sourceKey: string, collected: boolean) => {
+    setLocalCollectedSourceKeys((prev) => {
+      if (collected) {
+        return prev.includes(sourceKey) ? prev : [...prev, sourceKey];
+      }
+      return prev.filter((key) => key !== sourceKey);
+    });
+    fetcher.submit(
+      { collectedSource: { sourceKey } },
+      { method: collected ? "POST" : "DELETE", encType: "application/json" },
     );
   };
 
@@ -608,10 +662,14 @@ export default function PyroxenePlanner() {
             eventDataMap={eventDataMap}
             scheduleItems={scheduleItems}
             options={options}
-            onPickupComplete={(eventUid, resources) => handleSaveOwnedResources(eventUid, resources)}
+            collectedSourceKeys={localCollectedSourceKeys}
+            onPickupComplete={(eventUid, resources, collectedSourceKeys) =>
+              handleSaveOwnedResources(eventUid, resources, collectedSourceKeys)
+            }
             onDeletePickupComplete={(eventUid) => handleDeletePickupComplete(eventUid)}
             onDeleteItem={(itemUid) => handleDeleteItem(itemUid)}
             onUpdateEventData={handleUpdateEventData}
+            onCollectedSourceChange={handleCollectedSourceChange}
           />
         ) : (
           <ErrorPage Icon={LockClosedIcon} message="로그인 후 이용할 수 있어요" showButtons={false} />

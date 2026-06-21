@@ -15,6 +15,7 @@ export type TimelineSource = {
   event?: PyroxeneScheduleItem["event"];
   description?: string;
   uid?: string;
+  collectedSourceKey?: string;
 };
 
 export type TimelineDelta = {
@@ -832,7 +833,9 @@ export function buildTimeline(
   scheduleItems: PyroxeneScheduleItem[],
   options: PyroxeneCalculationOptions,
   bandMode: PyroxeneTimelineBandMode = "central_ticket_discount",
+  collectedSourceKeys: string[] = [],
 ): Timeline {
+  const collectedSources = new Set(collectedSourceKeys);
   const maxDate = scheduleItems.reduce((max, item) => {
     if (!item.event) {
       return max;
@@ -848,10 +851,13 @@ export function buildTimeline(
 
       // 이벤트 보상 청휘석은 픽업 완료 여부와 무관하게 이벤트 종료일에 수급됩니다.
       if (event.earnablePyroxene) {
+        const collectedSourceKey = `event_reward:${event.uid}`;
         timelineDeltas.push({
           date: dayjs(event.until),
-          source: { type: "event_reward", description: event.name },
-          resourceDelta: { pyroxene: event.earnablePyroxene, oneTimeTicket: 0, tenTimeTicket: 0 },
+          source: { type: "event_reward", uid: event.uid, description: event.name, collectedSourceKey },
+          resourceDelta: collectedSources.has(collectedSourceKey)
+            ? zeroResources()
+            : { pyroxene: event.earnablePyroxene, oneTimeTicket: 0, tenTimeTicket: 0 },
         });
       }
 
@@ -914,23 +920,40 @@ export function buildTimeline(
       });
     } else if (scheduleItem.raid) {
       const { raid } = scheduleItem;
+      const collectedSourceKey = `raid:${raid.uid}`;
+      const raidSource = {
+        type: "raid" as const,
+        uid: raid.uid,
+        collectedSourceKey,
+      };
+      const isCollected = collectedSources.has(collectedSourceKey);
       if (raid.type === "total_assault") {
         const tierReward = PYROXENE.RAID_TOTAL_ASSAULT_TIER[options.raid.tier];
         timelineDeltas.push({
           date: dayjs(raid.until),
-          source: { type: "raid", description: `총력전 ${raid.name}` },
-          resourceDelta: {
-            pyroxene: PYROXENE.RAID_TOTAL_ASSAULT_BASE + tierReward,
-            oneTimeTicket: 0,
-            tenTimeTicket: 0,
-          },
+          source: { ...raidSource, description: `총력전 ${raid.name}` },
+          resourceDelta: isCollected
+            ? zeroResources()
+            : {
+                pyroxene: PYROXENE.RAID_TOTAL_ASSAULT_BASE + tierReward,
+                oneTimeTicket: 0,
+                tenTimeTicket: 0,
+              },
         });
       } else if (raid.type === "elimination") {
+        if (isCollected) {
+          timelineDeltas.push({
+            date: dayjs(raid.until),
+            source: { ...raidSource, description: `대결전 ${raid.name}` },
+            resourceDelta: zeroResources(),
+          });
+          continue;
+        }
         const ticketLotId = `${raid.uid}::ten-time-ticket`;
         const ticketExpiresAt = getEliminationTicketExpiresAt(raid.until);
         timelineDeltas.push({
           date: dayjs(raid.until).add(1, "day"),
-          source: { type: "raid", description: `대결전 ${raid.name}` },
+          source: { ...raidSource, description: `대결전 ${raid.name}` },
           resourceDelta: { pyroxene: PYROXENE.RAID_ELIMINATION_BASE, oneTimeTicket: 0, tenTimeTicket: 1 },
           tenTimeTicketLotId: ticketLotId,
           tenTimeTicketExpiresAt: ticketExpiresAt,
@@ -940,6 +963,7 @@ export function buildTimeline(
           source: {
             type: "raid",
             uid: `${raid.uid}::ten-time-ticket-expiry`,
+            collectedSourceKey,
             description: "대결전 10회 모집 티켓 만료",
           },
           tenTimeTicketLotId: ticketLotId,
