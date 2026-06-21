@@ -2,13 +2,17 @@ import { describe, expect, it } from "@jest/globals";
 import { Attack, Defense } from "~/graphql/graphql";
 import { buildStudentRaidUsageChartData, getDefaultRaidUsageDefenseFilter } from "./StudentRaidUsageChartModel";
 
+function makeJpSchedule(seasonIndex: number, startAt: string) {
+  return { seasonIndex, startAt };
+}
+
 const baseRaid = {
   raidBoss: { uid: "binah", name: "비나" },
   seasonIndex: 1,
   raidType: "total_assault",
   startAt: "2025-01-01T00:00:00.000Z",
   endAt: "2025-01-08T00:00:00.000Z",
-  jpSchedule: { seasonIndex: 101 },
+  jpSchedule: makeJpSchedule(101, "2025-01-01T00:00:00.000Z"),
   defenseTypes: [{ defenseType: Defense.Heavy, difficulty: "torment" }],
 };
 
@@ -22,7 +26,7 @@ describe("buildStudentRaidUsageChartData", () => {
           ...baseRaid,
           seasonIndex: 0,
           startAt: "2024-12-25T00:00:00.000Z",
-          jpSchedule: { seasonIndex: 100 },
+          jpSchedule: makeJpSchedule(100, "2024-12-25T00:00:00.000Z"),
         },
         baseRaid,
         {
@@ -30,7 +34,7 @@ describe("buildStudentRaidUsageChartData", () => {
           seasonIndex: 2,
           raidType: "elimination",
           startAt: "2025-01-15T00:00:00.000Z",
-          jpSchedule: { seasonIndex: 102 },
+          jpSchedule: makeJpSchedule(102, "2025-01-15T00:00:00.000Z"),
           defenseTypes: [
             { defenseType: Defense.Light, difficulty: "torment" },
             { defenseType: Defense.Heavy, difficulty: "torment" },
@@ -42,7 +46,7 @@ describe("buildStudentRaidUsageChartData", () => {
           seasonIndex: 3,
           raidType: "unlimit",
           startAt: "2025-01-22T00:00:00.000Z",
-          jpSchedule: { seasonIndex: 103 },
+          jpSchedule: makeJpSchedule(103, "2025-01-22T00:00:00.000Z"),
         },
       ],
       statistics: [
@@ -98,7 +102,7 @@ describe("buildStudentRaidUsageChartData", () => {
           seasonIndex: 2,
           raidType: "elimination",
           startAt: "2025-01-15T00:00:00.000Z",
-          jpSchedule: { seasonIndex: 102 },
+          jpSchedule: makeJpSchedule(102, "2025-01-15T00:00:00.000Z"),
           defenseTypes: [
             { defenseType: Defense.Light, difficulty: "torment" },
             { defenseType: Defense.Heavy, difficulty: "torment" },
@@ -152,21 +156,21 @@ describe("buildStudentRaidUsageChartData", () => {
           seasonIndex: 1,
           startAt: "2025-01-01T00:00:00.000Z",
           raidBoss: { uid: "binah", name: "비나" },
-          jpSchedule: { seasonIndex: 101 },
+          jpSchedule: makeJpSchedule(101, "2025-01-01T00:00:00.000Z"),
         },
         {
           ...baseRaid,
           seasonIndex: 2,
           startAt: "2025-03-01T00:00:00.000Z",
           raidBoss: { uid: "chesed", name: "헤세드" },
-          jpSchedule: { seasonIndex: 102 },
+          jpSchedule: makeJpSchedule(102, "2025-03-01T00:00:00.000Z"),
         },
         {
           ...baseRaid,
           seasonIndex: 3,
           startAt: "2026-01-01T00:00:00.000Z",
           raidBoss: { uid: "hod", name: "호드" },
-          jpSchedule: { seasonIndex: 103 },
+          jpSchedule: makeJpSchedule(103, "2026-01-01T00:00:00.000Z"),
         },
       ],
       statistics: [],
@@ -176,7 +180,7 @@ describe("buildStudentRaidUsageChartData", () => {
     expect(result.rows.map((row) => row.bossName)).toEqual(["비나", "헤세드", "호드"]);
   });
 
-  it("temporarily excludes raid rows before the statistics data availability cutoff", () => {
+  it("omits raid rows before the ranks statistics availability window", () => {
     const result = buildStudentRaidUsageChartData({
       releaseAt: "2024-01-01T00:00:00.000Z",
       selectedDefenseType: Defense.Heavy,
@@ -184,14 +188,14 @@ describe("buildStudentRaidUsageChartData", () => {
         {
           ...baseRaid,
           seasonIndex: 1,
-          startAt: "2024-10-28T00:00:00.000Z",
-          jpSchedule: { seasonIndex: 101 },
+          startAt: "2024-03-10T00:00:00.000Z",
+          jpSchedule: makeJpSchedule(101, "2024-02-29T00:00:00.000Z"),
         },
         {
           ...baseRaid,
           seasonIndex: 2,
-          startAt: "2024-10-29T00:00:00.000Z",
-          jpSchedule: { seasonIndex: 102 },
+          startAt: "2024-03-12T00:00:00.000Z",
+          jpSchedule: makeJpSchedule(102, "2024-03-01T00:00:00.000Z"),
         },
       ],
       statistics: [
@@ -215,7 +219,7 @@ describe("buildStudentRaidUsageChartData", () => {
     });
 
     expect(result.rows.map((row) => row.seasonIndex)).toEqual([2]);
-    expect(result.rows[0]?.totalCount).toBe(20);
+    expect(result.rows.map((row) => row.totalCount)).toEqual([20]);
   });
 
   it("prints a year label only once when one raid has multiple defense bars", () => {
@@ -228,7 +232,7 @@ describe("buildStudentRaidUsageChartData", () => {
           seasonIndex: 1,
           raidType: "elimination",
           startAt: "2025-01-01T00:00:00.000Z",
-          jpSchedule: { seasonIndex: 101 },
+          jpSchedule: makeJpSchedule(101, "2025-01-01T00:00:00.000Z"),
           defenseTypes: [
             { defenseType: Defense.Light, difficulty: "torment" },
             { defenseType: Defense.Heavy, difficulty: "torment" },
@@ -252,7 +256,7 @@ describe("buildStudentRaidUsageChartData", () => {
           seasonIndex: 4,
           raidType: "total_assault",
           startAt: "2026-09-08T00:00:00.000Z",
-          jpSchedule: { seasonIndex: 104 },
+          jpSchedule: makeJpSchedule(104, "2026-09-08T00:00:00.000Z"),
           defenseTypes: [{ defenseType: Defense.Light, difficulty: "torment" }],
         },
       ],

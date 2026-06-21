@@ -6,24 +6,14 @@ import { fetchCached } from "./base";
 import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
-export type Boss =
-  | "binah"
-  | "chesed"
-  | "hod"
-  | "shirokuro"
-  | "perorozilla"
-  | "goz"
-  | "hieronymus"
-  | "kaiten-fx-mk0"
-  | "gregorius"
-  | "hovercraft"
-  | "myouki-kurokage"
-  | "geburah"
-  | "yesod";
-const ALL_RAID_SCHEDULES_CACHE_KEY = "raids::schedules::all::v3";
-const RAID_SCHEDULE_CACHE_VERSION = "v2";
+const ALL_RAID_SCHEDULES_CACHE_KEY = "raids::schedules::all::v4";
+const RAID_SCHEDULE_CACHE_VERSION = "v3";
 
 type RawRaidSchedule = NonNullable<Awaited<ReturnType<typeof runRaidScheduleDetailQuery>>>;
+type RawRaidJpSchedule = NonNullable<RawRaidSchedule["jpSchedule"]>;
+type NormalizedRaidJpSchedule = Omit<RawRaidJpSchedule, "startAt"> & {
+  startAt: UtcIsoString | null;
+};
 
 export type RaidDefenseTypeSet = {
   difficulty: GraphqlDifficulty | null;
@@ -39,14 +29,17 @@ export type RaidDefenseType = {
   setIndex: number;
 };
 
-export function getRaidDefenseTypeSetKey(defenseTypeSet: { difficulty: string | null; defenseTypes: readonly Defense[] }) {
+export function getRaidDefenseTypeSetKey(defenseTypeSet: {
+  difficulty: string | null;
+  defenseTypes: readonly Defense[];
+}) {
   return `${defenseTypeSet.difficulty ?? "none"}:${defenseTypeSet.defenseTypes.join(",")}`;
 }
 
 export type NormalizedRaidSchedule = Omit<RawRaidSchedule, "startAt" | "endAt" | "jpSchedule" | "defenseTypeSets"> & {
   startAt: UtcIsoString | null;
   endAt: UtcIsoString | null;
-  jpSchedule: RawRaidSchedule["jpSchedule"];
+  jpSchedule: NormalizedRaidJpSchedule | null;
   defenseTypeSets: RaidDefenseTypeSet[];
   defenseTypes: RaidDefenseType[];
 };
@@ -85,13 +78,15 @@ function normalizeRaidSchedule<
   T extends {
     startAt: Date | string | null;
     endAt: Date | string | null;
+    jpSchedule: ({ startAt: Date | string | null } & RawRaidJpSchedule) | null;
     defenseTypeSets: { difficulty: GraphqlDifficulty | null; defenseTypes: Defense[] }[];
   },
 >(
   schedule: T,
-): Omit<T, "startAt" | "endAt" | "defenseTypeSets"> & {
+): Omit<T, "startAt" | "endAt" | "jpSchedule" | "defenseTypeSets"> & {
   startAt: UtcIsoString | null;
   endAt: UtcIsoString | null;
+  jpSchedule: NormalizedRaidJpSchedule | null;
   defenseTypeSets: RaidDefenseTypeSet[];
   defenseTypes: RaidDefenseType[];
 } {
@@ -100,6 +95,12 @@ function normalizeRaidSchedule<
     ...schedule,
     startAt: schedule.startAt ? toUtcIso(schedule.startAt) : null,
     endAt: schedule.endAt ? toUtcIso(schedule.endAt) : null,
+    jpSchedule: schedule.jpSchedule
+      ? {
+          ...schedule.jpSchedule,
+          startAt: schedule.jpSchedule.startAt ? toUtcIso(schedule.jpSchedule.startAt) : null,
+        }
+      : null,
     defenseTypeSets,
     defenseTypes: flattenDefenseTypeSets(defenseTypeSets),
   };
@@ -123,7 +124,7 @@ const raidScheduleDetailQuery = graphql(`
       uid raidType seasonIndex region terrain startAt endAt attackType
       raidBoss { uid name }
       defenseTypeSets { difficulty defenseTypes }
-      jpSchedule { uid seasonIndex }
+      jpSchedule { uid seasonIndex startAt }
     }
   }
 `);
@@ -147,7 +148,7 @@ const raidScheduleBySeasonIndexQuery = graphql(`
       uid raidType seasonIndex region terrain startAt endAt attackType
       raidBoss { uid name }
       defenseTypeSets { difficulty defenseTypes }
-      jpSchedule { uid seasonIndex }
+      jpSchedule { uid seasonIndex startAt }
     }
   }
 `);
@@ -175,7 +176,7 @@ const allRaidSchedulesQuery = graphql(`
         uid raidType seasonIndex region terrain startAt endAt attackType
         raidBoss { uid name }
         defenseTypeSets { difficulty defenseTypes }
-        jpSchedule { uid seasonIndex }
+        jpSchedule { uid seasonIndex startAt }
       }
     }
   }
@@ -204,21 +205,39 @@ export async function getUpcomingRaidSchedules(env: Env, forceRefresh = false) {
     .sort((a, b) => compareInstantAsc(a.startAt ?? now, b.startAt ?? now));
 }
 
-export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [
+const TOTAL_ASSAULT_BOSS_UIDS = [
   "binah",
   "chesed",
   "hod",
   "shirokuro",
-  "perorozilla",
+  "perorodzilla",
   "goz",
   "hieronymus",
-  "kaiten-fx-mk0",
+  "kaiten",
   "gregorius",
   "hovercraft",
-  "myouki-kurokage",
+  "kurokage",
   "geburah",
   "yesod",
-];
+  "drumbarka",
+] as const;
+
+export type Boss = (typeof TOTAL_ASSAULT_BOSS_UIDS)[number];
+
+export const ALL_TOTAL_ASSUALT_BOSS: Boss[] = [...TOTAL_ASSAULT_BOSS_UIDS];
+
+const LEGACY_BOSS_UIDS: Partial<Record<string, Boss>> = {
+  perorozilla: "perorodzilla",
+  "kaiten-fx-mk0": "kaiten",
+  "myouki-kurokage": "kurokage",
+};
+
+export function normalizeBossUid(boss: string): Boss | null {
+  if ((TOTAL_ASSAULT_BOSS_UIDS as readonly string[]).includes(boss)) {
+    return boss as Boss;
+  }
+  return LEGACY_BOSS_UIDS[boss] ?? null;
+}
 
 const RAID_TIME_SCORE_PER_SECOND = {
   normal: 120,
@@ -250,12 +269,12 @@ const RAID_HP_SCORE = {
   extreme: { 180: 5392000, 240: 6160000, 270: 6578880 },
   insane: { 180: 12449600, 240: 14216000, 270: 14941016 },
   torment: { 180: 18876000, 240: 19508000, 270: 20302000 },
-  lunatic: { 180: null, 240: 26315000, 270: 26954000 },
+  lunatic: { 180: 25525000, 240: 26315000, 270: 26954000 },
 };
 
 function timeForBoss(boss: Boss): 180 | 240 | 270 {
-  if (boss === "yesod") return 270;
-  if (boss === "binah" || boss === "kaiten-fx-mk0") return 180;
+  if (boss === "yesod" || boss === "drumbarka") return 270;
+  if (boss === "binah" || boss === "kaiten") return 180;
   return 240;
 }
 

@@ -1,0 +1,59 @@
+import { useState } from "react";
+import { Defense } from "~/graphql/graphql";
+import { defenseTypeLocale, terrainLocale } from "~/locales/ko";
+import type { StudentBossUsageSummary } from "./StudentDifficultyUsageModel";
+import { UsageBarList, UsageChartCard } from "./UsageBarChart";
+import { formatUsagePercent } from "./formatUsagePercent";
+
+type StudentBossUsageChartProps = {
+  summary: StudentBossUsageSummary | null;
+  loading: boolean;
+};
+
+const DEFENSE_BAR_CLASSES: Partial<Record<Defense, string>> = {
+  [Defense.Light]: "bg-red-500",
+  [Defense.Heavy]: "bg-yellow-400",
+  [Defense.Special]: "bg-blue-500",
+  [Defense.Elastic]: "bg-purple-500",
+};
+
+export default function StudentBossUsageChart({ summary, loading }: StudentBossUsageChartProps) {
+  const [expanded, setExpanded] = useState(false);
+  const rows = summary?.rows ?? [];
+  const visibleRows = expanded ? rows : rows.slice(0, 6);
+  const hiddenCount = rows.length - visibleRows.length;
+
+  return (
+    <UsageChartCard
+      title="보스별 출전 횟수"
+      description="보스 및 방어타입 별 출전 횟수"
+      loading={loading}
+      empty={!summary || summary.totalScopeCount === 0 || rows.length === 0}
+      emptyText="출전 기록이 부족해요"
+    >
+      <UsageBarList
+        rows={visibleRows}
+        getKey={(row) => row.key}
+        getRatio={(row) => row.usageRate}
+        labelClassName="w-20"
+        renderLabel={(row) => <span className="truncate">{row.bossName}</span>}
+        renderSubLabel={(row) => (
+          <span className="text-neutral-500 dark:text-neutral-400">
+            {terrainLocale[row.terrain]} · {defenseTypeLocale[row.defenseType]}
+          </span>
+        )}
+        renderValue={(row) => `${formatUsagePercent(row.usageRate)} · ${row.usageCount.toLocaleString()}회`}
+        getBarClassName={(row) => DEFENSE_BAR_CLASSES[row.defenseType] ?? "bg-neutral-400"}
+      />
+      {hiddenCount > 0 || expanded ? (
+        <button
+          type="button"
+          className="mt-3 self-start text-xs font-semibold text-blue-600 hover:underline dark:text-blue-300"
+          onClick={() => setExpanded((current) => !current)}
+        >
+          {expanded ? "접기" : `+${hiddenCount}개 더 보기`}
+        </button>
+      ) : null}
+    </UsageChartCard>
+  );
+}
