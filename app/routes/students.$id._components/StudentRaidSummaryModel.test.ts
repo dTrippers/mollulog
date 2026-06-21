@@ -1,6 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
 import type { UtcIsoString } from "~/lib/date-time";
-import { buildStudentRaidSummary, type StudentRaidSummaryStat } from "./StudentRaidSummaryModel";
+import {
+  buildStudentRaidInvestment,
+  buildStudentRaidSummary,
+  type StudentRaidSummaryStat,
+} from "./StudentRaidSummaryModel";
 
 function makeStat(overrides: Partial<StudentRaidSummaryStat> & { startAt: UtcIsoString }): StudentRaidSummaryStat {
   return {
@@ -15,7 +19,7 @@ function makeStat(overrides: Partial<StudentRaidSummaryStat> & { startAt: UtcIso
 describe("buildStudentRaidSummary", () => {
   const asOf = new Date("2026-06-19T00:00:00.000Z");
 
-  it("excludes seasons outside the recent two-year window", () => {
+  it("uses all provided seasons for the summary", () => {
     const result = buildStudentRaidSummary({
       asOf,
       myStudentTier: null,
@@ -35,16 +39,35 @@ describe("buildStudentRaidSummary", () => {
       ],
     });
 
-    expect(result.ownCount).toBe(60);
-    expect(result.assistCount).toBe(40);
-    expect(result.totalCount).toBe(100);
+    expect(result.ownCount).toBe(160);
+    expect(result.assistCount).toBe(140);
+    expect(result.totalCount).toBe(300);
+  });
+
+  it("includes collected statistics even when the mapped schedule is after asOf", () => {
+    const result = buildStudentRaidSummary({
+      asOf,
+      myStudentTier: null,
+      statistics: [
+        makeStat({
+          startAt: "2026-09-22T00:00:00.000Z" as UtcIsoString,
+          slotsCount: 459,
+          slotsByTier: [{ tier: 7, count: 459 }],
+          assistsCount: 57,
+        }),
+      ],
+    });
+
+    expect(result.ownCount).toBe(459);
+    expect(result.assistCount).toBe(57);
+    expect(result.totalCount).toBe(516);
   });
 
   it("calculates assist ratio and handles empty samples without verdict text", () => {
     const empty = buildStudentRaidSummary({ asOf, myStudentTier: null, statistics: [] });
     expect(empty.assistRatio).toBeNull();
     expect(empty.sampleInsufficient).toBe(true);
-    expect(empty.sampleMessage).toBe("최근 2년 표본이 없어 판단을 보류하는 편이 좋아요.");
+    expect(empty.sampleMessage).toBe("출전 기록이 없어 판단을 보류하는 편이 좋아요.");
     expect(empty.verdict).toBeNull();
 
     const result = buildStudentRaidSummary({
@@ -60,7 +83,7 @@ describe("buildStudentRaidSummary", () => {
       ],
     });
     expect(result.assistRatio).toBe(0.25);
-    expect(result.verdict).toBe("본대 비중이 높아 직접 보유 가치가 큰 편이에요.");
+    expect(result.verdict).toBe("모집 편성 비중이 높아 직접 보유 가치가 큰 편이에요.");
   });
 
   it("aggregates own-slot tier distribution and weighted median tier", () => {
@@ -93,6 +116,32 @@ describe("buildStudentRaidSummary", () => {
     expect(result.medianTier).toBe(7);
   });
 
+  it("uses all available seasons for the standalone investment distribution", () => {
+    const result = buildStudentRaidInvestment({
+      myStudentTier: 8,
+      statistics: [
+        makeStat({
+          startAt: "2023-01-01T00:00:00.000Z" as UtcIsoString,
+          slotsCount: 100,
+          slotsByTier: [{ tier: 8, count: 100 }],
+          assistsCount: 0,
+        }),
+        makeStat({
+          startAt: "2026-01-01T00:00:00.000Z" as UtcIsoString,
+          slotsCount: 20,
+          slotsByTier: [{ tier: 6, count: 20 }],
+          assistsCount: 0,
+        }),
+      ],
+    });
+
+    expect(result.ownCount).toBe(120);
+    expect(result.distribution.find(({ tier }) => tier === 8)).toMatchObject({ count: 100, ratio: 100 / 120 });
+    expect(result.distribution.find(({ tier }) => tier === 6)).toMatchObject({ count: 20, ratio: 20 / 120 });
+    expect(result.medianTier).toBe(8);
+    expect(result.myTier).toBe(8);
+  });
+
   it("calculates my tier percentile and branches for owned, missing, and unknown comparison states", () => {
     const statistics = [
       makeStat({
@@ -109,11 +158,11 @@ describe("buildStudentRaidSummary", () => {
 
     const ownedLow = buildStudentRaidSummary({ asOf, myStudentTier: 5, statistics });
     expect(ownedLow.myTierPercentile).toBe(0.2);
-    expect(ownedLow.myTierVerdict).toBe("본대 분포보다 낮은 편이라 추가 투자가 필요할 수 있어요.");
+    expect(ownedLow.myTierVerdict).toBe("모집 편성 분포보다 낮은 편이라 추가 투자가 필요할 수 있어요.");
 
     const ownedHigh = buildStudentRaidSummary({ asOf, myStudentTier: 7, statistics });
     expect(ownedHigh.myTierPercentile).toBe(1);
-    expect(ownedHigh.myTierVerdict).toBe("본대 분포 기준 충분히 높은 편이에요.");
+    expect(ownedHigh.myTierVerdict).toBe("모집 편성 분포 기준 충분히 높은 편이에요.");
 
     const missing = buildStudentRaidSummary({ asOf, myStudentTier: null, statistics });
     expect(missing.myTierPercentile).toBeNull();
@@ -149,7 +198,7 @@ describe("buildStudentRaidSummary", () => {
       ],
     });
     expect(balanced.sampleInsufficient).toBe(false);
-    expect(balanced.verdict).toBe("본대와 조력이 함께 쓰여 보유와 대여를 같이 고려할 만해요.");
+    expect(balanced.verdict).toBe("모집 편성과 조력이 함께 쓰여 보유와 대여를 같이 고려할 만해요.");
 
     const assistHeavy = buildStudentRaidSummary({
       asOf,

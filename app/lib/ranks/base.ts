@@ -1,8 +1,6 @@
 import protobuf from "protobufjs";
 
-const DEFAULT_RANK_API_BASE_URL = import.meta.env.DEV ? "http://localhost:8080" : "https://ranks.baql.net";
-
-export const RANK_API_BASE_URL = import.meta.env.VITE_RANK_API_BASE_URL || DEFAULT_RANK_API_BASE_URL;
+export const RANK_API_BASE_URL = import.meta.env.VITE_RANK_API_BASE_URL || "https://ranks.baql.net";
 
 export async function decompressGzip(data: ArrayBuffer): Promise<ArrayBuffer> {
   const ds = new DecompressionStream("gzip");

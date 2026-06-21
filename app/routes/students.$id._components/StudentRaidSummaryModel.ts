@@ -34,9 +34,16 @@ export type StudentRaidSummary = {
   myTierVerdict: string | null;
 };
 
+export type StudentRaidInvestment = {
+  ownCount: number;
+  medianTier: number | null;
+  distribution: StudentRaidTierDistributionItem[];
+  myTier: number | null;
+};
+
 const TIERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
-// Recent two-year aggregates can be noisy for niche students. 100 slots is a small but useful floor,
-// and mirrors the existing season detail threshold so weak samples do not produce confident advice.
+// 100 slots is a small but useful floor, and mirrors the existing season detail threshold
+// so weak samples do not produce confident advice.
 const MIN_TOTAL_SAMPLE_SIZE = 100;
 
 export function buildStudentRaidSummary({
@@ -48,18 +55,14 @@ export function buildStudentRaidSummary({
   myStudentTier: number | null;
   asOf?: Date;
 }): StudentRaidSummary {
-  const since = getTwoYearsAgo(asOf);
+  const since = getFirstStatisticDate(statistics) ?? asOf;
   const until = asOf;
-  const recentStatistics = statistics.filter((stat) => {
-    const startAt = getInstantTime(stat.raid.startAt);
-    return !Number.isNaN(startAt) && startAt >= since.getTime() && startAt <= until.getTime();
-  });
 
   const tierCounts = new Map<number, number>();
   let ownCount = 0;
   let assistCount = 0;
 
-  for (const stat of recentStatistics) {
+  for (const stat of statistics) {
     ownCount += stat.slotsCount;
     assistCount += stat.assistsCount;
     for (const { tier, count } of stat.slotsByTier) {
@@ -70,21 +73,13 @@ export function buildStudentRaidSummary({
     }
   }
 
+  const investment = buildInvestmentFromCounts({ tierCounts, ownCount, myStudentTier });
   const totalCount = ownCount + assistCount;
   const assistRatio = totalCount > 0 ? assistCount / totalCount : null;
   const sampleInsufficient = totalCount < MIN_TOTAL_SAMPLE_SIZE;
-  const medianTier = ownCount > 0 ? getWeightedMedianTier(tierCounts, ownCount) : null;
-  const distribution = TIERS.map((tier) => {
-    const count = tierCounts.get(tier) ?? 0;
-    return {
-      tier,
-      count,
-      ratio: ownCount > 0 ? count / ownCount : 0,
-    };
-  });
   const myTierPercentile =
     myStudentTier != null && ownCount > 0
-      ? distribution
+      ? investment.distribution
           .filter(({ tier }) => tier <= myStudentTier)
           .reduce((sum, { count }) => sum + count, 0) / ownCount
       : null;
@@ -101,18 +96,47 @@ export function buildStudentRaidSummary({
     sampleInsufficient,
     sampleMessage: sampleInsufficient ? getSampleMessage(totalCount) : null,
     verdict: sampleInsufficient ? null : getAssistRatioVerdict(assistRatio),
-    medianTier,
-    distribution,
+    medianTier: investment.medianTier,
+    distribution: investment.distribution,
     myTier: myStudentTier,
     myTierPercentile,
     myTierVerdict: getMyTierVerdict({ myStudentTier, ownCount, percentile: myTierPercentile }),
   };
 }
 
-function getTwoYearsAgo(asOf: Date) {
-  const since = new Date(asOf.getTime());
-  since.setUTCFullYear(since.getUTCFullYear() - 2);
-  return since;
+export function buildStudentRaidInvestment({
+  statistics,
+  myStudentTier,
+}: {
+  statistics: StudentRaidSummaryStat[];
+  myStudentTier: number | null;
+}): StudentRaidInvestment {
+  const tierCounts = new Map<number, number>();
+  let ownCount = 0;
+
+  for (const stat of statistics) {
+    ownCount += stat.slotsCount;
+    for (const { tier, count } of stat.slotsByTier) {
+      if (!TIERS.includes(tier as (typeof TIERS)[number])) {
+        continue;
+      }
+      tierCounts.set(tier, (tierCounts.get(tier) ?? 0) + count);
+    }
+  }
+
+  return buildInvestmentFromCounts({ tierCounts, ownCount, myStudentTier });
+}
+
+function getFirstStatisticDate(statistics: StudentRaidSummaryStat[]) {
+  const firstTime = statistics.reduce<number | null>((earliest, stat) => {
+    const startAt = getInstantTime(stat.raid.startAt);
+    if (Number.isNaN(startAt)) {
+      return earliest;
+    }
+    return earliest == null ? startAt : Math.min(earliest, startAt);
+  }, null);
+
+  return firstTime == null ? null : new Date(firstTime);
 }
 
 function getWeightedMedianTier(tierCounts: Map<number, number>, totalCount: number) {
@@ -127,11 +151,35 @@ function getWeightedMedianTier(tierCounts: Map<number, number>, totalCount: numb
   return null;
 }
 
+function buildInvestmentFromCounts({
+  tierCounts,
+  ownCount,
+  myStudentTier,
+}: {
+  tierCounts: Map<number, number>;
+  ownCount: number;
+  myStudentTier: number | null;
+}): StudentRaidInvestment {
+  return {
+    ownCount,
+    medianTier: ownCount > 0 ? getWeightedMedianTier(tierCounts, ownCount) : null,
+    distribution: TIERS.map((tier) => {
+      const count = tierCounts.get(tier) ?? 0;
+      return {
+        tier,
+        count,
+        ratio: ownCount > 0 ? count / ownCount : 0,
+      };
+    }),
+    myTier: myStudentTier,
+  };
+}
+
 function getSampleMessage(totalCount: number) {
   if (totalCount === 0) {
-    return "최근 2년 표본이 없어 판단을 보류하는 편이 좋아요.";
+    return "출전 기록이 없어 판단을 보류하는 편이 좋아요.";
   }
-  return "최근 2년 표본이 적어 판단은 참고용으로만 봐주세요.";
+  return "출전 기록이 적어 판단은 참고용으로만 봐주세요.";
 }
 
 function getAssistRatioVerdict(assistRatio: number | null) {
@@ -142,9 +190,9 @@ function getAssistRatioVerdict(assistRatio: number | null) {
     return "조력 비중이 높아 대여로 해결된 사례가 많은 편이에요.";
   }
   if (assistRatio >= 0.35) {
-    return "본대와 조력이 함께 쓰여 보유와 대여를 같이 고려할 만해요.";
+    return "모집 편성과 조력이 함께 쓰여 보유와 대여를 같이 고려할 만해요.";
   }
-  return "본대 비중이 높아 직접 보유 가치가 큰 편이에요.";
+  return "모집 편성 비중이 높아 직접 보유 가치가 큰 편이에요.";
 }
 
 function getMyTierVerdict({
@@ -160,13 +208,13 @@ function getMyTierVerdict({
     return "미보유 상태예요.";
   }
   if (ownCount === 0 || percentile == null) {
-    return "본대 투자 표본이 적어 내 티어 비교는 생략했어요.";
+    return "모집 편성 기록이 적어 내 티어 비교는 생략했어요.";
   }
   if (percentile >= 0.8) {
-    return "본대 분포 기준 충분히 높은 편이에요.";
+    return "모집 편성 분포 기준 충분히 높은 편이에요.";
   }
   if (percentile >= 0.5) {
-    return "본대 분포의 중간권에 가까워요.";
+    return "모집 편성 분포의 중간권에 가까워요.";
   }
-  return "본대 분포보다 낮은 편이라 추가 투자가 필요할 수 있어요.";
+  return "모집 편성 분포보다 낮은 편이라 추가 투자가 필요할 수 있어요.";
 }

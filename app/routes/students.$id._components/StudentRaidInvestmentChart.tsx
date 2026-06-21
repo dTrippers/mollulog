@@ -1,60 +1,151 @@
-import type { StudentRaidSummary } from "./StudentRaidSummaryModel";
-import { formatTierKey, formatTierLabel, TIER_COLORS } from "./raidTierVisual";
+import type { StudentRaidInvestment } from "./StudentRaidSummaryModel";
+import { UsageBarList, UsageChartCard } from "./UsageBarChart";
+import { TIER_COLORS, formatTierKey, formatTierLabel } from "./raidTierVisual";
+
+type InvestmentChartRow = {
+  id: string;
+  tier: number;
+  includedTiers: number[];
+  count: number;
+  ratio: number;
+};
 
 type StudentRaidInvestmentChartProps = {
-  summary: StudentRaidSummary;
+  investment: StudentRaidInvestment;
   signedIn: boolean;
 };
 
-export default function StudentRaidInvestmentChart({ summary, signedIn }: StudentRaidInvestmentChartProps) {
-  const rows = [...summary.distribution].sort((a, b) => b.tier - a.tier);
+export default function StudentRaidInvestmentChart({ investment, signedIn }: StudentRaidInvestmentChartProps) {
+  const rows = buildInvestmentRows(investment);
+  const insight = getInvestmentInsight(investment.medianTier);
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
-      <div className="mb-4 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-base font-bold">투자도 분포</p>
-          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">최근 2년 본대 슬롯 기준입니다.</p>
-        </div>
-        <div className="shrink-0 text-right">
-          <p className="text-xs text-neutral-500 dark:text-neutral-400">대표값</p>
-          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-            {summary.medianTier == null ? "표본 부족" : formatTierLabel(summary.medianTier)}
-          </p>
-        </div>
-      </div>
-
-      {summary.ownCount === 0 ? (
+    <UsageChartCard title="성장도별 출전 비율" description="학생 성장도에 따른 역대 출전 횟수와 비율">
+      {investment.ownCount === 0 ? (
         <div className="rounded-md bg-neutral-100 px-3 py-4 text-center text-sm text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
-          최근 2년 본대 투자 표본이 없어요.
+          모집 편성 기록이 없어요.
         </div>
       ) : (
-        <div className="space-y-3">
-          {rows.map(({ tier, count, ratio }) => (
-            <div key={tier} className="flex items-center gap-2 text-sm">
-              <span className="w-16 shrink-0 font-medium text-neutral-700 dark:text-neutral-300">{formatTierLabel(tier)}</span>
-              <div className="min-w-0 flex-1">
-                <div className="relative h-2 rounded-full bg-neutral-200 dark:bg-neutral-700">
-                  <div
-                    className="h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${ratio * 100}%`, backgroundColor: TIER_COLORS[formatTierKey(tier)] }}
-                  />
-                </div>
-                {signedIn && summary.myTier === tier && (
-                  <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">▲ 내 보유</p>
-                )}
+        <>
+          <UsageBarList
+            rows={rows}
+            getKey={(row) => row.id}
+            getRatio={(row) => row.ratio}
+            labelClassName="w-8"
+            renderLabel={(row) => (
+              <div className="flex items-center gap-0.5">
+                <TierBadge tier={row.tier} />
               </div>
-              <span className="w-16 shrink-0 text-right text-xs text-neutral-500 dark:text-neutral-400">
-                {formatPercent(ratio)} · {count.toLocaleString()}
-              </span>
-            </div>
-          ))}
-        </div>
+            )}
+            renderSubLabel={(row) => {
+              const isMyTier = signedIn && investment.myTier != null && row.includedTiers.includes(investment.myTier);
+              return (
+                <span className="font-medium text-blue-600 dark:text-blue-400">{isMyTier ? "내 학생" : null}</span>
+              );
+            }}
+            renderValue={(row) => `${formatPercent(row.ratio)} · ${formatCount(row.count)}회`}
+            getBarStyle={(row) => ({ backgroundColor: TIER_COLORS[formatTierKey(row.tier)] })}
+          />
+          {insight ? (
+            <p className="mt-3 border-t border-neutral-200 pt-3 text-xs text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+              <span className="font-semibold text-neutral-700 dark:text-neutral-300">{insight.value}</span> ·{" "}
+              {insight.description}
+            </p>
+          ) : null}
+        </>
       )}
-    </div>
+    </UsageChartCard>
+  );
+}
+
+function buildInvestmentRows(investment: StudentRaidInvestment): InvestmentChartRow[] {
+  const tier5AndUnique1 = investment.distribution.filter(({ tier }) => tier === 5 || tier === 6);
+  const tier5AndUnique1Count = tier5AndUnique1.reduce((sum, { count }) => sum + count, 0);
+  const tier5AndUnique1Ratio = tier5AndUnique1.reduce((sum, { ratio }) => sum + ratio, 0);
+  const tier3OrLower = investment.distribution.filter(({ tier }) => tier <= 3);
+  const tier3OrLowerCount = tier3OrLower.reduce((sum, { count }) => sum + count, 0);
+  const tier3OrLowerRatio = tier3OrLower.reduce((sum, { ratio }) => sum + ratio, 0);
+
+  return [
+    ...investment.distribution
+      .filter(({ tier }) => tier > 6)
+      .sort((a, b) => b.tier - a.tier)
+      .map(({ tier, count, ratio }) => ({
+        id: `tier-${tier}`,
+        tier,
+        includedTiers: [tier],
+        count,
+        ratio,
+      })),
+    {
+      id: "tier-5-and-unique-1",
+      tier: 6,
+      includedTiers: [5, 6],
+      count: tier5AndUnique1Count,
+      ratio: tier5AndUnique1Ratio,
+    },
+    ...investment.distribution
+      .filter(({ tier }) => tier === 4)
+      .map(({ tier, count, ratio }) => ({
+        id: `tier-${tier}`,
+        tier,
+        includedTiers: [tier],
+        count,
+        ratio,
+      })),
+    {
+      id: "tier-3-or-lower",
+      tier: 3,
+      includedTiers: [1, 2, 3],
+      count: tier3OrLowerCount,
+      ratio: tier3OrLowerRatio,
+    },
+  ];
+}
+
+function TierBadge({ tier }: { tier: number }) {
+  if (tier > 5) {
+    return (
+      <>
+        <img className="size-4 shrink-0" src="/icons/exclusive_weapon.png" alt="고유무기" />
+        <span className="tabular-nums">{tier - 5}</span>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <span aria-hidden="true">★</span>
+      <span className="tabular-nums">{tier}</span>
+    </>
   );
 }
 
 function formatPercent(value: number) {
   return `${Math.round(value * 100)}%`;
+}
+
+function formatCount(value: number) {
+  return value.toLocaleString();
+}
+
+function getInvestmentInsight(tier: number | null) {
+  if (tier == null) {
+    return null;
+  }
+
+  return {
+    value: formatTierLabel(tier),
+    description: getInvestmentDescription(tier),
+  };
+}
+
+function getInvestmentDescription(tier: number) {
+  if (tier >= 7) {
+    return "높은 성장이 필요해요";
+  }
+  if (tier >= 5) {
+    return "적당한 성장이 필요해요";
+  }
+  return "성장도가 낮아도 충분해요";
 }

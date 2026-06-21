@@ -1,32 +1,22 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Dropdown, EmptyView } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { type Attack, Defense } from "~/graphql/graphql";
-import { formatInstant, type UtcIsoString } from "~/lib/date-time";
+import { Defense } from "~/graphql/graphql";
+import { type UtcIsoString, formatInstant } from "~/lib/date-time";
 import type { RaidStatistics } from "~/lib/ranks/stats";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
-import type { RaidScheduleListItem } from "~/repositories";
 import { raidTypeToParam } from "~/models/raid";
+import type { RaidScheduleListItem } from "~/repositories";
 import {
-  buildStudentRaidUsageChartData,
-  getDefaultRaidUsageDefenseFilter,
   type StudentRaidUsageChartRow,
   type StudentRaidUsageDefenseFilter,
+  buildStudentRaidUsageChartData,
 } from "./StudentRaidUsageChartModel";
-import { formatTierLabel, TIER_COLORS } from "./raidTierVisual";
+import { TIER_COLORS, formatTierLabel } from "./raidTierVisual";
 
 type StudentRaidUsageChartProps = {
-  attackType: Attack;
   releaseAt: UtcIsoString | null;
   raids: RaidScheduleListItem[];
   statistics: RaidStatistics[];
@@ -82,12 +72,10 @@ function getRaidDetailPath(row: StudentRaidUsageChartRow) {
   return `${path}?${params.toString()}`;
 }
 
-export default function StudentRaidUsageChart({ attackType, releaseAt, raids, statistics }: StudentRaidUsageChartProps) {
+export default function StudentRaidUsageChart({ releaseAt, raids, statistics }: StudentRaidUsageChartProps) {
   const displayTimeZone = useDisplayTimeZone();
   const navigate = useNavigate();
-  const [selectedDefenseType, setSelectedDefenseType] = useState<StudentRaidUsageDefenseFilter>(() =>
-    getDefaultRaidUsageDefenseFilter(attackType),
-  );
+  const [selectedDefenseType, setSelectedDefenseType] = useState<StudentRaidUsageDefenseFilter>("all");
   const chartData = useMemo(
     () =>
       buildStudentRaidUsageChartData({
@@ -125,10 +113,14 @@ export default function StudentRaidUsageChart({ attackType, releaseAt, raids, st
           size="xs"
         />
       </div>
-      <div className="h-64 w-full">
+      <div className="h-52 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={chartData.rows} margin={{ top: 12, right: 4, bottom: 0, left: 0 }} barCategoryGap="18%">
-            <CartesianGrid strokeDasharray="3 3" vertical={false} className="stroke-neutral-200 dark:stroke-neutral-700" />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              vertical={false}
+              className="stroke-neutral-200 dark:stroke-neutral-700"
+            />
             <XAxis
               dataKey="id"
               tickFormatter={(_, index) => {

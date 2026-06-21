@@ -176,7 +176,7 @@ describe("buildStudentRaidUsageChartData", () => {
     expect(result.rows.map((row) => row.bossName)).toEqual(["비나", "헤세드", "호드"]);
   });
 
-  it("temporarily excludes raid rows before the statistics data availability cutoff", () => {
+  it("keeps raid rows before the former statistics data availability cutoff", () => {
     const result = buildStudentRaidUsageChartData({
       releaseAt: "2024-01-01T00:00:00.000Z",
       selectedDefenseType: Defense.Heavy,
@@ -214,8 +214,8 @@ describe("buildStudentRaidUsageChartData", () => {
       ],
     });
 
-    expect(result.rows.map((row) => row.seasonIndex)).toEqual([2]);
-    expect(result.rows[0]?.totalCount).toBe(20);
+    expect(result.rows.map((row) => row.seasonIndex)).toEqual([1, 2]);
+    expect(result.rows.map((row) => row.totalCount)).toEqual([10, 20]);
   });
 
   it("prints a year label only once when one raid has multiple defense bars", () => {
