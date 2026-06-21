@@ -74,6 +74,28 @@ export async function hasActiveCoupons(env: Env): Promise<boolean> {
   return rows.length > 0;
 }
 
+export async function hasUnregisteredActiveCoupons(env: Env, userId: number): Promise<boolean> {
+  const db = drizzle(env.DB);
+  const nowIso = new Date().toISOString();
+  const row = await db
+    .select({ exists: sql<number>`1` })
+    .from(couponsTable)
+    .where(
+      and(
+        or(isNull(couponsTable.expiresAt), gt(couponsTable.expiresAt, nowIso)),
+        sql`not exists (
+          select 1
+          from ${couponRegistrationsTable}
+          where ${couponRegistrationsTable.userId} = ${userId}
+            and ${couponRegistrationsTable.couponId} = ${couponsTable.id}
+        )`,
+      ),
+    )
+    .limit(1)
+    .get();
+  return row !== undefined;
+}
+
 export async function getCouponRegistrations(env: Env, userId: number): Promise<number[]> {
   const db = drizzle(env.DB);
   const rows = await db

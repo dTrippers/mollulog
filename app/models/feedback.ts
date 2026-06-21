@@ -15,6 +15,7 @@ export const feedbackTicketsTable = sqliteTable(
     content: text().notNull(),
     status: text().notNull().default("waiting"),
     replyEmail: text(),
+    lastSeenAdminReplyId: int().notNull().default(0),
     createdAt: text().notNull().default(sql`current_timestamp`),
     updatedAt: text().notNull().default(sql`current_timestamp`),
   },
@@ -49,6 +50,7 @@ export type FeedbackTicket = {
   content: string;
   status: FeedbackTicketStatus;
   replyEmail: string | null;
+  lastSeenAdminReplyId: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -85,6 +87,7 @@ function toFeedbackTicket(row: typeof feedbackTicketsTable.$inferSelect): Feedba
     content: row.content,
     status: toFeedbackTicketStatus(row.status),
     replyEmail: row.replyEmail,
+    lastSeenAdminReplyId: row.lastSeenAdminReplyId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -145,6 +148,51 @@ export async function getFeedbackThreadByUidForUser(env: Env, uid: string, userI
     ticket,
     replies: await getFeedbackRepliesByTicketId(env, ticket.id),
   };
+}
+
+export async function hasUnreadAdminFeedbackReplies(env: Env, userId: number): Promise<boolean> {
+  const db = drizzle(env.DB);
+  const row = await db
+    .select({ exists: sql<number>`1` })
+    .from(feedbackTicketsTable)
+    .innerJoin(
+      feedbackRepliesTable,
+      and(
+        eq(feedbackRepliesTable.ticketId, feedbackTicketsTable.id),
+        eq(feedbackRepliesTable.isAdmin, 1),
+        sql`${feedbackRepliesTable.id} > ${feedbackTicketsTable.lastSeenAdminReplyId}`,
+      ),
+    )
+    .where(eq(feedbackTicketsTable.userId, userId))
+    .limit(1)
+    .get();
+  return row !== undefined;
+}
+
+export function getLatestAdminFeedbackReplyId(replies: FeedbackReply[]): number {
+  return replies.reduce((latestId, reply) => (reply.isAdmin ? Math.max(latestId, reply.id) : latestId), 0);
+}
+
+export async function markFeedbackTicketAdminRepliesSeen(
+  env: Env,
+  ticket: Pick<FeedbackTicket, "id" | "userId" | "lastSeenAdminReplyId">,
+  latestAdminReplyId: number,
+): Promise<void> {
+  if (latestAdminReplyId <= ticket.lastSeenAdminReplyId) {
+    return;
+  }
+
+  const db = drizzle(env.DB);
+  await db
+    .update(feedbackTicketsTable)
+    .set({ lastSeenAdminReplyId: latestAdminReplyId })
+    .where(
+      and(
+        eq(feedbackTicketsTable.id, ticket.id),
+        eq(feedbackTicketsTable.userId, ticket.userId),
+        sql`${feedbackTicketsTable.lastSeenAdminReplyId} < ${latestAdminReplyId}`,
+      ),
+    );
 }
 
 export async function createFeedbackTicket(

@@ -45,7 +45,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const sensei = await getActiveSensei(env, request);
   const preference = await getPreference(env, request);
 
-  const navigationBarContents = await getNavigationBarContents(env);
+  const navigationBarContents = await getNavigationBarContents(env, false, sensei?.id);
   return {
     currentUsername: sensei?.username ?? null,
     currentProfileStudentId: sensei?.profileStudentId ?? null,
@@ -190,7 +190,8 @@ export default function App() {
             setDarkMode={setDarkMode}
             upcomingEvent={navigationBarContents.upcomingEvent}
             hasRecentNews={navigationBarContents.hasRecentNews}
-            hasActiveCoupons={navigationBarContents.hasActiveCoupons}
+            hasUnconsumedCoupons={navigationBarContents.hasUnconsumedCoupons}
+            hasUnreadFeedbackReplies={navigationBarContents.hasUnreadFeedbackReplies}
           />
           <div className="mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0">
             <div className="lg:h-screen mx-auto w-full px-4 md:px-8 pt-2 pb-6 lg:py-6">

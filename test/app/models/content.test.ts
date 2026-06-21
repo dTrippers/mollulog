@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fetchCached } from "~/models/base";
-import { getAllCoupons } from "~/models/coupon";
+import { getAllCoupons, hasUnregisteredActiveCoupons } from "~/models/coupon";
+import { hasUnreadAdminFeedbackReplies } from "~/models/feedback";
 import { getLatestPostTime } from "~/models/post";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 
@@ -11,6 +12,11 @@ jest.mock("~/models/base", () => ({
 
 jest.mock("~/models/coupon", () => ({
   getAllCoupons: jest.fn(),
+  hasUnregisteredActiveCoupons: jest.fn(),
+}));
+
+jest.mock("~/models/feedback", () => ({
+  hasUnreadAdminFeedbackReplies: jest.fn(),
 }));
 
 jest.mock("~/models/post", () => ({
@@ -37,6 +43,12 @@ import { getNavigationBarContents } from "../../../app/models/content";
 
 const mockedFetchCached = fetchCached as jest.MockedFunction<typeof fetchCached>;
 const mockedGetAllCoupons = getAllCoupons as jest.MockedFunction<typeof getAllCoupons>;
+const mockedHasUnregisteredActiveCoupons = hasUnregisteredActiveCoupons as jest.MockedFunction<
+  typeof hasUnregisteredActiveCoupons
+>;
+const mockedHasUnreadAdminFeedbackReplies = hasUnreadAdminFeedbackReplies as jest.MockedFunction<
+  typeof hasUnreadAdminFeedbackReplies
+>;
 const mockedGetLatestPostTime = getLatestPostTime as jest.MockedFunction<typeof getLatestPostTime>;
 const mockedGetTimelineContentsByContentTypes = getTimelineContentsByContentTypes as jest.MockedFunction<
   typeof getTimelineContentsByContentTypes
@@ -76,6 +88,8 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
     mockedFetchCached.mockImplementation(<T>(_env: Env, _key: string, fn: () => Promise<T>) => fn());
     mockedGetLatestPostTime.mockResolvedValue(null);
     mockedGetAllCoupons.mockResolvedValue([]);
+    mockedHasUnregisteredActiveCoupons.mockResolvedValue(false);
+    mockedHasUnreadAdminFeedbackReplies.mockResolvedValue(false);
   });
 
   it("picks the upcomingEvent against the request-time clock, not the cached snapshot time", async () => {
@@ -159,5 +173,23 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it("adds personal red dots only for authenticated navigation requests", async () => {
+    mockedGetTimelineContentsByContentTypes.mockResolvedValue([]);
+    mockedHasUnregisteredActiveCoupons.mockResolvedValue(true);
+    mockedHasUnreadAdminFeedbackReplies.mockResolvedValue(true);
+
+    const anonymousResult = await getNavigationBarContents(env);
+    expect(anonymousResult.hasUnconsumedCoupons).toBe(false);
+    expect(anonymousResult.hasUnreadFeedbackReplies).toBe(false);
+    expect(mockedHasUnregisteredActiveCoupons).not.toHaveBeenCalled();
+    expect(mockedHasUnreadAdminFeedbackReplies).not.toHaveBeenCalled();
+
+    const authenticatedResult = await getNavigationBarContents(env, false, 42);
+    expect(authenticatedResult.hasUnconsumedCoupons).toBe(true);
+    expect(authenticatedResult.hasUnreadFeedbackReplies).toBe(true);
+    expect(mockedHasUnregisteredActiveCoupons).toHaveBeenCalledWith(env, 42);
+    expect(mockedHasUnreadAdminFeedbackReplies).toHaveBeenCalledWith(env, 42);
   });
 });

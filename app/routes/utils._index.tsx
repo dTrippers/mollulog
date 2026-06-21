@@ -31,7 +31,7 @@ export default function UtilsIndexPage() {
   const utilSection = getNavigationSections({
     pathname: "/utils",
     upcomingEvent,
-    hasActiveCoupons: false,
+    hasUnconsumedCoupons: false,
   }).find((section) => section.name === "플래너 & 계산기");
 
   return (

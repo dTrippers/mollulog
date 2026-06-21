@@ -11,8 +11,9 @@ import {
 import { RaidRepository, type RaidSchedule, RecruitmentRepository } from "~/repositories";
 import { fetchCached } from "./base";
 import type { RaidType, Role } from "./content.d";
-import { getAllCoupons } from "./coupon";
+import { getAllCoupons, hasUnregisteredActiveCoupons } from "./coupon";
 import { getFavoritedCounts } from "./favorite-students";
+import { hasUnreadAdminFeedbackReplies } from "./feedback";
 import { normalizeFutureContentDates } from "./future-content";
 import { getLatestPostTime } from "./post";
 import { getFutureRaidContents, getTimelineContents, getTimelineContentsByContentTypes } from "./timeline-content";
@@ -358,6 +359,8 @@ type NavigationBarContents = {
   } | null;
   hasRecentNews: boolean;
   hasActiveCoupons: boolean;
+  hasUnconsumedCoupons: boolean;
+  hasUnreadFeedbackReplies: boolean;
 };
 
 type NavigationBarContentsRaw = {
@@ -404,9 +407,22 @@ export async function getNavigationBarContentsRaw(env: Env, forceRefresh = false
   );
 }
 
-export async function getNavigationBarContents(env: Env, forceRefresh = false): Promise<NavigationBarContents> {
+export async function getNavigationBarContents(
+  env: Env,
+  forceRefresh = false,
+  userId?: number,
+): Promise<NavigationBarContents> {
   const now = nowUtcIso();
-  const raw = await getNavigationBarContentsRaw(env, forceRefresh);
+  const [raw, personalRedDots] = await Promise.all([
+    getNavigationBarContentsRaw(env, forceRefresh),
+    userId
+      ? Promise.all([
+          hasUnregisteredActiveCoupons(env, userId),
+          hasUnreadAdminFeedbackReplies(env, userId),
+        ])
+      : Promise.resolve([false, false] as const),
+  ]);
+  const [hasUnconsumedCoupons, hasUnreadFeedbackReplies] = personalRedDots;
   const upcomingEventContent = raw.eventCandidates
     .filter((content) => content.endAt && isInstantAfter(content.endAt, now))
     .sort((a, b) => compareInstantAsc(a.startAt, b.startAt))[0];
@@ -427,5 +443,7 @@ export async function getNavigationBarContents(env: Env, forceRefresh = false): 
     hasActiveCoupons: raw.couponActivePeriods.some(
       (period) => period.endAt === null || isInstantAfter(period.endAt, now),
     ),
+    hasUnconsumedCoupons,
+    hasUnreadFeedbackReplies,
   };
 }
