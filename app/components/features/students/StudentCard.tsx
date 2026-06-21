@@ -143,7 +143,7 @@ export default function StudentCard({
   const [canUsePopupPortal, setCanUsePopupPortal] = useState(false);
   const [usesMobilePopupLayout, setUsesMobilePopupLayout] = useState(false);
   const [popupPosition, setPopupPosition] = useState<PopupPosition | null>(null);
-  const interactive = Boolean((onSelect && uid) || (popups && popupId));
+  const interactive = Boolean(onSelect ? uid : popups && popupId);
   const handleCardClick = getStudentCardAction({
     uid,
     onSelect,
