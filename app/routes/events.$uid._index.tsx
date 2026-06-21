@@ -1,11 +1,17 @@
 import { useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect } from "react-router";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, Recruitments } from "~/components/features/events";
 import { toUtcIso } from "~/lib/date-time";
 import { getNestedContentComments } from "~/models/content";
-import { getActiveSensei } from "~/auth/authenticator.server";
-import { favoriteStudent, getFavoritedCounts, getUserFavoritedStudents, unfavoriteStudent } from "~/models/favorite-students";
+import {
+  favoriteStudent,
+  getFavoritedCounts,
+  getUserFavoritedStudents,
+  unfavoriteStudent,
+} from "~/models/favorite-students";
+import { getRecruitmentFavoriteKey } from "~/models/recruitment-identity";
 import { getTimelineContent } from "~/models/timeline-content";
 import { RecruitmentRepository } from "~/repositories";
 import EventComment from "./events.$uid._components/EventComment";
@@ -39,9 +45,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const currentUser = await getActiveSensei(env, request);
 
-  const studentUids = eventContent.recruitments
-    .map((r) => r.student?.uid)
-    .filter((uid): uid is string => uid !== undefined);
+  const studentUids = eventContent.recruitments.map(getRecruitmentFavoriteKey);
 
   const [favoritedStudents, favoritedCounts, allComments] = await Promise.all([
     currentUser ? getUserFavoritedStudents(env, currentUser.id, timelineUid) : [],
@@ -53,11 +57,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     ...recruitment,
     since: toUtcIso(recruitment.since),
     until: recruitment.until ? toUtcIso(recruitment.until) : null,
-    favorited: favoritedStudents.some((f) => f.studentId === recruitment.student?.uid),
+    favoriteKey: getRecruitmentFavoriteKey(recruitment),
+    favorited: favoritedStudents.some((f) => f.studentId === getRecruitmentFavoriteKey(recruitment)),
     favoritedCount:
-      favoritedCounts.find(
-        (f) => f.studentId === recruitment.student?.uid && f.contentId === timelineUid,
-      )?.count ?? 0,
+      favoritedCounts.find((f) => f.studentId === getRecruitmentFavoriteKey(recruitment) && f.contentId === timelineUid)
+        ?.count ?? 0,
   }));
 
   return {
@@ -87,7 +91,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
   if (!eventUid) {
     throw new Response("Not Found", { status: 404 });
   }
-  const actionData = await request.json() as ActionData;
+  const actionData = (await request.json()) as ActionData;
   if (actionData.favorite) {
     const { studentUid, favorited } = actionData.favorite;
     const run = favorited ? favoriteStudent : unfavoriteStudent;

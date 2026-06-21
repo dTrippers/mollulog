@@ -76,13 +76,15 @@ function getStudentCardAction({
   activePopupId: string | null;
   setActivePopupId: (id: string | null) => void;
 }) {
-  if (!uid) {
+  if (!uid && (!popupId || onSelect)) {
     return undefined;
   }
 
   return () => {
     if (onSelect) {
-      onSelect(uid);
+      if (uid) {
+        onSelect(uid);
+      }
       return;
     }
 
@@ -141,7 +143,7 @@ export default function StudentCard({
   const [canUsePopupPortal, setCanUsePopupPortal] = useState(false);
   const [usesMobilePopupLayout, setUsesMobilePopupLayout] = useState(false);
   const [popupPosition, setPopupPosition] = useState<PopupPosition | null>(null);
-  const interactive = Boolean((onSelect || popups) && uid);
+  const interactive = Boolean(onSelect ? uid : popups && popupId);
   const handleCardClick = getStudentCardAction({
     uid,
     onSelect,
@@ -221,7 +223,7 @@ export default function StudentCard({
         top: popupPosition?.top,
         maxHeight: "calc(100vh - 2rem)",
       };
-  const popup = uid && name && popups && popups.length > 0 && (
+  const popup = (uid || popupId) && name && popups && popups.length > 0 && (
     <Transition
       show={showPositionedPopup}
       as="div"
@@ -353,7 +355,7 @@ export default function StudentCard({
 
 type StudentCardPopupProps = {
   student: {
-    uid: string;
+    uid: string | null;
     name: string;
     attackType?: Attack;
     defenseType?: Defense;

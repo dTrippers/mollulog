@@ -35,8 +35,8 @@ import {
 import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
 import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { EventType, RaidType, Role } from "~/models/content.d";
-import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
+import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";
@@ -109,6 +109,7 @@ export type ContentTimelineItemProps = {
       initialTier?: number;
     } | null;
     studentName: string;
+    favoriteKey: string;
     since: UtcIsoString;
     until: UtcIsoString | null;
   }[];
@@ -439,6 +440,7 @@ type RecruitmentsProps = {
       role?: Role;
       initialTier?: number;
     } | null;
+    favoriteKey: string;
     since: UtcIsoString;
     until: UtcIsoString | null;
   }[];
@@ -602,7 +604,8 @@ export function getRecruitmentStudentCards({
   return recruitments.map((recruitment) => {
     const student = recruitment.student;
     const studentUid = student?.uid;
-    const isFavorited = studentUid ? favoritedStudents.includes(studentUid) : false;
+    const favoriteKey = recruitment.favoriteKey;
+    const isFavorited = favoritedStudents.includes(favoriteKey);
     const recruitmentCompleted = studentUid ? completedStudentUids.includes(studentUid) : false;
     const showRecruitmentCompleteAction = Boolean(
       recruitmentCompleted ||
@@ -629,18 +632,17 @@ export function getRecruitmentStudentCards({
     return {
       ...student,
       uid: studentUid ?? null,
+      popupId: favoriteKey,
       name: recruitment.studentName,
       label: <span className={labelColorClass}>{recruitmentLabelLocale(recruitment)}</span>,
-      state: studentUid
-        ? {
-            favorited: isFavorited,
-            favoritedCount: favoritedCounts[studentUid],
-            completed: recruitmentCompleted,
-          }
-        : undefined,
-      popups: studentUid
+      state: {
+        favorited: isFavorited,
+        favoritedCount: favoritedCounts[favoriteKey],
+        completed: recruitmentCompleted,
+      },
+      popups: favoriteKey
         ? [
-            ...(onRecruitmentComplete && showRecruitmentCompleteAction
+            ...(onRecruitmentComplete && studentUid && showRecruitmentCompleteAction
               ? [
                   recruitmentCompleted
                     ? {
@@ -659,18 +661,22 @@ export function getRecruitmentStudentCards({
               ? {
                   Icon: FilledHeartIcon,
                   text: "관심 학생에서 해제",
-                  onClick: () => onFavorite?.(studentUid, false),
+                  onClick: () => onFavorite?.(favoriteKey, false),
                 }
               : {
                   Icon: EmptyHeartIcon,
                   text: "관심 학생에 등록",
-                  onClick: () => onFavorite?.(studentUid, true),
+                  onClick: () => onFavorite?.(favoriteKey, true),
                 },
-            {
-              Icon: IdentificationIcon,
-              text: detailedLinkText,
-              link: `/students/${studentUid}`,
-            },
+            ...(studentUid
+              ? [
+                  {
+                    Icon: IdentificationIcon,
+                    text: detailedLinkText,
+                    link: `/students/${studentUid}`,
+                  },
+                ]
+              : []),
           ]
         : undefined,
     };

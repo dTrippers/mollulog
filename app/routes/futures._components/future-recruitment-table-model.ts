@@ -18,6 +18,7 @@ export type FutureRecruitmentTableRecruitment = {
   since: UtcIsoString;
   until: UtcIsoString | null;
   studentName: string;
+  favoriteKey: string;
   student: {
     uid: string;
     attackType?: Attack;

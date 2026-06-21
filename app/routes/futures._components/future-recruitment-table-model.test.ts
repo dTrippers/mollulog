@@ -40,6 +40,7 @@ function recruitment(
     pickup: overrides.pickup ?? true,
     rerun: overrides.rerun ?? false,
     studentName: overrides.studentName,
+    favoriteKey: overrides.favoriteKey ?? overrides.student?.uid ?? `provisional:${overrides.studentName}`,
     since: overrides.since,
     until: overrides.until,
     student: overrides.student ?? null,

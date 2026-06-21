@@ -6,14 +6,14 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, RecruitmentCard } from "~/components/features/events";
 import { RaidCard } from "~/components/features/raids";
 import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
-import { type IndexRecruitment, getIndexContents } from "~/models/content";
-import { raidTypeToParam } from "~/models/raid";
-import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { getLogger } from "~/lib/observability.server";
 import { getCommunityFeedPage } from "~/models/community";
 import { enrichCommunityFeedPosts } from "~/models/community-feed";
+import { type IndexRecruitment, getIndexContents } from "~/models/content";
+import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { raidTypeToParam } from "~/models/raid";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
-import { getLogger } from "~/lib/observability.server";
 import HomeRightRail from "./_index._components/HomeRightRail";
 
 export const meta: MetaFunction = () => {
@@ -31,23 +31,20 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const logger = getLogger(env, ctx, { route: "_index.loader" });
   const currentUser = await getActiveSensei(env, request);
 
-  const [
-    { mainEvent, currentRaids, currentRecruitments, favoritedCounts },
-    recentCommunityPage,
-    youtubeSections,
-  ] = await Promise.all([
-    getIndexContents(env),
-    getCommunityFeedPage(env, {
-      currentUserId: currentUser?.id,
-      postTypes: ["student_review", "event_opinion"],
-      pageSize: 4,
-      includeEngagement: false,
-    }),
-    getHomeYoutubeSections(env).catch((error) => {
-      logger.error("Failed to load home youtube sections", error);
-      return [];
-    }),
-  ]);
+  const [{ mainEvent, currentRaids, currentRecruitments, favoritedCounts }, recentCommunityPage, youtubeSections] =
+    await Promise.all([
+      getIndexContents(env),
+      getCommunityFeedPage(env, {
+        currentUserId: currentUser?.id,
+        postTypes: ["student_review", "event_opinion"],
+        pageSize: 4,
+        includeEngagement: false,
+      }),
+      getHomeYoutubeSections(env).catch((error) => {
+        logger.error("Failed to load home youtube sections", error);
+        return [];
+      }),
+    ]);
   const recentCommunityFeed = await enrichCommunityFeedPosts(env, recentCommunityPage.items);
   const favoritedStudentUids = currentUser
     ? (await getUserFavoritedStudents(env, currentUser.id))
@@ -56,7 +53,9 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     : [];
 
   // ========== Raids ==========
-  const currentTotalAssualt = currentRaids.find((raid) => raid.raidType === "total_assault" || raid.raidType === "elimination");
+  const currentTotalAssualt = currentRaids.find(
+    (raid) => raid.raidType === "total_assault" || raid.raidType === "elimination",
+  );
   const currentUnlimit = currentRaids.find((raid) => raid.raidType === "unlimit");
   return {
     mainEvent,
@@ -111,12 +110,18 @@ export default function Index() {
 
         <div className="my-6 grid grid-cols-1 gap-2 md:grid-cols-2">
           {currentTotalAssualt && (
-            <Link to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`} className="hover:opacity-75 transition-opacity">
+            <Link
+              to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`}
+              className="hover:opacity-75 transition-opacity"
+            >
               <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
             </Link>
           )}
           {currentUnlimit && (
-            <Link to={`/raids/${raidTypeToParam(currentUnlimit.raidType)}/${currentUnlimit.seasonIndex}`} className="hover:opacity-75 transition-opacity">
+            <Link
+              to={`/raids/${raidTypeToParam(currentUnlimit.raidType)}/${currentUnlimit.seasonIndex}`}
+              className="hover:opacity-75 transition-opacity"
+            >
               <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
             </Link>
           )}
@@ -174,19 +179,15 @@ function CurrentRecruitments({
   signedIn,
 }: CurrentRecruitmentsProps) {
   const recruitmentCards = recruitments.map(({ eventUid, recruitment }) => {
-    const student = recruitment.student;
-    if (!student) {
-      return null;
-    }
-
-    const favorited = favoritedStudentUids.includes(student.uid);
-    const favoritedCount = favoritedCounts.find(
-      (favorited) => favorited.studentId === student.uid && favorited.contentId === eventUid,
-    )?.count ?? 0;
+    const favorited = favoritedStudentUids.includes(recruitment.favoriteKey);
+    const favoritedCount =
+      favoritedCounts.find(
+        (favorited) => favorited.studentId === recruitment.favoriteKey && favorited.contentId === eventUid,
+      )?.count ?? 0;
 
     return (
       <RecruitmentCard
-        key={`${eventUid}-${student.uid}`}
+        key={`${eventUid}-${recruitment.favoriteKey}`}
         recruitment={{
           ...recruitment,
           favorited,
@@ -213,9 +214,7 @@ function CurrentRecruitments({
           {recruitmentCards}
         </HorizontalScroll>
       </div>
-      <div className="hidden md:flex md:flex-wrap md:gap-3">
-        {recruitmentCards}
-      </div>
+      <div className="hidden md:flex md:flex-wrap md:gap-3">{recruitmentCards}</div>
     </div>
   );
 }
