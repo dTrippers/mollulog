@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { EmptyView, SubTitle } from "~/components/primitives";
 import { collectedSourceKeyForEventReward, collectedSourceKeyForRaid } from "~/models/pyroxene-collected-source";
 import type { PyroxeneCalculationOptions, PyroxenePlannerOptions } from "~/models/pyroxene-planner";
-import type { PickupResources } from "~/models/pyroxene-timeline";
+import { PYROXENE, type PickupResources } from "~/models/pyroxene-timeline";
 import PyroxeneAvailableOneTimePackages from "./PyroxeneAvailableOneTimePackages";
 import PyroxeneChart from "./PyroxeneChart";
 import PyroxeneInitialResources from "./PyroxeneInitialResources";
@@ -143,6 +143,55 @@ export default function PyroxeneSchedule({
   }, [initialDate, scheduleItems]);
 
   const collectedSourceKeySet = useMemo(() => new Set(collectedSourceKeys), [collectedSourceKeys]);
+  const collectableSourceKeySet = useMemo(() => {
+    const currentDate = dayjs();
+    const sourceKeys = new Set<string>();
+
+    for (const item of scheduleItems) {
+      if (item.event?.earnablePyroxene && !dayjs(item.event.since).isAfter(currentDate)) {
+        sourceKeys.add(collectedSourceKeyForEventReward(item.event.uid));
+      }
+
+      if (
+        item.raid &&
+        (item.raid.type === "total_assault" || item.raid.type === "elimination") &&
+        !dayjs(item.raid.since).isAfter(currentDate)
+      ) {
+        sourceKeys.add(collectedSourceKeyForRaid(item.raid.uid));
+      }
+    }
+
+    return sourceKeys;
+  }, [scheduleItems]);
+  const collectedSourceDisplayResources = useMemo(() => {
+    const resourcesBySourceKey = new Map<string, PickupResources>();
+
+    for (const item of scheduleItems) {
+      if (item.event?.earnablePyroxene) {
+        resourcesBySourceKey.set(collectedSourceKeyForEventReward(item.event.uid), {
+          pyroxene: item.event.earnablePyroxene,
+          oneTimeTicket: 0,
+          tenTimeTicket: 0,
+        });
+      }
+
+      if (item.raid?.type === "total_assault") {
+        resourcesBySourceKey.set(collectedSourceKeyForRaid(item.raid.uid), {
+          pyroxene: PYROXENE.RAID_TOTAL_ASSAULT_BASE + PYROXENE.RAID_TOTAL_ASSAULT_TIER[options.raid.tier],
+          oneTimeTicket: 0,
+          tenTimeTicket: 0,
+        });
+      } else if (item.raid?.type === "elimination") {
+        resourcesBySourceKey.set(collectedSourceKeyForRaid(item.raid.uid), {
+          pyroxene: PYROXENE.RAID_ELIMINATION_BASE,
+          oneTimeTicket: 0,
+          tenTimeTicket: 1,
+        });
+      }
+    }
+
+    return resourcesBySourceKey;
+  }, [scheduleItems, options.raid.tier]);
   const collectedSourceCandidates = useMemo<PyroxeneCollectedSourceCandidate[]>(() => {
     const currentDate = dayjs();
     const isOngoing = (
@@ -266,6 +315,10 @@ export default function PyroxeneSchedule({
               ? source.collectedSourceKey
               : undefined;
           const collected = collectedSourceKey ? collectedSourceKeySet.has(collectedSourceKey) : false;
+          const displayResources =
+            collected && collectedSourceKey
+              ? (collectedSourceDisplayResources.get(collectedSourceKey) ?? resourceDelta)
+              : resourceDelta;
           return (
             <PyroxeneTimelineResources
               key={
@@ -275,10 +328,11 @@ export default function PyroxeneSchedule({
               }
               date={date}
               description={source.description}
-              resources={resourceDelta}
+              resources={displayResources}
               itemUid={itemUid}
               onDeleteItem={onDeleteItem}
               collectedSourceKey={collectedSourceKey}
+              collectable={collectedSourceKey ? collectableSourceKeySet.has(collectedSourceKey) : false}
               collected={collected}
               onCollectedSourceChange={onCollectedSourceChange}
             />

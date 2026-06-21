@@ -1,10 +1,9 @@
 import type dayjs from "dayjs";
-import { useState } from "react";
-import { Button, ResourceCard } from "~/components/primitives";
+import { Button } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { cn } from "~/lib/utils";
-import type { PickupResources } from "~/models/pyroxene-timeline";
 import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
+import type { PickupResources } from "~/models/pyroxene-timeline";
+import PyroxeneResourceChip from "./PyroxeneResourceChip";
 
 type PyroxeneTimelineResourcesProps = {
   date: dayjs.Dayjs;
@@ -13,6 +12,7 @@ type PyroxeneTimelineResourcesProps = {
   itemUid?: string;
   onDeleteItem?: (itemUid: string) => void;
   collectedSourceKey?: string;
+  collectable?: boolean;
   collected?: boolean;
   onCollectedSourceChange?: (sourceKey: string, collected: boolean) => void;
 };
@@ -24,92 +24,117 @@ export default function PyroxeneTimelineResources({
   itemUid,
   onDeleteItem,
   collectedSourceKey,
+  collectable = false,
   collected = false,
   onCollectedSourceChange,
 }: PyroxeneTimelineResourcesProps) {
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
-
   const handleDeleteClick = () => {
     if (!itemUid || !onDeleteItem) {
       return;
     }
 
-    if (confirmingDelete) {
+    if (window.confirm("정말 삭제할까요?")) {
       onDeleteItem(itemUid);
-      return;
     }
-
-    setConfirmingDelete(true);
-    setTimeout(() => setConfirmingDelete(false), 3000);
   };
 
-  const formatResourceDelta = (value: number) => (value > 0 ? value.toLocaleString() : `-${Math.abs(value).toLocaleString()}`);
-  const labelColor = (value: number) => (value < 0 ? "red" : "white");
+  const formatResourceDelta = (value: number) =>
+    value > 0 ? value.toLocaleString() : `-${Math.abs(value).toLocaleString()}`;
+  const resourceTone = (value: number) => {
+    if (collected) {
+      return "muted";
+    }
+    return value < 0 ? "negative" : "neutral";
+  };
+  const showCollectedAction = collectable && collectedSourceKey && onCollectedSourceChange;
 
   return (
-    <div
-      className={cn(
-        "my-3 flex items-center gap-3 rounded-lg border border-neutral-200 px-3 py-2 transition-opacity dark:border-neutral-700",
-        collected && "opacity-60",
-      )}
-    >
+    <div className="my-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-neutral-200 px-3 py-2 transition-opacity dark:border-neutral-700">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold">
-          {date.format("YYYY-MM-DD")}({date.format("ddd")})
-        </p>
-        <p className="line-clamp-1 text-xs text-neutral-500 dark:text-neutral-400">{description}</p>
-        {(collectedSourceKey || (itemUid && onDeleteItem)) && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            {collectedSourceKey && onCollectedSourceChange && (
-              <Button
-                text={collected ? "되돌리기" : "수급 완료"}
-                variant={collected ? "tint" : "tint-blue"}
-                size="xs"
-                onClick={() => onCollectedSourceChange(collectedSourceKey, !collected)}
-              />
-            )}
-            {itemUid && onDeleteItem && (
-              <button
-                type="button"
-                onClick={handleDeleteClick}
-                className={`cursor-pointer whitespace-nowrap rounded-sm border px-2 py-1 text-xs font-medium transition ${
-                  confirmingDelete
-                    ? "animate-pulse border-red-300 bg-red-100 text-red-700 dark:border-red-700 dark:bg-red-900/40 dark:text-red-300"
-                    : "border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
-                }`}
-              >
-                {confirmingDelete ? "정말 삭제할까요?" : "삭제"}
-              </button>
-            )}
+        <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
+          <p className="shrink-0 text-xs font-semibold sm:text-sm">
+            {date.format("YYYY-MM-DD")}({date.format("ddd")})
+          </p>
+          <TimelineResourceDescription description={description} />
+        </div>
+      </div>
+      <div className="flex min-w-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
+        <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+          {resources.pyroxene !== 0 && (
+            <PyroxeneResourceChip
+              resourceType={ResourceTypeEnum.Currency}
+              itemUid={PYROXENE_RESOURCE_UIDS.pyroxene}
+              value={formatResourceDelta(resources.pyroxene)}
+              tone={resourceTone(resources.pyroxene)}
+              variant="plain"
+              className={collected ? "opacity-60" : undefined}
+            />
+          )}
+          {resources.oneTimeTicket !== 0 && (
+            <PyroxeneResourceChip
+              resourceType={ResourceTypeEnum.Item}
+              itemUid={PYROXENE_RESOURCE_UIDS.oneTimeTicket}
+              value={formatResourceDelta(resources.oneTimeTicket)}
+              tone={resourceTone(resources.oneTimeTicket)}
+              variant="plain"
+              className={collected ? "opacity-60" : undefined}
+            />
+          )}
+          {resources.tenTimeTicket !== 0 && (
+            <PyroxeneResourceChip
+              resourceType={ResourceTypeEnum.Item}
+              itemUid={PYROXENE_RESOURCE_UIDS.tenTimeTicket}
+              value={formatResourceDelta(resources.tenTimeTicket)}
+              tone={resourceTone(resources.tenTimeTicket)}
+              variant="plain"
+              className={collected ? "opacity-60" : undefined}
+            />
+          )}
+        </div>
+        {showCollectedAction && (
+          <div className="flex justify-end">
+            <Button
+              variant={collected ? "tint" : "tint-blue"}
+              size="xs"
+              onClick={() => onCollectedSourceChange(collectedSourceKey, !collected)}
+              className="group"
+            >
+              {collected ? (
+                <>
+                  <span className="group-hover:hidden">수급 완료</span>
+                  <span className="hidden group-hover:inline">되돌리기</span>
+                </>
+              ) : (
+                "수급 완료"
+              )}
+            </Button>
+          </div>
+        )}
+        {itemUid && onDeleteItem && (
+          <div className="flex justify-end">
+            <Button text="삭제" variant="tint-red" size="xs" onClick={handleDeleteClick} />
           </div>
         )}
       </div>
-      <div className="ml-auto flex shrink-0 items-center justify-end gap-1.5">
-        {resources.pyroxene !== 0 && (
-          <ResourceCard
-            resourceType={ResourceTypeEnum.Currency}
-            itemUid={PYROXENE_RESOURCE_UIDS.pyroxene}
-            label={formatResourceDelta(resources.pyroxene)}
-            labelColor={labelColor(resources.pyroxene)}
-          />
-        )}
-        {resources.oneTimeTicket !== 0 && (
-          <ResourceCard
-            resourceType={ResourceTypeEnum.Item}
-            itemUid={PYROXENE_RESOURCE_UIDS.oneTimeTicket}
-            label={formatResourceDelta(resources.oneTimeTicket)}
-            labelColor={labelColor(resources.oneTimeTicket)}
-          />
-        )}
-        {resources.tenTimeTicket !== 0 && (
-          <ResourceCard
-            resourceType={ResourceTypeEnum.Item}
-            itemUid={PYROXENE_RESOURCE_UIDS.tenTimeTicket}
-            label={formatResourceDelta(resources.tenTimeTicket)}
-            labelColor={labelColor(resources.tenTimeTicket)}
-          />
-        )}
-      </div>
+    </div>
+  );
+}
+
+function TimelineResourceDescription({ description }: { description: string }) {
+  let offset = 0;
+  const lines = description.split("\n").map((line) => {
+    const key = `${offset}:${line}`;
+    offset += line.length + 1;
+    return { key, line };
+  });
+
+  return (
+    <div className="min-w-0 text-xs leading-snug text-neutral-500 dark:text-neutral-400 sm:text-sm">
+      {lines.map(({ key, line }) => (
+        <span key={key} className="block truncate">
+          {line}
+        </span>
+      ))}
     </div>
   );
 }
