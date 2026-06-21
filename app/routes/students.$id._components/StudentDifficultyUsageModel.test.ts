@@ -17,11 +17,13 @@ function makeScopeMetadata(overrides: {
   boss?: string;
   bossName: string;
   defenseType?: Defense;
+  defenseTypes?: Defense[];
   terrain?: Terrain;
 }): [string, StudentAnalysisScopeMetadata] {
   const boss = overrides.boss ?? "chesed";
   const terrain = overrides.terrain ?? "outdoor";
   const defenseType = overrides.defenseType ?? Defense.Heavy;
+  const defenseTypes = overrides.defenseTypes ?? [defenseType];
 
   return [
     getStudentAnalysisScopeKey({
@@ -33,6 +35,7 @@ function makeScopeMetadata(overrides: {
       bossName: overrides.bossName,
       terrain,
       defenseType,
+      defenseTypes,
       environmentKey: getStudentAnalysisEnvironmentKey({ boss, terrain, defenseType }),
     },
   ];
@@ -47,7 +50,7 @@ describe("buildStudentAnalysisScopeLookup", () => {
           terrain: "outdoor",
           raidBoss: { uid: "goz", name: "고즈" },
           jpSchedule: { seasonIndex: 87 },
-          defenseTypeSets: [{ primaryDefenseType: Defense.Special }],
+          defenseTypeSets: [{ primaryDefenseType: Defense.Special, defenseTypes: [Defense.Special] }],
         },
         {
           raidType: "elimination",
@@ -55,8 +58,8 @@ describe("buildStudentAnalysisScopeLookup", () => {
           raidBoss: { uid: "hieronymus", name: "예로니무스" },
           jpSchedule: { seasonIndex: 31 },
           defenseTypeSets: [
-            { primaryDefenseType: Defense.Heavy },
-            { primaryDefenseType: Defense.Special },
+            { primaryDefenseType: Defense.Heavy, defenseTypes: [Defense.Heavy] },
+            { primaryDefenseType: Defense.Special, defenseTypes: [Defense.Special, Defense.Light] },
           ],
         },
         {
@@ -64,7 +67,7 @@ describe("buildStudentAnalysisScopeLookup", () => {
           terrain: "indoor",
           raidBoss: { uid: "binah", name: "비나" },
           jpSchedule: { seasonIndex: 1 },
-          defenseTypeSets: [{ primaryDefenseType: Defense.Heavy }],
+          defenseTypeSets: [{ primaryDefenseType: Defense.Heavy, defenseTypes: [Defense.Heavy] }],
         },
       ],
     });
@@ -75,6 +78,7 @@ describe("buildStudentAnalysisScopeLookup", () => {
       bossName: "고즈",
       terrain: "outdoor",
       defenseType: Defense.Special,
+      defenseTypes: [Defense.Special],
       environmentKey: "goz:outdoor:special",
     });
     expect(
@@ -83,6 +87,7 @@ describe("buildStudentAnalysisScopeLookup", () => {
       bossName: "예로니무스",
       terrain: "street",
       defenseType: Defense.Special,
+      defenseTypes: [Defense.Special, Defense.Light],
       environmentKey: "hieronymus:street:special",
     });
     expect(result.has(getStudentAnalysisScopeKey({ raidType: "allied", season: 1, defenseType: Defense.Heavy }))).toBe(
@@ -182,6 +187,7 @@ describe("aggregateBossUsage", () => {
         bossName: "헤세드",
         terrain: "outdoor",
         defenseType: Defense.Heavy,
+        defenseTypes: [Defense.Heavy],
       }),
       makeScopeMetadata({
         jpSeasonIndex: 32,
@@ -189,6 +195,7 @@ describe("aggregateBossUsage", () => {
         bossName: "헤세드",
         terrain: "outdoor",
         defenseType: Defense.Heavy,
+        defenseTypes: [Defense.Heavy],
       }),
       makeScopeMetadata({
         jpSeasonIndex: 33,
@@ -196,6 +203,7 @@ describe("aggregateBossUsage", () => {
         bossName: "비나",
         terrain: "indoor",
         defenseType: Defense.Light,
+        defenseTypes: [Defense.Light, Defense.Special],
       }),
     ]);
     const response: StudentAnalysisResponse = {
@@ -230,6 +238,7 @@ describe("aggregateBossUsage", () => {
         bossName: "헤세드",
         terrain: "outdoor",
         defenseType: Defense.Heavy,
+        defenseTypes: [Defense.Heavy],
         usageCount: 150,
         sampleSize: 200,
         usageRate: 0.75,

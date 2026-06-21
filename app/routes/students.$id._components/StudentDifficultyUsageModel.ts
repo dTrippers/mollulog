@@ -7,6 +7,7 @@ export type StudentAnalysisScopeMetadata = {
   bossName: string;
   terrain: Terrain;
   defenseType: Defense;
+  defenseTypes: Defense[];
   environmentKey: string;
 };
 
@@ -24,6 +25,7 @@ export type StudentAnalysisRaidMetadataSource = {
   } | null;
   defenseTypeSets: {
     primaryDefenseType: Defense;
+    defenseTypes: Defense[];
   }[];
 };
 
@@ -41,6 +43,7 @@ export type StudentBossUsage = {
   bossName: string;
   terrain: Terrain;
   defenseType: Defense;
+  defenseTypes: Defense[];
   usageCount: number;
   sampleSize: number;
   usageRate: number;
@@ -81,7 +84,7 @@ export function buildStudentAnalysisScopeLookup({
       continue;
     }
 
-    for (const { primaryDefenseType } of raid.defenseTypeSets) {
+    for (const { primaryDefenseType, defenseTypes } of raid.defenseTypeSets) {
       const defenseType = primaryDefenseType;
       const key = getStudentAnalysisScopeKey({
         raidType: raid.raidType as RaidType,
@@ -96,6 +99,7 @@ export function buildStudentAnalysisScopeLookup({
         bossName: raid.raidBoss.name,
         terrain: raid.terrain as Terrain,
         defenseType,
+        defenseTypes: defenseTypes.length > 0 ? [...defenseTypes] : [defenseType],
         environmentKey: getStudentAnalysisEnvironmentKey({
           boss: raid.raidBoss.uid,
           terrain: raid.terrain as Terrain,
@@ -177,6 +181,7 @@ export function aggregateBossUsage({
       bossName: string;
       terrain: Terrain;
       defenseType: Defense;
+      defenseTypes: Defense[];
       usageCount: number;
       sampleSize: number;
     }
@@ -214,6 +219,7 @@ export function aggregateBossUsage({
       bossName: metadata.bossName,
       terrain: metadata.terrain,
       defenseType: metadata.defenseType,
+      defenseTypes: metadata.defenseTypes,
       usageCount: 0,
       sampleSize: 0,
     };
@@ -234,6 +240,7 @@ export function aggregateBossUsage({
           bossName: item.bossName,
           terrain: item.terrain,
           defenseType: item.defenseType,
+          defenseTypes: item.defenseTypes,
           usageCount: item.usageCount,
           sampleSize: item.sampleSize,
           usageRate: item.usageCount / item.sampleSize,

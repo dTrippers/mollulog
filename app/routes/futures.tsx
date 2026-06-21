@@ -8,6 +8,7 @@ import { ContentFilterPanel } from "~/components/features/futures";
 import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
 import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import {
   type FutureContent,
@@ -19,6 +20,7 @@ import {
 import type { EventType, RaidType } from "~/models/content.d";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/models/raid";
+import { getRecruitmentFavoriteKey } from "~/models/recruitment-identity";
 import {
   type RecruitmentCompletionMeta,
   getRecruitmentResultsByRecruitmentGroupUids,
@@ -60,7 +62,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
     confirmed: content.confirmed,
     isSpoiler: content.isSpoiler,
     tags: content.tags,
-    recruitments: content.recruitments,
+    recruitments: content.recruitments.map(normalizeFutureRecruitment),
     raidInfo: content.raidInfo,
   }));
 
@@ -68,7 +70,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
     .flatMap((content: FutureContentsLoaderContent) =>
       content.recruitments.map((recruitment: FutureRecruitment) => recruitment.favoriteKey),
     )
-    .filter((uid): uid is string => uid !== null);
+    .filter((uid): uid is string => typeof uid === "string" && uid.length > 0);
 
   const currentUser = await getActiveSensei(env, request);
   const signedIn = currentUser !== null;
@@ -99,6 +101,13 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
     allComments,
   };
 };
+
+function normalizeFutureRecruitment(recruitment: FutureRecruitment): FutureRecruitment {
+  return {
+    ...recruitment,
+    favoriteKey: recruitment.favoriteKey ?? getRecruitmentFavoriteKey(recruitment),
+  };
+}
 
 function equalFavorites(
   a: { contentUid: string; studentUid: string },
@@ -185,6 +194,32 @@ function getCommonContentFields(content: FutureContentForView) {
     raidInfo,
     contentType: raidInfo?.raidType ?? content.contentType,
   };
+}
+
+function getEarliestUpcomingPickupAt(content: FutureContentsLoaderContent, now: string): string | null {
+  const upcomingPickup = content.recruitments
+    .filter((recruitment) => recruitment.pickup && recruitment.student !== null && isInstantAfter(recruitment.since, now))
+    .sort((a, b) => compareInstantAsc(a.since, b.since))[0];
+
+  return upcomingPickup?.since ?? null;
+}
+
+function getStudentAnalysisFeatureBannerContentUid(contents: FutureContentsLoaderContent[], now: string): string | null {
+  const target = contents
+    .map((content) => ({
+      content,
+      upcomingPickupAt: getEarliestUpcomingPickupAt(content, now),
+    }))
+    .filter((item): item is { content: FutureContentsLoaderContent; upcomingPickupAt: string } =>
+      Boolean(item.upcomingPickupAt),
+    )
+    .sort((a, b) => compareInstantAsc(a.upcomingPickupAt, b.upcomingPickupAt))[0];
+
+  return target?.content.uid ?? null;
+}
+
+function hasPendingStudentRecruitment(content: FutureContentsLoaderContent): boolean {
+  return content.recruitments.some((recruitment) => recruitment.student === null && Boolean(recruitment.favoriteKey));
 }
 
 export default function FutureContents() {
@@ -454,6 +489,11 @@ export default function FutureContents() {
     [contents, filter],
   );
 
+  const studentAnalysisFeatureBannerContentUid = useMemo(
+    () => getStudentAnalysisFeatureBannerContentUid(filteredContents, nowUtcIso()),
+    [filteredContents],
+  );
+
   const timelineContents = useMemo<ContentTimelineProps["contents"]>(
     () =>
       filteredContents.map((content: FutureContentsLoaderContent): ContentTimelineProps["contents"][number] => {
@@ -463,10 +503,12 @@ export default function FutureContents() {
           name: common.raidInfo ? common.raidInfo.name : content.name,
           recruitmentGroupUid: content.recruitmentGroupUid,
           recruitments: content.recruitments.length > 0 ? content.recruitments : undefined,
+          showStudentAnalysisFeatureBanner: content.uid === studentAnalysisFeatureBannerContentUid,
+          showPendingStudentFavoriteFeatureBanner: hasPendingStudentRecruitment(content),
           allComments: allComments[content.uid] ?? [],
         };
       }),
-    [allComments, filteredContents],
+    [allComments, filteredContents, studentAnalysisFeatureBannerContentUid],
   );
 
   const tableContents = useMemo<FutureRecruitmentTableContent[]>(
@@ -555,6 +597,7 @@ export default function FutureContents() {
             completedRecruitmentStudents={completedRecruitmentStudents}
             recruitmentResultEditLinks={recruitmentResultEditLinks}
             signedIn={signedIn}
+            showFeatureBanners={view === "timeline"}
             revealedSpoilerContentUids={revealedSpoilerContentUids}
             onRevealSpoiler={revealSpoiler}
             onHideSpoiler={hideSpoiler}

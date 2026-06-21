@@ -20,7 +20,7 @@ export default function StudentRaidInvestmentChart({ investment, signedIn }: Stu
   const insight = getInvestmentInsight(rows);
 
   return (
-    <UsageChartCard title="성장도별 출전 비율" description="학생 성장도에 따른 역대 출전 횟수와 비율">
+    <UsageChartCard title="성장도별 출전 비율" description="학생을 얼마나 육성해야할지 확인해보세요">
       {investment.ownCount === 0 ? (
         <div className="rounded-md bg-neutral-100 px-3 py-4 text-center text-sm text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
           모집 편성 기록이 없어요.

@@ -12,7 +12,6 @@ export default function StudentDifficultyUsageChart({ rows, loading }: StudentDi
   return (
     <UsageChartCard
       title="난이도별 출전 비율"
-      description="학생의 총력전/대결전 난이도별 출전 비율"
       loading={loading}
       empty={rows.length === 0}
       emptyText="출전 기록이 부족해요"

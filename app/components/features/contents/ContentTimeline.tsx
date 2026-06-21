@@ -1,11 +1,30 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { type UtcIsoString, formatInstant, formatInstantDateKey, nowUtcIso, parseUtcTimestamp } from "~/lib/date-time";
 import type { EventType, RaidType } from "~/models/content.d";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
-import type { ContentTimelineItemProps } from "./ContentTimelineItem";
+import type { ContentTimelineFeatureBannerId, ContentTimelineItemProps } from "./ContentTimelineItem";
 import { ContentTimelineItem } from "./ContentTimelineItem";
 import { groupContents } from "./content-timeline-grouping";
+
+const featureBannerDismissalStorageKey = "futures::dismissed-feature-banners";
+const featureBannerIds: ContentTimelineFeatureBannerId[] = ["student-analysis", "pending-student-favorite"];
+
+function parseDismissedFeatureBannerIds(value: string | null): ContentTimelineFeatureBannerId[] {
+  if (!value) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((item): item is ContentTimelineFeatureBannerId => featureBannerIds.includes(item));
+  } catch {
+    return [];
+  }
+}
 
 export type ContentTimelineProps = {
   contents: {
@@ -23,6 +42,8 @@ export type ContentTimelineProps = {
     tags: string[];
     recruitments?: ContentTimelineItemProps["recruitments"];
     raidInfo?: ContentTimelineItemProps["raidInfo"];
+    showStudentAnalysisFeatureBanner?: boolean;
+    showPendingStudentFavoriteFeatureBanner?: boolean;
 
     allComments?: ContentTimelineItemProps["allComments"];
   }[];
@@ -33,6 +54,7 @@ export type ContentTimelineProps = {
   recruitmentResultEditLinks?: { recruitmentGroupUid: string; link: string }[];
 
   signedIn: boolean;
+  showFeatureBanners?: boolean;
   revealedSpoilerContentUids?: string[];
   onRevealSpoiler?: (contentUid: string) => void;
   onHideSpoiler?: (contentUid: string) => void;
@@ -77,8 +99,11 @@ export default function ContentTimeline({
   onRecruitmentComplete,
   isSubmittingComment,
   signedIn,
+  showFeatureBanners = false,
 }: ContentTimelineProps) {
   const displayTimeZone = useDisplayTimeZone();
+  const [dismissedFeatureBannerIds, setDismissedFeatureBannerIds] = useState<ContentTimelineFeatureBannerId[]>([]);
+  const [featureBannerDismissalsLoaded, setFeatureBannerDismissalsLoaded] = useState(false);
   const contentGroups = useMemo(() => groupContents(contents, displayTimeZone), [contents, displayTimeZone]);
   const favoriteStudentIdsByContents = useMemo(() => {
     const aggregatedResult: Record<string, Record<string, number>> = {};
@@ -90,6 +115,25 @@ export default function ContentTimeline({
     }
     return aggregatedResult;
   }, [favoritedCounts]);
+
+  useEffect(() => {
+    setDismissedFeatureBannerIds(
+      parseDismissedFeatureBannerIds(localStorage.getItem(featureBannerDismissalStorageKey)),
+    );
+    setFeatureBannerDismissalsLoaded(true);
+  }, []);
+
+  const dismissFeatureBanner = (bannerId: ContentTimelineFeatureBannerId) => {
+    setDismissedFeatureBannerIds((prev) => {
+      if (prev.includes(bannerId)) {
+        return prev;
+      }
+
+      const next = [...prev, bannerId];
+      localStorage.setItem(featureBannerDismissalStorageKey, JSON.stringify(next));
+      return next;
+    });
+  };
 
   if (contents.length === 0) {
     return (
@@ -132,12 +176,13 @@ export default function ContentTimeline({
               <div className="min-w-0 flex-1 pl-3 pb-4 md:pl-5 md:pb-8">
                 {group.contents.map((content) => {
                   const showComments = !!onCommentCreate && !!content.recruitments && content.recruitments.length > 0;
+                  const spoilerVisible = !content.isSpoiler || revealedSpoilerContentUids.includes(content.uid);
                   return (
                     <ContentTimelineItem
                       key={content.uid}
                       confirmed={content.confirmed}
                       {...content}
-                      spoilerVisible={!content.isSpoiler || revealedSpoilerContentUids.includes(content.uid)}
+                      spoilerVisible={spoilerVisible}
                       onRevealSpoiler={content.isSpoiler ? () => onRevealSpoiler?.(content.uid) : undefined}
                       onHideSpoiler={content.isSpoiler ? () => onHideSpoiler?.(content.uid) : undefined}
                       allComments={content.allComments}
@@ -194,6 +239,21 @@ export default function ContentTimeline({
                               )
                           : undefined
                       }
+                      showStudentAnalysisFeatureBanner={
+                        showFeatureBanners &&
+                        featureBannerDismissalsLoaded &&
+                        spoilerVisible &&
+                        content.showStudentAnalysisFeatureBanner &&
+                        !dismissedFeatureBannerIds.includes("student-analysis")
+                      }
+                      showPendingStudentFavoriteFeatureBanner={
+                        showFeatureBanners &&
+                        featureBannerDismissalsLoaded &&
+                        spoilerVisible &&
+                        content.showPendingStudentFavoriteFeatureBanner &&
+                        !dismissedFeatureBannerIds.includes("pending-student-favorite")
+                      }
+                      onFeatureBannerDismiss={dismissFeatureBanner}
                       isSubmittingComment={isSubmittingComment}
                       signedIn={signedIn}
                     />

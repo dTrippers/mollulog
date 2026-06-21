@@ -5,6 +5,9 @@ import StudentGradingChart from "./students.$id._components/StudentGradingChart"
 
 export default function StudentGradingsPage() {
   const { student, tagCounts, allGradings, currentUser } = useOutletContext<StudentDetailPageContext>();
+  const currentUserReview = allGradings.find(
+    (grading) => currentUser && grading.user.username === currentUser.username,
+  );
 
   return (
     <section className="my-4 space-y-4">
@@ -13,9 +16,8 @@ export default function StudentGradingsPage() {
         tagCounts={tagCounts}
         noGrading={allGradings.length === 0}
         signedIn={currentUser !== null}
-        hasCurrentUserGrading={
-          !!currentUser && allGradings.some((grading) => grading.user.username === currentUser.username)
-        }
+        currentUserReview={currentUserReview}
+        showRecentReview={false}
       />
       <StudentGradingTimeline gradings={allGradings} currentUser={currentUser} />
     </section>

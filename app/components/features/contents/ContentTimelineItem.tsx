@@ -21,6 +21,7 @@ import { Link } from "react-router";
 import { RaidCard } from "~/components/features/raids";
 import { StudentCards } from "~/components/features/students";
 import { BottomSheet, Button } from "~/components/primitives";
+import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
 import {
@@ -95,6 +96,9 @@ export type ContentTimelineItemProps = {
   onRecruitmentComplete?: (studentUid: string, completed: boolean, recruitment: RecruitmentCompletionMeta) => void;
   onRevealSpoiler?: () => void;
   onHideSpoiler?: () => void;
+  showStudentAnalysisFeatureBanner?: boolean;
+  showPendingStudentFavoriteFeatureBanner?: boolean;
+  onFeatureBannerDismiss?: (bannerId: ContentTimelineFeatureBannerId) => void;
 
   recruitments?: {
     recruitmentType: RecruitmentTypeEnum;
@@ -133,6 +137,8 @@ export type ContentTimelineItemProps = {
   signedIn: boolean;
 };
 
+export type ContentTimelineFeatureBannerId = "student-analysis" | "pending-student-favorite";
+
 export function ContentTimelineItem({
   name,
   contentType,
@@ -163,9 +169,13 @@ export function ContentTimelineItem({
   onRecruitmentComplete,
   onRevealSpoiler,
   onHideSpoiler,
+  showStudentAnalysisFeatureBanner = false,
+  showPendingStudentFavoriteFeatureBanner = false,
+  onFeatureBannerDismiss,
   signedIn,
 }: ContentTimelineItemProps) {
   const displayTimeZone = useDisplayTimeZone();
+  const { setActivePopupId } = useStudentCardPopup();
   const showComments = recruitments && recruitments.length > 0;
   const [commentEditing, setCommentEditing] = useState(false);
 
@@ -255,6 +265,17 @@ export function ContentTimelineItem({
         </div>
       )}
 
+      {(showStudentAnalysisFeatureBanner || showPendingStudentFavoriteFeatureBanner) && (
+        <FeatureBanners
+          showStudentAnalysisFeatureBanner={showStudentAnalysisFeatureBanner}
+          showPendingStudentFavoriteFeatureBanner={showPendingStudentFavoriteFeatureBanner}
+          studentAnalysisPopupId={recruitments ? getStudentAnalysisFeatureBannerPopupId(recruitments, now) : null}
+          pendingStudentPopupId={recruitments ? getPendingStudentFeatureBannerPopupId(recruitments) : null}
+          onOpenPopup={setActivePopupId}
+          onDismiss={onFeatureBannerDismiss}
+        />
+      )}
+
       {/* 댓글 */}
       {showComments && onCommentCreate && (
         <>
@@ -283,6 +304,64 @@ export function ContentTimelineItem({
       )}
     </div>
   );
+}
+
+function FeatureBanners({
+  showStudentAnalysisFeatureBanner,
+  showPendingStudentFavoriteFeatureBanner,
+  studentAnalysisPopupId,
+  pendingStudentPopupId,
+  onOpenPopup,
+  onDismiss,
+}: {
+  showStudentAnalysisFeatureBanner: boolean;
+  showPendingStudentFavoriteFeatureBanner: boolean;
+  studentAnalysisPopupId: string | null;
+  pendingStudentPopupId: string | null;
+  onOpenPopup: (popupId: string) => void;
+  onDismiss?: (bannerId: ContentTimelineFeatureBannerId) => void;
+}) {
+  return (
+    <>
+      {showStudentAnalysisFeatureBanner && (
+        <TimelineItemBanner
+          icon="info"
+          color="green"
+          linkText="확인하기"
+          onLinkClick={studentAnalysisPopupId ? () => onOpenPopup(studentAnalysisPopupId) : undefined}
+          onDismiss={onDismiss ? () => onDismiss("student-analysis") : undefined}
+          message="학생부에서 통계 분석을 보고 모집 여부를 판단해보세요"
+        />
+      )}
+      {showPendingStudentFavoriteFeatureBanner && (
+        <TimelineItemBanner
+          icon="info"
+          color="green"
+          linkText="확인하기"
+          onLinkClick={pendingStudentPopupId ? () => onOpenPopup(pendingStudentPopupId) : undefined}
+          onDismiss={onDismiss ? () => onDismiss("pending-student-favorite") : undefined}
+          message="데이터를 준비중인 학생도 관심 학생에 등록할 수 있어요"
+        />
+      )}
+    </>
+  );
+}
+
+function getStudentAnalysisFeatureBannerPopupId(
+  recruitments: NonNullable<ContentTimelineItemProps["recruitments"]>,
+  now: UtcIsoString,
+): string | null {
+  const target = recruitments
+    .filter((recruitment) => recruitment.pickup && recruitment.student && isInstantAfter(recruitment.since, now))
+    .sort((a, b) => a.since.localeCompare(b.since))[0];
+
+  return target?.favoriteKey ?? null;
+}
+
+function getPendingStudentFeatureBannerPopupId(
+  recruitments: NonNullable<ContentTimelineItemProps["recruitments"]>,
+): string | null {
+  return recruitments.find((recruitment) => recruitment.student === null && recruitment.favoriteKey)?.favoriteKey ?? null;
 }
 
 function SpoilerHeader({

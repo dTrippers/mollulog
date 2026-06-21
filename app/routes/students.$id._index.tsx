@@ -192,15 +192,10 @@ export default function StudentDetail() {
     [statistics, myStudentTier],
   );
 
-  const highlightedGradings = (() => {
-    const currentUserGrading = allGradings.find(
-      (grading) => currentUser && grading.user.username === currentUser.username,
-    );
-    if (currentUserGrading) {
-      return [currentUserGrading];
-    }
-    return allGradings.slice(0, 1);
-  })();
+  const recentReview = allGradings[0];
+  const currentUserReview = allGradings.find(
+    (grading) => currentUser && grading.user.username === currentUser.username,
+  );
 
   return (
     <>
@@ -212,16 +207,12 @@ export default function StudentDetail() {
         tagCounts={tagCounts}
         noGrading={allGradings.length === 0}
         signedIn={currentUser !== null}
-        recentReview={highlightedGradings[0]}
-        recentReviewIsCurrentUser={!!currentUser && highlightedGradings[0]?.user?.username === currentUser.username}
-        hasCurrentUserGrading={
-          !!currentUser && allGradings.some((grading) => grading.user.username === currentUser.username)
-        }
-        totalReviewCount={allGradings.length}
+        recentReview={recentReview}
+        currentUserReview={currentUserReview}
       />
 
       <div className="mt-10">
-        <SubTitle text="학생 분석" description="학생 출시 이후의 총력전/대결전 통계를 분석했어요." />
+        <SubTitle text="학생 분석" description="2024년 3월 이후의 총력전/대결전 통계를 분석했어요" />
       </div>
       <div className="mt-4">
         {statisticsLoading ? (
@@ -235,7 +226,7 @@ export default function StudentDetail() {
                 className="mb-4"
                 tone="warning"
                 title="총력전/대결전 통계만 포함되어 있어요"
-                description="제약해제결전, 종합전술시험 등에서 활약하는 학생은 추천도가 낮게 표현될 수 있어요"
+                description="제약해제결전 등 다른 컨텐츠에서 활약하는 학생은 추천도가 낮게 표현될 수 있어요"
               />
               <StudentRaidUsageChart releaseAt={student.releaseAt} raids={allRaids} statistics={rawStatistics} />
               <div className="mt-4 grid gap-4 md:grid-cols-2">

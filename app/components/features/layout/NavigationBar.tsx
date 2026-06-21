@@ -280,11 +280,11 @@ export default function NavigationBar({
           </h1>
         </div>
 
-        <div className="px-4 pt-3 pb-2">
+        <div className="px-3 pt-3 pb-2">
           <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
         </div>
 
-        <div className="no-scrollbar flex-1 overflow-y-auto px-4 py-2">
+        <div className="no-scrollbar flex-1 overflow-y-auto px-3 py-2">
           <DesktopMenuContent
             currentUsername={currentUsername}
             pathname={pathname}
@@ -734,7 +734,7 @@ function DesktopUtilityFooter({
   const ModeIcon = darkMode ? SunIcon : MoonIcon;
 
   return (
-    <div className="shrink-0 border-neutral-200 border-t px-4 py-2 dark:border-neutral-700">
+    <div className="shrink-0 border-neutral-200 border-t px-3 py-2 dark:border-neutral-700">
       <div className="flex items-center gap-2">
         {currentUsername ? (
           <Link

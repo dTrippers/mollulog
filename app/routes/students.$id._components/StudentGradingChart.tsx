@@ -1,9 +1,17 @@
 import { PlusCircleIcon } from "@heroicons/react/16/solid";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { StudentGradingTimelineItem } from "~/components/features/students";
 import { ProfileImage, TagIcon } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
+
+const COMPACT_TAG_LABELS: Record<StudentGradingTagValue, string> = {
+  performance: "성능",
+  universal: "범용",
+  growth: "저성급",
+  love: "애정",
+};
 
 type StudentGradingChartProps = {
   student: { uid: string; name: string };
@@ -11,9 +19,8 @@ type StudentGradingChartProps = {
   noGrading: boolean;
   signedIn: boolean;
   recentReview?: StudentGradingTimelineItem;
-  recentReviewIsCurrentUser?: boolean;
-  hasCurrentUserGrading: boolean;
-  totalReviewCount?: number;
+  currentUserReview?: StudentGradingTimelineItem;
+  showRecentReview?: boolean;
 };
 
 export default function StudentGradingChart({
@@ -22,82 +29,139 @@ export default function StudentGradingChart({
   noGrading,
   signedIn,
   recentReview,
-  recentReviewIsCurrentUser = false,
-  hasCurrentUserGrading,
-  totalReviewCount,
+  currentUserReview,
+  showRecentReview = true,
 }: StudentGradingChartProps) {
   const maxCount = Math.max(...tagCounts.map((tagCount) => tagCount.count), 1);
 
   return (
     <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 bg-white dark:bg-neutral-800/50">
-      <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-x-6">
         {tagCounts.map(({ tag, displayName, count }) => (
-          <div key={tag} className="flex items-center gap-2">
-            <div className="flex-shrink-0">
-              <TagIcon tag={tag} />
-            </div>
-            <div className="flex-shrink-0 w-32">
-              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{displayName}</span>
-            </div>
-            <div className="flex-1 flex items-center gap-2">
-              <div className="flex-1 bg-neutral-200 dark:bg-neutral-700 rounded-full h-2 relative">
-                <div
-                  className="bg-neutral-700 dark:bg-neutral-50 h-2 rounded-full transition-all duration-300 absolute left-0 top-0 min-w-0"
-                  style={{ width: `${(count / maxCount) * 100}%` }}
-                />
-              </div>
-              <span className="ml-2 text-sm font-medium text-neutral-500 dark:text-neutral-400 min-w-0 flex-shrink-0">
-                {count}
-              </span>
-            </div>
-          </div>
+          <GradingTagMeter key={tag} tag={tag} displayName={displayName} count={count} maxCount={maxCount} />
         ))}
+      </div>
 
-        {recentReview && totalReviewCount ? (
-          <>
-            <p className="mt-6 font-bold">최근에 작성된 평가</p>
-            <Link to={`/students/${student.uid}/gradings`} className="group block">
-              <div className="mt-2 rounded-lg bg-neutral-100 p-4 transition hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800">
-                <div className="flex items-center gap-3">
-                  <ProfileImage studentUid={recentReview.student.uid} imageSize={6} />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100">
-                      {recentReviewIsCurrentUser ? "나의 평가" : recentReview.user.username}
-                    </p>
-                    {recentReview.comment && (
-                      <p className="mt-0.5 line-clamp-2 text-sm text-neutral-600 dark:text-neutral-300">
-                        {recentReview.comment.trim()}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {recentReview.tags && recentReview.tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {recentReview.tags.map((tag) => (
-                      <div
-                        key={tag}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200"
-                      >
-                        <TagIcon tag={tag} size="sm" />
-                        <span>{STUDENT_GRADING_TAG_DISPLAY[tag]}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </Link>
-          </>
+      <div className="mt-4 space-y-2 border-neutral-200 border-t pt-3 dark:border-neutral-700">
+        {showRecentReview ? (
+          <ReviewSummaryRow label="최근 평가">
+            {recentReview ? (
+              <ReviewSummaryLink
+                studentUid={student.uid}
+                review={recentReview}
+                reviewerName={recentReview.user.username}
+              />
+            ) : (
+              <ReviewEmptyText text="아무도 평가를 남기지 않았어요" />
+            )}
+          </ReviewSummaryRow>
         ) : null}
 
-        {(noGrading || !hasCurrentUserGrading) && (
-          <NewGrading
-            title={noGrading ? "아무도 평가를 남기지 않았어요" : "아직 평가를 작성하지 않았어요"}
-            message={noGrading ? "첫 번째 평가를 남겨보세요!" : "다른 선생님들에게 정보를 공유해주세요!"}
-            studentUid={student.uid}
-            signedIn={signedIn}
-          />
-        )}
+        <ReviewSummaryRow label="나의 평가">
+          {currentUserReview ? (
+            <ReviewSummaryLink
+              studentUid={student.uid}
+              review={currentUserReview}
+              reviewerName={currentUserReview.user.username}
+              to={`/students/${student.uid}/grade`}
+            />
+          ) : (
+            <NewGrading
+              title={
+                signedIn
+                  ? noGrading
+                    ? "아무도 평가를 남기지 않았어요"
+                    : "아직 평가를 작성하지 않았어요"
+                  : "로그인 후 학생 평가를 공유해보세요"
+              }
+              message={noGrading ? "첫 번째 평가를 남겨보세요!" : "평가 작성"}
+              studentUid={student.uid}
+              signedIn={signedIn}
+            />
+          )}
+        </ReviewSummaryRow>
       </div>
+    </div>
+  );
+}
+
+type GradingTagMeterProps = {
+  tag: StudentGradingTagValue;
+  displayName: string;
+  count: number;
+  maxCount: number;
+};
+
+function GradingTagMeter({ tag, displayName, count, maxCount }: GradingTagMeterProps) {
+  return (
+    <div className="flex min-w-0 items-center gap-2" aria-label={`${displayName} ${count}개`}>
+      <TagIcon tag={tag} />
+      <div className="flex w-18 shrink-0 items-baseline gap-1">
+        <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{COMPACT_TAG_LABELS[tag]}</span>
+        <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{count}</span>
+      </div>
+      <div className="relative h-2 flex-1 rounded-full bg-neutral-200 dark:bg-neutral-700">
+        <div
+          className="absolute top-0 left-0 h-2 rounded-full bg-neutral-700 transition-all duration-300 dark:bg-neutral-50"
+          style={{ width: `${(count / maxCount) * 100}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+type ReviewSummaryRowProps = {
+  label: string;
+  children: ReactNode;
+};
+
+function ReviewSummaryRow({ label, children }: ReviewSummaryRowProps) {
+  return (
+    <div className="grid grid-cols-[3.5rem_minmax(0,1fr)] items-stretch gap-2 sm:grid-cols-[4rem_minmax(0,1fr)]">
+      <div className="flex items-center text-xs font-semibold text-neutral-500 dark:text-neutral-400">{label}</div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+type ReviewSummaryLinkProps = {
+  studentUid: string;
+  review: StudentGradingTimelineItem;
+  reviewerName: string;
+  to?: string;
+};
+
+function ReviewSummaryLink({ studentUid, review, reviewerName, to }: ReviewSummaryLinkProps) {
+  const previewTag = review.tags?.[0];
+  const extraTagCount = Math.max((review.tags?.length ?? 0) - 1, 0);
+
+  return (
+    <Link
+      to={to ?? `/students/${studentUid}/gradings`}
+      className="group flex min-w-0 items-center gap-3 rounded-md bg-neutral-100 px-3 py-2.5 transition hover:bg-neutral-50 dark:bg-neutral-900 dark:hover:bg-neutral-900/50"
+    >
+      <ProfileImage studentUid={review.student.uid} imageSize={6} />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:items-baseline">
+        <span className="truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100">{reviewerName}</span>
+        {review.comment ? (
+          <span className="line-clamp-1 text-sm text-neutral-600 dark:text-neutral-300">{review.comment.trim()}</span>
+        ) : null}
+      </div>
+      {previewTag ? (
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-1 text-xs text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
+          <TagIcon tag={previewTag} size="sm" />
+          <span className="hidden sm:inline">{STUDENT_GRADING_TAG_DISPLAY[previewTag]}</span>
+          {extraTagCount > 0 ? <span>+{extraTagCount}</span> : null}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
+
+function ReviewEmptyText({ text }: { text: string }) {
+  return (
+    <div className="rounded-md bg-neutral-100 px-3 py-2.5 text-sm text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
+      {text}
     </div>
   );
 }
@@ -112,9 +176,12 @@ type NewGradingProps = {
 function NewGrading({ title, message, studentUid, signedIn }: NewGradingProps) {
   const { showSignIn } = useSignIn();
   const inner = (
-    <div className="p-4 text-center text-neutral-500 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-900/50 bg-neutral-100 dark:bg-neutral-900 transition rounded-lg cursor-pointer">
-      <p className="text-sm">{title}</p>
-      <p className="text-xs mt-1 text-blue-600 dark:text-blue-400 group-hover:underline">{message}</p>
+    <div className="flex cursor-pointer items-center justify-between gap-3 rounded-md bg-neutral-100 px-3 py-2.5 text-neutral-500 transition hover:bg-neutral-50 dark:bg-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-900/50">
+      <p className="min-w-0 truncate text-sm">{title}</p>
+      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-blue-600 group-hover:underline dark:text-blue-400">
+        <PlusCircleIcon className="size-4" />
+        {message}
+      </span>
     </div>
   );
 

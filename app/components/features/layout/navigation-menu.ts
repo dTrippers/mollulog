@@ -151,6 +151,7 @@ export function getNavigationSections({
           to: "/students",
           name: "학생부",
           description: "학생 프로필과 평가를 확인해보세요",
+          badgeLabel: "분석 정보 추가",
           OutlineIcon: IdentificationIconOutline,
           SolidIcon: IdentificationIconSolid,
           isActive: pathname.startsWith("/students"),

@@ -112,7 +112,7 @@ async function getSearchIndex(env: Env): Promise<SearchIndexEntry[]> {
 async function buildSearchIndex(env: Env): Promise<SearchIndexEntry[]> {
   const [menuItems, students, timelineContents] = await Promise.all([
     Promise.resolve(getSearchableMenuItems()),
-    getAllStudents(env),
+    getAllStudents(env, true),
     getAllTimelineContentsMeta(env),
   ]);
 
