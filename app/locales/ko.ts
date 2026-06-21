@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
+import { normalizeTimeZone } from "~/lib/date-time";
 import type { EventType, RaidType, Role, Terrain } from "~/models/content.d";
 import type { TimelineContentType } from "~/models/timeline-content";
 
@@ -135,7 +136,10 @@ export const contentTypeLocale: Record<EventType | RaidType, string> = {
   ...raidTypeLocale,
 };
 
-export function recruitmentLabelLocale({ recruitmentType: type, rerun }: { recruitmentType: RecruitmentTypeEnum, rerun: boolean }): string {
+export function recruitmentLabelLocale({
+  recruitmentType: type,
+  rerun,
+}: { recruitmentType: RecruitmentTypeEnum; rerun: boolean }): string {
   if (type === "archive") {
     return "아카이브";
   } else if (type === "recollect") {
@@ -172,22 +176,45 @@ export const schoolNameLocale: Record<string, string> = {
   others: "기타 학원",
 };
 
-export function relativeTime(at: dayjs.Dayjs): string {
-  let timeLabel = null;
+type RelativeTimeOptions = {
+  now?: dayjs.Dayjs;
+  timeZone?: string | null;
+};
 
-  const now = dayjs();
-  const remainingDays = at.startOf("day").diff(now.startOf("day"), "day");
+function getRelativeTimeParts(at: dayjs.Dayjs, { now = dayjs(), timeZone }: RelativeTimeOptions = {}) {
+  const normalizedTimeZone = normalizeTimeZone(timeZone);
+  const target = at.tz(normalizedTimeZone);
+  const current = now.tz(normalizedTimeZone);
+
+  const remainingDays = target.startOf("day").diff(current.startOf("day"), "day");
+  const remainingHours = target.startOf("hour").diff(current.startOf("hour"), "hour");
+
+  return { remainingDays, remainingHours };
+}
+
+export function relativeTime(at: dayjs.Dayjs, options: RelativeTimeOptions = {}): string {
+  const { remainingDays, remainingHours } = getRelativeTimeParts(at, options);
   if (remainingDays >= 2) {
-    timeLabel = `${remainingDays}일 후`;
-  } else {
-    const remainingHours = at.startOf("hour").diff(now.startOf("hour"), "hour");
-    if (remainingHours > 24) {
-      timeLabel = "내일";
-    } else {
-      timeLabel = `${remainingHours}시간 후`;
-    }
+    return `${remainingDays}일 후`;
   }
-  return timeLabel;
+  if (remainingDays === 1) {
+    return "내일";
+  }
+  return `${remainingHours}시간 후`;
+}
+
+export function remainingTime(
+  at: dayjs.Dayjs,
+  options: RelativeTimeOptions = {},
+): { text: string; finishSoon: boolean } {
+  const { remainingDays, remainingHours } = getRelativeTimeParts(at, options);
+  if (remainingDays >= 2) {
+    return { text: `${remainingDays}일`, finishSoon: false };
+  }
+  if (remainingDays === 1) {
+    return { text: "내일 종료", finishSoon: false };
+  }
+  return { text: `${remainingHours}시간 남음`, finishSoon: true };
 }
 
 export function formatResourceAmount(amount: number): string {

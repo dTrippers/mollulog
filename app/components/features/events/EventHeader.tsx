@@ -1,12 +1,24 @@
+import {
+  ChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon,
+  SpeakerWaveIcon,
+  SpeakerXMarkIcon,
+} from "@heroicons/react/16/solid";
 import { Suspense, useEffect, useRef, useState } from "react";
 import YouTube from "react-youtube";
-import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon, SpeakerWaveIcon, SpeakerXMarkIcon } from "@heroicons/react/16/solid";
-import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { formatInstant, isInstantAfter, isInstantBefore, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
-import { timelineContentTypeLocale, relativeTime } from "~/locales/ko";
-import { sanitizeClassName } from "~/prophandlers";
 import { MultilineText } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import {
+  type UtcIsoString,
+  formatInstant,
+  isInstantAfter,
+  isInstantBefore,
+  nowUtcIso,
+  parseUtcTimestamp,
+} from "~/lib/date-time";
+import { relativeTime, timelineContentTypeLocale } from "~/locales/ko";
 import type { TimelineContentType } from "~/models/timeline-content";
+import { sanitizeClassName } from "~/prophandlers";
 
 type Video = {
   title: string;
@@ -37,16 +49,25 @@ type EventHeaderProps = {
   videos?: Video[];
 };
 
-export default function EventHeader({ imageUrl, name, type, runType, since, until, endless, videos }: EventHeaderProps) {
+export default function EventHeader({
+  imageUrl,
+  name,
+  type,
+  runType,
+  since,
+  until,
+  endless,
+  videos,
+}: EventHeaderProps) {
   const displayTimeZone = useDisplayTimeZone();
   const now = nowUtcIso();
 
   // Calculate remaining time
   let timeLabel = null;
   if (isInstantAfter(since, now)) {
-    timeLabel = `${relativeTime(parseUtcTimestamp(since))} 시작`;
+    timeLabel = `${relativeTime(parseUtcTimestamp(since), { timeZone: displayTimeZone })} 시작`;
   } else if (!endless && until && isInstantAfter(until, now)) {
-    timeLabel = `${relativeTime(parseUtcTimestamp(until))} 종료`;
+    timeLabel = `${relativeTime(parseUtcTimestamp(until), { timeZone: displayTimeZone })} 종료`;
   }
 
   // States about videos
@@ -117,7 +138,9 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
                   setVideoPlaying(true);
                   setVideoEndTimer(
                     setTimeout(
-                      () => { setVideoPlaying(false); },
+                      () => {
+                        setVideoPlaying(false);
+                      },
                       (ytEvent.target.getDuration() - (currentVideo.start ?? 0) - 1.0) * 1000,
                     ),
                   );
@@ -131,7 +154,8 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
         {/* Background Image */}
         {imageUrl && (
           <img
-            src={imageUrl} alt={name}
+            src={imageUrl}
+            alt={name}
             className={`absolute top-0 left-0 w-full h-full object-cover transition-opacity duration-500 ${videoPlaying ? "opacity-0" : "opacity-100"}`}
           />
         )}
@@ -150,11 +174,11 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
         </div>
 
         {/* Content Info */}
-        <div className={`p-4 ${imageUrl ? "absolute bottom-0 left-0 right-0 text-white bg-linear-to-t from-black/80 via-black/60 to-transparent via-75%" : "bg-linear-to-br from-neutral-900 via-neutral-800 to-neutral-700 via-75%"}`}>
+        <div
+          className={`p-4 ${imageUrl ? "absolute bottom-0 left-0 right-0 text-white bg-linear-to-t from-black/80 via-black/60 to-transparent via-75%" : "bg-linear-to-br from-neutral-900 via-neutral-800 to-neutral-700 via-75%"}`}
+        >
           {/* Event Type and Status */}
-          <span className="text-sm md:text-base text-white">
-            {timelineContentTypeLocale[type]}
-          </span>
+          <span className="text-sm md:text-base text-white">{timelineContentTypeLocale[type]}</span>
 
           {/* Event Name */}
           <h3 className="my-1">
@@ -177,19 +201,21 @@ export default function EventHeader({ imageUrl, name, type, runType, since, unti
         </div>
       </div>
 
-      {videos && videos.length > 0 && <VideoList videos={videos} currentVideo={currentVideo} onVideoSelect={setCurrentVideo} />}
+      {videos && videos.length > 0 && (
+        <VideoList videos={videos} currentVideo={currentVideo} onVideoSelect={setCurrentVideo} />
+      )}
     </>
   );
 }
 
-function Label({ text, showRedDot = false }: { text: string, showRedDot?: boolean }): React.ReactNode {
+function Label({ text, showRedDot = false }: { text: string; showRedDot?: boolean }): React.ReactNode {
   return (
     <span className="flex items-center gap-1.5 px-2 md:px-3 py-1 text-xs md:text-sm bg-black/40 backdrop-blur-sm rounded-full text-white border border-white/20">
       {showRedDot && <div className="size-2 bg-red-500 rounded-full animate-pulse" />}
       {text}
     </span>
   );
-};
+}
 
 type VideoListProps = {
   videos: Video[];
@@ -221,7 +247,8 @@ function VideoList({ videos, currentVideo, onVideoSelect }: VideoListProps): Rea
       return;
     }
 
-    const newIndex = (videos.findIndex((video) => video.youtube === currentVideo.youtube) + indexDiff + videos.length) % videos.length;
+    const newIndex =
+      (videos.findIndex((video) => video.youtube === currentVideo.youtube) + indexDiff + videos.length) % videos.length;
     onVideoSelect(videos[newIndex]);
   };
 
@@ -243,12 +270,20 @@ function VideoList({ videos, currentVideo, onVideoSelect }: VideoListProps): Rea
         ))}
       </div>
       <div className="h-full w-8 absolute left-0 top-0 flex items-center justify-center bg-white dark:bg-neutral-800">
-        <button type="button" onClick={() => changeVideo(-1)} className="p-1 hover:bg-black hover:text-white rounded-full transition">
+        <button
+          type="button"
+          onClick={() => changeVideo(-1)}
+          className="p-1 hover:bg-black hover:text-white rounded-full transition"
+        >
           <ChevronDoubleLeftIcon className="size-6" strokeWidth={2} />
         </button>
       </div>
       <div className="h-full w-8 absolute right-0 top-0 flex items-center justify-center bg-white dark:bg-neutral-800">
-        <button type="button" onClick={() => changeVideo(1)} className="p-1 hover:bg-black hover:text-white rounded-full transition">
+        <button
+          type="button"
+          onClick={() => changeVideo(1)}
+          className="p-1 hover:bg-black hover:text-white rounded-full transition"
+        >
           <ChevronDoubleRightIcon className="size-6" strokeWidth={2} />
         </button>
       </div>

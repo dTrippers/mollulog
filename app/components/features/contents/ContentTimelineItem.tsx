@@ -32,7 +32,7 @@ import {
   nowUtcIso,
   parseUtcTimestamp,
 } from "~/lib/date-time";
-import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
+import { contentTypeLocale, recruitmentLabelLocale, remainingTime } from "~/locales/ko";
 import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { EventType, RaidType, Role } from "~/models/content.d";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
@@ -174,20 +174,12 @@ export function ContentTimelineItem({
 
   let finishSoon = false;
   if (since && until && isInstantBefore(since, now)) {
-    const remainingDays = parseUtcTimestamp(until).startOf("day").diff(parseUtcTimestamp(now).startOf("day"), "day");
-    if (remainingDays >= 2) {
-      daysLabel = `${remainingDays}일`;
-    } else {
-      const remainingHours = parseUtcTimestamp(until)
-        .startOf("hour")
-        .diff(parseUtcTimestamp(now).startOf("hour"), "hour");
-      if (remainingHours > 24) {
-        daysLabel = "내일 종료";
-      } else {
-        finishSoon = true;
-        daysLabel = `${remainingHours}시간 남음`;
-      }
-    }
+    const remaining = remainingTime(parseUtcTimestamp(until), {
+      now: parseUtcTimestamp(now),
+      timeZone: displayTimeZone,
+    });
+    daysLabel = remaining.text;
+    finishSoon = remaining.finishSoon;
   }
 
   const headerLinked = isContentHeaderLinked({ contentType, raidInfo, isSpoiler, spoilerVisible });

@@ -1,11 +1,16 @@
 import { Fragment } from "react";
 import { Link } from "react-router";
-import type { RaidType, Terrain } from "~/models/content.d";
-import type { Difficulty } from "~/models/raid";
 import { AttributeBadge } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { formatInstant, isInstantAfter, isInstantBefore, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
-import { bossImageUrl } from "~/models/assets";
+import type { Attack, Defense } from "~/graphql/graphql";
+import {
+  type UtcIsoString,
+  formatInstant,
+  isInstantAfter,
+  isInstantBefore,
+  nowUtcIso,
+  parseUtcTimestamp,
+} from "~/lib/date-time";
 import {
   attackTypeColor,
   attackTypeLocale,
@@ -16,8 +21,10 @@ import {
   relativeTime,
   terrainLocale,
 } from "~/locales/ko";
+import { bossImageUrl } from "~/models/assets";
+import type { RaidType, Terrain } from "~/models/content.d";
+import type { Difficulty } from "~/models/raid";
 import { sanitizeClassName } from "~/prophandlers";
-import type { Attack, Defense } from "~/graphql/graphql";
 
 type RaidCardProps = {
   raid: {
@@ -77,9 +84,9 @@ export default function RaidCard({
   let timeLabel = null;
   if (timeLocaleType === "relative") {
     if (startAt && isInstantAfter(startAt, now)) {
-      timeLabel = `${relativeTime(parseUtcTimestamp(startAt))} 시작`;
+      timeLabel = `${relativeTime(parseUtcTimestamp(startAt), { timeZone: displayTimeZone })} 시작`;
     } else if (endAt && isInstantAfter(endAt, now)) {
-      timeLabel = `${relativeTime(parseUtcTimestamp(endAt))} 종료`;
+      timeLabel = `${relativeTime(parseUtcTimestamp(endAt), { timeZone: displayTimeZone })} 종료`;
     }
   } else if (startAt) {
     timeLabel = `${formatInstant(startAt, { timeZone: displayTimeZone, format: "YYYY/M/D" })}`;
@@ -104,7 +111,9 @@ export default function RaidCard({
           {showTimeLabel && timeLabel && (
             <div className="absolute top-0 left-0 px-3 py-2">
               <div className="flex items-center px-1.5 py-0.5 gap-x-1.5 text-xs text-center bg-neutral-100 dark:bg-neutral-800 rounded-md">
-                {timeLocaleType === "relative" && startAt && isInstantBefore(startAt, now) && <div className="size-2 bg-red-500 rounded-full animate-pulse" />}
+                {timeLocaleType === "relative" && startAt && isInstantBefore(startAt, now) && (
+                  <div className="size-2 bg-red-500 rounded-full animate-pulse" />
+                )}
                 <p className="text-xs text-neutral-600 md:text-sm dark:text-neutral-300">{timeLabel}</p>
               </div>
             </div>
@@ -137,7 +146,8 @@ export default function RaidCard({
                     <div className="mt-1 flex gap-1">
                       {buttons.map(({ text, to }) => (
                         <Link
-                          key={`${text}-${to}`} to={to}
+                          key={`${text}-${to}`}
+                          to={to}
                           className={sanitizeClassName(`
                             px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-300 bg-white dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-black
                             border border-neutral-200 dark:border-neutral-700 rounded-md transition whitespace-nowrap
@@ -154,9 +164,7 @@ export default function RaidCard({
               {/* 데스크탑: 우측 난이도/방어타입 */}
               <div
                 className={sanitizeClassName(
-                  showTitle
-                    ? "flex flex-col gap-1 items-start flex-shrink-0"
-                    : "flex items-end gap-1.5 flex-shrink-0",
+                  showTitle ? "flex flex-col gap-1 items-start flex-shrink-0" : "flex items-end gap-1.5 flex-shrink-0",
                 )}
               >
                 {showAttackType && showTitle && (
