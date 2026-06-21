@@ -1,10 +1,11 @@
 import { Transition } from "@headlessui/react";
 import { useEffect, useState } from "react";
-import { Button, ResourceCard } from "~/components/primitives";
+import { Button, Checkbox, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
 import type { PickupResources } from "~/models/pyroxene-timeline";
 import ResourcesInput from "./planner-input/ResourcesInput";
+import type { PyroxeneCollectedSourceCandidate } from "./types";
 
 const resourceItems = [
   {
@@ -29,12 +30,18 @@ const resourceItems = [
 
 type PyroxeneInitialResourcesProps = {
   resources: PickupResources;
-  onUpdateResources: (resources: PickupResources) => void;
+  collectedSourceCandidates: PyroxeneCollectedSourceCandidate[];
+  onUpdateResources: (resources: PickupResources, collectedSourceKeys: string[]) => void;
 };
 
-export default function PyroxeneInitialResources({ resources, onUpdateResources }: PyroxeneInitialResourcesProps) {
+export default function PyroxeneInitialResources({
+  resources,
+  collectedSourceCandidates,
+  onUpdateResources,
+}: PyroxeneInitialResourcesProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedResources, setEditedResources] = useState<PickupResources>(resources);
+  const [selectedCollectedSourceKeys, setSelectedCollectedSourceKeys] = useState<string[]>([]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -44,7 +51,17 @@ export default function PyroxeneInitialResources({ resources, onUpdateResources 
 
   const handleCancel = () => {
     setEditedResources(resources);
+    setSelectedCollectedSourceKeys([]);
     setIsEditing(false);
+  };
+
+  const handleToggleCollectedSource = (sourceKey: string, checked: boolean) => {
+    setSelectedCollectedSourceKeys((prev) => {
+      if (checked) {
+        return prev.includes(sourceKey) ? prev : [...prev, sourceKey];
+      }
+      return prev.filter((key) => key !== sourceKey);
+    });
   };
 
   return (
@@ -85,10 +102,34 @@ export default function PyroxeneInitialResources({ resources, onUpdateResources 
             description="현재 보유한 재화 수량을 입력해주세요."
             initialResources={editedResources}
             onSaveResources={(resources) => {
-              onUpdateResources(resources);
+              onUpdateResources(resources, selectedCollectedSourceKeys);
+              setSelectedCollectedSourceKeys([]);
               setIsEditing(false);
             }}
           />
+          {collectedSourceCandidates.length > 0 && (
+            <div className="mt-4 border-t border-neutral-200 pt-4 dark:border-neutral-700">
+              <p className="text-sm font-semibold">진행 중 보상 정합</p>
+              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                이미 받아 현재 보유 재화에 포함된 보상만 체크해주세요. 체크한 항목은 그래프에서 중복 제외됩니다.
+              </p>
+              <div className="mt-3 space-y-2">
+                {collectedSourceCandidates.map((candidate) => (
+                  <Checkbox
+                    key={candidate.sourceKey}
+                    checked={selectedCollectedSourceKeys.includes(candidate.sourceKey)}
+                    onChange={(checked) => handleToggleCollectedSource(candidate.sourceKey, checked)}
+                    label={
+                      <span className="flex flex-col">
+                        <span className="font-medium">{candidate.title}</span>
+                        <span className="text-xs text-neutral-500 dark:text-neutral-400">{candidate.description}</span>
+                      </span>
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </Transition>
     </div>

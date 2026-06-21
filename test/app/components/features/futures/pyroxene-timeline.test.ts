@@ -783,7 +783,12 @@ describe("pyroxene-timeline", () => {
       expect.objectContaining({
         date: expect.objectContaining({}),
         resourceDelta: { pyroxene: 1200, oneTimeTicket: 0, tenTimeTicket: 0 },
-        source: { type: "event_reward", description: "보상 이벤트" },
+        source: expect.objectContaining({
+          type: "event_reward",
+          uid: "reward-event",
+          description: "보상 이벤트",
+          collectedSourceKey: "event_reward:reward-event",
+        }),
       }),
     );
     expect(rewardEntry?.date.format("YYYY-MM-DD")).toBe("2026-01-10");

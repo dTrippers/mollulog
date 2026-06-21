@@ -57,8 +57,8 @@ export default function PyroxeneTimelineEvent({
       : pickupChance === "ceil"
         ? "모든 픽업 천장"
         : pickupChance === "average_pity"
-          ? "천장 포함 기댓값"
-          : "픽업 확률 기댓값";
+          ? "기댓값 (천장 반영)"
+          : "기댓값 (단순 확률)";
 
   const handleDeletePickupComplete = () => {
     if (confirmingPickupDelete) {

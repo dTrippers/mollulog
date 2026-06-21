@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import { and, eq, like, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { type UtcIsoString, compareInstantAsc, compareInstantDesc, nowUtcIso, toUtcIso } from "~/lib/date-time";
@@ -230,6 +230,68 @@ export async function deletePyroxeneOwnedResourceByUid(env: Env, userId: number,
   await db
     .delete(pyroxeneOwnedResourcesTable)
     .where(and(eq(pyroxeneOwnedResourcesTable.userId, userId), eq(pyroxeneOwnedResourcesTable.uid, uid)));
+}
+
+/**
+ * Pyroxene Collected Sources
+ */
+export const pyroxeneCollectedSourcesTable = sqliteTable(
+  "pyroxene_collected_sources",
+  {
+    id: int().primaryKey({ autoIncrement: true }),
+    uid: text().notNull(),
+    userId: int().notNull(),
+    sourceKey: text().notNull(),
+    collectedAt: text().notNull(),
+    createdAt: text().notNull().default(sql`current_timestamp`),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_collected_sources_uid").on(table.uid),
+    uniqueIndex("pyroxene_collected_sources_userId_sourceKey").on(table.userId, table.sourceKey),
+  ],
+);
+
+export async function getCollectedSourceKeys(env: Env, userId: number): Promise<Set<string>> {
+  const db = drizzle(env.DB);
+  const rows = await db
+    .select({ sourceKey: pyroxeneCollectedSourcesTable.sourceKey })
+    .from(pyroxeneCollectedSourcesTable)
+    .where(eq(pyroxeneCollectedSourcesTable.userId, userId));
+
+  return new Set(rows.map((row) => row.sourceKey));
+}
+
+export async function upsertCollectedSource(env: Env, userId: number, sourceKey: string): Promise<void> {
+  const db = drizzle(env.DB);
+  const collectedAt = nowUtcIso();
+  await db
+    .insert(pyroxeneCollectedSourcesTable)
+    .values({ uid: nanoid(8), userId, sourceKey, collectedAt })
+    .onConflictDoUpdate({
+      target: [pyroxeneCollectedSourcesTable.userId, pyroxeneCollectedSourcesTable.sourceKey],
+      set: { collectedAt },
+    });
+}
+
+export async function upsertCollectedSources(env: Env, userId: number, sourceKeys: string[]): Promise<void> {
+  const uniqueSourceKeys = [...new Set(sourceKeys)].filter((sourceKey) => sourceKey.length > 0);
+  if (uniqueSourceKeys.length === 0) {
+    return;
+  }
+
+  await Promise.all(uniqueSourceKeys.map((sourceKey) => upsertCollectedSource(env, userId, sourceKey)));
+}
+
+export async function deleteCollectedSource(env: Env, userId: number, sourceKey: string): Promise<void> {
+  const db = drizzle(env.DB);
+  await db
+    .delete(pyroxeneCollectedSourcesTable)
+    .where(
+      and(
+        eq(pyroxeneCollectedSourcesTable.userId, userId),
+        eq(pyroxeneCollectedSourcesTable.sourceKey, sourceKey),
+      ),
+    );
 }
 
 /**

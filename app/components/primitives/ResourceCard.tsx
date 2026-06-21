@@ -11,7 +11,7 @@ type ResourceCardProps = {
   labelColor?: "white" | "yellow" | "red";
   labelBgColor?: "black" | "red";
   name?: string;
-  size?: "md" | "lg";
+  size?: "sm" | "md" | "lg";
 } & (
   | {
       itemUid: string;
@@ -50,7 +50,10 @@ function ResourceCard({
 
   let sizeClass = "size-10";
   let imageSizeClass = "size-8";
-  if (size === "lg") {
+  if (size === "sm") {
+    sizeClass = "size-6";
+    imageSizeClass = "size-5";
+  } else if (size === "lg") {
     sizeClass = "size-12 md:size-14";
     imageSizeClass = "size-10";
   }

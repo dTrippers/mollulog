@@ -55,6 +55,7 @@ function eventItem({
   uid,
   since = "2026-07-02T00:00:00.000Z",
   until = "2026-07-03T00:00:00.000Z",
+  earnablePyroxene = null,
   recruitments = [pickupRecruitment()],
   recruitmentPool = { tier2Count: 150, tier3Count: 202 },
   tags = [],
@@ -62,6 +63,7 @@ function eventItem({
   uid: string;
   since?: string;
   until?: string;
+  earnablePyroxene?: number | null;
   recruitments?: NonNullable<PyroxeneScheduleItem["event"]>["recruitments"];
   recruitmentPool?: NonNullable<PyroxeneScheduleItem["event"]>["recruitmentPool"];
   tags?: string[];
@@ -72,7 +74,7 @@ function eventItem({
       name: uid,
       since,
       until,
-      earnablePyroxene: null,
+      earnablePyroxene,
       tags,
       recruitments,
       recruitmentPool,
@@ -80,26 +82,55 @@ function eventItem({
   };
 }
 
+function raidItem({
+  uid,
+  type,
+  name,
+  since = "2026-07-02T00:00:00.000Z",
+  until = "2026-07-03T00:00:00.000Z",
+}: {
+  uid: string;
+  type: NonNullable<PyroxeneScheduleItem["raid"]>["type"];
+  name: string;
+  since?: string;
+  until?: string;
+}): PyroxeneScheduleItem {
+  return {
+    raid: {
+      uid,
+      type,
+      name,
+      since,
+      until,
+    },
+  };
+}
+
 function buildTestTimeline({
   initialResources = { pyroxene: 100_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+  initialDate = new Date("2026-07-01T00:00:00.000Z"),
   eventDataMap = new Map<string, { completed: boolean; expectedTrials: number | null }>(),
   scheduleItems = [eventItem({ uid: "event-a" })],
   options = defaultOptions,
   bandMode,
+  collectedSourceKeys = [],
 }: {
   initialResources?: PickupResources;
+  initialDate?: Date;
   eventDataMap?: Map<string, { completed: boolean; expectedTrials: number | null }>;
   scheduleItems?: PyroxeneScheduleItem[];
   options?: PyroxenePlannerOptions;
   bandMode?: PyroxeneTimelineBandMode;
+  collectedSourceKeys?: string[];
 } = {}) {
   return buildTimeline(
     initialResources,
-    new Date("2026-07-01T00:00:00.000Z"),
+    initialDate,
     eventDataMap,
     scheduleItems,
     options,
     bandMode,
+    collectedSourceKeys,
   );
 }
 
@@ -188,6 +219,127 @@ describe("normalizePyroxenePlannerOptions", () => {
         event: { pickupChance: "unexpected" as PyroxenePlannerOptions["event"]["pickupChance"] },
       }).event.pickupChance,
     ).toBe("average_pity");
+  });
+});
+
+describe("buildTimeline collected sources", () => {
+  it("keeps a zero-delta total assault row when the raid reward is already collected", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [raidItem({ uid: "raid-total", type: "total_assault", name: "비나" })],
+      options: { ...defaultOptions, raid: { tier: "gold" } },
+      collectedSourceKeys: ["raid:raid-total"],
+    });
+
+    const raidEntry = timeline.find((entry) => entry.source.collectedSourceKey === "raid:raid-total");
+
+    expect(raidEntry).toEqual(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          type: "raid",
+          uid: "raid-total",
+          description: "총력전 비나",
+          collectedSourceKey: "raid:raid-total",
+        }),
+        resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+        accumulatedResources: { pyroxene: 100_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+      }),
+    );
+  });
+
+  it("keeps a zero-delta elimination row and skips ticket grant and expiry when already collected", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [raidItem({ uid: "raid-elimination", type: "elimination", name: "고즈" })],
+      collectedSourceKeys: ["raid:raid-elimination"],
+    });
+
+    const raidEntries = timeline.filter((entry) => entry.source.type === "raid");
+
+    expect(raidEntries).toHaveLength(1);
+    expect(raidEntries[0]).toEqual(
+      expect.objectContaining({
+        date: expect.objectContaining({}),
+        source: expect.objectContaining({
+          uid: "raid-elimination",
+          description: "대결전 고즈",
+          collectedSourceKey: "raid:raid-elimination",
+        }),
+        resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+        accumulatedResources: { pyroxene: 100_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+      }),
+    );
+    expect(raidEntries[0].date.format("YYYY-MM-DD")).toBe("2026-07-03");
+    expect(timeline.find((entry) => entry.source.uid === "raid-elimination::ten-time-ticket-expiry")).toBeUndefined();
+  });
+
+  it("keeps a zero-delta event reward row when the event reward is already collected", () => {
+    const timeline = buildTestTimeline({
+      initialResources: { pyroxene: 10_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+      initialDate: new Date("2026-07-02T00:00:00.000Z"),
+      scheduleItems: [
+        eventItem({
+          uid: "reward-event",
+          earnablePyroxene: 1_200,
+          recruitments: [],
+          recruitmentPool: undefined,
+        }),
+      ],
+      collectedSourceKeys: ["event_reward:reward-event"],
+    });
+
+    const rewardEntry = timeline.find((entry) => entry.source.collectedSourceKey === "event_reward:reward-event");
+
+    expect(rewardEntry).toEqual(
+      expect.objectContaining({
+        source: expect.objectContaining({
+          type: "event_reward",
+          uid: "reward-event",
+          description: "reward-event",
+          collectedSourceKey: "event_reward:reward-event",
+        }),
+        resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+        accumulatedResources: { pyroxene: 10_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+      }),
+    );
+    expect(rewardEntry?.date.format("YYYY-MM-DD")).toBe("2026-07-03");
+  });
+
+  it("keeps existing raid and event reward behavior when sources are not collected", () => {
+    const timeline = buildTestTimeline({
+      initialResources: { pyroxene: 10_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+      initialDate: new Date("2026-07-02T00:00:00.000Z"),
+      scheduleItems: [
+        raidItem({ uid: "raid-total", type: "total_assault", name: "비나" }),
+        raidItem({ uid: "raid-elimination", type: "elimination", name: "고즈" }),
+        eventItem({
+          uid: "reward-event",
+          earnablePyroxene: 1_200,
+          recruitments: [],
+          recruitmentPool: undefined,
+        }),
+      ],
+      options: { ...defaultOptions, raid: { tier: "gold" } },
+    });
+
+    expect(timeline.find((entry) => entry.source.uid === "raid-total")?.resourceDelta).toEqual({
+      pyroxene: 1_650,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+    });
+    expect(timeline.find((entry) => entry.source.uid === "raid-elimination")?.resourceDelta).toEqual({
+      pyroxene: 650,
+      oneTimeTicket: 0,
+      tenTimeTicket: 1,
+    });
+    expect(timeline.find((entry) => entry.source.uid === "raid-elimination::ten-time-ticket-expiry")).toEqual(
+      expect.objectContaining({
+        resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: -1 },
+      }),
+    );
+    expect(timeline.find((entry) => entry.source.uid === "reward-event")?.resourceDelta).toEqual({
+      pyroxene: 1_200,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+    });
   });
 });
 
