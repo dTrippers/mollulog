@@ -21,6 +21,7 @@ const allowedFilterTypes = new Set<EventType | RaidType>([
   "collab",
   "mini_event",
   "main_story",
+  "mini_story",
   "campaign",
   "joint_firing_drill",
   "pickup",

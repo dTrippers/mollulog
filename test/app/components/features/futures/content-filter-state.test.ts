@@ -26,11 +26,11 @@ describe("content-filter-state", () => {
   it("drops unsupported types and deduplicates the remaining values", () => {
     expect(
       normalizeContentFilterState({
-        types: ["event", "event", "raid", "unknown", "allied"],
+        types: ["event", "event", "raid", "unknown", "allied", "mini_story"],
         onlyPickups: "true",
       }),
     ).toEqual({
-      types: ["event", "allied"],
+      types: ["event", "allied", "mini_story"],
       onlyPickups: false,
     });
   });

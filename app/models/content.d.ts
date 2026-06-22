@@ -7,7 +7,7 @@ export type Position = "front" | "middle" | "back";
 export type TacticRole = "attacker" | "tank" | "support" | "healer" | "tactical_support";
 
 // 컨텐츠 관련
-export type EventType = "event" | "mini_event" | "guide_mission" | "immortal_event" | "pickup" | "fes" | "campaign" | "joint_firing_drill" | "main_story" | "collab" | "battle_pass" | "update";
+export type EventType = "event" | "mini_event" | "guide_mission" | "immortal_event" | "pickup" | "fes" | "campaign" | "joint_firing_drill" | "main_story" | "mini_story" | "collab" | "battle_pass" | "update";
 export type RaidType = "total_assault" | "elimination" | "unlimit" | "allied" | "raid";
 
 export const attackTypeColorMap: Record<Attack, "red" | "yellow" | "green" | "blue" | "purple" | "grey"> = {

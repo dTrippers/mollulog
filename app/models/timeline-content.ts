@@ -17,6 +17,7 @@ export type TimelineContentType =
   | "mini_event"
   | "pickup"
   | "main_story"
+  | "mini_story"
   | "campaign"
   | "joint_firing_drill"
   | "raid"
