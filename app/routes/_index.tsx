@@ -1,7 +1,8 @@
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { BookOpenIcon, FireIcon, IdentificationIcon, TicketIcon } from "@heroicons/react/24/outline";
+import { Suspense } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, data, useLoaderData } from "react-router";
+import { Await, Link, data, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, RecruitmentCard } from "~/components/features/events";
 import { RaidCard } from "~/components/features/raids";
@@ -15,7 +16,7 @@ import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/models/raid";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
-import HomeRightRail from "./_index._components/HomeRightRail";
+import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
 
 export const meta: MetaFunction = () => {
   return [
@@ -36,29 +37,52 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const currentUser = await timing.measure("auth", () => getActiveSensei(env, request));
   const currentUserId = currentUser?.id;
 
-  const [{ mainEvent, currentRaids, currentRecruitments, favoritedCounts }, recentCommunityPage, youtubeSections] =
-    await Promise.all([
-      timing.measure("index_contents", () => getIndexContents(env)),
-      timing.measure("community", () =>
-        getCommunityFeedPage(env, {
-          currentUserId,
-          postTypes: ["student_review", "event_opinion"],
-          pageSize: 4,
-          includeEngagement: false,
-        }),
-      ),
-      timing.measure("youtube", () =>
-        getHomeYoutubeSections(env).catch((error) => {
-          logger.error("Failed to load home youtube sections", error);
-          return [];
-        }),
-      ),
-    ]);
-  const recentCommunityFeed = await timing.measure("enrich", () =>
-    enrichCommunityFeedPosts(env, recentCommunityPage.items),
+  const indexContentsPromise = timing.measure("index_contents", () => getIndexContents(env));
+  const recentCommunityPagePromise = timing.measure("community", () =>
+    getCommunityFeedPage(env, {
+      currentUserId,
+      postTypes: ["student_review", "event_opinion"],
+      pageSize: 4,
+      includeEngagement: false,
+    }),
   );
+  const recentCommunityFeedPromise = recentCommunityPagePromise.then((recentCommunityPage) =>
+    timing.measure("enrich", () => enrichCommunityFeedPosts(env, recentCommunityPage.items)),
+  );
+  const recentCommunityRailPromise = recentCommunityFeedPromise
+    .then((recentCommunityFeed) => ({
+      recentCommunityPosts: recentCommunityFeed.posts,
+      studentsByUid: recentCommunityFeed.studentsByUid,
+    }))
+    .catch((error) => {
+      logger.error("Failed to load home community rail", error);
+      return {
+        recentCommunityPosts: [],
+        studentsByUid: {},
+      };
+    });
+  const youtubeSectionsPromise = timing.measure("youtube", () =>
+    getHomeYoutubeSections(env).catch((error) => {
+      logger.error("Failed to load home youtube sections", error);
+      return [];
+    }),
+  );
+  const favoritedStudentsPromise = currentUserId
+    ? timing.measure("favorites", () => getUserFavoritedStudents(env, currentUserId))
+    : Promise.resolve([]);
+  const rightRailPromise = Promise.all([recentCommunityRailPromise, youtubeSectionsPromise]).then(
+    ([communityRail, youtubeSections]) => ({
+      ...communityRail,
+      youtubeSections,
+    }),
+  );
+
+  const [{ mainEvent, currentRaids, currentRecruitments, favoritedCounts }, favoritedStudents] = await Promise.all([
+    indexContentsPromise,
+    favoritedStudentsPromise,
+  ]);
   const favoritedStudentUids = currentUserId
-    ? (await timing.measure("favorites", () => getUserFavoritedStudents(env, currentUserId)))
+    ? favoritedStudents
         .filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId))
         .map((favorited) => favorited.studentId)
     : [];
@@ -70,9 +94,11 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const currentUnlimit = currentRaids.find((raid) => raid.raidType === "unlimit");
 
   timing.add("total", Date.now() - startedAt);
-  if (shouldLogTiming()) {
-    logger.info("loader_timing", { route: "_index", signedIn: currentUser !== null, ...timing.toMetrics() });
-  }
+  void rightRailPromise.finally(() => {
+    if (shouldLogTiming()) {
+      logger.info("loader_timing", { route: "_index", signedIn: currentUser !== null, ...timing.toMetrics() });
+    }
+  });
 
   return data(
     {
@@ -82,10 +108,8 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       favoritedStudentUids,
       currentTotalAssualt,
       currentUnlimit,
-      recentCommunityPosts: recentCommunityFeed.posts,
-      studentsByUid: recentCommunityFeed.studentsByUid,
+      rightRail: rightRailPromise,
       signedIn: currentUser !== null,
-      youtubeSections,
     },
     { headers: { "Server-Timing": timing.header() } },
   );
@@ -110,10 +134,8 @@ export default function Index() {
     favoritedStudentUids,
     currentTotalAssualt,
     currentUnlimit,
-    recentCommunityPosts,
+    rightRail,
     signedIn,
-    studentsByUid,
-    youtubeSections,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -159,12 +181,18 @@ export default function Index() {
         </div>
       </div>
       <div className="min-w-0 lg:w-full lg:max-w-72 xl:max-w-xs lg:flex-none">
-        <HomeRightRail
-          recentCommunityPosts={recentCommunityPosts}
-          signedIn={signedIn}
-          studentsByUid={studentsByUid}
-          youtubeSections={youtubeSections}
-        />
+        <Suspense fallback={<HomeRightRailSkeleton />}>
+          <Await resolve={rightRail}>
+            {({ recentCommunityPosts, studentsByUid, youtubeSections }) => (
+              <HomeRightRail
+                recentCommunityPosts={recentCommunityPosts}
+                signedIn={signedIn}
+                studentsByUid={studentsByUid}
+                youtubeSections={youtubeSections}
+              />
+            )}
+          </Await>
+        </Suspense>
       </div>
     </div>
   );

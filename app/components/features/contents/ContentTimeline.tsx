@@ -46,6 +46,8 @@ export type ContentTimelineProps = {
     showPendingStudentFavoriteFeatureBanner?: boolean;
 
     allComments?: ContentTimelineItemProps["allComments"];
+    commentSummary?: ContentTimelineItemProps["commentSummary"];
+    isLoadingComments?: boolean;
   }[];
 
   favoritedStudents?: { contentUid: string; studentUid: string }[];
@@ -58,6 +60,7 @@ export type ContentTimelineProps = {
   revealedSpoilerContentUids?: string[];
   onRevealSpoiler?: (contentUid: string) => void;
   onHideSpoiler?: (contentUid: string) => void;
+  onCommentOpen?: (contentUid: string) => void;
   onCommentCreate?: (contentUid: string, body: string, visibility: "private" | "public") => void;
   onCommentCreateSubcomment?: (
     contentUid: string,
@@ -89,6 +92,7 @@ export default function ContentTimeline({
   revealedSpoilerContentUids = [],
   onRevealSpoiler,
   onHideSpoiler,
+  onCommentOpen,
   onCommentCreate,
   onCommentCreateSubcomment,
   onCommentUpdate,
@@ -186,6 +190,9 @@ export default function ContentTimeline({
                       onRevealSpoiler={content.isSpoiler ? () => onRevealSpoiler?.(content.uid) : undefined}
                       onHideSpoiler={content.isSpoiler ? () => onHideSpoiler?.(content.uid) : undefined}
                       allComments={content.allComments}
+                      commentSummary={content.commentSummary}
+                      isLoadingComments={content.isLoadingComments}
+                      onCommentOpen={showComments ? () => onCommentOpen?.(content.uid) : undefined}
                       onCommentCreate={
                         showComments
                           ? (body, visibility) => onCommentCreate?.(content.uid, body, visibility)

@@ -25,6 +25,7 @@ export {
   getUserComments,
   getContentComments,
   getContentsComments,
+  getContentsCommentSummaries,
   createComment,
   createSubcomment,
   updateComment,
@@ -36,7 +37,7 @@ export {
   getNestedContentComments,
   nestComments,
 } from "./content-comment";
-export type { NestedComment } from "./content-comment";
+export type { ContentCommentSummary, NestedComment } from "./content-comment";
 
 /**
  * Index Contents

@@ -1,5 +1,5 @@
 import { LockClosedIcon, LockOpenIcon, ArrowUturnLeftIcon, TrashIcon, PencilSquareIcon, ArrowUpIcon, XMarkIcon, BookmarkIcon } from "@heroicons/react/16/solid";
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Callout } from "~/components/primitives";
 import { ClickableSurface } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
@@ -32,6 +32,7 @@ type ContentCommentEditorProps = {
   onDeleteComment?: (commentUid: string) => void;
   onPinComment?: (commentUid: string) => void;
   onUnpinComment?: () => void;
+  isLoading?: boolean;
   isSubmitting?: boolean;
 };
 
@@ -47,9 +48,11 @@ export default function ContentCommentEditor({
   onDeleteComment,
   onPinComment,
   onUnpinComment,
+  isLoading = false,
   isSubmitting = false,
 }: ContentCommentEditorProps) {
   const { showSignIn } = useSignIn();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [newCommentBody, setNewCommentBody] = useState<string>("");
   const [newCommentVisibility, setNewCommentVisibility] = useState<"private" | "public">("public");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -58,6 +61,23 @@ export default function ContentCommentEditor({
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [editBody, setEditBody] = useState<string>("");
   const [editVisibility, setEditVisibility] = useState<"private" | "public">("private");
+  const sortedComments = useMemo(() => sortCommentsByCreatedAt(comments), [comments]);
+  const commentScrollKey = sortedComments
+    .map((comment) => `${comment.uid}:${comment.createdAt}:${comment.subcomments?.map((sub) => sub.uid).join(",")}`)
+    .join("|");
+
+  useEffect(() => {
+    if (commentScrollKey.length === 0 && comments.length > 0) {
+      return;
+    }
+
+    const scrollContainer = scrollContainerRef.current;
+    if (!scrollContainer || isLoading) {
+      return;
+    }
+
+    scrollContainer.scrollTop = scrollContainer.scrollHeight;
+  }, [commentScrollKey, comments.length, isLoading]);
 
   const handleCreateComment = () => {
     if (!isSubmitting && newCommentBody.trim()) {
@@ -115,10 +135,12 @@ export default function ContentCommentEditor({
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto no-scrollbar">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar">
         <div className={`${variant === "compact" ? "mb-3 space-y-1" : "-mt-3 mb-4 space-y-1"}`}>
-          {comments.length > 0 ?
-            comments.map((comment) => (
+          {isLoading ? (
+            <p className="my-16 text-sm text-center text-neutral-500 dark:text-neutral-400">의견을 불러오고 있어요</p>
+          ) : sortedComments.length > 0 ? (
+            sortedComments.map((comment) => (
               <div key={comment.uid} className={variant === "compact" ? "mb-2.5" : "mb-3"}>
                 <div className={editingComment === comment.uid ? "opacity-50" : ""}>
                   <CommentDisplay
@@ -172,7 +194,7 @@ export default function ContentCommentEditor({
                     className={
                       variant === "compact"
                         ? "ml-1.5 my-1 space-y-1 border-l-2 border-neutral-200 pl-3 dark:border-neutral-700"
-                        : "ml-2 my-1 space-y-1 border-l-2 border-neutral-200 pl-4 dark:border-neutral-700"
+                      : "ml-2 my-1 space-y-1 border-l-2 border-neutral-200 pl-4 dark:border-neutral-700"
                     }
                   >
                     {comment.subcomments.map((subcomment) => (
@@ -211,9 +233,10 @@ export default function ContentCommentEditor({
                   </div>
                 )}
               </div>
-            )) :
+            ))
+          ) : (
             <p className="my-16 text-sm text-center text-neutral-500 dark:text-neutral-400">작성된 의견이 없어요</p>
-          }
+          )}
         </div>
       </div>
       <div className="shrink-0">
@@ -246,6 +269,19 @@ export default function ContentCommentEditor({
       </div>
     </>
   );
+}
+
+function sortCommentsByCreatedAt(comments: CommentData[]): CommentData[] {
+  return [...comments]
+    .sort(compareCommentCreatedAt)
+    .map((comment) => ({
+      ...comment,
+      subcomments: comment.subcomments ? [...comment.subcomments].sort(compareCommentCreatedAt) : undefined,
+    }));
+}
+
+function compareCommentCreatedAt(a: CommentData, b: CommentData): number {
+  return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
 }
 
 type CommentFormProps = {
