@@ -84,6 +84,14 @@
         {
           "pattern": "mollulog.net",
           "custom_domain": true
+        },
+        {
+          "pattern": "origin.mollulog.net",
+          "custom_domain": true
+        },
+        {
+          "pattern": "mollulog.net/*",
+          "zone_name": "mollulog.net"
         }
       ],
       "vars": {
