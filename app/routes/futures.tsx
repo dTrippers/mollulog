@@ -1,6 +1,13 @@
 import { Bars3BottomLeftIcon, FunnelIcon, QueueListIcon, TableCellsIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
-import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
+import {
+  type HeadersFunction,
+  type LoaderFunctionArgs,
+  type MetaFunction,
+  data,
+  useFetcher,
+  useLoaderData,
+} from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { ContentTimeline, ContentTimelineCompact } from "~/components/features/contents";
 import type { ContentTimelineProps } from "~/components/features/contents";
@@ -10,6 +17,8 @@ import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
+import { getLogger } from "~/lib/observability.server";
+import { ServerTiming, shouldLogTiming } from "~/lib/server-timing.server";
 import {
   type FutureContent,
   type NestedComment,
@@ -45,9 +54,13 @@ export const meta: MetaFunction = () => {
   ];
 };
 
-export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<FutureContentsLoaderData> => {
-  const { env } = context.cloudflare;
-  const rawContents = await getFutureContents(env);
+export const loader = async ({ request, context }: LoaderFunctionArgs) => {
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "futures.loader" });
+  const timing = new ServerTiming();
+  const startedAt = Date.now();
+
+  const rawContents = await timing.measure("future_contents", () => getFutureContents(env));
   const contents: FutureContentsLoaderContent[] = rawContents.map((content: FutureContent) => ({
     uid: content.uid,
     name: content.name,
@@ -72,12 +85,15 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
     )
     .filter((uid): uid is string => typeof uid === "string" && uid.length > 0);
 
-  const currentUser = await getActiveSensei(env, request);
+  const currentUser = await timing.measure("auth", () => getActiveSensei(env, request));
+  const currentUserId = currentUser?.id;
   const signedIn = currentUser !== null;
-  const flatComments = await getContentsComments(
-    env,
-    contents.map((content: FutureContentsLoaderContent) => content.uid),
-    currentUser?.id,
+  const flatComments = await timing.measure("comments", () =>
+    getContentsComments(
+      env,
+      contents.map((content: FutureContentsLoaderContent) => content.uid),
+      currentUserId,
+    ),
   );
 
   const allComments: AllCommentsState = {};
@@ -90,16 +106,42 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
     .map((content) => content.recruitmentGroupUid)
     .filter((uid): uid is string => uid !== null);
 
-  return {
+  const favoritedStudents = currentUserId
+    ? await timing.measure("favorited_students", () => getUserFavoritedStudents(env, currentUserId))
+    : null;
+  const favoritedCounts = await timing.measure("favorited_counts", () => getFavoritedCounts(env, allStudentUids));
+  const recruitmentResults = currentUserId
+    ? await timing.measure("recruitment_results", () =>
+        getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids),
+      )
+    : [];
+
+  const payload: FutureContentsLoaderData = {
     signedIn,
     contents,
-    favoritedStudents: signedIn ? await getUserFavoritedStudents(env, currentUser.id) : null,
-    favoritedCounts: await getFavoritedCounts(env, allStudentUids),
-    recruitmentResults: signedIn
-      ? await getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids)
-      : [],
+    favoritedStudents,
+    favoritedCounts,
+    recruitmentResults,
     allComments,
   };
+
+  timing.add("total", Date.now() - startedAt);
+  if (shouldLogTiming()) {
+    logger.info("loader_timing", { route: "futures", signedIn, ...timing.toMetrics() });
+  }
+
+  return data(payload, { headers: { "Server-Timing": timing.header() } });
+};
+
+export const headers: HeadersFunction = ({ loaderHeaders, parentHeaders }) => {
+  const responseHeaders: Record<string, string> = {};
+  const serverTiming = [parentHeaders.get("Server-Timing"), loaderHeaders.get("Server-Timing")]
+    .filter((value): value is string => Boolean(value))
+    .join(", ");
+  if (serverTiming) {
+    responseHeaders["Server-Timing"] = serverTiming;
+  }
+  return responseHeaders;
 };
 
 function normalizeFutureRecruitment(recruitment: FutureRecruitment): FutureRecruitment {
@@ -198,13 +240,18 @@ function getCommonContentFields(content: FutureContentForView) {
 
 function getEarliestUpcomingPickupAt(content: FutureContentsLoaderContent, now: string): string | null {
   const upcomingPickup = content.recruitments
-    .filter((recruitment) => recruitment.pickup && recruitment.student !== null && isInstantAfter(recruitment.since, now))
+    .filter(
+      (recruitment) => recruitment.pickup && recruitment.student !== null && isInstantAfter(recruitment.since, now),
+    )
     .sort((a, b) => compareInstantAsc(a.since, b.since))[0];
 
   return upcomingPickup?.since ?? null;
 }
 
-function getStudentAnalysisFeatureBannerContentUid(contents: FutureContentsLoaderContent[], now: string): string | null {
+function getStudentAnalysisFeatureBannerContentUid(
+  contents: FutureContentsLoaderContent[],
+  now: string,
+): string | null {
   const target = contents
     .map((content) => ({
       content,

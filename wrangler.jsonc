@@ -82,10 +82,6 @@
     "production": {
       "routes": [
         {
-          "pattern": "mollulog.net",
-          "custom_domain": true
-        },
-        {
           "pattern": "origin.mollulog.net",
           "custom_domain": true
         },
