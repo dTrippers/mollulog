@@ -1,12 +1,14 @@
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { BookOpenIcon, FireIcon, IdentificationIcon, TicketIcon } from "@heroicons/react/24/outline";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Suspense } from "react";
+import type { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Await, Link, data, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, RecruitmentCard } from "~/components/features/events";
 import { RaidCard } from "~/components/features/raids";
 import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
 import { getLogger } from "~/lib/observability.server";
+import { ServerTiming, shouldLogTiming } from "~/lib/server-timing.server";
 import { getCommunityFeedPage } from "~/models/community";
 import { enrichCommunityFeedPosts } from "~/models/community-feed";
 import { type IndexRecruitment, getIndexContents } from "~/models/content";
@@ -14,7 +16,7 @@ import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/models/raid";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
-import HomeRightRail from "./_index._components/HomeRightRail";
+import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
 
 export const meta: MetaFunction = () => {
   return [
@@ -29,25 +31,58 @@ export const meta: MetaFunction = () => {
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const logger = getLogger(env, ctx, { route: "_index.loader" });
-  const currentUser = await getActiveSensei(env, request);
+  const timing = new ServerTiming();
+  const startedAt = Date.now();
 
-  const [{ mainEvent, currentRaids, currentRecruitments, favoritedCounts }, recentCommunityPage, youtubeSections] =
-    await Promise.all([
-      getIndexContents(env),
-      getCommunityFeedPage(env, {
-        currentUserId: currentUser?.id,
-        postTypes: ["student_review", "event_opinion"],
-        pageSize: 4,
-        includeEngagement: false,
-      }),
-      getHomeYoutubeSections(env).catch((error) => {
-        logger.error("Failed to load home youtube sections", error);
-        return [];
-      }),
-    ]);
-  const recentCommunityFeed = await enrichCommunityFeedPosts(env, recentCommunityPage.items);
-  const favoritedStudentUids = currentUser
-    ? (await getUserFavoritedStudents(env, currentUser.id))
+  const currentUser = await timing.measure("auth", () => getActiveSensei(env, request));
+  const currentUserId = currentUser?.id;
+
+  const indexContentsPromise = timing.measure("index_contents", () => getIndexContents(env));
+  const recentCommunityPagePromise = timing.measure("community", () =>
+    getCommunityFeedPage(env, {
+      currentUserId,
+      postTypes: ["student_review", "event_opinion"],
+      pageSize: 4,
+      includeEngagement: false,
+    }),
+  );
+  const recentCommunityFeedPromise = recentCommunityPagePromise.then((recentCommunityPage) =>
+    timing.measure("enrich", () => enrichCommunityFeedPosts(env, recentCommunityPage.items)),
+  );
+  const recentCommunityRailPromise = recentCommunityFeedPromise
+    .then((recentCommunityFeed) => ({
+      recentCommunityPosts: recentCommunityFeed.posts,
+      studentsByUid: recentCommunityFeed.studentsByUid,
+    }))
+    .catch((error) => {
+      logger.error("Failed to load home community rail", error);
+      return {
+        recentCommunityPosts: [],
+        studentsByUid: {},
+      };
+    });
+  const youtubeSectionsPromise = timing.measure("youtube", () =>
+    getHomeYoutubeSections(env).catch((error) => {
+      logger.error("Failed to load home youtube sections", error);
+      return [];
+    }),
+  );
+  const favoritedStudentsPromise = currentUserId
+    ? timing.measure("favorites", () => getUserFavoritedStudents(env, currentUserId))
+    : Promise.resolve([]);
+  const rightRailPromise = Promise.all([recentCommunityRailPromise, youtubeSectionsPromise]).then(
+    ([communityRail, youtubeSections]) => ({
+      ...communityRail,
+      youtubeSections,
+    }),
+  );
+
+  const [{ mainEvent, currentRaids, currentRecruitments, favoritedCounts }, favoritedStudents] = await Promise.all([
+    indexContentsPromise,
+    favoritedStudentsPromise,
+  ]);
+  const favoritedStudentUids = currentUserId
+    ? favoritedStudents
         .filter((favorited) => currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId))
         .map((favorited) => favorited.studentId)
     : [];
@@ -57,18 +92,38 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     (raid) => raid.raidType === "total_assault" || raid.raidType === "elimination",
   );
   const currentUnlimit = currentRaids.find((raid) => raid.raidType === "unlimit");
-  return {
-    mainEvent,
-    currentRecruitments,
-    favoritedCounts,
-    favoritedStudentUids,
-    currentTotalAssualt,
-    currentUnlimit,
-    recentCommunityPosts: recentCommunityFeed.posts,
-    studentsByUid: recentCommunityFeed.studentsByUid,
-    signedIn: currentUser !== null,
-    youtubeSections,
-  };
+
+  timing.add("total", Date.now() - startedAt);
+  void rightRailPromise.finally(() => {
+    if (shouldLogTiming()) {
+      logger.info("loader_timing", { route: "_index", signedIn: currentUser !== null, ...timing.toMetrics() });
+    }
+  });
+
+  return data(
+    {
+      mainEvent,
+      currentRecruitments,
+      favoritedCounts,
+      favoritedStudentUids,
+      currentTotalAssualt,
+      currentUnlimit,
+      rightRail: rightRailPromise,
+      signedIn: currentUser !== null,
+    },
+    { headers: { "Server-Timing": timing.header() } },
+  );
+};
+
+export const headers: HeadersFunction = ({ loaderHeaders, parentHeaders }) => {
+  const responseHeaders: Record<string, string> = {};
+  const serverTiming = [parentHeaders.get("Server-Timing"), loaderHeaders.get("Server-Timing")]
+    .filter((value): value is string => Boolean(value))
+    .join(", ");
+  if (serverTiming) {
+    responseHeaders["Server-Timing"] = serverTiming;
+  }
+  return responseHeaders;
 };
 
 export default function Index() {
@@ -79,10 +134,8 @@ export default function Index() {
     favoritedStudentUids,
     currentTotalAssualt,
     currentUnlimit,
-    recentCommunityPosts,
+    rightRail,
     signedIn,
-    studentsByUid,
-    youtubeSections,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -128,12 +181,18 @@ export default function Index() {
         </div>
       </div>
       <div className="min-w-0 lg:w-full lg:max-w-72 xl:max-w-xs lg:flex-none">
-        <HomeRightRail
-          recentCommunityPosts={recentCommunityPosts}
-          signedIn={signedIn}
-          studentsByUid={studentsByUid}
-          youtubeSections={youtubeSections}
-        />
+        <Suspense fallback={<HomeRightRailSkeleton />}>
+          <Await resolve={rightRail}>
+            {({ recentCommunityPosts, studentsByUid, youtubeSections }) => (
+              <HomeRightRail
+                recentCommunityPosts={recentCommunityPosts}
+                signedIn={signedIn}
+                studentsByUid={studentsByUid}
+                youtubeSections={youtubeSections}
+              />
+            )}
+          </Await>
+        </Suspense>
       </div>
     </div>
   );

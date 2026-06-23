@@ -34,6 +34,7 @@ import {
   parseUtcTimestamp,
 } from "~/lib/date-time";
 import { contentTypeLocale, recruitmentLabelLocale, remainingTime } from "~/locales/ko";
+import type { ContentCommentSummary } from "~/models/content";
 import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { EventType, RaidType, Role } from "~/models/content.d";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
@@ -79,13 +80,16 @@ export type ContentTimelineItemProps = {
       };
     }[];
   }[];
+  commentSummary?: ContentCommentSummary;
 
+  onCommentOpen?: () => void;
   onCommentCreate?: (body: string, visibility: "private" | "public") => void;
   onCommentCreateSubcomment?: (parentCommentId: string, body: string, visibility: "private" | "public") => void;
   onCommentUpdate?: (commentUid: string, body: string, visibility: "private" | "public") => void;
   onCommentDelete?: (commentUid: string) => void;
   onCommentPin?: (commentUid: string) => void;
   onCommentUnpin?: () => void;
+  isLoadingComments?: boolean;
   isSubmittingComment?: boolean;
 
   favoritedStudents?: string[];
@@ -160,6 +164,9 @@ export function ContentTimelineItem({
   onCommentDelete,
   onCommentPin,
   onCommentUnpin,
+  commentSummary,
+  onCommentOpen,
+  isLoadingComments = false,
   isSubmittingComment,
   favoritedStudents,
   favoritedCounts,
@@ -279,7 +286,14 @@ export function ContentTimelineItem({
       {/* 댓글 */}
       {showComments && onCommentCreate && (
         <>
-          <ContentCommentView comments={allComments} onClick={() => setCommentEditing(true)} />
+          <ContentCommentView
+            comments={allComments}
+            summary={commentSummary}
+            onClick={() => {
+              onCommentOpen?.();
+              setCommentEditing(true);
+            }}
+          />
 
           {commentEditing && (
             <BottomSheet
@@ -295,6 +309,7 @@ export function ContentTimelineItem({
                 onDeleteComment={onCommentDelete}
                 onPinComment={onCommentPin}
                 onUnpinComment={onCommentUnpin}
+                isLoading={isLoadingComments}
                 isSubmitting={isSubmittingComment}
                 signedIn={signedIn}
               />

@@ -28,6 +28,42 @@ export default function HomeRightRail({
   );
 }
 
+export function HomeRightRailSkeleton() {
+  return (
+    <aside className="space-y-4 lg:sticky lg:top-24">
+      <RailSection title="최근 평가/의견" compact>
+        <div className="space-y-2" aria-hidden="true">
+          {["community-1", "community-2", "community-3"].map((key) => (
+            <div key={key} className="rounded-md border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-950">
+              <div className="h-4 w-3/4 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+              <div className="mt-2 h-3 w-1/2 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+            </div>
+          ))}
+          <div className="h-9 animate-pulse rounded-md bg-neutral-200 dark:bg-neutral-800" />
+        </div>
+      </RailSection>
+      <RailSection title="공식 유튜브 최근 영상">
+        <div className="space-y-3" aria-hidden="true">
+          {["youtube-1", "youtube-2", "youtube-3"].map((key) => (
+            <div key={key} className="flex gap-3 rounded-lg border border-neutral-200 bg-white p-2 dark:border-neutral-800 dark:bg-neutral-950">
+              <div className="aspect-video w-28 shrink-0 animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800" />
+              <div className="min-w-0 flex-1 py-1">
+                <div className="h-4 w-full animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+                <div className="mt-2 h-4 w-2/3 animate-pulse rounded bg-neutral-200 dark:bg-neutral-800" />
+                <div className="mt-3 h-5 w-20 animate-pulse rounded-full bg-neutral-200 dark:bg-neutral-800" />
+              </div>
+            </div>
+          ))}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="h-9 animate-pulse rounded-md bg-neutral-200 dark:bg-neutral-800" />
+            <div className="h-9 animate-pulse rounded-md bg-neutral-200 dark:bg-neutral-800" />
+          </div>
+        </div>
+      </RailSection>
+    </aside>
+  );
+}
+
 function HomeRecentCommunitySection({
   recentCommunityPosts,
   signedIn,

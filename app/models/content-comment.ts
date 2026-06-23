@@ -36,6 +36,12 @@ type ContentCommentWithSensei = ContentComment & {
   };
 };
 
+export type ContentCommentSummary = {
+  count: number;
+  hasRecentComment: boolean;
+  pinnedPreviewBody: string | null;
+};
+
 export const contentComments = communityPostsTable;
 
 function splitIntoBatches<T>(values: T[], batchSize = IN_QUERY_BATCH_SIZE): T[][] {
@@ -232,6 +238,137 @@ export async function getContentsComments(
         },
       },
     ];
+  }
+
+  return result;
+}
+
+export async function getContentsCommentSummaries(
+  env: Env,
+  contentIds: string[],
+  userId?: number,
+): Promise<Record<string, ContentCommentSummary>> {
+  if (contentIds.length === 0) {
+    return {};
+  }
+
+  const db = drizzle(env.DB);
+  const uniqueContentIds = [...new Set(contentIds)];
+  const result = uniqueContentIds.reduce<Record<string, ContentCommentSummary>>((acc, contentUid) => {
+    acc[contentUid] = {
+      count: 0,
+      hasRecentComment: false,
+      pinnedPreviewBody: null,
+    };
+    return acc;
+  }, {});
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const isRecent = (createdAt: string) => new Date(normalizeCommunityTimestamp(createdAt)) >= threeDaysAgo;
+
+  const postsPromise = Promise.all(
+    splitIntoBatches(uniqueContentIds).map((batch) =>
+      db
+        .select({
+          id: communityPostsTable.id,
+          uid: communityPostsTable.uid,
+          userId: communityPostsTable.userId,
+          subjectContentUid: communityPostsTable.subjectContentUid,
+          pinned: communityPostsTable.pinned,
+          createdAt: communityPostsTable.createdAt,
+        })
+        .from(communityPostsTable)
+        .where(
+          and(
+            eq(communityPostsTable.postType, "event_opinion"),
+            inArray(communityPostsTable.subjectContentUid, batch),
+            visibilityFilter(userId),
+          ),
+        ),
+    ),
+  );
+
+  // The pinned-preview lookup only depends on contentIds (not on the posts/subcomments
+  // results), so kick it off concurrently instead of running it as a third serial round-trip.
+  const pinnedPostsPromise: Promise<{ subjectContentUid: string | null; blocks: string }[]> = userId
+    ? Promise.all(
+        splitIntoBatches(uniqueContentIds).map((batch) =>
+          db
+            .select({
+              subjectContentUid: communityPostsTable.subjectContentUid,
+              blocks: communityPostsTable.blocks,
+            })
+            .from(communityPostsTable)
+            .where(
+              and(
+                eq(communityPostsTable.userId, userId),
+                eq(communityPostsTable.postType, "event_opinion"),
+                eq(communityPostsTable.pinned, 1),
+                inArray(communityPostsTable.subjectContentUid, batch),
+                visibilityFilter(userId),
+              ),
+            ),
+        ),
+      ).then((batches) => batches.flat())
+    : Promise.resolve([]);
+
+  const posts = (await postsPromise).flat();
+  const postMap = new Map(
+    posts.map((post) => [
+      post.uid,
+      {
+        contentId: post.subjectContentUid ?? "",
+      },
+    ]),
+  );
+
+  for (const post of posts) {
+    const contentUid = post.subjectContentUid ?? "";
+    const summary = result[contentUid];
+    if (!summary) {
+      continue;
+    }
+    summary.count += 1;
+    summary.hasRecentComment = summary.hasRecentComment || isRecent(post.createdAt);
+  }
+
+  const comments =
+    posts.length === 0
+      ? []
+      : (
+          await Promise.all(
+            splitIntoBatches(posts.map((post) => post.uid)).map((batch) =>
+              db
+                .select({
+                  postUid: communityCommentsTable.postUid,
+                  createdAt: communityCommentsTable.createdAt,
+                })
+                .from(communityCommentsTable)
+                .where(and(inArray(communityCommentsTable.postUid, batch), commentVisibilityFilter(userId))),
+            ),
+          )
+        ).flat();
+
+  for (const comment of comments) {
+    const post = postMap.get(comment.postUid);
+    if (!post) {
+      continue;
+    }
+
+    const summary = result[post.contentId];
+    if (!summary) {
+      continue;
+    }
+    summary.count += 1;
+    summary.hasRecentComment = summary.hasRecentComment || isRecent(comment.createdAt);
+  }
+
+  for (const post of await pinnedPostsPromise) {
+    const contentUid = post.subjectContentUid ?? "";
+    const summary = result[contentUid];
+    if (!summary || summary.pinnedPreviewBody !== null) {
+      continue;
+    }
+    summary.pinnedPreviewBody = getPrimaryPlaintextBlockText(parseCommunityPostBlocks(post.blocks)) ?? null;
   }
 
   return result;

@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 import { runScheduledJobs } from "~/jobs/scheduled";
+import { handleEdgeCachedDocumentRequest } from "./edge-cache";
 
 type ObservabilityEnv = Env & {
   SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
@@ -23,9 +24,11 @@ const requestHandler = createRequestHandler(
 
 const handler: ExportedHandler<ObservabilityEnv> = {
   async fetch(request, env, ctx) {
-    return requestHandler(request, {
-      cloudflare: { env, ctx },
-    });
+    return handleEdgeCachedDocumentRequest(request, ctx, () =>
+      requestHandler(request, {
+        cloudflare: { env, ctx },
+      }),
+    );
   },
   scheduled(_controller, env, ctx) {
     ctx.waitUntil(runScheduledJobs(env, ctx));
