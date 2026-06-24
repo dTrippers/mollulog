@@ -1,6 +1,6 @@
 import { data, Link } from "react-router";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/solid";
-import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import Page from "~/components/features/layout/Page";
 import CouponCard from "~/components/features/coupons/CouponCard";
@@ -9,10 +9,12 @@ import { useLoaderData } from "react-router";
 import { getSenseiPrivacyByUserId } from "~/models/sensei-privacy";
 import { IdentificationIcon } from "@heroicons/react/16/solid";
 import CopyField from "~/components/features/coupons/CopyField";
+import { canonicalLink } from "~/lib/seo";
 
-export const meta = () => [
+export const meta: MetaFunction = ({ location }) => [
   { title: "블루 아카이브 쿠폰 목록 | 몰루로그" },
   { name: "description", content: "블루 아카이브 인게임 재화를 획득할 수 있는 쿠폰 목록" },
+  canonicalLink(location.pathname),
 ];
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {

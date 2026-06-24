@@ -13,6 +13,7 @@ import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { Page } from "~/components/features/layout";
+import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
@@ -105,7 +106,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({ actionResult, defau
   return defaultShouldRevalidate;
 };
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
   const title = "평가/의견 | 몰루로그";
   const description = "블루 아카이브의 학생 평가와 이벤트 의견을 확인해보세요.";
   return [
@@ -115,6 +116,7 @@ export const meta: MetaFunction = () => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
+    canonicalLink(location.pathname),
   ];
 };
 

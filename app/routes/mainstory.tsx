@@ -5,6 +5,7 @@ import { useLoaderData } from "react-router";
 import { BookOpenIcon, CalendarIcon } from "@heroicons/react/24/outline";
 import { FilterButtons } from "~/components/primitives";
 import { Title } from "~/components/primitives";
+import { canonicalLink } from "~/lib/seo";
 import {
   formatMainStorySeasonTitle,
   getMainStories,
@@ -13,7 +14,7 @@ import {
   type MainStoryVolume,
 } from "~/models/main-story";
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
   const title = "메인 스토리 | 몰루로그";
   const description = "블루 아카이브 메인 스토리 일람 및 공개 일정을 확인해보세요.";
   return [
@@ -23,6 +24,7 @@ export const meta: MetaFunction = () => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
+    canonicalLink(location.pathname),
   ];
 };
 

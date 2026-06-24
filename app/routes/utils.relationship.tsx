@@ -7,6 +7,7 @@ import { Page } from "~/components/features/layout";
 import { FavoriteItemSelector, RequiredGifts, StudentRelationshipLevel, RelationshipStudentPicker, FavoritedItemSelector } from "~/components/features/relationship";
 import { Button, ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { canonicalLink } from "~/lib/seo";
 import { formatVisibleName, getAllStudents } from "~/models/student";
 import {
   getRelationshipLevelValidationError,
@@ -17,7 +18,7 @@ import {
 } from "~/models/relationship-level";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
   const title = "인연 랭크 계산기 | 몰루로그";
   const description = "블루 아카이브 학생들의 인연 랭크를 계산하고 관리해보세요";
   return [
@@ -27,6 +28,7 @@ export const meta: MetaFunction = () => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
+    canonicalLink(location.pathname),
   ];
 };
 

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { MarkdownText, Pagination, Title } from "~/components/primitives";
+import { canonicalLink } from "~/lib/seo";
 import { getNewsPosts } from "~/models/post";
 
 const PAGE_SIZE = 5;
@@ -13,9 +14,10 @@ function parsePage(request: Request) {
   return Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
 }
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
   return [
     { title: "업데이트 소식 | 몰루로그" },
+    canonicalLink(location.pathname),
   ];
 };
 

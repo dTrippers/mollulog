@@ -15,6 +15,7 @@ import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
+import { canonicalLink } from "~/lib/seo";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
 import { type RaidDefenseTypeSet, getRaidDefenseTypeSetKey, raidTypeToParam } from "~/models/raid";
 import { RaidRepository } from "~/repositories";
@@ -77,7 +78,7 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
   };
 };
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   if (!data?.currentRaid) {
     return [{ title: "총력전 정보 | 몰루로그" }];
   }
@@ -93,6 +94,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
+    canonicalLink(location.pathname),
   ];
 };
 

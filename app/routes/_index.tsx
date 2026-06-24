@@ -9,6 +9,7 @@ import { RaidCard } from "~/components/features/raids";
 import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
 import { getLogger } from "~/lib/observability.server";
 import { ServerTiming, shouldLogTiming } from "~/lib/server-timing.server";
+import { canonicalLink } from "~/lib/seo";
 import { getCommunityFeedPage } from "~/models/community";
 import { enrichCommunityFeedPosts } from "~/models/community-feed";
 import { type IndexRecruitment, getIndexContents } from "~/models/content";
@@ -18,13 +19,14 @@ import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
 import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
   return [
     { title: "몰루로그 - 블루 아카이브 미래시/통계 정보 모음" },
     {
       name: "description",
       content: "게임 <블루 아카이브>의 컨텐츠, 통계 정보 등을 확인하고 미래시 계획을 관리해보세요.",
     },
+    canonicalLink(location.pathname),
   ];
 };
 

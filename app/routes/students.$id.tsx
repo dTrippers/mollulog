@@ -10,6 +10,7 @@ import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
+import { canonicalLink } from "~/lib/seo";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { formatStudentFullName, getAllStudentsMap } from "~/models/student";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
@@ -123,7 +124,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   };
 };
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   if (!data) {
     return [{ title: "학생 정보 | 몰루로그" }];
   }
@@ -139,6 +140,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
+    canonicalLink(location.pathname),
   ];
 };
 

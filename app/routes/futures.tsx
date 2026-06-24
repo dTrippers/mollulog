@@ -19,6 +19,7 @@ import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import { getLogger } from "~/lib/observability.server";
 import { ServerTiming, shouldLogTiming } from "~/lib/server-timing.server";
+import { canonicalLink } from "~/lib/seo";
 import {
   type ContentCommentSummary,
   type FutureContent,
@@ -41,7 +42,7 @@ import type { ActionData as RecruitmentResultActionData } from "./api.recruitmen
 import FutureRecruitmentTable from "./futures._components/FutureRecruitmentTable";
 import type { FutureRecruitmentTableContent } from "./futures._components/future-recruitment-table-model";
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
   const title = "블루 아카이브 이벤트, 픽업 미래시";
   const description = "블루 아카이브 한국 서버의 이벤트 및 총력전, 픽업 미래시 정보 모음";
   return [
@@ -51,6 +52,7 @@ export const meta: MetaFunction = () => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
+    canonicalLink(location.pathname),
   ];
 };
 

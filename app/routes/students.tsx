@@ -4,6 +4,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { Page } from "~/components/features/layout";
 import { createStudentFilterState, getFilteredStudentUids, StudentFilter } from "~/components/features/students";
+import { canonicalLink } from "~/lib/seo";
 import { getAllStudents } from "~/models/student";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
@@ -24,7 +25,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   };
 };
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
   const title = "학생부 | 몰루로그";
   const description = "블루 아카이브 학생들의 프로필과 통계, 평가 정보를 확인해보세요.";
   return [
@@ -34,6 +35,7 @@ export const meta: MetaFunction = () => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
+    canonicalLink(location.pathname),
   ];
 };
 

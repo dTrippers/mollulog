@@ -3,10 +3,11 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { Page } from "~/components/features/layout";
 import { getNavigationSections } from "~/components/features/layout/navigation-menu";
+import { canonicalLink } from "~/lib/seo";
 import { getNavigationBarContents } from "~/models/content";
 import { sanitizeClassName } from "~/prophandlers";
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
   const title = "유틸리티 | 몰루로그";
   const description = "블루 아카이브 플레이 계획에 필요한 계산기와 플래너를 사용해보세요.";
   return [
@@ -16,6 +17,7 @@ export const meta: MetaFunction = () => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
+    canonicalLink(location.pathname),
   ];
 };
 

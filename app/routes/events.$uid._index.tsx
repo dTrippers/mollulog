@@ -4,6 +4,7 @@ import { redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, Recruitments } from "~/components/features/events";
 import { toUtcIso } from "~/lib/date-time";
+import { canonicalLink } from "~/lib/seo";
 import { getNestedContentComments } from "~/models/content";
 import {
   favoriteStudent,
@@ -101,7 +102,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
   return {};
 };
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData, params }) => {
+export const meta: MetaFunction<typeof loader> = ({ loaderData, params, location }) => {
   if (!loaderData) {
     return [{ title: "이벤트 정보 | 몰루로그" }];
   }
@@ -121,6 +122,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params }) => {
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
     { name: "twitter:card", content: "summary_large_image" },
+    canonicalLink(location.pathname),
   ];
 };
 
