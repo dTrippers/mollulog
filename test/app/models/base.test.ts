@@ -167,6 +167,7 @@ describe("fetchCached", () => {
   it("returns stale cached data when refresh times out", async () => {
     jest.useFakeTimers();
     jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
     const now = 1_800_000_000_000;
     jest.spyOn(Date, "now").mockReturnValue(now);
 
@@ -193,7 +194,7 @@ describe("fetchCached", () => {
 
     await expect(result).resolves.toEqual(staleData);
     expect(kv.put).not.toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledWith(
+    expect(console.error).toHaveBeenCalledWith(
       "[io-watchdog] timeout",
       expect.objectContaining({
         label: "cache.fn",
@@ -206,6 +207,7 @@ describe("fetchCached", () => {
   it("treats a KV read timeout as a cache miss", async () => {
     jest.useFakeTimers();
     jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
     const now = 1_800_000_000_000;
     jest.spyOn(Date, "now").mockReturnValue(now);
 
@@ -228,16 +230,8 @@ describe("fetchCached", () => {
 
     await expect(result).resolves.toEqual(freshData);
     expect(fn).toHaveBeenCalledTimes(1);
-    expect(kv.put).toHaveBeenCalledWith(
-      "cache::youtube",
-      JSON.stringify({
-        _ver: 2,
-        data: freshData,
-        cachedAt: now,
-      }),
-      { expirationTtl: DEFAULT_KV_EXPIRATION_TTL },
-    );
-    expect(console.warn).toHaveBeenCalledWith(
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(console.error).toHaveBeenCalledWith(
       "[io-watchdog] timeout",
       expect.objectContaining({
         label: "kv.get",
@@ -245,11 +239,63 @@ describe("fetchCached", () => {
         timeoutMs: 2_000,
       }),
     );
+    expect(console.warn).toHaveBeenCalledWith(
+      "[io-watchdog] kv.skipped",
+      expect.objectContaining({
+        label: "kv.put",
+        dataKey: "youtube",
+      }),
+    );
+  });
+
+  it("skips later KV operations during the timeout cooldown", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env, kv } = createEnv(null);
+    kv.get.mockImplementation(
+      () =>
+        new Promise<string | null>(() => {
+          // Never settles; this trips the KV cooldown.
+        }),
+    );
+
+    const firstData = ["fresh-video"];
+    const first = fetchCached(
+      env,
+      "youtube",
+      jest.fn(async () => firstData),
+      60 * 30,
+    );
+    await jest.advanceTimersByTimeAsync(2_000);
+    await expect(first).resolves.toEqual(firstData);
+
+    kv.get.mockClear();
+    kv.put.mockClear();
+    const secondData = ["fresh-students"];
+    const secondFn = jest.fn(async () => secondData);
+
+    await expect(fetchCached(env, "students", secondFn, 60 * 30)).resolves.toEqual(secondData);
+
+    expect(secondFn).toHaveBeenCalledTimes(1);
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(
+      "[io-watchdog] kv.skipped",
+      expect.objectContaining({
+        label: "kv.get",
+        dataKey: "students",
+      }),
+    );
   });
 
   it("returns fresh data when a KV write times out", async () => {
     jest.useFakeTimers();
     jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
     const now = 1_800_000_000_000;
     jest.spyOn(Date, "now").mockReturnValue(now);
 
@@ -270,7 +316,7 @@ describe("fetchCached", () => {
     await jest.advanceTimersByTimeAsync(2_000);
 
     await expect(result).resolves.toEqual(freshData);
-    expect(console.warn).toHaveBeenCalledWith(
+    expect(console.error).toHaveBeenCalledWith(
       "[io-watchdog] timeout",
       expect.objectContaining({
         label: "kv.put",
@@ -351,6 +397,48 @@ describe("fetchCached", () => {
     resolveRefresh(["fresh-video"]);
 
     await expect(Promise.all([first, second])).resolves.toEqual([["fresh-video"], ["fresh-video"]]);
+  });
+
+  it("evicts stale in-flight refreshes before piggybacking", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env, kv } = createEnv(null);
+    const firstFn = jest.fn(
+      () =>
+        new Promise<string[]>(() => {
+          // Never settles; a later request must not keep piggybacking on it.
+        }),
+    );
+
+    const first = fetchCached(env, "youtube", firstFn, 60 * 30);
+    await flushPromises();
+
+    expect(kv.get).toHaveBeenCalledTimes(1);
+    expect(firstFn).toHaveBeenCalledTimes(1);
+
+    jest.spyOn(Date, "now").mockReturnValue(now + 10_001);
+    kv.get.mockClear();
+    kv.put.mockClear();
+
+    const secondData = ["fresh-video"];
+    const secondFn = jest.fn(async () => secondData);
+    await expect(fetchCached(env, "youtube", secondFn, 60 * 30)).resolves.toEqual(secondData);
+
+    expect(secondFn).toHaveBeenCalledTimes(1);
+    expect(kv.get).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledWith(
+      "[io-watchdog] cache.inflight",
+      expect.objectContaining({
+        phase: "evicted",
+        dataKey: "youtube",
+        inflightAgeMs: 10_001,
+      }),
+    );
+
+    await expect(Promise.race([first, Promise.resolve("still-pending")])).resolves.toBe("still-pending");
   });
 
   it("does not let a forceRefresh caller piggyback on an inflight non-force request", async () => {

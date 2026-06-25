@@ -1,5 +1,7 @@
+import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
+
 /**
- * Async I/O watchdog for diagnosing request hangs.
+ * Async I/O watchdog for surfacing request hangs before the platform cuts them.
  *
  * When a request blocks on an awaited operation that never settles (observed
  * symptom: `wallTime > 30000ms` while `cpuTime < 100ms`, then a CloudFront 30s
@@ -9,34 +11,48 @@
  * `setTimeout` fires a `console.warn` once the promise has been unsettled past
  * `warnMs`, surfacing the stuck operation in the Workers logs before the cut.
  *
- * `console.warn` (not `getLogger`) is intentional: it must fire reliably mid-hang
- * without a logger/ctx threaded through every cache call site, and it lands in the
- * Workers runtime log where these hangs are being investigated. Same `setTimeout`
- * mechanism the D1 timeout wrapper already relies on in production.
+ * Direct console logging (not `getLogger`) is intentional: it must fire reliably
+ * mid-hang without a logger/ctx threaded through every cache call site, and it
+ * lands in the Workers runtime log where these hangs are being investigated.
+ * Pending/settled observations stay at warn level; confirmed timeout/failure
+ * callers should log at error level so alert metrics can key off them.
  *
- * This is diagnostic instrumentation — safe to remove once the culprit is found.
+ * Keep this low-volume: prefer operation-level timeouts for expected failures
+ * and use watchdog pending/settled logs only around boundaries that can still
+ * explain a future whole-request hang.
  */
 
-const DEFAULT_WARN_MS = 3000;
+const DEFAULT_WARN_MS = RUNTIME_TIMEOUTS.watchdogWarnMs.default;
 const WATCHDOG_PREFIX = "[io-watchdog]";
-const WORKER_ISOLATE_ID = getWorkerIsolateId();
-const WORKER_ISOLATE_STARTED_AT = Date.now();
 
 let watchdogSequence = 0;
+let workerIsolateId: string | undefined;
+let workerIsolateStartedAt: number | undefined;
 
 function getWorkerIsolateId() {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+  if (workerIsolateId) {
+    return workerIsolateId;
   }
 
-  return `fallback-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    workerIsolateId = crypto.randomUUID();
+    return workerIsolateId;
+  }
+
+  workerIsolateId = `fallback-${Date.now()}-${watchdogSequence}`;
+  return workerIsolateId;
+}
+
+function getWorkerIsolateStartedAt() {
+  workerIsolateStartedAt ??= Date.now();
+  return workerIsolateStartedAt;
 }
 
 export function getIoWatchdogContext(context: Record<string, unknown> = {}, watchdogId = ++watchdogSequence) {
   return {
     ...context,
-    isolateId: WORKER_ISOLATE_ID,
-    isolateAgeMs: Date.now() - WORKER_ISOLATE_STARTED_AT,
+    isolateId: getWorkerIsolateId(),
+    isolateAgeMs: Date.now() - getWorkerIsolateStartedAt(),
     watchdogId,
   };
 }

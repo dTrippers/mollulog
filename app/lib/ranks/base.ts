@@ -1,7 +1,11 @@
 import protobuf from "protobufjs";
-import { watchIo } from "~/lib/io-watchdog";
+import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
+import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 
 export const RANK_API_BASE_URL = import.meta.env.VITE_RANK_API_BASE_URL || "https://ranks.baql.net";
+const RANK_FETCH_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.ranksFetch;
+const RANK_BODY_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.ranksBody;
+const RANK_DECOMPRESS_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.ranksDecompress;
 
 export async function decompressGzip(data: ArrayBuffer): Promise<ArrayBuffer> {
   const ds = new DecompressionStream("gzip");
@@ -59,16 +63,18 @@ export async function fetchProtobuf<T>(params: {
 }): Promise<T> {
   const { url, method = "GET", headers = {}, body, schema, messageType, getRoot } = params;
 
-  const response = await watchIo(
-    "ranks.fetch",
-    fetch(url, {
+  const response = await fetchWithTimeout(
+    url,
+    {
       method,
       headers: {
         "Accept-Encoding": "gzip",
         ...headers,
       },
       body,
-    }),
+    },
+    RANK_FETCH_TIMEOUT_MS,
+    "ranks.fetch",
     { url },
   );
 
@@ -76,10 +82,20 @@ export async function fetchProtobuf<T>(params: {
     throw new Error(`Failed to fetch: ${response.statusText}`);
   }
 
-  let arrayBuffer = await response.arrayBuffer();
+  let arrayBuffer = await readBodyWithTimeout(
+    () => response.arrayBuffer(),
+    RANK_BODY_TIMEOUT_MS,
+    "ranks.body",
+    { url },
+  );
   const contentEncoding = response.headers.get("Content-Encoding");
   if (contentEncoding === "gzip" || contentEncoding?.includes("gzip")) {
-    arrayBuffer = await decompressGzip(arrayBuffer);
+    arrayBuffer = await readBodyWithTimeout(
+      () => decompressGzip(arrayBuffer),
+      RANK_DECOMPRESS_TIMEOUT_MS,
+      "ranks.decompress",
+      { url },
+    );
   }
 
   return await parseProtobufResponse<T>(arrayBuffer, schema, messageType, getRoot);

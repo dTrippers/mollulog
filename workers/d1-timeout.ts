@@ -13,13 +13,15 @@
  * well before the CloudFront deadline.
  *
  * Note: D1 has no cancellation API, so the underlying query keeps running in the
- * background after a timeout; we only stop awaiting it. Applied to the user-facing
- * `fetch` path only — the `scheduled` (cron) path keeps the raw binding.
+ * background after a timeout; we only stop awaiting it. Applied to both the
+ * user-facing `fetch` path and scheduled jobs so background work cannot hold a
+ * raw D1 promise indefinitely.
  */
 
 import { getIoWatchdogContext } from "~/lib/io-watchdog";
+import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 
-export const DEFAULT_D1_TIMEOUT_MS = 2000;
+export const DEFAULT_D1_TIMEOUT_MS = RUNTIME_TIMEOUTS.d1.query;
 
 export class D1TimeoutError extends Error {
   constructor(timeoutMs: number) {
@@ -28,23 +30,63 @@ export class D1TimeoutError extends Error {
   }
 }
 
+type D1DeadlineContext = {
+  operation: string;
+  queryHash?: string;
+  queryPreview?: string;
+  batchSize?: number;
+};
+
 /** Retrieves the underlying (unwrapped) statement from a wrapped proxy. */
 const UNWRAP = Symbol("d1-timeout-unwrap");
 
 // Slow (but not yet timed-out) D1 queries are logged below this threshold so a
 // query that hovers under the timeout is still visible while diagnosing hangs.
-const D1_SLOW_WARN_MS = 1000;
+const D1_SLOW_WARN_MS = RUNTIME_TIMEOUTS.d1.slowWarn;
 
-function withDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+function normalizeQueryPreview(query: string): string {
+  return query
+    .replace(/'([^']|'')*'/g, "?")
+    .replace(/"([^"]|"")*"/g, "?")
+    .replace(/\b\d+(\.\d+)?\b/g, "?")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+}
+
+function hashQuery(query: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < query.length; index += 1) {
+    hash ^= query.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+function createQueryContext(operation: string, query: string): D1DeadlineContext {
+  return {
+    operation,
+    queryHash: hashQuery(query),
+    queryPreview: normalizeQueryPreview(query),
+  };
+}
+
+function withDeadline<T>(promise: Promise<T>, timeoutMs: number, context: D1DeadlineContext): Promise<T> {
   const startedAt = Date.now();
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new D1TimeoutError(timeoutMs)), timeoutMs);
+    const timer = setTimeout(() => {
+      console.error(
+        "[io-watchdog] timeout",
+        getIoWatchdogContext({ label: "d1", timeoutMs, elapsedMs: Date.now() - startedAt, ...context }),
+      );
+      reject(new D1TimeoutError(timeoutMs));
+    }, timeoutMs);
     promise.then(
       (value) => {
         clearTimeout(timer);
         const elapsedMs = Date.now() - startedAt;
         if (elapsedMs >= D1_SLOW_WARN_MS) {
-          console.warn("[io-watchdog] settled", getIoWatchdogContext({ label: "d1", elapsedMs }));
+          console.warn("[io-watchdog] settled", getIoWatchdogContext({ label: "d1", elapsedMs, ...context }));
         }
         resolve(value);
       },
@@ -59,7 +101,11 @@ function withDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 // Statement methods that return a result promise to bound.
 const STATEMENT_AWAITABLES = new Set(["first", "run", "all", "raw"]);
 
-function wrapStatement(statement: D1PreparedStatement, timeoutMs: number): D1PreparedStatement {
+function wrapStatement(
+  statement: D1PreparedStatement,
+  timeoutMs: number,
+  statementContext: D1DeadlineContext,
+): D1PreparedStatement {
   return new Proxy(statement, {
     get(target, prop, receiver) {
       if (prop === UNWRAP) {
@@ -74,12 +120,18 @@ function wrapStatement(statement: D1PreparedStatement, timeoutMs: number): D1Pre
       // `bind` returns a new, chainable statement — re-wrap so its terminal call is bounded too.
       if (prop === "bind") {
         return (...args: unknown[]) =>
-          wrapStatement((value as (...a: unknown[]) => D1PreparedStatement).apply(target, args), timeoutMs);
+          wrapStatement((value as (...a: unknown[]) => D1PreparedStatement).apply(target, args), timeoutMs, {
+            ...statementContext,
+            operation: "prepare.bind",
+          });
       }
 
       if (typeof prop === "string" && STATEMENT_AWAITABLES.has(prop)) {
         return (...args: unknown[]) =>
-          withDeadline((value as (...a: unknown[]) => Promise<unknown>).apply(target, args), timeoutMs);
+          withDeadline((value as (...a: unknown[]) => Promise<unknown>).apply(target, args), timeoutMs, {
+            ...statementContext,
+            operation: `statement.${prop}`,
+          });
       }
 
       return (value as (...a: unknown[]) => unknown).bind(target);
@@ -104,7 +156,11 @@ export function withD1Timeout(db: D1Database, timeoutMs: number = DEFAULT_D1_TIM
 
       if (prop === "prepare") {
         return (query: string) =>
-          wrapStatement((value as (q: string) => D1PreparedStatement).call(target, query), timeoutMs);
+          wrapStatement(
+            (value as (q: string) => D1PreparedStatement).call(target, query),
+            timeoutMs,
+            createQueryContext("prepare", query),
+          );
       }
 
       // Batch receives the wrapped statements built via the proxied `prepare`/`bind`;
@@ -114,12 +170,17 @@ export function withD1Timeout(db: D1Database, timeoutMs: number = DEFAULT_D1_TIM
           withDeadline(
             (value as (s: D1PreparedStatement[]) => Promise<unknown>).call(target, statements.map(unwrapStatement)),
             timeoutMs,
+            { operation: "batch", batchSize: statements.length },
           );
       }
 
       if (prop === "exec") {
         return (query: string) =>
-          withDeadline((value as (q: string) => Promise<unknown>).call(target, query), timeoutMs);
+          withDeadline(
+            (value as (q: string) => Promise<unknown>).call(target, query),
+            timeoutMs,
+            createQueryContext("exec", query),
+          );
       }
 
       return (value as (...a: unknown[]) => unknown).bind(target);

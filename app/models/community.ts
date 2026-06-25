@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { type UtcIsoString, normalizeUtcTimestamp, nowUtcIso } from "~/lib/date-time";
+import { watchIo } from "~/lib/io-watchdog";
 import { fetchCached } from "./base";
 import { senseisTable } from "./sensei";
 
@@ -408,6 +409,7 @@ const COMMUNITY_FEED_CACHE_VERSION = "v1";
  * users bypass this cache, so a poster always sees their own post immediately.
  */
 const COMMUNITY_FEED_CACHE_TTL = 60;
+const COMMUNITY_FEED_SLOW_WARN_MS = 1000;
 
 export async function getCommunityFeedPage(
   env: Env,
@@ -474,47 +476,69 @@ async function loadCommunityFeedPage(
   const where = and(...filters);
   const safePage = Math.max(1, page);
   const safePageSize = Math.max(1, pageSize);
+  const traceContext = {
+    label: "community.feed",
+    currentUser: Boolean(currentUserId),
+    postTypes: postTypes?.join(",") ?? postType ?? "",
+    authorUserId,
+    youtubeChannelKey,
+    includeEngagement,
+    page: safePage,
+    pageSize: safePageSize,
+  };
 
-  const [{ count }] = await db.select({ count: sql<number>`count(*)` }).from(communityPostsTable).where(where);
+  const [{ count }] = await watchIo(
+    "community.feed.count",
+    Promise.resolve(db.select({ count: sql<number>`count(*)` }).from(communityPostsTable).where(where)),
+    traceContext,
+    COMMUNITY_FEED_SLOW_WARN_MS,
+  );
 
   const totalCount = Number(count);
   const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
   const currentPage = Math.min(safePage, totalPages);
   const offset = (currentPage - 1) * safePageSize;
 
-  const rows = await db
-    .select({
-      id: communityPostsTable.id,
-      uid: communityPostsTable.uid,
-      userId: communityPostsTable.userId,
-      postType: communityPostsTable.postType,
-      origin: communityPostsTable.origin,
-      title: communityPostsTable.title,
-      visibility: communityPostsTable.visibility,
-      pinned: communityPostsTable.pinned,
-      subjectStudentUid: communityPostsTable.subjectStudentUid,
-      subjectContentUid: communityPostsTable.subjectContentUid,
-      subjectRaidType: communityPostsTable.subjectRaidType,
-      subjectSeasonIndex: communityPostsTable.subjectSeasonIndex,
-      blocks: communityPostsTable.blocks,
-      sourceName: communityPostsTable.sourceName,
-      sourceUrl: communityPostsTable.sourceUrl,
-      sourceMetadata: communityPostsTable.sourceMetadata,
-      displayAt: communityPostsTable.displayAt,
-      createdAt: communityPostsTable.createdAt,
-      updatedAt: communityPostsTable.updatedAt,
-      username: senseisTable.username,
-      profileStudentId: senseisTable.profileStudentId,
-    })
-    .from(communityPostsTable)
-    .leftJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
-    .where(where)
-    .orderBy(
-      desc(sql`unixepoch(coalesce(${communityPostsTable.displayAt}, ${communityPostsTable.createdAt}))`),
-      desc(communityPostsTable.id),
-    )
-    .limit(safePageSize)
-    .offset(offset);
+  const rows = await watchIo(
+    "community.feed.rows",
+    Promise.resolve(
+      db
+        .select({
+          id: communityPostsTable.id,
+          uid: communityPostsTable.uid,
+          userId: communityPostsTable.userId,
+          postType: communityPostsTable.postType,
+          origin: communityPostsTable.origin,
+          title: communityPostsTable.title,
+          visibility: communityPostsTable.visibility,
+          pinned: communityPostsTable.pinned,
+          subjectStudentUid: communityPostsTable.subjectStudentUid,
+          subjectContentUid: communityPostsTable.subjectContentUid,
+          subjectRaidType: communityPostsTable.subjectRaidType,
+          subjectSeasonIndex: communityPostsTable.subjectSeasonIndex,
+          blocks: communityPostsTable.blocks,
+          sourceName: communityPostsTable.sourceName,
+          sourceUrl: communityPostsTable.sourceUrl,
+          sourceMetadata: communityPostsTable.sourceMetadata,
+          displayAt: communityPostsTable.displayAt,
+          createdAt: communityPostsTable.createdAt,
+          updatedAt: communityPostsTable.updatedAt,
+          username: senseisTable.username,
+          profileStudentId: senseisTable.profileStudentId,
+        })
+        .from(communityPostsTable)
+        .leftJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+        .where(where)
+        .orderBy(
+          desc(sql`unixepoch(coalesce(${communityPostsTable.displayAt}, ${communityPostsTable.createdAt}))`),
+          desc(communityPostsTable.id),
+        )
+        .limit(safePageSize)
+        .offset(offset),
+    ),
+    traceContext,
+    COMMUNITY_FEED_SLOW_WARN_MS,
+  );
 
   const postUids = rows.map((row) => row.uid);
   const [commentsByPostUid, likeCounts, likedPostUids]: [
@@ -522,11 +546,16 @@ async function loadCommunityFeedPage(
     Record<string, number>,
     Set<string>,
   ] = includeEngagement
-    ? await Promise.all([
-        getNestedCommunityCommentsByPostUids(env, postUids, currentUserId),
-        getCommunityLikeCountsByPostUids(env, postUids),
-        currentUserId ? getLikedCommunityPostUids(env, currentUserId, postUids) : new Set<string>(),
-      ])
+    ? await watchIo(
+        "community.feed.engagement",
+        Promise.all([
+          getNestedCommunityCommentsByPostUids(env, postUids, currentUserId),
+          getCommunityLikeCountsByPostUids(env, postUids),
+          currentUserId ? getLikedCommunityPostUids(env, currentUserId, postUids) : new Set<string>(),
+        ]),
+        traceContext,
+        COMMUNITY_FEED_SLOW_WARN_MS,
+      )
     : [{}, {}, new Set<string>()];
 
   return {

@@ -1,4 +1,5 @@
-import { watchIo } from "~/lib/io-watchdog";
+import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
+import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import type { RaidVideosData, VideoSort } from "~/models/raid-videos";
 import { DEFAULT_VIDEO_SORT, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
 import { RANK_API_BASE_URL } from "./base";
@@ -30,6 +31,9 @@ export type RaidVideosQueryOptions = {
   sort?: VideoSort;
 };
 
+const RANK_VIDEOS_FETCH_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.ranksVideosFetch;
+const RANK_VIDEOS_BODY_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.ranksVideosBody;
+
 export async function fetchRaidVideos({
   raidType,
   boss,
@@ -53,12 +57,23 @@ export async function fetchRaidVideos({
     url.searchParams.set("defenseType", defenseType);
   }
 
-  const response = await watchIo("ranks.videos.fetch", fetch(url), { url: url.toString() });
+  const response = await fetchWithTimeout(
+    url,
+    {},
+    RANK_VIDEOS_FETCH_TIMEOUT_MS,
+    "ranks.videos.fetch",
+    { url: url.toString() },
+  );
   if (!response.ok) {
     throw new Error(`failed to fetch raid videos: ${response.status}`);
   }
 
-  const data = (await response.json()) as VideosApiResponse;
+  const data = (await readBodyWithTimeout(
+    () => response.json(),
+    RANK_VIDEOS_BODY_TIMEOUT_MS,
+    "ranks.videos.body",
+    { url: url.toString() },
+  )) as VideosApiResponse;
   return {
     videos:
       data.videos?.map((video) => ({

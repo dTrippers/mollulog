@@ -1,9 +1,10 @@
 import type { TypedDocumentNode, AnyVariables, OperationResult } from "urql";
 import { createClient, fetchExchange } from "urql";
 import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
+import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, TimeoutError } from "~/lib/with-timeout";
 
-const DEFAULT_BAQL_TIMEOUT_MS = 5000;
+const BAQL_TIMEOUT_MS = RUNTIME_TIMEOUTS.baql.query;
 
 export async function runQuery<Data = unknown, Variables extends AnyVariables = AnyVariables>(
   query: TypedDocumentNode<Data, Variables>,
@@ -26,10 +27,10 @@ export async function runQuery<Data = unknown, Variables extends AnyVariables = 
   const queryPromise = client.query<Data, Variables>(query, variables).toPromise();
   const timeout = new Promise<never>((_resolve, reject) => {
     const timer = setTimeout(() => {
-      timeoutError = new TimeoutError("baql.query", DEFAULT_BAQL_TIMEOUT_MS);
+      timeoutError = new TimeoutError("baql.query", BAQL_TIMEOUT_MS);
       controller.abort();
       reject(timeoutError);
-    }, DEFAULT_BAQL_TIMEOUT_MS);
+    }, BAQL_TIMEOUT_MS);
 
     queryPromise.then(
       () => clearTimeout(timer),
@@ -41,17 +42,17 @@ export async function runQuery<Data = unknown, Variables extends AnyVariables = 
     return await watchIo("baql.query", Promise.race([queryPromise, timeout]), context);
   } catch (error) {
     if (timeoutError) {
-      console.warn(
+      console.error(
         "[io-watchdog] timeout",
-        getIoWatchdogContext({ label: "baql.query", timeoutMs: DEFAULT_BAQL_TIMEOUT_MS, ...context }),
+        getIoWatchdogContext({ label: "baql.query", timeoutMs: BAQL_TIMEOUT_MS, ...context }),
       );
       throw timeoutError;
     }
 
     if (isTimeoutError(error)) {
-      console.warn(
+      console.error(
         "[io-watchdog] timeout",
-        getIoWatchdogContext({ label: "baql.query", timeoutMs: DEFAULT_BAQL_TIMEOUT_MS, ...context }),
+        getIoWatchdogContext({ label: "baql.query", timeoutMs: BAQL_TIMEOUT_MS, ...context }),
       );
     }
     throw error;

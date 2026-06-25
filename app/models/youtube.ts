@@ -1,4 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
+import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
+import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import {
   getCommunityFeedPage,
   type CommunityFeedPost,
@@ -27,6 +29,9 @@ const xmlParser = new XMLParser({
   parseTagValue: false,
   trimValues: true,
 });
+
+const YOUTUBE_FEED_FETCH_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.youtubeFeedFetch;
+const YOUTUBE_FEED_BODY_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.youtubeFeedBody;
 
 export type HomeYoutubeVideo = {
   id: string;
@@ -107,12 +112,20 @@ export async function syncYoutubeCommunityPosts(env: Env): Promise<{ synced: num
 }
 
 async function getChannelVideos(channelId: string): Promise<HomeYoutubeVideo[]> {
-  const response = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`);
+  const url = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+  const response = await fetchWithTimeout(url, {}, YOUTUBE_FEED_FETCH_TIMEOUT_MS, "youtube.feed.fetch", {
+    channelId,
+  });
   if (!response.ok) {
     throw new Error(`failed to fetch youtube feed: ${channelId} (${response.status} ${response.statusText})`);
   }
 
-  const xml = await response.text();
+  const xml = await readBodyWithTimeout(
+    () => response.text(),
+    YOUTUBE_FEED_BODY_TIMEOUT_MS,
+    "youtube.feed.body",
+    { channelId },
+  );
   const parsed = parseYoutubeFeed(xml, channelId);
   const entries = normalizeEntries(parsed.feed?.entry);
 
