@@ -3,6 +3,7 @@ import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
 import type { AppLoadContext, EntryContext } from "react-router";
 import { ServerRouter } from "react-router";
+import { watchIo } from "./lib/io-watchdog";
 import { captureServerError, getLogger } from "./lib/observability.server";
 
 export default async function handleRequest(
@@ -18,22 +19,27 @@ export default async function handleRequest(
     method: request.method,
     url: request.url,
   });
-  const body = await renderToReadableStream(<ServerRouter context={reactRouterContext} url={request.url} />, {
-    signal: request.signal,
-    onError(error: unknown) {
-      // Log streaming rendering errors from inside the shell
-      logger.error("SSR streaming render failed", error);
-      captureServerError(error, {
-        handler: "entry.server",
-        method: request.method,
-        url: request.url,
-      });
-      statusCode = 500;
-    },
-  });
+  const path = new URL(request.url).pathname;
+  const body = await watchIo(
+    "ssr.render",
+    renderToReadableStream(<ServerRouter context={reactRouterContext} url={request.url} />, {
+      signal: request.signal,
+      onError(error: unknown) {
+        // Log streaming rendering errors from inside the shell
+        logger.error("SSR streaming render failed", error);
+        captureServerError(error, {
+          handler: "entry.server",
+          method: request.method,
+          url: request.url,
+        });
+        statusCode = 500;
+      },
+    }),
+    { method: request.method, path },
+  );
 
   if (isbot(request.headers.get("user-agent"))) {
-    await body.allReady;
+    await watchIo("ssr.allReady", body.allReady, { method: request.method, path });
   }
 
   responseHeaders.set("Content-Type", "text/html");

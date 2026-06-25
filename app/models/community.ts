@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { type UtcIsoString, normalizeUtcTimestamp, nowUtcIso } from "~/lib/date-time";
+import { fetchCached } from "./base";
 import { senseisTable } from "./sensei";
 
 export type CommunityPostType = "student_review" | "event_opinion" | "guide" | "youtube_video" | "recruitment_result";
@@ -379,7 +380,65 @@ export async function getNestedCommunityComments(
   return (await getNestedCommunityCommentsByPostUids(env, [postUid], currentUserId))[postUid] ?? [];
 }
 
+export type CommunityFeedPageOptions = {
+  currentUserId?: number | null;
+  page?: number;
+  pageSize?: number;
+  postType?: CommunityPostType;
+  postTypes?: CommunityPostType[];
+  authorUserId?: number;
+  youtubeChannelKey?: "jp" | "kr";
+  includeEngagement?: boolean;
+};
+
+export type CommunityFeedPageResult = {
+  items: CommunityFeedPost[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+};
+
+/** Cache version for the anonymous community feed; bump to invalidate stored entries. */
+const COMMUNITY_FEED_CACHE_VERSION = "v1";
+
+/**
+ * Staleness window for the cached anonymous community feed. Matches the 60s edge
+ * cache so a new public post surfaces within the same delay everywhere. Signed-in
+ * users bypass this cache, so a poster always sees their own post immediately.
+ */
+const COMMUNITY_FEED_CACHE_TTL = 60;
+
 export async function getCommunityFeedPage(
+  env: Env,
+  options: CommunityFeedPageOptions = {},
+): Promise<CommunityFeedPageResult> {
+  const page = Math.max(1, options.page ?? 1);
+
+  // Cache only anonymous, first-page results. Anonymous keeps the query
+  // non-personalized (public visibility, empty liked state) so the result is
+  // shared across users. Restricting to page 1 avoids OFFSET pagination drift:
+  // deeper pages stay uncached, so adjacent pages never come from snapshots taken
+  // up to a full TTL apart. Page 1 carries nearly all feed traffic anyway.
+  if (options.currentUserId || page > 1) {
+    return loadCommunityFeedPage(env, options);
+  }
+
+  const { postType, postTypes, authorUserId, youtubeChannelKey, includeEngagement = true } = options;
+  const types = postTypes && postTypes.length > 0 ? [...postTypes].sort() : postType ? [postType] : [];
+  const cacheKey = [
+    `community::feed::${COMMUNITY_FEED_CACHE_VERSION}`,
+    `types=${types.join(",")}`,
+    `author=${authorUserId ?? ""}`,
+    `yt=${youtubeChannelKey ?? ""}`,
+    `eng=${includeEngagement ? 1 : 0}`,
+    `size=${Math.max(1, options.pageSize ?? 20)}`,
+  ].join("::");
+
+  return fetchCached(env, cacheKey, () => loadCommunityFeedPage(env, options), COMMUNITY_FEED_CACHE_TTL);
+}
+
+async function loadCommunityFeedPage(
   env: Env,
   {
     currentUserId,
@@ -390,23 +449,8 @@ export async function getCommunityFeedPage(
     authorUserId,
     youtubeChannelKey,
     includeEngagement = true,
-  }: {
-    currentUserId?: number | null;
-    page?: number;
-    pageSize?: number;
-    postType?: CommunityPostType;
-    postTypes?: CommunityPostType[];
-    authorUserId?: number;
-    youtubeChannelKey?: "jp" | "kr";
-    includeEngagement?: boolean;
-  } = {},
-): Promise<{
-  items: CommunityFeedPost[];
-  page: number;
-  pageSize: number;
-  totalCount: number;
-  totalPages: number;
-}> {
+  }: CommunityFeedPageOptions = {},
+): Promise<CommunityFeedPageResult> {
   const db = drizzle(env.DB);
   const filters: SQLWrapper[] = [communityPostVisibilityFilter(currentUserId)];
 

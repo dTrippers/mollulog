@@ -1,5 +1,33 @@
+import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
+import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
 
 const cachePrefix = "cache::";
+
+/**
+ * Per-operation timeout for KV reads/writes.
+ *
+ * KV occasionally stops responding without ever rejecting. Bounding each call
+ * turns a 30s isolate hang into a fast cache-miss (read) or a skipped write,
+ * which also prevents a never-settling promise from poisoning the in-flight map
+ * below. Mirrors the 2s D1 deadline.
+ */
+const KV_TIMEOUT_MS = 2000;
+
+/**
+ * Deadline for regenerating a cached value.
+ *
+ * This is intentionally longer than KV/D1, but still well below CloudFront's
+ * 30s origin timeout. When stale data exists, this turns a hung refresh into a
+ * stale fallback instead of holding the SSR response open.
+ */
+const CACHE_FN_TIMEOUT_MS = 5000;
+
+/**
+ * Safety deadline for the in-flight dedup entry. Even if a generation never
+ * settles (e.g. a hung BAQL/ranks fetch inside `fn`), the entry is dropped after
+ * this so it cannot poison every later same-key request in a long-lived isolate.
+ */
+const INFLIGHT_MAX_MS = 10000;
 
 /**
  * Default KV expirationTtl (90 days).
@@ -47,6 +75,23 @@ function parseCacheValue<T>(raw: string): CacheEnvelope<T> | T {
   return JSON.parse(raw) as CacheEnvelope<T> | T;
 }
 
+function warnIoFailure(label: string, dataKey: string, error: unknown, timeoutMs: number) {
+  const details: Record<string, unknown> = { label, dataKey };
+  if (isTimeoutError(error)) {
+    details.timeoutMs = timeoutMs;
+    console.warn("[io-watchdog] timeout", getIoWatchdogContext(details));
+    return;
+  }
+
+  if (error instanceof Error) {
+    details.errorName = error.name;
+    details.errorMessage = error.message;
+  } else {
+    details.error = error;
+  }
+  console.warn("[io-watchdog] failed", getIoWatchdogContext(details));
+}
+
 async function fetchCachedInternal<T>(
   env: Env,
   dataKey: string,
@@ -55,7 +100,14 @@ async function fetchCachedInternal<T>(
   forceRefresh = false,
 ): Promise<T> {
   const cacheKey = `${cachePrefix}${dataKey}`;
-  const raw = await env.KV_CACHE.get(cacheKey);
+  let raw: string | null = null;
+  try {
+    raw = await watchIo("kv.get", withTimeout(env.KV_CACHE.get(cacheKey), KV_TIMEOUT_MS, "kv.get"), { dataKey });
+  } catch (error) {
+    // KV read timed out or failed — fall through to a fresh fetch (treat as a miss).
+    warnIoFailure("kv.get", dataKey, error, KV_TIMEOUT_MS);
+    raw = null;
+  }
 
   let cachedData: T | undefined;
   let cachedAt = 0;
@@ -82,16 +134,33 @@ async function fetchCachedInternal<T>(
   }
 
   try {
-    const data = await fn();
+    const data = await watchIo("cache.fn", withTimeout(fn(), CACHE_FN_TIMEOUT_MS, "cache.fn"), { dataKey });
     const envelope: CacheEnvelope<T> = {
       _ver: 2,
       data,
       cachedAt: Date.now(),
     };
 
-    await env.KV_CACHE.put(cacheKey, serializeCacheValue(envelope), { expirationTtl: DEFAULT_KV_EXPIRATION_TTL });
+    try {
+      await watchIo(
+        "kv.put",
+        withTimeout(
+          env.KV_CACHE.put(cacheKey, serializeCacheValue(envelope), { expirationTtl: DEFAULT_KV_EXPIRATION_TTL }),
+          KV_TIMEOUT_MS,
+          "kv.put",
+        ),
+        { dataKey },
+      );
+    } catch (error) {
+      // Cache write timed out or failed — still return the fresh data we just fetched.
+      warnIoFailure("kv.put", dataKey, error, KV_TIMEOUT_MS);
+    }
     return data;
   } catch (error) {
+    if (isTimeoutError(error)) {
+      warnIoFailure("cache.fn", dataKey, error, CACHE_FN_TIMEOUT_MS);
+    }
+
     if (cachedData !== undefined) {
       return cachedData;
     }
@@ -127,12 +196,22 @@ export async function fetchCached<T>(
     }
   }
 
+  const inflightMap = namespaceInflightRequests;
   const request = fetchCachedInternal(env, dataKey, fn, ttl, forceRefresh).finally(() => {
-    if (namespaceInflightRequests.get(cacheKey) === request) {
-      namespaceInflightRequests.delete(cacheKey);
+    clearTimeout(evictTimer);
+    if (inflightMap.get(cacheKey) === request) {
+      inflightMap.delete(cacheKey);
     }
   });
-  namespaceInflightRequests.set(cacheKey, request);
+  // Safety net: if `request` never settles (a hung KV/BAQL/ranks call), drop the
+  // in-flight entry after a deadline so it cannot poison every later same-key
+  // request sharing this long-lived isolate.
+  const evictTimer = setTimeout(() => {
+    if (inflightMap.get(cacheKey) === request) {
+      inflightMap.delete(cacheKey);
+    }
+  }, INFLIGHT_MAX_MS);
+  inflightMap.set(cacheKey, request);
   return request;
 }
 

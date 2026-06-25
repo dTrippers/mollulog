@@ -1,4 +1,5 @@
 import protobuf from "protobufjs";
+import { watchIo } from "~/lib/io-watchdog";
 
 export const RANK_API_BASE_URL = import.meta.env.VITE_RANK_API_BASE_URL || "https://ranks.baql.net";
 
@@ -58,14 +59,18 @@ export async function fetchProtobuf<T>(params: {
 }): Promise<T> {
   const { url, method = "GET", headers = {}, body, schema, messageType, getRoot } = params;
 
-  const response = await fetch(url, {
-    method,
-    headers: {
-      "Accept-Encoding": "gzip",
-      ...headers,
-    },
-    body,
-  });
+  const response = await watchIo(
+    "ranks.fetch",
+    fetch(url, {
+      method,
+      headers: {
+        "Accept-Encoding": "gzip",
+        ...headers,
+      },
+      body,
+    }),
+    { url },
+  );
 
   if (!response.ok) {
     throw new Error(`Failed to fetch: ${response.statusText}`);

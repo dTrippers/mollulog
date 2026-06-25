@@ -1,3 +1,4 @@
+import { watchIo } from "~/lib/io-watchdog";
 import type { RaidVideosData, VideoSort } from "~/models/raid-videos";
 import { DEFAULT_VIDEO_SORT, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
 import { RANK_API_BASE_URL } from "./base";
@@ -52,7 +53,7 @@ export async function fetchRaidVideos({
     url.searchParams.set("defenseType", defenseType);
   }
 
-  const response = await fetch(url);
+  const response = await watchIo("ranks.videos.fetch", fetch(url), { url: url.toString() });
   if (!response.ok) {
     throw new Error(`failed to fetch raid videos: ${response.status}`);
   }

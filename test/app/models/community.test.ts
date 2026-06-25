@@ -368,8 +368,22 @@ function rowPatchFromUpdateParams(params: unknown[]): Partial<FakeCommunityPostR
   return patch;
 }
 
+function createKvCache() {
+  const store = new Map<string, string>();
+  return {
+    get: jest.fn(async (key: string) => store.get(key) ?? null),
+    put: jest.fn(async (key: string, value: string) => {
+      store.set(key, value);
+    }),
+    delete: jest.fn(async (key: string) => {
+      store.delete(key);
+    }),
+    list: jest.fn(async () => ({ keys: [], list_complete: true })),
+  };
+}
+
 function createEnv(db: FakeCommunityD1Database): Env {
-  return { DB: db } as unknown as Env;
+  return { DB: db, KV_CACHE: createKvCache() } as unknown as Env;
 }
 
 describe("community model feed queries", () => {

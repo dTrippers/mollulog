@@ -20,7 +20,14 @@ function createEnv(raw: string | null, disableCache?: string) {
   };
 }
 
+async function flushPromises() {
+  for (let i = 0; i < 5; i += 1) {
+    await Promise.resolve();
+  }
+}
+
 afterEach(() => {
+  jest.useRealTimers();
   jest.restoreAllMocks();
 });
 
@@ -157,6 +164,122 @@ describe("fetchCached", () => {
     expect(kv.put).not.toHaveBeenCalled();
   });
 
+  it("returns stale cached data when refresh times out", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const staleData = ["stale-video"];
+    const { env, kv } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: staleData,
+        cachedAt: now - 1_900_000,
+      }),
+    );
+    const fn = jest.fn(
+      () =>
+        new Promise<string[]>(() => {
+          // Never settles; fetchCached should stop awaiting it and serve stale data.
+        }),
+    );
+
+    const result = fetchCached(env, "youtube", fn, 60 * 30);
+    await flushPromises();
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(5_000);
+
+    await expect(result).resolves.toEqual(staleData);
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(
+      "[io-watchdog] timeout",
+      expect.objectContaining({
+        label: "cache.fn",
+        dataKey: "youtube",
+        timeoutMs: 5_000,
+      }),
+    );
+  });
+
+  it("treats a KV read timeout as a cache miss", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env, kv } = createEnv(null);
+    kv.get.mockImplementation(
+      () =>
+        new Promise<string | null>(() => {
+          // Never settles; fetchCached should stop awaiting it and refresh.
+        }),
+    );
+    const freshData = ["fresh-video"];
+    const fn = jest.fn(async () => freshData);
+
+    const result = fetchCached(env, "youtube", fn, 60 * 30);
+    await flushPromises();
+    expect(fn).not.toHaveBeenCalled();
+
+    await jest.advanceTimersByTimeAsync(2_000);
+    await flushPromises();
+
+    await expect(result).resolves.toEqual(freshData);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(kv.put).toHaveBeenCalledWith(
+      "cache::youtube",
+      JSON.stringify({
+        _ver: 2,
+        data: freshData,
+        cachedAt: now,
+      }),
+      { expirationTtl: DEFAULT_KV_EXPIRATION_TTL },
+    );
+    expect(console.warn).toHaveBeenCalledWith(
+      "[io-watchdog] timeout",
+      expect.objectContaining({
+        label: "kv.get",
+        dataKey: "youtube",
+        timeoutMs: 2_000,
+      }),
+    );
+  });
+
+  it("returns fresh data when a KV write times out", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env, kv } = createEnv(null);
+    kv.put.mockImplementation(
+      () =>
+        new Promise<undefined>(() => {
+          // Never settles; fetchCached should return fresh data anyway.
+        }),
+    );
+    const freshData = ["fresh-video"];
+    const fn = jest.fn(async () => freshData);
+
+    const result = fetchCached(env, "youtube", fn, 60 * 30);
+    await flushPromises();
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    await jest.advanceTimersByTimeAsync(2_000);
+
+    await expect(result).resolves.toEqual(freshData);
+    expect(console.warn).toHaveBeenCalledWith(
+      "[io-watchdog] timeout",
+      expect.objectContaining({
+        label: "kv.put",
+        dataKey: "youtube",
+        timeoutMs: 2_000,
+      }),
+    );
+  });
+
   it("propagates the error when there is no cache to fall back to", async () => {
     const { env, kv } = createEnv(null);
     const fn = jest.fn(async () => {
@@ -220,7 +343,7 @@ describe("fetchCached", () => {
 
     const first = fetchCached(env, "youtube", fn, 60 * 30);
     const second = fetchCached(env, "youtube", fn, 60 * 30);
-    await Promise.resolve();
+    await flushPromises();
 
     expect(kv.get).toHaveBeenCalledTimes(1);
     expect(fn).toHaveBeenCalledTimes(1);
