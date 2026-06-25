@@ -36,6 +36,23 @@ function createResult(groups: unknown[]) {
   };
 }
 
+function createPoolResult(students: unknown[]) {
+  return {
+    data: { students },
+    error: undefined,
+    extensions: undefined,
+    operation: {} as never,
+    stale: false,
+    hasNext: false,
+  };
+}
+
+function mockRefreshResults(groups: unknown[]) {
+  mockedRunQuery.mockResolvedValueOnce(createResult(groups));
+  mockedRunQuery.mockResolvedValueOnce(createResult([]));
+  mockedRunQuery.mockResolvedValueOnce(createPoolResult([]));
+}
+
 afterEach(() => {
   jest.restoreAllMocks();
   mockedRunQuery.mockReset();
@@ -44,7 +61,7 @@ afterEach(() => {
 describe("RecruitmentRepository.refresh", () => {
   it("passes a seven-day endAfter bound to BAQL", async () => {
     jest.spyOn(Date, "now").mockReturnValue(new Date("2026-05-11T00:00:00.000Z").getTime());
-    mockedRunQuery.mockResolvedValueOnce(createResult([]));
+    mockRefreshResults([]);
 
     const repository = new RecruitmentRepository(createEnv());
 
@@ -79,25 +96,30 @@ describe("RecruitmentRepository.refresh", () => {
         recruitments: [],
       },
     ];
-    mockedRunQuery.mockResolvedValueOnce(createResult(firstGroups));
-    mockedRunQuery.mockResolvedValueOnce(createResult(secondGroups));
+    mockRefreshResults(firstGroups);
+    mockRefreshResults(secondGroups);
 
     const repository = new RecruitmentRepository(createEnv());
 
     await expect(repository.refresh()).resolves.toEqual(firstGroups);
     await expect(repository.refresh()).resolves.toEqual(secondGroups);
 
-    expect(runQuery).toHaveBeenCalledTimes(2);
+    expect(runQuery).toHaveBeenCalledTimes(6);
   });
 
   it("deduplicates concurrent refresh requests while one is in flight", async () => {
+    let callCount = 0;
     let releaseRefreshPromise!: (value: ReturnType<typeof createResult>) => void;
-    mockedRunQuery.mockImplementation(
-      () =>
-        new Promise<ReturnType<typeof createResult>>((resolve) => {
+    mockedRunQuery.mockImplementation(() => {
+      callCount += 1;
+      if (callCount === 1) {
+        return new Promise<ReturnType<typeof createResult>>((resolve) => {
           releaseRefreshPromise = resolve as (value: ReturnType<typeof createResult>) => void;
-        }),
-    );
+        });
+      }
+
+      return Promise.resolve(callCount === 2 ? createResult([]) : createPoolResult([]));
+    });
 
     const repository = new RecruitmentRepository(createEnv());
     const expectedGroups = [
@@ -120,6 +142,7 @@ describe("RecruitmentRepository.refresh", () => {
     releaseRefreshPromise(createResult(expectedGroups));
 
     await expect(Promise.all([firstRefresh, secondRefresh])).resolves.toEqual([expectedGroups, expectedGroups]);
+    expect(runQuery).toHaveBeenCalledTimes(3);
   });
 });
 

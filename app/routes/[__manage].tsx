@@ -1,11 +1,10 @@
-import { ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, data, redirect, useActionData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, Callout, Title } from "~/components/primitives";
-import { flushCacheAll } from "~/models/base";
-import { getFutureContents, getNavigationBarContentsRaw } from "~/models/content";
-import { getEventList } from "~/models/event-content";
+import { getFutureContents, getIndexContents, getNavigationBarContentsRaw } from "~/models/content";
+import { getEventList, syncEventContentsList } from "~/models/event-content";
 import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
@@ -13,6 +12,8 @@ import { syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { RaidRepository, RecruitmentRepository } from "~/repositories";
+import { getItemCatalogResources } from "~/repositories/item-catalog";
+import { getCampaignFarmingStages } from "~/repositories/stage";
 
 type RefreshTaskName =
   | "syncYoutubeCommunityPosts"
@@ -22,7 +23,11 @@ type RefreshTaskName =
   | "getMainStories"
   | "getAllStudentsFavoriteItems"
   | "syncAllTimelineContentsMeta"
+  | "syncEventContentsList"
+  | "getItemCatalogResources"
+  | "getCampaignFarmingStages"
   | "getEventList"
+  | "getIndexContents"
   | "getFutureContents"
   | "getNavigationBarContentsRaw";
 
@@ -39,15 +44,7 @@ type RefreshResult = {
   errors?: Partial<Record<RefreshTaskName, string>>;
 };
 
-type FlushResult = {
-  ok: true;
-  ranAt: string;
-};
-
-type ManageActionData =
-  | { intent: "cache.refresh"; result: RefreshResult }
-  | { intent: "cache.flush"; result: FlushResult }
-  | { intent: "unknown"; error: string };
+type ManageActionData = { intent: "cache.refresh"; result: RefreshResult } | { intent: "unknown"; error: string };
 
 async function requireAdmin(env: Env, request: Request, ctx: ExecutionContext): Promise<Sensei | Response> {
   const currentUser = await getActiveSensei(env, request, ctx);
@@ -70,10 +67,10 @@ async function runRefreshTask(name: RefreshTaskName, fn: () => Promise<unknown>)
   }
 }
 
-async function refreshCache(env: Env): Promise<RefreshResult> {
+async function refreshCache(env: Env, ctx: ExecutionContext): Promise<RefreshResult> {
   const recruitmentRepository = new RecruitmentRepository(env);
   const raidRepository = new RaidRepository(env);
-  const leafTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
+  const sourceTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
     ["syncYoutubeCommunityPosts", () => syncYoutubeCommunityPosts(env)],
     ["syncRawStudents", () => syncRawStudents(env)],
     ["RecruitmentRepository.refresh", () => recruitmentRepository.refresh()],
@@ -81,18 +78,22 @@ async function refreshCache(env: Env): Promise<RefreshResult> {
     ["getMainStories", () => getMainStories(env, true)],
     ["getAllStudentsFavoriteItems", () => getAllStudentsFavoriteItems(env, true)],
     ["syncAllTimelineContentsMeta", () => syncAllTimelineContentsMeta(env)],
+    ["syncEventContentsList", () => syncEventContentsList(env)],
+    ["getItemCatalogResources", () => getItemCatalogResources(env, true)],
+    ["getCampaignFarmingStages", () => getCampaignFarmingStages(env, true)],
   ];
-  const compositeTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
-    ["getEventList", () => getEventList(env, undefined, true)],
-    ["getFutureContents", () => getFutureContents(env, true)],
-    ["getNavigationBarContentsRaw", () => getNavigationBarContentsRaw(env, true)],
+  const routeTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
+    ["getEventList", () => getEventList(env, undefined, true, ctx)],
+    ["getIndexContents", () => getIndexContents(env, true, ctx)],
+    ["getFutureContents", () => getFutureContents(env, true, ctx)],
+    ["getNavigationBarContentsRaw", () => getNavigationBarContentsRaw(env, true, ctx)],
   ];
 
-  const leafResults = await Promise.all(leafTasks.map(([name, fn]) => runRefreshTask(name, fn)));
-  const compositeResults = leafResults.some((result) => result.error)
+  const sourceResults = await Promise.all(sourceTasks.map(([name, fn]) => runRefreshTask(name, fn)));
+  const routeResults = sourceResults.some((result) => result.error)
     ? []
-    : await Promise.all(compositeTasks.map(([name, fn]) => runRefreshTask(name, fn)));
-  const results = [...leafResults, ...compositeResults];
+    : await Promise.all(routeTasks.map(([name, fn]) => runRefreshTask(name, fn)));
+  const results = [...sourceResults, ...routeResults];
   const durations: Partial<Record<RefreshTaskName, number>> = {};
   const errors: Partial<Record<RefreshTaskName, string>> = {};
   for (const result of results) {
@@ -130,11 +131,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   if (intent === "cache.refresh") {
-    return data<ManageActionData>({ intent, result: await refreshCache(env) });
-  }
-  if (intent === "cache.flush") {
-    await flushCacheAll(env);
-    return data<ManageActionData>({ intent, result: { ok: true, ranAt: new Date().toISOString() } });
+    return data<ManageActionData>({ intent, result: await refreshCache(env, ctx) });
   }
 
   return data<ManageActionData>({ intent: "unknown", error: `Unsupported intent: ${intent}` }, { status: 400 });
@@ -147,7 +144,6 @@ export default function ManagePage() {
   const navigation = useNavigation();
   const submittingIntent = navigation.formData?.get("intent");
   const isRefreshing = navigation.state === "submitting" && submittingIntent === "cache.refresh";
-  const isFlushing = navigation.state === "submitting" && submittingIntent === "cache.flush";
 
   return (
     <div className="max-w-3xl">
@@ -168,27 +164,7 @@ export default function ManagePage() {
                 variant="tint-blue"
                 icon={ArrowPathIcon}
                 text={isRefreshing ? "Refreshing..." : "Refresh cache"}
-                disabled={isRefreshing || isFlushing}
-              />
-            </Form>
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-destructive/20 bg-destructive/5 p-5 md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-destructive">Cache flush</h2>
-              <p className="mt-1 text-sm text-muted-foreground">모든 KV cache entry를 삭제합니다.</p>
-            </div>
-            <Form method="post">
-              <Button
-                type="submit"
-                name="intent"
-                value="cache.flush"
-                variant="danger"
-                icon={TrashIcon}
-                text={isFlushing ? "Flushing..." : "Flush all cache"}
-                disabled={isRefreshing || isFlushing}
+                disabled={isRefreshing}
               />
             </Form>
           </div>
@@ -208,17 +184,6 @@ function ActionResult({ data }: { data: ManageActionData }) {
         tone="destructive"
         title="요청을 처리하지 못했어요."
         description={data.error}
-      />
-    );
-  }
-
-  if (data.intent === "cache.flush") {
-    return (
-      <Callout
-        Icon={CheckCircleIcon}
-        tone="success"
-        title="Cache flush 완료"
-        description={`Ran at ${data.result.ranAt}`}
       />
     );
   }

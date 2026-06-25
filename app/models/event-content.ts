@@ -17,9 +17,12 @@ import {
   toUtcIso,
 } from "~/lib/date-time";
 import { RecruitmentRepository } from "~/repositories";
-import { fetchCached } from "./base";
+import { cacheKey, cacheQuery, fetchCached, fetchRouteCached, fetchSourceCached } from "./base";
 import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "./timeline-content";
 import type { RunType } from "./timeline-content";
+
+const EVENT_CONTENTS_LIST_CACHE_KEY = cacheKey("source", "event-content", 1, "list");
+const EVENT_LIST_CACHE_KEY = cacheKey("route", "events", 1, "list");
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
   if (runType === "rerun") return RunTypeEnum.Rerun;
@@ -89,7 +92,7 @@ export async function getEventContentSchedule(
 ): Promise<EventContentSchedule | null> {
   const schedule = await fetchCached<CachedEventContentSchedule | null>(
     env,
-    `event-content::schedule::gl::v1::${eventUid}::${runType}`,
+    cacheKey("cache", "event-content-schedule", 1, cacheQuery({ eventUid, region: "gl", runType })),
     async () => {
       const { data, error } = await runQuery(eventContentScheduleQuery, { eventUid });
       if (error || !data?.eventContent) {
@@ -204,9 +207,7 @@ function getScheduleStatus(
   return "past";
 }
 
-function groupEventListSchedules(
-  schedules: EventContentListSourceSchedule[],
-): CachedEventListItem["schedules"] {
+function groupEventListSchedules(schedules: EventContentListSourceSchedule[]): CachedEventListItem["schedules"] {
   const grouped: CachedEventListItem["schedules"] = {};
   for (const schedule of schedules) {
     if (schedule.region !== "gl") continue;
@@ -258,26 +259,38 @@ function addEventListScheduleStatuses(event: CachedEventListItem, now: UtcIsoStr
   };
 }
 
-async function getEventListCachedItems(env: Env, forceRefresh: boolean): Promise<CachedEventListItem[]> {
-  return fetchCached<CachedEventListItem[]>(
+async function getEventContentsList(env: Env, forceRefresh = false): Promise<EventContentsListQuery["eventContents"]> {
+  return fetchSourceCached(
     env,
-    "event-list::v1",
+    EVENT_CONTENTS_LIST_CACHE_KEY,
+    async () => {
+      const { data, error } = await runQuery(eventContentsListQuery, {});
+      if (error || !data) {
+        throw error ?? new Error("failed to fetch event contents");
+      }
+
+      return data.eventContents;
+    },
+    forceRefresh,
+  );
+}
+
+export function syncEventContentsList(env: Env): Promise<EventContentsListQuery["eventContents"]> {
+  return getEventContentsList(env, true);
+}
+
+async function getEventListCachedItems(
+  env: Env,
+  forceRefresh: boolean,
+  ctx?: ExecutionContext,
+): Promise<CachedEventListItem[]> {
+  return fetchRouteCached<CachedEventListItem[]>(
+    env,
+    ctx,
+    EVENT_LIST_CACHE_KEY,
     async () => {
       const [eventContents, timelineContents] = await Promise.all([
-        fetchCached<EventContentsListQuery["eventContents"]>(
-          env,
-          "event-contents::list::v1",
-          async () => {
-            const { data, error } = await runQuery(eventContentsListQuery, {});
-            if (error || !data) {
-              throw error ?? new Error("failed to fetch event contents");
-            }
-
-            return data.eventContents;
-          },
-          24 * 60 * 60,
-          forceRefresh,
-        ),
+        getEventContentsList(env, forceRefresh),
         getAllTimelineContentsMeta(env),
       ]);
 
@@ -327,7 +340,6 @@ async function getEventListCachedItems(env: Env, forceRefresh: boolean): Promise
         })
         .sort((a, b) => compareEventContentUidAsc(a.uid, b.uid));
     },
-    24 * 60 * 60,
     forceRefresh,
   );
 }
@@ -336,8 +348,9 @@ export async function getEventList(
   env: Env,
   now: UtcIsoString = nowUtcIso(),
   forceRefresh = false,
+  ctx?: ExecutionContext,
 ): Promise<EventListItem[]> {
-  const cachedEvents = await getEventListCachedItems(env, forceRefresh);
+  const cachedEvents = await getEventListCachedItems(env, forceRefresh, ctx);
   return cachedEvents.map((event) => addEventListScheduleStatuses(event, now));
 }
 
@@ -595,7 +608,7 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
 
   return fetchCached(
     env,
-    `event-content::shop::v5::${shopContentUid}::${runType}`,
+    cacheKey("cache", "event-shop", 1, cacheQuery({ contentUid: shopContentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,

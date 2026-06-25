@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
-import { DEFAULT_KV_EXPIRATION_TTL, fetchCached, flushCacheAll } from "../../../app/models/base";
+import { DEFAULT_KV_EXPIRATION_TTL, fetchCached } from "../../../app/models/base";
 
 type CacheEnv = Parameters<typeof fetchCached>[0];
 
@@ -82,7 +82,7 @@ describe("fetchCached", () => {
 
     expect(fn).toHaveBeenCalledTimes(1);
     expect(kv.put).toHaveBeenCalledWith(
-      "cache::youtube",
+      "youtube",
       JSON.stringify({
         _ver: 2,
         data: newData,
@@ -110,7 +110,7 @@ describe("fetchCached", () => {
 
     expect(fn).toHaveBeenCalledTimes(1);
     expect(kv.put).toHaveBeenCalledWith(
-      "cache::youtube",
+      "youtube",
       JSON.stringify({
         _ver: 2,
         data,
@@ -132,7 +132,7 @@ describe("fetchCached", () => {
 
     expect(fn).toHaveBeenCalledTimes(1);
     expect(kv.put).toHaveBeenCalledWith(
-      "cache::youtube",
+      "youtube",
       JSON.stringify({
         _ver: 2,
         data,
@@ -351,7 +351,7 @@ describe("fetchCached", () => {
 
     expect(fn).toHaveBeenCalledTimes(1);
     expect(kv.put).toHaveBeenCalledWith(
-      "cache::youtube",
+      "youtube",
       JSON.stringify({
         _ver: 2,
         data: newData,
@@ -461,35 +461,5 @@ describe("fetchCached", () => {
     await expect(nonForce).resolves.toEqual(["cached-video"]);
     await expect(forced).resolves.toEqual(["fresh-video"]);
     expect(fn).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("flushCacheAll", () => {
-  it("deletes all cache keys across paginated KV lists", async () => {
-    const { env, kv } = createEnv(null);
-    const list = kv.list as jest.MockedFunction<
-      (_opts?: { prefix?: string; cursor?: string }) => Promise<{
-        keys: { name: string }[];
-        cursor?: string;
-        list_complete: boolean;
-      }>
-    >;
-    list
-      .mockResolvedValueOnce({
-        keys: [{ name: "cache::a" }],
-        cursor: "next-page",
-        list_complete: false,
-      })
-      .mockResolvedValueOnce({
-        keys: [{ name: "cache::b" }],
-        list_complete: true,
-      });
-
-    await flushCacheAll(env);
-
-    expect(kv.list).toHaveBeenCalledWith({ prefix: "cache::", cursor: undefined });
-    expect(kv.list).toHaveBeenCalledWith({ prefix: "cache::", cursor: "next-page" });
-    expect(kv.delete).toHaveBeenCalledWith("cache::a");
-    expect(kv.delete).toHaveBeenCalledWith("cache::b");
   });
 });

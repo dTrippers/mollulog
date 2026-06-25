@@ -39,7 +39,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const currentUser = await timing.measure("auth", () => getActiveSensei(env, request));
   const currentUserId = currentUser?.id;
 
-  const indexContentsPromise = timing.measure("index_contents", () => getIndexContents(env));
+  const indexContentsPromise = timing.measure("index_contents", () => getIndexContents(env, false, ctx));
   const recentCommunityPagePromise = timing.measure("community", () =>
     getCommunityFeedPage(env, {
       currentUserId,

@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { fetchCached } from "~/models/base";
+import { fetchRouteCached } from "~/models/base";
 import { getAllCoupons, hasUnregisteredActiveCoupons } from "~/models/coupon";
 import { hasUnreadAdminFeedbackReplies } from "~/models/feedback";
 import { getLatestPostTime } from "~/models/post";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 
 jest.mock("~/models/base", () => ({
+  cacheKey: (category: string, domain: string, version: number, query: string) =>
+    `${category}::${domain}::v${version}::${query}`,
   // Bypass cache by executing fn() directly.
-  fetchCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
+  fetchRouteCached: jest.fn((_env: unknown, _ctx: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
 }));
 
 jest.mock("~/models/coupon", () => ({
@@ -41,7 +43,7 @@ jest.mock("~/repositories", () => ({
 
 import { getNavigationBarContents } from "../../../app/models/content";
 
-const mockedFetchCached = fetchCached as jest.MockedFunction<typeof fetchCached>;
+const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
 const mockedGetAllCoupons = getAllCoupons as jest.MockedFunction<typeof getAllCoupons>;
 const mockedHasUnregisteredActiveCoupons = hasUnregisteredActiveCoupons as jest.MockedFunction<
   typeof hasUnregisteredActiveCoupons
@@ -83,9 +85,11 @@ function event(uid: string, startAt: string, endAt: string | null, runType: "fir
 describe("getNavigationBarContents (raw + request-time filter)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // The module mock defines fetchCached as an fn() passthrough, so no separate
+    // The module mock defines fetchRouteCached as an fn() passthrough, so no separate
     // implementation is needed. clearAllMocks resets it, so reapply the mock behavior.
-    mockedFetchCached.mockImplementation(<T>(_env: Env, _key: string, fn: () => Promise<T>) => fn());
+    mockedFetchRouteCached.mockImplementation(
+      <T>(_env: Env, _ctx: ExecutionContext | undefined, _key: string, fn: () => Promise<T>) => fn(),
+    );
     mockedGetLatestPostTime.mockResolvedValue(null);
     mockedGetAllCoupons.mockResolvedValue([]);
     mockedHasUnregisteredActiveCoupons.mockResolvedValue(false);

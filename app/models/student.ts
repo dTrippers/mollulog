@@ -1,7 +1,7 @@
 import { graphql } from "~/graphql";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { fetchCached } from "./base";
+import { cacheKey, cacheQuery, fetchCached, fetchSourceCached } from "./base";
 import type { Position, TacticRole } from "./content.d";
 
 export type Role = "striker" | "special";
@@ -50,8 +50,7 @@ export async function getAllStudentsMap(env: Env, includeUnreleased = false): Pr
   }, {} as StudentMap);
 }
 
-const rawStudentsKey = "students::v5";
-const RAW_STUDENTS_TTL = 60 * 10; // 10 minutes
+const rawStudentsKey = cacheKey("source", "student", 1, "all");
 
 async function fetchStudentsFromBaql(): Promise<Student[]> {
   const { data } = await runQuery(allStudentsQuery, {});
@@ -60,11 +59,11 @@ async function fetchStudentsFromBaql(): Promise<Student[]> {
 }
 
 export async function syncRawStudents(env: Env): Promise<Student[]> {
-  return fetchCached(env, rawStudentsKey, fetchStudentsFromBaql, RAW_STUDENTS_TTL, true);
+  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, true);
 }
 
 async function getRawStudents(env: Env): Promise<Student[]> {
-  return fetchCached(env, rawStudentsKey, fetchStudentsFromBaql, RAW_STUDENTS_TTL);
+  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, false);
 }
 
 const maximumTiers: Record<string, number> = {
@@ -102,7 +101,7 @@ export async function getStudentSkillItems(
 ): Promise<{ schaleDbId: string | null; skillItems: StudentSkillItem[] }> {
   return fetchCached(
     env,
-    `student-skill-items::v1::${uid}`,
+    cacheKey("cache", "student-skill-item", 1, cacheQuery({ uid })),
     async () => {
       const { data } = await runQuery(studentSkillItemsQuery, { uid });
       return {

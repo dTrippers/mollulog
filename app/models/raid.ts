@@ -2,12 +2,11 @@ import { graphql } from "~/graphql";
 import type { Defense, Difficulty as GraphqlDifficulty } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { type UtcIsoString, compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { fetchCached } from "./base";
+import { cacheKey, cacheQuery, fetchSourceCached } from "./base";
 import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
-const ALL_RAID_SCHEDULES_CACHE_KEY = "raids::schedules::all::v4";
-const RAID_SCHEDULE_CACHE_VERSION = "v3";
+const ALL_RAID_SCHEDULES_CACHE_KEY = cacheKey("source", "raid-schedule", 1, cacheQuery({ region: "gl" }));
 
 type RawRaidSchedule = NonNullable<Awaited<ReturnType<typeof runRaidScheduleDetailQuery>>>;
 type RawRaidJpSchedule = NonNullable<RawRaidSchedule["jpSchedule"]>;
@@ -130,41 +129,13 @@ const raidScheduleDetailQuery = graphql(`
 `);
 
 export function getRaidSchedule(env: Env, uid: string, forceRefresh = false) {
-  return fetchCached(
+  return fetchSourceCached(
     env,
-    `raids::schedules::${RAID_SCHEDULE_CACHE_VERSION}::uid=${uid}`,
+    cacheKey("source", "raid-schedule", 1, cacheQuery({ uid })),
     async () => {
       const schedule = await runRaidScheduleDetailQuery(env, uid);
       return schedule ? normalizeRaidSchedule(schedule) : null;
     },
-    24 * 60 * 60,
-    forceRefresh,
-  );
-}
-
-const raidScheduleBySeasonIndexQuery = graphql(`
-  query RaidScheduleBySeasonIndex($region: String!, $seasonIndex: Int!) {
-    raidScheduleBySeasonIndex(region: $region, seasonIndex: $seasonIndex) {
-      uid raidType seasonIndex region terrain startAt endAt attackType
-      raidBoss { uid name }
-      defenseTypeSets { difficulty defenseTypes }
-      jpSchedule { uid seasonIndex startAt }
-    }
-  }
-`);
-
-export function getRaidScheduleBySeasonIndex(env: Env, region: string, seasonIndex: number, forceRefresh = false) {
-  return fetchCached(
-    env,
-    `raids::schedules::region=${region}::seasonIndex=${seasonIndex}`,
-    async () => {
-      const { data, error } = await runQuery(raidScheduleBySeasonIndexQuery, { region, seasonIndex });
-      if (error) {
-        throw "failed to fetch raid schedule by season index";
-      }
-      return data?.raidScheduleBySeasonIndex ? normalizeRaidSchedule(data.raidScheduleBySeasonIndex) : null;
-    },
-    24 * 60 * 60,
     forceRefresh,
   );
 }
@@ -182,7 +153,7 @@ const allRaidSchedulesQuery = graphql(`
   }
 `);
 export function getAllRaidSchedules(env: Env, forceRefresh = false) {
-  return fetchCached(
+  return fetchSourceCached(
     env,
     ALL_RAID_SCHEDULES_CACHE_KEY,
     async () => {
@@ -192,7 +163,6 @@ export function getAllRaidSchedules(env: Env, forceRefresh = false) {
       }
       return data.raidSchedules.nodes.map(normalizeRaidSchedule);
     },
-    24 * 60 * 60,
     forceRefresh,
   );
 }

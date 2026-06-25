@@ -1,6 +1,6 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { DEFAULT_KV_EXPIRATION_TTL } from "~/models/base";
+import { DEFAULT_KV_EXPIRATION_TTL, cacheKey, cacheQuery } from "~/models/base";
 import type { EquipmentMetadata, ItemMetadata, SkillCostStudent, StudentGearData } from "~/models/growth-resource";
 
 type CacheEnvelope<T> = {
@@ -10,7 +10,6 @@ type CacheEnvelope<T> = {
 };
 
 const STUDENT_GEAR_DATA_TTL = 24 * 60 * 60;
-const STUDENT_GEAR_DATA_CACHE_PREFIX = "cache::student-gear-data::v2::";
 
 const skillCostQuery = graphql(`
   query GrowthSkillCosts($uids: [String!]) {
@@ -224,7 +223,7 @@ export class GrowthResourceRepository {
   }
 
   private buildStudentGearDataCacheKey(uid: string): string {
-    return `${STUDENT_GEAR_DATA_CACHE_PREFIX}${uid}`;
+    return cacheKey("cache", "student-gear-data", 1, cacheQuery({ uid }));
   }
 
   private parseCacheEnvelope<T>(raw: string | null): CacheEnvelope<T> | null {

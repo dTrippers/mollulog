@@ -4,7 +4,7 @@ import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { type UtcIsoString, normalizeUtcTimestamp, nowUtcIso } from "~/lib/date-time";
 import { watchIo } from "~/lib/io-watchdog";
-import { fetchCached } from "./base";
+import { cacheKey, cacheQuery, fetchCached } from "./base";
 import { senseisTable } from "./sensei";
 
 export type CommunityPostType = "student_review" | "event_opinion" | "guide" | "youtube_video" | "recruitment_result";
@@ -428,16 +428,20 @@ export async function getCommunityFeedPage(
 
   const { postType, postTypes, authorUserId, youtubeChannelKey, includeEngagement = true } = options;
   const types = postTypes && postTypes.length > 0 ? [...postTypes].sort() : postType ? [postType] : [];
-  const cacheKey = [
-    `community::feed::${COMMUNITY_FEED_CACHE_VERSION}`,
-    `types=${types.join(",")}`,
-    `author=${authorUserId ?? ""}`,
-    `yt=${youtubeChannelKey ?? ""}`,
-    `eng=${includeEngagement ? 1 : 0}`,
-    `size=${Math.max(1, options.pageSize ?? 20)}`,
-  ].join("::");
+  const feedCacheKey = cacheKey(
+    "cache",
+    "community-feed",
+    Number(COMMUNITY_FEED_CACHE_VERSION.replace("v", "")),
+    cacheQuery({
+      author: authorUserId ?? "",
+      eng: includeEngagement ? 1 : 0,
+      size: Math.max(1, options.pageSize ?? 20),
+      types: types.join(","),
+      yt: youtubeChannelKey ?? "",
+    }),
+  );
 
-  return fetchCached(env, cacheKey, () => loadCommunityFeedPage(env, options), COMMUNITY_FEED_CACHE_TTL);
+  return fetchCached(env, feedCacheKey, () => loadCommunityFeedPage(env, options), COMMUNITY_FEED_CACHE_TTL);
 }
 
 async function loadCommunityFeedPage(

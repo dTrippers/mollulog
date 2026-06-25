@@ -51,7 +51,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const sensei = await timing.measure("root_auth", () => getActiveSensei(env, request));
   const preference = await timing.measure("root_preference", () => getPreference(env, request));
   const navigationBarContents = await timing.measure("root_nav", () =>
-    getNavigationBarContents(env, false, sensei?.id),
+    getNavigationBarContents(env, false, sensei?.id, ctx),
   );
 
   timing.add("root_total", Date.now() - startedAt);

@@ -1,7 +1,7 @@
 import { graphql } from "~/graphql";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { fetchCached } from "~/models/base";
+import { cacheKey, fetchSourceCached } from "~/models/base";
 import {
   GROWTH_RESOURCE_KIND_ORDER,
   classifyGrowthResourceKind,
@@ -12,6 +12,8 @@ import {
   getSkillMaterialChoiceBoxRarity,
   shouldSortGrowthResourceKindByUid,
 } from "~/models/growth-resource";
+
+const ITEM_CATALOG_RESOURCES_CACHE_KEY = cacheKey("source", "item-catalog", 1, "user-resource-inventory");
 
 const itemCatalogQuery = graphql(`
   query UserResourceInventoryCatalog {
@@ -35,9 +37,9 @@ export type ItemCatalogResource = {
 };
 
 export async function getItemCatalogResources(env: Env, forceRefresh = false): Promise<ItemCatalogResource[]> {
-  return fetchCached(
+  return fetchSourceCached(
     env,
-    "user-resource-inventory-catalog::v1",
+    ITEM_CATALOG_RESOURCES_CACHE_KEY,
     async () => {
       const { data, error } = await runQuery(itemCatalogQuery, {});
       if (error) {
@@ -65,7 +67,6 @@ export async function getItemCatalogResources(env: Env, forceRefresh = false): P
         })),
       ].sort((a, b) => Number(a.uid) - Number(b.uid));
     },
-    60 * 60 * 24,
     forceRefresh,
   );
 }

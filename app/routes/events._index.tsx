@@ -38,9 +38,9 @@ export const meta: MetaFunction = () => {
 };
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
   const now = nowUtcIso();
-  return { events: await getEventList(env, now), now };
+  return { events: await getEventList(env, now, false, ctx), now };
 };
 
 function formatEventDate(value: string, format = "YY.MM.DD"): string {
@@ -148,12 +148,7 @@ function FilterToggleRow({
     <div className="rounded-md px-3 py-2 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70 lg:px-2.5 lg:py-1.5">
       <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
         <p className="min-w-0 grow text-sm font-medium text-neutral-900 dark:text-neutral-100">{title}</p>
-        <PanelOptionIconButton
-          label={title}
-          active={checked}
-          Icon={CheckIcon}
-          onClick={() => onChange(!checked)}
-        />
+        <PanelOptionIconButton label={title} active={checked} Icon={CheckIcon} onClick={() => onChange(!checked)} />
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { DEFAULT_KV_EXPIRATION_TTL, fetchCached } from "~/models/base";
+import { cacheKey, cacheQuery, fetchSourceCached } from "~/models/base";
 import type { FarmingStage, FarmingStageReward } from "~/models/farming-recommendation";
+
+const CAMPAIGN_FARMING_STAGES_CACHE_KEY = cacheKey("source", "farming-stage", 1, cacheQuery({ category: "campaign" }));
 
 const farmingStagesQuery = graphql(`
   query FarmingStages($category: String) {
@@ -23,9 +25,9 @@ const farmingStagesQuery = graphql(`
 `);
 
 export async function getCampaignFarmingStages(env: Env, forceRefresh = false): Promise<FarmingStage[]> {
-  return fetchCached(
+  return fetchSourceCached(
     env,
-    "farming-stages::campaign::v2",
+    CAMPAIGN_FARMING_STAGES_CACHE_KEY,
     async () => {
       const { data, error } = await runQuery(farmingStagesQuery, { category: "campaign" });
       if (error) {
@@ -42,7 +44,6 @@ export async function getCampaignFarmingStages(env: Env, forceRefresh = false): 
         rewards: stage.rewards.flatMap(toFarmingStageReward),
       }));
     },
-    DEFAULT_KV_EXPIRATION_TTL,
     forceRefresh,
   );
 }

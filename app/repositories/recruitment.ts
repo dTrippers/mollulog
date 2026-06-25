@@ -1,12 +1,11 @@
 import { graphql } from "~/graphql";
 import type { RecruitmentGroupsListQuery, RecruitmentPoolStudentsQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { fetchCached } from "~/models/base";
+import { cacheKey, fetchSourceCached } from "~/models/base";
 
-const RECRUITMENT_GROUPS_CACHE_KEY = "repo::recruitment-groups::all";
-const HISTORICAL_RECRUITMENT_GROUPS_CACHE_KEY = "repo::recruitment-groups::all-historical::v1";
-const RECRUITMENT_POOL_STUDENTS_CACHE_KEY = "repo::recruitment-pool-students::all::v1";
-const RECRUITMENT_GROUPS_CACHE_TTL = 24 * 60 * 60;
+const RECRUITMENT_GROUPS_CACHE_KEY = cacheKey("source", "recruitment-group", 1, "endAfterDays=7");
+const HISTORICAL_RECRUITMENT_GROUPS_CACHE_KEY = cacheKey("source", "recruitment-group", 1, "all");
+const RECRUITMENT_POOL_STUDENTS_CACHE_KEY = cacheKey("source", "recruitment-pool-student", 1, "all");
 const BAQL_HISTORY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 const recruitmentGroupsQuery = graphql(`
@@ -40,11 +39,12 @@ export class RecruitmentRepository {
   private refreshPromise: Promise<RecruitmentGroup[]> | null = null;
   private historicalPromise: Promise<RecruitmentGroup[]> | null = null;
   private historicalRefreshPromise: Promise<RecruitmentGroup[]> | null = null;
+  private fullRefreshPromise: Promise<RecruitmentGroup[]> | null = null;
 
   constructor(private env: Env) {}
 
   private async fetchAll(forceRefresh = false): Promise<RecruitmentGroup[]> {
-    return fetchCached(
+    return fetchSourceCached(
       this.env,
       RECRUITMENT_GROUPS_CACHE_KEY,
       async () => {
@@ -61,13 +61,12 @@ export class RecruitmentRepository {
 
         return data.recruitmentGroups;
       },
-      RECRUITMENT_GROUPS_CACHE_TTL,
       forceRefresh,
     );
   }
 
   private async fetchAllHistorical(forceRefresh = false): Promise<RecruitmentGroup[]> {
-    return fetchCached(
+    return fetchSourceCached(
       this.env,
       HISTORICAL_RECRUITMENT_GROUPS_CACHE_KEY,
       async () => {
@@ -82,7 +81,6 @@ export class RecruitmentRepository {
 
         return data.recruitmentGroups;
       },
-      RECRUITMENT_GROUPS_CACHE_TTL,
       forceRefresh,
     );
   }
@@ -183,11 +181,22 @@ export class RecruitmentRepository {
   }
 
   refresh(): Promise<RecruitmentGroup[]> {
-    return this.getAllPromise(true);
+    if (!this.fullRefreshPromise) {
+      this.fullRefreshPromise = this.getAllPromise(true)
+        .then(async (groups) => {
+          await Promise.all([this.getAllHistoricalPromise(true), this.getPoolStudents(true)]);
+          return groups;
+        })
+        .finally(() => {
+          this.fullRefreshPromise = null;
+        });
+    }
+
+    return this.fullRefreshPromise;
   }
 
   async getPoolStudents(forceRefresh = false): Promise<RecruitmentPoolStudent[]> {
-    return fetchCached(
+    return fetchSourceCached(
       this.env,
       RECRUITMENT_POOL_STUDENTS_CACHE_KEY,
       async () => {
@@ -199,7 +208,6 @@ export class RecruitmentRepository {
 
         return data.students;
       },
-      RECRUITMENT_GROUPS_CACHE_TTL,
       forceRefresh,
     );
   }

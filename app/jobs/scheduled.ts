@@ -2,10 +2,17 @@ import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
 import { getLogger } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
+import { getMainStories } from "~/models/main-story";
+import { getAllStudentsFavoriteItems } from "~/models/resource";
+import { syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
+import { getItemCatalogResources } from "~/repositories/item-catalog";
+import { RaidRepository, RecruitmentRepository } from "~/repositories";
+import { getCampaignFarmingStages } from "~/repositories/stage";
+import { syncEventContentsList } from "~/models/event-content";
 
-type ScheduledJobName = "syncYoutubeCommunityPosts" | "syncAllTimelineContentsMeta";
+type ScheduledJobName = "syncYoutubeCommunityPosts" | "refreshSourceCaches";
 
 type ScheduledJob = {
   name: ScheduledJobName;
@@ -19,11 +26,31 @@ type ScheduledRunContext = {
 
 const SCHEDULED_JOB_TIMEOUT_MS = RUNTIME_TIMEOUTS.scheduled.job;
 
-export async function runScheduledJobs(env: Env, ctx?: ExecutionContext, runContext: ScheduledRunContext = {}): Promise<void> {
+async function refreshSourceCaches(env: Env): Promise<void> {
+  const recruitmentRepository = new RecruitmentRepository(env);
+  const raidRepository = new RaidRepository(env);
+  await Promise.all([
+    syncRawStudents(env),
+    recruitmentRepository.refresh(),
+    raidRepository.refresh(),
+    getMainStories(env, true),
+    getAllStudentsFavoriteItems(env, true),
+    syncAllTimelineContentsMeta(env),
+    syncEventContentsList(env),
+    getItemCatalogResources(env, true),
+    getCampaignFarmingStages(env, true),
+  ]);
+}
+
+export async function runScheduledJobs(
+  env: Env,
+  ctx?: ExecutionContext,
+  runContext: ScheduledRunContext = {},
+): Promise<void> {
   const logger = getLogger(env, ctx, { job: "scheduled" });
   const jobs: ScheduledJob[] = [
     { name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env) },
-    { name: "syncAllTimelineContentsMeta", run: () => syncAllTimelineContentsMeta(env) },
+    { name: "refreshSourceCaches", run: () => refreshSourceCaches(env) },
   ];
 
   const results = await Promise.allSettled(

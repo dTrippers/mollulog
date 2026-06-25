@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
-import { fetchCached } from "~/models/base";
+import { fetchCached, fetchRouteCached, fetchSourceCached } from "~/models/base";
 import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "~/models/timeline-content";
 import {
   getEventList,
@@ -16,7 +16,17 @@ jest.mock("~/models/timeline-content", () => ({
 }));
 
 jest.mock("~/models/base", () => ({
+  cacheKey: (category: string, domain: string, version: number, query: string) =>
+    `${category}::${domain}::v${version}::${query}`,
+  cacheQuery: (params: Record<string, string | number | boolean | null | undefined>) =>
+    Object.entries(params)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .join("::") || "all",
   fetchCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
+  fetchRouteCached: jest.fn((_env: unknown, _ctx: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
+  fetchSourceCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
 }));
 
 jest.mock("~/lib/baql", () => ({
@@ -30,6 +40,8 @@ const mockedGetAllTimelineContentsMeta = getAllTimelineContentsMeta as jest.Mock
 >;
 const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
 const mockedFetchCached = fetchCached as jest.MockedFunction<typeof fetchCached>;
+const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
+const mockedFetchSourceCached = fetchSourceCached as jest.MockedFunction<typeof fetchSourceCached>;
 
 const env = {} as Env;
 
@@ -178,12 +190,17 @@ describe("getEventList", () => {
         },
       },
     ]);
-    expect(mockedFetchCached).toHaveBeenCalledWith(env, "event-list::v1", expect.any(Function), 24 * 60 * 60, false);
-    expect(mockedFetchCached).toHaveBeenCalledWith(
+    expect(mockedFetchRouteCached).toHaveBeenCalledWith(
       env,
-      "event-contents::list::v1",
+      undefined,
+      "route::events::v1::list",
       expect.any(Function),
-      24 * 60 * 60,
+      false,
+    );
+    expect(mockedFetchSourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-content::v1::list",
+      expect.any(Function),
       false,
     );
   });
@@ -205,7 +222,7 @@ describe("getEventList", () => {
         },
       },
     ];
-    mockedFetchCached.mockImplementationOnce(async () => cachedEvents as never);
+    mockedFetchRouteCached.mockImplementationOnce(async () => cachedEvents as never);
 
     await expect(getEventList(env, "2026-06-13T00:00:00.000Z", true)).resolves.toEqual([
       {
@@ -224,7 +241,13 @@ describe("getEventList", () => {
         },
       },
     ]);
-    expect(mockedFetchCached).toHaveBeenCalledWith(env, "event-list::v1", expect.any(Function), 24 * 60 * 60, true);
+    expect(mockedFetchRouteCached).toHaveBeenCalledWith(
+      env,
+      undefined,
+      "route::events::v1::list",
+      expect.any(Function),
+      true,
+    );
     expect(mockedRunQuery).not.toHaveBeenCalled();
   });
 });
@@ -327,7 +350,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchCached).toHaveBeenCalledWith(
       env,
-      "event-content::shop::v5::linked-event::permanent",
+      "cache::event-shop::v1::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
     );

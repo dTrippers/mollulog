@@ -2,15 +2,14 @@ import { and, eq, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { type UtcIsoString, normalizeInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { fetchCached } from "./base";
+import { cacheKey, fetchSourceCached } from "./base";
 import {
   type TimelineContentNameI18n,
   parseTimelineContentNames,
   selectTimelineContentName,
 } from "./timeline-content-name-i18n";
 
-const ALL_TIMELINE_CONTENTS_META_CACHE_KEY = "timeline-contents-meta::v1";
-const ALL_TIMELINE_CONTENTS_META_TTL = 60 * 30; // 30 minutes
+const ALL_TIMELINE_CONTENTS_META_CACHE_KEY = cacheKey("source", "timeline-content", 1, "all");
 
 export type TimelineContentType =
   | "event"
@@ -313,21 +312,20 @@ async function fetchAllTimelineContentsMetaFromDb(env: Env): Promise<TimelineCon
 }
 
 export async function syncAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
-  return fetchCached(
+  return fetchSourceCached(
     env,
     ALL_TIMELINE_CONTENTS_META_CACHE_KEY,
     () => fetchAllTimelineContentsMetaFromDb(env),
-    ALL_TIMELINE_CONTENTS_META_TTL,
     true,
   );
 }
 
 export async function getAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
-  return fetchCached(
+  return fetchSourceCached(
     env,
     ALL_TIMELINE_CONTENTS_META_CACHE_KEY,
     () => fetchAllTimelineContentsMetaFromDb(env),
-    ALL_TIMELINE_CONTENTS_META_TTL,
+    false,
   );
 }
 

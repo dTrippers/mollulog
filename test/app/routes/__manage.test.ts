@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { flushCacheAll } from "~/models/base";
-import { getFutureContents, getNavigationBarContentsRaw } from "~/models/content";
-import { getEventList } from "~/models/event-content";
+import { getFutureContents, getIndexContents, getNavigationBarContentsRaw } from "~/models/content";
+import { getEventList, syncEventContentsList } from "~/models/event-content";
 import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
@@ -10,6 +9,8 @@ import { syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { RaidRepository, RecruitmentRepository } from "~/repositories";
+import { getItemCatalogResources } from "~/repositories/item-catalog";
+import { getCampaignFarmingStages } from "~/repositories/stage";
 
 function makeSensei(overrides: Partial<Sensei>): Sensei {
   return {
@@ -27,10 +28,6 @@ function makeSensei(overrides: Partial<Sensei>): Sensei {
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
-}));
-
-jest.mock("~/models/base", () => ({
-  flushCacheAll: jest.fn(),
 }));
 
 jest.mock("~/models/main-story", () => ({
@@ -55,11 +52,21 @@ jest.mock("~/models/youtube", () => ({
 
 jest.mock("~/models/content", () => ({
   getFutureContents: jest.fn(),
+  getIndexContents: jest.fn(),
   getNavigationBarContentsRaw: jest.fn(),
 }));
 
 jest.mock("~/models/event-content", () => ({
   getEventList: jest.fn(),
+  syncEventContentsList: jest.fn(),
+}));
+
+jest.mock("~/repositories/item-catalog", () => ({
+  getItemCatalogResources: jest.fn(),
+}));
+
+jest.mock("~/repositories/stage", () => ({
+  getCampaignFarmingStages: jest.fn(),
 }));
 
 const mockRecruitmentRefresh = jest.fn<() => Promise<unknown[]>>();
@@ -73,16 +80,17 @@ jest.mock("~/repositories", () => ({
 import { action, loader } from "../../../app/routes/[__manage]";
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
-const mockedFlushCacheAll = flushCacheAll as jest.MockedFunction<typeof flushCacheAll>;
 const mockedSyncRawStudents = syncRawStudents as jest.MockedFunction<typeof syncRawStudents>;
 const mockedSyncYoutubeCommunityPosts = syncYoutubeCommunityPosts as jest.MockedFunction<
   typeof syncYoutubeCommunityPosts
 >;
 const mockedGetFutureContents = getFutureContents as jest.MockedFunction<typeof getFutureContents>;
+const mockedGetIndexContents = getIndexContents as jest.MockedFunction<typeof getIndexContents>;
 const mockedGetNavigationBarContentsRaw = getNavigationBarContentsRaw as jest.MockedFunction<
   typeof getNavigationBarContentsRaw
 >;
 const mockedGetEventList = getEventList as jest.MockedFunction<typeof getEventList>;
+const mockedSyncEventContentsList = syncEventContentsList as jest.MockedFunction<typeof syncEventContentsList>;
 const mockedGetMainStories = getMainStories as jest.MockedFunction<typeof getMainStories>;
 const mockedGetAllStudentsFavoriteItems = getAllStudentsFavoriteItems as jest.MockedFunction<
   typeof getAllStudentsFavoriteItems
@@ -90,11 +98,13 @@ const mockedGetAllStudentsFavoriteItems = getAllStudentsFavoriteItems as jest.Mo
 const mockedSyncAllTimelineContentsMeta = syncAllTimelineContentsMeta as jest.MockedFunction<
   typeof syncAllTimelineContentsMeta
 >;
+const mockedGetItemCatalogResources = getItemCatalogResources as jest.MockedFunction<typeof getItemCatalogResources>;
+const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
 const MockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
 const MockedRaidRepository = RaidRepository as jest.MockedClass<typeof RaidRepository>;
 
 type ManageActionResponse = {
-  intent: "cache.refresh" | "cache.flush" | "unknown";
+  intent: "cache.refresh" | "unknown";
   result?: {
     ok: boolean;
     ranAt: string;
@@ -147,7 +157,6 @@ function expectResponse(result: unknown): Response {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockedFlushCacheAll.mockResolvedValue(undefined);
   mockedSyncYoutubeCommunityPosts.mockResolvedValue({ synced: 0 });
   mockedSyncRawStudents.mockResolvedValue([]);
   mockRecruitmentRefresh.mockResolvedValue([]);
@@ -155,7 +164,16 @@ beforeEach(() => {
   mockedGetMainStories.mockResolvedValue([]);
   mockedGetAllStudentsFavoriteItems.mockResolvedValue([]);
   mockedSyncAllTimelineContentsMeta.mockResolvedValue([]);
+  mockedSyncEventContentsList.mockResolvedValue([]);
+  mockedGetItemCatalogResources.mockResolvedValue([]);
+  mockedGetCampaignFarmingStages.mockResolvedValue([]);
   mockedGetEventList.mockResolvedValue([]);
+  mockedGetIndexContents.mockResolvedValue({
+    mainEvent: null,
+    currentRaids: [],
+    currentRecruitments: [],
+    favoritedCounts: [],
+  });
   mockedGetFutureContents.mockResolvedValue([]);
   mockedGetNavigationBarContentsRaw.mockResolvedValue({
     eventCandidates: [],
@@ -192,7 +210,11 @@ describe("__manage route", () => {
           getMainStories: expect.any(Number),
           getAllStudentsFavoriteItems: expect.any(Number),
           syncAllTimelineContentsMeta: expect.any(Number),
+          syncEventContentsList: expect.any(Number),
+          getItemCatalogResources: expect.any(Number),
+          getCampaignFarmingStages: expect.any(Number),
           getEventList: expect.any(Number),
+          getIndexContents: expect.any(Number),
           getFutureContents: expect.any(Number),
           getNavigationBarContentsRaw: expect.any(Number),
         },
@@ -203,9 +225,13 @@ describe("__manage route", () => {
     expect(mockedGetMainStories).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(expect.anything());
-    expect(mockedGetEventList).toHaveBeenCalledWith(expect.anything(), undefined, true);
-    expect(mockedGetFutureContents).toHaveBeenCalledWith(expect.anything(), true);
-    expect(mockedGetNavigationBarContentsRaw).toHaveBeenCalledWith(expect.anything(), true);
+    expect(mockedSyncEventContentsList).toHaveBeenCalledWith(expect.anything());
+    expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(expect.anything(), true);
+    expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(expect.anything(), true);
+    expect(mockedGetEventList).toHaveBeenCalledWith(expect.anything(), undefined, true, expect.anything());
+    expect(mockedGetIndexContents).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
+    expect(mockedGetFutureContents).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
+    expect(mockedGetNavigationBarContentsRaw).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
     expect(MockedRecruitmentRepository).toHaveBeenCalledWith(expect.anything());
     expect(MockedRaidRepository).toHaveBeenCalledWith(expect.anything());
   });
@@ -228,24 +254,8 @@ describe("__manage route", () => {
     expect(body.result?.durations?.["RaidRepository.refresh"]).toBeGreaterThan(0);
     expect(mockedGetFutureContents).not.toHaveBeenCalled();
     expect(mockedGetEventList).not.toHaveBeenCalled();
+    expect(mockedGetIndexContents).not.toHaveBeenCalled();
     expect(mockedGetNavigationBarContentsRaw).not.toHaveBeenCalled();
-  });
-
-  it("flushes all cache entries for admins", async () => {
-    mockedGetActiveSensei.mockResolvedValue(makeSensei({ id: 1, role: "admin" }));
-
-    const response = expectDataResult<ManageActionResponse>(await action(createActionArgs("cache.flush")));
-    const body = response.data;
-
-    expect(dataStatus(response)).toBe(200);
-    expect(body).toMatchObject({
-      intent: "cache.flush",
-      result: {
-        ok: true,
-        ranAt: expect.any(String),
-      },
-    });
-    expect(mockedFlushCacheAll).toHaveBeenCalledWith(expect.anything());
   });
 
   it("rejects non-admin users from loader and action", async () => {

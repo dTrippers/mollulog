@@ -9,7 +9,7 @@ import {
   toUtcIso,
 } from "~/lib/date-time";
 import { RaidRepository, type RaidSchedule, RecruitmentRepository } from "~/repositories";
-import { fetchCached } from "./base";
+import { cacheKey, fetchRouteCached } from "./base";
 import type { RaidType, Role } from "./content.d";
 import { getAllCoupons, hasUnregisteredActiveCoupons } from "./coupon";
 import { getFavoritedCounts } from "./favorite-students";
@@ -43,6 +43,10 @@ export type { ContentCommentSummary, NestedComment } from "./content-comment";
  * Index Contents
  */
 
+const INDEX_CONTENTS_CACHE_KEY = cacheKey("route", "index", 1, "all");
+const FUTURE_CONTENTS_CACHE_KEY = cacheKey("route", "futures", 1, "all");
+const NAVIGATION_BAR_CONTENTS_RAW_CACHE_KEY = cacheKey("route", "navigation-bar", 1, "raw");
+
 export type IndexRecruitment = {
   student: { uid: string; name: string; attackType: Attack; defenseType: Defense; role: Role } | null;
   favoriteKey: string;
@@ -52,6 +56,13 @@ export type IndexRecruitment = {
   since: UtcIsoString;
   until: UtcIsoString | null;
   studentName: string;
+};
+
+export type IndexContents = {
+  mainEvent: TimelineContent | null;
+  currentRaids: RaidSchedule[];
+  currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[];
+  favoritedCounts: Awaited<ReturnType<typeof getFavoritedCounts>>;
 };
 
 async function enrichRaidContents(
@@ -80,92 +91,102 @@ async function enrichRaidContents(
   );
 }
 
-export async function getIndexContents(env: Env, forceRefresh = false) {
-  const now = nowUtcIso();
-  const nowDate = new Date(now);
-  const eventContentTypes: TimelineContentType[] = ["event", "main_story", "mini_event", "campaign"];
+export async function getIndexContents(env: Env, forceRefresh = false, ctx?: ExecutionContext): Promise<IndexContents> {
+  return fetchRouteCached<IndexContents>(
+    env,
+    ctx,
+    INDEX_CONTENTS_CACHE_KEY,
+    async () => {
+      const now = nowUtcIso();
+      const nowDate = new Date(now);
+      const eventContentTypes: TimelineContentType[] = ["event", "main_story", "mini_event", "campaign"];
 
-  const recruitmentRepository = new RecruitmentRepository(env);
-  const [allEvents, currentRaids, allRecruitmentGroups] = await Promise.all([
-    getTimelineContentsByContentTypes(env, eventContentTypes, now).then((events) =>
-      events.filter((content) => !content.endAt || isInstantAfter(content.endAt, now)),
-    ),
-    getUpcomingRaidContents(env, { limit: 4, forceRefresh }).then((contents) =>
-      contents.flatMap((content) => (content.raidSchedule ? [content.raidSchedule] : [])),
-    ),
-    recruitmentRepository.getAll(forceRefresh),
-  ]);
+      const recruitmentRepository = new RecruitmentRepository(env);
+      const [allEvents, currentRaids, allRecruitmentGroups] = await Promise.all([
+        getTimelineContentsByContentTypes(env, eventContentTypes, now).then((events) =>
+          events.filter((content) => !content.endAt || isInstantAfter(content.endAt, now)),
+        ),
+        getUpcomingRaidContents(env, { limit: 4, forceRefresh }).then((contents) =>
+          contents.flatMap((content) => (content.raidSchedule ? [content.raidSchedule] : [])),
+        ),
+        recruitmentRepository.getAll(forceRefresh),
+      ]);
 
-  const ongoingEvents = allEvents.filter(
-    (event) =>
-      event.contentType === "event" &&
-      !isInstantAfter(event.startAt, now) &&
-      event.endAt &&
-      isInstantAfter(event.endAt, now),
-  );
-  const mainEvent =
-    ongoingEvents[0] ??
-    allEvents.find((event) => event.contentType === "event" && isInstantAfter(event.startAt, now)) ??
-    null;
+      const ongoingEvents = allEvents.filter(
+        (event) =>
+          event.contentType === "event" &&
+          !isInstantAfter(event.startAt, now) &&
+          event.endAt &&
+          isInstantAfter(event.endAt, now),
+      );
+      const mainEvent: TimelineContent | null =
+        ongoingEvents[0] ??
+        allEvents.find((event) => event.contentType === "event" && isInstantAfter(event.startAt, now)) ??
+        null;
 
-  const recruitmentGroups = allRecruitmentGroups.filter((group) => {
-    const startAt = new Date(group.startAt).getTime();
-    const endAt = group.endAt ? new Date(group.endAt).getTime() : null;
-    const nowTime = nowDate.getTime();
-    return startAt <= nowTime && (endAt === null || endAt >= nowTime);
-  });
-  const timelineUidByRecruitmentGroupUid = new Map(
-    allEvents
-      .filter((event) => event.recruitmentGroupUid)
-      .map((event) => [event.recruitmentGroupUid as string, event.uid]),
-  );
-  const currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[] = recruitmentGroups
-    .flatMap((group) =>
-      group.recruitments
-        .filter(
-          (recruitment) =>
-            recruitment.recruitmentType !== "recollect" &&
-            recruitment.recruitmentType !== "archive" &&
-            recruitment.recruitmentType !== "encore",
+      const recruitmentGroups = allRecruitmentGroups.filter((group) => {
+        const startAt = new Date(group.startAt).getTime();
+        const endAt = group.endAt ? new Date(group.endAt).getTime() : null;
+        const nowTime = nowDate.getTime();
+        return startAt <= nowTime && (endAt === null || endAt >= nowTime);
+      });
+      const timelineUidByRecruitmentGroupUid = new Map(
+        allEvents
+          .filter((event) => event.recruitmentGroupUid)
+          .map((event) => [event.recruitmentGroupUid as string, event.uid]),
+      );
+      const currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[] = recruitmentGroups
+        .flatMap((group) =>
+          group.recruitments
+            .filter(
+              (recruitment) =>
+                recruitment.recruitmentType !== "recollect" &&
+                recruitment.recruitmentType !== "archive" &&
+                recruitment.recruitmentType !== "encore",
+            )
+            .map((recruitment) => ({
+              eventUid: timelineUidByRecruitmentGroupUid.get(group.uid) ?? group.uid,
+              recruitment: {
+                student: recruitment.student
+                  ? {
+                      uid: recruitment.student.uid,
+                      name: recruitment.student.name ?? "",
+                      attackType: recruitment.student.attackType,
+                      defenseType: recruitment.student.defenseType,
+                      role: recruitment.student.role,
+                    }
+                  : null,
+                favoriteKey: getRecruitmentFavoriteKey(recruitment),
+                recruitmentType: recruitment.recruitmentType,
+                pickup: recruitment.pickup,
+                rerun: recruitment.rerun,
+                since: toUtcIso(recruitment.since),
+                until: recruitment.until ? toUtcIso(recruitment.until) : null,
+                studentName: recruitment.studentName,
+              } satisfies IndexRecruitment,
+            })),
         )
-        .map((recruitment) => ({
-          eventUid: timelineUidByRecruitmentGroupUid.get(group.uid) ?? group.uid,
-          recruitment: {
-            student: recruitment.student
-              ? {
-                  uid: recruitment.student.uid,
-                  name: recruitment.student.name ?? "",
-                  attackType: recruitment.student.attackType,
-                  defenseType: recruitment.student.defenseType,
-                  role: recruitment.student.role,
-                }
-              : null,
-            favoriteKey: getRecruitmentFavoriteKey(recruitment),
-            recruitmentType: recruitment.recruitmentType,
-            pickup: recruitment.pickup,
-            rerun: recruitment.rerun,
-            since: toUtcIso(recruitment.since),
-            until: recruitment.until ? toUtcIso(recruitment.until) : null,
-            studentName: recruitment.studentName,
-          } satisfies IndexRecruitment,
-        })),
-    )
-    .filter(
-      ({ recruitment }) =>
-        !isInstantAfter(recruitment.since, now) && recruitment.until !== null && isInstantAfter(recruitment.until, now),
-    );
+        .filter(
+          ({ recruitment }) =>
+            !isInstantAfter(recruitment.since, now) &&
+            recruitment.until !== null &&
+            isInstantAfter(recruitment.until, now),
+        );
 
-  const allStudentUids = currentRecruitments.map(({ recruitment }) => recruitment.favoriteKey);
-  const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) =>
-    currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId),
+      const allStudentUids = currentRecruitments.map(({ recruitment }) => recruitment.favoriteKey);
+      const favoritedCounts = (await getFavoritedCounts(env, allStudentUids)).filter((favorited) =>
+        currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId),
+      );
+
+      return {
+        mainEvent,
+        currentRaids,
+        currentRecruitments,
+        favoritedCounts,
+      };
+    },
+    forceRefresh,
   );
-
-  return {
-    mainEvent,
-    currentRaids,
-    currentRecruitments,
-    favoritedCounts,
-  };
 }
 
 /**
@@ -309,10 +330,15 @@ function toRecruitmentInfos(group: Awaited<ReturnType<RecruitmentRepository["get
     }));
 }
 
-export async function getFutureContents(env: Env, forceRefresh = false): Promise<FutureContent[]> {
-  const allEnriched = await fetchCached(
+export async function getFutureContents(
+  env: Env,
+  forceRefresh = false,
+  ctx?: ExecutionContext,
+): Promise<FutureContent[]> {
+  const allEnriched = await fetchRouteCached(
     env,
-    "future-contents::v2",
+    ctx,
+    FUTURE_CONTENTS_CACHE_KEY,
     async () => {
       const recruitmentRepository = new RecruitmentRepository(env);
       const [contents, upcomingRaidContents] = await Promise.all([
@@ -341,7 +367,6 @@ export async function getFutureContents(env: Env, forceRefresh = false): Promise
         }),
       );
     },
-    24 * 60 * 60,
     forceRefresh,
   );
 
@@ -377,10 +402,15 @@ type NavigationBarContentsRaw = {
   couponActivePeriods: { endAt: UtcIsoString | null }[];
 };
 
-export async function getNavigationBarContentsRaw(env: Env, forceRefresh = false): Promise<NavigationBarContentsRaw> {
-  return fetchCached(
+export async function getNavigationBarContentsRaw(
+  env: Env,
+  forceRefresh = false,
+  ctx?: ExecutionContext,
+): Promise<NavigationBarContentsRaw> {
+  return fetchRouteCached(
     env,
-    "navigation-bar-contents-raw::v2",
+    ctx,
+    NAVIGATION_BAR_CONTENTS_RAW_CACHE_KEY,
     async () => {
       const now = nowUtcIso();
       const [contents, latestNewsTime, coupons] = await Promise.all([
@@ -405,7 +435,6 @@ export async function getNavigationBarContentsRaw(env: Env, forceRefresh = false
         })),
       };
     },
-    60 * 60 * 24,
     forceRefresh,
   );
 }
@@ -414,15 +443,13 @@ export async function getNavigationBarContents(
   env: Env,
   forceRefresh = false,
   userId?: number,
+  ctx?: ExecutionContext,
 ): Promise<NavigationBarContents> {
   const now = nowUtcIso();
   const [raw, personalRedDots] = await Promise.all([
-    getNavigationBarContentsRaw(env, forceRefresh),
+    getNavigationBarContentsRaw(env, forceRefresh, ctx),
     userId
-      ? Promise.all([
-          hasUnregisteredActiveCoupons(env, userId),
-          hasUnreadAdminFeedbackReplies(env, userId),
-        ])
+      ? Promise.all([hasUnregisteredActiveCoupons(env, userId), hasUnreadAdminFeedbackReplies(env, userId)])
       : Promise.resolve([false, false] as const),
   ]);
   const [hasUnconsumedCoupons, hasUnreadFeedbackReplies] = personalRedDots;

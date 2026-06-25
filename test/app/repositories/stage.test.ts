@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
-import { fetchCached } from "~/models/base";
+import { fetchSourceCached } from "~/models/base";
 import { getCampaignFarmingStages } from "../../../app/repositories/stage";
 
 jest.mock("~/models/base", () => ({
-  DEFAULT_KV_EXPIRATION_TTL: 60,
-  fetchCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
+  cacheKey: (category: string, domain: string, version: number, query: string) =>
+    `${category}::${domain}::v${version}::${query}`,
+  cacheQuery: (params: Record<string, string | number | boolean | null | undefined>) =>
+    Object.entries(params)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .join("::") || "all",
+  fetchSourceCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
 }));
 
 jest.mock("~/lib/baql", () => ({
@@ -13,7 +20,7 @@ jest.mock("~/lib/baql", () => ({
 }));
 
 const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
-const mockedFetchCached = fetchCached as jest.MockedFunction<typeof fetchCached>;
+const mockedFetchSourceCached = fetchSourceCached as jest.MockedFunction<typeof fetchSourceCached>;
 
 afterEach(() => {
   jest.clearAllMocks();
@@ -92,11 +99,10 @@ describe("getCampaignFarmingStages", () => {
 
     const stages = await getCampaignFarmingStages({} as Env);
 
-    expect(mockedFetchCached).toHaveBeenCalledWith(
+    expect(mockedFetchSourceCached).toHaveBeenCalledWith(
       expect.anything(),
-      "farming-stages::campaign::v2",
+      "source::farming-stage::v1::category=campaign",
       expect.any(Function),
-      expect.any(Number),
       false,
     );
     expect(stages[0].rewards).toEqual([

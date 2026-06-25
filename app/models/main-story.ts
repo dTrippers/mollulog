@@ -1,6 +1,8 @@
-import { fetchCached } from "./base";
+import { cacheKey, fetchSourceCached } from "./base";
 import { runQuery } from "~/lib/baql";
 import { graphql } from "~/graphql";
+
+const MAIN_STORIES_CACHE_KEY = cacheKey("source", "main-story", 1, "all");
 
 type MainStoryVolumeTitleInput = {
   season: number;
@@ -69,11 +71,16 @@ const mainStoriesQuery = graphql(`
 `);
 
 export async function getMainStories(env: Env, forceRefresh = false) {
-  return fetchCached(env, "main-stories::v2", async () => {
-    const { data, error } = await runQuery(mainStoriesQuery, {});
-    if (error || !data) {
-      throw error ?? "failed to fetch main stories";
-    }
-    return data.mainStories;
-  }, 24 * 60 * 60, forceRefresh);
+  return fetchSourceCached(
+    env,
+    MAIN_STORIES_CACHE_KEY,
+    async () => {
+      const { data, error } = await runQuery(mainStoriesQuery, {});
+      if (error || !data) {
+        throw error ?? "failed to fetch main stories";
+      }
+      return data.mainStories;
+    },
+    forceRefresh,
+  );
 }

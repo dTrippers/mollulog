@@ -22,7 +22,8 @@ export const meta: MetaFunction = ({ location }) => {
 };
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
-  const navigationBarContents = await getNavigationBarContents(context.cloudflare.env);
+  const { env, ctx } = context.cloudflare;
+  const navigationBarContents = await getNavigationBarContents(env, false, undefined, ctx);
   return {
     upcomingEvent: navigationBarContents.upcomingEvent,
   };
@@ -76,7 +77,9 @@ function UtilityLinkItem({
       </div>
       <div className="min-w-0 flex-1">
         <p className="font-bold">{name}</p>
-        {description && <p className="mt-0.5 text-sm leading-snug text-neutral-500 dark:text-neutral-400">{description}</p>}
+        {description && (
+          <p className="mt-0.5 text-sm leading-snug text-neutral-500 dark:text-neutral-400">{description}</p>
+        )}
       </div>
     </div>
   );

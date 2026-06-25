@@ -62,7 +62,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const timing = new ServerTiming();
   const startedAt = Date.now();
 
-  const rawContentsPromise = timing.measure("future_contents", () => getFutureContents(env));
+  const rawContentsPromise = timing.measure("future_contents", () => getFutureContents(env, false, ctx));
   const currentUserPromise = timing.measure("auth", () => getActiveSensei(env, request));
   const [rawContents, currentUser] = await Promise.all([rawContentsPromise, currentUserPromise]);
   const contents: FutureContentsLoaderContent[] = rawContents.map((content: FutureContent) => ({
@@ -416,7 +416,13 @@ export default function FutureContents() {
       }
       setPendingContentUid(null);
     }
-  }, [commentFetcher.state, commentFetcher.data, commentLoadRequest?.uid, commentThreadFetcher.data, pendingContentUid]);
+  }, [
+    commentFetcher.state,
+    commentFetcher.data,
+    commentLoadRequest?.uid,
+    commentThreadFetcher.data,
+    pendingContentUid,
+  ]);
 
   useEffect(() => {
     if (!commentLoadRequest || commentLoadRequest.started || commentThreadFetcher.state !== "loading") {
