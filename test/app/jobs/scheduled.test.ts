@@ -201,6 +201,20 @@ describe("runScheduledJobs", () => {
     expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false);
   });
 
+  it("does not record the warm marker when the periodic warm fails", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    mockedGetStudentGearData.mockRejectedValue(new Error("gear warm failed"));
+    const { env, kv } = createEnv();
+
+    await expect(runScheduledJobs(env, {} as ExecutionContext)).rejects.toThrow("One or more scheduled jobs failed");
+
+    // Warm was attempted but failed, so the window marker must not be written —
+    // the next cron retries instead of skipping for the full window.
+    expect(mockedGetStudentGearData).toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalledWith(SOURCE_WARM_MARKER_KEY, expect.anything(), expect.anything());
+  });
+
   it("raises scheduled job failures", async () => {
     mockedSyncYoutubeCommunityPosts.mockRejectedValue(new Error("youtube failed"));
     const { env } = createEnv();

@@ -303,6 +303,118 @@ function logInflightLifecycle(phase: "start" | "settled" | "evicted", entry: Inf
   );
 }
 
+function getNamespaceInflightRequests(env: Env): Map<string, InflightCacheRequest> {
+  let namespaceInflightRequests = inflightCacheRequests.get(env.KV_CACHE);
+  if (!namespaceInflightRequests) {
+    namespaceInflightRequests = new Map<string, InflightCacheRequest>();
+    inflightCacheRequests.set(env.KV_CACHE, namespaceInflightRequests);
+  }
+  return namespaceInflightRequests;
+}
+
+/**
+ * Coalesces concurrent regenerations for one cache key onto a single in-flight
+ * request inside this isolate, so a cold miss or a maxStale-exceeded burst calls
+ * `produce()` once instead of once per request.
+ *
+ * Safety invariant: a registered entry's promise resolves to the regenerated
+ * value (or rejects) — never to `undefined` — so any caller can piggyback on it.
+ * Every wait is bounded, which is what keeps a stuck regeneration from poisoning
+ * later same-key requests in a long-lived isolate:
+ * - a piggybacking caller gives up after INFLIGHT_WAIT_TIMEOUT_MS and starts its
+ *   own regeneration instead of waiting forever on a shared promise;
+ * - an entry older than INFLIGHT_MAX_MS is evicted before any new piggyback;
+ * - the registrant force-drops its own entry after INFLIGHT_MAX_MS even if
+ *   `produce()` never settles.
+ *
+ * A non-timeout rejection from the shared regeneration is propagated to
+ * piggybackers (rather than each retrying) so a true upstream failure does not
+ * turn into a retry storm; callers with stale data fall back to it upstream.
+ */
+async function runWithInflightDedup<T>(
+  inflightMap: Map<string, InflightCacheRequest>,
+  cacheKey: string,
+  forceRefresh: boolean,
+  produce: () => Promise<T>,
+): Promise<T> {
+  // A forceRefresh caller must start its own request instead of piggybacking on
+  // an in-flight one. Non-force callers can piggyback regardless of force status.
+  if (!forceRefresh) {
+    const inflightEntry = inflightMap.get(cacheKey);
+    if (inflightEntry) {
+      const inflightAgeMs = Date.now() - inflightEntry.startedAt;
+      if (inflightAgeMs > INFLIGHT_MAX_MS) {
+        if (inflightMap.get(cacheKey) === inflightEntry) {
+          inflightMap.delete(cacheKey);
+          logInflightLifecycle("evicted", inflightEntry);
+        }
+      } else {
+        try {
+          return await watchIo(
+            "cache.inflight",
+            withTimeout(inflightEntry.promise as Promise<T>, INFLIGHT_WAIT_TIMEOUT_MS, "cache.inflight"),
+            {
+              dataKey: cacheKey,
+              inflightAgeMs,
+              inflightForceRefresh: inflightEntry.forceRefresh,
+            },
+          );
+        } catch (error) {
+          if (!isTimeoutError(error)) {
+            throw error;
+          }
+
+          warnIoFailure("cache.inflight", cacheKey, error, INFLIGHT_WAIT_TIMEOUT_MS);
+          if (inflightMap.get(cacheKey) === inflightEntry) {
+            inflightMap.delete(cacheKey);
+          }
+        }
+      }
+    }
+  }
+
+  const inflightState: {
+    entry?: InflightCacheRequest;
+    evictTimer?: ReturnType<typeof setTimeout>;
+  } = {};
+  const request = produce().finally(() => {
+    if (inflightState.evictTimer) {
+      clearTimeout(inflightState.evictTimer);
+    }
+    if (!inflightState.entry) {
+      return;
+    }
+
+    if (inflightMap.get(cacheKey) === inflightState.entry) {
+      inflightMap.delete(cacheKey);
+    }
+    logInflightLifecycle("settled", inflightState.entry);
+  });
+  const entry: InflightCacheRequest = {
+    promise: request,
+    dataKey: cacheKey,
+    startedAt: Date.now(),
+    forceRefresh,
+  };
+  inflightState.entry = entry;
+  logInflightLifecycle("start", entry);
+  // Safety net: if `request` never settles (a hung KV/BAQL/ranks call), drop the
+  // in-flight entry after a deadline so it cannot poison every later same-key
+  // request sharing this long-lived isolate.
+  inflightState.evictTimer = setTimeout(() => {
+    if (!inflightState.entry) {
+      return;
+    }
+
+    if (inflightMap.get(cacheKey) === inflightState.entry) {
+      inflightMap.delete(cacheKey);
+      logInflightLifecycle("evicted", inflightState.entry);
+    }
+  }, INFLIGHT_MAX_MS);
+  inflightMap.set(cacheKey, entry);
+  return request;
+}
+
 async function fetchCachedInternal<T>(
   env: Env,
   dataKey: string,
@@ -310,6 +422,7 @@ async function fetchCachedInternal<T>(
   ttl?: number | ((data: T) => number),
   forceRefresh = false,
   options: FetchCachedOptions<T> = {},
+  coalesceRefresh?: (produce: () => Promise<T>) => Promise<T>,
 ): Promise<T> {
   const cacheKey = dataKey;
   const expirationTtl = options.expirationTtl ?? DEFAULT_KV_EXPIRATION_TTL;
@@ -344,7 +457,11 @@ async function fetchCachedInternal<T>(
   }
 
   try {
-    const data = await refreshCacheValue(env, cacheKey, fn, expirationTtl);
+    // Cold miss / maxStale-exceeded regeneration. `coalesceRefresh` (SWR routes)
+    // shares one regeneration across concurrent callers; non-SWR callers are
+    // already coalesced one level up in `fetchCached`.
+    const runRefresh = () => refreshCacheValue(env, cacheKey, fn, expirationTtl);
+    const data = coalesceRefresh ? await coalesceRefresh(runRefresh) : await runRefresh();
     return data;
   } catch (error) {
     if (isTimeoutError(error)) {
@@ -383,18 +500,20 @@ function scheduleBackgroundRefresh<T>(
   expirationTtl: number,
   options: FetchCachedOptions<T>,
 ) {
-  let namespaceInflightRequests = inflightCacheRequests.get(env.KV_CACHE);
-  if (!namespaceInflightRequests) {
-    namespaceInflightRequests = new Map<string, InflightCacheRequest>();
-    inflightCacheRequests.set(env.KV_CACHE, namespaceInflightRequests);
-  }
+  const inflightMap = getNamespaceInflightRequests(env);
 
-  if (namespaceInflightRequests.has(cacheKey)) {
+  if (inflightMap.has(cacheKey)) {
     return;
   }
 
-  const inflightMap = namespaceInflightRequests;
-  const request = refreshCacheValue(env, cacheKey, fn, expirationTtl)
+  // The entry stores the raw, value-bearing regeneration so a concurrent cold
+  // miss / maxStale-exceeded caller that piggybacks on this background refresh
+  // receives the regenerated value (or a rejection) — never the `undefined` that
+  // the error-swallowing `guarded` chain resolves to. `guarded` attaches a
+  // rejection handler, so storing the raw promise does not leak an unhandled
+  // rejection even when nobody piggybacks.
+  const request = refreshCacheValue(env, cacheKey, fn, expirationTtl);
+  const guarded = request
     .catch((error) => {
       console.error(
         "[cache] swr_refresh_failed",
@@ -423,11 +542,11 @@ function scheduleBackgroundRefresh<T>(
   logInflightLifecycle("start", entry);
   inflightMap.set(cacheKey, entry);
   if (options.ctx) {
-    options.ctx.waitUntil(request);
+    options.ctx.waitUntil(guarded);
     return;
   }
 
-  void request;
+  void guarded;
 }
 
 export async function fetchSourceCached<T>(
@@ -459,18 +578,31 @@ export async function fetchLazySourceCached<T>(
   });
 }
 
-export async function claimKvCacheWindow(env: Env, dataKey: string, freshTtl: number): Promise<boolean> {
+/**
+ * Returns whether a warm window marker written within `freshTtl` already exists,
+ * i.e. the periodic warm can be skipped this run.
+ *
+ * Split from the marker write (see `markKvCacheWindow`) on purpose: the marker is
+ * recorded only *after* a successful warm, so a failed/partial warm leaves no
+ * fresh marker and the next scheduled run retries instead of skipping for the
+ * whole window.
+ */
+export async function isKvCacheWindowFresh(env: Env, dataKey: string, freshTtl: number): Promise<boolean> {
   if (isCacheDisabled(env)) {
-    return true;
-  }
-
-  const marker = await readKvCacheValue<true>(env, dataKey);
-  if (marker && isFresh(marker.cachedAt, freshTtl, marker.data)) {
     return false;
   }
 
+  const marker = await readKvCacheValue<true>(env, dataKey);
+  return Boolean(marker && isFresh(marker.cachedAt, freshTtl, marker.data));
+}
+
+/** Records the warm window marker. Call only after the warm work has succeeded. */
+export async function markKvCacheWindow(env: Env, dataKey: string): Promise<void> {
+  if (isCacheDisabled(env)) {
+    return;
+  }
+
   await writeKvCacheValue(env, dataKey, true, Date.now(), SOURCE_CACHE_EXPIRATION_TTL);
-  return true;
 }
 
 function resolveBatchValue<K, T>(key: K, freshValues: Map<K, T>, staleValues: Map<K, T>): T {
@@ -609,91 +741,21 @@ export async function fetchCached<T>(
   }
 
   const cacheKey = dataKey;
-  let namespaceInflightRequests = inflightCacheRequests.get(env.KV_CACHE);
-  if (!namespaceInflightRequests) {
-    namespaceInflightRequests = new Map<string, InflightCacheRequest>();
-    inflightCacheRequests.set(env.KV_CACHE, namespaceInflightRequests);
-  }
+  const inflightMap = getNamespaceInflightRequests(env);
 
-  // A forceRefresh caller must start its own request instead of piggybacking on an in-flight one.
-  // Non-force callers can freely piggyback on any in-flight request regardless of force status.
-  if (!forceRefresh && !options.swr) {
-    const inflightEntry = namespaceInflightRequests.get(cacheKey);
-    if (inflightEntry) {
-      const inflightAgeMs = Date.now() - inflightEntry.startedAt;
-      if (inflightAgeMs > INFLIGHT_MAX_MS) {
-        if (namespaceInflightRequests.get(cacheKey) === inflightEntry) {
-          namespaceInflightRequests.delete(cacheKey);
-          logInflightLifecycle("evicted", inflightEntry);
-        }
-      } else {
-        try {
-          return await watchIo(
-            "cache.inflight",
-            withTimeout(inflightEntry.promise as Promise<T>, INFLIGHT_WAIT_TIMEOUT_MS, "cache.inflight"),
-            {
-              dataKey,
-              inflightAgeMs,
-              inflightForceRefresh: inflightEntry.forceRefresh,
-            },
-          );
-        } catch (error) {
-          if (!isTimeoutError(error)) {
-            throw error;
-          }
-
-          warnIoFailure("cache.inflight", dataKey, error, INFLIGHT_WAIT_TIMEOUT_MS);
-          if (namespaceInflightRequests.get(cacheKey) === inflightEntry) {
-            namespaceInflightRequests.delete(cacheKey);
-          }
-        }
-      }
-    }
-  }
-
+  // SWR returns usable stale data immediately and must not block on the shared
+  // regeneration when it has stale to serve. So the dedup is pushed *inside*
+  // `fetchCachedInternal`: it only coalesces the cold-miss / maxStale-exceeded
+  // synchronous regeneration, after the stale-first decision has been made.
   if (options.swr) {
-    return fetchCachedInternal(env, dataKey, fn, ttl, forceRefresh, options);
+    return fetchCachedInternal(env, dataKey, fn, ttl, forceRefresh, options, (produce) =>
+      runWithInflightDedup(inflightMap, cacheKey, forceRefresh, produce),
+    );
   }
 
-  const inflightMap = namespaceInflightRequests;
-  const inflightState: {
-    entry?: InflightCacheRequest;
-    evictTimer?: ReturnType<typeof setTimeout>;
-  } = {};
-  const request = fetchCachedInternal(env, dataKey, fn, ttl, forceRefresh, options).finally(() => {
-    if (inflightState.evictTimer) {
-      clearTimeout(inflightState.evictTimer);
-    }
-    if (!inflightState.entry) {
-      return;
-    }
-
-    if (inflightMap.get(cacheKey) === inflightState.entry) {
-      inflightMap.delete(cacheKey);
-    }
-    logInflightLifecycle("settled", inflightState.entry);
-  });
-  const entry: InflightCacheRequest = {
-    promise: request,
-    dataKey,
-    startedAt: Date.now(),
-    forceRefresh,
-  };
-  inflightState.entry = entry;
-  logInflightLifecycle("start", entry);
-  // Safety net: if `request` never settles (a hung KV/BAQL/ranks call), drop the
-  // in-flight entry after a deadline so it cannot poison every later same-key
-  // request sharing this long-lived isolate.
-  inflightState.evictTimer = setTimeout(() => {
-    if (!inflightState.entry) {
-      return;
-    }
-
-    if (inflightMap.get(cacheKey) === inflightState.entry) {
-      inflightMap.delete(cacheKey);
-      logInflightLifecycle("evicted", inflightState.entry);
-    }
-  }, INFLIGHT_MAX_MS);
-  inflightMap.set(cacheKey, entry);
-  return request;
+  // Non-SWR callers have no stale-first path, so the whole fetch (KV read +
+  // regeneration) is coalesced as one in-flight request.
+  return runWithInflightDedup(inflightMap, cacheKey, forceRefresh, () =>
+    fetchCachedInternal(env, dataKey, fn, ttl, forceRefresh, options),
+  );
 }

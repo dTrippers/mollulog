@@ -12,7 +12,7 @@ import { getStudentGearData } from "~/models/growth-resource";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getCampaignFarmingStages } from "~/models/stage";
 import { syncEventContentsList } from "~/models/event-content";
-import { cacheKey, cacheQuery, claimKvCacheWindow } from "~/lib/cache";
+import { cacheKey, cacheQuery, isKvCacheWindowFresh, markKvCacheWindow } from "~/lib/cache";
 import { warmRaidCache } from "~/models/raid";
 import { warmActiveUpcomingEventContent } from "~/views/events";
 
@@ -41,12 +41,16 @@ async function warmStudentSourceCaches(env: Env, forceRefresh = false): Promise<
 }
 
 async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
-  const shouldWarm = await claimKvCacheWindow(env, SOURCE_WARM_MARKER_KEY, SOURCE_WARM_WINDOW_SECONDS);
-  if (!shouldWarm) {
+  if (await isKvCacheWindowFresh(env, SOURCE_WARM_MARKER_KEY, SOURCE_WARM_WINDOW_SECONDS)) {
     return;
   }
 
+  // Record the window only after a successful warm. A failed/partial warm leaves
+  // no marker so the next cron (10 min later) retries instead of skipping for the
+  // full hour. Cron runs are ~60s-capped and 10 min apart, so they never overlap
+  // and there is no concurrency window to protect against by claiming first.
   await Promise.all([warmStudentSourceCaches(env, false), warmActiveUpcomingEventContent(env, false)]);
+  await markKvCacheWindow(env, SOURCE_WARM_MARKER_KEY);
 }
 
 async function refreshSourceCaches(env: Env): Promise<void> {

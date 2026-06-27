@@ -655,6 +655,102 @@ describe("fetchRouteCached", () => {
       }),
     );
   });
+
+  it("deduplicates concurrent cold route misses", async () => {
+    const { env, kv } = createEnv(null);
+    const ctx = { waitUntil: jest.fn() } as unknown as ExecutionContext;
+    let resolveRefresh!: (value: string[]) => void;
+    const fn = jest.fn(
+      () =>
+        new Promise<string[]>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+
+    const first = fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 });
+    const second = fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 });
+    await flushPromises();
+
+    // Both cold-miss callers share one regeneration instead of each calling fn.
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    resolveRefresh(["fresh-route"]);
+    await expect(Promise.all([first, second])).resolves.toEqual([["fresh-route"], ["fresh-route"]]);
+    expect(kv.put).toHaveBeenCalledTimes(1);
+  });
+
+  it("deduplicates concurrent refreshes beyond max stale", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: ["too-stale-route"],
+        cachedAt: now - 121_000,
+      }),
+    );
+    const ctx = { waitUntil: jest.fn() } as unknown as ExecutionContext;
+    let resolveRefresh!: (value: string[]) => void;
+    const fn = jest.fn(
+      () =>
+        new Promise<string[]>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+
+    const first = fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 });
+    const second = fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 });
+    await flushPromises();
+
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    resolveRefresh(["fresh-route"]);
+    await expect(Promise.all([first, second])).resolves.toEqual([["fresh-route"], ["fresh-route"]]);
+  });
+
+  it("frees a concurrent cold-miss caller instead of hanging it when the shared refresh stalls", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env } = createEnv(null);
+    const ctx = { waitUntil: jest.fn() } as unknown as ExecutionContext;
+    const stalledFn = jest.fn(
+      () =>
+        new Promise<string[]>(() => {
+          // Never settles; the cache.fn timeout must cut it loose.
+        }),
+    );
+    const recoveredFn = jest.fn(async () => ["recovered-route"]);
+
+    const first = fetchRouteCached(env, ctx, "route::home::v1::all", stalledFn, false, {
+      freshTtl: 60,
+      maxStaleTtl: 120,
+    });
+    // Cold miss + a stalled fn eventually rejects with no stale fallback; swallow it.
+    first.catch(() => undefined);
+    await flushPromises();
+    expect(stalledFn).toHaveBeenCalledTimes(1);
+
+    const second = fetchRouteCached(env, ctx, "route::home::v1::all", recoveredFn, false, {
+      freshTtl: 60,
+      maxStaleTtl: 120,
+    });
+    await flushPromises();
+    // The second caller piggybacked on the stalled shared refresh and has not run its own fn yet.
+    expect(recoveredFn).not.toHaveBeenCalled();
+
+    // The shared regeneration is cut by the cache.fn timeout, freeing the piggybacking
+    // caller to run its own refresh rather than hanging on the dead shared promise.
+    await jest.advanceTimersByTimeAsync(5_000);
+    await flushPromises();
+
+    await expect(second).resolves.toEqual(["recovered-route"]);
+    expect(recoveredFn).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("fetchLazySourceCachedBatch", () => {
