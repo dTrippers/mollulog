@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { Form, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
-import { parseStudentStateImport } from "~/models/student-state-import";
+import { parseStudentStateImport } from "~/domain/student-state-serialization";
 import { getSyncDraftEntryCounts, listPendingSyncDrafts } from "~/models/sync-draft";
 import ConnectDataPage from "./connect._components/ConnectDataPage";
 import PendingSyncDraftList from "./connect._components/PendingSyncDraftList";

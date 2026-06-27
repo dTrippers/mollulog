@@ -7,7 +7,7 @@ import {
   type TimelineContentNameI18n,
   parseTimelineContentNames,
   selectTimelineContentName,
-} from "./timeline-content-name-i18n";
+} from "~/domain/timeline-content-name-i18n";
 
 const ALL_TIMELINE_CONTENTS_META_CACHE_KEY = cacheKey("source", "timeline-content", 1, "all");
 

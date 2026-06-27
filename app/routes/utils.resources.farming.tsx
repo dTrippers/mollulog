@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { buildEquipmentFarmingNeeded, buildEquipmentFarmingRequirements } from "~/models/farming-recommendation";
+import { buildEquipmentFarmingNeeded, buildEquipmentFarmingRequirements } from "~/domain/farming-recommendation";
 import { aggregateGrowthResourceRequirements } from "~/models/growth-resource";
 import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
 import { getCampaignFarmingStages } from "~/models/stage";

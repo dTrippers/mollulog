@@ -1,21 +1,21 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { PyroxeneScheduleItem } from "~/components/features/futures/types";
-import { RecruitmentTypeEnum } from "~/graphql/graphql";
-import { type PyroxenePlannerOptions, normalizePyroxenePlannerOptions } from "./pyroxene-planner";
 import {
   type PickupResources,
   type PyroxeneTimelineBandMode,
   buildTimeline,
   calculatePickupTrialMoments,
-} from "./pyroxene-timeline";
+} from "~/domain/pyroxene-timeline";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
+import { type PyroxenePlannerOptions, normalizePyroxenePlannerOptions } from "~/models/pyroxene-planner";
 
 jest.mock("~/models/recruitment", () => ({
   getRecruitmentGroupsByUids: jest.fn(),
   getRecruitmentPoolStudents: jest.fn(),
 }));
 jest.mock("~/models/raid", () => ({ getRaidSchedule: jest.fn() }));
-jest.mock("./student", () => ({ getAllStudentsMap: jest.fn() }));
-jest.mock("./timeline-content", () => ({
+jest.mock("~/models/student", () => ({ getAllStudentsMap: jest.fn() }));
+jest.mock("~/models/timeline-content", () => ({
   getFutureRaidContents: jest.fn(),
   getTimelineContents: jest.fn(),
 }));

@@ -1,8 +1,8 @@
 import type dayjs from "dayjs";
 import { Button } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
-import type { PickupResources } from "~/models/pyroxene-timeline";
+import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
+import type { PickupResources } from "~/domain/pyroxene-timeline";
 import PyroxeneResourceChip from "./PyroxeneResourceChip";
 
 type PyroxeneTimelineResourcesProps = {

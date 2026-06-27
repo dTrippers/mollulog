@@ -9,7 +9,7 @@ import {
   buildStudentAnalysisScopeLookup,
   getStudentAnalysisEnvironmentKey,
   getStudentAnalysisScopeKey,
-} from "./StudentDifficultyUsageModel";
+} from "~/routes/students.$id._components/StudentDifficultyUsageModel";
 
 function makeScopeMetadata(overrides: {
   raidType?: RaidType;

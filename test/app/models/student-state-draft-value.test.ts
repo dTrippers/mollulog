@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { parseStudentStateDraftValue } from "~/models/student-state-draft-value";
+import { parseStudentStateDraftValue } from "~/domain/student-state";
 
 function parseDraft(value: unknown, tierValue: number) {
   return parseStudentStateDraftValue({

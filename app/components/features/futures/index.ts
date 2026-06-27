@@ -3,5 +3,5 @@ export { default as PyroxenePlannerOptionsPanel } from "./PyroxenePlannerOptions
 export { default as PyroxenePlannerSourcePanel } from "./PyroxenePlannerSourcePanel";
 export { default as PyroxeneSchedule } from "./PyroxeneSchedule";
 export { usePyroxeneScheduleItems } from "./usePyroxeneScheduleItems";
-export type { PickupResources } from "~/models/pyroxene-timeline";
+export type { PickupResources } from "~/domain/pyroxene-timeline";
 export type { PyroxeneScheduleItem } from "./types";

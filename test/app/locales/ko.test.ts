@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import dayjs from "~/lib/dayjs";
-import { relativeTime, remainingTime } from "./ko";
+import { relativeTime, remainingTime } from "~/locales/ko";
 
 describe("Korean relative time labels", () => {
   it("uses the display timezone calendar date for remaining content labels", () => {

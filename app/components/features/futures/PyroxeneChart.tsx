@@ -2,7 +2,7 @@ import dayjs from "dayjs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { TimelineSourceType } from "~/models/pyroxene-planner";
-import type { PickupResources } from "~/models/pyroxene-timeline";
+import type { PickupResources } from "~/domain/pyroxene-timeline";
 
 type ChartEntry = {
   date: dayjs.Dayjs;

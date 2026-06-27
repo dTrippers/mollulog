@@ -6,7 +6,7 @@ import {
   PYROXENE_MONTHLY_PACKAGE_CONFIG,
   calculatePackageStartDateFromRemainingDays,
   type PyroxeneMonthlyPackageType,
-} from "~/models/pyroxene-planner-source-config";
+} from "~/domain/pyroxene-sources";
 
 type PackageInputProps = {
   onSavePackage: (startDate: Date, packageType: PyroxeneMonthlyPackageType, autoRepurchase: boolean) => void;

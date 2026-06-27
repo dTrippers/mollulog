@@ -4,7 +4,7 @@ import {
   aggregateGrowthResourceRequirements,
   getEquipmentTier,
   getEquipmentTypeKey,
-} from "./growth-resource";
+} from "~/models/growth-resource";
 
 export type FarmingDifficultyFilter = "all" | "normal" | "hard";
 

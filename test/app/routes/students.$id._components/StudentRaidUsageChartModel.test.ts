@@ -1,6 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import { Attack, Defense } from "~/graphql/graphql";
-import { buildStudentRaidUsageChartData, getDefaultRaidUsageDefenseFilter } from "./StudentRaidUsageChartModel";
+import {
+  buildStudentRaidUsageChartData,
+  getDefaultRaidUsageDefenseFilter,
+} from "~/routes/students.$id._components/StudentRaidUsageChartModel";
 
 function makeJpSchedule(seasonIndex: number, startAt: string) {
   return { seasonIndex, startAt };

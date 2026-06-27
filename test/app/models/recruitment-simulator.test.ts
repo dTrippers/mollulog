@@ -1,10 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
-import { Attack, Defense, RecruitmentTypeEnum } from "../../../app/graphql/graphql";
 import {
   buildRecruitmentPoolSnapshot,
   createDefaultRecruitmentRateTable,
   drawRecruitmentTenPull,
-} from "../../../app/models/recruitment-simulator";
+} from "~/domain/recruitment-simulator";
+import { Attack, Defense, RecruitmentTypeEnum } from "../../../app/graphql/graphql";
 
 type PoolStudent = Parameters<typeof buildRecruitmentPoolSnapshot>[0]["students"][number];
 

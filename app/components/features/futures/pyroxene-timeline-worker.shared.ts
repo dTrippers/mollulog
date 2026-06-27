@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import type { PyroxeneCalculationOptions } from "~/models/pyroxene-planner";
-import type { PickupResources, Timeline, TimelineSource } from "~/models/pyroxene-timeline";
+import type { PickupResources, Timeline, TimelineSource } from "~/domain/pyroxene-timeline";
 import type { PyroxeneScheduleItem } from "./types";
 
 // dayjs 인스턴스는 구조화 복제로 워커 경계를 넘길 수 없으므로

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { fetchProtobuf } from "./base";
-import { fetchStudentAnalysis } from "./student-analysis";
+import { fetchProtobuf } from "~/lib/ranks/base";
+import { fetchStudentAnalysis } from "~/lib/ranks/student-analysis";
 
-jest.mock("./base", () => ({
+jest.mock("~/lib/ranks/base", () => ({
   RANK_API_BASE_URL: "http://localhost:8080",
   createProtobufRootCache: jest.fn(() => jest.fn()),
   fetchProtobuf: jest.fn(),

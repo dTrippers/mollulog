@@ -6,7 +6,7 @@ import { cn } from "~/lib/utils";
 import {
   DEFAULT_BUY_PYROXENE_QUANTITY,
   PYROXENE_BUY_PRESET_GROUPS,
-} from "~/models/pyroxene-planner-source-config";
+} from "~/domain/pyroxene-sources";
 import type { PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 
 type BuyInputProps = {

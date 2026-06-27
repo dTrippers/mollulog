@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { PickupResources } from "..";
 import { Button, Field, Input, NumberInput, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
+import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import dayjs from "dayjs";
 
 type ResourcesInputProps = {

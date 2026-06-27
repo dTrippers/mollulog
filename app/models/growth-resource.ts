@@ -7,7 +7,7 @@ import {
   ABILITY_RELEASE_COST_BANDS,
   ABILITY_RELEASE_WB_UIDS,
   TARGET_ABILITY_RELEASE_WB_UIDS,
-} from "./student-growth-state";
+} from "~/domain/student-growth-state";
 
 const STUDENT_GEAR_DATA_TTL = 24 * 60 * 60;
 

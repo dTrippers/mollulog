@@ -1,13 +1,13 @@
 import { describe, expect, it } from "@jest/globals";
-import type { RecruitedStudent } from "./recruited-student";
-import type { RelationshipLevel } from "./relationship-level";
-import type { StudentGrowth } from "./student-growth";
-import { parseStudentStateImport } from "./student-state-import";
+import { parseStudentStateImport } from "~/domain/student-state-serialization";
 import {
   type StudentStateExportInput,
   serializeJustin163Export,
   serializeSchaleDbExport,
-} from "./student-state-export";
+} from "~/domain/student-state-serialization";
+import type { RecruitedStudent } from "~/models/recruited-student";
+import type { RelationshipLevel } from "~/models/relationship-level";
+import type { StudentGrowth } from "~/models/student-growth";
 
 describe("student-state-export", () => {
   it("serializes current state to Base64-encoded SchaleDB JSON with defaults", () => {
@@ -212,16 +212,16 @@ describe("student-state-export", () => {
             skillEx: 5,
             skillNormal: 7,
             skillEnhanced: 8,
-          skillSub: 9,
-          equip1: 9,
-          equip2: 8,
-          equip3: 7,
-          equipSpecial: 2,
-          weaponLevel: 0,
-          abilityHp: 0,
-          abilityAtk: 0,
-          abilityHeal: 0,
-          bond: 20,
+            skillSub: 9,
+            equip1: 9,
+            equip2: 8,
+            equip3: 7,
+            equipSpecial: 2,
+            weaponLevel: 0,
+            abilityHp: 0,
+            abilityAtk: 0,
+            abilityHeal: 0,
+            bond: 20,
           },
           target: null,
         },
@@ -352,7 +352,9 @@ describe("student-state-export", () => {
   });
 });
 
-function createRecruitedStudent(input: Partial<RecruitedStudent> & Pick<RecruitedStudent, "studentUid" | "tier">): RecruitedStudent {
+function createRecruitedStudent(
+  input: Partial<RecruitedStudent> & Pick<RecruitedStudent, "studentUid" | "tier">,
+): RecruitedStudent {
   return {
     uid: `recruited-${input.studentUid}`,
     level: null,

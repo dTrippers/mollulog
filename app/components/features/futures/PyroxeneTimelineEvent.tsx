@@ -6,8 +6,8 @@ import { StudentCards } from "~/components/features/students";
 import { Button, NumberInput, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { PyroxenePickupChance } from "~/models/pyroxene-planner";
-import { PYROXENE_RESOURCE_UIDS } from "~/models/pyroxene-planner-source-config";
-import { isFreeRecruitment100Event, type PickupResources } from "~/models/pyroxene-timeline";
+import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
+import { isFreeRecruitment100Event, type PickupResources } from "~/domain/pyroxene-timeline";
 import type { PyroxeneScheduleItem } from "./types";
 import ResourcesInput from "./planner-input/ResourcesInput";
 

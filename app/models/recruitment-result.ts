@@ -14,7 +14,7 @@ import {
 } from "./community";
 import type { PickupHistory } from "./pickup-history";
 import { upsertRecruitedStudentFromRecruitmentResult } from "./recruited-student";
-import { type StudentLookup, resolveRecruitmentResultStudent } from "./recruitment-result-stats";
+import { type StudentLookup, resolveRecruitmentResultStudent } from "~/domain/recruitment-result";
 
 const IN_QUERY_BATCH_SIZE = 90;
 

@@ -11,7 +11,7 @@ import { fetchRaidOverview } from "~/lib/ranks/overview";
 import { type RaidStatistics, fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import type { RaidType } from "~/models/content.d";
 import { getRaidDefenseTypeSetKey } from "~/models/raid";
-import { getSameOccurrenceRaids } from "~/models/raid-group";
+import { getSameOccurrenceRaids } from "~/domain/raid-group";
 import { getMaxTierAt } from "~/models/student";
 import { getAllStudentsMap } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";

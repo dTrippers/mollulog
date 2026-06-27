@@ -8,7 +8,7 @@ import {
   toConnectApiKeyModel,
   toConnectApiKeyPrefix,
   toConnectApiKeyScopes,
-} from "./connect-api-key";
+} from "~/models/connect-api-key";
 
 describe("connect-api-key", () => {
   it("derives the stable lookup prefix from the plaintext key", () => {

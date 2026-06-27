@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { buildEventShopStateIdentity } from "./event-shop-state-key";
+import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
 
 describe("buildEventShopStateIdentity", () => {
   it("uses the timeline UID as the state key when no shop content UID exists", () => {

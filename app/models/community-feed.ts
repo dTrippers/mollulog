@@ -7,7 +7,7 @@ import {
   recruitmentResultsTable,
   sanitizeRecruitmentResultStudents,
 } from "./recruitment-result";
-import { getRecruitmentResultCountStats } from "./recruitment-result-stats";
+import { getRecruitmentResultCountStats } from "~/domain/recruitment-result";
 import { getAllStudentsMap } from "./student";
 import { type StudentGradingTagValue, getGradingTagsByGradingUids } from "./student-grading-tag";
 import { getTimelineContentsByUids } from "./timeline-content";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { parseStudentStateImport } from "./student-state-import";
+import { parseStudentStateImport } from "~/domain/student-state-serialization";
 
 const justin163OwnedWithTarget =
   '{"exportVersion":2,"characters":[{"id":"20048","name":"Nagisa (Swimsuit)","current":{"level":"1","ue_level":"0","bond":"1","ex":"1","basic":"2","passive":"3","sub":"4","gear1":"1","gear2":"2","gear3":"3","bond_gear":"0","book_hp":"0","book_atk":"0","book_heal":"0","star":5,"ue":1},"target":{"level":"90","ue_level":"50","bond":"100","ex":"5","basic":"6","passive":"7","sub":"8","gear1":"9","gear2":"10","gear3":"8","bond_gear":"2","book_hp":"25","book_atk":"24","book_heal":"23","star":5,"ue":3},"enabled":true}],"language":"Kr","level_cap":90,"server":"Global","site_version":"1.4.21"}';

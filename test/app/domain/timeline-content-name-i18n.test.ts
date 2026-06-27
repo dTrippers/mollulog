@@ -4,7 +4,7 @@ import {
   parseTimelineContentNames,
   selectTimelineContentName,
   serializeTimelineContentNames,
-} from "./timeline-content-name-i18n";
+} from "~/domain/timeline-content-name-i18n";
 
 describe("timeline content localized names", () => {
   it("parses valid localized names and trims blank values", () => {

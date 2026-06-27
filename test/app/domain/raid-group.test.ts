@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
+import { getRaidOccurrenceKey, getSameOccurrenceRaids } from "~/domain/raid-group";
 import type { UtcIsoString } from "~/lib/date-time";
 import type { Terrain } from "~/models/content.d";
-import { getRaidOccurrenceKey, getSameOccurrenceRaids } from "./raid-group";
 
 type TestRaid = {
   uid: string;

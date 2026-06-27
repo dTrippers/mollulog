@@ -38,7 +38,7 @@ import type { ContentCommentSummary } from "~/models/content";
 import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { EventType, RaidType, Role } from "~/models/content.d";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
-import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
+import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";

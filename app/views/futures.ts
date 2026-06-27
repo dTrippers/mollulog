@@ -5,7 +5,7 @@ import {
   type getRecruitmentGroupByUid,
   getRecruitmentGroupsByUids,
 } from "~/models/recruitment";
-import { getRecruitmentFavoriteKey } from "~/models/recruitment-identity";
+import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { getTimelineContents } from "~/models/timeline-content";
 import type { TimelineContent } from "~/models/timeline-content";
 import type { Role } from "~/models/content.d";

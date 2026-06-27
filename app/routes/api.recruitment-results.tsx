@@ -4,7 +4,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { nowUtcIso } from "~/lib/date-time";
 import { getFutureContents } from "~/views/futures";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
+import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import {
   addRecruitedStudentToResult,
   deleteRecruitmentResult,

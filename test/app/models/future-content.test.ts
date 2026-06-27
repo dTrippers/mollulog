@@ -6,7 +6,7 @@ jest.mock("~/models/recruitment", () => ({
   getRecruitmentGroupsByUids: jest.fn(),
 }));
 
-jest.mock("~/models/recruitment-identity", () => ({
+jest.mock("~/domain/recruitment-identity", () => ({
   getRecruitmentFavoriteKey: jest.fn(),
 }));
 

@@ -3,7 +3,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { calculateShopPurchaseDays } from "~/components/features/events/shop/calculations";
 import { getEventContentSchedule, getEventMetadata, getEventShopContent } from "~/models/event-content";
-import { buildEventShopStateIdentity } from "~/models/event-shop-state-key";
+import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
 import { getEventShopState } from "~/models/event-shop-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getTimelineContentDatesByContentUid } from "~/models/timeline-content";

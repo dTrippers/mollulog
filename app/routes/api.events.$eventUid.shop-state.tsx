@@ -2,7 +2,7 @@ import { type ActionFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getEventMetadata } from "~/models/event-content";
 import { upsertEventShopState, type EventShopState } from "~/models/event-shop-state";
-import { buildEventShopStateIdentity } from "~/models/event-shop-state-key";
+import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
 
 export type ActionData = {
   save?: EventShopState;

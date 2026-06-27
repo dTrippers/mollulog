@@ -10,7 +10,7 @@ import {
   ABILITY_RELEASE_MAX_LEVEL,
   WEAPON_LEVEL_MAX_LEVEL,
   getWeaponLevelMaxByTier,
-} from "~/models/student-growth-state";
+} from "~/domain/student-growth-state";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
 
 function extractStudentUpdate(actionData: GrowthActionResult | undefined): GrowthStudent | null {

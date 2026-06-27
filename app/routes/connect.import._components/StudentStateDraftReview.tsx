@@ -21,19 +21,19 @@ import {
   isStudentStateTargetFieldUpdateTarget,
   isStudentStateTargetChanged,
   mergeStudentStateDraftValueForUpdate,
-} from "~/models/student-state-diff";
+} from "~/domain/student-state";
 import type {
   StudentStateDraftCurrentValue,
   StudentStateDraftTargetValue,
   StudentStateDraftValue,
-} from "~/models/student-state-draft-value";
+} from "~/domain/student-state";
 import {
   type StudentStateComparisonField,
   type StudentStateFieldDefinition,
   studentStateComparisonFields,
   studentStateCurrentFields,
   studentStateTargetFields,
-} from "~/models/student-state-fields";
+} from "~/domain/student-state";
 import type { SyncDraft } from "~/models/sync-draft";
 import DraftReviewView, {
   DraftReviewActions,

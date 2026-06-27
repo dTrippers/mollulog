@@ -13,7 +13,7 @@ import {
 import {
   getRecruitmentResultCountStats,
   resolveRecruitmentResultStudents,
-} from "~/models/recruitment-result-stats";
+} from "~/domain/recruitment-result";
 import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";

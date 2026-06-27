@@ -12,7 +12,7 @@ import { getStudentGrowths } from "~/models/student-growth";
 import {
   type StudentStateExportFormat,
   serializeStudentStateExport,
-} from "~/models/student-state-export";
+} from "~/domain/student-state-serialization";
 import { listPendingSyncDrafts } from "~/models/sync-draft";
 import ConnectDataPage from "./connect._components/ConnectDataPage";
 

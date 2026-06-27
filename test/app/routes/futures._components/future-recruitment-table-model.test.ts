@@ -6,7 +6,7 @@ import {
   formatAuxiliaryContentPeriodLabel,
   isFutureRecruitmentTableContentLinkable,
   isFutureRecruitmentTableContentVisible,
-} from "./future-recruitment-table-model";
+} from "~/routes/futures._components/future-recruitment-table-model";
 
 function content(
   overrides: Partial<FutureRecruitmentTableContent> &

@@ -29,12 +29,12 @@ import { type FutureContent, getFutureContents } from "~/views/futures";
 import type { EventType, RaidType } from "~/models/content.d";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/domain/raid";
-import { getRecruitmentFavoriteKey } from "~/models/recruitment-identity";
+import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import {
   type RecruitmentCompletionMeta,
   getRecruitmentResultsByRecruitmentGroupUids,
 } from "~/models/recruitment-result";
-import { applyRecruitmentResultStudentCompletion } from "~/models/recruitment-result-completion";
+import { applyRecruitmentResultStudentCompletion } from "~/domain/recruitment-result";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
 import type { ActionData as RecruitmentResultActionData } from "./api.recruitment-results";

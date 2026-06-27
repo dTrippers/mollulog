@@ -3,7 +3,7 @@ import { type UtcIsoString, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/da
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
 import { getAllRecruitmentGroups } from "~/models/recruitment";
 import { getFavoritedCounts } from "~/models/favorite-students";
-import { getRecruitmentFavoriteKey } from "~/models/recruitment-identity";
+import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 import type { TimelineContent, TimelineContentType } from "~/models/timeline-content";
 import type { RaidSchedule } from "~/models/raid";

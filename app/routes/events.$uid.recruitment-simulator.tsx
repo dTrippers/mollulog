@@ -8,7 +8,7 @@ import {
   type SimulationStudent,
   buildRecruitmentPoolSnapshotFromBaql,
   drawRecruitmentTenPull,
-} from "~/models/recruitment-simulator";
+} from "~/domain/recruitment-simulator";
 import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content";
 import { sanitizeClassName } from "~/prophandlers";

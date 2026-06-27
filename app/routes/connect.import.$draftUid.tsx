@@ -7,13 +7,13 @@ import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruit
 import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentGrowths } from "~/models/student-growth";
-import { mergeStudentStateDraftValueForUpdate } from "~/models/student-state-diff";
+import { mergeStudentStateDraftValueForUpdate } from "~/domain/student-state";
 import {
   type StudentStateDraftCurrentValue,
   type StudentStateDraftTargetValue,
   parseStudentStateDraftValue,
-} from "~/models/student-state-draft-value";
-import { studentStateCurrentFields, studentStateTargetFields } from "~/models/student-state-fields";
+} from "~/domain/student-state";
+import { studentStateCurrentFields, studentStateTargetFields } from "~/domain/student-state";
 import {
   type SyncDraft,
   type SyncDraftEntry,

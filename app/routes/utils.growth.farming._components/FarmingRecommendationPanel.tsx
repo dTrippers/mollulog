@@ -8,7 +8,7 @@ import {
   type FarmingStage,
   type FarmingStageRecommendation,
   buildFarmingRecommendations,
-} from "~/models/farming-recommendation";
+} from "~/domain/farming-recommendation";
 import {
   EQUIPMENT_TYPE_LABELS,
   EQUIPMENT_TYPE_ORDER,

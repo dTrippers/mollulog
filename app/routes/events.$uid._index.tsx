@@ -13,7 +13,7 @@ import {
   unfavoriteStudent,
 } from "~/models/favorite-students";
 import { getRecruitmentGroupByUid } from "~/models/recruitment";
-import { getRecruitmentFavoriteKey } from "~/models/recruitment-identity";
+import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { getTimelineContent } from "~/models/timeline-content";
 import EventComment from "./events.$uid._components/EventComment";
 

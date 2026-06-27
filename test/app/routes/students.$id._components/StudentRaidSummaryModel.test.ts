@@ -3,7 +3,7 @@ import {
   type StudentRaidSummaryStat,
   buildStudentRaidInvestment,
   buildStudentRaidSummary,
-} from "./StudentRaidSummaryModel";
+} from "~/routes/students.$id._components/StudentRaidSummaryModel";
 
 function makeStat(overrides: Partial<StudentRaidSummaryStat>): StudentRaidSummaryStat {
   return {

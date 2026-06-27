@@ -18,7 +18,7 @@ import {
   mergeEditableRecruitmentResultStudents,
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
-import { resolveRecruitmentResultStudents } from "~/models/recruitment-result-stats";
+import { resolveRecruitmentResultStudents } from "~/domain/recruitment-result";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";

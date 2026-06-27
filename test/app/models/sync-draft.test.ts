@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { applySyncDraft, normalizeSyncDraftEntryValue } from "./sync-draft";
+import { applySyncDraft, normalizeSyncDraftEntryValue } from "~/models/sync-draft";
 
 type SyncDraftRow = {
   id: number;

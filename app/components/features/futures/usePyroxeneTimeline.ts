@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PyroxeneCalculationOptions } from "~/models/pyroxene-planner";
-import { type PickupResources, type Timeline, buildTimeline } from "~/models/pyroxene-timeline";
+import { type PickupResources, type Timeline, buildTimeline } from "~/domain/pyroxene-timeline";
 import {
   type PyroxeneTimelineWorkerRequest,
   type PyroxeneTimelineWorkerResponse,
