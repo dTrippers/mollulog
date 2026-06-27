@@ -4,7 +4,7 @@ import type { Terrain } from "~/models/content.d";
 // ============================================================
 // Raid grouping (boss + terrain [+ defenseType])
 //
-// Pure logic only — keep BAQL read/orchestration in repositories.
+// Pure logic only — keep BAQL read/orchestration in models.
 // ============================================================
 
 type RaidGroupInput = {
