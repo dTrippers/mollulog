@@ -4,13 +4,14 @@ import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
 import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
-import { syncRawStudents } from "~/models/student";
+import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { getItemCatalogResources } from "~/repositories/item-catalog";
-import { RaidRepository, RecruitmentRepository } from "~/repositories";
+import { GrowthResourceRepository, RaidRepository, RecruitmentRepository } from "~/repositories";
 import { getCampaignFarmingStages } from "~/repositories/stage";
-import { syncEventContentsList } from "~/models/event-content";
+import { syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
+import { cacheKey, cacheQuery, claimKvCacheWindow } from "~/models/base";
 
 type ScheduledJobName = "syncYoutubeCommunityPosts" | "refreshSourceCaches";
 
@@ -25,6 +26,26 @@ type ScheduledRunContext = {
 };
 
 const SCHEDULED_JOB_TIMEOUT_MS = RUNTIME_TIMEOUTS.scheduled.job;
+const SOURCE_WARM_WINDOW_SECONDS = 60 * 60;
+const SOURCE_WARM_MARKER_KEY = cacheKey("source", "cron-source-warm", 1, cacheQuery({ name: "students-events" }));
+
+async function warmStudentSourceCaches(env: Env, forceRefresh = false): Promise<void> {
+  const studentUids = (await getAllStudents(env, true)).map((student) => student.uid);
+  const growthResourceRepository = new GrowthResourceRepository(env);
+  await Promise.all([
+    getStudentSkillItemsBatch(env, studentUids, forceRefresh),
+    growthResourceRepository.getStudentGearData(studentUids, forceRefresh),
+  ]);
+}
+
+async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
+  const shouldWarm = await claimKvCacheWindow(env, SOURCE_WARM_MARKER_KEY, SOURCE_WARM_WINDOW_SECONDS);
+  if (!shouldWarm) {
+    return;
+  }
+
+  await Promise.all([warmStudentSourceCaches(env, false), warmActiveUpcomingEventContent(env, false)]);
+}
 
 async function refreshSourceCaches(env: Env): Promise<void> {
   const recruitmentRepository = new RecruitmentRepository(env);
@@ -37,6 +58,7 @@ async function refreshSourceCaches(env: Env): Promise<void> {
     getAllStudentsFavoriteItems(env, true),
     syncAllTimelineContentsMeta(env),
     syncEventContentsList(env),
+    warmPeriodicLazySourceCaches(env),
     getItemCatalogResources(env, true),
     getCampaignFarmingStages(env, true),
   ]);

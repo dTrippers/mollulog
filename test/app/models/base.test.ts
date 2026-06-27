@@ -1,11 +1,34 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
-import { DEFAULT_KV_EXPIRATION_TTL, fetchCached } from "../../../app/models/base";
+import {
+  DEFAULT_KV_EXPIRATION_TTL,
+  SOURCE_CACHE_EXPIRATION_TTL,
+  fetchCached,
+  fetchLazySourceCachedBatch,
+  fetchRouteCached,
+} from "../../../app/models/base";
 
 type CacheEnv = Parameters<typeof fetchCached>[0];
 
 function createEnv(raw: string | null, disableCache?: string) {
   const kv = {
     get: jest.fn(async (_key: string) => raw),
+    put: jest.fn(async (_key: string, _value: string, _opts?: { expirationTtl?: number }) => undefined),
+    delete: jest.fn(async (_key: string) => undefined),
+    list: jest.fn(async (_opts?: { prefix?: string; cursor?: string }) => ({ keys: [], list_complete: true })),
+  };
+
+  return {
+    env: {
+      KV_CACHE: kv,
+      DISABLE_CACHE: disableCache,
+    } as unknown as CacheEnv,
+    kv,
+  };
+}
+
+function createKeyedEnv(rawByKey: Map<string, string | null>, disableCache?: string) {
+  const kv = {
+    get: jest.fn(async (key: string) => rawByKey.get(key) ?? null),
     put: jest.fn(async (_key: string, _value: string, _opts?: { expirationTtl?: number }) => undefined),
     delete: jest.fn(async (_key: string) => undefined),
     list: jest.fn(async (_opts?: { prefix?: string; cursor?: string }) => ({ keys: [], list_complete: true })),
@@ -461,5 +484,361 @@ describe("fetchCached", () => {
     await expect(nonForce).resolves.toEqual(["cached-video"]);
     await expect(forced).resolves.toEqual(["fresh-video"]);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("fetchRouteCached", () => {
+  it("returns stale data immediately and schedules one background refresh", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const staleData = ["stale-route"];
+    const freshData = ["fresh-route"];
+    const { env, kv } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: staleData,
+        cachedAt: now - 61_000,
+      }),
+    );
+    const waitUntil = jest.fn();
+    const ctx = { waitUntil } as unknown as ExecutionContext;
+    const fn = jest.fn(async () => freshData);
+
+    await expect(
+      fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 }),
+    ).resolves.toEqual(staleData);
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    await expect(waitUntil.mock.calls[0][0]).resolves.toEqual(freshData);
+    expect(kv.put).toHaveBeenCalledTimes(1);
+    expect(kv.put).toHaveBeenCalledWith(
+      "route::home::v1::all",
+      JSON.stringify({
+        _ver: 2,
+        data: freshData,
+        cachedAt: now,
+      }),
+      { expirationTtl: 7 * 24 * 60 * 60 },
+    );
+  });
+
+  it("returns fresh route data without refreshing", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const cachedData = ["cached-route"];
+    const { env, kv } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: cachedData,
+        cachedAt: now - 1_000,
+      }),
+    );
+    const waitUntil = jest.fn();
+    const ctx = { waitUntil } as unknown as ExecutionContext;
+    const fn = jest.fn(async () => ["fresh-route"]);
+
+    await expect(
+      fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 }),
+    ).resolves.toEqual(cachedData);
+
+    expect(fn).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates concurrent background refreshes for stale route data", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: ["stale-route"],
+        cachedAt: now - 61_000,
+      }),
+    );
+    const waitUntil = jest.fn();
+    const ctx = { waitUntil } as unknown as ExecutionContext;
+    let resolveRefresh!: (value: string[]) => void;
+    const fn = jest.fn(
+      () =>
+        new Promise<string[]>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+
+    const first = fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, {
+      freshTtl: 60,
+      maxStaleTtl: 120,
+    });
+    const second = fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, {
+      freshTtl: 60,
+      maxStaleTtl: 120,
+    });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([["stale-route"], ["stale-route"]]);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+
+    resolveRefresh(["fresh-route"]);
+    await expect(waitUntil.mock.calls[0][0]).resolves.toEqual(["fresh-route"]);
+  });
+
+  it("refreshes synchronously on a cold route miss", async () => {
+    const { env } = createEnv(null);
+    const waitUntil = jest.fn();
+    const ctx = { waitUntil } as unknown as ExecutionContext;
+    const fn = jest.fn(async () => ["fresh-route"]);
+
+    await expect(fetchRouteCached(env, ctx, "route::home::v1::all", fn)).resolves.toEqual(["fresh-route"]);
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it("refreshes synchronously when route data is beyond max stale", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: ["too-stale-route"],
+        cachedAt: now - 121_000,
+      }),
+    );
+    const waitUntil = jest.fn();
+    const ctx = { waitUntil } as unknown as ExecutionContext;
+    const fn = jest.fn(async () => ["fresh-route"]);
+
+    await expect(
+      fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 }),
+    ).resolves.toEqual(["fresh-route"]);
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it("logs background refresh failures without throwing to the stale caller", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: ["stale-route"],
+        cachedAt: now - 61_000,
+      }),
+    );
+    const waitUntil = jest.fn();
+    const ctx = { waitUntil } as unknown as ExecutionContext;
+    const fn = jest.fn(async () => {
+      throw new Error("refresh failed");
+    });
+
+    await expect(
+      fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 }),
+    ).resolves.toEqual(["stale-route"]);
+    await expect(waitUntil.mock.calls[0][0]).resolves.toBeUndefined();
+
+    expect(console.error).toHaveBeenCalledWith(
+      "[cache] swr_refresh_failed",
+      expect.objectContaining({
+        label: "cache.swr_refresh_failed",
+        cacheKey: "route::home::v1::all",
+        errorMessage: "refresh failed",
+      }),
+    );
+  });
+});
+
+describe("fetchLazySourceCachedBatch", () => {
+  const entries = [
+    { key: "a", dataKey: "source::thing::v1::uid=a" },
+    { key: "b", dataKey: "source::thing::v1::uid=b" },
+  ];
+
+  it("returns a full fresh hit without loading missing keys", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env, kv } = createKeyedEnv(
+      new Map([
+        ["source::thing::v1::uid=a", JSON.stringify({ _ver: 2, data: "cached-a", cachedAt: now - 1_000 })],
+        ["source::thing::v1::uid=b", JSON.stringify({ _ver: 2, data: "cached-b", cachedAt: now - 1_000 })],
+      ]),
+    );
+    const loadMissing = jest.fn(async () => new Map<string, string>());
+
+    await expect(fetchLazySourceCachedBatch(env, entries, loadMissing, 60)).resolves.toEqual(
+      new Map([
+        ["a", "cached-a"],
+        ["b", "cached-b"],
+      ]),
+    );
+
+    expect(loadMissing).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("loads and writes only missing batch keys", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env, kv } = createKeyedEnv(
+      new Map([["source::thing::v1::uid=a", JSON.stringify({ _ver: 2, data: "cached-a", cachedAt: now - 1_000 })]]),
+    );
+    const loadMissing = jest.fn(async (missingKeys: string[]) => new Map(missingKeys.map((key) => [key, "loaded-b"])));
+
+    await expect(fetchLazySourceCachedBatch(env, entries, loadMissing, 60)).resolves.toEqual(
+      new Map([
+        ["a", "cached-a"],
+        ["b", "loaded-b"],
+      ]),
+    );
+
+    expect(loadMissing).toHaveBeenCalledWith(["b"]);
+    expect(kv.put).toHaveBeenCalledWith(
+      "source::thing::v1::uid=b",
+      JSON.stringify({ _ver: 2, data: "loaded-b", cachedAt: now }),
+      { expirationTtl: SOURCE_CACHE_EXPIRATION_TTL },
+    );
+  });
+
+  it("preserves loaded null values when another batch key is a cache hit", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env } = createKeyedEnv(
+      new Map([["source::thing::v1::uid=a", JSON.stringify({ _ver: 2, data: "cached-a", cachedAt: now - 1_000 })]]),
+    );
+    const loadMissing = jest.fn(async () => new Map<string, string | null>([["b", null]]));
+
+    await expect(fetchLazySourceCachedBatch(env, entries, loadMissing, 60)).resolves.toEqual(
+      new Map([
+        ["a", "cached-a"],
+        ["b", null],
+      ]),
+    );
+
+    expect(loadMissing).toHaveBeenCalledWith(["b"]);
+  });
+
+  it("loads every key when all batch keys miss", async () => {
+    const { env } = createKeyedEnv(new Map());
+    const loadMissing = jest.fn(async (missingKeys: string[]) => new Map(missingKeys.map((key) => [key, key])));
+
+    await expect(fetchLazySourceCachedBatch(env, entries, loadMissing, 60)).resolves.toEqual(
+      new Map([
+        ["a", "a"],
+        ["b", "b"],
+      ]),
+    );
+
+    expect(loadMissing).toHaveBeenCalledWith(["a", "b"]);
+  });
+
+  it("treats a per-key KV get timeout as a miss", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+
+    const kv = {
+      get: jest.fn((key: string) =>
+        key.endsWith("uid=a")
+          ? new Promise<string | null>(() => undefined)
+          : Promise.resolve(JSON.stringify({ _ver: 2, data: "cached-b", cachedAt: Date.now() })),
+      ),
+      put: jest.fn(async (_key: string, _value: string, _opts?: { expirationTtl?: number }) => undefined),
+      delete: jest.fn(async (_key: string) => undefined),
+      list: jest.fn(async (_opts?: { prefix?: string; cursor?: string }) => ({ keys: [], list_complete: true })),
+    };
+    const env = { KV_CACHE: kv } as unknown as CacheEnv;
+    const loadMissing = jest.fn(async () => new Map([["a", "loaded-a"]]));
+
+    const result = fetchLazySourceCachedBatch(env, entries, loadMissing, 60);
+    await flushPromises();
+    await jest.advanceTimersByTimeAsync(2_000);
+
+    await expect(result).resolves.toEqual(
+      new Map([
+        ["a", "loaded-a"],
+        ["b", "cached-b"],
+      ]),
+    );
+    expect(loadMissing).toHaveBeenCalledWith(["a"]);
+    expect(console.error).toHaveBeenCalledWith(
+      "[io-watchdog] timeout",
+      expect.objectContaining({
+        label: "kv.get",
+        dataKey: "source::thing::v1::uid=a",
+      }),
+    );
+  });
+
+  it("falls back to stale values when loading missing keys fails", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env, kv } = createKeyedEnv(
+      new Map([["source::thing::v1::uid=a", JSON.stringify({ _ver: 2, data: "stale-a", cachedAt: now - 120_000 })]]),
+    );
+    const loadMissing = jest.fn(async () => {
+      throw new Error("loader failed");
+    });
+
+    await expect(fetchLazySourceCachedBatch(env, [entries[0]], loadMissing, 60)).resolves.toEqual(
+      new Map([["a", "stale-a"]]),
+    );
+
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("preserves stale null values when loading missing keys fails", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const { env, kv } = createKeyedEnv(
+      new Map([["source::thing::v1::uid=a", JSON.stringify({ _ver: 2, data: null, cachedAt: now - 120_000 })]]),
+    );
+    const loadMissing = jest.fn(async () => {
+      throw new Error("loader failed");
+    });
+
+    await expect(fetchLazySourceCachedBatch(env, [entries[0]], loadMissing, 60)).resolves.toEqual(
+      new Map([["a", null]]),
+    );
+
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("throws load failures when a missing key has no stale fallback", async () => {
+    const { env } = createKeyedEnv(new Map());
+    const loadMissing = jest.fn(async () => {
+      throw new Error("loader failed");
+    });
+
+    await expect(fetchLazySourceCachedBatch(env, [entries[0]], loadMissing, 60)).rejects.toThrow("loader failed");
+  });
+
+  it("bypasses KV when DISABLE_CACHE is set", async () => {
+    const { env, kv } = createKeyedEnv(new Map(), "true");
+    const loadMissing = jest.fn(async (missingKeys: string[]) => new Map(missingKeys.map((key) => [key, key])));
+
+    await expect(fetchLazySourceCachedBatch(env, entries, loadMissing, 60)).resolves.toEqual(
+      new Map([
+        ["a", "a"],
+        ["b", "b"],
+      ]),
+    );
+
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(loadMissing).toHaveBeenCalledWith(["a", "b"]);
   });
 });

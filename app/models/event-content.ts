@@ -17,12 +17,13 @@ import {
   toUtcIso,
 } from "~/lib/date-time";
 import { RecruitmentRepository } from "~/repositories";
-import { cacheKey, cacheQuery, fetchCached, fetchRouteCached, fetchSourceCached } from "./base";
+import { cacheKey, cacheQuery, fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "./base";
 import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "./timeline-content";
 import type { RunType } from "./timeline-content";
 
 const EVENT_CONTENTS_LIST_CACHE_KEY = cacheKey("source", "event-content", 1, "list");
 const EVENT_LIST_CACHE_KEY = cacheKey("route", "events", 1, "list");
+const EVENT_STATIC_CONTENT_TTL = 7 * 24 * 60 * 60;
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
   if (runType === "rerun") return RunTypeEnum.Rerun;
@@ -89,10 +90,11 @@ export async function getEventContentSchedule(
   env: Env,
   eventUid: string,
   runType: RunType,
+  forceRefresh = false,
 ): Promise<EventContentSchedule | null> {
-  const schedule = await fetchCached<CachedEventContentSchedule | null>(
+  const schedule = await fetchLazySourceCached<CachedEventContentSchedule | null>(
     env,
-    cacheKey("cache", "event-content-schedule", 1, cacheQuery({ eventUid, region: "gl", runType })),
+    cacheKey("source", "event-content-schedule", 1, cacheQuery({ eventUid, region: "gl", runType })),
     async () => {
       const { data, error } = await runQuery(eventContentScheduleQuery, { eventUid });
       if (error || !data?.eventContent) {
@@ -109,7 +111,8 @@ export async function getEventContentSchedule(
         endAt: schedule.endAt ? toUtcIso(schedule.endAt) : null,
       };
     },
-    7 * 24 * 60 * 60,
+    EVENT_STATIC_CONTENT_TTL,
+    forceRefresh,
   );
   if (!schedule) {
     return null;
@@ -593,7 +596,7 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
   };
 }
 
-export async function getEventShopContent(env: Env, timelineUid: string) {
+export async function getEventShopContent(env: Env, timelineUid: string, forceRefresh = false) {
   const metadata = await getEventMetadata(env, timelineUid);
   if (!metadata) {
     return null;
@@ -606,9 +609,9 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
 
   const { runType } = metadata;
 
-  return fetchCached(
+  return fetchLazySourceCached(
     env,
-    cacheKey("cache", "event-shop", 1, cacheQuery({ contentUid: shopContentUid, runType })),
+    cacheKey("source", "event-shop", 1, cacheQuery({ contentUid: shopContentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,
@@ -626,6 +629,32 @@ export async function getEventShopContent(env: Env, timelineUid: string) {
         minigameConfig: transformMinigameConfigs(minigameConfigs),
       };
     },
-    7 * 24 * 60 * 60,
+    EVENT_STATIC_CONTENT_TTL,
+    forceRefresh,
   );
+}
+
+export async function warmActiveUpcomingEventContent(env: Env, forceRefresh = false): Promise<void> {
+  const events = await getEventList(env, undefined, forceRefresh);
+  const scheduleTasks: Array<Promise<unknown>> = [];
+  const shopTimelineUids = new Set<string>();
+
+  for (const event of events) {
+    const activeUpcomingSchedules = Object.values(event.schedules).filter(
+      (schedule): schedule is EventListSchedule => schedule.status === "current" || schedule.status === "upcoming",
+    );
+    if (activeUpcomingSchedules.length === 0) {
+      continue;
+    }
+
+    shopTimelineUids.add(event.latestTimelineUid);
+    for (const schedule of activeUpcomingSchedules) {
+      scheduleTasks.push(getEventContentSchedule(env, event.uid, schedule.runType, forceRefresh));
+    }
+  }
+
+  await Promise.all([
+    ...scheduleTasks,
+    ...[...shopTimelineUids].map((timelineUid) => getEventShopContent(env, timelineUid, forceRefresh)),
+  ]);
 }

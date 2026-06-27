@@ -4,14 +4,14 @@ import { Form, data, redirect, useActionData, useNavigation } from "react-router
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, Callout, Title } from "~/components/primitives";
 import { getFutureContents, getIndexContents, getNavigationBarContentsRaw } from "~/models/content";
-import { getEventList, syncEventContentsList } from "~/models/event-content";
+import { getEventList, syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
 import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
-import { syncRawStudents } from "~/models/student";
+import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { RaidRepository, RecruitmentRepository } from "~/repositories";
+import { GrowthResourceRepository, RaidRepository, RecruitmentRepository } from "~/repositories";
 import { getItemCatalogResources } from "~/repositories/item-catalog";
 import { getCampaignFarmingStages } from "~/repositories/stage";
 
@@ -24,6 +24,9 @@ type RefreshTaskName =
   | "getAllStudentsFavoriteItems"
   | "syncAllTimelineContentsMeta"
   | "syncEventContentsList"
+  | "warmStudentSkillItems"
+  | "warmStudentGearData"
+  | "warmActiveUpcomingEventContent"
   | "getItemCatalogResources"
   | "getCampaignFarmingStages"
   | "getEventList"
@@ -70,6 +73,8 @@ async function runRefreshTask(name: RefreshTaskName, fn: () => Promise<unknown>)
 async function refreshCache(env: Env, ctx: ExecutionContext): Promise<RefreshResult> {
   const recruitmentRepository = new RecruitmentRepository(env);
   const raidRepository = new RaidRepository(env);
+  const growthResourceRepository = new GrowthResourceRepository(env);
+  const studentUids = getAllStudents(env, true).then((students) => students.map((student) => student.uid));
   const sourceTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
     ["syncYoutubeCommunityPosts", () => syncYoutubeCommunityPosts(env)],
     ["syncRawStudents", () => syncRawStudents(env)],
@@ -79,6 +84,9 @@ async function refreshCache(env: Env, ctx: ExecutionContext): Promise<RefreshRes
     ["getAllStudentsFavoriteItems", () => getAllStudentsFavoriteItems(env, true)],
     ["syncAllTimelineContentsMeta", () => syncAllTimelineContentsMeta(env)],
     ["syncEventContentsList", () => syncEventContentsList(env)],
+    ["warmStudentSkillItems", async () => getStudentSkillItemsBatch(env, await studentUids, true)],
+    ["warmStudentGearData", async () => growthResourceRepository.getStudentGearData(await studentUids, true)],
+    ["warmActiveUpcomingEventContent", () => warmActiveUpcomingEventContent(env, true)],
     ["getItemCatalogResources", () => getItemCatalogResources(env, true)],
     ["getCampaignFarmingStages", () => getCampaignFarmingStages(env, true)],
   ];

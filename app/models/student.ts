@@ -1,7 +1,7 @@
 import { graphql } from "~/graphql";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, cacheQuery, fetchCached, fetchSourceCached } from "./base";
+import { cacheKey, cacheQuery, fetchLazySourceCached, fetchLazySourceCachedBatch, fetchSourceCached } from "./base";
 import type { Position, TacticRole } from "./content.d";
 
 export type Role = "striker" | "special";
@@ -81,9 +81,11 @@ export function getMaxTierAt(date: Date | string): number {
   return 8;
 }
 
+const STUDENT_SKILL_ITEMS_TTL = 7 * 24 * 60 * 60;
+
 const studentSkillItemsQuery = graphql(`
-  query StudentSkillItems($uid: String!) {
-    student(uid: $uid) {
+  query StudentSkillItems($uids: [String!]) {
+    students(uids: $uids) {
       uid
       schaleDbId
       skillItems(skillType: ex, skillLevel: 5) {
@@ -94,24 +96,59 @@ const studentSkillItemsQuery = graphql(`
 `);
 
 export type StudentSkillItem = { item: { uid: string; subCategory: string | null; rarity: number } };
+export type StudentSkillItems = { schaleDbId: string | null; skillItems: StudentSkillItem[] };
+
+function buildStudentSkillItemsCacheKey(uid: string): string {
+  return cacheKey("source", "student-skill-item", 1, cacheQuery({ uid }));
+}
+
+async function fetchStudentSkillItemsFromBaql(uids: string[]): Promise<Map<string, StudentSkillItems>> {
+  const { data } = await runQuery(studentSkillItemsQuery, { uids });
+  const itemsByUid = new Map<string, StudentSkillItems>(
+    (data?.students ?? []).map((student) => [
+      student.uid,
+      {
+        schaleDbId: student.schaleDbId ?? null,
+        skillItems: (student.skillItems ?? []).map((si) => ({
+          item: { uid: si.item.uid, subCategory: si.item.subCategory ?? null, rarity: si.item.rarity },
+        })),
+      },
+    ]),
+  );
+
+  for (const uid of uids) {
+    if (!itemsByUid.has(uid)) {
+      itemsByUid.set(uid, { schaleDbId: null, skillItems: [] });
+    }
+  }
+
+  return itemsByUid;
+}
+
+export async function getStudentSkillItemsBatch(
+  env: Env,
+  uids: string[],
+  forceRefresh = false,
+): Promise<Map<string, StudentSkillItems>> {
+  const uniqueUids = [...new Set(uids)].sort();
+  return fetchLazySourceCachedBatch(
+    env,
+    uniqueUids.map((uid) => ({ key: uid, dataKey: buildStudentSkillItemsCacheKey(uid) })),
+    fetchStudentSkillItemsFromBaql,
+    STUDENT_SKILL_ITEMS_TTL,
+    forceRefresh,
+  );
+}
 
 export async function getStudentSkillItems(
   env: Env,
   uid: string,
-): Promise<{ schaleDbId: string | null; skillItems: StudentSkillItem[] }> {
-  return fetchCached(
+): Promise<StudentSkillItems> {
+  return fetchLazySourceCached(
     env,
-    cacheKey("cache", "student-skill-item", 1, cacheQuery({ uid })),
-    async () => {
-      const { data } = await runQuery(studentSkillItemsQuery, { uid });
-      return {
-        schaleDbId: data?.student?.schaleDbId ?? null,
-        skillItems: (data?.student?.skillItems ?? []).map((si) => ({
-          item: { uid: si.item.uid, subCategory: si.item.subCategory ?? null, rarity: si.item.rarity },
-        })),
-      };
-    },
-    7 * 24 * 60 * 60,
+    buildStudentSkillItemsCacheKey(uid),
+    async () => (await fetchStudentSkillItemsFromBaql([uid])).get(uid) ?? { schaleDbId: null, skillItems: [] },
+    STUDENT_SKILL_ITEMS_TTL,
   );
 }
 

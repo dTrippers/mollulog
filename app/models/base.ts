@@ -2,6 +2,12 @@ import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
 
+/**
+ * Cache ownership tiers:
+ * - source: cron/manual-warmed upstream reference data
+ * - route: route-loader views that can refresh with stale-while-revalidate
+ * - cache: short-term generic/runtime caches
+ */
 export type CacheCategory = "source" | "route" | "cache";
 
 const CACHE_VERSION_PREFIX = "v";
@@ -106,6 +112,11 @@ type ParsedCacheValue<T> = {
   cachedAt: number;
 };
 
+type LazySourceBatchEntry<K extends string> = {
+  key: K;
+  dataKey: string;
+};
+
 type FetchCachedOptions<T> = {
   ctx?: ExecutionContext;
   expirationTtl?: number;
@@ -158,6 +169,50 @@ function toParsedCacheValue<T>(raw: string): ParsedCacheValue<T> | null {
     data: parsed,
     cachedAt: 0,
   };
+}
+
+async function readKvCacheValue<T>(env: Env, dataKey: string): Promise<ParsedCacheValue<T> | null> {
+  if (shouldSkipKv(env, "kv.get", dataKey)) {
+    return null;
+  }
+
+  try {
+    const raw = await watchIo("kv.get", withTimeout(env.KV_CACHE.get(dataKey), KV_TIMEOUT_MS, "kv.get"), {
+      dataKey,
+    });
+    return raw ? toParsedCacheValue<T>(raw) : null;
+  } catch (error) {
+    warnIoFailure("kv.get", dataKey, error, KV_TIMEOUT_MS);
+    if (isTimeoutError(error)) {
+      tripKvCircuit(env, "kv.get");
+    }
+    return null;
+  }
+}
+
+async function writeKvCacheValue<T>(env: Env, dataKey: string, data: T, cachedAt: number, expirationTtl: number) {
+  const envelope: CacheEnvelope<T> = {
+    _ver: 2,
+    data,
+    cachedAt,
+  };
+
+  if (shouldSkipKv(env, "kv.put", dataKey)) {
+    return;
+  }
+
+  try {
+    await watchIo(
+      "kv.put",
+      withTimeout(env.KV_CACHE.put(dataKey, serializeCacheValue(envelope), { expirationTtl }), KV_TIMEOUT_MS, "kv.put"),
+      { dataKey },
+    );
+  } catch (error) {
+    warnIoFailure("kv.put", dataKey, error, KV_TIMEOUT_MS);
+    if (isTimeoutError(error)) {
+      tripKvCircuit(env, "kv.put");
+    }
+  }
 }
 
 function warnIoFailure(label: string, dataKey: string, error: unknown, timeoutMs: number) {
@@ -258,22 +313,7 @@ async function fetchCachedInternal<T>(
 ): Promise<T> {
   const cacheKey = dataKey;
   const expirationTtl = options.expirationTtl ?? DEFAULT_KV_EXPIRATION_TTL;
-  let cached: ParsedCacheValue<T> | null = null;
-  if (!shouldSkipKv(env, "kv.get", dataKey)) {
-    try {
-      const raw = await watchIo("kv.get", withTimeout(env.KV_CACHE.get(cacheKey), KV_TIMEOUT_MS, "kv.get"), {
-        dataKey,
-      });
-      cached = raw ? toParsedCacheValue<T>(raw) : null;
-    } catch (error) {
-      // KV read timed out or failed — fall through to a fresh fetch (treat as a miss).
-      warnIoFailure("kv.get", dataKey, error, KV_TIMEOUT_MS);
-      if (isTimeoutError(error)) {
-        tripKvCircuit(env, "kv.get");
-      }
-      cached = null;
-    }
-  }
+  const cached = await readKvCacheValue<T>(env, dataKey);
 
   if (cached && !forceRefresh && isFresh(cached.cachedAt, ttl, cached.data)) {
     return cached.data;
@@ -332,25 +372,7 @@ async function refreshCacheValue<T>(
     cachedAt: Date.now(),
   };
 
-  if (!shouldSkipKv(env, "kv.put", cacheKey)) {
-    try {
-      await watchIo(
-        "kv.put",
-        withTimeout(
-          env.KV_CACHE.put(cacheKey, serializeCacheValue(envelope), { expirationTtl }),
-          KV_TIMEOUT_MS,
-          "kv.put",
-        ),
-        { dataKey: cacheKey },
-      );
-    } catch (error) {
-      // Cache write timed out or failed — still return the fresh data we just fetched.
-      warnIoFailure("kv.put", cacheKey, error, KV_TIMEOUT_MS);
-      if (isTimeoutError(error)) {
-        tripKvCircuit(env, "kv.put");
-      }
-    }
-  }
+  await writeKvCacheValue(env, cacheKey, envelope.data, envelope.cachedAt, expirationTtl);
   return data;
 }
 
@@ -420,6 +442,141 @@ export async function fetchSourceCached<T>(
     mode: "source",
     warnOnRequestRefresh: true,
   });
+}
+
+export async function fetchLazySourceCached<T>(
+  env: Env,
+  dataKey: string,
+  fn: () => Promise<T>,
+  freshTtl: number | ((data: T) => number),
+  forceRefresh = false,
+): Promise<T> {
+  return fetchCached(env, dataKey, fn, freshTtl, forceRefresh, {
+    expirationTtl: SOURCE_CACHE_EXPIRATION_TTL,
+    maxStaleTtl: SOURCE_CACHE_MAX_STALE_TTL,
+    mode: "source",
+    warnOnRequestRefresh: false,
+  });
+}
+
+export async function claimKvCacheWindow(env: Env, dataKey: string, freshTtl: number): Promise<boolean> {
+  if (isCacheDisabled(env)) {
+    return true;
+  }
+
+  const marker = await readKvCacheValue<true>(env, dataKey);
+  if (marker && isFresh(marker.cachedAt, freshTtl, marker.data)) {
+    return false;
+  }
+
+  await writeKvCacheValue(env, dataKey, true, Date.now(), SOURCE_CACHE_EXPIRATION_TTL);
+  return true;
+}
+
+function resolveBatchValue<K, T>(key: K, freshValues: Map<K, T>, staleValues: Map<K, T>): T {
+  if (freshValues.has(key)) {
+    return freshValues.get(key) as T;
+  }
+
+  if (staleValues.has(key)) {
+    return staleValues.get(key) as T;
+  }
+
+  throw new Error(`Lazy source value missing for key: ${String(key)}`);
+}
+
+export async function fetchLazySourceCachedBatch<K extends string, T>(
+  env: Env,
+  entries: readonly LazySourceBatchEntry<K>[],
+  loadMissing: (missingKeys: K[]) => Promise<Map<K, T>>,
+  freshTtl: number | ((data: T) => number),
+  forceRefresh = false,
+): Promise<Map<K, T>> {
+  const uniqueEntries = [...new Map(entries.map((entry) => [entry.key, entry])).values()];
+  if (uniqueEntries.length === 0) {
+    return new Map();
+  }
+
+  if (isCacheDisabled(env)) {
+    return loadMissing(uniqueEntries.map((entry) => entry.key));
+  }
+
+  const freshValues = new Map<K, T>();
+  const staleValues = new Map<K, T>();
+  const missingEntries: Array<LazySourceBatchEntry<K>> = [];
+
+  const cachedValues = await Promise.all(
+    uniqueEntries.map(async (entry) => ({
+      entry,
+      cached: await readKvCacheValue<T>(env, entry.dataKey),
+    })),
+  );
+
+  for (const { entry, cached } of cachedValues) {
+    if (!cached) {
+      missingEntries.push(entry);
+      continue;
+    }
+
+    staleValues.set(entry.key, cached.data);
+    if (!forceRefresh && isFresh(cached.cachedAt, freshTtl, cached.data)) {
+      freshValues.set(entry.key, cached.data);
+      continue;
+    }
+
+    missingEntries.push(entry);
+  }
+
+  if (missingEntries.length === 0) {
+    return new Map(uniqueEntries.map((entry) => [entry.key, freshValues.get(entry.key) as T]));
+  }
+
+  const missingKeys = missingEntries.map((entry) => entry.key);
+  let loadedValues: Map<K, T>;
+  try {
+    loadedValues = await watchIo("cache.fn", withTimeout(loadMissing(missingKeys), CACHE_FN_TIMEOUT_MS, "cache.fn"), {
+      dataKey: missingEntries.map((entry) => entry.dataKey).join(","),
+    });
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      warnIoFailure("cache.fn", missingKeys.join(","), error, CACHE_FN_TIMEOUT_MS);
+    }
+
+    const missingWithoutStale = missingKeys.filter((key) => !staleValues.has(key));
+    if (missingWithoutStale.length > 0) {
+      throw error;
+    }
+
+    return new Map(
+      uniqueEntries.map((entry) => [entry.key, resolveBatchValue(entry.key, freshValues, staleValues)]),
+    );
+  }
+
+  const cachedAt = Date.now();
+  const missingWithoutValue = missingEntries.filter(
+    (entry) => !loadedValues.has(entry.key) && !staleValues.has(entry.key),
+  );
+  if (missingWithoutValue.length > 0) {
+    throw new Error(
+      `Lazy source loader did not return values for keys: ${missingWithoutValue.map((entry) => entry.key).join(", ")}`,
+    );
+  }
+
+  await Promise.all(
+    missingEntries.flatMap((entry) => {
+      if (!loadedValues.has(entry.key)) {
+        return [];
+      }
+
+      const data = loadedValues.get(entry.key) as T;
+      freshValues.set(entry.key, data);
+      return [writeKvCacheValue(env, entry.dataKey, data, cachedAt, SOURCE_CACHE_EXPIRATION_TTL)];
+    }),
+  );
+
+  return new Map(
+    uniqueEntries.map((entry) => [entry.key, resolveBatchValue(entry.key, freshValues, staleValues)]),
+  );
 }
 
 export async function fetchRouteCached<T>(
@@ -492,6 +649,10 @@ export async function fetchCached<T>(
         }
       }
     }
+  }
+
+  if (options.swr) {
+    return fetchCachedInternal(env, dataKey, fn, ttl, forceRefresh, options);
   }
 
   const inflightMap = namespaceInflightRequests;

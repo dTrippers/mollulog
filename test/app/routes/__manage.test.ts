@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getFutureContents, getIndexContents, getNavigationBarContentsRaw } from "~/models/content";
-import { getEventList, syncEventContentsList } from "~/models/event-content";
+import { getEventList, syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
 import { getMainStories } from "~/models/main-story";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
-import { syncRawStudents } from "~/models/student";
+import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { RaidRepository, RecruitmentRepository } from "~/repositories";
+import { GrowthResourceRepository, RaidRepository, RecruitmentRepository } from "~/repositories";
 import { getItemCatalogResources } from "~/repositories/item-catalog";
 import { getCampaignFarmingStages } from "~/repositories/stage";
 
@@ -39,6 +39,8 @@ jest.mock("~/models/resource", () => ({
 }));
 
 jest.mock("~/models/student", () => ({
+  getAllStudents: jest.fn(),
+  getStudentSkillItemsBatch: jest.fn(),
   syncRawStudents: jest.fn(),
 }));
 
@@ -59,6 +61,7 @@ jest.mock("~/models/content", () => ({
 jest.mock("~/models/event-content", () => ({
   getEventList: jest.fn(),
   syncEventContentsList: jest.fn(),
+  warmActiveUpcomingEventContent: jest.fn(),
 }));
 
 jest.mock("~/repositories/item-catalog", () => ({
@@ -71,8 +74,10 @@ jest.mock("~/repositories/stage", () => ({
 
 const mockRecruitmentRefresh = jest.fn<() => Promise<unknown[]>>();
 const mockRaidRefresh = jest.fn<() => Promise<unknown[]>>();
+const mockGetStudentGearData = jest.fn<() => Promise<unknown>>();
 
 jest.mock("~/repositories", () => ({
+  GrowthResourceRepository: jest.fn().mockImplementation(() => ({ getStudentGearData: mockGetStudentGearData })),
   RecruitmentRepository: jest.fn().mockImplementation(() => ({ refresh: mockRecruitmentRefresh })),
   RaidRepository: jest.fn().mockImplementation(() => ({ refresh: mockRaidRefresh })),
 }));
@@ -81,6 +86,10 @@ import { action, loader } from "../../../app/routes/[__manage]";
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedSyncRawStudents = syncRawStudents as jest.MockedFunction<typeof syncRawStudents>;
+const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
+const mockedGetStudentSkillItemsBatch = getStudentSkillItemsBatch as jest.MockedFunction<
+  typeof getStudentSkillItemsBatch
+>;
 const mockedSyncYoutubeCommunityPosts = syncYoutubeCommunityPosts as jest.MockedFunction<
   typeof syncYoutubeCommunityPosts
 >;
@@ -91,6 +100,9 @@ const mockedGetNavigationBarContentsRaw = getNavigationBarContentsRaw as jest.Mo
 >;
 const mockedGetEventList = getEventList as jest.MockedFunction<typeof getEventList>;
 const mockedSyncEventContentsList = syncEventContentsList as jest.MockedFunction<typeof syncEventContentsList>;
+const mockedWarmActiveUpcomingEventContent = warmActiveUpcomingEventContent as jest.MockedFunction<
+  typeof warmActiveUpcomingEventContent
+>;
 const mockedGetMainStories = getMainStories as jest.MockedFunction<typeof getMainStories>;
 const mockedGetAllStudentsFavoriteItems = getAllStudentsFavoriteItems as jest.MockedFunction<
   typeof getAllStudentsFavoriteItems
@@ -100,6 +112,7 @@ const mockedSyncAllTimelineContentsMeta = syncAllTimelineContentsMeta as jest.Mo
 >;
 const mockedGetItemCatalogResources = getItemCatalogResources as jest.MockedFunction<typeof getItemCatalogResources>;
 const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
+const MockedGrowthResourceRepository = GrowthResourceRepository as jest.MockedClass<typeof GrowthResourceRepository>;
 const MockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
 const MockedRaidRepository = RaidRepository as jest.MockedClass<typeof RaidRepository>;
 
@@ -159,12 +172,18 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedSyncYoutubeCommunityPosts.mockResolvedValue({ synced: 0 });
   mockedSyncRawStudents.mockResolvedValue([]);
+  mockedGetAllStudents.mockResolvedValue([{ uid: "10000" }, { uid: "10001" }] as Awaited<
+    ReturnType<typeof getAllStudents>
+  >);
+  mockedGetStudentSkillItemsBatch.mockResolvedValue(new Map());
+  mockGetStudentGearData.mockResolvedValue(new Map());
   mockRecruitmentRefresh.mockResolvedValue([]);
   mockRaidRefresh.mockResolvedValue([]);
   mockedGetMainStories.mockResolvedValue([]);
   mockedGetAllStudentsFavoriteItems.mockResolvedValue([]);
   mockedSyncAllTimelineContentsMeta.mockResolvedValue([]);
   mockedSyncEventContentsList.mockResolvedValue([]);
+  mockedWarmActiveUpcomingEventContent.mockResolvedValue();
   mockedGetItemCatalogResources.mockResolvedValue([]);
   mockedGetCampaignFarmingStages.mockResolvedValue([]);
   mockedGetEventList.mockResolvedValue([]);
@@ -211,6 +230,9 @@ describe("__manage route", () => {
           getAllStudentsFavoriteItems: expect.any(Number),
           syncAllTimelineContentsMeta: expect.any(Number),
           syncEventContentsList: expect.any(Number),
+          warmStudentSkillItems: expect.any(Number),
+          warmStudentGearData: expect.any(Number),
+          warmActiveUpcomingEventContent: expect.any(Number),
           getItemCatalogResources: expect.any(Number),
           getCampaignFarmingStages: expect.any(Number),
           getEventList: expect.any(Number),
@@ -226,6 +248,11 @@ describe("__manage route", () => {
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(expect.anything());
     expect(mockedSyncEventContentsList).toHaveBeenCalledWith(expect.anything());
+    expect(mockedGetAllStudents).toHaveBeenCalledWith(expect.anything(), true);
+    expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(expect.anything(), ["10000", "10001"], true);
+    expect(MockedGrowthResourceRepository).toHaveBeenCalledWith(expect.anything());
+    expect(mockGetStudentGearData).toHaveBeenCalledWith(["10000", "10001"], true);
+    expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetEventList).toHaveBeenCalledWith(expect.anything(), undefined, true, expect.anything());

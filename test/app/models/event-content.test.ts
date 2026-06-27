@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
-import { fetchCached, fetchRouteCached, fetchSourceCached } from "~/models/base";
+import { fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "~/models/base";
 import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "~/models/timeline-content";
 import {
+  getEventContentSchedule,
   getEventList,
   getEventMetadata,
   getEventShopContent,
@@ -24,7 +25,7 @@ jest.mock("~/models/base", () => ({
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, value]) => `${key}=${String(value)}`)
       .join("::") || "all",
-  fetchCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
+  fetchLazySourceCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
   fetchRouteCached: jest.fn((_env: unknown, _ctx: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
   fetchSourceCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
 }));
@@ -39,7 +40,7 @@ const mockedGetAllTimelineContentsMeta = getAllTimelineContentsMeta as jest.Mock
   typeof getAllTimelineContentsMeta
 >;
 const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
-const mockedFetchCached = fetchCached as jest.MockedFunction<typeof fetchCached>;
+const mockedFetchLazySourceCached = fetchLazySourceCached as jest.MockedFunction<typeof fetchLazySourceCached>;
 const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
 const mockedFetchSourceCached = fetchSourceCached as jest.MockedFunction<typeof fetchSourceCached>;
 
@@ -348,16 +349,46 @@ describe("getEventShopContent", () => {
 
     await getEventShopContent(env, "main-story-timeline");
 
-    expect(mockedFetchCached).toHaveBeenCalledWith(
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "cache::event-shop::v1::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v1::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
+      false,
     );
     expect(mockedRunQuery).toHaveBeenCalledWith(expect.any(Object), {
       eventUid: "linked-event",
       runType: "permanent",
     });
+  });
+
+  it("passes force refresh through to the event shop source cache", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        eventContent: {
+          stages: [],
+          shopResources: [],
+          bonuses: [],
+          minigameConfigs: [],
+        },
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    });
+
+    await getEventShopContent(env, "main-story-timeline", true);
+
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-shop::v1::contentUid=linked-event::runType=permanent",
+      expect.any(Function),
+      7 * 24 * 60 * 60,
+      true,
+    );
   });
 
   it("maps shop purchase tiers from BAQL", async () => {
@@ -430,5 +461,39 @@ describe("getEventShopContent", () => {
         },
       ],
     });
+  });
+});
+
+describe("getEventContentSchedule", () => {
+  it("passes force refresh through to the event schedule source cache", async () => {
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        eventContent: {
+          schedules: [
+            {
+              region: "gl",
+              runType: "rerun",
+              startAt: "2026-06-10T02:00:00.000Z",
+              endAt: "2026-06-20T01:59:59.000Z",
+            },
+          ],
+        },
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    });
+
+    await getEventContentSchedule(env, "10", "rerun", true);
+
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-content-schedule::v1::eventUid=10::region=gl::runType=rerun",
+      expect.any(Function),
+      7 * 24 * 60 * 60,
+      true,
+    );
   });
 });

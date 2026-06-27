@@ -1,13 +1,7 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { DEFAULT_KV_EXPIRATION_TTL, cacheKey, cacheQuery } from "~/models/base";
+import { cacheKey, cacheQuery, fetchLazySourceCachedBatch } from "~/models/base";
 import type { EquipmentMetadata, ItemMetadata, SkillCostStudent, StudentGearData } from "~/models/growth-resource";
-
-type CacheEnvelope<T> = {
-  _ver: 2;
-  data: T;
-  cachedAt: number;
-};
 
 const STUDENT_GEAR_DATA_TTL = 24 * 60 * 60;
 
@@ -133,68 +127,27 @@ export class GrowthResourceRepository {
     );
   }
 
-  async getStudentGearData(studentUids: string[]): Promise<Map<string, StudentGearData | null>> {
+  async getStudentGearData(studentUids: string[], forceRefresh = false): Promise<Map<string, StudentGearData | null>> {
     const uniqueStudentUids = [...new Set(studentUids)].sort();
     if (uniqueStudentUids.length === 0) {
       return new Map();
     }
 
-    const cachedStates = await Promise.all(
-      uniqueStudentUids.map(async (uid) => {
-        const raw = await this.env.KV_CACHE.get(this.buildStudentGearDataCacheKey(uid));
-        return { uid, cached: this.parseCacheEnvelope<StudentGearData | null>(raw) };
-      }),
+    return fetchLazySourceCachedBatch(
+      this.env,
+      uniqueStudentUids.map((uid) => ({ key: uid, dataKey: this.buildStudentGearDataCacheKey(uid) })),
+      async (missingUids) => {
+        const fetchedMap = new Map(await this.fetchStudentGearDataFromBaql(missingUids));
+        for (const uid of missingUids) {
+          if (!fetchedMap.has(uid)) {
+            fetchedMap.set(uid, null);
+          }
+        }
+        return fetchedMap;
+      },
+      STUDENT_GEAR_DATA_TTL,
+      forceRefresh,
     );
-
-    const cachedDataMap = new Map<string, StudentGearData | null>();
-    const staleDataMap = new Map<string, StudentGearData | null>();
-    const missingUids: string[] = [];
-
-    for (const { uid, cached } of cachedStates) {
-      if (!cached) {
-        missingUids.push(uid);
-        continue;
-      }
-
-      staleDataMap.set(uid, cached.data);
-      if (this.isCacheFresh(cached.cachedAt, STUDENT_GEAR_DATA_TTL)) {
-        cachedDataMap.set(uid, cached.data);
-        continue;
-      }
-
-      missingUids.push(uid);
-    }
-
-    if (missingUids.length === 0) {
-      return cachedDataMap;
-    }
-
-    try {
-      const fetchedMap = new Map(await this.fetchStudentGearDataFromBaql(missingUids));
-      const cachedAt = Date.now();
-
-      await Promise.all(
-        missingUids.map((uid) => {
-          const data = fetchedMap.get(uid) ?? null;
-          cachedDataMap.set(uid, data);
-          const envelope: CacheEnvelope<StudentGearData | null> = { _ver: 2, data, cachedAt };
-          return this.env.KV_CACHE.put(this.buildStudentGearDataCacheKey(uid), JSON.stringify(envelope), {
-            expirationTtl: DEFAULT_KV_EXPIRATION_TTL,
-          });
-        }),
-      );
-    } catch (error) {
-      const missingWithoutStale = missingUids.filter((uid) => !staleDataMap.has(uid));
-      if (missingWithoutStale.length > 0) {
-        throw error;
-      }
-
-      for (const uid of missingUids) {
-        cachedDataMap.set(uid, staleDataMap.get(uid) ?? null);
-      }
-    }
-
-    return new Map(uniqueStudentUids.map((uid) => [uid, cachedDataMap.get(uid) ?? staleDataMap.get(uid) ?? null]));
   }
 
   private async fetchStudentGearDataFromBaql(studentUids: string[]): Promise<Array<[string, StudentGearData | null]>> {
@@ -223,35 +176,6 @@ export class GrowthResourceRepository {
   }
 
   private buildStudentGearDataCacheKey(uid: string): string {
-    return cacheKey("cache", "student-gear-data", 1, cacheQuery({ uid }));
-  }
-
-  private parseCacheEnvelope<T>(raw: string | null): CacheEnvelope<T> | null {
-    if (!raw) {
-      return null;
-    }
-
-    try {
-      const parsed = JSON.parse(raw) as CacheEnvelope<T> | T;
-      if (
-        typeof parsed === "object" &&
-        parsed !== null &&
-        "_ver" in parsed &&
-        parsed._ver === 2 &&
-        "cachedAt" in parsed &&
-        typeof parsed.cachedAt === "number" &&
-        "data" in parsed
-      ) {
-        return parsed;
-      }
-
-      return null;
-    } catch {
-      return null;
-    }
-  }
-
-  private isCacheFresh(cachedAt: number, ttlInSeconds: number): boolean {
-    return Date.now() - cachedAt < ttlInSeconds * 1000;
+    return cacheKey("source", "student-gear-data", 1, cacheQuery({ uid }));
   }
 }
