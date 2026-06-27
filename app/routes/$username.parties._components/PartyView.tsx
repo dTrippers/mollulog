@@ -5,11 +5,11 @@ import { Link } from "react-router";
 import { ProfileImage, SubTitle } from "~/components/primitives";
 import { raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { ActionCard } from "~/components/features/editor";
+import { raidTypeToParam } from "~/domain/raid";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType } from "~/models/content.d";
-import { raidTypeToParam } from "~/models/raid";
 import type { Party } from "~/models/party";
-import type { RaidScheduleListItem } from "~/repositories";
+import type { RaidScheduleListItem } from "~/models/raid";
 import { StudentCards } from "~/components/features/students";
 
 type PartyViewProps = {

@@ -29,7 +29,7 @@ import {
 } from "~/models/content";
 import type { EventType, RaidType } from "~/models/content.d";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
-import { raidTypeToParam } from "~/models/raid";
+import { raidTypeToParam } from "~/domain/raid";
 import { getRecruitmentFavoriteKey } from "~/models/recruitment-identity";
 import {
   type RecruitmentCompletionMeta,

@@ -10,9 +10,9 @@ import {
   parsePartyRaidReference,
   updateParty,
 } from "~/models/party";
+import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
-import { RaidRepository } from "~/repositories";
 import { compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 
 export const meta: MetaFunction = () => [
@@ -21,7 +21,6 @@ export const meta: MetaFunction = () => [
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const raidRepository = new RaidRepository(env);
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
@@ -35,7 +34,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   return {
     allStudents: (await getAllStudents(env, true)).sort((a, b) => a.order - b.order),
     recruitedStudentTiers: await getRecruitedStudentTiers(env, sensei.id),
-    raids: (await raidRepository.getAll()).sort(
+    raids: (await getAllRaidSchedules(env)).sort(
       (a, b) => compareInstantDesc(a.startAt ?? nowUtcIso(), b.startAt ?? nowUtcIso()),
     ),
     party,

@@ -8,8 +8,15 @@ import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 jest.mock("~/lib/cache", () => ({
   cacheKey: (category: string, domain: string, version: number, query: string) =>
     `${category}::${domain}::v${version}::${query}`,
+  cacheQuery: (params: Record<string, string | number | boolean | null | undefined>) =>
+    Object.entries(params)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .join("::") || "all",
   // Bypass cache by executing fn() directly.
   fetchRouteCached: jest.fn((_env: unknown, _ctx: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
+  fetchSourceCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
 }));
 
 jest.mock("~/models/coupon", () => ({
@@ -38,7 +45,6 @@ jest.mock("~/lib/baql", () => ({
 }));
 jest.mock("~/repositories", () => ({
   RecruitmentRepository: jest.fn(),
-  RaidRepository: jest.fn(),
 }));
 
 import { getNavigationBarContents } from "../../../app/models/content";

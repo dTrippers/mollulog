@@ -8,7 +8,8 @@ import {
   nowUtcIso,
   toUtcIso,
 } from "~/lib/date-time";
-import { RaidRepository, type RaidSchedule, RecruitmentRepository } from "~/repositories";
+import { getRaidSchedule, getRaidScheduleByTypeAndSeason, type RaidSchedule } from "~/models/raid";
+import { RecruitmentRepository } from "~/repositories";
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
 import type { RaidType, Role } from "./content.d";
 import { getAllCoupons, hasUnregisteredActiveCoupons } from "./coupon";
@@ -70,14 +71,13 @@ async function enrichRaidContents(
   contents: TimelineContent[],
   forceRefresh = false,
 ): Promise<TimelineRaidContent[]> {
-  const raidRepository = new RaidRepository(env);
   return Promise.all(
     contents.map(async (content) => {
       if (!content.contentUid) {
         return { ...content };
       }
 
-      const schedule = await raidRepository.getSchedule(content.contentUid, forceRefresh);
+      const schedule = await getRaidSchedule(env, content.contentUid, forceRefresh);
       if (!schedule) {
         return { ...content };
       }
@@ -277,8 +277,7 @@ export async function getUpcomingRaidContentByTypeAndSeason(
   raidType: RaidType,
   seasonIndex: number,
 ): Promise<TimelineRaidContent | null> {
-  const raidRepository = new RaidRepository(env);
-  const schedule = await raidRepository.getByTypeAndSeason(raidType, seasonIndex);
+  const schedule = await getRaidScheduleByTypeAndSeason(env, raidType, seasonIndex);
   if (!schedule) {
     return null;
   }

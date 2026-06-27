@@ -14,7 +14,7 @@ import { getCommunityFeedPage } from "~/models/community";
 import { enrichCommunityFeedPosts } from "~/models/community-feed";
 import { type IndexRecruitment, getIndexContents } from "~/models/content";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { raidTypeToParam } from "~/models/raid";
+import { raidTypeToParam } from "~/domain/raid";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
 import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";

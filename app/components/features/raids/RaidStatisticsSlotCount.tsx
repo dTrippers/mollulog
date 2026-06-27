@@ -12,7 +12,7 @@ import { raidTypeLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType, Terrain } from "~/models/content.d";
 import type { Defense } from "~/graphql/graphql";
-import { raidTypeToParam } from "~/models/raid";
+import { raidTypeToParam } from "~/domain/raid";
 
 type RaidStatisticsSlotCountProps = {
   student?: { uid: string; name: string };

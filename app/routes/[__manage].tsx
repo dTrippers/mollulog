@@ -6,12 +6,13 @@ import { Button, Callout, Title } from "~/components/primitives";
 import { getFutureContents, getIndexContents, getNavigationBarContentsRaw } from "~/models/content";
 import { getEventList, syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
 import { getMainStories } from "~/models/main-story";
+import { warmRaidCache } from "~/models/raid";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { GrowthResourceRepository, RaidRepository, RecruitmentRepository } from "~/repositories";
+import { GrowthResourceRepository, RecruitmentRepository } from "~/repositories";
 import { getItemCatalogResources } from "~/repositories/item-catalog";
 import { getCampaignFarmingStages } from "~/repositories/stage";
 
@@ -19,7 +20,7 @@ type RefreshTaskName =
   | "syncYoutubeCommunityPosts"
   | "syncRawStudents"
   | "RecruitmentRepository.refresh"
-  | "RaidRepository.refresh"
+  | "warmRaidCache"
   | "getMainStories"
   | "getAllStudentsFavoriteItems"
   | "syncAllTimelineContentsMeta"
@@ -72,14 +73,13 @@ async function runRefreshTask(name: RefreshTaskName, fn: () => Promise<unknown>)
 
 async function refreshCache(env: Env, ctx: ExecutionContext): Promise<RefreshResult> {
   const recruitmentRepository = new RecruitmentRepository(env);
-  const raidRepository = new RaidRepository(env);
   const growthResourceRepository = new GrowthResourceRepository(env);
   const studentUids = getAllStudents(env, true).then((students) => students.map((student) => student.uid));
   const sourceTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
     ["syncYoutubeCommunityPosts", () => syncYoutubeCommunityPosts(env)],
     ["syncRawStudents", () => syncRawStudents(env)],
     ["RecruitmentRepository.refresh", () => recruitmentRepository.refresh()],
-    ["RaidRepository.refresh", () => raidRepository.refresh()],
+    ["warmRaidCache", () => warmRaidCache(env)],
     ["getMainStories", () => getMainStories(env, true)],
     ["getAllStudentsFavoriteItems", () => getAllStudentsFavoriteItems(env, true)],
     ["syncAllTimelineContentsMeta", () => syncAllTimelineContentsMeta(env)],

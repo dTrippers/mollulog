@@ -1,9 +1,5 @@
-import { describe, expect, it, jest } from "@jest/globals";
-import { ALL_TOTAL_ASSUALT_BOSS, normalizeBossUid, timeToScore } from "./raid";
-
-jest.mock("~/lib/baql", () => ({
-  runQuery: jest.fn(),
-}));
+import { describe, expect, it } from "@jest/globals";
+import { ALL_TOTAL_ASSUALT_BOSS, normalizeBossUid, timeToScore } from "./raid-score";
 
 describe("raid score data", () => {
   it("uses BAQL raid boss uids", () => {

@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
 import { getMainStories } from "~/models/main-story";
+import { warmRaidCache } from "~/models/raid";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { GrowthResourceRepository, RaidRepository, RecruitmentRepository } from "~/repositories";
+import { GrowthResourceRepository, RecruitmentRepository } from "~/repositories";
 import { getItemCatalogResources } from "~/repositories/item-catalog";
 import { getCampaignFarmingStages } from "~/repositories/stage";
 
@@ -45,13 +46,15 @@ jest.mock("~/repositories/stage", () => ({
 }));
 
 const mockRecruitmentRefresh = jest.fn<() => Promise<unknown[]>>();
-const mockRaidRefresh = jest.fn<() => Promise<unknown[]>>();
 const mockGetStudentGearData = jest.fn<(_studentUids: string[], _forceRefresh?: boolean) => Promise<unknown>>();
 
 jest.mock("~/repositories", () => ({
   GrowthResourceRepository: jest.fn().mockImplementation(() => ({ getStudentGearData: mockGetStudentGearData })),
   RecruitmentRepository: jest.fn().mockImplementation(() => ({ refresh: mockRecruitmentRefresh })),
-  RaidRepository: jest.fn().mockImplementation(() => ({ refresh: mockRaidRefresh })),
+}));
+
+jest.mock("~/models/raid", () => ({
+  warmRaidCache: jest.fn(),
 }));
 
 jest.mock("~/lib/observability.server", () => ({
@@ -88,7 +91,7 @@ const mockedGetItemCatalogResources = getItemCatalogResources as jest.MockedFunc
 const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
 const MockedGrowthResourceRepository = GrowthResourceRepository as jest.MockedClass<typeof GrowthResourceRepository>;
 const MockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
-const MockedRaidRepository = RaidRepository as jest.MockedClass<typeof RaidRepository>;
+const mockedWarmRaidCache = warmRaidCache as jest.MockedFunction<typeof warmRaidCache>;
 
 function createEnv(markerRaw: string | null = null) {
   const kv = {
@@ -114,7 +117,7 @@ beforeEach(() => {
   mockedGetStudentSkillItemsBatch.mockResolvedValue(new Map());
   mockGetStudentGearData.mockResolvedValue(new Map());
   mockRecruitmentRefresh.mockResolvedValue([]);
-  mockRaidRefresh.mockResolvedValue([]);
+  mockedWarmRaidCache.mockResolvedValue([]);
   mockedGetMainStories.mockResolvedValue([]);
   mockedGetAllStudentsFavoriteItems.mockResolvedValue([]);
   mockedSyncAllTimelineContentsMeta.mockResolvedValue([]);
@@ -141,8 +144,7 @@ describe("runScheduledJobs", () => {
     expect(mockedSyncRawStudents).toHaveBeenCalledWith(env);
     expect(MockedRecruitmentRepository).toHaveBeenCalledWith(env);
     expect(mockRecruitmentRefresh).toHaveBeenCalledWith();
-    expect(MockedRaidRepository).toHaveBeenCalledWith(env);
-    expect(mockRaidRefresh).toHaveBeenCalledWith();
+    expect(mockedWarmRaidCache).toHaveBeenCalledWith(env);
     expect(mockedGetMainStories).toHaveBeenCalledWith(env, true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(env, true);
     expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(env);

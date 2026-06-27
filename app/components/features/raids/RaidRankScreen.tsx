@@ -7,7 +7,7 @@ import type { Attack, Defense } from "~/graphql/graphql";
 import { type ParsedRaidRankDocument, convertTier, fetchRanks } from "~/lib/ranks/ranks";
 import type { UtcIsoString } from "~/lib/date-time";
 import type { RaidType, Role } from "~/models/content.d";
-import { type Boss, scoreToDifficultyAndTime } from "~/models/raid";
+import { type Boss, scoreToDifficultyAndTime } from "~/domain/raid-score";
 import type { RaidRankFilterState } from "./RaidRankFilter";
 
 type RaidRankScreenProps = {

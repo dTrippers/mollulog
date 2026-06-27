@@ -1,10 +1,10 @@
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import type { LoaderFunctionArgs } from "react-router";
-import { raidTypeToParam } from "~/models/raid";
+import { raidTypeToParam } from "~/domain/raid";
+import { getAllRaidSchedules } from "~/models/raid";
 import { getAllStudents } from "~/models/student";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content";
-import { RaidRepository } from "~/repositories";
 
 type SitemapItem = {
   link: string;
@@ -19,7 +19,6 @@ const EVENT_CONTENT_TYPES = new Set(["event", "fes", "collab", "immortal_event",
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const raidRepository = new RaidRepository(env);
   const items: SitemapItem[] = [
     { link: `${HOST}/futures`, lastmod: dayjs(), changefreq: "daily", priority: 1.0 },
     { link: `${HOST}/utils`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
@@ -32,7 +31,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   const [contents, students, raidSchedules] = await Promise.all([
     getAllTimelineContentsMeta(env),
     getAllStudents(env),
-    raidRepository.getAll(),
+    getAllRaidSchedules(env),
   ]);
   const raidScheduleMap = new Map(raidSchedules.map((schedule) => [schedule.uid, schedule]));
 

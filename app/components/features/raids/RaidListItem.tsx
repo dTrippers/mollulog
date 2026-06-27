@@ -6,7 +6,7 @@ import { type UtcIsoString, formatInstant } from "~/lib/date-time";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType, Terrain } from "~/models/content.d";
-import type { Difficulty } from "~/models/raid";
+import type { Difficulty } from "~/domain/raid-score";
 import { sanitizeClassName } from "~/prophandlers";
 
 export type RaidListItemRaid = {

@@ -5,7 +5,6 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { ContentSelectForm, FormGroup, InputForm, SelectForm } from "~/components/features/forms";
 import { FilterButtons, Title } from "~/components/primitives";
-import { difficultyLocale } from "~/locales/ko";
 import {
   ALL_TOTAL_ASSUALT_BOSS,
   type Boss,
@@ -13,8 +12,9 @@ import {
   normalizeBossUid,
   scoreToDifficultyAndTime,
   timeToScore,
-} from "~/models/raid";
-import { RaidRepository } from "~/repositories";
+} from "~/domain/raid-score";
+import { difficultyLocale } from "~/locales/ko";
+import { getAllRaidSchedules } from "~/models/raid";
 
 const STORAGE_KEY_TIME_TO_SCORE = "raid-score-util-timeToScore";
 const STORAGE_KEY_SCORE_TO_TIME = "raid-score-util-scoreToTime";
@@ -26,8 +26,7 @@ type RaidScoreBossOption = {
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const raidRepository = new RaidRepository(env);
-  const allRaids = await raidRepository.getAll();
+  const allRaids = await getAllRaidSchedules(env);
   const bossNameByUid = new Map(allRaids.map((raid) => [raid.raidBoss.uid, raid.raidBoss.name]));
 
   return {

@@ -1,18 +1,18 @@
 import { type LoaderFunctionArgs, redirect } from "react-router";
 import { createPageErrorBoundary } from "~/components/features/layout";
+import { raidTypeToParam } from "~/domain/raid";
 import { routeError } from "~/lib/http-errors";
-import { RaidRepository } from "~/repositories";
+import { getUpcomingRaidSchedules } from "~/models/raid";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const raidRepository = new RaidRepository(env);
 
-  const upcomingRaids = await raidRepository.getUpcoming();
+  const upcomingRaids = await getUpcomingRaidSchedules(env);
   const latestRaid = upcomingRaids.find((schedule) => ["total_assault", "elimination"].includes(schedule.raidType));
   if (!latestRaid) {
     throw routeError(404, "raid.not_found", "예정된 총력전/대결전 정보를 찾을 수 없어요");
   }
-  return redirect(`/raids/${latestRaid.raidType}/${latestRaid.seasonIndex}`);
+  return redirect(`/raids/${raidTypeToParam(latestRaid.raidType)}/${latestRaid.seasonIndex}`);
 };
 
 export const ErrorBoundary = createPageErrorBoundary({

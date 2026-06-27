@@ -11,12 +11,12 @@ import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
+import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { formatStudentFullName, getAllStudentsMap } from "~/models/student";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
-import { RaidRepository } from "~/repositories";
 
 const studentDetailQuery = graphql(`
   query StudentDetail($uid: String!) {
@@ -40,7 +40,6 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     route: "students.$id.loader",
     studentUid: uid,
   });
-  const raidRepository = new RaidRepository(env);
 
   const { data, error } = await runQuery(studentDetailQuery, { uid });
   if (error) {
@@ -79,7 +78,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   );
   const tagCounts = await getTagCountsByStudent(env, uid);
   const allGradings = await getStudentGradingsByStudentWithUsers(env, uid, true);
-  const allRaids = await raidRepository.getAll();
+  const allRaids = await getAllRaidSchedules(env);
 
   const sortedGradings = [...allGradings].sort((a, b) => {
     const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();

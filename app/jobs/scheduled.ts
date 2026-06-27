@@ -8,10 +8,11 @@ import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/mo
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { getItemCatalogResources } from "~/repositories/item-catalog";
-import { GrowthResourceRepository, RaidRepository, RecruitmentRepository } from "~/repositories";
+import { GrowthResourceRepository, RecruitmentRepository } from "~/repositories";
 import { getCampaignFarmingStages } from "~/repositories/stage";
 import { syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
 import { cacheKey, cacheQuery, claimKvCacheWindow } from "~/lib/cache";
+import { warmRaidCache } from "~/models/raid";
 
 type ScheduledJobName = "syncYoutubeCommunityPosts" | "refreshSourceCaches";
 
@@ -49,11 +50,10 @@ async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
 
 async function refreshSourceCaches(env: Env): Promise<void> {
   const recruitmentRepository = new RecruitmentRepository(env);
-  const raidRepository = new RaidRepository(env);
   await Promise.all([
     syncRawStudents(env),
     recruitmentRepository.refresh(),
-    raidRepository.refresh(),
+    warmRaidCache(env),
     getMainStories(env, true),
     getAllStudentsFavoriteItems(env, true),
     syncAllTimelineContentsMeta(env),

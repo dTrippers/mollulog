@@ -3,12 +3,13 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { getFutureContents, getIndexContents, getNavigationBarContentsRaw } from "~/models/content";
 import { getEventList, syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
 import { getMainStories } from "~/models/main-story";
+import { warmRaidCache } from "~/models/raid";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { GrowthResourceRepository, RaidRepository, RecruitmentRepository } from "~/repositories";
+import { GrowthResourceRepository, RecruitmentRepository } from "~/repositories";
 import { getItemCatalogResources } from "~/repositories/item-catalog";
 import { getCampaignFarmingStages } from "~/repositories/stage";
 
@@ -73,13 +74,15 @@ jest.mock("~/repositories/stage", () => ({
 }));
 
 const mockRecruitmentRefresh = jest.fn<() => Promise<unknown[]>>();
-const mockRaidRefresh = jest.fn<() => Promise<unknown[]>>();
 const mockGetStudentGearData = jest.fn<(_studentUids: string[], _forceRefresh?: boolean) => Promise<unknown>>();
 
 jest.mock("~/repositories", () => ({
   GrowthResourceRepository: jest.fn().mockImplementation(() => ({ getStudentGearData: mockGetStudentGearData })),
   RecruitmentRepository: jest.fn().mockImplementation(() => ({ refresh: mockRecruitmentRefresh })),
-  RaidRepository: jest.fn().mockImplementation(() => ({ refresh: mockRaidRefresh })),
+}));
+
+jest.mock("~/models/raid", () => ({
+  warmRaidCache: jest.fn(),
 }));
 
 import { action, loader } from "../../../app/routes/[__manage]";
@@ -114,7 +117,7 @@ const mockedGetItemCatalogResources = getItemCatalogResources as jest.MockedFunc
 const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
 const MockedGrowthResourceRepository = GrowthResourceRepository as jest.MockedClass<typeof GrowthResourceRepository>;
 const MockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
-const MockedRaidRepository = RaidRepository as jest.MockedClass<typeof RaidRepository>;
+const mockedWarmRaidCache = warmRaidCache as jest.MockedFunction<typeof warmRaidCache>;
 
 type ManageActionResponse = {
   intent: "cache.refresh" | "unknown";
@@ -178,7 +181,7 @@ beforeEach(() => {
   mockedGetStudentSkillItemsBatch.mockResolvedValue(new Map());
   mockGetStudentGearData.mockResolvedValue(new Map());
   mockRecruitmentRefresh.mockResolvedValue([]);
-  mockRaidRefresh.mockResolvedValue([]);
+  mockedWarmRaidCache.mockResolvedValue([]);
   mockedGetMainStories.mockResolvedValue([]);
   mockedGetAllStudentsFavoriteItems.mockResolvedValue([]);
   mockedSyncAllTimelineContentsMeta.mockResolvedValue([]);
@@ -225,7 +228,7 @@ describe("__manage route", () => {
           syncYoutubeCommunityPosts: expect.any(Number),
           syncRawStudents: expect.any(Number),
           "RecruitmentRepository.refresh": expect.any(Number),
-          "RaidRepository.refresh": expect.any(Number),
+          warmRaidCache: expect.any(Number),
           getMainStories: expect.any(Number),
           getAllStudentsFavoriteItems: expect.any(Number),
           syncAllTimelineContentsMeta: expect.any(Number),
@@ -260,12 +263,12 @@ describe("__manage route", () => {
     expect(mockedGetFutureContents).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
     expect(mockedGetNavigationBarContentsRaw).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
     expect(MockedRecruitmentRepository).toHaveBeenCalledWith(expect.anything());
-    expect(MockedRaidRepository).toHaveBeenCalledWith(expect.anything());
+    expect(mockedWarmRaidCache).toHaveBeenCalledWith(expect.anything());
   });
 
   it("captures elapsed duration and skips composite refresh when a leaf task fails", async () => {
     mockedGetActiveSensei.mockResolvedValue(makeSensei({ id: 1, role: "admin" }));
-    mockRaidRefresh.mockImplementation(
+    mockedWarmRaidCache.mockImplementation(
       () =>
         new Promise((_resolve, reject) => {
           setTimeout(() => reject(new Error("raid refresh failed")), 5);
@@ -277,8 +280,8 @@ describe("__manage route", () => {
 
     expect(dataStatus(response)).toBe(200);
     expect(body.result?.ok).toBe(false);
-    expect(body.result?.errors).toEqual({ "RaidRepository.refresh": "raid refresh failed" });
-    expect(body.result?.durations?.["RaidRepository.refresh"]).toBeGreaterThan(0);
+    expect(body.result?.errors).toEqual({ warmRaidCache: "raid refresh failed" });
+    expect(body.result?.durations?.warmRaidCache).toBeGreaterThan(0);
     expect(mockedGetFutureContents).not.toHaveBeenCalled();
     expect(mockedGetEventList).not.toHaveBeenCalled();
     expect(mockedGetIndexContents).not.toHaveBeenCalled();

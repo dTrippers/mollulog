@@ -4,10 +4,10 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { AddContentButton } from "~/components/features/editor";
 import PartyView from "./$username.parties._components/PartyView";
 import { getUserParties, removePartyByUid } from "~/models/party";
+import { getAllRaidSchedules } from "~/models/raid";
 import { getAllStudents } from "~/models/student";
 import { getRouteSensei } from "./$username";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
-import { RaidRepository } from "~/repositories";
 
 export const meta: MetaFunction = ({ params }) => {
   return [
@@ -20,14 +20,13 @@ export const meta: MetaFunction = ({ params }) => {
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const raidRepository = new RaidRepository(env);
   const sensei = await getRouteSensei(env, params);
   const currentUser = await getActiveSensei(env, request);
   const me = sensei.username === currentUser?.username;
 
   const allStudents = await getAllStudents(env, true);
   const recruitedStudentTiers = await getRecruitedStudentTiers(env, sensei.id);
-  const allRaids = await raidRepository.getAll();
+  const allRaids = await getAllRaidSchedules(env);
   const parties = (await getUserParties(env, sensei.username, { includePrivate: me })).reverse();
 
   return {

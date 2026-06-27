@@ -1,7 +1,7 @@
 import { useSignIn } from "~/contexts/SignInProvider";
 import RaidRankFilterStudentSearch from "./RaidRankFilterStudentSearch";
 import { ClickableSurface, FilterButtons, Toggle } from "~/components/primitives";
-import type { Difficulty } from "~/models/raid";
+import type { Difficulty } from "~/domain/raid-score";
 import { difficultyLocale } from "~/locales/ko";
 
 export type RaidRankFilterState = {

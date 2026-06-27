@@ -9,7 +9,8 @@ import {
   calculatePickupTrialMoments,
 } from "./pyroxene-timeline";
 
-jest.mock("~/repositories", () => ({ RaidRepository: {}, RecruitmentRepository: {} }));
+jest.mock("~/repositories", () => ({ RecruitmentRepository: {} }));
+jest.mock("~/models/raid", () => ({ getRaidSchedule: jest.fn() }));
 jest.mock("./student", () => ({ getAllStudentsMap: jest.fn() }));
 jest.mock("./timeline-content", () => ({
   getFutureRaidContents: jest.fn(),

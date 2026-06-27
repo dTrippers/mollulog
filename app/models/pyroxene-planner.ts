@@ -5,7 +5,8 @@ import { int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { type UtcIsoString, compareInstantAsc, compareInstantDesc, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { RaidRepository, RecruitmentRepository } from "~/repositories";
+import { getRaidSchedule } from "~/models/raid";
+import { RecruitmentRepository } from "~/repositories";
 import type { RaidType } from "./content.d";
 import {
   PYROXENE_AP_PACKAGE_CONFIG,
@@ -62,7 +63,6 @@ export type PyroxenePlannerContent =
 
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
   const recruitmentRepository = new RecruitmentRepository(env);
-  const raidRepository = new RaidRepository(env);
 
   // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
   const [eventContents, raidContents] = await Promise.all([
@@ -140,7 +140,7 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
         let until: UtcIsoString | null = content.endAt;
 
         if (content.contentUid) {
-          const schedule = await raidRepository.getSchedule(content.contentUid, forceRefresh);
+          const schedule = await getRaidSchedule(env, content.contentUid, forceRefresh);
           if (schedule) {
             raidName = schedule.raidBoss.name;
             raidType = schedule.raidType as RaidType;

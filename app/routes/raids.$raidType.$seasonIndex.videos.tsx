@@ -1,10 +1,11 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useOutletContext } from "react-router";
 import { RaidVideosScreen } from "~/components/features/raids";
+import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
 import { fetchRaidVideos } from "~/lib/ranks";
-import { raidTypeToParam } from "~/models/raid";
+import { getRaidScheduleByTypeAndSeason } from "~/models/raid";
 import { getVideoDateRange } from "~/models/raid-videos";
-import { RAID_VIDEOS_PAGE_SIZE, RaidRepository, parseVideoSort } from "~/repositories";
+import { RAID_VIDEOS_PAGE_SIZE, parseVideoSort } from "~/repositories";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import { useRaidVideosFeed } from "./raids.$raidType.$seasonIndex._components/useRaidVideosFeed";
 
@@ -18,7 +19,6 @@ function createErrorResponse(message: string, status: number) {
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
-  const raidRepository = new RaidRepository(env);
   if (!raidType || !seasonIndex) {
     throw createErrorResponse("총력전/대결전 정보를 찾을 수 없어요", 404);
   }
@@ -28,7 +28,7 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     throw createErrorResponse("총력전/대결전 정보를 찾을 수 없어요", 404);
   }
 
-  const currentRaid = await raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex);
+  const currentRaid = await getRaidScheduleByTypeAndSeason(env, raidTypeFromParam(raidType), parsedSeasonIndex);
   if (!currentRaid) {
     throw createErrorResponse("총력전/대결전 정보를 찾을 수 없어요", 404);
   }
