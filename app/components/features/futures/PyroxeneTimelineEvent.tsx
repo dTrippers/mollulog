@@ -4,11 +4,11 @@ import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { StudentCards } from "~/components/features/students";
 import { Button, NumberInput, ResourceCard } from "~/components/primitives";
-import { ResourceTypeEnum } from "~/graphql/graphql";
-import type { PyroxenePickupChance } from "~/models/pyroxene-planner";
+import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
+import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
-import { isFreeRecruitment100Event, type PickupResources } from "~/domain/pyroxene-timeline";
-import type { PyroxeneScheduleItem } from "./types";
+import { type PickupResources, isFreeRecruitment100Event } from "~/domain/pyroxene-timeline";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";
 
 type PyroxeneTimelineEventProps = {

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import type { CommunityFeedPost } from "~/models/community";
-import { enrichCommunityFeedPosts } from "~/models/community-feed";
 import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
 import { getGradingTagsByGradingUids } from "~/models/student-grading-tag";
 import { getTimelineContentsByUids } from "~/models/timeline-content";
+import { enrichCommunityFeedPosts } from "~/views/community";
 
 jest.mock("~/models/student", () => ({
   getAllStudentsMap: jest.fn(),

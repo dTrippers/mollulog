@@ -1,5 +1,4 @@
-import type { MinigameConfig } from "~/components/features/events/shop/constants";
-import type { ShopResource } from "~/components/features/events/shop/types";
+import type { MinigameConfig, ShopResource } from "~/domain/event-shop";
 import { graphql } from "~/graphql";
 import type {
   EventContentShopContentQuery,
@@ -8,12 +7,8 @@ import type {
 } from "~/graphql/graphql";
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import {
-  type UtcIsoString,
-  compareInstantAsc,
-  toUtcIso,
-} from "~/lib/date-time";
 import { cacheKey, cacheQuery, fetchLazySourceCached, fetchSourceCached } from "~/lib/cache";
+import { type UtcIsoString, compareInstantAsc, toUtcIso } from "~/lib/date-time";
 import { getAllRecruitmentGroups, getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getTimelineContent, getTimelineContents } from "./timeline-content";
 import type { RunType } from "./timeline-content";

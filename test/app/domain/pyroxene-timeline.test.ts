@@ -1,5 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import type { PyroxeneScheduleItem } from "~/components/features/futures/types";
+import { type PyroxenePlannerOptions, normalizePyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import {
   type PickupResources,
   type PyroxeneTimelineBandMode,
@@ -7,7 +8,6 @@ import {
   calculatePickupTrialMoments,
 } from "~/domain/pyroxene-timeline";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
-import { type PyroxenePlannerOptions, normalizePyroxenePlannerOptions } from "~/models/pyroxene-planner";
 
 jest.mock("~/models/recruitment", () => ({
   getRecruitmentGroupsByUids: jest.fn(),

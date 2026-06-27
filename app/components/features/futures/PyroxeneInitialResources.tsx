@@ -1,11 +1,11 @@
 import { Transition } from "@headlessui/react";
 import { useEffect, useState } from "react";
 import { Button, Checkbox, ResourceCard } from "~/components/primitives";
-import { ResourceTypeEnum } from "~/graphql/graphql";
+import type { PyroxeneCollectedSourceCandidate } from "~/domain/pyroxene-schedule";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";
-import type { PyroxeneCollectedSourceCandidate } from "./types";
 
 const resourceItems = [
   {

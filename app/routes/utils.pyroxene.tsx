@@ -15,16 +15,21 @@ import {
   PyroxeneSchedule,
   usePyroxeneScheduleItems,
 } from "~/components/features/futures";
-import type { PickupResources } from "~/components/features/futures";
 import { ErrorPage } from "~/components/features/layout";
 import Page from "~/components/features/layout/Page";
+import { type PyroxenePlannerOptions, defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import {
+  type PyroxeneMonthlyPackageType,
+  createOptimisticApPackageTimelineItems,
+  createOptimisticAttendanceTimelineItems,
+  createOptimisticBuyTimelineItems,
+  createOptimisticMonthlyPackageTimelineItems,
+  createOptimisticOtherTimelineItems,
+  extractPyroxeneTimelineBaseUid,
+} from "~/domain/pyroxene-sources";
+import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import type {
-  PyroxeneEventData,
-  PyroxenePlannerOptions,
-  PyroxeneTimelineItem,
-  PyroxeneTimelineRepeatType,
-} from "~/models/pyroxene-planner";
+import type { PyroxeneEventData, PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 import {
   createAttendance,
   createBuyPyroxene,
@@ -32,13 +37,11 @@ import {
   createPyroxeneApPackage,
   createPyroxeneMonthlyPackage,
   createPyroxeneOwnedResource,
-  defaultPyroxenePlannerOptions,
   deleteCollectedSource,
   deletePyroxeneTimelineItem,
   getAllPyroxeneEventData,
   getCollectedSourceKeys,
   getLatestPyroxeneOwnedResource,
-  getPyroxenePlannerContents,
   getPyroxenePlannerOptions,
   getPyroxeneTimelineItems,
   upsertCollectedSources,
@@ -46,19 +49,11 @@ import {
   upsertPyroxenePlannerOptions,
 } from "~/models/pyroxene-planner";
 import {
-  type PyroxeneMonthlyPackageType,
-  extractPyroxeneTimelineBaseUid,
-  createOptimisticApPackageTimelineItems,
-  createOptimisticAttendanceTimelineItems,
-  createOptimisticBuyTimelineItems,
-  createOptimisticMonthlyPackageTimelineItems,
-  createOptimisticOtherTimelineItems,
-} from "~/domain/pyroxene-sources";
-import {
   deleteRecruitmentResult,
   getRecruitmentResultsByRecruitmentGroupUids,
   setRecruitmentResultCompletion,
 } from "~/models/recruitment-result";
+import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
@@ -89,16 +84,23 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
   );
 
-  const [favoritedStudents, latestResources, savedOptions, eventData, timelineItems, recruitmentResults, collectedSources] =
-    await Promise.all([
-      getUserFavoritedStudents(env, currentUser.id),
-      getLatestPyroxeneOwnedResource(env, currentUser.id),
-      getPyroxenePlannerOptions(env, currentUser.id),
-      getAllPyroxeneEventData(env, currentUser.id),
-      getPyroxeneTimelineItems(env, currentUser.id),
-      getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
-      getCollectedSourceKeys(env, currentUser.id),
-    ]);
+  const [
+    favoritedStudents,
+    latestResources,
+    savedOptions,
+    eventData,
+    timelineItems,
+    recruitmentResults,
+    collectedSources,
+  ] = await Promise.all([
+    getUserFavoritedStudents(env, currentUser.id),
+    getLatestPyroxeneOwnedResource(env, currentUser.id),
+    getPyroxenePlannerOptions(env, currentUser.id),
+    getAllPyroxeneEventData(env, currentUser.id),
+    getPyroxeneTimelineItems(env, currentUser.id),
+    getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
+    getCollectedSourceKeys(env, currentUser.id),
+  ]);
 
   return {
     signedIn: true,

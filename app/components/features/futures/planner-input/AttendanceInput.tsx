@@ -1,5 +1,5 @@
-import { useState } from "react";
 import dayjs from "dayjs";
+import { useState } from "react";
 import { Button, Input } from "~/components/primitives";
 
 type AttendanceInputProps = {
@@ -13,7 +13,8 @@ export default function AttendanceInput({ onSaveAttendance, disabled = false }: 
   return (
     <>
       <p className="mb-2 text-sm text-neutral-500">
-        출석 1일차 기준 날짜를 입력해주세요.<br/>
+        출석 1일차 기준 날짜를 입력해주세요.
+        <br />
         5일차에 50개, 10일치에 100개의 청휘석을 획득해요.
       </p>
       <div className="space-y-4">

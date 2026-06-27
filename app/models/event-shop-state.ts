@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
-import type { MinigamePaymentQuantityMode } from "~/components/features/events/shop/constants";
+import type { MinigamePaymentQuantityMode } from "~/domain/event-shop";
 
 export const eventShopStatesTable = sqliteTable("event_shop_states", {
   id: int().primaryKey({ autoIncrement: true }),

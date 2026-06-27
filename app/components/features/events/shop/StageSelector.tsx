@@ -1,8 +1,8 @@
 import type Decimal from "decimal.js";
 import { Section, Toggle } from "~/components/primitives";
+import type { Stage } from "~/domain/event-shop";
 import { StageCard } from "./StageCard";
-import type { Stage } from "./types";
-import type { ShopState, ShopActions } from "./hooks";
+import type { ShopActions, ShopState } from "./hooks";
 
 type StagesProps = {
   stages: Stage[];

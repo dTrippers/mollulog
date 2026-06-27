@@ -1,11 +1,11 @@
 import dayjs from "dayjs";
-import type { PyroxeneScheduleItem } from "~/components/features/futures/types";
+import type { PyroxeneCalculationOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
+import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import {
+  calculateDailyApChargePyroxene,
   collectedSourceKeyForEventReward,
   collectedSourceKeyForRaid,
-  calculateDailyApChargePyroxene,
 } from "~/domain/pyroxene-sources";
-import type { PyroxeneCalculationOptions, TimelineSourceType } from "~/models/pyroxene-planner";
 import { DEFAULT_PICKUP_STUDENT_RATE_BY_TIER } from "~/domain/recruitment-simulator";
 
 export type PickupResources = {

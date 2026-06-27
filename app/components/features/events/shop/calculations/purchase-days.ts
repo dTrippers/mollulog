@@ -14,7 +14,10 @@ const SHOP_RESOURCE_PURCHASE_DAYS_LIMITS: Record<string, Record<string, number>>
   "854": STEEL_CONTINENT_PURCHASE_DAYS_LIMITS,
 };
 
-export function calculateShopPurchaseDays(since: Date | string | null | undefined, until: Date | string | null | undefined) {
+export function calculateShopPurchaseDays(
+  since: Date | string | null | undefined,
+  until: Date | string | null | undefined,
+) {
   if (!since || !until) {
     return 0;
   }

@@ -1,5 +1,5 @@
 import { PanelOptionChip, PanelOptionGroup } from "~/components/primitives";
-import type { PyroxenePickupChance, PyroxenePlannerOptions } from "~/models/pyroxene-planner";
+import type { PyroxenePickupChance, PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 
 const pickupChanceOptions = [
   {

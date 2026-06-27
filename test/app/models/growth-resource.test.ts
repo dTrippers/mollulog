@@ -26,10 +26,10 @@ import {
   getSkillMaterialChoiceBoxKindOrder,
   getSkillMaterialChoiceBoxRarity,
   getSkillMaterialResourceChoiceBoxUid,
-  getStudentGrowthResourceRequirements,
   normalizeStudentGrowthInputForCalculation,
   sortGrowthResourceItems,
-} from "../../../app/models/growth-resource";
+} from "../../../app/domain/growth-resource";
+import { getStudentGrowthResourceRequirements } from "../../../app/models/growth-resource";
 
 const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
 

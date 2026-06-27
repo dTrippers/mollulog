@@ -1,7 +1,8 @@
+import type { TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { UtcIsoString } from "~/lib/date-time";
 import type { RaidType } from "~/models/content.d";
-import type { PyroxeneTimelineRepeatType, TimelineSourceType } from "~/models/pyroxene-planner";
+import type { PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 
 export type PyroxeneScheduleItem = {
   event?: {

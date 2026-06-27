@@ -1,5 +1,5 @@
+import type { ShopResource } from "~/domain/event-shop";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import type { ShopResource } from "../types";
 import { calculateEffectiveShopPurchaseCount } from "./shop-costs";
 
 export type BoughtResourceQuantity = {

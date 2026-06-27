@@ -2,6 +2,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
+import {
+  appendRecruitmentResultStudent,
+  normalizeRecruitmentResultStudents,
+  removeRecruitmentResultStudent,
+  sanitizeRecruitmentResultStudents,
+} from "~/domain/recruitment-result";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { type UtcIsoString, nowUtcIso } from "~/lib/date-time";
 import {
@@ -12,9 +18,7 @@ import {
   parseCommunityPostBlocks,
   upsertRecruitmentResultCommunityPost,
 } from "./community";
-import type { PickupHistory } from "./pickup-history";
 import { upsertRecruitedStudentFromRecruitmentResult } from "./recruited-student";
-import { type StudentLookup, resolveRecruitmentResultStudent } from "~/domain/recruitment-result";
 
 const IN_QUERY_BATCH_SIZE = 90;
 
@@ -124,131 +128,6 @@ function toModel(row: RecruitmentResultRow): RecruitmentResult {
     createdAt: row.createdAt as UtcIsoString,
     updatedAt: row.updatedAt as UtcIsoString,
   };
-}
-
-export function normalizeRecruitmentResultStudents(
-  students: RecruitmentResultStudent[] | undefined,
-): RecruitmentResultStudent[] {
-  const byStudentUid = new Map<string, RecruitmentResultStudent>();
-  for (const student of students ?? []) {
-    const studentUid = student.studentUid?.trim();
-    if (!studentUid) {
-      continue;
-    }
-
-    const tier = Math.max(1, Math.min(9, Number.isFinite(student.tier) ? Math.trunc(student.tier) : 3));
-    const existing = byStudentUid.get(studentUid);
-    byStudentUid.set(studentUid, {
-      studentUid,
-      tier: Math.max(existing?.tier ?? 0, tier),
-      pickup: Boolean(existing?.pickup || student.pickup),
-    });
-  }
-
-  return [...byStudentUid.values()];
-}
-
-export function appendRecruitmentResultStudent(
-  students: RecruitmentResultStudent[] | undefined,
-  student: RecruitmentResultStudent,
-): RecruitmentResultStudent[] {
-  return sanitizeRecruitmentResultStudents([...(students ?? []), student]);
-}
-
-export function removeRecruitmentResultStudent(
-  students: RecruitmentResultStudent[] | undefined,
-  studentUid: string,
-): RecruitmentResultStudent[] {
-  let removed = false;
-  return sanitizeRecruitmentResultStudents(
-    (students ?? []).filter((student) => {
-      if (!removed && student.studentUid === studentUid) {
-        removed = true;
-        return false;
-      }
-
-      return true;
-    }),
-  );
-}
-
-export function sanitizeRecruitmentResultStudents(
-  students: RecruitmentResultStudent[] | undefined,
-): RecruitmentResultStudent[] {
-  return (students ?? []).flatMap((student) => {
-    const studentUid = student.studentUid?.trim();
-    if (!studentUid) {
-      return [];
-    }
-
-    const tier = Math.max(1, Math.min(9, Number.isFinite(student.tier) ? Math.trunc(student.tier) : 3));
-    return [{ studentUid, tier, pickup: Boolean(student.pickup) }];
-  });
-}
-
-export function createRecruitmentResultStudentsFromPickupHistory(
-  history: Pick<PickupHistory, "result">,
-  pickupStudentUids: Set<string> = new Set(),
-  studentInitialTiers: Record<string, number> = {},
-): RecruitmentResultStudent[] {
-  return sanitizeRecruitmentResultStudents(
-    history.result.flatMap((trial) =>
-      trial.tier3StudentIds.map((studentUid) => ({
-        studentUid,
-        tier: studentInitialTiers[studentUid] ?? 3,
-        pickup: pickupStudentUids.has(studentUid),
-      })),
-    ),
-  );
-}
-
-export function mergeEditableRecruitmentResultStudents({
-  existingStudents,
-  history,
-  lookup,
-  pickupStudentUids = new Set(),
-  studentInitialTiers = {},
-}: {
-  existingStudents: RecruitmentResultStudent[];
-  history: Pick<PickupHistory, "result">;
-  lookup: StudentLookup;
-  pickupStudentUids?: Set<string>;
-  studentInitialTiers?: Record<string, number>;
-}): RecruitmentResultStudent[] {
-  // The edit form owns only ★3 draw rows; non-★3 rows written by quick-complete flows must survive saves.
-  const preservedExistingStudents = sanitizeRecruitmentResultStudents(existingStudents).flatMap((student) => {
-    const resolvedStudent = resolveRecruitmentResultStudent(student, lookup);
-    if (resolvedStudent.tier === 3) {
-      return [];
-    }
-
-    return [
-      {
-        studentUid: student.studentUid,
-        tier: resolvedStudent.tier,
-        pickup: resolvedStudent.pickup,
-      },
-    ];
-  });
-  const editedFormStudents = createRecruitmentResultStudentsFromPickupHistory(
-    history,
-    pickupStudentUids,
-    studentInitialTiers,
-  );
-
-  return sanitizeRecruitmentResultStudents([...preservedExistingStudents, ...editedFormStudents]);
-}
-
-export function getRecruitmentResultTrialFromPickupHistory(history: Pick<PickupHistory, "result">): number | null {
-  if (history.result.length === 0) {
-    return null;
-  }
-
-  return Math.max(...history.result.map((trial) => trial.trial));
-}
-
-export function getRecruitmentResultTier3CountFromPickupHistory(history: Pick<PickupHistory, "result">): number {
-  return history.result.reduce((sum, trial) => sum + trial.tier3Count, 0);
 }
 
 export async function getRecruitmentResult(env: Env, userId: number, uid: string): Promise<RecruitmentResult | null> {

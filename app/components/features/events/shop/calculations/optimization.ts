@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import solver from "javascript-lp-solver";
-import type { Stage } from "../types";
-import type { StageInfo, OptimizationResult } from "./types";
+import type { Stage } from "~/domain/event-shop";
+import type { OptimizationResult, StageInfo } from "./types";
 
 /**
  * Calculates reward information for stages based on required target items.
@@ -12,27 +12,29 @@ export function calculateStageInfos(
   appliedBonusRatio: Record<string, Decimal>,
   targets: [string, number][], // [uid, quantity]
 ): StageInfo[] {
-  return stages.filter((stage) => enabledStages[stage.uid]).map((stage) => {
-    const rewardPerItem: Record<string, Decimal> = {};
-    for (const { item, rewardRequirement, amount } of stage.rewards) {
-      if (!item || item.category !== "coin" || rewardRequirement !== null) {
-        continue;
+  return stages
+    .filter((stage) => enabledStages[stage.uid])
+    .map((stage) => {
+      const rewardPerItem: Record<string, Decimal> = {};
+      for (const { item, rewardRequirement, amount } of stage.rewards) {
+        if (!item || item.category !== "coin" || rewardRequirement !== null) {
+          continue;
+        }
+        const bonusRatio = appliedBonusRatio[item.uid] ?? new Decimal(0);
+        const perClear = new Decimal(amount).plus(bonusRatio.mul(amount).ceil());
+        if (perClear.gt(0)) {
+          rewardPerItem[item.uid] = perClear;
+        }
       }
-      const bonusRatio = appliedBonusRatio[item.uid] ?? new Decimal(0);
-      const perClear = new Decimal(amount).plus(bonusRatio.mul(amount).ceil());
-      if (perClear.gt(0)) {
-        rewardPerItem[item.uid] = perClear;
-      }
-    }
-    const contributes = targets.length > 0 && targets.some(([uid]) => rewardPerItem[uid]?.gt(0));
-    return {
-      uid: stage.uid,
-      index: stage.index,
-      entryAp: new Decimal(stage.entryAp),
-      rewardPerItem,
-      contributes,
-    };
-  });
+      const contributes = targets.length > 0 && targets.some(([uid]) => rewardPerItem[uid]?.gt(0));
+      return {
+        uid: stage.uid,
+        index: stage.index,
+        entryAp: new Decimal(stage.entryAp),
+        rewardPerItem,
+        contributes,
+      };
+    });
 }
 
 /**
@@ -65,10 +67,7 @@ function checkConstraintsSatisfied(
 /**
  * Calculate total AP for given stage runs.
  */
-function calculateTotalAp(
-  stageRuns: Record<string, number>,
-  stages: StageInfo[],
-): Decimal {
+function calculateTotalAp(stageRuns: Record<string, number>, stages: StageInfo[]): Decimal {
   let total = new Decimal(0);
   for (const stage of stages) {
     const runs = stageRuns[stage.uid] || 0;
@@ -146,9 +145,7 @@ function solveForSubset(
     }
 
     // Local search: reduce runs where possible
-    const sortedStages = [...stageSubset].sort((a, b) =>
-      b.entryAp.minus(a.entryAp).toNumber()
-    );
+    const sortedStages = [...stageSubset].sort((a, b) => b.entryAp.minus(a.entryAp).toNumber());
 
     let improved = true;
     while (improved) {
@@ -181,7 +178,7 @@ function solveForSubset(
 function* generateSubsets<T>(arr: T[]): Generator<T[]> {
   const n = arr.length;
   // Iterate from 1 to 2^n - 1 (skip empty set)
-  for (let mask = 1; mask < (1 << n); mask++) {
+  for (let mask = 1; mask < 1 << n; mask++) {
     const subset: T[] = [];
     for (let i = 0; i < n; i++) {
       if (mask & (1 << i)) {
@@ -196,10 +193,7 @@ function* generateSubsets<T>(arr: T[]): Generator<T[]> {
  * Optimizes stage runs to minimize AP while fulfilling target item requirements.
  * Uses subset enumeration + LP relaxation + local search for optimal results.
  */
-export function optimizeStageRuns(
-  stageInfos: StageInfo[],
-  targets: [string, number][],
-): OptimizationResult {
+export function optimizeStageRuns(stageInfos: StageInfo[], targets: [string, number][]): OptimizationResult {
   const emptyResult: OptimizationResult = {
     stageRuns: {},
     totalAp: new Decimal(0),

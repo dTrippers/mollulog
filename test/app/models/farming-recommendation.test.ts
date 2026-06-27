@@ -10,7 +10,7 @@ import {
   buildEquipmentFarmingRequirements,
   buildFarmingRecommendations,
 } from "~/domain/farming-recommendation";
-import type { StudentGrowthResourceRequirements } from "../../../app/models/growth-resource";
+import type { StudentGrowthResourceRequirements } from "../../../app/domain/growth-resource";
 
 function requirement(items: StudentGrowthResourceRequirements["items"]): StudentGrowthResourceRequirements {
   return {

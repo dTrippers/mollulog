@@ -1,4 +1,4 @@
-import type { StudentGrowthResourceRequirements } from "~/models/growth-resource";
+import type { StudentGrowthResourceRequirements } from "~/domain/growth-resource";
 
 export type GrowthActionResult =
   | { kind: "studentUpdate"; student: GrowthStudent; submissionId?: string }

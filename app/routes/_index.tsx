@@ -7,16 +7,16 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, RecruitmentCard } from "~/components/features/events";
 import { RaidCard } from "~/components/features/raids";
 import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
-import { getLogger } from "~/lib/observability.server";
-import { ServerTiming, shouldLogTiming } from "~/lib/server-timing.server";
-import { canonicalLink } from "~/lib/seo";
-import { getCommunityFeedPage } from "~/models/community";
-import { enrichCommunityFeedPosts } from "~/models/community-feed";
-import { type IndexRecruitment, getIndexContents } from "~/views/home";
-import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/domain/raid";
+import { getLogger } from "~/lib/observability.server";
+import { canonicalLink } from "~/lib/seo";
+import { ServerTiming, shouldLogTiming } from "~/lib/server-timing.server";
+import { getCommunityFeedPage } from "~/models/community";
+import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
+import { enrichCommunityFeedPosts } from "~/views/community";
+import { type IndexRecruitment, getIndexContents } from "~/views/home";
 import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
 
 export const meta: MetaFunction = ({ location }) => {

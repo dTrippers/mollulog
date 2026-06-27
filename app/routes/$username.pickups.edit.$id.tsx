@@ -6,20 +6,22 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
 import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { compareInstantDesc, formatInstant, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { routeError } from "~/lib/http-errors";
-import { type PickupHistory, getPickupHistory } from "~/models/pickup-history";
 import {
   createRecruitmentResultStudentsFromPickupHistory,
-  getRecruitmentResult,
-  getRecruitmentResultComment,
   getRecruitmentResultTier3CountFromPickupHistory,
   getRecruitmentResultTrialFromPickupHistory,
   mergeEditableRecruitmentResultStudents,
+  resolveRecruitmentResultStudents,
+} from "~/domain/recruitment-result";
+import { compareInstantDesc, formatInstant, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { routeError } from "~/lib/http-errors";
+import { type PickupHistory, getPickupHistory } from "~/models/pickup-history";
+import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
+import {
+  getRecruitmentResult,
+  getRecruitmentResultComment,
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
-import { resolveRecruitmentResultStudents } from "~/domain/recruitment-result";
-import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
@@ -144,10 +146,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const now = nowUtcIso();
 
-  const [allGroups, allStudentsList] = await Promise.all([
-    getAllHistoricalRecruitmentGroups(env),
-    getAllStudents(env),
-  ]);
+  const [allGroups, allStudentsList] = await Promise.all([getAllHistoricalRecruitmentGroups(env), getAllStudents(env)]);
   const pickupGroups = allGroups.filter(
     (g) => g.recruitments.some((r) => r.pickup && r.student) && isInstantBefore(g.startAt, now),
   );

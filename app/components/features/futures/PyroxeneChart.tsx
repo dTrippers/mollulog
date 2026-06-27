@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import type { TimelineSourceType } from "~/models/pyroxene-planner";
+import type { TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 
 type ChartEntry = {
@@ -94,9 +94,11 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
         // recharts 범위 영역: [하단(비관), 상단(낙관)] 튜플로 채움 밴드를 그립니다.
         pyroxeneBand: [pessimisticPyroxene, optimisticPyroxene],
         consumedOneTimeTicket:
-          (previous?.consumedOneTimeTicket ?? 0) + (isPickupEvent ? Math.max(0, -entry.resourceDelta.oneTimeTicket) : 0),
+          (previous?.consumedOneTimeTicket ?? 0) +
+          (isPickupEvent ? Math.max(0, -entry.resourceDelta.oneTimeTicket) : 0),
         consumedTenTimeTicket:
-          (previous?.consumedTenTimeTicket ?? 0) + (isPickupEvent ? Math.max(0, -entry.resourceDelta.tenTimeTicket) : 0),
+          (previous?.consumedTenTimeTicket ?? 0) +
+          (isPickupEvent ? Math.max(0, -entry.resourceDelta.tenTimeTicket) : 0),
       });
     }
     const chartData = Array.from(dayMap.values()).sort((a, b) => a.ts - b.ts);

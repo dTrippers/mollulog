@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PyroxeneCalculationOptions } from "~/models/pyroxene-planner";
+import type { PyroxeneCalculationOptions } from "~/domain/pyroxene-planner";
+import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { type PickupResources, type Timeline, buildTimeline } from "~/domain/pyroxene-timeline";
 import {
   type PyroxeneTimelineWorkerRequest,
   type PyroxeneTimelineWorkerResponse,
   rehydrateTimeline,
 } from "./pyroxene-timeline-worker.shared";
-import type { PyroxeneScheduleItem } from "./types";
 
 type UsePyroxeneTimelineArgs = {
   initialResources: PickupResources;

@@ -1,7 +1,7 @@
 import type Decimal from "decimal.js";
+import type { MinigameConfig, MinigamePayment } from "~/domain/event-shop";
+import type { CollectableResource, ShopResource, Stage } from "~/domain/event-shop";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
-import type { MinigameConfig, MinigamePayment } from "../constants";
-import type { CollectableResource, ShopResource, Stage } from "../types";
 
 export type StageInfo = {
   uid: string;

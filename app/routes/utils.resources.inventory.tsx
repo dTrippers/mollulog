@@ -5,14 +5,14 @@ import {
   aggregateGrowthResourceRequirements,
   buildRelationshipGiftResourceRequirements,
   getEquipmentTypeKey,
-} from "~/models/growth-resource";
+} from "~/domain/growth-resource";
+import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/models/item-catalog";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import {
   getUserResourceInventoryMap,
   parseUserResourceInventoryQuantity,
   upsertUserResourceInventories,
 } from "~/models/user-resource-inventory";
-import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/models/item-catalog";
 import type { GrowthLayoutContext } from "./utils.growth._components/types";
 import ResourceInventoryEditor from "./utils.resources._components/ResourceInventoryEditor";
 

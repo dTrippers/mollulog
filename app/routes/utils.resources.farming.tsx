@@ -2,9 +2,9 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { buildEquipmentFarmingNeeded, buildEquipmentFarmingRequirements } from "~/domain/farming-recommendation";
-import { aggregateGrowthResourceRequirements } from "~/models/growth-resource";
-import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
+import { aggregateGrowthResourceRequirements } from "~/domain/growth-resource";
 import { getCampaignFarmingStages } from "~/models/stage";
+import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
 import type { GrowthLayoutContext } from "./utils.growth._components/types";
 import FarmingRecommendationPanel from "./utils.growth.farming._components/FarmingRecommendationPanel";
 

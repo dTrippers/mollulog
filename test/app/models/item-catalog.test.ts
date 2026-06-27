@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { GROWTH_RESOURCE_KIND_LABELS, GROWTH_RESOURCE_KIND_ORDER } from "../../../app/domain/growth-resource";
 import { ResourceTypeEnum } from "../../../app/graphql/graphql";
-import { GROWTH_RESOURCE_KIND_LABELS, GROWTH_RESOURCE_KIND_ORDER } from "../../../app/models/growth-resource";
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),

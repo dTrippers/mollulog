@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { FilterButtons, NumberInput, ResourceCard, Section } from "~/components/primitives";
+import type { MinigameConfig } from "~/domain/event-shop";
 import { minigameDescription } from "~/locales/ko";
-import type { MinigameConfig } from "./constants";
 import type { ShopActions, ShopState } from "./hooks";
 import {
   calculateDiceMinigameStats,

@@ -2,10 +2,10 @@ import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import { Form, Link, useNavigation } from "react-router";
 import { Button, EmptyView, ResourceCard, Title } from "~/components/primitives";
+import { getEquipmentResourceTierLabel } from "~/domain/growth-resource";
 import { cn } from "~/lib/utils";
-import { getEquipmentResourceTierLabel } from "~/models/growth-resource";
-import type { UserResourceInventoryDraft } from "~/models/user-resource-inventory";
 import type { ItemCatalogResource } from "~/models/item-catalog";
+import type { UserResourceInventoryDraft } from "~/models/user-resource-inventory";
 
 type ResourceInventoryDraftReviewProps = {
   draft: UserResourceInventoryDraft;

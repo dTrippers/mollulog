@@ -1,13 +1,13 @@
-import { useMemo, useState, memo } from "react";
 import Decimal from "decimal.js";
-import { ResourceTypeEnum } from "~/graphql/graphql";
+import { memo, useMemo, useState } from "react";
 import { StudentCards } from "~/components/features/students";
+import { Button, ResourceCard, Section, Toggle } from "~/components/primitives";
+import type { EventRewardBonus } from "~/domain/event-shop";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import EventItemBonus from "../EventItemBonus";
 import { Tabs } from "./Tabs";
-import type { EventRewardBonus } from "./types";
-import type { ShopState, ShopActions } from "./hooks";
+import type { ShopActions, ShopState } from "./hooks";
 import { useBonusCalculation } from "./hooks";
-import { Button, ResourceCard, Section, Toggle } from "~/components/primitives";
 
 type StudentBonusSelectorProps = {
   eventRewardBonus: EventRewardBonus[];

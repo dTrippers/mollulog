@@ -1,5 +1,7 @@
 import type Decimal from "decimal.js";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { MinigameConfig, MinigamePayment } from "~/domain/event-shop";
+import type { CollectableResource, ShopResource, Stage } from "~/domain/event-shop";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import {
   calculateItemBreakdowns,
@@ -8,8 +10,6 @@ import {
   optimizeStageRuns,
 } from "../calculations";
 import type { ItemBreakdownResult } from "../calculations";
-import type { MinigameConfig, MinigamePayment } from "../constants";
-import type { CollectableResource, ShopResource, Stage } from "../types";
 import type { ShopState } from "./useShopState";
 
 type UseShopCalculationsParams = {

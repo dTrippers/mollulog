@@ -1,8 +1,5 @@
-import {
-  type StudentGearData,
-  getStudentGearData,
-  getStudentGrowthResourceRequirements,
-} from "~/models/growth-resource";
+import type { StudentGearData } from "~/domain/growth-resource";
+import { getStudentGearData, getStudentGrowthResourceRequirements } from "~/models/growth-resource";
 import { type RecruitedStudent, getRecruitedStudents } from "~/models/recruited-student";
 import { getRelationshipLevel, getRelationshipLevels } from "~/models/relationship-level";
 import { type Student, getAllStudentsMap } from "~/models/student";
@@ -102,17 +99,18 @@ export async function loadStudentRow(
     gearData,
   });
 
-  const requirementsMap = await getStudentGrowthResourceRequirements(
-    env,
-    [base],
-    allStudentsMap,
-    gearDataMap,
-    { logger: options.logger },
-  );
+  const requirementsMap = await getStudentGrowthResourceRequirements(env, [base], allStudentsMap, gearDataMap, {
+    logger: options.logger,
+  });
 
   return {
     ...base,
-    resourceRequirements: requirementsMap[studentUid] ?? { items: [], characterExp: 0, credit: 0, skillUnavailable: false },
+    resourceRequirements: requirementsMap[studentUid] ?? {
+      items: [],
+      characterExp: 0,
+      credit: 0,
+      skillUnavailable: false,
+    },
   };
 }
 
@@ -192,7 +190,12 @@ export async function loadGrowthPlannerData(
   );
   const managedStudents = managedStudentsData.map((student) => ({
     ...student,
-    resourceRequirements: growthResourceRequirements[student.uid] ?? { items: [], characterExp: 0, credit: 0, skillUnavailable: false },
+    resourceRequirements: growthResourceRequirements[student.uid] ?? {
+      items: [],
+      characterExp: 0,
+      credit: 0,
+      skillUnavailable: false,
+    },
   }));
 
   const availableStudents = Object.values(allStudentsMap)

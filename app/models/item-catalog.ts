@@ -1,7 +1,3 @@
-import { graphql } from "~/graphql";
-import type { ResourceTypeEnum } from "~/graphql/graphql";
-import { runQuery } from "~/lib/baql";
-import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import {
   GROWTH_RESOURCE_KIND_ORDER,
   classifyGrowthResourceKind,
@@ -11,7 +7,11 @@ import {
   getEquipmentTypeOrder,
   getSkillMaterialChoiceBoxRarity,
   shouldSortGrowthResourceKindByUid,
-} from "~/models/growth-resource";
+} from "~/domain/growth-resource";
+import { graphql } from "~/graphql";
+import type { ResourceTypeEnum } from "~/graphql/graphql";
+import { runQuery } from "~/lib/baql";
+import { cacheKey, fetchSourceCached } from "~/lib/cache";
 
 const ITEM_CATALOG_RESOURCES_CACHE_KEY = cacheKey("source", "item-catalog", 1, "user-resource-inventory");
 

@@ -2,7 +2,6 @@ import { BoltIcon } from "@heroicons/react/16/solid";
 import { ArchiveBoxIcon, BeakerIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 import { useMemo } from "react";
 import { EmptyView, ResourceCard, SubTitle } from "~/components/primitives";
-import { ResourceTypeEnum } from "~/graphql/graphql";
 import {
   type FarmingRequirement,
   type FarmingStage,
@@ -14,7 +13,8 @@ import {
   EQUIPMENT_TYPE_ORDER,
   getEquipmentTierLabel,
   getEquipmentTypeKey,
-} from "~/models/growth-resource";
+} from "~/domain/growth-resource";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 
 type FarmingRecommendationPanelProps = {
   managedStudentCount: number;

@@ -154,8 +154,9 @@ export function extractPyroxeneTimelineBaseUid(uid: string): string {
   return uid.split("::")[0];
 }
 
-import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType, TimelineSourceType } from "~/models/pyroxene-planner";
+import type { TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
+import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 export function isPyroxeneTimelineSourceVisible(
   display: TimelineSourceType[],
   sourceType: TimelineSourceType,
@@ -329,4 +330,3 @@ export function createOptimisticOtherTimelineItems(
     }),
   ];
 }
-

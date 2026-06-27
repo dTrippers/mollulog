@@ -1,12 +1,9 @@
+import { CheckIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
 import { useState } from "react";
-import { CheckIcon } from "@heroicons/react/16/solid";
 import { Button, Field, Input, NumberInput, Toggle } from "~/components/primitives";
+import { DEFAULT_BUY_PYROXENE_QUANTITY, PYROXENE_BUY_PRESET_GROUPS } from "~/domain/pyroxene-sources";
 import { cn } from "~/lib/utils";
-import {
-  DEFAULT_BUY_PYROXENE_QUANTITY,
-  PYROXENE_BUY_PRESET_GROUPS,
-} from "~/domain/pyroxene-sources";
 import type { PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 
 type BuyInputProps = {
@@ -86,12 +83,7 @@ export default function BuyInput({ onSaveBuy }: BuyInputProps) {
           )}
         </Field>
         <Field label="구매 주기">
-          <Toggle
-            label="매월 반복 구매"
-            initialState={monthlyRepeat}
-            className="my-2"
-            onChange={setMonthlyRepeat}
-          />
+          <Toggle label="매월 반복 구매" initialState={monthlyRepeat} className="my-2" onChange={setMonthlyRepeat} />
         </Field>
         {monthlyRepeat && (
           <div className="space-y-2">
@@ -114,11 +106,7 @@ export default function BuyInput({ onSaveBuy }: BuyInputProps) {
           fullWidth
           className="mt-2"
           onClick={() =>
-            onSaveBuy(
-              quantity,
-              date,
-              monthlyRepeat ? { repeatType: "monthly_first", monthlyCount } : undefined,
-            )
+            onSaveBuy(quantity, date, monthlyRepeat ? { repeatType: "monthly_first", monthlyCount } : undefined)
           }
         />
       </div>

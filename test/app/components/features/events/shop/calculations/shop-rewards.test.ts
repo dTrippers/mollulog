@@ -3,7 +3,7 @@ import {
   calculateBoughtItemQuantities,
   calculateBoughtResourceQuantities,
 } from "../../../../../../../app/components/features/events/shop/calculations/shop-rewards";
-import type { ShopResource } from "../../../../../../../app/components/features/events/shop/types";
+import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 
 function createShopResource(overrides: Partial<ShopResource>): ShopResource {

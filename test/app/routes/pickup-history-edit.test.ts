@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { mergeEditableRecruitmentResultStudents } from "~/domain/recruitment-result";
 import { Attack, Defense } from "~/graphql/graphql";
 import { getPickupHistory } from "~/models/pickup-history";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import {
   getRecruitmentResult,
   getRecruitmentResultComment,
-  mergeEditableRecruitmentResultStudents,
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
 import { getAllStudents } from "~/models/student";
@@ -29,6 +29,10 @@ jest.mock("~/models/pickup-history", () => ({
 jest.mock("~/models/recruitment-result", () => ({
   getRecruitmentResult: jest.fn(),
   getRecruitmentResultComment: jest.fn(),
+  upsertRecruitmentResult: jest.fn(),
+}));
+
+jest.mock("~/domain/recruitment-result", () => ({
   createRecruitmentResultStudentsFromPickupHistory: jest.fn((history: { result: { tier3StudentIds: string[] }[] }) =>
     history.result.flatMap((trial) =>
       trial.tier3StudentIds.map((studentUid) => ({ studentUid, tier: 3, pickup: false })),
@@ -42,7 +46,35 @@ jest.mock("~/models/recruitment-result", () => ({
     history.result.reduce((sum, trial) => sum + trial.tier3Count, 0),
   ),
   mergeEditableRecruitmentResultStudents: jest.fn(),
-  upsertRecruitmentResult: jest.fn(),
+  resolveRecruitmentResultStudents: jest.fn(
+    (
+      students: { studentUid: string; tier: number; pickup: boolean }[],
+      lookup: {
+        allStudentsMap?: Record<string, { name: string; initialTier: number }>;
+        group?: {
+          recruitments: {
+            pickup: boolean;
+            recruitmentType?: string | null;
+            student?: { uid: string; name?: string | null; initialTier?: number | null } | null;
+          }[];
+        } | null;
+      },
+    ) =>
+      students
+        .filter((student) => student.studentUid)
+        .map((student) => {
+          const groupRecruitment =
+            lookup.group?.recruitments.find((recruitment) => recruitment.student?.uid === student.studentUid) ?? null;
+          const studentInfo = lookup.allStudentsMap?.[student.studentUid] ?? groupRecruitment?.student;
+          return {
+            uid: student.studentUid,
+            name: studentInfo?.name ?? student.studentUid,
+            tier: studentInfo?.initialTier ?? student.tier,
+            pickup:
+              groupRecruitment?.recruitmentType === "given" ? false : (groupRecruitment?.pickup ?? student.pickup),
+          };
+        }),
+  ),
 }));
 
 jest.mock("~/models/student", () => ({

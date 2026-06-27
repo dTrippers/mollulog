@@ -1,5 +1,11 @@
+import { type UtcIsoString, isInstantAfter } from "~/lib/date-time";
+import type { PickupHistory } from "~/models/pickup-history";
 import type { RecruitmentGroup, RecruitmentPoolStudent } from "~/models/recruitment";
-import type { RecruitmentResult, RecruitmentResultStudent } from "~/models/recruitment-result";
+import type {
+  RecruitmentCompletionMeta,
+  RecruitmentResult,
+  RecruitmentResultStudent,
+} from "~/models/recruitment-result";
 import type { StudentMap } from "~/models/student";
 
 type StudentInfo = {
@@ -125,8 +131,130 @@ export function getRecruitmentResultCountStats(
   };
 }
 
-import { isInstantAfter, type UtcIsoString } from "~/lib/date-time";
-import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
+export function normalizeRecruitmentResultStudents(
+  students: RecruitmentResultStudent[] | undefined,
+): RecruitmentResultStudent[] {
+  const byStudentUid = new Map<string, RecruitmentResultStudent>();
+  for (const student of students ?? []) {
+    const studentUid = student.studentUid?.trim();
+    if (!studentUid) {
+      continue;
+    }
+
+    const tier = Math.max(1, Math.min(9, Number.isFinite(student.tier) ? Math.trunc(student.tier) : 3));
+    const existing = byStudentUid.get(studentUid);
+    byStudentUid.set(studentUid, {
+      studentUid,
+      tier: Math.max(existing?.tier ?? 0, tier),
+      pickup: Boolean(existing?.pickup || student.pickup),
+    });
+  }
+
+  return [...byStudentUid.values()];
+}
+
+export function appendRecruitmentResultStudent(
+  students: RecruitmentResultStudent[] | undefined,
+  student: RecruitmentResultStudent,
+): RecruitmentResultStudent[] {
+  return sanitizeRecruitmentResultStudents([...(students ?? []), student]);
+}
+
+export function removeRecruitmentResultStudent(
+  students: RecruitmentResultStudent[] | undefined,
+  studentUid: string,
+): RecruitmentResultStudent[] {
+  let removed = false;
+  return sanitizeRecruitmentResultStudents(
+    (students ?? []).filter((student) => {
+      if (!removed && student.studentUid === studentUid) {
+        removed = true;
+        return false;
+      }
+
+      return true;
+    }),
+  );
+}
+
+export function sanitizeRecruitmentResultStudents(
+  students: RecruitmentResultStudent[] | undefined,
+): RecruitmentResultStudent[] {
+  return (students ?? []).flatMap((student) => {
+    const studentUid = student.studentUid?.trim();
+    if (!studentUid) {
+      return [];
+    }
+
+    const tier = Math.max(1, Math.min(9, Number.isFinite(student.tier) ? Math.trunc(student.tier) : 3));
+    return [{ studentUid, tier, pickup: Boolean(student.pickup) }];
+  });
+}
+
+export function createRecruitmentResultStudentsFromPickupHistory(
+  history: Pick<PickupHistory, "result">,
+  pickupStudentUids: Set<string> = new Set(),
+  studentInitialTiers: Record<string, number> = {},
+): RecruitmentResultStudent[] {
+  return sanitizeRecruitmentResultStudents(
+    history.result.flatMap((trial) =>
+      trial.tier3StudentIds.map((studentUid) => ({
+        studentUid,
+        tier: studentInitialTiers[studentUid] ?? 3,
+        pickup: pickupStudentUids.has(studentUid),
+      })),
+    ),
+  );
+}
+
+export function mergeEditableRecruitmentResultStudents({
+  existingStudents,
+  history,
+  lookup,
+  pickupStudentUids = new Set(),
+  studentInitialTiers = {},
+}: {
+  existingStudents: RecruitmentResultStudent[];
+  history: Pick<PickupHistory, "result">;
+  lookup: StudentLookup;
+  pickupStudentUids?: Set<string>;
+  studentInitialTiers?: Record<string, number>;
+}): RecruitmentResultStudent[] {
+  // The edit form owns only 3-star draw rows; non-3-star rows written by quick-complete flows must survive saves.
+  const preservedExistingStudents = sanitizeRecruitmentResultStudents(existingStudents).flatMap((student) => {
+    const resolvedStudent = resolveRecruitmentResultStudent(student, lookup);
+    if (resolvedStudent.tier === 3) {
+      return [];
+    }
+
+    return [
+      {
+        studentUid: student.studentUid,
+        tier: resolvedStudent.tier,
+        pickup: resolvedStudent.pickup,
+      },
+    ];
+  });
+  const editedFormStudents = createRecruitmentResultStudentsFromPickupHistory(
+    history,
+    pickupStudentUids,
+    studentInitialTiers,
+  );
+
+  return sanitizeRecruitmentResultStudents([...preservedExistingStudents, ...editedFormStudents]);
+}
+
+export function getRecruitmentResultTrialFromPickupHistory(history: Pick<PickupHistory, "result">): number | null {
+  if (history.result.length === 0) {
+    return null;
+  }
+
+  return Math.max(...history.result.map((trial) => trial.trial));
+}
+
+export function getRecruitmentResultTier3CountFromPickupHistory(history: Pick<PickupHistory, "result">): number {
+  return history.result.reduce((sum, trial) => sum + trial.tier3Count, 0);
+}
 
 type RecruitmentResultCompletionState = {
   contentUid: string | null;

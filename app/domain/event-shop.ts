@@ -35,11 +35,11 @@ export type DiceNodeReward = {
 };
 
 export type DiceMinigameConfig = {
-  tiles: number; // 칸 수 (18)
-  diceMin: number; // 주사위 최솟값 (1)
-  diceMax: number; // 주사위 최댓값 (6)
-  bonusRollUntilLap: number; // 보너스 종료 바퀴 (16) - 이 바퀴까지 확정권 1회 지급
-  nodeRewards?: DiceNodeReward[]; // 각 발판(노드)의 보상 목록
+  tiles: number;
+  diceMin: number;
+  diceMax: number;
+  bonusRollUntilLap: number;
+  nodeRewards?: DiceNodeReward[];
 };
 
 export type MinigameConfig = {
@@ -52,7 +52,7 @@ export type MinigameConfig = {
   };
   payments: MinigamePayment[];
   rewardGroups: RewardGroup[];
-  dice?: DiceMinigameConfig; // dice 타입일 때만 사용
+  dice?: DiceMinigameConfig;
 };
 
 export type MinigamePayment = {
@@ -70,4 +70,70 @@ export type MinigamePaymentRange = {
   quantityExpected: number;
   quantityMax: number;
   quantityVariable: boolean;
+};
+
+export type Stage = {
+  uid: string;
+  entryAp: number;
+  index: string;
+  difficulty: number;
+  rewards: {
+    amount: number;
+    rewardRequirement: string | null;
+    chance: string | null;
+    item: {
+      uid: string;
+      name: string;
+      category: string;
+      rarity: number;
+    } | null;
+  }[];
+};
+
+export type ShopResource = {
+  uid: string;
+  resource: {
+    type: ResourceTypeEnum;
+    uid: string;
+    name: string;
+    rarity: number;
+  };
+  resourceAmount: number;
+  paymentResource: {
+    type: ResourceTypeEnum;
+    uid: string;
+    name: string;
+  };
+  purchaseTiers: {
+    tierIndex: number;
+    startQuantity: number;
+    quantity: number | null;
+    unitPrice: number;
+    paymentResource: {
+      type: ResourceTypeEnum;
+      uid: string;
+      name: string;
+    };
+  }[];
+  shopAmount: number | null;
+};
+
+export type EventRewardBonus = {
+  uid: string;
+  name: string;
+  rewardBonuses: {
+    student: {
+      uid: string;
+      name: string;
+      role: string;
+    };
+    ratio: string;
+  }[];
+};
+
+export type CollectableResource = {
+  type: ResourceTypeEnum;
+  uid: string;
+  name: string;
+  forPayment: boolean;
 };

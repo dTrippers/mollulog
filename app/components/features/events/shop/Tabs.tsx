@@ -25,16 +25,15 @@ export function Tabs({ tabs, activeTabId, setActiveTabId }: TabsProps) {
             aria-pressed={isActive}
             className={sanitizeClassName(`
                 flex items-center gap-1 py-2 px-4 border-b-3 transition-colors shrink-0 hover:bg-neutral-100 dark:hover:bg-neutral-900
-                ${isActive
-                ? "border-b-blue-500 text-neutral-800 dark:text-neutral-200"
-                : "border-b-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200"
-              }
+                ${
+                  isActive
+                    ? "border-b-blue-500 text-neutral-800 dark:text-neutral-200"
+                    : "border-b-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200"
+                }
             `)}
           >
-            {imageUrl && <img alt={name} src={imageUrl} className="-ml-2 -my-2 size-8 object-contain" loading="lazy"/>}
-            <span className="text-sm font-medium whitespace-nowrap">
-              {name}
-            </span>
+            {imageUrl && <img alt={name} src={imageUrl} className="-ml-2 -my-2 size-8 object-contain" loading="lazy" />}
+            <span className="text-sm font-medium whitespace-nowrap">{name}</span>
           </button>
         );
       })}

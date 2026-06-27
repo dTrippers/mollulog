@@ -1,9 +1,9 @@
-import { memo } from "react";
-import Decimal from "decimal.js";
 import { BoltIcon } from "@heroicons/react/16/solid";
-import { ResourceTypeEnum } from "~/graphql/graphql";
+import Decimal from "decimal.js";
+import { memo } from "react";
 import { NumberInput, ResourceCard, Toggle } from "~/components/primitives";
-import type { Stage } from "./types";
+import type { Stage } from "~/domain/event-shop";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 
 type StageCardProps = {
   stage: Stage;
@@ -15,11 +15,23 @@ type StageCardProps = {
   onChangeExtraRuns: (uid: string, value: number) => void;
 };
 
-export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedRuns, extraRuns, appliedBonusRatio, onToggleStage, onChangeExtraRuns }: StageCardProps) {
+export const StageCard = memo(function StageCard({
+  stage,
+  isEnabled,
+  calculatedRuns,
+  extraRuns,
+  appliedBonusRatio,
+  onToggleStage,
+  onChangeExtraRuns,
+}: StageCardProps) {
   const { uid, entryAp, index, rewards } = stage;
 
-  const coinRewards = rewards.filter(({ item, rewardRequirement }) => item?.category === "coin" && rewardRequirement === null);
-  const nonCoinRewards = rewards.filter(({ item, rewardRequirement }) => item?.category !== "coin" && rewardRequirement === null);
+  const coinRewards = rewards.filter(
+    ({ item, rewardRequirement }) => item?.category === "coin" && rewardRequirement === null,
+  );
+  const nonCoinRewards = rewards.filter(
+    ({ item, rewardRequirement }) => item?.category !== "coin" && rewardRequirement === null,
+  );
 
   return (
     <div className="relative px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-700">
@@ -53,7 +65,13 @@ export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedR
                 return null;
               }
               return (
-                <ResourceCard key={`${item.uid}-${idx}`} itemUid={item.uid} resourceType={ResourceTypeEnum.Item} label={amount} name={item.name} />
+                <ResourceCard
+                  key={`${item.uid}-${idx}`}
+                  itemUid={item.uid}
+                  resourceType={ResourceTypeEnum.Item}
+                  label={amount}
+                  name={item.name}
+                />
               );
             })}
             {coinRewards.map(({ amount, item }, idx) => {
@@ -63,7 +81,14 @@ export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedR
               const bonusRatio = appliedBonusRatio[item.uid] ?? new Decimal(0);
               const amountLabel = bonusRatio.mul(amount).ceil().toString();
               return (
-                <ResourceCard key={`${item.uid}-${idx}-bonus`} itemUid={item.uid} resourceType={ResourceTypeEnum.Item} label={amountLabel} labelColor="yellow" name={item.name} />
+                <ResourceCard
+                  key={`${item.uid}-${idx}-bonus`}
+                  itemUid={item.uid}
+                  resourceType={ResourceTypeEnum.Item}
+                  label={amountLabel}
+                  labelColor="yellow"
+                  name={item.name}
+                />
               );
             })}
             {nonCoinRewards.map(({ amount, item }, idx) => {
@@ -71,7 +96,14 @@ export const StageCard = memo(function StageCard({ stage, isEnabled, calculatedR
                 return null;
               }
               return (
-                <ResourceCard key={`${item.uid}-${idx}`} itemUid={item.uid} resourceType={ResourceTypeEnum.Item} label={amount} rarity={item.rarity} name={item.name} />
+                <ResourceCard
+                  key={`${item.uid}-${idx}`}
+                  itemUid={item.uid}
+                  resourceType={ResourceTypeEnum.Item}
+                  label={amount}
+                  rarity={item.rarity}
+                  name={item.name}
+                />
               );
             })}
           </div>

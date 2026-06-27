@@ -8,15 +8,11 @@ import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { getCommunityFeedPage } from "~/models/community";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
-import {
-  COMMUNITY_FEED_PAGE_SIZE,
-  COMMUNITY_VISIBLE_POST_TYPES,
-  enrichCommunityFeedPosts,
-} from "~/models/community-feed";
 import { getFollowerIds, getFollowingIds } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
 import { sanitizeClassName } from "~/prophandlers";
+import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES, enrichCommunityFeedPosts } from "~/views/community";
 import { getRouteSensei } from "./$username";
 import type { ActionData } from "./api.followerships";
 

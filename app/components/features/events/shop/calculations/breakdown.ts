@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 import { calculateMinigameRewards } from "../utils";
-import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
 import { calculateShopResourcePaymentCostForResource } from "./shop-costs";
+import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
 
 /**
  * Calculates the final breakdown of items and AP costs.

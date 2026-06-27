@@ -4,7 +4,7 @@ import {
   calculateShopResourcePaymentCosts,
   isDailyResetShopResource,
 } from "../../../../../../../app/components/features/events/shop/calculations/shop-costs";
-import type { ShopResource } from "../../../../../../../app/components/features/events/shop/types";
+import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 
 const pyroxene = {

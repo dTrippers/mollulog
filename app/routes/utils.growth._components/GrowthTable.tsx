@@ -4,13 +4,13 @@ import { Link, useFetcher } from "react-router";
 import { StudentSelectForm } from "~/components/features/forms";
 import { TierSelector } from "~/components/features/students";
 import { Button, NumberInput, ProfileImage, ResourceCard, useNumberInputGridNavigation } from "~/components/primitives";
-import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
-import { getRelationshipLevelValidationError } from "~/models/relationship-level";
+import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
   WEAPON_LEVEL_MAX_LEVEL,
   getWeaponLevelMaxByTier,
 } from "~/domain/student-growth-state";
+import { getRelationshipLevelValidationError } from "~/models/relationship-level";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
 
 function extractStudentUpdate(actionData: GrowthActionResult | undefined): GrowthStudent | null {
@@ -113,8 +113,10 @@ function getClientValidationError(values: GrowthValues, currentTier: number, tar
     if (isAbilityReleaseDisabled(targetKey, effectiveTargetTier) && (t ?? 0) > 0) {
       return "능력 해방 목표값은 고유무기 장착 후 입력할 수 있어요";
     }
-    if (v != null && (v < min || v > currentMax)) return `${label}은(는) ${min}부터 ${currentMax} 사이만 입력할 수 있어요`;
-    if (t != null && (t < min || t > targetMax)) return `${label} 목표값은 ${min}부터 ${targetMax} 사이만 입력할 수 있어요`;
+    if (v != null && (v < min || v > currentMax))
+      return `${label}은(는) ${min}부터 ${currentMax} 사이만 입력할 수 있어요`;
+    if (t != null && (t < min || t > targetMax))
+      return `${label} 목표값은 ${min}부터 ${targetMax} 사이만 입력할 수 있어요`;
   }
   return null;
 }
@@ -294,13 +296,9 @@ function rowReducer(state: RowState, action: RowAction): RowState {
         ...state,
         growthError: action.error,
         draftValues:
-          state.growthDraftRevision === action.submitted.draftRevision
-            ? state.savedValues
-            : state.draftValues,
+          state.growthDraftRevision === action.submitted.draftRevision ? state.savedValues : state.draftValues,
         targetTierDraft:
-          state.growthDraftRevision === action.submitted.draftRevision
-            ? state.targetTierSaved
-            : state.targetTierDraft,
+          state.growthDraftRevision === action.submitted.draftRevision ? state.targetTierSaved : state.targetTierDraft,
         isPendingSave: false,
       };
     case "relationshipSuccess":
@@ -669,14 +667,14 @@ function GrowthRow({
           <div className={studentHeaderContentClass}>
             <div className="flex min-w-0 grow items-center gap-2">
               <ProfileImage studentUid={student.uid} />
-              <span className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50">{student.name}</span>
+              <span className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50">
+                {student.name}
+              </span>
               {displayedError && <p className="text-xs text-red-500 dark:text-red-400">{displayedError}</p>}
             </div>
             {(student.relationshipCurrentLevel != null || student.relationshipTargetLevel != null) && (
               <Link to="/utils/relationship">
-                <Button size="xs">
-                  인연 랭크 계산기
-                </Button>
+                <Button size="xs">인연 랭크 계산기</Button>
               </Link>
             )}
             <Button
@@ -907,7 +905,11 @@ function GrowthRow({
             aria-expanded={isResourceRequirementsOpen}
             onClick={() => setIsResourceRequirementsOpen((open) => !open)}
           >
-            {isResourceRequirementsOpen ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
+            {isResourceRequirementsOpen ? (
+              <ChevronDownIcon className="size-3" />
+            ) : (
+              <ChevronRightIcon className="size-3" />
+            )}
             <span className="whitespace-nowrap">재화</span>
           </button>
         </td>

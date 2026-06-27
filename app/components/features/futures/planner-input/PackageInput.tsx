@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import dayjs from "~/lib/dayjs";
 import { Button, Checkbox, Field, FilterButtons, Input, NumberInput } from "~/components/primitives";
 import {
   PYROXENE_AP_PACKAGE_CONFIG,
   PYROXENE_MONTHLY_PACKAGE_CONFIG,
-  calculatePackageStartDateFromRemainingDays,
   type PyroxeneMonthlyPackageType,
+  calculatePackageStartDateFromRemainingDays,
 } from "~/domain/pyroxene-sources";
+import dayjs from "~/lib/dayjs";
 
 type PackageInputProps = {
   onSavePackage: (startDate: Date, packageType: PyroxeneMonthlyPackageType, autoRepurchase: boolean) => void;
@@ -30,11 +30,7 @@ function clampRemainingDays(remainingDays: number, packageDurationDays: number) 
   return Math.max(0, Math.min(packageDurationDays - 1, Math.floor(remainingDays)));
 }
 
-function PackageStartDateInput({
-  packageDurationDays,
-  startDate,
-  onStartDateChange,
-}: PackageStartDateInputProps) {
+function PackageStartDateInput({ packageDurationDays, startDate, onStartDateChange }: PackageStartDateInputProps) {
   const [inputMode, setInputMode] = useState<PackageStartDateInputMode>("date");
   const [remainingDays, setRemainingDays] = useState(packageDurationDays - 1);
   const calculatedStartDate = useMemo(
@@ -152,11 +148,7 @@ export default function PackageInput({ onSavePackage, disabled = false }: Packag
           startDate={startDate}
           onStartDateChange={setStartDate}
         />
-        <Checkbox
-          checked={autoRepurchase}
-          onChange={setAutoRepurchase}
-          label="만료 후 자동 재구매 처리"
-        />
+        <Checkbox checked={autoRepurchase} onChange={setAutoRepurchase} label="만료 후 자동 재구매 처리" />
         <Button
           text="저장"
           variant="tint-blue"
@@ -184,11 +176,7 @@ export function ApPackageInput({ onSavePackage, disabled = false }: ApPackageInp
           startDate={startDate}
           onStartDateChange={setStartDate}
         />
-        <Checkbox
-          checked={autoRepurchase}
-          onChange={setAutoRepurchase}
-          label="만료 후 자동 재구매 처리"
-        />
+        <Checkbox checked={autoRepurchase} onChange={setAutoRepurchase} label="만료 후 자동 재구매 처리" />
         <Button
           text="저장"
           variant="tint-blue"
