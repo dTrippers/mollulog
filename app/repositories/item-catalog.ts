@@ -1,7 +1,7 @@
 import { graphql } from "~/graphql";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, fetchSourceCached } from "~/models/base";
+import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import {
   GROWTH_RESOURCE_KIND_ORDER,
   classifyGrowthResourceKind,

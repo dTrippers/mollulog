@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
-import { fetchSourceCached } from "~/models/base";
+import { fetchSourceCached } from "~/lib/cache";
 import { getCampaignFarmingStages } from "../../../app/repositories/stage";
 
-jest.mock("~/models/base", () => ({
+jest.mock("~/lib/cache", () => ({
   cacheKey: (category: string, domain: string, version: number, query: string) =>
     `${category}::${domain}::v${version}::${query}`,
   cacheQuery: (params: Record<string, string | number | boolean | null | undefined>) =>

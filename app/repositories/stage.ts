@@ -1,6 +1,6 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, cacheQuery, fetchSourceCached } from "~/models/base";
+import { cacheKey, cacheQuery, fetchSourceCached } from "~/lib/cache";
 import type { FarmingStage, FarmingStageReward } from "~/models/farming-recommendation";
 
 const CAMPAIGN_FARMING_STAGES_CACHE_KEY = cacheKey("source", "farming-stage", 1, cacheQuery({ category: "campaign" }));

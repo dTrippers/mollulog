@@ -8,8 +8,8 @@
   예: `2026-05-01T15:30:00.000Z`
 - 날짜만 의미하는 값은 `YYYY-MM-DD` 문자열로 다룹니다.
   예: `2026-05-02`
-- `Date` 객체는 loader, cache, model/repository 반환값의 계약으로 쓰지 않습니다.
-- D1 `current_timestamp`처럼 timezone이 없는 legacy 값은 model/repository read boundary에서 UTC instant로 정규화합니다.
+- `Date` 객체는 loader, cache, model 반환값의 계약으로 쓰지 않습니다.
+- D1 `current_timestamp`처럼 timezone이 없는 legacy 값은 model read boundary에서 UTC instant로 정규화합니다.
 - 사용자의 표시 timezone은 KST 고정이 아니라 브라우저 timezone을 preference cookie에 저장한 값을 사용합니다.
 
 ## 구현 규칙

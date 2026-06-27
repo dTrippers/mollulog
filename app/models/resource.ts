@@ -1,6 +1,6 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, fetchSourceCached } from "./base";
+import { cacheKey, fetchSourceCached } from "~/lib/cache";
 
 const ALL_STUDENTS_FAVORITE_ITEMS_CACHE_KEY = cacheKey("source", "student-favorite-item", 1, "all");
 

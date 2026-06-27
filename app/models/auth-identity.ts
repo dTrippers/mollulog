@@ -1,7 +1,7 @@
 import { and, eq, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
-import { isUniqueConstraintError } from "./base";
+import { isUniqueConstraintError } from "~/lib/db";
 import { type Sensei, getSenseiById, senseisTable } from "./sensei";
 
 export type AuthProvider = "google" | "github";

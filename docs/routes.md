@@ -36,6 +36,9 @@
 - 한 화면에서만 쓰는 클라이언트 훅
 - 반복 렌더링 블록
 - 도메인 재사용 UI
+- 여러 데이터 소스 합성과 캐시 정책 (→ `app/views`)
+
+데이터 합성은 라우트가 아니라 `app/views` 함수에 맡깁니다. loader는 뷰 함수 하나를 호출하는 정도로 얇게 유지합니다.
 
 ## route-local 구성 규칙
 
@@ -89,7 +92,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => [
 ## API 라우트 규칙
 
 - 내부 API 라우트는 `api.` prefix를 사용합니다.
-- 가능하면 route 수준의 얇은 입력 검증과 응답 조립만 두고, 실제 로직은 `models` 또는 `repositories` 로 내립니다.
+- 가능하면 route 수준의 얇은 입력 검증과 응답 조립만 두고, 실제 로직은 `views` 또는 `models` 로 내립니다.
 - 캐시 flush, 좋아요, 댓글, 설정 저장처럼 브라우저 상호작용에 직접 연결되는 엔드포인트를 여기에 둡니다.
 
 ## 네이밍 기준

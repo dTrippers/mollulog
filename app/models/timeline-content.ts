@@ -2,7 +2,7 @@ import { and, eq, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { type UtcIsoString, normalizeInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { cacheKey, fetchSourceCached } from "./base";
+import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import {
   type TimelineContentNameI18n,
   parseTimelineContentNames,

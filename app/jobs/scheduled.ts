@@ -11,7 +11,7 @@ import { getItemCatalogResources } from "~/repositories/item-catalog";
 import { GrowthResourceRepository, RaidRepository, RecruitmentRepository } from "~/repositories";
 import { getCampaignFarmingStages } from "~/repositories/stage";
 import { syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
-import { cacheKey, cacheQuery, claimKvCacheWindow } from "~/models/base";
+import { cacheKey, cacheQuery, claimKvCacheWindow } from "~/lib/cache";
 
 type ScheduledJobName = "syncYoutubeCommunityPosts" | "refreshSourceCaches";
 

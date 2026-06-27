@@ -1,7 +1,7 @@
 import { graphql } from "~/graphql";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, cacheQuery, fetchLazySourceCached, fetchLazySourceCachedBatch, fetchSourceCached } from "./base";
+import { cacheKey, cacheQuery, fetchLazySourceCached, fetchLazySourceCachedBatch, fetchSourceCached } from "~/lib/cache";
 import type { Position, TacticRole } from "./content.d";
 
 export type Role = "striker" | "special";

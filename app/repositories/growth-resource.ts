@@ -1,6 +1,6 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, cacheQuery, fetchLazySourceCachedBatch } from "~/models/base";
+import { cacheKey, cacheQuery, fetchLazySourceCachedBatch } from "~/lib/cache";
 import type { EquipmentMetadata, ItemMetadata, SkillCostStudent, StudentGearData } from "~/models/growth-resource";
 
 const STUDENT_GEAR_DATA_TTL = 24 * 60 * 60;

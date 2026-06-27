@@ -46,7 +46,7 @@ jest.mock("~/repositories/stage", () => ({
 
 const mockRecruitmentRefresh = jest.fn<() => Promise<unknown[]>>();
 const mockRaidRefresh = jest.fn<() => Promise<unknown[]>>();
-const mockGetStudentGearData = jest.fn<() => Promise<unknown>>();
+const mockGetStudentGearData = jest.fn<(_studentUids: string[], _forceRefresh?: boolean) => Promise<unknown>>();
 
 jest.mock("~/repositories", () => ({
   GrowthResourceRepository: jest.fn().mockImplementation(() => ({ getStudentGearData: mockGetStudentGearData })),

@@ -1,7 +1,7 @@
 import { graphql } from "~/graphql";
 import type { RecruitmentGroupsListQuery, RecruitmentPoolStudentsQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, fetchSourceCached } from "~/models/base";
+import { cacheKey, fetchSourceCached } from "~/lib/cache";
 
 const RECRUITMENT_GROUPS_CACHE_KEY = cacheKey("source", "recruitment-group", 1, "endAfterDays=7");
 const HISTORICAL_RECRUITMENT_GROUPS_CACHE_KEY = cacheKey("source", "recruitment-group", 1, "all");

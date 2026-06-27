@@ -2,7 +2,7 @@ import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
-import { isUniqueConstraintError } from "./base";
+import { isUniqueConstraintError } from "~/lib/db";
 
 type SenseiRole = "guest" | "admin";
 

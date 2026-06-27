@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { fetchRouteCached } from "~/models/base";
+import { fetchRouteCached } from "~/lib/cache";
 import { getAllCoupons, hasUnregisteredActiveCoupons } from "~/models/coupon";
 import { hasUnreadAdminFeedbackReplies } from "~/models/feedback";
 import { getLatestPostTime } from "~/models/post";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 
-jest.mock("~/models/base", () => ({
+jest.mock("~/lib/cache", () => ({
   cacheKey: (category: string, domain: string, version: number, query: string) =>
     `${category}::${domain}::v${version}::${query}`,
   // Bypass cache by executing fn() directly.

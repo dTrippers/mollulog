@@ -29,9 +29,10 @@
 
 ## 조회 위치 규칙
 
-- route 안에서 한 번만 쓰는 단순 조회는 해당 route에서 직접 사용할 수 있습니다.
-- 여러 화면이 공유하는 조회이거나 캐시 정책이 붙는다면 `models` 또는 `repositories` 로 올립니다.
-- 새 cross-cutting BAQL orchestration은 `app/repositories` 를 우선 검토합니다.
+- route에서 한 번만 쓰는 단순 조회라도 BAQL 호출은 `models` 로 내리는 것을 기본으로 합니다.
+- 여러 화면이 공유하거나 캐시 정책이 붙는 조회는 `models` 에 둡니다.
+- `runQuery`/`graphql()` 직접 호출은 `lib/baql` 와 `models` 에만 둡니다. 라우트·뷰·컴포넌트에는 두지 않습니다.
+- 화면용으로 여러 조회를 합성해야 하면 모델 함수를 만든 뒤 그 위에서 `views` 가 모델을 호출합니다.
 
 ## loader 패턴
 
@@ -56,14 +57,16 @@ export async function loader({ params }: LoaderFunctionArgs) {
 
 ## 캐싱 규칙
 
-- BAQL 조회 결과를 재사용해야 하면 `fetchCached` 패턴을 사용합니다.
-- 캐시 전략은 route보다 조회 책임이 있는 모델/리포지토리 쪽에 둡니다.
+- BAQL 조회 결과를 모델에서 재사용하면 `fetchSourceCached`(소스 캐시) 를 사용합니다.
+- 화면 단위로 합성한 결과를 캐시하려면 뷰에서 `fetchRouteCached`(라우트 캐시, SWR) 를 사용합니다.
+- 캐시 책임은 라우트가 아니라 조회·합성 레이어(모델/뷰)에 둡니다.
 - 강제 갱신이 필요한 크론/백그라운드 작업은 `forceRefresh` 패턴을 사용합니다.
 
 ## 백그라운드 작업
 
 - Worker 크론은 `workers/app.ts` 에서 분기합니다.
-- BAQL 기반의 동기화 작업은 `app/jobs/` 와 `models`/`repositories` 조합으로 처리합니다.
+- BAQL 기반의 동기화 작업은 `app/jobs/` 와 `models` 조합으로 처리합니다.
+- 크론 캐시 워밍업은 모델이 export하는 `warm*Cache(env)` 함수를 호출합니다.
 - 대표 예시는 `app/jobs/sync-timeline-contents.ts` 입니다.
 
 ## 체크리스트

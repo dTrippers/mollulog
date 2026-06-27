@@ -17,7 +17,7 @@ import {
   toUtcIso,
 } from "~/lib/date-time";
 import { RecruitmentRepository } from "~/repositories";
-import { cacheKey, cacheQuery, fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "./base";
+import { cacheKey, cacheQuery, fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "~/lib/cache";
 import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "./timeline-content";
 import type { RunType } from "./timeline-content";
 

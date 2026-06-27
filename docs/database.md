@@ -24,7 +24,7 @@
 
 1. `db/migrations` 에 SQL 추가
 2. 관련 `app/models/*.ts` 에 테이블/함수 추가
-3. route, feature, repository에서 해당 모델 사용
+3. route, feature, view에서 해당 모델 사용
 
 단, 스키마 변경이 아니라 특정 운영 데이터 보정, 검증, 재집계처럼 사람이 명시적으로 실행해야 하는 SQL은
 `db/migrations` 가 아니라 `db/operations` 에 둡니다.
@@ -33,7 +33,8 @@
 
 - 테이블 변수는 보통 `*Table` suffix를 사용합니다.
 - DB 접근 함수는 도메인 의도가 드러나는 이름을 사용합니다.
-- route에서 직접 SQL 성격의 분기를 늘리기보다 `models` 또는 `repositories` 로 내립니다.
+- route에서 직접 SQL 성격의 분기를 늘리기보다 `models` 로 내립니다.
+- 모델은 데이터 접근(CRUD·BAQL 읽기·소스 캐시·정규화)까지만 맡습니다. 점수 계산이나 시뮬레이션 같은 순수 로직은 `app/domain` 에, 화면용 합성은 `app/views` 에 둡니다.
 - 새 canonical 저장소가 이미 정해진 영역에는 레거시 테이블을 다시 확장하지 않습니다.
 
 ## Drizzle 사용 패턴

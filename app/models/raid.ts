@@ -2,7 +2,7 @@ import { graphql } from "~/graphql";
 import type { Defense, Difficulty as GraphqlDifficulty } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { type UtcIsoString, compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { cacheKey, cacheQuery, fetchSourceCached } from "./base";
+import { cacheKey, cacheQuery, fetchSourceCached } from "~/lib/cache";
 import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";

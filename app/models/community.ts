@@ -4,7 +4,7 @@ import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { type UtcIsoString, normalizeUtcTimestamp, nowUtcIso } from "~/lib/date-time";
 import { watchIo } from "~/lib/io-watchdog";
-import { cacheKey, cacheQuery, fetchCached } from "./base";
+import { cacheKey, cacheQuery, fetchCached } from "~/lib/cache";
 import { senseisTable } from "./sensei";
 
 export type CommunityPostType = "student_review" | "event_opinion" | "guide" | "youtube_video" | "recruitment_result";

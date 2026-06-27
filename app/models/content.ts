@@ -9,7 +9,7 @@ import {
   toUtcIso,
 } from "~/lib/date-time";
 import { RaidRepository, type RaidSchedule, RecruitmentRepository } from "~/repositories";
-import { cacheKey, fetchRouteCached } from "./base";
+import { cacheKey, fetchRouteCached } from "~/lib/cache";
 import type { RaidType, Role } from "./content.d";
 import { getAllCoupons, hasUnregisteredActiveCoupons } from "./coupon";
 import { getFavoritedCounts } from "./favorite-students";

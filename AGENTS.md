@@ -41,6 +41,6 @@ This project has been deployed to Cloudflare Workers.
   - After adding or changing a query, run `pnpm codegen`. Do not manually edit generated files under `app/graphql/`.
   - Prefer codegen-inferred query/result/variables types. Do not duplicate GraphQL result or variables types locally unless there is a clear reason.
   - Prefer domain-level return types only at the boundary where GraphQL data is transformed into app-specific models.
-  - Shared BAQL read logic, caching, and request orchestration should live in `app/repositories/`. Keep pure calculation and transformation logic in `app/models/`.
+  - Shared BAQL read logic, source caching, and upstream→domain normalization live in `app/models/` (data access only). Keep pure calculation/transformation in `app/domain/`, and route-presentation composition with route caching (SWR) in `app/views/`. The `app/repositories/` layer is being removed during migration — do not add to it. See `docs/architecture.md` for the target architecture.
   - Avoid `TypedDocumentNode` casts or manual GraphQL shape annotations unless codegen is temporarily unavailable or inference is blocked by an existing project issue.
 - This project uses Biome for code formatting and linting. Always follow the Biome conventions when creating or modifying code. You can run `pnpm run lint` to check formatting issues.

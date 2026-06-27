@@ -5,7 +5,7 @@ import {
   fetchCached,
   fetchLazySourceCachedBatch,
   fetchRouteCached,
-} from "../../../app/models/base";
+} from "../../../app/lib/cache";
 
 type CacheEnv = Parameters<typeof fetchCached>[0];
 
@@ -717,7 +717,7 @@ describe("fetchLazySourceCachedBatch", () => {
     const { env } = createKeyedEnv(
       new Map([["source::thing::v1::uid=a", JSON.stringify({ _ver: 2, data: "cached-a", cachedAt: now - 1_000 })]]),
     );
-    const loadMissing = jest.fn(async () => new Map<string, string | null>([["b", null]]));
+    const loadMissing = jest.fn(async (_missingKeys: string[]) => new Map<string, string | null>([["b", null]]));
 
     await expect(fetchLazySourceCachedBatch(env, entries, loadMissing, 60)).resolves.toEqual(
       new Map([
@@ -759,7 +759,7 @@ describe("fetchLazySourceCachedBatch", () => {
       list: jest.fn(async (_opts?: { prefix?: string; cursor?: string }) => ({ keys: [], list_complete: true })),
     };
     const env = { KV_CACHE: kv } as unknown as CacheEnv;
-    const loadMissing = jest.fn(async () => new Map([["a", "loaded-a"]]));
+    const loadMissing = jest.fn(async (_missingKeys: string[]) => new Map([["a", "loaded-a"]]));
 
     const result = fetchLazySourceCachedBatch(env, entries, loadMissing, 60);
     await flushPromises();
