@@ -33,6 +33,26 @@ const allStudentsQuery = graphql(`
   }
 `);
 
+const studentDetailQuery = graphql(`
+  query StudentDetail($uid: String!) {
+    student(uid: $uid) {
+      name familyName uid attackType defenseType role school schaleDbId releaseAt
+      recruitments {
+        since rerun
+        recruitmentGroup { uid startAt endAt }
+      }
+    }
+  }
+`);
+
+const studentGradeDetailQuery = graphql(`
+  query StudentGradeDetail($uid: String!) {
+    student(uid: $uid) {
+      name familyName uid attackType defenseType role school schaleDbId
+    }
+  }
+`);
+
 export async function getAllStudents(env: Env, includeUnreleased = false): Promise<Student[]> {
   const rawStudents = await getRawStudents(env);
   if (includeUnreleased) {
@@ -64,6 +84,22 @@ export async function syncRawStudents(env: Env): Promise<Student[]> {
 
 async function getRawStudents(env: Env): Promise<Student[]> {
   return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, false);
+}
+
+export async function getStudentDetail(env: Env, uid: string) {
+  const { data, error } = await runQuery(studentDetailQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  return data?.student;
+}
+
+export async function getStudentGradeDetail(env: Env, uid: string) {
+  const { data, error } = await runQuery(studentGradeDetailQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  return data?.student;
 }
 
 const maximumTiers: Record<string, number> = {

@@ -6,9 +6,9 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Page } from "~/components/features/layout";
 import { EmptyView, PanelOptionIconButton } from "~/components/primitives";
 import { formatInstant, nowUtcIso } from "~/lib/date-time";
-import { type EventListItem, type EventListSchedule, getEventList } from "~/models/event-content";
-import { filterEventList, type EventFilterState } from "~/models/event-list-filter";
+import { filterEventList, type EventFilterState } from "~/views/event-list-filter";
 import type { RunType } from "~/models/timeline-content";
+import { type EventListItem, type EventListSchedule, getEventList } from "~/views/events";
 
 const GL_TIME_ZONE = "Asia/Seoul";
 const runTypeLabels: Record<RunType, string> = {

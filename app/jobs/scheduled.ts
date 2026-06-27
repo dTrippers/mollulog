@@ -11,9 +11,10 @@ import { getItemCatalogResources } from "~/models/item-catalog";
 import { getStudentGearData } from "~/models/growth-resource";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getCampaignFarmingStages } from "~/models/stage";
-import { syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
+import { syncEventContentsList } from "~/models/event-content";
 import { cacheKey, cacheQuery, claimKvCacheWindow } from "~/lib/cache";
 import { warmRaidCache } from "~/models/raid";
+import { warmActiveUpcomingEventContent } from "~/views/events";
 
 type ScheduledJobName = "syncYoutubeCommunityPosts" | "refreshSourceCaches";
 

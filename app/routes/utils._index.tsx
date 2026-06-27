@@ -4,7 +4,7 @@ import { Link, useLoaderData } from "react-router";
 import { Page } from "~/components/features/layout";
 import { getNavigationSections } from "~/components/features/layout/navigation-menu";
 import { canonicalLink } from "~/lib/seo";
-import { getNavigationBarContents } from "~/models/content";
+import { getNavigationBarContents } from "~/views/navigation";
 import { sanitizeClassName } from "~/prophandlers";
 
 export const meta: MetaFunction = ({ location }) => {

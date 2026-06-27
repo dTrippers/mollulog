@@ -1,7 +1,7 @@
 import hangul from "hangul-js";
 import { getInstantTime } from "~/lib/date-time";
-import type { EventListItem, EventListSchedule } from "~/models/event-content";
 import type { RunType } from "~/models/timeline-content";
+import type { EventListItem, EventListSchedule } from "~/views/events";
 
 const permanentGracePeriodMs = 7 * 24 * 60 * 60 * 1000;
 const scheduleOrder: RunType[] = ["first", "rerun", "permanent"];

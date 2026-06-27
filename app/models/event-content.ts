@@ -11,18 +11,14 @@ import { runQuery } from "~/lib/baql";
 import {
   type UtcIsoString,
   compareInstantAsc,
-  compareInstantDesc,
-  getInstantTime,
-  nowUtcIso,
   toUtcIso,
 } from "~/lib/date-time";
-import { cacheKey, cacheQuery, fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "~/lib/cache";
+import { cacheKey, cacheQuery, fetchLazySourceCached, fetchSourceCached } from "~/lib/cache";
 import { getAllRecruitmentGroups, getRecruitmentGroupsByUids } from "~/models/recruitment";
-import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "./timeline-content";
+import { getTimelineContent, getTimelineContents } from "./timeline-content";
 import type { RunType } from "./timeline-content";
 
 const EVENT_CONTENTS_LIST_CACHE_KEY = cacheKey("source", "event-content", 1, "list");
-const EVENT_LIST_CACHE_KEY = cacheKey("route", "events", 1, "list");
 const EVENT_STATIC_CONTENT_TTL = 7 * 24 * 60 * 60;
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
@@ -161,108 +157,10 @@ const eventContentsListQuery = graphql(`
   }
 `);
 
-type EventContentListSource = EventContentsListQuery["eventContents"][number];
-type EventContentListSourceSchedule = EventContentListSource["schedules"][number];
-export type EventListScheduleStatus = "past" | "current" | "upcoming";
-export type EventListSchedule = {
-  runType: RunType;
-  since: UtcIsoString;
-  until: UtcIsoString | null;
-  status: EventListScheduleStatus;
-};
-type CachedEventListSchedule = Omit<EventListSchedule, "status">;
-type CachedEventListItem = Omit<EventListItem, "schedules"> & {
-  schedules: Partial<Record<RunType, CachedEventListSchedule>>;
-};
-export type EventListItem = {
-  uid: string;
-  name: string;
-  imageUrl: string | null;
-  fallbackImageUrl: string | null;
-  latestTimelineUid: string;
-  schedules: Partial<Record<RunType, EventListSchedule>>;
-};
-
-function getEventLogoImageUrl(eventUid: string, locale: "jp" | "kr"): string {
-  return `https://assets.baql.net/images/events/logo/${encodeURIComponent(eventUid)}_${locale}.webp`;
-}
-
-function parseEventListRunType(runType: string): RunType | null {
-  if (runType === "first" || runType === "rerun" || runType === "permanent") {
-    return runType;
-  }
-  return null;
-}
-
-function getScheduleStatus(
-  schedule: Pick<EventListSchedule, "since" | "until">,
-  now: UtcIsoString,
-): EventListScheduleStatus {
-  const nowTime = getInstantTime(now);
-  if (getInstantTime(schedule.since) > nowTime) {
-    return "upcoming";
-  }
-
-  if (schedule.until === null || getInstantTime(schedule.until) > nowTime) {
-    return "current";
-  }
-
-  return "past";
-}
-
-function groupEventListSchedules(schedules: EventContentListSourceSchedule[]): CachedEventListItem["schedules"] {
-  const grouped: CachedEventListItem["schedules"] = {};
-  for (const schedule of schedules) {
-    if (schedule.region !== "gl") continue;
-
-    const runType = parseEventListRunType(schedule.runType);
-    if (!runType) continue;
-
-    const nextSchedule = {
-      runType,
-      since: toUtcIso(schedule.startAt),
-      until: schedule.endAt ? toUtcIso(schedule.endAt) : null,
-    };
-    const existing = grouped[runType];
-    if (existing && compareInstantDesc(existing.since, nextSchedule.since) <= 0) {
-      continue;
-    }
-
-    grouped[runType] = {
-      ...nextSchedule,
-    };
-  }
-
-  return grouped;
-}
-
-function compareEventContentUidAsc(a: string, b: string): number {
-  const numericA = Number(a);
-  const numericB = Number(b);
-  if (Number.isFinite(numericA) && Number.isFinite(numericB)) {
-    return numericA - numericB;
-  }
-  return a.localeCompare(b);
-}
-
-function addEventListScheduleStatuses(event: CachedEventListItem, now: UtcIsoString): EventListItem {
-  const schedules = Object.fromEntries(
-    Object.entries(event.schedules).map(([runType, schedule]) => [
-      runType,
-      {
-        ...schedule,
-        status: getScheduleStatus(schedule, now),
-      },
-    ]),
-  ) as EventListItem["schedules"];
-
-  return {
-    ...event,
-    schedules,
-  };
-}
-
-async function getEventContentsList(env: Env, forceRefresh = false): Promise<EventContentsListQuery["eventContents"]> {
+export async function getEventContentsList(
+  env: Env,
+  forceRefresh = false,
+): Promise<EventContentsListQuery["eventContents"]> {
   return fetchSourceCached(
     env,
     EVENT_CONTENTS_LIST_CACHE_KEY,
@@ -280,81 +178,6 @@ async function getEventContentsList(env: Env, forceRefresh = false): Promise<Eve
 
 export function syncEventContentsList(env: Env): Promise<EventContentsListQuery["eventContents"]> {
   return getEventContentsList(env, true);
-}
-
-async function getEventListCachedItems(
-  env: Env,
-  forceRefresh: boolean,
-  ctx?: ExecutionContext,
-): Promise<CachedEventListItem[]> {
-  return fetchRouteCached<CachedEventListItem[]>(
-    env,
-    ctx,
-    EVENT_LIST_CACHE_KEY,
-    async () => {
-      const [eventContents, timelineContents] = await Promise.all([
-        getEventContentsList(env, forceRefresh),
-        getAllTimelineContentsMeta(env),
-      ]);
-
-      const timelineContentByContentUid = new Map<
-        string,
-        {
-          first: { name: string; startAt: UtcIsoString };
-          latest: { uid: string; startAt: UtcIsoString };
-        }
-      >();
-      for (const content of timelineContents) {
-        if (content.contentType !== "event" || !content.contentUid) continue;
-
-        const existing = timelineContentByContentUid.get(content.contentUid);
-        if (!existing) {
-          timelineContentByContentUid.set(content.contentUid, {
-            first: { name: content.name, startAt: content.startAt },
-            latest: { uid: content.uid, startAt: content.startAt },
-          });
-          continue;
-        }
-
-        if (compareInstantAsc(content.startAt, existing.first.startAt) < 0) {
-          existing.first = { name: content.name, startAt: content.startAt };
-        }
-
-        if (compareInstantDesc(content.startAt, existing.latest.startAt) < 0) {
-          existing.latest = { uid: content.uid, startAt: content.startAt };
-        }
-      }
-
-      return eventContents
-        .flatMap((eventContent) => {
-          const timelineContent = timelineContentByContentUid.get(eventContent.uid) ?? null;
-          if (!timelineContent) {
-            return [];
-          }
-
-          return {
-            uid: eventContent.uid,
-            name: timelineContent.first.name || eventContent.name,
-            imageUrl: getEventLogoImageUrl(eventContent.uid, "kr"),
-            fallbackImageUrl: getEventLogoImageUrl(eventContent.uid, "jp"),
-            latestTimelineUid: timelineContent.latest.uid,
-            schedules: groupEventListSchedules(eventContent.schedules),
-          };
-        })
-        .sort((a, b) => compareEventContentUidAsc(a.uid, b.uid));
-    },
-    forceRefresh,
-  );
-}
-
-export async function getEventList(
-  env: Env,
-  now: UtcIsoString = nowUtcIso(),
-  forceRefresh = false,
-  ctx?: ExecutionContext,
-): Promise<EventListItem[]> {
-  const cachedEvents = await getEventListCachedItems(env, forceRefresh, ctx);
-  return cachedEvents.map((event) => addEventListScheduleStatuses(event, now));
 }
 
 //
@@ -630,29 +453,4 @@ export async function getEventShopContent(env: Env, timelineUid: string, forceRe
     EVENT_STATIC_CONTENT_TTL,
     forceRefresh,
   );
-}
-
-export async function warmActiveUpcomingEventContent(env: Env, forceRefresh = false): Promise<void> {
-  const events = await getEventList(env, undefined, forceRefresh);
-  const scheduleTasks: Array<Promise<unknown>> = [];
-  const shopTimelineUids = new Set<string>();
-
-  for (const event of events) {
-    const activeUpcomingSchedules = Object.values(event.schedules).filter(
-      (schedule): schedule is EventListSchedule => schedule.status === "current" || schedule.status === "upcoming",
-    );
-    if (activeUpcomingSchedules.length === 0) {
-      continue;
-    }
-
-    shopTimelineUids.add(event.latestTimelineUid);
-    for (const schedule of activeUpcomingSchedules) {
-      scheduleTasks.push(getEventContentSchedule(env, event.uid, schedule.runType, forceRefresh));
-    }
-  }
-
-  await Promise.all([
-    ...scheduleTasks,
-    ...[...shopTimelineUids].map((timelineUid) => getEventShopContent(env, timelineUid, forceRefresh)),
-  ]);
 }

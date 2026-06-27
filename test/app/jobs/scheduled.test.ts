@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
+import { syncEventContentsList } from "~/models/event-content";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
@@ -10,6 +10,7 @@ import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
+import { warmActiveUpcomingEventContent } from "~/views/events";
 
 jest.mock("~/models/main-story", () => ({
   getMainStories: jest.fn(),
@@ -35,6 +36,9 @@ jest.mock("~/models/youtube", () => ({
 
 jest.mock("~/models/event-content", () => ({
   syncEventContentsList: jest.fn(),
+}));
+
+jest.mock("~/views/events", () => ({
   warmActiveUpcomingEventContent: jest.fn(),
 }));
 

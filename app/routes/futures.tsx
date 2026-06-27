@@ -22,11 +22,10 @@ import { ServerTiming, shouldLogTiming } from "~/lib/server-timing.server";
 import { canonicalLink } from "~/lib/seo";
 import {
   type ContentCommentSummary,
-  type FutureContent,
   type NestedComment,
   getContentsCommentSummaries,
-  getFutureContents,
 } from "~/models/content";
+import { type FutureContent, getFutureContents } from "~/views/futures";
 import type { EventType, RaidType } from "~/models/content.d";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/domain/raid";

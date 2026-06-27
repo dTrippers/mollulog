@@ -4,23 +4,13 @@ import { Form, Link, redirect, useActionData, useLoaderData, useNavigation, useS
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { createPageErrorBoundary } from "~/components/features/layout";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { formatStudentFullName } from "~/models/student";
+import { formatStudentFullName, getStudentGradeDetail } from "~/models/student";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
 import type { StudentGradingTagValue } from "~/models/student-grading-tag";
 import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
-
-const studentDetailQuery = graphql(`
-  query StudentGradeDetail($uid: String!) {
-    student(uid: $uid) {
-      name familyName uid attackType defenseType role school schaleDbId
-    }
-  }
-`);
 
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -37,10 +27,10 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     return redirect(`/students/${studentUid}`);
   }
 
-  const { data, error } = await runQuery(studentDetailQuery, {
-    uid: studentUid,
-  });
-  if (error) {
+  let student: Awaited<ReturnType<typeof getStudentGradeDetail>>;
+  try {
+    student = await getStudentGradeDetail(env, studentUid);
+  } catch (error) {
     logger.error("Failed to load student grading detail", error);
     if (isStudentNotFoundError(error)) {
       throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
@@ -48,13 +38,12 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
   }
 
-  if (!data) {
+  if (student === undefined) {
     logger.error("Failed to load student grading detail without response data");
     throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
   }
 
   const existingGrading = await getStudentGrading(env, currentUser.id, studentUid, true);
-  const student = data.student;
   if (!student) {
     throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }

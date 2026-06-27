@@ -26,7 +26,7 @@ import { captureClientError } from "./lib/observability.client";
 import { getLogger } from "./lib/observability.server";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
 import { ServerTiming, shouldLogTiming } from "./lib/server-timing.server";
-import { getNavigationBarContents } from "./models/content";
+import { getNavigationBarContents } from "./views/navigation";
 import styles from "./tailwind.css?url";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));

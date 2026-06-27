@@ -12,7 +12,7 @@ import { ServerTiming, shouldLogTiming } from "~/lib/server-timing.server";
 import { canonicalLink } from "~/lib/seo";
 import { getCommunityFeedPage } from "~/models/community";
 import { enrichCommunityFeedPosts } from "~/models/community-feed";
-import { type IndexRecruitment, getIndexContents } from "~/models/content";
+import { type IndexRecruitment, getIndexContents } from "~/views/home";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { raidTypeToParam } from "~/domain/raid";
 import type { TimelineContent } from "~/models/timeline-content";

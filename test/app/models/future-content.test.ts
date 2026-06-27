@@ -1,6 +1,22 @@
-import { describe, expect, it } from "@jest/globals";
-import type { FutureContent } from "../../../app/models/content";
-import { normalizeFutureContentDates } from "../../../app/models/future-content";
+import { describe, expect, it, jest } from "@jest/globals";
+import { type FutureContent, normalizeFutureContentDates } from "../../../app/views/futures";
+
+jest.mock("~/models/recruitment", () => ({
+  getRecruitmentGroupByUid: jest.fn(),
+  getRecruitmentGroupsByUids: jest.fn(),
+}));
+
+jest.mock("~/models/recruitment-identity", () => ({
+  getRecruitmentFavoriteKey: jest.fn(),
+}));
+
+jest.mock("~/models/timeline-content", () => ({
+  getTimelineContents: jest.fn(),
+}));
+
+jest.mock("~/views/raid-content", () => ({
+  getUpcomingRaidContents: jest.fn(),
+}));
 
 describe("normalizeFutureContentDates", () => {
   it("keeps cached ISO date strings as normalized UTC ISO strings", () => {

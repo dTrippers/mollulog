@@ -4,11 +4,11 @@ import { fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "~/li
 import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "~/models/timeline-content";
 import {
   getEventContentSchedule,
-  getEventList,
   getEventMetadata,
   getEventShopContent,
   getShopAvailableEvents,
 } from "../../../app/models/event-content";
+import { getEventList } from "../../../app/views/events";
 
 jest.mock("~/models/timeline-content", () => ({
   getAllTimelineContentsMeta: jest.fn(),

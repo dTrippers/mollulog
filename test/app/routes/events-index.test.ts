@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
-import type { EventListItem, EventListSchedule } from "../../../app/models/event-content";
-import { type EventFilterState, filterEventList } from "../../../app/models/event-list-filter";
 import type { RunType } from "../../../app/models/timeline-content";
+import { type EventFilterState, filterEventList } from "../../../app/views/event-list-filter";
+import type { EventListItem, EventListSchedule } from "../../../app/views/events";
 
 const now = "2026-06-13T00:00:00.000Z";
 

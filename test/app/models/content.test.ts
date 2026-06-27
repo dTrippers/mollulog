@@ -49,7 +49,7 @@ jest.mock("~/models/recruitment", () => ({
   getRecruitmentGroupsByUids: jest.fn(),
 }));
 
-import { getNavigationBarContents } from "../../../app/models/content";
+import { getNavigationBarContents } from "../../../app/views/navigation";
 
 const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
 const mockedGetAllCoupons = getAllCoupons as jest.MockedFunction<typeof getAllCoupons>;

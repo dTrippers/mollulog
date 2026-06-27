@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getFutureContents, getIndexContents, getNavigationBarContentsRaw } from "~/models/content";
-import { getEventList, syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
+import { syncEventContentsList } from "~/models/event-content";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
@@ -13,6 +12,10 @@ import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
+import { getEventList, warmActiveUpcomingEventContent } from "~/views/events";
+import { getFutureContents } from "~/views/futures";
+import { getIndexContents } from "~/views/home";
+import { getNavigationBarContentsRaw } from "~/views/navigation";
 
 function makeSensei(overrides: Partial<Sensei>): Sensei {
   return {
@@ -54,15 +57,24 @@ jest.mock("~/models/youtube", () => ({
   syncYoutubeCommunityPosts: jest.fn(),
 }));
 
-jest.mock("~/models/content", () => ({
+jest.mock("~/views/futures", () => ({
   getFutureContents: jest.fn(),
+}));
+
+jest.mock("~/views/home", () => ({
   getIndexContents: jest.fn(),
+}));
+
+jest.mock("~/views/navigation", () => ({
   getNavigationBarContentsRaw: jest.fn(),
 }));
 
 jest.mock("~/models/event-content", () => ({
-  getEventList: jest.fn(),
   syncEventContentsList: jest.fn(),
+}));
+
+jest.mock("~/views/events", () => ({
+  getEventList: jest.fn(),
   warmActiveUpcomingEventContent: jest.fn(),
 }));
 

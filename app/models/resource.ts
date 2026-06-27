@@ -16,6 +16,18 @@ const allStudentsFavoriteItemsQuery = graphql(`
   }
 `);
 
+const studentFavoriteItemsQuery = graphql(`
+  query StudentFavoriteItem($uid: String!) {
+    student(uid: $uid) {
+      uid name
+      favoriteItems {
+        favorited favoriteLevel exp
+        item { uid name rarity }
+      }
+    }
+  }
+`);
+
 export type AllStudentsFavoriteItems = {
   itemUid: string;
   itemName: string;
@@ -79,4 +91,12 @@ export async function getAllStudentsFavoriteItems(env: Env, forceRefresh = false
     },
     forceRefresh,
   );
+}
+
+export async function getStudentFavoriteItems(env: Env, uid: string) {
+  const { data, error } = await runQuery(studentFavoriteItemsQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  return data?.student;
 }
