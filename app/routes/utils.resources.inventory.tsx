@@ -12,7 +12,7 @@ import {
   parseUserResourceInventoryQuantity,
   upsertUserResourceInventories,
 } from "~/models/user-resource-inventory";
-import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/repositories/item-catalog";
+import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/models/item-catalog";
 import type { GrowthLayoutContext } from "./utils.growth._components/types";
 import ResourceInventoryEditor from "./utils.resources._components/ResourceInventoryEditor";
 

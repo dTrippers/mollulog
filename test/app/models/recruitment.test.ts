@@ -1,19 +1,24 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
-import { RecruitmentRepository } from "../../../app/repositories/recruitment";
+import {
+  getAllHistoricalRecruitmentGroups,
+  getRecruitmentGroupByUid,
+  getRecruitmentGroupsByUids,
+  warmRecruitmentCache,
+} from "../../../app/models/recruitment";
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
 }));
 
-type RepositoryEnv = ConstructorParameters<typeof RecruitmentRepository>[0];
+type ModelEnv = Env;
 const mockedRunQuery = runQuery as unknown as {
   mockReset: () => void;
   mockResolvedValueOnce: (value: unknown) => unknown;
   mockImplementation: (fn: () => Promise<unknown>) => unknown;
 };
 
-function createEnv(disableCache = "true"): RepositoryEnv {
+function createEnv(disableCache = "true"): ModelEnv {
   return {
     DISABLE_CACHE: disableCache,
     KV_CACHE: {
@@ -22,7 +27,7 @@ function createEnv(disableCache = "true"): RepositoryEnv {
       delete: jest.fn(async () => undefined),
       list: jest.fn(async () => ({ keys: [] })),
     },
-  } as unknown as RepositoryEnv;
+  } as unknown as ModelEnv;
 }
 
 function createResult(groups: unknown[]) {
@@ -53,19 +58,26 @@ function mockRefreshResults(groups: unknown[]) {
   mockedRunQuery.mockResolvedValueOnce(createPoolResult([]));
 }
 
+async function waitForRunQueryCall() {
+  for (let i = 0; i < 10; i += 1) {
+    if ((runQuery as jest.Mock).mock.calls.length > 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 afterEach(() => {
   jest.restoreAllMocks();
   mockedRunQuery.mockReset();
 });
 
-describe("RecruitmentRepository.refresh", () => {
+describe("warmRecruitmentCache", () => {
   it("passes a seven-day endAfter bound to BAQL", async () => {
     jest.spyOn(Date, "now").mockReturnValue(new Date("2026-05-11T00:00:00.000Z").getTime());
     mockRefreshResults([]);
 
-    const repository = new RecruitmentRepository(createEnv());
-
-    await expect(repository.refresh()).resolves.toEqual([]);
+    await expect(warmRecruitmentCache(createEnv())).resolves.toEqual([]);
 
     expect(runQuery).toHaveBeenCalledWith(expect.anything(), {
       endAfter: new Date("2026-05-04T00:00:00.000Z"),
@@ -99,29 +111,29 @@ describe("RecruitmentRepository.refresh", () => {
     mockRefreshResults(firstGroups);
     mockRefreshResults(secondGroups);
 
-    const repository = new RecruitmentRepository(createEnv());
+    const env = createEnv();
 
-    await expect(repository.refresh()).resolves.toEqual(firstGroups);
-    await expect(repository.refresh()).resolves.toEqual(secondGroups);
+    await expect(warmRecruitmentCache(env)).resolves.toEqual(firstGroups);
+    await expect(warmRecruitmentCache(env)).resolves.toEqual(secondGroups);
 
     expect(runQuery).toHaveBeenCalledTimes(6);
   });
 
-  it("deduplicates concurrent refresh requests while one is in flight", async () => {
+  it("uses source-cache in-flight deduplication for concurrent non-force list requests", async () => {
     let callCount = 0;
-    let releaseRefreshPromise!: (value: ReturnType<typeof createResult>) => void;
+    let releaseListPromise!: (value: ReturnType<typeof createResult>) => void;
     mockedRunQuery.mockImplementation(() => {
       callCount += 1;
       if (callCount === 1) {
         return new Promise<ReturnType<typeof createResult>>((resolve) => {
-          releaseRefreshPromise = resolve as (value: ReturnType<typeof createResult>) => void;
+          releaseListPromise = resolve as (value: ReturnType<typeof createResult>) => void;
         });
       }
 
-      return Promise.resolve(callCount === 2 ? createResult([]) : createPoolResult([]));
+      return Promise.resolve(createResult([]));
     });
 
-    const repository = new RecruitmentRepository(createEnv());
+    const env = createEnv("false");
     const expectedGroups = [
       {
         uid: "pickup-a",
@@ -134,25 +146,24 @@ describe("RecruitmentRepository.refresh", () => {
       },
     ];
 
-    const firstRefresh = repository.refresh();
-    const secondRefresh = repository.refresh();
+    const firstRequest = getAllHistoricalRecruitmentGroups(env);
+    const secondRequest = getAllHistoricalRecruitmentGroups(env);
+    await waitForRunQueryCall();
 
     expect(runQuery).toHaveBeenCalledTimes(1);
 
-    releaseRefreshPromise(createResult(expectedGroups));
+    releaseListPromise(createResult(expectedGroups));
 
-    await expect(Promise.all([firstRefresh, secondRefresh])).resolves.toEqual([expectedGroups, expectedGroups]);
-    expect(runQuery).toHaveBeenCalledTimes(3);
+    await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual([expectedGroups, expectedGroups]);
+    expect(runQuery).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("RecruitmentRepository historical lookups", () => {
+describe("recruitment historical lookups", () => {
   it("fetches historical recruitment groups without the seven-day endAfter bound", async () => {
     mockedRunQuery.mockResolvedValueOnce(createResult([]));
 
-    const repository = new RecruitmentRepository(createEnv());
-
-    await expect(repository.getAllHistorical()).resolves.toEqual([]);
+    await expect(getAllHistoricalRecruitmentGroups(createEnv())).resolves.toEqual([]);
 
     expect(runQuery).toHaveBeenCalledWith(expect.anything(), {
       endAfter: null,
@@ -192,9 +203,7 @@ describe("RecruitmentRepository historical lookups", () => {
     };
     mockedRunQuery.mockResolvedValueOnce(createResult([oldPickupGroup]));
 
-    const repository = new RecruitmentRepository(createEnv());
-
-    await expect(repository.getByUids(["magical-heavy-caliber"])).resolves.toEqual([oldPickupGroup]);
+    await expect(getRecruitmentGroupsByUids(createEnv(), ["magical-heavy-caliber"])).resolves.toEqual([oldPickupGroup]);
     expect(runQuery).toHaveBeenCalledWith(expect.anything(), {
       endAfter: null,
       uids: null,
@@ -213,9 +222,7 @@ describe("RecruitmentRepository historical lookups", () => {
     };
     mockedRunQuery.mockResolvedValueOnce(createResult([oldPickupGroup]));
 
-    const repository = new RecruitmentRepository(createEnv());
-
-    await expect(repository.getByUid("magical-heavy-caliber")).resolves.toEqual(oldPickupGroup);
+    await expect(getRecruitmentGroupByUid(createEnv(), "magical-heavy-caliber")).resolves.toEqual(oldPickupGroup);
     expect(runQuery).toHaveBeenCalledWith(expect.anything(), {
       endAfter: null,
       uids: null,

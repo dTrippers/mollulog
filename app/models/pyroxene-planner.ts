@@ -6,7 +6,7 @@ import { nanoid } from "nanoid/non-secure";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { type UtcIsoString, compareInstantAsc, compareInstantDesc, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { getRaidSchedule } from "~/models/raid";
-import { RecruitmentRepository } from "~/repositories";
+import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import type { RaidType } from "./content.d";
 import {
   PYROXENE_AP_PACKAGE_CONFIG,
@@ -62,8 +62,6 @@ export type PyroxenePlannerContent =
     };
 
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
-  const recruitmentRepository = new RecruitmentRepository(env);
-
   // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
   const [eventContents, raidContents] = await Promise.all([
     getTimelineContents(env),
@@ -76,9 +74,9 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
 
   const recruitmentGroupUids = allContents.map((c) => c.recruitmentGroupUid).filter((uid) => uid !== null) as string[];
   const [recruitmentGroups, studentsMap, recruitmentPoolStudents] = await Promise.all([
-    recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh),
+    getRecruitmentGroupsByUids(env, recruitmentGroupUids, forceRefresh),
     getAllStudentsMap(env, true),
-    recruitmentRepository.getPoolStudents(forceRefresh),
+    getRecruitmentPoolStudents(env, forceRefresh),
   ]);
 
   const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));

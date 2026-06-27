@@ -38,7 +38,7 @@ import {
   getSkillMaterialChoiceBoxRarity,
   getSkillMaterialResourceChoiceBoxUid,
 } from "~/models/growth-resource";
-import { type ItemCatalogResource, getGrowthPlannerCatalogResourceKindOrder } from "~/repositories/item-catalog";
+import { type ItemCatalogResource, getGrowthPlannerCatalogResourceKindOrder } from "~/models/item-catalog";
 
 type ResourceInventoryEditorProps = {
   resources: ItemCatalogResource[];

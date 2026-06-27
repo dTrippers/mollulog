@@ -4,8 +4,7 @@ import { RaidVideosScreen } from "~/components/features/raids";
 import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
 import { fetchRaidVideos } from "~/lib/ranks";
 import { getRaidScheduleByTypeAndSeason } from "~/models/raid";
-import { getVideoDateRange } from "~/models/raid-videos";
-import { RAID_VIDEOS_PAGE_SIZE, parseVideoSort } from "~/repositories";
+import { RAID_VIDEOS_PAGE_SIZE, getVideoDateRange, parseVideoSort } from "~/models/raid-videos";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import { useRaidVideosFeed } from "./raids.$raidType.$seasonIndex._components/useRaidVideosFeed";
 

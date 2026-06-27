@@ -10,7 +10,7 @@ import {
   type ItemCatalogResource,
   getGrowthPlannerCatalogResourceKindOrder,
   getGrowthPlannerCatalogResources,
-} from "../../../app/repositories/item-catalog";
+} from "../../../app/models/item-catalog";
 
 describe("item-catalog", () => {
   it("includes equipment blueprint choice boxes in the growth planner catalog", () => {

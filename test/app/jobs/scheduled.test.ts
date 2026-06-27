@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
+import { getStudentGearData } from "~/models/growth-resource";
+import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { warmRaidCache } from "~/models/raid";
+import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
+import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { GrowthResourceRepository, RecruitmentRepository } from "~/repositories";
-import { getItemCatalogResources } from "~/repositories/item-catalog";
-import { getCampaignFarmingStages } from "~/repositories/stage";
 
 jest.mock("~/models/main-story", () => ({
   getMainStories: jest.fn(),
@@ -37,20 +38,20 @@ jest.mock("~/models/event-content", () => ({
   warmActiveUpcomingEventContent: jest.fn(),
 }));
 
-jest.mock("~/repositories/item-catalog", () => ({
+jest.mock("~/models/item-catalog", () => ({
   getItemCatalogResources: jest.fn(),
 }));
 
-jest.mock("~/repositories/stage", () => ({
+jest.mock("~/models/stage", () => ({
   getCampaignFarmingStages: jest.fn(),
 }));
 
-const mockRecruitmentRefresh = jest.fn<() => Promise<unknown[]>>();
-const mockGetStudentGearData = jest.fn<(_studentUids: string[], _forceRefresh?: boolean) => Promise<unknown>>();
+jest.mock("~/models/growth-resource", () => ({
+  getStudentGearData: jest.fn(),
+}));
 
-jest.mock("~/repositories", () => ({
-  GrowthResourceRepository: jest.fn().mockImplementation(() => ({ getStudentGearData: mockGetStudentGearData })),
-  RecruitmentRepository: jest.fn().mockImplementation(() => ({ refresh: mockRecruitmentRefresh })),
+jest.mock("~/models/recruitment", () => ({
+  warmRecruitmentCache: jest.fn(),
 }));
 
 jest.mock("~/models/raid", () => ({
@@ -89,8 +90,8 @@ const mockedWarmActiveUpcomingEventContent = warmActiveUpcomingEventContent as j
 >;
 const mockedGetItemCatalogResources = getItemCatalogResources as jest.MockedFunction<typeof getItemCatalogResources>;
 const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
-const MockedGrowthResourceRepository = GrowthResourceRepository as jest.MockedClass<typeof GrowthResourceRepository>;
-const MockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
+const mockedGetStudentGearData = getStudentGearData as jest.MockedFunction<typeof getStudentGearData>;
+const mockedWarmRecruitmentCache = warmRecruitmentCache as jest.MockedFunction<typeof warmRecruitmentCache>;
 const mockedWarmRaidCache = warmRaidCache as jest.MockedFunction<typeof warmRaidCache>;
 
 function createEnv(markerRaw: string | null = null) {
@@ -115,8 +116,8 @@ beforeEach(() => {
     ReturnType<typeof getAllStudents>
   >);
   mockedGetStudentSkillItemsBatch.mockResolvedValue(new Map());
-  mockGetStudentGearData.mockResolvedValue(new Map());
-  mockRecruitmentRefresh.mockResolvedValue([]);
+  mockedGetStudentGearData.mockResolvedValue(new Map());
+  mockedWarmRecruitmentCache.mockResolvedValue([]);
   mockedWarmRaidCache.mockResolvedValue([]);
   mockedGetMainStories.mockResolvedValue([]);
   mockedGetAllStudentsFavoriteItems.mockResolvedValue([]);
@@ -142,8 +143,7 @@ describe("runScheduledJobs", () => {
 
     expect(mockedSyncYoutubeCommunityPosts).toHaveBeenCalledWith(env);
     expect(mockedSyncRawStudents).toHaveBeenCalledWith(env);
-    expect(MockedRecruitmentRepository).toHaveBeenCalledWith(env);
-    expect(mockRecruitmentRefresh).toHaveBeenCalledWith();
+    expect(mockedWarmRecruitmentCache).toHaveBeenCalledWith(env);
     expect(mockedWarmRaidCache).toHaveBeenCalledWith(env);
     expect(mockedGetMainStories).toHaveBeenCalledWith(env, true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(env, true);
@@ -151,8 +151,7 @@ describe("runScheduledJobs", () => {
     expect(mockedSyncEventContentsList).toHaveBeenCalledWith(env);
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
-    expect(MockedGrowthResourceRepository).toHaveBeenCalledWith(env);
-    expect(mockGetStudentGearData).toHaveBeenCalledWith(["10000", "10001"], false);
+    expect(mockedGetStudentGearData).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false);
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(env, true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(env, true);
@@ -174,7 +173,7 @@ describe("runScheduledJobs", () => {
     expect(kv.put).not.toHaveBeenCalled();
     expect(mockedGetAllStudents).not.toHaveBeenCalled();
     expect(mockedGetStudentSkillItemsBatch).not.toHaveBeenCalled();
-    expect(mockGetStudentGearData).not.toHaveBeenCalled();
+    expect(mockedGetStudentGearData).not.toHaveBeenCalled();
     expect(mockedWarmActiveUpcomingEventContent).not.toHaveBeenCalled();
     expect(mockedSyncRawStudents).toHaveBeenCalledWith(env);
     expect(mockedSyncEventContentsList).toHaveBeenCalledWith(env);
@@ -194,7 +193,7 @@ describe("runScheduledJobs", () => {
     );
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
-    expect(mockGetStudentGearData).toHaveBeenCalledWith(["10000", "10001"], false);
+    expect(mockedGetStudentGearData).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false);
   });
 

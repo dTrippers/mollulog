@@ -13,6 +13,10 @@ const mockUpsertRecruitedStudent = jest.fn();
 const mockUpsertStudentGrowth = jest.fn();
 const mockValidateStudentGrowthTargetStateForTier = jest.fn();
 
+jest.mock("~/lib/baql", () => ({
+  runQuery: jest.fn(),
+}));
+
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: mockGetActiveSensei,
   getAuthenticator: jest.fn(() => ({

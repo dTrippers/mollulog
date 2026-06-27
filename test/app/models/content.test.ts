@@ -43,8 +43,10 @@ jest.mock("~/models/timeline-content", () => ({
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
 }));
-jest.mock("~/repositories", () => ({
-  RecruitmentRepository: jest.fn(),
+jest.mock("~/models/recruitment", () => ({
+  getAllRecruitmentGroups: jest.fn(),
+  getRecruitmentGroupByUid: jest.fn(),
+  getRecruitmentGroupsByUids: jest.fn(),
 }));
 
 import { getNavigationBarContents } from "../../../app/models/content";

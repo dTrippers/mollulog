@@ -2,16 +2,17 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getFutureContents, getIndexContents, getNavigationBarContentsRaw } from "~/models/content";
 import { getEventList, syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
+import { getStudentGearData } from "~/models/growth-resource";
+import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { warmRaidCache } from "~/models/raid";
+import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
+import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { GrowthResourceRepository, RecruitmentRepository } from "~/repositories";
-import { getItemCatalogResources } from "~/repositories/item-catalog";
-import { getCampaignFarmingStages } from "~/repositories/stage";
 
 function makeSensei(overrides: Partial<Sensei>): Sensei {
   return {
@@ -65,20 +66,20 @@ jest.mock("~/models/event-content", () => ({
   warmActiveUpcomingEventContent: jest.fn(),
 }));
 
-jest.mock("~/repositories/item-catalog", () => ({
+jest.mock("~/models/item-catalog", () => ({
   getItemCatalogResources: jest.fn(),
 }));
 
-jest.mock("~/repositories/stage", () => ({
+jest.mock("~/models/stage", () => ({
   getCampaignFarmingStages: jest.fn(),
 }));
 
-const mockRecruitmentRefresh = jest.fn<() => Promise<unknown[]>>();
-const mockGetStudentGearData = jest.fn<(_studentUids: string[], _forceRefresh?: boolean) => Promise<unknown>>();
+jest.mock("~/models/growth-resource", () => ({
+  getStudentGearData: jest.fn(),
+}));
 
-jest.mock("~/repositories", () => ({
-  GrowthResourceRepository: jest.fn().mockImplementation(() => ({ getStudentGearData: mockGetStudentGearData })),
-  RecruitmentRepository: jest.fn().mockImplementation(() => ({ refresh: mockRecruitmentRefresh })),
+jest.mock("~/models/recruitment", () => ({
+  warmRecruitmentCache: jest.fn(),
 }));
 
 jest.mock("~/models/raid", () => ({
@@ -115,8 +116,8 @@ const mockedSyncAllTimelineContentsMeta = syncAllTimelineContentsMeta as jest.Mo
 >;
 const mockedGetItemCatalogResources = getItemCatalogResources as jest.MockedFunction<typeof getItemCatalogResources>;
 const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
-const MockedGrowthResourceRepository = GrowthResourceRepository as jest.MockedClass<typeof GrowthResourceRepository>;
-const MockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
+const mockedGetStudentGearData = getStudentGearData as jest.MockedFunction<typeof getStudentGearData>;
+const mockedWarmRecruitmentCache = warmRecruitmentCache as jest.MockedFunction<typeof warmRecruitmentCache>;
 const mockedWarmRaidCache = warmRaidCache as jest.MockedFunction<typeof warmRaidCache>;
 
 type ManageActionResponse = {
@@ -179,8 +180,8 @@ beforeEach(() => {
     ReturnType<typeof getAllStudents>
   >);
   mockedGetStudentSkillItemsBatch.mockResolvedValue(new Map());
-  mockGetStudentGearData.mockResolvedValue(new Map());
-  mockRecruitmentRefresh.mockResolvedValue([]);
+  mockedGetStudentGearData.mockResolvedValue(new Map());
+  mockedWarmRecruitmentCache.mockResolvedValue([]);
   mockedWarmRaidCache.mockResolvedValue([]);
   mockedGetMainStories.mockResolvedValue([]);
   mockedGetAllStudentsFavoriteItems.mockResolvedValue([]);
@@ -227,7 +228,7 @@ describe("__manage route", () => {
         durations: {
           syncYoutubeCommunityPosts: expect.any(Number),
           syncRawStudents: expect.any(Number),
-          "RecruitmentRepository.refresh": expect.any(Number),
+          warmRecruitmentCache: expect.any(Number),
           warmRaidCache: expect.any(Number),
           getMainStories: expect.any(Number),
           getAllStudentsFavoriteItems: expect.any(Number),
@@ -253,8 +254,7 @@ describe("__manage route", () => {
     expect(mockedSyncEventContentsList).toHaveBeenCalledWith(expect.anything());
     expect(mockedGetAllStudents).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(expect.anything(), ["10000", "10001"], true);
-    expect(MockedGrowthResourceRepository).toHaveBeenCalledWith(expect.anything());
-    expect(mockGetStudentGearData).toHaveBeenCalledWith(["10000", "10001"], true);
+    expect(mockedGetStudentGearData).toHaveBeenCalledWith(expect.anything(), ["10000", "10001"], true);
     expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(expect.anything(), true);
@@ -262,7 +262,7 @@ describe("__manage route", () => {
     expect(mockedGetIndexContents).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
     expect(mockedGetFutureContents).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
     expect(mockedGetNavigationBarContentsRaw).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
-    expect(MockedRecruitmentRepository).toHaveBeenCalledWith(expect.anything());
+    expect(mockedWarmRecruitmentCache).toHaveBeenCalledWith(expect.anything());
     expect(mockedWarmRaidCache).toHaveBeenCalledWith(expect.anything());
   });
 

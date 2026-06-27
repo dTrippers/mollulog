@@ -9,7 +9,10 @@ import {
   calculatePickupTrialMoments,
 } from "./pyroxene-timeline";
 
-jest.mock("~/repositories", () => ({ RecruitmentRepository: {} }));
+jest.mock("~/models/recruitment", () => ({
+  getRecruitmentGroupsByUids: jest.fn(),
+  getRecruitmentPoolStudents: jest.fn(),
+}));
 jest.mock("~/models/raid", () => ({ getRaidSchedule: jest.fn() }));
 jest.mock("./student", () => ({ getAllStudentsMap: jest.fn() }));
 jest.mock("./timeline-content", () => ({

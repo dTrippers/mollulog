@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import type { CommunityFeedPost } from "~/models/community";
 import { enrichCommunityFeedPosts } from "~/models/community-feed";
+import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
 import { getGradingTagsByGradingUids } from "~/models/student-grading-tag";
 import { getTimelineContentsByUids } from "~/models/timeline-content";
-import { RecruitmentRepository } from "~/repositories/recruitment";
 
 jest.mock("~/models/student", () => ({
   getAllStudentsMap: jest.fn(),
@@ -18,12 +18,8 @@ jest.mock("~/models/timeline-content", () => ({
   getTimelineContentsByUids: jest.fn(),
 }));
 
-const mockGetByUids = jest.fn<() => Promise<unknown[]>>();
-
-jest.mock("~/repositories/recruitment", () => ({
-  RecruitmentRepository: jest.fn(() => ({
-    getByUids: mockGetByUids,
-  })),
+jest.mock("~/models/recruitment", () => ({
+  getRecruitmentGroupsByUids: jest.fn(),
 }));
 
 type PreparedStatement = {
@@ -110,7 +106,9 @@ const mockedGetGradingTagsByGradingUids = getGradingTagsByGradingUids as jest.Mo
 const mockedGetTimelineContentsByUids = getTimelineContentsByUids as jest.MockedFunction<
   typeof getTimelineContentsByUids
 >;
-const mockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
+const mockedGetRecruitmentGroupsByUids = getRecruitmentGroupsByUids as unknown as jest.MockedFunction<
+  (...args: unknown[]) => Promise<unknown[]>
+>;
 
 function createEnv(db: FakeCommunityFeedD1Database): Env {
   return { DB: db } as unknown as Env;
@@ -177,7 +175,7 @@ describe("enrichCommunityFeedPosts", () => {
         recruitmentGroupUid: "group-1",
       },
     ] as Awaited<ReturnType<typeof getTimelineContentsByUids>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "group-1",
         recruitments: [
@@ -189,7 +187,7 @@ describe("enrichCommunityFeedPosts", () => {
 
     const enriched = await enrichCommunityFeedPosts(createEnv(db), [createRecruitmentResultPost()]);
 
-    expect(mockedRecruitmentRepository).toHaveBeenCalledWith(createEnv(db));
+    expect(mockedGetRecruitmentGroupsByUids).toHaveBeenCalledWith(createEnv(db), ["group-1"]);
     expect(enriched.posts[0].recruitmentStats).toEqual({
       totalTrial: 120,
       tier3Count: 2,
@@ -242,7 +240,7 @@ describe("enrichCommunityFeedPosts", () => {
         recruitmentGroupUid: "main-story-decagrammaton-3-2",
       },
     ] as Awaited<ReturnType<typeof getTimelineContentsByUids>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "main-story-decagrammaton-3-2",
         recruitmentType: "usual",

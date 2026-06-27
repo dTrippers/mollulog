@@ -5,7 +5,7 @@ import { Button, EmptyView, ResourceCard, Title } from "~/components/primitives"
 import { cn } from "~/lib/utils";
 import { getEquipmentResourceTierLabel } from "~/models/growth-resource";
 import type { UserResourceInventoryDraft } from "~/models/user-resource-inventory";
-import type { ItemCatalogResource } from "~/repositories/item-catalog";
+import type { ItemCatalogResource } from "~/models/item-catalog";
 
 type ResourceInventoryDraftReviewProps = {
   draft: UserResourceInventoryDraft;

@@ -9,7 +9,11 @@ import {
   toUtcIso,
 } from "~/lib/date-time";
 import { getRaidSchedule, getRaidScheduleByTypeAndSeason, type RaidSchedule } from "~/models/raid";
-import { RecruitmentRepository } from "~/repositories";
+import {
+  getAllRecruitmentGroups,
+  type getRecruitmentGroupByUid,
+  getRecruitmentGroupsByUids,
+} from "~/models/recruitment";
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
 import type { RaidType, Role } from "./content.d";
 import { getAllCoupons, hasUnregisteredActiveCoupons } from "./coupon";
@@ -101,7 +105,6 @@ export async function getIndexContents(env: Env, forceRefresh = false, ctx?: Exe
       const nowDate = new Date(now);
       const eventContentTypes: TimelineContentType[] = ["event", "main_story", "mini_event", "campaign"];
 
-      const recruitmentRepository = new RecruitmentRepository(env);
       const [allEvents, currentRaids, allRecruitmentGroups] = await Promise.all([
         getTimelineContentsByContentTypes(env, eventContentTypes, now).then((events) =>
           events.filter((content) => !content.endAt || isInstantAfter(content.endAt, now)),
@@ -109,7 +112,7 @@ export async function getIndexContents(env: Env, forceRefresh = false, ctx?: Exe
         getUpcomingRaidContents(env, { limit: 4, forceRefresh }).then((contents) =>
           contents.flatMap((content) => (content.raidSchedule ? [content.raidSchedule] : [])),
         ),
-        recruitmentRepository.getAll(forceRefresh),
+        getAllRecruitmentGroups(env, forceRefresh),
       ]);
 
       const ongoingEvents = allEvents.filter(
@@ -306,7 +309,7 @@ export type FutureContent = TimelineContent & {
   raidInfo?: RaidInfo;
 };
 
-function toRecruitmentInfos(group: Awaited<ReturnType<RecruitmentRepository["getByUid"]>>): RecruitmentInfo[] {
+function toRecruitmentInfos(group: Awaited<ReturnType<typeof getRecruitmentGroupByUid>>): RecruitmentInfo[] {
   return (group?.recruitments ?? [])
     .sort((a, b) => Number(a.rerun) - Number(b.rerun))
     .map((r) => ({
@@ -339,7 +342,6 @@ export async function getFutureContents(
     ctx,
     FUTURE_CONTENTS_CACHE_KEY,
     async () => {
-      const recruitmentRepository = new RecruitmentRepository(env);
       const [contents, upcomingRaidContents] = await Promise.all([
         getTimelineContents(env),
         getUpcomingRaidContents(env, { forceRefresh }),
@@ -348,7 +350,7 @@ export async function getFutureContents(
       const recruitmentGroupUids = contents
         .map((content) => content.recruitmentGroupUid)
         .filter((uid) => uid !== null) as string[];
-      const recruitmentGroups = await recruitmentRepository.getByUids(recruitmentGroupUids, forceRefresh);
+      const recruitmentGroups = await getRecruitmentGroupsByUids(env, recruitmentGroupUids, forceRefresh);
       const recruitmentGroupMap = new Map(recruitmentGroups.map((group) => [group.uid, group]));
 
       return Promise.all(

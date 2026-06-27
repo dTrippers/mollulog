@@ -1,5 +1,9 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import { ResourceTypeEnum } from "../../../app/graphql/graphql";
+
+jest.mock("~/lib/baql", () => ({
+  runQuery: jest.fn(),
+}));
 import {
   type FarmingStage,
   buildEquipmentFarmingNeeded,

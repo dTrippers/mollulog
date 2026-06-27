@@ -19,9 +19,9 @@ import {
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
 import { resolveRecruitmentResultStudents } from "~/models/recruitment-result-stats";
+import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
-import { RecruitmentRepository } from "~/repositories";
 import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
 
@@ -132,7 +132,6 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     return redirectToCanonicalEditor(params);
   }
 
-  const recruitmentRepository = new RecruitmentRepository(env);
   let currentPickupHistory: EditablePickupHistory | null = null;
   let currentRecruitmentResult: Awaited<ReturnType<typeof getRecruitmentResult>> = null;
   let currentRecruitmentResultComment: string | null = null;
@@ -146,7 +145,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const now = nowUtcIso();
 
   const [allGroups, allStudentsList] = await Promise.all([
-    recruitmentRepository.getAllHistorical(),
+    getAllHistoricalRecruitmentGroups(env),
     getAllStudents(env),
   ]);
   const pickupGroups = allGroups.filter(
@@ -252,7 +251,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   }
 
   const data = await request.json<ActionData>();
-  const recruitmentGroup = await new RecruitmentRepository(env).getByUid(data.eventUid);
+  const recruitmentGroup = await getRecruitmentGroupByUid(env, data.eventUid);
   if (!recruitmentGroup) {
     throw routeError(400, "pickup_history.recruitment_group_missing", "모집 이벤트를 찾을 수 없어요", {
       recruitmentGroupUid: data.eventUid,

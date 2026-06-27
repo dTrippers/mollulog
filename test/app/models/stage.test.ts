@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
 import { fetchSourceCached } from "~/lib/cache";
-import { getCampaignFarmingStages } from "../../../app/repositories/stage";
+import { getCampaignFarmingStages } from "../../../app/models/stage";
 
 jest.mock("~/lib/cache", () => ({
   cacheKey: (category: string, domain: string, version: number, query: string) =>

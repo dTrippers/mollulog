@@ -4,7 +4,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { buildEquipmentFarmingNeeded, buildEquipmentFarmingRequirements } from "~/models/farming-recommendation";
 import { aggregateGrowthResourceRequirements } from "~/models/growth-resource";
 import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
-import { getCampaignFarmingStages } from "~/repositories/stage";
+import { getCampaignFarmingStages } from "~/models/stage";
 import type { GrowthLayoutContext } from "./utils.growth._components/types";
 import FarmingRecommendationPanel from "./utils.growth.farming._components/FarmingRecommendationPanel";
 

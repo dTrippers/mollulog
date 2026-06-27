@@ -1,4 +1,4 @@
-import type { RecruitmentGroup, RecruitmentPoolStudent } from "~/repositories/recruitment";
+import type { RecruitmentGroup, RecruitmentPoolStudent } from "~/models/recruitment";
 import type { RecruitmentResult, RecruitmentResultStudent } from "./recruitment-result";
 import type { StudentMap } from "./student";
 

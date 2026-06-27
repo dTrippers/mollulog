@@ -7,9 +7,10 @@ import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { getItemCatalogResources } from "~/repositories/item-catalog";
-import { GrowthResourceRepository, RecruitmentRepository } from "~/repositories";
-import { getCampaignFarmingStages } from "~/repositories/stage";
+import { getItemCatalogResources } from "~/models/item-catalog";
+import { getStudentGearData } from "~/models/growth-resource";
+import { warmRecruitmentCache } from "~/models/recruitment";
+import { getCampaignFarmingStages } from "~/models/stage";
 import { syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
 import { cacheKey, cacheQuery, claimKvCacheWindow } from "~/lib/cache";
 import { warmRaidCache } from "~/models/raid";
@@ -32,10 +33,9 @@ const SOURCE_WARM_MARKER_KEY = cacheKey("source", "cron-source-warm", 1, cacheQu
 
 async function warmStudentSourceCaches(env: Env, forceRefresh = false): Promise<void> {
   const studentUids = (await getAllStudents(env, true)).map((student) => student.uid);
-  const growthResourceRepository = new GrowthResourceRepository(env);
   await Promise.all([
     getStudentSkillItemsBatch(env, studentUids, forceRefresh),
-    growthResourceRepository.getStudentGearData(studentUids, forceRefresh),
+    getStudentGearData(env, studentUids, forceRefresh),
   ]);
 }
 
@@ -49,10 +49,9 @@ async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
 }
 
 async function refreshSourceCaches(env: Env): Promise<void> {
-  const recruitmentRepository = new RecruitmentRepository(env);
   await Promise.all([
     syncRawStudents(env),
-    recruitmentRepository.refresh(),
+    warmRecruitmentCache(env),
     warmRaidCache(env),
     getMainStories(env, true),
     getAllStudentsFavoriteItems(env, true),

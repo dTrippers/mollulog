@@ -1,6 +1,6 @@
 import { inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { RecruitmentRepository } from "~/repositories/recruitment";
+import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import type { CommunityFeedPost } from "./community";
 import {
   type RecruitmentResultStudent,
@@ -52,7 +52,7 @@ async function getRecruitmentFeedStatsByPostUid(
   posts: CommunityFeedPost[],
   options: {
     allStudentsMap: Awaited<ReturnType<typeof getAllStudentsMap>>;
-    recruitmentGroupMap: Map<string, Awaited<ReturnType<RecruitmentRepository["getByUids"]>>[number]>;
+    recruitmentGroupMap: Map<string, Awaited<ReturnType<typeof getRecruitmentGroupsByUids>>[number]>;
     timelineContentMap: Map<string, Awaited<ReturnType<typeof getTimelineContentsByUids>>[number]>;
   },
 ): Promise<Map<string, RecruitmentFeedStats>> {
@@ -138,7 +138,7 @@ export async function enrichCommunityFeedPosts(
     .map((content) => content.recruitmentGroupUid)
     .filter((uid): uid is string => uid !== null);
   const recruitmentGroups =
-    recruitmentGroupUids.length > 0 ? await new RecruitmentRepository(env).getByUids(recruitmentGroupUids) : [];
+    recruitmentGroupUids.length > 0 ? await getRecruitmentGroupsByUids(env, recruitmentGroupUids) : [];
   const recruitmentGroupMap = new Map(recruitmentGroups.map((group) => [group.uid, group]));
   const recruitmentStatsByPostUid = await getRecruitmentFeedStatsByPostUid(env, posts, {
     allStudentsMap,

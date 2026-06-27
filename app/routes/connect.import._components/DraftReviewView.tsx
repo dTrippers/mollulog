@@ -5,7 +5,7 @@ import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { Form, Link, useNavigation } from "react-router";
 import { Button, Callout } from "~/components/primitives";
 import type { SyncDraft, SyncDraftStatus, SyncDraftType } from "~/models/sync-draft";
-import type { ItemCatalogResource } from "~/repositories/item-catalog";
+import type { ItemCatalogResource } from "~/models/item-catalog";
 
 export type SyncDraftDisplayMetadata = {
   label: string;

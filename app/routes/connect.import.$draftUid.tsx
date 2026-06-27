@@ -26,8 +26,8 @@ import {
   updateSyncDraftEntries,
 } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
-import { GrowthResourceRepository } from "~/repositories/growth-resource";
-import { getItemCatalogResourceMap } from "~/repositories/item-catalog";
+import { getStudentGearData } from "~/models/growth-resource";
+import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import type { SyncDraftDisplayMetadata, SyncDraftReviewActionData } from "./connect.import._components/DraftReviewView";
 import SyncDraftReview from "./connect.import._components/SyncDraftReview";
 import StudentStateDraftReview, {
@@ -168,7 +168,7 @@ async function loadDraftMetadata(env: Env, draft: SyncDraft): Promise<Record<str
     const studentsByUid = await getAllStudentsMap(env);
     const gearDataByUid =
       draft.type === "student_state"
-        ? await new GrowthResourceRepository(env).getStudentGearData(draft.entries.map((entry) => entry.entryKey))
+        ? await getStudentGearData(env, draft.entries.map((entry) => entry.entryKey))
         : new Map<string, null>();
     return Object.fromEntries(
       draft.entries.flatMap((entry) => {

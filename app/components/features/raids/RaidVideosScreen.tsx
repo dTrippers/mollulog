@@ -3,7 +3,7 @@ import { PlayIcon } from "@heroicons/react/24/outline";
 import { ArrowsUpDownIcon } from "@heroicons/react/24/outline";
 import type { RefObject } from "react";
 import { EmptyView, FilterButtons, LoadingSkeleton } from "~/components/primitives";
-import type { RaidVideoItem, VideoSort } from "~/repositories";
+import type { RaidVideoItem, VideoSort } from "~/models/raid-videos";
 
 export type RaidVideosScreenProps = {
   videos: RaidVideoItem[];

@@ -2,8 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { raidTypeFromParam } from "~/domain/raid";
 import { fetchRaidVideos } from "~/lib/ranks";
 import { getRaidScheduleByTypeAndSeason } from "~/models/raid";
-import { getVideoDateRange } from "~/models/raid-videos";
-import { RAID_VIDEOS_PAGE_SIZE, type RaidVideosData, parseVideoSort } from "~/repositories";
+import { RAID_VIDEOS_PAGE_SIZE, type RaidVideosData, getVideoDateRange, parseVideoSort } from "~/models/raid-videos";
 
 export type { RaidVideosData };
 

@@ -16,8 +16,8 @@ import {
   nowUtcIso,
   toUtcIso,
 } from "~/lib/date-time";
-import { RecruitmentRepository } from "~/repositories";
 import { cacheKey, cacheQuery, fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "~/lib/cache";
+import { getAllRecruitmentGroups, getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "./timeline-content";
 import type { RunType } from "./timeline-content";
 
@@ -366,10 +366,8 @@ export async function getRecruitmentGroups(
   env: Env,
   opts: { endAfter?: Date; uids?: string[] } = {},
 ): Promise<RecruitmentGroupsResult> {
-  const repository = new RecruitmentRepository(env);
-
   if (opts.uids) {
-    let groups = await repository.getByUids(opts.uids);
+    let groups = await getRecruitmentGroupsByUids(env, opts.uids);
     if (opts.endAfter) {
       const endAfterTime = opts.endAfter.getTime();
       groups = groups.filter((group) => !group.endAt || new Date(group.endAt).getTime() >= endAfterTime);
@@ -379,11 +377,11 @@ export async function getRecruitmentGroups(
 
   if (opts.endAfter) {
     const endAfterTime = opts.endAfter.getTime();
-    const groups = await repository.getAll();
+    const groups = await getAllRecruitmentGroups(env);
     return groups.filter((group) => !group.endAt || new Date(group.endAt).getTime() >= endAfterTime);
   }
 
-  return repository.getAll();
+  return getAllRecruitmentGroups(env);
 }
 
 //

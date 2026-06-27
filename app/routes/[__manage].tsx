@@ -12,14 +12,15 @@ import type { Sensei } from "~/models/sensei";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { GrowthResourceRepository, RecruitmentRepository } from "~/repositories";
-import { getItemCatalogResources } from "~/repositories/item-catalog";
-import { getCampaignFarmingStages } from "~/repositories/stage";
+import { getStudentGearData } from "~/models/growth-resource";
+import { getItemCatalogResources } from "~/models/item-catalog";
+import { warmRecruitmentCache } from "~/models/recruitment";
+import { getCampaignFarmingStages } from "~/models/stage";
 
 type RefreshTaskName =
   | "syncYoutubeCommunityPosts"
   | "syncRawStudents"
-  | "RecruitmentRepository.refresh"
+  | "warmRecruitmentCache"
   | "warmRaidCache"
   | "getMainStories"
   | "getAllStudentsFavoriteItems"
@@ -72,20 +73,18 @@ async function runRefreshTask(name: RefreshTaskName, fn: () => Promise<unknown>)
 }
 
 async function refreshCache(env: Env, ctx: ExecutionContext): Promise<RefreshResult> {
-  const recruitmentRepository = new RecruitmentRepository(env);
-  const growthResourceRepository = new GrowthResourceRepository(env);
   const studentUids = getAllStudents(env, true).then((students) => students.map((student) => student.uid));
   const sourceTasks: Array<[RefreshTaskName, () => Promise<unknown>]> = [
     ["syncYoutubeCommunityPosts", () => syncYoutubeCommunityPosts(env)],
     ["syncRawStudents", () => syncRawStudents(env)],
-    ["RecruitmentRepository.refresh", () => recruitmentRepository.refresh()],
+    ["warmRecruitmentCache", () => warmRecruitmentCache(env)],
     ["warmRaidCache", () => warmRaidCache(env)],
     ["getMainStories", () => getMainStories(env, true)],
     ["getAllStudentsFavoriteItems", () => getAllStudentsFavoriteItems(env, true)],
     ["syncAllTimelineContentsMeta", () => syncAllTimelineContentsMeta(env)],
     ["syncEventContentsList", () => syncEventContentsList(env)],
     ["warmStudentSkillItems", async () => getStudentSkillItemsBatch(env, await studentUids, true)],
-    ["warmStudentGearData", async () => growthResourceRepository.getStudentGearData(await studentUids, true)],
+    ["warmStudentGearData", async () => getStudentGearData(env, await studentUids, true)],
     ["warmActiveUpcomingEventContent", () => warmActiveUpcomingEventContent(env, true)],
     ["getItemCatalogResources", () => getItemCatalogResources(env, true)],
     ["getCampaignFarmingStages", () => getCampaignFarmingStages(env, true)],
