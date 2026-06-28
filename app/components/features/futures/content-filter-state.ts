@@ -48,9 +48,7 @@ export function normalizeContentFilterState(value: unknown): ContentFilterState 
       )
     : [];
 
-  const onlyPickups = "onlyPickups" in value && typeof value.onlyPickups === "boolean"
-    ? value.onlyPickups
-    : false;
+  const onlyPickups = "onlyPickups" in value && typeof value.onlyPickups === "boolean" ? value.onlyPickups : false;
 
   return { types, onlyPickups };
 }

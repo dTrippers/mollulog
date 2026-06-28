@@ -4,31 +4,17 @@ import { Outlet, useLoaderData, useLocation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page, createPageErrorBoundary } from "~/components/features/layout";
 import { StudentInfo } from "~/components/features/students";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
+import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
-import { formatStudentFullName, getAllStudentsMap } from "~/models/student";
+import { formatStudentFullName, getAllStudentsMap, getStudentDetail } from "~/models/student";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
-import { RaidRepository } from "~/repositories";
-
-const studentDetailQuery = graphql(`
-  query StudentDetail($uid: String!) {
-    student(uid: $uid) {
-      name familyName uid attackType defenseType role school schaleDbId releaseAt
-      recruitments {
-        since rerun
-        recruitmentGroup { uid startAt endAt }
-      }
-    }
-  }
-`);
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const uid = params.id;
@@ -40,10 +26,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     route: "students.$id.loader",
     studentUid: uid,
   });
-  const raidRepository = new RaidRepository(env);
 
-  const { data, error } = await runQuery(studentDetailQuery, { uid });
-  if (error) {
+  let student: Awaited<ReturnType<typeof getStudentDetail>>;
+  try {
+    student = await getStudentDetail(env, uid);
+  } catch (error) {
     logger.error("Failed to load student detail", error);
     if (isStudentNotFoundError(error)) {
       throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
@@ -51,12 +38,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
   }
 
-  if (!data) {
+  if (student === undefined) {
     logger.error("Failed to load student detail without response data");
     throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
   }
 
-  const student = data.student;
   if (!student) {
     throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
@@ -79,7 +65,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   );
   const tagCounts = await getTagCountsByStudent(env, uid);
   const allGradings = await getStudentGradingsByStudentWithUsers(env, uid, true);
-  const allRaids = await raidRepository.getAll();
+  const allRaids = await getAllRaidSchedules(env);
 
   const sortedGradings = [...allGradings].sort((a, b) => {
     const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();

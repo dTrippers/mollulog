@@ -9,20 +9,16 @@ import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { getActiveSensei } from "~/auth/authenticator.server";
 import { createPageErrorBoundary, Page } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
+import { raidTypeToParam } from "~/domain/raid";
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
 import { canonicalLink } from "~/lib/seo";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
-import { type RaidDefenseTypeSet, getRaidDefenseTypeSetKey, raidTypeToParam } from "~/models/raid";
-import { RaidRepository } from "~/repositories";
-
-function raidKey(raid: { raidType: string; seasonIndex: number }) {
-  return `${raid.raidType}:${raid.seasonIndex}`;
-}
+import { type RaidDefenseTypeSet, getRaidDefenseTypeSetKey } from "~/models/raid";
+import { loadRaidSeasonPage } from "~/views/raid";
 
 function getDefenseTypeSetLabel(defenseTypeSet: RaidDefenseTypeSet) {
   return defenseTypeSet.defenseTypes.map((defenseType) => defenseTypeLocale[defenseType]).join(" / ");
@@ -49,7 +45,6 @@ function getAvailableDefenseTypeSet(
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
-  const raidRepository = new RaidRepository(env);
   if (!raidType || !seasonIndex) {
     throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");
   }
@@ -59,22 +54,16 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
     throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");
   }
 
-  const [currentRaid, allRaidSchedules, sensei] = await Promise.all([
-    raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex),
-    raidRepository.getAll(),
-    getActiveSensei(env, request),
-  ]);
+  const { currentRaid, allRaids, signedIn } = await loadRaidSeasonPage(env, request, raidType, parsedSeasonIndex);
 
   if (!currentRaid) {
     throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");
   }
 
-  const mergedRaids = new Map(allRaidSchedules.map((raid) => [raidKey(raid), raid]));
-
   return {
     currentRaid,
-    allRaids: Array.from(mergedRaids.values()),
-    signedIn: sensei !== null,
+    allRaids,
+    signedIn,
   };
 };
 

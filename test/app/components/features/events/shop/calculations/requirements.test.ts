@@ -1,10 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { calculateRequiredQuantities } from "../../../../../../../app/components/features/events/shop/calculations/requirements";
-import type {
-  CollectableResource,
-  ShopResource,
-  Stage,
-} from "../../../../../../../app/components/features/events/shop/types";
+import type { CollectableResource, ShopResource, Stage } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 
 const eventCoin = {

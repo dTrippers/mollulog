@@ -6,7 +6,7 @@ import { FilterButtons } from "~/components/primitives";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { type UtcIsoString, compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 import type { RaidType, Terrain } from "~/models/content.d";
-import { raidTypeToParam } from "~/models/raid";
+import { raidTypeToParam } from "~/domain/raid";
 import { sanitizeClassName } from "~/prophandlers";
 import RaidListItem from "./RaidListItem";
 

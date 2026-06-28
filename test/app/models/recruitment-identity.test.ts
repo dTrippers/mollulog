@@ -3,7 +3,7 @@ import {
   getProvisionalRecruitmentStudentKey,
   getRecruitmentFavoriteKey,
   normalizeRecruitmentStudentName,
-} from "../../../app/models/recruitment-identity";
+} from "~/domain/recruitment-identity";
 
 describe("recruitment identity", () => {
   it("normalizes recruitment student names before deriving provisional keys", () => {

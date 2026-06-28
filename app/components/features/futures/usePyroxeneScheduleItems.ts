@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import type { PyroxenePlannerContent, PyroxeneTimelineItem } from "~/models/pyroxene-planner";
-import type { PyroxeneScheduleItem } from "./types";
+import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
+import type { PyroxeneTimelineItem } from "~/models/pyroxene-planner";
+import type { PyroxenePlannerContent } from "~/views/pyroxene";
 
 type FavoritedStudentRef = {
   contentUid: string;

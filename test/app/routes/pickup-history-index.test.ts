@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import {
   deleteRecruitmentResult,
   getRecruitmentResultComments,
@@ -8,7 +9,6 @@ import {
 import { getSenseiByUsername } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
-import { RecruitmentRepository } from "~/repositories";
 import { action, loader } from "../../../app/routes/$username.pickups._index";
 
 jest.mock("~/auth/authenticator.server", () => ({
@@ -33,14 +33,9 @@ jest.mock("~/models/timeline-content", () => ({
   getTimelineContentsByRecruitmentGroupUids: jest.fn(),
 }));
 
-const mockGetByUids = jest.fn<() => Promise<unknown[]>>();
-const mockGetPoolStudents = jest.fn<() => Promise<unknown[]>>();
-
-jest.mock("~/repositories", () => ({
-  RecruitmentRepository: jest.fn(() => ({
-    getByUids: mockGetByUids,
-    getPoolStudents: mockGetPoolStudents,
-  })),
+jest.mock("~/models/recruitment", () => ({
+  getRecruitmentGroupsByUids: jest.fn(),
+  getRecruitmentPoolStudents: jest.fn(),
 }));
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
@@ -53,7 +48,12 @@ const mockedGetSenseiByUsername = getSenseiByUsername as jest.MockedFunction<typ
 const mockedGetAllStudentsMap = getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>;
 const mockedGetTimelineContentsByRecruitmentGroupUids =
   getTimelineContentsByRecruitmentGroupUids as jest.MockedFunction<typeof getTimelineContentsByRecruitmentGroupUids>;
-const mockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
+const mockedGetRecruitmentGroupsByUids = getRecruitmentGroupsByUids as unknown as jest.MockedFunction<
+  (...args: unknown[]) => Promise<unknown[]>
+>;
+const mockedGetRecruitmentPoolStudents = getRecruitmentPoolStudents as unknown as jest.MockedFunction<
+  (...args: unknown[]) => Promise<unknown[]>
+>;
 
 const env = {} as Env;
 
@@ -74,7 +74,7 @@ function createActionArgs(request: Request) {
 }
 
 beforeEach(() => {
-  mockGetPoolStudents.mockResolvedValue([]);
+  mockedGetRecruitmentPoolStudents.mockResolvedValue([]);
   mockedGetRecruitmentResultComments.mockResolvedValue(new Map());
 });
 
@@ -117,7 +117,7 @@ describe("pickup history index loader", () => {
         initialTier: 3,
       },
     } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "hidden-heritage-rerun",
         recruitmentType: "usual",
@@ -135,7 +135,7 @@ describe("pickup history index loader", () => {
 
     const result = await loader(createLoaderArgs() as never);
 
-    expect(mockedRecruitmentRepository).toHaveBeenCalledWith(env);
+    expect(mockedGetRecruitmentGroupsByUids).toHaveBeenCalledWith(env, ["hidden-heritage-rerun"]);
     expect(result.recruitmentHistories[0].event.name).toBe("숨겨진 유산을 찾아서 ~트리니티 과외 활동~");
   });
 
@@ -173,7 +173,7 @@ describe("pickup history index loader", () => {
         initialTier: 3,
       },
     } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "hidden-heritage-rerun",
         recruitmentType: "usual",
@@ -236,7 +236,7 @@ describe("pickup history index loader", () => {
         initialTier: 3,
       },
     } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "decagrammaton-armed",
         recruitmentType: "usual",
@@ -293,7 +293,7 @@ describe("pickup history index loader", () => {
       },
     ]);
     mockedGetAllStudentsMap.mockResolvedValue({} as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "decagrammaton-armed",
         recruitmentType: "usual",
@@ -351,14 +351,14 @@ describe("pickup history index loader", () => {
       },
     ]);
     mockedGetAllStudentsMap.mockResolvedValue({} as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetPoolStudents.mockResolvedValue([
+    mockedGetRecruitmentPoolStudents.mockResolvedValue([
       {
         uid: "101",
         name: "히나",
         initialTier: 3,
       },
     ]);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "hidden-heritage-rerun",
         recruitmentType: "usual",
@@ -418,7 +418,7 @@ describe("pickup history index loader", () => {
       },
     ]);
     mockedGetAllStudentsMap.mockResolvedValue({} as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "hidden-heritage-rerun",
         recruitmentType: "usual",
@@ -473,7 +473,7 @@ describe("pickup history index loader", () => {
       },
     ]);
     mockedGetAllStudentsMap.mockResolvedValue({} as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetByUids.mockResolvedValue([]);
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([]);
     mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([]);
 
     await expect(loader(createLoaderArgs() as never)).rejects.toMatchObject({
@@ -543,7 +543,7 @@ describe("pickup history index loader", () => {
         initialTier: 3,
       },
     } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "known-trial-group",
         recruitmentType: "usual",
@@ -622,7 +622,7 @@ describe("pickup history index loader", () => {
         initialTier: 3,
       },
     } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "armed-rio-group",
         recruitmentType: "usual",
@@ -707,7 +707,7 @@ describe("pickup history index loader", () => {
       "20039": { uid: "20039", name: "키사키", initialTier: 3 },
       "20054": { uid: "20054", name: "히마리(무장)", initialTier: 3 },
     } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
-    mockGetByUids.mockResolvedValue([
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
       {
         uid: "main-story-decagrammaton-3-2",
         recruitmentType: "usual",

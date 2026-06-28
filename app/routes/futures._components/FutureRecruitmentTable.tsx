@@ -16,7 +16,7 @@ import { formatInstant, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib
 import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
-import { canCompleteRecruitmentStudent } from "~/models/recruitment-result-completion";
+import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import {
   type FutureRecruitmentTableContent,
   type FutureRecruitmentTableRecruitmentGroup,

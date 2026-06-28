@@ -1,12 +1,13 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { SubTitle } from "~/components/primitives";
-import { getContentsComments, nestComments, getFutureContents } from "~/models/content";
+import { getContentsComments, nestComments } from "~/models/content";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRouteSensei } from "./$username";
 import FuturePlan from "./$username.futures._components/FuturePlan";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { NestedComment } from "~/models/content";
+import { getFutureContents } from "~/views/futures";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentSkillItems } from "~/models/student";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";

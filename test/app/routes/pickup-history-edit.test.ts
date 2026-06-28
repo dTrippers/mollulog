@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { mergeEditableRecruitmentResultStudents } from "~/domain/recruitment-result";
 import { Attack, Defense } from "~/graphql/graphql";
 import { getPickupHistory } from "~/models/pickup-history";
+import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import {
   getRecruitmentResult,
   getRecruitmentResultComment,
-  mergeEditableRecruitmentResultStudents,
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
-import { RecruitmentRepository } from "~/repositories";
 import {
   action,
   getVisibleTier3StudentUids,
@@ -29,6 +29,10 @@ jest.mock("~/models/pickup-history", () => ({
 jest.mock("~/models/recruitment-result", () => ({
   getRecruitmentResult: jest.fn(),
   getRecruitmentResultComment: jest.fn(),
+  upsertRecruitmentResult: jest.fn(),
+}));
+
+jest.mock("~/domain/recruitment-result", () => ({
   createRecruitmentResultStudentsFromPickupHistory: jest.fn((history: { result: { tier3StudentIds: string[] }[] }) =>
     history.result.flatMap((trial) =>
       trial.tier3StudentIds.map((studentUid) => ({ studentUid, tier: 3, pickup: false })),
@@ -42,7 +46,35 @@ jest.mock("~/models/recruitment-result", () => ({
     history.result.reduce((sum, trial) => sum + trial.tier3Count, 0),
   ),
   mergeEditableRecruitmentResultStudents: jest.fn(),
-  upsertRecruitmentResult: jest.fn(),
+  resolveRecruitmentResultStudents: jest.fn(
+    (
+      students: { studentUid: string; tier: number; pickup: boolean }[],
+      lookup: {
+        allStudentsMap?: Record<string, { name: string; initialTier: number }>;
+        group?: {
+          recruitments: {
+            pickup: boolean;
+            recruitmentType?: string | null;
+            student?: { uid: string; name?: string | null; initialTier?: number | null } | null;
+          }[];
+        } | null;
+      },
+    ) =>
+      students
+        .filter((student) => student.studentUid)
+        .map((student) => {
+          const groupRecruitment =
+            lookup.group?.recruitments.find((recruitment) => recruitment.student?.uid === student.studentUid) ?? null;
+          const studentInfo = lookup.allStudentsMap?.[student.studentUid] ?? groupRecruitment?.student;
+          return {
+            uid: student.studentUid,
+            name: studentInfo?.name ?? student.studentUid,
+            tier: studentInfo?.initialTier ?? student.tier,
+            pickup:
+              groupRecruitment?.recruitmentType === "given" ? false : (groupRecruitment?.pickup ?? student.pickup),
+          };
+        }),
+  ),
 }));
 
 jest.mock("~/models/student", () => ({
@@ -53,16 +85,9 @@ jest.mock("~/models/timeline-content", () => ({
   getTimelineContentsByRecruitmentGroupUids: jest.fn(),
 }));
 
-const mockGetAllHistorical = jest.fn<() => Promise<unknown[]>>();
-const mockGetAll = jest.fn<() => Promise<unknown[]>>();
-const mockGetByUid = jest.fn<() => Promise<unknown | null>>();
-
-jest.mock("~/repositories", () => ({
-  RecruitmentRepository: jest.fn(() => ({
-    getAll: mockGetAll,
-    getAllHistorical: mockGetAllHistorical,
-    getByUid: mockGetByUid,
-  })),
+jest.mock("~/models/recruitment", () => ({
+  getAllHistoricalRecruitmentGroups: jest.fn(),
+  getRecruitmentGroupByUid: jest.fn(),
 }));
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
@@ -78,7 +103,12 @@ const mockedUpsertRecruitmentResult = upsertRecruitmentResult as jest.MockedFunc
 const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
 const mockedGetTimelineContentsByRecruitmentGroupUids =
   getTimelineContentsByRecruitmentGroupUids as jest.MockedFunction<typeof getTimelineContentsByRecruitmentGroupUids>;
-const mockedRecruitmentRepository = RecruitmentRepository as jest.MockedClass<typeof RecruitmentRepository>;
+const mockedGetAllHistoricalRecruitmentGroups = getAllHistoricalRecruitmentGroups as unknown as jest.MockedFunction<
+  (...args: unknown[]) => Promise<unknown[]>
+>;
+const mockedGetRecruitmentGroupByUid = getRecruitmentGroupByUid as unknown as jest.MockedFunction<
+  (...args: unknown[]) => Promise<unknown | null>
+>;
 
 const env = {} as Env;
 
@@ -143,7 +173,7 @@ describe("pickup history editor loader", () => {
 
     const historicalGroup = createGroup("magical-heavy-caliber", "2026-03-10T02:00:00Z");
     const recentGroup = createGroup("gojinraigou-rerun", "2026-05-12T02:00:00Z");
-    mockGetAllHistorical.mockResolvedValue([historicalGroup, recentGroup]);
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([historicalGroup, recentGroup]);
     mockedGetActiveSensei.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -175,9 +205,7 @@ describe("pickup history editor loader", () => {
       throw new Error(`Expected pickup history editor data, got redirect to ${result.headers.get("Location")}`);
     }
 
-    expect(mockedRecruitmentRepository).toHaveBeenCalledWith(env);
-    expect(mockGetAllHistorical).toHaveBeenCalledTimes(1);
-    expect(mockGetAll).not.toHaveBeenCalled();
+    expect(mockedGetAllHistoricalRecruitmentGroups).toHaveBeenCalledWith(env);
     expect(result.events.map((event: { uid: string }) => event.uid)).toEqual([
       "gojinraigou-rerun",
       "magical-heavy-caliber",
@@ -200,7 +228,7 @@ describe("pickup history editor loader", () => {
         initialTier: 1,
       },
     });
-    mockGetAllHistorical.mockResolvedValue([historicalGroup]);
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([historicalGroup]);
     mockedGetActiveSensei.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -246,7 +274,7 @@ describe("pickup history editor loader", () => {
     jest.setSystemTime(new Date("2026-05-27T00:00:00.000Z").getTime());
 
     const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
-    mockGetAllHistorical.mockResolvedValue([historicalGroup]);
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([historicalGroup]);
     mockedGetActiveSensei.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -310,7 +338,7 @@ describe("pickup history editor loader", () => {
         initialTier: 1,
       },
     });
-    mockGetAllHistorical.mockResolvedValue([historicalGroup]);
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([historicalGroup]);
     mockedGetActiveSensei.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -393,7 +421,7 @@ describe("pickup history editor loader", () => {
         initialTier: 1,
       },
     });
-    mockGetByUid.mockResolvedValue(historicalGroup);
+    mockedGetRecruitmentGroupByUid.mockResolvedValue(historicalGroup);
     mockedGetActiveSensei.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -438,7 +466,7 @@ describe("pickup history editor loader", () => {
 
   it("saves explicit tier3 count even when tier3 student names are omitted", async () => {
     const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
-    mockGetByUid.mockResolvedValue(historicalGroup);
+    mockedGetRecruitmentGroupByUid.mockResolvedValue(historicalGroup);
     mockedGetActiveSensei.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -489,7 +517,7 @@ describe("pickup history editor loader", () => {
         initialTier: 1,
       },
     });
-    mockGetByUid.mockResolvedValue(historicalGroup);
+    mockedGetRecruitmentGroupByUid.mockResolvedValue(historicalGroup);
     mockedGetActiveSensei.mockResolvedValue({
       id: 1,
       uid: "sensei-1",
@@ -562,7 +590,7 @@ describe("pickup history editor loader", () => {
     jest.setSystemTime(new Date("2026-05-27T00:00:00.000Z").getTime());
 
     const historicalGroup = createGroup("magical-heavy-caliber", "2026-03-10T02:00:00Z");
-    mockGetAllHistorical.mockResolvedValue([historicalGroup]);
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([historicalGroup]);
     mockedGetActiveSensei.mockResolvedValue({
       id: 1,
       uid: "sensei-1",

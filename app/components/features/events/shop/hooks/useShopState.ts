@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
+import type { MinigamePaymentQuantityMode } from "~/domain/event-shop";
+import type { ShopResource, Stage } from "~/domain/event-shop";
 import type { EventShopState } from "~/models/event-shop-state";
 import { isDailyResetShopResource } from "../calculations/shop-costs";
-import type { MinigamePaymentQuantityMode } from "../constants";
-import type { ShopResource, Stage } from "../types";
 
 export type ShopState = {
   itemQuantities: Record<string, number>;

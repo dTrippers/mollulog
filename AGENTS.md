@@ -27,9 +27,9 @@ This project has been deployed to Cloudflare Workers.
 ## Development Guides
 - Please follow the conventions of the project. Search for the existing code and follow the same style.
 - For UI layout, use modern and simple design.
-- Before creating or changing UI components, read `docs/ui-ux-guidelines.md` and follow its component structure, naming, reuse, layout, and performance rules.
-- Before adding, moving, or refactoring components, read `docs/component-development-guide.md` and follow its final structure rules for `primitives`, `features`, and route-local components.
-- Before restructuring route files or extracting screen-only UI, read `docs/routes.md` and follow its route-local composition rules.
+- Before creating or changing UI components, read `docs/frontend/design.md` and follow its component structure, naming, reuse, layout, and performance rules.
+- Before adding, moving, or refactoring components, read `docs/frontend/components.md` and follow its final structure rules for `primitives`, `features`, and route-local components.
+- Before restructuring route files or extracting screen-only UI, read `docs/frontend/routing.md` and follow its route-local composition rules.
 - Avoid Tailwind arbitrary values such as `text-[10px]`, `h-[37px]`, `mt-[3px]`, or custom grid sizes unless there is a concrete layout constraint that cannot be expressed with the existing scale.
 - Prefer the project's existing spacing, typography, radius, and color tokens such as `text-xs`, `text-sm`, `gap-1`, `rounded-md`, and semantic color classes.
 - If an arbitrary value is necessary, keep it isolated inside the smallest relevant component and explain why it is necessary in the implementation note.
@@ -41,6 +41,6 @@ This project has been deployed to Cloudflare Workers.
   - After adding or changing a query, run `pnpm codegen`. Do not manually edit generated files under `app/graphql/`.
   - Prefer codegen-inferred query/result/variables types. Do not duplicate GraphQL result or variables types locally unless there is a clear reason.
   - Prefer domain-level return types only at the boundary where GraphQL data is transformed into app-specific models.
-  - Shared BAQL read logic, caching, and request orchestration should live in `app/repositories/`. Keep pure calculation and transformation logic in `app/models/`.
+  - Shared BAQL read logic, source caching, and upstream→domain normalization live in `app/models/` (data access only). Keep pure calculation/transformation in `app/domain/`, and route-presentation composition with route caching (SWR) in `app/views/`. See `docs/architecture.md` for the architecture.
   - Avoid `TypedDocumentNode` casts or manual GraphQL shape annotations unless codegen is temporarily unavailable or inference is blocked by an existing project issue.
 - This project uses Biome for code formatting and linting. Always follow the Biome conventions when creating or modifying code. You can run `pnpm run lint` to check formatting issues.

@@ -1,5 +1,5 @@
-import dayjs from "dayjs";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import dayjs from "dayjs";
 import { useState } from "react";
 import PyroxeneTimelineResources from "./PyroxeneTimelineResources";
 

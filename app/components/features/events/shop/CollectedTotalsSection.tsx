@@ -1,13 +1,13 @@
 import { Transition } from "@headlessui/react";
 import { memo, useMemo, useState } from "react";
 import { NumberInput, ResourceCard } from "~/components/primitives";
+import type { MinigameConfig } from "~/domain/event-shop";
+import type { CollectableResource, ShopResource, Stage } from "~/domain/event-shop";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import BugReportModal from "./BugReportModal";
 import { calculateBoughtItemQuantities, calculateBoughtResourceQuantities } from "./calculations/shop-rewards";
-import type { MinigameConfig } from "./constants";
 import type { ShopActions, ShopState } from "./hooks";
 import type { CalculationResult } from "./hooks/useShopCalculations";
-import type { CollectableResource, ShopResource, Stage } from "./types";
 import { calculateMinigameRewards, resourceCountLabel } from "./utils";
 
 type CollectedTotalsSectionProps = {

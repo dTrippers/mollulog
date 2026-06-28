@@ -1,16 +1,16 @@
 import { describe, expect, it } from "@jest/globals";
-import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
 import {
   appendRecruitmentResultStudent,
   createRecruitmentResultStudentsFromPickupHistory,
+  getRecruitmentResultCountStats,
   getRecruitmentResultTier3CountFromPickupHistory,
   getRecruitmentResultTrialFromPickupHistory,
   mergeEditableRecruitmentResultStudents,
   normalizeRecruitmentResultStudents,
   removeRecruitmentResultStudent,
   sanitizeRecruitmentResultStudents,
-} from "../../../app/models/recruitment-result";
-import { getRecruitmentResultCountStats } from "../../../app/models/recruitment-result-stats";
+} from "~/domain/recruitment-result";
+import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
 
 describe("recruitment-result", () => {
   it("preserves recruited student order and duplicates for pickup history display", () => {

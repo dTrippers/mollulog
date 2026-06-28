@@ -1,13 +1,13 @@
-import { useState, useEffect } from "react";
+import { Transition } from "@headlessui/react";
+import { CheckCircleIcon, XMarkIcon } from "@heroicons/react/16/solid";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useFetcher } from "react-router";
-import { Transition } from "@headlessui/react";
-import { XMarkIcon, CheckCircleIcon } from "@heroicons/react/16/solid";
 import { Button, Textarea } from "~/components/primitives";
+import type { CollectableResource, ShopResource, Stage } from "~/domain/event-shop";
 import { nowUtcIso } from "~/lib/date-time";
-import type { Stage, ShopResource, CollectableResource } from "./types";
-import type { ShopState } from "./hooks/useShopState";
 import type { CalculationResult } from "./hooks/useShopCalculations";
+import type { ShopState } from "./hooks/useShopState";
 
 type BugReportModalProps = {
   show: boolean;
@@ -90,7 +90,8 @@ export default function BugReportModal({
           <div>
             <h2 className="text-xl font-bold">오류 제보</h2>
             <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-              계산 결과에 오류가 있거나 사용 중 문제가 있는 경우 제보해주세요.<br />
+              계산 결과에 오류가 있거나 사용 중 문제가 있는 경우 제보해주세요.
+              <br />
               (로그 데이터가 서버로 전송됩니다.)
             </p>
           </div>
@@ -108,9 +109,7 @@ export default function BugReportModal({
           <div className="flex flex-col items-center justify-center py-8">
             <CheckCircleIcon className="size-16 text-green-500 mb-4" />
             <p className="text-lg font-semibold mb-2">제출 완료</p>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
-              오류 제보가 성공적으로 제출되었습니다.
-            </p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">오류 제보가 성공적으로 제출되었습니다.</p>
           </div>
         ) : (
           <fetcher.Form onSubmit={handleSubmit}>
@@ -125,12 +124,7 @@ export default function BugReportModal({
             />
 
             <div className="mt-6 flex justify-end gap-2">
-              <Button
-                type="button"
-                text="취소"
-                onClick={onClose}
-                disabled={fetcher.state === "submitting"}
-              />
+              <Button type="button" text="취소" onClick={onClose} disabled={fetcher.state === "submitting"} />
               <Button
                 type="submit"
                 text={fetcher.state === "submitting" ? "제출 중..." : "제출하기"}

@@ -8,10 +8,10 @@ import {
   type SimulationStudent,
   buildRecruitmentPoolSnapshotFromBaql,
   drawRecruitmentTenPull,
-} from "~/models/recruitment-simulator";
+} from "~/domain/recruitment-simulator";
+import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content";
 import { sanitizeClassName } from "~/prophandlers";
-import { RecruitmentRepository } from "~/repositories";
 
 type PullRow = {
   id: string;
@@ -41,10 +41,9 @@ export const loader = async ({ params, context }: LoaderFunctionArgs) => {
     throw new Response("Not Found", { status: 404 });
   }
 
-  const recruitmentRepository = new RecruitmentRepository(env);
   const [recruitmentGroup, students] = await Promise.all([
-    recruitmentRepository.getByUid(content.recruitmentGroupUid),
-    recruitmentRepository.getPoolStudents(),
+    getRecruitmentGroupByUid(env, content.recruitmentGroupUid),
+    getRecruitmentPoolStudents(env),
   ]);
   if (!recruitmentGroup) {
     throw new Response("Not Found", { status: 404 });

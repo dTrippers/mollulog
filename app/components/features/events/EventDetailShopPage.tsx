@@ -1,6 +1,7 @@
 import { ArrowPathIcon, ExclamationCircleIcon, UserIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSignIn } from "~/contexts/SignInProvider";
+import type { CollectableResource, EventRewardBonus, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopState } from "~/models/event-shop-state";
 import EventInfoCard from "./EventInfoCard";
@@ -11,8 +12,6 @@ import {
   StageSelector,
   StudentBonusSelector,
 } from "./shop";
-import type { CollectableResource, EventRewardBonus, ShopResource, Stage } from "./shop";
-import type { MinigameConfig } from "./shop/constants";
 import { useAutoSave, useBonusCalculation, useShopCalculations, useShopState } from "./shop/hooks";
 import { calculateMinigamePaymentCosts } from "./shop/utils";
 

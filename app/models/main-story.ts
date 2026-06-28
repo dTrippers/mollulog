@@ -1,4 +1,4 @@
-import { cacheKey, fetchSourceCached } from "./base";
+import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import { runQuery } from "~/lib/baql";
 import { graphql } from "~/graphql";
 

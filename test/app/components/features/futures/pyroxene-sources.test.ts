@@ -1,24 +1,22 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  PYROXENE_PANEL_HIDDEN_SOURCE_TYPES,
-  PYROXENE_SOURCE_ROW_DEFINITIONS,
-} from "../../../../../app/components/features/futures/pyroxene-source-config";
-import dayjs from "../../../../../app/lib/dayjs";
-import {
-  calculatePackageStartDateFromRemainingDays,
-  normalizePyroxeneTimelineEventAt,
-} from "../../../../../app/models/pyroxene-planner-source-config";
-import {
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
   PYROXENE_SOURCE_DEFINITIONS,
   calculateDailyApChargePyroxene,
+  calculatePackageStartDateFromRemainingDays,
   createOptimisticApPackageTimelineItems,
   createOptimisticAttendanceTimelineItems,
   createOptimisticBuyTimelineItems,
   createOptimisticMonthlyPackageTimelineItems,
   createOptimisticOtherTimelineItems,
+  normalizePyroxeneTimelineEventAt,
   togglePyroxeneTimelineSourceVisibility,
-} from "../../../../../app/models/pyroxene-sources";
+} from "~/domain/pyroxene-sources";
+import {
+  PYROXENE_PANEL_HIDDEN_SOURCE_TYPES,
+  PYROXENE_SOURCE_ROW_DEFINITIONS,
+} from "../../../../../app/components/features/futures/pyroxene-source-config";
+import dayjs from "../../../../../app/lib/dayjs";
 
 describe("pyroxene-sources", () => {
   it("builds the existing default timeline display set from source metadata", () => {

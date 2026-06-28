@@ -8,7 +8,7 @@ import {
   assertAbilityReleaseAvailable,
   assertWeaponLevelRange,
   getWeaponLevelMaxByTier,
-} from "./student-growth-state";
+} from "~/domain/student-growth-state";
 
 export const recruitedStudentsTable = sqliteTable("recruited_students", {
   id: int().primaryKey({ autoIncrement: true }),

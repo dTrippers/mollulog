@@ -7,13 +7,13 @@ import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruit
 import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentGrowths } from "~/models/student-growth";
-import { mergeStudentStateDraftValueForUpdate } from "~/models/student-state-diff";
+import { mergeStudentStateDraftValueForUpdate } from "~/domain/student-state";
 import {
   type StudentStateDraftCurrentValue,
   type StudentStateDraftTargetValue,
   parseStudentStateDraftValue,
-} from "~/models/student-state-draft-value";
-import { studentStateCurrentFields, studentStateTargetFields } from "~/models/student-state-fields";
+} from "~/domain/student-state";
+import { studentStateCurrentFields, studentStateTargetFields } from "~/domain/student-state";
 import {
   type SyncDraft,
   type SyncDraftEntry,
@@ -26,8 +26,8 @@ import {
   updateSyncDraftEntries,
 } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
-import { GrowthResourceRepository } from "~/repositories/growth-resource";
-import { getItemCatalogResourceMap } from "~/repositories/item-catalog";
+import { getStudentGearData } from "~/models/growth-resource";
+import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import type { SyncDraftDisplayMetadata, SyncDraftReviewActionData } from "./connect.import._components/DraftReviewView";
 import SyncDraftReview from "./connect.import._components/SyncDraftReview";
 import StudentStateDraftReview, {
@@ -168,7 +168,7 @@ async function loadDraftMetadata(env: Env, draft: SyncDraft): Promise<Record<str
     const studentsByUid = await getAllStudentsMap(env);
     const gearDataByUid =
       draft.type === "student_state"
-        ? await new GrowthResourceRepository(env).getStudentGearData(draft.entries.map((entry) => entry.entryKey))
+        ? await getStudentGearData(env, draft.entries.map((entry) => entry.entryKey))
         : new Map<string, null>();
     return Object.fromEntries(
       draft.entries.flatMap((entry) => {

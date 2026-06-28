@@ -1,15 +1,15 @@
-import { useMemo, useState, memo } from "react";
+import { memo, useMemo, useState } from "react";
+import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
+import type { CollectableResource, ShopResource } from "~/domain/event-shop";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { formatResourceAmount } from "~/locales/ko";
 import { Tabs } from "./Tabs";
-import type { ShopResource, CollectableResource } from "./types";
-import type { ShopState, ShopActions } from "./hooks";
-import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import {
   calculateEffectiveShopPurchaseCount,
   getShopResourcePurchaseDaysLimit,
   isDailyResetShopResource,
 } from "./calculations";
+import type { ShopActions, ShopState } from "./hooks";
 
 type ShopResourceSelectorProps = {
   shopResources: ShopResource[];
@@ -124,91 +124,89 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 md:gap-2">
-        {selectedShopResources.map(
-          ({ uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount }) => {
-            const shopResource = { uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount };
-            const quantity = state.itemQuantities[uid] || 0;
-            const purchaseDays = state.itemPurchaseDays[uid] || 0;
-            const dailyReset = isDailyResetShopResource(shopResource);
-            const purchaseDaysLimit = getShopResourcePurchaseDaysLimit(eventUid, uid, availablePurchaseDays);
-            const totalPurchaseCount = calculateEffectiveShopPurchaseCount(shopResource, quantity, purchaseDays);
+        {selectedShopResources.map(({ uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount }) => {
+          const shopResource = { uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount };
+          const quantity = state.itemQuantities[uid] || 0;
+          const purchaseDays = state.itemPurchaseDays[uid] || 0;
+          const dailyReset = isDailyResetShopResource(shopResource);
+          const purchaseDaysLimit = getShopResourcePurchaseDaysLimit(eventUid, uid, availablePurchaseDays);
+          const totalPurchaseCount = calculateEffectiveShopPurchaseCount(shopResource, quantity, purchaseDays);
 
-            const formattedResourceAmount = formatResourceAmount(resourceAmount);
-            const unitPriceLabel = formatUnitPriceLabel(purchaseTiers);
-            return (
-              <div key={uid} className="p-2 flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
-                <div className="flex items-center justify-center gap-x-1">
-                  <ResourceCard
-                    itemUid={resource.uid}
-                    resourceType={resource.type}
-                    rarity={resource.rarity}
-                    label={resourceAmount === 1 ? undefined : formattedResourceAmount}
-                    name={resource.name}
-                  />
-                  <div className="grow">
-                    <div className="flex items-center justify-center gap-1">
-                      <img
-                        alt={paymentResource.name}
-                        src={resourceImageUrl(paymentResource.type, paymentResource.uid)}
-                        className="-m-1 size-6 md:size-8 object-contain"
-                        loading="lazy"
-                      />
-                      <span className="mr-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                        {unitPriceLabel}
-                      </span>
-                    </div>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center">
-                      {shopAmount ? `${dailyReset ? "매일 " : ""}${shopAmount}회 구매 가능` : "구매 제한 없음"}
-                    </p>
-                  </div>
-                </div>
-
-                {dailyReset ? (
-                  <div className="space-y-1.5">
-                    <div className="grid grid-cols-1 gap-1.5">
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-medium leading-tight text-muted-foreground">하루 구매량</p>
-                        <NumberInput
-                          value={quantity}
-                          maxValue={shopAmount ?? undefined}
-                          showMin
-                          showMax={shopAmount !== null}
-                          maxButtonVariant="active"
-                          onChange={(value) => actions.updateItemQuantity(uid, value)}
-                        />
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-xs font-medium leading-tight text-muted-foreground">구매 일수</p>
-                        <NumberInput
-                          value={purchaseDays}
-                          maxValue={purchaseDaysLimit}
-                          showMin
-                          showMax={purchaseDaysLimit > 0}
-                          maxButtonVariant="active"
-                          onChange={(value) => actions.updateItemPurchaseDay(uid, value)}
-                        />
-                      </div>
-                    </div>
-                    <p className="text-center text-xs text-neutral-500 dark:text-neutral-400">
-                      총 {totalPurchaseCount.toLocaleString()}회 구매
-                    </p>
-                  </div>
-                ) : (
-                  <div>
-                    <NumberInput
-                      value={quantity}
-                      maxValue={shopAmount ?? undefined}
-                      showMin
-                      showMax={shopAmount !== null}
-                      maxButtonVariant="active"
-                      onChange={(value) => actions.updateItemQuantity(uid, value)}
+          const formattedResourceAmount = formatResourceAmount(resourceAmount);
+          const unitPriceLabel = formatUnitPriceLabel(purchaseTiers);
+          return (
+            <div key={uid} className="p-2 flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
+              <div className="flex items-center justify-center gap-x-1">
+                <ResourceCard
+                  itemUid={resource.uid}
+                  resourceType={resource.type}
+                  rarity={resource.rarity}
+                  label={resourceAmount === 1 ? undefined : formattedResourceAmount}
+                  name={resource.name}
+                />
+                <div className="grow">
+                  <div className="flex items-center justify-center gap-1">
+                    <img
+                      alt={paymentResource.name}
+                      src={resourceImageUrl(paymentResource.type, paymentResource.uid)}
+                      className="-m-1 size-6 md:size-8 object-contain"
+                      loading="lazy"
                     />
+                    <span className="mr-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                      {unitPriceLabel}
+                    </span>
                   </div>
-                )}
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center">
+                    {shopAmount ? `${dailyReset ? "매일 " : ""}${shopAmount}회 구매 가능` : "구매 제한 없음"}
+                  </p>
+                </div>
               </div>
-            );
-          },
-        )}
+
+              {dailyReset ? (
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-1 gap-1.5">
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium leading-tight text-muted-foreground">하루 구매량</p>
+                      <NumberInput
+                        value={quantity}
+                        maxValue={shopAmount ?? undefined}
+                        showMin
+                        showMax={shopAmount !== null}
+                        maxButtonVariant="active"
+                        onChange={(value) => actions.updateItemQuantity(uid, value)}
+                      />
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs font-medium leading-tight text-muted-foreground">구매 일수</p>
+                      <NumberInput
+                        value={purchaseDays}
+                        maxValue={purchaseDaysLimit}
+                        showMin
+                        showMax={purchaseDaysLimit > 0}
+                        maxButtonVariant="active"
+                        onChange={(value) => actions.updateItemPurchaseDay(uid, value)}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-center text-xs text-neutral-500 dark:text-neutral-400">
+                    총 {totalPurchaseCount.toLocaleString()}회 구매
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <NumberInput
+                    value={quantity}
+                    maxValue={shopAmount ?? undefined}
+                    showMin
+                    showMax={shopAmount !== null}
+                    maxButtonVariant="active"
+                    onChange={(value) => actions.updateItemQuantity(uid, value)}
+                  />
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="my-2 flex justify-end gap-0.5">

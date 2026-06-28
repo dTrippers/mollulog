@@ -1,4 +1,4 @@
-import type { TimelineSourceType } from "~/models/pyroxene-planner";
+import type { TimelineSourceType } from "~/domain/pyroxene-planner";
 
 export type PyroxeneSourceAction = "add" | "configure" | "none";
 export type PyroxeneSourceRowGroup = "regular" | "paid" | "consumption";

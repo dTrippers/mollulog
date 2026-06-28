@@ -1,19 +1,19 @@
 ---
-name: 기능 제안
-about: 새 기능이나 개선 아이디어를 제안합니다.
+name: Feature request
+about: Suggest a new feature or improvement idea.
 title: "[Feature] "
 ---
 
-<!-- 공개적으로 제안하기 어려운 내용이라면 몰루로그의 제안/문의 페이지를 이용해주세요. -->
+<!-- If this is hard to suggest publicly, please use MolluLog's suggestion/contact page. -->
 
-## 제안 내용
+## Proposal
 
-<!-- 원하는 변경 사항을 간단히 설명해주세요. -->
+<!-- Briefly describe the change you want. -->
 
-## 배경
+## Background
 
-<!-- 어떤 문제나 불편함 때문에 이 제안을 하게 되었는지 적어주세요. -->
+<!-- Describe the problem or inconvenience that led to this proposal. -->
 
-## 참고 자료
+## References
 
-<!-- 관련 화면, 문서, 링크가 있다면 첨부해주세요. -->
+<!-- Attach related screens, docs, or links if any. -->

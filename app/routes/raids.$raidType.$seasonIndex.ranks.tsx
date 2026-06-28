@@ -11,7 +11,7 @@ import { Difficulty } from "~/graphql/graphql";
 import { nowUtcIso } from "~/lib/date-time";
 import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import type { RaidType } from "~/models/content.d";
-import type { Difficulty as DifficultyType } from "~/models/raid";
+import type { Difficulty as DifficultyType } from "~/domain/raid-score";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudentsMap } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";

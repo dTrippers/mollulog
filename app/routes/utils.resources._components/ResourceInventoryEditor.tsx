@@ -19,7 +19,6 @@ import {
   type NumberInputFlowNavigationInputProps,
   useNumberInputFlowNavigation,
 } from "~/components/primitives";
-import { cn } from "~/lib/utils";
 import {
   type AggregatedGrowthResourceRequirements,
   CHARACTER_EXP_REPORTS,
@@ -37,8 +36,9 @@ import {
   getResourceKindOrder,
   getSkillMaterialChoiceBoxRarity,
   getSkillMaterialResourceChoiceBoxUid,
-} from "~/models/growth-resource";
-import { type ItemCatalogResource, getGrowthPlannerCatalogResourceKindOrder } from "~/repositories/item-catalog";
+} from "~/domain/growth-resource";
+import { cn } from "~/lib/utils";
+import { type ItemCatalogResource, getGrowthPlannerCatalogResourceKindOrder } from "~/models/item-catalog";
 
 type ResourceInventoryEditorProps = {
   resources: ItemCatalogResource[];

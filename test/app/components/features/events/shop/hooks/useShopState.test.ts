@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { getInitialItemPurchaseDays } from "../../../../../../../app/components/features/events/shop/hooks/useShopState";
-import type { ShopResource } from "../../../../../../../app/components/features/events/shop/types";
+import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 import type { EventShopState } from "../../../../../../../app/models/event-shop-state";
 

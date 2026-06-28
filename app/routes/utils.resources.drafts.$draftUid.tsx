@@ -8,7 +8,7 @@ import {
   getUserResourceInventoryDraft,
   getUserResourceInventoryMapByItemUids,
 } from "~/models/user-resource-inventory";
-import { getItemCatalogResourceMap } from "~/repositories/item-catalog";
+import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import ResourceInventoryDraftReview from "./utils.resources._components/ResourceInventoryDraftReview";
 
 type ActionData = {

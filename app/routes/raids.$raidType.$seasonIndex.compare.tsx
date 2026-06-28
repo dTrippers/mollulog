@@ -4,20 +4,19 @@ import { type LoaderFunctionArgs, useLoaderData } from "react-router";
 import RaidDifficultyComparison from "~/components/features/raids/RaidDifficultyComparison";
 import RaidStudentComparison from "~/components/features/raids/RaidStudentComparison";
 import { EmptyView, LoadingSkeleton, Section } from "~/components/primitives";
+import { raidTypeFromParam } from "~/domain/raid";
 import type { Defense } from "~/graphql/graphql";
 import { fetchRaidOverview } from "~/lib/ranks/overview";
 import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import { type defenseTypeColor, defenseTypeLocale, difficultyLocale, type raidTypeLocale } from "~/locales/ko";
 import type { RaidType } from "~/models/content.d";
-import { getRaidDefenseTypeSetKey } from "~/models/raid";
+import { getRaidDefenseTypeSetKey, getRaidSchedule, getRaidScheduleByTypeAndSeason } from "~/models/raid";
 import { getAllStudentsMap } from "~/models/student";
-import { RaidRepository } from "~/repositories";
 import RaidComparisonHeader from "./raids.$raidType.$seasonIndex._components/RaidComparisonHeader";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const { raidType, seasonIndex } = params;
-  const raidRepository = new RaidRepository(env);
   if (!raidType || !seasonIndex) {
     throw new Response(JSON.stringify({ error: { message: "총력전/대결전 정보를 찾을 수 없어요" } }), {
       status: 404,
@@ -53,8 +52,8 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   }
 
   const [toSchedule, fromSchedule, rawAllStudents] = await Promise.all([
-    raidRepository.getByTypeAndSeason(raidType, parsedSeasonIndex),
-    raidRepository.getSchedule(fromRaidUid),
+    getRaidScheduleByTypeAndSeason(env, raidTypeFromParam(raidType), parsedSeasonIndex),
+    getRaidSchedule(env, fromRaidUid),
     getAllStudentsMap(env, true),
   ]);
 
@@ -78,7 +77,13 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   );
 
   if (toSchedule.startAt && fromSchedule.startAt && dayjs(toSchedule.startAt).isAfter(dayjs(fromSchedule.startAt))) {
-    return { toRaid: toSchedule, fromRaid: fromSchedule, allStudents, defenseType: defenseTypeParam, defenseTypeSet: defenseTypeSetParam };
+    return {
+      toRaid: toSchedule,
+      fromRaid: fromSchedule,
+      allStudents,
+      defenseType: defenseTypeParam,
+      defenseTypeSet: defenseTypeSetParam,
+    };
   }
   return {
     toRaid: fromSchedule,

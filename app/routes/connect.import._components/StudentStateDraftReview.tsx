@@ -1,39 +1,39 @@
-import type { ReactNode } from "react";
-import { Fragment, useEffect, useMemo, useState } from "react";
 import { ArchiveBoxIcon, StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
+import type { ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { Form, useNavigation } from "react-router";
 import { TierSelector } from "~/components/features/students";
 import {
   EmptyView,
   NumberInput,
-  ProfileImage,
   type NumberInputGridNavigationInputProps,
+  ProfileImage,
   useNumberInputGridNavigation,
 } from "~/components/primitives";
-import { cn } from "~/lib/utils";
-import { EQUIPMENT_TYPE_LABELS } from "~/models/growth-resource";
+import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import {
   type StudentStateCurrentComparisonValue,
   type StudentStateTargetComparisonValue,
-  isStudentStateCurrentFieldUpdateTarget,
   isStudentStateCurrentChanged,
-  isStudentStateTargetFieldUpdateTarget,
+  isStudentStateCurrentFieldUpdateTarget,
   isStudentStateTargetChanged,
+  isStudentStateTargetFieldUpdateTarget,
   mergeStudentStateDraftValueForUpdate,
-} from "~/models/student-state-diff";
+} from "~/domain/student-state";
 import type {
   StudentStateDraftCurrentValue,
   StudentStateDraftTargetValue,
   StudentStateDraftValue,
-} from "~/models/student-state-draft-value";
+} from "~/domain/student-state";
 import {
   type StudentStateComparisonField,
   type StudentStateFieldDefinition,
   studentStateComparisonFields,
   studentStateCurrentFields,
   studentStateTargetFields,
-} from "~/models/student-state-fields";
+} from "~/domain/student-state";
+import { cn } from "~/lib/utils";
 import type { SyncDraft } from "~/models/sync-draft";
 import DraftReviewView, {
   DraftReviewActions,

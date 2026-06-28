@@ -30,7 +30,7 @@ const migratedModelFiles = [
   "app/models/event-content.ts",
   "app/models/raid.ts",
   "app/models/content.ts",
-  "app/models/future-content.ts",
+  "app/views/futures.ts",
 ];
 
 describe("date-time guardrails", () => {

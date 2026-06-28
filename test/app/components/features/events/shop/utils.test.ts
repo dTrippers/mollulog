@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
-import type { MinigameConfig } from "../../../../../../app/components/features/events/shop/constants";
 import {
   calculateMinigamePaymentCosts,
   hasVariableMinigamePayment,
 } from "../../../../../../app/components/features/events/shop/utils";
+import type { MinigameConfig } from "../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../app/graphql/graphql";
 
 function createMinigameConfig(overrides: Partial<MinigameConfig> = {}): MinigameConfig {

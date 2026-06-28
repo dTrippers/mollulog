@@ -1,4 +1,4 @@
-import type { ShopResource } from "../types";
+import type { ShopResource } from "~/domain/event-shop";
 
 export type PaymentCost = {
   resource: ShopResource["paymentResource"];

@@ -1,8 +1,8 @@
 import { Outlet, redirect } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { createPageErrorBoundary } from "~/components/features/layout";
+import { raidTypeToParam } from "~/domain/raid";
 import { routeError } from "~/lib/http-errors";
-import { raidTypeToParam } from "~/models/raid";
 
 // Valid URL path params (dash-format)
 const VALID_URL_PARAMS = ["total-assault", "grand-assault", "unlimit", "allied"];

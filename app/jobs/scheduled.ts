@@ -7,11 +7,14 @@ import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { getItemCatalogResources } from "~/repositories/item-catalog";
-import { GrowthResourceRepository, RaidRepository, RecruitmentRepository } from "~/repositories";
-import { getCampaignFarmingStages } from "~/repositories/stage";
-import { syncEventContentsList, warmActiveUpcomingEventContent } from "~/models/event-content";
-import { cacheKey, cacheQuery, claimKvCacheWindow } from "~/models/base";
+import { getItemCatalogResources } from "~/models/item-catalog";
+import { getStudentGearData } from "~/models/growth-resource";
+import { warmRecruitmentCache } from "~/models/recruitment";
+import { getCampaignFarmingStages } from "~/models/stage";
+import { syncEventContentsList } from "~/models/event-content";
+import { cacheKey, cacheQuery, isKvCacheWindowFresh, markKvCacheWindow } from "~/lib/cache";
+import { warmRaidCache } from "~/models/raid";
+import { warmActiveUpcomingEventContent } from "~/views/events";
 
 type ScheduledJobName = "syncYoutubeCommunityPosts" | "refreshSourceCaches";
 
@@ -31,29 +34,30 @@ const SOURCE_WARM_MARKER_KEY = cacheKey("source", "cron-source-warm", 1, cacheQu
 
 async function warmStudentSourceCaches(env: Env, forceRefresh = false): Promise<void> {
   const studentUids = (await getAllStudents(env, true)).map((student) => student.uid);
-  const growthResourceRepository = new GrowthResourceRepository(env);
   await Promise.all([
     getStudentSkillItemsBatch(env, studentUids, forceRefresh),
-    growthResourceRepository.getStudentGearData(studentUids, forceRefresh),
+    getStudentGearData(env, studentUids, forceRefresh),
   ]);
 }
 
 async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
-  const shouldWarm = await claimKvCacheWindow(env, SOURCE_WARM_MARKER_KEY, SOURCE_WARM_WINDOW_SECONDS);
-  if (!shouldWarm) {
+  if (await isKvCacheWindowFresh(env, SOURCE_WARM_MARKER_KEY, SOURCE_WARM_WINDOW_SECONDS)) {
     return;
   }
 
+  // Record the window only after a successful warm. A failed/partial warm leaves
+  // no marker so the next cron (10 min later) retries instead of skipping for the
+  // full hour. Cron runs are ~60s-capped and 10 min apart, so they never overlap
+  // and there is no concurrency window to protect against by claiming first.
   await Promise.all([warmStudentSourceCaches(env, false), warmActiveUpcomingEventContent(env, false)]);
+  await markKvCacheWindow(env, SOURCE_WARM_MARKER_KEY);
 }
 
 async function refreshSourceCaches(env: Env): Promise<void> {
-  const recruitmentRepository = new RecruitmentRepository(env);
-  const raidRepository = new RaidRepository(env);
   await Promise.all([
     syncRawStudents(env),
-    recruitmentRepository.refresh(),
-    raidRepository.refresh(),
+    warmRecruitmentCache(env),
+    warmRaidCache(env),
     getMainStories(env, true),
     getAllStudentsFavoriteItems(env, true),
     syncAllTimelineContentsMeta(env),

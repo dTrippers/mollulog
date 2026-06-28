@@ -1,12 +1,16 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import { ResourceTypeEnum } from "../../../app/graphql/graphql";
+
+jest.mock("~/lib/baql", () => ({
+  runQuery: jest.fn(),
+}));
 import {
   type FarmingStage,
   buildEquipmentFarmingNeeded,
   buildEquipmentFarmingRequirements,
   buildFarmingRecommendations,
-} from "../../../app/models/farming-recommendation";
-import type { StudentGrowthResourceRequirements } from "../../../app/models/growth-resource";
+} from "~/domain/farming-recommendation";
+import type { StudentGrowthResourceRequirements } from "../../../app/domain/growth-resource";
 
 function requirement(items: StudentGrowthResourceRequirements["items"]): StudentGrowthResourceRequirements {
   return {

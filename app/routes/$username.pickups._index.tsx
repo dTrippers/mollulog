@@ -13,10 +13,10 @@ import {
 import {
   getRecruitmentResultCountStats,
   resolveRecruitmentResultStudents,
-} from "~/models/recruitment-result-stats";
+} from "~/domain/recruitment-result";
+import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
-import { RecruitmentRepository } from "~/repositories";
 import { getRouteSensei } from "./$username";
 import PickupHistoryView from "./$username.pickups._components/PickupHistoryView";
 
@@ -54,7 +54,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const sensei = await getRouteSensei(env, params);
-  const recruitmentRepository = new RecruitmentRepository(env);
 
   const [recruitmentResults, allStudentsMap] = await Promise.all([
     getRecruitmentResults(env, sensei.id),
@@ -63,9 +62,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const eventUids = recruitmentResults.map((result) => result.recruitmentGroupUid);
 
   const [groups, timelineContents, poolStudents] = await Promise.all([
-    recruitmentRepository.getByUids(eventUids),
+    getRecruitmentGroupsByUids(env, eventUids),
     getTimelineContentsByRecruitmentGroupUids(env, eventUids),
-    recruitmentRepository.getPoolStudents(),
+    getRecruitmentPoolStudents(env),
   ]);
   const commentMap = await getRecruitmentResultComments(
     env,

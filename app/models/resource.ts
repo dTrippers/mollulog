@@ -1,12 +1,24 @@
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, fetchSourceCached } from "./base";
+import { cacheKey, fetchSourceCached } from "~/lib/cache";
 
 const ALL_STUDENTS_FAVORITE_ITEMS_CACHE_KEY = cacheKey("source", "student-favorite-item", 1, "all");
 
 const allStudentsFavoriteItemsQuery = graphql(`
   query AllStudentsFavoriteItems {
     students {
+      uid name
+      favoriteItems {
+        favorited favoriteLevel exp
+        item { uid name rarity }
+      }
+    }
+  }
+`);
+
+const studentFavoriteItemsQuery = graphql(`
+  query StudentFavoriteItem($uid: String!) {
+    student(uid: $uid) {
       uid name
       favoriteItems {
         favorited favoriteLevel exp
@@ -79,4 +91,12 @@ export async function getAllStudentsFavoriteItems(env: Env, forceRefresh = false
     },
     forceRefresh,
   );
+}
+
+export async function getStudentFavoriteItems(env: Env, uid: string) {
+  const { data, error } = await runQuery(studentFavoriteItemsQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  return data?.student;
 }

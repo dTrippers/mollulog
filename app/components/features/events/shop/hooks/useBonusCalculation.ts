@@ -1,6 +1,6 @@
-import { useMemo } from "react";
 import Decimal from "decimal.js";
-import type { EventRewardBonus } from "../types";
+import { useMemo } from "react";
+import type { EventRewardBonus } from "~/domain/event-shop";
 
 export type BonusSummary = {
   uid: string;
@@ -40,14 +40,9 @@ export function useBonusCalculation({
         let maxSpecialRatio = new Decimal(0);
         let maxSpecialCount = 0;
 
-        const sortedRewardBonuses = [...rewardBonuses].sort(
-          (a, b) => Number(b.ratio) - Number(a.ratio),
-        );
+        const sortedRewardBonuses = [...rewardBonuses].sort((a, b) => Number(b.ratio) - Number(a.ratio));
 
-        if (
-          sortedRewardBonuses.length === 0 ||
-          Number(sortedRewardBonuses[0].ratio) === 0
-        ) {
+        if (sortedRewardBonuses.length === 0 || Number(sortedRewardBonuses[0].ratio) === 0) {
           return null;
         }
 
@@ -93,13 +88,10 @@ export function useBonusCalculation({
   const appliedBonusRatios = useMemo(() => {
     const ratios: Record<string, Decimal> = {};
     for (const bonus of bonusSummary) {
-      ratios[bonus.uid] = bonus.appliedStrikerRatio.plus(
-        bonus.appliedSpecialRatio,
-      );
+      ratios[bonus.uid] = bonus.appliedStrikerRatio.plus(bonus.appliedSpecialRatio);
     }
     return ratios;
   }, [bonusSummary]);
 
   return { appliedBonusRatios, bonusSummary };
 }
-

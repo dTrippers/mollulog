@@ -7,7 +7,7 @@ import {
   type StudentStateDraftTargetValue,
   type StudentStateDraftValue,
   parseStudentStateDraftValue,
-} from "./student-state-draft-value";
+} from "~/domain/student-state";
 
 export const syncDraftsTable = sqliteTable("sync_drafts", {
   id: int().primaryKey({ autoIncrement: true }),

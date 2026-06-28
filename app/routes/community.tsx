@@ -17,11 +17,7 @@ import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
-import {
-  COMMUNITY_FEED_PAGE_SIZE,
-  COMMUNITY_VISIBLE_POST_TYPES,
-  enrichCommunityFeedPosts,
-} from "~/models/community-feed";
+import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES, enrichCommunityFeedPosts } from "~/views/community";
 
 type CommunityVisiblePostType = (typeof COMMUNITY_VISIBLE_POST_TYPES)[number];
 

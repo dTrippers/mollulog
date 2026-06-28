@@ -1,4 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { runQuery } from "~/lib/baql";
 import { ResourceTypeEnum } from "../../../app/graphql/graphql";
 
 jest.mock("~/lib/baql", () => ({
@@ -25,10 +26,12 @@ import {
   getSkillMaterialChoiceBoxKindOrder,
   getSkillMaterialChoiceBoxRarity,
   getSkillMaterialResourceChoiceBoxUid,
-  getStudentGrowthResourceRequirements,
   normalizeStudentGrowthInputForCalculation,
   sortGrowthResourceItems,
-} from "../../../app/models/growth-resource";
+} from "../../../app/domain/growth-resource";
+import { getStudentGrowthResourceRequirements } from "../../../app/models/growth-resource";
+
+const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
 
 describe("growth-resource", () => {
   it("calculates exact character exp difference between levels", () => {
@@ -76,14 +79,8 @@ describe("growth-resource", () => {
   });
 
   it("stores student level requirements as character exp instead of report counts", async () => {
-    const repository = {
-      getSkillCosts: jest.fn(),
-      getItemMetadata: jest.fn(async () => new Map()),
-      getEquipmentMetadata: jest.fn(async () => new Map()),
-    };
-
     const requirements = await getStudentGrowthResourceRequirements(
-      repository as never,
+      {} as Env,
       [
         {
           uid: "10000",
@@ -229,14 +226,29 @@ describe("growth-resource", () => {
   });
 
   it("uses Secret Tech Sheet for non-EX skill level 10 requirements", async () => {
-    const repository = {
-      getSkillCosts: jest.fn(async () => new Map([["10000", { uid: "10000" }]])),
-      getItemMetadata: jest.fn(async () => new Map()),
-      getEquipmentMetadata: jest.fn(async () => new Map()),
-    };
+    mockedRunQuery
+      .mockResolvedValueOnce({
+        data: { students: [{ uid: "10000", __typename: "Student" }] },
+        error: undefined,
+      } as Awaited<ReturnType<typeof runQuery>>)
+      .mockResolvedValueOnce({
+        data: {
+          items: [
+            {
+              uid: "9999",
+              name: "Secret Tech Sheet",
+              rarity: 4,
+              type: ResourceTypeEnum.Item,
+              category: "material",
+              subCategory: null,
+            },
+          ],
+        },
+        error: undefined,
+      } as Awaited<ReturnType<typeof runQuery>>);
 
     const requirements = await getStudentGrowthResourceRequirements(
-      repository as never,
+      {} as Env,
       [
         {
           uid: "10000",

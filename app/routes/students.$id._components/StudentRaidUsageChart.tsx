@@ -7,8 +7,8 @@ import { Defense } from "~/graphql/graphql";
 import { type UtcIsoString, formatInstant } from "~/lib/date-time";
 import type { RaidStatistics } from "~/lib/ranks/stats";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
-import { raidTypeToParam } from "~/models/raid";
-import type { RaidScheduleListItem } from "~/repositories";
+import { raidTypeToParam } from "~/domain/raid";
+import type { RaidScheduleListItem } from "~/models/raid";
 import {
   type StudentRaidUsageChartRow,
   type StudentRaidUsageDefenseFilter,

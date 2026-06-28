@@ -1,15 +1,22 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { fetchRouteCached } from "~/models/base";
+import { fetchRouteCached } from "~/lib/cache";
 import { getAllCoupons, hasUnregisteredActiveCoupons } from "~/models/coupon";
 import { hasUnreadAdminFeedbackReplies } from "~/models/feedback";
 import { getLatestPostTime } from "~/models/post";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 
-jest.mock("~/models/base", () => ({
+jest.mock("~/lib/cache", () => ({
   cacheKey: (category: string, domain: string, version: number, query: string) =>
     `${category}::${domain}::v${version}::${query}`,
+  cacheQuery: (params: Record<string, string | number | boolean | null | undefined>) =>
+    Object.entries(params)
+      .filter(([, value]) => value !== undefined && value !== null)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, value]) => `${key}=${String(value)}`)
+      .join("::") || "all",
   // Bypass cache by executing fn() directly.
   fetchRouteCached: jest.fn((_env: unknown, _ctx: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
+  fetchSourceCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
 }));
 
 jest.mock("~/models/coupon", () => ({
@@ -36,12 +43,13 @@ jest.mock("~/models/timeline-content", () => ({
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
 }));
-jest.mock("~/repositories", () => ({
-  RecruitmentRepository: jest.fn(),
-  RaidRepository: jest.fn(),
+jest.mock("~/models/recruitment", () => ({
+  getAllRecruitmentGroups: jest.fn(),
+  getRecruitmentGroupByUid: jest.fn(),
+  getRecruitmentGroupsByUids: jest.fn(),
 }));
 
-import { getNavigationBarContents } from "../../../app/models/content";
+import { getNavigationBarContents } from "../../../app/views/navigation";
 
 const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
 const mockedGetAllCoupons = getAllCoupons as jest.MockedFunction<typeof getAllCoupons>;

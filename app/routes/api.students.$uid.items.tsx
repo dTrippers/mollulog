@@ -1,20 +1,8 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { graphql } from "~/graphql";
-import { runQuery } from "~/lib/baql";
+import { isStudentNotFoundError } from "~/lib/baql/errors";
+import { getStudentFavoriteItems } from "~/models/resource";
 
-const favoriteItemsQuery = graphql(`
-  query StudentFavoriteItem($uid: String!) {
-    student(uid: $uid) {
-      uid name
-      favoriteItems {
-        favorited favoriteLevel exp
-        item { uid name rarity }
-      }
-    }
-  }
-`);
-
-export const loader = async ({ params }: LoaderFunctionArgs) => {
+export const loader = async ({ params, context }: LoaderFunctionArgs) => {
   const uid = params.uid;
   if (!uid) {
     throw new Response(JSON.stringify({ error: { message: "학생 정보가 누락되었어요" } }), {
@@ -23,8 +11,22 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     });
   }
 
-  const { data } = await runQuery(favoriteItemsQuery, { uid });
-  const student = data?.student;
+  let student: Awaited<ReturnType<typeof getStudentFavoriteItems>>;
+  try {
+    student = await getStudentFavoriteItems(context.cloudflare.env, uid);
+  } catch (error) {
+    if (isStudentNotFoundError(error)) {
+      throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    throw new Response(JSON.stringify({ error: { message: "학생 정보를 불러오지 못했어요" } }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
   if (!student) {
     throw new Response(JSON.stringify({ error: { message: "학생 정보를 찾을 수 없어요" } }), {
       status: 404,

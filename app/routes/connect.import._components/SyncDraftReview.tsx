@@ -2,9 +2,9 @@ import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { Form, useNavigation } from "react-router";
 import { EmptyView, ResourceCard } from "~/components/primitives";
+import { getEquipmentResourceTierLabel } from "~/domain/growth-resource";
 import { cn } from "~/lib/utils";
 import { studentImageUrl } from "~/models/assets";
-import { getEquipmentResourceTierLabel } from "~/models/growth-resource";
 import type { SyncDraft, SyncDraftType } from "~/models/sync-draft";
 import DraftReviewView, {
   DraftReviewActions,

@@ -1,18 +1,17 @@
-## 요약
+## Summary
 
-<!-- 무엇을 왜 변경했는지 짧게 적어주세요. -->
+<!-- Briefly describe what you changed and why. -->
 
-## 변경 사항
+## Changes
 
-<!-- 주요 변경 내용을 항목별로 적어주세요. -->
+<!-- List the main changes as bullet points. -->
 
-## 확인한 내용
+## Verification
 
-- [ ] 관련 동작을 직접 확인했습니다.
-- [ ] 필요한 경우 `pnpm typecheck`, `pnpm exec biome check .`, 관련 테스트를 실행했습니다.
-- [ ] (AI 도구를 사용한 경우) 생성된 내용을 사람이 충분히 검토하였습니다.
+- [ ] I verified the related behavior myself.
+- [ ] I ran `pnpm typecheck`, `pnpm exec biome check .`, and relevant tests when needed.
+- [ ] (If AI tools were used) The generated content was reviewed by a person.
 
-## 관련 이슈
+## Related issues
 
-<!-- 관련 이슈가 있다면 `Closes #123` 형식으로 적어주세요. -->
-
+<!-- If there is a related issue, reference it as `Closes #123`. -->

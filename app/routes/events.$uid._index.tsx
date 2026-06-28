@@ -12,9 +12,9 @@ import {
   getUserFavoritedStudents,
   unfavoriteStudent,
 } from "~/models/favorite-students";
-import { getRecruitmentFavoriteKey } from "~/models/recruitment-identity";
+import { getRecruitmentGroupByUid } from "~/models/recruitment";
+import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { getTimelineContent } from "~/models/timeline-content";
-import { RecruitmentRepository } from "~/repositories";
 import EventComment from "./events.$uid._components/EventComment";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -28,9 +28,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
 
-  const recruitmentRepository = new RecruitmentRepository(env);
   const recruitments = content.recruitmentGroupUid
-    ? ((await recruitmentRepository.getByUid(content.recruitmentGroupUid))?.recruitments ?? [])
+    ? ((await getRecruitmentGroupByUid(env, content.recruitmentGroupUid))?.recruitments ?? [])
     : [];
   const eventContent = {
     name: content.name,

@@ -6,22 +6,24 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
 import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { compareInstantDesc, formatInstant, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { routeError } from "~/lib/http-errors";
-import { type PickupHistory, getPickupHistory } from "~/models/pickup-history";
 import {
   createRecruitmentResultStudentsFromPickupHistory,
-  getRecruitmentResult,
-  getRecruitmentResultComment,
   getRecruitmentResultTier3CountFromPickupHistory,
   getRecruitmentResultTrialFromPickupHistory,
   mergeEditableRecruitmentResultStudents,
+  resolveRecruitmentResultStudents,
+} from "~/domain/recruitment-result";
+import { compareInstantDesc, formatInstant, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { routeError } from "~/lib/http-errors";
+import { type PickupHistory, getPickupHistory } from "~/models/pickup-history";
+import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
+import {
+  getRecruitmentResult,
+  getRecruitmentResultComment,
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
-import { resolveRecruitmentResultStudents } from "~/models/recruitment-result-stats";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
-import { RecruitmentRepository } from "~/repositories";
 import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
 
@@ -132,7 +134,6 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     return redirectToCanonicalEditor(params);
   }
 
-  const recruitmentRepository = new RecruitmentRepository(env);
   let currentPickupHistory: EditablePickupHistory | null = null;
   let currentRecruitmentResult: Awaited<ReturnType<typeof getRecruitmentResult>> = null;
   let currentRecruitmentResultComment: string | null = null;
@@ -145,10 +146,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const now = nowUtcIso();
 
-  const [allGroups, allStudentsList] = await Promise.all([
-    recruitmentRepository.getAllHistorical(),
-    getAllStudents(env),
-  ]);
+  const [allGroups, allStudentsList] = await Promise.all([getAllHistoricalRecruitmentGroups(env), getAllStudents(env)]);
   const pickupGroups = allGroups.filter(
     (g) => g.recruitments.some((r) => r.pickup && r.student) && isInstantBefore(g.startAt, now),
   );
@@ -252,7 +250,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   }
 
   const data = await request.json<ActionData>();
-  const recruitmentGroup = await new RecruitmentRepository(env).getByUid(data.eventUid);
+  const recruitmentGroup = await getRecruitmentGroupByUid(env, data.eventUid);
   if (!recruitmentGroup) {
     throw routeError(400, "pickup_history.recruitment_group_missing", "모집 이벤트를 찾을 수 없어요", {
       recruitmentGroupUid: data.eventUid,

@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "../../../app/auth/authenticator.server";
 import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
-import { getFutureContents } from "../../../app/models/content";
 import { getUserFavoritedStudents } from "../../../app/models/favorite-students";
 import { addRecruitedStudentToResult } from "../../../app/models/recruitment-result";
 import { action } from "../../../app/routes/api.recruitment-results";
+import { getFutureContents } from "../../../app/views/futures";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
 }));
 
-jest.mock("~/models/content", () => ({
+jest.mock("~/views/futures", () => ({
   getFutureContents: jest.fn(),
 }));
 

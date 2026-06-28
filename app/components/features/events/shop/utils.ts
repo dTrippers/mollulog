@@ -7,7 +7,7 @@ import type {
   MinigamePaymentQuantityMode,
   RewardGroup,
   RewardItem,
-} from "./constants";
+} from "~/domain/event-shop";
 
 /**
  * Formats resource count labels with K/M suffixes for large numbers.

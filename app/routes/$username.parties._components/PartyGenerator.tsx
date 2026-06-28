@@ -11,7 +11,7 @@ import {
   serializePartyRaidReference,
   type Party,
 } from "~/models/party";
-import type { RaidScheduleListItem } from "~/repositories";
+import type { RaidScheduleListItem } from "~/models/raid";
 
 type PartyGeneratorProps = {
   party?: Party;

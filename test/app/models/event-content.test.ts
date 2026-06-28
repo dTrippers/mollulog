@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
-import { fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "~/models/base";
+import { fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "~/lib/cache";
 import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "~/models/timeline-content";
 import {
   getEventContentSchedule,
-  getEventList,
   getEventMetadata,
   getEventShopContent,
   getShopAvailableEvents,
 } from "../../../app/models/event-content";
+import { getEventList } from "../../../app/views/events";
 
 jest.mock("~/models/timeline-content", () => ({
   getAllTimelineContentsMeta: jest.fn(),
@@ -16,7 +16,7 @@ jest.mock("~/models/timeline-content", () => ({
   getTimelineContents: jest.fn(),
 }));
 
-jest.mock("~/models/base", () => ({
+jest.mock("~/lib/cache", () => ({
   cacheKey: (category: string, domain: string, version: number, query: string) =>
     `${category}::${domain}::v${version}::${query}`,
   cacheQuery: (params: Record<string, string | number | boolean | null | undefined>) =>

@@ -1,4 +1,4 @@
-import { buildTimeline } from "~/models/pyroxene-timeline";
+import { buildTimeline } from "~/domain/pyroxene-timeline";
 import {
   type PyroxeneTimelineWorkerRequest,
   type PyroxeneTimelineWorkerResponse,

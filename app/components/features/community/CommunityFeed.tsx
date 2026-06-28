@@ -18,8 +18,8 @@ import type {
   CommunityPostCommentsChangedActionResult,
   CommunityPostLikeChangedActionResult,
 } from "~/models/community-engagement";
-import type { EnrichedCommunityFeedPost } from "~/models/community-feed";
 import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
+import type { EnrichedCommunityFeedPost } from "~/views/community";
 import { StudentCards } from "../students";
 import {
   getCommentEditorPanelClassName,

@@ -1,9 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
+import { applyRecruitmentResultStudentCompletion, canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
-import {
-  applyRecruitmentResultStudentCompletion,
-  canCompleteRecruitmentStudent,
-} from "../../../app/models/recruitment-result-completion";
 
 describe("recruitment-result-completion", () => {
   it("keeps completedAt when uncompleting one duplicate occurrence leaves another recruited student", () => {

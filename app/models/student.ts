@@ -1,7 +1,7 @@
 import { graphql } from "~/graphql";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, cacheQuery, fetchLazySourceCached, fetchLazySourceCachedBatch, fetchSourceCached } from "./base";
+import { cacheKey, cacheQuery, fetchLazySourceCached, fetchLazySourceCachedBatch, fetchSourceCached } from "~/lib/cache";
 import type { Position, TacticRole } from "./content.d";
 
 export type Role = "striker" | "special";
@@ -29,6 +29,26 @@ const allStudentsQuery = graphql(`
   query AllStudents {
     students {
       uid name familyName altNames school initialTier order attackType defenseType position tacticRole birthday role equipments released
+    }
+  }
+`);
+
+const studentDetailQuery = graphql(`
+  query StudentDetail($uid: String!) {
+    student(uid: $uid) {
+      name familyName uid attackType defenseType role school schaleDbId releaseAt
+      recruitments {
+        since rerun
+        recruitmentGroup { uid startAt endAt }
+      }
+    }
+  }
+`);
+
+const studentGradeDetailQuery = graphql(`
+  query StudentGradeDetail($uid: String!) {
+    student(uid: $uid) {
+      name familyName uid attackType defenseType role school schaleDbId
     }
   }
 `);
@@ -64,6 +84,22 @@ export async function syncRawStudents(env: Env): Promise<Student[]> {
 
 async function getRawStudents(env: Env): Promise<Student[]> {
   return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, false);
+}
+
+export async function getStudentDetail(env: Env, uid: string) {
+  const { data, error } = await runQuery(studentDetailQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  return data?.student;
+}
+
+export async function getStudentGradeDetail(env: Env, uid: string) {
+  const { data, error } = await runQuery(studentGradeDetailQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  return data?.student;
 }
 
 const maximumTiers: Record<string, number> = {

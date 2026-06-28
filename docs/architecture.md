@@ -1,13 +1,12 @@
-# 아키텍처 가이드
+# Architecture
 
-몰루로그의 문서는 파일 목록보다 오래 유지되는 구조와 규칙을 설명하는 것을 목표로 합니다.
-이 문서도 현재 코드의 세부 나열보다 "어디에 무엇을 두는가"와 "데이터가 어떻게 흐르는가"에 집중합니다.
+This document focuses on the project's durable structure rather than a listing of current files: where things live, how data flows, and the boundaries between layers. New code follows the structure described here.
 
-## 전체 구조
+## System overview
 
 ```text
-브라우저
-  ↕ SSR 요청/응답
+Browser
+  ↕ SSR request / response
 Cloudflare Workers
   ↕
 BAQL GraphQL API
@@ -15,104 +14,101 @@ BAQL GraphQL API
 Cloudflare D1 / KV
 ```
 
-- 웹 앱은 React Router v7 기반 SSR 앱으로 Cloudflare Workers에서 실행됩니다.
-- 게임 원천 데이터는 주로 BAQL GraphQL API에서 읽고, 사용자 데이터와 앱 상태는 D1에 저장합니다.
-- 응답 속도와 크론성 선계산 작업에는 KV 캐시를 사용합니다.
+- The web app is a React Router v7 SSR app running on Cloudflare Workers.
+- Game source data is read primarily from the BAQL GraphQL API, while user data and app state are stored in D1.
+- KV is used for response caching and for precomputed work driven by cron.
 
-## 핵심 디렉터리
+## Layers
 
-- `app/routes`
-  라우트 파일, `loader`/`action`, 메타, 상위 화면 조립을 담당합니다.
-- `app/components/primitives`
-  semantic token을 사용하는 저수준 공통 UI와 얇은 앱 공통 표현 레이어입니다.
-- `app/components/features/<domain>`
-  여러 화면에서 재사용되는 도메인 UI입니다.
-- `app/routes/*._components`, `app/routes/*/_components`
-  한 라우트 패밀리 안에서만 쓰는 route-local UI와 훅입니다.
-- `app/models`
-  D1 테이블 정의와 앱 도메인 단위의 읽기/쓰기 로직이 위치합니다.
-- `app/repositories`
-  새로 추가되는 BAQL 읽기 조합, 캐싱, 복합 조회 orchestration은 우선 이 계층을 고려합니다.
-- `workers/app.ts`
-  Worker 엔트리와 크론 작업 진입점입니다.
+Data flows in one direction, top to bottom.
 
-세부 UI 구조 규칙은 아래 문서를 기준으로 합니다.
+```text
+Routes  (loader / action · thin)
+  → Views   (composition + route cache, SWR)
+      → Domain  (pure calculation · no I/O)
+      → Models  (D1 CRUD · BAQL reads · source cache · normalization)
+          → lib/cache · lib/baql · db
+```
 
-- [컴포넌트 개발 가이드](./component-development-guide.md)
-- [라우트 가이드](./routes.md)
-- [UI/UX 가이드](./ui-ux-guidelines.md)
+- `app/routes` — Route files with `loader` / `action`, meta, parameter parsing, access control, and top-level screen assembly. Data composition and direct cache / BAQL / D1 calls do not belong here; they are delegated to views.
+- `app/views` — The composition layer for route presentation. It combines model and domain results into the shape a screen needs and applies the route cache (SWR).
+- `app/domain` — Pure calculation and transformation only. With no I/O or env dependency, it is easy to unit test. Logic such as raid scoring or the recruitment simulator lives here.
+- `app/models` — The data access layer. It handles D1 CRUD, BAQL reads, source caching, and normalization of upstream data into domain types.
+- `app/lib/cache`, `app/lib/baql`, `app/lib/db` — Infrastructure such as cache primitives, GraphQL execution, and D1 helpers.
+- `app/components/primitives` — Low-level shared UI built on semantic tokens, plus thin app-wide presentation.
+- `app/components/features/<domain>` — Domain UI reused across multiple screens.
+- `app/routes/*._components`, `app/routes/*/_components` — Route-local UI and hooks used within a single route family.
+- `workers/app.ts` — The Worker entry point and the entry for scheduled jobs.
 
-## 런타임과 배포
+## Boundary rules
 
-- Worker 엔트리: `workers/app.ts`
-- 라우팅 설정: `app/routes.ts` + React Router flat routes
-- 배포 설정: `wrangler.jsonc`
-- 정적 에셋: `build/client`
-- 주요 바인딩:
+- Lower layers never import upper layers. Data flows one way.
+- Routes stay thin: `loader` / `action`, params, auth, meta, and screen assembly. Routes do not call cache, BAQL, or D1 directly — they delegate to a view function.
+- Views own composition and the route cache (SWR). They call models and domain.
+- Models are data access only. They must not import from views.
+- Domain is pure: no I/O and no env. Type-only imports from models are allowed; avoid runtime imports from models.
+
+Detailed UI structure rules live in the frontend documents:
+
+- [Routing](./frontend/routing.md)
+- [Components](./frontend/components.md)
+- [Design](./frontend/design.md)
+
+## Runtime and deployment
+
+- Worker entry: `workers/app.ts`
+- Routing config: `app/routes.ts` with React Router flat routes
+- Deploy config: `wrangler.jsonc`
+- Static assets: `build/client`
+- Bindings:
   - `DB`: Cloudflare D1
-  - `KV_CACHE`: 캐시 저장소
-  - `KV_SESSION`: 세션 및 인증 관련 임시 데이터
+  - `KV_CACHE`: cache store
+  - `KV_SESSION`: session and auth-related transient data
+  - `EVENTS`: queue binding
 
-프로덕션 크론은 현재 아래처럼 운영됩니다.
+Cron runs on a single schedule:
 
-- `* * * * *`
-  UI용 단기 캐시 워밍
-- `*/10 * * * *`
-  타임라인 동기화, 학생/레이드/모집 데이터 갱신
-- `0 * * * *`
-  장기 캐시 재생성
+- `*/10 * * * *` — Runs `app/jobs/scheduled.ts`, which synchronizes source data (students, timeline contents, event contents, community posts) and warms caches.
 
-## 데이터 흐름
+## Data flow
 
-### 읽기
+### Read
 
-1. 브라우저가 라우트를 요청합니다.
-2. route `loader`가 실행됩니다.
-3. 필요하면 KV 캐시를 먼저 확인합니다.
-4. 캐시 미스 시 BAQL 또는 D1을 조회합니다.
-5. `useLoaderData()`로 화면을 렌더링합니다.
+1. The browser requests a route.
+2. The route `loader` runs and calls a single view function.
+3. The view calls the models and domain it needs, composes the screen shape, and applies a route cache when appropriate.
+4. Models check the source cache first and query BAQL or D1 on a miss.
+5. The screen renders from `useLoaderData()`.
 
-### 쓰기
+### Write
 
-1. 사용자가 `Form` 또는 fetcher를 통해 요청합니다.
-2. route `action`이 실행됩니다.
-3. D1 또는 인증/세션 상태를 갱신합니다.
-4. 필요하면 캐시를 비웁니다.
-5. 응답 또는 리다이렉트를 반환합니다.
+1. The user submits through a `Form` or a fetcher.
+2. The route `action` runs.
+3. D1 or auth / session state is updated.
+4. Caches are invalidated when needed.
+5. A response or redirect is returned.
 
-## 캐싱 원칙
+## Caching
 
-- 공통 캐시 유틸리티는 `app/models/base.ts`의 `fetchCached`를 사용합니다.
-- 캐시 키는 `cache::` 접두사 아래에 저장됩니다.
-- 화면 단위에서 임의로 캐시 정책을 만들기보다, 재사용되는 조회 로직 안에서 캐시를 결정합니다.
-- 강제 새로고침이 필요한 경우 `forceRefresh` 패턴을 사용합니다.
+- Cache primitives live in `app/lib/cache` (`fetchCached`, `fetchSourceCached`, `fetchRouteCached`, and related helpers).
+- There are two kinds of cache:
+  - Source cache (`fetchSourceCached`): raw BAQL reference data. Applied in models only.
+  - Route cache (`fetchRouteCached`, SWR): composed view-models. Applied in views only.
+- Cache keys are stored under the `cache::` prefix.
+- Routes and screens do not invent cache policy; the owning layer (models or views) decides it.
+- Use the `forceRefresh` pattern when a forced refresh is needed, such as in cron and background work.
 
-## 인증 원칙
+## Authentication
 
-- 인증 진입점은 `app/auth/authenticator.server.ts`입니다.
-- 현재 로그인 수단은 Google OAuth와 Passkey입니다.
-- 인증이 필요한 라우트는 route `loader`/`action`에서 직접 검사합니다.
-- 세션 저장은 쿠키 세션을 사용하며, 임시 Passkey challenge 등은 `KV_SESSION`을 사용합니다.
+- The authentication entry point is `app/auth/authenticator.server.ts`.
+- Supported login methods are Google OAuth and Passkey.
+- Routes that require authentication check it directly in `loader` / `action`.
+- Sessions use cookie sessions; transient data such as Passkey challenges uses `KV_SESSION`.
 
-## 도메인 규칙
+## Domain rules
 
-### 커뮤니티
+### Community
 
-- 사용자 작성 콘텐츠의 canonical 저장소는 `community_*` 계층입니다.
-- 학생 평가, 이벤트 의견, 공략글은 저장소를 따로 늘리기보다 이 계층 안에서 타입으로 구분합니다.
-- 레거시 테이블이 남아 있어도 새 기능은 canonical 저장소 기준으로 판단합니다.
-
-### UI 구조
-
-- 새 저수준 UI는 `primitives`와 `features/forms` 조합을 우선 사용합니다.
-- semantic token은 `app/tailwind.css`에 두고, surface/foreground/border 역할은 그 기준을 따릅니다.
-- 공용화가 검증되기 전에는 route-local 구성을 먼저 선택합니다.
-- 화면 설명보다 구조 규칙을 우선 문서화합니다.
-
-## 문서 역할 분리
-
-- 이 문서: 전체 구조와 데이터 흐름
-- [라우트 가이드](./routes.md): 파일명 규칙, route 책임, route-local 규칙
-- [컴포넌트 개발 가이드](./component-development-guide.md): UI 계층과 승격 기준
-- [데이터베이스 가이드](./database.md): D1/Drizzle 모델링과 마이그레이션 규칙
-- [BAQL API 가이드](./baql-api.md): GraphQL 조회와 codegen 규칙
+- The canonical store for user-generated content is the `community_*` layer.
+- Student reviews, event opinions, and guide posts are distinguished by type within this layer rather than by adding separate stores.
+- Legacy tables may still exist, but new features target the canonical store.

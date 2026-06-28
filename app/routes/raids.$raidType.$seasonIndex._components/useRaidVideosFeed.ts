@@ -5,7 +5,7 @@ import {
   type RaidVideoItem,
   RAID_VIDEOS_PAGE_SIZE,
   type VideoSort,
-} from "~/repositories";
+} from "~/models/raid-videos";
 import type { RaidVideosData } from "~/routes/raids.data.$raidType.$seasonIndex.videos";
 
 type UseRaidVideosFeedParams = {
