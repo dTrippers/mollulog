@@ -1,19 +1,20 @@
+import { cacheKey, cacheQuery, isKvCacheWindowFresh, markKvCacheWindow } from "~/lib/cache";
+import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
 import { getLogger } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
+import { syncEventContentsList } from "~/models/event-content";
+import { getStudentGearData } from "~/models/growth-resource";
+import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
+import { warmRaidCache } from "~/models/raid";
+import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
+import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
-import { getItemCatalogResources } from "~/models/item-catalog";
-import { getStudentGearData } from "~/models/growth-resource";
-import { warmRecruitmentCache } from "~/models/recruitment";
-import { getCampaignFarmingStages } from "~/models/stage";
-import { syncEventContentsList } from "~/models/event-content";
-import { cacheKey, cacheQuery, isKvCacheWindowFresh, markKvCacheWindow } from "~/lib/cache";
-import { warmRaidCache } from "~/models/raid";
 import { warmActiveUpcomingEventContent } from "~/views/events";
 
 type ScheduledJobName = "syncYoutubeCommunityPosts" | "refreshSourceCaches";
@@ -29,15 +30,34 @@ type ScheduledRunContext = {
 };
 
 const SCHEDULED_JOB_TIMEOUT_MS = RUNTIME_TIMEOUTS.scheduled.job;
+const SOURCE_REFRESH_CONCURRENCY = 1;
 const SOURCE_WARM_WINDOW_SECONDS = 60 * 60;
 const SOURCE_WARM_MARKER_KEY = cacheKey("source", "cron-source-warm", 1, cacheQuery({ name: "students-events" }));
 
+async function runSourceRefreshTasks(tasks: Array<() => Promise<unknown>>, errorMessage: string): Promise<void> {
+  const errors: unknown[] = [];
+  await mapWithConcurrencyLimit(tasks, SOURCE_REFRESH_CONCURRENCY, async (run) => {
+    try {
+      await run();
+    } catch (error) {
+      errors.push(error);
+    }
+  });
+
+  if (errors.length > 0) {
+    throw new AggregateError(errors, errorMessage);
+  }
+}
+
 async function warmStudentSourceCaches(env: Env, forceRefresh = false): Promise<void> {
   const studentUids = (await getAllStudents(env, true)).map((student) => student.uid);
-  await Promise.all([
-    getStudentSkillItemsBatch(env, studentUids, forceRefresh),
-    getStudentGearData(env, studentUids, forceRefresh),
-  ]);
+  await runSourceRefreshTasks(
+    [
+      () => getStudentSkillItemsBatch(env, studentUids, forceRefresh),
+      () => getStudentGearData(env, studentUids, forceRefresh),
+    ],
+    "One or more student source cache warm tasks failed",
+  );
 }
 
 async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
@@ -49,23 +69,28 @@ async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
   // no marker so the next cron (10 min later) retries instead of skipping for the
   // full hour. Cron runs are ~60s-capped and 10 min apart, so they never overlap
   // and there is no concurrency window to protect against by claiming first.
-  await Promise.all([warmStudentSourceCaches(env, false), warmActiveUpcomingEventContent(env, false)]);
+  await runSourceRefreshTasks(
+    [() => warmStudentSourceCaches(env, false), () => warmActiveUpcomingEventContent(env, false)],
+    "One or more periodic lazy source cache warm tasks failed",
+  );
   await markKvCacheWindow(env, SOURCE_WARM_MARKER_KEY);
 }
 
 async function refreshSourceCaches(env: Env): Promise<void> {
-  await Promise.all([
-    syncRawStudents(env),
-    warmRecruitmentCache(env),
-    warmRaidCache(env),
-    getMainStories(env, true),
-    getAllStudentsFavoriteItems(env, true),
-    syncAllTimelineContentsMeta(env),
-    syncEventContentsList(env),
-    warmPeriodicLazySourceCaches(env),
-    getItemCatalogResources(env, true),
-    getCampaignFarmingStages(env, true),
-  ]);
+  const tasks: Array<() => Promise<unknown>> = [
+    () => syncRawStudents(env),
+    () => warmRecruitmentCache(env),
+    () => warmRaidCache(env),
+    () => getMainStories(env, true),
+    () => getAllStudentsFavoriteItems(env, true),
+    () => syncAllTimelineContentsMeta(env),
+    () => syncEventContentsList(env),
+    () => warmPeriodicLazySourceCaches(env),
+    () => getItemCatalogResources(env, true),
+    () => getCampaignFarmingStages(env, true),
+  ];
+
+  await runSourceRefreshTasks(tasks, "One or more source cache refresh tasks failed");
 }
 
 export async function runScheduledJobs(
