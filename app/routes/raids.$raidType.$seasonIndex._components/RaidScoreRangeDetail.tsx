@@ -22,6 +22,7 @@ type RaidScoreRangeDetailProps = {
   sampleSize: number;
   allStudents: Record<string, StudentInfo>;
   recruitedStudentTiers: Record<string, number>;
+  hasRecruitedStudentData: boolean;
 };
 
 const PARTY_COUNT_BUCKETS = ["1편성", "2편성", "3편성", "4편성+"] as const;
@@ -35,10 +36,10 @@ export default function RaidScoreRangeDetail({
   sampleSize,
   allStudents,
   recruitedStudentTiers,
+  hasRecruitedStudentData,
 }: RaidScoreRangeDetailProps) {
   const [showUnrecruitedStudents, setShowUnrecruitedStudents] = useState(true);
   const { search } = useLocation();
-  const hasRecruitedStudentTiers = Object.keys(recruitedStudentTiers).length > 0;
 
   if (loading && !rangeStats) {
     return <RaidScoreRangeDetailSkeleton />;
@@ -75,7 +76,7 @@ export default function RaidScoreRangeDetail({
           title="많이 편성한 조합"
           description="순서나 학생 성장도은 반영되지 않아요"
           action={
-            hasRecruitedStudentTiers ? (
+            hasRecruitedStudentData ? (
               <Toggle
                 label="미모집 학생 표시"
                 initialState={showUnrecruitedStudents}
@@ -89,7 +90,7 @@ export default function RaidScoreRangeDetail({
             oftenUsedParties={rangeStats.oftenUsedParties}
             allStudents={allStudents}
             recruitedStudentTiers={recruitedStudentTiers}
-            showUnrecruitedStudents={showUnrecruitedStudents}
+            showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
           />
           <RanksPageLink to={`ranks${search}`} />
         </RaidStatsCard>
@@ -105,9 +106,7 @@ function RanksPageLink({ to }: { to: string }) {
       className="group mt-3 flex items-center justify-between gap-3 border-t border-neutral-100 pt-3 text-sm transition-colors hover:text-neutral-900 focus-visible:outline-none dark:border-neutral-800 dark:hover:text-neutral-100"
     >
       <span className="min-w-0">
-        <span className="font-medium text-neutral-700 group-hover:underline dark:text-neutral-300">
-          모든 편성 보기
-        </span>
+        <span className="font-medium text-neutral-700 group-hover:underline dark:text-neutral-300">모든 편성 보기</span>
         <span className="mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400">
           특정 성장도의 학생을 포함/제외하는 조건으로 편성을 찾아볼 수 있어요
         </span>

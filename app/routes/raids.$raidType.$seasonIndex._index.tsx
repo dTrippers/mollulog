@@ -33,12 +33,13 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   return {
     allStudents,
     recruitedStudentTiers,
+    hasRecruitedStudentData: sensei !== null,
   };
 };
 
 export default function RaidSummary() {
   const { currentRaid, allRaids, defenseType, defenseTypeSet } = useOutletContext<RaidPageContext>();
-  const { allStudents, recruitedStudentTiers } = useLoaderData<typeof loader>();
+  const { allStudents, recruitedStudentTiers, hasRecruitedStudentData } = useLoaderData<typeof loader>();
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
 
   // Past hostings of the same boss + terrain (excluding current raid)
@@ -130,6 +131,7 @@ export default function RaidSummary() {
         clearLevels={clearLevels}
         allStudents={allStudents}
         recruitedStudentTiers={recruitedStudentTiers}
+        hasRecruitedStudentData={hasRecruitedStudentData}
       />
 
       {sameBossRaids.length > 0 && (
