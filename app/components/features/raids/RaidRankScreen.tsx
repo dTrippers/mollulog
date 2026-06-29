@@ -1,13 +1,12 @@
 import { IdentificationIcon, MinusCircleIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActionCard } from "~/components/features/editor";
-import { StudentCards } from "~/components/features/students";
 import { EmptyView, Pagination } from "~/components/primitives";
+import { normalizeBossUid, scoreToDifficultyAndTime } from "~/domain/raid-score";
 import type { Attack, Defense } from "~/graphql/graphql";
-import { type ParsedRaidRankDocument, convertTier, fetchRanks } from "~/lib/ranks/ranks";
 import type { UtcIsoString } from "~/lib/date-time";
+import { type ParsedRaidRankDocument, convertTier, fetchRanks } from "~/lib/ranks/ranks";
 import type { RaidType, Role } from "~/models/content.d";
-import { type Boss, scoreToDifficultyAndTime } from "~/domain/raid-score";
+import RaidPartyCard, { type RaidPartyRow, type RaidPartySlot } from "./RaidPartyCard";
 import type { RaidRankFilterState } from "./RaidRankFilter";
 
 type RaidRankScreenProps = {
@@ -229,82 +228,118 @@ export default function RaidRankScreen({
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
   const filteredRanks = ranks;
   const maxLevel = getMaxLevelAt(currentRaid.since);
+  const boss = normalizeBossUid(currentRaid.boss);
   return (
-    <div className="max-w-2xl">
+    <div className="space-y-3">
       {filteredRanks.map(({ rank, score, parties }) => {
-        let clearTimeMillisec: number | undefined = undefined;
-        try {
-          clearTimeMillisec = scoreToDifficultyAndTime(currentRaid.boss as Boss, score).clearTimeMillisec;
-        } catch (error) {
-          clearTimeMillisec = 0;
-          // Timing issue can be ignored
-        }
-
-        const clearMinutes = Math.floor(clearTimeMillisec / 60000);
-        const clearSeconds = Math.floor((clearTimeMillisec % 60000) / 1000);
-        const clearMilliseconds = clearTimeMillisec % 1000;
-        const label = `${score.toLocaleString()}점 / ${clearMinutes.toString().padStart(2, "0")}:${clearSeconds.toString().padStart(2, "0")}.${clearMilliseconds.toString().padStart(3, "0")}`;
+        const clearTimeLabel = boss ? getClearTimeLabel(boss, score) : null;
+        const rows = parties.map((party) => toRaidPartyRow({ party, allStudents, maxLevel }));
         return (
-          <ActionCard key={`rank-${rank}-${score}`} actions={[]}>
-            <p className="mb-2">
-              <span className="md:text-lg font-bold">{rank}위</span> ({label})
-            </p>
-            {parties.map((party) => (
-              <StudentCards
-                key={`party-${party.partyIndex}`}
-                students={party.slots.map(({ studentUid, tier, level, isAssist }) => {
-                  if (!studentUid) {
-                    return { uid: null };
-                  }
-
-                  const student = allStudents[studentUid];
-                  if (!student) {
-                    return { uid: null };
-                  }
-
-                  return {
-                    uid: studentUid,
-                    name: student.name,
-                    hideName: true,
-                    attackType: student.attackType,
-                    defenseType: student.defenseType,
-                    role: student.role,
-                    tier,
-                    level: level && level < maxLevel ? level : undefined,
-                    isAssist,
-                    popups:
-                      student && tier
-                        ? [
-                            {
-                              Icon: PlusCircleIcon,
-                              text: "이 학생을 포함한 편성만 보기",
-                              onClick: () => onIncludeStudent({ uid: studentUid, tier }),
-                            },
-                            {
-                              Icon: MinusCircleIcon,
-                              text: "이 학생을 제외한 편성만 보기",
-                              onClick: () => onExcludeStudent({ uid: studentUid, tier }),
-                            },
-                            {
-                              Icon: IdentificationIcon,
-                              text: "학생부 보기 (평가/통계)",
-                              link: `/students/${studentUid}`,
-                            },
-                          ]
-                        : undefined,
-                    popupId: studentUid ? `${rank}-${party.partyIndex}-${studentUid}` : undefined,
-                  };
-                })}
-                pcGrid={10}
-              />
-            ))}
-          </ActionCard>
+          <RaidPartyCard
+            key={`rank-${rank}-${score}`}
+            primaryLabel={`${rank.toLocaleString()}위`}
+            rows={rows}
+            summaryItems={[
+              { label: "점수", value: `${score.toLocaleString()}점` },
+              ...(clearTimeLabel ? [{ label: "클리어 시간", value: clearTimeLabel }] : []),
+            ]}
+            popupIdPrefix={`rank-${rank}-${score}`}
+            surface="elevated"
+            getStudentActions={(slot) => getRankStudentActions(slot, onIncludeStudent, onExcludeStudent)}
+          />
         );
       })}
 
       <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
     </div>
   );
+}
+
+function toRaidPartyRow({
+  party,
+  allStudents,
+  maxLevel,
+}: {
+  party: ParsedRaidRankDocument["parties"][number];
+  allStudents: RaidRankScreenProps["allStudents"];
+  maxLevel: number;
+}): RaidPartyRow {
+  return {
+    key: `party-${party.partyIndex}`,
+    label: `${party.partyIndex + 1}편성`,
+    slots: party.slots.map(({ studentUid, tier, level, isAssist }) => {
+      if (!studentUid) {
+        return { uid: null };
+      }
+
+      const student = allStudents[studentUid];
+      if (!student) {
+        return { uid: null };
+      }
+
+      return {
+        uid: studentUid,
+        name: student.name,
+        attackType: student.attackType,
+        defenseType: student.defenseType,
+        role: student.role,
+        tier,
+        level: level && level < maxLevel ? level : undefined,
+        isAssist,
+      };
+    }),
+  };
+}
+
+function getRankStudentActions(
+  slot: RaidPartySlot,
+  onIncludeStudent: RaidRankScreenProps["onIncludeStudent"],
+  onExcludeStudent: RaidRankScreenProps["onExcludeStudent"],
+) {
+  const uid = slot.uid;
+  const tier = slot.tier;
+
+  if (!uid) {
+    return [];
+  }
+
+  return [
+    ...(tier
+      ? [
+          {
+            Icon: PlusCircleIcon,
+            text: "이 학생을 포함한 편성만 보기",
+            onClick: () => onIncludeStudent({ uid, tier }),
+          },
+          {
+            Icon: MinusCircleIcon,
+            text: "이 학생을 제외한 편성만 보기",
+            onClick: () => onExcludeStudent({ uid, tier }),
+          },
+        ]
+      : []),
+    {
+      Icon: IdentificationIcon,
+      text: "학생부 보기 (평가/통계)",
+      link: `/students/${uid}`,
+    },
+  ];
+}
+
+function getClearTimeLabel(boss: NonNullable<ReturnType<typeof normalizeBossUid>>, score: number): string | null {
+  try {
+    return formatClearTime(scoreToDifficultyAndTime(boss, score).clearTimeMillisec);
+  } catch {
+    return null;
+  }
+}
+
+function formatClearTime(clearTimeMillisec: number): string {
+  const clearMinutes = Math.floor(clearTimeMillisec / 60000);
+  const clearSeconds = Math.floor((clearTimeMillisec % 60000) / 1000);
+  const clearMilliseconds = clearTimeMillisec % 1000;
+
+  return `${clearMinutes.toString().padStart(2, "0")}:${clearSeconds.toString().padStart(2, "0")}.${clearMilliseconds.toString().padStart(3, "0")}`;
 }
 
 // Spinner animation

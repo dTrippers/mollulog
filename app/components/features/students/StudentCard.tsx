@@ -207,6 +207,7 @@ export default function StudentCard({
   const visibleNames = parseVisibleNames(name ?? "");
   const showName = Boolean(name && !hideName);
   const showsOverlayName = showName && namePlacement === "overlay";
+  const showTier = typeof tier === "number" && tier > 0;
   const overlaySubName = visibleNames.length === 2 ? visibleNames[1] : "";
   const overlayMainName = visibleNames[0] ?? name;
   const cardAspectClassName = circular ? "aspect-square" : showsOverlayName ? "aspect-5/6" : "";
@@ -267,7 +268,7 @@ export default function StudentCard({
                     {label}
                   </span>
                 )}
-                {showsOverlayName && !label && tier && (
+                {showsOverlayName && !label && showTier && (
                   <span
                     className={`inline-flex items-center gap-0.5 px-1.5 rounded-md bg-black/70 backdrop-blur-sm leading-tight ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}
                   >
@@ -319,7 +320,7 @@ export default function StudentCard({
                     </div>
                   )}
                   {label}
-                  {!label && tier && (
+                  {!label && showTier && (
                     <div
                       className={`flex-grow flex justify-center items-center ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}
                     >

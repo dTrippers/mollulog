@@ -49,6 +49,14 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - Controls in the same row align in height and rhythm.
 - Avoid interactions that feel slow or leave their state ambiguous.
 
+## Loading states
+
+- Skeleton UI should resemble the final loaded UI, not a generic placeholder block.
+- Preserve the loaded screen's main sections, row density, columns, and visual rhythm while data is loading.
+- Use skeletons to reduce layout shift and help users predict what content is coming.
+- Do not put a tiny skeleton inside an unrelated container if the loaded content will become multiple sections or cards.
+- For example, raid platinum statistics should load as skeleton versions of the party count, student usage, and often-used party sections, not as one generic loading box.
+
 ## Checklist
 
 Before building new UI:

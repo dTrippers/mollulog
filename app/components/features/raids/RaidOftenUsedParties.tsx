@@ -1,7 +1,7 @@
-import type { Role } from "~/models/content.d";
+import { IdentificationIcon } from "@heroicons/react/24/outline";
 import type { Attack, Defense } from "~/graphql/graphql";
-import { ActionCard } from "~/components/features/editor";
-import { StudentCards } from "~/components/features/students";
+import type { Role } from "~/models/content.d";
+import RaidPartyCard, { type RaidPartyRow, type RaidPartySlot } from "./RaidPartyCard";
 
 type ServerStudent = {
   uid: string;
@@ -21,94 +21,177 @@ type Party = {
   students: ServerStudentSlot[];
 };
 
-type RaidOftenUsedPartiesProps = {
-  oftenUsedParties: Array<{
-    count: number;
-    maxRank: number;
-    maxScore: number;
-    parties: Party[];
-  }>;
-  allStudents: Record<string, { name: string; attackType: Attack; defenseType: Defense; role: Role }>;
+type RaidOftenUsedParty = {
+  count: number;
+  maxRank: number;
+  maxScore: number;
+  parties: Party[];
 };
 
-export default function RaidOftenUsedParties({ oftenUsedParties, allStudents }: RaidOftenUsedPartiesProps) {
+type RaidOftenUsedPartiesProps = {
+  oftenUsedParties: RaidOftenUsedParty[];
+  allStudents: Record<string, { name: string; attackType: Attack; defenseType: Defense; role: Role }>;
+  recruitedStudentTiers: Record<string, number>;
+  showUnrecruitedStudents?: boolean;
+};
+
+const VISIBLE_PARTY_COUNT = 3;
+
+export default function RaidOftenUsedParties({
+  oftenUsedParties,
+  allStudents,
+  recruitedStudentTiers,
+  showUnrecruitedStudents = false,
+}: RaidOftenUsedPartiesProps) {
   if (oftenUsedParties.length === 0) {
     return (
-      <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
-        많이 사용된 편성 데이터가 없어요
-      </div>
+      <div className="py-8 text-center text-neutral-500 dark:text-neutral-400">많이 사용된 편성 데이터가 없어요</div>
     );
   }
 
-  // Take only TOP 5
-  const top5Parties = oftenUsedParties.slice(0, 5);
   return (
-    <div className="space-y-4">
-      {top5Parties.map(({ count, maxRank, maxScore, parties }, index) => {
-        const representativeParty = parties[0];
-        const representativeKey = representativeParty?.students
-          .map((slot) => slot.student?.uid ?? slot.slot)
-          .join("-");
-
-        // Use the first party as representative (all parties in the array have the same composition)
-        return (
-          <ActionCard key={`${maxRank}-${representativeKey ?? index}`} actions={[]}>
-            <div className="mb-2">
-              <span className="text-lg font-bold">{index + 1}위</span>
-              <span className="ml-2 text-sm text-neutral-600 dark:text-neutral-400">
-                {count.toLocaleString()}회
-              </span>
-            </div>
-            <div className="flex flex-col-reverse md:flex-row md:items-center gap-4">
-              <div>
-                {parties.map((party) => (
-                  <div key={party.students.map((slot) => slot.student?.uid ?? slot.slot).join("-")}>
-                    <StudentCards
-                      students={party.students.map((slot) => {
-                        if (slot.slot === "empty" || !slot.student) {
-                          return { uid: null };
-                        }
-
-                        const student = allStudents[slot.student.uid];
-                        if (!student) {
-                          return { uid: slot.student.uid, hideName: true };
-                        }
-                        return {
-                          uid: slot.student.uid,
-                          name: student.name,
-                          hideName: true,
-                          attackType: student.attackType,
-                          defenseType: student.defenseType,
-                          role: student.role,
-                        };
-                      })}
-                      pcGrid={8}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="flex-shrink-0 md:w-40">
-                <div className="space-y-1 text-sm">
-                  {maxRank !== undefined && (
-                    <div className="text-neutral-500 dark:text-neutral-400">
-                      <span className="font-medium">최고 순위:</span>{" "}
-                      <span className="text-neutral-900 dark:text-neutral-100">
-                        {maxRank.toLocaleString()}위
-                      </span>
-                    </div>
-                  )}
-                  <div className="text-neutral-500 dark:text-neutral-400">
-                    <span className="font-medium">최고 점수:</span>{" "}
-                    <span className="text-neutral-900 dark:text-neutral-100">
-                      {maxScore.toLocaleString()}점
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </ActionCard>
-        );
-      })}
+    <div className="space-y-3">
+      {oftenUsedParties.slice(0, 5).map((oftenUsedParty, index) => (
+        <OftenUsedPartyCard
+          key={getOftenUsedPartyKey(oftenUsedParty, index)}
+          rank={index + 1}
+          oftenUsedParty={oftenUsedParty}
+          allStudents={allStudents}
+          recruitedStudentTiers={recruitedStudentTiers}
+          showUnrecruitedStudents={showUnrecruitedStudents}
+        />
+      ))}
     </div>
   );
+}
+
+function OftenUsedPartyCard({
+  rank,
+  oftenUsedParty,
+  allStudents,
+  recruitedStudentTiers,
+  showUnrecruitedStudents,
+}: {
+  rank: number;
+  oftenUsedParty: RaidOftenUsedParty;
+  allStudents: RaidOftenUsedPartiesProps["allStudents"];
+  recruitedStudentTiers: RaidOftenUsedPartiesProps["recruitedStudentTiers"];
+  showUnrecruitedStudents: boolean;
+}) {
+  const rows = oftenUsedParty.parties.map((party, partyIndex) =>
+    toRaidPartyRow({
+      party,
+      partyIndex,
+      allStudents,
+      recruitedStudentTiers,
+      showUnrecruitedStudents,
+    }),
+  );
+  const summaryItems = [
+    {
+      label: "최고 순위",
+      value: `${oftenUsedParty.maxRank.toLocaleString()}위`,
+    },
+    {
+      label: "최고 점수",
+      value: `${oftenUsedParty.maxScore.toLocaleString()}점`,
+    },
+  ];
+
+  return (
+    <RaidPartyCard
+      primaryLabel={`${rank}위`}
+      secondaryLabel={`${oftenUsedParty.count.toLocaleString()}회`}
+      rows={rows}
+      summaryItems={summaryItems}
+      popupIdPrefix={`often-used-${rank}`}
+      visibleRowCount={VISIBLE_PARTY_COUNT}
+      getStudentActions={(slot) =>
+        slot.uid
+          ? [
+              {
+                Icon: IdentificationIcon,
+                text: "학생부 보기",
+                link: `/students/${slot.uid}`,
+              },
+            ]
+          : []
+      }
+    />
+  );
+}
+
+function toRaidPartyRow({
+  party,
+  partyIndex,
+  allStudents,
+  recruitedStudentTiers,
+  showUnrecruitedStudents,
+}: {
+  party: Party;
+  partyIndex: number;
+  allStudents: RaidOftenUsedPartiesProps["allStudents"];
+  recruitedStudentTiers: RaidOftenUsedPartiesProps["recruitedStudentTiers"];
+  showUnrecruitedStudents: boolean;
+}): RaidPartyRow {
+  const key = `${partyIndex}-${party.students.map((slot) => slot.student?.uid ?? slot.slot).join("-")}`;
+
+  return {
+    key,
+    label: `${partyIndex + 1}편성`,
+    slots: party.students.map((slot) =>
+      toRaidPartySlot({
+        slot,
+        allStudents,
+        recruitedStudentTiers,
+        showUnrecruitedStudents,
+      }),
+    ),
+  };
+}
+
+function toRaidPartySlot({
+  slot,
+  allStudents,
+  recruitedStudentTiers,
+  showUnrecruitedStudents,
+}: {
+  slot: ServerStudentSlot;
+  allStudents: RaidOftenUsedPartiesProps["allStudents"];
+  recruitedStudentTiers: RaidOftenUsedPartiesProps["recruitedStudentTiers"];
+  showUnrecruitedStudents: boolean;
+}): RaidPartySlot {
+  if (slot.slot === "empty" || !slot.student) {
+    return { uid: null };
+  }
+
+  const student = allStudents[slot.student.uid];
+  const isUnrecruited = showUnrecruitedStudents && recruitedStudentTiers[slot.student.uid] === undefined;
+
+  return {
+    uid: slot.student.uid,
+    name: student?.name,
+    attackType: student?.attackType,
+    defenseType: student?.defenseType,
+    role: student?.role,
+    tier: slot.student.tier,
+    isAssist: slot.student.isAssist,
+    grayscale: isUnrecruited,
+    badge: isUnrecruited ? <UnrecruitedBadge /> : null,
+  };
+}
+
+function UnrecruitedBadge() {
+  return (
+    <span className="pointer-events-none absolute top-1 right-0 origin-top-right scale-75 rounded-sm bg-neutral-900/80 px-1 py-0.5 text-xs font-bold leading-none text-white shadow-sm dark:bg-neutral-50/90 dark:text-neutral-900">
+      미모집
+    </span>
+  );
+}
+
+function getOftenUsedPartyKey({ maxRank, maxScore, parties }: RaidOftenUsedParty, index: number): string {
+  const representativeParty = parties[0];
+  const representativeKey = representativeParty?.students.map((slot) => slot.student?.uid ?? slot.slot).join("-");
+
+  return `${maxRank}-${maxScore}-${representativeKey ?? index}`;
 }

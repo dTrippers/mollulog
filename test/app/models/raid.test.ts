@@ -41,6 +41,22 @@ describe("getAllRaidSchedules", () => {
     expect(runQuery).toHaveBeenCalledWith(expect.anything(), {
       region: "gl",
       endAfter: null,
+      raidType: null,
+    });
+  });
+
+  it("passes raidType when a schedule type filter is requested", async () => {
+    mockedRunQuery.mockResolvedValueOnce({
+      data: { raidSchedules: { nodes: [] } },
+      error: undefined,
+    } as Awaited<ReturnType<typeof runQuery>>);
+
+    await expect(getAllRaidSchedules(createEnv(), true, { raidType: "total_assault" })).resolves.toEqual([]);
+
+    expect(runQuery).toHaveBeenCalledWith(expect.anything(), {
+      region: "gl",
+      endAfter: null,
+      raidType: "total_assault",
     });
   });
 });
@@ -108,6 +124,7 @@ describe("raid schedule lookup helpers", () => {
     expect(runQuery).toHaveBeenCalledWith(expect.anything(), {
       region: "gl",
       endAfter: null,
+      raidType: null,
     });
   });
 
