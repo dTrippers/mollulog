@@ -68,13 +68,13 @@ export default function RaidScoreRangeDetail({
           allStudents={allStudents}
           recruitedStudentTiers={recruitedStudentTiers}
         />
-        <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">고유1에는 ★5가 포함돼요</p>
+        <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">고유 ★1 데이터에는 ★5가 포함돼요</p>
       </RaidStatsCard>
 
       {rangeStats.oftenUsedParties.length > 0 && (
         <RaidStatsCard
           title="많이 편성한 조합"
-          description="순서나 학생 성장도은 반영되지 않아요"
+          description="순서나 학생 성장도는 반영되지 않아요"
           action={
             hasRecruitedStudentData ? (
               <Toggle

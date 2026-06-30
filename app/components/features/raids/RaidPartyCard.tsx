@@ -49,6 +49,8 @@ type RaidPartyCardProps = {
   getStudentActions?: (slot: RaidPartySlot, rowIndex: number, slotIndex: number) => RaidPartyStudentAction[];
 };
 
+const PARTY_SLOT_COUNT = 6;
+
 export default function RaidPartyCard({
   primaryLabel,
   secondaryLabel,
@@ -147,13 +149,15 @@ function PartyRow({
   popupIdPrefix: string;
   getStudentActions?: RaidPartyCardProps["getStudentActions"];
 }) {
+  const slots = getFixedPartySlots(row.slots);
+
   return (
     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
       <span className="shrink-0 text-xs font-medium tabular-nums text-neutral-500 dark:text-neutral-400 sm:mt-2 sm:w-10">
         {row.label}
       </span>
-      <div className="flex min-w-0 flex-1 flex-wrap gap-x-1.5 gap-y-1">
-        {row.slots.map((slot, slotIndex) => (
+      <div className="grid w-full min-w-0 grid-cols-6 gap-1.5 sm:w-fit sm:flex-none">
+        {slots.map((slot, slotIndex) => (
           <PartyStudentCard
             key={`${slot.uid ?? "empty"}-${slotIndex}`}
             slot={slot}
@@ -164,6 +168,13 @@ function PartyRow({
       </div>
     </div>
   );
+}
+
+function getFixedPartySlots(slots: RaidPartySlot[]): RaidPartySlot[] {
+  return [
+    ...slots.slice(0, PARTY_SLOT_COUNT),
+    ...Array<RaidPartySlot>(Math.max(PARTY_SLOT_COUNT - slots.length, 0)).fill({ uid: null }),
+  ];
 }
 
 function PartyStudentCard({
@@ -177,14 +188,14 @@ function PartyStudentCard({
 }) {
   if (!slot.uid) {
     return (
-      <div className="w-11 shrink-0 sm:w-12">
+      <div className="min-w-0 sm:w-12">
         <div className="aspect-square w-full rounded-lg bg-neutral-200/60 dark:bg-neutral-700/50" />
       </div>
     );
   }
 
   return (
-    <div className="relative w-11 shrink-0 sm:w-12">
+    <div className="relative min-w-0 sm:w-12">
       <StudentCard
         uid={slot.uid}
         name={slot.name}
