@@ -228,11 +228,14 @@ export default function RaidRankScreen({
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
   const filteredRanks = ranks;
   const maxLevel = getMaxLevelAt(currentRaid.since);
-  const boss = normalizeBossUid(currentRaid.boss);
   return (
     <div className="space-y-3">
       {filteredRanks.map(({ rank, score, parties }) => {
-        const clearTimeLabel = boss ? getClearTimeLabel(boss, score) : null;
+        const clearTimeLabel = getClearTimeLabel({
+          raidType: currentRaid.raidType,
+          bossUid: currentRaid.boss,
+          score,
+        });
         const rows = parties.map((party) => toRaidPartyRow({ party, allStudents, maxLevel }));
         return (
           <RaidPartyCard
@@ -326,10 +329,29 @@ function getRankStudentActions(
   ];
 }
 
-function getClearTimeLabel(boss: NonNullable<ReturnType<typeof normalizeBossUid>>, score: number): string | null {
+function getClearTimeLabel({
+  raidType,
+  bossUid,
+  score,
+}: {
+  raidType: RaidType;
+  bossUid: string;
+  score: number;
+}): string | null {
+  if (raidType !== "total_assault" && raidType !== "elimination") {
+    return null;
+  }
+
+  const boss = normalizeBossUid(bossUid);
+  if (!boss) {
+    console.error("Failed to resolve raid boss for clear time label.", { raidType, bossUid, score });
+    return null;
+  }
+
   try {
     return formatClearTime(scoreToDifficultyAndTime(boss, score).clearTimeMillisec);
-  } catch {
+  } catch (error) {
+    console.error("Failed to format clear time label.", { raidType, bossUid, score, error });
     return null;
   }
 }

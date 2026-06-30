@@ -100,9 +100,10 @@ export async function getUpcomingRaidContents(
   const sortedRaidContents = [...raidContents].sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
 
   if (raidTypes?.length) {
-    const schedules = (
-      await Promise.all([...new Set(raidTypes)].map((raidType) => getAllRaidSchedules(env, forceRefresh, { raidType })))
-    ).flat();
+    const raidTypeSet = new Set(raidTypes);
+    const schedules = (await getAllRaidSchedules(env, forceRefresh)).filter((schedule) =>
+      raidTypeSet.has(schedule.raidType as RaidType),
+    );
     const filteredRaidContents = schedules
       .flatMap((schedule) => {
         const matchingContent = findRaidContentForSchedule(sortedRaidContents, schedule);
@@ -129,12 +130,17 @@ export async function getUpcomingRaidContents(
 
 function findRaidContentForSchedule(contents: TimelineContent[], schedule: RaidScheduleMeta) {
   const scheduleStartAt = schedule.startAt ? getInstantTime(schedule.startAt) : null;
-  return (
-    contents.find((content) => content.contentUid === schedule.uid) ??
-    (scheduleStartAt !== null
-      ? contents.find((content) => getInstantTime(content.startAt) === scheduleStartAt)
-      : undefined)
-  );
+  const matchingContentByUid = contents.find((content) => content.contentUid === schedule.uid);
+  if (matchingContentByUid) {
+    return matchingContentByUid;
+  }
+
+  if (scheduleStartAt === null) {
+    return undefined;
+  }
+
+  const matchingContentsByStartAt = contents.filter((content) => getInstantTime(content.startAt) === scheduleStartAt);
+  return matchingContentsByStartAt.length === 1 ? matchingContentsByStartAt[0] : undefined;
 }
 
 export async function getUpcomingRaidContentByTypeAndSeason(

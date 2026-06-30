@@ -161,9 +161,7 @@ describe("getUpcomingRaidContents", () => {
     ]);
 
     mockedGetFutureRaidContents.mockResolvedValueOnce(contents);
-    mockedGetAllRaidSchedules.mockImplementation(async (_env, _forceRefresh, { raidType } = {}) =>
-      [...schedules.values()].filter((schedule) => schedule.raidType === raidType),
-    );
+    mockedGetAllRaidSchedules.mockResolvedValueOnce([...schedules.values()]);
 
     const result = await getUpcomingRaidContents(env, {
       limit: 3,
@@ -175,9 +173,43 @@ describe("getUpcomingRaidContents", () => {
       "gl_total_assault_83",
       "gl_elimination_31",
     ]);
-    expect(mockedGetAllRaidSchedules).toHaveBeenCalledWith(env, false, { raidType: "total_assault" });
-    expect(mockedGetAllRaidSchedules).toHaveBeenCalledWith(env, false, { raidType: "elimination" });
-    expect(mockedGetAllRaidSchedules).toHaveBeenCalledWith(env, false, { raidType: "unlimit" });
+    expect(mockedGetAllRaidSchedules).toHaveBeenCalledTimes(1);
+    expect(mockedGetAllRaidSchedules).toHaveBeenCalledWith(env, false);
     expect(getRaidSchedule).not.toHaveBeenCalled();
+  });
+
+  it("does not attach raid metadata by start time when multiple raid contents share the same start time", async () => {
+    const env = {} as Env;
+    const contents = [
+      createTimelineRaidContent({
+        uid: "timeline-total-assault",
+        contentUid: "timeline-total-assault",
+        startAt: "2026-07-07T02:00:00.000Z",
+        endAt: "2026-07-13T19:00:00.000Z",
+      }),
+      createTimelineRaidContent({
+        uid: "timeline-elimination",
+        contentUid: "timeline-elimination",
+        startAt: "2026-07-07T02:00:00.000Z",
+        endAt: "2026-07-13T19:00:00.000Z",
+      }),
+    ];
+    const schedules = [
+      createRaidSchedule({
+        uid: "gl_total_assault_84",
+        raidType: "total_assault",
+        startAt: "2026-07-07T02:00:00.000Z",
+      }),
+    ];
+
+    mockedGetFutureRaidContents.mockResolvedValueOnce(contents);
+    mockedGetAllRaidSchedules.mockResolvedValueOnce(schedules);
+
+    const result = await getUpcomingRaidContents(env, {
+      limit: 3,
+      raidTypes: ["total_assault"],
+    });
+
+    expect(result).toEqual([]);
   });
 });

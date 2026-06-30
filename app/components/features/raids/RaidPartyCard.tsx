@@ -1,9 +1,9 @@
 import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
 import type { ElementType, ReactNode } from "react";
 import { useState } from "react";
+import { StudentCard } from "~/components/features/students";
 import type { Attack, Defense } from "~/graphql/graphql";
 import type { Role } from "~/models/content.d";
-import { StudentCard } from "../students";
 
 export type RaidPartyStudentAction = {
   Icon?: ElementType;
@@ -171,10 +171,7 @@ function PartyRow({
 }
 
 function getFixedPartySlots(slots: RaidPartySlot[]): RaidPartySlot[] {
-  return [
-    ...slots.slice(0, PARTY_SLOT_COUNT),
-    ...Array<RaidPartySlot>(Math.max(PARTY_SLOT_COUNT - slots.length, 0)).fill({ uid: null }),
-  ];
+  return [...slots, ...Array<RaidPartySlot>(Math.max(PARTY_SLOT_COUNT - slots.length, 0)).fill({ uid: null })];
 }
 
 function PartyStudentCard({

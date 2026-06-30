@@ -84,6 +84,8 @@ type ScoreMarker = {
 };
 
 const rangeStatsCache = new Map<string, RangeStats>();
+const reportedDifficultyBandStatsMismatches = new Set<string>();
+const RANGE_STATS_CACHE_MAX_SIZE = 50;
 const MY_SCORE_STORAGE_PREFIX = "raid-clear-time-distribution:my-score";
 const CHART_PADDING_PX = 12;
 const CHART_MARGIN_RIGHT = 4;
@@ -276,7 +278,7 @@ export default function RaidScoreHistogram({
     }
 
     const cacheKey = getRangeStatsCacheKey({ raidType, season, defenseType, range: selectedRange });
-    const cached = rangeStatsCache.get(cacheKey);
+    const cached = getCachedRangeStats(cacheKey);
     if (cached) {
       setRangeStats(cached);
       setRangeStatsLoading(false);
@@ -314,7 +316,7 @@ export default function RaidScoreHistogram({
         if (cancelled) {
           return;
         }
-        rangeStatsCache.set(cacheKey, response);
+        setCachedRangeStats(cacheKey, response);
         setRangeStats(response);
         setRangeStatsLoading(false);
         setRangeStatsLoadedKey(cacheKey);
@@ -355,7 +357,7 @@ export default function RaidScoreHistogram({
   };
 
   const displayedRangeStats = currentRangeStatsCacheKey
-    ? (rangeStats ?? rangeStatsCache.get(currentRangeStatsCacheKey) ?? null)
+    ? (rangeStats ?? getCachedRangeStats(currentRangeStatsCacheKey) ?? null)
     : rangeStats;
   const rangeStatsReady =
     currentRangeStatsCacheKey === null ||
@@ -958,13 +960,16 @@ function buildDifficultyBandStats({
   totalCount: number;
 }): DifficultyBandStat[] {
   const totalClearCount = Object.values(clearLevels).reduce((sum, count) => sum + count, 0);
-  const denominator = totalClearCount || totalCount;
+  const hasClearLevels = totalClearCount > 0;
+  const denominator = hasClearLevels ? totalClearCount : totalCount;
   if (denominator <= 0) {
     return [];
   }
 
+  reportDifficultyBandStatsMismatch({ bands, clearLevels, totalCount });
+
   return bands.flatMap<DifficultyBandStat>((band) => {
-    const count = clearLevels[band.difficulty] ?? band.sampleCount;
+    const count = hasClearLevels ? (clearLevels[band.difficulty] ?? 0) : band.sampleCount;
     if (count <= 0) {
       return [];
     }
@@ -976,6 +981,74 @@ function buildDifficultyBandStats({
       },
     ];
   });
+}
+
+function reportDifficultyBandStatsMismatch({
+  bands,
+  clearLevels,
+  totalCount,
+}: {
+  bands: ClearTimeDifficultyBand[];
+  clearLevels: Record<string, number>;
+  totalCount: number;
+}): void {
+  const bandSampleCounts = new Map(bands.map((band) => [band.difficulty, band.sampleCount]));
+  const missingClearLevels = bands
+    .filter((band) => band.sampleCount > 0 && clearLevels[band.difficulty] === undefined)
+    .map((band) => band.difficulty);
+  const missingBands = Object.entries(clearLevels)
+    .filter(([difficulty, count]) => count > 0 && !bandSampleCounts.has(difficulty))
+    .map(([difficulty]) => difficulty);
+  const mismatchedCounts = bands.flatMap((band) => {
+    const overviewCount = clearLevels[band.difficulty];
+    if (overviewCount === undefined || overviewCount === band.sampleCount) {
+      return [];
+    }
+
+    return [{ difficulty: band.difficulty, overviewCount, distributionCount: band.sampleCount }];
+  });
+
+  if (missingClearLevels.length === 0 && missingBands.length === 0 && mismatchedCounts.length === 0) {
+    return;
+  }
+
+  const reportKey = JSON.stringify({ missingClearLevels, missingBands, mismatchedCounts });
+  if (reportedDifficultyBandStatsMismatches.has(reportKey)) {
+    return;
+  }
+
+  reportedDifficultyBandStatsMismatches.add(reportKey);
+  console.error("Raid difficulty stats mismatch between overview and clear-time distribution.", {
+    clearLevels,
+    totalCount,
+    missingClearLevels,
+    missingBands,
+    mismatchedCounts,
+  });
+}
+
+function getCachedRangeStats(cacheKey: string): RangeStats | undefined {
+  const cached = rangeStatsCache.get(cacheKey);
+  if (!cached) {
+    return undefined;
+  }
+
+  rangeStatsCache.delete(cacheKey);
+  rangeStatsCache.set(cacheKey, cached);
+  return cached;
+}
+
+function setCachedRangeStats(cacheKey: string, stats: RangeStats): void {
+  rangeStatsCache.delete(cacheKey);
+  rangeStatsCache.set(cacheKey, stats);
+
+  while (rangeStatsCache.size > RANGE_STATS_CACHE_MAX_SIZE) {
+    const oldestKey = rangeStatsCache.keys().next().value;
+    if (!oldestKey) {
+      return;
+    }
+    rangeStatsCache.delete(oldestKey);
+  }
 }
 
 function distributionToSelectedRange(
