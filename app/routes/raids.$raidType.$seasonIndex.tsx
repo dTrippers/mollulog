@@ -1,15 +1,9 @@
-import {
-  ChartBarIcon,
-  InformationCircleIcon,
-  ShieldCheckIcon,
-  TrophyIcon,
-  VideoCameraIcon,
-} from "@heroicons/react/24/outline";
+import { InformationCircleIcon, ShieldCheckIcon, TrophyIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import { Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { createPageErrorBoundary, Page } from "~/components/features/layout";
+import { Page, createPageErrorBoundary } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons, type PagePanelProps } from "~/components/primitives";
 import { raidTypeToParam } from "~/domain/raid";
@@ -150,13 +144,13 @@ export default function RaidPage() {
   return (
     <Page
       title={`${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} 정보`}
-      description="일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
+      description="총력전/대결전의 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
       belowTitle={<RaidSelector raids={allRaids} currentRaid={currentRaid ?? null} />}
       panels={panel ? [panel] : undefined}
       screens={[
         {
-          text: "시즌 요약",
-          description: `${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType}의 주요 정보 요약`,
+          text: "시즌 통계",
+          description: "플래티넘 유저들의 클리어 통계",
           Icon: InformationCircleIcon,
           link: raidPath,
           active: pathname === raidPath,
@@ -164,14 +158,9 @@ export default function RaidPage() {
         {
           text: "상위권 편성",
           Icon: TrophyIcon,
+          description: "특정 성장도의 학생을 포함/제외하는 편성 찾기",
           link: `${raidPath}/ranks`,
           active: pathname === `${raidPath}/ranks`,
-        },
-        {
-          text: "학생별 출전 횟수",
-          Icon: ChartBarIcon,
-          link: `${raidPath}/statistics`,
-          active: pathname === `${raidPath}/statistics`,
         },
         {
           text: "공략 영상",
@@ -201,14 +190,16 @@ export default function RaidPage() {
         </div>
       )}
       <Outlet
-        context={{
-          currentRaid,
-          allRaids,
-          defenseType: selectedDefense,
-          defenseTypeSet: selectedDefenseTypeSet,
-          setPanel,
-          signedIn,
-        } satisfies RaidPageContext}
+        context={
+          {
+            currentRaid,
+            allRaids,
+            defenseType: selectedDefense,
+            defenseTypeSet: selectedDefenseTypeSet,
+            setPanel,
+            signedIn,
+          } satisfies RaidPageContext
+        }
       />
     </Page>
   );

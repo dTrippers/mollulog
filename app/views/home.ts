@@ -1,14 +1,13 @@
-import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
-import { type UtcIsoString, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { cacheKey, fetchRouteCached } from "~/lib/cache";
-import { getAllRecruitmentGroups } from "~/models/recruitment";
-import { getFavoritedCounts } from "~/models/favorite-students";
 import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
+import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
+import { cacheKey, fetchRouteCached } from "~/lib/cache";
+import { type UtcIsoString, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import type { Role } from "~/models/content.d";
+import { getFavoritedCounts } from "~/models/favorite-students";
+import { getAllRecruitmentGroups } from "~/models/recruitment";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 import type { TimelineContent, TimelineContentType } from "~/models/timeline-content";
-import type { RaidSchedule } from "~/models/raid";
-import type { Role } from "~/models/content.d";
-import { getUpcomingRaidContents } from "./raid-content";
+import { type RaidScheduleMeta, getUpcomingRaidContents } from "./raid-content";
 
 const INDEX_CONTENTS_CACHE_KEY = cacheKey("route", "index", 1, "all");
 
@@ -25,7 +24,7 @@ export type IndexRecruitment = {
 
 export type IndexContents = {
   mainEvent: TimelineContent | null;
-  currentRaids: RaidSchedule[];
+  currentRaids: RaidScheduleMeta[];
   currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[];
   favoritedCounts: Awaited<ReturnType<typeof getFavoritedCounts>>;
 };
@@ -44,9 +43,11 @@ export async function getIndexContents(env: Env, forceRefresh = false, ctx?: Exe
         getTimelineContentsByContentTypes(env, eventContentTypes, now).then((events) =>
           events.filter((content) => !content.endAt || isInstantAfter(content.endAt, now)),
         ),
-        getUpcomingRaidContents(env, { limit: 4, forceRefresh }).then((contents) =>
-          contents.flatMap((content) => (content.raidSchedule ? [content.raidSchedule] : [])),
-        ),
+        getUpcomingRaidContents(env, {
+          limit: 4,
+          forceRefresh,
+          raidTypes: ["total_assault", "elimination", "unlimit"],
+        }).then((contents) => contents.flatMap((content) => (content.raidSchedule ? [content.raidSchedule] : []))),
         getAllRecruitmentGroups(env, forceRefresh),
       ]);
 

@@ -1,8 +1,8 @@
 import { graphql } from "~/graphql";
 import type { Defense, Difficulty as GraphqlDifficulty } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { type UtcIsoString, compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { cacheKey, cacheQuery, fetchSourceCached } from "~/lib/cache";
+import { type UtcIsoString, compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 const ALL_RAID_SCHEDULES_CACHE_KEY = cacheKey("source", "raid-schedule", 1, cacheQuery({ region: "gl" }));
@@ -140,8 +140,8 @@ export function getRaidSchedule(env: Env, uid: string, forceRefresh = false) {
 }
 
 const allRaidSchedulesQuery = graphql(`
-  query AllRaidSchedules($region: String!, $endAfter: ISO8601DateTime) {
-    raidSchedules(region: $region, endAfter: $endAfter) {
+  query AllRaidSchedules($region: String!, $endAfter: ISO8601DateTime, $raidType: String) {
+    raidSchedules(region: $region, endAfter: $endAfter, raidType: $raidType) {
       nodes {
         uid raidType seasonIndex region terrain startAt endAt attackType
         raidBoss { uid name }
@@ -151,12 +151,25 @@ const allRaidSchedulesQuery = graphql(`
     }
   }
 `);
-export function getAllRaidSchedules(env: Env, forceRefresh = false) {
+
+function allRaidSchedulesCacheKey(raidType: string | null) {
+  if (!raidType) {
+    return ALL_RAID_SCHEDULES_CACHE_KEY;
+  }
+
+  return cacheKey("source", "raid-schedule", 1, cacheQuery({ region: "gl", raidType }));
+}
+
+export function getAllRaidSchedules(
+  env: Env,
+  forceRefresh = false,
+  { raidType = null }: { raidType?: string | null } = {},
+) {
   return fetchSourceCached(
     env,
-    ALL_RAID_SCHEDULES_CACHE_KEY,
+    allRaidSchedulesCacheKey(raidType),
     async () => {
-      const { data, error } = await runQuery(allRaidSchedulesQuery, { region: "gl", endAfter: null });
+      const { data, error } = await runQuery(allRaidSchedulesQuery, { region: "gl", endAfter: null, raidType });
       if (error || !data) {
         throw error ?? "failed to fetch raid schedules";
       }
@@ -189,7 +202,9 @@ export async function findRaidScheduleSummaryByTypeAndSeason(
   }
 
   const schedules = await getAllRaidSchedules(env, forceRefresh);
-  return schedules.find((schedule) => schedule.raidType === raidType && schedule.seasonIndex === parsedSeasonIndex) ?? null;
+  return (
+    schedules.find((schedule) => schedule.raidType === raidType && schedule.seasonIndex === parsedSeasonIndex) ?? null
+  );
 }
 
 export async function getRaidScheduleByTypeAndSeason(

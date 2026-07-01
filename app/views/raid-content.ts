@@ -1,9 +1,15 @@
 import type { Attack, Defense, Terrain } from "~/graphql/graphql";
 import { compareInstantAsc, getInstantTime } from "~/lib/date-time";
-import { getRaidSchedule, getRaidScheduleByTypeAndSeason, type RaidSchedule } from "~/models/raid";
+import type { RaidType } from "~/models/content.d";
+import {
+  type RaidSchedule,
+  type RaidScheduleListItem,
+  getAllRaidSchedules,
+  getRaidSchedule,
+  getRaidScheduleByTypeAndSeason,
+} from "~/models/raid";
 import { getFutureRaidContents } from "~/models/timeline-content";
 import type { TimelineContent } from "~/models/timeline-content";
-import type { RaidType } from "~/models/content.d";
 
 export type RaidInfo = {
   raidType: RaidType;
@@ -21,7 +27,7 @@ export type RaidInfo = {
   defenseTypes: { defenseType: Defense; difficulty: string | null }[];
 };
 
-export type RaidScheduleMeta = RaidSchedule;
+export type RaidScheduleMeta = RaidSchedule | RaidScheduleListItem;
 
 export type TimelineRaidContent = TimelineContent & {
   raidInfo?: RaidInfo;
@@ -84,12 +90,57 @@ export async function enrichRaidContents(
 
 export async function getUpcomingRaidContents(
   env: Env,
-  { limit, forceRefresh = false }: { limit?: number; forceRefresh?: boolean } = {},
+  {
+    limit,
+    forceRefresh = false,
+    raidTypes,
+  }: { limit?: number; forceRefresh?: boolean; raidTypes?: readonly RaidType[] } = {},
 ): Promise<TimelineRaidContent[]> {
   const raidContents = await getFutureRaidContents(env, ["raid"]);
   const sortedRaidContents = [...raidContents].sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
-  const selectedRaidContents = limit ? sortedRaidContents.slice(0, limit) : sortedRaidContents;
-  return enrichRaidContents(env, selectedRaidContents, forceRefresh);
+
+  if (raidTypes?.length) {
+    const raidTypeSet = new Set(raidTypes);
+    const schedules = (await getAllRaidSchedules(env, forceRefresh)).filter((schedule) =>
+      raidTypeSet.has(schedule.raidType as RaidType),
+    );
+    const filteredRaidContents = schedules
+      .flatMap((schedule) => {
+        const matchingContent = findRaidContentForSchedule(sortedRaidContents, schedule);
+        if (!matchingContent) {
+          return [];
+        }
+
+        return [
+          {
+            ...matchingContent,
+            raidInfo: toRaidInfo(schedule),
+            raidSchedule: withTimelineDates(schedule, matchingContent),
+          },
+        ];
+      })
+      .sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
+
+    return limit ? filteredRaidContents.slice(0, limit) : filteredRaidContents;
+  }
+
+  const enrichedRaidContents = await enrichRaidContents(env, sortedRaidContents, forceRefresh);
+  return limit ? enrichedRaidContents.slice(0, limit) : enrichedRaidContents;
+}
+
+function findRaidContentForSchedule(contents: TimelineContent[], schedule: RaidScheduleMeta) {
+  const scheduleStartAt = schedule.startAt ? getInstantTime(schedule.startAt) : null;
+  const matchingContentByUid = contents.find((content) => content.contentUid === schedule.uid);
+  if (matchingContentByUid) {
+    return matchingContentByUid;
+  }
+
+  if (scheduleStartAt === null) {
+    return undefined;
+  }
+
+  const matchingContentsByStartAt = contents.filter((content) => getInstantTime(content.startAt) === scheduleStartAt);
+  return matchingContentsByStartAt.length === 1 ? matchingContentsByStartAt[0] : undefined;
 }
 
 export async function getUpcomingRaidContentByTypeAndSeason(
@@ -102,13 +153,8 @@ export async function getUpcomingRaidContentByTypeAndSeason(
     return null;
   }
 
-  const scheduleStartAt = schedule.startAt ? getInstantTime(schedule.startAt) : null;
   const raidContents = await getFutureRaidContents(env, ["raid"]);
-  const matchingContent =
-    raidContents.find((content) => content.contentUid === schedule.uid) ??
-    (scheduleStartAt !== null
-      ? raidContents.find((content) => getInstantTime(content.startAt) === scheduleStartAt)
-      : undefined);
+  const matchingContent = findRaidContentForSchedule(raidContents, schedule);
 
   if (!matchingContent) {
     return null;

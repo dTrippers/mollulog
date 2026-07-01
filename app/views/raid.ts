@@ -6,12 +6,7 @@ function raidKey(raid: { raidType: string; seasonIndex: number }) {
   return `${raid.raidType}:${raid.seasonIndex}`;
 }
 
-export async function loadRaidSeasonPage(
-  env: Env,
-  request: Request,
-  raidTypeParam: string,
-  seasonIndex: number,
-) {
+export async function loadRaidSeasonPage(env: Env, request: Request, raidTypeParam: string, seasonIndex: number) {
   const raidType = raidTypeFromParam(raidTypeParam);
   const [currentRaid, allRaidSchedules, sensei] = await Promise.all([
     getRaidScheduleByTypeAndSeason(env, raidType, seasonIndex),

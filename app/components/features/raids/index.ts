@@ -4,6 +4,8 @@ export { default as RaidDifficultyComparison } from "./RaidDifficultyComparison"
 export { default as RaidListItem } from "./RaidListItem";
 export type { RaidListItemRaid } from "./RaidListItem";
 export { default as RaidOftenUsedParties } from "./RaidOftenUsedParties";
+export { default as RaidPartyCard } from "./RaidPartyCard";
+export type { RaidPartyRow, RaidPartySlot, RaidPartyStudentAction } from "./RaidPartyCard";
 export { default as RaidRankFilter } from "./RaidRankFilter";
 export type { RaidRankFilterState } from "./RaidRankFilter";
 export { mergeFilteredStudents } from "./RaidRankFilter";
