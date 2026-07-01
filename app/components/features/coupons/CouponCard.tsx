@@ -26,7 +26,7 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
   return (
     <div className="relative rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-800 shadow-sm">
       {/* 만료 오버레이 */}
-      {isExpired && !optimisticRegistered && (
+      {isExpired && (
         <div className="absolute inset-0 z-10 backdrop-blur-sm bg-white/60 dark:bg-neutral-800/60 flex flex-col items-center justify-center gap-2">
           <ClockIcon className="size-10 text-red-400" strokeWidth={1.5} />
           <span className="font-bold text-red-500 dark:text-red-400">만료됨</span>
@@ -34,7 +34,7 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
       )}
 
       {/* 등록 완료 오버레이 */}
-      {optimisticRegistered && (
+      {!isExpired && optimisticRegistered && (
         <div className="absolute inset-0 z-10 backdrop-blur-sm bg-white/60 dark:bg-neutral-800/60 flex flex-col items-center justify-center gap-2">
           <CheckCircleIconSolid className="size-10 text-green-500" />
           <span className="font-bold text-green-600 dark:text-green-400">이미 등록한 쿠폰이에요</span>
