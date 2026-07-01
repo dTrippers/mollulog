@@ -40,6 +40,11 @@ const themeConfig = {
 };
 const reportedServerRouteErrorKeys = new Set<string>();
 
+export type RootOutletContext = {
+  darkMode: boolean;
+  setDarkMode: (fn: (prev: boolean) => boolean) => void;
+};
+
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env as Env & {
     FRONT_BETTER_STACK_SENTRY_DSN?: string;
@@ -227,7 +232,7 @@ export default function App() {
               <div>
                 <TimeZoneProvider timeZone={displayTimeZone}>
                   <StudentCardPopupProvider key={pathname}>
-                    <Outlet />
+                    <Outlet context={{ darkMode, setDarkMode } satisfies RootOutletContext} />
                   </StudentCardPopupProvider>
                 </TimeZoneProvider>
                 <Footer />

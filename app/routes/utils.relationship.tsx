@@ -1,22 +1,28 @@
-import { useCallback, useEffect, useState, useRef, useMemo, type Dispatch, type SetStateAction } from "react";
-import { useFetcher, useLoaderData, redirect, useSearchParams } from "react-router";
-import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { ArchiveBoxIcon, GiftIcon, MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
-import { FavoriteItemSelector, RequiredGifts, StudentRelationshipLevel, RelationshipStudentPicker, FavoritedItemSelector } from "~/components/features/relationship";
+import {
+  FavoriteItemSelector,
+  FavoritedItemSelector,
+  RelationshipStudentPicker,
+  RequiredGifts,
+  StudentRelationshipLevel,
+} from "~/components/features/relationship";
 import { Button, ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { canonicalLink } from "~/lib/seo";
-import { formatVisibleName, getAllStudents } from "~/models/student";
 import {
+  type RelationshipLevel,
   getRelationshipLevelValidationError,
-  upsertRelationshipLevel,
   getRelationshipLevels,
   removeRelationshipLevel,
-  type RelationshipLevel,
+  upsertRelationshipLevel,
 } from "~/models/relationship-level";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
+import { formatVisibleName, getAllStudents } from "~/models/student";
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "인연 랭크 계산기 | 몰루로그";
@@ -58,10 +64,13 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   let savedRelationships: Record<string, RelationshipLevel> = {};
   if (currentUser) {
     const relationLevels = await getRelationshipLevels(env, currentUser.id);
-    savedRelationships = relationLevels.reduce((acc, rel) => {
-      acc[rel.studentId] = rel;
-      return acc;
-    }, {} as Record<string, RelationshipLevel>);
+    savedRelationships = relationLevels.reduce(
+      (acc, rel) => {
+        acc[rel.studentId] = rel;
+        return acc;
+      },
+      {} as Record<string, RelationshipLevel>,
+    );
   }
 
   // Merge students with their relationship levels (only for authenticated users)
@@ -164,12 +173,16 @@ const emptyRelationship: Relationship = {
 export default function RelationshipUtil() {
   const { students, allStudentsFavoriteItems, isAuthenticated } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
+  const queryStudentUid = searchParams.get("studentUid");
   const { showSignIn } = useSignIn();
 
   const saveFetcher = useFetcher<typeof action>();
   const [managedStudents, setManagedStudents] = useState<RelationshipStudentState[]>(students);
   const studentListKey = students
-    .map((student) => `${student.uid}:${student.currentLevel ?? ""}:${student.currentExp ?? ""}:${student.targetLevel ?? ""}:${JSON.stringify(student.items)}`)
+    .map(
+      (student) =>
+        `${student.uid}:${student.currentLevel ?? ""}:${student.currentExp ?? ""}:${student.targetLevel ?? ""}:${JSON.stringify(student.items)}`,
+    )
     .join("|");
   const syncedStudentListKeyRef = useRef(studentListKey);
 
@@ -180,7 +193,10 @@ export default function RelationshipUtil() {
     setManagedStudents(students);
   }, [students, studentListKey]);
 
-  const [selectedStudentUid, setSelectedStudentUid] = useState<string | null>(null);
+  const initialSelectedStudentUid =
+    queryStudentUid && students.some((student) => student.uid === queryStudentUid) ? queryStudentUid : null;
+  const [selectedStudentUid, setSelectedStudentUid] = useState<string | null>(initialSelectedStudentUid);
+  const syncedQueryStudentUidRef = useRef<string | null>(initialSelectedStudentUid);
   const selectedStudent = useMemo(
     () => managedStudents.find((student) => student.uid === selectedStudentUid) ?? null,
     [selectedStudentUid, managedStudents],
@@ -228,6 +244,19 @@ export default function RelationshipUtil() {
   const submittedRelationshipRef = useRef<{ studentUid: string; relationship: Relationship } | null>(null);
   const processedActionDataRef = useRef<typeof saveFetcher.data | null>(null);
 
+  useEffect(() => {
+    if (!queryStudentUid || syncedQueryStudentUidRef.current === queryStudentUid) {
+      return;
+    }
+    if (!managedStudents.some((student) => student.uid === queryStudentUid)) {
+      return;
+    }
+
+    syncedQueryStudentUidRef.current = queryStudentUid;
+    setSaveSuccess(false);
+    setSelectedStudentUid(queryStudentUid);
+  }, [queryStudentUid, managedStudents]);
+
   const validateRelationship = useCallback((relationship: Relationship): string | null => {
     return getRelationshipLevelValidationError({
       currentLevel: relationship.currentLevel,
@@ -235,34 +264,37 @@ export default function RelationshipUtil() {
     });
   }, []);
 
-  const submitRelationship = useCallback((relationship: Relationship) => {
-    setSaveSuccess(false);
+  const submitRelationship = useCallback(
+    (relationship: Relationship) => {
+      setSaveSuccess(false);
 
-    if (!selectedStudentUid) return;
-    if (!isAuthenticated) {
-      showSignIn();
-      return;
-    }
+      if (!selectedStudentUid) return;
+      if (!isAuthenticated) {
+        showSignIn();
+        return;
+      }
 
-    const validationError = validateRelationship(relationship);
-    if (validationError) {
-      setSaveError(validationError);
-      return;
-    }
-    setSaveError(null);
-    submittedRelationshipRef.current = { studentUid: selectedStudentUid, relationship };
+      const validationError = validateRelationship(relationship);
+      if (validationError) {
+        setSaveError(validationError);
+        return;
+      }
+      setSaveError(null);
+      submittedRelationshipRef.current = { studentUid: selectedStudentUid, relationship };
 
-    saveFetcher.submit(
-      {
-        studentId: selectedStudentUid,
-        currentLevel: relationship.currentLevel,
-        currentExp: relationship.currentExp,
-        targetLevel: relationship.targetLevel,
-        items: relationship.items,
-      },
-      { method: "POST", encType: "application/json" },
-    );
-  }, [isAuthenticated, saveFetcher, selectedStudentUid, showSignIn, validateRelationship]);
+      saveFetcher.submit(
+        {
+          studentId: selectedStudentUid,
+          currentLevel: relationship.currentLevel,
+          currentExp: relationship.currentExp,
+          targetLevel: relationship.targetLevel,
+          items: relationship.items,
+        },
+        { method: "POST", encType: "application/json" },
+      );
+    },
+    [isAuthenticated, saveFetcher, selectedStudentUid, showSignIn, validateRelationship],
+  );
 
   const handleSave = () => {
     if (saveTimerRef.current) {
@@ -281,17 +313,21 @@ export default function RelationshipUtil() {
 
     if ("kind" in saveFetcher.data && saveFetcher.data.kind === "relationshipDelete") {
       const deletedStudentId = saveFetcher.data.studentId;
-      setManagedStudents((prev) => sortRelationshipStudents(prev.map((student) =>
-        student.uid === deletedStudentId ?
-          {
-            ...student,
-            currentLevel: null,
-            currentExp: null,
-            targetLevel: null,
-            items: {},
-          } :
-          student,
-      )));
+      setManagedStudents((prev) =>
+        sortRelationshipStudents(
+          prev.map((student) =>
+            student.uid === deletedStudentId
+              ? {
+                  ...student,
+                  currentLevel: null,
+                  currentExp: null,
+                  targetLevel: null,
+                  items: {},
+                }
+              : student,
+          ),
+        ),
+      );
       setCurrentRelationship(emptyRelationship);
       setSavedRelationship(emptyRelationship);
       setSaveError(null);
@@ -310,17 +346,21 @@ export default function RelationshipUtil() {
         setSaveSuccess(true);
       }
       setSavePending(false);
-      setManagedStudents((prev) => sortRelationshipStudents(prev.map((student) =>
-        student.uid === submitted.studentUid ?
-          {
-            ...student,
-            currentLevel: submitted.relationship.currentLevel,
-            currentExp: submitted.relationship.currentExp,
-            targetLevel: submitted.relationship.targetLevel,
-            items: submitted.relationship.items,
-          } :
-          student,
-      )));
+      setManagedStudents((prev) =>
+        sortRelationshipStudents(
+          prev.map((student) =>
+            student.uid === submitted.studentUid
+              ? {
+                  ...student,
+                  currentLevel: submitted.relationship.currentLevel,
+                  currentExp: submitted.relationship.currentExp,
+                  targetLevel: submitted.relationship.targetLevel,
+                  items: submitted.relationship.items,
+                }
+              : student,
+          ),
+        ),
+      );
     }
   }, [saveFetcher.state, saveFetcher.data, selectedStudentUid]);
 
@@ -364,7 +404,15 @@ export default function RelationshipUtil() {
         saveTimerRef.current = null;
       }
     };
-  }, [currentRelationship, savedRelationship, isAuthenticated, saveFetcher.state, selectedStudentUid, submitRelationship, validateRelationship]);
+  }, [
+    currentRelationship,
+    savedRelationship,
+    isAuthenticated,
+    saveFetcher.state,
+    selectedStudentUid,
+    submitRelationship,
+    validateRelationship,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -392,10 +440,7 @@ export default function RelationshipUtil() {
     setSavePending(false);
     submittedRelationshipRef.current = null;
 
-    saveFetcher.submit(
-      { studentId: selectedStudentUid },
-      { method: "DELETE", encType: "application/json" },
-    );
+    saveFetcher.submit({ studentId: selectedStudentUid }, { method: "DELETE", encType: "application/json" });
   };
 
   const isItemScreen = searchParams.get("mode") === "item";
@@ -440,17 +485,15 @@ export default function RelationshipUtil() {
               },
             ]
       }
-      links={
-        [
-			{
-				title: "보유 선물 수량",
-				description: "재화 플래너에서 보유 수량을 관리",
-				Icon: ArchiveBoxIcon,
-				to: "/utils/growth/resources?category=favor",
-				preventScrollReset: true,
-			},
-        ]
-      }
+      links={[
+        {
+          title: "보유 선물 수량",
+          description: "재화 플래너에서 보유 수량을 관리",
+          Icon: ArchiveBoxIcon,
+          to: "/utils/growth/resources?category=favor",
+          preventScrollReset: true,
+        },
+      ]}
     >
       {isItemScreen ? (
         <FavoritedItemSelector
@@ -535,9 +578,7 @@ function RelationshipStudentScreen({
           <FavoriteItemSelector
             studentUid={selectedStudentUid}
             quantities={currentRelationship.items}
-            onQuantitiesChange={(quantities) =>
-              onCurrentRelationshipChange((prev) => ({ ...prev, items: quantities }))
-            }
+            onQuantitiesChange={(quantities) => onCurrentRelationshipChange((prev) => ({ ...prev, items: quantities }))}
             onSelectedItemExpChange={onSelectedItemExpChange}
           />
         </>
@@ -576,7 +617,9 @@ function RelationshipActionHeader({
         <div className="flex min-w-0 items-center gap-2.5">
           <ProfileImage studentUid={student.uid} imageSize={10} />
           <div className="min-w-0">
-            <p className="truncate pt-0.5 text-sm font-bold leading-tight text-foreground md:text-base">{visibleName}</p>
+            <p className="truncate pt-0.5 text-sm font-bold leading-tight text-foreground md:text-base">
+              {visibleName}
+            </p>
           </div>
         </div>
         <div className="flex shrink-0 items-center justify-end gap-1">
@@ -595,7 +638,6 @@ function RelationshipActionHeader({
     </div>
   );
 }
-
 
 function relationshipEquals(a: Relationship, b: Relationship): boolean {
   return (

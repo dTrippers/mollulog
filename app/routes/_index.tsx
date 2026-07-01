@@ -1,10 +1,9 @@
-import { ArrowRightIcon } from "@heroicons/react/16/solid";
-import { BookOpenIcon, FireIcon, IdentificationIcon, TicketIcon } from "@heroicons/react/24/outline";
 import { Suspense } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Await, Link, data, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, RecruitmentCard } from "~/components/features/events";
+import { MobileMoreTabNoticeBanner } from "~/components/features/layout";
 import { RaidCard } from "~/components/features/raids";
 import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
 import { raidTypeToParam } from "~/domain/raid";
@@ -18,6 +17,8 @@ import { getHomeYoutubeSections } from "~/models/youtube";
 import { enrichCommunityFeedPosts } from "~/views/community";
 import { type IndexRecruitment, getIndexContents } from "~/views/home";
 import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
+
+const homeMoreMenuBannerDismissalStorageKey = "home::dismissed-more-menu-banner";
 
 export const meta: MetaFunction = ({ location }) => {
   return [
@@ -147,12 +148,11 @@ export default function Index() {
 
         <MainEvent event={mainEvent} />
 
-        <div className="my-4 lg:hidden grid grid-cols-2 gap-2">
-          <LinkCard Icon={IdentificationIcon} title="학생부" description="통계 및 평가" to="/students" />
-          <LinkCard Icon={FireIcon} title="총력전/대결전" description="상위권 편성" to="/raids" />
-          <LinkCard Icon={BookOpenIcon} title="메인 스토리" description="공개 일정" to="/mainstory" />
-          <LinkCard Icon={TicketIcon} title="쿠폰" description="인게임 쿠폰" to="/coupons" />
-        </div>
+        <MobileMoreTabNoticeBanner
+          className="-mt-5"
+          dismissStorageKey={homeMoreMenuBannerDismissalStorageKey}
+          message={'전체 메뉴는 "더보기" 탭에서 확인할 수 있어요'}
+        />
 
         {currentRecruitments.length > 0 && (
           <CurrentRecruitments
@@ -277,34 +277,5 @@ function CurrentRecruitments({
       </div>
       <div className="hidden md:flex md:flex-wrap md:gap-3">{recruitmentCards}</div>
     </div>
-  );
-}
-
-type LinkCardProps = {
-  Icon: React.ElementType;
-  title: string;
-  description: string;
-  to: string;
-};
-
-function LinkCard({ Icon, title, description, to }: LinkCardProps) {
-  return (
-    <Link to={to} className="block group">
-      <div className="flex items-center justify-between p-3 lg:p-4 bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors rounded-lg">
-        <div className="flex items-center gap-2 md:gap-3">
-          <div className="p-2 bg-neutral-200 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 rounded-lg">
-            <Icon className="size-5" strokeWidth={2} />
-          </div>
-          <div>
-            <p className="text-sm md:text-base font-bold">{title}</p>
-            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">{description}</p>
-          </div>
-        </div>
-        <ArrowRightIcon
-          className="hidden md:block size-4 text-neutral-500 dark:text-neutral-400 group-hover:translate-x-1 transition-transform duration-200"
-          strokeWidth={2}
-        />
-      </div>
-    </Link>
   );
 }

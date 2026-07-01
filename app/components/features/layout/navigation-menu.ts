@@ -7,6 +7,7 @@ import {
   ClockIcon as ClockIconOutline,
   Cog6ToothIcon as Cog6ToothIconOutline,
   CreditCardIcon as CreditCardIconOutline,
+  EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconOutline,
   FireIcon as FireIconOutline,
   GiftIcon as GiftIconOutline,
   HeartIcon as HeartIconOutline,
@@ -16,7 +17,6 @@ import {
   RectangleGroupIcon as RectangleGroupIconOutline,
   TableCellsIcon as TableCellsIconOutline,
   TicketIcon as TicketIconOutline,
-  UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   ArchiveBoxIcon as ArchiveBoxIconSolid,
@@ -27,6 +27,7 @@ import {
   ClockIcon as ClockIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
   CreditCardIcon as CreditCardIconSolid,
+  EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconSolid,
   FireIcon as FireIconSolid,
   GiftIcon as GiftIconSolid,
   HeartIcon as HeartIconSolid,
@@ -36,7 +37,6 @@ import {
   RectangleGroupIcon as RectangleGroupIconSolid,
   TableCellsIcon as TableCellsIconSolid,
   TicketIcon as TicketIconSolid,
-  UserCircleIcon as UserCircleIconSolid,
 } from "@heroicons/react/24/solid";
 import type { ComponentProps, ComponentType } from "react";
 import { type UtcIsoString, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
@@ -70,6 +70,7 @@ export type NavigationSectionStates = {
   isUtilActive: boolean;
   isExternalActive: boolean;
   isProfileActive: boolean;
+  isMoreActive: boolean;
 };
 
 export type UpcomingNavigationEvent = { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
@@ -83,13 +84,20 @@ export function getNavigationSectionStates(
   pathname: string,
   upcomingEvent: UpcomingNavigationEvent,
 ): NavigationSectionStates {
+  const isHomeActive = pathname === "/";
+  const isFuturesActive = pathname.startsWith("/futures");
+  const isCommunityActive = pathname.startsWith("/community");
+  const isStudentActive = pathname.startsWith("/students");
+  const isMoreActive =
+    pathname.startsWith("/more") || !(isHomeActive || isFuturesActive || isCommunityActive || isStudentActive);
+
   return {
-    isCommunityActive: pathname.startsWith("/community"),
+    isCommunityActive,
     isContentActive:
-      pathname.startsWith("/futures") ||
+      isFuturesActive ||
       pathname.startsWith("/events") ||
       pathname.startsWith("/raids") ||
-      pathname.startsWith("/students") ||
+      isStudentActive ||
       pathname.startsWith("/mainstory"),
     isUtilActive:
       pathname.startsWith("/utils") || !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
@@ -99,6 +107,7 @@ export function getNavigationSectionStates(
       pathname.startsWith("/edit") ||
       pathname.startsWith("/my") ||
       pathname.startsWith("/connect"),
+    isMoreActive,
   };
 }
 
@@ -143,7 +152,6 @@ export function getNavigationSections({
           to: "/raids",
           name: "총력전 / 대결전",
           description: "시즌 요약, 상위권 편성, 공략 영상을 확인해보세요",
-          badgeLabel: "통계 강화!",
           showRedDot: true,
           OutlineIcon: FireIconOutline,
           SolidIcon: FireIconSolid,
@@ -266,6 +274,7 @@ export function getSearchableMenuItems(): SearchableMenuItem[] {
       isUtilActive: false,
       isExternalActive: false,
       isProfileActive: false,
+      isMoreActive: false,
     },
   });
 
@@ -287,11 +296,9 @@ export function getSearchableMenuItems(): SearchableMenuItem[] {
 
 export function getMobileNavigationItems({
   pathname,
-  currentUsername,
   upcomingEvent,
 }: {
   pathname: string;
-  currentUsername: string | null;
   upcomingEvent: UpcomingNavigationEvent;
 }): NavigationItem[] {
   const sectionStates = getNavigationSectionStates(pathname, upcomingEvent);
@@ -319,18 +326,18 @@ export function getMobileNavigationItems({
       isActive: sectionStates.isCommunityActive,
     },
     {
-      to: "/utils",
-      name: "유틸리티",
-      OutlineIcon: Cog6ToothIconOutline,
-      SolidIcon: Cog6ToothIconSolid,
-      isActive: sectionStates.isUtilActive,
+      to: "/students",
+      name: "학생부",
+      OutlineIcon: IdentificationIconOutline,
+      SolidIcon: IdentificationIconSolid,
+      isActive: pathname.startsWith("/students"),
     },
     {
-      to: currentUsername ? `/@${currentUsername}` : "/my",
-      name: currentUsername ? "내 정보" : "로그인",
-      OutlineIcon: UserCircleIconOutline,
-      SolidIcon: UserCircleIconSolid,
-      isActive: sectionStates.isProfileActive,
+      to: "/more",
+      name: "더보기",
+      OutlineIcon: EllipsisHorizontalCircleIconOutline,
+      SolidIcon: EllipsisHorizontalCircleIconSolid,
+      isActive: sectionStates.isMoreActive,
     },
   ];
 }
