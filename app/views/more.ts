@@ -34,6 +34,7 @@ export type MoreCurrentUser = {
     nextStudents: { uid: string; name: string }[];
     nextTimelineLabel: string | null;
     expectedPyroxene: number | null;
+    expectedTicketTrialCount: number | null;
   } | null;
   relationship: {
     savedCount: number;
@@ -164,7 +165,12 @@ async function buildCurrentUserSummary(
           nextTimelineLabel: nextFavoritedRecruitment
             ? getRecruitmentScheduleLabel(nextFavoritedRecruitment.since, nextFavoritedRecruitment.until, now)
             : null,
-          expectedPyroxene: nextPyroxeneTimelineEntry?.accumulatedResources.pyroxene ?? null,
+          expectedPyroxene: nextPyroxeneTimelineEntry
+            ? nextPyroxeneTimelineEntry.accumulatedResources.pyroxene - nextPyroxeneTimelineEntry.resourceDelta.pyroxene
+            : null,
+          expectedTicketTrialCount: nextPyroxeneTimelineEntry
+            ? getTicketTrialCountBeforeTimelineEntry(nextPyroxeneTimelineEntry)
+            : null,
         }
       : null,
     relationship: {
@@ -173,6 +179,15 @@ async function buildCurrentUserSummary(
       targetStudents: relationshipTargetStudents,
     },
   };
+}
+
+function getTicketTrialCountBeforeTimelineEntry(entry: {
+  accumulatedResources: PickupResources;
+  resourceDelta: PickupResources;
+}) {
+  const oneTimeTicket = entry.accumulatedResources.oneTimeTicket - entry.resourceDelta.oneTimeTicket;
+  const tenTimeTicket = entry.accumulatedResources.tenTimeTicket - entry.resourceDelta.tenTimeTicket;
+  return oneTimeTicket + tenTimeTicket * 10;
 }
 
 type MorePyroxeneContent = Awaited<ReturnType<typeof getPyroxenePlannerContents>>[number];

@@ -226,7 +226,11 @@ function PyroxenePlannerRow({ pyroxene }: { pyroxene: MoreCurrentUser["pyroxene"
               <span className="font-semibold text-blue-600 dark:text-blue-300">
                 {status.expectedPyroxene.toLocaleString()}
               </span>
-              개
+              개 + 티켓{" "}
+              <span className="font-semibold text-blue-600 dark:text-blue-300">
+                {(status.expectedTicketTrialCount ?? 0).toLocaleString()}
+              </span>
+              회
             </>
           ) : (
             status.secondary
@@ -397,6 +401,7 @@ function getPyroxeneStatus(pyroxene: MoreCurrentUser["pyroxene"]) {
       secondary: "관심 학생 모집 시점의 예상 청휘석을 계산할 수 있어요",
       scheduleLabel: null,
       expectedPyroxene: null,
+      expectedTicketTrialCount: null,
     };
   }
 
@@ -414,5 +419,6 @@ function getPyroxeneStatus(pyroxene: MoreCurrentUser["pyroxene"]) {
     secondary: secondaryItems.join(" / "),
     scheduleLabel: pyroxene.nextTimelineLabel,
     expectedPyroxene: pyroxene.expectedPyroxene,
+    expectedTicketTrialCount: pyroxene.expectedTicketTrialCount,
   };
 }
