@@ -1,7 +1,7 @@
-import { useFetcher } from "react-router";
 import { ArrowTopRightOnSquareIcon, CheckCircleIcon, ClockIcon } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as CheckCircleIconSolid } from "@heroicons/react/24/solid";
 import dayjs from "dayjs";
+import { useFetcher } from "react-router";
 import type { Coupon } from "~/models/coupon";
 import CopyField from "./CopyField";
 import CouponRewardList from "./CouponRewardList";
@@ -16,23 +16,18 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
   const fetcher = useFetcher();
 
   const isExpired = coupon.expiresAt !== null && dayjs(coupon.expiresAt).isBefore(dayjs());
-  const optimisticRegistered = fetcher.state !== "idle"
-    ? fetcher.formMethod === "POST"
-    : registered;
+  const optimisticRegistered = fetcher.state !== "idle" ? fetcher.formMethod === "POST" : registered;
 
   const handleToggle = () => {
     if (fetcher.state !== "idle") return;
-    fetcher.submit(
-      { couponId: coupon.id },
-      { method: optimisticRegistered ? "DELETE" : "POST" },
-    );
+    fetcher.submit({ couponId: coupon.id }, { method: optimisticRegistered ? "DELETE" : "POST" });
   };
 
   return (
     <div className="relative rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-800 shadow-sm">
       {/* 만료 오버레이 */}
       {isExpired && !optimisticRegistered && (
-        <div className="absolute inset-0 z-10 backdrop-blur-sm bg-white/60 dark:bg-neutral-800/60 flex flex-col items-center justify-center gap-2 pointer-events-none">
+        <div className="absolute inset-0 z-10 backdrop-blur-sm bg-white/60 dark:bg-neutral-800/60 flex flex-col items-center justify-center gap-2">
           <ClockIcon className="size-10 text-red-400" strokeWidth={1.5} />
           <span className="font-bold text-red-500 dark:text-red-400">만료됨</span>
         </div>
@@ -40,7 +35,7 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
 
       {/* 등록 완료 오버레이 */}
       {optimisticRegistered && (
-        <div className="absolute inset-0 z-10 backdrop-blur-sm bg-white/60 dark:bg-neutral-800/60 flex flex-col items-center justify-center gap-2 pointer-events-none">
+        <div className="absolute inset-0 z-10 backdrop-blur-sm bg-white/60 dark:bg-neutral-800/60 flex flex-col items-center justify-center gap-2">
           <CheckCircleIconSolid className="size-10 text-green-500" />
           <span className="font-bold text-green-600 dark:text-green-400">이미 등록한 쿠폰이에요</span>
           <button
@@ -57,12 +52,7 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
       {/* 이미지 */}
       <div className="aspect-video bg-neutral-100 dark:bg-neutral-700 overflow-hidden">
         {coupon.imageUrl ? (
-          <img
-            src={coupon.imageUrl}
-            alt={coupon.name}
-            className="w-full h-full object-cover"
-            loading="lazy"
-          />
+          <img src={coupon.imageUrl} alt={coupon.name} className="w-full h-full object-cover" loading="lazy" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-neutral-300 dark:text-neutral-600 text-sm">
             이미지 없음
