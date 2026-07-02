@@ -18,6 +18,7 @@ type MoreActionItem = {
   to?: string;
   badgeLabel?: string;
   showRedDot?: boolean;
+  disabled?: boolean;
   onClick?: () => void;
   actionLabel?: string;
 };
@@ -63,7 +64,7 @@ export default function MoreIndexPage() {
     section.items
       .filter(
         (item) =>
-          item.disabled !== true && !bottomNavigationPaths.has(item.to) && !pathsAlreadyOnThisScreen.has(item.to),
+          item.disabled === true || (!bottomNavigationPaths.has(item.to) && !pathsAlreadyOnThisScreen.has(item.to)),
       )
       .map((item) => ({
         key: item.to,
@@ -73,6 +74,7 @@ export default function MoreIndexPage() {
         Icon: item.OutlineIcon,
         badgeLabel: item.badgeLabel,
         showRedDot: item.showRedDot,
+        disabled: item.disabled,
       })),
   );
 
@@ -106,7 +108,7 @@ function MoreProfileBlock({
     return (
       <section className="overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-900/50">
         <div className="flex items-center gap-4 px-4 py-4">
-          <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-300">
+          <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-white text-neutral-500 dark:bg-neutral-800 dark:text-neutral-300">
             <UserCircleIcon className="size-9" strokeWidth={1.75} />
           </div>
           <div className="min-w-0 flex-1">
@@ -375,9 +377,18 @@ function MoreGridItem({ item }: { item: MoreActionItem }) {
 
   const className = sanitizeClassName(`
     flex min-w-0 flex-col items-center rounded-md px-1 py-1.5 text-center transition-colors
-    hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
-    dark:hover:bg-neutral-800/70 dark:focus-visible:ring-offset-neutral-900
+    focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
+    dark:focus-visible:ring-offset-neutral-900
+    ${item.disabled ? "cursor-default opacity-40" : "hover:bg-white dark:hover:bg-neutral-800/70"}
   `);
+
+  if (item.disabled) {
+    return (
+      <div className={className} title={item.description ?? item.name} aria-disabled="true">
+        {content}
+      </div>
+    );
+  }
 
   if (item.to) {
     return (

@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { MobileMoreTabNoticeBanner, Page } from "~/components/features/layout";
-import { createStudentFilterState, getFilteredStudentUids, StudentFilter } from "~/components/features/students";
+import { StudentFilter, createStudentFilterState, getFilteredStudentUids } from "~/components/features/students";
 import { canonicalLink } from "~/lib/seo";
 import { getAllStudents } from "~/models/student";
 
@@ -45,11 +45,6 @@ export default function StudentsLayout() {
   const { students } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const usesStudentsPageLayout = pathname === "/students" || pathname === "/students/gradings";
-
-  if (!usesStudentsPageLayout) {
-    return <Outlet />;
-  }
-
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [filterState, setFilterState] = useState(() => createStudentFilterState("recent"));
   const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
@@ -60,6 +55,10 @@ export default function StudentsLayout() {
     });
   }, [studentMap, filteredUids]);
   const isStudentsIndex = pathname === "/students";
+
+  if (!usesStudentsPageLayout) {
+    return <Outlet />;
+  }
 
   return (
     <Page
