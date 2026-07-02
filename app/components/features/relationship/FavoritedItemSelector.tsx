@@ -1,8 +1,11 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Await, useFetcher, useRevalidator } from "react-router";
-import { Button, ClickableSurface, LoadingSkeleton, NumberInput, ProfileImage, ResourceCard, SubTitle } from "~/components/primitives";
+import { ResourceInventoryTile } from "~/components/features/growth";
+import { Button, ClickableSurface, HoverTooltip, LoadingSkeleton, NumberInput, ProfileImage, ResourceCard, SubTitle } from "~/components/primitives";
+import { cn } from "~/lib/utils";
 import { COMMON_FAVORITE_ITEM_UIDS, type AllStudentsFavoriteItems } from "~/models/resource";
 import type { action } from "~/routes/utils.relationship";
+import { type ItemQuantityBreakdownEntry, QuantityBreakdownTooltipContent } from "./QuantityBreakdownTooltip";
 
 // Common types
 type StudentWithRelationship = {
@@ -15,14 +18,27 @@ type StudentWithRelationship = {
 };
 
 type StudentItemsMap = Map<string, { uid: string; items: Record<string, number> }>;
+type ItemQuantityComparison = {
+  requiredQuantity: number;
+  ownedQuantity: number;
+  isInsufficient: boolean;
+};
 
 type FavoritedItemSelectorProps = {
   items: Promise<AllStudentsFavoriteItems[]>;
   students: StudentWithRelationship[];
   isAuthenticated: boolean;
+  ownedQuantities: Record<string, number> | null;
 };
 
-export default function FavoritedItemSelector({ items, students, isAuthenticated }: FavoritedItemSelectorProps) {
+const INSUFFICIENT_QUANTITY_CLASS = "text-red-600 dark:text-red-400";
+
+export default function FavoritedItemSelector({
+  items,
+  students,
+  isAuthenticated,
+  ownedQuantities,
+}: FavoritedItemSelectorProps) {
   const [activeItem, setActiveItem] = useState<AllStudentsFavoriteItems | null>(null);
   const [studentItemsState, setStudentItemsState] = useState<StudentItemsMap>(new Map());
   const [initialStudentItems, setInitialStudentItems] = useState<StudentItemsMap>(new Map());
@@ -44,11 +60,22 @@ export default function FavoritedItemSelector({ items, students, isAuthenticated
     const _itemCounts = new Map<string, number>();
     for (const studentItem of studentItemsState.values()) {
       for (const [itemUid, count] of Object.entries(studentItem.items)) {
+        if (count <= 0) {
+          continue;
+        }
         _itemCounts.set(itemUid, (_itemCounts.get(itemUid) ?? 0) + count);
       }
     }
     return _itemCounts;
   }, [studentItemsState]);
+
+  const itemQuantityBreakdowns = useMemo(() => {
+    if (!isAuthenticated) {
+      return null;
+    }
+
+    return buildItemQuantityBreakdowns(students, studentItemsState);
+  }, [isAuthenticated, students, studentItemsState]);
 
   const handleQuantityChange = (studentUid: string, itemUid: string, value: number) => {
     setStudentItemsState((prev) => {
@@ -95,6 +122,8 @@ export default function FavoritedItemSelector({ items, students, isAuthenticated
                 <ItemSelector
                   items={items}
                   itemCounts={itemCounts}
+                  itemQuantityBreakdowns={itemQuantityBreakdowns}
+                  ownedQuantities={ownedQuantities}
                   onSelectItem={(itemUid) => setActiveItem(items.find((item) => item.itemUid === itemUid) ?? null)}
                 />
                 {activeItem && (
@@ -108,6 +137,8 @@ export default function FavoritedItemSelector({ items, students, isAuthenticated
                           exp={exp}
                           levelStudents={levelStudents}
                           activeItem={activeItem}
+                          quantityComparison={getItemQuantityComparison(activeItem.itemUid, itemCounts, ownedQuantities)}
+                          itemQuantityBreakdown={itemQuantityBreakdowns?.[activeItem.itemUid]}
                           studentItemsMap={studentItemsState}
                           initialStudentItems={initialStudentItems}
                           onQuantityChange={handleQuantityChange}
@@ -134,25 +165,55 @@ type ItemSelectorProps = {
     itemRarity: number;
   }[];
   itemCounts: Map<string, number>;
+  itemQuantityBreakdowns: Record<string, ItemQuantityBreakdownEntry[]> | null;
+  ownedQuantities: Record<string, number> | null;
   onSelectItem: (itemUid: string) => void;
 };
 
-function ItemSelector({ items, itemCounts, onSelectItem }: ItemSelectorProps) {
+function ItemSelector({ items, itemCounts, itemQuantityBreakdowns, ownedQuantities, onSelectItem }: ItemSelectorProps) {
   return (
     <div>
       <SubTitle
         text="선물 목록"
         description="선물을 선호하는 학생을 확인하고 필요한 개수를 계산할 수 있어요"
       />
-      <div className="flex flex-wrap gap-1">
+      <div className="flex flex-wrap gap-x-1 gap-y-0">
         {items.map(({ itemUid, itemName, itemRarity }) => {
+          const quantityComparison = getItemQuantityComparison(itemUid, itemCounts, ownedQuantities);
+          const breakdown = itemQuantityBreakdowns?.[itemUid];
+          const isDimmed = quantityComparison?.requiredQuantity === 0;
           return (
             <ClickableSurface
               key={itemUid}
               className="transition hover:scale-105"
               onClick={() => onSelectItem(itemUid)}
             >
-              <ResourceCard rarity={itemRarity} itemUid={itemUid} name={itemName} size="lg" label={itemCounts.get(itemUid)} />
+              <ResourceInventoryTile
+                resource={{
+                  itemUid,
+                  rarity: itemRarity,
+                  name: itemName,
+                  label: quantityComparison ? undefined : itemCounts.get(itemUid),
+                }}
+                metrics={
+                  quantityComparison
+                    ? [
+                        {
+                          label: "필요",
+                          value: quantityComparison.requiredQuantity.toLocaleString(),
+                          tooltip: breakdown && breakdown.length > 0 ? <QuantityBreakdownTooltipContent breakdown={breakdown} /> : undefined,
+                          dimmed: isDimmed,
+                        },
+                        {
+                          label: "보유",
+                          value: quantityComparison.ownedQuantity.toLocaleString(),
+                          valueClassName: quantityComparison.isInsufficient ? INSUFFICIENT_QUANTITY_CLASS : undefined,
+                          dimmed: isDimmed,
+                        },
+                      ]
+                    : undefined
+                }
+              />
             </ClickableSurface>
           );
         })}
@@ -269,6 +330,8 @@ type FavoriteLevelCardProps = {
   exp: number;
   levelStudents: Array<{ uid: string; name: string }>;
   activeItem: AllStudentsFavoriteItems;
+  quantityComparison: ItemQuantityComparison | null;
+  itemQuantityBreakdown: ItemQuantityBreakdownEntry[] | undefined;
   studentItemsMap: StudentItemsMap;
   initialStudentItems: StudentItemsMap;
   onQuantityChange: (studentUid: string, itemUid: string, value: number) => void;
@@ -376,7 +439,20 @@ function FavoriteLevelCardViewMode({ levelStudents, activeItem, studentItemsMap,
   );
 }
 
-function FavoriteLevelCard({ favoriteLevel, exp, levelStudents, activeItem, studentItemsMap, initialStudentItems, onQuantityChange, students, isAuthenticated, onSave }: FavoriteLevelCardProps) {
+function FavoriteLevelCard({
+  favoriteLevel,
+  exp,
+  levelStudents,
+  activeItem,
+  quantityComparison,
+  itemQuantityBreakdown,
+  studentItemsMap,
+  initialStudentItems,
+  onQuantityChange,
+  students,
+  isAuthenticated,
+  onSave,
+}: FavoriteLevelCardProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const { saveError, saveSuccess, isSaving, hasChanges, handleSave } = useSaveStudentItems({
     studentItemsMap,
@@ -407,6 +483,13 @@ function FavoriteLevelCard({ favoriteLevel, exp, levelStudents, activeItem, stud
         <div className="flex-1 min-w-0">
           <p className="font-medium truncate">{activeItem.itemName}</p>
           <p className="text-sm text-neutral-500 dark:text-neutral-400">+{exp} EXP</p>
+          {quantityComparison ? (
+            <ItemQuantitySummary
+              comparison={quantityComparison}
+              breakdown={itemQuantityBreakdown}
+              className="mt-1 justify-start text-left"
+            />
+          ) : null}
         </div>
         <div className="shrink-0">
           <span className="text-sm">{totalCount}개</span>
@@ -436,4 +519,120 @@ function FavoriteLevelCard({ favoriteLevel, exp, levelStudents, activeItem, stud
       )}
     </div>
   );
+}
+
+function getItemQuantityComparison(
+  itemUid: string,
+  itemCounts: Map<string, number>,
+  ownedQuantities: Record<string, number> | null,
+): ItemQuantityComparison | null {
+  if (ownedQuantities === null) {
+    return null;
+  }
+
+  const requiredQuantity = itemCounts.get(itemUid) ?? 0;
+  const ownedQuantity = ownedQuantities[itemUid] ?? 0;
+
+  return {
+    requiredQuantity,
+    ownedQuantity,
+    isInsufficient: ownedQuantity < requiredQuantity,
+  };
+}
+
+function ItemQuantitySummary({
+  comparison,
+  breakdown,
+  className,
+}: {
+  comparison: ItemQuantityComparison;
+  breakdown?: ItemQuantityBreakdownEntry[];
+  className?: string;
+}) {
+  const isDimmed = comparison.requiredQuantity === 0;
+  const hasBreakdown = breakdown && breakdown.length > 0;
+
+  const requiredEntry = (
+    <span>
+      <span className={cn(hasBreakdown && "underline decoration-dotted underline-offset-2")}>필요</span>{" "}
+      <span className="font-semibold tabular-nums text-foreground">{comparison.requiredQuantity.toLocaleString()}</span>
+    </span>
+  );
+
+  return (
+    <div
+      className={cn(
+        "mt-1 flex flex-wrap justify-center gap-x-1.5 gap-y-px text-center text-xs leading-tight text-muted-foreground",
+        className,
+      )}
+    >
+      <span className={cn(isDimmed && "opacity-40")}>
+        {hasBreakdown ? (
+          <HoverTooltip
+            as="span"
+            focusable
+            content={<QuantityBreakdownTooltipContent breakdown={breakdown} />}
+            className="cursor-help rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            contentClassName="px-3 py-2"
+          >
+            {requiredEntry}
+          </HoverTooltip>
+        ) : (
+          requiredEntry
+        )}
+      </span>
+      <span className={cn(isDimmed && "opacity-40")}>
+        보유{" "}
+        <span
+          className={cn(
+            "font-semibold tabular-nums text-foreground",
+            comparison.isInsufficient && INSUFFICIENT_QUANTITY_CLASS,
+          )}
+        >
+          {comparison.ownedQuantity.toLocaleString()}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+function buildItemQuantityBreakdowns(
+  students: StudentWithRelationship[],
+  studentItemsMap: StudentItemsMap,
+): Record<string, ItemQuantityBreakdownEntry[]> {
+  const studentsByUid = new Map(students.map((student) => [student.uid, student]));
+  const breakdowns: Record<string, ItemQuantityBreakdownEntry[]> = {};
+
+  for (const studentItem of studentItemsMap.values()) {
+    const student = studentsByUid.get(studentItem.uid);
+    if (!student) {
+      continue;
+    }
+
+    for (const [itemUid, quantity] of Object.entries(studentItem.items)) {
+      if (quantity <= 0) {
+        continue;
+      }
+
+      breakdowns[itemUid] = [
+        ...(breakdowns[itemUid] ?? []),
+        {
+          studentUid: student.uid,
+          name: student.name,
+          quantity,
+        },
+      ];
+    }
+  }
+
+  for (const entries of Object.values(breakdowns)) {
+    entries.sort((a, b) => {
+      if (a.quantity !== b.quantity) {
+        return b.quantity - a.quantity;
+      }
+      return a.name.localeCompare(b.name, "ko");
+    });
+  }
+
+  return breakdowns;
 }

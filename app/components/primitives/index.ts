@@ -13,6 +13,7 @@ export { default as EmptyView } from "./EmptyView";
 export { default as Field } from "./Field";
 export { default as FilterButtons } from "./FilterButtons";
 export { default as HorizontalScroll } from "./HorizontalScroll";
+export { default as HoverTooltip } from "./HoverTooltip";
 export { default as Input } from "./Input";
 export { default as ItemCard } from "./ItemCard";
 export { default as KeyValueTable } from "./KeyValueTable";

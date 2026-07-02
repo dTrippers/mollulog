@@ -7,6 +7,7 @@ import { Page } from "~/components/features/layout";
 import {
   FavoriteItemSelector,
   FavoritedItemSelector,
+  type ItemQuantityBreakdownEntry,
   RelationshipStudentPicker,
   RequiredGifts,
   StudentRelationshipLevel,
@@ -23,6 +24,7 @@ import {
 } from "~/models/relationship-level";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { formatVisibleName, getAllStudents } from "~/models/student";
+import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "인연 랭크 계산기 | 몰루로그";
@@ -57,13 +59,16 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const allStudents = await getAllStudents(env, true);
+  const [allStudents, currentUser] = await Promise.all([getAllStudents(env, true), getActiveSensei(env, request)]);
 
-  // Get saved relationship levels from database if user is authenticated
-  const currentUser = await getActiveSensei(env, request);
   let savedRelationships: Record<string, RelationshipLevel> = {};
+  let ownedQuantities: Record<string, number> | null = null;
   if (currentUser) {
-    const relationLevels = await getRelationshipLevels(env, currentUser.id);
+    const [relationLevels, resourceInventoryMap] = await Promise.all([
+      getRelationshipLevels(env, currentUser.id),
+      getUserResourceInventoryMap(env, currentUser.id),
+    ]);
+    ownedQuantities = resourceInventoryMap;
     savedRelationships = relationLevels.reduce(
       (acc, rel) => {
         acc[rel.studentId] = rel;
@@ -98,6 +103,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     }),
     allStudentsFavoriteItems: getAllStudentsFavoriteItems(env),
     isAuthenticated: !!currentUser,
+    ownedQuantities,
   };
 };
 
@@ -171,7 +177,7 @@ const emptyRelationship: Relationship = {
 };
 
 export default function RelationshipUtil() {
-  const { students, allStudentsFavoriteItems, isAuthenticated } = useLoaderData<typeof loader>();
+  const { students, allStudentsFavoriteItems, isAuthenticated, ownedQuantities } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const queryStudentUid = searchParams.get("studentUid");
   const { showSignIn } = useSignIn();
@@ -201,6 +207,13 @@ export default function RelationshipUtil() {
     () => managedStudents.find((student) => student.uid === selectedStudentUid) ?? null,
     [selectedStudentUid, managedStudents],
   );
+  const itemQuantityState = useMemo(() => {
+    if (!isAuthenticated) {
+      return null;
+    }
+
+    return buildRelationshipItemQuantityState(managedStudents);
+  }, [isAuthenticated, managedStudents]);
   const [selectedItemExp, setSelectedItemExp] = useState<number>(0);
   const handleSelectStudentUid = (studentUid: string | null) => {
     setSaveSuccess(false);
@@ -487,8 +500,8 @@ export default function RelationshipUtil() {
       }
       links={[
         {
-          title: "보유 선물 수량",
-          description: "재화 플래너에서 보유 수량을 관리",
+          title: "재화 플래너",
+          description: "보유 아이템 수량을 관리할 수 있어요",
           Icon: ArchiveBoxIcon,
           to: "/utils/growth/resources?category=favor",
           preventScrollReset: true,
@@ -500,6 +513,7 @@ export default function RelationshipUtil() {
           items={allStudentsFavoriteItems}
           students={managedStudents}
           isAuthenticated={isAuthenticated}
+          ownedQuantities={ownedQuantities}
         />
       ) : (
         <RelationshipStudentScreen
@@ -510,6 +524,9 @@ export default function RelationshipUtil() {
           saveState={savePending ? "pending" : saveFetcher.state}
           saveError={saveError}
           saveSuccess={saveSuccess}
+          itemRequiredQuantities={itemQuantityState?.requiredQuantities ?? null}
+          itemQuantityBreakdowns={itemQuantityState?.breakdowns ?? null}
+          ownedQuantities={ownedQuantities}
           onCurrentRelationshipChange={setCurrentRelationship}
           onSelectedItemExpChange={setSelectedItemExp}
           onDelete={handleDelete}
@@ -528,6 +545,9 @@ function RelationshipStudentScreen({
   saveState,
   saveError,
   saveSuccess,
+  itemRequiredQuantities,
+  itemQuantityBreakdowns,
+  ownedQuantities,
   onCurrentRelationshipChange,
   onSelectedItemExpChange,
   onDelete,
@@ -540,6 +560,9 @@ function RelationshipStudentScreen({
   saveState: SaveState;
   saveError: string | null;
   saveSuccess: boolean;
+  itemRequiredQuantities: Record<string, number> | null;
+  itemQuantityBreakdowns: Record<string, ItemQuantityBreakdownEntry[]> | null;
+  ownedQuantities: Record<string, number> | null;
   onCurrentRelationshipChange: Dispatch<SetStateAction<Relationship>>;
   onSelectedItemExpChange: (exp: number) => void;
   onDelete: () => void;
@@ -578,6 +601,9 @@ function RelationshipStudentScreen({
           <FavoriteItemSelector
             studentUid={selectedStudentUid}
             quantities={currentRelationship.items}
+            itemRequiredQuantities={itemRequiredQuantities}
+            itemQuantityBreakdowns={itemQuantityBreakdowns}
+            ownedQuantities={ownedQuantities}
             onQuantitiesChange={(quantities) => onCurrentRelationshipChange((prev) => ({ ...prev, items: quantities }))}
             onSelectedItemExpChange={onSelectedItemExpChange}
           />
@@ -657,4 +683,41 @@ function sortRelationshipStudents<T extends { currentLevel: number | null; order
     }
     return bLevel - aLevel;
   });
+}
+
+function buildRelationshipItemQuantityState(students: RelationshipStudentState[]): {
+  requiredQuantities: Record<string, number>;
+  breakdowns: Record<string, ItemQuantityBreakdownEntry[]>;
+} {
+  const requiredQuantities: Record<string, number> = {};
+  const breakdowns: Record<string, ItemQuantityBreakdownEntry[]> = {};
+
+  for (const student of students) {
+    for (const [itemUid, quantity] of Object.entries(student.items)) {
+      if (quantity <= 0) {
+        continue;
+      }
+
+      requiredQuantities[itemUid] = (requiredQuantities[itemUid] ?? 0) + quantity;
+      breakdowns[itemUid] = [
+        ...(breakdowns[itemUid] ?? []),
+        {
+          studentUid: student.uid,
+          name: student.name,
+          quantity,
+        },
+      ];
+    }
+  }
+
+  for (const entries of Object.values(breakdowns)) {
+    entries.sort((a, b) => {
+      if (a.quantity !== b.quantity) {
+        return b.quantity - a.quantity;
+      }
+      return a.name.localeCompare(b.name, "ko");
+    });
+  }
+
+  return { requiredQuantities, breakdowns };
 }

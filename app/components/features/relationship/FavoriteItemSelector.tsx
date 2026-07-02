@@ -3,16 +3,30 @@ import { useFetcher } from "react-router";
 import { ResourceInventoryGroup, ResourceInventoryTile } from "~/components/features/growth";
 import { LoadingSkeleton, Toggle, useNumberInputFlowNavigation } from "~/components/primitives";
 import type { loader as favoriteItemsLoader } from "~/routes/api.students.$uid.items";
+import { type ItemQuantityBreakdownEntry, QuantityBreakdownTooltipContent } from "./QuantityBreakdownTooltip";
 
 type FavoriteItemSelectorProps = {
   studentUid: string;
 
   quantities: Record<string, number>;
+  itemRequiredQuantities: Record<string, number> | null;
+  itemQuantityBreakdowns: Record<string, ItemQuantityBreakdownEntry[]> | null;
+  ownedQuantities: Record<string, number> | null;
   onQuantitiesChange: (quantities: Record<string, number>) => void;
   onSelectedItemExpChange: (exp: number) => void;
 };
 
-export default function FavoriteItemSelector({ studentUid, quantities, onQuantitiesChange, onSelectedItemExpChange }: FavoriteItemSelectorProps) {
+const INSUFFICIENT_QUANTITY_CLASS = "text-red-600 dark:text-red-400";
+
+export default function FavoriteItemSelector({
+  studentUid,
+  quantities,
+  itemRequiredQuantities,
+  itemQuantityBreakdowns,
+  ownedQuantities,
+  onQuantitiesChange,
+  onSelectedItemExpChange,
+}: FavoriteItemSelectorProps) {
   const [filterFavorited, setFilterFavorited] = useState(true);
   const numberInputFlowNavigation = useNumberInputFlowNavigation();
 
@@ -75,6 +89,11 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
           {filteredItems.map(({ item, favoriteLevel, exp }) => {
             const quantity = quantities[item.uid] || 0;
             const totalItemExp = exp * quantity;
+            const requiredQuantity = itemRequiredQuantities?.[item.uid] ?? 0;
+            const ownedQuantity = ownedQuantities?.[item.uid] ?? 0;
+            const showQuantityComparison = itemRequiredQuantities !== null && ownedQuantities !== null;
+            const breakdown = itemQuantityBreakdowns?.[item.uid];
+            const isDimmed = requiredQuantity === 0;
             return (
               <ResourceInventoryTile
                 key={item.uid}
@@ -89,7 +108,23 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
                 quantityLabel="목표"
                 inputProps={numberInputFlowNavigation.getInputProps()}
                 metrics={[
-                  { label: "EXP", value: `+${exp.toLocaleString()}` },
+                  { label: "EXP", value: exp.toLocaleString() },
+                  ...(showQuantityComparison
+                    ? [
+                        {
+                          label: "필요",
+                          value: requiredQuantity.toLocaleString(),
+                          tooltip: breakdown && breakdown.length > 0 ? <QuantityBreakdownTooltipContent breakdown={breakdown} /> : undefined,
+                          dimmed: isDimmed,
+                        },
+                        {
+                          label: "보유",
+                          value: ownedQuantity.toLocaleString(),
+                          valueClassName: ownedQuantity < requiredQuantity ? INSUFFICIENT_QUANTITY_CLASS : undefined,
+                          dimmed: isDimmed,
+                        },
+                      ]
+                    : []),
                   ...(quantity > 0
                     ? [{
                         value: `+${totalItemExp.toLocaleString()}`,

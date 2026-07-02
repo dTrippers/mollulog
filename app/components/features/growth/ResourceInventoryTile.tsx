@@ -1,11 +1,15 @@
+import type { ReactNode } from "react";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
-import { ResourceCard, NumberInput, type NumberInputFlowNavigationInputProps } from "~/components/primitives";
+import { HoverTooltip, ResourceCard, NumberInput, type NumberInputFlowNavigationInputProps } from "~/components/primitives";
 
 export type ResourceInventoryTileMetric = {
+  key?: string;
   label?: string;
-  value: string;
+  value: ReactNode;
   valueClassName?: string;
+  tooltip?: ReactNode;
+  dimmed?: boolean;
 };
 
 type ResourceInventoryTileResource = {
@@ -54,7 +58,7 @@ export default function ResourceInventoryTile({
     <div
       title={resource.name}
       className={cn(
-        "flex w-20 flex-col items-center gap-1.5 rounded-md px-1 py-2",
+        "flex w-18 flex-col items-center gap-1 rounded-md px-1 py-1.5",
         changed && "bg-blue-50/70 dark:bg-blue-950/20",
       )}
     >
@@ -97,13 +101,15 @@ export default function ResourceInventoryTile({
         </div>
       ) : null}
       {metrics && metrics.length > 0 ? (
-        <div className="w-full space-y-px text-xs leading-tight">
-          {metrics.map((metric) => (
+        <div className="mx-auto w-12 space-y-px text-xs leading-tight md:w-14">
+          {metrics.map((metric, index) => (
             <MetricRow
-              key={`${metric.label}-${metric.value}`}
+              key={metric.key ?? `${metric.label ?? "metric"}-${index}`}
               label={metric.label}
               value={metric.value}
               valueClassName={metric.valueClassName}
+              tooltip={metric.tooltip}
+              dimmed={metric.dimmed}
             />
           ))}
         </div>
@@ -116,23 +122,50 @@ function MetricRow({
   label,
   value,
   valueClassName,
+  tooltip,
+  dimmed,
 }: {
   label?: string;
-  value: string;
+  value: ReactNode;
   valueClassName?: string;
+  tooltip?: ReactNode;
+  dimmed?: boolean;
 }) {
   if (!label) {
     return (
-      <div className="text-center">
+      <div className={cn("text-center", dimmed && "opacity-40")}>
         <span className={cn("font-semibold tabular-nums text-foreground", valueClassName)}>{value}</span>
       </div>
     );
   }
 
-  return (
-    <div className="flex items-center justify-between gap-0.5">
-      <span className="leading-tight text-muted-foreground">{label}</span>
+  const row = (
+    <div className={cn("flex items-center justify-between gap-1", dimmed && "opacity-40")}>
+      <span
+        className={cn(
+          "leading-tight text-muted-foreground",
+          tooltip && "underline decoration-dotted underline-offset-2",
+        )}
+      >
+        {label}
+      </span>
       <span className={cn("font-semibold tabular-nums text-foreground", valueClassName)}>{value}</span>
     </div>
+  );
+
+  if (!tooltip) {
+    return row;
+  }
+
+  return (
+    <HoverTooltip
+      as="div"
+      content={tooltip}
+      focusable
+      className="cursor-help rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      contentClassName="px-3 py-2"
+    >
+      {row}
+    </HoverTooltip>
   );
 }
