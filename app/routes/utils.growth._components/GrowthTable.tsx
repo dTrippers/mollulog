@@ -673,7 +673,7 @@ function GrowthRow({
               {displayedError && <p className="text-xs text-red-500 dark:text-red-400">{displayedError}</p>}
             </div>
             {(student.relationshipCurrentLevel != null || student.relationshipTargetLevel != null) && (
-              <Link to="/utils/relationship">
+              <Link to={`/utils/relationship?studentUid=${encodeURIComponent(student.uid)}`}>
                 <Button size="xs">인연 랭크 계산기</Button>
               </Link>
             )}

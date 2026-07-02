@@ -838,15 +838,17 @@ export function buildTimeline(
   options: PyroxeneCalculationOptions,
   bandMode: PyroxeneTimelineBandMode = "central_ticket_discount",
   collectedSourceKeys: string[] = [],
+  endDate?: Date,
 ): Timeline {
   const collectedSources = new Set(collectedSourceKeys);
-  const maxDate = scheduleItems.reduce((max, item) => {
+  const scheduleMaxDate = scheduleItems.reduce((max, item) => {
     if (!item.event) {
       return max;
     }
     const eventUntil = dayjs(item.event.until);
     return max.isAfter(eventUntil) ? max : eventUntil;
   }, dayjs(initialDate));
+  const maxDate = endDate ? dayjs(endDate) : scheduleMaxDate;
 
   const timelineDeltas: TimelineDelta[] = [];
   for (const scheduleItem of scheduleItems) {
@@ -1055,7 +1057,11 @@ export function buildTimeline(
   }
 
   const initialDateDayjs = dayjs(initialDate);
+  const endDateDayjs = endDate ? dayjs(endDate) : null;
   const filteredDeltas = timelineDeltas.filter((delta) => {
+    if (endDateDayjs && delta.date.isAfter(endDateDayjs)) {
+      return false;
+    }
     if (delta.date.isAfter(initialDateDayjs)) {
       return true;
     }

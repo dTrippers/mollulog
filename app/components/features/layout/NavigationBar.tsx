@@ -306,7 +306,6 @@ export default function NavigationBar({
       </aside>
 
       <MobileBrandHeader
-        currentUsername={currentUsername}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
         hasRecentNews={hasRecentNews}
@@ -319,21 +318,18 @@ export default function NavigationBar({
         currentProfileStudentId={currentProfileStudentId}
         pathname={pathname}
         upcomingEvent={upcomingEvent}
-        onShowSignIn={showSignIn}
       />
     </>
   );
 }
 
 function MobileBrandHeader({
-  currentUsername,
   darkMode,
   setDarkMode,
   hasRecentNews,
   hasUnreadFeedbackReplies,
   searchResetKey,
 }: {
-  currentUsername: string | null;
   darkMode: boolean;
   setDarkMode: NavigationBarProps["setDarkMode"];
   hasRecentNews: boolean;
@@ -544,15 +540,13 @@ function MobileBottomNavigation({
   currentProfileStudentId,
   pathname,
   upcomingEvent,
-  onShowSignIn,
 }: {
   currentUsername: string | null;
   currentProfileStudentId: string | null;
   pathname: string;
   upcomingEvent: NavigationBarProps["upcomingEvent"];
-  onShowSignIn: () => void;
 }) {
-  const items = getMobileNavigationItems({ pathname, currentUsername, upcomingEvent });
+  const items = getMobileNavigationItems({ pathname, upcomingEvent });
 
   return (
     <nav
@@ -573,22 +567,16 @@ function MobileBottomNavigation({
           `);
           const content = (
             <>
-              {currentUsername && item.to.startsWith("/@") && currentProfileStudentId ? (
-                <ProfileImage studentUid={currentProfileStudentId} imageSize={6} />
-              ) : (
-                <Icon className="size-5 shrink-0" strokeWidth={2} />
-              )}
-              <span className="max-w-full truncate">{item.name}</span>
+              <span className="flex h-6 shrink-0 items-center justify-center">
+                {currentUsername && item.name === "더보기" && currentProfileStudentId ? (
+                  <ProfileImage studentUid={currentProfileStudentId} imageSize={6} />
+                ) : (
+                  <Icon className="size-5 shrink-0" strokeWidth={2} />
+                )}
+              </span>
+              <span className="block h-4 max-w-full truncate leading-4">{item.name}</span>
             </>
           );
-
-          if (!currentUsername && item.to === "/my") {
-            return (
-              <button key={item.name} type="button" className={className} onClick={onShowSignIn}>
-                {content}
-              </button>
-            );
-          }
 
           return (
             <Link key={item.name} to={item.to} className={className}>
