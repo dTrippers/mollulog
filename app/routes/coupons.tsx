@@ -1,15 +1,26 @@
-import { data, Link } from "react-router";
-import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/solid";
-import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react-router";
-import { getActiveSensei } from "~/auth/authenticator.server";
-import Page from "~/components/features/layout/Page";
-import CouponCard from "~/components/features/coupons/CouponCard";
-import { getAllCoupons, getCouponRegistrations, registerCoupon, unregisterCoupon } from "~/models/coupon";
-import { useLoaderData } from "react-router";
-import { getSenseiPrivacyByUserId } from "~/models/sensei-privacy";
 import { IdentificationIcon } from "@heroicons/react/16/solid";
+import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/solid";
+import { useState } from "react";
+import { Link, data, useLoaderData } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import CopyField from "~/components/features/coupons/CopyField";
+import CouponCard from "~/components/features/coupons/CouponCard";
+import { type CouponDisplayStatus, getCouponDisplayStatus } from "~/components/features/coupons/coupon-display";
+import Page from "~/components/features/layout/Page";
+import { FilterButtons } from "~/components/primitives";
 import { canonicalLink } from "~/lib/seo";
+import { getAllCoupons, getCouponRegistrations, registerCoupon, unregisterCoupon } from "~/models/coupon";
+import { getSenseiPrivacyByUserId } from "~/models/sensei-privacy";
+
+type CouponStatusFilter = CouponDisplayStatus;
+
+const AVAILABLE_EMPTY_IMAGE_URL = "https://assets.mollulog.net/assets/videos/site/dear-yongha-kim.gif";
+
+const COUPON_STATUS_FILTERS: { id: CouponStatusFilter; label: string }[] = [
+  { id: "available", label: "사용 가능" },
+  { id: "history", label: "사용완료/만료" },
+];
 
 export const meta: MetaFunction = ({ location }) => [
   { title: "블루 아카이브 쿠폰 목록 | 몰루로그" },
@@ -22,10 +33,12 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const coupons = await getAllCoupons(env);
 
   const sensei = await getActiveSensei(env, request);
-  const currentUserData = sensei ? {
-    registeredCouponIds: await getCouponRegistrations(env, sensei.id),
-    memberCode: (await getSenseiPrivacyByUserId(env, sensei.id))?.memberCode ?? null,
-  } : null;
+  const currentUserData = sensei
+    ? {
+        registeredCouponIds: await getCouponRegistrations(env, sensei.id),
+        memberCode: (await getSenseiPrivacyByUserId(env, sensei.id))?.memberCode ?? null,
+      }
+    : null;
 
   return {
     coupons,
@@ -57,6 +70,8 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
 
 export default function CouponsPage() {
   const { coupons, currentUserData } = useLoaderData<typeof loader>();
+  const [statusFilter, setStatusFilter] = useState<CouponStatusFilter>("available");
+  const [initialRegisteredCouponIds] = useState(() => currentUserData?.registeredCouponIds ?? []);
 
   const memberCodeSection = currentUserData?.memberCode ? (
     <div className="px-3 py-2.5 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg">
@@ -76,6 +91,11 @@ export default function CouponsPage() {
   ) : undefined;
 
   const registeredSet = new Set(currentUserData?.registeredCouponIds ?? []);
+  const initialRegisteredSet = new Set(initialRegisteredCouponIds);
+  const displayedCoupons = coupons.filter(
+    (coupon) => getCouponDisplayStatus(coupon, initialRegisteredSet.has(coupon.id)) === statusFilter,
+  );
+
   return (
     <Page
       title="쿠폰"
@@ -90,13 +110,26 @@ export default function CouponsPage() {
         },
       ]}
     >
-      {coupons.length === 0 ? (
-        <div className="py-16 text-center text-neutral-400 dark:text-neutral-500">
-          쿠폰이 없습니다.
-        </div>
+      <div className="mb-4">
+        <FilterButtons
+          exclusive
+          atLeastOne
+          size="sm"
+          buttonProps={COUPON_STATUS_FILTERS.map((filter) => ({
+            text: filter.label,
+            active: statusFilter === filter.id,
+            onToggle: (activated) => {
+              if (activated) setStatusFilter(filter.id);
+            },
+          }))}
+        />
+      </div>
+
+      {displayedCoupons.length === 0 ? (
+        <CouponEmptyView statusFilter={statusFilter} />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {coupons.map((coupon) => (
+          {displayedCoupons.map((coupon) => (
             <CouponCard
               key={coupon.uid}
               coupon={coupon}
@@ -108,4 +141,17 @@ export default function CouponsPage() {
       )}
     </Page>
   );
+}
+
+function CouponEmptyView({ statusFilter }: { statusFilter: CouponStatusFilter }) {
+  if (statusFilter === "available") {
+    return (
+      <div className="my-16 flex w-full flex-col items-center justify-center text-center">
+        <img src={AVAILABLE_EMPTY_IMAGE_URL} alt="" className="mb-4 size-36 object-contain" loading="lazy" />
+        <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">현재 사용 가능한 쿠폰이 없어요</p>
+      </div>
+    );
+  }
+
+  return <div className="py-16 text-center text-neutral-400 dark:text-neutral-500">사용완료/만료된 쿠폰이 없어요</div>;
 }
