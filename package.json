@@ -70,7 +70,7 @@
     "@cloudflare/vite-plugin": "^1.43.0",
     "@cloudflare/workers-types": "^4.20260702.1",
     "@eslint/eslintrc": "^3.3.5",
-    "@eslint/js": "^9.39.1",
+    "@eslint/js": "^10.0.1",
     "@jest/globals": "^30.4.1",
     "@react-router/dev": "^7.18.1",
     "@tailwindcss/aspect-ratio": "^0.4.2",
