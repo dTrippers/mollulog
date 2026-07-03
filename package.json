@@ -46,7 +46,7 @@
     "graphql": "^16.12.0",
     "hangul-js": "^0.2.6",
     "isbot": "^5.1.44",
-    "javascript-lp-solver": "^0.4.24",
+    "javascript-lp-solver": "^1.0.3",
     "marked": "^15.0.12",
     "nanoid": "^3.3.15",
     "protobufjs": "^8.6.5",

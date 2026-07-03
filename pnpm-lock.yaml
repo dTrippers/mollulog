@@ -81,8 +81,8 @@ importers:
         specifier: ^5.1.44
         version: 5.1.44
       javascript-lp-solver:
-        specifier: ^0.4.24
-        version: 0.4.24
+        specifier: ^1.0.3
+        version: 1.0.3
       marked:
         specifier: ^15.0.12
         version: 15.0.12
@@ -3857,8 +3857,8 @@ packages:
   jackspeak@3.4.3:
     resolution: {integrity: sha512-OGlZQpz2yfahA/Rd1Y8Cd9SIEsqvXkLVoSw/cgwhnhFMDbsQFeZYoJJ7bIZBS9BcamUW96asq/npPWugM+RQBw==}
 
-  javascript-lp-solver@0.4.24:
-    resolution: {integrity: sha512-5edoDKnMrt/u3M6GnZKDDIPxOyFOg+WrwDv8mjNiMC2DePhy2H9/FFQgf4ggywaXT1utvkxusJcjQUER72cZmA==}
+  javascript-lp-solver@1.0.3:
+    resolution: {integrity: sha512-+qUYrubmn227YTz25uf9wOTlgB3wFKGtutECxL1shjOkgi/Tcn3SpnC7+T9rxhv/JNOxLIfZ3O6wEx0FwLlXbw==}
 
   jest-changed-files@30.4.1:
     resolution: {integrity: sha512-IuctmYrxi21iOSOaIXpJWalHyPAsVv0GeBHKDn8C1CA4W5htHn7INL+wdnL4Bo0+olEndvAFkmb++tIQJG+vvg==}
@@ -8983,7 +8983,7 @@ snapshots:
     optionalDependencies:
       '@pkgjs/parseargs': 0.11.0
 
-  javascript-lp-solver@0.4.24: {}
+  javascript-lp-solver@1.0.3: {}
 
   jest-changed-files@30.4.1:
     dependencies:
