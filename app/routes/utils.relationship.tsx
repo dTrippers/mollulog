@@ -1,5 +1,5 @@
 import { ArchiveBoxIcon, GiftIcon, MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type Dispatch, type ReactNode, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -309,15 +309,6 @@ export default function RelationshipUtil() {
     [isAuthenticated, saveFetcher, selectedStudentUid, showSignIn, validateRelationship],
   );
 
-  const handleSave = () => {
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = null;
-    }
-    setSavePending(false);
-    submitRelationship(currentRelationship);
-  };
-
   useEffect(() => {
     if (saveFetcher.state !== "idle") return;
     if (!saveFetcher.data?.success) return;
@@ -517,6 +508,7 @@ export default function RelationshipUtil() {
         />
       ) : (
         <RelationshipStudentScreen
+          studentPicker={studentPicker}
           selectedStudentUid={selectedStudentUid}
           selectedStudent={selectedStudent}
           currentRelationship={currentRelationship}
@@ -530,7 +522,6 @@ export default function RelationshipUtil() {
           onCurrentRelationshipChange={setCurrentRelationship}
           onSelectedItemExpChange={setSelectedItemExp}
           onDelete={handleDelete}
-          onSave={handleSave}
         />
       )}
     </Page>
@@ -538,6 +529,7 @@ export default function RelationshipUtil() {
 }
 
 function RelationshipStudentScreen({
+  studentPicker,
   selectedStudentUid,
   selectedStudent,
   currentRelationship,
@@ -551,8 +543,8 @@ function RelationshipStudentScreen({
   onCurrentRelationshipChange,
   onSelectedItemExpChange,
   onDelete,
-  onSave,
 }: {
+  studentPicker: ReactNode;
   selectedStudentUid: string | null;
   selectedStudent: RelationshipStudentState | null;
   currentRelationship: Relationship;
@@ -566,7 +558,6 @@ function RelationshipStudentScreen({
   onCurrentRelationshipChange: Dispatch<SetStateAction<Relationship>>;
   onSelectedItemExpChange: (exp: number) => void;
   onDelete: () => void;
-  onSave: () => void;
 }) {
   return (
     <div className="min-w-0 overflow-x-hidden">
@@ -577,8 +568,6 @@ function RelationshipStudentScreen({
             saveState={saveState}
             saveError={saveError}
             saveSuccess={saveSuccess}
-            onDelete={onDelete}
-            onSave={onSave}
           />
 
           <StudentRelationshipLevel
@@ -607,14 +596,26 @@ function RelationshipStudentScreen({
             onQuantitiesChange={(quantities) => onCurrentRelationshipChange((prev) => ({ ...prev, items: quantities }))}
             onSelectedItemExpChange={onSelectedItemExpChange}
           />
+
+          <div className="my-4 flex justify-end">
+            <Button text="초기화" size="xs" variant="tint-red" onClick={onDelete} />
+          </div>
         </>
       ) : (
-        <div className="rounded-lg border border-dashed border-border bg-muted/40 px-4 py-10 text-center">
-          <p className="font-semibold text-foreground">학생을 선택해 주세요</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            학생 찾기에서 저장된 학생을 고르거나 이름으로 검색하면 계산을 시작할 수 있어요.
-          </p>
-        </div>
+        <>
+          <div className="lg:hidden">
+            <p className="mb-3 text-sm text-muted-foreground">
+              저장된 학생을 고르거나 이름으로 검색하면 계산을 시작할 수 있어요.
+            </p>
+            {studentPicker}
+          </div>
+          <div className="hidden rounded-lg border border-dashed border-border bg-muted/40 px-4 py-10 text-center lg:block">
+            <p className="font-semibold text-foreground">학생을 선택해 주세요</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              학생 찾기에서 저장된 학생을 고르거나 이름으로 검색하면 계산을 시작할 수 있어요.
+            </p>
+          </div>
+        </>
       )}
     </div>
   );
@@ -625,42 +626,31 @@ function RelationshipActionHeader({
   saveState,
   saveError,
   saveSuccess,
-  onDelete,
-  onSave,
 }: {
   student: { uid: string; name: string };
   saveState: SaveState;
   saveError: string | null;
   saveSuccess: boolean;
-  onDelete: () => void;
-  onSave: () => void;
 }) {
   const visibleName = formatVisibleName(student.name);
+  const isSaving = saveState === "pending" || saveState === "submitting" || saveState === "loading";
 
   return (
-    <div className="mb-3 rounded-lg border border-border bg-card p-2.5 md:mb-4 md:p-4">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <ProfileImage studentUid={student.uid} imageSize={10} />
-          <div className="min-w-0">
-            <p className="truncate pt-0.5 text-sm font-bold leading-tight text-foreground md:text-base">
-              {visibleName}
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center justify-end gap-1">
-          <Button text="초기화" size="sm" variant="tint-red" onClick={onDelete} />
-          <Button
-            variant="tint-blue"
-            text={saveState === "submitting" ? "저장 중" : "저장"}
-            size="sm"
-            onClick={onSave}
-            disabled={saveState === "submitting" || saveState === "loading"}
-          />
+    <div className="my-4">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <ProfileImage studentUid={student.uid} imageSize={10} />
+        <div className="min-w-0">
+          <p className="truncate pt-0.5 text-sm font-bold leading-tight text-foreground md:text-base">
+            {visibleName}
+          </p>
+          {isSaving ? (
+            <p className="text-xs text-muted-foreground">저장 중...</p>
+          ) : saveSuccess ? (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400">저장됨</p>
+          ) : null}
         </div>
       </div>
       {saveError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{saveError}</p>}
-      {saveSuccess && <p className="mt-2 text-sm text-green-600 dark:text-green-400">성공적으로 저장했어요</p>}
     </div>
   );
 }

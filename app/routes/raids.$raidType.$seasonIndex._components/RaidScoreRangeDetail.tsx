@@ -2,12 +2,11 @@ import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import RaidOftenUsedParties from "~/components/features/raids/RaidOftenUsedParties";
-import { Toggle } from "~/components/primitives";
+import { Container, Toggle } from "~/components/primitives";
 import type { Attack, Defense } from "~/graphql/graphql";
 import type { RangeStats } from "~/lib/ranks/range-stats";
 import type { Role } from "~/models/content.d";
 import RaidScoreUsageList from "./RaidScoreUsageList";
-import RaidStatsCard from "./RaidStatsCard";
 
 type StudentInfo = {
   name: string;
@@ -57,11 +56,11 @@ export default function RaidScoreRangeDetail({
 
   return (
     <div className="space-y-4">
-      <RaidStatsCard title="클리어 편성 수">
+      <Container title="클리어 편성 수">
         <PartyCountDistribution partyCounts={rangeStats.partyCounts} sampleSize={detailSampleSize} />
-      </RaidStatsCard>
+      </Container>
 
-      <RaidStatsCard title="학생별 출전 횟수" description="학생 성장도별 출전 횟수">
+      <Container title="학생별 출전 횟수" description="학생 성장도별 출전 횟수">
         <RaidScoreUsageList
           usage={rangeStats.studentUsage}
           sampleSize={detailSampleSize}
@@ -69,10 +68,10 @@ export default function RaidScoreRangeDetail({
           recruitedStudentTiers={recruitedStudentTiers}
         />
         <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">고유 ★1 데이터에는 ★5가 포함돼요</p>
-      </RaidStatsCard>
+      </Container>
 
       {rangeStats.oftenUsedParties.length > 0 && (
-        <RaidStatsCard
+        <Container
           title="많이 편성한 조합"
           description="순서나 학생 성장도는 반영되지 않아요"
           action={
@@ -93,7 +92,7 @@ export default function RaidScoreRangeDetail({
             showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
           />
           <RanksPageLink to={`ranks${search}`} />
-        </RaidStatsCard>
+        </Container>
       )}
     </div>
   );
@@ -119,7 +118,7 @@ function RanksPageLink({ to }: { to: string }) {
 function RaidScoreRangeDetailSkeleton() {
   return (
     <div className="space-y-4" aria-hidden="true">
-      <RaidStatsCard title="클리어 편성 수">
+      <Container title="클리어 편성 수">
         <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
           {PARTY_COUNT_BUCKETS.map((label, index) => (
             <div key={label} className="min-w-0 space-y-1">
@@ -131,9 +130,9 @@ function RaidScoreRangeDetailSkeleton() {
             </div>
           ))}
         </div>
-      </RaidStatsCard>
+      </Container>
 
-      <RaidStatsCard title="출전 횟수 통계" description="학생 성장도 및 모집/조력별 출전 횟수">
+      <Container title="출전 횟수 통계" description="학생 성장도 및 모집/조력별 출전 횟수">
         <div className="flex items-center justify-between gap-2">
           <div className="flex gap-1">
             <span className="h-8 w-12 animate-pulse rounded-md bg-neutral-200 dark:bg-neutral-700" />
@@ -146,9 +145,9 @@ function RaidScoreRangeDetailSkeleton() {
           <StudentUsageSkeletonGroup />
           <StudentUsageSkeletonGroup />
         </div>
-      </RaidStatsCard>
+      </Container>
 
-      <RaidStatsCard title="많이 편성한 조합" description="순서나 학생 성장도는 반영되지 않아요">
+      <Container title="많이 편성한 조합" description="순서나 학생 성장도는 반영되지 않아요">
         <div className="grid gap-3 md:grid-cols-2">
           {SKELETON_PARTY_CARD_KEYS.map((key) => (
             <div key={key} className="space-y-3 rounded-md bg-neutral-100 p-3 dark:bg-neutral-800/50">
@@ -167,7 +166,7 @@ function RaidScoreRangeDetailSkeleton() {
             </div>
           ))}
         </div>
-      </RaidStatsCard>
+      </Container>
     </div>
   );
 }

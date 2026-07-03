@@ -6,6 +6,8 @@ export { default as BottomSheet } from "./BottomSheet";
 export { default as Callout } from "./Callout";
 export { default as Checkbox } from "./Checkbox";
 export { default as ClickableSurface } from "./ClickableSurface";
+export { default as Container } from "./Container";
+export type { ContainerProps } from "./Container";
 export { default as Description } from "./Description";
 export { default as Dropdown } from "./Dropdown";
 export type { DropdownOption, DropdownProps } from "./Dropdown";

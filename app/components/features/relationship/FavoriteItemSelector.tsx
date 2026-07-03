@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
-import { ResourceInventoryGroup, ResourceInventoryTile } from "~/components/features/growth";
-import { LoadingSkeleton, Toggle, useNumberInputFlowNavigation } from "~/components/primitives";
+import { ResourceInventoryTile } from "~/components/features/growth";
+import { Container, LoadingSkeleton, Toggle, useNumberInputFlowNavigation } from "~/components/primitives";
 import type { loader as favoriteItemsLoader } from "~/routes/api.students.$uid.items";
 import { type ItemQuantityBreakdownEntry, QuantityBreakdownTooltipContent } from "./QuantityBreakdownTooltip";
 
@@ -72,9 +72,10 @@ export default function FavoriteItemSelector({
   }, [favoriteItems, onSelectedItemExpChange, quantities]);
 
   return (
-    <ResourceInventoryGroup
+    <Container
       title="선물 목록"
-      controls={
+      description="선물할 개수를 입력하고 예상 도달 랭크를 계산해보세요"
+      action={
         <Toggle
           label="좋아하는 선물만 보기"
           initialState={filterFavorited}
@@ -85,7 +86,7 @@ export default function FavoriteItemSelector({
     >
       {!favoriteItems ?
         <LoadingSkeleton /> :
-        <>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(5rem,1fr))] justify-items-center gap-x-1 gap-y-0">
           {filteredItems.map(({ item, favoriteLevel, exp }) => {
             const quantity = quantities[item.uid] || 0;
             const totalItemExp = exp * quantity;
@@ -125,19 +126,18 @@ export default function FavoriteItemSelector({
                         },
                       ]
                     : []),
-                  ...(quantity > 0
-                    ? [{
-                        value: `+${totalItemExp.toLocaleString()}`,
-                        valueClassName: "text-emerald-600 dark:text-emerald-400",
-                      }]
-                    : []),
+                  {
+                    value: `+${totalItemExp.toLocaleString()}`,
+                    valueClassName: "text-emerald-600 dark:text-emerald-400",
+                    hidden: quantity === 0,
+                  },
                 ]}
                 onQuantityChange={(value) => onQuantitiesChange({ ...quantities, [item.uid]: value })}
               />
             );
           })}
-        </>
+        </div>
       }
-    </ResourceInventoryGroup>
+    </Container>
   );
 }

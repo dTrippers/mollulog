@@ -1,7 +1,12 @@
 import type { ReactNode } from "react";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
-import { HoverTooltip, ResourceCard, NumberInput, type NumberInputFlowNavigationInputProps } from "~/components/primitives";
+import {
+  HoverTooltip,
+  ResourceCard,
+  NumberInput,
+  type NumberInputFlowNavigationInputProps,
+} from "~/components/primitives";
 
 export type ResourceInventoryTileMetric = {
   key?: string;
@@ -10,6 +15,8 @@ export type ResourceInventoryTileMetric = {
   valueClassName?: string;
   tooltip?: ReactNode;
   dimmed?: boolean;
+  /** Renders invisible while still reserving its row height, to avoid layout shift when the value becomes empty. */
+  hidden?: boolean;
 };
 
 type ResourceInventoryTileResource = {
@@ -31,6 +38,7 @@ type ResourceInventoryTileResource = {
 
 type ResourceInventoryTileProps = {
   resource: ResourceInventoryTileResource;
+  className?: string;
   currentQuantity?: number;
   draftQuantity?: number;
   quantityLabel?: string;
@@ -43,6 +51,7 @@ type ResourceInventoryTileProps = {
 
 export default function ResourceInventoryTile({
   resource,
+  className,
   currentQuantity,
   draftQuantity = 0,
   quantityLabel = "보유",
@@ -58,8 +67,9 @@ export default function ResourceInventoryTile({
     <div
       title={resource.name}
       className={cn(
-        "flex w-18 flex-col items-center gap-1 rounded-md px-1 py-1.5",
+        "flex w-20 flex-col items-center gap-1 rounded-md px-0.5 py-1.5",
         changed && "bg-blue-50/70 dark:bg-blue-950/20",
+        className,
       )}
     >
       {resource.itemUid ? (
@@ -101,7 +111,7 @@ export default function ResourceInventoryTile({
         </div>
       ) : null}
       {metrics && metrics.length > 0 ? (
-        <div className="mx-auto w-12 space-y-px text-xs leading-tight md:w-14">
+        <div className="px-0.5 w-full space-y-px text-xs leading-tight">
           {metrics.map((metric, index) => (
             <MetricRow
               key={metric.key ?? `${metric.label ?? "metric"}-${index}`}
@@ -110,6 +120,7 @@ export default function ResourceInventoryTile({
               valueClassName={metric.valueClassName}
               tooltip={metric.tooltip}
               dimmed={metric.dimmed}
+              hidden={metric.hidden}
             />
           ))}
         </div>
@@ -124,32 +135,36 @@ function MetricRow({
   valueClassName,
   tooltip,
   dimmed,
+  hidden,
 }: {
   label?: string;
   value: ReactNode;
   valueClassName?: string;
   tooltip?: ReactNode;
   dimmed?: boolean;
+  hidden?: boolean;
 }) {
   if (!label) {
     return (
-      <div className={cn("text-center", dimmed && "opacity-40")}>
-        <span className={cn("font-semibold tabular-nums text-foreground", valueClassName)}>{value}</span>
+      <div className={cn("text-center", dimmed && "opacity-40", hidden && "invisible")}>
+        <span className={cn("whitespace-nowrap font-bold tabular-nums text-foreground", valueClassName)}>
+          {value}
+        </span>
       </div>
     );
   }
 
   const row = (
-    <div className={cn("flex items-center justify-between gap-1", dimmed && "opacity-40")}>
+    <div className={cn("flex items-center justify-between gap-1", dimmed && "opacity-40", hidden && "invisible")}>
       <span
         className={cn(
-          "leading-tight text-muted-foreground",
+          "shrink-0 whitespace-nowrap leading-tight text-muted-foreground/70",
           tooltip && "underline decoration-dotted underline-offset-2",
         )}
       >
         {label}
       </span>
-      <span className={cn("font-semibold tabular-nums text-foreground", valueClassName)}>{value}</span>
+      <span className={cn("whitespace-nowrap font-bold tabular-nums text-foreground", valueClassName)}>{value}</span>
     </div>
   );
 
