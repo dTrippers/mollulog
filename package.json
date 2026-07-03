@@ -48,7 +48,7 @@
     "javascript-lp-solver": "^0.4.24",
     "marked": "^15.0.12",
     "nanoid": "^3.3.11",
-    "protobufjs": "^7.5.8",
+    "protobufjs": "^7.6.3",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-loading-skeleton": "^3.5.0",
@@ -95,6 +95,7 @@
   "pnpm": {
     "overrides": {
       "@esbuild-kit/core-utils>esbuild": "0.25.12",
+      "brace-expansion@5": "5.0.6",
       "@remix-run/react": "2.17.4",
       "@remix-run/server-runtime": "2.17.4"
     }
