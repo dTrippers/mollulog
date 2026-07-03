@@ -1,7 +1,6 @@
 {
   "files": {
-    "include": ["app/**/*.tsx", "app/**/*.ts", "test/**/*.ts"],
-    "ignore": ["app/graphql/**/*"]
+    "includes": ["**/app/**/*.tsx", "**/app/**/*.ts", "**/test/**/*.ts", "!**/app/graphql/**/*"]
   },
   "formatter": {
     "enabled": true,
@@ -12,7 +11,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": {
         "noUselessElse": "off"
       }
