@@ -234,6 +234,7 @@ function ItemSelector({
             >
               <ResourceInventoryTile
                 className="w-16 sm:w-18"
+                tooltipFocusable={false}
                 resource={{
                   itemUid,
                   rarity: itemRarity,
@@ -722,6 +723,10 @@ function FavoriteLevelCard({
     .reduce((acc, count) => acc + count, 0);
 
   const handleCancelEdit = () => {
+    for (const studentUid of changedStudents) {
+      const initialQuantity = initialStudentItems.get(studentUid)?.items[activeItem.itemUid] ?? 0;
+      onQuantityChange(studentUid, activeItem.itemUid, initialQuantity);
+    }
     setIsEditMode(false);
   };
 

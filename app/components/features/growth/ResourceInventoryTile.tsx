@@ -47,6 +47,11 @@ type ResourceInventoryTileProps = {
   inputProps?: NumberInputFlowNavigationInputProps;
   metrics?: ResourceInventoryTileMetric[];
   onQuantityChange?: (quantity: number) => void;
+  /**
+   * Set to false when the tile itself is rendered inside another focusable
+   * element (e.g. a button), so metric tooltips don't add a nested focus stop.
+   */
+  tooltipFocusable?: boolean;
 };
 
 export default function ResourceInventoryTile({
@@ -60,6 +65,7 @@ export default function ResourceInventoryTile({
   metrics,
   onQuantityChange,
   showQuantityInput = Boolean(onQuantityChange),
+  tooltipFocusable = true,
 }: ResourceInventoryTileProps) {
   const changed = currentQuantity !== undefined && draftQuantity !== currentQuantity;
 
@@ -119,6 +125,7 @@ export default function ResourceInventoryTile({
               value={metric.value}
               valueClassName={metric.valueClassName}
               tooltip={metric.tooltip}
+              tooltipFocusable={tooltipFocusable}
               dimmed={metric.dimmed}
               hidden={metric.hidden}
             />
@@ -134,6 +141,7 @@ function MetricRow({
   value,
   valueClassName,
   tooltip,
+  tooltipFocusable = true,
   dimmed,
   hidden,
 }: {
@@ -141,6 +149,7 @@ function MetricRow({
   value: ReactNode;
   valueClassName?: string;
   tooltip?: ReactNode;
+  tooltipFocusable?: boolean;
   dimmed?: boolean;
   hidden?: boolean;
 }) {
@@ -176,7 +185,7 @@ function MetricRow({
     <HoverTooltip
       as="div"
       content={tooltip}
-      focusable
+      focusable={tooltipFocusable}
       className="cursor-help rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
       contentClassName="px-3 py-2"
     >

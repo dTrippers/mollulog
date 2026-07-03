@@ -256,6 +256,7 @@ export default function RelationshipUtil() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submittedRelationshipRef = useRef<{ studentUid: string; relationship: Relationship } | null>(null);
   const processedActionDataRef = useRef<typeof saveFetcher.data | null>(null);
+  const pendingSaveRef = useRef<{ studentUid: string; relationship: Relationship } | null>(null);
 
   useEffect(() => {
     if (!queryStudentUid || syncedQueryStudentUidRef.current === queryStudentUid) {
@@ -368,6 +369,9 @@ export default function RelationshipUtil() {
     }
   }, [saveFetcher.state, saveFetcher.data, selectedStudentUid]);
 
+  const submitRelationshipRef = useRef(submitRelationship);
+  submitRelationshipRef.current = submitRelationship;
+
   useEffect(() => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
@@ -376,13 +380,21 @@ export default function RelationshipUtil() {
     setSavePending(false);
 
     if (!selectedStudentUid) return;
-    if (relationshipEquals(currentRelationship, savedRelationship)) return;
+    if (relationshipEquals(currentRelationship, savedRelationship)) {
+      pendingSaveRef.current = null;
+      return;
+    }
 
     setSaveSuccess(false);
 
     if (!isAuthenticated) {
       return;
     }
+
+    // Remember the latest unsaved change so it can be flushed if the user
+    // switches students or navigates away before the debounce timer fires.
+    pendingSaveRef.current = { studentUid: selectedStudentUid, relationship: currentRelationship };
+
     if (saveFetcher.state !== "idle") {
       setSavePending(true);
       return;
@@ -398,6 +410,7 @@ export default function RelationshipUtil() {
     setSavePending(true);
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
+      pendingSaveRef.current = null;
       setSavePending(false);
       submitRelationship(currentRelationship);
     }, 500);
@@ -418,13 +431,16 @@ export default function RelationshipUtil() {
     validateRelationship,
   ]);
 
+  // Flush any unsaved, still-debounced change for the student being left,
+  // whether the user switches to another student or navigates away entirely.
   useEffect(() => {
     return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current);
-      }
+      const pending = pendingSaveRef.current;
+      if (!pending || pending.studentUid !== selectedStudentUid) return;
+      pendingSaveRef.current = null;
+      submitRelationshipRef.current(pending.relationship);
     };
-  }, []);
+  }, [selectedStudentUid]);
 
   const handleDelete = () => {
     setSaveSuccess(false);
@@ -443,6 +459,7 @@ export default function RelationshipUtil() {
     }
     setSavePending(false);
     submittedRelationshipRef.current = null;
+    pendingSaveRef.current = null;
 
     saveFetcher.submit({ studentId: selectedStudentUid }, { method: "DELETE", encType: "application/json" });
   };
