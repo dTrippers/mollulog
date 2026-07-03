@@ -36,6 +36,7 @@
     "@sentry/cloudflare": "^10.63.0",
     "@simplewebauthn/browser": "^11.0.0",
     "@simplewebauthn/server": "^11.0.0",
+    "@urql/core": "^6.0.3",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.21",
     "decimal.js": "^10.6.0",
@@ -61,7 +62,7 @@
     "remix-auth-google": "^2.0.0",
     "sanitize-html": "^2.17.5",
     "tailwind-merge": "^3.6.0",
-    "urql": "^4.2.2"
+    "urql": "^5.0.3"
   },
   "devDependencies": {
     "@babel/preset-typescript": "^7.28.5",
