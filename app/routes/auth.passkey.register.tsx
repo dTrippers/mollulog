@@ -1,6 +1,5 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
-// @ts-ignore
-import type { RegistrationResponseJSON } from "@simplewebauthn/server/script/deps";
+import type { RegistrationResponseJSON } from "@simplewebauthn/server";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { createPasskeyCreationOptions, verifyAndCreatePasskey } from "~/models/passkey";
 

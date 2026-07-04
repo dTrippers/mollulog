@@ -11,6 +11,12 @@ import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import { action, loader } from "../../../app/routes/$username.pickups._index";
 
+jest.mock("~/components/features/layout", () => ({
+  ErrorPage: jest.fn(() => null),
+  Page: jest.fn(({ children }: { children?: unknown }) => children ?? null),
+  ServerErrorPage: jest.fn(() => null),
+}));
+
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
 }));

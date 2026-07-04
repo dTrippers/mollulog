@@ -1,6 +1,5 @@
 import { startAuthentication } from "@simplewebauthn/browser";
-// @ts-ignore
-import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/server/script/deps";
+import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/server";
 import { useEffect, useRef, useState } from "react";
 import { useFetcher, useLocation, useRouteLoaderData } from "react-router";
 import { Button } from "~/components/primitives";

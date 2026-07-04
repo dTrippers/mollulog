@@ -3,8 +3,7 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   PublicKeyCredentialCreationOptionsJSON,
   RegistrationResponseJSON,
-  // @ts-ignore
-} from "@simplewebauthn/server/script/deps";
+} from "@simplewebauthn/server";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";

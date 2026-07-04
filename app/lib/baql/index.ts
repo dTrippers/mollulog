@@ -22,6 +22,7 @@ export async function runQuery<Data = unknown, Variables extends AnyVariables = 
     url,
     exchanges: [fetchExchange],
     fetchOptions: () => ({ signal: controller.signal }),
+    preferGetMethod: false,
   });
   let timeoutError: TimeoutError | null = null;
   const queryPromise = client.query<Data, Variables>(query, variables).toPromise();
