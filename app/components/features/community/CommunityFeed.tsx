@@ -30,6 +30,7 @@ import {
   getCommunityPostTimestampMeta,
   getGroupedAvatarPlaceholderClassName,
   getPickupStudentNameClassName,
+  getPickupStudentSummary,
   getSubjectMetaClassName,
   shouldGroupPostWithPrevious,
 } from "./community-feed-presentation";
@@ -359,6 +360,8 @@ function PostSubjectMeta({
   }
 
   if ((post.postType === "event_opinion" || post.postType === "recruitment_result") && post.subjectContentUid) {
+    const pickupStudentSummary = post.pickupStudents ? getPickupStudentSummary(post.pickupStudents) : null;
+
     return (
       <div className={getSubjectMetaClassName(post.postType)}>
         <Link
@@ -368,10 +371,10 @@ function PostSubjectMeta({
           <UserGroupIcon className="size-3.5 shrink-0 text-neutral-400 dark:text-neutral-500" />
           <span className="max-w-64 truncate sm:max-w-md">{post.subjectContentName ?? "이벤트 보기"}</span>
         </Link>
-        {post.pickupStudents && post.pickupStudents.length > 0 && (
+        {pickupStudentSummary && pickupStudentSummary.visibleStudents.length > 0 && (
           <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
             <span className="mr-0.5 shrink-0 text-neutral-400 dark:text-neutral-500">픽업</span>
-            {post.pickupStudents.map((student) => (
+            {pickupStudentSummary.visibleStudents.map((student) => (
               <StudentSubjectLink
                 key={`${post.uid}-${student.uid}`}
                 uid={student.uid}
@@ -380,6 +383,11 @@ function PostSubjectMeta({
                 nameClassName={getPickupStudentNameClassName()}
               />
             ))}
+            {pickupStudentSummary.remainingCount > 0 && (
+              <span className="ml-0.5 shrink-0 text-neutral-500 dark:text-neutral-400">
+                외 {pickupStudentSummary.remainingCount}명
+              </span>
+            )}
           </div>
         )}
       </div>

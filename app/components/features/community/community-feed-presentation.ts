@@ -108,6 +108,15 @@ export function getPickupStudentNameClassName() {
   return "sr-only";
 }
 
+export function getPickupStudentSummary<T>(students: T[]) {
+  const visibleCount = students.length > 7 ? 5 : students.length;
+
+  return {
+    visibleStudents: students.slice(0, visibleCount),
+    remainingCount: students.length - visibleCount,
+  };
+}
+
 export function getGroupedAvatarPlaceholderClassName() {
   return "size-10 shrink-0";
 }

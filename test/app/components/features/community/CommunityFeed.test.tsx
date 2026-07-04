@@ -1,6 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import type { CommunityFeedPostItem } from "~/components/features/community/CommunityFeed";
-import { getCommunityPostTimestampMeta } from "~/components/features/community/community-feed-presentation";
+import {
+  getCommunityPostTimestampMeta,
+  getPickupStudentSummary,
+} from "~/components/features/community/community-feed-presentation";
 
 function createPost(overrides: Partial<CommunityFeedPostItem> = {}): CommunityFeedPostItem {
   return {
@@ -72,6 +75,26 @@ describe("CommunityFeed timestamp meta", () => {
       dateTime: "2026-05-10T00:00:00.000Z",
       text: "2026.05.10",
       edited: false,
+    });
+  });
+});
+
+describe("CommunityFeed pickup student summary", () => {
+  it("keeps all pickup students visible up to 7 students", () => {
+    const students = Array.from({ length: 7 }, (_, index) => `student-${index + 1}`);
+
+    expect(getPickupStudentSummary(students)).toEqual({
+      visibleStudents: students,
+      remainingCount: 0,
+    });
+  });
+
+  it("shows the first 5 pickup students and summarizes the rest over 7 students", () => {
+    const students = Array.from({ length: 8 }, (_, index) => `student-${index + 1}`);
+
+    expect(getPickupStudentSummary(students)).toEqual({
+      visibleStudents: students.slice(0, 5),
+      remainingCount: 3,
     });
   });
 });
