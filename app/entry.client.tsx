@@ -6,6 +6,18 @@ import { initializeClientObservability } from "./lib/observability.client";
 
 initializeClientObservability();
 
+const STALE_CHUNK_RELOAD_KEY = "mllg:stale-chunk-reloaded";
+window.addEventListener("vite:preloadError", () => {
+  if (sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY)) {
+    return;
+  }
+  sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, "1");
+  window.location.reload();
+});
+window.addEventListener("load", () => {
+  sessionStorage.removeItem(STALE_CHUNK_RELOAD_KEY);
+});
+
 startTransition(() => {
   hydrateRoot(
     document,
