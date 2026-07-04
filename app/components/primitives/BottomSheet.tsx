@@ -23,7 +23,7 @@ export default function BottomSheet({ children, Icon, title, description, onClos
     return null;
   }
 
-  return createPortal((
+  return createPortal(
     <>
       <button
         type="button"
@@ -31,10 +31,12 @@ export default function BottomSheet({ children, Icon, title, description, onClos
         onClick={onClose}
         aria-label="바텀시트 닫기"
       />
-      <div className={sanitizeClassName(`
+      <div
+        className={sanitizeClassName(`
         w-screen lg:max-w-3xl h-dvh max-h-120 md:max-h-144 fixed bottom-0 left-0 right-0 mx-auto px-4 pt-6 lg:px-8 lg:pt-8 pb-[var(--pb-safe-or-6)] flex flex-col
         bg-white/90 dark:bg-neutral-800/80 backdrop-blur-sm z-layer-modal rounded-t-2xl shadow-t-xl
-      `)}>
+      `)}
+      >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 lg:p-3 flex items-center justify-center bg-neutral-100 dark:bg-neutral-700 rounded-lg">
@@ -54,10 +56,9 @@ export default function BottomSheet({ children, Icon, title, description, onClos
             <XMarkIcon className="size-6 text-neutral-600 dark:text-neutral-400" />
           </button>
         </div>
-        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto">
-          {children}
-        </div>
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar">{children}</div>
       </div>
-    </>
-  ), document.body);
+    </>,
+    document.body,
+  );
 }

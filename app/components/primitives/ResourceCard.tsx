@@ -1,7 +1,7 @@
-import { memo, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { memo } from "react";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { sanitizeClassName } from "~/prophandlers";
+import HoverTooltip from "./HoverTooltip";
 
 type ResourceCardProps = {
   resourceType?: ResourceTypeEnum;
@@ -58,64 +58,12 @@ function ResourceCard({
     imageSizeClass = "size-10";
   }
 
-  const cardRef = useRef<HTMLDivElement>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
-  const [tooltip, setTooltip] = useState<{
-    top: number;
-    left: number;
-    placement: "top" | "bottom";
-  } | null>(null);
-
-  const showTooltip = () => {
-    if (!name || typeof window === "undefined") {
-      return;
-    }
-
-    const rect = cardRef.current?.getBoundingClientRect();
-    if (!rect) {
-      return;
-    }
-
-    setTooltip({
-      top: rect.top - 8,
-      left: rect.left + rect.width / 2,
-      placement: "top",
-    });
-  };
-
-  const hideTooltip = () => setTooltip(null);
-
-  useLayoutEffect(() => {
-    if (!tooltip || !tooltipRef.current || !cardRef.current || typeof window === "undefined") {
-      return;
-    }
-
-    const tooltipRect = tooltipRef.current.getBoundingClientRect();
-    const cardRect = cardRef.current.getBoundingClientRect();
-    const viewportPadding = 8;
-    const minLeft = viewportPadding + tooltipRect.width / 2;
-    const maxLeft = window.innerWidth - viewportPadding - tooltipRect.width / 2;
-    const nextLeft = Math.min(Math.max(cardRect.left + cardRect.width / 2, minLeft), maxLeft);
-    const placement = cardRect.top - tooltipRect.height - viewportPadding < viewportPadding ? "bottom" : "top";
-    const nextTop = placement === "top" ? cardRect.top - viewportPadding : cardRect.bottom + viewportPadding;
-
-    if (tooltip.left !== nextLeft || tooltip.top !== nextTop || tooltip.placement !== placement) {
-      setTooltip({
-        top: nextTop,
-        left: nextLeft,
-        placement,
-      });
-    }
-  }, [tooltip]);
-
   return (
-    <div
-      ref={cardRef}
+    <HoverTooltip
+      as="div"
       className="relative group"
-      onMouseEnter={showTooltip}
-      onMouseLeave={hideTooltip}
-      onFocus={showTooltip}
-      onBlur={hideTooltip}
+      content={name}
+      disabled={!name}
     >
       <div
         className={`shrink-0 ${sizeClass} rounded-lg border border-neutral-200 dark:border-neutral-700 ${rarityBgClass(rarity)} flex items-center justify-center overflow-hidden`}
@@ -145,34 +93,7 @@ function ResourceCard({
           loading="lazy"
         />
       )}
-      {name &&
-        tooltip &&
-        typeof document !== "undefined" &&
-        createPortal(
-          <div
-            ref={tooltipRef}
-            className={sanitizeClassName(`
-              pointer-events-none fixed z-layer-navigation max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-white shadow-lg
-              dark:border-neutral-600 dark:bg-neutral-800
-              ${tooltip.placement === "top" ? "-translate-y-full" : ""}
-            `)}
-            style={{ top: tooltip.top, left: tooltip.left }}
-          >
-            {name}
-            <div
-              className={sanitizeClassName(`
-                absolute left-1/2 -translate-x-1/2 border-4 border-transparent
-                ${
-                  tooltip.placement === "top"
-                    ? "top-full border-t-neutral-900 dark:border-t-neutral-800"
-                    : "bottom-full border-b-neutral-900 dark:border-b-neutral-800"
-                }
-              `)}
-            />
-          </div>,
-          document.body,
-        )}
-    </div>
+    </HoverTooltip>
   );
 }
 

@@ -47,7 +47,7 @@ export default function RelationshipStudentPicker({
 
       {savedStudents.length > 0 && (
         <div className="mt-2">
-          <div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1 lg:mx-0 lg:grid lg:grid-cols-1 lg:overflow-visible lg:px-0 lg:pb-0">
+          <div className="grid grid-cols-1 gap-1 lg:max-h-96 lg:overflow-y-auto">
             {savedStudents.map((student) => (
               <SavedStudentButton
                 key={student.uid}
@@ -86,14 +86,14 @@ function SavedStudentButton({
     <button
       type="button"
       className={sanitizeClassName(`
-        flex min-w-24 shrink-0 items-center gap-1.5 rounded-md border px-2 py-1.5 text-left transition-colors lg:min-w-0 lg:shrink lg:gap-2 lg:py-2
-        ${selected ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/30" : "border-border bg-background hover:bg-muted"}
+        flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors
+        ${selected ? "border-blue-300 bg-blue-50 hover:bg-blue-500/10 dark:border-blue-700 dark:bg-blue-950/30" : "border-border bg-background hover:bg-muted"}
       `)}
       onClick={onSelect}
     >
-      <ProfileImage studentUid={student.uid} imageSize={8} />
+      <ProfileImage studentUid={student.uid} imageSize={6} />
       <span className="min-w-0 flex-1">
-        <span className="block max-w-20 truncate text-xs font-medium text-foreground lg:max-w-none lg:text-sm">{visibleName}</span>
+        <span className="block truncate text-xs font-medium text-foreground">{visibleName}</span>
       </span>
       {student.currentLevel && (
         <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-rose-50 px-1.5 py-0.5 text-xs font-semibold text-rose-600 dark:bg-rose-950/30 dark:text-rose-300">

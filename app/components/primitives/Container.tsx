@@ -1,15 +1,17 @@
 import type { ReactNode } from "react";
+import { cn } from "~/lib/utils";
 
-type RaidStatsCardProps = {
+type ContainerProps = {
   title: string;
   description?: string;
   action?: ReactNode;
+  className?: string;
   children: ReactNode;
 };
 
-export default function RaidStatsCard({ title, description, action, children }: RaidStatsCardProps) {
+export default function Container({ title, description, action, className, children }: ContainerProps) {
   return (
-    <section className="rounded-lg bg-neutral-50 p-4 dark:bg-neutral-900">
+    <section className={cn("rounded-lg bg-neutral-50 p-4 dark:bg-neutral-900", className)}>
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100">{title}</h3>
@@ -21,3 +23,5 @@ export default function RaidStatsCard({ title, description, action, children }: 
     </section>
   );
 }
+
+export type { ContainerProps };

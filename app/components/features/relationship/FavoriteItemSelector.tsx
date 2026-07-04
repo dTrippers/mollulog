@@ -1,18 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
-import { ResourceInventoryGroup, ResourceInventoryTile } from "~/components/features/growth";
-import { LoadingSkeleton, Toggle, useNumberInputFlowNavigation } from "~/components/primitives";
+import { ResourceInventoryTile } from "~/components/features/growth";
+import { Container, LoadingSkeleton, Toggle, useNumberInputFlowNavigation } from "~/components/primitives";
 import type { loader as favoriteItemsLoader } from "~/routes/api.students.$uid.items";
+import { type ItemQuantityBreakdownEntry, QuantityBreakdownTooltipContent } from "./QuantityBreakdownTooltip";
 
 type FavoriteItemSelectorProps = {
   studentUid: string;
 
   quantities: Record<string, number>;
+  itemRequiredQuantities: Record<string, number> | null;
+  itemQuantityBreakdowns: Record<string, ItemQuantityBreakdownEntry[]> | null;
+  ownedQuantities: Record<string, number> | null;
   onQuantitiesChange: (quantities: Record<string, number>) => void;
   onSelectedItemExpChange: (exp: number) => void;
 };
 
-export default function FavoriteItemSelector({ studentUid, quantities, onQuantitiesChange, onSelectedItemExpChange }: FavoriteItemSelectorProps) {
+const INSUFFICIENT_QUANTITY_CLASS = "text-red-600 dark:text-red-400";
+
+export default function FavoriteItemSelector({
+  studentUid,
+  quantities,
+  itemRequiredQuantities,
+  itemQuantityBreakdowns,
+  ownedQuantities,
+  onQuantitiesChange,
+  onSelectedItemExpChange,
+}: FavoriteItemSelectorProps) {
   const [filterFavorited, setFilterFavorited] = useState(true);
   const numberInputFlowNavigation = useNumberInputFlowNavigation();
 
@@ -58,9 +72,10 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
   }, [favoriteItems, onSelectedItemExpChange, quantities]);
 
   return (
-    <ResourceInventoryGroup
+    <Container
       title="선물 목록"
-      controls={
+      description="선물할 개수를 입력하고 예상 도달 랭크를 계산해보세요"
+      action={
         <Toggle
           label="좋아하는 선물만 보기"
           initialState={filterFavorited}
@@ -71,10 +86,15 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
     >
       {!favoriteItems ?
         <LoadingSkeleton /> :
-        <>
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(5rem,1fr))] justify-items-center gap-x-1 gap-y-0">
           {filteredItems.map(({ item, favoriteLevel, exp }) => {
             const quantity = quantities[item.uid] || 0;
             const totalItemExp = exp * quantity;
+            const requiredQuantity = itemRequiredQuantities?.[item.uid] ?? 0;
+            const ownedQuantity = ownedQuantities?.[item.uid] ?? 0;
+            const showQuantityComparison = itemRequiredQuantities !== null && ownedQuantities !== null;
+            const breakdown = itemQuantityBreakdowns?.[item.uid];
+            const isDimmed = requiredQuantity === 0;
             return (
               <ResourceInventoryTile
                 key={item.uid}
@@ -89,20 +109,35 @@ export default function FavoriteItemSelector({ studentUid, quantities, onQuantit
                 quantityLabel="목표"
                 inputProps={numberInputFlowNavigation.getInputProps()}
                 metrics={[
-                  { label: "EXP", value: `+${exp.toLocaleString()}` },
-                  ...(quantity > 0
-                    ? [{
-                        value: `+${totalItemExp.toLocaleString()}`,
-                        valueClassName: "text-emerald-600 dark:text-emerald-400",
-                      }]
+                  { label: "EXP", value: exp.toLocaleString() },
+                  ...(showQuantityComparison
+                    ? [
+                        {
+                          label: "필요",
+                          value: requiredQuantity.toLocaleString(),
+                          tooltip: breakdown && breakdown.length > 0 ? <QuantityBreakdownTooltipContent breakdown={breakdown} /> : undefined,
+                          dimmed: isDimmed,
+                        },
+                        {
+                          label: "보유",
+                          value: ownedQuantity.toLocaleString(),
+                          valueClassName: ownedQuantity < requiredQuantity ? INSUFFICIENT_QUANTITY_CLASS : undefined,
+                          dimmed: isDimmed,
+                        },
+                      ]
                     : []),
+                  {
+                    value: `+${totalItemExp.toLocaleString()}`,
+                    valueClassName: "text-emerald-600 dark:text-emerald-400",
+                    hidden: quantity === 0,
+                  },
                 ]}
                 onQuantityChange={(value) => onQuantitiesChange({ ...quantities, [item.uid]: value })}
               />
             );
           })}
-        </>
+        </div>
       }
-    </ResourceInventoryGroup>
+    </Container>
   );
 }

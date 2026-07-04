@@ -1,4 +1,5 @@
-import { ResourceInventoryGroup, ResourceInventoryTile } from "~/components/features/growth";
+import { ResourceInventoryTile } from "~/components/features/growth";
+import { Container } from "~/components/primitives";
 import { RELATIONSHIP_ITEMS } from "~/models/constants";
 import { getAccumulatedRelationshipExpForLevel } from "~/models/relationship-level";
 
@@ -11,30 +12,36 @@ type RequiredGiftsProps = {
 export default function RequiredGifts({ currentExp: currentExpProp, currentLevel, targetLevel }: RequiredGiftsProps) {
   const currentExp = currentExpProp ?? getAccumulatedRelationshipExpForLevel(currentLevel);
   return (
-    <ResourceInventoryGroup title="필요 선물" className="mb-3 md:mb-4">
-      {RELATIONSHIP_ITEMS.map(({ type, name, exp, item }) => {
-        const remainingExp = getAccumulatedRelationshipExpForLevel(targetLevel) - currentExp;
-        const requiredAmount = Math.max(Math.ceil(remainingExp / exp), 0);
-        const imageUrl = getRelationshipItemImageUrl(type, item?.favoriteLevel);
-        return (
-          <ResourceInventoryTile
-            key={`${type}-${name}-${exp}`}
-            resource={{
-              imageUrl,
-              rarity: item?.rarity ?? 1,
-              name,
-            }}
-            showQuantityInput={false}
-            showName
-            metrics={[
-              {
-                value: `${requiredAmount.toLocaleString()}${item ? "개" : "번"}`,
-              },
-            ]}
-          />
-        );
-      })}
-    </ResourceInventoryGroup>
+    <Container
+      title="필요 선물"
+      description="목표 랭크까지 도달하기 위해 필요한 개수에요"
+      className="mb-3 md:mb-4"
+    >
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(5rem,1fr))] justify-items-center gap-x-1 gap-y-0">
+        {RELATIONSHIP_ITEMS.map(({ type, name, exp, item }) => {
+          const remainingExp = getAccumulatedRelationshipExpForLevel(targetLevel) - currentExp;
+          const requiredAmount = Math.max(Math.ceil(remainingExp / exp), 0);
+          const imageUrl = getRelationshipItemImageUrl(type, item?.favoriteLevel);
+          return (
+            <ResourceInventoryTile
+              key={`${type}-${name}-${exp}`}
+              resource={{
+                imageUrl,
+                rarity: item?.rarity ?? 1,
+                name,
+              }}
+              showQuantityInput={false}
+              showName
+              metrics={[
+                {
+                  value: `${requiredAmount.toLocaleString()}${item ? "개" : "번"}`,
+                },
+              ]}
+            />
+          );
+        })}
+      </div>
+    </Container>
   );
 }
 
