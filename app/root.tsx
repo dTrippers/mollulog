@@ -1,12 +1,11 @@
 import { Suspense, lazy, useEffect, useRef, useState } from "react";
-import type { HeadersFunction, LinksFunction, LoaderFunctionArgs } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
   Links,
   Meta,
   Outlet,
   Scripts,
   ScrollRestoration,
-  data,
   useFetcher,
   useLoaderData,
   useLocation,
@@ -23,9 +22,7 @@ import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { captureClientError } from "./lib/observability.client";
-import { getLogger } from "./lib/observability.server";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
-import { ServerTiming, shouldLogTiming } from "./lib/server-timing.server";
 import { getNavigationBarContents } from "./views/navigation";
 import styles from "./tailwind.css?url";
 
@@ -49,27 +46,18 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env as Env & {
     FRONT_BETTER_STACK_SENTRY_DSN?: string;
   };
-  const { ctx } = context.cloudflare;
-  const timing = new ServerTiming();
-  const startedAt = Date.now();
+  const ctx: ExecutionContext = context.cloudflare.ctx;
 
-  const sensei = await timing.measure("root_auth", () => getActiveSensei(env, request));
-  const preference = await timing.measure("root_preference", () => getPreference(env, request));
-  const navigationBarContents = await timing.measure("root_nav", () =>
-    getNavigationBarContents(env, false, sensei?.id, ctx),
-  );
+  return ctx.tracing.enterSpan("root.loader", async (span) => {
+    const sensei = await ctx.tracing.enterSpan("root_auth", () => getActiveSensei(env, request));
+    const preference = await ctx.tracing.enterSpan("root_preference", () => getPreference(env, request));
+    const navigationBarContents = await ctx.tracing.enterSpan("root_nav", () =>
+      getNavigationBarContents(env, false, sensei?.id, ctx),
+    );
 
-  timing.add("root_total", Date.now() - startedAt);
-  if (shouldLogTiming()) {
-    getLogger(env, ctx, { route: "root.loader" }).info("loader_timing", {
-      route: "root",
-      signedIn: sensei !== null,
-      ...timing.toMetrics(),
-    });
-  }
+    span.setAttribute("signedIn", sensei !== null);
 
-  return data(
-    {
+    return {
       currentUsername: sensei?.username ?? null,
       currentProfileStudentId: sensei?.profileStudentId ?? null,
       darkMode: preference.darkMode ?? true,
@@ -79,18 +67,8 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
         STAGE: env.STAGE ?? "local",
         FRONT_BETTER_STACK_SENTRY_DSN: env.FRONT_BETTER_STACK_SENTRY_DSN ?? "",
       },
-    },
-    { headers: { "Server-Timing": timing.header() } },
-  );
-};
-
-export const headers: HeadersFunction = ({ loaderHeaders }) => {
-  const responseHeaders: Record<string, string> = {};
-  const serverTiming = loaderHeaders.get("Server-Timing");
-  if (serverTiming) {
-    responseHeaders["Server-Timing"] = serverTiming;
-  }
-  return responseHeaders;
+    };
+  });
 };
 
 export const links: LinksFunction = () => [
