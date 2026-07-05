@@ -18,6 +18,12 @@ export default defineConfig(({ mode }) => ({
       persistState: {
         path: process.env.WRANGLER_PERSIST_TO ?? ".wrangler/state",
       },
+      auxiliaryWorkers: [
+        {
+          configPath: "./wrangler.cron.jsonc",
+          viteEnvironment: { name: "cron" },
+        },
+      ],
     }),
     tailwindcss(),
     reactRouter(),
