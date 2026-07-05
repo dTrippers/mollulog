@@ -1,13 +1,6 @@
 import { Bars3BottomLeftIcon, FunnelIcon, QueueListIcon, TableCellsIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  type HeadersFunction,
-  type LoaderFunctionArgs,
-  type MetaFunction,
-  data,
-  useFetcher,
-  useLoaderData,
-} from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { ContentTimeline, ContentTimelineCompact } from "~/components/features/contents";
 import type { ContentTimelineProps } from "~/components/features/contents";
@@ -17,8 +10,6 @@ import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
-import { getLogger } from "~/lib/observability.server";
-import { ServerTiming, shouldLogTiming } from "~/lib/server-timing.server";
 import { canonicalLink } from "~/lib/seo";
 import {
   type ContentCommentSummary,
@@ -56,86 +47,74 @@ export const meta: MetaFunction = ({ location }) => {
 };
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
-  const { env, ctx } = context.cloudflare;
-  const logger = getLogger(env, ctx, { route: "futures.loader" });
-  const timing = new ServerTiming();
-  const startedAt = Date.now();
+  const { env } = context.cloudflare;
+  const ctx: ExecutionContext = context.cloudflare.ctx;
 
-  const rawContentsPromise = timing.measure("future_contents", () => getFutureContents(env, false, ctx));
-  const currentUserPromise = timing.measure("auth", () => getActiveSensei(env, request));
-  const [rawContents, currentUser] = await Promise.all([rawContentsPromise, currentUserPromise]);
-  const contents: FutureContentsLoaderContent[] = rawContents.map((content: FutureContent) => ({
-    uid: content.uid,
-    name: content.name,
-    startAt: content.startAt,
-    endAt: content.endAt,
-    endless: content.endless,
-    contentType: content.contentType,
-    runType: content.runType,
-    contentUid: content.contentUid,
-    recruitmentGroupUid: content.recruitmentGroupUid,
-    imageUrl: content.imageUrl,
-    confirmed: content.confirmed,
-    isSpoiler: content.isSpoiler,
-    tags: content.tags,
-    recruitments: content.recruitments.map(normalizeFutureRecruitment),
-    raidInfo: content.raidInfo,
-  }));
+  return ctx.tracing.enterSpan("futures.loader", async (span) => {
+    const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () => getFutureContents(env, false, ctx));
+    const currentUserPromise = ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
+    const [rawContents, currentUser] = await Promise.all([rawContentsPromise, currentUserPromise]);
+    const contents: FutureContentsLoaderContent[] = rawContents.map((content: FutureContent) => ({
+      uid: content.uid,
+      name: content.name,
+      startAt: content.startAt,
+      endAt: content.endAt,
+      endless: content.endless,
+      contentType: content.contentType,
+      runType: content.runType,
+      contentUid: content.contentUid,
+      recruitmentGroupUid: content.recruitmentGroupUid,
+      imageUrl: content.imageUrl,
+      confirmed: content.confirmed,
+      isSpoiler: content.isSpoiler,
+      tags: content.tags,
+      recruitments: content.recruitments.map(normalizeFutureRecruitment),
+      raidInfo: content.raidInfo,
+    }));
 
-  const allStudentUids = contents
-    .flatMap((content: FutureContentsLoaderContent) =>
-      content.recruitments.map((recruitment: FutureRecruitment) => recruitment.favoriteKey),
-    )
-    .filter((uid): uid is string => typeof uid === "string" && uid.length > 0);
+    const allStudentUids = contents
+      .flatMap((content: FutureContentsLoaderContent) =>
+        content.recruitments.map((recruitment: FutureRecruitment) => recruitment.favoriteKey),
+      )
+      .filter((uid): uid is string => typeof uid === "string" && uid.length > 0);
 
-  const currentUserId = currentUser?.id;
-  const signedIn = currentUser !== null;
-  const recruitmentGroupUids = contents
-    .map((content) => content.recruitmentGroupUid)
-    .filter((uid): uid is string => uid !== null);
-  const [commentSummaries, favoritedStudents, favoritedCounts, recruitmentResults] = await Promise.all([
-    timing.measure("comment_summaries", () =>
-      getContentsCommentSummaries(
-        env,
-        contents.map((content: FutureContentsLoaderContent) => content.uid),
-        currentUserId,
+    const currentUserId = currentUser?.id;
+    const signedIn = currentUser !== null;
+    const recruitmentGroupUids = contents
+      .map((content) => content.recruitmentGroupUid)
+      .filter((uid): uid is string => uid !== null);
+    const [commentSummaries, favoritedStudents, favoritedCounts, recruitmentResults] = await Promise.all([
+      ctx.tracing.enterSpan("comment_summaries", () =>
+        getContentsCommentSummaries(
+          env,
+          contents.map((content: FutureContentsLoaderContent) => content.uid),
+          currentUserId,
+        ),
       ),
-    ),
-    currentUserId ? timing.measure("favorited_students", () => getUserFavoritedStudents(env, currentUserId)) : null,
-    timing.measure("favorited_counts", () => getFavoritedCounts(env, allStudentUids)),
-    currentUserId
-      ? timing.measure("recruitment_results", () =>
-          getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids),
-        )
-      : [],
-  ]);
+      currentUserId
+        ? ctx.tracing.enterSpan("favorited_students", () => getUserFavoritedStudents(env, currentUserId))
+        : null,
+      ctx.tracing.enterSpan("favorited_counts", () => getFavoritedCounts(env, allStudentUids)),
+      currentUserId
+        ? ctx.tracing.enterSpan("recruitment_results", () =>
+            getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids),
+          )
+        : [],
+    ]);
 
-  const payload: FutureContentsLoaderData = {
-    signedIn,
-    contents,
-    favoritedStudents,
-    favoritedCounts,
-    recruitmentResults,
-    commentSummaries,
-  };
+    const payload: FutureContentsLoaderData = {
+      signedIn,
+      contents,
+      favoritedStudents,
+      favoritedCounts,
+      recruitmentResults,
+      commentSummaries,
+    };
 
-  timing.add("total", Date.now() - startedAt);
-  if (shouldLogTiming()) {
-    logger.info("loader_timing", { route: "futures", signedIn, ...timing.toMetrics() });
-  }
+    span.setAttribute("signedIn", signedIn);
 
-  return data(payload, { headers: { "Server-Timing": timing.header() } });
-};
-
-export const headers: HeadersFunction = ({ loaderHeaders, parentHeaders }) => {
-  const responseHeaders: Record<string, string> = {};
-  const serverTiming = [parentHeaders.get("Server-Timing"), loaderHeaders.get("Server-Timing")]
-    .filter((value): value is string => Boolean(value))
-    .join(", ");
-  if (serverTiming) {
-    responseHeaders["Server-Timing"] = serverTiming;
-  }
-  return responseHeaders;
+    return payload;
+  });
 };
 
 function normalizeFutureRecruitment(recruitment: FutureRecruitment): FutureRecruitment {
