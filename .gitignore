@@ -4,6 +4,7 @@ pnpm-workspace.yaml
 /.cache
 /.wrangler
 /build
+/dist
 /public/build
 .env
 .dev.vars

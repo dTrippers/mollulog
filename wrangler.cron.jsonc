@@ -1,0 +1,70 @@
+{
+  "name": "mollulog-cron",
+  "compatibility_date": "2025-06-17",  // https://developers.cloudflare.com/workers/platform/compatibility-dates
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./workers/cron.ts",
+  "workers_dev": false,
+  "preview_urls": false,
+
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "triggers": {
+    "crons": ["*/10 * * * *"]
+  },
+
+  "kv_namespaces": [
+    { "binding": "KV_CACHE", "id": "local_KV_CACHE" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "local_mollulog_db",
+      "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
+      "migrations_dir": "db/migrations"
+    }
+  ],
+  "vars": {
+    "STAGE": "local"
+  },
+
+  // Secrets configuration
+  // - SERVER_BETTER_STACK_SOURCE_TOKEN
+  // - SERVER_BETTER_STACK_SENTRY_DSN
+  "env": {
+    "staging": {
+      "vars": {
+        "STAGE": "staging"
+      },
+      "kv_namespaces": [
+        { "binding": "KV_CACHE", "id": "b957557c116a41168c42136666ef5808" }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "mollulog",
+          "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
+          "migrations_dir": "db/migrations"
+        }
+      ]
+    },
+    "production": {
+      "vars": {
+        "STAGE": "prod"
+      },
+      "kv_namespaces": [
+        { "binding": "KV_CACHE", "id": "a613bc84ffeb4362b3deaa05c617a7b3"}
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "mollulog",
+          "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
+          "migrations_dir": "db/migrations"
+        }
+      ],
+      "logpush": true
+    }
+  }
+}
