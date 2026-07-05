@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { type UtcIsoString, normalizeUtcTimestamp, nowUtcIso } from "~/lib/date-time";
+import { withD1Session } from "~/lib/d1-session";
 import { watchIo } from "~/lib/io-watchdog";
 import { cacheKey, cacheQuery, fetchCached } from "~/lib/cache";
 import { senseisTable } from "./sensei";
@@ -433,6 +434,7 @@ export async function getCommunityFeedPage(
     return loadCommunityFeedPage(env, options);
   }
 
+  const sessionEnv = withD1Session(env, "first-unconstrained");
   const { postType, postTypes, authorUserId, youtubeChannelKey, includeEngagement = true } = options;
   const types = postTypes && postTypes.length > 0 ? [...postTypes].sort() : postType ? [postType] : [];
   const feedCacheKey = cacheKey(
@@ -451,7 +453,7 @@ export async function getCommunityFeedPage(
   return fetchCached(
     env,
     feedCacheKey,
-    () => loadCommunityFeedPage(env, options),
+    () => loadCommunityFeedPage(sessionEnv, options),
     COMMUNITY_FEED_CACHE_FRESH_TTL,
     false,
     {
