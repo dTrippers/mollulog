@@ -1,11 +1,11 @@
-import { describe, expect, it, jest } from "@jest/globals";
-import { type PyroxenePlannerOptions, normalizePyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import { afterAll, beforeAll, describe, expect, it, jest } from "@jest/globals";
+import { normalizePyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import {
-  type PickupResources,
-  type PyroxeneTimelineBandMode,
   buildTimeline,
   calculatePickupTrialMoments,
+  type PickupResources,
+  type PyroxeneTimelineBandMode,
 } from "~/domain/pyroxene-timeline";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
 
@@ -227,14 +227,14 @@ describe("normalizePyroxenePlannerOptions", () => {
 });
 
 describe("buildTimeline collected sources", () => {
-  it("keeps a zero-delta total assault row when the raid reward is already collected", () => {
+  it("ignores collected raid source keys for total assault rewards", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [raidItem({ uid: "raid-total", type: "total_assault", name: "비나" })],
       options: { ...defaultOptions, raid: { tier: "gold" } },
       collectedSourceKeys: ["raid:raid-total"],
     });
 
-    const raidEntry = timeline.find((entry) => entry.source.collectedSourceKey === "raid:raid-total");
+    const raidEntry = timeline.find((entry) => entry.source.uid === "raid-total");
 
     expect(raidEntry).toEqual(
       expect.objectContaining({
@@ -242,15 +242,15 @@ describe("buildTimeline collected sources", () => {
           type: "raid",
           uid: "raid-total",
           description: "총력전 비나",
-          collectedSourceKey: "raid:raid-total",
         }),
-        resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
-        accumulatedResources: { pyroxene: 100_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+        resourceDelta: { pyroxene: 1_650, oneTimeTicket: 0, tenTimeTicket: 0 },
+        accumulatedResources: { pyroxene: 101_650, oneTimeTicket: 0, tenTimeTicket: 0 },
       }),
     );
+    expect(raidEntry?.source.collectedSourceKey).toBeUndefined();
   });
 
-  it("keeps a zero-delta elimination row and skips ticket grant and expiry when already collected", () => {
+  it("ignores collected raid source keys for elimination rewards", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [raidItem({ uid: "raid-elimination", type: "elimination", name: "고즈" })],
       collectedSourceKeys: ["raid:raid-elimination"],
@@ -258,21 +258,22 @@ describe("buildTimeline collected sources", () => {
 
     const raidEntries = timeline.filter((entry) => entry.source.type === "raid");
 
-    expect(raidEntries).toHaveLength(1);
-    expect(raidEntries[0]).toEqual(
+    expect(raidEntries).toHaveLength(2);
+    const rewardEntry = timeline.find((entry) => entry.source.uid === "raid-elimination");
+    expect(rewardEntry).toEqual(
       expect.objectContaining({
         date: expect.objectContaining({}),
         source: expect.objectContaining({
           uid: "raid-elimination",
           description: "대결전 고즈",
-          collectedSourceKey: "raid:raid-elimination",
         }),
-        resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
-        accumulatedResources: { pyroxene: 100_000, oneTimeTicket: 0, tenTimeTicket: 0 },
+        resourceDelta: { pyroxene: 650, oneTimeTicket: 0, tenTimeTicket: 1 },
+        accumulatedResources: { pyroxene: 100_650, oneTimeTicket: 0, tenTimeTicket: 1 },
       }),
     );
-    expect(raidEntries[0].date.format("YYYY-MM-DD")).toBe("2026-07-03");
-    expect(timeline.find((entry) => entry.source.uid === "raid-elimination::ten-time-ticket-expiry")).toBeUndefined();
+    expect(rewardEntry?.date.format("YYYY-MM-DD")).toBe("2026-07-31");
+    expect(rewardEntry?.source.collectedSourceKey).toBeUndefined();
+    expect(timeline.find((entry) => entry.source.uid === "raid-elimination::ten-time-ticket-expiry")).toBeDefined();
   });
 
   it("keeps a zero-delta event reward row when the event reward is already collected", () => {
@@ -348,6 +349,14 @@ describe("buildTimeline collected sources", () => {
 });
 
 describe("buildTimeline pyroxene balance band", () => {
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date("2026-07-01T00:00:00.000Z") });
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   it("calculates the average-mode linear central path while keeping the uncapped probability band", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [

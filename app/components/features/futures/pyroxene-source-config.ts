@@ -27,7 +27,7 @@ export const PYROXENE_SOURCE_ROW_GROUP_LABELS: Record<PyroxeneSourceRowGroup, st
 export const PYROXENE_SOURCE_ROW_DEFINITIONS = [
   {
     id: "event_reward",
-    label: "이벤트 보상",
+    label: "이벤트/스토리 보상",
     group: "regular",
     action: "none",
     visibilityTargets: [{ type: "event_reward" }],

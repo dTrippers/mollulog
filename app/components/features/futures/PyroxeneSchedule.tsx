@@ -3,8 +3,8 @@ import { useMemo } from "react";
 import { EmptyView, SubTitle } from "~/components/primitives";
 import type { PyroxeneCalculationOptions, PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import type { PyroxeneCollectedSourceCandidate, PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import { collectedSourceKeyForEventReward, collectedSourceKeyForRaid } from "~/domain/pyroxene-sources";
-import { PYROXENE, type PickupResources } from "~/domain/pyroxene-timeline";
+import { collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
+import type { PickupResources } from "~/domain/pyroxene-timeline";
 import PyroxeneAvailableOneTimePackages from "./PyroxeneAvailableOneTimePackages";
 import PyroxeneChart from "./PyroxeneChart";
 import PyroxeneInitialResources from "./PyroxeneInitialResources";
@@ -151,14 +151,6 @@ export default function PyroxeneSchedule({
       if (item.event?.earnablePyroxene && !dayjs(item.event.since).isAfter(currentDate)) {
         sourceKeys.add(collectedSourceKeyForEventReward(item.event.uid));
       }
-
-      if (
-        item.raid &&
-        (item.raid.type === "total_assault" || item.raid.type === "elimination") &&
-        !dayjs(item.raid.since).isAfter(currentDate)
-      ) {
-        sourceKeys.add(collectedSourceKeyForRaid(item.raid.uid));
-      }
     }
 
     return sourceKeys;
@@ -174,24 +166,10 @@ export default function PyroxeneSchedule({
           tenTimeTicket: 0,
         });
       }
-
-      if (item.raid?.type === "total_assault") {
-        resourcesBySourceKey.set(collectedSourceKeyForRaid(item.raid.uid), {
-          pyroxene: PYROXENE.RAID_TOTAL_ASSAULT_BASE + PYROXENE.RAID_TOTAL_ASSAULT_TIER[options.raid.tier],
-          oneTimeTicket: 0,
-          tenTimeTicket: 0,
-        });
-      } else if (item.raid?.type === "elimination") {
-        resourcesBySourceKey.set(collectedSourceKeyForRaid(item.raid.uid), {
-          pyroxene: PYROXENE.RAID_ELIMINATION_BASE,
-          oneTimeTicket: 0,
-          tenTimeTicket: 1,
-        });
-      }
     }
 
     return resourcesBySourceKey;
-  }, [scheduleItems, options.raid.tier]);
+  }, [scheduleItems]);
   const collectedSourceCandidates = useMemo<PyroxeneCollectedSourceCandidate[]>(() => {
     const currentDate = dayjs();
     const isOngoing = (
@@ -212,26 +190,7 @@ export default function PyroxeneSchedule({
         return [
           {
             sourceKey,
-            title: `이벤트 클리어 보상 · ${item.event.name}`,
-            description: "이미 받아 현재 보유 재화에 포함됨 → 그래프에서 중복 제외",
-          },
-        ];
-      }
-
-      if (
-        item.raid &&
-        (item.raid.type === "total_assault" || item.raid.type === "elimination") &&
-        isOngoing(item.raid.since, item.raid.until)
-      ) {
-        const sourceKey = collectedSourceKeyForRaid(item.raid.uid);
-        if (collectedSourceKeySet.has(sourceKey)) {
-          return [];
-        }
-        return [
-          {
-            sourceKey,
-            title: `${item.raid.type === "total_assault" ? "총력전" : "대결전"} 보상 · ${item.raid.name}`,
-            description: "이미 받아 현재 보유 재화에 포함됨 → 그래프에서 중복 제외",
+            title: `이벤트/스토리 · ${item.event.name}`,
           },
         ];
       }

@@ -1,7 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  DEFAULT_PYROXENE_TIMELINE_DISPLAY,
-  PYROXENE_SOURCE_DEFINITIONS,
   calculateDailyApChargePyroxene,
   calculatePackageStartDateFromRemainingDays,
   createOptimisticApPackageTimelineItems,
@@ -9,7 +7,9 @@ import {
   createOptimisticBuyTimelineItems,
   createOptimisticMonthlyPackageTimelineItems,
   createOptimisticOtherTimelineItems,
+  DEFAULT_PYROXENE_TIMELINE_DISPLAY,
   normalizePyroxeneTimelineEventAt,
+  PYROXENE_SOURCE_DEFINITIONS,
   togglePyroxeneTimelineSourceVisibility,
 } from "~/domain/pyroxene-sources";
 import {
@@ -42,6 +42,15 @@ describe("pyroxene-sources", () => {
 
     expect(rowSourceTypes).toEqual(sourceTypes);
     expect(new Set(rowSourceTypes).size).toBe(rowSourceTypes.length);
+  });
+
+  it("labels event rewards as event and story rewards", () => {
+    expect(PYROXENE_SOURCE_DEFINITIONS.find((source) => source.type === "event_reward")).toEqual(
+      expect.objectContaining({ label: "이벤트/스토리 보상" }),
+    );
+    expect(PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "event_reward")).toEqual(
+      expect.objectContaining({ label: "이벤트/스토리 보상" }),
+    );
   });
 
   it("keeps monthly package as one row with one-time and daily detail toggles", () => {

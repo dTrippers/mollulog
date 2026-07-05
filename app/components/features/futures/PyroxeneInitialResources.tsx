@@ -109,9 +109,9 @@ export default function PyroxeneInitialResources({
           />
           {collectedSourceCandidates.length > 0 && (
             <div className="mt-4 border-t border-neutral-200 pt-4 dark:border-neutral-700">
-              <p className="text-sm font-semibold">진행 중 보상 정합</p>
+              <p className="text-sm font-semibold">이미 받은 보상</p>
               <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                이미 받아 현재 보유 재화에 포함된 보상만 체크해주세요. 체크한 항목은 그래프에서 중복 제외됩니다.
+                선택한 이벤트 보상은 이후 그래프에서 중복 계산하지 않아요.
               </p>
               <div className="mt-3 space-y-2">
                 {collectedSourceCandidates.map((candidate) => (
@@ -122,7 +122,11 @@ export default function PyroxeneInitialResources({
                     label={
                       <span className="flex flex-col">
                         <span className="font-medium">{candidate.title}</span>
-                        <span className="text-xs text-neutral-500 dark:text-neutral-400">{candidate.description}</span>
+                        {candidate.description && (
+                          <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                            {candidate.description}
+                          </span>
+                        )}
                       </span>
                     }
                   />

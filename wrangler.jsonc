@@ -14,7 +14,7 @@
     "enabled": true,
     "head_sampling_rate": 1,
     "traces": {
-      "enabled": true,
+      "enabled": false,
       "head_sampling_rate": 1
     }
   },

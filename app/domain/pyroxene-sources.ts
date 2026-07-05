@@ -1,6 +1,5 @@
-import dayjs from "~/lib/dayjs";
-
 import { nanoid } from "nanoid/non-secure";
+import dayjs from "~/lib/dayjs";
 
 export type PyroxeneSourceDefinition = {
   type: string;
@@ -10,7 +9,7 @@ export type PyroxeneSourceDefinition = {
 
 export const PYROXENE_SOURCE_DEFINITIONS = [
   { type: "event", label: "모집 소비", defaultVisible: true },
-  { type: "event_reward", label: "이벤트 보상", defaultVisible: true },
+  { type: "event_reward", label: "이벤트/스토리 보상", defaultVisible: true },
   { type: "raid", label: "총력전/대결전 보상", defaultVisible: true },
   { type: "buy", label: "청휘석 구매", defaultVisible: true },
   { type: "package_onetime", label: "패키지 (초회)", defaultVisible: true },
@@ -32,10 +31,6 @@ export const DEFAULT_PYROXENE_TIMELINE_DISPLAY = PYROXENE_SOURCE_DEFINITIONS.fil
 
 export function collectedSourceKeyForEventReward(eventUid: string): string {
   return `event_reward:${eventUid}`;
-}
-
-export function collectedSourceKeyForRaid(raidUid: string): string {
-  return `raid:${raidUid}`;
 }
 
 export const PYROXENE_MONTHLY_PACKAGE_CONFIG = {

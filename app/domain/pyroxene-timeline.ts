@@ -1,12 +1,9 @@
-import dayjs from "dayjs";
+import type { Dayjs } from "dayjs";
 import type { PyroxeneCalculationOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import {
-  calculateDailyApChargePyroxene,
-  collectedSourceKeyForEventReward,
-  collectedSourceKeyForRaid,
-} from "~/domain/pyroxene-sources";
+import { calculateDailyApChargePyroxene, collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
 import { DEFAULT_PICKUP_STUDENT_RATE_BY_TIER } from "~/domain/recruitment-simulator";
+import dayjs from "~/lib/dayjs";
 
 export type PickupResources = {
   pyroxene: number;
@@ -23,7 +20,7 @@ export type TimelineSource = {
 };
 
 export type TimelineDelta = {
-  date: dayjs.Dayjs;
+  date: Dayjs;
   source: TimelineSource;
 
   pickupTrial?: number;
@@ -31,12 +28,12 @@ export type TimelineDelta = {
   pickupTrialCostDistribution?: TrialDistribution;
   resourceDelta?: PickupResources;
   tenTimeTicketLotId?: string;
-  tenTimeTicketExpiresAt?: dayjs.Dayjs;
+  tenTimeTicketExpiresAt?: Dayjs;
   priority?: number;
 };
 
 export type TimelineEntry = {
-  date: dayjs.Dayjs;
+  date: Dayjs;
   source: TimelineSource;
   accumulatedResources: PickupResources;
   accumulatedResourcesBand?: {
@@ -80,7 +77,7 @@ export { calculateDailyApChargePyroxene } from "~/domain/pyroxene-sources";
 type TenTimeTicketLot = {
   id: string;
   count: number;
-  expiresAt?: dayjs.Dayjs;
+  expiresAt?: Dayjs;
 };
 
 type TimelineAccumulationState = {
@@ -131,19 +128,23 @@ function zeroResources(): PickupResources {
   return { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
 }
 
-function getNextMonthlyFirstDate(date: dayjs.Dayjs): dayjs.Dayjs {
+function getNextMonthlyFirstDate(date: Dayjs): Dayjs {
   return date.add(1, "month").startOf("month");
 }
 
-function getNextRepeatedGainDate(repeatedGain: NonNullable<PyroxeneScheduleItem["repeatedGain"]>, date: dayjs.Dayjs) {
+function getNextRepeatedGainDate(repeatedGain: NonNullable<PyroxeneScheduleItem["repeatedGain"]>, date: Dayjs) {
   if (repeatedGain.repeatType === "monthly_first") {
     return getNextMonthlyFirstDate(date);
   }
   return date.add(repeatedGain.repeatIntervalDays ?? 0, "day");
 }
 
-function getEliminationTicketExpiresAt(raidUntil: Date | string): dayjs.Dayjs {
-  return dayjs(raidUntil).add(1, "month").endOf("month");
+function getRaidRewardDate(raidUntil: Date | string): Dayjs {
+  return dayjs(raidUntil).tz("Asia/Seoul").endOf("month").hour(4).minute(0).second(0).millisecond(0);
+}
+
+function getEliminationTicketExpiresAt(rewardAt: Date | string | Dayjs): Dayjs {
+  return dayjs(rewardAt).tz("Asia/Seoul").add(1, "month").endOf("month");
 }
 
 function spendTenTimeTickets(lots: TenTimeTicketLot[], count: number): number {
@@ -855,11 +856,11 @@ export function buildTimeline(
     if (scheduleItem.event) {
       const { event } = scheduleItem;
 
-      // 이벤트 보상 청휘석은 픽업 완료 여부와 무관하게 이벤트 종료일에 수급됩니다.
+      // 보상 청휘석은 픽업 완료 여부와 무관하게 콘텐츠별 보상 시점에 수급됩니다.
       if (event.earnablePyroxene) {
         const collectedSourceKey = collectedSourceKeyForEventReward(event.uid);
         timelineDeltas.push({
-          date: dayjs(event.until),
+          date: dayjs(event.rewardAt ?? event.until),
           source: { type: "event_reward", uid: event.uid, description: event.name, collectedSourceKey },
           resourceDelta: collectedSources.has(collectedSourceKey)
             ? zeroResources()
@@ -926,39 +927,27 @@ export function buildTimeline(
       });
     } else if (scheduleItem.raid) {
       const { raid } = scheduleItem;
-      const collectedSourceKey = collectedSourceKeyForRaid(raid.uid);
+      const rewardAt = getRaidRewardDate(raid.until);
       const raidSource = {
         type: "raid" as const,
         uid: raid.uid,
-        collectedSourceKey,
       };
-      const isCollected = collectedSources.has(collectedSourceKey);
       if (raid.type === "total_assault") {
         const tierReward = PYROXENE.RAID_TOTAL_ASSAULT_TIER[options.raid.tier];
         timelineDeltas.push({
-          date: dayjs(raid.until),
+          date: rewardAt,
           source: { ...raidSource, description: `총력전 ${raid.name}` },
-          resourceDelta: isCollected
-            ? zeroResources()
-            : {
-                pyroxene: PYROXENE.RAID_TOTAL_ASSAULT_BASE + tierReward,
-                oneTimeTicket: 0,
-                tenTimeTicket: 0,
-              },
+          resourceDelta: {
+            pyroxene: PYROXENE.RAID_TOTAL_ASSAULT_BASE + tierReward,
+            oneTimeTicket: 0,
+            tenTimeTicket: 0,
+          },
         });
       } else if (raid.type === "elimination") {
-        if (isCollected) {
-          timelineDeltas.push({
-            date: dayjs(raid.until),
-            source: { ...raidSource, description: `대결전 ${raid.name}` },
-            resourceDelta: zeroResources(),
-          });
-          continue;
-        }
         const ticketLotId = `${raid.uid}::ten-time-ticket`;
-        const ticketExpiresAt = getEliminationTicketExpiresAt(raid.until);
+        const ticketExpiresAt = getEliminationTicketExpiresAt(rewardAt);
         timelineDeltas.push({
-          date: dayjs(raid.until).add(1, "day"),
+          date: rewardAt,
           source: { ...raidSource, description: `대결전 ${raid.name}` },
           resourceDelta: { pyroxene: PYROXENE.RAID_ELIMINATION_BASE, oneTimeTicket: 0, tenTimeTicket: 1 },
           tenTimeTicketLotId: ticketLotId,
@@ -969,7 +958,6 @@ export function buildTimeline(
           source: {
             type: "raid",
             uid: `${raid.uid}::ten-time-ticket-expiry`,
-            collectedSourceKey,
             description: "대결전 10회 모집 티켓 만료",
           },
           tenTimeTicketLotId: ticketLotId,

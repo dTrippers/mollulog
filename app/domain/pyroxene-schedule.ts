@@ -11,6 +11,7 @@ export type PyroxeneScheduleContent =
       name: string;
       since: UtcIsoString;
       until: UtcIsoString;
+      rewardAt?: UtcIsoString;
       earnablePyroxene: number | null;
       tags: string[];
       recruitments: {
@@ -45,6 +46,7 @@ export type PyroxeneScheduleItem = {
     name: string;
     since: UtcIsoString | Date;
     until: UtcIsoString | Date;
+    rewardAt?: UtcIsoString | Date;
     earnablePyroxene: number | null;
     tags: string[];
     recruitments: {
@@ -96,7 +98,7 @@ export type PyroxeneScheduleItem = {
 export type PyroxeneCollectedSourceCandidate = {
   sourceKey: string;
   title: string;
-  description: string;
+  description?: string;
 };
 
 export function buildPyroxeneScheduleItems(
@@ -115,6 +117,7 @@ export function buildPyroxeneScheduleItems(
           name: content.name,
           since: content.since,
           until: content.until,
+          rewardAt: content.rewardAt,
           earnablePyroxene: content.earnablePyroxene ?? null,
           tags: content.tags,
           recruitmentPool: content.recruitmentPool,
