@@ -33,6 +33,13 @@ const SCHEDULED_JOB_TIMEOUT_MS = RUNTIME_TIMEOUTS.scheduled.job;
 const SOURCE_REFRESH_CONCURRENCY = 1;
 const SOURCE_WARM_WINDOW_SECONDS = 60 * 60;
 const SOURCE_WARM_MARKER_KEY = cacheKey("source", "cron-source-warm", 1, cacheQuery({ name: "students-events" }));
+const SOURCE_FORCED_REFRESH_WINDOW_SECONDS = 60 * 60;
+const SOURCE_FORCED_REFRESH_MARKER_KEY = cacheKey(
+  "source",
+  "cron-source-refresh",
+  1,
+  cacheQuery({ name: "baql-sources" }),
+);
 
 async function runSourceRefreshTasks(tasks: Array<() => Promise<unknown>>, errorMessage: string): Promise<void> {
   const errors: unknown[] = [];
@@ -76,18 +83,35 @@ async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
   await markKvCacheWindow(env, SOURCE_WARM_MARKER_KEY);
 }
 
-async function refreshSourceCaches(env: Env): Promise<void> {
+async function refreshForcedSourceCaches(env: Env): Promise<void> {
+  // These BAQL-sourced snapshots change at most a few times a day. Read paths use
+  // fetchSourceCached (long freshness window) so a normal request never blocks on
+  // them; this hourly gate is what lets cron force a refresh instead, without
+  // forcing on every 10-minute tick.
+  if (await isKvCacheWindowFresh(env, SOURCE_FORCED_REFRESH_MARKER_KEY, SOURCE_FORCED_REFRESH_WINDOW_SECONDS)) {
+    return;
+  }
+
   const tasks: Array<() => Promise<unknown>> = [
-    () => syncRawStudents(env),
-    () => warmRecruitmentCache(env),
-    () => warmRaidCache(env),
+    () => syncRawStudents(env, true),
+    () => warmRecruitmentCache(env, true),
+    () => warmRaidCache(env, true),
     () => getMainStories(env, true),
     () => getAllStudentsFavoriteItems(env, true),
-    () => syncAllTimelineContentsMeta(env),
-    () => syncEventContentsList(env),
-    () => warmPeriodicLazySourceCaches(env),
+    () => syncAllTimelineContentsMeta(env, true),
+    () => syncEventContentsList(env, true),
     () => getItemCatalogResources(env, true),
     () => getCampaignFarmingStages(env, true),
+  ];
+
+  await runSourceRefreshTasks(tasks, "One or more hourly forced source refresh tasks failed");
+  await markKvCacheWindow(env, SOURCE_FORCED_REFRESH_MARKER_KEY);
+}
+
+async function refreshSourceCaches(env: Env): Promise<void> {
+  const tasks: Array<() => Promise<unknown>> = [
+    () => refreshForcedSourceCaches(env),
+    () => warmPeriodicLazySourceCaches(env),
   ];
 
   await runSourceRefreshTasks(tasks, "One or more source cache refresh tasks failed");

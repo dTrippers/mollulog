@@ -27,6 +27,16 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     studentUid: uid,
   });
 
+  // Global/uid-independent reads: start these in parallel right away, and swallow
+  // rejections on this reference so a student-detail failure below can't surface
+  // them as unhandled rejections (they're still awaited via Promise.all afterwards).
+  const currentUserPromise = getActiveSensei(env, request);
+  const rawAllStudentsPromise = getAllStudentsMap(env, true);
+  const allRaidsPromise = getAllRaidSchedules(env);
+  for (const p of [currentUserPromise, rawAllStudentsPromise, allRaidsPromise]) {
+    p.catch(() => {});
+  }
+
   let student: Awaited<ReturnType<typeof getStudentDetail>>;
   try {
     student = await getStudentDetail(env, uid);
@@ -47,14 +57,26 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
 
+  // Per-uid reads only start once the uid is confirmed to be a real student, so
+  // bot-scanned/invalid uids don't trigger extra D1 lookups.
+  const tagCountsPromise = getTagCountsByStudent(env, uid);
+  const allGradingsPromise = getStudentGradingsByStudentWithUsers(env, uid, true);
+
   const recruitmentGroupUids = student.recruitments.map(
     (recruitment: { recruitmentGroup: { uid: string } }) => recruitment.recruitmentGroup.uid,
   );
-  const timelineContents = await getTimelineContentsByRecruitmentGroupUids(env, recruitmentGroupUids);
-  const currentUser = await getActiveSensei(env, request);
+
+  const [timelineContents, currentUser, rawAllStudents, tagCounts, allGradings, allRaids] = await Promise.all([
+    getTimelineContentsByRecruitmentGroupUids(env, recruitmentGroupUids),
+    currentUserPromise,
+    rawAllStudentsPromise,
+    tagCountsPromise,
+    allGradingsPromise,
+    allRaidsPromise,
+  ]);
+
   const recruitedStudentTiers = currentUser ? await getRecruitedStudentTiers(env, currentUser.id) : {};
   const myStudentTier = recruitedStudentTiers[student.uid] ?? null;
-  const rawAllStudents = await getAllStudentsMap(env, true);
   const allStudents = Object.fromEntries(
     Object.entries(rawAllStudents).map(([uid, student]) => [
       uid,
@@ -63,9 +85,6 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       },
     ]),
   );
-  const tagCounts = await getTagCountsByStudent(env, uid);
-  const allGradings = await getStudentGradingsByStudentWithUsers(env, uid, true);
-  const allRaids = await getAllRaidSchedules(env);
 
   const sortedGradings = [...allGradings].sort((a, b) => {
     const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();

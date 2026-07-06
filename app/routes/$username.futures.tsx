@@ -9,7 +9,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import type { NestedComment } from "~/models/content";
 import { getFutureContents } from "~/views/futures";
 import { getAllStudentsMap } from "~/models/student";
-import { getStudentSkillItems } from "~/models/student";
+import { getStudentSkillItemsBatch } from "~/models/student";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { Role } from "~/models/student";
 
@@ -50,12 +50,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   );
 
   // Fetch skill items only for favorited students that appear in matched events
-  const skillItemsMap = new Map(
-    await Promise.all([...relevantStudentUids].map(async (uid) => {
-      const data = await getStudentSkillItems(env, uid);
-      return [uid, data] as const;
-    })),
-  );
+  const skillItemsMap = await getStudentSkillItemsBatch(env, [...relevantStudentUids]);
 
   // Build events in the shape FuturePlan expects
   const events = matchedContents.map((content) => ({

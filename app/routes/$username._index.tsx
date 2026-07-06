@@ -23,7 +23,7 @@ function parsePage(request: Request) {
 }
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const sensei = await getRouteSensei(env, params);
   const page = parsePage(request);
 
@@ -54,6 +54,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     postTypes: [...COMMUNITY_VISIBLE_POST_TYPES],
     page,
     pageSize: COMMUNITY_FEED_PAGE_SIZE,
+    ctx,
   });
   const enrichedFeed = await enrichCommunityFeedPosts(env, feedPage.items);
 

@@ -26,8 +26,8 @@ jest.mock("~/lib/cache", () => ({
       .map(([key, value]) => `${key}=${String(value)}`)
       .join("::") || "all",
   fetchLazySourceCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
-  fetchRouteCached: jest.fn((_env: unknown, _ctx: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
   fetchSourceCached: jest.fn((_env: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
+  fetchRouteCached: jest.fn((_env: unknown, _ctx: unknown, _key: string, fn: () => Promise<unknown>) => fn()),
 }));
 
 jest.mock("~/lib/baql", () => ({
@@ -41,8 +41,8 @@ const mockedGetAllTimelineContentsMeta = getAllTimelineContentsMeta as jest.Mock
 >;
 const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
 const mockedFetchLazySourceCached = fetchLazySourceCached as jest.MockedFunction<typeof fetchLazySourceCached>;
-const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
 const mockedFetchSourceCached = fetchSourceCached as jest.MockedFunction<typeof fetchSourceCached>;
+const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
 
 const env = {} as Env;
 

@@ -70,7 +70,7 @@ function parsePage(request: Request) {
 }
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   const postTypes = parseCommunityPostTypes(request);
   const page = parsePage(request);
@@ -81,6 +81,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     youtubeChannelKey: "kr",
     page,
     pageSize: COMMUNITY_FEED_PAGE_SIZE,
+    ctx,
   });
   const enrichedFeed = await enrichCommunityFeedPosts(env, feedPage.items);
 

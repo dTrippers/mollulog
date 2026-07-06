@@ -235,14 +235,14 @@ export async function findRaidScheduleSummaryByTypeAndJpSeason(
   );
 }
 
-export async function warmRaidCache(env: Env) {
+export async function warmRaidCache(env: Env, forceRefresh = true) {
   const now = nowUtcIso();
-  const schedules = await getAllRaidSchedules(env, true);
+  const schedules = await getAllRaidSchedules(env, forceRefresh);
 
   await Promise.all(
     schedules
       .filter((schedule) => schedule.endAt && isInstantAfter(schedule.endAt, now))
-      .map((schedule) => getRaidSchedule(env, schedule.uid, true)),
+      .map((schedule) => getRaidSchedule(env, schedule.uid, forceRefresh)),
   );
 
   return schedules;

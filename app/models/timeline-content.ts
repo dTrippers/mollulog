@@ -311,13 +311,8 @@ async function fetchAllTimelineContentsMetaFromDb(env: Env): Promise<TimelineCon
   return rows.map(toRaw).map(toTimelineContent);
 }
 
-export async function syncAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
-  return fetchSourceCached(
-    env,
-    ALL_TIMELINE_CONTENTS_META_CACHE_KEY,
-    () => fetchAllTimelineContentsMetaFromDb(env),
-    true,
-  );
+export async function syncAllTimelineContentsMeta(env: Env, forceRefresh = true): Promise<TimelineContent[]> {
+  return fetchSourceCached(env, ALL_TIMELINE_CONTENTS_META_CACHE_KEY, () => fetchAllTimelineContentsMetaFromDb(env), forceRefresh);
 }
 
 export async function getAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {

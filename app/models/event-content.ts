@@ -171,8 +171,8 @@ export async function getEventContentsList(
   );
 }
 
-export function syncEventContentsList(env: Env): Promise<EventContentsListQuery["eventContents"]> {
-  return getEventContentsList(env, true);
+export function syncEventContentsList(env: Env, forceRefresh = true): Promise<EventContentsListQuery["eventContents"]> {
+  return getEventContentsList(env, forceRefresh);
 }
 
 //

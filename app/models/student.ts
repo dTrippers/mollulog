@@ -78,8 +78,8 @@ async function fetchStudentsFromBaql(): Promise<Student[]> {
   return data.students satisfies Student[];
 }
 
-export async function syncRawStudents(env: Env): Promise<Student[]> {
-  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, true);
+export async function syncRawStudents(env: Env, forceRefresh = true): Promise<Student[]> {
+  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, forceRefresh);
 }
 
 async function getRawStudents(env: Env): Promise<Student[]> {

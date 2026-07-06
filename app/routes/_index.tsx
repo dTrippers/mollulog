@@ -46,6 +46,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
         postTypes: ["student_review", "event_opinion"],
         pageSize: 4,
         includeEngagement: false,
+        ctx,
       }),
     );
     const recentCommunityFeedPromise = recentCommunityPagePromise.then((recentCommunityPage) =>
@@ -64,7 +65,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
         };
       });
     const youtubeSectionsPromise = ctx.tracing.enterSpan("youtube", () =>
-      getHomeYoutubeSections(env).catch((error) => {
+      getHomeYoutubeSections(env, ctx).catch((error) => {
         logger.error("Failed to load home youtube sections", error);
         return [];
       }),

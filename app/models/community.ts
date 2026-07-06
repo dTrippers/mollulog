@@ -390,6 +390,8 @@ export type CommunityFeedPageOptions = {
   authorUserId?: number;
   youtubeChannelKey?: "jp" | "kr";
   includeEngagement?: boolean;
+  /** Lets the cached-feed path background-refresh via `ctx.waitUntil` instead of firing-and-forgetting past the response. */
+  ctx?: ExecutionContext;
 };
 
 export type CommunityFeedPageResult = {
@@ -404,11 +406,16 @@ export type CommunityFeedPageResult = {
 const COMMUNITY_FEED_CACHE_VERSION = "v1";
 
 /**
- * Staleness window for the cached anonymous community feed. Matches the 60s edge
- * cache so a new public post surfaces within the same delay everywhere. Signed-in
- * users bypass this cache, so a poster always sees their own post immediately.
+ * Freshness window for the cached anonymous community feed. Within this window a
+ * request gets the cached page as-is. Past it, the cache is served stale
+ * (bounded by COMMUNITY_FEED_CACHE_MAX_STALE_TTL) while a single background
+ * request refreshes it, so no request ever blocks on regeneration and a new
+ * public post still surfaces within roughly this window. Signed-in users bypass
+ * this cache, so a poster always sees their own post immediately.
  */
-const COMMUNITY_FEED_CACHE_TTL = 60;
+const COMMUNITY_FEED_CACHE_FRESH_TTL = 12;
+/** Safety net so low-traffic filter combinations don't serve arbitrarily old data between visits. */
+const COMMUNITY_FEED_CACHE_MAX_STALE_TTL = 3 * 60;
 const COMMUNITY_FEED_SLOW_WARN_MS = 1000;
 
 export async function getCommunityFeedPage(
@@ -441,7 +448,19 @@ export async function getCommunityFeedPage(
     }),
   );
 
-  return fetchCached(env, feedCacheKey, () => loadCommunityFeedPage(env, options), COMMUNITY_FEED_CACHE_TTL);
+  return fetchCached(
+    env,
+    feedCacheKey,
+    () => loadCommunityFeedPage(env, options),
+    COMMUNITY_FEED_CACHE_FRESH_TTL,
+    false,
+    {
+      ctx: options.ctx,
+      maxStaleTtl: COMMUNITY_FEED_CACHE_MAX_STALE_TTL,
+      mode: "route",
+      swr: true,
+    },
+  );
 }
 
 async function loadCommunityFeedPage(

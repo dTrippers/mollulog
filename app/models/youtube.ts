@@ -57,11 +57,15 @@ export type HomeYoutubeChannelSection = {
   videos: HomeYoutubeVideo[];
 };
 
-export async function getHomeYoutubeSections(env: Env): Promise<HomeYoutubeChannelSection[]> {
+export async function getHomeYoutubeSections(
+  env: Env,
+  ctx?: ExecutionContext,
+): Promise<HomeYoutubeChannelSection[]> {
   const page = await getCommunityFeedPage(env, {
     postTypes: ["youtube_video"],
     pageSize: 8,
     includeEngagement: false,
+    ctx,
   });
 
   const sectionsByKey = new Map<YoutubeChannelKey, HomeYoutubeChannelSection>();

@@ -72,6 +72,7 @@ jest.mock("~/lib/observability.server", () => ({
 import { runScheduledJobs } from "~/jobs/scheduled";
 
 const SOURCE_WARM_MARKER_KEY = "source::cron-source-warm::v1::name=students-events";
+const SOURCE_FORCED_REFRESH_MARKER_KEY = "source::cron-source-refresh::v1::name=baql-sources";
 
 const mockedSyncYoutubeCommunityPosts = syncYoutubeCommunityPosts as jest.MockedFunction<
   typeof syncYoutubeCommunityPosts
@@ -98,9 +99,9 @@ const mockedGetStudentGearData = getStudentGearData as jest.MockedFunction<typeo
 const mockedWarmRecruitmentCache = warmRecruitmentCache as jest.MockedFunction<typeof warmRecruitmentCache>;
 const mockedWarmRaidCache = warmRaidCache as jest.MockedFunction<typeof warmRaidCache>;
 
-function createEnv(markerRaw: string | null = null) {
+function createEnv(markers: Record<string, string | null> = {}) {
   const kv = {
-    get: jest.fn(async (key: string) => (key === SOURCE_WARM_MARKER_KEY ? markerRaw : null)),
+    get: jest.fn(async (key: string) => markers[key] ?? null),
     put: jest.fn(async (_key: string, _value: string, _opts?: { expirationTtl?: number }) => undefined),
     delete: jest.fn(async (_key: string) => undefined),
     list: jest.fn(async (_opts?: { prefix?: string; cursor?: string }) => ({ keys: [], list_complete: true })),
@@ -145,14 +146,13 @@ describe("runScheduledJobs", () => {
 
     await runScheduledJobs(env, ctx);
 
-    expect(mockedSyncYoutubeCommunityPosts).toHaveBeenCalledWith(env);
-    expect(mockedSyncRawStudents).toHaveBeenCalledWith(env);
-    expect(mockedWarmRecruitmentCache).toHaveBeenCalledWith(env);
-    expect(mockedWarmRaidCache).toHaveBeenCalledWith(env);
+    expect(mockedSyncRawStudents).toHaveBeenCalledWith(env, true);
+    expect(mockedWarmRecruitmentCache).toHaveBeenCalledWith(env, true);
+    expect(mockedWarmRaidCache).toHaveBeenCalledWith(env, true);
     expect(mockedGetMainStories).toHaveBeenCalledWith(env, true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(env, true);
-    expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(env);
-    expect(mockedSyncEventContentsList).toHaveBeenCalledWith(env);
+    expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(env, true);
+    expect(mockedSyncEventContentsList).toHaveBeenCalledWith(env, true);
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedGetStudentGearData).toHaveBeenCalledWith(env, ["10000", "10001"], false);
@@ -164,29 +164,60 @@ describe("runScheduledJobs", () => {
       JSON.stringify({ _ver: 2, data: true, cachedAt: now }),
       { expirationTtl: 30 * 24 * 60 * 60 },
     );
+    expect(kv.put).toHaveBeenCalledWith(
+      SOURCE_FORCED_REFRESH_MARKER_KEY,
+      JSON.stringify({ _ver: 2, data: true, cachedAt: now }),
+      { expirationTtl: 30 * 24 * 60 * 60 },
+    );
   });
 
-  it("skips per-uid source warming when the cron marker is fresh", async () => {
+  it("skips per-uid source warming when its marker is fresh but still forces the hourly BAQL refresh", async () => {
     const now = 1_800_000_000_000;
     jest.spyOn(Date, "now").mockReturnValue(now);
-    const { env, kv } = createEnv(JSON.stringify({ _ver: 2, data: true, cachedAt: now - 30 * 60 * 1000 }));
+    const { env, kv } = createEnv({
+      [SOURCE_WARM_MARKER_KEY]: JSON.stringify({ _ver: 2, data: true, cachedAt: now - 30 * 60 * 1000 }),
+    });
 
     await runScheduledJobs(env, {} as ExecutionContext);
 
     expect(kv.get).toHaveBeenCalledWith(SOURCE_WARM_MARKER_KEY);
-    expect(kv.put).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalledWith(SOURCE_WARM_MARKER_KEY, expect.anything(), expect.anything());
     expect(mockedGetAllStudents).not.toHaveBeenCalled();
     expect(mockedGetStudentSkillItemsBatch).not.toHaveBeenCalled();
     expect(mockedGetStudentGearData).not.toHaveBeenCalled();
     expect(mockedWarmActiveUpcomingEventContent).not.toHaveBeenCalled();
-    expect(mockedSyncRawStudents).toHaveBeenCalledWith(env);
-    expect(mockedSyncEventContentsList).toHaveBeenCalledWith(env);
+    expect(mockedSyncRawStudents).toHaveBeenCalledWith(env, true);
+    expect(mockedSyncEventContentsList).toHaveBeenCalledWith(env, true);
+  });
+
+  it("skips the hourly forced BAQL refresh when its marker is fresh but still runs per-uid source warming", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const { env } = createEnv({
+      [SOURCE_FORCED_REFRESH_MARKER_KEY]: JSON.stringify({ _ver: 2, data: true, cachedAt: now - 30 * 60 * 1000 }),
+    });
+
+    await runScheduledJobs(env, {} as ExecutionContext);
+
+    expect(mockedSyncRawStudents).not.toHaveBeenCalled();
+    expect(mockedWarmRecruitmentCache).not.toHaveBeenCalled();
+    expect(mockedWarmRaidCache).not.toHaveBeenCalled();
+    expect(mockedGetMainStories).not.toHaveBeenCalled();
+    expect(mockedGetAllStudentsFavoriteItems).not.toHaveBeenCalled();
+    expect(mockedSyncAllTimelineContentsMeta).not.toHaveBeenCalled();
+    expect(mockedSyncEventContentsList).not.toHaveBeenCalled();
+    expect(mockedGetItemCatalogResources).not.toHaveBeenCalled();
+    expect(mockedGetCampaignFarmingStages).not.toHaveBeenCalled();
+    expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
+    expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
   });
 
   it("runs per-uid source warming and updates the cron marker when the marker is stale", async () => {
     const now = 1_800_000_000_000;
     jest.spyOn(Date, "now").mockReturnValue(now);
-    const { env, kv } = createEnv(JSON.stringify({ _ver: 2, data: true, cachedAt: now - 61 * 60 * 1000 }));
+    const { env, kv } = createEnv({
+      [SOURCE_WARM_MARKER_KEY]: JSON.stringify({ _ver: 2, data: true, cachedAt: now - 61 * 60 * 1000 }),
+    });
 
     await runScheduledJobs(env, {} as ExecutionContext);
 

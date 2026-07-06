@@ -80,6 +80,15 @@ const INFLIGHT_WAIT_TIMEOUT_MS = RUNTIME_TIMEOUTS.cache.inflightWait;
 export const DEFAULT_KV_EXPIRATION_TTL = 30 * 24 * 60 * 60;
 export const SOURCE_CACHE_MAX_STALE_TTL = 10 * 24 * 60 * 60;
 export const SOURCE_CACHE_EXPIRATION_TTL = 30 * 24 * 60 * 60;
+/**
+ * Freshness window for BAQL-sourced snapshots that the scheduled cron job keeps
+ * warm (student roster, main stories, farming stages, item catalog, recruitment
+ * groups, raid schedules, event contents). This upstream data changes at most a
+ * few times a day, so an hourly refresh cadence is enough — cron passes
+ * `forceRefresh: false` and relies on this TTL instead of forcing a refetch on
+ * every 10-minute tick.
+ */
+export const SOURCE_CRON_REFRESH_TTL = 60 * 60;
 export const ROUTE_CACHE_FRESH_TTL = 10 * 60;
 export const ROUTE_CACHE_MAX_STALE_TTL = 24 * 60 * 60;
 export const ROUTE_CACHE_EXPIRATION_TTL = 7 * 24 * 60 * 60;
