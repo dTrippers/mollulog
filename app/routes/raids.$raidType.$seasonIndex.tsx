@@ -11,7 +11,7 @@ import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
 import { canonicalLink } from "~/lib/seo";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
-import { getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
+import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
 import { loadRaidSeasonPage } from "~/views/raid";
 
 function getDefenseTypeSetLabel(defenseTypeSet: RaidDefenseTypeSet) {
@@ -23,17 +23,9 @@ function getAvailableDefenseTypeSet(
   requestedDefenseTypeSet: string | null,
   requestedDefenseType: string | null,
 ): RaidDefenseTypeSet {
-  const requestedSet = defenseTypeSets.find(
-    (defenseTypeSet) => getRaidDefenseTypeSetKey(defenseTypeSet) === requestedDefenseTypeSet,
+  return (
+    getRaidDefenseTypeSetByQuery(defenseTypeSets, requestedDefenseTypeSet, requestedDefenseType) ?? defenseTypeSets[0]
   );
-  if (requestedSet) {
-    return requestedSet;
-  }
-
-  const requestedPrimaryDefense = defenseTypeSets.find(
-    ({ primaryDefenseType }) => primaryDefenseType === requestedDefenseType,
-  );
-  return requestedPrimaryDefense ?? defenseTypeSets[0];
 }
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
@@ -103,7 +95,7 @@ export default function RaidPage() {
 
   const [panel, setPanel] = useState<PagePanelProps | undefined>(undefined);
   useEffect(() => {
-    if (pathname !== `${raidPath}/ranks`) {
+    if (pathname !== `${raidPath}/ranks` && pathname !== `${raidPath}/videos`) {
       setPanel(undefined);
     }
   }, [pathname, raidPath]);
@@ -147,6 +139,7 @@ export default function RaidPage() {
       description="총력전/대결전의 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
       belowTitle={<RaidSelector raids={allRaids} currentRaid={currentRaid ?? null} />}
       panels={panel ? [panel] : undefined}
+      contentWidth={pathname.endsWith("/videos") ? "full" : "narrow"}
       screens={[
         {
           text: "시즌 통계",
@@ -172,22 +165,20 @@ export default function RaidPage() {
     >
       {currentRaid.defenseTypeSets.length > 1 && !pathname.endsWith("/compare") && (
         <div className="my-4">
-          {!pathname.endsWith("/videos") && (
-            <FilterButtons
-              surface="page"
-              key={`filters-${currentRaid.uid}`}
-              Icon={ShieldCheckIcon}
-              buttonProps={currentRaid.defenseTypeSets.map((defenseTypeSet) => ({
-                text: getDefenseTypeSetLabel(defenseTypeSet),
-                subText: defenseTypeSet.difficulty ? difficultyLocale[defenseTypeSet.difficulty] : undefined,
-                color: defenseTypeColor[defenseTypeSet.primaryDefenseType],
-                active: getRaidDefenseTypeSetKey(defenseTypeSet) === selectedDefenseTypeSetKey,
-                onToggle: () => selectDefenseTypeSet(defenseTypeSet),
-              }))}
-              exclusive
-              atLeastOne
-            />
-          )}
+          <FilterButtons
+            surface="page"
+            key={`filters-${currentRaid.uid}`}
+            Icon={ShieldCheckIcon}
+            buttonProps={currentRaid.defenseTypeSets.map((defenseTypeSet) => ({
+              text: getDefenseTypeSetLabel(defenseTypeSet),
+              subText: defenseTypeSet.difficulty ? difficultyLocale[defenseTypeSet.difficulty] : undefined,
+              color: defenseTypeColor[defenseTypeSet.primaryDefenseType],
+              active: getRaidDefenseTypeSetKey(defenseTypeSet) === selectedDefenseTypeSetKey,
+              onToggle: () => selectDefenseTypeSet(defenseTypeSet),
+            }))}
+            exclusive
+            atLeastOne
+          />
         </div>
       )}
       <Outlet

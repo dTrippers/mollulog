@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { Defense, Difficulty } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
+import type { RaidDefenseTypeSet } from "../../../app/models/raid";
 import {
   findRaidScheduleSummaryByTypeAndSeason,
   getAllRaidSchedules,
+  getRaidDefenseTypeSetByQuery,
   getRaidScheduleByTypeAndSeason,
 } from "../../../app/models/raid";
 
@@ -58,6 +61,39 @@ describe("getAllRaidSchedules", () => {
       endAfter: null,
       raidType: "total_assault",
     });
+  });
+});
+
+describe("getRaidDefenseTypeSetByQuery", () => {
+  const lightSet: RaidDefenseTypeSet = {
+    difficulty: Difficulty.Torment,
+    defenseTypes: [Defense.Light],
+    primaryDefenseType: Defense.Light,
+    secondaryDefenseTypes: [],
+  };
+  const specialSet: RaidDefenseTypeSet = {
+    difficulty: Difficulty.Insane,
+    defenseTypes: [Defense.Special, Defense.Elastic],
+    primaryDefenseType: Defense.Special,
+    secondaryDefenseTypes: [Defense.Elastic],
+  };
+
+  it("uses the full defense type set key when present", () => {
+    expect(getRaidDefenseTypeSetByQuery([lightSet, specialSet], "insane:special,elastic", Defense.Light)).toBe(
+      specialSet,
+    );
+  });
+
+  it("falls back to the legacy primary defense type query", () => {
+    expect(getRaidDefenseTypeSetByQuery([lightSet, specialSet], null, Defense.Special)).toBe(specialSet);
+  });
+
+  it("uses the first available set when the query does not match", () => {
+    expect(getRaidDefenseTypeSetByQuery([lightSet, specialSet], "unknown", "unknown")).toBe(lightSet);
+  });
+
+  it("returns null when no defense type set exists", () => {
+    expect(getRaidDefenseTypeSetByQuery([], null, null)).toBeNull();
   });
 });
 

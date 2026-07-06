@@ -1,12 +1,19 @@
 import dayjs from "dayjs";
+import type { ParsedRaidRankDocument } from "~/lib/ranks/ranks";
 import { getRaidSchedule } from "~/models/raid";
 
 type RaidSchedule = NonNullable<Awaited<ReturnType<typeof getRaidSchedule>>>;
 
 export type VideoSort = "published_at_desc" | "score_desc";
 
-export const DEFAULT_VIDEO_SORT: VideoSort = "published_at_desc";
+export const DEFAULT_VIDEO_SORT: VideoSort = "score_desc";
 export const RAID_VIDEOS_PAGE_SIZE = 20;
+
+export type RaidVideoRankMatch = {
+  rank: number;
+  finalRank: number;
+  parties: ParsedRaidRankDocument["parties"];
+};
 
 export type RaidVideoItem = {
   title: string;
@@ -15,6 +22,7 @@ export type RaidVideoItem = {
   youtubeId: string;
   thumbnailUrl: string;
   publishedAt: string;
+  rankMatch?: RaidVideoRankMatch;
 };
 
 export type RaidVideosData = {

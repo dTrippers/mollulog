@@ -187,16 +187,8 @@ function toRaidPartySlot({
     tier: slot.student.tier,
     isAssist: slot.student.isAssist,
     grayscale: isUnrecruited,
-    badge: isUnrecruited ? <UnrecruitedBadge /> : null,
+    unrecruited: isUnrecruited,
   };
-}
-
-function UnrecruitedBadge() {
-  return (
-    <span className="pointer-events-none absolute top-1 right-0 origin-top-right scale-75 rounded-sm bg-neutral-900/80 px-1 py-0.5 text-xs font-bold leading-none text-white shadow-sm dark:bg-neutral-50/90 dark:text-neutral-900">
-      미모집
-    </span>
-  );
 }
 
 function getOftenUsedPartyKey({ maxRank, maxScore, parties }: RaidOftenUsedParty, index: number): string {

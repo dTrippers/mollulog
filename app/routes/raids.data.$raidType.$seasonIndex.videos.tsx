@@ -1,8 +1,8 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { raidTypeFromParam } from "~/domain/raid";
 import { fetchRaidVideos } from "~/lib/ranks";
-import { getRaidScheduleByTypeAndSeason } from "~/models/raid";
-import { RAID_VIDEOS_PAGE_SIZE, type RaidVideosData, getVideoDateRange, parseVideoSort } from "~/models/raid-videos";
+import { getRaidDefenseTypeSetByQuery, getRaidScheduleByTypeAndSeason } from "~/models/raid";
+import { getVideoDateRange, parseVideoSort, RAID_VIDEOS_PAGE_SIZE, type RaidVideosData } from "~/models/raid-videos";
 
 export type { RaidVideosData };
 
@@ -36,6 +36,11 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
   const limit = Number.isNaN(parsedLimit) ? RAID_VIDEOS_PAGE_SIZE : parsedLimit;
   const offset = Number.isNaN(parsedOffset) ? 0 : parsedOffset;
   const sort = parseVideoSort(url.searchParams.get("sort"));
+  const defenseTypeSet = getRaidDefenseTypeSetByQuery(
+    currentRaid.defenseTypeSets,
+    url.searchParams.get("defenseTypeSet"),
+    url.searchParams.get("defenseType"),
+  );
   const videoDateRange = await getVideoDateRange(env, currentRaid);
   if (!videoDateRange) {
     return null;
@@ -45,6 +50,7 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     return await fetchRaidVideos({
       raidType: currentRaid.raidType,
       boss: currentRaid.raidBoss.uid,
+      defenseType: currentRaid.raidType === "elimination" ? defenseTypeSet?.primaryDefenseType : undefined,
       from: videoDateRange.from,
       to: videoDateRange.to,
       limit,

@@ -3,6 +3,7 @@ import type { Defense, Difficulty as GraphqlDifficulty } from "~/graphql/graphql
 import { runQuery } from "~/lib/baql";
 import { cacheKey, cacheQuery, fetchSourceCached } from "~/lib/cache";
 import { compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 const ALL_RAID_SCHEDULES_CACHE_KEY = cacheKey("source", "raid-schedule", 1, cacheQuery({ region: "gl" }));
 
@@ -31,6 +32,28 @@ export function getRaidDefenseTypeSetKey(defenseTypeSet: {
   defenseTypes: readonly Defense[];
 }) {
   return `${defenseTypeSet.difficulty ?? "none"}:${defenseTypeSet.defenseTypes.join(",")}`;
+}
+
+export function getRaidDefenseTypeSetByQuery(
+  defenseTypeSets: RaidDefenseTypeSet[],
+  requestedDefenseTypeSet: string | null,
+  requestedDefenseType: string | null,
+): RaidDefenseTypeSet | null {
+  if (defenseTypeSets.length === 0) {
+    return null;
+  }
+
+  const requestedSet = defenseTypeSets.find(
+    (defenseTypeSet) => getRaidDefenseTypeSetKey(defenseTypeSet) === requestedDefenseTypeSet,
+  );
+  if (requestedSet) {
+    return requestedSet;
+  }
+
+  const requestedPrimaryDefense = defenseTypeSets.find(
+    ({ primaryDefenseType }) => primaryDefenseType === requestedDefenseType,
+  );
+  return requestedPrimaryDefense ?? defenseTypeSets[0];
 }
 
 export type NormalizedRaidSchedule = Omit<RawRaidSchedule, "startAt" | "endAt" | "jpSchedule" | "defenseTypeSets"> & {
@@ -103,7 +126,7 @@ function normalizeRaidSchedule<
   };
 }
 
-async function runRaidScheduleDetailQuery(env: Env, uid: string) {
+async function runRaidScheduleDetailQuery(_env: Env, uid: string) {
   const { data, error } = await runQuery(raidScheduleDetailQuery, { uid });
   if (error) {
     throw "failed to fetch raid schedule";

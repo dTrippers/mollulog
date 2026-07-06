@@ -23,6 +23,7 @@ export type RaidPartySlot = {
   level?: number | null;
   isAssist?: boolean | null;
   grayscale?: boolean;
+  unrecruited?: boolean;
   badge?: ReactNode;
 };
 
@@ -203,7 +204,12 @@ function PartyStudentCard({
         popups={slot.name && actions.length > 0 ? actions : undefined}
         popupId={slot.name && actions.length > 0 ? popupId : undefined}
       />
-      {slot.badge}
+      {slot.badge ??
+        (slot.unrecruited ? (
+          <span className="pointer-events-none absolute top-1 right-0 origin-top-right scale-75 rounded-sm bg-neutral-900/80 px-1 py-0.5 text-xs font-bold leading-none text-white shadow-sm dark:bg-neutral-50/90 dark:text-neutral-900">
+            미모집
+          </span>
+        ) : null)}
     </div>
   );
 }

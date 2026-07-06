@@ -1,11 +1,17 @@
+import { FunnelIcon } from "@heroicons/react/24/outline";
+import { useEffect, useMemo, useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useOutletContext } from "react-router";
-import { RaidVideosScreen } from "~/components/features/raids";
+import { getActiveSensei } from "~/auth/authenticator.server";
+import { getMaxLevelAt, RaidVideosScreen } from "~/components/features/raids";
 import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
 import { fetchRaidVideos } from "~/lib/ranks";
-import { getRaidScheduleByTypeAndSeason } from "~/models/raid";
-import { RAID_VIDEOS_PAGE_SIZE, getVideoDateRange, parseVideoSort } from "~/models/raid-videos";
+import { getRaidDefenseTypeSetByQuery, getRaidScheduleByTypeAndSeason } from "~/models/raid";
+import { getVideoDateRange, parseVideoSort, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
+import { getRecruitedStudentTiers } from "~/models/recruited-student";
+import { getAllStudentsMap } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
+import RaidVideosPanel from "./raids.$raidType.$seasonIndex._components/RaidVideosPanel";
 import { useRaidVideosFeed } from "./raids.$raidType.$seasonIndex._components/useRaidVideosFeed";
 
 function createErrorResponse(message: string, status: number) {
@@ -34,43 +40,106 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
 
   const url = new URL(request.url);
   const sort = parseVideoSort(url.searchParams.get("sort"));
-  const videoDateRange = await getVideoDateRange(env, currentRaid);
+  const defenseTypeSet = getRaidDefenseTypeSetByQuery(
+    currentRaid.defenseTypeSets,
+    url.searchParams.get("defenseTypeSet"),
+    url.searchParams.get("defenseType"),
+  );
+  const [rawAllStudents, videoDateRange, sensei] = await Promise.all([
+    getAllStudentsMap(env, true),
+    getVideoDateRange(env, currentRaid),
+    getActiveSensei(env, request),
+  ]);
+  const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
+  const allStudents = Object.fromEntries(
+    Object.entries(rawAllStudents).map(([uid, student]) => [
+      uid,
+      {
+        name: student.name,
+        attackType: student.attackType,
+        defenseType: student.defenseType,
+        role: student.role,
+      },
+    ]),
+  );
+
   if (!videoDateRange) {
-    return null;
+    return {
+      initialData: null,
+      allStudents,
+      recruitedStudentTiers,
+      hasRecruitedStudentData: sensei !== null,
+    };
   }
 
   try {
-    return await fetchRaidVideos({
+    const initialData = await fetchRaidVideos({
       raidType: currentRaid.raidType,
       boss: currentRaid.raidBoss.uid,
+      defenseType: currentRaid.raidType === "elimination" ? defenseTypeSet?.primaryDefenseType : undefined,
       from: videoDateRange.from,
       to: videoDateRange.to,
       limit: RAID_VIDEOS_PAGE_SIZE,
       offset: 0,
       sort,
     });
+    return {
+      initialData,
+      allStudents,
+      recruitedStudentTiers,
+      hasRecruitedStudentData: sensei !== null,
+    };
   } catch {
     throw createErrorResponse("공략 영상을 불러오는 중 오류가 발생했어요", 500);
   }
 };
 
 export default function RaidVideos() {
-  const { currentRaid } = useOutletContext<RaidPageContext>();
-  const initialData = useLoaderData<typeof loader>();
+  const { currentRaid, defenseType, setPanel } = useOutletContext<RaidPageContext>();
+  const { initialData, allStudents, recruitedStudentTiers, hasRecruitedStudentData } =
+    useLoaderData<typeof loader>();
   const { allVideos, hasMore, isLoading, loadingRef, sort, setSort } = useRaidVideosFeed({
     initialData,
     raidType: raidTypeToParam(currentRaid.raidType),
     seasonIndex: currentRaid.seasonIndex,
+    defenseType,
   });
+  const [onlyWithParty, setOnlyWithParty] = useState(false);
+  const [showUnrecruitedStudents, setShowUnrecruitedStudents] = useState(true);
+  const visibleVideos = useMemo(
+    () => (onlyWithParty ? allVideos.filter((video) => (video.rankMatch?.parties.length ?? 0) > 0) : allVideos),
+    [allVideos, onlyWithParty],
+  );
+
+  useEffect(() => {
+    setPanel({
+      title: "필터 및 정렬",
+      Icon: FunnelIcon,
+      children: (
+        <RaidVideosPanel
+          sort={sort}
+          onSortChange={setSort}
+          onlyWithParty={onlyWithParty}
+          onOnlyWithPartyChange={setOnlyWithParty}
+          showUnrecruitedStudents={showUnrecruitedStudents}
+          onShowUnrecruitedStudentsChange={setShowUnrecruitedStudents}
+          canShowUnrecruitedStudents={hasRecruitedStudentData}
+        />
+      ),
+    });
+  }, [hasRecruitedStudentData, onlyWithParty, setPanel, setSort, showUnrecruitedStudents, sort]);
 
   return (
     <RaidVideosScreen
-      videos={allVideos}
+      videos={visibleVideos}
       hasMore={hasMore}
-      sort={sort}
-      setSort={setSort}
       isLoading={isLoading}
       loadingRef={loadingRef}
+      allStudents={allStudents}
+      maxLevel={getMaxLevelAt(currentRaid.startAt ?? new Date())}
+      recruitedStudentTiers={recruitedStudentTiers}
+      showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
+      emptyText={onlyWithParty ? "편성 정보가 있는 공략 영상이 없어요" : undefined}
     />
   );
 }

@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { fetchRaidVideos } from "../../../../app/lib/ranks/videos";
 
 jest.mock("../../../../app/lib/ranks/base", () => ({
+  createProtobufRootCache: jest.fn(() => jest.fn()),
+  fetchProtobuf: jest.fn(),
   RANK_API_BASE_URL: "https://ranks.baql.net",
 }));
 
 jest.mock("~/models/raid-videos", () => ({
-  DEFAULT_VIDEO_SORT: "published_at_desc",
+  DEFAULT_VIDEO_SORT: "score_desc",
   RAID_VIDEOS_PAGE_SIZE: 20,
 }));
 
@@ -27,6 +29,15 @@ describe("fetchRaidVideos", () => {
               youtubeId: "abc123",
               thumbnailUrl: "https://img.youtube.com/vi/abc123/maxresdefault.jpg",
               publishedAt: "2026-04-01T03:00:00Z",
+              rankMatch: {
+                rank: 123,
+                finalRank: 120,
+                parties: [
+                  {
+                    students: [{ uid: "10085", level: 90, tier: 5, weaponTier: 4, isAssist: false }, null],
+                  },
+                ],
+              },
             },
             {
               title: "시로쿠로 인세인",
@@ -52,6 +63,7 @@ describe("fetchRaidVideos", () => {
         limit: 12,
         offset: 24,
         sort: "published_at_desc",
+        defenseType: "special",
       }),
     ).resolves.toEqual({
       videos: [
@@ -62,6 +74,31 @@ describe("fetchRaidVideos", () => {
           youtubeId: "abc123",
           thumbnailUrl: "https://img.youtube.com/vi/abc123/maxresdefault.jpg",
           publishedAt: "2026-04-01T03:00:00Z",
+          rankMatch: {
+            rank: 123,
+            finalRank: 120,
+            parties: [
+              {
+                partyIndex: 0,
+                slots: [
+                  {
+                    slotIndex: 0,
+                    tier: 9,
+                    level: 90,
+                    isAssist: false,
+                    studentUid: "10085",
+                  },
+                  {
+                    slotIndex: 1,
+                    tier: null,
+                    level: null,
+                    isAssist: null,
+                    studentUid: null,
+                  },
+                ],
+              },
+            ],
+          },
         },
         {
           title: "시로쿠로 인세인",
@@ -70,6 +107,7 @@ describe("fetchRaidVideos", () => {
           youtubeId: "def456",
           thumbnailUrl: "https://img.youtube.com/vi/def456/maxresdefault.jpg",
           publishedAt: "2026-04-02T03:00:00Z",
+          rankMatch: undefined,
         },
       ],
       total: 142,
@@ -84,6 +122,7 @@ describe("fetchRaidVideos", () => {
     expect(url.pathname).toBe("/v1/videos");
     expect(url.searchParams.get("raidType")).toBe("elimination");
     expect(url.searchParams.get("boss")).toBe("hovercraft");
+    expect(url.searchParams.get("defenseType")).toBe("special");
     expect(url.searchParams.get("from")).toBe("2026-04-01T03:00:00.000Z");
     expect(url.searchParams.get("to")).toBe("2026-04-29T03:00:00.000Z");
     expect(url.searchParams.get("sort")).toBe("published_at_desc");

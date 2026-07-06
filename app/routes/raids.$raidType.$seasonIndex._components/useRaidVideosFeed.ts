@@ -1,20 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator, useSearchParams } from "react-router";
-import {
-  parseVideoSort,
-  type RaidVideoItem,
-  RAID_VIDEOS_PAGE_SIZE,
-  type VideoSort,
-} from "~/models/raid-videos";
+import { parseVideoSort, RAID_VIDEOS_PAGE_SIZE, type RaidVideoItem, type VideoSort } from "~/models/raid-videos";
 import type { RaidVideosData } from "~/routes/raids.data.$raidType.$seasonIndex.videos";
 
 type UseRaidVideosFeedParams = {
   initialData: RaidVideosData;
   raidType: string;
   seasonIndex: number;
+  defenseType: string;
 };
 
-export function useRaidVideosFeed({ initialData, raidType, seasonIndex }: UseRaidVideosFeedParams) {
+export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseType }: UseRaidVideosFeedParams) {
   const fetcher = useFetcher<RaidVideosData>();
   const revalidator = useRevalidator();
 
@@ -29,6 +25,7 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex }: UseRai
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement | null>(null);
   const prevSortRef = useRef<VideoSort>(sort);
+  const prevDefenseTypeRef = useRef(defenseType);
   const isResettingRef = useRef(false);
   const lastInitialDataKeyRef = useRef<string | null>(null);
 
@@ -50,12 +47,25 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex }: UseRai
   }, [revalidator, setSearchParams, sort]);
 
   useEffect(() => {
+    if (prevDefenseTypeRef.current === defenseType) {
+      return;
+    }
+
+    prevDefenseTypeRef.current = defenseType;
+    isResettingRef.current = true;
+    setAllVideos([]);
+    setHasMore(false);
+    setOffset(0);
+    setIsLoading(true);
+  }, [defenseType]);
+
+  useEffect(() => {
     if (revalidator.state !== "idle") {
       return;
     }
 
     const currentSort = parseVideoSort(searchParams.get("sort"));
-    const currentKey = `${raidType}:${seasonIndex}:${currentSort}`;
+    const currentKey = `${raidType}:${seasonIndex}:${defenseType}:${currentSort}`;
     if (isResettingRef.current || lastInitialDataKeyRef.current !== currentKey) {
       lastInitialDataKeyRef.current = currentKey;
       isResettingRef.current = false;
@@ -64,7 +74,7 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex }: UseRai
       setOffset(initialData?.videos.length ?? 0);
       setIsLoading(false);
     }
-  }, [initialData, raidType, revalidator.state, searchParams, seasonIndex]);
+  }, [defenseType, initialData, raidType, revalidator.state, searchParams, seasonIndex]);
 
   useEffect(() => {
     if (fetcher.state !== "idle" || fetcher.data === undefined) {
@@ -98,9 +108,10 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex }: UseRai
     params.set("limit", String(RAID_VIDEOS_PAGE_SIZE));
     params.set("sort", sort);
     params.set("offset", String(offset));
+    params.set("defenseType", defenseType);
 
     fetcher.load(`/raids/data/${raidType}/${seasonIndex}/videos?${params.toString()}`);
-  }, [fetcher, hasMore, isLoading, offset, raidType, seasonIndex, sort]);
+  }, [defenseType, fetcher, hasMore, isLoading, offset, raidType, seasonIndex, sort]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

@@ -3,6 +3,16 @@ import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import type { RaidVideosData, VideoSort } from "~/models/raid-videos";
 import { DEFAULT_VIDEO_SORT, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
 import { RANK_API_BASE_URL } from "./base";
+import { convertRawPartySlot, type RawPartySlotStudent } from "./ranks";
+
+export type RankMatchApiResponse = {
+  raidType?: string | null;
+  season?: number | null;
+  defenseType?: string | null;
+  rank?: number | null;
+  finalRank?: number | null;
+  parties?: Array<{ students?: RawPartySlotStudent[] | null } | null> | null;
+};
 
 export type VideosApiResponse = {
   videos?: Array<{
@@ -15,6 +25,7 @@ export type VideosApiResponse = {
     boss?: string | null;
     defenseType?: string | null;
     score?: number | null;
+    rankMatch?: RankMatchApiResponse | null;
   }> | null;
   total?: number | null;
   hasMore?: boolean | null;
@@ -57,23 +68,16 @@ export async function fetchRaidVideos({
     url.searchParams.set("defenseType", defenseType);
   }
 
-  const response = await fetchWithTimeout(
-    url,
-    {},
-    RANK_VIDEOS_FETCH_TIMEOUT_MS,
-    "ranks.videos.fetch",
-    { url: url.toString() },
-  );
+  const response = await fetchWithTimeout(url, {}, RANK_VIDEOS_FETCH_TIMEOUT_MS, "ranks.videos.fetch", {
+    url: url.toString(),
+  });
   if (!response.ok) {
     throw new Error(`failed to fetch raid videos: ${response.status}`);
   }
 
-  const data = (await readBodyWithTimeout(
-    () => response.json(),
-    RANK_VIDEOS_BODY_TIMEOUT_MS,
-    "ranks.videos.body",
-    { url: url.toString() },
-  )) as VideosApiResponse;
+  const data = (await readBodyWithTimeout(() => response.json(), RANK_VIDEOS_BODY_TIMEOUT_MS, "ranks.videos.body", {
+    url: url.toString(),
+  })) as VideosApiResponse;
   return {
     videos:
       data.videos?.map((video) => ({
@@ -83,6 +87,16 @@ export async function fetchRaidVideos({
         youtubeId: video.youtubeId ?? "",
         thumbnailUrl: video.thumbnailUrl ?? "",
         publishedAt: video.publishedAt ?? "",
+        rankMatch: video.rankMatch
+          ? {
+              rank: video.rankMatch.rank ?? 0,
+              finalRank: video.rankMatch.finalRank ?? 0,
+              parties: (video.rankMatch.parties ?? []).map((party, partyIndex) => ({
+                partyIndex,
+                slots: (party?.students ?? []).map((slot, slotIndex) => convertRawPartySlot(slot, slotIndex)),
+              })),
+            }
+          : undefined,
       })) ?? [],
     total: data.total ?? 0,
     hasMore: data.hasMore ?? false,
