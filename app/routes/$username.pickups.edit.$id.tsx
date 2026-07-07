@@ -11,7 +11,7 @@ import {
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
-import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
+import { Button, FormContainer, Textarea, Title } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import {
   createRecruitmentResultStudentsFromPickupHistory,
@@ -449,87 +449,91 @@ export default function EditPickup() {
   };
 
   return (
-    <>
+    <div className="space-y-8">
       <Title text="모집 이력 관리" />
 
-      <SubTitle text="모집 이벤트" />
-      {isEditing ? (
-        initialEvent && (
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
-            <p className="whitespace-pre-line font-semibold text-neutral-950 dark:text-neutral-50">
-              {initialEvent.name}
-            </p>
-            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-              {formatInstant(initialEvent.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
-            </p>
-          </div>
-        )
-      ) : (
-        <EventSelector
-          label="이벤트"
-          description="모집을 진행한 이벤트를 선택해주세요."
-          name="eventUid"
-          events={events}
-          currentEventUid={eventUid}
-          maxVisibleEvents={PICKUP_EVENT_SELECTOR_LIMIT}
-          placeholder="이벤트 선택"
-          searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
-          onSelect={(uid) => {
-            setEventUid(uid);
-            setExchangedStudentUids([]);
-          }}
-        />
-      )}
-
-      <SubTitle text="모집 결과" />
-      <div className="mb-4">
-        <Button
-          text={showImporter ? "외부 데이터 닫기" : "외부 데이터 가져오기"}
-          icon={DocumentArrowDownIcon}
-          variant="tint"
-          onClick={() => setShowImporter((prev) => !prev)}
-        />
-      </div>
-      {showImporter && (
-        <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
-          <PickupHistoryImporter
-            tier3Students={tier3Students}
-            onImport={({ totalCount, tier3Count, tier3StudentIds }) => {
-              setTotalCount(totalCount);
-              setTier3Count(tier3Count);
-              setTier3StudentUids(tier3StudentIds);
+      <FormContainer title="모집 이벤트">
+        {isEditing ? (
+          initialEvent && (
+            <div className="rounded-lg border border-border bg-background p-4">
+              <p className="whitespace-pre-line font-semibold text-foreground">{initialEvent.name}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {formatInstant(initialEvent.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
+              </p>
+            </div>
+          )
+        ) : (
+          <EventSelector
+            label="이벤트"
+            description="모집을 진행한 이벤트를 선택해주세요."
+            name="eventUid"
+            events={events}
+            currentEventUid={eventUid}
+            maxVisibleEvents={PICKUP_EVENT_SELECTOR_LIMIT}
+            placeholder="이벤트 선택"
+            searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
+            onSelect={(uid) => {
+              setEventUid(uid);
+              setExchangedStudentUids([]);
             }}
           />
-        </div>
-      )}
-      <PickupHistoryEditor
-        tier3Students={tier3Students}
-        totalCount={totalCount}
-        tier3Count={tier3Count}
-        tier3StudentIds={visibleTier3StudentUids}
-        skipTier3StudentList={skipTier3StudentList}
-        exchangedStudentIds={exchangedStudentUids}
-        exchangeableStudents={
-          selectedEvent?.recruitments.flatMap((recruitment) =>
-            canExchangeRecruitmentStudent(recruitment) && recruitment.student ? [recruitment.student] : [],
-          ) ?? []
-        }
-        onTotalCountChange={handleTotalCountChange}
-        onTier3CountChange={handleTier3CountChange}
-        onTier3StudentIdsChange={setTier3StudentUids}
-        onSkipTier3StudentListChange={setSkipTier3StudentList}
-        onExchangedStudentIdsChange={setExchangedStudentUids}
-      />
+        )}
+      </FormContainer>
 
-      <SubTitle text="모집 결과 의견 (선택)" />
-      <Textarea
-        value={comment}
-        rows={4}
-        description="입력하지 않아도 저장할 수 있어요."
-        placeholder="남긴 의견은 다른 사람에게 공개돼요."
-        onChange={setComment}
-      />
-      <div className="mt-8 flex flex-col items-start gap-2">
+      <FormContainer
+        title="모집 결과"
+        description="총 모집 횟수와 획득한 ★3 학생, 모집 포인트 교환 학생을 입력해주세요."
+      >
+        <div>
+          <Button
+            text={showImporter ? "외부 데이터 닫기" : "외부 데이터 가져오기"}
+            icon={DocumentArrowDownIcon}
+            variant="tint"
+            onClick={() => setShowImporter((prev) => !prev)}
+          />
+        </div>
+        {showImporter && (
+          <div className="rounded-lg border border-border bg-background p-4">
+            <PickupHistoryImporter
+              tier3Students={tier3Students}
+              onImport={({ totalCount, tier3Count, tier3StudentIds }) => {
+                setTotalCount(totalCount);
+                setTier3Count(tier3Count);
+                setTier3StudentUids(tier3StudentIds);
+              }}
+            />
+          </div>
+        )}
+        <PickupHistoryEditor
+          tier3Students={tier3Students}
+          totalCount={totalCount}
+          tier3Count={tier3Count}
+          tier3StudentIds={visibleTier3StudentUids}
+          skipTier3StudentList={skipTier3StudentList}
+          exchangedStudentIds={exchangedStudentUids}
+          exchangeableStudents={
+            selectedEvent?.recruitments.flatMap((recruitment) =>
+              canExchangeRecruitmentStudent(recruitment) && recruitment.student ? [recruitment.student] : [],
+            ) ?? []
+          }
+          onTotalCountChange={handleTotalCountChange}
+          onTier3CountChange={handleTier3CountChange}
+          onTier3StudentIdsChange={setTier3StudentUids}
+          onSkipTier3StudentListChange={setSkipTier3StudentList}
+          onExchangedStudentIdsChange={setExchangedStudentUids}
+        />
+        <Textarea
+          label="모집 결과 의견"
+          value={comment}
+          rows={4}
+          description="입력하지 않아도 저장할 수 있어요."
+          placeholder="남긴 의견은 다른 사람에게 공개돼요."
+          onChange={setComment}
+          containerClassName="mt-0 mb-0"
+        />
+      </FormContainer>
+
+      <div className="flex flex-col items-start gap-2">
         <Button
           text="모집 결과 저장"
           variant="primary"
@@ -540,6 +544,6 @@ export default function EditPickup() {
           <p className="text-sm text-neutral-500 dark:text-neutral-400">{saveUnavailableReason}</p>
         )}
       </div>
-    </>
+    </div>
   );
 }

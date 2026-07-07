@@ -5,12 +5,12 @@ import {
   KeyIcon,
   LinkIcon,
 } from "@heroicons/react/24/outline";
-import { type ElementType, type ReactNode, useEffect, useState } from "react";
+import { type ElementType, useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
-import { Button, Input, Title } from "~/components/primitives";
+import { Button, FormContainer, Input, Title } from "~/components/primitives";
 import { nowUtcIso } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
@@ -156,26 +156,6 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   return data<ActionData>({ intent, success: true, savedAt: nowUtcIso() });
 };
 
-function EditSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className="space-y-5 rounded-xl border border-border bg-card p-5 text-card-foreground">
-      <div className="space-y-1">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
-      </div>
-      {children}
-    </section>
-  );
-}
-
 function SaveSubmitButton({
   idleLabel,
   isSubmitting,
@@ -308,7 +288,7 @@ export default function EditProfile() {
     <div className="space-y-8">
       <Title text="프로필 관리" />
 
-      <EditSection title="프로필 정보" description="프로필 정보는 다른 사람에게 표시돼요">
+      <FormContainer title="프로필 정보" description="프로필 정보는 다른 사람에게 표시돼요">
         <Form
           method="put"
           className="space-y-6"
@@ -327,9 +307,9 @@ export default function EditProfile() {
             />
           </div>
         </Form>
-      </EditSection>
+      </FormContainer>
 
-      <EditSection title="블루 아카이브 계정 정보" description="계정 정보는 다른 사람이 확인할 수 없어요">
+      <FormContainer title="블루 아카이브 계정 정보" description="계정 정보는 다른 사람이 확인할 수 없어요">
         <Form
           method="put"
           className="space-y-6"
@@ -358,9 +338,9 @@ export default function EditProfile() {
             />
           </div>
         </Form>
-      </EditSection>
+      </FormContainer>
 
-      <EditSection title="인증 및 보안">
+      <FormContainer title="인증 및 보안">
         <div className="space-y-3">
           {authMessage ? (
             <p
@@ -384,7 +364,7 @@ export default function EditProfile() {
           />
           <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} tone="destructive" />
         </div>
-      </EditSection>
+      </FormContainer>
     </div>
   );
 }

@@ -171,7 +171,7 @@ export default function EventSelector({
         <div className="sticky top-0 z-10 mb-1 rounded-md border border-input bg-background p-1">
           <input
             type="text"
-            className="min-h-10 w-full rounded-sm bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground"
+            className="min-h-10 w-full rounded-sm bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground/50"
             placeholder={searchPlaceholder ?? "이벤트 이름으로 찾기"}
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
@@ -303,8 +303,8 @@ function EventSelectorItem({
           {event.until ? formatInstant(event.until, { timeZone: displayTimeZone, format: "MM.DD" }) : "미정"}
         </p>
         {pickupStudents && pickupStudents.length > 0 && (
-          <div className="mt-1.5 max-w-72">
-            <StudentCards students={pickupStudents.slice(0, 8)} pcGrid={6} mobileGrid={6} gap="tight" />
+          <div className="mt-1.5 w-full">
+            <StudentCards students={pickupStudents.slice(0, 8)} layout="wrap" cardSize="xs" gap="tight" />
           </div>
         )}
       </div>

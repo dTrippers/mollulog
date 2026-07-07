@@ -1,9 +1,8 @@
 import { SparklesIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { redirect, useLoaderData } from "react-router";
+import { redirect, useLoaderData, useNavigate } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { EventHeader, Recruitments } from "~/components/features/events";
-import { PageLink } from "~/components/primitives";
+import { EventHeader, EventInfoCard, Recruitments } from "~/components/features/events";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { toUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
@@ -138,6 +137,8 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params, location
 
 export default function EventIndex() {
   const { eventContent, signedIn, allComments, me, eventUid, siblingEvents } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+
   return (
     <div className="w-full">
       <div className="my-2 lg:my-8">
@@ -154,12 +155,13 @@ export default function EventIndex() {
       </div>
 
       {siblingEvents.map((sibling) => (
-        <PageLink
+        <EventInfoCard
           key={sibling.uid}
           Icon={SparklesIcon}
-          title="동시 개최 픽업 이벤트"
-          description={`"${sibling.name}"에서도 같은 모집이 진행돼요`}
-          to={`/events/${sibling.uid}`}
+          title="모집 동시 개최"
+          description={`"${sibling.name}" 이벤트 모집과 동시에 개최되어 모집 포인트(천장)을 공유해요.`}
+          onClick={() => navigate(`/events/${sibling.uid}`)}
+          showArrow
         />
       ))}
 

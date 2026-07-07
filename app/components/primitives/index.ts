@@ -14,6 +14,8 @@ export type { DropdownOption, DropdownProps } from "./Dropdown";
 export { default as EmptyView } from "./EmptyView";
 export { default as Field } from "./Field";
 export { default as FilterButtons } from "./FilterButtons";
+export { default as FormContainer } from "./FormContainer";
+export type { FormContainerProps } from "./FormContainer";
 export { default as HorizontalScroll } from "./HorizontalScroll";
 export { default as HoverTooltip } from "./HoverTooltip";
 export { default as Input } from "./Input";

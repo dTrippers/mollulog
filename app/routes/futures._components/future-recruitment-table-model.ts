@@ -149,34 +149,24 @@ function getContentPeriod(content: FutureRecruitmentTableContent): { since: UtcI
   return { since: content.startAt, until: content.endAt };
 }
 
+function getRecruitmentPeriod(
+  content: FutureRecruitmentTableContent,
+  recruitment: FutureRecruitmentTableRecruitment,
+): { since: UtcIsoString; until: UtcIsoString } | null {
+  const until = recruitment.until ?? content.endAt;
+  if (!until || getInstantTime(recruitment.since) >= getInstantTime(until)) {
+    return null;
+  }
+
+  return { since: recruitment.since, until };
+}
+
 function getDateKey(instant: UtcIsoString, timeZone: string): DateKey {
   return formatInstantDateKey(instant, timeZone);
 }
 
 function compareDateKeys(a: DateKey, b: DateKey): number {
   return a < b ? -1 : a > b ? 1 : 0;
-}
-
-function addDaysToDateKey(dateKey: DateKey, days: number, timeZone: string): DateKey {
-  return dayjs.tz(dateKey, normalizeTimeZone(timeZone)).add(days, "day").format("YYYY-MM-DD");
-}
-
-function addWeeklyBoundaryKeys(
-  boundaryKeys: Set<DateKey>,
-  sinceKey: DateKey,
-  untilKey: DateKey,
-  timeZone: string,
-): void {
-  boundaryKeys.add(sinceKey);
-  boundaryKeys.add(untilKey);
-
-  for (
-    let currentKey = addDaysToDateKey(sinceKey, 7, timeZone);
-    currentKey < untilKey;
-    currentKey = addDaysToDateKey(currentKey, 7, timeZone)
-  ) {
-    boundaryKeys.add(currentKey);
-  }
 }
 
 function toBoundaryInstant(dateKey: DateKey, timeZone: string): UtcIsoString {
@@ -226,7 +216,7 @@ export function buildFutureRecruitmentTableRows(
 ): FutureRecruitmentTableRow[] {
   const recruitmentGroups: InternalRecruitmentGroup[] = contents.flatMap((content, contentIndex) =>
     content.recruitments.flatMap((recruitment, recruitmentIndex) => {
-      const period = getContentPeriod(content);
+      const period = getRecruitmentPeriod(content, recruitment);
       if (!period) {
         return [];
       }
@@ -234,38 +224,40 @@ export function buildFutureRecruitmentTableRows(
     }),
   );
 
-  const boundaryKeys = new Set<DateKey>();
+  const rowRecruitmentsBySince = new Map<string, InternalRecruitmentGroup[]>();
   for (const group of recruitmentGroups) {
-    addWeeklyBoundaryKeys(boundaryKeys, getDateKey(group.since, timeZone), getDateKey(group.until, timeZone), timeZone);
+    const sinceKey = getDateKey(group.since, timeZone);
+    rowRecruitmentsBySince.set(sinceKey, [...(rowRecruitmentsBySince.get(sinceKey) ?? []), group]);
   }
-  const boundaries = [...boundaryKeys].sort(compareDateKeys);
 
-  const rowPeriods = boundaries.slice(0, -1).flatMap((sinceKey, index) => {
-    const untilKey = boundaries[index + 1];
-    const rowRecruitments = recruitmentGroups
-      .filter((group) => getDateKey(group.since, timeZone) < untilKey && getDateKey(group.until, timeZone) > sinceKey)
-      .sort(
+  const rowPeriods = [...rowRecruitmentsBySince.entries()]
+    .map(([sinceKey, rowRecruitments]) => {
+      const untilKey = rowRecruitments
+        .map((group) => getDateKey(group.until, timeZone))
+        .sort(compareDateKeys)
+        .at(-1) as DateKey;
+      const sortedRecruitments = rowRecruitments.sort(
         (a, b) =>
           compareContentsByTimelineOrder(a, b) ||
-          compareInstantAsc(a.since, b.since) ||
+          compareDateKeys(getDateKey(a.until, timeZone), getDateKey(b.until, timeZone)) ||
           a.recruitmentIndex - b.recruitmentIndex,
       );
 
-    if (rowRecruitments.length === 0) {
-      return [];
-    }
-
-    return [
-      {
+      return {
         since: toBoundaryInstant(sinceKey, timeZone),
         until: toBoundaryInstant(untilKey, timeZone),
         sinceKey,
         untilKey,
-        recruitments: rowRecruitments,
-        recruitmentCellKey: getRecruitmentCellKey(rowRecruitments),
-      },
-    ];
-  });
+        recruitments: sortedRecruitments,
+        recruitmentCellKey: getRecruitmentCellKey(sortedRecruitments),
+      };
+    })
+    .sort(
+      (a, b) =>
+        compareDateKeys(a.sinceKey, b.sinceKey) ||
+        compareInstantAsc(a.recruitments[0].since, b.recruitments[0].since) ||
+        a.recruitments[0].contentIndex - b.recruitments[0].contentIndex,
+    );
 
   const auxiliaryContentsByRow = new Map<number, { content: FutureRecruitmentTableContent; contentIndex: number }[]>();
   for (const [contentIndex, content] of contents.entries()) {

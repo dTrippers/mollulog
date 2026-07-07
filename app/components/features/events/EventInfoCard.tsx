@@ -26,14 +26,14 @@ export default function EventInfoCard({ Icon, title, description, color, onClick
   return (
     <ClickableSurface
       onClick={onClick}
-      className={`my-4 flex items-center gap-3 p-3 md:p-4 rounded-lg border ${bgColorClass} ${onClick ? "cursor-pointer hover:opacity-50 transition-opacity" : ""}`}
+      className={`my-3 flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 md:px-4 md:py-3 ${bgColorClass} ${onClick ? "cursor-pointer hover:opacity-50 transition-opacity" : ""}`}
     >
       <div className={`flex-shrink-0 p-2 rounded-lg ${iconBgColorClass}`}>
         <Icon className={`size-4 md:size-5 ${textColorClass}`} />
       </div>
       <div className="grow">
-        <h4 className={`font-semibold ${titleColorClass} mb-1`}>{title}</h4>
-        <p className={`text-sm ${textColorClass}`}>{description}</p>
+        <h4 className={`mb-0.5 text-sm font-semibold ${titleColorClass}`}>{title}</h4>
+        <p className={`text-xs ${textColorClass}`}>{description}</p>
       </div>
       {showArrow && (
         <ArrowRightIcon className="shrink-0 size-4 text-neutral-600 dark:text-neutral-300" />
