@@ -1,7 +1,14 @@
 import { DocumentArrowDownIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
-import { type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction, redirect } from "react-router";
-import { useLoaderData, useSearchParams, useSubmit } from "react-router";
+import {
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  type MetaFunction,
+  redirect,
+  useLoaderData,
+  useSearchParams,
+  useSubmit,
+} from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
 import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
@@ -13,9 +20,16 @@ import {
   mergeEditableRecruitmentResultStudents,
   resolveRecruitmentResultStudents,
 } from "~/domain/recruitment-result";
-import { compareInstantDesc, formatInstant, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import {
+  compareInstantAsc,
+  compareInstantDesc,
+  formatInstant,
+  isInstantBefore,
+  nowUtcIso,
+  toUtcIso,
+} from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import { type PickupHistory, getPickupHistory } from "~/models/pickup-history";
+import { getPickupHistory, type PickupHistory } from "~/models/pickup-history";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import {
   getRecruitmentResult,
@@ -23,7 +37,10 @@ import {
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
 import { getAllStudents } from "~/models/student";
-import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import {
+  getTimelineContentsByRecruitmentGroupUids,
+  groupTimelineContentsByRecruitmentGroupUid,
+} from "~/models/timeline-content";
 import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
 
@@ -154,13 +171,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     env,
     pickupGroups.map((group) => group.uid),
   );
-  const timelineContentMap = new Map(
-    timelineContents.map((content) => [content.recruitmentGroupUid, content] as const),
-  );
+  const timelineContentsByGroupUid = groupTimelineContentsByRecruitmentGroupUid(timelineContents);
   const allStudentsMap = Object.fromEntries(allStudentsList.map((student) => [student.uid, student] as const));
 
   const missingTimelineGroupUids = pickupGroups
-    .filter((group) => !timelineContentMap.has(group.uid))
+    .filter((group) => !timelineContentsByGroupUid.has(group.uid))
     .map((group) => group.uid);
   if (missingTimelineGroupUids.length > 0) {
     throw routeError(500, "pickup_history.timeline_content_missing", "모집 이력 정보를 불러오지 못했어요", {
@@ -169,17 +184,22 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   }
 
   const events = pickupGroups.map((group) => {
-    const timelineContent = timelineContentMap.get(group.uid);
-    if (!timelineContent) {
+    // A group can be shared by more than one event (e.g. a rerun and its permanent
+    // counterpart); this screen treats the whole group as one option, labeled with every
+    // event's name joined by "/".
+    const groupTimelineContents = [...(timelineContentsByGroupUid.get(group.uid) ?? [])].sort((a, b) =>
+      compareInstantAsc(a.startAt, b.startAt),
+    );
+    if (groupTimelineContents.length === 0) {
       throw new Error(`timeline content is missing for recruitment group: ${group.uid}`);
     }
 
     return {
       uid: group.uid,
-      name: timelineContent.name,
+      name: groupTimelineContents.map((content) => content.name).join(" / "),
       since: toUtcIso(group.startAt),
       until: group.endAt ? toUtcIso(group.endAt) : null,
-      isSpoiler: timelineContent.isSpoiler,
+      isSpoiler: groupTimelineContents.some((content) => content.isSpoiler),
       recruitments: group.recruitments
         .filter((r) => r.pickup && r.student)
         .map((r) => ({
@@ -256,7 +276,13 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       recruitmentGroupUid: data.eventUid,
     });
   }
-  const timelineContent = (await getTimelineContentsByRecruitmentGroupUids(env, [data.eventUid]))[0];
+  // When the group is shared by multiple events, default to the earliest one as the
+  // representative content (e.g. for community post linking). See TODO in project notes:
+  // this policy isn't user-facing yet.
+  const groupTimelineContents = (await getTimelineContentsByRecruitmentGroupUids(env, [data.eventUid])).sort((a, b) =>
+    compareInstantAsc(a.startAt, b.startAt),
+  );
+  const timelineContent = groupTimelineContents[0];
   const exchangeableStudentMap = new Map(
     recruitmentGroup.recruitments.flatMap((recruitment) => {
       if (!canExchangeRecruitmentStudent(recruitment)) {
@@ -353,9 +379,9 @@ export default function EditPickup() {
     }
   }
 
-  let initialTotalCount: number | undefined = undefined;
-  let initialTier3Count: number | undefined = undefined;
-  let initialTier3StudentUids: string[] | undefined = undefined;
+  let initialTotalCount: number | undefined;
+  let initialTier3Count: number | undefined;
+  let initialTier3StudentUids: string[] | undefined;
   if (currentPickupHistory?.result) {
     const recordedTrials = currentPickupHistory.result
       .map((trial) => trial.trial)

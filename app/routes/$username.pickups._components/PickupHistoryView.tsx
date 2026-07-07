@@ -4,14 +4,13 @@ import ContentCommentView from "~/components/features/contents/ContentCommentVie
 import { StudentCards } from "~/components/features/students";
 import { Button } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { type UtcIsoString, formatInstant } from "~/lib/date-time";
+import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { pickupGroupTypeLocale } from "~/locales/ko";
 
 type PickupHistoryViewProps = {
   uid: string;
   event: {
-    uid: string;
-    name: string;
+    events: { uid: string; name: string }[];
     type: string;
     since: UtcIsoString;
   };
@@ -118,12 +117,17 @@ function PickupHeader({ event }: { event: PickupHistoryViewProps["event"] }) {
 
   return (
     <div>
-      <Link to={`/events/${event.uid}`} className="inline-block max-w-full hover:underline">
-        <h2 className="whitespace-pre-line font-bold text-base leading-tight md:text-lg">
-          {event.name}
-          <ChevronRightIcon className="ml-1 inline-block size-4 align-[-0.125em]" />
-        </h2>
-      </Link>
+      <h2 className="whitespace-pre-line font-bold text-base leading-tight md:text-lg">
+        {event.events.map((eventItem, index) => (
+          <span key={eventItem.uid}>
+            {index > 0 && " / "}
+            <Link to={`/events/${eventItem.uid}`} className="hover:underline">
+              {eventItem.name}
+            </Link>
+          </span>
+        ))}
+        <ChevronRightIcon className="ml-1 inline-block size-4 align-[-0.125em]" />
+      </h2>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {pickupGroupTypeLocale[event.type] ?? "픽업 모집"} |{" "}
         {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}

@@ -1,16 +1,16 @@
 import { buildPyroxeneScheduleItems } from "~/domain/pyroxene-schedule";
-import { type PickupResources, buildTimeline } from "~/domain/pyroxene-timeline";
+import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
 import { getInstantTime, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { countUnregisteredActiveCoupons } from "~/models/coupon";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getPickupHistories } from "~/models/pickup-history";
 import {
-  type PyroxeneEventData,
   getAllPyroxeneEventData,
   getCollectedSourceKeys,
   getLatestPyroxeneOwnedResource,
   getPyroxenePlannerOptions,
   getPyroxeneTimelineItems,
+  type PyroxeneEventData,
 } from "~/models/pyroxene-planner";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
@@ -227,8 +227,11 @@ function getFavoritedRecruitments(
       }
 
       const favoritedRecruitments = content.recruitments.filter(
-        ({ pickup, recruitmentType, student }) =>
-          pickup && recruitmentType !== "given" && student && favoritedStudentKeys.has(`${content.uid}:${student.uid}`),
+        ({ pickup, recruitmentType, student, sourceContentUid }) =>
+          pickup &&
+          recruitmentType !== "given" &&
+          student &&
+          favoritedStudentKeys.has(`${sourceContentUid ?? content.uid}:${student.uid}`),
       );
       if (favoritedRecruitments.length === 0) {
         return [];
@@ -284,11 +287,20 @@ function buildPyroxeneEventDataMap(
     });
   }
 
-  const contentByRecruitmentGroupUid = new Map(
-    contents.flatMap((content) =>
-      content.kind === "event" && content.recruitmentGroupUid ? [[content.recruitmentGroupUid, content]] : [],
-    ),
-  );
+  // A recruitment group can be split into a recruitments-empty "reward only" entry per event
+  // plus one merged entry carrying the actual recruitments (see getPyroxenePlannerContents).
+  // Prefer the merged entry here so "completed" status lands on the content that actually
+  // renders the pickup students, regardless of which entry appears last in `contents`.
+  const contentByRecruitmentGroupUid = new Map<string, MorePyroxeneContent>();
+  for (const content of contents) {
+    if (content.kind !== "event" || !content.recruitmentGroupUid) {
+      continue;
+    }
+    const existing = contentByRecruitmentGroupUid.get(content.recruitmentGroupUid);
+    if (!existing || content.recruitments.length > 0) {
+      contentByRecruitmentGroupUid.set(content.recruitmentGroupUid, content);
+    }
+  }
   for (const result of recruitmentResults) {
     if (!result.completedAt) {
       continue;

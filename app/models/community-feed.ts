@@ -28,6 +28,7 @@ export type CommunityFeedStatsTimelineContent = {
   uid: string;
   name: string;
   recruitmentGroupUid: string | null;
+  recruitmentStudentUids: string[] | null;
 };
 
 function parseRecruitmentResultStudents(value: string): RecruitmentResultStudent[] {

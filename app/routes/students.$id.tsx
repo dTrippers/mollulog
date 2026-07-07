@@ -2,7 +2,7 @@ import { ArrowTopRightOnSquareIcon, ChatBubbleLeftRightIcon, InformationCircleIc
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Page, createPageErrorBoundary } from "~/components/features/layout";
+import { createPageErrorBoundary, Page } from "~/components/features/layout";
 import { StudentInfo } from "~/components/features/students";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
@@ -14,7 +14,36 @@ import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { formatStudentFullName, getAllStudentsMap, getStudentDetail } from "~/models/student";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
-import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import {
+  findEventsForRecruitmentStudent,
+  getTimelineContentsByRecruitmentGroupUids,
+  groupTimelineContentsByRecruitmentGroupUid,
+} from "~/models/timeline-content";
+
+/**
+ * Restricts the events shown on a student's page to the ones actually listing that student,
+ * since a recruitment group can be shared by multiple events (e.g. a rerun and its permanent
+ * counterpart) that each only feature a subset of the group's students.
+ */
+export function getStudentRelevantTimelineContents(
+  timelineContents: Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>,
+  recruitmentGroupUids: string[],
+  studentUid: string,
+) {
+  const timelineContentsByGroupUid = groupTimelineContentsByRecruitmentGroupUid(timelineContents);
+  const relevantContents = recruitmentGroupUids.flatMap((groupUid) =>
+    findEventsForRecruitmentStudent(timelineContentsByGroupUid.get(groupUid) ?? [], studentUid),
+  );
+
+  const seenUids = new Set<string>();
+  return relevantContents.filter((content) => {
+    if (seenUids.has(content.uid)) {
+      return false;
+    }
+    seenUids.add(content.uid);
+    return true;
+  });
+}
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const uid = params.id;
@@ -106,13 +135,15 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       schaleDbId: student.schaleDbId,
       releaseAt: student.releaseAt ? toUtcIso(student.releaseAt) : null,
     },
-    recruitments: timelineContents.map((content) => ({
-      uid: content.uid,
-      name: content.name,
-      since: content.startAt,
-      until: content.endAt,
-      imageUrl: content.imageUrl ?? null,
-    })),
+    recruitments: getStudentRelevantTimelineContents(timelineContents, recruitmentGroupUids, student.uid).map(
+      (content) => ({
+        uid: content.uid,
+        name: content.name,
+        since: content.startAt,
+        until: content.endAt,
+        imageUrl: content.imageUrl ?? null,
+      }),
+    ),
     tagCounts,
     allGradings: sortedGradings.map((grading) => ({
       ...grading,

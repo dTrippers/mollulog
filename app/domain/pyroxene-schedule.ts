@@ -20,6 +20,10 @@ export type PyroxeneScheduleContent =
         rerun: boolean;
         until: UtcIsoString | null;
         student: { uid: string; name: string; initialTier: number } | null;
+        // Set when this content merges recruitments from multiple events sharing one
+        // recruitment group; identifies which event this particular recruitment belongs to,
+        // since favorites are stored per-event rather than per-group.
+        sourceContentUid?: string;
       }[];
       recruitmentPool?: {
         tier2Count: number;
@@ -56,6 +60,7 @@ export type PyroxeneScheduleItem = {
       until: UtcIsoString | null;
       student: { uid: string; name: string; initialTier: number } | null;
       favorited: boolean;
+      sourceContentUid?: string;
     }[];
     recruitmentPool?: {
       tier2Count: number;
@@ -124,7 +129,8 @@ export function buildPyroxeneScheduleItems(
           recruitments: content.recruitments.map((recruitment) => ({
             ...recruitment,
             favorited:
-              recruitment.student !== null && favoritedStudentKeys.has(`${content.uid}:${recruitment.student.uid}`),
+              recruitment.student !== null &&
+              favoritedStudentKeys.has(`${recruitment.sourceContentUid ?? content.uid}:${recruitment.student.uid}`),
           })),
         },
       };

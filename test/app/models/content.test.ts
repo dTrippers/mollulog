@@ -82,6 +82,7 @@ function event(uid: string, startAt: string, endAt: string | null, runType: "fir
     contentUid: null,
     shopContentUid: null,
     recruitmentGroupUid: null,
+    recruitmentStudentUids: null,
     confirmed: true,
     isSpoiler: false,
     tags: [],

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  filterRecruitmentsByStudentUids,
   getProvisionalRecruitmentStudentKey,
   getRecruitmentFavoriteKey,
   normalizeRecruitmentStudentName,
@@ -23,5 +24,29 @@ describe("recruitment identity", () => {
     expect(getRecruitmentFavoriteKey({ student: null, studentName: "리오(무장)" })).toBe(
       getProvisionalRecruitmentStudentKey("리오(무장)"),
     );
+  });
+});
+
+describe("filterRecruitmentsByStudentUids", () => {
+  const recruitmentA = { student: { uid: "a" } };
+  const recruitmentB = { student: { uid: "b" } };
+  const recruitmentNoStudent = { student: null };
+
+  it("returns every recruitment unchanged when studentUids is null", () => {
+    const recruitments = [recruitmentA, recruitmentB, recruitmentNoStudent];
+    expect(filterRecruitmentsByStudentUids(recruitments, null)).toBe(recruitments);
+  });
+
+  it("keeps only recruitments whose student uid is listed", () => {
+    const recruitments = [recruitmentA, recruitmentB, recruitmentNoStudent];
+    expect(filterRecruitmentsByStudentUids(recruitments, ["a"])).toEqual([recruitmentA]);
+  });
+
+  it("drops student-less recruitments once a filter is active", () => {
+    expect(filterRecruitmentsByStudentUids([recruitmentNoStudent], ["a"])).toEqual([]);
+  });
+
+  it("returns an empty array when no recruitment matches the filter", () => {
+    expect(filterRecruitmentsByStudentUids([recruitmentA], ["c"])).toEqual([]);
   });
 });
