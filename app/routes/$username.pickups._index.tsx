@@ -3,20 +3,20 @@ import { data, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { AddContentButton } from "~/components/features/editor";
 import { SubTitle } from "~/components/primitives";
-import { compareInstantDesc } from "~/lib/date-time";
+import { getRecruitmentResultCountStats, resolveRecruitmentResultStudents } from "~/domain/recruitment-result";
+import { compareInstantAsc, compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
+import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import {
   deleteRecruitmentResult,
   getRecruitmentResultComments,
   getRecruitmentResults,
 } from "~/models/recruitment-result";
-import {
-  getRecruitmentResultCountStats,
-  resolveRecruitmentResultStudents,
-} from "~/domain/recruitment-result";
-import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
-import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import {
+  getTimelineContentsByRecruitmentGroupUids,
+  groupTimelineContentsByRecruitmentGroupUid,
+} from "~/models/timeline-content";
 import { getRouteSensei } from "./$username";
 import PickupHistoryView from "./$username.pickups._components/PickupHistoryView";
 
@@ -74,11 +74,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const groupMap = new Map(groups.map((group) => [group.uid, group] as const));
   const poolStudentsMap = new Map(poolStudents.map((student) => [student.uid, student] as const));
-  const timelineContentMap = new Map(
-    timelineContents.flatMap((content) =>
-      content.recruitmentGroupUid ? [[content.recruitmentGroupUid, content] as const] : [],
-    ),
-  );
+  const timelineContentsByGroupUid = groupTimelineContentsByRecruitmentGroupUid(timelineContents);
 
   let tier3Count = 0;
   let tier3DrawCount = 0;
@@ -96,8 +92,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     )
     .map((result) => {
       const group = groupMap.get(result.recruitmentGroupUid);
-      const timelineContent = timelineContentMap.get(result.recruitmentGroupUid);
-      if (!timelineContent) {
+      const timelineContents = [...(timelineContentsByGroupUid.get(result.recruitmentGroupUid) ?? [])].sort((a, b) =>
+        compareInstantAsc(a.startAt, b.startAt),
+      );
+      const firstTimelineContent = timelineContents[0];
+      if (!firstTimelineContent) {
         throw routeError(500, "pickup_history.timeline_content_missing", "모집 이력 정보를 불러오지 못했어요", {
           eventId: result.recruitmentGroupUid,
         });
@@ -135,10 +134,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       return {
         uid: result.uid,
         event: {
-          uid: timelineContent.uid,
-          name: timelineContent.name,
+          events: timelineContents.map((content) => ({ uid: content.uid, name: content.name })),
           type: group?.recruitmentType ?? "pickup",
-          since: timelineContent.startAt,
+          since: firstTimelineContent.startAt,
         },
         trial: result.trial,
         recruitedStudents: students,

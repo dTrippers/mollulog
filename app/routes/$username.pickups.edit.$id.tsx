@@ -1,10 +1,17 @@
 import { DocumentArrowDownIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
-import { type ActionFunctionArgs, type LoaderFunctionArgs, type MetaFunction, redirect } from "react-router";
-import { useLoaderData, useSearchParams, useSubmit } from "react-router";
+import {
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+  type MetaFunction,
+  redirect,
+  useLoaderData,
+  useSearchParams,
+  useSubmit,
+} from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
-import { Button, SubTitle, Textarea, Title } from "~/components/primitives";
+import { Button, FormContainer, Textarea, Title } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import {
   createRecruitmentResultStudentsFromPickupHistory,
@@ -13,9 +20,16 @@ import {
   mergeEditableRecruitmentResultStudents,
   resolveRecruitmentResultStudents,
 } from "~/domain/recruitment-result";
-import { compareInstantDesc, formatInstant, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import {
+  compareInstantAsc,
+  compareInstantDesc,
+  formatInstant,
+  isInstantBefore,
+  nowUtcIso,
+  toUtcIso,
+} from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import { type PickupHistory, getPickupHistory } from "~/models/pickup-history";
+import { getPickupHistory, type PickupHistory } from "~/models/pickup-history";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import {
   getRecruitmentResult,
@@ -23,7 +37,10 @@ import {
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
 import { getAllStudents } from "~/models/student";
-import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import {
+  getTimelineContentsByRecruitmentGroupUids,
+  groupTimelineContentsByRecruitmentGroupUid,
+} from "~/models/timeline-content";
 import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
 
@@ -154,13 +171,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     env,
     pickupGroups.map((group) => group.uid),
   );
-  const timelineContentMap = new Map(
-    timelineContents.map((content) => [content.recruitmentGroupUid, content] as const),
-  );
+  const timelineContentsByGroupUid = groupTimelineContentsByRecruitmentGroupUid(timelineContents);
   const allStudentsMap = Object.fromEntries(allStudentsList.map((student) => [student.uid, student] as const));
 
   const missingTimelineGroupUids = pickupGroups
-    .filter((group) => !timelineContentMap.has(group.uid))
+    .filter((group) => !timelineContentsByGroupUid.has(group.uid))
     .map((group) => group.uid);
   if (missingTimelineGroupUids.length > 0) {
     throw routeError(500, "pickup_history.timeline_content_missing", "모집 이력 정보를 불러오지 못했어요", {
@@ -169,17 +184,22 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   }
 
   const events = pickupGroups.map((group) => {
-    const timelineContent = timelineContentMap.get(group.uid);
-    if (!timelineContent) {
+    // A group can be shared by more than one event (e.g. a rerun and its permanent
+    // counterpart); this screen treats the whole group as one option, labeled with every
+    // event's name joined by "/".
+    const groupTimelineContents = [...(timelineContentsByGroupUid.get(group.uid) ?? [])].sort((a, b) =>
+      compareInstantAsc(a.startAt, b.startAt),
+    );
+    if (groupTimelineContents.length === 0) {
       throw new Error(`timeline content is missing for recruitment group: ${group.uid}`);
     }
 
     return {
       uid: group.uid,
-      name: timelineContent.name,
+      name: groupTimelineContents.map((content) => content.name).join(" / "),
       since: toUtcIso(group.startAt),
       until: group.endAt ? toUtcIso(group.endAt) : null,
-      isSpoiler: timelineContent.isSpoiler,
+      isSpoiler: groupTimelineContents.some((content) => content.isSpoiler),
       recruitments: group.recruitments
         .filter((r) => r.pickup && r.student)
         .map((r) => ({
@@ -256,7 +276,13 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       recruitmentGroupUid: data.eventUid,
     });
   }
-  const timelineContent = (await getTimelineContentsByRecruitmentGroupUids(env, [data.eventUid]))[0];
+  // When the group is shared by multiple events, default to the earliest one as the
+  // representative content (e.g. for community post linking). See TODO in project notes:
+  // this policy isn't user-facing yet.
+  const groupTimelineContents = (await getTimelineContentsByRecruitmentGroupUids(env, [data.eventUid])).sort((a, b) =>
+    compareInstantAsc(a.startAt, b.startAt),
+  );
+  const timelineContent = groupTimelineContents[0];
   const exchangeableStudentMap = new Map(
     recruitmentGroup.recruitments.flatMap((recruitment) => {
       if (!canExchangeRecruitmentStudent(recruitment)) {
@@ -353,9 +379,9 @@ export default function EditPickup() {
     }
   }
 
-  let initialTotalCount: number | undefined = undefined;
-  let initialTier3Count: number | undefined = undefined;
-  let initialTier3StudentUids: string[] | undefined = undefined;
+  let initialTotalCount: number | undefined;
+  let initialTier3Count: number | undefined;
+  let initialTier3StudentUids: string[] | undefined;
   if (currentPickupHistory?.result) {
     const recordedTrials = currentPickupHistory.result
       .map((trial) => trial.trial)
@@ -423,87 +449,91 @@ export default function EditPickup() {
   };
 
   return (
-    <>
+    <div className="space-y-8">
       <Title text="모집 이력 관리" />
 
-      <SubTitle text="모집 이벤트" />
-      {isEditing ? (
-        initialEvent && (
-          <div className="rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
-            <p className="whitespace-pre-line font-semibold text-neutral-950 dark:text-neutral-50">
-              {initialEvent.name}
-            </p>
-            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-              {formatInstant(initialEvent.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
-            </p>
-          </div>
-        )
-      ) : (
-        <EventSelector
-          label="이벤트"
-          description="모집을 진행한 이벤트를 선택해주세요."
-          name="eventUid"
-          events={events}
-          currentEventUid={eventUid}
-          maxVisibleEvents={PICKUP_EVENT_SELECTOR_LIMIT}
-          placeholder="이벤트 선택"
-          searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
-          onSelect={(uid) => {
-            setEventUid(uid);
-            setExchangedStudentUids([]);
-          }}
-        />
-      )}
-
-      <SubTitle text="모집 결과" />
-      <div className="mb-4">
-        <Button
-          text={showImporter ? "외부 데이터 닫기" : "외부 데이터 가져오기"}
-          icon={DocumentArrowDownIcon}
-          variant="tint"
-          onClick={() => setShowImporter((prev) => !prev)}
-        />
-      </div>
-      {showImporter && (
-        <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-800 dark:bg-neutral-900">
-          <PickupHistoryImporter
-            tier3Students={tier3Students}
-            onImport={({ totalCount, tier3Count, tier3StudentIds }) => {
-              setTotalCount(totalCount);
-              setTier3Count(tier3Count);
-              setTier3StudentUids(tier3StudentIds);
+      <FormContainer title="모집 이벤트">
+        {isEditing ? (
+          initialEvent && (
+            <div className="rounded-lg border border-border bg-background p-4">
+              <p className="whitespace-pre-line font-semibold text-foreground">{initialEvent.name}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {formatInstant(initialEvent.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
+              </p>
+            </div>
+          )
+        ) : (
+          <EventSelector
+            label="이벤트"
+            description="모집을 진행한 이벤트를 선택해주세요."
+            name="eventUid"
+            events={events}
+            currentEventUid={eventUid}
+            maxVisibleEvents={PICKUP_EVENT_SELECTOR_LIMIT}
+            placeholder="이벤트 선택"
+            searchPlaceholder="이벤트 또는 모집 학생 이름으로 찾기"
+            onSelect={(uid) => {
+              setEventUid(uid);
+              setExchangedStudentUids([]);
             }}
           />
-        </div>
-      )}
-      <PickupHistoryEditor
-        tier3Students={tier3Students}
-        totalCount={totalCount}
-        tier3Count={tier3Count}
-        tier3StudentIds={visibleTier3StudentUids}
-        skipTier3StudentList={skipTier3StudentList}
-        exchangedStudentIds={exchangedStudentUids}
-        exchangeableStudents={
-          selectedEvent?.recruitments.flatMap((recruitment) =>
-            canExchangeRecruitmentStudent(recruitment) && recruitment.student ? [recruitment.student] : [],
-          ) ?? []
-        }
-        onTotalCountChange={handleTotalCountChange}
-        onTier3CountChange={handleTier3CountChange}
-        onTier3StudentIdsChange={setTier3StudentUids}
-        onSkipTier3StudentListChange={setSkipTier3StudentList}
-        onExchangedStudentIdsChange={setExchangedStudentUids}
-      />
+        )}
+      </FormContainer>
 
-      <SubTitle text="모집 결과 의견 (선택)" />
-      <Textarea
-        value={comment}
-        rows={4}
-        description="입력하지 않아도 저장할 수 있어요."
-        placeholder="남긴 의견은 다른 사람에게 공개돼요."
-        onChange={setComment}
-      />
-      <div className="mt-8 flex flex-col items-start gap-2">
+      <FormContainer
+        title="모집 결과"
+        description="총 모집 횟수와 획득한 ★3 학생, 모집 포인트 교환 학생을 입력해주세요."
+      >
+        <div>
+          <Button
+            text={showImporter ? "외부 데이터 닫기" : "외부 데이터 가져오기"}
+            icon={DocumentArrowDownIcon}
+            variant="tint"
+            onClick={() => setShowImporter((prev) => !prev)}
+          />
+        </div>
+        {showImporter && (
+          <div className="rounded-lg border border-border bg-background p-4">
+            <PickupHistoryImporter
+              tier3Students={tier3Students}
+              onImport={({ totalCount, tier3Count, tier3StudentIds }) => {
+                setTotalCount(totalCount);
+                setTier3Count(tier3Count);
+                setTier3StudentUids(tier3StudentIds);
+              }}
+            />
+          </div>
+        )}
+        <PickupHistoryEditor
+          tier3Students={tier3Students}
+          totalCount={totalCount}
+          tier3Count={tier3Count}
+          tier3StudentIds={visibleTier3StudentUids}
+          skipTier3StudentList={skipTier3StudentList}
+          exchangedStudentIds={exchangedStudentUids}
+          exchangeableStudents={
+            selectedEvent?.recruitments.flatMap((recruitment) =>
+              canExchangeRecruitmentStudent(recruitment) && recruitment.student ? [recruitment.student] : [],
+            ) ?? []
+          }
+          onTotalCountChange={handleTotalCountChange}
+          onTier3CountChange={handleTier3CountChange}
+          onTier3StudentIdsChange={setTier3StudentUids}
+          onSkipTier3StudentListChange={setSkipTier3StudentList}
+          onExchangedStudentIdsChange={setExchangedStudentUids}
+        />
+        <Textarea
+          label="모집 결과 의견"
+          value={comment}
+          rows={4}
+          description="입력하지 않아도 저장할 수 있어요."
+          placeholder="남긴 의견은 다른 사람에게 공개돼요."
+          onChange={setComment}
+          containerClassName="mt-0 mb-0"
+        />
+      </FormContainer>
+
+      <div className="flex flex-col items-start gap-2">
         <Button
           text="모집 결과 저장"
           variant="primary"
@@ -514,6 +544,6 @@ export default function EditPickup() {
           <p className="text-sm text-neutral-500 dark:text-neutral-400">{saveUnavailableReason}</p>
         )}
       </div>
-    </>
+    </div>
   );
 }

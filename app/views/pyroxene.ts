@@ -1,3 +1,4 @@
+import { filterRecruitmentsByStudentUids } from "~/domain/recruitment-identity";
 import { buildRecruitmentPoolSnapshot } from "~/domain/recruitment-simulator";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { compareInstantAsc, compareInstantDesc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
@@ -9,10 +10,15 @@ import {
   type MainStoryVolume,
 } from "~/models/main-story";
 import { getRaidSchedule } from "~/models/raid";
-import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
+import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents, type RecruitmentGroup } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
 import type { TimelineContent, TimelineContentType } from "~/models/timeline-content";
-import { getFutureRaidContents, getTimelineContents } from "~/models/timeline-content";
+import {
+  findEventsForRecruitmentStudent,
+  getFutureRaidContents,
+  getTimelineContents,
+  groupTimelineContentsByRecruitmentGroupUid,
+} from "~/models/timeline-content";
 
 const EVENT_CONTENT_TYPES: TimelineContentType[] = ["event", "main_story", "pickup"];
 const MAIN_STORY_REWARD_REGION = "gl";
@@ -36,6 +42,10 @@ export type PyroxenePlannerContent =
         rerun: boolean;
         until: UtcIsoString | null;
         student: { uid: string; name: string; initialTier: number } | null;
+        // Which event this recruitment "belongs to" when its group is shared by multiple
+        // events. Only set on the merged recruitment entry (see buildGroupRecruitmentContent);
+        // absent elsewhere, where recruitment.uid === content.uid already disambiguates.
+        sourceContentUid?: string;
       }[];
       recruitmentPool?: {
         tier2Count: number;
@@ -113,6 +123,41 @@ function getContentRecruitmentGroupUid(content: TimelineContent | PyroxenePlanne
   return content.recruitmentGroupUid;
 }
 
+type PyroxeneEventVariant = Extract<PyroxenePlannerContent, { kind: "event" }>;
+type PyroxeneRecruitmentDetail = PyroxeneEventVariant["recruitments"][number];
+
+function toRecruitmentDetail(
+  recruitment: RecruitmentGroup["recruitments"][number],
+  studentsMap: Awaited<ReturnType<typeof getAllStudentsMap>>,
+  sourceContentUid?: string,
+): PyroxeneRecruitmentDetail {
+  return {
+    recruitmentType: recruitment.recruitmentType,
+    pickup: recruitment.pickup,
+    rerun: recruitment.rerun,
+    until: recruitment.until ? toUtcIso(recruitment.until) : null,
+    student: recruitment.student
+      ? {
+          uid: recruitment.student.uid,
+          name: recruitment.student.name,
+          initialTier: studentsMap[recruitment.student.uid]?.initialTier ?? 0,
+        }
+      : null,
+    ...(sourceContentUid ? { sourceContentUid } : {}),
+  };
+}
+
+function buildRecruitmentPoolInfo(
+  group: RecruitmentGroup,
+  recruitmentPoolStudents: Awaited<ReturnType<typeof getRecruitmentPoolStudents>>,
+): PyroxeneEventVariant["recruitmentPool"] {
+  const snapshot = buildRecruitmentPoolSnapshot({ recruitmentGroup: group, students: recruitmentPoolStudents });
+  return {
+    tier2Count: snapshot.nonPickupStudentsByTier.tier2.length,
+    tier3Count: snapshot.nonPickupStudentsByTier.tier3.length,
+  };
+}
+
 export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
   // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
   const [eventContents, raidContents, mainStories] = await Promise.all([
@@ -136,39 +181,21 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
   ]);
 
   const recruitmentGroupMap = new Map(recruitmentGroups.map((g) => [g.uid, g]));
+  const eventsByRecruitmentGroupUid = groupTimelineContentsByRecruitmentGroupUid(eventContents);
+  // Multiple events can share one BAQL recruitment group (e.g. a rerun and its permanent
+  // counterpart). Each event still gets its own reward-only entry (earnablePyroxene is tied
+  // to that specific event, not the recruitment), but the group's recruitments are only
+  // surfaced once, as a separate merged entry, so pickup cost isn't double-counted.
+  const emittedGroupRecruitmentUids = new Set<string>();
+
   const results = await Promise.all(
-    allContents.map(async (content) => {
+    allContents.map(async (content): Promise<PyroxenePlannerContent[]> => {
       if ("kind" in content) {
-        return content;
+        return [content];
       }
 
       if (EVENT_CONTENT_TYPES.includes(content.contentType)) {
         const group = content.recruitmentGroupUid ? recruitmentGroupMap.get(content.recruitmentGroupUid) : undefined;
-        const recruitments = (group?.recruitments ?? []).map((r) => ({
-          recruitmentType: r.recruitmentType,
-          pickup: r.pickup,
-          rerun: r.rerun,
-          until: r.until ? toUtcIso(r.until) : null,
-          student: r.student
-            ? {
-                uid: r.student.uid,
-                name: r.student.name,
-                initialTier: studentsMap[r.student.uid]?.initialTier ?? 0,
-              }
-            : null,
-        }));
-        const recruitmentPool = group
-          ? (() => {
-              const snapshot = buildRecruitmentPoolSnapshot({
-                recruitmentGroup: group,
-                students: recruitmentPoolStudents,
-              });
-              return {
-                tier2Count: snapshot.nonPickupStudentsByTier.tier2.length,
-                tier3Count: snapshot.nonPickupStudentsByTier.tier3.length,
-              };
-            })()
-          : undefined;
 
         // Use the latest recruitment until date when endAt is missing.
         const until =
@@ -177,20 +204,77 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
             (max, r) => (r.until ? (max && compareInstantDesc(max, r.until) < 0 ? max : toUtcIso(r.until)) : max),
             null,
           );
-        if (!until) return null;
+        if (!until) return [];
 
-        return {
+        const earnablePyroxene = content.contentType === "main_story" ? null : (content.earnablePyroxene ?? null);
+        const siblingEvents = content.recruitmentGroupUid
+          ? (eventsByRecruitmentGroupUid.get(content.recruitmentGroupUid) ?? [])
+          : [];
+
+        if (siblingEvents.length <= 1) {
+          const recruitments = filterRecruitmentsByStudentUids(
+            group?.recruitments ?? [],
+            content.recruitmentStudentUids,
+          ).map((r) => toRecruitmentDetail(r, studentsMap));
+
+          return [
+            {
+              kind: "event" as const,
+              uid: content.uid,
+              recruitmentGroupUid: content.recruitmentGroupUid,
+              name: content.name,
+              since: content.startAt,
+              until,
+              earnablePyroxene,
+              tags: content.tags,
+              recruitments,
+              recruitmentPool: group ? buildRecruitmentPoolInfo(group, recruitmentPoolStudents) : undefined,
+            },
+          ];
+        }
+
+        const rewardOnlyEntry: PyroxenePlannerContent = {
           kind: "event" as const,
           uid: content.uid,
           recruitmentGroupUid: content.recruitmentGroupUid,
           name: content.name,
           since: content.startAt,
           until,
-          earnablePyroxene: content.contentType === "main_story" ? null : (content.earnablePyroxene ?? null),
+          earnablePyroxene,
           tags: content.tags,
-          recruitments,
-          recruitmentPool,
+          recruitments: [],
         };
+
+        const recruitmentGroupUid = content.recruitmentGroupUid as string;
+        if (emittedGroupRecruitmentUids.has(recruitmentGroupUid)) {
+          return [rewardOnlyEntry];
+        }
+        emittedGroupRecruitmentUids.add(recruitmentGroupUid);
+
+        const sortedSiblings = [...siblingEvents].sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
+        const mergedRecruitments = (group?.recruitments ?? []).map((r) =>
+          toRecruitmentDetail(
+            r,
+            studentsMap,
+            findEventsForRecruitmentStudent(siblingEvents, r.student?.uid ?? null)[0]?.uid,
+          ),
+        );
+
+        return [
+          rewardOnlyEntry,
+          {
+            kind: "event" as const,
+            uid: `group:${recruitmentGroupUid}`,
+            recruitmentGroupUid,
+            name: sortedSiblings.map((sibling) => sibling.name).join(" / "),
+            since: group?.startAt ? toUtcIso(group.startAt) : content.startAt,
+            until: group?.endAt ? toUtcIso(group.endAt) : until,
+            earnablePyroxene: null,
+            tags: [...new Set(sortedSiblings.flatMap((sibling) => sibling.tags))],
+            recruitments: mergedRecruitments,
+            recruitmentPool: group ? buildRecruitmentPoolInfo(group, recruitmentPoolStudents) : undefined,
+          },
+        ];
       }
       if (content.contentType === "raid") {
         let raidName = content.name;
@@ -206,20 +290,22 @@ export async function getPyroxenePlannerContents(env: Env, forceRefresh = false)
           }
         }
 
-        if (!until) return null;
+        if (!until) return [];
 
-        return {
-          kind: "raid" as const,
-          uid: content.uid,
-          name: raidName,
-          type: raidType,
-          since: content.startAt,
-          until,
-        };
+        return [
+          {
+            kind: "raid" as const,
+            uid: content.uid,
+            name: raidName,
+            type: raidType,
+            since: content.startAt,
+            until,
+          },
+        ];
       }
-      return null;
+      return [];
     }),
   );
 
-  return results.filter((r) => r !== null);
+  return results.flat();
 }

@@ -1,13 +1,13 @@
 import { and, eq, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { type UtcIsoString, normalizeInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import {
-  type TimelineContentNameI18n,
   parseTimelineContentNames,
   selectTimelineContentName,
+  type TimelineContentNameI18n,
 } from "~/domain/timeline-content-name-i18n";
+import { cacheKey, fetchSourceCached } from "~/lib/cache";
+import { normalizeInstant, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 
 const ALL_TIMELINE_CONTENTS_META_CACHE_KEY = cacheKey("source", "timeline-content", 1, "all");
 
@@ -47,6 +47,7 @@ export const timelineContentsTable = sqliteTable("timeline_contents", {
   contentUid: text("content_uid"),
   shopContentUid: text("shop_content_uid"),
   recruitmentGroupUid: text("recruitment_group_uid"),
+  recruitmentStudentUids: text("recruitment_student_uids"),
   confirmed: int().notNull().default(0),
   isSpoiler: int("is_spoiler").notNull().default(0),
   tags: text().notNull().default("[]"),
@@ -71,6 +72,8 @@ export type TimelineContent = {
   contentUid: string | null;
   shopContentUid: string | null;
   recruitmentGroupUid: string | null;
+  // null = 그룹의 모든 학생 노출(하위호환 기본값). 값이 있으면 이 이벤트 페이지엔 해당 uid의 학생만 필터링해서 보여줌.
+  recruitmentStudentUids: string[] | null;
   confirmed: boolean;
   isSpoiler: boolean;
   tags: string[];
@@ -106,6 +109,7 @@ function toRaw(row: typeof timelineContentsTable.$inferSelect): RawTimelineConte
     contentUid: row.contentUid ?? null,
     shopContentUid: row.shopContentUid ?? null,
     recruitmentGroupUid: row.recruitmentGroupUid ?? null,
+    recruitmentStudentUids: row.recruitmentStudentUids ? (JSON.parse(row.recruitmentStudentUids) as string[]) : null,
     confirmed: row.confirmed === 1,
     isSpoiler: row.isSpoiler === 1,
     tags: JSON.parse(row.tags) as string[],
@@ -289,6 +293,49 @@ export async function getTimelineContentsByRecruitmentGroupUids(
   return rows.map(toRaw).map(toTimelineContent);
 }
 
+/**
+ * Groups timeline contents by their recruitmentGroupUid without dropping entries when
+ * multiple events share the same group (unlike `new Map(contents.map(...))`, which keeps
+ * only the last event per key).
+ */
+export function groupTimelineContentsByRecruitmentGroupUid(
+  contents: TimelineContent[],
+): Map<string, TimelineContent[]> {
+  const map = new Map<string, TimelineContent[]>();
+  for (const content of contents) {
+    if (!content.recruitmentGroupUid) continue;
+
+    const existing = map.get(content.recruitmentGroupUid);
+    if (existing) {
+      existing.push(content);
+    } else {
+      map.set(content.recruitmentGroupUid, [content]);
+    }
+  }
+  return map;
+}
+
+/**
+ * Picks which of a shared recruitment group's events a given student "belongs to", based on
+ * each event's recruitmentStudentUids allowlist. Events with no allowlist (null) match every
+ * student, which keeps the common one-event-per-group case working unchanged. Falls back to
+ * every candidate event when nothing matches, since a student is expected to always be listed
+ * under at least one event.
+ */
+export function findEventsForRecruitmentStudent(
+  events: TimelineContent[],
+  studentUid: string | null,
+): TimelineContent[] {
+  if (events.length === 0) return [];
+
+  const matches = events.filter(
+    (event) =>
+      event.recruitmentStudentUids === null ||
+      (studentUid !== null && event.recruitmentStudentUids.includes(studentUid)),
+  );
+  return matches.length > 0 ? matches : events;
+}
+
 export async function getContentUidsByRecruitmentGroup(
   env: Env,
 ): Promise<Map<string, { contentType: string; contentUid: string | null }>> {
@@ -312,7 +359,12 @@ async function fetchAllTimelineContentsMetaFromDb(env: Env): Promise<TimelineCon
 }
 
 export async function syncAllTimelineContentsMeta(env: Env, forceRefresh = true): Promise<TimelineContent[]> {
-  return fetchSourceCached(env, ALL_TIMELINE_CONTENTS_META_CACHE_KEY, () => fetchAllTimelineContentsMetaFromDb(env), forceRefresh);
+  return fetchSourceCached(
+    env,
+    ALL_TIMELINE_CONTENTS_META_CACHE_KEY,
+    () => fetchAllTimelineContentsMetaFromDb(env),
+    forceRefresh,
+  );
 }
 
 export async function getAllTimelineContentsMeta(env: Env): Promise<TimelineContent[]> {
@@ -365,6 +417,7 @@ export async function upsertTimelineContent(
     contentUid: input.contentUid,
     shopContentUid: input.shopContentUid,
     recruitmentGroupUid: input.recruitmentGroupUid,
+    recruitmentStudentUids: input.recruitmentStudentUids ? JSON.stringify(input.recruitmentStudentUids) : null,
     confirmed: input.confirmed ? 1 : 0,
     tags: JSON.stringify(input.tags),
   };

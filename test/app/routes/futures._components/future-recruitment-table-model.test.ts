@@ -48,7 +48,7 @@ function recruitment(
 }
 
 describe("buildFutureRecruitmentTableRows", () => {
-  it("splits overlapping recruitments by every start and end boundary", () => {
+  it("groups overlapping recruitments by their own recruitment periods", () => {
     const rows = buildFutureRecruitmentTableRows([
       content({
         uid: "content-a",
@@ -80,13 +80,11 @@ describe("buildFutureRecruitmentTableRows", () => {
     ]);
 
     expect(rows.map((row) => [row.since, row.until])).toEqual([
-      ["2026-05-12T00:00:00.000Z", "2026-05-19T00:00:00.000Z"],
-      ["2026-05-19T00:00:00.000Z", "2026-05-26T00:00:00.000Z"],
-      ["2026-05-26T00:00:00.000Z", "2026-06-02T00:00:00.000Z"],
+      ["2026-05-12T00:00:00.000Z", "2026-05-26T00:00:00.000Z"],
+      ["2026-05-19T00:00:00.000Z", "2026-06-02T00:00:00.000Z"],
     ]);
     expect(rows.map((row) => row.recruitments.map((group) => group.recruitment.studentName))).toEqual([
       ["학생 A"],
-      ["학생 A", "학생 B"],
       ["학생 B"],
     ]);
   });
@@ -116,7 +114,7 @@ describe("buildFutureRecruitmentTableRows", () => {
     expect(rows[0].recruitments[0].recruitment.studentName).toBe("아카이브 학생");
   });
 
-  it("uses timeline content dates for archive recruitments when the content is not endless", () => {
+  it("uses recruitment dates for archive recruitments when the content is not endless", () => {
     const rows = buildFutureRecruitmentTableRows([
       content({
         uid: "archive-but-limited",
@@ -136,11 +134,11 @@ describe("buildFutureRecruitmentTableRows", () => {
     ]);
 
     expect(rows).toHaveLength(1);
-    expect(rows[0].since).toBe("2026-08-01T00:00:00.000Z");
-    expect(rows[0].until).toBe("2026-08-08T00:00:00.000Z");
+    expect(rows[0].since).toBe("2026-08-03T00:00:00.000Z");
+    expect(rows[0].until).toBe("2026-08-10T00:00:00.000Z");
   });
 
-  it("ignores recruitment dates and uses the timeline content period", () => {
+  it("uses recruitment dates when they differ from the timeline content period", () => {
     const rows = buildFutureRecruitmentTableRows([
       content({
         uid: "fes-content",
@@ -159,9 +157,76 @@ describe("buildFutureRecruitmentTableRows", () => {
       }),
     ]);
 
-    expect(rows).toHaveLength(1);
-    expect(rows[0].since).toBe("2026-06-09T00:00:00.000Z");
-    expect(rows[0].until).toBe("2026-06-16T00:00:00.000Z");
+    expect(rows.map((row) => [row.since, row.until])).toEqual([
+      ["2026-06-02T00:00:00.000Z", "2026-06-16T00:00:00.000Z"],
+    ]);
+    expect(rows[0].events.map((item) => item.name)).toEqual(["페스 모집"]);
+  });
+
+  it("does not keep showing an event recruitment after the recruitment ends", () => {
+    const rows = buildFutureRecruitmentTableRows([
+      content({
+        uid: "event-with-shorter-recruitment",
+        name: "이벤트보다 짧은 모집",
+        startAt: "2026-10-13T02:00:00.000Z",
+        endAt: "2026-10-27T02:00:00.000Z",
+        contentType: "event",
+        recruitments: [
+          recruitment({
+            studentName: "나구사",
+            since: "2026-10-13T02:00:00.000Z",
+            until: "2026-10-20T02:00:00.000Z",
+          }),
+        ],
+      }),
+    ]);
+
+    expect(rows.map((row) => [row.since, row.until])).toEqual([
+      ["2026-10-13T00:00:00.000Z", "2026-10-20T00:00:00.000Z"],
+    ]);
+    expect(rows[0].recruitments.map((group) => group.recruitment.studentName)).toEqual(["나구사"]);
+  });
+
+  it("groups simultaneous recruitments by their shared start date even when they have different end dates", () => {
+    const rows = buildFutureRecruitmentTableRows([
+      content({
+        uid: "long-recruitment",
+        name: "2주 모집",
+        startAt: "2026-11-10T02:00:00.000Z",
+        endAt: "2026-11-24T02:00:00.000Z",
+        contentType: "event",
+        recruitments: [
+          recruitment({
+            studentName: "히카리",
+            since: "2026-11-10T02:00:00.000Z",
+            until: "2026-11-24T02:00:00.000Z",
+          }),
+        ],
+      }),
+      content({
+        uid: "short-recruitment",
+        name: "1주 모집",
+        startAt: "2026-11-10T02:00:00.000Z",
+        endAt: "2026-11-24T02:00:00.000Z",
+        contentType: "event",
+        recruitments: [
+          recruitment({
+            studentName: "사오리",
+            since: "2026-11-10T02:00:00.000Z",
+            until: "2026-11-17T02:00:00.000Z",
+          }),
+        ],
+      }),
+    ]);
+
+    expect(rows.map((row) => [row.since, row.until])).toEqual([
+      ["2026-11-10T00:00:00.000Z", "2026-11-24T00:00:00.000Z"],
+    ]);
+    expect(rows[0].recruitments.map((group) => group.recruitment.studentName)).toEqual(["히카리", "사오리"]);
+    expect(rows[0].recruitments.map((group) => group.until)).toEqual([
+      "2026-11-24T02:00:00.000Z",
+      "2026-11-17T02:00:00.000Z",
+    ]);
   });
 
   it("uses the display timezone midnight for row boundary instants", () => {
@@ -189,7 +254,7 @@ describe("buildFutureRecruitmentTableRows", () => {
     ]);
   });
 
-  it("splits recruitment content into weekly rows when a later week has auxiliary contents", () => {
+  it("keeps long recruitment content in one row when a later week has auxiliary contents", () => {
     const rows = buildFutureRecruitmentTableRows([
       content({
         uid: "two-week-pickup",
@@ -215,9 +280,9 @@ describe("buildFutureRecruitmentTableRows", () => {
     ]);
 
     expect(rows.map((row) => [row.since, row.until])).toEqual([
-      ["2026-05-26T00:00:00.000Z", "2026-06-02T00:00:00.000Z"],
-      ["2026-06-02T00:00:00.000Z", "2026-06-09T00:00:00.000Z"],
+      ["2026-05-26T00:00:00.000Z", "2026-06-09T00:00:00.000Z"],
     ]);
+    expect(rows[0].events.map((item) => item.name)).toEqual(["2주 모집", "2주차 컨텐츠"]);
   });
 
   it("folds empty continuation rows into the previous visible row period", () => {
@@ -269,10 +334,7 @@ describe("buildFutureRecruitmentTableRows", () => {
       }),
     ]);
 
-    expect(rows.map((row) => [row.hideRecruitmentCell, row.recruitmentRowSpan])).toEqual([
-      [false, 2],
-      [true, 1],
-    ]);
+    expect(rows.map((row) => [row.hideRecruitmentCell, row.recruitmentRowSpan])).toEqual([[false, 1]]);
   });
 
   it("does not create rows from auxiliary-only contents", () => {

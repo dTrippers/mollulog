@@ -1,13 +1,17 @@
 import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
-import { type UtcIsoString, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { isInstantAfter, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import type { Role } from "~/models/content.d";
 import { getFavoritedCounts } from "~/models/favorite-students";
 import { getAllRecruitmentGroups } from "~/models/recruitment";
-import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 import type { TimelineContent, TimelineContentType } from "~/models/timeline-content";
-import { type RaidScheduleMeta, getUpcomingRaidContents } from "./raid-content";
+import {
+  findEventsForRecruitmentStudent,
+  getTimelineContentsByContentTypes,
+  groupTimelineContentsByRecruitmentGroupUid,
+} from "~/models/timeline-content";
+import { getUpcomingRaidContents, type RaidScheduleMeta } from "./raid-content";
 
 const INDEX_CONTENTS_CACHE_KEY = cacheKey("route", "index", 1, "all");
 
@@ -69,11 +73,7 @@ export async function getIndexContents(env: Env, forceRefresh = false, ctx?: Exe
         const nowTime = nowDate.getTime();
         return startAt <= nowTime && (endAt === null || endAt >= nowTime);
       });
-      const timelineUidByRecruitmentGroupUid = new Map(
-        allEvents
-          .filter((event) => event.recruitmentGroupUid)
-          .map((event) => [event.recruitmentGroupUid as string, event.uid]),
-      );
+      const eventsByRecruitmentGroupUid = groupTimelineContentsByRecruitmentGroupUid(allEvents);
       const currentRecruitments: { eventUid: string; recruitment: IndexRecruitment }[] = recruitmentGroups
         .flatMap((group) =>
           group.recruitments
@@ -84,7 +84,11 @@ export async function getIndexContents(env: Env, forceRefresh = false, ctx?: Exe
                 recruitment.recruitmentType !== "encore",
             )
             .map((recruitment) => ({
-              eventUid: timelineUidByRecruitmentGroupUid.get(group.uid) ?? group.uid,
+              eventUid:
+                findEventsForRecruitmentStudent(
+                  eventsByRecruitmentGroupUid.get(group.uid) ?? [],
+                  recruitment.student?.uid ?? null,
+                )[0]?.uid ?? group.uid,
               recruitment: {
                 student: recruitment.student
                   ? {

@@ -1,14 +1,11 @@
+import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
-import { normalizeInstant, type UtcIsoString, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
-import {
-  type getRecruitmentGroupByUid,
-  getRecruitmentGroupsByUids,
-} from "~/models/recruitment";
-import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
-import { getTimelineContents } from "~/models/timeline-content";
-import type { TimelineContent } from "~/models/timeline-content";
+import { isInstantAfter, normalizeInstant, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import type { Role } from "~/models/content.d";
+import { type getRecruitmentGroupByUid, getRecruitmentGroupsByUids } from "~/models/recruitment";
+import type { TimelineContent } from "~/models/timeline-content";
+import { getTimelineContents } from "~/models/timeline-content";
 import { getUpcomingRaidContents, type RaidInfo } from "./raid-content";
 
 const FUTURE_CONTENTS_CACHE_KEY = cacheKey("route", "futures", 1, "all");
@@ -57,8 +54,11 @@ export function normalizeFutureContentDates(content: FutureContent): FutureConte
   };
 }
 
-export function toRecruitmentInfos(group: Awaited<ReturnType<typeof getRecruitmentGroupByUid>>): RecruitmentInfo[] {
-  return (group?.recruitments ?? [])
+export function toRecruitmentInfos(
+  group: Awaited<ReturnType<typeof getRecruitmentGroupByUid>>,
+  studentUids: string[] | null = null,
+): RecruitmentInfo[] {
+  return filterRecruitmentsByStudentUids(group?.recruitments ?? [], studentUids)
     .sort((a, b) => Number(a.rerun) - Number(b.rerun))
     .map((r) => ({
       recruitmentType: r.recruitmentType,
@@ -109,7 +109,7 @@ export async function getFutureContents(
 
           if (content.recruitmentGroupUid) {
             const group = recruitmentGroupMap.get(content.recruitmentGroupUid) ?? null;
-            return { ...content, recruitments: toRecruitmentInfos(group) };
+            return { ...content, recruitments: toRecruitmentInfos(group, content.recruitmentStudentUids) };
           }
 
           return { ...content, recruitments: [] };

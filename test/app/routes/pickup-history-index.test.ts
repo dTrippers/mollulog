@@ -36,6 +36,7 @@ jest.mock("~/models/student", () => ({
 }));
 
 jest.mock("~/models/timeline-content", () => ({
+  ...jest.requireActual<typeof import("~/models/timeline-content")>("~/models/timeline-content"),
   getTimelineContentsByRecruitmentGroupUids: jest.fn(),
 }));
 
@@ -142,7 +143,69 @@ describe("pickup history index loader", () => {
     const result = await loader(createLoaderArgs() as never);
 
     expect(mockedGetRecruitmentGroupsByUids).toHaveBeenCalledWith(env, ["hidden-heritage-rerun"]);
-    expect(result.recruitmentHistories[0].event.name).toBe("숨겨진 유산을 찾아서 ~트리니티 과외 활동~");
+    expect(result.recruitmentHistories[0].event.events).toEqual([
+      { uid: "content-hidden-heritage-rerun", name: "숨겨진 유산을 찾아서 ~트리니티 과외 활동~" },
+    ]);
+  });
+
+  it("lists every event sharing a recruitment group instead of dropping all but one", async () => {
+    mockedGetSenseiByUsername.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getSenseiByUsername>>);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResults.mockResolvedValue([
+      {
+        uid: "history-shared",
+        userId: 1,
+        recruitmentGroupUid: "shared-group",
+        contentUid: null,
+        completedAt: "2026-11-10T02:00:00.000Z",
+        recruitedStudents: [{ studentUid: "a", tier: 3, pickup: true }],
+        exchangedStudents: [],
+        trial: 10,
+        rawResult: null,
+        commentPostUid: null,
+        createdAt: "2026-11-10T02:00:00.000Z",
+        updatedAt: "2026-11-10T02:00:00.000Z",
+      },
+    ]);
+    mockedGetAllStudentsMap.mockResolvedValue({
+      a: { uid: "a", name: "학생A", initialTier: 3 },
+    } as unknown as Awaited<ReturnType<typeof getAllStudentsMap>>);
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
+      {
+        uid: "shared-group",
+        recruitmentType: "usual",
+        recruitments: [{ pickup: true, student: { uid: "a" } }],
+      },
+    ]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "event-b",
+        name: "이벤트B",
+        recruitmentGroupUid: "shared-group",
+        startAt: "2026-11-12T02:00:00.000Z",
+      },
+      {
+        uid: "event-a",
+        name: "이벤트A",
+        recruitmentGroupUid: "shared-group",
+        startAt: "2026-11-10T02:00:00.000Z",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader(createLoaderArgs() as never);
+
+    expect(result.recruitmentHistories[0].event.events).toEqual([
+      { uid: "event-a", name: "이벤트A" },
+      { uid: "event-b", name: "이벤트B" },
+    ]);
   });
 
   it("uses the student's initial tier for pickup history display", async () => {

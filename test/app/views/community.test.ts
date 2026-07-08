@@ -273,4 +273,31 @@ describe("enrichCommunityFeedPosts", () => {
     });
     expect(enriched.posts[0].pickupStudents.map((student) => student.uid)).toEqual(["10133", "20054"]);
   });
+
+  it("restricts pickupStudents to the subject event's recruitmentStudentUids when a group is shared", async () => {
+    const db = new FakeCommunityFeedD1Database();
+    mockedGetAllStudentsMap.mockResolvedValue({});
+    mockedGetGradingTagsByGradingUids.mockResolvedValue({});
+    mockedGetTimelineContentsByUids.mockResolvedValue([
+      {
+        uid: "content-1",
+        name: "이벤트#1",
+        recruitmentGroupUid: "shared-group",
+        recruitmentStudentUids: ["a"],
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByUids>>);
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([
+      {
+        uid: "shared-group",
+        recruitments: [
+          { pickup: true, recruitmentType: "limited", student: { uid: "a", name: "학생A" } },
+          { pickup: true, recruitmentType: "limited", student: { uid: "b", name: "학생B" } },
+        ],
+      },
+    ]);
+
+    const enriched = await enrichCommunityFeedPosts(createEnv(db), [createRecruitmentResultPost()]);
+
+    expect(enriched.posts[0].pickupStudents.map((student) => student.uid)).toEqual(["a"]);
+  });
 });

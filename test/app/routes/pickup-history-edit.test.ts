@@ -82,6 +82,7 @@ jest.mock("~/models/student", () => ({
 }));
 
 jest.mock("~/models/timeline-content", () => ({
+  ...jest.requireActual<typeof import("~/models/timeline-content")>("~/models/timeline-content"),
   getTimelineContentsByRecruitmentGroupUids: jest.fn(),
 }));
 
@@ -210,6 +211,52 @@ describe("pickup history editor loader", () => {
       "gojinraigou-rerun",
       "magical-heavy-caliber",
     ]);
+  });
+
+  it("collapses a group shared by two events into one option with joined names", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-11-25T00:00:00.000Z").getTime());
+
+    const sharedGroup = createGroup("shared-group", "2026-11-10T02:00:00Z");
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([sharedGroup]);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue(null);
+    mockedGetRecruitmentResultComment.mockResolvedValue(null);
+    mockedGetPickupHistory.mockResolvedValue(null);
+    mockedGetAllStudents.mockResolvedValue([]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "event-b",
+        name: "이벤트B",
+        recruitmentGroupUid: "shared-group",
+        startAt: "2026-11-12T02:00:00.000Z",
+        isSpoiler: false,
+      },
+      {
+        uid: "event-a",
+        name: "이벤트A",
+        recruitmentGroupUid: "shared-group",
+        startAt: "2026-11-10T02:00:00.000Z",
+        isSpoiler: false,
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/new"),
+      params: { username: "@sensei", id: "new" },
+    } as never);
+    if (result instanceof Response) {
+      throw new Error(`Expected pickup history editor data, got redirect to ${result.headers.get("Location")}`);
+    }
+
+    expect(result.events.map((event: { uid: string; name: string }) => ({ uid: event.uid, name: event.name }))).toEqual(
+      [{ uid: "shared-group", name: "이벤트A / 이벤트B" }],
+    );
   });
 
   it("keeps given students out of exchangeable pickup candidates", async () => {

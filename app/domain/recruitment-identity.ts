@@ -27,3 +27,20 @@ export function getRecruitmentFavoriteKey({
 }): string {
   return student?.uid ?? getProvisionalRecruitmentStudentKey(studentName);
 }
+
+/**
+ * Restricts a recruitment group's recruitments to the students an event's page is allowed
+ * to show. `studentUids: null` means "no restriction" (show every recruitment in the group),
+ * which is the default for events that don't share their recruitment group with another event.
+ */
+export function filterRecruitmentsByStudentUids<T extends { student: { uid: string } | null }>(
+  recruitments: T[],
+  studentUids: string[] | null,
+): T[] {
+  if (studentUids === null) {
+    return recruitments;
+  }
+
+  const allowedUids = new Set(studentUids);
+  return recruitments.filter((recruitment) => recruitment.student !== null && allowedUids.has(recruitment.student.uid));
+}

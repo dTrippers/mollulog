@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { type FutureContent, normalizeFutureContentDates } from "../../../app/views/futures";
+import { type FutureContent, normalizeFutureContentDates, toRecruitmentInfos } from "../../../app/views/futures";
 
 jest.mock("~/models/recruitment", () => ({
   getRecruitmentGroupByUid: jest.fn(),
@@ -8,6 +8,9 @@ jest.mock("~/models/recruitment", () => ({
 
 jest.mock("~/domain/recruitment-identity", () => ({
   getRecruitmentFavoriteKey: jest.fn(),
+  filterRecruitmentsByStudentUids: jest.requireActual<typeof import("~/domain/recruitment-identity")>(
+    "~/domain/recruitment-identity",
+  ).filterRecruitmentsByStudentUids,
 }));
 
 jest.mock("~/models/timeline-content", () => ({
@@ -93,5 +96,52 @@ describe("normalizeFutureContentDates", () => {
     } as unknown as FutureContent);
 
     expect(normalized.endAt ? normalized.endAt > now : normalized.startAt > now).toBe(true);
+  });
+});
+
+describe("toRecruitmentInfos", () => {
+  const group = {
+    uid: "shared-group",
+    recruitments: [
+      {
+        recruitmentType: "usual",
+        pickup: true,
+        rerun: false,
+        since: "2026-11-10T02:00:00.000Z",
+        until: null,
+        studentName: "학생A",
+        student: { uid: "a" },
+      },
+      {
+        recruitmentType: "usual",
+        pickup: true,
+        rerun: false,
+        since: "2026-11-10T02:00:00.000Z",
+        until: null,
+        studentName: "학생B",
+        student: { uid: "b" },
+      },
+      {
+        recruitmentType: "usual",
+        pickup: true,
+        rerun: true,
+        since: "2026-11-10T02:00:00.000Z",
+        until: null,
+        studentName: "학생C",
+        student: { uid: "c" },
+      },
+    ],
+  } as unknown as Parameters<typeof toRecruitmentInfos>[0];
+
+  it("returns every recruitment when no student filter is given", () => {
+    expect(toRecruitmentInfos(group).map((r) => r.student?.uid)).toEqual(["a", "b", "c"]);
+  });
+
+  it("keeps only the recruitments whose student uid is in the filter", () => {
+    expect(toRecruitmentInfos(group, ["a", "b"]).map((r) => r.student?.uid)).toEqual(["a", "b"]);
+  });
+
+  it("returns an empty list when the group is missing", () => {
+    expect(toRecruitmentInfos(null, ["a"])).toEqual([]);
   });
 });

@@ -1,8 +1,9 @@
-import { useLoaderData } from "react-router";
+import { SparklesIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { redirect } from "react-router";
+import { redirect, useLoaderData, useNavigate } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { EventHeader, Recruitments } from "~/components/features/events";
+import { EventHeader, EventInfoCard, Recruitments } from "~/components/features/events";
+import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { toUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
 import { getNestedContentComments } from "~/models/content";
@@ -13,8 +14,7 @@ import {
   unfavoriteStudent,
 } from "~/models/favorite-students";
 import { getRecruitmentGroupByUid } from "~/models/recruitment";
-import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
-import { getTimelineContent } from "~/models/timeline-content";
+import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
 import EventComment from "./events.$uid._components/EventComment";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -28,8 +28,17 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
 
-  const recruitments = content.recruitmentGroupUid
-    ? ((await getRecruitmentGroupByUid(env, content.recruitmentGroupUid))?.recruitments ?? [])
+  const recruitmentGroup = content.recruitmentGroupUid
+    ? await getRecruitmentGroupByUid(env, content.recruitmentGroupUid)
+    : null;
+  const recruitments = filterRecruitmentsByStudentUids(
+    recruitmentGroup?.recruitments ?? [],
+    content.recruitmentStudentUids,
+  );
+  const siblingEvents = content.recruitmentGroupUid
+    ? (await getTimelineContentsByRecruitmentGroupUids(env, [content.recruitmentGroupUid])).filter(
+        (sibling) => sibling.uid !== content.uid,
+      )
     : [];
   const eventContent = {
     name: content.name,
@@ -70,6 +79,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     allComments,
     me: currentUser ? { username: currentUser.username } : null,
     eventUid: timelineUid,
+    siblingEvents: siblingEvents.map((sibling) => ({ uid: sibling.uid, name: sibling.name })),
   };
 };
 
@@ -126,7 +136,9 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params, location
 };
 
 export default function EventIndex() {
-  const { eventContent, signedIn, allComments, me, eventUid } = useLoaderData<typeof loader>();
+  const { eventContent, signedIn, allComments, me, eventUid, siblingEvents } = useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+
   return (
     <div className="w-full">
       <div className="my-2 lg:my-8">
@@ -141,6 +153,17 @@ export default function EventIndex() {
           videos={eventContent.videos}
         />
       </div>
+
+      {siblingEvents.map((sibling) => (
+        <EventInfoCard
+          key={sibling.uid}
+          Icon={SparklesIcon}
+          title="모집 동시 개최"
+          description={`"${sibling.name}" 이벤트 모집과 동시에 개최되어 모집 포인트(천장)을 공유해요.`}
+          onClick={() => navigate(`/events/${sibling.uid}`)}
+          showArrow
+        />
+      ))}
 
       {eventContent.recruitments.length > 0 && (
         <Recruitments recruitments={eventContent.recruitments} signedIn={signedIn} />

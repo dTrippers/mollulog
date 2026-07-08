@@ -12,7 +12,7 @@ import { Link } from "react-router";
 import { StudentCard } from "~/components/features/students";
 import { EmptyView } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { formatInstant, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
+import { formatInstant, getInstantTime, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
 import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
@@ -128,6 +128,7 @@ function DesktopRecruitmentTable({
                 <TableCell rowSpan={row.recruitmentRowSpan}>
                   <RecruitmentStudents
                     groups={row.recruitments}
+                    rowUntil={row.until}
                     favoritedStudents={favoritedStudents}
                     favoritedCounts={favoritedCounts}
                     completedRecruitmentStudents={completedRecruitmentStudents}
@@ -184,6 +185,7 @@ function PeriodLabel({ since, until }: { since: string; until: string }) {
 
 function RecruitmentStudents({
   groups,
+  rowUntil,
   favoritedStudents,
   favoritedCounts,
   completedRecruitmentStudents,
@@ -192,6 +194,7 @@ function RecruitmentStudents({
   onRecruitmentComplete,
 }: {
   groups: FutureRecruitmentTableRecruitmentGroup[];
+  rowUntil: string;
   favoritedStudents: { contentUid: string; studentUid: string }[];
   favoritedCounts: { contentUid: string; studentUid: string; count: number }[];
   completedRecruitmentStudents: { recruitmentGroupUid: string; studentUid: string }[];
@@ -221,7 +224,9 @@ function RecruitmentStudents({
   }
 
   if (groupedStudents.length === 1) {
-    return <RecruitmentContentStudentGroup group={groupedStudents[0]} now={now} showContentName={false} />;
+    return (
+      <RecruitmentContentStudentGroup group={groupedStudents[0]} rowUntil={rowUntil} now={now} showContentName={false} />
+    );
   }
 
   return (
@@ -230,6 +235,7 @@ function RecruitmentStudents({
         <RecruitmentContentStudentGroup
           key={group.content.uid}
           group={group}
+          rowUntil={rowUntil}
           now={now}
           showContentName
           className={index > 0 ? "border-t border-neutral-100 pt-2 dark:border-neutral-800" : undefined}
@@ -241,17 +247,24 @@ function RecruitmentStudents({
 
 function RecruitmentContentStudentGroup({
   group,
+  rowUntil,
   now,
   showContentName,
   className,
 }: {
   group: FutureRecruitmentTableContentStudentGroup;
+  rowUntil: string;
   now: string;
   showContentName: boolean;
   className?: string;
 }) {
   const tags = getRecruitmentContentTags(group.content, now);
-  const showHeader = showContentName || tags.length > 0;
+  const timeZone = useDisplayTimeZone();
+  const groupUntilDateKey = formatInstant(group.until, { timeZone, format: "YYYY-MM-DD" });
+  const rowUntilDateKey = formatInstant(rowUntil, { timeZone, format: "YYYY-MM-DD" });
+  const earlyEndLabel =
+    groupUntilDateKey < rowUntilDateKey ? `${formatInstant(group.until, { timeZone, format: "MM/DD" })} 종료` : null;
+  const showHeader = showContentName || earlyEndLabel !== null || tags.length > 0;
 
   return (
     <div className={className ? `space-y-1 ${className}` : "space-y-1"}>
@@ -262,6 +275,7 @@ function RecruitmentContentStudentGroup({
               {group.content.name}
             </p>
           )}
+          {earlyEndLabel && <RecruitmentContentTag text={earlyEndLabel} color="neutral" />}
           {tags.map((tag) => (
             <RecruitmentContentTag key={tag.text} {...tag} />
           ))}
@@ -279,7 +293,7 @@ function RecruitmentContentTag({
 }: {
   Icon?: React.ElementType;
   text: string;
-  color: "current" | "green" | "yellow";
+  color: "current" | "green" | "yellow" | "neutral";
 }) {
   if (color === "current") {
     return (
@@ -293,6 +307,9 @@ function RecruitmentContentTag({
   let className = "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
   if (color === "green") {
     className = "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+  }
+  if (color === "neutral") {
+    className = "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300";
   }
 
   return (
@@ -387,6 +404,7 @@ type FutureRecruitmentTableStudent = ReturnType<typeof getRecruitmentStudentGrou
 
 type FutureRecruitmentTableContentStudentGroup = {
   content: FutureRecruitmentTableContent;
+  until: string;
   students: FutureRecruitmentTableStudent[];
 };
 
@@ -413,9 +431,12 @@ function getRecruitmentContentStudentGroups(
     if (!contentGroup) {
       contentGroup = {
         content: group.content,
+        until: group.until,
         students: [],
       };
       contentGroups.push(contentGroup);
+    } else if (getInstantTime(group.until) > getInstantTime(contentGroup.until)) {
+      contentGroup.until = group.until;
     }
 
     contentGroup.students.push(

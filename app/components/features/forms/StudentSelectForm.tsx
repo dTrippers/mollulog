@@ -35,7 +35,7 @@ function SearchInput({ searchQuery, setSearchQuery, searchPlaceholder, inputRef 
       <input
         ref={inputRef}
         type="text"
-        className="min-h-10 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
+        className="min-h-10 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/50 focus:border-ring focus:ring-2 focus:ring-ring/20"
         placeholder={searchPlaceholder ?? "검색해서 찾기..."}
         value={searchQuery}
         onChange={(event) => {

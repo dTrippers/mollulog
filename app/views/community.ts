@@ -1,13 +1,14 @@
+import { filterRecruitmentsByStudentUids } from "~/domain/recruitment-identity";
 import type { CommunityFeedPost } from "~/models/community";
 import {
   type CommunityFeedStatsRecruitmentGroup,
   type CommunityFeedStatsTimelineContent,
-  type RecruitmentFeedStats,
   getRecruitmentFeedStatsByPostUid,
+  type RecruitmentFeedStats,
 } from "~/models/community-feed";
 import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
-import { type StudentGradingTagValue, getGradingTagsByGradingUids } from "~/models/student-grading-tag";
+import { getGradingTagsByGradingUids, type StudentGradingTagValue } from "~/models/student-grading-tag";
 import { getTimelineContentsByUids } from "~/models/timeline-content";
 
 export const COMMUNITY_FEED_PAGE_SIZE = 20;
@@ -79,15 +80,21 @@ export async function enrichCommunityFeedPosts(
         : null,
       recruitmentStats: recruitmentStatsByPostUid.get(post.uid) ?? null,
       pickupStudents: post.subjectContentUid
-        ? (recruitmentGroupMap
-            .get(timelineContentMap.get(post.subjectContentUid)?.recruitmentGroupUid ?? "")
-            ?.recruitments.filter(
-              (recruitment) => recruitment.pickup && recruitment.recruitmentType !== "given" && recruitment.student,
+        ? (() => {
+            const subjectContent = timelineContentMap.get(post.subjectContentUid);
+            const group = recruitmentGroupMap.get(subjectContent?.recruitmentGroupUid ?? "");
+            return filterRecruitmentsByStudentUids(
+              group?.recruitments ?? [],
+              subjectContent?.recruitmentStudentUids ?? null,
             )
-            .map((recruitment) => ({
-              uid: recruitment.student?.uid ?? "",
-              name: recruitment.student?.name ?? recruitment.studentName,
-            })) ?? [])
+              .filter(
+                (recruitment) => recruitment.pickup && recruitment.recruitmentType !== "given" && recruitment.student,
+              )
+              .map((recruitment) => ({
+                uid: recruitment.student?.uid ?? "",
+                name: recruitment.student?.name ?? recruitment.studentName,
+              }));
+          })()
         : [],
     })),
   };
