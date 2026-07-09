@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  type StudentRaidSummaryStat,
   buildStudentRaidInvestment,
   buildStudentRaidSummary,
+  type StudentRaidSummaryStat,
 } from "~/routes/students.$id._components/StudentRaidSummaryModel";
 
 function makeStat(overrides: Partial<StudentRaidSummaryStat>): StudentRaidSummaryStat {

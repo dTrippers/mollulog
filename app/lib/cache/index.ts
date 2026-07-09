@@ -40,6 +40,7 @@ const KV_COOLDOWN_AFTER_TIMEOUT_MS = RUNTIME_TIMEOUTS.kv.cooldownAfterTimeout;
 type KvCircuitState = {
   disabledUntil: number;
   reason: string;
+  skippedOperations: number;
 };
 
 const kvCircuitStates = new WeakMap<object, KvCircuitState>();
@@ -183,7 +184,7 @@ function toParsedCacheValue<T>(raw: string): ParsedCacheValue<T> | null {
 }
 
 async function readKvCacheValue<T>(env: Env, dataKey: string): Promise<ParsedCacheValue<T> | null> {
-  if (shouldSkipKv(env, "kv.get", dataKey)) {
+  if (shouldSkipKv(env)) {
     return null;
   }
 
@@ -208,7 +209,7 @@ async function writeKvCacheValue<T>(env: Env, dataKey: string, data: T, cachedAt
     cachedAt,
   };
 
-  if (shouldSkipKv(env, "kv.put", dataKey)) {
+  if (shouldSkipKv(env)) {
     return;
   }
 
@@ -243,6 +244,13 @@ function warnIoFailure(label: string, dataKey: string, error: unknown, timeoutMs
   console.error("[io-watchdog] failed", getIoWatchdogContext(details));
 }
 
+/**
+ * The circuit logs on its two edges — opening and closing — rather than on every
+ * skipped operation. A tripped circuit skips KV for the whole cooldown, so a
+ * per-operation log emits hundreds of identical events that say nothing the
+ * opening event did not already say. `skippedOperations` on the closing event
+ * carries the blast radius instead.
+ */
 function getKvCooldownRemainingMs(env: Env) {
   const state = kvCircuitStates.get(env.KV_CACHE);
   if (!state) {
@@ -252,6 +260,14 @@ function getKvCooldownRemainingMs(env: Env) {
   const remainingMs = state.disabledUntil - Date.now();
   if (remainingMs <= 0) {
     kvCircuitStates.delete(env.KV_CACHE);
+    console.warn(
+      "[cache] kv.circuit_closed",
+      getIoWatchdogContext({
+        label: "kv.circuit",
+        reason: state.reason,
+        skippedOperations: state.skippedOperations,
+      }),
+    );
     return 0;
   }
 
@@ -259,28 +275,38 @@ function getKvCooldownRemainingMs(env: Env) {
 }
 
 function tripKvCircuit(env: Env, reason: string) {
-  kvCircuitStates.set(env.KV_CACHE, {
-    disabledUntil: Date.now() + KV_COOLDOWN_AFTER_TIMEOUT_MS,
-    reason,
-  });
+  const disabledUntil = Date.now() + KV_COOLDOWN_AFTER_TIMEOUT_MS;
+  const openState = getKvCooldownRemainingMs(env) > 0 ? kvCircuitStates.get(env.KV_CACHE) : undefined;
+
+  // Re-tripping while open extends the cooldown but keeps the skip count, so the
+  // closing event still reports the blast radius of the whole open period.
+  if (openState) {
+    openState.disabledUntil = disabledUntil;
+    openState.reason = reason;
+    return;
+  }
+
+  kvCircuitStates.set(env.KV_CACHE, { disabledUntil, reason, skippedOperations: 0 });
+  console.error(
+    "[cache] kv.circuit_open",
+    getIoWatchdogContext({
+      label: "kv.circuit",
+      reason,
+      cooldownMs: KV_COOLDOWN_AFTER_TIMEOUT_MS,
+    }),
+  );
 }
 
-function shouldSkipKv(env: Env, operation: "kv.get" | "kv.put", dataKey: string) {
+function shouldSkipKv(env: Env) {
   const remainingMs = getKvCooldownRemainingMs(env);
   if (remainingMs <= 0) {
     return false;
   }
 
   const state = kvCircuitStates.get(env.KV_CACHE);
-  console.warn(
-    "[io-watchdog] kv.skipped",
-    getIoWatchdogContext({
-      label: operation,
-      dataKey,
-      cooldownRemainingMs: remainingMs,
-      reason: state?.reason,
-    }),
-  );
+  if (state) {
+    state.skippedOperations += 1;
+  }
   return true;
 }
 
@@ -301,21 +327,14 @@ function enterCacheDecisionSpan<T>(
   });
 }
 
-function shouldTraceInflightStart(dataKey: string) {
-  return dataKey.startsWith("cache::community-feed::");
-}
-
-function logInflightLifecycle(phase: "start" | "settled" | "evicted", entry: InflightCacheRequest) {
+/**
+ * A regeneration that starts and never settles surfaces as an `evicted` log once
+ * it outlives `INFLIGHT_MAX_MS`, so the lifecycle needs no `start` log to detect
+ * a hang. Only slow settles and evictions are worth an event.
+ */
+function logInflightLifecycle(phase: "settled" | "evicted", entry: InflightCacheRequest) {
   const elapsedMs = Date.now() - entry.startedAt;
-  if (phase === "start" && !shouldTraceInflightStart(entry.dataKey)) {
-    return;
-  }
-
-  if (
-    phase === "settled" &&
-    elapsedMs < RUNTIME_TIMEOUTS.watchdogWarnMs.default &&
-    !shouldTraceInflightStart(entry.dataKey)
-  ) {
+  if (phase === "settled" && elapsedMs < RUNTIME_TIMEOUTS.watchdogWarnMs.default) {
     return;
   }
 
@@ -425,7 +444,6 @@ async function runWithInflightDedup<T>(
     forceRefresh,
   };
   inflightState.entry = entry;
-  logInflightLifecycle("start", entry);
   // Safety net: if `request` never settles (a hung KV/BAQL/ranks call), drop the
   // in-flight entry after a deadline so it cannot poison every later same-key
   // request sharing this long-lived isolate.
@@ -571,7 +589,6 @@ function scheduleBackgroundRefresh<T>(
     startedAt: Date.now(),
     forceRefresh: true,
   };
-  logInflightLifecycle("start", entry);
   inflightMap.set(cacheKey, entry);
   if (options.ctx) {
     options.ctx.waitUntil(guarded);

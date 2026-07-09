@@ -1,8 +1,8 @@
 import "./lib/dayjs";
 import { isbot } from "isbot";
 import { renderToReadableStream } from "react-dom/server";
-import type { AppLoadContext, EntryContext } from "react-router";
-import { ServerRouter } from "react-router";
+import type { AppLoadContext, EntryContext, HandleErrorFunction } from "react-router";
+import { isRouteErrorResponse, ServerRouter } from "react-router";
 import { watchIo } from "./lib/io-watchdog";
 import { captureServerError, getLogger } from "./lib/observability.server";
 
@@ -48,3 +48,26 @@ export default async function handleRequest(
     status: statusCode,
   });
 }
+
+/**
+ * Replaces React Router's default handler, which `console.error`s every thrown
+ * router response — including the 404s that bot scans and stale asset hashes
+ * generate constantly. Those are correct 404 responses, not failures, and at
+ * error level they drown out real incidents and misfire error-rate alerts.
+ */
+export const handleError: HandleErrorFunction = (error, { request }) => {
+  if (request.signal.aborted) {
+    return;
+  }
+
+  if (isRouteErrorResponse(error) && error.status < 500) {
+    return;
+  }
+
+  console.error(error);
+  captureServerError(error, {
+    handler: "handleError",
+    method: request.method,
+    url: request.url,
+  });
+};

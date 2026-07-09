@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
-import { parseStudentStateImport } from "~/domain/student-state-serialization";
 import {
+  parseStudentStateImport,
   type StudentStateExportInput,
   serializeJustin163Export,
   serializeSchaleDbExport,

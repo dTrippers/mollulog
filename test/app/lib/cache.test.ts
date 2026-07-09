@@ -288,11 +288,11 @@ describe("fetchCached", () => {
         timeoutMs: 2_000,
       }),
     );
-    expect(console.warn).toHaveBeenCalledWith(
-      "[io-watchdog] kv.skipped",
+    expect(console.error).toHaveBeenCalledWith(
+      "[cache] kv.circuit_open",
       expect.objectContaining({
-        label: "kv.put",
-        dataKey: "youtube",
+        label: "kv.circuit",
+        reason: "kv.get",
       }),
     );
   });
@@ -332,13 +332,13 @@ describe("fetchCached", () => {
     expect(secondFn).toHaveBeenCalledTimes(1);
     expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledWith(
-      "[io-watchdog] kv.skipped",
-      expect.objectContaining({
-        label: "kv.get",
-        dataKey: "students",
-      }),
+
+    // The circuit announces itself once when it opens, not once per skipped
+    // operation — this request skipped both a get and a put and added no logs.
+    const circuitOpenLogs = (console.error as jest.Mock).mock.calls.filter(
+      ([message]) => message === "[cache] kv.circuit_open",
     );
+    expect(circuitOpenLogs).toHaveLength(1);
   });
 
   it("returns fresh data when a KV write times out", async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import {
-  type SelectableEvent,
   filterSelectableEvents,
+  type SelectableEvent,
   shouldConfirmSelectableEventNavigation,
 } from "~/components/features/events/EventSelector";
 

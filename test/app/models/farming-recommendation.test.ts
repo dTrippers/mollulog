@@ -4,11 +4,12 @@ import { ResourceTypeEnum } from "../../../app/graphql/graphql";
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
 }));
+
 import {
-  type FarmingStage,
   buildEquipmentFarmingNeeded,
   buildEquipmentFarmingRequirements,
   buildFarmingRecommendations,
+  type FarmingStage,
 } from "~/domain/farming-recommendation";
 import type { StudentGrowthResourceRequirements } from "../../../app/domain/growth-resource";
 

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import { RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
 import {
-  type FutureRecruitmentTableContent,
   buildFutureRecruitmentTableRows,
+  type FutureRecruitmentTableContent,
   formatAuxiliaryContentPeriodLabel,
   isFutureRecruitmentTableContentLinkable,
   isFutureRecruitmentTableContentVisible,

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
 import type { StudentStateDraftCurrentValue, StudentStateDraftTargetValue } from "~/domain/student-state";
 import {
-  type StudentStateCurrentComparisonValue,
-  type StudentStateTargetComparisonValue,
   isStudentStateCurrentChanged,
   isStudentStateTargetChanged,
   mergeStudentStateDraftValueForUpdate,
+  type StudentStateCurrentComparisonValue,
+  type StudentStateTargetComparisonValue,
 } from "~/domain/student-state";
 
 const defaultOptions = { initialTier: 1, hasGear: true };

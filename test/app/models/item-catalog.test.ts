@@ -7,9 +7,9 @@ jest.mock("~/lib/baql", () => ({
 }));
 
 import {
-  type ItemCatalogResource,
   getGrowthPlannerCatalogResourceKindOrder,
   getGrowthPlannerCatalogResources,
+  type ItemCatalogResource,
 } from "../../../app/models/item-catalog";
 
 describe("item-catalog", () => {

@@ -1,10 +1,10 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import {
-  PASSKEY_CHALLENGE_TIMEOUT_MS,
-  PASSKEY_CHALLENGE_TTL_SECONDS,
   advancePasskeyCounterAndGetSensei,
   createPasskeyAuthenticationOptions,
   createPasskeyCreationOptions,
+  PASSKEY_CHALLENGE_TIMEOUT_MS,
+  PASSKEY_CHALLENGE_TTL_SECONDS,
 } from "../../../app/models/passkey";
 
 type PreparedStatement = {

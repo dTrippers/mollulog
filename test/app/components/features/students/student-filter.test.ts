@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  type StudentFilterState,
   createStudentFilterState,
   getFilteredStudentUids,
+  type StudentFilterState,
 } from "~/components/features/students/StudentFilter";
 import { Attack, Defense } from "~/graphql/graphql";
 

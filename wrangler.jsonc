@@ -13,9 +13,12 @@
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
+    // Raised 0.1 -> 1 after measuring volume (2026-07-10): ~930k events/month
+    // against the 10M included in Workers Paid. Sampled traces made per-route
+    // percentiles and single-incident forensics unusable.
     "traces": {
       "enabled": true,
-      "head_sampling_rate": 0.1,
+      "head_sampling_rate": 1,
       "destinations": ["axiom-traces"],
       "persist": true
     },

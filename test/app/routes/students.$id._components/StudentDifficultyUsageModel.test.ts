@@ -3,12 +3,12 @@ import { Defense } from "~/graphql/graphql";
 import type { StudentAnalysisResponse } from "~/lib/ranks/student-analysis";
 import type { RaidType, Terrain } from "~/models/content.d";
 import {
-  type StudentAnalysisScopeMetadata,
   aggregateBossUsage,
   aggregateDifficultyUsage,
   buildStudentAnalysisScopeLookup,
   getStudentAnalysisEnvironmentKey,
   getStudentAnalysisScopeKey,
+  type StudentAnalysisScopeMetadata,
 } from "~/routes/students.$id._components/StudentDifficultyUsageModel";
 
 function makeScopeMetadata(overrides: {

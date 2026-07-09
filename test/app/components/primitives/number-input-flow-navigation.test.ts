@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  type NumberInputFlowNavigationRect,
   findNumberInputFlowNavigationTargetIndex,
+  type NumberInputFlowNavigationRect,
 } from "../../../../app/components/primitives/useNumberInputFlowNavigation";
 
 function rect(left: number, top: number, width = 40, height = 20): NumberInputFlowNavigationRect {
