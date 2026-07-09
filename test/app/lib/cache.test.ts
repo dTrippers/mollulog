@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import {
   DEFAULT_KV_EXPIRATION_TTL,
-  SOURCE_CACHE_EXPIRATION_TTL,
   fetchCached,
   fetchLazySourceCachedBatch,
   fetchRouteCached,
+  SOURCE_CACHE_EXPIRATION_TTL,
 } from "../../../app/lib/cache";
 
 type CacheEnv = Parameters<typeof fetchCached>[0];
@@ -47,6 +47,32 @@ async function flushPromises() {
   for (let i = 0; i < 5; i += 1) {
     await Promise.resolve();
   }
+}
+
+function createTracingContext() {
+  const spans: Array<{ name: string; attributes: Record<string, unknown> }> = [];
+  const waitUntil = jest.fn();
+  const enterSpan = jest.fn(
+    (name: string, callback: (span: { setAttribute: (key: string, value: unknown) => void }) => unknown) => {
+      const attributes: Record<string, unknown> = {};
+      spans.push({ name, attributes });
+      return callback({
+        setAttribute(key, value) {
+          attributes[key] = value;
+        },
+      });
+    },
+  );
+
+  return {
+    ctx: {
+      waitUntil,
+      tracing: { enterSpan },
+    } as unknown as ExecutionContext,
+    enterSpan,
+    spans,
+    waitUntil,
+  };
 }
 
 afterEach(() => {
@@ -548,6 +574,92 @@ describe("fetchRouteCached", () => {
     expect(fn).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
     expect(waitUntil).not.toHaveBeenCalled();
+  });
+
+  it("records a fresh hit decision span when route cache is fresh", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const cachedData = ["cached-route"];
+    const { env } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: cachedData,
+        cachedAt: now - 1_000,
+      }),
+    );
+    const { ctx, spans } = createTracingContext();
+    const fn = jest.fn(async () => ["fresh-route"]);
+
+    await expect(
+      fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 }),
+    ).resolves.toEqual(cachedData);
+
+    expect(fn).not.toHaveBeenCalled();
+    expect(spans).toEqual([
+      {
+        name: "cache.decision",
+        attributes: {
+          "cache.key": "route::home::v1::all",
+          "cache.result": "fresh_hit",
+        },
+      },
+    ]);
+  });
+
+  it("records a stale SWR decision span while preserving background refresh", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const staleData = ["stale-route"];
+    const freshData = ["fresh-route"];
+    const { env } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: staleData,
+        cachedAt: now - 61_000,
+      }),
+    );
+    const { ctx, spans, waitUntil } = createTracingContext();
+    const fn = jest.fn(async () => freshData);
+
+    await expect(
+      fetchRouteCached(env, ctx, "route::home::v1::all", fn, false, { freshTtl: 60, maxStaleTtl: 120 }),
+    ).resolves.toEqual(staleData);
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(waitUntil).toHaveBeenCalledTimes(1);
+    await expect(waitUntil.mock.calls[0][0]).resolves.toEqual(freshData);
+    expect(spans).toEqual([
+      {
+        name: "cache.decision",
+        attributes: {
+          "cache.key": "route::home::v1::all",
+          "cache.result": "stale_swr",
+        },
+      },
+    ]);
+  });
+
+  it("records a miss decision span while preserving synchronous regeneration", async () => {
+    const { env, kv } = createEnv(null);
+    const { ctx, spans, waitUntil } = createTracingContext();
+    const fn = jest.fn(async () => ["fresh-route"]);
+
+    await expect(fetchRouteCached(env, ctx, "route::home::v1::all", fn)).resolves.toEqual(["fresh-route"]);
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(kv.put).toHaveBeenCalledTimes(1);
+    expect(waitUntil).not.toHaveBeenCalled();
+    expect(spans).toEqual([
+      {
+        name: "cache.decision",
+        attributes: {
+          "cache.key": "route::home::v1::all",
+          "cache.result": "miss_regenerate",
+        },
+      },
+    ]);
   });
 
   it("deduplicates concurrent background refreshes for stale route data", async () => {

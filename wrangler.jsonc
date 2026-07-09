@@ -14,8 +14,15 @@
     "enabled": true,
     "head_sampling_rate": 1,
     "traces": {
-      "enabled": false,
-      "head_sampling_rate": 1
+      "enabled": true,
+      "head_sampling_rate": 0.1,
+      "destinations": ["axiom-traces"],
+      "persist": true
+    },
+    "logs": {
+      "head_sampling_rate": 1,
+      "destinations": ["axiom-logs"],
+      "persist": true
     }
   },
 
