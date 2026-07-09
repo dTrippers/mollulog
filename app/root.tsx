@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
   Links,
@@ -16,15 +16,14 @@ import type { Route } from "./+types/root";
 import { getActiveSensei } from "./auth/authenticator.server";
 import { getPreference } from "./auth/preference.server";
 import { ErrorPage, Footer, NavigationBar, ServerErrorPage } from "./components/features/layout";
-import { SignInProvider } from "./contexts/SignInProvider";
-import { useSignIn } from "./contexts/SignInProvider";
+import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { captureClientError } from "./lib/observability.client";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
-import { getNavigationBarContents } from "./views/navigation";
 import styles from "./tailwind.css?url";
+import { getNavigationBarContents } from "./views/navigation";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
 const themeConfig = {
@@ -47,6 +46,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     FRONT_BETTER_STACK_SENTRY_DSN?: string;
   };
   const ctx: ExecutionContext = context.cloudflare.ctx;
+  const colo = context.cloudflare.colo;
 
   return ctx.tracing.enterSpan("root.loader", async (span) => {
     const sensei = await ctx.tracing.enterSpan("root_auth", () => getActiveSensei(env, request));
@@ -56,6 +56,9 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     );
 
     span.setAttribute("signedIn", sensei !== null);
+    if (colo) {
+      span.setAttribute("colo", colo);
+    }
 
     return {
       currentUsername: sensei?.username ?? null,

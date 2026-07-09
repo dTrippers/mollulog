@@ -8,7 +8,18 @@
 
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "head_sampling_rate": 1,
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1,
+      "destinations": ["axiom-traces"],
+      "persist": true
+    },
+    "logs": {
+      "head_sampling_rate": 1,
+      "destinations": ["axiom-logs"],
+      "persist": true
+    }
   },
   "triggers": {
     "crons": ["*/10 * * * *"]

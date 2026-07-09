@@ -16,6 +16,7 @@ declare module "react-router" {
     cloudflare: {
       env: ObservabilityEnv;
       ctx: ExecutionContext;
+      colo?: string;
     };
   }
 }
@@ -29,7 +30,7 @@ const handler: ExportedHandler<ObservabilityEnv> = {
       watchIo(
         "request",
         requestHandler(request, {
-          cloudflare: { env: appEnv, ctx },
+          cloudflare: { env: appEnv, ctx, colo: request.cf?.colo },
         }),
         { method: request.method, path: new URL(request.url).pathname },
         RUNTIME_TIMEOUTS.watchdogWarnMs.request,

@@ -135,6 +135,8 @@ type FetchCachedOptions<T> = {
   warnOnRequestRefresh?: boolean;
 };
 
+type CacheDecision = "fresh_hit" | "stale_swr" | "miss_regenerate";
+
 type RouteCacheOptions<T> = {
   freshTtl?: number | ((data: T) => number);
   maxStaleTtl?: number | ((data: T) => number);
@@ -280,6 +282,23 @@ function shouldSkipKv(env: Env, operation: "kv.get" | "kv.put", dataKey: string)
     }),
   );
   return true;
+}
+
+function enterCacheDecisionSpan<T>(
+  ctx: ExecutionContext | undefined,
+  dataKey: string,
+  decision: CacheDecision,
+  fn: () => T,
+): T {
+  if (!ctx?.tracing) {
+    return fn();
+  }
+
+  return ctx.tracing.enterSpan("cache.decision", (span) => {
+    span.setAttribute("cache.key", dataKey);
+    span.setAttribute("cache.result", decision);
+    return fn();
+  });
 }
 
 function shouldTraceInflightStart(dataKey: string) {
@@ -438,7 +457,7 @@ async function fetchCachedInternal<T>(
   const cached = await readKvCacheValue<T>(env, dataKey);
 
   if (cached && !forceRefresh && isFresh(cached.cachedAt, ttl, cached.data)) {
-    return cached.data;
+    return enterCacheDecisionSpan(options.ctx, cacheKey, "fresh_hit", () => cached.data);
   }
 
   if (
@@ -448,8 +467,10 @@ async function fetchCachedInternal<T>(
     options.maxStaleTtl !== undefined &&
     isFresh(cached.cachedAt, options.maxStaleTtl, cached.data)
   ) {
-    scheduleBackgroundRefresh(env, cacheKey, fn, expirationTtl, options);
-    return cached.data;
+    return enterCacheDecisionSpan(options.ctx, cacheKey, "stale_swr", () => {
+      scheduleBackgroundRefresh(env, cacheKey, fn, expirationTtl, options);
+      return cached.data;
+    });
   }
 
   if (!forceRefresh && options.warnOnRequestRefresh) {
@@ -465,24 +486,26 @@ async function fetchCachedInternal<T>(
     );
   }
 
-  try {
-    // Cold miss / maxStale-exceeded regeneration. `coalesceRefresh` (SWR routes)
-    // shares one regeneration across concurrent callers; non-SWR callers are
-    // already coalesced one level up in `fetchCached`.
-    const runRefresh = () => refreshCacheValue(env, cacheKey, fn, expirationTtl);
-    const data = coalesceRefresh ? await coalesceRefresh(runRefresh) : await runRefresh();
-    return data;
-  } catch (error) {
-    if (isTimeoutError(error)) {
-      warnIoFailure("cache.fn", dataKey, error, CACHE_FN_TIMEOUT_MS);
-    }
+  return enterCacheDecisionSpan(options.ctx, cacheKey, "miss_regenerate", async () => {
+    try {
+      // Cold miss / maxStale-exceeded regeneration. `coalesceRefresh` (SWR routes)
+      // shares one regeneration across concurrent callers; non-SWR callers are
+      // already coalesced one level up in `fetchCached`.
+      const runRefresh = () => refreshCacheValue(env, cacheKey, fn, expirationTtl);
+      const data = coalesceRefresh ? await coalesceRefresh(runRefresh) : await runRefresh();
+      return data;
+    } catch (error) {
+      if (isTimeoutError(error)) {
+        warnIoFailure("cache.fn", dataKey, error, CACHE_FN_TIMEOUT_MS);
+      }
 
-    if (cached) {
-      return cached.data;
-    }
+      if (cached) {
+        return cached.data;
+      }
 
-    throw error;
-  }
+      throw error;
+    }
+  });
 }
 
 async function refreshCacheValue<T>(
@@ -688,9 +711,7 @@ export async function fetchLazySourceCachedBatch<K extends string, T>(
       throw error;
     }
 
-    return new Map(
-      uniqueEntries.map((entry) => [entry.key, resolveBatchValue(entry.key, freshValues, staleValues)]),
-    );
+    return new Map(uniqueEntries.map((entry) => [entry.key, resolveBatchValue(entry.key, freshValues, staleValues)]));
   }
 
   const cachedAt = Date.now();
@@ -715,9 +736,7 @@ export async function fetchLazySourceCachedBatch<K extends string, T>(
     }),
   );
 
-  return new Map(
-    uniqueEntries.map((entry) => [entry.key, resolveBatchValue(entry.key, freshValues, staleValues)]),
-  );
+  return new Map(uniqueEntries.map((entry) => [entry.key, resolveBatchValue(entry.key, freshValues, staleValues)]));
 }
 
 export async function fetchRouteCached<T>(
