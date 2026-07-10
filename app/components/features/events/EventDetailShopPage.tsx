@@ -160,7 +160,7 @@ export default function EventDetailShopPage({
           )}
         </div>
 
-        <div>
+        <div className="space-y-8">
           <StudentBonusSelector
             eventRewardBonus={eventRewardBonus}
             recruitedStudentUids={recruitedStudentUids}

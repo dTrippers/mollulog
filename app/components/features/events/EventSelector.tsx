@@ -9,7 +9,7 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import type { ShopAvailableEvent } from "~/models/event-content";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 const SPOILER_EVENT_NAVIGATION_MESSAGE = "스포일러가 포함된 이벤트에요. 이동할까요?";
 
@@ -133,7 +133,7 @@ export default function EventSelector({
     <div className="relative" ref={rootRef}>
       <button
         type="button"
-        className="group relative w-full cursor-pointer rounded-md border border-input bg-background text-left transition-colors hover:border-neutral-300 hover:bg-muted/70 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none dark:hover:border-neutral-500 dark:hover:bg-neutral-700/70"
+        className="group relative w-full cursor-pointer rounded-md border border-input bg-background text-left transition-colors hover:bg-muted/70 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:outline-none"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
@@ -150,7 +150,7 @@ export default function EventSelector({
           </div>
         )}
         <ChevronDownIcon
-          className={sanitizeClassName(`
+          className={cn(`
             absolute top-1/2 right-3 size-5 -translate-y-1/2 flex-shrink-0 text-neutral-500 transition-transform
             ${isOpen ? "rotate-180" : ""}
           `)}
@@ -186,7 +186,7 @@ export default function EventSelector({
                   type="button"
                   key={event.uid}
                   onClick={() => handleSelect(event.uid)}
-                  className={sanitizeClassName(`
+                  className={cn(`
                     block w-full cursor-pointer text-left transition-colors hover:bg-muted/70 dark:hover:bg-neutral-700/70
                     ${index > 0 ? "border-border/70 border-t" : ""}
                   `)}
@@ -198,7 +198,7 @@ export default function EventSelector({
                   to={getEventHref(event)}
                   key={event.uid}
                   onClick={(clickEvent) => handleLinkClick(event, clickEvent)}
-                  className={sanitizeClassName(`
+                  className={cn(`
                     block cursor-pointer transition-colors hover:bg-muted/70 dark:hover:bg-neutral-700/70
                     ${index > 0 ? "border-border/70 border-t" : ""}
                   `)}

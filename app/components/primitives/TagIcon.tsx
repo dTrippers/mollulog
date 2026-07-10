@@ -11,7 +11,7 @@ export default function TagIcon({ tag, size = "md" }: TagIconProps) {
   const sizeClasses = {
     sm: "size-4",
     md: "size-5",
-    lg: "size-6"
+    lg: "size-6",
   };
 
   // Define specific colors for each icon (chart style)
@@ -26,7 +26,7 @@ export default function TagIcon({ tag, size = "md" }: TagIconProps) {
       case "love":
         return "text-red-600 dark:text-red-400";
       default:
-        return "text-neutral-600 dark:text-neutral-400";
+        return "text-muted-foreground";
     }
   };
 

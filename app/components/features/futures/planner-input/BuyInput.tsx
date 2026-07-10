@@ -102,7 +102,7 @@ export default function BuyInput({ onSaveBuy }: BuyInputProps) {
         )}
         <Button
           text="저장"
-          variant="tint-blue"
+          variant="primary"
           fullWidth
           className="mt-2"
           onClick={() =>

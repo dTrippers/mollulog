@@ -3,7 +3,7 @@ import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from "@heroicons/react/
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { compareInstantDesc, formatInstant, type UtcIsoString } from "~/lib/date-time";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type RecruitmentHistoriesProps = {
   recruitments: {
@@ -36,7 +36,7 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
     if (!scrollContainerRef.current) {
       return;
     }
-  
+
     const container = scrollContainerRef.current;
     const items = container.children;
     if (items.length === 0) {
@@ -85,7 +85,11 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
       {/* Left Arrow (desktop only) */}
       {sortedRecruitments.length > 2 && (
         <div className="hidden md:flex pointer-events-none absolute left-0 top-1/2 -translate-y-1/2 -translate-x-full z-10 w-10 items-center justify-center">
-          <button type="button" className="pointer-events-auto p-1 hover:bg-black hover:text-white rounded-full transition" onClick={() => selectPickup(-1)}>
+          <button
+            type="button"
+            className="pointer-events-auto p-1 hover:bg-black hover:text-white rounded-full transition"
+            onClick={() => selectPickup(-1)}
+          >
             <ChevronDoubleLeftIcon className="size-6" strokeWidth={2} />
           </button>
         </div>
@@ -104,15 +108,11 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
         {sortedRecruitments.map((event) => (
           <div key={event.uid} className="w-3/4 md:w-2/5 aspect-video rounded-lg relative shrink-0">
             {event.imageUrl && (
-              <img
-                src={event.imageUrl}
-                alt={event.name}
-                className="absolute w-full h-full object-cover rounded-lg"
-              />
+              <img src={event.imageUrl} alt={event.name} className="absolute w-full h-full object-cover rounded-lg" />
             )}
             <Link
               to={`/events/${event.uid}`}
-              className={sanitizeClassName(`
+              className={cn(`
                   absolute w-full h-full flex flex-col justify-end p-4 rounded-lg transition
                   ${event.imageUrl ? "bg-black/65 hover:bg-black/80 text-white" : "bg-neutral-100 dark:bg-neutral-900 hover:bg-neutral-200 dark:hover:bg-neutral-700"}
                 `)}
@@ -129,7 +129,11 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
       {/* Right Arrow (desktop only) */}
       {sortedRecruitments.length > 2 && (
         <div className="hidden md:flex pointer-events-none absolute right-0 top-1/2 -translate-y-1/2 translate-x-full z-10 w-10 items-center justify-center">
-          <button type="button" className="pointer-events-auto p-1 hover:bg-black hover:text-white rounded-full transition" onClick={() => selectPickup(1)}>
+          <button
+            type="button"
+            className="pointer-events-auto p-1 hover:bg-black hover:text-white rounded-full transition"
+            onClick={() => selectPickup(1)}
+          >
             <ChevronDoubleRightIcon className="size-6" strokeWidth={2} />
           </button>
         </div>

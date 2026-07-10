@@ -151,7 +151,7 @@ export default function PackageInput({ onSavePackage, disabled = false }: Packag
         <Checkbox checked={autoRepurchase} onChange={setAutoRepurchase} label="만료 후 자동 재구매 처리" />
         <Button
           text="저장"
-          variant="tint-blue"
+          variant="primary"
           fullWidth
           className="mt-2"
           disabled={disabled}
@@ -179,7 +179,7 @@ export function ApPackageInput({ onSavePackage, disabled = false }: ApPackageInp
         <Checkbox checked={autoRepurchase} onChange={setAutoRepurchase} label="만료 후 자동 재구매 처리" />
         <Button
           text="저장"
-          variant="tint-blue"
+          variant="primary"
           fullWidth
           className="mt-2"
           disabled={disabled}

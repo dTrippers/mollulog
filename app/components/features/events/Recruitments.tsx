@@ -19,7 +19,7 @@ import {
 } from "~/locales/ko";
 import { studentImageUrl } from "~/models/assets";
 import type { Role } from "~/models/content.d";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 import EventInfoCard from "./EventInfoCard";
 
 export type Recruitment = {
@@ -50,7 +50,7 @@ type ActionData = {
 };
 
 function getFavoriteButtonClassName(favorited: boolean) {
-  return sanitizeClassName(
+  return cn(
     `inline-flex items-center justify-center gap-1.5 rounded-lg text-sm font-semibold transition-all ${
       favorited
         ? "bg-gradient-to-r from-red-500 to-pink-500 text-white shadow shadow-red-500/25 hover:shadow-red-500/40 hover:brightness-110"
@@ -106,7 +106,7 @@ function RecruitmentFavoriteButton({
   return (
     <button
       type="button"
-      className={sanitizeClassName(`${getFavoriteButtonClassName(favorited)} ${className ?? ""}`)}
+      className={cn(`${getFavoriteButtonClassName(favorited)} ${className ?? ""}`)}
       onClick={onClick}
     >
       {favorited ? <HeartIconSolid className="size-3.5" /> : <HeartIconOutline className="size-3.5" strokeWidth={2} />}
@@ -222,13 +222,7 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
   );
 }
 
-function RecruitmentCardList({
-  recruitments,
-  signedIn,
-}: {
-  recruitments: Recruitment[];
-  signedIn: boolean;
-}) {
+function RecruitmentCardList({ recruitments, signedIn }: { recruitments: Recruitment[]; signedIn: boolean }) {
   const recruitmentCards = recruitments.map((recruitment) => (
     <RecruitmentCard
       key={recruitment.favoriteKey}
@@ -281,7 +275,7 @@ export function RecruitmentCard({
 
   return (
     <div
-      className={sanitizeClassName(
+      className={cn(
         `w-28 flex flex-col bg-neutral-100 dark:bg-neutral-900 rounded-lg overflow-hidden ${className ?? ""}`,
       )}
     >

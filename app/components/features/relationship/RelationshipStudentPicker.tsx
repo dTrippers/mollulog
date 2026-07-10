@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { StudentSelectForm } from "~/components/features/forms";
 import { ProfileImage } from "~/components/primitives";
 import { formatVisibleName } from "~/models/student";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type RelationshipStudent = {
   uid: string;
@@ -27,7 +27,11 @@ export default function RelationshipStudentPicker({
     [selectedStudentUid, students],
   );
   const savedStudents = useMemo(
-    () => sortStudentsByLevel(students.filter((student) => student.currentLevel !== null), students),
+    () =>
+      sortStudentsByLevel(
+        students.filter((student) => student.currentLevel !== null),
+        students,
+      ),
     [students],
   );
 
@@ -41,7 +45,7 @@ export default function RelationshipStudentPicker({
         className="max-w-none"
         containerClassName="mt-0 mb-0"
         onSelect={(value) => {
-          onSelectStudentUid(Array.isArray(value) ? (value[0] ?? null) : (value || null));
+          onSelectStudentUid(Array.isArray(value) ? (value[0] ?? null) : value || null);
         }}
       />
 
@@ -85,7 +89,7 @@ function SavedStudentButton({
   return (
     <button
       type="button"
-      className={sanitizeClassName(`
+      className={cn(`
         flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors
         ${selected ? "border-blue-300 bg-blue-50 hover:bg-blue-500/10 dark:border-blue-700 dark:bg-blue-950/30" : "border-border bg-background hover:bg-muted"}
       `)}
@@ -104,7 +108,6 @@ function SavedStudentButton({
     </button>
   );
 }
-
 
 function sortStudentsByLevel(candidates: RelationshipStudent[], students: RelationshipStudent[]) {
   return [...candidates].sort((a, b) => {

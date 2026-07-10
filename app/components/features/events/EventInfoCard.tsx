@@ -11,13 +11,20 @@ type EventInfoCardProps = {
   showArrow?: boolean;
 };
 
-export default function EventInfoCard({ Icon, title, description, color, onClick, showArrow = false }: EventInfoCardProps) {
-  let bgColorClass = "bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700";
-  let iconBgColorClass = "bg-neutral-100 dark:bg-neutral-700";
-  let titleColorClass = "text-neutral-900 dark:text-neutral-100";
-  let textColorClass = "text-neutral-700 dark:text-neutral-300";
+export default function EventInfoCard({
+  Icon,
+  title,
+  description,
+  color,
+  onClick,
+  showArrow = false,
+}: EventInfoCardProps) {
+  let bgColorClass = "bg-card";
+  let iconBgColorClass = "bg-muted";
+  let titleColorClass = "text-foreground";
+  let textColorClass = "text-muted-foreground";
   if (color === "yellow") {
-    bgColorClass = "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-700";
+    bgColorClass = "bg-amber-500/10";
     iconBgColorClass = "bg-amber-100 dark:bg-amber-900";
     titleColorClass = "text-amber-700 dark:text-amber-300";
     textColorClass = "text-amber-700 dark:text-amber-300";
@@ -26,7 +33,7 @@ export default function EventInfoCard({ Icon, title, description, color, onClick
   return (
     <ClickableSurface
       onClick={onClick}
-      className={`my-3 flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 md:px-4 md:py-3 ${bgColorClass} ${onClick ? "cursor-pointer hover:opacity-50 transition-opacity" : ""}`}
+      className={`my-3 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 transition-shadow md:px-4 md:py-3 ${bgColorClass} ${onClick ? "cursor-pointer hover:shadow-sm" : ""}`}
     >
       <div className={`flex-shrink-0 p-2 rounded-lg ${iconBgColorClass}`}>
         <Icon className={`size-4 md:size-5 ${textColorClass}`} />
@@ -35,9 +42,7 @@ export default function EventInfoCard({ Icon, title, description, color, onClick
         <h4 className={`mb-0.5 text-sm font-semibold ${titleColorClass}`}>{title}</h4>
         <p className={`text-xs ${textColorClass}`}>{description}</p>
       </div>
-      {showArrow && (
-        <ArrowRightIcon className="shrink-0 size-4 text-neutral-600 dark:text-neutral-300" />
-      )}
+      {showArrow && <ArrowRightIcon className="size-4 shrink-0 text-muted-foreground" />}
     </ClickableSurface>
   );
 }

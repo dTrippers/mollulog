@@ -19,16 +19,38 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 ## Surfaces and layout
 
 - Do not add unnecessary nested cards, heavy borders, or decorative wrappers.
+- Prefer spacing, background contrast, and typography over borders. Use a border only when a control boundary or dense data boundary would otherwise be unclear.
+- Cards and section surfaces do not use borders by default. Form controls and data tables may use `border-input` or `border-border` when the boundary is functionally necessary.
 - Within a section, keep radius, border, shadow, and spacing uniform.
-- Base surface radius generally stays between `rounded-md` and `rounded-lg`.
+- Base surface radius stays between `rounded-md` and `rounded-lg`. Do not use `rounded-xl` or larger.
 - Card-like surfaces stacking several rows use roughly `p-5 md:p-6` padding by default; only simple single-line items or small auxiliary panels drop to `p-3`–`p-4`.
 - For spacing between major blocks inside a card, use `gap-4`–`gap-6`, and keep at least `pt-4` after a divider so it does not feel cramped.
 - `rounded-full` is mostly for small elements like pills, chips, and avatars.
 - Do not force every control to full width; size to content and context.
 
+### Surface hierarchy
+
+- Page background uses `bg-background`.
+- Cards use `bg-card`; elevated popovers and sheets use `bg-popover` with a shadow when separation is needed.
+- Supporting areas and hover states use `bg-muted` or a translucent muted value.
+- In dark mode the page is the darkest surface, cards are one step lighter, and popovers are separated with shadow or stronger local contrast.
+- Do not combine semantic surface tokens with raw `neutral-*` colors in the same file unless the color is an image overlay or a fixed inverse surface.
+
+### Page width
+
+- Default lists and dashboards use `max-w-5xl`.
+- Forms and document-like screens use `max-w-3xl`.
+- Dense tables and comparison screens opt into `max-w-7xl` through the route layout handle.
+- Shared layout owns page width. Routes should not add a second equivalent max-width wrapper.
+
 ## Typography and copy
 
 - Titles, labels, descriptions, and actions need a clear hierarchy.
+- Page title: `text-2xl md:text-3xl font-bold`.
+- Section title: `text-lg font-semibold`.
+- Card or subsection title: `text-base font-semibold`.
+- Supporting descriptions: `text-sm text-muted-foreground`.
+- `text-xs` is reserved for metadata, captions, and compact badges.
 - Add description text only when it genuinely helps the user decide.
 - Do not add decorative English phrases or meaningless filler text.
 - Prefer natural, short sentences written for Korean users.
@@ -45,6 +67,8 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 ## Interaction
 
 - Use a semantic `button` or `Link` for primary clickable elements.
+- Shared button variants express roles rather than colors: `default`, `primary`, `secondary`, `danger`, `danger-subtle`, and `inverse`.
+- Focusable controls use `ring-ring/30`; do not introduce route-specific blue or neutral focus rings.
 - Dropdowns, popovers, and pickers must connect visually to their trigger.
 - Controls in the same row align in height and rhythm.
 - Avoid interactions that feel slow or leave their state ambiguous.
@@ -67,3 +91,5 @@ Before building new UI:
 4. Is the information hierarchy visible without unnecessary decoration?
 5. Does the result of save / submit appear immediately?
 6. Are you creating a second visual language different from existing screens?
+7. Can spacing or background contrast replace this border?
+8. Is every radius `rounded-lg` or smaller, except intentional pills and avatars?

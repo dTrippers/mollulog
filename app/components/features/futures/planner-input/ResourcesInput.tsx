@@ -115,7 +115,7 @@ export default function ResourcesInput({
         </Field>
         <Button
           text="저장"
-          variant="tint-blue"
+          variant="primary"
           fullWidth
           className="mt-2"
           disabled={!!descriptionError}

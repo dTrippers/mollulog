@@ -126,7 +126,7 @@ export default function Index() {
   } = useLoaderData<typeof loader>();
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
+    <div className="flex w-full flex-col gap-8 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
       <div className="min-w-0 lg:flex-1">
         <Title text="진행중인 컨텐츠" />
 
@@ -151,7 +151,7 @@ export default function Index() {
           {currentTotalAssualt && (
             <Link
               to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`}
-              className="hover:opacity-75 transition-opacity"
+              className="block rounded-lg transition-shadow hover:shadow-md"
             >
               <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
             </Link>
@@ -159,7 +159,7 @@ export default function Index() {
           {currentUnlimit && (
             <Link
               to={`/raids/${raidTypeToParam(currentUnlimit.raidType)}/${currentUnlimit.seasonIndex}`}
-              className="hover:opacity-75 transition-opacity"
+              className="block rounded-lg transition-shadow hover:shadow-md"
             >
               <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
             </Link>
@@ -187,15 +187,15 @@ export default function Index() {
 function MainEvent({ event }: { event: TimelineContent | null }) {
   if (!event) {
     return (
-      <div className="my-8 p-8 text-center border border-neutral-200 dark:border-neutral-700 rounded-xl bg-neutral-50 dark:bg-neutral-800">
-        <p className="text-neutral-600 dark:text-neutral-400">현재 진행중인 이벤트가 없어요</p>
+      <div className="my-8 rounded-lg bg-card p-8 text-center">
+        <p className="text-muted-foreground">현재 진행중인 이벤트가 없어요</p>
       </div>
     );
   }
 
   return (
     <div className="my-8">
-      <Link to={`/events/${event.uid}`} className="block hover:opacity-75 transition-opacity">
+      <Link to={`/events/${event.uid}`} className="block rounded-lg transition-shadow hover:shadow-md">
         <EventHeader
           name={event.name}
           type={event.contentType}

@@ -11,7 +11,7 @@ import { isCommunityEngagementActionResult } from "~/models/community-engagement
 import { getFollowershipSummary } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES, enrichCommunityFeedPosts } from "~/views/community";
 import { getRouteSensei } from "./$username";
 import type { ActionData } from "./api.followerships";
@@ -267,7 +267,7 @@ function RecruitmentSummaryBar({
   return (
     <Link
       to={`/@${username}/students`}
-      className="mt-5 block border-t border-neutral-200/70 pt-4 transition hover:opacity-90 dark:border-neutral-700/70"
+      className="mt-5 block rounded-md pt-4 transition-colors hover:text-primary"
       aria-label={`모집한 학생 ${recruitedCount}명 보기`}
     >
       <div className="mb-2 flex items-center justify-between gap-3 text-sm">
@@ -358,7 +358,7 @@ function ProfileActionButton({
     return (
       <button
         type="button"
-        className={sanitizeClassName(`
+        className={cn(`
           group inline-flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold transition
           hover:border-red-500 hover:bg-red-500 hover:text-white disabled:opacity-50
           dark:border-neutral-600 dark:hover:border-red-500

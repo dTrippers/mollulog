@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type TabsProps = {
   tabs: {
@@ -23,7 +23,7 @@ export function Tabs({ tabs, activeTabId, setActiveTabId }: TabsProps) {
             key={tabId}
             onClick={() => setActiveTabId(tabId)}
             aria-pressed={isActive}
-            className={sanitizeClassName(`
+            className={cn(`
                 flex items-center gap-1 py-2 px-4 border-b-3 transition-colors shrink-0 hover:bg-neutral-100 dark:hover:bg-neutral-900
                 ${
                   isActive

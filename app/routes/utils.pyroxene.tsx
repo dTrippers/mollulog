@@ -650,7 +650,7 @@ export default function PyroxenePlanner() {
             Icon: ChartBarIcon,
             description: "시뮬레이션 조건을 선택해주세요",
             disabled: !signedIn,
-            foldable: signedIn,
+            collapsible: signedIn,
             children: <PyroxenePlannerOptionsPanel options={options} onOptionsChange={handleOptionsChange} />,
           },
         ]}

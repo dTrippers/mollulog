@@ -111,8 +111,8 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
     <Section
       title="상점 아이템"
       description="구매할 아이템의 개수를 선택하세요"
-      foldable
-      foldStateKey="event-shop-section::shop-resource-selector"
+      collapsible
+      persistenceKey="event-shop-section::shop-resource-selector"
       defaultExpanded={true}
     >
       <Tabs
@@ -172,7 +172,6 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                         maxValue={shopAmount ?? undefined}
                         showMin
                         showMax={shopAmount !== null}
-                        maxButtonVariant="active"
                         onChange={(value) => actions.updateItemQuantity(uid, value)}
                       />
                     </div>
@@ -183,7 +182,6 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                         maxValue={purchaseDaysLimit}
                         showMin
                         showMax={purchaseDaysLimit > 0}
-                        maxButtonVariant="active"
                         onChange={(value) => actions.updateItemPurchaseDay(uid, value)}
                       />
                     </div>
@@ -199,7 +197,6 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                     maxValue={shopAmount ?? undefined}
                     showMin
                     showMax={shopAmount !== null}
-                    maxButtonVariant="active"
                     onChange={(value) => actions.updateItemQuantity(uid, value)}
                   />
                 </div>

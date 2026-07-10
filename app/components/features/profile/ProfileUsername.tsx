@@ -1,7 +1,7 @@
 import { PencilSquareIcon, UserIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
 import { Link } from "react-router";
-import { ProfileImage } from "~/components/primitives";
-import { sanitizeClassName } from "~/prophandlers";
+import { Button, ProfileImage } from "~/components/primitives";
+import { cn } from "~/lib/utils";
 
 type ProfileUsernameProps = {
   profileStudentUid: string | null;
@@ -17,7 +17,16 @@ type ProfileUsernameProps = {
 };
 
 export default function ProfileUsername({
-  profileStudentUid, username, bio, friendCode, loading, followability, followerCount, followingCount, onFollow, onUnfollow,
+  profileStudentUid,
+  username,
+  bio,
+  friendCode,
+  loading,
+  followability,
+  followerCount,
+  followingCount,
+  onFollow,
+  onUnfollow,
 }: ProfileUsernameProps) {
   return (
     <div className="m-4 md:m-6">
@@ -29,30 +38,30 @@ export default function ProfileUsername({
             {followerCount !== undefined && followingCount !== undefined && (
               <p>
                 <Link to={`/@${username}/friends?tab=following`} className="hover:underline mr-2">
-                  {followingCount} <span className="text-neutral-500 dark:text-neutral-400">팔로잉</span>
+                  {followingCount} <span className="text-muted-foreground">팔로잉</span>
                 </Link>
                 <Link to={`/@${username}/friends?tab=following`} className="hover:underline">
-                  {followerCount} <span className="text-neutral-500 dark:text-neutral-400">팔로워</span>
+                  {followerCount} <span className="text-muted-foreground">팔로워</span>
                 </Link>
               </p>
             )}
             {followerCount !== undefined && followingCount !== undefined && friendCode && (
-              <span className="hidden md:inline text-neutral-300 dark:text-neutral-600 mx-1.5">|</span>
+              <span className="mx-1.5 hidden text-muted-foreground/50 md:inline">|</span>
             )}
             {friendCode && (
               <p>
-                <span className="text-neutral-500 dark:text-neutral-400">친구 코드 </span>
+                <span className="text-muted-foreground">친구 코드 </span>
                 <span>{friendCode}</span>
               </p>
             )}
           </div>
         </div>
-        {(followability === "followable" && onFollow) && (
+        {followability === "followable" && onFollow && (
           <button
             type="button"
-            className={sanitizeClassName(`
-              px-4 py-2 flex shrink-0 items-center text-white border border-2 border-neutral-900 bg-neutral-900 rounded-full transition
-              disabled:opacity-50 hover:bg-neutral-700 cursor-pointer
+            className={cn(`
+              flex shrink-0 cursor-pointer items-center rounded-full bg-primary px-4 py-2 text-primary-foreground transition-colors
+              hover:bg-primary/90 disabled:opacity-50
             `)}
             onClick={onFollow}
             disabled={loading}
@@ -61,12 +70,12 @@ export default function ProfileUsername({
             <span className="text-sm">팔로우</span>
           </button>
         )}
-        {(followability === "following" && onUnfollow) && (
+        {followability === "following" && onUnfollow && (
           <button
             type="button"
-            className={sanitizeClassName(`
-              px-4 py-2 flex shrink-0 items-center border border-2 border-neutral-500 dark:border-neutral-700 rounded-full transition group
-              disabled:opacity-50 dark:bg-neutral-900 hover:border-red-500 hover:bg-red-500 hover:text-white cursor-pointer
+            className={cn(`
+              group flex shrink-0 cursor-pointer items-center rounded-full bg-muted px-4 py-2 text-foreground transition-colors
+              hover:bg-destructive hover:text-white disabled:opacity-50
             `)}
             onClick={onUnfollow}
             disabled={loading}
@@ -78,20 +87,16 @@ export default function ProfileUsername({
           </button>
         )}
         {followability === "unable" && (
-          <Link to="/edit" className="shrink-0 ml-2">
-            <button
-              type="button"
-              className="px-4 py-2 flex items-center text-white border border-neutral-900 bg-neutral-900 rounded-full transition disabled:opacity-50 hover:bg-neutral-700 cursor-pointer"
-            >
-              <PencilSquareIcon className="size-4 mr-1" />
-              <span className="text-sm">프로필 관리</span>
-            </button>
-          </Link>
+          <Button
+            to="/edit"
+            icon={PencilSquareIcon}
+            text="프로필 관리"
+            variant="primary"
+            className="ml-2 rounded-full"
+          />
         )}
       </div>
-      {bio && (
-        <p className="my-2 md:my-4 text-sm md:text-base">{bio}</p>
-      )}
+      {bio && <p className="my-2 md:my-4 text-sm md:text-base">{bio}</p>}
     </div>
   );
 }

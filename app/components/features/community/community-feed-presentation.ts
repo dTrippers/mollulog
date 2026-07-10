@@ -66,7 +66,7 @@ export function getCommunityPostCardClassName({
   firstInFeed?: boolean;
   groupedWithPrevious?: boolean;
 }) {
-  const borderClass = firstInFeed || groupedWithPrevious ? "" : "border-t border-neutral-200 dark:border-neutral-700";
+  const borderClass = firstInFeed || groupedWithPrevious ? "" : "border-t border-border/60";
   const spacingClass = groupedWithPrevious
     ? preview
       ? "pt-1 pb-3"
@@ -75,33 +75,33 @@ export function getCommunityPostCardClassName({
       ? "py-3"
       : "px-4 py-4 sm:px-4";
 
-  return `transition-colors hover:bg-neutral-50/70 dark:hover:bg-neutral-700/40 ${borderClass} ${spacingClass}`;
+  return `transition-colors hover:bg-muted/50 ${borderClass} ${spacingClass}`;
 }
 
 export function getCommentToggleClassName({ active }: { active: boolean }) {
-  const base = "group inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition";
+  const base = "group inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-colors";
 
   if (active) {
-    return `${base} border-neutral-300 bg-neutral-200 text-neutral-900 dark:border-neutral-600 dark:bg-neutral-700 dark:text-neutral-100`;
+    return `${base} bg-secondary text-secondary-foreground`;
   }
 
-  return `${base} border-neutral-200 bg-neutral-100 text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-neutral-100`;
+  return `${base} bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground`;
 }
 
 export function getCommentEditorPanelClassName({
   groupedWithPrevious = false,
-}: { groupedWithPrevious?: boolean } = {}) {
-  return `mt-3 rounded-lg border border-neutral-200 bg-white px-3 py-3 shadow-sm dark:border-neutral-700 dark:bg-neutral-900 ${
-    groupedWithPrevious ? "" : "sm:ml-[52px]"
-  }`;
+}: {
+  groupedWithPrevious?: boolean;
+} = {}) {
+  return `mt-3 rounded-lg bg-muted/40 px-3 py-3 ${groupedWithPrevious ? "" : "sm:ml-[52px]"}`;
 }
 
 export function getSubjectMetaClassName(postType: CommunityPostType) {
   if (postType === "event_opinion" || postType === "recruitment_result") {
-    return "space-y-1 text-xs text-neutral-500 dark:text-neutral-400";
+    return "space-y-1 text-xs text-muted-foreground";
   }
 
-  return "flex min-w-0 items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400";
+  return "flex min-w-0 items-center gap-2 text-xs text-muted-foreground";
 }
 
 export function getPickupStudentNameClassName() {

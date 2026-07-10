@@ -113,7 +113,7 @@ export default function PyroxeneTimelineEvent({
                 <div className="flex justify-end">
                   <Button
                     text={confirmingPickupDelete ? "정말 삭제할까요?" : "기록 삭제"}
-                    variant="tint-red"
+                    variant="danger-subtle"
                     size="xs"
                     onClick={handleDeletePickupComplete}
                   />
@@ -130,7 +130,7 @@ export default function PyroxeneTimelineEvent({
                   {expectedTrials !== null && (
                     <Button
                       text="초기화"
-                      variant="tint"
+                      variant="secondary"
                       size="xs"
                       onClick={() => {
                         setExpectedTrialsInputValue(0);
@@ -141,13 +141,13 @@ export default function PyroxeneTimelineEvent({
                   <Button
                     text={showExpectedTrialsAction ? "변경 취소" : "목표 변경"}
                     onClick={() => setShowExpectedTrialsAction((prev) => !prev)}
-                    variant="tint-blue"
+                    variant="secondary"
                     size="xs"
                   />
                   {canComplete && (
                     <Button
                       text={showCompleteAction ? "취소" : "모집 완료"}
-                      variant={showCompleteAction ? "tint" : "tint-blue"}
+                      variant={showCompleteAction ? "secondary" : "primary"}
                       size="xs"
                       onClick={() => setShowCompleteAction((prev) => !prev)}
                     />
@@ -308,8 +308,8 @@ function ExpectedTrialsPopover({
           <NumberInput size="md" defaultValue={value} onChange={onChange} />
         </div>
         <div className="flex justify-end gap-2">
-          <Button text="취소" variant="tint" size="xs" onClick={onCancel} />
-          <Button text="저장" variant="tint-blue" size="xs" onClick={onSave} />
+          <Button text="취소" variant="secondary" size="xs" onClick={onCancel} />
+          <Button text="저장" variant="primary" size="xs" onClick={onSave} />
         </div>
       </div>
     </Transition>

@@ -1,5 +1,5 @@
-import { type HTMLInputTypeAttribute, useEffect, useRef } from "react";
-import { Field } from "~/components/primitives";
+import type { HTMLInputTypeAttribute } from "react";
+import { Input } from "~/components/primitives";
 
 type InputFormProps = {
   label: string;
@@ -22,26 +22,18 @@ export default function InputForm({
   error,
   onChange,
 }: InputFormProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (inputRef.current && defaultValue !== undefined) {
-      inputRef.current.value = defaultValue;
-    }
-  }, [defaultValue]);
-
   return (
-    <Field label={label} description={description} error={error} htmlFor={name} containerClassName="p-4">
-      <input
-        ref={inputRef}
-        id={name}
-        type={type}
-        name={name}
-        defaultValue={defaultValue}
-        className="mt-2 w-full text-neutral-500 dark:text-neutral-400"
-        placeholder={placeholder}
-        onChange={(event) => onChange?.(event.target.value)}
-      />
-    </Field>
+    <Input
+      key={`${name ?? "input"}:${defaultValue ?? ""}`}
+      label={label}
+      description={description}
+      error={error}
+      containerClassName="p-4"
+      type={type}
+      name={name}
+      defaultValue={defaultValue}
+      placeholder={placeholder}
+      onChange={onChange}
+    />
   );
 }

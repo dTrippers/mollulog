@@ -3,9 +3,12 @@ import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from 
 import { Outlet, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
+import type { PageLayoutHandle } from "~/components/features/layout/page-width";
 import { getLogger } from "~/lib/observability.server";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
+
+export const handle = { pageWidth: "wide" } satisfies PageLayoutHandle;
 
 export const meta: MetaFunction = () => {
   return [
@@ -84,7 +87,7 @@ export default function GrowthLayout() {
     <Page
       title="학생 성장 플래너"
       description="학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요."
-      contentArea="full"
+      contentWidth="full"
       layout="vertical"
     >
       <Outlet context={contextValue satisfies GrowthLayoutContext} />

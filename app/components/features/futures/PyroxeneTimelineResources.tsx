@@ -94,7 +94,7 @@ export default function PyroxeneTimelineResources({
         {showCollectedAction && (
           <div className="flex justify-end">
             <Button
-              variant={collected ? "tint" : "tint-blue"}
+              variant={collected ? "secondary" : "primary"}
               size="xs"
               onClick={() => onCollectedSourceChange(collectedSourceKey, !collected)}
               className="group"
@@ -112,7 +112,7 @@ export default function PyroxeneTimelineResources({
         )}
         {itemUid && onDeleteItem && (
           <div className="flex justify-end">
-            <Button text="삭제" variant="tint-red" size="xs" onClick={handleDeleteClick} />
+            <Button text="삭제" variant="danger-subtle" size="xs" onClick={handleDeleteClick} />
           </div>
         )}
       </div>

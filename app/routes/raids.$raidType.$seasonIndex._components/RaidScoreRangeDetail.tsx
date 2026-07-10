@@ -2,7 +2,7 @@ import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
 import { Link, useLocation } from "react-router";
 import RaidOftenUsedParties from "~/components/features/raids/RaidOftenUsedParties";
-import { Container, Toggle } from "~/components/primitives";
+import { SectionCard, Toggle } from "~/components/primitives";
 import type { Attack, Defense } from "~/graphql/graphql";
 import type { RangeStats } from "~/lib/ranks/range-stats";
 import type { Role } from "~/models/content.d";
@@ -46,7 +46,7 @@ export default function RaidScoreRangeDetail({
 
   if (!rangeStats || rangeStats.sampleSize === 0) {
     return (
-      <div className="rounded-md bg-neutral-50 p-4 text-center text-sm text-neutral-500 dark:bg-neutral-900/40 dark:text-neutral-400">
+      <div className="rounded-md bg-muted/40 p-4 text-center text-sm text-muted-foreground">
         선택한 구간의 상세 통계가 없어요
       </div>
     );
@@ -56,22 +56,22 @@ export default function RaidScoreRangeDetail({
 
   return (
     <div className="space-y-4">
-      <Container title="클리어 편성 수">
+      <SectionCard title="클리어 편성 수">
         <PartyCountDistribution partyCounts={rangeStats.partyCounts} sampleSize={detailSampleSize} />
-      </Container>
+      </SectionCard>
 
-      <Container title="학생별 출전 횟수" description="학생 성장도별 출전 횟수">
+      <SectionCard title="학생별 출전 횟수" description="학생 성장도별 출전 횟수">
         <RaidScoreUsageList
           usage={rangeStats.studentUsage}
           sampleSize={detailSampleSize}
           allStudents={allStudents}
           recruitedStudentTiers={recruitedStudentTiers}
         />
-        <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">고유 ★1 데이터에는 ★5가 포함돼요</p>
-      </Container>
+        <p className="mt-2 text-xs text-muted-foreground">고유 ★1 데이터에는 ★5가 포함돼요</p>
+      </SectionCard>
 
       {rangeStats.oftenUsedParties.length > 0 && (
-        <Container
+        <SectionCard
           title="많이 편성한 조합"
           description="순서나 학생 성장도는 반영되지 않아요"
           action={
@@ -92,7 +92,7 @@ export default function RaidScoreRangeDetail({
             showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
           />
           <RanksPageLink to={`ranks${search}`} />
-        </Container>
+        </SectionCard>
       )}
     </div>
   );
@@ -102,15 +102,15 @@ function RanksPageLink({ to }: { to: string }) {
   return (
     <Link
       to={to}
-      className="group mt-3 flex items-center justify-between gap-3 border-t border-neutral-100 pt-3 text-sm transition-colors hover:text-neutral-900 focus-visible:outline-none dark:border-neutral-800 dark:hover:text-neutral-100"
+      className="group mt-3 flex items-center justify-between gap-3 rounded-md bg-muted/40 px-3 py-2 text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
     >
       <span className="min-w-0">
-        <span className="font-medium text-neutral-700 group-hover:underline dark:text-neutral-300">모든 편성 보기</span>
-        <span className="mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400">
+        <span className="font-medium text-foreground group-hover:underline">모든 편성 보기</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
           특정 성장도의 학생을 포함/제외하는 조건으로 편성을 찾아볼 수 있어요
         </span>
       </span>
-      <ChevronRightIcon className="size-4 shrink-0 text-neutral-400 transition group-hover:translate-x-0.5 group-hover:text-neutral-600 dark:text-neutral-500 dark:group-hover:text-neutral-300" />
+      <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-foreground" />
     </Link>
   );
 }
@@ -118,55 +118,52 @@ function RanksPageLink({ to }: { to: string }) {
 function RaidScoreRangeDetailSkeleton() {
   return (
     <div className="space-y-4" aria-hidden="true">
-      <Container title="클리어 편성 수">
+      <SectionCard title="클리어 편성 수">
         <div className="grid gap-x-4 gap-y-2 sm:grid-cols-2">
           {PARTY_COUNT_BUCKETS.map((label, index) => (
             <div key={label} className="min-w-0 space-y-1">
               <div className="flex items-center justify-between gap-2">
-                <span className="h-4 w-10 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
-                <span className="h-3 w-20 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+                <span className="h-4 w-10 animate-pulse rounded-sm bg-muted" />
+                <span className="h-3 w-20 animate-pulse rounded-sm bg-muted/60" />
               </div>
               <SkeletonLine className={index === 0 ? "w-full" : index === 1 ? "w-3/4" : "w-2/5"} />
             </div>
           ))}
         </div>
-      </Container>
+      </SectionCard>
 
-      <Container title="출전 횟수 통계" description="학생 성장도 및 모집/조력별 출전 횟수">
+      <SectionCard title="출전 횟수 통계" description="학생 성장도 및 모집/조력별 출전 횟수">
         <div className="flex items-center justify-between gap-2">
           <div className="flex gap-1">
-            <span className="h-8 w-12 animate-pulse rounded-md bg-neutral-200 dark:bg-neutral-700" />
-            <span className="h-8 w-12 animate-pulse rounded-md bg-neutral-100 dark:bg-neutral-800" />
-            <span className="h-8 w-12 animate-pulse rounded-md bg-neutral-100 dark:bg-neutral-800" />
+            <span className="h-8 w-12 animate-pulse rounded-md bg-muted" />
+            <span className="h-8 w-12 animate-pulse rounded-md bg-muted/60" />
+            <span className="h-8 w-12 animate-pulse rounded-md bg-muted/60" />
           </div>
-          <span className="h-4 w-20 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+          <span className="h-4 w-20 animate-pulse rounded-sm bg-muted/60" />
         </div>
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
           <StudentUsageSkeletonGroup />
           <StudentUsageSkeletonGroup />
         </div>
-      </Container>
+      </SectionCard>
 
-      <Container title="많이 편성한 조합" description="순서나 학생 성장도는 반영되지 않아요">
+      <SectionCard title="많이 편성한 조합" description="순서나 학생 성장도는 반영되지 않아요">
         <div className="grid gap-3 md:grid-cols-2">
           {SKELETON_PARTY_CARD_KEYS.map((key) => (
-            <div key={key} className="space-y-3 rounded-md bg-neutral-100 p-3 dark:bg-neutral-800/50">
+            <div key={key} className="space-y-3 rounded-md bg-muted/40 p-3">
               <div className="flex items-center justify-between">
-                <span className="h-4 w-24 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
-                <span className="h-4 w-16 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+                <span className="h-4 w-24 animate-pulse rounded-sm bg-muted" />
+                <span className="h-4 w-16 animate-pulse rounded-sm bg-muted/60" />
               </div>
               <div className="grid grid-cols-6 gap-2">
                 {SKELETON_PARTY_SLOT_KEYS.map((slotKey) => (
-                  <span
-                    key={slotKey}
-                    className="aspect-square animate-pulse rounded-full bg-neutral-100 dark:bg-neutral-800"
-                  />
+                  <span key={slotKey} className="aspect-square animate-pulse rounded-full bg-muted/60" />
                 ))}
               </div>
             </div>
           ))}
         </div>
-      </Container>
+      </SectionCard>
     </div>
   );
 }
@@ -174,15 +171,15 @@ function RaidScoreRangeDetailSkeleton() {
 function StudentUsageSkeletonGroup() {
   return (
     <div>
-      <span className="mb-2 block h-4 w-16 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
+      <span className="mb-2 block h-4 w-16 animate-pulse rounded-sm bg-muted" />
       <div className="space-y-3">
         {SKELETON_STUDENT_ROW_KEYS.map((key) => (
           <div key={key} className="flex items-start gap-2">
-            <span className="size-8 shrink-0 animate-pulse rounded-full bg-neutral-200 dark:bg-neutral-700" />
+            <span className="size-8 shrink-0 animate-pulse rounded-full bg-muted" />
             <div className="min-w-0 flex-1 space-y-2">
               <div className="flex items-center justify-between gap-3">
-                <span className="h-4 w-24 animate-pulse rounded bg-neutral-200 dark:bg-neutral-700" />
-                <span className="h-3 w-16 animate-pulse rounded bg-neutral-100 dark:bg-neutral-800" />
+                <span className="h-4 w-24 animate-pulse rounded-sm bg-muted" />
+                <span className="h-3 w-16 animate-pulse rounded-sm bg-muted/60" />
               </div>
               <SkeletonLine className="w-full" />
               <SkeletonLine className={key === "first" ? "w-5/6" : "w-2/3"} />
@@ -196,8 +193,8 @@ function StudentUsageSkeletonGroup() {
 
 function SkeletonLine({ className }: { className?: string }) {
   return (
-    <span className="block h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
-      <span className={`block h-2 animate-pulse rounded-full bg-neutral-200 dark:bg-neutral-700 ${className ?? ""}`} />
+    <span className="block h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted/60">
+      <span className={`block h-2 animate-pulse rounded-full bg-muted ${className ?? ""}`} />
     </span>
   );
 }
@@ -225,12 +222,12 @@ function PartyCountDistribution({
         return (
           <div key={label} className="min-w-0 space-y-1">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{label}</span>
-              <span className="shrink-0 text-right text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
+              <span className="text-sm font-medium text-foreground">{label}</span>
+              <span className="shrink-0 text-right text-xs tabular-nums text-muted-foreground">
                 {count.toLocaleString()}명 · {formatPercent(ratio)}
               </span>
             </div>
-            <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
+            <div className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
               <div
                 className="h-2 rounded-full bg-blue-500 transition-all duration-300 dark:bg-blue-400"
                 style={{ width: `${ratio * 100}%` }}

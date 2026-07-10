@@ -20,16 +20,20 @@ const colorClasses = {
     icon: "text-amber-600 dark:text-amber-400",
     text: "text-amber-700 dark:text-amber-300",
     link: "text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300",
-    action: "bg-amber-600/10 text-amber-700 hover:bg-amber-600/15 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/15",
-    close: "text-amber-700/70 hover:bg-amber-600/10 hover:text-amber-800 dark:text-amber-300/70 dark:hover:bg-amber-400/10 dark:hover:text-amber-200",
+    action:
+      "bg-amber-600/10 text-amber-700 hover:bg-amber-600/15 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/15",
+    close:
+      "text-amber-700/70 hover:bg-amber-600/10 hover:text-amber-800 dark:text-amber-300/70 dark:hover:bg-amber-400/10 dark:hover:text-amber-200",
   },
   green: {
     container: "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20",
     icon: "text-green-600 dark:text-green-400",
     text: "text-green-700 dark:text-green-300",
     link: "text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300",
-    action: "bg-green-600/10 text-green-700 hover:bg-green-600/15 dark:bg-green-400/10 dark:text-green-300 dark:hover:bg-green-400/15",
-    close: "text-green-700/70 hover:bg-green-600/10 hover:text-green-800 dark:text-green-300/70 dark:hover:bg-green-400/10 dark:hover:text-green-200",
+    action:
+      "bg-green-600/10 text-green-700 hover:bg-green-600/15 dark:bg-green-400/10 dark:text-green-300 dark:hover:bg-green-400/15",
+    close:
+      "text-green-700/70 hover:bg-green-600/10 hover:text-green-800 dark:text-green-300/70 dark:hover:bg-green-400/10 dark:hover:text-green-200",
   },
   neutral: {
     container: "bg-neutral-100 dark:bg-neutral-700/70",
@@ -82,9 +86,7 @@ export function TimelineItemBanner({
   const mobileAction = structured ? renderAction("sm:hidden") : null;
 
   return (
-    <div
-      className={`my-2 px-2 py-2 flex items-start gap-x-2 ${classes.container} rounded-xl text-sm sm:items-center`}
-    >
+    <div className={`my-2 flex items-start gap-x-2 rounded-lg px-2 py-2 text-sm sm:items-center ${classes.container}`}>
       <IconComponent className={`mt-0.5 shrink-0 size-5 ${classes.icon} sm:mt-0`} />
       <div className={`min-w-0 flex-1 ${structured ? "sm:flex sm:min-h-6 sm:items-center" : ""}`}>
         {title && <p className={`text-xs font-semibold leading-none ${classes.icon}`}>{title}</p>}

@@ -7,7 +7,7 @@ import { getMobileNavigationItems, getNavigationSections } from "~/components/fe
 import { ProfileImage, SubTitle, Title } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { canonicalLink } from "~/lib/seo";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 import { type MoreCurrentUser, getMoreViewData } from "~/views/more";
 
 type MoreActionItem = {
@@ -118,7 +118,7 @@ function MoreProfileBlock({
             </p>
             <button
               type="button"
-              className="mt-3 rounded-md bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-neutral-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-neutral-100 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200 dark:focus-visible:ring-offset-neutral-900"
+              className="mt-3 rounded-md bg-foreground px-4 py-2 text-sm font-semibold text-background transition-colors hover:bg-foreground/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
               onClick={onShowSignIn}
             >
               로그인
@@ -195,9 +195,9 @@ function PyroxenePlannerRow({ pyroxene }: { pyroxene: MoreCurrentUser["pyroxene"
   return (
     <Link
       to="/utils/pyroxene"
-      className={sanitizeClassName(`
+      className={cn(`
         group flex items-center gap-2 py-3 pl-4 pr-2 transition-colors hover:bg-neutral-200
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset
         dark:hover:bg-neutral-800/40
       `)}
     >
@@ -289,9 +289,9 @@ function RelationshipPlannerRow({
 
   return (
     <div
-      className={sanitizeClassName(`
+      className={cn(`
         group relative flex items-center gap-2 py-3 pl-4 pr-2 transition-colors hover:bg-neutral-200
-        focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset
+        focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset
         dark:hover:bg-neutral-800/40
         ${showTopBorder ? "border-neutral-200 border-t dark:border-neutral-800" : ""}
       `)}
@@ -299,7 +299,7 @@ function RelationshipPlannerRow({
       <Link
         to="/utils/relationship"
         aria-label="인연 랭크 계산기 열기"
-        className="absolute inset-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+        className="absolute inset-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset"
       />
       <div className="pointer-events-none relative z-10 min-w-0 flex-1">
         <p className="truncate text-base font-semibold text-neutral-900 dark:text-neutral-100">인연 랭크 계산기</p>
@@ -310,7 +310,7 @@ function RelationshipPlannerRow({
                 <Link
                   to={`/utils/relationship?studentUid=${encodeURIComponent(student.uid)}`}
                   key={student.uid}
-                  className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white pr-2 text-xs font-semibold text-neutral-700 transition-colors hover:border-neutral-300 hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-neutral-700 dark:bg-neutral-900/40 dark:text-neutral-200 dark:hover:border-neutral-600 dark:hover:bg-neutral-800/60"
+                  className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-card pr-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
                   title={`현재 인연 랭크 ${student.currentLevel}`}
                 >
                   <ProfileImage studentUid={student.uid} imageSize={6} />
@@ -375,9 +375,9 @@ function MoreGridItem({ item }: { item: MoreActionItem }) {
     </>
   );
 
-  const className = sanitizeClassName(`
+  const className = cn(`
     flex min-w-0 flex-col items-center rounded-md px-1 py-1.5 text-center transition-colors
-    focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
+    focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
     dark:focus-visible:ring-offset-neutral-900
     ${item.disabled ? "cursor-default opacity-40" : "hover:bg-white dark:hover:bg-neutral-800/70"}
   `);

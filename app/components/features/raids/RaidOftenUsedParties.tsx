@@ -44,9 +44,7 @@ export default function RaidOftenUsedParties({
   showUnrecruitedStudents = false,
 }: RaidOftenUsedPartiesProps) {
   if (oftenUsedParties.length === 0) {
-    return (
-      <div className="py-8 text-center text-neutral-500 dark:text-neutral-400">많이 사용된 편성 데이터가 없어요</div>
-    );
+    return <div className="py-8 text-center text-muted-foreground">많이 사용된 편성 데이터가 없어요</div>;
   }
 
   return (

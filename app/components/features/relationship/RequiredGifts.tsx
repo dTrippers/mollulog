@@ -1,5 +1,5 @@
 import { ResourceInventoryTile } from "~/components/features/growth";
-import { Container } from "~/components/primitives";
+import { SectionCard } from "~/components/primitives";
 import { RELATIONSHIP_ITEMS } from "~/models/constants";
 import { getAccumulatedRelationshipExpForLevel } from "~/models/relationship-level";
 
@@ -12,11 +12,7 @@ type RequiredGiftsProps = {
 export default function RequiredGifts({ currentExp: currentExpProp, currentLevel, targetLevel }: RequiredGiftsProps) {
   const currentExp = currentExpProp ?? getAccumulatedRelationshipExpForLevel(currentLevel);
   return (
-    <Container
-      title="필요 선물"
-      description="목표 랭크까지 도달하기 위해 필요한 개수에요"
-      className="mb-3 md:mb-4"
-    >
+    <SectionCard title="필요 선물" description="목표 랭크까지 도달하기 위해 필요한 개수에요" className="mb-3 md:mb-4">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(5rem,1fr))] justify-items-center gap-x-1 gap-y-0">
         {RELATIONSHIP_ITEMS.map(({ type, name, exp, item }) => {
           const remainingExp = getAccumulatedRelationshipExpForLevel(targetLevel) - currentExp;
@@ -41,7 +37,7 @@ export default function RequiredGifts({ currentExp: currentExpProp, currentLevel
           );
         })}
       </div>
-    </Container>
+    </SectionCard>
   );
 }
 

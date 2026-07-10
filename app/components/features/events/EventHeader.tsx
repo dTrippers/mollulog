@@ -18,7 +18,7 @@ import {
 } from "~/lib/date-time";
 import { relativeTime, timelineContentTypeLocale } from "~/locales/ko";
 import type { TimelineContentType } from "~/models/timeline-content";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type Video = {
   title: string;
@@ -113,11 +113,11 @@ export default function EventHeader({
 
   return (
     <>
-      <div className={`relative overflow-hidden rounded-xl shadow-lg ${aspectRatioClass}`}>
+      <div className={`relative overflow-hidden rounded-lg ${aspectRatioClass}`}>
         {/* Videos */}
         {currentVideo && (
           <Suspense>
-            <div className="absolute top-0 left-0 w-full h-full overflow-hidden md:rounded-xl">
+            <div className="absolute top-0 left-0 h-full w-full overflow-hidden md:rounded-lg">
               <YouTube
                 videoId={currentVideo.youtube}
                 className="w-full h-full"
@@ -259,9 +259,9 @@ function VideoList({ videos, currentVideo, onVideoSelect }: VideoListProps): Rea
           <button
             type="button"
             key={video.youtube}
-            className={sanitizeClassName(`
-              -mx-1 px-4 py-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-600 transition text-sm shrink-0
-              ${currentVideo?.youtube === video.youtube ? "bg-neutral-100 dark:bg-neutral-700 font-bold" : ""}
+            className={cn(`
+              -mx-1 shrink-0 rounded-lg px-4 py-2 text-sm transition-colors hover:bg-muted
+              ${currentVideo?.youtube === video.youtube ? "bg-muted font-bold" : ""}
             `)}
             onClick={() => onVideoSelect(video)}
           >
@@ -269,7 +269,7 @@ function VideoList({ videos, currentVideo, onVideoSelect }: VideoListProps): Rea
           </button>
         ))}
       </div>
-      <div className="h-full w-8 absolute left-0 top-0 flex items-center justify-center bg-white dark:bg-neutral-800">
+      <div className="absolute top-0 left-0 flex h-full w-8 items-center justify-center bg-background">
         <button
           type="button"
           onClick={() => changeVideo(-1)}
@@ -278,7 +278,7 @@ function VideoList({ videos, currentVideo, onVideoSelect }: VideoListProps): Rea
           <ChevronDoubleLeftIcon className="size-6" strokeWidth={2} />
         </button>
       </div>
-      <div className="h-full w-8 absolute right-0 top-0 flex items-center justify-center bg-white dark:bg-neutral-800">
+      <div className="absolute top-0 right-0 flex h-full w-8 items-center justify-center bg-background">
         <button
           type="button"
           onClick={() => changeVideo(1)}

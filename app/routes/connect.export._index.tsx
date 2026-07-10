@@ -9,10 +9,7 @@ import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudents } from "~/models/student";
 import { getStudentGrowths } from "~/models/student-growth";
-import {
-  type StudentStateExportFormat,
-  serializeStudentStateExport,
-} from "~/domain/student-state-serialization";
+import { type StudentStateExportFormat, serializeStudentStateExport } from "~/domain/student-state-serialization";
 import { listPendingSyncDrafts } from "~/models/sync-draft";
 import ConnectDataPage from "./connect._components/ConnectDataPage";
 
@@ -37,7 +34,13 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     allStudents.map((student) => [student.uid, { name: student.name, order: student.order }]),
   );
 
-  return { pendingDraftCount: pendingDrafts.length, recruitedStudents, studentGrowths, relationshipLevels, studentCatalog };
+  return {
+    pendingDraftCount: pendingDrafts.length,
+    recruitedStudents,
+    studentGrowths,
+    relationshipLevels,
+    studentCatalog,
+  };
 };
 
 export default function ConnectExportIndexPage() {
@@ -92,10 +95,7 @@ export default function ConnectExportIndexPage() {
     <ConnectDataPage currentScreen="export" pendingDraftCount={pendingDraftCount}>
       <div className="space-y-8 pb-12">
         <section>
-          <SubTitle
-            text="데이터 내보내기"
-            description="현재 SchaleDB와 Justin163 플래너를 지원해요"
-          />
+          <SubTitle text="데이터 내보내기" description="현재 SchaleDB와 Justin163 플래너를 지원해요" />
 
           <div className="space-y-4">
             <Callout
@@ -150,7 +150,7 @@ export default function ConnectExportIndexPage() {
             />
 
             <div className="flex justify-end">
-              <Button type="button" variant={copied ? "tint-blue" : "default"} disabled={!exportedText} onClick={handleCopy}>
+              <Button type="button" variant="secondary" disabled={!exportedText} onClick={handleCopy}>
                 {copied ? <CheckCircleIcon className="size-4" /> : <ClipboardDocumentIcon className="size-4" />}
                 {copied ? "복사됨" : "복사하기"}
               </Button>

@@ -11,7 +11,7 @@ import {
 } from "~/domain/recruitment-simulator";
 import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type PullRow = {
   id: string;
@@ -278,14 +278,12 @@ export default function EventRecruitmentSimulator() {
         <div>
           <SubTitle text="모집 결과" />
           {selectedPickupStudentUid && (
-            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-              총 {totalCount.toLocaleString()}회 모집
-            </p>
+            <p className="mt-1 text-sm text-muted-foreground">총 {totalCount.toLocaleString()}회 모집</p>
           )}
         </div>
 
         {!selectedPickupStudentUid ? (
-          <div className="rounded-md border border-dashed border-neutral-200 bg-neutral-50 px-4 py-8 text-center text-sm text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900/40 dark:text-neutral-400">
+          <div className="rounded-md bg-muted/40 px-4 py-8 text-center text-sm text-muted-foreground">
             픽업 대상 학생을 선택해주세요
           </div>
         ) : (
@@ -311,7 +309,7 @@ export default function EventRecruitmentSimulator() {
               <Button text="10회 모집" variant="primary" onClick={handleTenPull} disabled={runningUntilTarget} />
               <Button
                 text="특정 학생을 뽑을 때까지 모집"
-                variant="tint-blue"
+                variant="secondary"
                 onClick={handleOpenTargetChooser}
                 disabled={runningUntilTarget}
               />
@@ -370,7 +368,7 @@ function RecruitmentStatusBar({
           </p>
         </div>
         <div className="flex gap-2">
-          <Button type="button" size="sm" variant="tint" onClick={onStop} disabled={!running}>
+          <Button type="button" size="sm" variant="secondary" onClick={onStop} disabled={!running}>
             중지
           </Button>
           <Button type="button" size="sm" variant="danger" onClick={onReset}>
@@ -530,7 +528,7 @@ function RecruitmentResultCard({ result }: { result: RecruitmentDrawResult }) {
   return (
     <div className="min-w-0 space-y-1">
       <div className="relative">
-        <div className={sanitizeClassName(`transition-opacity duration-300 ${revealed ? "opacity-100" : "opacity-0"}`)}>
+        <div className={cn(`transition-opacity duration-300 ${revealed ? "opacity-100" : "opacity-0"}`)}>
           <StudentCard
             uid={result.student.uid}
             name={result.student.name}
@@ -559,9 +557,7 @@ function RecruitmentEnvelope({ rarity }: { rarity: 1 | 2 | 3 }) {
   }[rarity];
 
   return (
-    <div
-      className={sanitizeClassName(`flex aspect-5/6 w-full items-center justify-center rounded-lg border ${className}`)}
-    >
+    <div className={cn(`flex aspect-5/6 w-full items-center justify-center rounded-lg border ${className}`)}>
       <EnvelopeIcon className="size-8" />
     </div>
   );

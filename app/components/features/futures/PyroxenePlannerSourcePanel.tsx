@@ -339,7 +339,7 @@ function ApChargeInput({
         onChange={setApChargeCount}
       />
       <p className="text-xs text-neutral-500 dark:text-neutral-400">매일 {dailyPyroxene.toLocaleString()}개 소비</p>
-      <Button text="저장" variant="tint-blue" fullWidth onClick={handleSave} />
+      <Button text="저장" variant="primary" fullWidth onClick={handleSave} />
     </div>
   );
 }

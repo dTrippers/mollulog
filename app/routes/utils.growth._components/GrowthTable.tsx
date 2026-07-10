@@ -679,7 +679,7 @@ function GrowthRow({
             )}
             <Button
               size="xs"
-              variant="tint-red"
+              variant="danger-subtle"
               onClick={() =>
                 confirm("정말로 성장 목표를 삭제할까요? 삭제된 기록은 복구할 수 없어요.") &&
                 removeFetcher.submit(
@@ -794,7 +794,7 @@ function GrowthRow({
             <td colSpan={fieldDefinitions.length} className={`${cellBase} relative px-3 py-2`}>
               <div className="pointer-events-none flex select-none items-center gap-2 opacity-20 blur-sm">
                 {fieldDefinitions.map(({ key }) => (
-                  <div key={key} className="h-4 w-10 rounded bg-neutral-400 dark:bg-neutral-500" />
+                  <div key={key} className="h-4 w-10 rounded-sm bg-muted" />
                 ))}
               </div>
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-1">
@@ -1078,7 +1078,7 @@ export default function GrowthTable({
     <div className="space-y-2">
       <AddStudentControl availableStudents={availableStudents} isEmpty={students.length === 0} />
       <div className="max-w-full overflow-x-auto">
-        <div className="inline-block align-top rounded-xl border border-neutral-200 dark:border-neutral-700">
+        <div className="inline-block align-top rounded-lg border border-neutral-200 dark:border-neutral-700">
           <table className="w-max border-collapse">
             <tbody>
               {students.map((student, studentIndex) => (

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFetcher } from "react-router";
 import { ResourceInventoryTile } from "~/components/features/growth";
-import { Container, LoadingSkeleton, Toggle, useNumberInputFlowNavigation } from "~/components/primitives";
+import { LoadingSkeleton, SectionCard, Toggle, useNumberInputFlowNavigation } from "~/components/primitives";
 import type { loader as favoriteItemsLoader } from "~/routes/api.students.$uid.items";
 import { type ItemQuantityBreakdownEntry, QuantityBreakdownTooltipContent } from "./QuantityBreakdownTooltip";
 
@@ -31,7 +31,9 @@ export default function FavoriteItemSelector({
   const numberInputFlowNavigation = useNumberInputFlowNavigation();
 
   const fetcher = useFetcher<typeof favoriteItemsLoader>();
-  const [cachedFavoriteItems, setCachedFavoriteItems] = useState<Record<string, NonNullable<typeof fetcher.data>["favoriteItems"]>>({});
+  const [cachedFavoriteItems, setCachedFavoriteItems] = useState<
+    Record<string, NonNullable<typeof fetcher.data>["favoriteItems"]>
+  >({});
   useEffect(() => {
     fetcher.load(`/api/students/${studentUid}/items`);
   }, [fetcher.load, studentUid]);
@@ -52,7 +54,7 @@ export default function FavoriteItemSelector({
     }
 
     return favoriteItems
-      .filter(({ favorited }) => filterFavorited ? favorited : true)
+      .filter(({ favorited }) => (filterFavorited ? favorited : true))
       .sort((a, b) => {
         if (a.item.rarity !== b.item.rarity) {
           return b.item.rarity - a.item.rarity;
@@ -72,7 +74,7 @@ export default function FavoriteItemSelector({
   }, [favoriteItems, onSelectedItemExpChange, quantities]);
 
   return (
-    <Container
+    <SectionCard
       title="선물 목록"
       description="선물할 개수를 입력하고 예상 도달 랭크를 계산해보세요"
       action={
@@ -84,8 +86,9 @@ export default function FavoriteItemSelector({
         />
       }
     >
-      {!favoriteItems ?
-        <LoadingSkeleton /> :
+      {!favoriteItems ? (
+        <LoadingSkeleton />
+      ) : (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(5rem,1fr))] justify-items-center gap-x-1 gap-y-0">
           {filteredItems.map(({ item, favoriteLevel, exp }) => {
             const quantity = quantities[item.uid] || 0;
@@ -115,7 +118,10 @@ export default function FavoriteItemSelector({
                         {
                           label: "필요",
                           value: requiredQuantity.toLocaleString(),
-                          tooltip: breakdown && breakdown.length > 0 ? <QuantityBreakdownTooltipContent breakdown={breakdown} /> : undefined,
+                          tooltip:
+                            breakdown && breakdown.length > 0 ? (
+                              <QuantityBreakdownTooltipContent breakdown={breakdown} />
+                            ) : undefined,
                           dimmed: isDimmed,
                         },
                         {
@@ -137,7 +143,7 @@ export default function FavoriteItemSelector({
             );
           })}
         </div>
-      }
-    </Container>
+      )}
+    </SectionCard>
   );
 }

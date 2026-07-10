@@ -92,11 +92,7 @@ export default function FarmingRecommendationPanel({
   );
 }
 
-function StageRecommendationRow({
-  recommendation,
-}: {
-  recommendation: FarmingStageRecommendation;
-}) {
+function StageRecommendationRow({ recommendation }: { recommendation: FarmingStageRecommendation }) {
   const { stage, drops } = recommendation;
   const dropGroups = groupDropsByEquipmentType(drops);
 
@@ -105,7 +101,7 @@ function StageRecommendationRow({
       <div className="min-w-0 lg:w-52">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-semibold text-foreground">{formatStageLabel(stage)}</h2>
-          <span className="flex items-center gap-0.5 rounded border border-green-600 px-1 text-xs font-medium text-green-600">
+          <span className="flex items-center gap-0.5 rounded-sm bg-green-500/10 px-1 text-xs font-medium text-green-600">
             <BoltIcon className="size-2.5" />
             <span>{stage.apCost.toLocaleString()}</span>
           </span>

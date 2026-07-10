@@ -267,7 +267,7 @@ export function ContentTimelineItem({
             icon={PencilSquareIcon}
             to={recruitmentResultEditLink}
             size="xs"
-            shadow="none"
+            className="shadow-none"
           />
         </div>
       )}
@@ -376,7 +376,9 @@ function getStudentAnalysisFeatureBannerPopupId(
 function getPendingStudentFeatureBannerPopupId(
   recruitments: NonNullable<ContentTimelineItemProps["recruitments"]>,
 ): string | null {
-  return recruitments.find((recruitment) => recruitment.student === null && recruitment.favoriteKey)?.favoriteKey ?? null;
+  return (
+    recruitments.find((recruitment) => recruitment.student === null && recruitment.favoriteKey)?.favoriteKey ?? null
+  );
 }
 
 function SpoilerHeader({
@@ -384,7 +386,12 @@ function SpoilerHeader({
   onReveal,
   onHide,
   children,
-}: { hidden: boolean; onReveal?: () => void; onHide?: () => void; children: ReactNode }) {
+}: {
+  hidden: boolean;
+  onReveal?: () => void;
+  onHide?: () => void;
+  children: ReactNode;
+}) {
   if (!hidden) {
     return (
       <div className="space-y-2">
@@ -394,10 +401,9 @@ function SpoilerHeader({
             text="스포일러 다시 숨기기"
             icon={EyeSlashIcon}
             size="xs"
-            variant="tint"
-            shadow="none"
+            variant="secondary"
             onClick={onHide}
-            className="dark:border-neutral-700/80 dark:bg-neutral-800/70 dark:hover:bg-neutral-700/75"
+            className="shadow-none dark:border-neutral-700/80 dark:bg-neutral-800/70 dark:hover:bg-neutral-700/75"
           />
         )}
       </div>
@@ -405,12 +411,12 @@ function SpoilerHeader({
   }
 
   return (
-    <div className="relative min-h-32 overflow-hidden rounded-xl border border-neutral-200/70 bg-white/60 dark:border-neutral-700/70 dark:bg-neutral-800/45">
+    <div className="relative min-h-32 overflow-hidden rounded-lg bg-white/60 dark:bg-neutral-800/45">
       <div className="pointer-events-none select-none blur-md opacity-80 dark:opacity-35 dark:saturate-75">
         {children}
       </div>
 
-      <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-linear-to-b from-white/86 to-white/78 px-4 text-center shadow-sm backdrop-blur-[2px] dark:from-neutral-800/84 dark:to-neutral-800/76">
+      <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-linear-to-b from-white/86 to-white/78 px-4 text-center shadow-sm backdrop-blur-[2px] dark:from-neutral-800/84 dark:to-neutral-800/76">
         <div className="flex flex-col items-center gap-3">
           <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">스포일러가 포함되어 있어요</p>
           <Button text="내용 보기" size="sm" variant="inverse" onClick={onReveal} />
@@ -582,11 +588,7 @@ function Recruitments({
   const hasMultiplePeriods = recruitDateGroupsArray.length >= 2;
 
   if (contentType === "fes") {
-    return (
-      <>
-        <TimelineItemBanner message="픽업 외 학생은 모집 포인트(천장)로 교환할 수 없어요." link={link} />
-      </>
-    );
+    return <TimelineItemBanner message="픽업 외 학생은 모집 포인트(천장)로 교환할 수 없어요." link={link} />;
   }
 
   if (hasMultiplePeriods) {

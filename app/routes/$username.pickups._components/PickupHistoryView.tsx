@@ -69,7 +69,7 @@ export default function PickupHistoryView({
   const visibleComment = comment?.body.trim() ? comment : null;
 
   return (
-    <article className="my-4 rounded-lg bg-neutral-100 p-5 dark:bg-neutral-900">
+    <article className="my-4 rounded-lg bg-card p-5">
       <div className="flex flex-col gap-5 md:flex-row md:gap-6">
         <div className="min-w-0 flex-1 space-y-4">
           <PickupHeader event={event} />
@@ -128,7 +128,7 @@ function PickupHeader({ event }: { event: PickupHistoryViewProps["event"] }) {
         ))}
         <ChevronRightIcon className="ml-1 inline-block size-4 align-[-0.125em]" />
       </h2>
-      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+      <p className="mt-1 text-sm text-muted-foreground">
         {pickupGroupTypeLocale[event.type] ?? "픽업 모집"} |{" "}
         {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
       </p>
@@ -145,7 +145,7 @@ function Tier3StudentList({ students }: { students: PickupHistoryViewProps["recr
 
   return (
     <div className="space-y-2.5">
-      <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집한 ★3 학생</p>
+      <p className="text-sm font-semibold text-foreground">모집한 ★3 학생</p>
       <StudentCards layout="wrap" cardSize="md" gap="tight" namePlacement="overlay" students={cardStudents} />
     </div>
   );
@@ -154,8 +154,8 @@ function Tier3StudentList({ students }: { students: PickupHistoryViewProps["recr
 function Tier3StudentListMissing() {
   return (
     <div className="space-y-2.5">
-      <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집한 ★3 학생</p>
-      <p className="text-sm text-neutral-500 dark:text-neutral-400">학생 목록 미입력</p>
+      <p className="text-sm font-semibold text-foreground">모집한 ★3 학생</p>
+      <p className="text-sm text-muted-foreground">학생 목록 미입력</p>
     </div>
   );
 }
@@ -169,7 +169,7 @@ function ExchangedStudentList({ students }: { students: PickupHistoryViewProps["
 
   return (
     <div className="space-y-2.5">
-      <p className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">모집 포인트 교환 학생</p>
+      <p className="text-sm font-semibold text-foreground">모집 포인트 교환 학생</p>
       <StudentCards layout="wrap" cardSize="md" gap="tight" namePlacement="overlay" students={cardStudents} />
     </div>
   );
@@ -214,7 +214,7 @@ function PickupStats({ totalTrial, tier3Count, pickupCount, trialMissing }: Pick
         </div>
       )}
       <div
-        className={`grid ${statsGridClassName} divide-neutral-200 overflow-hidden rounded-md border border-neutral-200/80 bg-white/70 dark:divide-neutral-700 dark:border-neutral-700/80 dark:bg-neutral-950/40 md:block md:divide-x-0`}
+        className={`grid ${statsGridClassName} divide-border overflow-hidden rounded-md bg-background/70 md:block md:divide-x-0`}
       >
         {stats}
       </div>
@@ -225,10 +225,10 @@ function PickupStats({ totalTrial, tier3Count, pickupCount, trialMissing }: Pick
 function PickupStat({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
     <div className="px-3 py-2">
-      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{label}</p>
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <div className="mt-0.5 flex items-baseline gap-1.5">
-        <p className="font-bold text-neutral-950 dark:text-neutral-50">{value}</p>
-        {detail && <p className="text-xs text-neutral-500 dark:text-neutral-400">({detail})</p>}
+        <p className="font-bold text-foreground">{value}</p>
+        {detail && <p className="text-xs text-muted-foreground">({detail})</p>}
       </div>
     </div>
   );
@@ -243,10 +243,10 @@ function PickupActions({ uid }: { uid: string }) {
 
   return (
     <div className="flex flex-wrap justify-end gap-2 md:mt-auto">
-      <Button text="편집" to={`/my?path=pickups/edit/${uid}`} size="xs" variant="tint" />
+      <Button text="편집" to={`/my?path=pickups/edit/${uid}`} size="xs" variant="secondary" />
       <Form method="delete" action="?index" onSubmit={handleDeleteSubmit}>
         <input type="hidden" name="uid" value={uid} />
-        <Button text="삭제" type="submit" size="xs" variant="tint-red" />
+        <Button text="삭제" type="submit" size="xs" variant="danger-subtle" />
       </Form>
     </div>
   );

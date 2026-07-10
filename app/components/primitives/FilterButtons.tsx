@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 // === FilterButtons
 type FilterButtonsProps = {
-  Icon?: React.ElementType,
-  buttonProps: FilterButtonProps[],
+  Icon?: React.ElementType;
+  buttonProps: FilterButtonProps[];
   exclusive?: boolean;
   atLeastOne?: boolean;
   size?: "sm" | "md";
@@ -98,7 +98,14 @@ function getNextActiveStates({
   return nextActives;
 }
 
-function FilterButton({ text, subText, color, active, onToggle, size = "md" }: FilterButtonProps & { size: "sm" | "md" }) {
+function FilterButton({
+  text,
+  subText,
+  color,
+  active,
+  onToggle,
+  size = "md",
+}: FilterButtonProps & { size: "sm" | "md" }) {
   let textSizeClass = "text-sm";
   if (size === "md") {
     textSizeClass = "text-base";
@@ -108,17 +115,21 @@ function FilterButton({ text, subText, color, active, onToggle, size = "md" }: F
     <button
       type="button"
       aria-pressed={active}
-      className={sanitizeClassName(`
-        inline-flex items-center px-2 py-1 rounded-lg transition-colors border border-neutral-200 dark:border-neutral-700 gap-x-1
-        ${active ?
-          "bg-neutral-800 hover:bg-neutral-700 dark:bg-neutral-200 dark:hover:bg-neutral-300 text-neutral-200 dark:text-neutral-700" :
-          "bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-neutral-700 dark:text-neutral-200"}
+      className={cn(`
+        inline-flex items-center gap-x-1 rounded-md px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
+        ${
+          active ? "bg-foreground text-background hover:bg-foreground/90" : "bg-muted text-foreground hover:bg-muted/80"
+        }
       `)}
-      onClick={() => { onToggle(!active); }}
+      onClick={() => {
+        onToggle(!active);
+      }}
     >
       {color && <div className={`size-2.5 rounded-full ${buttonColors[color]}`} />}
       <span className={`${textSizeClass} tracking-tighter shrink-0`}>{text}</span>
-      {subText && <span className={`text-xs ${active ? "text-neutral-300 dark:text-neutral-700" : "text-neutral-500 dark:text-neutral-400"}`}>{subText}</span>}
+      {subText && (
+        <span className={`text-xs ${active ? "text-background/70" : "text-muted-foreground"}`}>{subText}</span>
+      )}
     </button>
   );
 }

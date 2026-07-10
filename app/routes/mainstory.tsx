@@ -95,10 +95,12 @@ function flattenByRelease(volumes: Volume[]): FlatPart[] {
     if (b.releasedAt === null) return -1;
     const releasedAtDiff = a.releasedAt.getTime() - b.releasedAt.getTime();
     if (releasedAtDiff !== 0) return releasedAtDiff;
-    return a.volume.season - b.volume.season ||
+    return (
+      a.volume.season - b.volume.season ||
       a.volume.sortOrder - b.volume.sortOrder ||
       a.chapter.chapterNumber - b.chapter.chapterNumber ||
-      a.part.sortOrder - b.part.sortOrder;
+      a.part.sortOrder - b.part.sortOrder
+    );
   });
 }
 
@@ -136,13 +138,17 @@ function EpisodeRange({ start, end }: { start: number | null; end: number | null
   if (start === end) {
     return <span className="text-sm text-neutral-500 dark:text-neutral-400">{start}화</span>;
   }
-  return <span className="text-sm text-neutral-500 dark:text-neutral-400">{start}~{end}화</span>;
+  return (
+    <span className="text-sm text-neutral-500 dark:text-neutral-400">
+      {start}~{end}화
+    </span>
+  );
 }
 
 function UpcomingBadge({ releasedAt }: { releasedAt: Date | null }) {
   if (!releasedAt || !dayjs(releasedAt).isAfter(dayjs())) return null;
   return (
-    <span className="whitespace-nowrap px-1.5 py-0.5 text-xs rounded bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 font-medium">
+    <span className="whitespace-nowrap rounded-sm bg-yellow-100 px-1.5 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300">
       예정
     </span>
   );
@@ -227,9 +233,7 @@ function ReleaseOrderView({ volumes }: { volumes: Volume[] }) {
             {/* Year marker */}
             <div className="flex items-center">
               <div className="size-3 rounded-full bg-neutral-400 dark:bg-neutral-500 shrink-0" />
-              <span className="ml-3 font-bold text-neutral-500 dark:text-neutral-400 text-sm">
-                {label}
-              </span>
+              <span className="ml-3 font-bold text-neutral-500 dark:text-neutral-400 text-sm">{label}</span>
             </div>
 
             {/* Items within year */}
@@ -293,21 +297,23 @@ export default function MainStoryPage() {
           {
             text: "스토리순",
             active: sortMode === "volume",
-            onToggle: (activated) => { if (activated) setSortMode("volume"); },
+            onToggle: (activated) => {
+              if (activated) setSortMode("volume");
+            },
           },
           {
             text: "공개순",
             active: sortMode === "release",
-            onToggle: (activated) => { if (activated) setSortMode("release"); },
+            onToggle: (activated) => {
+              if (activated) setSortMode("release");
+            },
           },
         ]}
         exclusive
         atLeastOne
       />
       <div className="mt-4">
-        {sortMode === "volume"
-          ? <VolumeOrderView volumes={mainStories} />
-          : <ReleaseOrderView volumes={mainStories} />}
+        {sortMode === "volume" ? <VolumeOrderView volumes={mainStories} /> : <ReleaseOrderView volumes={mainStories} />}
       </div>
     </div>
   );

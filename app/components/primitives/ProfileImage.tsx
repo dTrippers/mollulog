@@ -28,12 +28,12 @@ export default function ProfileImage({ studentUid, imageSize }: ProfileImageProp
 
   return studentUid ? (
     <img
-      className={cn(imageSizeClass, "inline rounded-full border border-border bg-muted object-cover dark:opacity-90")}
+      className={cn(imageSizeClass, "inline rounded-full bg-muted object-cover dark:opacity-90")}
       src={studentImageUrl(studentUid)}
       alt="학생 프로필"
     />
   ) : (
-    <div className={cn(imageSizeClass, "flex items-center justify-center rounded-full border border-border bg-muted text-muted-foreground")}>
+    <div className={cn(imageSizeClass, "flex items-center justify-center rounded-full bg-muted text-muted-foreground")}>
       <UserIcon className={iconSizeClass} />
     </div>
   );

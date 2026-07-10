@@ -25,7 +25,11 @@ type StudentComparison = {
   percentageDiff: number;
 };
 
-export default function RaidStudentComparison({ currentStudentStats, fromStudentStats, allStudents }: RaidStudentComparisonProps) {
+export default function RaidStudentComparison({
+  currentStudentStats,
+  fromStudentStats,
+  allStudents,
+}: RaidStudentComparisonProps) {
   const [showAllIncreased, setShowAllIncreased] = useState(false);
   const [showAllDecreased, setShowAllDecreased] = useState(false);
 
@@ -51,7 +55,7 @@ export default function RaidStudentComparison({ currentStudentStats, fromStudent
       continue;
     }
 
-    const percentageDiff = fromCount > 0 ? Math.round((countDiff / fromCount) * 100) : (currentCount > 0 ? 100 : 0);
+    const percentageDiff = fromCount > 0 ? Math.round((countDiff / fromCount) * 100) : currentCount > 0 ? 100 : 0;
     comparisons.push({
       student: { uid, name: student.name, role: student.role },
       fromCount,
@@ -62,36 +66,29 @@ export default function RaidStudentComparison({ currentStudentStats, fromStudent
   }
 
   // Separate into increased and decreased
-  const allIncreased = comparisons
-    .filter((comp) => comp.countDiff > 20)
-    .sort((a, b) => b.countDiff - a.countDiff); // Sort by absolute count diff descending
+  const allIncreased = comparisons.filter((comp) => comp.countDiff > 20).sort((a, b) => b.countDiff - a.countDiff); // Sort by absolute count diff descending
 
-  const allDecreased = comparisons
-    .filter((comp) => comp.countDiff < -20)
-    .sort((a, b) => a.countDiff - b.countDiff); // Sort by absolute count diff ascending (most negative first)
+  const allDecreased = comparisons.filter((comp) => comp.countDiff < -20).sort((a, b) => a.countDiff - b.countDiff); // Sort by absolute count diff ascending (most negative first)
 
   if (allIncreased.length === 0 && allDecreased.length === 0) {
-    return (
-      <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
-        변화가 있는 학생이 없어요
-      </div>
-    );
+    return <div className="py-8 text-center text-muted-foreground">변화가 있는 학생이 없어요</div>;
   }
 
   const renderStudentItem = (comp: StudentComparison) => {
     return (
-      <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800">
+      <div className="flex items-center gap-2 rounded-lg p-2 hover:bg-muted">
         <div className="flex-shrink-0 w-8">
           <StudentCard uid={comp.student.uid} circular />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
-            {comp.student.name}
-          </div>
-          <div className="text-xs text-neutral-500 dark:text-neutral-400">
+          <div className="text-sm font-medium text-foreground">{comp.student.name}</div>
+          <div className="text-xs text-muted-foreground">
             {comp.fromCount.toLocaleString()} → {comp.currentCount.toLocaleString()}회
-            <span className={`ml-1 ${comp.countDiff > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-              ({comp.countDiff > 0 ? "+" : ""}{comp.countDiff.toLocaleString()})
+            <span
+              className={`ml-1 ${comp.countDiff > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+            >
+              ({comp.countDiff > 0 ? "+" : ""}
+              {comp.countDiff.toLocaleString()})
             </span>
           </div>
         </div>
@@ -103,10 +100,8 @@ export default function RaidStudentComparison({ currentStudentStats, fromStudent
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {allDecreased.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-red-600 dark:text-red-400 mb-2">
-            감소 ({allDecreased.length}명)
-          </h3>
-          <div className="space-y-1 border border-neutral-200 dark:border-neutral-700 rounded-lg p-2 bg-white dark:bg-neutral-900">
+          <h3 className="text-sm font-semibold text-red-600 dark:text-red-400 mb-2">감소 ({allDecreased.length}명)</h3>
+          <div className="space-y-1 rounded-lg bg-card p-2">
             <div className="space-y-1">
               {allDecreased.map((comp, index) => (
                 <div key={comp.student.uid} className={index >= 10 && !showAllDecreased ? "hidden md:block" : ""}>
@@ -119,7 +114,7 @@ export default function RaidStudentComparison({ currentStudentStats, fromStudent
               <button
                 type="button"
                 onClick={() => setShowAllDecreased(true)}
-                className="w-full mt-2 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors md:hidden"
+                className="mt-2 w-full rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
               >
                 더 보기 ({allDecreased.length - 10}명)
               </button>
@@ -129,7 +124,7 @@ export default function RaidStudentComparison({ currentStudentStats, fromStudent
               <button
                 type="button"
                 onClick={() => setShowAllDecreased(false)}
-                className="w-full mt-2 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors md:hidden"
+                className="mt-2 w-full rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
               >
                 접기
               </button>
@@ -143,7 +138,7 @@ export default function RaidStudentComparison({ currentStudentStats, fromStudent
           <h3 className="text-sm font-semibold text-green-600 dark:text-green-400 mb-2">
             증가 ({allIncreased.length}명)
           </h3>
-          <div className="space-y-1 border border-neutral-200 dark:border-neutral-700 rounded-lg p-2 bg-white dark:bg-neutral-900">
+          <div className="space-y-1 rounded-lg bg-card p-2">
             <div className="space-y-1">
               {allIncreased.map((comp, index) => (
                 <div key={comp.student.uid} className={index >= 10 && !showAllIncreased ? "hidden md:block" : ""}>
@@ -156,7 +151,7 @@ export default function RaidStudentComparison({ currentStudentStats, fromStudent
               <button
                 type="button"
                 onClick={() => setShowAllIncreased(true)}
-                className="w-full mt-2 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors md:hidden"
+                className="mt-2 w-full rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
               >
                 더 보기 ({allIncreased.length - 10}명)
               </button>
@@ -166,7 +161,7 @@ export default function RaidStudentComparison({ currentStudentStats, fromStudent
               <button
                 type="button"
                 onClick={() => setShowAllIncreased(false)}
-                className="w-full mt-2 px-3 py-1.5 text-sm text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-md transition-colors md:hidden"
+                className="mt-2 w-full rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
               >
                 접기
               </button>

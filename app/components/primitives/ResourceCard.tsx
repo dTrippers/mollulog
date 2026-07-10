@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 import HoverTooltip from "./HoverTooltip";
 
 type ResourceCardProps = {
@@ -59,14 +59,9 @@ function ResourceCard({
   }
 
   return (
-    <HoverTooltip
-      as="div"
-      className="relative group"
-      content={name}
-      disabled={!name}
-    >
+    <HoverTooltip as="div" className="relative group" content={name} disabled={!name}>
       <div
-        className={`shrink-0 ${sizeClass} rounded-lg border border-neutral-200 dark:border-neutral-700 ${rarityBgClass(rarity)} flex items-center justify-center overflow-hidden`}
+        className={`shrink-0 ${sizeClass} flex items-center justify-center overflow-hidden rounded-lg ${rarityBgClass(rarity)}`}
       >
         <img
           alt="아이템 이미지"
@@ -76,7 +71,7 @@ function ResourceCard({
         />
         {label && (
           <div
-            className={sanitizeClassName(`
+            className={cn(`
               flex items-center justify-center px-1 absolute -bottom-1 -right-1 ${labelBadgeBgClass(labelBgColor)} rounded
               border-2 border-white dark:border-neutral-800 ${labelTextColorClass(labelColor)} text-xs font-medium tracking-tighter
             `)}

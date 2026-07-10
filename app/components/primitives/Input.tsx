@@ -43,7 +43,7 @@ export default function Input({
         type={type ?? "text"}
         name={name}
         className={cn(
-          "w-full max-w-96 rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors outline-none focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50",
+          "w-full max-w-96 rounded-md border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground/50 transition-colors outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50",
           size === "sm" ? "min-h-9 py-1.5" : "min-h-10 py-2",
           type === "number" &&
             "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",

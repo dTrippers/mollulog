@@ -41,8 +41,8 @@ export function MiniGameSection({ config, state, actions }: MiniGameSectionProps
     <Section
       title="미니 게임"
       description={minigameDescription(config.minigameType) ?? undefined}
-      foldable
-      foldStateKey="event-shop-section::mini-game"
+      collapsible
+      persistenceKey="event-shop-section::mini-game"
       defaultExpanded={true}
     >
       <div className="flex items-center gap-2">

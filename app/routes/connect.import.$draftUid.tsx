@@ -155,7 +155,7 @@ export default function ConnectDraftDetailPage() {
       title="가져온 데이터 검토"
       description="가져온 데이터를 확인하고 잘못된 값을 수정하여 반영할 수 있어요"
       backward={{ title: "데이터 가져오기", to: "/connect/import" }}
-      contentArea="full"
+      contentWidth="full"
       layout="vertical"
     >
       {review}
@@ -168,7 +168,10 @@ async function loadDraftMetadata(env: Env, draft: SyncDraft): Promise<Record<str
     const studentsByUid = await getAllStudentsMap(env);
     const gearDataByUid =
       draft.type === "student_state"
-        ? await getStudentGearData(env, draft.entries.map((entry) => entry.entryKey))
+        ? await getStudentGearData(
+            env,
+            draft.entries.map((entry) => entry.entryKey),
+          )
         : new Map<string, null>();
     return Object.fromEntries(
       draft.entries.flatMap((entry) => {
@@ -391,7 +394,12 @@ async function mergeStudentStateDraftFormEntries(
 ): Promise<SyncDraftEntryUpdateInput[]> {
   const [metadataByKey, currentValues] = await Promise.all([
     loadDraftMetadata(env, draft),
-    loadCurrentValues(env, userId, draft.type, draft.entries.map((entry) => entry.entryKey)),
+    loadCurrentValues(
+      env,
+      userId,
+      draft.type,
+      draft.entries.map((entry) => entry.entryKey),
+    ),
   ]);
   const currentStateValues = currentValues as StudentStateCurrentValues;
 
@@ -420,23 +428,23 @@ async function mergeStudentStateDraftFormEntries(
 
 function emptyStudentStateValue(): StudentStateCurrentValues[string] {
   return {
-      current: {
-        level: null,
-        tier: null,
-        weaponLevel: null,
-        skillEx: null,
-        skillNormal: null,
+    current: {
+      level: null,
+      tier: null,
+      weaponLevel: null,
+      skillEx: null,
+      skillNormal: null,
       skillEnhanced: null,
       skillSub: null,
       equip1: null,
-        equip2: null,
-        equip3: null,
-        equipSpecial: null,
-        abilityHp: null,
-        abilityAtk: null,
-        abilityHeal: null,
-        bond: null,
-      },
+      equip2: null,
+      equip3: null,
+      equipSpecial: null,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
+      bond: null,
+    },
     target: {
       targetBond: null,
       targetLevel: null,

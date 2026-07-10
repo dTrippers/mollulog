@@ -26,18 +26,11 @@ export default function RaidDifficultyComparison({
   const fromTotal = Object.values(fromClearLevels).reduce((sum, count) => sum + count, 0);
 
   if (currentTotal === 0 || fromTotal === 0) {
-    return (
-      <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
-        비교할 데이터가 없어요
-      </div>
-    );
+    return <div className="py-8 text-center text-muted-foreground">비교할 데이터가 없어요</div>;
   }
 
   // Get all difficulties that appear in either dataset
-  const allDifficulties = new Set([
-    ...Object.keys(currentClearLevels),
-    ...Object.keys(fromClearLevels),
-  ]);
+  const allDifficulties = new Set([...Object.keys(currentClearLevels), ...Object.keys(fromClearLevels)]);
 
   // Sort by difficulty order, filter, and exclude those with no change
   const sortedDifficulties = DIFFICULTY_ORDER.filter((difficulty) => {
@@ -52,15 +45,11 @@ export default function RaidDifficultyComparison({
   });
 
   if (sortedDifficulties.length === 0) {
-    return (
-      <div className="text-center py-8 text-neutral-500 dark:text-neutral-400">
-        클리어 비율에 변화가 없어요
-      </div>
-    );
+    return <div className="py-8 text-center text-muted-foreground">클리어 비율에 변화가 없어요</div>;
   }
 
   return (
-    <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 bg-white dark:bg-neutral-800/50">
+    <div className="rounded-lg bg-card p-4">
       <div className="space-y-3">
         {sortedDifficulties.map((difficulty) => {
           const currentCount = currentClearLevels[difficulty] || 0;
@@ -74,14 +63,15 @@ export default function RaidDifficultyComparison({
             <div key={difficulty} className="flex items-center gap-2">
               {/* Label */}
               <div className="flex-shrink-0 w-40">
-                <div className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                  {difficultyLocale[difficulty] || difficulty}
-                </div>
-                <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                <div className="text-sm font-medium text-foreground">{difficultyLocale[difficulty] || difficulty}</div>
+                <div className="text-xs text-muted-foreground">
                   {fromPercentage}% → {currentPercentage}%
                   {percentageDiff !== 0 && (
-                    <span className={`ml-1 ${percentageDiff > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
-                      ({percentageDiff > 0 ? "+" : ""}{percentageDiff}%)
+                    <span
+                      className={`ml-1 ${percentageDiff > 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
+                    >
+                      ({percentageDiff > 0 ? "+" : ""}
+                      {percentageDiff}%)
                     </span>
                   )}
                 </div>
@@ -89,14 +79,14 @@ export default function RaidDifficultyComparison({
 
               {/* Bar */}
               <div className="flex-1 min-w-0">
-                <div className="bg-neutral-200 dark:bg-neutral-700 rounded-full h-2 relative">
+                <div className="relative h-2 rounded-full bg-muted">
                   <div
                     className={`h-2 rounded-full transition-all duration-300 absolute left-0 top-0 ${
                       percentageDiff > 0
                         ? "bg-green-500 dark:bg-green-400"
                         : percentageDiff < 0
-                        ? "bg-red-500 dark:bg-red-400"
-                        : "bg-blue-500 dark:bg-blue-400"
+                          ? "bg-red-500 dark:bg-red-400"
+                          : "bg-blue-500 dark:bg-blue-400"
                     }`}
                     style={{ width: `${Math.max(0, Math.min(100, currentPercentage))}%` }}
                   />
@@ -109,4 +99,3 @@ export default function RaidDifficultyComparison({
     </div>
   );
 }
-

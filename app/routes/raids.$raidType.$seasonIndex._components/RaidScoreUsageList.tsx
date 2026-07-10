@@ -147,7 +147,7 @@ function UsageGroup({
           <div className={cn("mt-2 flex justify-center", showMore && "sticky bottom-3 z-10")}>
             <button
               type="button"
-              className="inline-flex cursor-pointer items-center justify-center rounded-full bg-white/80 px-4 py-1.5 text-sm font-medium text-neutral-700 shadow-sm shadow-neutral-950/10 backdrop-blur-sm transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 dark:bg-neutral-800/80 dark:text-neutral-200 dark:shadow-neutral-950/25 dark:hover:bg-neutral-800"
+              className="inline-flex cursor-pointer items-center justify-center rounded-full bg-background/80 px-4 py-1.5 text-sm font-medium text-foreground shadow-sm shadow-neutral-950/10 backdrop-blur-sm transition hover:bg-background/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:shadow-neutral-950/25"
               onClick={() => setShowMore((current) => !current)}
             >
               {showMore ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}

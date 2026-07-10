@@ -1,6 +1,6 @@
 import { HeartIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useState } from "react";
-import { Container, NumberInput, Toggle } from "~/components/primitives";
+import { NumberInput, SectionCard, Toggle } from "~/components/primitives";
 import { RELATIONSHIP_EXP_TABLE } from "~/models/constants";
 import { getAccumulatedRelationshipExpForLevel } from "~/models/relationship-level";
 
@@ -40,7 +40,7 @@ export default function StudentRelationshipLevel({
     expectedLevel === 100 ? 0 : getAccumulatedRelationshipExpForLevel(expectedLevel + 1) - expectedExp;
 
   return (
-    <Container
+    <SectionCard
       title="인연 랭크"
       description="현재 경험치를 알고 있다면 더 정확하게 계산할 수 있어요"
       action={<Toggle label="EXP 입력" initialState={useCurrentExp} className="my-0" onChange={setUseCurrentExp} />}
@@ -107,7 +107,7 @@ export default function StudentRelationshipLevel({
           </p>
         </div>
       </div>
-    </Container>
+    </SectionCard>
   );
 }
 

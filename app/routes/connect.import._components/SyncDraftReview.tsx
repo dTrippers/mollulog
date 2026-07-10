@@ -188,7 +188,7 @@ function DraftValueEditor({
   onChange: (value: string) => void;
 }) {
   const inputClassName = cn(
-    "ml-auto min-h-9 w-24 rounded-md border border-input bg-background px-2 py-1 text-right text-sm font-semibold tabular-nums text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/20 disabled:cursor-not-allowed disabled:opacity-50",
+    "ml-auto min-h-9 w-24 rounded-md border border-input bg-background px-2 py-1 text-right text-sm font-semibold tabular-nums text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50",
     error && "border-destructive focus:border-destructive focus:ring-destructive/20",
   );
 

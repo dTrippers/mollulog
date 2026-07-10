@@ -24,7 +24,10 @@ type RaidRankFilterProps = {
   signedIn: boolean;
 };
 
-export function mergeFilteredStudents(prev: { uid: string; tiers: number[] }[], toMerge: { uid: string; tiers: number[] }): { uid: string; tiers: number[] }[] {
+export function mergeFilteredStudents(
+  prev: { uid: string; tiers: number[] }[],
+  toMerge: { uid: string; tiers: number[] },
+): { uid: string; tiers: number[] }[] {
   let found = false;
   const results = prev.map((student) => {
     if (student.uid === toMerge.uid) {
@@ -39,7 +42,13 @@ export function mergeFilteredStudents(prev: { uid: string; tiers: number[] }[], 
   return results;
 }
 
-export default function RaidRankFilter({ state, setState, signedIn, filterableStudents, filterableDifficulties }: RaidRankFilterProps) {
+export default function RaidRankFilter({
+  state,
+  setState,
+  signedIn,
+  filterableStudents,
+  filterableDifficulties,
+}: RaidRankFilterProps) {
   const { showSignIn } = useSignIn();
   const updateStudents = (
     key: "includeStudents" | "excludeStudents",
@@ -65,7 +74,7 @@ export default function RaidRankFilter({ state, setState, signedIn, filterableSt
 
       <div className="mb-4">
         <p className="text-sm font-bold">포함할 학생</p>
-        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">선택한 학생을 모두 포함</p>
+        <p className="mb-3 text-xs text-muted-foreground">선택한 학생을 모두 포함</p>
         <RaidRankFilterStudentSearch
           searchableStudents={filterableStudents}
           selectedStudents={state.includeStudents}
@@ -73,14 +82,17 @@ export default function RaidRankFilter({ state, setState, signedIn, filterableSt
             updateStudents("includeStudents", mergeFilteredStudents(state.includeStudents, { uid, tiers }));
           }}
           onRemove={(uid) => {
-            updateStudents("includeStudents", state.includeStudents.filter((student) => student.uid !== uid));
+            updateStudents(
+              "includeStudents",
+              state.includeStudents.filter((student) => student.uid !== uid),
+            );
           }}
         />
       </div>
 
       <div>
         <p className="text-sm font-bold">제외할 학생</p>
-        <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-3">선택한 학생이 한 명이라도 포함되면 제외</p>
+        <p className="mb-3 text-xs text-muted-foreground">선택한 학생이 한 명이라도 포함되면 제외</p>
         <ClickableSurface onClick={!signedIn ? showSignIn : undefined}>
           <Toggle
             label="내가 모집하지 않은 학생"
@@ -95,7 +107,10 @@ export default function RaidRankFilter({ state, setState, signedIn, filterableSt
             updateStudents("excludeStudents", mergeFilteredStudents(state.excludeStudents, { uid, tiers }));
           }}
           onRemove={(uid) => {
-            updateStudents("excludeStudents", state.excludeStudents.filter((student) => student.uid !== uid));
+            updateStudents(
+              "excludeStudents",
+              state.excludeStudents.filter((student) => student.uid !== uid),
+            );
           }}
         />
       </div>

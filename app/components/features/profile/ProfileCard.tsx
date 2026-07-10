@@ -20,7 +20,7 @@ export default function ProfileCard(props: ProfileCardProps) {
   const { username, tierCounts } = props;
 
   return (
-    <div className="my-4 border border-neutral-100 dark:border-neutral-700 rounded-lg shadow-lg">
+    <div className="my-4 rounded-lg bg-card">
       <ProfileUsername {...props} />
 
       <div className="m-4 md:m-6">

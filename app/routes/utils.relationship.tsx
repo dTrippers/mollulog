@@ -1,9 +1,19 @@
 import { ArchiveBoxIcon, GiftIcon, MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
-import { type Dispatch, type ReactNode, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
+import type { PageLayoutHandle } from "~/components/features/layout/page-width";
 import {
   FavoriteItemSelector,
   FavoritedItemSelector,
@@ -25,6 +35,8 @@ import {
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { formatVisibleName, getAllStudents } from "~/models/student";
 import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
+
+export const handle = { pageWidth: "wide" } satisfies PageLayoutHandle;
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "인연 랭크 계산기 | 몰루로그";
@@ -477,7 +489,7 @@ export default function RelationshipUtil() {
     <Page
       title="인연 랭크 계산기"
       description="학생들의 목표 인연 랭크까지 필요한 선물 개수를 계산할 수 있어요."
-      contentArea="full"
+      contentWidth="full"
       screens={[
         {
           text: "학생별",
@@ -615,7 +627,7 @@ function RelationshipStudentScreen({
           />
 
           <div className="my-4 flex justify-end">
-            <Button text="초기화" size="xs" variant="tint-red" onClick={onDelete} />
+            <Button text="초기화" size="xs" variant="danger-subtle" onClick={onDelete} />
           </div>
         </>
       ) : (
@@ -626,7 +638,7 @@ function RelationshipStudentScreen({
             </p>
             {studentPicker}
           </div>
-          <div className="hidden rounded-lg border border-dashed border-border bg-muted/40 px-4 py-10 text-center lg:block">
+          <div className="hidden rounded-lg bg-muted/40 px-4 py-10 text-center lg:block">
             <p className="font-semibold text-foreground">학생을 선택해 주세요</p>
             <p className="mt-1 text-sm text-muted-foreground">
               학생 찾기에서 저장된 학생을 고르거나 이름으로 검색하면 계산을 시작할 수 있어요.
@@ -657,9 +669,7 @@ function RelationshipActionHeader({
       <div className="flex min-w-0 items-center gap-2.5">
         <ProfileImage studentUid={student.uid} imageSize={10} />
         <div className="min-w-0">
-          <p className="truncate pt-0.5 text-sm font-bold leading-tight text-foreground md:text-base">
-            {visibleName}
-          </p>
+          <p className="truncate pt-0.5 text-sm font-bold leading-tight text-foreground md:text-base">{visibleName}</p>
           {isSaving ? (
             <p className="text-xs text-muted-foreground">저장 중...</p>
           ) : saveSuccess ? (

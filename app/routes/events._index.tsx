@@ -78,10 +78,8 @@ function StatusBadge({ schedule }: { schedule: EventListSchedule }) {
 function EventScheduleRow({ schedule }: { schedule: EventListSchedule }) {
   return (
     <div className={scheduleRowClassName}>
-      <span className="w-8 shrink-0 text-neutral-500 dark:text-neutral-400">{runTypeLabels[schedule.runType]}</span>
-      <span className="min-w-0 flex-1 tabular-nums text-neutral-700 dark:text-neutral-300">
-        {formatScheduleDate(schedule)}
-      </span>
+      <span className="w-8 shrink-0 text-muted-foreground">{runTypeLabels[schedule.runType]}</span>
+      <span className="min-w-0 flex-1 tabular-nums text-foreground">{formatScheduleDate(schedule)}</span>
       <StatusBadge schedule={schedule} />
     </div>
   );
@@ -107,8 +105,8 @@ function EventFilterPanel({
 }) {
   return (
     <div className="space-y-2">
-      <p className="px-1 text-xs text-neutral-500 dark:text-neutral-400">{countText}</p>
-      <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
+      <p className="px-1 text-xs text-muted-foreground">{countText}</p>
+      <div className="space-y-1">
         <FilterToggleRow
           title="다가오는 이벤트만 보기"
           checked={filter.onlyUpcoming}
@@ -116,17 +114,17 @@ function EventFilterPanel({
         />
       </div>
 
-      <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
-        <label className="block rounded-md px-3 py-2 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70 lg:px-2.5 lg:py-1.5">
-          <span className="block text-sm font-medium text-neutral-900 dark:text-neutral-100">이름으로 찾기</span>
-          <span className="mt-2 flex h-9 items-center rounded-md border border-neutral-200 bg-white px-2 text-neutral-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400">
+      <div className="space-y-1">
+        <label className="block px-3 py-2 lg:px-2.5 lg:py-1.5">
+          <span className="block text-sm font-medium text-foreground">이름으로 찾기</span>
+          <span className="mt-2 flex h-9 items-center rounded-md border border-input bg-background px-2 text-muted-foreground">
             <MagnifyingGlassIcon className="mr-2 size-4 shrink-0" />
             <input
               type="search"
               value={filter.search}
               onChange={(event) => onFilterChange({ ...filter, search: event.currentTarget.value })}
               placeholder="이벤트 이름"
-              className="min-w-0 flex-1 bg-transparent text-sm text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-neutral-100 dark:placeholder:text-neutral-500"
+              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
             />
           </span>
         </label>
@@ -145,9 +143,9 @@ function FilterToggleRow({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="rounded-md px-3 py-2 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70 lg:px-2.5 lg:py-1.5">
+    <div className="rounded-md px-3 py-2 transition-colors hover:bg-muted lg:px-2.5 lg:py-1.5">
       <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
-        <p className="min-w-0 grow text-sm font-medium text-neutral-900 dark:text-neutral-100">{title}</p>
+        <p className="min-w-0 grow text-sm font-medium text-foreground">{title}</p>
         <PanelOptionIconButton label={title} active={checked} Icon={CheckIcon} onClick={() => onChange(!checked)} />
       </div>
     </div>
@@ -174,7 +172,7 @@ function EventBanner({ event }: { event: EventListItem }) {
   }
 
   return (
-    <div className="flex aspect-[3/1] w-28 shrink-0 items-center justify-center rounded bg-neutral-100 text-xs font-medium text-neutral-400 dark:bg-neutral-900 dark:text-neutral-600 md:w-32">
+    <div className="flex aspect-[3/1] w-28 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground md:w-32">
       EVENT
     </div>
   );
@@ -192,11 +190,11 @@ function EventCard({ event }: { event: EventListItem }) {
         <EventBanner event={event} />
       </div>
       <div className="flex min-w-0 items-center px-3 pb-3 text-center md:px-4">
-        <h2 className="w-full min-w-0 whitespace-pre-line break-keep text-sm font-normal leading-snug text-neutral-950 dark:text-neutral-50">
+        <h2 className="w-full min-w-0 whitespace-pre-line break-keep text-sm font-normal leading-snug text-foreground">
           {event.name}
         </h2>
       </div>
-      <div className="min-w-0 space-y-1 border-t border-neutral-100 bg-neutral-50/50 px-3 py-2.5 dark:border-neutral-700/80 dark:bg-neutral-900/20 md:px-4">
+      <div className="min-w-0 space-y-1 bg-muted/40 px-3 py-2.5 md:px-4">
         {schedules.length > 0 ? (
           scheduleOrder.map((runType) => {
             const schedule = event.schedules[runType];
@@ -207,17 +205,14 @@ function EventCard({ event }: { event: EventListItem }) {
             );
           })
         ) : (
-          <p className="text-sm text-neutral-500 dark:text-neutral-400">GL 서버 일정 정보가 없어요</p>
+          <p className="text-sm text-muted-foreground">GL 서버 일정 정보가 없어요</p>
         )}
       </div>
     </div>
   );
   return (
-    <article className="h-full overflow-hidden rounded-md border border-neutral-200 bg-white transition dark:border-neutral-700/80 dark:bg-neutral-800/50">
-      <Link
-        to={`/events/${event.latestTimelineUid}`}
-        className="block h-full transition hover:bg-neutral-50 dark:hover:bg-neutral-700/50"
-      >
+    <article className="h-full overflow-hidden rounded-lg bg-card transition-shadow hover:shadow-sm">
+      <Link to={`/events/${event.latestTimelineUid}`} className="block h-full transition-colors hover:bg-muted/50">
         {body}
       </Link>
     </article>
@@ -237,8 +232,7 @@ export default function EventsIndex() {
     <Page
       title="이벤트"
       description="블루 아카이브의 이벤트 개최 일정을 확인해보세요"
-      contentArea="4xl"
-      layout="horizontal"
+      contentWidth="full"
       panels={[
         {
           title: "이벤트 필터",

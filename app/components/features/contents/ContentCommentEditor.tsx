@@ -1,9 +1,18 @@
-import { LockClosedIcon, LockOpenIcon, ArrowUturnLeftIcon, TrashIcon, PencilSquareIcon, ArrowUpIcon, XMarkIcon, BookmarkIcon } from "@heroicons/react/16/solid";
+import {
+  LockClosedIcon,
+  LockOpenIcon,
+  ArrowUturnLeftIcon,
+  TrashIcon,
+  PencilSquareIcon,
+  ArrowUpIcon,
+  XMarkIcon,
+  BookmarkIcon,
+} from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Callout } from "~/components/primitives";
 import { ClickableSurface } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 import CommentView from "./CommentView";
 
 type CommentData = {
@@ -194,7 +203,7 @@ export default function ContentCommentEditor({
                     className={
                       variant === "compact"
                         ? "ml-1.5 my-1 space-y-1 border-l-2 border-neutral-200 pl-3 dark:border-neutral-700"
-                      : "ml-2 my-1 space-y-1 border-l-2 border-neutral-200 pl-4 dark:border-neutral-700"
+                        : "ml-2 my-1 space-y-1 border-l-2 border-neutral-200 pl-4 dark:border-neutral-700"
                     }
                   >
                     {comment.subcomments.map((subcomment) => (
@@ -272,12 +281,10 @@ export default function ContentCommentEditor({
 }
 
 function sortCommentsByCreatedAt(comments: CommentData[]): CommentData[] {
-  return [...comments]
-    .sort(compareCommentCreatedAt)
-    .map((comment) => ({
-      ...comment,
-      subcomments: comment.subcomments ? [...comment.subcomments].sort(compareCommentCreatedAt) : undefined,
-    }));
+  return [...comments].sort(compareCommentCreatedAt).map((comment) => ({
+    ...comment,
+    subcomments: comment.subcomments ? [...comment.subcomments].sort(compareCommentCreatedAt) : undefined,
+  }));
 }
 
 function compareCommentCreatedAt(a: CommentData, b: CommentData): number {
@@ -317,9 +324,7 @@ function CommentForm({
   const compact = variant === "compact";
   return (
     <div
-      className={`my-2 border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-800 ${
-        compact ? "rounded-lg" : "rounded-xl"
-      } ${
+      className={`my-2 border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-800 ${"rounded-lg"} ${
         compact ? "px-3 py-1.5 text-sm" : "pl-4 pr-2 py-1 text-sm"
       }`}
     >
@@ -338,19 +343,24 @@ function CommentForm({
           {!hideVisibilityToggle && (
             <button
               type="button"
-              className={sanitizeClassName(`
+              className={cn(`
                 flex items-center gap-1 rounded-lg border shrink-0 transition
                 ${compact ? "px-2 py-1 text-xs" : "px-2 py-1.5 text-sm"}
                 ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-100 dark:hover:bg-neutral-700"}
-                ${visibility === "public"
-                  ? "text-blue-500 dark:text-blue-400 border-blue-300 dark:border-blue-600" 
-                  : "text-neutral-500 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700"
+                ${
+                  visibility === "public"
+                    ? "text-blue-500 dark:text-blue-400 border-blue-300 dark:border-blue-600"
+                    : "text-neutral-500 dark:text-neutral-400 border-neutral-200 dark:border-neutral-700"
                 }
               `)}
               onClick={() => onVisibilityChange(visibility === "private" ? "public" : "private")}
               disabled={isSubmitting}
             >
-              {visibility === "private" ? <LockClosedIcon className="size-4 shrink-0" /> : <LockOpenIcon className="size-4 shrink-0" />}
+              {visibility === "private" ? (
+                <LockClosedIcon className="size-4 shrink-0" />
+              ) : (
+                <LockOpenIcon className="size-4 shrink-0" />
+              )}
               <span className="hidden sm:inline">{visibility === "private" ? "나만 보기" : "전체 공개"}</span>
             </button>
           )}
@@ -358,12 +368,13 @@ function CommentForm({
           {/* Submit Button */}
           <button
             type="button"
-            className={sanitizeClassName(`
+            className={cn(`
               rounded-lg transition
               ${compact ? "p-1.5" : "p-2"}
-              ${(isSubmitting || !body.trim()) ?
-                "bg-neutral-400 dark:bg-neutral-500 cursor-not-allowed" :
-                "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 cursor-pointer"
+              ${
+                isSubmitting || !body.trim()
+                  ? "bg-neutral-400 dark:bg-neutral-500 cursor-not-allowed"
+                  : "bg-blue-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-700 cursor-pointer"
               }
             `)}
             onClick={onSubmit}
@@ -395,8 +406,24 @@ type CommentDisplayProps = {
   onCancelReply?: () => void;
 };
 
-function CommentDisplay({ comment, signedIn, variant, isSubmitting, isEditing, isReplying, onReply, onEdit, onDelete, onPin, onUnpin, onUpdateComment, onDeleteComment, onCancelEdit, onCancelReply }: CommentDisplayProps) {
-  const isSubcomment = (onReply === undefined);
+function CommentDisplay({
+  comment,
+  signedIn,
+  variant,
+  isSubmitting,
+  isEditing,
+  isReplying,
+  onReply,
+  onEdit,
+  onDelete,
+  onPin,
+  onUnpin,
+  onUpdateComment,
+  onDeleteComment,
+  onCancelEdit,
+  onCancelReply,
+}: CommentDisplayProps) {
+  const isSubcomment = onReply === undefined;
   const showActions = comment.sensei.me && onUpdateComment && onDeleteComment;
   const showPinActions = !isSubcomment && comment.sensei.me && (onPin || onUnpin);
   return (
@@ -410,24 +437,28 @@ function CommentDisplay({ comment, signedIn, variant, isSubmitting, isEditing, i
           sensei={comment.sensei}
         />
       </div>
-      <div className={`flex gap-x-1 shrink-0 ${!isSubcomment ? "text-neutral-500 dark:text-neutral-400" : ""}`}>
+      <div className={`flex shrink-0 gap-x-1 ${!isSubcomment ? "text-muted-foreground" : ""}`}>
         {signedIn && !isSubcomment && comment.visibility === "public" && (
           <button
             type="button"
-            className="p-1 rounded transition cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"
+            className="cursor-pointer rounded-md p-1 transition-colors hover:bg-muted"
             onClick={isReplying ? onCancelReply : onReply}
             disabled={isSubmitting}
           >
-            {isReplying ? <XMarkIcon className="size-4" /> : <ArrowUturnLeftIcon className="size-4 transform scale-y-[-1]" />}
+            {isReplying ? (
+              <XMarkIcon className="size-4" />
+            ) : (
+              <ArrowUturnLeftIcon className="size-4 transform scale-y-[-1]" />
+            )}
           </button>
         )}
         {showPinActions && (
           <button
             type="button"
-            className={sanitizeClassName(`
-              p-1 rounded transition
-              ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}
-              ${comment.pinned ? "text-blue-500 dark:text-blue-400" : "text-neutral-500 dark:text-neutral-400"}
+            className={cn(`
+              rounded-md p-1 transition-colors
+              ${isSubmitting ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-muted"}
+              ${comment.pinned ? "text-primary" : "text-muted-foreground"}
             `)}
             onClick={comment.pinned ? onUnpin : onPin}
             disabled={isSubmitting}
@@ -441,7 +472,7 @@ function CommentDisplay({ comment, signedIn, variant, isSubmitting, isEditing, i
             {isEditing ? (
               <button
                 type="button"
-                className={`p-1 rounded transition ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}`}
+                className={`rounded-md p-1 transition-colors ${isSubmitting ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-muted"}`}
                 onClick={onCancelEdit}
                 disabled={isSubmitting}
               >
@@ -450,18 +481,18 @@ function CommentDisplay({ comment, signedIn, variant, isSubmitting, isEditing, i
             ) : (
               <button
                 type="button"
-                className = {`p-1 rounded transition ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}`}
+                className={`rounded-md p-1 transition-colors ${isSubmitting ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-muted"}`}
                 onClick={onEdit}
                 disabled={isSubmitting}
               >
-                <PencilSquareIcon className={`size-4 ${isSubcomment ? "text-neutral-500 dark:text-neutral-400" : ""}`} />
+                <PencilSquareIcon className={`size-4 ${isSubcomment ? "text-muted-foreground" : ""}`} />
               </button>
             )}
             <button
               type="button"
-              className={sanitizeClassName(`
-                p-1 rounded transition text-neutral-500 dark:text-neutral-400 hover:text-red-500 dark:hover:text-red-400 transition-colors
-                ${isSubmitting ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800"}
+              className={cn(`
+                rounded-md p-1 text-muted-foreground transition-colors hover:text-red-500 dark:hover:text-red-400
+                ${isSubmitting ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-muted"}
               `)}
               onClick={onDelete}
               disabled={isSubmitting}

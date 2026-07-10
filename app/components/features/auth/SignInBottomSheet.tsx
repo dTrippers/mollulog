@@ -81,39 +81,44 @@ export default function SignInBottomSheet() {
         onClick={hideSignIn}
         aria-label="로그인 창 닫기"
       />
-      <div className="fixed bottom-0 w-full md:max-w-3xl mx-auto left-1/2 -translate-x-1/2 p-4 md:p-8 bg-white dark:bg-neutral-800 z-layer-modal rounded-t-2xl">
-        <p className="mt-4 mb-4 md:mb-8 text-2xl md:text-4xl font-black">로그인</p>
-        {displayError && <p className="my-4 text-sm md:text-base text-red-500">{displayError}</p>}
+      <div className="fixed bottom-0 left-1/2 z-layer-modal mx-auto w-full -translate-x-1/2 rounded-t-lg bg-popover p-4 text-popover-foreground shadow-t-xl md:max-w-3xl md:p-8">
+        <h2 className="mt-4 mb-4 text-2xl font-bold md:mb-8 md:text-3xl">로그인</h2>
+        {displayError && <p className="my-4 text-sm text-destructive md:text-base">{displayError}</p>}
         <div className="space-y-3">
           <Button
-            className="w-full py-2 cursor-pointer"
+            className="py-2"
             type="submit"
             variant="primary"
             onClick={signInWithGoogle}
             disabled={buttonDisabled}
+            fullWidth
           >
             <p>Google 계정으로 로그인</p>
           </Button>
           <Button
-            className="w-full py-2 cursor-pointer"
+            className="py-2"
             type="button"
             variant="inverse"
             onClick={signInWithGithub}
             disabled={buttonDisabled}
+            fullWidth
           >
             <p>GitHub 계정으로 로그인</p>
           </Button>
           <Button
-            className="w-full py-2 cursor-pointer"
+            className="py-2"
             type="button"
             variant="inverse"
             onClick={signInWithPasskey}
             disabled={buttonDisabled}
+            fullWidth
           >
             <p>Passkey로 로그인</p>
           </Button>
         </div>
-        <p className="my-4 text-sm text-neutral-500 text-center">로그인 후 학생 정보, 미래시 계획을 관리해보세요.</p>
+        <p className="my-4 text-center text-sm text-muted-foreground">
+          로그인 후 학생 정보, 미래시 계획을 관리해보세요.
+        </p>
       </div>
     </>
   );

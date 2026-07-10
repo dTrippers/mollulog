@@ -80,8 +80,8 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
           ? "로그인 후 모집한 학생 정보를 등록하면 편리하게 이용할 수 있어요"
           : "편성 보너스를 적용할 학생을 선택하세요"
       }
-      foldable
-      foldStateKey="event-shop-section::student-bonus-selector"
+      collapsible
+      persistenceKey="event-shop-section::student-bonus-selector"
       defaultExpanded={true}
     >
       <Toggle

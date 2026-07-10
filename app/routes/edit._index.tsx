@@ -1,16 +1,12 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
-import {
-  ArrowRightStartOnRectangleIcon,
-  KeyIcon,
-  LinkIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowRightStartOnRectangleIcon, KeyIcon, LinkIcon } from "@heroicons/react/24/outline";
 import { type ElementType, useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
-import { Button, FormContainer, Input, Title } from "~/components/primitives";
+import { Button, Input, SectionCard, Title } from "~/components/primitives";
 import { nowUtcIso } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
@@ -173,8 +169,7 @@ function SaveSubmitButton({
       disabled={isSubmitting}
       className={cn(
         "min-w-32 self-start transition-colors",
-        isSaved &&
-          "border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-600 dark:border-emerald-500 dark:bg-emerald-500 dark:text-emerald-950",
+        isSaved && "bg-emerald-600 text-white hover:bg-emerald-600 dark:bg-emerald-500 dark:text-emerald-950",
       )}
     >
       {isSubmitting ? <ArrowPathIcon className="size-4 animate-spin" /> : null}
@@ -203,7 +198,7 @@ function SettingsLink({
     <Link
       to={to}
       className={cn(
-        "flex items-center gap-3 rounded-md border border-border bg-background px-4 py-3 text-foreground transition-colors hover:bg-muted/60",
+        "flex items-center gap-3 rounded-md bg-background px-4 py-3 text-foreground transition-colors hover:bg-muted/60",
         destructive && "text-destructive",
       )}
     >
@@ -217,29 +212,21 @@ function SettingsLink({
   );
 }
 
-function AuthIdentityLinkForm({
-  provider,
-  label,
-  linked,
-}: {
-  provider: AuthProvider;
-  label: string;
-  linked: boolean;
-}) {
+function AuthIdentityLinkForm({ provider, label, linked }: { provider: AuthProvider; label: string; linked: boolean }) {
   return (
-    <div className="flex items-center gap-3 rounded-md border border-border bg-background px-4 py-3">
+    <div className="flex items-center gap-3 rounded-md bg-background px-4 py-3">
       <LinkIcon className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{label}</p>
         <p className="text-sm text-muted-foreground">{linked ? "로그인에 사용할 수 있어요" : "연동되지 않음"}</p>
       </div>
       {linked ? (
-        <span className="inline-flex w-fit items-center justify-center gap-2 whitespace-nowrap rounded-md border border-border bg-muted/60 px-3 py-1.5 text-center text-sm font-medium text-muted-foreground shadow-xs">
+        <span className="inline-flex w-fit items-center justify-center gap-2 whitespace-nowrap rounded-md bg-muted px-3 py-1.5 text-center text-sm font-medium text-muted-foreground">
           연동됨
         </span>
       ) : (
         <Form method="post" action={`/auth/${provider}/link`}>
-          <Button type="submit" size="sm" variant="tint-blue">
+          <Button type="submit" size="sm" variant="primary">
             연동하기
           </Button>
         </Form>
@@ -288,7 +275,7 @@ export default function EditProfile() {
     <div className="space-y-8">
       <Title text="프로필 관리" />
 
-      <FormContainer title="프로필 정보" description="프로필 정보는 다른 사람에게 표시돼요">
+      <SectionCard title="프로필 정보" description="프로필 정보는 다른 사람에게 표시돼요">
         <Form
           method="put"
           className="space-y-6"
@@ -307,9 +294,9 @@ export default function EditProfile() {
             />
           </div>
         </Form>
-      </FormContainer>
+      </SectionCard>
 
-      <FormContainer title="블루 아카이브 계정 정보" description="계정 정보는 다른 사람이 확인할 수 없어요">
+      <SectionCard title="블루 아카이브 계정 정보" description="계정 정보는 다른 사람이 확인할 수 없어요">
         <Form
           method="put"
           className="space-y-6"
@@ -338,17 +325,17 @@ export default function EditProfile() {
             />
           </div>
         </Form>
-      </FormContainer>
+      </SectionCard>
 
-      <FormContainer title="인증 및 보안">
+      <SectionCard title="인증 및 보안">
         <div className="space-y-3">
           {authMessage ? (
             <p
               className={cn(
-                "rounded-md border px-3 py-2 text-sm",
+                "rounded-md px-3 py-2 text-sm",
                 authMessage.tone === "success"
-                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                  : "border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300",
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "bg-red-500/10 text-red-700 dark:text-red-300",
               )}
             >
               {authMessage.text}
@@ -364,7 +351,7 @@ export default function EditProfile() {
           />
           <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} tone="destructive" />
         </div>
-      </FormContainer>
+      </SectionCard>
     </div>
   );
 }

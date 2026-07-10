@@ -2,14 +2,13 @@ import { ArrowLeftIcon } from "@heroicons/react/16/solid";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { BottomSheet } from "~/components/primitives";
-import { default as PageLink, type PageLinkProps } from "~/components/primitives/PageLink";
-import { default as PagePanel, type PagePanelProps } from "~/components/primitives/PagePanel";
-import {
-  default as PageScreenSelector,
+import { cn } from "~/lib/utils";
+import PageLink, { type PageLinkProps } from "./PageLink";
+import PagePanel, { type PagePanelProps } from "./PagePanel";
+import PageScreenSelector, {
   type PageScreenSelectorItemProps,
   type PageScreenSelectorProps,
-} from "~/components/primitives/PageScreenSelector";
-import { sanitizeClassName } from "~/prophandlers";
+} from "./PageScreenSelector";
 
 type PageProps = {
   title: string;
@@ -19,7 +18,7 @@ type PageProps = {
   showMobileScreens?: boolean;
   panels?: PagePanelProps[];
   links?: PageLinkProps[];
-  contentArea?: "3xl" | "4xl" | "full";
+  contentWidth?: "narrow" | "full";
   layout?: "horizontal" | "vertical";
 
   backward?: {
@@ -35,50 +34,20 @@ type TabItemState = {
   disabled?: boolean;
 };
 
-export function shouldShowMobileTabText(_state: TabItemState) {
-  return true;
-}
-
-export function getVerticalDesktopTabItemClassName({ active, disabled }: TabItemState) {
+function getTabItemClassName({ active, disabled }: TabItemState) {
   if (active) {
-    return sanitizeClassName(`
+    return cn(`
       flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
-      ${
-        disabled
-          ? "bg-neutral-200 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 opacity-50"
-          : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
-      }
+      ${disabled ? "bg-muted text-muted-foreground opacity-50" : "bg-primary text-primary-foreground"}
     `);
   }
 
-  return sanitizeClassName(`
+  return cn(`
     flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
     ${
       disabled
-        ? "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-600 opacity-50"
-        : "bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
-    }
-  `);
-}
-
-export function getMobileTabItemClassName({ active, disabled }: TabItemState) {
-  if (active) {
-    return sanitizeClassName(`
-      flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
-      ${
-        disabled
-          ? "bg-neutral-200 dark:bg-neutral-700 text-neutral-400 dark:text-neutral-500 opacity-50"
-          : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900"
-      }
-    `);
-  }
-
-  return sanitizeClassName(`
-    flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
-    ${
-      disabled
-        ? "bg-neutral-100 dark:bg-neutral-900 text-neutral-400 dark:text-neutral-600 opacity-50"
-        : "bg-neutral-100 dark:bg-neutral-900 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700"
+        ? "bg-muted/40 text-muted-foreground opacity-50"
+        : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
     }
   `);
 }
@@ -91,7 +60,7 @@ export default function Page({
   showMobileScreens = true,
   panels,
   links,
-  contentArea = "3xl",
+  contentWidth = "narrow",
   layout = "horizontal",
   backward,
   children,
@@ -111,14 +80,7 @@ export default function Page({
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, []);
-  let contentAreaClass = "";
-  if (contentArea === "4xl") {
-    contentAreaClass = "max-w-4xl";
-  } else if (contentArea === "3xl") {
-    contentAreaClass = "max-w-3xl";
-  } else if (contentArea === "full") {
-    contentAreaClass = "w-full";
-  }
+  const contentAreaClass = contentWidth === "full" ? "w-full" : "max-w-3xl";
 
   return (
     <>
@@ -176,7 +138,7 @@ function PageSidebar({
   panels,
   links,
   layout = "horizontal",
-}: Omit<PageProps, "children" | "contentArea">) {
+}: Omit<PageProps, "children" | "contentWidth">) {
   const isVertical = layout === "vertical";
   const containerClass = isVertical
     ? "relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar"
@@ -184,21 +146,19 @@ function PageSidebar({
 
   return (
     <div className={containerClass}>
-      <div className="mt-8 mb-4">
+      <header className="pt-6 pb-4">
         {backward && (
           <Link
             to={backward.to}
-            className="mb-4 inline-flex items-center gap-1 text-neutral-500 dark:text-neutral-400 hover:underline"
+            className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeftIcon className="size-4" />
-            <span className="text-sm">{backward.title}</span>
+            <span>{backward.title}</span>
           </Link>
         )}
-        <h1 className="font-black text-3xl drop-shadow-xl drop-shadow-neutral-300/50 dark:drop-shadow-neutral-700/50">
-          {title}
-        </h1>
-        {description && <p className="mt-2 text-sm lg:mt-4 text-neutral-500 dark:text-neutral-400">{description}</p>}
-      </div>
+        <h1 className="text-2xl font-bold text-foreground md:text-3xl">{title}</h1>
+        {description ? <p className="mt-2 text-sm text-muted-foreground">{description}</p> : null}
+      </header>
       {belowTitle && <div className="my-4">{belowTitle}</div>}
       {!isVertical && screens && <PageScreenSelector screens={screens} />}
       {(panels || links) && (
@@ -207,7 +167,7 @@ function PageSidebar({
             <PagePanel key={panel.title} {...panel} />
           ))}
           {links && links.length > 0 && (
-            <div className="lg:mt-8">
+            <div className="space-y-3 lg:mt-8">
               {links.map((link) => (
                 <PageLink key={link.title} {...link} />
               ))}
@@ -219,21 +179,30 @@ function PageSidebar({
   );
 }
 
-function MobileTabBar({
-  screens,
-  isSticky,
-}: {
-  screens: PageScreenSelectorProps["screens"];
-  isSticky: boolean;
-}) {
+function MobileTabBar({ screens, isSticky }: { screens: PageScreenSelectorProps["screens"]; isSticky: boolean }) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const activeScreenKey =
+    screens.find((screen) => screen.active)?.link ?? screens.find((screen) => screen.active)?.text;
+
+  useEffect(() => {
+    if (!activeScreenKey) return;
+
+    const container = scrollContainerRef.current;
+    const activeItem = container?.querySelector<HTMLElement>('[data-active="true"]');
+    if (!container || !activeItem) return;
+
+    const targetLeft = activeItem.offsetLeft - (container.clientWidth - activeItem.clientWidth) / 2;
+    container.scrollTo({ left: Math.max(0, targetLeft), behavior: "auto" });
+  }, [activeScreenKey]);
+
   return (
     <div
-      className={sanitizeClassName(`
-      lg:hidden sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
-      ${isSticky ? "border-b" : ""}
+      className={cn(`
+      lg:hidden sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-background/90 backdrop-blur-sm
+      ${isSticky ? "shadow-sm" : ""}
     `)}
     >
-      <div className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">
+      <div ref={scrollContainerRef} className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">
         {screens.map((screen) => (
           <MobileTabItem key={screen.link ?? screen.text} {...screen} />
         ))}
@@ -253,7 +222,7 @@ function MobileActionBar({
 }) {
   return (
     <div className="lg:hidden fixed w-fit bottom-[var(--mobile-bottom-offset)] right-4 z-30 flex gap-x-2">
-      <div className="flex px-2 py-1 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-full shadow-lg">
+      <div className="flex rounded-full bg-popover/90 px-2 py-1 shadow-lg backdrop-blur-sm">
         {links?.map((link) => (
           <MobileActionLink key={link.title} {...link} />
         ))}
@@ -263,9 +232,9 @@ function MobileActionBar({
             type="button"
             onClick={() => onOpenPanel(index)}
             disabled={panel.disabled}
-            className={sanitizeClassName(`
-              w-20 flex flex-col justify-center items-center p-2 text-neutral-700 dark:text-neutral-300 rounded-full transition-colors
-              ${panel.disabled ? "opacity-50" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}
+            className={cn(`
+              w-20 flex flex-col justify-center items-center p-2 text-foreground rounded-full transition-colors
+              ${panel.disabled ? "opacity-50" : "hover:bg-muted"}
             `)}
           >
             <panel.Icon className="mb-1 size-5 shrink-0" strokeWidth={2} />
@@ -279,7 +248,7 @@ function MobileActionBar({
 
 function MobileActionLink({ Icon, title, to }: PageLinkProps) {
   const className =
-    "w-20 flex flex-col justify-center items-center p-2 text-neutral-700 dark:text-neutral-300 rounded-full transition-colors hover:bg-neutral-100 dark:hover:bg-neutral-800";
+    "w-20 flex flex-col justify-center items-center rounded-full p-2 text-foreground transition-colors hover:bg-muted";
   const inner = (
     <>
       <Icon className="mb-1 size-5 shrink-0" strokeWidth={2} />
@@ -311,9 +280,9 @@ function VerticalDesktopTabBar({
 }) {
   return (
     <div
-      className={sanitizeClassName(`
-      hidden lg:flex sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm border-neutral-200 dark:border-neutral-700
-      ${isSticky ? "border-b" : ""}
+      className={cn(`
+      hidden lg:flex sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-background/90 backdrop-blur-sm
+      ${isSticky ? "shadow-sm" : ""}
     `)}
     >
       <div className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">
@@ -326,7 +295,7 @@ function VerticalDesktopTabBar({
 }
 
 function VerticalDesktopTabItem({ text, label, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
-  const className = getVerticalDesktopTabItemClassName({ active, disabled });
+  const className = getTabItemClassName({ active, disabled });
   const inner = (
     <>
       <Icon className="size-5 shrink-0" strokeWidth={2} />
@@ -341,7 +310,12 @@ function VerticalDesktopTabItem({ text, label, Icon, active, disabled, link, onC
 
   if (!disabled && link) {
     return (
-      <Link to={link} className={className}>
+      <Link
+        to={link}
+        className={className}
+        data-active={active ? "true" : undefined}
+        aria-current={active ? "page" : undefined}
+      >
         {inner}
       </Link>
     );
@@ -351,6 +325,8 @@ function VerticalDesktopTabItem({ text, label, Icon, active, disabled, link, onC
     <button
       type="button"
       className={className}
+      data-active={active ? "true" : undefined}
+      aria-pressed={active}
       onClick={disabled ? undefined : onClick}
       disabled={disabled || !onClick}
     >
@@ -360,13 +336,11 @@ function VerticalDesktopTabItem({ text, label, Icon, active, disabled, link, onC
 }
 
 function MobileTabItem({ text, label, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
-  const className = getMobileTabItemClassName({ active, disabled });
+  const className = getTabItemClassName({ active, disabled });
   const inner = (
     <>
       <Icon className="size-5 shrink-0" strokeWidth={2} />
-      {shouldShowMobileTabText({ active, disabled }) && (
-        <span className={`text-sm whitespace-nowrap ${active ? "font-semibold" : "font-medium"}`}>{text}</span>
-      )}
+      <span className={`text-sm whitespace-nowrap ${active ? "font-semibold" : "font-medium"}`}>{text}</span>
       {label ? (
         <span className="flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-xs font-bold leading-none text-white dark:bg-rose-400 dark:text-rose-950">
           {label}
@@ -377,7 +351,12 @@ function MobileTabItem({ text, label, Icon, active, disabled, link, onClick }: P
 
   if (!disabled && link) {
     return (
-      <Link to={link} className={className}>
+      <Link
+        to={link}
+        className={className}
+        data-active={active ? "true" : undefined}
+        aria-current={active ? "page" : undefined}
+      >
         {inner}
       </Link>
     );
@@ -387,6 +366,8 @@ function MobileTabItem({ text, label, Icon, active, disabled, link, onClick }: P
     <button
       type="button"
       className={className}
+      data-active={active ? "true" : undefined}
+      aria-pressed={active}
       onClick={disabled ? undefined : onClick}
       disabled={disabled || !onClick}
     >

@@ -79,9 +79,9 @@ export default function PyroxeneInitialResources({
           ))}
           <div className="mt-2 flex items-center justify-end gap-2">
             {isEditing ? (
-              <Button text="취소" variant="tint" size="xs" onClick={handleCancel} />
+              <Button text="취소" variant="secondary" size="xs" onClick={handleCancel} />
             ) : (
-              <Button text="수정" variant="tint-blue" size="xs" onClick={() => setIsEditing(true)} />
+              <Button text="수정" variant="secondary" size="xs" onClick={() => setIsEditing(true)} />
             )}
           </div>
         </div>

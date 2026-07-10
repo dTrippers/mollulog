@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { ActionCard } from "~/components/features/editor";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { StudentCard, TierCounts } from "~/components/features/students";
-import { FilterButtons, OptionBadge } from "~/components/primitives";
+import { AttributeBadge, FilterButtons } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
@@ -33,21 +33,35 @@ type RaidStatisticsSlotCountProps = {
   assistsByTier: { tier: number; count: number }[];
 
   maxTier?: number;
-}
+};
 
 type SlotMode = "total" | "own" | "assist";
 
-export default function RaidStatisticsSlotCount({ student, raid, slotsCount, assistsCount, slotsByTier, assistsByTier, maxTier = 8 }: RaidStatisticsSlotCountProps) {
+export default function RaidStatisticsSlotCount({
+  student,
+  raid,
+  slotsCount,
+  assistsCount,
+  slotsByTier,
+  assistsByTier,
+  maxTier = 8,
+}: RaidStatisticsSlotCountProps) {
   const displayTimeZone = useDisplayTimeZone();
-  const ownedByTierMap = slotsByTier.reduce((acc, { tier, count }) => {
-    acc[tier] = count;
-    return acc;
-  }, {} as { [tier: number]: number });
+  const ownedByTierMap = slotsByTier.reduce(
+    (acc, { tier, count }) => {
+      acc[tier] = count;
+      return acc;
+    },
+    {} as { [tier: number]: number },
+  );
 
-  const assistsByTierMap = assistsByTier.reduce((acc, { tier, count }) => {
-    acc[tier] = count;
-    return acc;
-  }, {} as { [tier: number]: number });
+  const assistsByTierMap = assistsByTier.reduce(
+    (acc, { tier, count }) => {
+      acc[tier] = count;
+      return acc;
+    },
+    {} as { [tier: number]: number },
+  );
 
   // Sum the two tier maps for total slot mode
   const totalByTierMap = { ...ownedByTierMap };
@@ -71,9 +85,7 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
             to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
             className="grow group z-10 relative "
           >
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
-              {raidTypeLocale[raid.raidType]}
-            </p>
+            <p className="text-xs text-muted-foreground">{raidTypeLocale[raid.raidType]}</p>
             <p className="text-lg font-bold group-hover:underline">
               {raid.name}
               <ChevronRightIcon className="size-4 inline-block" />
@@ -91,9 +103,9 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
             style={{ backgroundImage: `url(${bossImageUrl(raid.boss)})` }}
           />
           <div className="absolute right-2 bottom-1 z-10 flex gap-1">
-            {raid.difficulty && <OptionBadge text={difficultyLocale[raid.difficulty]} bgColor="dark" />}
-            <OptionBadge text={terrainLocale[raid.terrain]} bgColor="dark" />
-            <OptionBadge text={defenseTypeLocale[raid.defenseType]} color={defenseTypeColor[raid.defenseType]} bgColor="dark" />
+            {raid.difficulty && <AttributeBadge text={difficultyLocale[raid.difficulty]} />}
+            <AttributeBadge text={terrainLocale[raid.terrain]} />
+            <AttributeBadge text={defenseTypeLocale[raid.defenseType]} color={defenseTypeColor[raid.defenseType]} />
           </div>
         </div>
       )}
@@ -111,26 +123,36 @@ export default function RaidStatisticsSlotCount({ student, raid, slotsCount, ass
           </div>
         </Link>
       )}
-        <div className="flex-grow min-w-0">
-          <FilterButtons
-            buttonProps={[
-              { text: "전체", subText: `${slotsCount + assistsCount}`, active: slotMode === "total", onToggle: () => setSlotMode("total") },
-              { text: "모집", subText: `${slotsCount}`, active: slotMode === "own", onToggle: () => setSlotMode("own") },
-              { text: "조력", subText: `${assistsCount}`, active: slotMode === "assist", onToggle: () => setSlotMode("assist") },
-            ]}
-            exclusive
-            size="sm"
+      <div className="flex-grow min-w-0">
+        <FilterButtons
+          buttonProps={[
+            {
+              text: "전체",
+              subText: `${slotsCount + assistsCount}`,
+              active: slotMode === "total",
+              onToggle: () => setSlotMode("total"),
+            },
+            { text: "모집", subText: `${slotsCount}`, active: slotMode === "own", onToggle: () => setSlotMode("own") },
+            {
+              text: "조력",
+              subText: `${assistsCount}`,
+              active: slotMode === "assist",
+              onToggle: () => setSlotMode("assist"),
+            },
+          ]}
+          exclusive
+          size="sm"
+        />
+        <div className="overflow-x-auto">
+          <TierCounts
+            tierCounts={tierCounts[slotMode]}
+            // From maxTier to 3
+            visibleTiers={Array.from({ length: maxTier - 2 }, (_, i) => maxTier - i)}
+            reducePaddings
+            totalCount={20000}
           />
-          <div className="overflow-x-auto">
-            <TierCounts
-              tierCounts={tierCounts[slotMode]}
-              // From maxTier to 3
-              visibleTiers={Array.from({ length: maxTier - 2 }, (_, i) => maxTier - i)}
-              reducePaddings
-              totalCount={20000}
-            />
-          </div>
         </div>
+      </div>
     </ActionCard>
   );
 }

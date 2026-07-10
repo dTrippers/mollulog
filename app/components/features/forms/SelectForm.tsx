@@ -79,15 +79,15 @@ export default function SelectForm({
         >
           <Field label={label} description={description} containerClassName="pointer-events-none">
             {(selectedLabel ?? placeholder) && (
-              <p className="mt-2 text-neutral-500 dark:text-neutral-400">{selectedLabel ?? placeholder}</p>
+              <p className="mt-2 text-muted-foreground">{selectedLabel ?? placeholder}</p>
             )}
           </Field>
           <ChevronDownIcon className="absolute top-1/2 right-4 size-4 -translate-y-1/2" />
         </button>
         {isOpen && (
-          <div className="absolute top-full left-0 z-5 mt-4 max-h-72 w-full overflow-y-auto rounded-lg border border-neutral-100 bg-white/90 shadow-lg backdrop-blur-sm dark:border-neutral-800 dark:bg-black/80 md:max-h-128">
+          <div className="absolute top-full left-0 z-5 mt-4 max-h-72 w-full overflow-y-auto rounded-lg bg-popover/95 text-popover-foreground shadow-lg backdrop-blur-sm md:max-h-128">
             {useSearch && (
-              <div className="sticky top-0 z-10 rounded-t-lg border-b border-neutral-100 bg-white p-2 dark:border-neutral-800 dark:bg-black">
+              <div className="sticky top-0 z-10 rounded-t-lg bg-popover p-2 shadow-sm">
                 <input
                   type="text"
                   className="w-full p-2"
@@ -106,14 +106,14 @@ export default function SelectForm({
                 <button
                   type="button"
                   key={option.value}
-                  className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-neutral-200 dark:hover:bg-neutral-800"
+                  className="flex w-full cursor-pointer items-center gap-x-2 text-left transition-colors duration-100 hover:bg-muted"
                   onClick={() => handleSelect(option.value)}
                 >
                   {option.element ?? <div className="px-4 py-3">{option.label}</div>}
                 </button>
               ))
             ) : (
-              <div className="p-4 text-center text-neutral-500 dark:text-neutral-400">검색 결과가 없어요</div>
+              <div className="p-4 text-center text-muted-foreground">검색 결과가 없어요</div>
             )}
           </div>
         )}

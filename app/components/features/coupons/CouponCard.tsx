@@ -24,7 +24,7 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
   };
 
   return (
-    <div className="relative rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden bg-white dark:bg-neutral-800 shadow-sm">
+    <div className="relative overflow-hidden rounded-lg bg-card shadow-sm">
       {/* 만료 오버레이 */}
       {isExpired && (
         <div className="absolute inset-0 z-10 backdrop-blur-sm bg-white/60 dark:bg-neutral-800/60 flex flex-col items-center justify-center gap-2">

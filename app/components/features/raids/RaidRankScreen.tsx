@@ -247,7 +247,6 @@ export default function RaidRankScreen({
               ...(clearTimeLabel ? [{ label: "클리어 시간", value: clearTimeLabel }] : []),
             ]}
             popupIdPrefix={`rank-${rank}-${score}`}
-            surface="elevated"
             getStudentActions={(slot) => getRankStudentActions(slot, onIncludeStudent, onExcludeStudent)}
           />
         );
@@ -367,7 +366,7 @@ function formatClearTime(clearTimeMillisec: number): string {
 // Spinner animation
 function LoadingRanks() {
   return (
-    <div className="my-16 flex flex-col justify-center items-center gap-y-4 text-neutral-900 dark:text-neutral-100">
+    <div className="my-16 flex flex-col items-center justify-center gap-y-4 text-foreground">
       <div
         className="animate-spin inline-block size-10 border-3 border-current border-t-transparent rounded-full"
         aria-label="loading"

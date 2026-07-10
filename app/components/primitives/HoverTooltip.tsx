@@ -115,7 +115,7 @@ export default function HoverTooltip({
             id={tooltipId}
             role="tooltip"
             className={cn(
-              "pointer-events-none fixed z-layer-navigation max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-white shadow-lg dark:border-neutral-600 dark:bg-neutral-800",
+              "pointer-events-none fixed z-layer-navigation max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded-md bg-neutral-900 px-2 py-1 text-xs text-white shadow-lg dark:bg-neutral-800",
               tooltip.placement === "top" && "-translate-y-full",
               contentClassName,
             )}

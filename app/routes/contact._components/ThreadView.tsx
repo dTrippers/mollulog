@@ -12,7 +12,7 @@ type ThreadViewProps = {
 
 export default function ThreadView({ ticket, replies }: ThreadViewProps) {
   return (
-    <section className="rounded-xl border border-border bg-card p-5 text-card-foreground">
+    <section className="rounded-lg bg-card p-5 text-card-foreground">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <h2 className="text-lg font-semibold md:text-xl">{ticket.title}</h2>
@@ -21,7 +21,7 @@ export default function ThreadView({ ticket, replies }: ThreadViewProps) {
         <FeedbackStatusBadge status={ticket.status} />
       </div>
 
-      <section className="mt-6 flex flex-col gap-3 rounded-xl border border-border/70 bg-muted/30 p-4">
+      <section className="mt-6 flex flex-col gap-3 rounded-lg bg-muted/40 p-4">
         <p className="text-sm font-medium">문의 내용</p>
         <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{ticket.content}</p>
       </section>
@@ -45,12 +45,14 @@ export default function ThreadView({ ticket, replies }: ThreadViewProps) {
               <div key={reply.uid} className={cn("flex", reply.isAdmin ? "justify-start" : "justify-end")}>
                 <div
                   className={cn(
-                    "flex w-full max-w-2xl flex-col gap-2 rounded-xl border px-4 py-3",
-                    reply.isAdmin ? "border-primary/20 bg-primary/5" : "border-border/70 bg-background",
+                    "flex w-full max-w-2xl flex-col gap-2 rounded-lg px-4 py-3",
+                    reply.isAdmin ? "bg-primary/10" : "bg-background",
                   )}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-medium text-muted-foreground">{reply.isAdmin ? "운영팀 답변" : "내 문의"}</p>
+                    <p className="text-xs font-medium text-muted-foreground">
+                      {reply.isAdmin ? "운영팀 답변" : "내 문의"}
+                    </p>
                     <p className="text-xs text-muted-foreground">{dayjs(reply.createdAt).format("YYYY-MM-DD HH:mm")}</p>
                   </div>
                   <p className="whitespace-pre-wrap break-words text-sm leading-7 text-foreground">{reply.content}</p>

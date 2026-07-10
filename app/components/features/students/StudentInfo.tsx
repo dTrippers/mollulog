@@ -1,4 +1,4 @@
-import { OptionBadge } from "~/components/primitives";
+import { AttributeBadge } from "~/components/primitives";
 import type { Attack, Defense, RoleEnum } from "~/graphql/graphql";
 import {
   attackTypeColor,
@@ -40,22 +40,14 @@ export default function StudentInfo({ student, className = "" }: StudentInfoProp
 
         <div className="relative z-10 flex min-h-40 flex-col justify-center p-4 md:p-5">
           <p className="text-xl font-bold text-neutral-950 dark:text-neutral-50">{student.name}</p>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
-            {schoolNameLocale[student.school]}
-          </p>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">{schoolNameLocale[student.school]}</p>
           <div className="mt-3 flex gap-2">
-            <OptionBadge
-              text={attackTypeLocale[student.attackType]}
-              color={attackTypeColor[student.attackType]}
-            />
-            <OptionBadge
+            <AttributeBadge text={attackTypeLocale[student.attackType]} color={attackTypeColor[student.attackType]} />
+            <AttributeBadge
               text={defenseTypeLocale[student.defenseType]}
               color={defenseTypeColor[student.defenseType]}
             />
-            <OptionBadge
-              text={roleLocale[student.role]}
-              color={roleColor[student.role]}
-            />
+            <AttributeBadge text={roleLocale[student.role]} color={roleColor[student.role]} />
           </div>
         </div>
       </div>
