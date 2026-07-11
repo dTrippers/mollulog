@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import {
@@ -32,6 +33,9 @@ const xmlParser = new XMLParser({
 
 const YOUTUBE_FEED_FETCH_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.youtubeFeedFetch;
 const YOUTUBE_FEED_BODY_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.youtubeFeedBody;
+// Each upsert starts with a D1 existence check. Both staging and production cron
+// target the same database, so an unbounded fan-out can overload the primary.
+const YOUTUBE_SYNC_CONCURRENCY = 4;
 
 export type HomeYoutubeVideo = {
   id: string;
@@ -111,7 +115,9 @@ export async function fetchYoutubeFeedVideos(): Promise<YoutubeFeedVideo[]> {
 
 export async function syncYoutubeCommunityPosts(env: Env): Promise<{ synced: number }> {
   const videos = await fetchYoutubeFeedVideos();
-  await Promise.all(videos.map((video) => upsertYoutubeVideoCommunityPost(env, video)));
+  await mapWithConcurrencyLimit(videos, YOUTUBE_SYNC_CONCURRENCY, (video) =>
+    upsertYoutubeVideoCommunityPost(env, video),
+  );
   return { synced: videos.length };
 }
 

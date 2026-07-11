@@ -894,6 +894,51 @@ describe("fetchLazySourceCachedBatch", () => {
     expect(kv.put).not.toHaveBeenCalled();
   });
 
+  it("limits concurrent KV reads to 32 entries", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+
+    const manyEntries = Array.from({ length: 40 }, (_, index) => ({
+      key: `key-${index}`,
+      dataKey: `source::thing::v1::uid=key-${index}`,
+    }));
+    let activeReads = 0;
+    let maxActiveReads = 0;
+    const pendingReads: Array<() => void> = [];
+    const kv = {
+      get: jest.fn(
+        (key: string) =>
+          new Promise<string>((resolve) => {
+            activeReads += 1;
+            maxActiveReads = Math.max(maxActiveReads, activeReads);
+            pendingReads.push(() => {
+              activeReads -= 1;
+              resolve(JSON.stringify({ _ver: 2, data: key, cachedAt: now }));
+            });
+          }),
+      ),
+      put: jest.fn(async () => undefined),
+      delete: jest.fn(async () => undefined),
+      list: jest.fn(async () => ({ keys: [], list_complete: true })),
+    };
+    const env = { KV_CACHE: kv } as unknown as CacheEnv;
+    const loadMissing = jest.fn(async () => new Map<string, string>());
+
+    const result = fetchLazySourceCachedBatch(env, manyEntries, loadMissing, 60);
+    await flushPromises();
+
+    expect(maxActiveReads).toBe(32);
+    while (pendingReads.length > 0) {
+      pendingReads.splice(0).forEach((resolve) => {
+        resolve();
+      });
+      await flushPromises();
+    }
+
+    expect((await result).size).toBe(40);
+    expect(loadMissing).not.toHaveBeenCalled();
+  });
+
   it("loads and writes only missing batch keys", async () => {
     const now = 1_800_000_000_000;
     jest.spyOn(Date, "now").mockReturnValue(now);

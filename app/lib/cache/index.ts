@@ -1,3 +1,4 @@
+import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
@@ -36,6 +37,9 @@ export function cacheQuery(params: Record<string, string | number | boolean | nu
  */
 const KV_TIMEOUT_MS = RUNTIME_TIMEOUTS.kv.operation;
 const KV_COOLDOWN_AFTER_TIMEOUT_MS = RUNTIME_TIMEOUTS.kv.cooldownAfterTimeout;
+// Cron can request hundreds of source keys at once. Keep enough parallelism for
+// throughput without fanning every KV operation out in the same event-loop turn.
+const LAZY_SOURCE_KV_CONCURRENCY = 32;
 
 type KvCircuitState = {
   disabledUntil: number;
@@ -686,12 +690,10 @@ export async function fetchLazySourceCachedBatch<K extends string, T>(
   const staleValues = new Map<K, T>();
   const missingEntries: Array<LazySourceBatchEntry<K>> = [];
 
-  const cachedValues = await Promise.all(
-    uniqueEntries.map(async (entry) => ({
-      entry,
-      cached: await readKvCacheValue<T>(env, entry.dataKey),
-    })),
-  );
+  const cachedValues = await mapWithConcurrencyLimit(uniqueEntries, LAZY_SOURCE_KV_CONCURRENCY, async (entry) => ({
+    entry,
+    cached: await readKvCacheValue<T>(env, entry.dataKey),
+  }));
 
   for (const { entry, cached } of cachedValues) {
     if (!cached) {
@@ -741,16 +743,14 @@ export async function fetchLazySourceCachedBatch<K extends string, T>(
     );
   }
 
-  await Promise.all(
-    missingEntries.flatMap((entry) => {
-      if (!loadedValues.has(entry.key)) {
-        return [];
-      }
-
+  await mapWithConcurrencyLimit(
+    missingEntries.filter((entry) => loadedValues.has(entry.key)),
+    LAZY_SOURCE_KV_CONCURRENCY,
+    async (entry) => {
       const data = loadedValues.get(entry.key) as T;
       freshValues.set(entry.key, data);
-      return [writeKvCacheValue(env, entry.dataKey, data, cachedAt, SOURCE_CACHE_EXPIRATION_TTL)];
-    }),
+      await writeKvCacheValue(env, entry.dataKey, data, cachedAt, SOURCE_CACHE_EXPIRATION_TTL);
+    },
   );
 
   return new Map(uniqueEntries.map((entry) => [entry.key, resolveBatchValue(entry.key, freshValues, staleValues)]));
