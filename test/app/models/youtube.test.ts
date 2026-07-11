@@ -12,6 +12,10 @@ const mockedUpsertYoutubeVideoCommunityPost = upsertYoutubeVideoCommunityPost as
 >;
 const mockedGetCommunityFeedPage = getCommunityFeedPage as jest.MockedFunction<typeof getCommunityFeedPage>;
 
+function flushPromises() {
+  return new Promise<void>((resolve) => setImmediate(resolve));
+}
+
 function createFeedXml(videoId: string, title: string) {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/">
@@ -24,6 +28,25 @@ function createFeedXml(videoId: string, title: string) {
       <media:thumbnail url="https://i.ytimg.com/vi/${videoId}/hqdefault.jpg" />
     </media:group>
   </entry>
+</feed>`;
+}
+
+function createFeedXmlWithVideos(videoIds: string[]) {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/">
+  ${videoIds
+    .map(
+      (videoId) => `<entry>
+    <yt:videoId>${videoId}</yt:videoId>
+    <title>${videoId}</title>
+    <link href="https://www.youtube.com/watch?v=${videoId}" />
+    <published>2026-03-28T00:00:00+00:00</published>
+    <media:group>
+      <media:thumbnail url="https://i.ytimg.com/vi/${videoId}/hqdefault.jpg" />
+    </media:group>
+  </entry>`,
+    )
+    .join("\n")}
 </feed>`;
 }
 
@@ -107,6 +130,45 @@ describe("syncYoutubeCommunityPosts", () => {
         channelKey: "kr",
       }),
     );
+  });
+
+  it("limits concurrent D1-backed upserts to four videos", async () => {
+    jest.spyOn(global, "fetch").mockImplementation(
+      async () =>
+        ({
+          ok: true,
+          status: 200,
+          statusText: "OK",
+          text: async () => createFeedXmlWithVideos(["video-1", "video-2", "video-3", "video-4", "video-5"]),
+        }) as Response,
+    );
+    let activeUpserts = 0;
+    let maxActiveUpserts = 0;
+    const pendingUpserts: Array<() => void> = [];
+    mockedUpsertYoutubeVideoCommunityPost.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          activeUpserts += 1;
+          maxActiveUpserts = Math.max(maxActiveUpserts, activeUpserts);
+          pendingUpserts.push(() => {
+            activeUpserts -= 1;
+            resolve();
+          });
+        }),
+    );
+
+    const result = syncYoutubeCommunityPosts({} as Env);
+    await flushPromises();
+
+    expect(maxActiveUpserts).toBe(4);
+    while (pendingUpserts.length > 0) {
+      pendingUpserts.splice(0).forEach((resolve) => {
+        resolve();
+      });
+      await Promise.resolve();
+    }
+
+    await expect(result).resolves.toEqual({ synced: 10 });
   });
 });
 

@@ -1,6 +1,17 @@
 import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { createComment, createSubcomment, updateComment, deleteComment, getNestedContentComments, nestComments, getContentComments, pinComment, unpinComment } from "~/models/content";
+import { withD1Session } from "~/lib/d1-session";
+import {
+  createComment,
+  createSubcomment,
+  deleteComment,
+  getContentComments,
+  getNestedContentComments,
+  nestComments,
+  pinComment,
+  unpinComment,
+  updateComment,
+} from "~/models/content";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const contentUid = params.uid;
@@ -10,7 +21,8 @@ export const loader = async ({ request, params, context }: LoaderFunctionArgs) =
 
   const env = context.cloudflare.env;
   const currentUser = await getActiveSensei(env, request);
-  return nestComments(await getContentComments(env, contentUid, currentUser?.id), currentUser);
+  const sessionEnv = withD1Session(env, currentUser ? "first-primary" : "first-unconstrained");
+  return nestComments(await getContentComments(sessionEnv, contentUid, currentUser?.id), currentUser);
 };
 
 export type ActionData = {
@@ -43,12 +55,25 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     if (!actionData.body || !actionData.parentCommentUid) {
       throw new Response("Body and parentCommentUid are required", { status: 400 });
     }
-    await createSubcomment(env, currentUser.id, contentUid, actionData.parentCommentUid, actionData.body, actionData.visibility ?? "private");
+    await createSubcomment(
+      env,
+      currentUser.id,
+      contentUid,
+      actionData.parentCommentUid,
+      actionData.body,
+      actionData.visibility ?? "private",
+    );
   } else if (actionData.action === "update") {
     if (!actionData.commentUid || !actionData.body) {
       throw new Response("CommentUid and body are required", { status: 400 });
     }
-    await updateComment(env, currentUser.id, actionData.commentUid, actionData.body, actionData.visibility ?? "private");
+    await updateComment(
+      env,
+      currentUser.id,
+      actionData.commentUid,
+      actionData.body,
+      actionData.visibility ?? "private",
+    );
   } else if (actionData.action === "delete") {
     if (!actionData.commentUid) {
       throw new Response("CommentUid is required", { status: 400 });

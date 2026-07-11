@@ -45,6 +45,11 @@
   // - SERVER_BETTER_STACK_SENTRY_DSN
   "env": {
     "staging": {
+      // Staging shares the production D1 database. Do not duplicate the
+      // production cache warm and YouTube sync load on the same schedule.
+      "triggers": {
+        "crons": []
+      },
       "vars": {
         "STAGE": "staging"
       },

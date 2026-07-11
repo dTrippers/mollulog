@@ -143,6 +143,37 @@ function unwrapStatement(statement: D1PreparedStatement): D1PreparedStatement {
   return (statement as { [UNWRAP]?: D1PreparedStatement })[UNWRAP] ?? statement;
 }
 
+function wrapSession(session: D1DatabaseSession, timeoutMs: number): D1DatabaseSession {
+  return new Proxy(session, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value !== "function") {
+        return value;
+      }
+
+      if (prop === "prepare") {
+        return (query: string) =>
+          wrapStatement(
+            (value as (q: string) => D1PreparedStatement).call(target, query),
+            timeoutMs,
+            createQueryContext("session.prepare", query),
+          );
+      }
+
+      if (prop === "batch") {
+        return (statements: D1PreparedStatement[]) =>
+          withDeadline(
+            (value as (s: D1PreparedStatement[]) => Promise<unknown>).call(target, statements.map(unwrapStatement)),
+            timeoutMs,
+            { operation: "session.batch", batchSize: statements.length },
+          );
+      }
+
+      return (value as (...a: unknown[]) => unknown).bind(target);
+    },
+  });
+}
+
 /**
  * Wraps a D1 binding so every query rejects after `timeoutMs` instead of hanging.
  */
@@ -180,6 +211,17 @@ export function withD1Timeout(db: D1Database, timeoutMs: number = DEFAULT_D1_TIM
             (value as (q: string) => Promise<unknown>).call(target, query),
             timeoutMs,
             createQueryContext("exec", query),
+          );
+      }
+
+      if (prop === "withSession") {
+        return (constraintOrBookmark?: D1SessionBookmark | D1SessionConstraint) =>
+          wrapSession(
+            (value as (c?: D1SessionBookmark | D1SessionConstraint) => D1DatabaseSession).call(
+              target,
+              constraintOrBookmark,
+            ),
+            timeoutMs,
           );
       }
 
