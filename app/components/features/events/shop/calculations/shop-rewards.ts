@@ -1,5 +1,4 @@
 import type { ShopResource } from "~/domain/event-shop";
-import { ResourceTypeEnum } from "~/graphql/graphql";
 import { calculateEffectiveShopPurchaseCount } from "./shop-costs";
 
 export type BoughtResourceQuantity = {
@@ -40,26 +39,4 @@ export function calculateBoughtResourceQuantities(
   }
 
   return Array.from(resourceMap.values());
-}
-
-export function calculateBoughtItemQuantities(
-  shopResources: ShopResource[],
-  itemQuantities: Record<string, number>,
-  itemPurchaseDays: Record<string, number> = {},
-): Record<string, number> {
-  const itemQuantitiesByUid: Record<string, number> = {};
-
-  for (const { resource, totalQuantity } of calculateBoughtResourceQuantities(
-    shopResources,
-    itemQuantities,
-    itemPurchaseDays,
-  )) {
-    if (resource.type !== ResourceTypeEnum.Item) {
-      continue;
-    }
-
-    itemQuantitiesByUid[resource.uid] = (itemQuantitiesByUid[resource.uid] || 0) + totalQuantity;
-  }
-
-  return itemQuantitiesByUid;
 }

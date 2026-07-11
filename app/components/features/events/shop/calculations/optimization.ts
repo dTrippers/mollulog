@@ -10,7 +10,6 @@ export function calculateStageInfos(
   stages: Stage[],
   enabledStages: Record<string, boolean>,
   appliedBonusRatio: Record<string, Decimal>,
-  targets: [string, number][],
 ): StageInfo[] {
   return stages
     .filter((stage) => enabledStages[stage.uid])
@@ -26,13 +25,11 @@ export function calculateStageInfos(
           rewardPerItem[item.uid] = perClear;
         }
       }
-      const contributes = targets.length > 0 && targets.some(([uid]) => rewardPerItem[uid]?.gt(0));
       return {
         uid: stage.uid,
         index: stage.index,
         entryAp: new Decimal(stage.entryAp),
         rewardPerItem,
-        contributes,
       };
     });
 }

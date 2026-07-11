@@ -89,7 +89,6 @@ export function calculateItemBreakdowns({
     questSweepAp: calculatedTotalAp,
     extraSweepAp: extraAp,
     totalApWithExtras: firstClearAp + calculatedTotalAp + extraAp,
-    collectedTotals: remaining,
     itemBreakdown: {
       fromFirstRun,
       fromRepeatedRuns,

@@ -6,7 +6,6 @@ export type StageInfo = {
   index: string;
   entryAp: Decimal;
   rewardPerItem: Record<string, Decimal>;
-  contributes: boolean;
 };
 
 export type OptimizationResult = {
@@ -43,7 +42,6 @@ export type ItemBreakdownResult = {
   questSweepAp: number;
   extraSweepAp: number;
   totalApWithExtras: number;
-  collectedTotals: Record<string, number>;
   itemBreakdown: {
     fromFirstRun: Record<string, number>;
     fromRepeatedRuns: Record<string, number>;

@@ -32,7 +32,6 @@ const EMPTY_RESULT: CalculationResult = {
   questSweepAp: 0,
   extraSweepAp: 0,
   totalApWithExtras: 0,
-  collectedTotals: {},
   itemBreakdown: {
     fromFirstRun: {},
     fromRepeatedRuns: {},
@@ -86,12 +85,7 @@ export function useShopCalculations({
       });
 
       const targets = Object.entries(resourceLedger.remainingToFarm).filter(([, qty]) => (qty || 0) > 0);
-      const stageInfos = calculateStageInfos(
-        stages,
-        state.enabledStages,
-        appliedBonusRatio,
-        targets as [string, number][],
-      );
+      const stageInfos = calculateStageInfos(stages, state.enabledStages, appliedBonusRatio);
       const optimizationResult = optimizeStageRuns(stageInfos, targets as [string, number][]);
 
       const itemBreakdownResult = calculateItemBreakdowns({

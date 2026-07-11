@@ -24,7 +24,6 @@ function createStageInfo(overrides: Partial<StageInfo>): StageInfo {
     index: overrides.index ?? "1-1",
     entryAp: overrides.entryAp ?? new Decimal(10),
     rewardPerItem: overrides.rewardPerItem ?? {},
-    contributes: overrides.contributes ?? true,
   };
 }
 
@@ -60,7 +59,7 @@ describe("calculateStageInfos", () => {
       }),
     ];
 
-    const [stageInfo] = calculateStageInfos(stages, { "coin-stage": true }, {}, [["coin", 1]]);
+    const [stageInfo] = calculateStageInfos(stages, { "coin-stage": true }, {});
 
     expect(Object.keys(stageInfo.rewardPerItem)).toEqual(["coin"]);
     expect(stageInfo.rewardPerItem.coin.toNumber()).toBe(100);
@@ -81,9 +80,7 @@ describe("calculateStageInfos", () => {
       }),
     ];
 
-    const [stageInfo] = calculateStageInfos(stages, { "coin-stage": true }, { coin: new Decimal(0.125) }, [
-      ["coin", 1],
-    ]);
+    const [stageInfo] = calculateStageInfos(stages, { "coin-stage": true }, { coin: new Decimal(0.125) });
 
     // 100 + ceil(0.125 * 100) = 100 + 13 = 113
     expect(stageInfo.rewardPerItem.coin.toNumber()).toBe(113);
@@ -92,31 +89,9 @@ describe("calculateStageInfos", () => {
   it("excludes stages that are not enabled", () => {
     const stages = [createStage({ uid: "enabled" }), createStage({ uid: "disabled" })];
 
-    const result = calculateStageInfos(stages, { enabled: true, disabled: false }, {}, []);
+    const result = calculateStageInfos(stages, { enabled: true, disabled: false }, {});
 
     expect(result.map((s) => s.uid)).toEqual(["enabled"]);
-  });
-
-  it("marks a stage as not contributing when it has no target rewards", () => {
-    const stages = [
-      createStage({
-        uid: "coin-stage",
-        rewards: [
-          {
-            amount: 100,
-            rewardRequirement: null,
-            chance: null,
-            item: { uid: "coin", name: "코인", category: "coin", rarity: 1 },
-          },
-        ],
-      }),
-    ];
-
-    const [withTarget] = calculateStageInfos(stages, { "coin-stage": true }, {}, [["coin", 1]]);
-    const [withoutMatchingTarget] = calculateStageInfos(stages, { "coin-stage": true }, {}, [["other-item", 1]]);
-
-    expect(withTarget.contributes).toBe(true);
-    expect(withoutMatchingTarget.contributes).toBe(false);
   });
 });
 

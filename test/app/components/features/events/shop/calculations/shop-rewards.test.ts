@@ -1,8 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import {
-  calculateBoughtItemQuantities,
-  calculateBoughtResourceQuantities,
-} from "../../../../../../../app/components/features/events/shop/calculations/shop-rewards";
+import { calculateBoughtResourceQuantities } from "../../../../../../../app/components/features/events/shop/calculations/shop-rewards";
 import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 
@@ -48,9 +45,12 @@ describe("shop reward calculations", () => {
       }),
     ];
 
-    expect(calculateBoughtItemQuantities(shopResources, { "shop-resource-100-pack": 5 })).toEqual({
-      "reward-item": 500,
-    });
+    expect(calculateBoughtResourceQuantities(shopResources, { "shop-resource-100-pack": 5 })).toEqual([
+      {
+        resource: shopResources[0].resource,
+        totalQuantity: 500,
+      },
+    ]);
   });
 
   it("merges repeated rewards for the same resource", () => {
@@ -111,8 +111,11 @@ describe("shop reward calculations", () => {
       }),
     ];
 
-    expect(calculateBoughtItemQuantities(shopResources, { "daily-ticket": 20 }, { "daily-ticket": 14 })).toEqual({
-      "reward-item": 280,
-    });
+    expect(calculateBoughtResourceQuantities(shopResources, { "daily-ticket": 20 }, { "daily-ticket": 14 })).toEqual([
+      {
+        resource: shopResources[0].resource,
+        totalQuantity: 280,
+      },
+    ]);
   });
 });

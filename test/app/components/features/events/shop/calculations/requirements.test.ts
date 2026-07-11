@@ -94,12 +94,7 @@ describe("calculateRequiredQuantities", () => {
 
     const optimize = (requirements: Record<string, number>) => {
       const targets = Object.entries(requirements);
-      const stageInfos = calculateStageInfos(
-        stages,
-        { "gamepad-stage": true },
-        { [gamepad.uid]: new Decimal("0.95") },
-        targets,
-      );
+      const stageInfos = calculateStageInfos(stages, { "gamepad-stage": true }, { [gamepad.uid]: new Decimal("0.95") });
       return optimizeStageRuns(stageInfos, targets).stageRuns;
     };
 

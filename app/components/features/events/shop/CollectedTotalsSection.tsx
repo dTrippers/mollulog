@@ -122,8 +122,16 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
 }: CollectedTotalsSectionProps) {
   const { itemBreakdown, totalApWithExtras, firstClearAp, questSweepAp, extraSweepAp, unobtainableTargets } =
     stageCalculations;
-  const { existing, fromFirstRun, fromRepeatedRuns, fromShop, toPlayMinigame, toBuyShopItems, fromMinigame } =
-    itemBreakdown;
+  const {
+    existing,
+    fromFirstRun,
+    fromRepeatedRuns,
+    fromShop,
+    toPlayMinigame,
+    toBuyShopItems,
+    fromMinigame,
+    remaining,
+  } = itemBreakdown;
 
   // State for managing popup visibility per item
   const [editingItemUid, setEditingItemUid] = useState<string | null>(null);
@@ -268,7 +276,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
               const hasOverride = state.overriddenRequiredQuantities[itemUid] !== undefined;
               const overrideValue = state.overriddenRequiredQuantities[itemUid];
               const actualRequired = hasOverride ? overrideValue : requiredSubtotal;
-              const remainingCount = acquiredSubtotal - actualRequired;
+              const remainingCount = remaining[itemUid] ?? 0;
 
               // Build breakdown lines
               const acquiredLines: BreakdownLine[] = [
