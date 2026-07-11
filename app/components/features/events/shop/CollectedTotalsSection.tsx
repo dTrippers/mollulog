@@ -1,11 +1,10 @@
 import { Transition } from "@headlessui/react";
 import { memo, useMemo, useState } from "react";
 import { NumberInput, ResourceCard } from "~/components/primitives";
-import type { MinigameConfig } from "~/domain/event-shop";
-import type { CollectableResource, ShopResource, Stage } from "~/domain/event-shop";
+import type { CollectableResource, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import BugReportModal from "./BugReportModal";
-import { calculateBoughtItemQuantities, calculateBoughtResourceQuantities } from "./calculations/shop-rewards";
+import { calculateBoughtResourceQuantities } from "./calculations/shop-rewards";
 import type { ShopActions, ShopState } from "./hooks";
 import type { CalculationResult } from "./hooks/useShopCalculations";
 import { calculateMinigameRewards, resourceCountLabel } from "./utils";
@@ -121,8 +120,10 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
   stageCalculations,
   signedIn,
 }: CollectedTotalsSectionProps) {
-  const { itemBreakdown, totalApWithExtras, firstClearAp, questSweepAp, extraSweepAp } = stageCalculations;
-  const { fromFirstRun, fromRepeatedRuns, toPlayMinigame, toBuyShopItems, fromMinigame } = itemBreakdown;
+  const { itemBreakdown, totalApWithExtras, firstClearAp, questSweepAp, extraSweepAp, unobtainableTargets } =
+    stageCalculations;
+  const { existing, fromFirstRun, fromRepeatedRuns, fromShop, toPlayMinigame, toBuyShopItems, fromMinigame } =
+    itemBreakdown;
 
   // State for managing popup visibility per item
   const [editingItemUid, setEditingItemUid] = useState<string | null>(null);
@@ -147,11 +148,6 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     () => calculateBoughtResourceQuantities(shopResources, state.itemQuantities, state.itemPurchaseDays),
     [shopResources, state.itemQuantities, state.itemPurchaseDays],
   );
-  const boughtItemQuantities = useMemo(
-    () => calculateBoughtItemQuantities(shopResources, state.itemQuantities, state.itemPurchaseDays),
-    [shopResources, state.itemQuantities, state.itemPurchaseDays],
-  );
-
   // Also include minigame rewards as bought resources
   const mergedBoughtResources = useMemo(() => {
     const resourceMap = new Map<
@@ -234,6 +230,21 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
             </div>
           )}
 
+          {Object.keys(unobtainableTargets).length > 0 && (
+            <div className="my-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+              <p className="text-sm font-semibold">선택한 스테이지에서 획득할 수 없는 이벤트 재화가 있어요</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {Object.entries(unobtainableTargets).map(([uid, quantity]) => (
+                  <li key={uid}>
+                    {collectableResources.find((resource) => resource.uid === uid)?.name ??
+                      "이름을 확인할 수 없는 이벤트 재화"}
+                    : {quantity.toLocaleString()}개
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="p-3 border border-neutral-200 dark:border-neutral-700 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
             {allItemUids.size === 0 && (
               <p className="w-full py-8 text-neutral-500 dark:text-neutral-400 text-center col-span-2 text-sm">
@@ -242,10 +253,10 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
             )}
             {collectableResources.map(({ type: resourceType, uid: itemUid, name: itemName }) => {
               // Gather all counts
-              const existingCount = state.existingPaymentItemQuantities[itemUid] || 0;
+              const existingCount = existing[itemUid] || 0;
               const firstRunCount = fromFirstRun[itemUid] || 0;
               const fromMinigameCount = fromMinigame[itemUid] || 0;
-              const fromShopCount = boughtItemQuantities[itemUid] || 0;
+              const fromShopCount = fromShop[itemUid] || 0;
               const repeatedRunsCount = fromRepeatedRuns[itemUid] || 0;
               const toPlayMinigameCount = toPlayMinigame[itemUid] || 0;
               const toBuyCount = toBuyShopItems[itemUid] || 0;

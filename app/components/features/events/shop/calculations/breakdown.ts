@@ -1,6 +1,4 @@
 import Decimal from "decimal.js";
-import { calculateMinigameRewards } from "../utils";
-import { calculateShopResourcePaymentCostForResource } from "./shop-costs";
 import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
 
 /**
@@ -13,44 +11,19 @@ export function calculateItemBreakdowns({
   extraStageRuns,
   appliedBonusRatio,
   includeFirstClear,
-  minigamePlayCount,
-  minigameConfig,
-  minigameRewards,
-  shopResources,
-  itemQuantities,
-  itemPurchaseDays,
-  collectableResources,
-  minigamePaymentCosts,
+  resourceLedger,
 }: ItemBreakdownInput): ItemBreakdownResult {
-  const fromFirstRun: Record<string, number> = {};
+  const fromFirstRun = { ...resourceLedger.fromFirstRun };
   const fromRepeatedRuns: Record<string, number> = {};
-  const toPlayMinigame: Record<string, number> = {};
-  const toBuyShopItems: Record<string, number> = {};
-  const fromMinigame: Record<string, number> = {};
+  const toPlayMinigame = { ...resourceLedger.requiredForMinigame };
+  const toBuyShopItems = { ...resourceLedger.requiredForShopItems };
+  const fromMinigame = { ...resourceLedger.fromMinigame };
   let extraAp = 0;
   let firstClearAp = 0;
 
-  // Calculate first_clear rewards for all stages (first clear is one-time, regardless of enabled status)
   if (includeFirstClear) {
     for (const stage of stages) {
-      let hasFirstClearReward = false;
-      for (const { item, rewardRequirement, amount } of stage.rewards) {
-        if (!item || item.category !== "coin") {
-          continue;
-        }
-        if (rewardRequirement === "first_clear") {
-          fromFirstRun[item.uid] = (fromFirstRun[item.uid] || 0) + amount;
-          hasFirstClearReward = true;
-        } else if (stage.difficulty === 0) {
-          // story
-          fromFirstRun[item.uid] = (fromFirstRun[item.uid] || 0) + amount;
-        }
-      }
-
-      // Check if stage has any first_clear rewards (not just coin rewards)
-      if (!hasFirstClearReward) {
-        hasFirstClearReward = stage.rewards.some(({ rewardRequirement }) => rewardRequirement === "first_clear");
-      }
+      const hasFirstClearReward = stage.rewards.some(({ rewardRequirement }) => rewardRequirement === "first_clear");
       if (stage.difficulty === 0 || hasFirstClearReward) {
         firstClearAp += stage.entryAp;
       }
@@ -84,7 +57,7 @@ export function calculateItemBreakdowns({
     // Calculate items from repeated runs (excluding first_clear)
     if (totalRuns > 0) {
       for (const { item, rewardRequirement, amount } of stage.rewards) {
-        if (!item || item.category !== "coin" || rewardRequirement !== null) {
+        if (item?.category !== "coin" || rewardRequirement !== null) {
           continue;
         }
 
@@ -97,71 +70,17 @@ export function calculateItemBreakdowns({
     }
   }
 
-  // Calculate original requirement (before subtracting minigame rewards)
-  // This is what we need to show in toBuyShopItems
-  const originalRequirements: Record<string, number> = {};
-  for (const { uid, forPayment } of collectableResources) {
-    if (!forPayment) {
-      continue;
-    }
-
-    const required = shopResources.reduce(
-      (total, shopResource) =>
-        total +
-        calculateShopResourcePaymentCostForResource(
-          shopResource,
-          itemQuantities[shopResource.uid] || 0,
-          uid,
-          itemPurchaseDays[shopResource.uid] || 0,
-        ),
-      0,
-    );
-
-    if (required > 0) {
-      originalRequirements[uid] = required;
-    }
-  }
-
-  // Calculate total collected (first run + repeated runs, before minigame)
-  const totalCollected: Record<string, number> = {};
-  const allItemUids = new Set([...Object.keys(fromFirstRun), ...Object.keys(fromRepeatedRuns)]);
-  for (const itemUid of allItemUids) {
-    totalCollected[itemUid] = (fromFirstRun[itemUid] || 0) + (fromRepeatedRuns[itemUid] || 0);
-  }
-
-  // Calculate items needed to play minigame (total required, not adjusted)
-  if (minigamePaymentCosts && minigamePlayCount > 0) {
-    for (const { resourceUid, quantity } of minigamePaymentCosts) {
-      toPlayMinigame[resourceUid] = (toPlayMinigame[resourceUid] || 0) + quantity;
-    }
-  }
-
-  // Calculate items to buy shop items using original requirement
   const remaining: Record<string, number> = {};
-  for (const [paymentUid, originalRequired] of Object.entries(originalRequirements)) {
-    if ((originalRequired || 0) > 0) {
-      toBuyShopItems[paymentUid] = originalRequired;
-    }
-  }
-
-  // Add minigame rewards
-  if (minigameConfig && minigamePlayCount > 0) {
-    const rewards = calculateMinigameRewards(minigameConfig, minigamePlayCount);
-    for (const { resourceUid, quantity } of rewards) {
-      totalCollected[resourceUid] = (totalCollected[resourceUid] || 0) + quantity;
-      fromMinigame[resourceUid] = (fromMinigame[resourceUid] || 0) + quantity;
-    }
-  }
-
-  // Calculate remaining items
-  // For payment items: remaining = totalCollected (including minigame) - originalRequired
-  // For non-payment items: remaining = totalCollected
-  for (const [itemUid, amount] of Object.entries(totalCollected)) {
-    const originalRequired = originalRequirements[itemUid] || 0;
-    const remainingAmount = amount - originalRequired;
-    if (originalRequired > 0 || remainingAmount !== 0) {
-      remaining[itemUid] = remainingAmount;
-    }
+  const allItemUids = new Set([
+    ...Object.keys(resourceLedger.requiredTotals),
+    ...Object.keys(resourceLedger.acquiredBeforeSweeps),
+    ...Object.keys(fromRepeatedRuns),
+  ]);
+  for (const itemUid of allItemUids) {
+    remaining[itemUid] =
+      (resourceLedger.acquiredBeforeSweeps[itemUid] || 0) +
+      (fromRepeatedRuns[itemUid] || 0) -
+      (resourceLedger.requiredTotals[itemUid] || 0);
   }
 
   return {
@@ -174,6 +93,8 @@ export function calculateItemBreakdowns({
     itemBreakdown: {
       fromFirstRun,
       fromRepeatedRuns,
+      existing: resourceLedger.existing,
+      fromShop: resourceLedger.fromShop,
       toPlayMinigame,
       toBuyShopItems,
       fromMinigame,

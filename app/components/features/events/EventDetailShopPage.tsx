@@ -119,12 +119,9 @@ export default function EventDetailShopPage({
     state,
     stages,
     shopResources,
-    collectableResources,
     appliedBonusRatio: appliedBonusRatios,
     minigamePaymentCosts,
-    minigameRewards: undefined,
     minigameConfig,
-    eventUid,
   });
 
   return (
