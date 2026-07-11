@@ -71,6 +71,12 @@ class FakeCommunityD1Database {
 
   readonly preparedSql: string[] = [];
   readonly executedStatements: PreparedStatement[] = [];
+  readonly sessionConstraints: D1SessionConstraint[] = [];
+
+  withSession(constraint: D1SessionConstraint): FakeCommunityD1Database {
+    this.sessionConstraints.push(constraint);
+    return this;
+  }
 
   prepare(sql: string): FakeD1Statement {
     this.preparedSql.push(sql);
@@ -399,6 +405,7 @@ describe("community model feed queries", () => {
     });
 
     expect(page.items).toHaveLength(1);
+    expect(db.sessionConstraints).toEqual(["first-unconstrained"]);
     expect(page.items[0]).toMatchObject({
       uid: "post-user-review",
       postType: "student_review",
