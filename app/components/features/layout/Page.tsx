@@ -209,7 +209,7 @@ function MobileTabBar({ screens, isSticky }: { screens: PageScreenSelectorProps[
     >
       <div ref={scrollContainerRef} className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">
         {screens.map((screen) => (
-          <MobileTabItem key={screen.link ?? screen.text} {...screen} />
+          <ResponsiveTabItem key={screen.link ?? screen.text} {...screen} />
         ))}
       </div>
     </div>
@@ -227,7 +227,7 @@ function MobileActionBar({
 }) {
   return (
     <div className="lg:hidden fixed w-fit bottom-[var(--mobile-bottom-offset)] right-4 z-30 flex gap-x-2">
-      <div className="flex rounded-full bg-popover/90 px-2 py-1 shadow-lg backdrop-blur-sm">
+      <div className="flex rounded-full border border-border bg-card/95 px-2 py-1 shadow-lg backdrop-blur-sm">
         {links?.map((link) => (
           <MobileActionLink key={link.title} {...link} />
         ))}
@@ -292,55 +292,14 @@ function VerticalDesktopTabBar({
     >
       <div className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">
         {screens.map((screen) => (
-          <VerticalDesktopTabItem key={screen.link ?? screen.text} {...screen} />
+          <ResponsiveTabItem key={screen.link ?? screen.text} {...screen} />
         ))}
       </div>
     </div>
   );
 }
 
-function VerticalDesktopTabItem({ text, label, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
-  const className = getTabItemClassName({ active, disabled });
-  const inner = (
-    <>
-      <Icon className="size-5 shrink-0" strokeWidth={2} />
-      <span className={`text-sm whitespace-nowrap ${active ? "font-semibold" : "font-medium"}`}>{text}</span>
-      {label ? (
-        <span className="flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-xs font-bold leading-none text-white dark:bg-rose-400 dark:text-rose-950">
-          {label}
-        </span>
-      ) : null}
-    </>
-  );
-
-  if (!disabled && link) {
-    return (
-      <Link
-        to={link}
-        className={className}
-        data-active={active ? "true" : undefined}
-        aria-current={active ? "page" : undefined}
-      >
-        {inner}
-      </Link>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className={className}
-      data-active={active ? "true" : undefined}
-      aria-pressed={active}
-      onClick={disabled ? undefined : onClick}
-      disabled={disabled || !onClick}
-    >
-      {inner}
-    </button>
-  );
-}
-
-function MobileTabItem({ text, label, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
+function ResponsiveTabItem({ text, label, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
   const className = getTabItemClassName({ active, disabled });
   const inner = (
     <>

@@ -152,8 +152,8 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
           onResultClick={() => setIsPopupOpen(false)}
           className={
             variant === "desktop"
-              ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-lg"
-              : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-lg"
+              ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
+              : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
           }
         />
       )}
@@ -339,6 +339,11 @@ function MobileBrandHeader({
   const submit = useSubmit();
 
   useEffect(() => {
+    setIsSearchOpen(false);
+    setIsMenuOpen(false);
+  }, [searchResetKey]);
+
+  useEffect(() => {
     if (!isMenuOpen) {
       return;
     }
@@ -365,7 +370,7 @@ function MobileBrandHeader({
     <header
       className="
         lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex flex-col
-        bg-card/95 shadow-lg shadow-black/5 backdrop-blur-sm dark:shadow-md dark:shadow-black/20
+        border-border border-b bg-background
       "
     >
       <div className="flex h-[var(--mobile-header-height)] w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
@@ -387,7 +392,7 @@ function MobileBrandHeader({
           <button
             type="button"
             className="
-              inline-flex size-9 items-center justify-center rounded-md bg-background text-foreground
+              inline-flex size-9 items-center justify-center rounded-md bg-transparent text-foreground
               transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
             "
             onClick={() => {
@@ -402,7 +407,7 @@ function MobileBrandHeader({
           <button
             type="button"
             className="
-              relative inline-flex size-9 items-center justify-center rounded-md bg-background text-foreground
+              relative inline-flex size-9 items-center justify-center rounded-md bg-transparent text-foreground
               transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
             "
             onClick={() => {
@@ -436,7 +441,7 @@ function MobileBrandHeader({
           />
           <div
             className="
-              absolute right-3 top-full z-layer-navigation-menu mt-2 flex w-56 flex-col gap-1 rounded-lg bg-popover p-2 text-popover-foreground shadow-lg
+              absolute right-3 top-full z-layer-navigation-menu mt-2 flex w-56 flex-col gap-1 rounded-lg border border-border/70 bg-card p-2 text-card-foreground shadow-lg
             "
           >
             <MobileHeaderMenuButton

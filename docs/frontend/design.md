@@ -40,7 +40,7 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - `FilterButtons` defaults to the nested Panel/Container treatment (`surface="panel"`): inactive buttons use `bg-muted` without a shadow. Only direct page placement opts into `surface="page"`, which uses a white control and a small light-mode shadow.
 - Independent lists use one card surface with internal `divide-border` separators and a medium subdued shadow. Do not give every row its own border or shadow when the rows form one list.
 - In light mode, white cards sit subtly above the neutral-50 canvas. In dark mode, cards are moderately darker than the neutral-800 page without reaching neutral-900.
-- Do not combine semantic surface tokens with raw `neutral-*` colors in the same file unless the color is an image overlay or a fixed inverse surface.
+- New shared primitives and structural surfaces use semantic tokens. Existing feature-specific `neutral-*` colors are migrated file by file in the separate token-migration track; image overlays, fixed inverse surfaces, status colors, and data visualizations may keep explicit colors.
 
 ### Page width
 
@@ -51,7 +51,7 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - Default and wide pages share the same `max-w-7xl` outer canvas. Route-specific widths are applied to an inner wrapper anchored to the left, so titles and primary panels do not move horizontally when navigating between page widths.
 - Page side rails distinguish navigation roles: the active screen selector uses a full subtle primary tint, while destination links use a neutral card with a tinted icon and directional arrow. Both use the same small light-mode shadow and occupy the full rail width.
 - Consecutive Page Panels use a consistent `space-y-3` gap. Link groups add extra separation only when a Panel group actually precedes them.
-- Expanded Page Panels separate the icon/title header from the body with a light `border-border/70` divider. Collapsed Panels do not show an orphan divider.
+- Expanded Page Panels use consistent spacing between the icon/title header and body without a default divider. Add a divider only when the content structure requires an explicit boundary.
 - Controls embedded directly in a Page Panel should not create a second default card. Use a Panel-specific composition such as `PanelEventSelector`, or remove the reusable form control's resting border/background while keeping focus, open-popover, hover, and selected-state feedback.
 - Panel body anatomy is composed from `PanelBody`, `PanelBodySection`, and the internal `PanelBodyRow`: section labels are `text-xs font-semibold text-muted-foreground`; repeated row titles are `text-sm font-normal text-foreground/85`; supporting text is `text-xs text-muted-foreground`.
 - Routes use purpose-specific compositions instead of constructing anatomy or selecting a large style variant directly: `PanelActionRow`, `PanelIconToggleRow`, `PanelSwitchRow`, `PanelFilterButtonRow`, `PanelFilterButtonsSection`, and `PanelSearchField`. Add a new composition when a genuinely new control type appears.

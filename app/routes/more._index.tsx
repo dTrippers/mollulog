@@ -173,7 +173,7 @@ function MoreProfileBlock({
 
 function MorePersonalPlannerSection({ currentUser }: { currentUser: MoreCurrentUser | null }) {
   return (
-    <section>
+    <section className="pt-3">
       <SubTitle text="나의 데이터" />
       <div className="overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-900/45">
         {currentUser ? <PyroxenePlannerRow pyroxene={currentUser.pyroxene} /> : null}
@@ -348,7 +348,7 @@ function RelationshipPlannerRow({
 
 function MoreMenuGrid({ title, items }: { title: string; items: MoreActionItem[] }) {
   return (
-    <section>
+    <section className="pt-3">
       <SubTitle text={title} />
       <div className="grid grid-cols-4 gap-x-2 gap-y-3 rounded-lg bg-neutral-100 px-2 py-3 dark:bg-neutral-900/45">
         {items.map((item) => (

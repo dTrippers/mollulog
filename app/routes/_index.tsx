@@ -129,12 +129,12 @@ export default function Index() {
     <div className="w-full">
       <Title text="진행중인 컨텐츠" />
 
-      <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
+      <div className="mt-4 flex flex-col gap-8 lg:mt-6 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
         <div className="min-w-0 lg:flex-1">
           <MainEvent event={mainEvent} />
 
           <MobileMoreTabNoticeBanner
-            className="-mt-5"
+            className="mt-2"
             dismissStorageKey={homeMoreMenuBannerDismissalStorageKey}
             message={'전체 메뉴는 "더보기" 탭에서 확인할 수 있어요'}
           />

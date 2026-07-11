@@ -121,13 +121,13 @@ function getClientValidationError(values: GrowthValues, currentTier: number, tar
   return null;
 }
 
-const cellBase = "border-b border-neutral-200 dark:border-neutral-700";
+const cellBase = "border-b border-border";
 const dataCellClass = `${cellBase} w-25 px-1 py-2`;
 const targetCellClass = `${cellBase} w-25 px-1 py-1.5 bg-blue-50/40 dark:bg-blue-950/10`;
-const bulkActionCellClass = `${cellBase} border-l border-neutral-200 px-2 py-2 dark:border-neutral-700`;
-const stickyRowLabelClass = "sticky left-0 z-20 border-r border-neutral-200 dark:border-neutral-700";
+const bulkActionCellClass = `${cellBase} border-l border-border px-2 py-2`;
+const stickyRowLabelClass = "sticky left-0 z-20 border-r border-border";
 const studentHeaderContentClass =
-  "sticky left-3 z-10 flex w-max max-w-[calc(100vw-2rem)] items-center gap-2 bg-neutral-100 pr-3 dark:bg-neutral-900";
+  "sticky left-3 z-10 flex w-max max-w-[calc(100vw-2rem)] items-center gap-2 bg-muted pr-3";
 
 function isGearField(key: CurrentFieldKey | TargetFieldKey): boolean {
   return key === "equipSpecial" || key === "targetEquipSpecial";
@@ -663,14 +663,12 @@ function GrowthRow({
 
   return (
     <>
-      <tr className="bg-neutral-100 dark:bg-neutral-900">
+      <tr className="bg-muted">
         <td colSpan={TOTAL_COLS} className={`${cellBase} px-3 py-2`}>
           <div className={studentHeaderContentClass}>
             <div className="flex min-w-0 grow items-center gap-2">
               <ProfileImage studentUid={student.uid} />
-              <span className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-50">
-                {student.name}
-              </span>
+              <span className="truncate text-sm font-semibold text-foreground">{student.name}</span>
               {displayedError && <p className="text-xs text-red-500 dark:text-red-400">{displayedError}</p>}
             </div>
             {(student.relationshipCurrentLevel != null || student.relationshipTargetLevel != null) && (
@@ -697,7 +695,7 @@ function GrowthRow({
 
       <tr className="relative align-top">
         <td
-          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-card px-1 py-2 text-center text-xs font-medium text-neutral-400 dark:text-neutral-500`}
+          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-card px-1 py-2 text-center text-xs font-medium text-muted-foreground`}
         >
           현재
         </td>
@@ -756,9 +754,7 @@ function GrowthRow({
                         onChange={(v) => handleFieldChange(key, v)}
                       />
                       {equipLabels[key] && (
-                        <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
-                          {equipLabels[key]}
-                        </span>
+                        <span className="text-xs font-medium text-muted-foreground">{equipLabels[key]}</span>
                       )}
                     </div>
                   ) : null}
@@ -769,7 +765,7 @@ function GrowthRow({
         ) : (
           <>
             <td className={`${cellBase} min-w-28 px-3 py-2 text-center`}>
-              <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">미모집</span>
+              <span className="text-xs font-medium text-muted-foreground">미모집</span>
             </td>
 
             <td className={`${cellBase} w-25 px-1 py-2`}>
@@ -813,9 +809,7 @@ function GrowthRow({
                     모집 학생으로 등록
                   </Button>
                 ) : (
-                  <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
-                    아직 모집하지 않은 학생이에요
-                  </p>
+                  <p className="text-xs font-medium text-muted-foreground">아직 모집하지 않은 학생이에요</p>
                 )}
               </div>
             </td>
@@ -825,7 +819,7 @@ function GrowthRow({
 
       <tr className="align-top">
         <td
-          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-blue-50 px-1 py-1.5 text-center text-xs font-medium text-blue-500 dark:bg-neutral-900 dark:text-blue-400`}
+          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-blue-50 px-1 py-1.5 text-center text-xs font-medium text-blue-500 dark:bg-card dark:text-blue-400`}
         >
           목표
         </td>
@@ -883,9 +877,7 @@ function GrowthRow({
                     onChange={(v) => handleFieldChange(targetKey, v)}
                   />
                   {equipLabels[targetKey] && (
-                    <span className="text-xs font-medium text-neutral-400 dark:text-neutral-500">
-                      {equipLabels[targetKey]}
-                    </span>
+                    <span className="text-xs font-medium text-muted-foreground">{equipLabels[targetKey]}</span>
                   )}
                 </div>
               ) : null}
@@ -896,7 +888,7 @@ function GrowthRow({
 
       <tr className="align-top">
         <td
-          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-emerald-50 px-1 py-2 text-center text-xs font-medium text-emerald-600 dark:bg-neutral-900 dark:text-emerald-400`}
+          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-emerald-50 px-1 py-2 text-center text-xs font-medium text-emerald-600 dark:bg-card dark:text-emerald-400`}
         >
           <button
             type="button"
@@ -916,7 +908,7 @@ function GrowthRow({
           >
             <button
               type="button"
-              className="flex w-full items-center justify-start gap-1.5 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400"
+              className="flex w-full items-center justify-start gap-1.5 text-left text-xs font-medium text-muted-foreground"
               aria-expanded={isResourceRequirementsOpen}
               disabled={!hasResourceRequirements}
               onClick={() => setIsResourceRequirementsOpen((open) => !open)}
@@ -963,15 +955,13 @@ function GrowthRow({
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-center font-medium text-neutral-400 dark:text-neutral-500">
-                    필요한 재화가 없어요
-                  </p>
+                  <p className="text-center text-xs font-medium text-muted-foreground">필요한 재화가 없어요</p>
                 )}
               </div>
             </div>
           </div>
           {isCalculatingResources && (
-            <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">
+            <div className="absolute inset-0 flex items-center justify-center gap-2 text-xs font-medium text-muted-foreground">
               <ArrowPathIcon className="size-4 animate-spin" />
               <span>재화 계산 중...</span>
             </div>
@@ -984,8 +974,8 @@ function GrowthRow({
 
 function GrowthFieldHeaderRow() {
   return (
-    <tr className="bg-neutral-50 text-left text-xs font-semibold tracking-wide text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
-      <th className={`${cellBase} ${stickyRowLabelClass} z-30 bg-neutral-50 px-1 py-3 dark:bg-neutral-900`} />
+    <tr className="bg-muted/60 text-left text-xs font-semibold tracking-wide text-muted-foreground">
+      <th className={`${cellBase} ${stickyRowLabelClass} z-30 bg-muted/60 px-1 py-3`} />
       <th className={`${cellBase} px-2 py-3 text-center`}>성급</th>
       <th className={`${cellBase} min-w-20 px-2 py-3 text-center`}>인연 랭크</th>
       <th className={`${cellBase} px-2 py-3 text-center`}>일괄 적용</th>
@@ -1044,7 +1034,7 @@ function AddStudentControl({
         />
       </div>
       {isEmpty ? (
-        <p className="pt-8 text-sm text-neutral-500 dark:text-neutral-400">
+        <p className="pt-8 text-sm text-muted-foreground">
           학생 이름을 검색하여 성장 목표를 관리할 학생을 등록해주세요.
         </p>
       ) : null}
@@ -1061,10 +1051,8 @@ function CharacterExpRequirementCard({ characterExp }: { characterExp: number })
         name="활동 보고서"
       />
       <div className="min-w-0">
-        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">레벨 경험치</p>
-        <p className="text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-200">
-          {characterExp.toLocaleString()}
-        </p>
+        <p className="text-xs font-medium text-muted-foreground">레벨 경험치</p>
+        <p className="text-xs font-semibold tabular-nums text-foreground/85">{characterExp.toLocaleString()}</p>
       </div>
     </div>
   );
@@ -1077,10 +1065,8 @@ function CreditRequirementCard({ credit }: { credit: number }) {
         Cr
       </div>
       <div className="min-w-0">
-        <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">크레딧</p>
-        <p className="text-xs font-semibold tabular-nums text-neutral-700 dark:text-neutral-200">
-          {credit.toLocaleString()}
-        </p>
+        <p className="text-xs font-medium text-muted-foreground">크레딧</p>
+        <p className="text-xs font-semibold tabular-nums text-foreground/85">{credit.toLocaleString()}</p>
       </div>
     </div>
   );

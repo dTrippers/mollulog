@@ -672,6 +672,7 @@ export default function FutureContents() {
             completedRecruitmentStudents={completedRecruitmentStudents}
             recruitmentResultEditLinks={recruitmentResultEditLinks}
             signedIn={signedIn}
+            recruitmentStudentMobileGrid={5}
             showFeatureBanners={view === "timeline"}
             revealedSpoilerContentUids={revealedSpoilerContentUids}
             onRevealSpoiler={revealSpoiler}

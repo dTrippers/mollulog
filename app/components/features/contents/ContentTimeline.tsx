@@ -56,6 +56,7 @@ export type ContentTimelineProps = {
   recruitmentResultEditLinks?: { recruitmentGroupUid: string; link: string }[];
 
   signedIn: boolean;
+  recruitmentStudentMobileGrid?: 5 | 6;
   showFeatureBanners?: boolean;
   revealedSpoilerContentUids?: string[];
   onRevealSpoiler?: (contentUid: string) => void;
@@ -104,6 +105,7 @@ export default function ContentTimeline({
   isSubmittingComment,
   signedIn,
   showFeatureBanners = false,
+  recruitmentStudentMobileGrid,
 }: ContentTimelineProps) {
   const displayTimeZone = useDisplayTimeZone();
   const [dismissedFeatureBannerIds, setDismissedFeatureBannerIds] = useState<ContentTimelineFeatureBannerId[]>([]);
@@ -263,6 +265,7 @@ export default function ContentTimeline({
                       onFeatureBannerDismiss={dismissFeatureBanner}
                       isSubmittingComment={isSubmittingComment}
                       signedIn={signedIn}
+                      recruitmentStudentMobileGrid={recruitmentStudentMobileGrid}
                     />
                   );
                 })}

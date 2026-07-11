@@ -139,6 +139,7 @@ export type ContentTimelineItemProps = {
   };
 
   signedIn: boolean;
+  recruitmentStudentMobileGrid?: 5 | 6;
 };
 
 export type ContentTimelineFeatureBannerId = "student-analysis" | "pending-student-favorite";
@@ -180,6 +181,7 @@ export function ContentTimelineItem({
   showPendingStudentFavoriteFeatureBanner = false,
   onFeatureBannerDismiss,
   signedIn,
+  recruitmentStudentMobileGrid,
 }: ContentTimelineItemProps) {
   const displayTimeZone = useDisplayTimeZone();
   const { setActivePopupId } = useStudentCardPopup();
@@ -258,6 +260,7 @@ export function ContentTimelineItem({
           eventSince={since ?? null}
           eventUntil={until ?? null}
           timeZone={displayTimeZone}
+          studentMobileGrid={recruitmentStudentMobileGrid}
         />
       )}
       {completedStudentUids.length > 0 && recruitmentResultEditLink && (
@@ -548,6 +551,7 @@ type RecruitmentsProps = {
   eventSince: UtcIsoString | null;
   eventUntil: UtcIsoString | null;
   timeZone: string;
+  studentMobileGrid?: 5 | 6;
 };
 
 function Recruitments({
@@ -560,6 +564,7 @@ function Recruitments({
   onRecruitmentComplete,
   link,
   timeZone,
+  studentMobileGrid,
 }: RecruitmentsProps) {
   // Group pickups by period (since/until dates)
   const recruitmentDateGroups = useMemo(() => {
@@ -608,6 +613,7 @@ function Recruitments({
               onFavorite={onFavorite}
               completedStudentUids={completedStudentUids}
               onRecruitmentComplete={onRecruitmentComplete}
+              mobileGrid={studentMobileGrid}
             />
           );
         })}
@@ -626,6 +632,7 @@ function Recruitments({
         onFavorite={onFavorite}
         completedStudentUids={completedStudentUids}
         onRecruitmentComplete={onRecruitmentComplete}
+        mobileGrid={studentMobileGrid}
       />
 
       {hasNonPickupRecruitments && (
@@ -637,6 +644,7 @@ function Recruitments({
           onFavorite={onFavorite}
           completedStudentUids={completedStudentUids}
           onRecruitmentComplete={onRecruitmentComplete}
+          mobileGrid={studentMobileGrid}
         />
       )}
     </>
@@ -652,6 +660,7 @@ type RecruitmentStudentsProps = {
   completedStudentUids: string[];
   onRecruitmentComplete?: (studentUid: string, completed: boolean, recruitment: RecruitmentCompletionMeta) => void;
   showToggle?: boolean;
+  mobileGrid?: 5 | 6;
 };
 
 export function isContentHeaderLinked({
@@ -781,6 +790,7 @@ function RecruitmentStudents({
   completedStudentUids,
   onRecruitmentComplete,
   showToggle = false,
+  mobileGrid,
 }: RecruitmentStudentsProps) {
   const [showCards, setShowCards] = useState(!showToggle);
   const studentCards = useMemo(
@@ -801,7 +811,7 @@ function RecruitmentStudents({
     return (
       <div className="my-2">
         {title && <p className="mt-4 mb-1 font-semibold">{title}</p>}
-        <StudentCards layout="responsive-wrap" cardSize="lg" students={studentCards} />
+        <StudentCards layout="responsive-wrap" mobileGrid={mobileGrid} cardSize="lg" students={studentCards} />
       </div>
     );
   }
@@ -828,7 +838,9 @@ function RecruitmentStudents({
         </button>
       </div>
 
-      {showCards && <StudentCards layout="responsive-wrap" cardSize="lg" students={studentCards} />}
+      {showCards && (
+        <StudentCards layout="responsive-wrap" mobileGrid={mobileGrid} cardSize="lg" students={studentCards} />
+      )}
     </div>
   );
 }

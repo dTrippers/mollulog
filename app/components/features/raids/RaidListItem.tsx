@@ -80,7 +80,7 @@ export default function RaidListItem({
               {seasonIndex != null ? ` #${seasonIndex}` : ""} · {terrainLocale[terrain]}
             </p>
             <p className="truncate text-sm font-bold lg:text-base">{raidBoss.name}</p>
-            <p className="text-xs text-muted-foreground">
+            <p className="whitespace-nowrap text-xs text-muted-foreground">
               {startAt ? formatInstant(startAt, { timeZone: displayTimeZone, format: "YYYY.MM.DD" }) : "-"} ~{" "}
               {endAt ? formatInstant(endAt, { timeZone: displayTimeZone, format: "MM.DD" }) : "-"}
             </p>
