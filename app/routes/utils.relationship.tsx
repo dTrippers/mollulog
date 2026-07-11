@@ -9,14 +9,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
+import { redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
-import type { PageLayoutHandle } from "~/components/features/layout/page-width";
 import {
-  FavoriteItemSelector,
   FavoritedItemSelector,
+  FavoriteItemSelector,
   type ItemQuantityBreakdownEntry,
   RelationshipStudentPicker,
   RequiredGifts,
@@ -26,17 +25,15 @@ import { Button, ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { canonicalLink } from "~/lib/seo";
 import {
-  type RelationshipLevel,
-  getRelationshipLevelValidationError,
   getRelationshipLevels,
+  getRelationshipLevelValidationError,
+  type RelationshipLevel,
   removeRelationshipLevel,
   upsertRelationshipLevel,
 } from "~/models/relationship-level";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { formatVisibleName, getAllStudents } from "~/models/student";
 import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
-
-export const handle = { pageWidth: "wide" } satisfies PageLayoutHandle;
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "인연 랭크 계산기 | 몰루로그";

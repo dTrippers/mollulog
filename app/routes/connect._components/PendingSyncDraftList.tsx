@@ -15,7 +15,7 @@ type PendingSyncDraftListProps = {
 export default function PendingSyncDraftList({ drafts }: PendingSyncDraftListProps) {
   if (drafts.length === 0) {
     return (
-      <div className="rounded-lg bg-card p-8">
+      <div className="rounded-lg bg-card p-8 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
         <EmptyView
           Icon={ArchiveBoxIcon}
           text="대기 중인 데이터가 없어요"
@@ -27,7 +27,7 @@ export default function PendingSyncDraftList({ drafts }: PendingSyncDraftListPro
   }
 
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-lg bg-card">
+    <div className="divide-y divide-border overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
       {drafts.map((draft) => (
         <Link
           key={draft.uid}

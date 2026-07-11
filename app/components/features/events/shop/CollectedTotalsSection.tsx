@@ -251,7 +251,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-4 rounded-lg bg-card p-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {allItemUids.size === 0 && (
               <p className="col-span-2 w-full py-8 text-center text-sm text-muted-foreground">
                 구매할 아이템과 스테이지를 선택하세요
@@ -293,7 +293,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                 : [];
 
               return (
-                <div key={itemUid} className="relative flex items-start gap-2 rounded-lg bg-muted/40 p-3">
+                <div key={itemUid} className="relative flex items-start gap-2 rounded-md bg-card p-3">
                   <ResourceCard itemUid={itemUid} resourceType={resourceType} rarity={1} name={itemName} />
                   <div className="grow space-y-3 text-sm relative">
                     {/* 필요 수량 */}
@@ -354,7 +354,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                             setEditingItemUid(itemUid);
                             setEditingRequiredItemUid(null);
                           }}
-                          className="cursor-pointer whitespace-nowrap rounded-md bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          className="cursor-pointer whitespace-nowrap rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
                         >
                           보유 수량 입력
                         </button>
@@ -384,7 +384,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                             setEditingRequiredItemUid(itemUid);
                             setEditingItemUid(null);
                           }}
-                          className="cursor-pointer whitespace-nowrap rounded-md bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                          className="cursor-pointer whitespace-nowrap rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
                         >
                           목표 수량 입력
                         </button>
@@ -413,7 +413,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
           </div>
 
           {mergedBoughtResources.length > 0 && (
-            <div className="my-4 rounded-lg bg-card p-3">
+            <div className="my-4 rounded-md bg-card p-3">
               <p className="text-sm font-medium text-foreground">획득 보상</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {mergedBoughtResources.map(({ resource, totalQuantity }) => (

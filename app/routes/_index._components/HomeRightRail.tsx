@@ -72,7 +72,7 @@ function HomeRecentCommunitySection({
   return (
     <RailSection title="최근 평가/의견">
       <CommunityFeed posts={recentCommunityPosts} signedIn={signedIn} studentsByUid={studentsByUid} preview />
-      <Button text="더 보기" to="/community" variant="secondary" fullWidth />
+      <Button text="더 보기" to="/community" variant="secondary" className="bg-background" fullWidth />
     </RailSection>
   );
 }
@@ -126,6 +126,7 @@ function HomeYoutubeSection({ youtubeSections }: Pick<HomeRightRailProps, "youtu
             href={channel.href}
             target="_blank"
             variant="secondary"
+            className="bg-background"
             fullWidth
           />
         ))}
@@ -136,7 +137,7 @@ function HomeYoutubeSection({ youtubeSections }: Pick<HomeRightRailProps, "youtu
 
 function RailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg bg-card p-4">
+    <section className="rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
       <h2 className="text-lg font-semibold text-foreground">{title}</h2>
       <div className="mt-4 space-y-4">{children}</div>
     </section>

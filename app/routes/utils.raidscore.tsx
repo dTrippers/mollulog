@@ -1,10 +1,12 @@
-import { Bars3Icon, ExclamationCircleIcon } from "@heroicons/react/16/solid";
+import { ExclamationCircleIcon } from "@heroicons/react/16/solid";
 import { CalculatorIcon, ClockIcon } from "@heroicons/react/24/solid";
+import type { ElementType, ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { ContentSelectForm, FormGroup, InputForm, SelectForm } from "~/components/features/forms";
-import { FilterButtons, Title } from "~/components/primitives";
+import { Page } from "~/components/features/layout";
+import { SectionCard } from "~/components/primitives";
 import {
   ALL_TOTAL_ASSUALT_BOSS,
   type Boss,
@@ -47,21 +49,64 @@ export default function RaidScoreUtil() {
   const [mode, setMode] = useState<"timeToScore" | "scoreToTime">("timeToScore");
   const { bossOptions } = useLoaderData<typeof loader>();
   return (
-    <>
-      <Title text="총력전 점수 계산기" description="총력전/대결전 시간과 점수를 변환할 수 있어요" />
-      <FilterButtons
-        Icon={Bars3Icon}
-        buttonProps={[
-          { text: "시간 → 점수", active: mode === "timeToScore", onToggle: () => setMode("timeToScore") },
-          { text: "점수 → 시간", active: mode === "scoreToTime", onToggle: () => setMode("scoreToTime") },
-        ]}
-        exclusive
-        atLeastOne
-      />
+    <Page
+      title="총력전 점수 계산기"
+      description="총력전/대결전 시간과 점수를 변환할 수 있어요"
+      screens={[
+        {
+          text: "시간 → 점수",
+          Icon: CalculatorIcon,
+          active: mode === "timeToScore",
+          onClick: () => setMode("timeToScore"),
+        },
+        {
+          text: "점수 → 시간",
+          Icon: ClockIcon,
+          active: mode === "scoreToTime",
+          onClick: () => setMode("scoreToTime"),
+        },
+      ]}
+    >
+      <div className="space-y-4 py-4">
+        {mode === "timeToScore" && <TimeToScore bossOptions={bossOptions} />}
+        {mode === "scoreToTime" && <ScoreToTime bossOptions={bossOptions} />}
+      </div>
+    </Page>
+  );
+}
 
-      {mode === "timeToScore" && <TimeToScore bossOptions={bossOptions} />}
-      {mode === "scoreToTime" && <ScoreToTime bossOptions={bossOptions} />}
-    </>
+function CalculatorForm({ children }: { children: ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">변환 조건</h2>
+        <p className="mt-1 text-sm text-muted-foreground">계산에 사용할 값을 입력해주세요</p>
+      </div>
+      <FormGroup itemHover={false}>{children}</FormGroup>
+    </section>
+  );
+}
+
+function CalculationResult({ Icon, label, value }: { Icon: ElementType; label: string; value: string }) {
+  return (
+    <SectionCard className="flex flex-row items-center justify-between gap-4 space-y-0">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+          <Icon className="size-5" />
+        </div>
+        <p className="text-sm font-semibold text-muted-foreground">{label}</p>
+      </div>
+      <p className="text-right text-xl font-bold text-foreground tabular-nums md:text-2xl">{value}</p>
+    </SectionCard>
+  );
+}
+
+function CalculationError({ message }: { message: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-4 text-destructive">
+      <ExclamationCircleIcon className="size-5 shrink-0" />
+      <p className="text-sm font-medium">{message}</p>
+    </div>
   );
 }
 
@@ -89,7 +134,7 @@ function TimeToScore({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
         if (parsed.difficulty) setDifficulty(parsed.difficulty);
         if (parsed.timeString) setTimeString(parsed.timeString);
       }
-    } catch (error) {
+    } catch (_error) {
       // Ignore localStorage errors
     }
   }, []);
@@ -103,7 +148,7 @@ function TimeToScore({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
 
     try {
       localStorage.setItem(STORAGE_KEY_TIME_TO_SCORE, JSON.stringify({ boss, difficulty, timeString }));
-    } catch (error) {
+    } catch (_error) {
       // Ignore localStorage errors
     }
   }, [boss, difficulty, timeString]);
@@ -117,9 +162,9 @@ function TimeToScore({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
       return;
     }
 
-    const minutes = Number.parseInt(time[1]);
-    const seconds = Number.parseInt(time[2]);
-    const milliseconds = time[3] ? Number.parseInt(time[3].slice(1)) : 0;
+    const minutes = Number.parseInt(time[1], 10);
+    const seconds = Number.parseInt(time[2], 10);
+    const milliseconds = time[3] ? Number.parseInt(time[3].slice(1), 10) : 0;
     try {
       const score = timeToScore(boss, difficulty, minutes * 60000 + seconds * 1000 + milliseconds);
       setCalculatedScore(score);
@@ -131,60 +176,57 @@ function TimeToScore({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
   }, [boss, difficulty, timeString]);
 
   return (
-    <div className="my-8">
-      <FormGroup>
-        <ContentSelectForm
-          label="대상 보스"
-          name="boss"
-          placeholder="보스를 선택하세요"
-          searchPlaceholder="보스 이름으로 찾기..."
-          contents={bossOptions.map((boss) => ({
-            uid: boss.uid,
-            name: boss.name,
-            boss: boss.uid,
-          }))}
-          initialValue={boss ?? undefined}
-          onSelect={(selectedBoss) => setBoss(selectedBoss as Boss)}
-        />
-        <SelectForm
-          label="난이도"
-          name="difficulty"
-          placeholder="난이도를 선택하세요"
-          options={["lunatic", "torment", "insane", "extreme", "hardcore", "very_hard", "hard", "normal"].map(
-            (difficulty) => ({
-              label: difficultyLocale[difficulty as Difficulty],
-              value: difficulty,
-            }),
-          )}
-          initialValue={difficulty ?? undefined}
-          onSelect={(selectedDifficulty) => setDifficulty(selectedDifficulty as Difficulty)}
-        />
-        <InputForm
-          label="소요 시간"
-          name="time"
-          placeholder="예) 01:39.000"
-          defaultValue={timeString ?? undefined}
-          onChange={setTimeString}
-        />
-      </FormGroup>
-
-      {calculatedScore && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-teal-950 border border-green-200 dark:border-green-800 rounded-lg">
-          <div className="flex items-center justify-between">
-            <CalculatorIcon className="size-6 text-green-600 dark:text-green-400 mr-2" />
-            <h3 className="grow text-lg font-semibold text-green-800 dark:text-green-200">계산된 점수</h3>
-            <div className="text-2xl font-bold text-green-700 dark:text-green-300">
-              {calculatedScore.toLocaleString()}
-            </div>
+    <div className="space-y-4">
+      <CalculatorForm>
+        <div key="boss" className="rounded-t-lg transition-colors hover:bg-muted">
+          <ContentSelectForm
+            label="대상 보스"
+            name="boss"
+            placeholder="보스를 선택하세요"
+            searchPlaceholder="보스 이름으로 찾기..."
+            contents={bossOptions.map((boss) => ({
+              uid: boss.uid,
+              name: boss.name,
+              boss: boss.uid,
+            }))}
+            initialValue={boss ?? undefined}
+            onSelect={(selectedBoss) => setBoss(selectedBoss as Boss)}
+          />
+        </div>
+        <div className="grid md:grid-cols-2">
+          <div className="transition-colors hover:bg-muted md:rounded-bl-lg">
+            <SelectForm
+              label="난이도"
+              name="difficulty"
+              placeholder="난이도를 선택하세요"
+              options={["lunatic", "torment", "insane", "extreme", "hardcore", "very_hard", "hard", "normal"].map(
+                (difficulty) => ({
+                  label: difficultyLocale[difficulty as Difficulty],
+                  value: difficulty,
+                }),
+              )}
+              initialValue={difficulty ?? undefined}
+              onSelect={(selectedDifficulty) => setDifficulty(selectedDifficulty as Difficulty)}
+              valueClassName="mt-0 flex min-h-10 max-w-96 items-center rounded-md border border-input bg-background px-3 py-2 text-sm"
+              chevronInsideValue
+            />
+          </div>
+          <div className="rounded-b-lg border-border border-t transition-colors hover:bg-muted md:rounded-bl-none md:border-t-0 md:border-l">
+            <InputForm
+              label="소요 시간"
+              name="time"
+              placeholder="예) 01:39.000"
+              value={timeString ?? ""}
+              onChange={setTimeString}
+            />
           </div>
         </div>
+      </CalculatorForm>
+
+      {calculatedScore && (
+        <CalculationResult Icon={CalculatorIcon} label="계산된 점수" value={calculatedScore.toLocaleString()} />
       )}
-      {error && (
-        <div className="mb-6 p-4 flex items-center gap-x-2 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950 dark:to-orange-950 border border-red-200 dark:border-red-800 rounded-lg">
-          <ExclamationCircleIcon className="size-4 text-red-600 dark:text-red-400" />
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        </div>
-      )}
+      {error && <CalculationError message={error} />}
     </div>
   );
 }
@@ -212,7 +254,7 @@ function ScoreToTime({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
         }
         if (parsed.scoreString) setScoreString(parsed.scoreString);
       }
-    } catch (error) {
+    } catch (_error) {
       // Ignore localStorage errors
     }
   }, []);
@@ -226,7 +268,7 @@ function ScoreToTime({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
 
     try {
       localStorage.setItem(STORAGE_KEY_SCORE_TO_TIME, JSON.stringify({ boss, scoreString }));
-    } catch (error) {
+    } catch (_error) {
       // Ignore localStorage errors
     }
   }, [boss, scoreString]);
@@ -234,7 +276,7 @@ function ScoreToTime({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
   useEffect(() => {
     if (!boss || !scoreString) return;
 
-    const score = Number.parseInt(scoreString.replace(/,/g, ""));
+    const score = Number.parseInt(scoreString.replace(/,/g, ""), 10);
     if (Number.isNaN(score)) {
       setCalculatedDifficulty(null);
       setCalculatedTimeString(null);
@@ -261,47 +303,42 @@ function ScoreToTime({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
   }, [boss, scoreString]);
 
   return (
-    <div className="my-8">
-      <FormGroup>
-        <ContentSelectForm
-          label="대상 보스"
-          name="boss"
-          placeholder="보스를 선택하세요"
-          searchPlaceholder="보스 이름으로 찾기..."
-          contents={bossOptions.map((boss) => ({
-            uid: boss.uid,
-            name: boss.name,
-            boss: boss.uid,
-          }))}
-          initialValue={boss ?? undefined}
-          onSelect={(selectedBoss) => setBoss(selectedBoss as Boss)}
-        />
-        <InputForm
-          label="점수"
-          name="score"
-          placeholder="점수를 입력하세요"
-          defaultValue={scoreString ?? undefined}
-          onChange={setScoreString}
-        />
-      </FormGroup>
+    <div className="space-y-4">
+      <CalculatorForm>
+        <div key="boss" className="rounded-t-lg transition-colors hover:bg-muted">
+          <ContentSelectForm
+            label="대상 보스"
+            name="boss"
+            placeholder="보스를 선택하세요"
+            searchPlaceholder="보스 이름으로 찾기..."
+            contents={bossOptions.map((boss) => ({
+              uid: boss.uid,
+              name: boss.name,
+              boss: boss.uid,
+            }))}
+            initialValue={boss ?? undefined}
+            onSelect={(selectedBoss) => setBoss(selectedBoss as Boss)}
+          />
+        </div>
+        <div key="score" className="rounded-b-lg transition-colors hover:bg-muted">
+          <InputForm
+            label="점수"
+            name="score"
+            placeholder="점수를 입력하세요"
+            value={scoreString ?? ""}
+            onChange={setScoreString}
+          />
+        </div>
+      </CalculatorForm>
 
       {calculatedDifficulty && calculatedTimeString && (
-        <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-teal-950 border border-green-200 dark:border-green-800 rounded-lg">
-          <div className="flex items-center justify-between">
-            <ClockIcon className="size-6 text-green-600 dark:text-green-400 mr-2" />
-            <h3 className="grow text-lg font-semibold text-green-800 dark:text-green-200">계산 결과</h3>
-            <div className="text-xl font-bold text-green-700 dark:text-green-300">
-              {difficultyLocale[calculatedDifficulty]} / {calculatedTimeString}
-            </div>
-          </div>
-        </div>
+        <CalculationResult
+          Icon={ClockIcon}
+          label="계산 결과"
+          value={`${difficultyLocale[calculatedDifficulty]} / ${calculatedTimeString}`}
+        />
       )}
-      {error && (
-        <div className="mb-6 p-4 flex items-center gap-x-2 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950 dark:to-orange-950 border border-red-200 dark:border-red-800 rounded-lg">
-          <ExclamationCircleIcon className="size-4 text-red-600 dark:text-red-400" />
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-        </div>
-      )}
+      {error && <CalculationError message={error} />}
     </div>
   );
 }

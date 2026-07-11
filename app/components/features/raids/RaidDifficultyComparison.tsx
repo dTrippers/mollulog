@@ -49,7 +49,7 @@ export default function RaidDifficultyComparison({
   }
 
   return (
-    <div className="rounded-lg bg-card p-4">
+    <div className="rounded-lg bg-card p-4 shadow-md shadow-black/5 dark:shadow-sm dark:shadow-black/20">
       <div className="space-y-3">
         {sortedDifficulties.map((difficulty) => {
           const currentCount = currentClearLevels[difficulty] || 0;

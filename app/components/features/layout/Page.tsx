@@ -47,7 +47,7 @@ function getTabItemClassName({ active, disabled }: TabItemState) {
     ${
       disabled
         ? "bg-muted/40 text-muted-foreground opacity-50"
-        : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+        : "bg-card text-muted-foreground shadow-sm shadow-black/5 hover:bg-muted hover:text-foreground dark:bg-muted dark:shadow-none"
     }
   `);
 }
@@ -68,6 +68,7 @@ export default function Page({
   const [openPanelIndex, setOpenPanelIndex] = useState<number | null>(null);
   const tabBarSentinelRef = useRef<HTMLDivElement>(null);
   const [isTabBarSticky, setIsTabBarSticky] = useState(false);
+  const openPanel = openPanelIndex === null ? undefined : panels?.[openPanelIndex];
 
   useEffect(() => {
     const sentinel = tabBarSentinelRef.current;
@@ -80,7 +81,7 @@ export default function Page({
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, []);
-  const contentAreaClass = contentWidth === "full" ? "w-full" : "max-w-3xl";
+  const contentAreaClass = contentWidth === "full" ? "w-full" : "max-w-4xl";
 
   return (
     <>
@@ -115,14 +116,14 @@ export default function Page({
         <MobileActionBar links={links} panels={panels} onOpenPanel={setOpenPanelIndex} />
       )}
 
-      {openPanelIndex !== null && panels && panels[openPanelIndex] && (
+      {openPanel && (
         <BottomSheet
-          Icon={panels[openPanelIndex].Icon}
-          title={panels[openPanelIndex].title}
-          description={panels[openPanelIndex].description}
+          Icon={openPanel.Icon}
+          title={openPanel.title}
+          description={openPanel.description}
           onClose={() => setOpenPanelIndex(null)}
         >
-          {panels[openPanelIndex].children}
+          {openPanel.children}
         </BottomSheet>
       )}
     </>
@@ -163,11 +164,15 @@ function PageSidebar({
       {!isVertical && screens && <PageScreenSelector screens={screens} />}
       {(panels || links) && (
         <div className="my-8 hidden lg:block">
-          {panels?.map((panel) => (
-            <PagePanel key={panel.title} {...panel} />
-          ))}
+          {panels && panels.length > 0 && (
+            <div className="space-y-3">
+              {panels.map((panel) => (
+                <PagePanel key={panel.title} {...panel} />
+              ))}
+            </div>
+          )}
           {links && links.length > 0 && (
-            <div className="space-y-3 lg:mt-8">
+            <div className={cn("space-y-3", panels && panels.length > 0 && "mt-8")}>
               {links.map((link) => (
                 <PageLink key={link.title} {...link} />
               ))}

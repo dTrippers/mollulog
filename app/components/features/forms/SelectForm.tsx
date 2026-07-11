@@ -1,7 +1,8 @@
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
 import hangul from "hangul-js";
-import { useEffect, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Field } from "~/components/primitives";
+import { cn } from "~/lib/utils";
 import { useFormGroup } from "./FormGroup";
 
 export type SelectFormProps = {
@@ -19,6 +20,8 @@ export type SelectFormProps = {
   useSearch?: boolean;
   searchPlaceholder?: string;
   onSelect?: (value: string) => void;
+  valueClassName?: string;
+  chevronInsideValue?: boolean;
 };
 
 export default function SelectForm({
@@ -31,6 +34,8 @@ export default function SelectForm({
   useSearch,
   searchPlaceholder,
   onSelect,
+  valueClassName,
+  chevronInsideValue = false,
 }: SelectFormProps) {
   const { submitFormGroup } = useFormGroup();
   const [isOpen, setIsOpen] = useState(false);
@@ -79,10 +84,15 @@ export default function SelectForm({
         >
           <Field label={label} description={description} containerClassName="pointer-events-none">
             {(selectedLabel ?? placeholder) && (
-              <p className="mt-2 text-muted-foreground">{selectedLabel ?? placeholder}</p>
+              <p className={cn("mt-2 text-muted-foreground", valueClassName)}>
+                <span>{selectedLabel ?? placeholder}</span>
+                {chevronInsideValue ? <ChevronDownIcon className="ml-auto size-4 shrink-0" /> : null}
+              </p>
             )}
           </Field>
-          <ChevronDownIcon className="absolute top-1/2 right-4 size-4 -translate-y-1/2" />
+          {!chevronInsideValue ? (
+            <ChevronDownIcon className="absolute top-1/2 right-4 size-4 -translate-y-1/2" />
+          ) : null}
         </button>
         {isOpen && (
           <div className="absolute top-full left-0 z-5 mt-4 max-h-72 w-full overflow-y-auto rounded-lg bg-popover/95 text-popover-foreground shadow-lg backdrop-blur-sm md:max-h-128">

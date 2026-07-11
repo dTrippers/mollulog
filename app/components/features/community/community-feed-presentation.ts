@@ -85,7 +85,7 @@ export function getCommentToggleClassName({ active }: { active: boolean }) {
     return `${base} bg-secondary text-secondary-foreground`;
   }
 
-  return `${base} bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground`;
+  return `${base} bg-card text-muted-foreground shadow-xs shadow-black/5 hover:bg-muted hover:text-foreground dark:bg-muted dark:shadow-none`;
 }
 
 export function getCommentEditorPanelClassName({

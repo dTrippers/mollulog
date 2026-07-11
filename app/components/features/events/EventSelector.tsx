@@ -1,15 +1,15 @@
 import { Transition } from "@headlessui/react";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import hangul from "hangul-js";
-import { type MouseEvent as ReactMouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { StudentCards } from "~/components/features/students";
 import { Field } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
-import type { ShopAvailableEvent } from "~/models/event-content";
 import { cn } from "~/lib/utils";
+import type { ShopAvailableEvent } from "~/models/event-content";
 
 const SPOILER_EVENT_NAVIGATION_MESSAGE = "스포일러가 포함된 이벤트에요. 이동할까요?";
 
@@ -34,6 +34,7 @@ type EventSelectorProps = {
   searchPlaceholder?: string;
   getEventHref?: (event: SelectableEvent) => string;
   onSelect?: (eventUid: string) => void;
+  triggerClassName?: string;
 };
 
 export default function EventSelector({
@@ -47,6 +48,7 @@ export default function EventSelector({
   searchPlaceholder,
   getEventHref = (event) => `/events/${event.uid}/shop`,
   onSelect,
+  triggerClassName,
 }: EventSelectorProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [isOpen, setIsOpen] = useState(false);
@@ -62,6 +64,10 @@ export default function EventSelector({
     () => filterSelectableEvents(events, debouncedSearchQuery, maxVisibleEvents, revealedSpoilerContentUids),
     [debouncedSearchQuery, events, maxVisibleEvents, revealedSpoilerContentUids],
   );
+  const closeOptions = useCallback(() => {
+    setIsOpen(false);
+    setSearchQuery("");
+  }, []);
 
   useEffect(() => {
     setSelectedEventUid(currentEventUid ?? null);
@@ -99,7 +105,7 @@ export default function EventSelector({
       window.removeEventListener("mousedown", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isOpen]);
+  }, [closeOptions, isOpen]);
 
   useEffect(() => {
     setRevealedSpoilerContentUids(parseRevealedSpoilerContentUids(localStorage.getItem(futuresRevealedSpoilerKey)));
@@ -108,11 +114,6 @@ export default function EventSelector({
   if (events.length === 0) {
     return null;
   }
-
-  const closeOptions = () => {
-    setIsOpen(false);
-    setSearchQuery("");
-  };
 
   const handleSelect = (eventUid: string) => {
     setSelectedEventUid(eventUid);
@@ -133,7 +134,10 @@ export default function EventSelector({
     <div className="relative" ref={rootRef}>
       <button
         type="button"
-        className="group relative w-full cursor-pointer rounded-md border border-input bg-background text-left transition-colors hover:bg-muted/70 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:outline-none"
+        className={cn(
+          "group relative w-full cursor-pointer rounded-md border border-input bg-background text-left transition-colors hover:bg-muted/70 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:outline-none",
+          triggerClassName,
+        )}
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
@@ -225,6 +229,10 @@ export default function EventSelector({
       {selector}
     </Field>
   );
+}
+
+export function PanelEventSelector(props: Omit<EventSelectorProps, "triggerClassName">) {
+  return <EventSelector {...props} triggerClassName="border-border bg-background shadow-none hover:bg-muted/70" />;
 }
 
 export function filterSelectableEvents(

@@ -1,7 +1,7 @@
 import {
   type ActionFunctionArgs,
-  type LoaderFunctionArgs,
   Form,
+  type LoaderFunctionArgs,
   redirect,
   useActionData,
   useLoaderData,
@@ -9,8 +9,8 @@ import {
   useSubmit,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { deletePasskey, getPasskeysBySensei, updatePasskeyMemo } from "~/models/passkey";
 import { Button, Input } from "~/components/primitives";
+import { deletePasskey, getPasskeysBySensei, updatePasskeyMemo } from "~/models/passkey";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const sensei = await getActiveSensei(context.cloudflare.env, request);
@@ -65,7 +65,10 @@ export default function EditPasskey() {
   const isDeleting = isSubmitting && navigation.formMethod?.toLowerCase() === "delete";
 
   return (
-    <Form method="patch" className="rounded-lg bg-card p-5">
+    <Form
+      method="patch"
+      className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20"
+    >
       <Input
         label="이름"
         type="text"

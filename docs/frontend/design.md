@@ -21,6 +21,7 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - Do not add unnecessary nested cards, heavy borders, or decorative wrappers.
 - Prefer spacing, background contrast, and typography over borders. Use a border only when a control boundary or dense data boundary would otherwise be unclear.
 - Cards and section surfaces do not use borders by default. Form controls and data tables may use `border-input` or `border-border` when the boundary is functionally necessary.
+- Large cards and navigation surfaces use a wide, subdued shadow in light mode (`shadow-lg shadow-black/5`) and a tighter shadow in dark mode (`dark:shadow-md dark:shadow-black/20`) when background contrast alone does not create enough separation. Do not apply shadows to every nested row or small card.
 - Within a section, keep radius, border, shadow, and spacing uniform.
 - Base surface radius stays between `rounded-md` and `rounded-lg`. Do not use `rounded-xl` or larger.
 - Card-like surfaces stacking several rows use roughly `p-5 md:p-6` padding by default; only simple single-line items or small auxiliary panels drop to `p-3`–`p-4`.
@@ -30,10 +31,15 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 
 ### Surface hierarchy
 
-- Page background uses `bg-background`.
-- Cards use `bg-card`; elevated popovers and sheets use `bg-popover` with a shadow when separation is needed.
+- Page background uses `bg-background`: neutral-50 in light mode and neutral-800 in dark mode.
+- Cards use `bg-card`: white in light mode and a tone between neutral-800 and neutral-900 in dark mode. Light cards sit softly above the canvas; dark cards act as inset content surfaces.
+- Navigation uses the card surface and a subtle edge shadow so it remains distinct from the page. Utility controls inside it keep a persistent contrasting fill instead of relying on hover alone.
+- Elevated popovers and sheets use `bg-popover` with a shadow when separation is needed.
 - Supporting areas and hover states use `bg-muted` or a translucent muted value.
-- In dark mode the page is the darkest surface, cards are one step lighter, and popovers are separated with shadow or stronger local contrast.
+- `bg-muted` is not the default surface for a stand-alone inactive control on the light page canvas. Use a white `bg-card` control with a small subdued shadow in light mode, and switch back to `bg-muted` in dark mode.
+- `FilterButtons` defaults to the nested Panel/Container treatment (`surface="panel"`): inactive buttons use `bg-muted` without a shadow. Only direct page placement opts into `surface="page"`, which uses a white control and a small light-mode shadow.
+- Independent lists use one card surface with internal `divide-border` separators and a medium subdued shadow. Do not give every row its own border or shadow when the rows form one list.
+- In light mode, white cards sit subtly above the neutral-50 canvas. In dark mode, cards are moderately darker than the neutral-800 page without reaching neutral-900.
 - Do not combine semantic surface tokens with raw `neutral-*` colors in the same file unless the color is an image overlay or a fixed inverse surface.
 
 ### Page width
@@ -42,6 +48,18 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - Forms and document-like screens use `max-w-3xl`.
 - Dense tables and comparison screens opt into `max-w-7xl` through the route layout handle.
 - Shared layout owns page width. Routes should not add a second equivalent max-width wrapper.
+- Default and wide pages share the same `max-w-7xl` outer canvas. Route-specific widths are applied to an inner wrapper anchored to the left, so titles and primary panels do not move horizontally when navigating between page widths.
+- Page side rails distinguish navigation roles: the active screen selector uses a full subtle primary tint, while destination links use a neutral card with a tinted icon and directional arrow. Both use the same small light-mode shadow and occupy the full rail width.
+- Consecutive Page Panels use a consistent `space-y-3` gap. Link groups add extra separation only when a Panel group actually precedes them.
+- Expanded Page Panels separate the icon/title header from the body with a light `border-border/70` divider. Collapsed Panels do not show an orphan divider.
+- Controls embedded directly in a Page Panel should not create a second default card. Use a Panel-specific composition such as `PanelEventSelector`, or remove the reusable form control's resting border/background while keeping focus, open-popover, hover, and selected-state feedback.
+- Panel body anatomy is composed from `PanelBody`, `PanelBodySection`, and the internal `PanelBodyRow`: section labels are `text-xs font-semibold text-muted-foreground`; repeated row titles are `text-sm font-normal text-foreground/85`; supporting text is `text-xs text-muted-foreground`.
+- Routes use purpose-specific compositions instead of constructing anatomy or selecting a large style variant directly: `PanelActionRow`, `PanelIconToggleRow`, `PanelSwitchRow`, `PanelFilterButtonRow`, `PanelFilterButtonsSection`, and `PanelSearchField`. Add a new composition when a genuinely new control type appears.
+- Dense filter rows use `PanelFilterButtonRow` with the standard `FilterButtons` padding and gap. Keep short groups on one line and allow long labels such as defense types to wrap naturally rather than compressing spacing or introducing horizontal scrolling.
+- Inactive `FilterButtons` use `hover:bg-foreground/10` so hover remains recognizable on both light card and dark muted surfaces without adding a border.
+- Colored `FilterButtons` use the same full-height left color rail as `AttributeBadge` in raid selectors. The rail is painted as a pseudo-element instead of a separate flex item, preserving the semantic color while reducing horizontal pressure in dense one-line filter rows.
+- Panel option controls use `bg-muted` with a small light-mode shadow when inactive. Repeated options default to a subtle primary tint when active; reserve the solid `strong` emphasis for a single state that must remain immediately recognizable. They should not mimic a stand-alone white page control inside a white Panel.
+- Do not paint a second hover surface across a non-interactive row around a Panel option. Keep hover feedback on the actual button so its boundary does not merge into its parent.
 
 ## Typography and copy
 

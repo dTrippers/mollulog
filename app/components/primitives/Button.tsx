@@ -12,6 +12,7 @@ type ButtonProps = {
   size?: "md" | "sm" | "xs";
   onClick?: (event: MouseEvent<HTMLElement>) => void;
   disabled?: boolean;
+  pressed?: boolean;
   name?: string;
   value?: string;
   form?: string;
@@ -32,6 +33,7 @@ export default function Button({
   size = "md",
   onClick,
   disabled = false,
+  pressed,
   name,
   value,
   form,
@@ -46,7 +48,7 @@ export default function Button({
     primary: "border-transparent bg-primary text-primary-foreground hover:bg-primary/90",
     danger: "border-transparent bg-destructive text-white hover:bg-destructive/90",
     inverse: "border-transparent bg-foreground text-background hover:bg-foreground/90",
-    secondary: "border-transparent bg-muted text-foreground hover:bg-muted/80",
+    secondary: "border-transparent bg-card text-foreground hover:bg-muted dark:bg-muted",
     "danger-subtle": "border-transparent bg-destructive/10 text-destructive hover:bg-destructive/15",
   }[variant];
 
@@ -118,6 +120,7 @@ export default function Button({
       className={buttonClassName}
       onClick={handleClick}
       disabled={disabled}
+      aria-pressed={pressed}
       name={name}
       value={value}
       form={form}

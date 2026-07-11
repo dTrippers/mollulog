@@ -1,6 +1,6 @@
 import { cn } from "~/lib/utils";
 
-const stripeColorClass = {
+export const semanticColorStripeClass = {
   red: "before:bg-red-500",
   yellow: "before:bg-yellow-500",
   green: "before:bg-green-600",
@@ -9,7 +9,7 @@ const stripeColorClass = {
   grey: "before:bg-neutral-500",
 };
 
-export type AttributeBadgeColor = keyof typeof stripeColorClass;
+export type AttributeBadgeColor = keyof typeof semanticColorStripeClass;
 
 type AttributeBadgeProps = {
   text: string;
@@ -22,7 +22,7 @@ export default function AttributeBadge({ text, color = "grey" }: AttributeBadgeP
       className={cn(`
         relative inline-flex w-fit shrink-0 justify-self-start overflow-hidden rounded-md bg-muted py-1 pr-2 pl-2.5 text-xs leading-none text-foreground
         before:absolute before:inset-y-0 before:left-0 before:w-1
-        ${stripeColorClass[color]}
+        ${semanticColorStripeClass[color]}
       `)}
     >
       {text}

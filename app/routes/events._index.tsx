@@ -1,13 +1,13 @@
 import { CheckIcon } from "@heroicons/react/16/solid";
-import { FunnelIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
+import { FunnelIcon } from "@heroicons/react/24/outline";
 import { useMemo, useState } from "react";
-import { Link, useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { Page } from "~/components/features/layout";
-import { EmptyView, PanelOptionIconButton } from "~/components/primitives";
+import { EmptyView, PanelBody, PanelIconToggleRow, PanelSearchField } from "~/components/primitives";
 import { formatInstant, nowUtcIso } from "~/lib/date-time";
-import { filterEventList, type EventFilterState } from "~/views/event-list-filter";
 import type { RunType } from "~/models/timeline-content";
+import { type EventFilterState, filterEventList } from "~/views/event-list-filter";
 import { type EventListItem, type EventListSchedule, getEventList } from "~/views/events";
 
 const GL_TIME_ZONE = "Asia/Seoul";
@@ -17,7 +17,7 @@ const runTypeLabels: Record<RunType, string> = {
   permanent: "상설",
 };
 const scheduleOrder: RunType[] = ["first", "rerun", "permanent"];
-const scheduleRowClassName = "flex items-center gap-x-2 text-xs leading-5";
+const scheduleRowClassName = "grid grid-cols-[2rem_max-content_1fr] items-center gap-x-2 text-xs leading-5";
 
 const defaultFilter: EventFilterState = {
   onlyUpcoming: false,
@@ -59,7 +59,10 @@ function formatScheduleDate(schedule: EventListSchedule): string {
 }
 
 function StatusBadge({ schedule }: { schedule: EventListSchedule }) {
-  if (schedule.status === "past" || (schedule.runType === "permanent" && schedule.status === "current")) {
+  if (
+    schedule.status === "past" ||
+    (schedule.status === "current" && (schedule.runType === "permanent" || schedule.until === null))
+  ) {
     return null;
   }
 
@@ -79,8 +82,10 @@ function EventScheduleRow({ schedule }: { schedule: EventListSchedule }) {
   return (
     <div className={scheduleRowClassName}>
       <span className="w-8 shrink-0 text-muted-foreground">{runTypeLabels[schedule.runType]}</span>
-      <span className="min-w-0 flex-1 tabular-nums text-foreground">{formatScheduleDate(schedule)}</span>
-      <StatusBadge schedule={schedule} />
+      <span className="whitespace-nowrap tabular-nums text-foreground">{formatScheduleDate(schedule)}</span>
+      <div className="justify-self-end">
+        <StatusBadge schedule={schedule} />
+      </div>
     </div>
   );
 }
@@ -104,51 +109,22 @@ function EventFilterPanel({
   countText: string;
 }) {
   return (
-    <div className="space-y-2">
-      <p className="px-1 text-xs text-muted-foreground">{countText}</p>
-      <div className="space-y-1">
-        <FilterToggleRow
-          title="다가오는 이벤트만 보기"
-          checked={filter.onlyUpcoming}
-          onChange={(checked) => onFilterChange({ ...filter, onlyUpcoming: checked })}
-        />
-      </div>
-
-      <div className="space-y-1">
-        <label className="block px-3 py-2 lg:px-2.5 lg:py-1.5">
-          <span className="block text-sm font-medium text-foreground">이름으로 찾기</span>
-          <span className="mt-2 flex h-9 items-center rounded-md border border-input bg-background px-2 text-muted-foreground">
-            <MagnifyingGlassIcon className="mr-2 size-4 shrink-0" />
-            <input
-              type="search"
-              value={filter.search}
-              onChange={(event) => onFilterChange({ ...filter, search: event.currentTarget.value })}
-              placeholder="이벤트 이름"
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/70"
-            />
-          </span>
-        </label>
-      </div>
-    </div>
-  );
-}
-
-function FilterToggleRow({
-  title,
-  checked,
-  onChange,
-}: {
-  title: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <div className="rounded-md px-3 py-2 transition-colors hover:bg-muted lg:px-2.5 lg:py-1.5">
-      <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
-        <p className="min-w-0 grow text-sm font-medium text-foreground">{title}</p>
-        <PanelOptionIconButton label={title} active={checked} Icon={CheckIcon} onClick={() => onChange(!checked)} />
-      </div>
-    </div>
+    <PanelBody>
+      <p className="text-xs text-muted-foreground">{countText}</p>
+      <PanelIconToggleRow
+        title="다가오는 이벤트만 보기"
+        active={filter.onlyUpcoming}
+        emphasis="strong"
+        Icon={CheckIcon}
+        onChange={(active) => onFilterChange({ ...filter, onlyUpcoming: active })}
+      />
+      <PanelSearchField
+        label="이름으로 찾기"
+        value={filter.search}
+        placeholder="이벤트 이름"
+        onChange={(search) => onFilterChange({ ...filter, search })}
+      />
+    </PanelBody>
   );
 }
 
@@ -211,7 +187,7 @@ function EventCard({ event }: { event: EventListItem }) {
     </div>
   );
   return (
-    <article className="h-full overflow-hidden rounded-lg bg-card transition-shadow hover:shadow-sm">
+    <article className="h-full overflow-hidden rounded-lg bg-card shadow-md shadow-black/5 transition-shadow hover:shadow-lg dark:shadow-sm dark:shadow-black/20 dark:hover:shadow-md">
       <Link to={`/events/${event.latestTimelineUid}`} className="block h-full transition-colors hover:bg-muted/50">
         {body}
       </Link>
@@ -242,7 +218,7 @@ export default function EventsIndex() {
       ]}
     >
       {filteredEvents.length > 0 && (
-        <div className="grid gap-3 py-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 py-4 sm:grid-cols-[repeat(auto-fit,minmax(16rem,1fr))]">
           {filteredEvents.map((event) => (
             <EventCard key={event.uid} event={event} />
           ))}

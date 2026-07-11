@@ -95,7 +95,7 @@ export default function RaidCard({
   const hasVisibleDifficulty = showDifficulty && displayDefenseTypeSets.some(({ difficulty }) => difficulty);
 
   return (
-    <div className={cn(`relative overflow-hidden rounded-lg ${className ?? ""}`)}>
+    <div className={cn(`relative overflow-hidden rounded-lg border border-border/70 ${className ?? ""}`)}>
       <div className="relative aspect-3/1">
         <div
           className="absolute inset-0 bg-cover bg-center"

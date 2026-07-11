@@ -453,7 +453,8 @@ type ContentTagProps = {
 };
 
 function ContentTag({ Icon, text, color }: ContentTagProps) {
-  let colorClass = "bg-neutral-100 dark:bg-neutral-700 text-neutral-800 dark:text-neutral-200";
+  let colorClass =
+    "bg-neutral-100 text-neutral-800 shadow-xs shadow-black/5 dark:bg-neutral-700 dark:text-neutral-200 dark:shadow-none";
   if (color === "green") {
     colorClass = "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200";
   } else if (color === "red") {
@@ -800,7 +801,7 @@ function RecruitmentStudents({
     return (
       <div className="my-2">
         {title && <p className="mt-4 mb-1 font-semibold">{title}</p>}
-        <StudentCards mobileGrid={5} pcGrid={8} students={studentCards} />
+        <StudentCards layout="responsive-wrap" cardSize="lg" students={studentCards} />
       </div>
     );
   }
@@ -827,7 +828,7 @@ function RecruitmentStudents({
         </button>
       </div>
 
-      {showCards && <StudentCards mobileGrid={5} students={studentCards} />}
+      {showCards && <StudentCards layout="responsive-wrap" cardSize="lg" students={studentCards} />}
     </div>
   );
 }

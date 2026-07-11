@@ -200,7 +200,7 @@ function CommunityPostTypeFilter({ selectedPostTypes }: { selectedPostTypes: Com
     <div ref={rootRef} className="relative z-50 w-fit">
       <button
         type="button"
-        className="inline-flex min-h-8 items-center justify-between gap-2 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-muted"
+        className="inline-flex min-h-8 items-center justify-between gap-2 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((prev) => !prev)}
@@ -212,7 +212,7 @@ function CommunityPostTypeFilter({ selectedPostTypes }: { selectedPostTypes: Com
         <ChevronDownIcon className={cn("size-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
       </button>
       {isOpen && (
-        <div className="mt-1 w-64 overflow-hidden rounded-md bg-popover py-1 text-xs text-popover-foreground shadow-lg">
+        <div className="absolute top-full left-0 z-20 mt-2 w-64 overflow-hidden rounded-md bg-popover py-1 text-xs text-popover-foreground shadow-lg">
           {COMMUNITY_POST_TYPE_FILTERS.map(({ type, label, Icon }) => {
             const active = selectedSet.has(type);
             const disabled = active && selectedCount <= 1;

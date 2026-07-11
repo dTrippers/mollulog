@@ -1,8 +1,8 @@
 import { IdentificationIcon } from "@heroicons/react/16/solid";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/solid";
 import { useState } from "react";
-import { Link, data, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { data, Link, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import CopyField from "~/components/features/coupons/CopyField";
 import CouponCard from "~/components/features/coupons/CouponCard";
@@ -112,6 +112,7 @@ export default function CouponsPage() {
     >
       <div className="mb-4">
         <FilterButtons
+          surface="page"
           exclusive
           atLeastOne
           size="sm"

@@ -1,4 +1,4 @@
-import { AttributeBadge } from "~/components/primitives";
+import { AttributeBadge, SectionCard } from "~/components/primitives";
 import type { Attack, Defense, RoleEnum } from "~/graphql/graphql";
 import {
   attackTypeColor,
@@ -25,9 +25,7 @@ type StudentInfoProps = {
 
 export default function StudentInfo({ student, className = "" }: StudentInfoProps) {
   return (
-    <section
-      className={`overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-800/50 ${className}`}
-    >
+    <SectionCard className={`overflow-hidden p-0 md:p-0 ${className}`}>
       <div className="relative min-h-40 overflow-hidden bg-linear-to-r from-neutral-100 via-white to-neutral-50 dark:from-neutral-900 dark:via-neutral-800 dark:to-neutral-800">
         <div className="absolute inset-0 z-0">
           <img
@@ -51,6 +49,6 @@ export default function StudentInfo({ student, className = "" }: StudentInfoProp
           </div>
         </div>
       </div>
-    </section>
+    </SectionCard>
   );
 }

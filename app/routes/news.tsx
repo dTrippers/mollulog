@@ -1,8 +1,7 @@
 import dayjs from "dayjs";
-import { useNavigate, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
-import { MarkdownText, Pagination, Title } from "~/components/primitives";
+import { useLoaderData, useNavigate, useSearchParams } from "react-router";
+import { MarkdownText, Pagination, SectionCard, Title } from "~/components/primitives";
 import { canonicalLink } from "~/lib/seo";
 import { getNewsPosts } from "~/models/post";
 
@@ -15,10 +14,7 @@ function parsePage(request: Request) {
 }
 
 export const meta: MetaFunction = ({ location }) => {
-  return [
-    { title: "업데이트 소식 | 몰루로그" },
-    canonicalLink(location.pathname),
-  ];
+  return [{ title: "업데이트 소식 | 몰루로그" }, canonicalLink(location.pathname)];
 };
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -53,13 +49,15 @@ export default function News() {
       <Title text="업데이트 소식" />
       <div className="mt-4">
         {posts.map((post) => (
-          <div className="mb-4 rounded-lg bg-neutral-100 dark:bg-neutral-900 p-5 last:mb-0 dark:border-neutral-700" key={post.uid}>
-            <h2 className="text-lg md:text-xl font-black">{post.title}</h2>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">{dayjs(post.createdAt).format("YYYY-MM-DD")}</p>
+          <SectionCard className="mb-4 last:mb-0" key={post.uid}>
+            <h2 className="text-lg font-black md:text-xl">{post.title}</h2>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              {dayjs(post.createdAt).format("YYYY-MM-DD")}
+            </p>
             <div className="mt-4">
               <MarkdownText text={post.content} />
             </div>
-          </div>
+          </SectionCard>
         ))}
         <Pagination currentPage={page} totalPages={totalPages} onPageChange={handlePageChange} />
       </div>

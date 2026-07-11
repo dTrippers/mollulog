@@ -38,9 +38,11 @@ function PageScreenSelectorItem({
 }: PageScreenSelectorItemProps) {
   const className = cn(
     "flex w-full items-center justify-between gap-3 rounded-lg px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-    disabled && "cursor-not-allowed bg-muted/40 text-muted-foreground opacity-60",
-    active && !disabled && "bg-primary/10 text-primary",
-    !active && !disabled && "bg-card text-foreground hover:bg-muted",
+    disabled && "cursor-not-allowed bg-muted/40 text-muted-foreground opacity-60 dark:bg-card/60",
+    active && !disabled && "bg-primary/10 text-primary shadow-sm shadow-black/5 dark:shadow-none",
+    !active &&
+      !disabled &&
+      "bg-card text-foreground shadow-sm shadow-black/5 hover:bg-muted dark:shadow-none dark:hover:bg-foreground/10",
   );
   const content = (
     <>

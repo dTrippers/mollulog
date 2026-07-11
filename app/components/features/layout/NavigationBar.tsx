@@ -17,24 +17,23 @@ import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
-  UserCircleIcon as UserCircleIconSolid,
 } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { type UtcIsoString, parseUtcTimestamp } from "~/lib/date-time";
+import { parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
+import { cn } from "~/lib/utils";
 import { timelineContentTypeLocale } from "~/locales/ko";
 import { studentImageUrl } from "~/models/assets";
-import { cn } from "~/lib/utils";
 import { submitPreference } from "~/routes/api.preference";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import {
-  type NavigationItem,
-  type NavigationSectionStates,
   getMobileNavigationItems,
   getNavigationSectionStates,
   getNavigationSections,
+  type NavigationItem,
+  type NavigationSectionStates,
 } from "./navigation-menu";
 
 type NavigationBarProps = {
@@ -115,7 +114,7 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
   const isLoading = fetcher.state !== "idle";
 
   const inputClassName = cn(`
-    w-full rounded-md bg-muted py-2 pr-3 pl-9 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring/30
+    w-full rounded-md bg-background py-2 pr-3 pl-9 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring/30
   `);
 
   return (
@@ -265,7 +264,7 @@ export default function NavigationBar({
     <>
       <aside
         className="
-          hidden bg-background/90 shadow-sm backdrop-blur-sm lg:relative lg:z-layer-navigation lg:flex lg:h-screen lg:w-72 lg:flex-col xl:w-84
+          hidden bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex lg:h-screen lg:w-72 lg:flex-col xl:w-84
         "
       >
         <div className="flex h-16 items-center px-5">
@@ -355,10 +354,9 @@ function MobileBrandHeader({
   }, [isMenuOpen]);
 
   const toggleDarkMode = () => {
-    setDarkMode((prev) => {
-      submitPreference(submit, { darkMode: !prev });
-      return !prev;
-    });
+    const nextDarkMode = !darkMode;
+    submitPreference(submit, { darkMode: nextDarkMode });
+    setDarkMode(() => nextDarkMode);
     setIsMenuOpen(false);
   };
   const ModeIcon = darkMode ? SunIcon : MoonIcon;
@@ -367,7 +365,7 @@ function MobileBrandHeader({
     <header
       className="
         lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex flex-col
-        bg-background/95 shadow-sm backdrop-blur-sm
+        bg-card/95 shadow-lg shadow-black/5 backdrop-blur-sm dark:shadow-md dark:shadow-black/20
       "
     >
       <div className="flex h-[var(--mobile-header-height)] w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
@@ -389,7 +387,7 @@ function MobileBrandHeader({
           <button
             type="button"
             className="
-              inline-flex size-9 items-center justify-center rounded-md text-foreground
+              inline-flex size-9 items-center justify-center rounded-md bg-background text-foreground
               transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
             "
             onClick={() => {
@@ -404,7 +402,7 @@ function MobileBrandHeader({
           <button
             type="button"
             className="
-              relative inline-flex size-9 items-center justify-center rounded-md text-foreground
+              relative inline-flex size-9 items-center justify-center rounded-md bg-background text-foreground
               transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
             "
             onClick={() => {
@@ -504,7 +502,7 @@ function MobileHeaderMenuButton({
   `);
   const iconClassName = cn(`
     size-4 shrink-0
-    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-muted-foreground"}
+    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-foreground/70"}
   `);
   const content = (
     <>
@@ -546,7 +544,7 @@ function MobileBottomNavigation({
     <nav
       className="
         lg:hidden fixed inset-x-0 bottom-0 z-layer-navigation h-[var(--mobile-nav-height)]
-        bg-background/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
+        bg-card/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
       "
       aria-label="주요 메뉴"
     >
@@ -556,7 +554,7 @@ function MobileBottomNavigation({
           const className = cn(`
             relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-xs font-medium transition-colors
             focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
-            ${item.isActive ? "font-bold text-foreground" : "text-muted-foreground hover:text-foreground"}
+            ${item.isActive ? "font-bold text-foreground" : "text-foreground/70 hover:text-foreground"}
           `);
           const content = (
             <>
@@ -587,7 +585,7 @@ interface MenuItemProps extends NavigationItem {
 }
 
 function DesktopMenuGroupLabel({ children }: { children: React.ReactNode }) {
-  return <div className="mt-5 mb-1.5 px-2 text-sm font-medium text-muted-foreground">{children}</div>;
+  return <div className="mt-5 mb-1.5 px-2 text-sm font-medium text-foreground/65">{children}</div>;
 }
 
 function DesktopMenuSectionList({
@@ -722,7 +720,7 @@ function DesktopUtilityFooter({
         {currentUsername ? (
           <Link
             to={`/@${currentUsername}`}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-background px-2 py-1.5 text-sm font-medium text-foreground/75 transition-colors hover:bg-muted hover:text-foreground"
           >
             {currentProfileStudentId ? (
               <ProfileImage studentUid={currentProfileStudentId} imageSize={6} />
@@ -736,7 +734,7 @@ function DesktopUtilityFooter({
         ) : (
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-background px-2 py-1.5 text-left text-sm font-medium text-foreground/75 transition-colors hover:bg-muted hover:text-foreground"
             onClick={onShowSignIn}
           >
             <span className="flex size-5 items-center justify-center">
@@ -747,12 +745,11 @@ function DesktopUtilityFooter({
         )}
         <button
           type="button"
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           onClick={() => {
-            onDarkModeToggle((prev) => {
-              submitPreference(submit, { darkMode: !prev });
-              return !prev;
-            });
+            const nextDarkMode = !darkMode;
+            submitPreference(submit, { darkMode: nextDarkMode });
+            onDarkModeToggle(() => nextDarkMode);
           }}
           aria-label={darkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
           title={darkMode ? "라이트 모드" : "다크 모드"}
@@ -766,8 +763,8 @@ function DesktopUtilityFooter({
 
 function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, showRedDot, badgeLabel, disabled }: MenuItemProps) {
   const className = cn(
-    `relative my-0.5 grid grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted hover:text-foreground ${
-      isActive ? "bg-muted font-medium text-foreground" : "font-normal text-muted-foreground"
+    `relative my-0.5 grid grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-sm transition-colors hover:bg-background hover:text-foreground ${
+      isActive ? "bg-background font-medium text-foreground" : "font-normal text-foreground/75"
     } ${disabled ? "opacity-40" : ""}`,
   );
   const content = (
@@ -776,7 +773,7 @@ function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, showRedDot, b
         {isActive ? (
           <SolidIcon className="size-4 text-foreground" />
         ) : (
-          <OutlineIcon className="size-4 text-muted-foreground" />
+          <OutlineIcon className="size-4 text-foreground/70" />
         )}
       </span>
       <span className="min-w-0">
@@ -813,7 +810,7 @@ type DesktopMenuLinkProps = {
 
 function DesktopMenuLink({ to, label, Icon, showRedDot = false }: DesktopMenuLinkProps) {
   const className =
-    "relative my-0.5 grid w-full grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-left text-sm font-normal text-muted-foreground transition-colors hover:bg-muted hover:text-foreground";
+    "relative my-0.5 grid w-full grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-left text-sm font-normal text-foreground/75 transition-colors hover:bg-background hover:text-foreground";
   const content = (
     <>
       <span className="flex size-5 items-center justify-center">

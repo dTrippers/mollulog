@@ -147,9 +147,8 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
 
   if (chartData.length < 2) return null;
 
-  const axisColor = isDark ? "#6b7280" : "#9ca3af";
-  const gridColor = isDark ? "#374151" : "#e5e7eb";
-  const zeroAxisColor = isDark ? "#d1d5db" : "#4b5563";
+  const axisColor = isDark ? "#6b7280" : "#a3a3a3";
+  const gridColor = isDark ? "#374151" : "#eeeeee";
   const tooltipBg = isDark ? "#1f2937" : "#ffffff";
   const tooltipBorder = isDark ? "#374151" : "#e5e7eb";
   const tooltipText = isDark ? "#f9fafb" : "#111827";
@@ -172,12 +171,13 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
   const maxValue = Math.max(...allValues);
   const minValue = Math.min(...allValues);
   const hasNegative = minValue < 0;
+  const zeroAxisColor = isDark ? "#d1d5db" : hasNegative ? "#a3a3a3" : "#d4d4d4";
 
   const domainMin = Math.min(minValue, 0);
   const domainMax = maxValue;
 
   return (
-    <div className="my-4 border border-neutral-200 dark:border-neutral-700 rounded-lg p-2 md:p-3" ref={containerRef}>
+    <div className="min-w-0" ref={containerRef}>
       <ResponsiveContainer width="100%" height={200}>
         <AreaChart data={chartData} margin={{ top: 24, right: 4, bottom: 0, left: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />

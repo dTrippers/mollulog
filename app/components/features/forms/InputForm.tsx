@@ -5,6 +5,7 @@ type InputFormProps = {
   label: string;
   type?: HTMLInputTypeAttribute;
   name?: string;
+  value?: string;
   defaultValue?: string;
   description?: string;
   placeholder?: string;
@@ -16,6 +17,7 @@ export default function InputForm({
   label,
   type,
   name,
+  value,
   defaultValue,
   description,
   placeholder,
@@ -31,6 +33,7 @@ export default function InputForm({
       containerClassName="p-4"
       type={type}
       name={name}
+      value={value}
       defaultValue={defaultValue}
       placeholder={placeholder}
       onChange={onChange}

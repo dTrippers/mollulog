@@ -90,6 +90,8 @@ export default function RaidScoreRangeDetail({
             allStudents={allStudents}
             recruitedStudentTiers={recruitedStudentTiers}
             showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
+            cardClassName="border border-border/70 bg-transparent"
+            summaryClassName="bg-neutral-100 dark:bg-neutral-800"
           />
           <RanksPageLink to={`ranks${search}`} />
         </SectionCard>
@@ -150,7 +152,7 @@ function RaidScoreRangeDetailSkeleton() {
       <SectionCard title="많이 편성한 조합" description="순서나 학생 성장도는 반영되지 않아요">
         <div className="grid gap-3 md:grid-cols-2">
           {SKELETON_PARTY_CARD_KEYS.map((key) => (
-            <div key={key} className="space-y-3 rounded-md bg-muted/40 p-3">
+            <div key={key} className="space-y-3 rounded-md border border-border/70 p-3">
               <div className="flex items-center justify-between">
                 <span className="h-4 w-24 animate-pulse rounded-sm bg-muted" />
                 <span className="h-4 w-16 animate-pulse rounded-sm bg-muted/60" />

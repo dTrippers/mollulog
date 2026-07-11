@@ -7,6 +7,7 @@ type FormGroupProps = {
   children: ReactNode | ReactNode[];
   submitOnChange?: boolean;
   showSavingIndicator?: boolean;
+  itemHover?: boolean;
 };
 
 const FormGroupContext = createContext<{
@@ -15,7 +16,13 @@ const FormGroupContext = createContext<{
   submitFormGroup: () => {},
 });
 
-export default function FormGroup({ method, children, submitOnChange, showSavingIndicator }: FormGroupProps) {
+export default function FormGroup({
+  method,
+  children,
+  submitOnChange,
+  showSavingIndicator,
+  itemHover = true,
+}: FormGroupProps) {
   const childrenArray = Children.toArray(children);
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -38,11 +45,11 @@ export default function FormGroup({ method, children, submitOnChange, showSaving
 
   const layout = (
     <>
-      <div className="rounded-lg bg-card">
+      <div className="rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
         {childrenArray.map((child) => (
           <div
             key={isValidElement(child) ? (child.key ?? child.type?.toString?.() ?? "child") : String(child)}
-            className="border-border transition-colors first:rounded-t-lg last:rounded-b-lg hover:bg-muted not-last:border-b"
+            className={`border-border transition-colors first:rounded-t-lg last:rounded-b-lg not-last:border-b ${itemHover ? "hover:bg-muted" : ""}`}
           >
             {child}
           </div>

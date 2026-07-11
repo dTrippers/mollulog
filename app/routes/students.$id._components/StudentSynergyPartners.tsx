@@ -1,8 +1,6 @@
-import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { LoadingSkeleton, ProfileImage } from "~/components/primitives";
+import { LoadingSkeleton, ProfileImage, SectionCard } from "~/components/primitives";
 import type { StudentAnalysisSynergyPartner } from "~/lib/ranks/student-analysis";
-import { cn } from "~/lib/utils";
 import { formatTierLabel } from "./raidTierVisual";
 
 type StudentSynergyPartnersProps = {
@@ -27,10 +25,9 @@ export default function StudentSynergyPartners({
 }: StudentSynergyPartnersProps) {
   if (loading) {
     return (
-      <CardShell className={className}>
-        <Header />
-        <LoadingSkeleton noOuterMargin className="-mt-4" />
-      </CardShell>
+      <SectionCard title="함께 쓰는 학생" description="함께 편성된 횟수가 많은 학생이에요." className={className}>
+        <LoadingSkeleton noOuterMargin />
+      </SectionCard>
     );
   }
 
@@ -43,8 +40,7 @@ export default function StudentSynergyPartners({
   }
 
   return (
-    <CardShell className={className}>
-      <Header />
+    <SectionCard title="함께 쓰는 학생" description="함께 편성된 횟수가 많은 학생이에요." className={className}>
       <div className="grid gap-3 md:grid-cols-3">
         {visiblePartners.map(({ partner, student }, index) => {
           const tier = recruitedStudentTiers[partner.partnerUid] ?? null;
@@ -100,28 +96,6 @@ export default function StudentSynergyPartners({
           );
         })}
       </div>
-    </CardShell>
-  );
-}
-
-function Header() {
-  return (
-    <div className="mb-4">
-      <p className="text-base font-bold">함께 쓰는 학생</p>
-      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">함께 편성된 횟수가 많은 학생이에요.</p>
-    </div>
-  );
-}
-
-function CardShell({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div
-      className={cn(
-        "rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900",
-        className,
-      )}
-    >
-      {children}
-    </div>
+    </SectionCard>
   );
 }

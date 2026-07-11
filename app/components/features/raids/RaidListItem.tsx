@@ -1,13 +1,13 @@
 import { Link } from "react-router";
 import { AttributeBadge } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import type { Difficulty } from "~/domain/raid-score";
 import type { Defense } from "~/graphql/graphql";
-import { type UtcIsoString, formatInstant } from "~/lib/date-time";
+import { formatInstant, type UtcIsoString } from "~/lib/date-time";
+import { cn } from "~/lib/utils";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType, Terrain } from "~/models/content.d";
-import type { Difficulty } from "~/domain/raid-score";
-import { cn } from "~/lib/utils";
 
 export type RaidListItemRaid = {
   raidBoss: { uid: string; name: string };
@@ -37,6 +37,8 @@ type RaidListItemProps = {
   actions?: RaidListItemAction[];
   reserveRightAccessorySpace?: boolean;
   className?: string;
+  imageClassName?: string;
+  contentClassName?: string;
 };
 
 export default function RaidListItem({
@@ -44,6 +46,8 @@ export default function RaidListItem({
   actions,
   reserveRightAccessorySpace = false,
   className,
+  imageClassName,
+  contentClassName,
 }: RaidListItemProps) {
   const displayTimeZone = useDisplayTimeZone();
   const { raidBoss, raidType, seasonIndex, startAt, endAt, terrain } = raid;
@@ -52,21 +56,22 @@ export default function RaidListItem({
   return (
     <div
       className={cn(`
-        relative overflow-hidden rounded-lg bg-card transition-colors hover:bg-muted
+        relative overflow-hidden rounded-lg bg-card shadow-md shadow-black/5 transition-colors hover:bg-muted dark:shadow-sm dark:shadow-black/20
         ${className ?? ""}
       `)}
     >
       <img
         src={bossImageUrl(raidBoss.uid)}
         alt="보스 이미지"
-        className="absolute top-0 right-0 h-full object-cover opacity-70"
+        className={cn("absolute top-0 right-0 h-full object-cover opacity-70", imageClassName)}
         loading="lazy"
       />
       <div
-        className={cn(`
-          relative w-full rounded-lg bg-card/90 p-4 transition-colors
-          ${reserveRightAccessorySpace ? "pr-10" : ""}
-        `)}
+        className={cn(
+          "relative w-full rounded-lg bg-card/90 p-4 transition-colors",
+          reserveRightAccessorySpace && "pr-10",
+          contentClassName,
+        )}
       >
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">

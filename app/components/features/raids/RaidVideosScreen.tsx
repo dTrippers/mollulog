@@ -1,7 +1,6 @@
-import { Link } from "react-router";
-import { PlayIcon } from "@heroicons/react/24/outline";
-import { ArrowsUpDownIcon } from "@heroicons/react/24/outline";
+import { ArrowsUpDownIcon, PlayIcon } from "@heroicons/react/24/outline";
 import type { RefObject } from "react";
+import { Link } from "react-router";
 import { EmptyView, FilterButtons, LoadingSkeleton } from "~/components/primitives";
 import type { RaidVideoItem, VideoSort } from "~/models/raid-videos";
 
@@ -25,6 +24,7 @@ export default function RaidVideosScreen({
   return (
     <div>
       <FilterButtons
+        surface="page"
         Icon={ArrowsUpDownIcon}
         buttonProps={[
           { text: "점수순", active: sort === "score_desc", onToggle: () => setSort("score_desc") },

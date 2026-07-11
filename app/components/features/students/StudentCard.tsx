@@ -376,7 +376,7 @@ export function StudentCardPopup({ student, popups, onClose }: StudentCardPopupP
   const { name, attackType, defenseType, role } = student;
 
   return (
-    <div className="m-4 rounded-lg bg-white/90 text-base leading-normal text-black shadow-lg backdrop-blur-sm md:m-0 dark:bg-black/80 dark:text-white">
+    <div className="m-4 rounded-lg border border-border bg-white/90 text-base leading-normal text-black shadow-lg backdrop-blur-sm md:m-0 dark:bg-black/80 dark:text-white">
       <div className="px-4 pt-4 pb-2">
         <p className="text-lg font-bold">{name}</p>
         {attackType && defenseType && role && (

@@ -154,6 +154,8 @@ export default function UserPage() {
           <div className="my-16 text-center">아직 모집한 학생이 없어요</div>
         ) : (
           <StudentCards
+            layout="responsive-wrap"
+            cardSize="lg"
             students={recruitedStudents.map(({ uid, name, attackType, defenseType, role, initialTier, tier }) => ({
               uid,
               name,
@@ -226,6 +228,8 @@ export default function UserPage() {
           </>
         )}
         <StudentCards
+          layout="responsive-wrap"
+          cardSize="lg"
           students={unrecruitedStudents.map(({ uid, name, attackType, defenseType, role, initialTier }) => ({
             uid,
             name,

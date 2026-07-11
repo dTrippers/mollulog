@@ -11,12 +11,12 @@ export type PageLinkProps = {
 
 export default function PageLink({ Icon, title, description, to, preventScrollReset }: PageLinkProps) {
   const content = (
-    <div className="flex items-center justify-between rounded-lg bg-primary/10 px-3 py-3 transition-colors hover:bg-primary/15 md:px-4">
-      <div className="flex items-center gap-3">
-        <div className="flex size-9 items-center justify-center rounded-md bg-primary text-primary-foreground">
+    <div className="flex w-full items-center justify-between gap-3 rounded-lg bg-card px-3 py-3 shadow-sm shadow-black/5 transition-colors hover:bg-muted dark:shadow-none dark:hover:bg-foreground/10 md:px-4">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
           <Icon className="size-5" strokeWidth={2} />
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-semibold text-foreground">{title}</p>
           <p className="text-xs text-muted-foreground">{description}</p>
         </div>
@@ -27,14 +27,14 @@ export default function PageLink({ Icon, title, description, to, preventScrollRe
 
   if (to.startsWith("http")) {
     return (
-      <a href={to} target="_blank" rel="noopener noreferrer" className="group block">
+      <a href={to} target="_blank" rel="noopener noreferrer" className="group block w-full">
         {content}
       </a>
     );
   }
 
   return (
-    <Link to={to} preventScrollReset={preventScrollReset} className="group block">
+    <Link to={to} preventScrollReset={preventScrollReset} className="group block w-full">
       {content}
     </Link>
   );

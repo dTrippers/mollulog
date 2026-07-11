@@ -135,7 +135,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
           const formattedResourceAmount = formatResourceAmount(resourceAmount);
           const unitPriceLabel = formatUnitPriceLabel(purchaseTiers);
           return (
-            <div key={uid} className="p-2 flex flex-col gap-2 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
+            <div key={uid} className="flex flex-col gap-2 rounded-md border border-border/60 bg-card p-2">
               <div className="flex items-center justify-center gap-x-1">
                 <ResourceCard
                   itemUid={resource.uid}
@@ -206,7 +206,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
         })}
       </div>
 
-      <div className="my-2 flex justify-end gap-0.5">
+      <div className="my-2 flex justify-end gap-2">
         <Button text="모두 선택" variant="primary" onClick={handleSelectAll} />
         <Button text="초기화" onClick={handleResetAll} />
       </div>

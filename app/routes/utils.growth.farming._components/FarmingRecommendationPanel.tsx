@@ -1,7 +1,7 @@
 import { BoltIcon } from "@heroicons/react/16/solid";
 import { ArchiveBoxIcon, BeakerIcon, ClipboardDocumentListIcon } from "@heroicons/react/24/outline";
 import { useMemo } from "react";
-import { EmptyView, ResourceCard, SubTitle } from "~/components/primitives";
+import { EmptyView, ResourceCard, Section, SectionCard } from "~/components/primitives";
 import {
   type FarmingRequirement,
   type FarmingStage,
@@ -46,49 +46,45 @@ export default function FarmingRecommendationPanel({
 
   if (managedStudentCount === 0) {
     return (
-      <div className="rounded-md border border-border bg-card p-8">
+      <SectionCard className="p-8 md:p-8">
         <EmptyView
           Icon={ClipboardDocumentListIcon}
           text="관리 중인 학생이 없어요"
           description="성장 목표 탭에서 학생을 추가하면 필요한 장비 설계도를 기준으로 파밍 스테이지를 계산할 수 있어요."
         />
-      </div>
+      </SectionCard>
     );
   }
 
   if (farmingRequirements.length === 0) {
     return (
-      <div className="rounded-md border border-border bg-card p-8">
+      <SectionCard className="p-8 md:p-8">
         <EmptyView
           Icon={ArchiveBoxIcon}
           text="파밍이 필요한 장비 설계도가 없어요"
           description="관리 중인 학생들의 장비 설계도 필요량이 이미 보유량으로 충족되어 있어요."
         />
-      </div>
+      </SectionCard>
     );
   }
 
   return (
-    <div className="space-y-3">
-      <div>
-        <SubTitle
-          text="추천 파밍 임무"
-          description="필요한 장비를 모으기 위해 소탕 우선순위를 추천해요. 우선순위는 판단 기준에 따라 다를 수 있으니 참고로만 사용해주세요."
-        />
-      </div>
-
+    <Section
+      title="추천 파밍 임무"
+      description="필요한 장비를 모으기 위해 소탕 우선순위를 추천해요. 우선순위는 판단 기준에 따라 다를 수 있으니 참고로만 사용해주세요."
+    >
       {recommendations.length === 0 ? (
-        <div className="rounded-md border border-border bg-card p-8">
+        <SectionCard className="p-8 md:p-8">
           <EmptyView Icon={BeakerIcon} text="'학생 성장 플래너'에서 목표를 입력하거나 난이도를 선택해주세요" />
-        </div>
+        </SectionCard>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {recommendations.map((recommendation) => (
             <StageRecommendationRow key={recommendation.stage.uid} recommendation={recommendation} />
           ))}
         </div>
       )}
-    </div>
+    </Section>
   );
 }
 
@@ -97,7 +93,7 @@ function StageRecommendationRow({ recommendation }: { recommendation: FarmingSta
   const dropGroups = groupDropsByEquipmentType(drops);
 
   return (
-    <article className="flex flex-col gap-3 rounded-md border border-border bg-card px-4 py-3 lg:flex-row lg:items-center">
+    <SectionCard className="flex flex-col gap-3 space-y-0 p-3 md:p-4 lg:flex-row lg:items-center">
       <div className="min-w-0 lg:w-52">
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-semibold text-foreground">{formatStageLabel(stage)}</h2>
@@ -111,7 +107,7 @@ function StageRecommendationRow({ recommendation }: { recommendation: FarmingSta
 
       <div className="flex flex-1 flex-wrap gap-2">
         {dropGroups.map((group) => (
-          <section key={group.typeKey} className="grid min-w-0 gap-1 rounded-md bg-background px-2 py-1.5">
+          <section key={group.typeKey} className="grid min-w-0 gap-1">
             <h3 className="text-xs font-semibold leading-none text-foreground">{group.label}</h3>
             <div className="flex flex-wrap gap-1">
               {group.drops.map((drop) => (
@@ -127,7 +123,7 @@ function StageRecommendationRow({ recommendation }: { recommendation: FarmingSta
           </section>
         ))}
       </div>
-    </article>
+    </SectionCard>
   );
 }
 

@@ -162,7 +162,7 @@ export default function Register() {
   return (
     <div className="max-w-3xl">
       <Title text="선생님 등록" />
-      <section className="rounded-lg bg-card p-5 text-card-foreground">
+      <section className="rounded-lg bg-card p-5 text-card-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
         <div className="mb-6 space-y-1">
           <h2 className="text-lg font-semibold">프로필 정보</h2>
           <p className="text-sm text-muted-foreground">프로필 정보는 다른 사람에게 표시돼요</p>

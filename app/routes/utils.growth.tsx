@@ -3,12 +3,9 @@ import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from 
 import { Outlet, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
-import type { PageLayoutHandle } from "~/components/features/layout/page-width";
 import { getLogger } from "~/lib/observability.server";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
-
-export const handle = { pageWidth: "wide" } satisfies PageLayoutHandle;
 
 export const meta: MetaFunction = () => {
   return [

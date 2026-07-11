@@ -31,6 +31,15 @@ export const defenseTypeLocale: Record<Defense, string> = {
   normal: "일반",
 };
 
+export const defenseTypeShortLocale: Record<Defense, string> = {
+  light: "경장",
+  heavy: "중장",
+  special: "특수",
+  elastic: "탄력",
+  composite: "복합",
+  normal: "일반",
+};
+
 export const defenseTypeColor: Record<Defense, "red" | "yellow" | "green" | "blue" | "purple" | "grey"> = {
   light: "red",
   heavy: "yellow",
@@ -141,7 +150,10 @@ export const contentTypeLocale: Record<EventType | RaidType, string> = {
 export function recruitmentLabelLocale({
   recruitmentType: type,
   rerun,
-}: { recruitmentType: RecruitmentTypeEnum; rerun: boolean }): string {
+}: {
+  recruitmentType: RecruitmentTypeEnum;
+  rerun: boolean;
+}): string {
   if (type === "archive") {
     return "아카이브";
   } else if (type === "recollect") {

@@ -23,7 +23,7 @@ export default function ReplyForm() {
   }, [fetcher.data, fetcher.state, revalidator]);
 
   return (
-    <section className="rounded-lg bg-card p-5 text-card-foreground">
+    <section className="rounded-lg bg-card p-5 text-card-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
       <div className="mb-6">
         <h2 className="text-lg font-semibold">답글/추가 문의 남기기</h2>
         <p className="mt-2 text-sm text-muted-foreground">

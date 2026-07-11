@@ -11,8 +11,8 @@ type AddContentButtonProps = {
 
 export default function AddContentButton({ text, link, onClick }: AddContentButtonProps) {
   const className = cn(`
-    mt-4 mb-4 flex items-center justify-center rounded-lg bg-muted px-4 py-3
-    text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground cursor-pointer
+    mt-4 mb-4 flex items-center justify-center rounded-lg bg-card px-4 py-3 shadow-md shadow-black/5
+    text-muted-foreground transition-colors hover:bg-muted hover:text-foreground cursor-pointer dark:shadow-none
   `);
   const content = (
     <>

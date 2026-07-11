@@ -3,6 +3,7 @@ import type { ElementType, ReactNode } from "react";
 import { useState } from "react";
 import { StudentCard } from "~/components/features/students";
 import type { Attack, Defense } from "~/graphql/graphql";
+import { cn } from "~/lib/utils";
 import type { Role } from "~/models/content.d";
 
 export type RaidPartyStudentAction = {
@@ -45,6 +46,8 @@ type RaidPartyCardProps = {
   popupIdPrefix: string;
   visibleRowCount?: number;
   emptyText?: string;
+  className?: string;
+  summaryClassName?: string;
   getStudentActions?: (slot: RaidPartySlot, rowIndex: number, slotIndex: number) => RaidPartyStudentAction[];
 };
 
@@ -59,6 +62,8 @@ export default function RaidPartyCard({
   popupIdPrefix,
   visibleRowCount,
   emptyText = "편성 데이터가 없어요",
+  className,
+  summaryClassName,
   getStudentActions,
 }: RaidPartyCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -66,12 +71,8 @@ export default function RaidPartyCard({
   const visibleRows = shouldCollapse && !expanded ? rows.slice(0, visibleRowCount) : rows;
   const hiddenRowCount = shouldCollapse ? rows.length - visibleRows.length : 0;
 
-  const cardClassName = "rounded-lg bg-card p-3 md:p-4";
-  const summaryClassName =
-    "grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-background/70 p-3 text-sm sm:grid-cols-3 lg:w-48 lg:grid-cols-1";
-
   return (
-    <article className={cardClassName}>
+    <article className={cn("rounded-lg bg-card p-3 md:p-4", className)}>
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
           <span className="text-lg font-bold leading-tight text-foreground">{primaryLabel}</span>
@@ -102,7 +103,12 @@ export default function RaidPartyCard({
         </div>
 
         {summaryItems.length > 0 ? (
-          <dl className={summaryClassName}>
+          <dl
+            className={cn(
+              "grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-background/70 p-3 text-sm sm:grid-cols-3 lg:w-48 lg:grid-cols-1",
+              summaryClassName,
+            )}
+          >
             {summaryItems.map((item) => (
               <div key={item.label} className="min-w-0">
                 <dt className="text-xs font-medium text-muted-foreground">{item.label}</dt>

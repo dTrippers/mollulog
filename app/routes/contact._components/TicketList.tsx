@@ -1,6 +1,6 @@
-import dayjs from "dayjs";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
+import dayjs from "dayjs";
 import { Link } from "react-router";
 import { Callout } from "~/components/primitives";
 import type { FeedbackTicket } from "~/models/feedback";
@@ -17,7 +17,7 @@ function getPreview(content: string): string {
 
 export default function TicketList({ tickets }: { tickets: FeedbackTicket[] }) {
   return (
-    <section className="rounded-lg bg-card p-5 text-card-foreground">
+    <section className="rounded-lg bg-card p-5 text-card-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
       <div className="mb-6">
         <h2 className="text-lg font-semibold">내 문의 내역</h2>
       </div>

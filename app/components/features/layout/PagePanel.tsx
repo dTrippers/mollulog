@@ -38,20 +38,28 @@ export default function PagePanel({
   );
 
   return (
-    <section className={cn("rounded-lg bg-card p-3 text-card-foreground", disabled && "opacity-50")}>
-      {collapsible && !disabled ? (
-        <button
-          type="button"
-          className="flex w-full cursor-pointer items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          aria-expanded={expanded}
-          onClick={() => setExpanded((current) => !current)}
-        >
-          {heading}
-        </button>
-      ) : (
-        <div className="flex items-center gap-3 p-1">{heading}</div>
+    <section
+      className={cn(
+        "rounded-lg bg-card p-3 text-card-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20",
+        expanded && "space-y-3",
+        disabled && "opacity-50",
       )}
-      {expanded ? <div className="mt-4">{children}</div> : null}
+    >
+      <div>
+        {collapsible && !disabled ? (
+          <button
+            type="button"
+            className="flex w-full cursor-pointer items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((current) => !current)}
+          >
+            {heading}
+          </button>
+        ) : (
+          <div className="flex items-center gap-3 p-1">{heading}</div>
+        )}
+      </div>
+      {expanded ? <div className="text-sm text-foreground/85">{children}</div> : null}
     </section>
   );
 }

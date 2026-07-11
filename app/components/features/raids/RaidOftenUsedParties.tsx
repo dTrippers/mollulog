@@ -33,6 +33,8 @@ type RaidOftenUsedPartiesProps = {
   allStudents: Record<string, { name: string; attackType: Attack; defenseType: Defense; role: Role }>;
   recruitedStudentTiers: Record<string, number>;
   showUnrecruitedStudents?: boolean;
+  cardClassName?: string;
+  summaryClassName?: string;
 };
 
 const VISIBLE_PARTY_COUNT = 3;
@@ -42,6 +44,8 @@ export default function RaidOftenUsedParties({
   allStudents,
   recruitedStudentTiers,
   showUnrecruitedStudents = false,
+  cardClassName,
+  summaryClassName,
 }: RaidOftenUsedPartiesProps) {
   if (oftenUsedParties.length === 0) {
     return <div className="py-8 text-center text-muted-foreground">많이 사용된 편성 데이터가 없어요</div>;
@@ -57,6 +61,8 @@ export default function RaidOftenUsedParties({
           allStudents={allStudents}
           recruitedStudentTiers={recruitedStudentTiers}
           showUnrecruitedStudents={showUnrecruitedStudents}
+          cardClassName={cardClassName}
+          summaryClassName={summaryClassName}
         />
       ))}
     </div>
@@ -69,12 +75,16 @@ function OftenUsedPartyCard({
   allStudents,
   recruitedStudentTiers,
   showUnrecruitedStudents,
+  cardClassName,
+  summaryClassName,
 }: {
   rank: number;
   oftenUsedParty: RaidOftenUsedParty;
   allStudents: RaidOftenUsedPartiesProps["allStudents"];
   recruitedStudentTiers: RaidOftenUsedPartiesProps["recruitedStudentTiers"];
   showUnrecruitedStudents: boolean;
+  cardClassName?: string;
+  summaryClassName?: string;
 }) {
   const rows = oftenUsedParty.parties.map((party, partyIndex) =>
     toRaidPartyRow({
@@ -104,6 +114,8 @@ function OftenUsedPartyCard({
       summaryItems={summaryItems}
       popupIdPrefix={`often-used-${rank}`}
       visibleRowCount={VISIBLE_PARTY_COUNT}
+      className={cardClassName}
+      summaryClassName={summaryClassName}
       getStudentActions={(slot) =>
         slot.uid
           ? [

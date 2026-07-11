@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { Role } from "~/models/content.d";
 import type { Attack, Defense } from "~/graphql/graphql";
+import type { Role } from "~/models/content.d";
 import StudentCard from "./StudentCard";
 
 type StudentCardsProps = {
@@ -26,7 +26,7 @@ type StudentCardsProps = {
   }[];
   mobileGrid?: 4 | 5 | 6 | 8;
   pcGrid?: 4 | 6 | 8 | 10 | 12;
-  layout?: "grid" | "wrap";
+  layout?: "grid" | "wrap" | "responsive-wrap";
   cardSize?: "xs" | "sm" | "md" | "lg";
   gap?: "normal" | "tight";
   namePlacement?: "below" | "overlay";
@@ -73,12 +73,25 @@ export default function StudentCards({
     md: "w-14 sm:w-16",
     lg: "w-16 sm:w-20",
   }[cardSize];
+  const responsiveWrapCardSizeClass = {
+    xs: "sm:w-12",
+    sm: "sm:w-14",
+    md: "sm:w-16",
+    lg: "sm:w-20",
+  }[cardSize];
+  const responsiveWrapGapClass = gap === "tight" ? "gap-1 sm:gap-x-1.5 sm:gap-y-2" : "gap-1 sm:gap-x-2 sm:gap-y-3";
   const containerClassName =
     layout === "wrap"
       ? `relative flex flex-wrap items-start ${wrapGapClass}`
-      : `relative grid ${gridClass} ${pcGridClass} ${gapClass}`;
+      : layout === "responsive-wrap"
+        ? `relative grid ${gridClass} ${responsiveWrapGapClass} sm:flex sm:flex-wrap sm:items-start`
+        : `relative grid ${gridClass} ${pcGridClass} ${gapClass}`;
   const itemClassName =
-    layout === "wrap" ? `scroll-mt-20 md:scroll-mt-4 shrink-0 ${wrapCardSizeClass}` : "scroll-mt-20 md:scroll-mt-4";
+    layout === "wrap"
+      ? `scroll-mt-20 shrink-0 md:scroll-mt-4 ${wrapCardSizeClass}`
+      : layout === "responsive-wrap"
+        ? `scroll-mt-20 md:scroll-mt-4 sm:shrink-0 ${responsiveWrapCardSizeClass}`
+        : "scroll-mt-20 md:scroll-mt-4";
 
   return (
     <div className={containerClassName}>

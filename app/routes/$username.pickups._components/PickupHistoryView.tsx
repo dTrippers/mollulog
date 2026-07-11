@@ -69,7 +69,7 @@ export default function PickupHistoryView({
   const visibleComment = comment?.body.trim() ? comment : null;
 
   return (
-    <article className="my-4 rounded-lg bg-card p-5">
+    <article className="my-4 rounded-lg bg-card p-5 shadow-md shadow-black/5 dark:shadow-sm dark:shadow-black/20">
       <div className="flex flex-col gap-5 md:flex-row md:gap-6">
         <div className="min-w-0 flex-1 space-y-4">
           <PickupHeader event={event} />

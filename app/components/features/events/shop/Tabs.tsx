@@ -14,7 +14,7 @@ type TabsProps = {
 
 export function Tabs({ tabs, activeTabId, setActiveTabId }: TabsProps) {
   return (
-    <div className="my-2 flex border-b border-neutral-200 dark:border-neutral-700 overflow-x-auto">
+    <div className="my-2 flex overflow-x-auto border-b border-border">
       {tabs.map(({ tabId, name, imageUrl }) => {
         const isActive = activeTabId === tabId;
         return (
@@ -24,11 +24,11 @@ export function Tabs({ tabs, activeTabId, setActiveTabId }: TabsProps) {
             onClick={() => setActiveTabId(tabId)}
             aria-pressed={isActive}
             className={cn(`
-                flex items-center gap-1 py-2 px-4 border-b-3 transition-colors shrink-0 hover:bg-neutral-100 dark:hover:bg-neutral-900
+                flex shrink-0 cursor-pointer items-center gap-1 border-b-3 px-4 py-2 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30
                 ${
                   isActive
-                    ? "border-b-blue-500 text-neutral-800 dark:text-neutral-200"
-                    : "border-b-transparent text-neutral-600 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-neutral-200"
+                    ? "border-b-primary text-foreground"
+                    : "border-b-transparent text-muted-foreground hover:text-foreground"
                 }
             `)}
           >

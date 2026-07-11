@@ -17,17 +17,18 @@ import {
   EmptyView,
   FilterButtons,
   type NumberInputFlowNavigationInputProps,
+  SectionCard,
   useNumberInputFlowNavigation,
 } from "~/components/primitives";
 import {
   type AggregatedGrowthResourceRequirements,
   CHARACTER_EXP_REPORTS,
+  calculateEquipmentTierCoverage,
+  compareGrowthResourceKindOrder,
   EQUIPMENT_TYPE_LABELS,
   EQUIPMENT_TYPE_ORDER,
   GROWTH_RESOURCE_KIND_LABELS,
   GROWTH_RESOURCE_KIND_ORDER,
-  calculateEquipmentTierCoverage,
-  compareGrowthResourceKindOrder,
   getEquipmentBlueprintChoiceBoxTier,
   getEquipmentBlueprintChoiceBoxUid,
   getEquipmentResourceTierLabel,
@@ -38,7 +39,7 @@ import {
   getSkillMaterialResourceChoiceBoxUid,
 } from "~/domain/growth-resource";
 import { cn } from "~/lib/utils";
-import { type ItemCatalogResource, getGrowthPlannerCatalogResourceKindOrder } from "~/models/item-catalog";
+import { getGrowthPlannerCatalogResourceKindOrder, type ItemCatalogResource } from "~/models/item-catalog";
 
 type ResourceInventoryEditorProps = {
   resources: ItemCatalogResource[];
@@ -185,9 +186,9 @@ export default function ResourceInventoryEditor({
         {hasCreditRequirement ? <CreditRequirementSummary credit={requiredResources.credit} /> : null}
 
         {resourceGroups.length === 0 && !hasCreditRequirement ? (
-          <div className="rounded-md bg-card p-8">
+          <SectionCard className="p-8 md:p-8">
             <EmptyView Icon={ArchiveBoxIcon} text="조건에 맞는 재화가 없어요" />
-          </div>
+          </SectionCard>
         ) : (
           resourceGroups.map((group) => (
             <div
@@ -213,7 +214,7 @@ export default function ResourceInventoryEditor({
 
       {hasChanges ? (
         <div className="fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-layer-navigation px-4 py-3 lg:bottom-0 lg:left-72 xl:left-84">
-          <div className="mx-auto flex max-w-4xl flex-col gap-3 rounded-lg bg-background/95 p-4 shadow-lg backdrop-blur-sm md:flex-row md:items-center md:justify-between">
+          <div className="mx-auto flex max-w-4xl flex-col gap-3 rounded-lg border border-border bg-card/95 p-4 shadow-lg shadow-black/10 backdrop-blur-sm md:flex-row md:items-center md:justify-between dark:shadow-black/30">
             <div>
               <p className="text-sm font-semibold text-foreground">변경 사항이 있습니다</p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -238,15 +239,15 @@ export default function ResourceInventoryEditor({
 
 function CreditRequirementSummary({ credit }: { credit: number }) {
   return (
-    <section className="overflow-hidden rounded-md bg-card">
-      <div className="border-b border-border bg-muted/60 px-3 py-2">
+    <SectionCard className="overflow-hidden space-y-0 p-0 md:p-0">
+      <div className="px-3 pt-3">
         <h2 className="text-sm font-semibold text-foreground">크레딧</h2>
       </div>
-      <div className="px-3 py-3">
+      <div className="px-3 pt-3 pb-3">
         <p className="text-xs font-medium text-muted-foreground">필요 크레딧</p>
         <p className="mt-1 text-lg font-semibold tabular-nums text-foreground">{credit.toLocaleString()}</p>
       </div>
-    </section>
+    </SectionCard>
   );
 }
 
@@ -383,8 +384,8 @@ function ResourceGroup({
   const isCharacterExpGroup = kindOrder === CHARACTER_EXP_KIND_ORDER;
   const isFavorGroup = kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor;
   return (
-    <section className="overflow-hidden rounded-md bg-card">
-      <div className="border-b border-border bg-muted/60 px-3 py-2">
+    <SectionCard className="overflow-hidden space-y-0 p-0 md:p-0">
+      <div className="px-3 pt-3">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-foreground">{GROWTH_RESOURCE_KIND_LABELS[kindOrder] ?? "기타"}</h2>
           {isFavorGroup ? (
@@ -435,7 +436,7 @@ function ResourceGroup({
           ))}
         </div>
       )}
-    </section>
+    </SectionCard>
   );
 }
 
@@ -895,7 +896,7 @@ function CharacterExpSummary({
   const ownedCharacterExp = calculateOwnedCharacterExp(draftQuantities);
   const balance = ownedCharacterExp - requiredCharacterExp;
   return (
-    <div className="border-b border-border bg-background px-3 py-2">
+    <div className="border-b border-border px-3 py-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <CharacterExpSummaryItem label="필요 경험치" value={requiredCharacterExp.toLocaleString()} />
         <CharacterExpSummaryItem label="보유 경험치" value={ownedCharacterExp.toLocaleString()} />
@@ -922,7 +923,7 @@ function CharacterExpSummaryItem({
   valueClassName?: string;
 }) {
   return (
-    <div className="rounded-md bg-muted/30 px-3 py-2">
+    <div className="px-1 py-1">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className={cn("mt-1 text-sm font-semibold tabular-nums text-foreground", valueClassName)}>{value}</p>
     </div>

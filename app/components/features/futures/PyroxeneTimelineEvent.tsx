@@ -3,11 +3,11 @@ import { StarIcon } from "@heroicons/react/16/solid";
 import dayjs from "dayjs";
 import { useMemo, useState } from "react";
 import { StudentCards } from "~/components/features/students";
-import { Button, NumberInput, ResourceCard } from "~/components/primitives";
+import { Button, NumberInput, ResourceCard, SectionCard } from "~/components/primitives";
 import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
-import { type PickupResources, isFreeRecruitment100Event } from "~/domain/pyroxene-timeline";
+import { isFreeRecruitment100Event, type PickupResources } from "~/domain/pyroxene-timeline";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";
 
@@ -71,14 +71,14 @@ export default function PyroxeneTimelineEvent({
   };
 
   return (
-    <div className="relative my-3">
-      <div className="rounded-lg bg-neutral-100 p-4 dark:bg-neutral-900 md:p-5">
+    <div className="relative py-1">
+      <SectionCard className="p-4 shadow-md dark:shadow-md md:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:gap-5">
           <div className="min-w-0 flex-1 space-y-3">
             <div className="min-w-0">
-              <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+              <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 <span>
-                  {dayjs(event.since).format("YYYY-MM-DD")} ~ {dayjs(event.until).format("YYYY-MM-DD")}
+                  {dayjs(event.since).format("MM.DD")} ~ {dayjs(event.until).format("MM.DD")}
                 </span>
                 {freeRecruitment100 && (
                   <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
@@ -87,7 +87,7 @@ export default function PyroxeneTimelineEvent({
                   </span>
                 )}
               </div>
-              <h3 className="line-clamp-2 whitespace-pre-line text-base font-semibold leading-tight text-neutral-950 dark:text-neutral-50">
+              <h3 className="line-clamp-2 whitespace-pre-line text-base font-semibold leading-tight text-foreground">
                 {event.name}
               </h3>
             </div>
@@ -106,9 +106,9 @@ export default function PyroxeneTimelineEvent({
           <aside className="relative flex flex-col gap-2 md:w-60">
             {completed ? (
               <>
-                <div className="rounded-md border border-neutral-200/80 bg-white/70 px-3 py-2 dark:border-neutral-700/80 dark:bg-neutral-950/40">
-                  <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">상태</p>
-                  <p className="mt-0.5 font-bold text-neutral-950 dark:text-neutral-50">모집 완료</p>
+                <div className="rounded-md bg-muted px-3 py-2">
+                  <p className="text-xs font-medium text-muted-foreground">상태</p>
+                  <p className="mt-0.5 font-semibold text-foreground">모집 완료</p>
                 </div>
                 <div className="flex justify-end">
                   <Button
@@ -143,6 +143,7 @@ export default function PyroxeneTimelineEvent({
                     onClick={() => setShowExpectedTrialsAction((prev) => !prev)}
                     variant="secondary"
                     size="xs"
+                    className="bg-muted hover:bg-foreground/10"
                   />
                   {canComplete && (
                     <Button
@@ -167,7 +168,7 @@ export default function PyroxeneTimelineEvent({
             )}
           </aside>
         </div>
-      </div>
+      </SectionCard>
 
       <CompletePickupPopover
         show={showCompleteAction}
@@ -191,7 +192,7 @@ function TimelineEventStats({
   resourceDelta: PickupResources;
 }) {
   return (
-    <div className="grid divide-y divide-neutral-200 overflow-hidden rounded-md border border-neutral-200/80 bg-white/70 dark:divide-neutral-700 dark:border-neutral-700/80 dark:bg-neutral-950/40 sm:grid-cols-2 sm:divide-x sm:divide-y-0 md:block md:divide-x-0 md:divide-y">
+    <div className="grid divide-y divide-border/70 overflow-hidden rounded-md bg-muted sm:grid-cols-2 sm:divide-x sm:divide-y-0 md:block md:divide-x-0 md:divide-y">
       <TimelineEventStat label="모집 목표" value={expectedTrialsLabel} />
       <TimelineResourcesStat
         pyroxene={accumulatedResources.pyroxene}
@@ -208,8 +209,8 @@ function TimelineEventStats({
 function TimelineEventStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="px-3 py-2">
-      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{label}</p>
-      <p className="mt-0.5 text-sm font-bold text-neutral-950 dark:text-neutral-50 md:text-base">{value}</p>
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-sm font-semibold text-foreground md:text-base">{value}</p>
     </div>
   );
 }
@@ -231,7 +232,7 @@ function TimelineResourcesStat({
 }) {
   return (
     <div className="px-3 py-2">
-      <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">남은 재화</p>
+      <p className="text-xs font-medium text-muted-foreground">남은 재화</p>
       <div className="mt-1 space-y-1.5">
         <CompactResource
           resourceType={ResourceTypeEnum.Currency}
@@ -302,8 +303,8 @@ function ExpectedTrialsPopover({
       leaveTo="opacity-0 scale-95"
       className="absolute top-full right-0 z-10 mt-2"
     >
-      <div className="min-w-[280px] rounded-lg border border-neutral-200 bg-white/90 p-4 shadow-lg backdrop-blur-sm dark:border-neutral-700 dark:bg-black/80">
-        <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">이 이벤트의 목표 모집 횟수를 입력해주세요</p>
+      <div className="min-w-[280px] rounded-lg border border-border bg-popover/95 p-4 text-popover-foreground shadow-lg backdrop-blur-sm">
+        <p className="mb-2 text-sm text-muted-foreground">이 이벤트의 목표 모집 횟수를 입력해주세요</p>
         <div className="mb-4">
           <NumberInput size="md" defaultValue={value} onChange={onChange} />
         </div>
@@ -337,7 +338,7 @@ function CompletePickupPopover({
       leaveTo="opacity-0 scale-95"
       className="absolute top-full left-0 z-10 mt-2 w-full"
     >
-      <div className="rounded-lg border border-neutral-200 bg-white/90 p-4 shadow-lg backdrop-blur-sm dark:border-neutral-700 dark:bg-black/80">
+      <div className="rounded-lg border border-border bg-popover/95 p-4 text-popover-foreground shadow-lg backdrop-blur-sm">
         <ResourcesInput
           description="모집 완료 시점의 재화 수량을 입력해주세요."
           initialResources={initialResources}
@@ -354,7 +355,7 @@ function RemainingResourceText({ count, diff }: { count: number; diff: number })
       <p className={`text-sm font-semibold ${count > 0 ? "text-green-600" : count === 0 ? "" : "text-red-500"}`}>
         {count.toLocaleString()}
       </p>
-      <p className="-mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+      <p className="-mt-0.5 text-xs text-muted-foreground">
         ({diff === 0 ? "-" : `${Math.abs(diff).toLocaleString()}개 사용`})
       </p>
     </div>

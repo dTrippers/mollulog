@@ -1,4 +1,4 @@
-import { ArrowPathIcon, ChevronDownIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { StudentSelectForm } from "~/components/features/forms";
@@ -7,8 +7,8 @@ import { Button, NumberInput, ProfileImage, ResourceCard, useNumberInputGridNavi
 import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
-  WEAPON_LEVEL_MAX_LEVEL,
   getWeaponLevelMaxByTier,
+  WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
 import { getRelationshipLevelValidationError } from "~/models/relationship-level";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
@@ -125,6 +125,7 @@ const cellBase = "border-b border-neutral-200 dark:border-neutral-700";
 const dataCellClass = `${cellBase} w-25 px-1 py-2`;
 const targetCellClass = `${cellBase} w-25 px-1 py-1.5 bg-blue-50/40 dark:bg-blue-950/10`;
 const bulkActionCellClass = `${cellBase} border-l border-neutral-200 px-2 py-2 dark:border-neutral-700`;
+const stickyRowLabelClass = "sticky left-0 z-20 border-r border-neutral-200 dark:border-neutral-700";
 const studentHeaderContentClass =
   "sticky left-3 z-10 flex w-max max-w-[calc(100vw-2rem)] items-center gap-2 bg-neutral-100 pr-3 dark:bg-neutral-900";
 
@@ -694,11 +695,9 @@ function GrowthRow({
         </td>
       </tr>
 
-      <GrowthFieldHeaderRow />
-
       <tr className="relative align-top">
         <td
-          className={`${cellBase} w-10 px-1 py-2 text-center text-xs font-medium text-neutral-400 dark:text-neutral-500`}
+          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-card px-1 py-2 text-center text-xs font-medium text-neutral-400 dark:text-neutral-500`}
         >
           현재
         </td>
@@ -826,7 +825,7 @@ function GrowthRow({
 
       <tr className="align-top">
         <td
-          className={`${cellBase} w-10 px-1 py-1.5 text-center text-xs font-medium text-blue-500 bg-blue-50/40 dark:text-blue-400 dark:bg-blue-950/10`}
+          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-blue-50 px-1 py-1.5 text-center text-xs font-medium text-blue-500 dark:bg-neutral-900 dark:text-blue-400`}
         >
           목표
         </td>
@@ -897,19 +896,14 @@ function GrowthRow({
 
       <tr className="align-top">
         <td
-          className={`${cellBase} w-10 px-1 py-2 text-center text-xs font-medium text-emerald-600 bg-emerald-50/60 dark:text-emerald-400 dark:bg-emerald-950/10`}
+          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-emerald-50 px-1 py-2 text-center text-xs font-medium text-emerald-600 dark:bg-neutral-900 dark:text-emerald-400`}
         >
           <button
             type="button"
-            className="flex w-full items-center justify-center gap-0.5"
+            className="flex w-full items-center justify-center"
             aria-expanded={isResourceRequirementsOpen}
             onClick={() => setIsResourceRequirementsOpen((open) => !open)}
           >
-            {isResourceRequirementsOpen ? (
-              <ChevronDownIcon className="size-3" />
-            ) : (
-              <ChevronRightIcon className="size-3" />
-            )}
             <span className="whitespace-nowrap">재화</span>
           </button>
         </td>
@@ -920,11 +914,26 @@ function GrowthRow({
           <div
             className={`${isCalculatingResources ? "opacity-40 pointer-events-none" : ""} transition-opacity duration-200`}
           >
-            {!isResourceRequirementsOpen ? (
-              <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
-                {hasResourceRequirements ? "펼쳐서 필요 재화 확인" : "필요한 재화가 없어요"}
-              </p>
-            ) : null}
+            <button
+              type="button"
+              className="flex w-full items-center justify-start gap-1.5 text-left text-xs font-medium text-neutral-500 dark:text-neutral-400"
+              aria-expanded={isResourceRequirementsOpen}
+              disabled={!hasResourceRequirements}
+              onClick={() => setIsResourceRequirementsOpen((open) => !open)}
+            >
+              <span>
+                {hasResourceRequirements
+                  ? isResourceRequirementsOpen
+                    ? "필요 재화 접기"
+                    : "펼쳐서 필요 재화 확인"
+                  : "필요한 재화가 없어요"}
+              </span>
+              {hasResourceRequirements ? (
+                <ChevronDownIcon
+                  className={`size-4 shrink-0 transition-transform ${isResourceRequirementsOpen ? "rotate-180" : ""}`}
+                />
+              ) : null}
+            </button>
             <div
               className="overflow-hidden transition-all duration-200 ease-out"
               style={{
@@ -933,7 +942,7 @@ function GrowthRow({
               }}
               aria-hidden={!isResourceRequirementsOpen}
             >
-              <div ref={resourceRequirementsContentRef}>
+              <div ref={resourceRequirementsContentRef} className="pt-2">
                 {hasResourceRequirements ? (
                   <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
                     {student.resourceRequirements.characterExp > 0 ? (
@@ -976,7 +985,7 @@ function GrowthRow({
 function GrowthFieldHeaderRow() {
   return (
     <tr className="bg-neutral-50 text-left text-xs font-semibold tracking-wide text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
-      <th className={`${cellBase} px-1 py-3`} />
+      <th className={`${cellBase} ${stickyRowLabelClass} z-30 bg-neutral-50 px-1 py-3 dark:bg-neutral-900`} />
       <th className={`${cellBase} px-2 py-3 text-center`}>성급</th>
       <th className={`${cellBase} min-w-20 px-2 py-3 text-center`}>인연 랭크</th>
       <th className={`${cellBase} px-2 py-3 text-center`}>일괄 적용</th>
@@ -986,6 +995,20 @@ function GrowthFieldHeaderRow() {
         </th>
       ))}
     </tr>
+  );
+}
+
+function GrowthTableColumnGroup() {
+  return (
+    <colgroup>
+      <col style={{ width: 40 }} />
+      <col style={{ width: 200 }} />
+      <col style={{ width: 100 }} />
+      <col style={{ width: 80 }} />
+      {fieldDefinitions.map(({ key }) => (
+        <col key={key} style={{ width: 100 }} />
+      ))}
+    </colgroup>
   );
 }
 
@@ -1002,7 +1025,7 @@ function AddStudentControl({
   const [selectKey, setSelectKey] = useState(0);
 
   return (
-    <div className="flex items-start gap-3">
+    <div className="relative z-40 flex items-start gap-3">
       <div className="w-full max-w-md">
         <StudentSelectForm
           key={selectKey}
@@ -1073,25 +1096,58 @@ export default function GrowthTable({
   onStudentUpdate: (student: GrowthStudent) => void;
 }) {
   const numberInputGridNavigation = useNumberInputGridNavigation();
+  const headerScrollRef = useRef<HTMLDivElement>(null);
 
   return (
     <div className="space-y-2">
       <AddStudentControl availableStudents={availableStudents} isEmpty={students.length === 0} />
-      <div className="max-w-full overflow-x-auto">
-        <div className="inline-block align-top rounded-lg border border-neutral-200 dark:border-neutral-700">
-          <table className="w-max border-collapse">
-            <tbody>
-              {students.map((student, studentIndex) => (
-                <GrowthRow
-                  key={student.uid}
-                  student={student}
-                  rowIndexBase={studentIndex * 2}
-                  numberInputGridNavigation={numberInputGridNavigation}
-                  onStudentUpdate={onStudentUpdate}
-                />
-              ))}
-            </tbody>
+      <div>
+        <div
+          ref={headerScrollRef}
+          className="sticky top-[var(--mobile-header-height)] z-30 max-w-full overflow-hidden rounded-t-lg border-x border-t border-border bg-card lg:top-0"
+        >
+          <table className="w-[1720px] table-fixed border-collapse">
+            <GrowthTableColumnGroup />
+            <thead>
+              <GrowthFieldHeaderRow />
+            </thead>
           </table>
+        </div>
+        <div
+          className="max-w-full overflow-x-auto"
+          onScroll={(event) => {
+            if (headerScrollRef.current) {
+              headerScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+            }
+          }}
+        >
+          <div className="inline-block overflow-clip rounded-b-lg border-x border-b border-border align-top">
+            <table className="w-[1720px] table-fixed border-collapse">
+              <GrowthTableColumnGroup />
+              <thead>
+                <tr className="sr-only">
+                  <th>구분</th>
+                  <th>성급</th>
+                  <th>인연 랭크</th>
+                  <th>일괄 적용</th>
+                  {fieldDefinitions.map(({ key, label }) => (
+                    <th key={key}>{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {students.map((student, studentIndex) => (
+                  <GrowthRow
+                    key={student.uid}
+                    student={student}
+                    rowIndexBase={studentIndex * 2}
+                    numberInputGridNavigation={numberInputGridNavigation}
+                    onStudentUpdate={onStudentUpdate}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>

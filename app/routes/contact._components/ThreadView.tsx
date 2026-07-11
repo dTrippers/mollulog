@@ -1,8 +1,8 @@
-import dayjs from "dayjs";
 import { ChatBubbleLeftRightIcon } from "@heroicons/react/24/outline";
+import dayjs from "dayjs";
+import { Callout } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import type { FeedbackReply, FeedbackTicket } from "~/models/feedback";
-import { Callout } from "~/components/primitives";
 import FeedbackStatusBadge from "./FeedbackStatusBadge";
 
 type ThreadViewProps = {
@@ -12,7 +12,7 @@ type ThreadViewProps = {
 
 export default function ThreadView({ ticket, replies }: ThreadViewProps) {
   return (
-    <section className="rounded-lg bg-card p-5 text-card-foreground">
+    <section className="rounded-lg bg-card p-5 text-card-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <h2 className="text-lg font-semibold md:text-xl">{ticket.title}</h2>

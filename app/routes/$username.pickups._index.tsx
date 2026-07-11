@@ -182,7 +182,7 @@ export default function UserPickups() {
   return (
     <div className="my-8">
       <SubTitle text="모집 통계" />
-      <div className="grid grid-cols-3 rounded-lg bg-card px-2 py-4 md:px-4 md:py-6">
+      <div className="grid grid-cols-3 rounded-lg bg-card px-2 py-4 shadow-md shadow-black/5 dark:shadow-sm dark:shadow-black/20 md:px-4 md:py-6">
         <div className="text-center">
           <p className="text-xs text-muted-foreground md:text-base">총 모집 횟수</p>
           <p className="text-lg font-bold text-foreground md:text-2xl">{recruitmentStats.trial} 회</p>

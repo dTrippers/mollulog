@@ -1,6 +1,6 @@
 import { Transition } from "@headlessui/react";
 import { useEffect, useState } from "react";
-import { Button, Checkbox, ResourceCard } from "~/components/primitives";
+import { Button, Checkbox, ResourceCard, SectionCard } from "~/components/primitives";
 import type { PyroxeneCollectedSourceCandidate } from "~/domain/pyroxene-schedule";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
@@ -66,18 +66,18 @@ export default function PyroxeneInitialResources({
 
   return (
     <div className="relative">
-      <div className="my-4 rounded-lg border border-neutral-200 p-4 dark:border-neutral-700">
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <SectionCard className="shadow-md dark:shadow-md">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-3 sm:grid-cols-[repeat(3,minmax(0,1fr))_auto] sm:items-center md:gap-x-4">
           {resourceItems.map(({ type, itemUid, label, resourceKey }) => (
-            <div key={itemUid} className="flex items-start gap-2">
+            <div key={itemUid} className="flex min-w-0 items-center gap-2.5">
               <ResourceCard resourceType={type} itemUid={itemUid} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">{label}</p>
-                <p className="my-1 text-sm">{resources[resourceKey].toLocaleString()}</p>
+                <p className="truncate text-xs font-medium text-muted-foreground">{label}</p>
+                <p className="mt-0.5 text-sm font-semibold tabular-nums">{resources[resourceKey].toLocaleString()}</p>
               </div>
             </div>
           ))}
-          <div className="mt-2 flex items-center justify-end gap-2">
+          <div className="col-span-3 flex items-center justify-end gap-2 sm:col-span-1">
             {isEditing ? (
               <Button text="취소" variant="secondary" size="xs" onClick={handleCancel} />
             ) : (
@@ -85,7 +85,7 @@ export default function PyroxeneInitialResources({
             )}
           </div>
         </div>
-      </div>
+      </SectionCard>
       <Transition
         show={isEditing}
         as="div"
@@ -97,7 +97,7 @@ export default function PyroxeneInitialResources({
         leaveTo="opacity-0 scale-95"
         className="absolute top-full left-0 z-10 mt-2 w-full"
       >
-        <div className="rounded-lg border border-neutral-200 bg-white/90 p-4 shadow-lg backdrop-blur-sm dark:border-neutral-700 dark:bg-black/80">
+        <div className="rounded-lg border border-border bg-popover/95 p-4 text-popover-foreground shadow-lg backdrop-blur-sm">
           <ResourcesInput
             description="현재 보유한 재화 수량을 입력해주세요."
             initialResources={editedResources}
@@ -108,9 +108,9 @@ export default function PyroxeneInitialResources({
             }}
           />
           {collectedSourceCandidates.length > 0 && (
-            <div className="mt-4 border-t border-neutral-200 pt-4 dark:border-neutral-700">
+            <div className="mt-4 border-t border-border pt-4">
               <p className="text-sm font-semibold">이미 받은 보상</p>
-              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 선택한 이벤트 보상은 이후 그래프에서 중복 계산하지 않아요.
               </p>
               <div className="mt-3 space-y-2">
@@ -123,9 +123,7 @@ export default function PyroxeneInitialResources({
                       <span className="flex flex-col">
                         <span className="font-medium">{candidate.title}</span>
                         {candidate.description && (
-                          <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                            {candidate.description}
-                          </span>
+                          <span className="text-xs text-muted-foreground">{candidate.description}</span>
                         )}
                       </span>
                     }

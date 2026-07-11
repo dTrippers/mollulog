@@ -2,7 +2,7 @@ import { PlusCircleIcon } from "@heroicons/react/16/solid";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import type { StudentGradingTimelineItem } from "~/components/features/students";
-import { ProfileImage, TagIcon } from "~/components/primitives";
+import { ProfileImage, SectionCard, TagIcon } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
 
@@ -35,7 +35,7 @@ export default function StudentGradingChart({
   const maxCount = Math.max(...tagCounts.map((tagCount) => tagCount.count), 1);
 
   return (
-    <div className="border border-neutral-200 dark:border-neutral-700 rounded-lg p-4 bg-white dark:bg-neutral-800/50">
+    <SectionCard>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-x-6">
         {tagCounts.map(({ tag, displayName, count }) => (
           <GradingTagMeter key={tag} tag={tag} displayName={displayName} count={count} maxCount={maxCount} />
@@ -81,7 +81,7 @@ export default function StudentGradingChart({
           )}
         </ReviewSummaryRow>
       </div>
-    </div>
+    </SectionCard>
   );
 }
 

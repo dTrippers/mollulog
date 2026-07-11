@@ -43,7 +43,7 @@ export default function PyroxenePlannerOptionsPanel({ options, onOptionsChange }
           }
         />
       ))}
-      <p className="basis-full pt-1 text-xs text-neutral-500 dark:text-neutral-400">{selectedOption.description}</p>
+      <p className="basis-full pt-1 text-xs leading-relaxed text-muted-foreground">{selectedOption.description}</p>
     </PanelOptionGroup>
   );
 }

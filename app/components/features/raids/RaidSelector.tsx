@@ -51,16 +51,23 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
     <div className="relative w-full">
       <button
         type="button"
-        className="group relative w-full text-left"
+        className="group relative w-full cursor-pointer rounded-lg text-left transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
       >
         <div className="relative">
-          {currentRaid && <RaidListItem raid={currentRaid} reserveRightAccessorySpace className="shadow-sm" />}
+          {currentRaid && (
+            <RaidListItem
+              raid={currentRaid}
+              reserveRightAccessorySpace
+              className="shadow-sm group-hover:shadow-md"
+              contentClassName="group-hover:bg-card/80"
+            />
+          )}
           <ChevronDownIcon
             className={cn(`
-              absolute top-1/2 right-3 size-5 -translate-y-1/2 flex-shrink-0 text-muted-foreground transition-transform
+              absolute top-1/2 right-3 size-5 -translate-y-1/2 flex-shrink-0 text-muted-foreground transition group-hover:text-foreground
               ${isOpen ? "rotate-180" : ""}
             `)}
           />
@@ -90,21 +97,26 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
           <button
             type="button"
             onClick={() => setIsOpen(false)}
-            className="rounded-md p-1 hover:bg-muted"
+            className="cursor-pointer rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="총력전 선택 닫기"
           >
             <XMarkIcon className="size-6" strokeWidth={2} />
           </button>
         </div>
-        <div className="no-scrollbar mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg lg:max-h-96">
+        <div className="no-scrollbar mt-2 max-h-64 divide-y divide-border/60 overflow-y-auto lg:max-h-96">
           {selectableRaids.map((raid) => (
             <Link
               to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
               key={raid.uid}
-              className="block rounded-lg"
+              className="group block cursor-pointer"
               onClick={() => setIsOpen(false)}
             >
-              <RaidListItem raid={raid} />
+              <RaidListItem
+                raid={raid}
+                className="rounded-none bg-transparent shadow-none hover:bg-transparent dark:shadow-none"
+                imageClassName="scale-105 opacity-20 blur-[1px]"
+                contentClassName="rounded-md bg-transparent px-3 py-3 group-hover:bg-foreground/10"
+              />
             </Link>
           ))}
         </div>

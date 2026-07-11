@@ -1,20 +1,20 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Dropdown, EmptyView } from "~/components/primitives";
+import { Dropdown, EmptyView, SectionCard } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { raidTypeToParam } from "~/domain/raid";
 import { Defense } from "~/graphql/graphql";
-import { type UtcIsoString, formatInstant } from "~/lib/date-time";
+import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import type { RaidStatistics } from "~/lib/ranks/stats";
 import { defenseTypeColor, defenseTypeLocale, raidTypeLocale } from "~/locales/ko";
-import { raidTypeToParam } from "~/domain/raid";
 import type { RaidScheduleListItem } from "~/models/raid";
+import { formatTierLabel, TIER_COLORS } from "./raidTierVisual";
 import {
+  buildStudentRaidUsageChartData,
   type StudentRaidUsageChartRow,
   type StudentRaidUsageDefenseFilter,
-  buildStudentRaidUsageChartData,
 } from "./StudentRaidUsageChartModel";
-import { TIER_COLORS, formatTierLabel } from "./raidTierVisual";
 
 type StudentRaidUsageChartProps = {
   releaseAt: UtcIsoString | null;
@@ -100,11 +100,8 @@ export default function StudentRaidUsageChart({ releaseAt, raids, statistics }: 
   }
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
-      <div className="mb-3 flex flex-col gap-1">
-        <p className="text-base font-bold">역대 편성 횟수</p>
-      </div>
-      <div className="mb-2">
+    <SectionCard title="역대 편성 횟수">
+      <div>
         <Dropdown
           label="방어 타입"
           value={selectedDefenseType}
@@ -201,7 +198,7 @@ export default function StudentRaidUsageChart({ releaseAt, raids, statistics }: 
         </ResponsiveContainer>
       </div>
       <TierLegend tierKeys={chartData.tierKeys} />
-    </div>
+    </SectionCard>
   );
 }
 

@@ -189,7 +189,7 @@ function ProfileHeader({
   onUnfollow,
 }: ProfileHeaderProps) {
   return (
-    <section className="rounded-lg bg-neutral-50 p-5 dark:bg-neutral-900/50 md:p-6">
+    <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
       <div className="flex items-center gap-4">
         <ProfileImage studentUid={profileStudentId} imageSize={12} />
         <div className="min-w-0 flex-1">

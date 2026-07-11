@@ -9,7 +9,6 @@ import {
   useFetcher,
   useLoaderData,
   useLocation,
-  useMatches,
   useNavigation,
 } from "react-router";
 import LoadingBar, { type LoadingBarRef } from "react-top-loading-bar";
@@ -17,21 +16,19 @@ import type { Route } from "./+types/root";
 import { getActiveSensei } from "./auth/authenticator.server";
 import { getPreference } from "./auth/preference.server";
 import { ErrorPage, Footer, NavigationBar, ServerErrorPage } from "./components/features/layout";
-import { type PageLayoutHandle, type PageWidth, pageWidthClassName } from "./components/features/layout/page-width";
 import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { captureClientError } from "./lib/observability.client";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
-import { cn } from "./lib/utils";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
 const themeConfig = {
   dark: {
-    backgroundColor: "#171717",
+    backgroundColor: "#262626",
   },
   light: {
     backgroundColor: "#fafafa",
@@ -186,13 +183,8 @@ export default function App() {
   }, []);
 
   const location = useLocation();
-  const matches = useMatches();
   const pathname = location.pathname;
   const routeKey = location.key;
-  const pageWidth = matches.reduce<PageWidth>((currentWidth, match) => {
-    const handle = match.handle as PageLayoutHandle | undefined;
-    return handle?.pageWidth ?? currentWidth;
-  }, "default");
   useEffect(() => {
     void routeKey;
     const scrollableContainer = document.querySelector(".mllg-content-area") as HTMLElement;
@@ -217,20 +209,13 @@ export default function App() {
             hasUnreadFeedbackReplies={navigationBarContents.hasUnreadFeedbackReplies}
           />
           <div className="mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0">
-            <div
-              className={cn(
-                "mx-auto w-full px-4 pt-2 pb-6 transition-[max-width] md:px-8 lg:min-h-screen lg:py-6",
-                pageWidthClassName(pageWidth),
-              )}
-            >
-              <div>
-                <TimeZoneProvider timeZone={displayTimeZone}>
-                  <StudentCardPopupProvider key={pathname}>
-                    <Outlet context={{ darkMode, setDarkMode } satisfies RootOutletContext} />
-                  </StudentCardPopupProvider>
-                </TimeZoneProvider>
-                <Footer />
-              </div>
+            <div className="mx-auto w-full max-w-7xl px-4 pt-2 pb-6 md:px-8 lg:min-h-screen lg:py-6">
+              <TimeZoneProvider timeZone={displayTimeZone}>
+                <StudentCardPopupProvider key={pathname}>
+                  <Outlet context={{ darkMode, setDarkMode } satisfies RootOutletContext} />
+                </StudentCardPopupProvider>
+              </TimeZoneProvider>
+              <Footer />
             </div>
           </div>
         </div>

@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/20/solid";
+import { useState } from "react";
 
 type PaginationProps = {
   currentPage: number;
@@ -139,7 +139,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
           type="button"
           onClick={handleJumpToPage}
           disabled={!jumpPage || Number.isNaN(Number.parseInt(jumpPage, 10))}
-          className="cursor-pointer rounded-md bg-muted px-3 py-1 text-sm transition-colors hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-40"
+          className="cursor-pointer rounded-md bg-card px-3 py-1 text-sm shadow-sm shadow-black/5 transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 dark:bg-muted dark:shadow-none"
         >
           이동
         </button>
