@@ -85,6 +85,9 @@ describe("futures loader D1 routing", () => {
     });
     expect(primaryDb.withSession).toHaveBeenCalledWith("first-unconstrained");
     expect(mockedGetFutureContents.mock.calls[0][0].DB).toBe(sessionDb);
+    expect(mockedGetFutureContents).toHaveBeenCalledWith(expect.anything(), false, ctx, {
+      timelineContentSourceMode: "d1",
+    });
     expect(mockedGetContentsCommentSummaries.mock.calls[0][0].DB).toBe(sessionDb);
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(
       expect.anything(),

@@ -5,10 +5,12 @@ import { isInstantAfter, normalizeInstant, nowUtcIso, toUtcIso, type UtcIsoStrin
 import type { Role } from "~/models/content.d";
 import { type getRecruitmentGroupByUid, getRecruitmentGroupsByUids } from "~/models/recruitment";
 import type { TimelineContent } from "~/models/timeline-content";
-import { getTimelineContents } from "~/models/timeline-content";
 import { getUpcomingRaidContents, type RaidInfo } from "./raid-content";
+import { loadTimelineContentsForFutures, type TimelineContentSourceMode } from "./timeline-content-source";
 
-const FUTURE_CONTENTS_CACHE_KEY = cacheKey("route", "futures", 1, "all");
+type FutureContentsOptions = {
+  timelineContentSourceMode?: TimelineContentSourceMode;
+};
 
 export type RecruitmentInfo = {
   recruitmentType: RecruitmentTypeEnum;
@@ -84,14 +86,16 @@ export async function getFutureContents(
   env: Env,
   forceRefresh = false,
   ctx?: ExecutionContext,
+  options: FutureContentsOptions = {},
 ): Promise<FutureContent[]> {
+  const timelineContentSourceMode = options.timelineContentSourceMode ?? "d1";
   const allEnriched = await fetchRouteCached(
     env,
     ctx,
-    FUTURE_CONTENTS_CACHE_KEY,
+    cacheKey("route", "futures", 1, `all:${timelineContentSourceMode}`),
     async () => {
       const [contents, upcomingRaidContents] = await Promise.all([
-        getTimelineContents(env),
+        loadTimelineContentsForFutures(env, timelineContentSourceMode, ctx),
         getUpcomingRaidContents(env, { forceRefresh }),
       ]);
       const upcomingRaidMap = new Map(upcomingRaidContents.map((content) => [content.uid, content]));

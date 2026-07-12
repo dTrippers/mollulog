@@ -2,7 +2,15 @@ import { Client } from "pg";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 
 type HyperdriveEnv = Pick<Env, "HYPERDRIVE">;
-type PostgresClientFactory = (env: HyperdriveEnv) => Client;
+export type PostgresClientFactory = (env: HyperdriveEnv) => Client;
+
+async function enterPostgresSpan<T>(
+  ctx: ExecutionContext | undefined,
+  name: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  return ctx ? ctx.tracing.enterSpan(name, operation) : operation();
+}
 
 /**
  * Creates one PostgreSQL connection for one request or scheduled job.
@@ -21,14 +29,15 @@ export async function withPostgresClient<T>(
   env: HyperdriveEnv,
   operation: (client: Client) => Promise<T>,
   createClient: PostgresClientFactory = createPostgresClient,
+  ctx?: ExecutionContext,
 ): Promise<T> {
   const client = createClient(env);
-  await client.connect();
+  await enterPostgresSpan(ctx, "postgres.connect", () => client.connect());
 
   try {
     return await operation(client);
   } finally {
-    await client.end();
+    await enterPostgresSpan(ctx, "postgres.end", () => client.end());
   }
 }
 

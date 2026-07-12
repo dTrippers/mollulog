@@ -50,7 +50,8 @@
     ]
   },
   "vars": {
-    "CONNECT_API_URL": "http://localhost:8787"
+    "CONNECT_API_URL": "http://localhost:8787",
+    "TIMELINE_CONTENT_SOURCE_MODE": "d1"
   },
 
   // Secrets configuration
@@ -73,7 +74,8 @@
       "vars": {
         "HOST": "https://staging.mollulog.net",
         "CONNECT_API_URL": "https://connect-staging.mollulog.net",
-        "STAGE": "staging"
+        "STAGE": "staging",
+        "TIMELINE_CONTENT_SOURCE_MODE": "compare"
       },
       "kv_namespaces": [
         { "binding": "KV_CACHE", "id": "b957557c116a41168c42136666ef5808" },
@@ -110,7 +112,8 @@
       "vars": {
         "HOST": "https://mollulog.net",
         "CONNECT_API_URL": "https://connect.mollulog.net",
-        "STAGE": "prod"
+        "STAGE": "prod",
+        "TIMELINE_CONTENT_SOURCE_MODE": "compare"
       },
       "kv_namespaces": [
         { "binding": "KV_CACHE", "id": "a613bc84ffeb4362b3deaa05c617a7b3"},

@@ -75,6 +75,21 @@ describe("request-scoped PostgreSQL client", () => {
     expect(end).toHaveBeenCalledTimes(1);
   });
 
+  it("records connect and end as separate spans", async () => {
+    const { client } = createClient();
+    const enterSpan = jest.fn(async (_name: string, operation: () => Promise<unknown>) => operation());
+    const ctx = { tracing: { enterSpan } } as unknown as ExecutionContext;
+
+    await withPostgresClient(
+      createEnv(),
+      async () => "ok",
+      () => client,
+      ctx,
+    );
+
+    expect(enterSpan.mock.calls.map(([name]) => name)).toEqual(["postgres.connect", "postgres.end"]);
+  });
+
   it("runs a read-only smoke query", async () => {
     const { client, query } = createClient();
 

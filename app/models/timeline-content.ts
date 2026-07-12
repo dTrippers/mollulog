@@ -1,87 +1,23 @@
 import { and, eq, gte, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { timelineContentsTable } from "~/db/d1/timeline-contents";
 import {
-  parseTimelineContentNames,
-  selectTimelineContentName,
-  type TimelineContentNameI18n,
-} from "~/domain/timeline-content-name-i18n";
+  type RawTimelineContent,
+  type RunType,
+  type TimelineContent,
+  type TimelineContentType,
+  type TimelineContentVideo,
+  toTimelineContent,
+} from "~/domain/timeline-content";
+import { parseTimelineContentNames, type TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import { normalizeInstant, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 
 const ALL_TIMELINE_CONTENTS_META_CACHE_KEY = cacheKey("source", "timeline-content", 1, "all");
 
-export type TimelineContentType =
-  | "event"
-  | "mini_event"
-  | "pickup"
-  | "main_story"
-  | "mini_story"
-  | "campaign"
-  | "joint_firing_drill"
-  | "raid"
-  | "total_assault"
-  | "elimination"
-  | "unlimit"
-  | "allied"; // 하위 호환
-export type RunType = "first" | "rerun" | "permanent";
+export { timelineContentsTable } from "~/db/d1/timeline-contents";
+export type { RunType, TimelineContent, TimelineContentType, TimelineContentVideo } from "~/domain/timeline-content";
 
-export type TimelineContentVideo = {
-  title: string;
-  youtube: string;
-  start: number | null;
-};
-
-export const timelineContentsTable = sqliteTable("timeline_contents", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  nameI18n: text("name_i18n").notNull().default("{}"),
-  startAt: text("start_at").notNull(),
-  endAt: text("end_at"),
-  endless: int().notNull().default(0),
-  imageUrl: text("image_url"),
-  videos: text().notNull().default("[]"),
-  contentType: text("content_type").notNull(),
-  runType: text("run_type").notNull().default("first"),
-  occurrence: int(),
-  contentUid: text("content_uid"),
-  shopContentUid: text("shop_content_uid"),
-  recruitmentGroupUid: text("recruitment_group_uid"),
-  recruitmentStudentUids: text("recruitment_student_uids"),
-  confirmed: int().notNull().default(0),
-  isSpoiler: int("is_spoiler").notNull().default(0),
-  tags: text().notNull().default("[]"),
-  earnablePyroxene: int("earnable_pyroxene"),
-  createdAt: text("created_at").notNull().default(sql`current_timestamp`),
-  updatedAt: text("updated_at").notNull().default(sql`current_timestamp`),
-  syncedAt: text("synced_at"),
-});
-
-export type TimelineContent = {
-  uid: string;
-  name: string;
-  nameI18n: TimelineContentNameI18n;
-  startAt: UtcIsoString;
-  endAt: UtcIsoString | null;
-  endless: boolean;
-  imageUrl: string | null;
-  videos: TimelineContentVideo[];
-  contentType: TimelineContentType;
-  runType: RunType;
-  occurrence: number | null;
-  contentUid: string | null;
-  shopContentUid: string | null;
-  recruitmentGroupUid: string | null;
-  // null = 그룹의 모든 학생 노출(하위호환 기본값). 값이 있으면 이 이벤트 페이지엔 해당 uid의 학생만 필터링해서 보여줌.
-  recruitmentStudentUids: string[] | null;
-  confirmed: boolean;
-  isSpoiler: boolean;
-  tags: string[];
-  earnablePyroxene: number | null;
-  syncedAt: UtcIsoString | null;
-};
-
-type RawTimelineContent = Omit<TimelineContent, "name">;
 const IN_QUERY_BATCH_SIZE = 90;
 
 function splitIntoBatches<T>(values: T[], batchSize = IN_QUERY_BATCH_SIZE): T[][] {
@@ -118,26 +54,14 @@ function toRaw(row: typeof timelineContentsTable.$inferSelect): RawTimelineConte
   };
 }
 
-function toTimelineContent(raw: RawTimelineContent): TimelineContent {
-  const name = selectTimelineContentName(raw.nameI18n);
-  if (!name) {
-    throw new Error(
-      `timeline content name is missing: uid=${raw.uid}, contentType=${raw.contentType}, contentUid=${raw.contentUid ?? "null"}`,
-    );
-  }
-
-  return { ...raw, name };
-}
-
 export async function getTimelineContent(env: Env, uid: string): Promise<TimelineContent | null> {
   const db = drizzle(env.DB);
   const row = await db.select().from(timelineContentsTable).where(eq(timelineContentsTable.uid, uid)).get();
   return row ? toTimelineContent(toRaw(row)) : null;
 }
 
-export async function getTimelineContents(env: Env): Promise<TimelineContent[]> {
+export async function getTimelineContents(env: Env, now = nowUtcIso()): Promise<TimelineContent[]> {
   const db = drizzle(env.DB);
-  const now = nowUtcIso();
   const rows = await db
     .select()
     .from(timelineContentsTable)
