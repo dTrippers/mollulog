@@ -38,7 +38,7 @@ export default function ContentSelectForm(props: ContentSelectFormProps) {
             <div className={content.boss ? "pr-24 md:pr-28" : ""}>
               <p className="font-semibold whitespace-pre-line">{content.name}</p>
               {content.since && content.until && (
-                <p className="text-sm text-neutral-500">
+                <p className="text-sm text-muted-foreground">
                   {formatInstant(content.since, { timeZone: displayTimeZone, format: "YYYY.MM.DD" })} ~{" "}
                   {formatInstant(content.until, { timeZone: displayTimeZone, format: "YYYY.MM.DD" })}
                 </p>

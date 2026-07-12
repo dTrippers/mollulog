@@ -7,7 +7,7 @@ import type { Attack, Defense } from "~/graphql/graphql";
 import { type UtcIsoString, compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 import type { RaidType, Terrain } from "~/models/content.d";
 import { raidTypeToParam } from "~/domain/raid";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 import RaidListItem from "./RaidListItem";
 
 type SelectableRaid = {
@@ -51,7 +51,7 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
     <div className="relative w-full">
       <button
         type="button"
-        className="group relative w-full text-left"
+        className="group relative w-full cursor-pointer rounded-lg text-left transition-shadow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         onClick={() => setIsOpen((prev) => !prev)}
         aria-expanded={isOpen}
         aria-haspopup="dialog"
@@ -61,12 +61,13 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
             <RaidListItem
               raid={currentRaid}
               reserveRightAccessorySpace
-              className="border border-neutral-200 shadow-sm dark:border-neutral-700"
+              className="shadow-sm group-hover:shadow-md"
+              contentClassName="group-hover:bg-card/80"
             />
           )}
           <ChevronDownIcon
-            className={sanitizeClassName(`
-              absolute top-1/2 right-3 size-5 -translate-y-1/2 flex-shrink-0 text-neutral-500 transition-transform
+            className={cn(`
+              absolute top-1/2 right-3 size-5 -translate-y-1/2 flex-shrink-0 text-muted-foreground transition group-hover:text-foreground
               ${isOpen ? "rotate-180" : ""}
             `)}
           />
@@ -82,7 +83,7 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
         leave="transition duration-100 ease-in"
         leaveFrom="opacity-100 scale-100"
         leaveTo="opacity-0 scale-95"
-        className="mt-4 mb-2 w-full bg-white dark:bg-neutral-800 lg:absolute lg:top-full lg:left-0 lg:z-30"
+        className="mt-4 mb-2 w-full rounded-lg bg-popover p-2 text-popover-foreground shadow-lg lg:absolute lg:top-full lg:left-0 lg:z-30"
       >
         <div className="flex items-center justify-between">
           <FilterButtons
@@ -96,21 +97,26 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
           <button
             type="button"
             onClick={() => setIsOpen(false)}
-            className="rounded-md p-1 hover:bg-neutral-100 dark:hover:bg-neutral-700"
+            className="cursor-pointer rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="총력전 선택 닫기"
           >
             <XMarkIcon className="size-6" strokeWidth={2} />
           </button>
         </div>
-        <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-lg border border-neutral-200 bg-white shadow-lg no-scrollbar dark:border-neutral-700 dark:bg-neutral-900 lg:max-h-96">
+        <div className="no-scrollbar mt-2 max-h-64 divide-y divide-border/60 overflow-y-auto lg:max-h-96">
           {selectableRaids.map((raid) => (
             <Link
               to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
               key={raid.uid}
-              className="block rounded-lg"
+              className="group block cursor-pointer"
               onClick={() => setIsOpen(false)}
             >
-              <RaidListItem raid={raid} />
+              <RaidListItem
+                raid={raid}
+                className="rounded-none bg-transparent shadow-none hover:bg-transparent dark:shadow-none"
+                imageClassName="scale-105 opacity-20 blur-[1px]"
+                contentClassName="rounded-md bg-transparent px-3 py-3 group-hover:bg-foreground/10"
+              />
             </Link>
           ))}
         </div>

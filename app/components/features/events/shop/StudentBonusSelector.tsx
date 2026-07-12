@@ -80,8 +80,8 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
           ? "로그인 후 모집한 학생 정보를 등록하면 편리하게 이용할 수 있어요"
           : "편성 보너스를 적용할 학생을 선택하세요"
       }
-      foldable
-      foldStateKey="event-shop-section::student-bonus-selector"
+      collapsible
+      persistenceKey="event-shop-section::student-bonus-selector"
       defaultExpanded={true}
     >
       <Toggle
@@ -111,7 +111,7 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
             }))}
             onSelect={actions.toggleBonusStudent}
           />
-          <div className="my-4 p-3 w-full border border-neutral-200 dark:border-neutral-700 rounded-lg grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+          <div className="my-4 grid w-full grid-cols-2 gap-3 rounded-lg bg-card p-3 md:grid-cols-3 md:gap-4">
             {bonusSummary.map(({ uid, appliedStrikerRatio, appliedSpecialRatio, maxStrikerRatio, maxSpecialRatio }) => {
               return (
                 <div
@@ -154,7 +154,7 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
             );
           })}
 
-      <div className="my-4 flex justify-end gap-0.5">
+      <div className="my-4 flex justify-end gap-2">
         <Button text="모두 선택" variant="primary" onClick={handleSelectAll} />
         <Button text="초기화" onClick={handleResetAll} />
       </div>

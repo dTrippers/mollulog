@@ -1,4 +1,4 @@
-import { OptionBadge } from "~/components/primitives";
+import { AttributeBadge, SectionCard } from "~/components/primitives";
 import type { Attack, Defense, RoleEnum } from "~/graphql/graphql";
 import {
   attackTypeColor,
@@ -25,9 +25,7 @@ type StudentInfoProps = {
 
 export default function StudentInfo({ student, className = "" }: StudentInfoProps) {
   return (
-    <section
-      className={`overflow-hidden rounded-lg border border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-800/50 ${className}`}
-    >
+    <SectionCard className={`overflow-hidden p-0 md:p-0 ${className}`}>
       <div className="relative min-h-40 overflow-hidden bg-linear-to-r from-neutral-100 via-white to-neutral-50 dark:from-neutral-900 dark:via-neutral-800 dark:to-neutral-800">
         <div className="absolute inset-0 z-0">
           <img
@@ -40,25 +38,17 @@ export default function StudentInfo({ student, className = "" }: StudentInfoProp
 
         <div className="relative z-10 flex min-h-40 flex-col justify-center p-4 md:p-5">
           <p className="text-xl font-bold text-neutral-950 dark:text-neutral-50">{student.name}</p>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">
-            {schoolNameLocale[student.school]}
-          </p>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">{schoolNameLocale[student.school]}</p>
           <div className="mt-3 flex gap-2">
-            <OptionBadge
-              text={attackTypeLocale[student.attackType]}
-              color={attackTypeColor[student.attackType]}
-            />
-            <OptionBadge
+            <AttributeBadge text={attackTypeLocale[student.attackType]} color={attackTypeColor[student.attackType]} />
+            <AttributeBadge
               text={defenseTypeLocale[student.defenseType]}
               color={defenseTypeColor[student.defenseType]}
             />
-            <OptionBadge
-              text={roleLocale[student.role]}
-              color={roleColor[student.role]}
-            />
+            <AttributeBadge text={roleLocale[student.role]} color={roleColor[student.role]} />
           </div>
         </div>
       </div>
-    </section>
+    </SectionCard>
   );
 }

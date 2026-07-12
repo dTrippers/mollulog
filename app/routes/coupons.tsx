@@ -1,8 +1,8 @@
 import { IdentificationIcon } from "@heroicons/react/16/solid";
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/solid";
 import { useState } from "react";
-import { Link, data, useLoaderData } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { data, Link, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import CopyField from "~/components/features/coupons/CopyField";
 import CouponCard from "~/components/features/coupons/CouponCard";
@@ -74,15 +74,15 @@ export default function CouponsPage() {
   const [initialRegisteredCouponIds] = useState(() => currentUserData?.registeredCouponIds ?? []);
 
   const memberCodeSection = currentUserData?.memberCode ? (
-    <div className="px-3 py-2.5 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg">
+    <div className="rounded-lg bg-card px-3 py-2.5">
       <div className="flex items-center gap-2">
         <IdentificationIcon className="size-4 shrink-0 text-neutral-400 dark:text-neutral-500" strokeWidth={2} />
         <CopyField text={currentUserData.memberCode} label="회원코드" />
       </div>
     </div>
   ) : currentUserData ? (
-    <Link to="/edit" className="hover:opacity-80 transition-opacity">
-      <span className="flex items-center gap-2 px-3 py-2.5 bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg">
+    <Link to="/edit" className="block rounded-lg transition-colors hover:bg-muted">
+      <span className="flex items-center gap-2 rounded-lg bg-card px-3 py-2.5">
         <IdentificationIcon className="size-4 shrink-0 text-neutral-400 dark:text-neutral-500" strokeWidth={2} />
         <span className="text-xs text-neutral-500 dark:text-neutral-400 shrink-0">회원코드</span>
         <span className="flex-1 text-sm text-neutral-400 dark:text-neutral-500 italic">설정하러 가기</span>
@@ -112,6 +112,7 @@ export default function CouponsPage() {
     >
       <div className="mb-4">
         <FilterButtons
+          surface="page"
           exclusive
           atLeastOne
           size="sm"

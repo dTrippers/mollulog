@@ -15,8 +15,6 @@ type NumberInputBaseProps = {
   size?: "sm" | "md" | "lg";
   showMin?: boolean;
   showMax?: boolean;
-  minButtonVariant?: "default" | "active";
-  maxButtonVariant?: "default" | "active";
   showDecrease?: boolean;
   showIncrease?: boolean;
   fullWidth?: boolean;
@@ -69,8 +67,6 @@ export default function NumberInput({
   size = "sm",
   showMin,
   showMax,
-  minButtonVariant = "default",
-  maxButtonVariant = "default",
   showDecrease = true,
   showIncrease = true,
   fullWidth = false,
@@ -110,41 +106,33 @@ export default function NumberInput({
     "self-stretch shrink-0 whitespace-nowrap transition-[background-color,border-color,color,opacity,filter] duration-150 ease-out active:brightness-95 disabled:pointer-events-none disabled:opacity-40";
   const buttonClass = cn(
     buttonBaseClass,
-    size === "sm" &&
-      "px-1 py-0.5 text-sm text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800",
+    size === "sm" && "px-1 py-0.5 text-sm text-muted-foreground hover:bg-muted",
     size === "md" && "min-h-10 px-3 text-base font-semibold text-muted-foreground hover:bg-muted",
     size === "lg" && "min-h-10 px-3 text-base font-semibold text-muted-foreground hover:bg-muted md:min-h-11 md:px-4",
   );
-  const shortcutButtonClass = (variant: "default" | "active") =>
-    cn(
-      buttonBaseClass,
-      size === "sm" && "border-l border-neutral-200 px-1 py-0.5 text-xs dark:border-neutral-700",
-      size === "md" && "min-h-10 border-l border-border px-2.5 text-xs font-medium",
-      size === "lg" && "min-h-10 border-l border-border px-2.5 text-xs font-semibold",
-      variant === "active"
-        ? "border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300"
-        : size === "sm"
-          ? "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-          : "text-muted-foreground hover:bg-muted",
-    );
+  const shortcutButtonClass = cn(
+    buttonBaseClass,
+    "border-l border-border text-muted-foreground hover:bg-muted",
+    size === "sm" && "px-1 py-0.5 text-xs",
+    size === "md" && "min-h-10 px-2.5 text-xs font-medium",
+    size === "lg" && "min-h-10 px-2.5 text-xs font-semibold",
+  );
 
   return (
     <Field
       label={label}
       containerClassName={size === "sm" ? "space-y-1" : size === "lg" ? "space-y-1.5" : undefined}
-      labelClassName={
-        size === "sm" || size === "lg" ? "text-sm font-medium text-neutral-700 dark:text-neutral-200" : undefined
-      }
+      labelClassName={size === "sm" || size === "lg" ? "text-sm font-medium text-foreground" : undefined}
     >
       <div
         className={cn(
           "flex w-full items-center overflow-hidden rounded-md border transition-colors",
           fullWidth ? "max-w-none" : "max-w-96",
-          size === "sm" && "border-neutral-300 bg-white dark:border-neutral-700 dark:bg-neutral-900",
+          size === "sm" && "border-input bg-background",
           size === "md" &&
-            "min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
+            "min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30",
           size === "lg" &&
-            "min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 md:min-h-11",
+            "min-h-10 border-input bg-background text-foreground focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 md:min-h-11",
           controlClassName,
         )}
       >
@@ -154,7 +142,7 @@ export default function NumberInput({
             onClick={() => {
               commitValue(effectiveMin);
             }}
-            className={cn(shortcutButtonClass(minButtonVariant), "border-l-0 border-r")}
+            className={cn(shortcutButtonClass, "border-l-0 border-r")}
             disabled={disabled || internalValue === effectiveMin}
             aria-label="최소값으로 설정"
           >
@@ -210,7 +198,7 @@ export default function NumberInput({
           }}
           className={cn(
             "w-full min-w-0 shrink appearance-none bg-transparent text-center outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
-            size === "sm" && "py-0.5 text-sm text-neutral-900 dark:text-neutral-100",
+            size === "sm" && "py-0.5 text-sm text-foreground",
             size === "md" && "px-3 py-2 text-sm text-foreground",
             size === "lg" && "px-2 py-1 text-base font-semibold text-foreground md:px-3 md:py-1.5",
             disabled && "cursor-not-allowed opacity-60",
@@ -237,7 +225,7 @@ export default function NumberInput({
             onClick={() => {
               commitValue(maxValue);
             }}
-            className={shortcutButtonClass(maxButtonVariant)}
+            className={shortcutButtonClass}
             disabled={disabled || internalValue === maxValue}
             aria-label="최대값으로 설정"
           >

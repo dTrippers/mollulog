@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Container } from "~/components/primitives";
+import { SectionCard } from "~/components/primitives";
 import Input from "~/components/primitives/Input";
 import type { Attack, Defense } from "~/graphql/graphql";
 import {
@@ -369,7 +369,7 @@ export default function RaidScoreHistogram({
 
   return (
     <div className="space-y-4">
-      <Container
+      <SectionCard
         title="클리어 시간 분포"
         description="구간을 드래그해서 해당 구간의 학생 출전 정보를 확인할 수 있어요"
       >
@@ -387,7 +387,7 @@ export default function RaidScoreHistogram({
             onSelectBand={selectBand}
           />
         </div>
-      </Container>
+      </SectionCard>
 
       <RaidScoreRangeDetail
         rangeStats={displayedRangeStats}
@@ -412,7 +412,7 @@ function RaidScoreHistogramSkeleton({
 }) {
   return (
     <div className="space-y-4">
-      <Container
+      <SectionCard
         title="클리어 시간 분포"
         description="구간을 드래그해서 해당 구간의 학생 출전 정보를 확인할 수 있어요"
       >
@@ -433,7 +433,7 @@ function RaidScoreHistogramSkeleton({
             </div>
           </div>
         </div>
-      </Container>
+      </SectionCard>
 
       <RaidScoreRangeDetail
         rangeStats={null}

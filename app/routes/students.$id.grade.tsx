@@ -1,16 +1,15 @@
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
+import { Form, redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { createPageErrorBoundary } from "~/components/features/layout";
-import { Button, SubTitle, Textarea } from "~/components/primitives";
+import { Button, Field, SectionCard, TagIcon, Textarea } from "~/components/primitives";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { formatStudentFullName, getStudentGradeDetail } from "~/models/student";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
-import type { StudentGradingTagValue } from "~/models/student-grading-tag";
-import StudentGradingTagSelector from "./students.$id.grade._components/StudentGradingTagSelector";
+import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
 
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -142,18 +141,42 @@ export default function StudentGrade() {
   };
 
   return (
-    <>
-      <Form method="post" className="space-y-6">
-        <SubTitle text="학생 평가하기" description="최대 100자까지 작성할 수 있어요" />
-
+    <Form method="post">
+      <SectionCard title="학생 평가하기" description="학생에 대한 평가를 공유해보세요">
         <Textarea
+          id="student-grading-comment"
           name="comment"
+          label="평가 의견 (선택)"
+          description="최대 100자까지 작성할 수 있어요"
           defaultValue={existingGrading?.comment || ""}
-          placeholder="평가 내용을 작성해주세요 (선택)"
+          placeholder="평가 내용을 작성해주세요"
           rows={3}
+          maxLength={100}
         />
 
-        <StudentGradingTagSelector selectedTags={selectedTags} onToggleTag={toggleTag} />
+        <Field label="평가 태그">
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(STUDENT_GRADING_TAG_DISPLAY).map(([tagValue, displayName]) => {
+              const tag = tagValue as StudentGradingTagValue;
+              const isSelected = selectedTags.includes(tag);
+
+              return (
+                <Button
+                  key={tag}
+                  type="button"
+                  size="xs"
+                  variant={isSelected ? "inverse" : "default"}
+                  className="gap-1.5 rounded-full"
+                  pressed={isSelected}
+                  onClick={() => toggleTag(tag)}
+                >
+                  <TagIcon tag={tag} size="sm" />
+                  <span>{displayName}</span>
+                </Button>
+              );
+            })}
+          </div>
+        </Field>
 
         {selectedTags.map((tag) => (
           <input key={tag} type="hidden" name="tags" value={tag} />
@@ -168,9 +191,7 @@ export default function StudentGrade() {
             text={isSaving ? "저장 중..." : existingGrading ? "편집 완료" : "작성 완료"}
             disabled={isSubmitting}
           />
-          <Link to={`/students/${student.uid}`} className="shrink-0">
-            <Button type="button" text="취소" disabled={isSubmitting} />
-          </Link>
+          <Button type="button" text="취소" to={`/students/${student.uid}`} disabled={isSubmitting} />
           {existingGrading && (
             <Button
               type="button"
@@ -185,8 +206,8 @@ export default function StudentGrade() {
             />
           )}
         </div>
-        {actionData?.error && <p className="text-sm text-red-500 -mt-4">{actionData.error}</p>}
-      </Form>
-    </>
+        {actionData?.error ? <p className="text-sm font-medium text-destructive">{actionData.error}</p> : null}
+      </SectionCard>
+    </Form>
   );
 }

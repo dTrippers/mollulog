@@ -2,28 +2,28 @@ import type { ElementType, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "~/lib/utils";
 
-type PrimitiveButtonProps = {
+type ButtonProps = {
   text?: string;
   children?: ReactNode | ReactNode[];
   icon?: ElementType;
   className?: string;
   type?: "button" | "submit" | "reset";
-  variant?: "default" | "primary" | "danger" | "inverse" | "tint" | "tint-blue" | "tint-red" | "list";
-  size?: "md" | "sm" | "xs" | "list";
+  variant?: "default" | "primary" | "secondary" | "danger" | "danger-subtle" | "inverse";
+  size?: "md" | "sm" | "xs";
   onClick?: (event: MouseEvent<HTMLElement>) => void;
   disabled?: boolean;
+  pressed?: boolean;
   name?: string;
   value?: string;
   form?: string;
   fullWidth?: boolean;
-  shadow?: "auto" | "xs" | "none";
   href?: string;
   to?: string;
   target?: "_blank" | "_self" | "_parent" | "_top";
   rel?: string;
 };
 
-export default function PrimitiveButton({
+export default function Button({
   text,
   children,
   icon: Icon,
@@ -33,37 +33,34 @@ export default function PrimitiveButton({
   size = "md",
   onClick,
   disabled = false,
+  pressed,
   name,
   value,
   form,
   fullWidth = false,
-  shadow = "auto",
   href,
   to,
   target,
   rel,
-}: PrimitiveButtonProps) {
+}: ButtonProps) {
   const variantClass = {
     default: "border-border bg-background text-foreground hover:bg-muted hover:text-foreground",
     primary: "border-transparent bg-primary text-primary-foreground hover:bg-primary/90",
     danger: "border-transparent bg-destructive text-white hover:bg-destructive/90",
-    inverse: "border-transparent bg-foreground text-background hover:opacity-90",
-    tint: "border-border bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
-    "tint-blue": "border-blue-500/20 bg-blue-500/10 text-blue-700 hover:bg-blue-500/15 dark:text-blue-300",
-    "tint-red": "border-red-500/20 bg-red-500/10 text-red-700 hover:bg-red-500/15 dark:text-red-300",
-    list: "border-transparent bg-transparent shadow-none hover:bg-muted",
+    inverse: "border-transparent bg-foreground text-background hover:bg-foreground/90",
+    secondary: "border-transparent bg-card text-foreground hover:bg-muted dark:bg-muted",
+    "danger-subtle": "border-transparent bg-destructive/10 text-destructive hover:bg-destructive/15",
   }[variant];
 
   const sizeClass = {
     md: "px-4 py-1.5 rounded-md text-sm",
     sm: "px-3 py-1.5 rounded-md text-sm",
     xs: "px-2 py-1 rounded-sm text-xs font-medium whitespace-nowrap",
-    list: "w-full min-h-12 p-4 rounded-md text-sm",
   }[size];
 
-  const justifyClass = size === "list" ? "justify-start text-left" : "justify-center text-center";
+  const justifyClass = "justify-center text-center";
   const widthClass = fullWidth ? "w-full" : "w-fit";
-  const shadowClass = shadow === "none" ? "" : shadow === "xs" ? "shadow-xs" : variant === "list" || size === "xs" ? "" : "shadow-xs";
+  const shadowClass = size === "xs" ? "" : "shadow-xs";
   const buttonClassName = cn(
     "inline-flex cursor-pointer items-center gap-2 border font-medium whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 disabled:pointer-events-none disabled:opacity-50",
     widthClass,
@@ -123,6 +120,7 @@ export default function PrimitiveButton({
       className={buttonClassName}
       onClick={handleClick}
       disabled={disabled}
+      aria-pressed={pressed}
       name={name}
       value={value}
       form={form}
@@ -132,4 +130,4 @@ export default function PrimitiveButton({
   );
 }
 
-export type { PrimitiveButtonProps };
+export type { ButtonProps };

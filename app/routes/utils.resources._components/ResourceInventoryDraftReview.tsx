@@ -121,7 +121,7 @@ export default function ResourceInventoryDraftReview({
         <div className="flex justify-end gap-2">
           <Form method="post">
             <input type="hidden" name="intent" value="discard" />
-            <Button type="submit" size="sm" variant="tint" disabled={isSubmitting}>
+            <Button type="submit" size="sm" variant="secondary" disabled={isSubmitting}>
               삭제
             </Button>
           </Form>

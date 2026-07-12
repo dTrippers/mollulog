@@ -23,10 +23,12 @@ export default function ReplyForm() {
   }, [fetcher.data, fetcher.state, revalidator]);
 
   return (
-    <section className="rounded-xl border border-border bg-card p-5 text-card-foreground">
+    <section className="rounded-lg bg-card p-5 text-card-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
       <div className="mb-6">
         <h2 className="text-lg font-semibold">답글/추가 문의 남기기</h2>
-        <p className="mt-2 text-sm text-muted-foreground">같은 문의에 이어서 내용을 남기면 스레드로 계속 확인할 수 있어요.</p>
+        <p className="mt-2 text-sm text-muted-foreground">
+          같은 문의에 이어서 내용을 남기면 스레드로 계속 확인할 수 있어요.
+        </p>
       </div>
 
       <fetcher.Form method="post" ref={formRef}>

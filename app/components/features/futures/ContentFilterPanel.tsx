@@ -1,4 +1,4 @@
-import { FilterButtons, Toggle } from "~/components/primitives";
+import { PanelBody, PanelFilterButtonsSection, PanelSwitchRow } from "~/components/primitives";
 import type { EventType, RaidType } from "~/models/content.d";
 import type { ContentFilterState } from "./content-filter-state";
 
@@ -76,16 +76,10 @@ export default function ContentFilterPanel({ filter, onFilterChange }: ContentFi
   ];
 
   return (
-    <>
-      <div className="mb-4">
-        <p className="mb-2 font-bold">이벤트</p>
-        <FilterButtons buttonProps={eventFilterProps} size="sm" />
-      </div>
-      <div className="mb-2 lg:mb-8">
-        <p className="mb-2 font-bold">레이드</p>
-        <FilterButtons buttonProps={contentFilterProps} size="sm" />
-      </div>
-      <Toggle label="학생 모집 컨텐츠만 보기" initialState={filter.onlyPickups} onChange={onToggleOnlyPickups} />
-    </>
+    <PanelBody>
+      <PanelFilterButtonsSection title="이벤트" buttonProps={eventFilterProps} size="sm" />
+      <PanelFilterButtonsSection title="레이드" buttonProps={contentFilterProps} size="sm" />
+      <PanelSwitchRow title="학생 모집 컨텐츠만 보기" checked={filter.onlyPickups} onChange={onToggleOnlyPickups} />
+    </PanelBody>
   );
 }

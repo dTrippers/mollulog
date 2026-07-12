@@ -2,7 +2,7 @@ import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { Link } from "react-router";
 import { EmptyView } from "~/components/primitives";
-import type { SyncDraftSource, SyncDraftSummary, SyncDraftType } from "~/models/sync-draft";
+import type { SyncDraftSummary } from "~/models/sync-draft";
 
 type PendingSyncDraft = SyncDraftSummary & {
   entryCount: number;
@@ -15,7 +15,7 @@ type PendingSyncDraftListProps = {
 export default function PendingSyncDraftList({ drafts }: PendingSyncDraftListProps) {
   if (drafts.length === 0) {
     return (
-      <div className="rounded-lg border border-border bg-card p-8">
+      <div className="rounded-lg bg-card p-8 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
         <EmptyView
           Icon={ArchiveBoxIcon}
           text="대기 중인 데이터가 없어요"
@@ -27,7 +27,7 @@ export default function PendingSyncDraftList({ drafts }: PendingSyncDraftListPro
   }
 
   return (
-    <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
+    <div className="divide-y divide-border overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
       {drafts.map((draft) => (
         <Link
           key={draft.uid}

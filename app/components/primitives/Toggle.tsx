@@ -1,18 +1,17 @@
 import { Field, Label, Switch } from "@headlessui/react";
 import { useEffect, useState } from "react";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type ToggleProps = {
   name?: string;
   label?: string;
   initialState?: boolean;
-  colorClass?: string;
   disabled?: boolean;
   className?: string;
   onChange?: (value: boolean) => void;
 };
 
-export default function Toggle({ name, label, colorClass, initialState, disabled, className, onChange }: ToggleProps) {
+export default function Toggle({ name, label, initialState, disabled, className, onChange }: ToggleProps) {
   const [enabled, setEnabled] = useState(initialState ?? false);
 
   useEffect(() => {
@@ -24,9 +23,9 @@ export default function Toggle({ name, label, colorClass, initialState, disabled
       <Field className={`${className ?? "my-4"} flex items-center`}>
         <Switch
           disabled={disabled}
-          className={sanitizeClassName(`
+          className={cn(`
             h-5 w-10 p-0.5 group relative flex rounded-full transition-colors duration-200 ease-in-out
-            ${colorClass ?? "bg-neutral-200 data-checked:bg-blue-500 dark:bg-neutral-700"}
+            bg-input data-checked:bg-primary
             ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
           `)}
           checked={enabled}

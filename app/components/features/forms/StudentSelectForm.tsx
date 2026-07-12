@@ -16,7 +16,7 @@ function StudentImage({ student, size }: { student: Student; size: string }) {
     <img
       src={studentImageUrl(student.uid)}
       alt={student.name}
-      className={cn(size, "rounded-full border border-border bg-muted object-cover")}
+      className={cn(size, "rounded-full bg-muted object-cover")}
       loading="lazy"
     />
   );
@@ -31,11 +31,11 @@ type SearchInputProps = {
 
 function SearchInput({ searchQuery, setSearchQuery, searchPlaceholder, inputRef }: SearchInputProps) {
   return (
-    <div className="sticky top-0 z-10 border-b border-border bg-popover/95 p-1.5 backdrop-blur-sm">
+    <div className="sticky top-0 z-10 bg-popover/95 p-1.5 shadow-sm backdrop-blur-sm">
       <input
         ref={inputRef}
         type="text"
-        className="min-h-10 w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/50 focus:border-ring focus:ring-2 focus:ring-ring/20"
+        className="min-h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/50 focus:border-ring focus:ring-2 focus:ring-ring/30"
         placeholder={searchPlaceholder ?? "검색해서 찾기..."}
         value={searchQuery}
         onChange={(event) => {
@@ -210,7 +210,7 @@ export default function StudentSelectForm({
           {selectedStudents.map((student, index) => (
             <div
               key={`${student.uid}-${index}`}
-              className="flex cursor-pointer items-center gap-x-2 rounded-full border border-primary/20 bg-primary/10 transition-colors hover:bg-primary/15"
+              className="flex cursor-pointer items-center gap-x-2 rounded-full bg-primary/10 transition-colors hover:bg-primary/15"
             >
               <StudentImage student={student} size="size-8" />
               <span className="text-sm text-primary">{student.name}</span>
@@ -255,7 +255,7 @@ export default function StudentSelectForm({
                 id={buttonId}
                 type="button"
                 className={cn(
-                  "flex min-h-10 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2 text-left text-foreground transition-colors hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20 focus-visible:outline-none",
+                  "flex min-h-10 w-full items-center justify-between gap-3 rounded-md border border-input bg-background px-3 py-2 text-left text-foreground transition-colors hover:bg-muted/40 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:outline-none",
                   className,
                 )}
                 onClick={() => setIsOpen((prev) => !prev)}
@@ -272,7 +272,7 @@ export default function StudentSelectForm({
                 <div
                   id={listboxId}
                   aria-labelledby={buttonId}
-                  className="no-scrollbar absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-lg shadow-foreground/10"
+                  className="no-scrollbar absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-lg shadow-foreground/10"
                 >
                   <SearchInput
                     searchQuery={searchQuery}

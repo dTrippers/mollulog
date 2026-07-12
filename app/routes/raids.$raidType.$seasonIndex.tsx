@@ -1,17 +1,17 @@
 import { InformationCircleIcon, ShieldCheckIcon, TrophyIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
-import { Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Page, createPageErrorBoundary } from "~/components/features/layout";
+import { Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
+import { createPageErrorBoundary, Page, type PagePanelProps } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
-import { FilterButtons, type PagePanelProps } from "~/components/primitives";
+import { FilterButtons } from "~/components/primitives";
 import { raidTypeToParam } from "~/domain/raid";
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
 import { canonicalLink } from "~/lib/seo";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
-import { type RaidDefenseTypeSet, getRaidDefenseTypeSetKey } from "~/models/raid";
+import { getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
 import { loadRaidSeasonPage } from "~/views/raid";
 
 function getDefenseTypeSetLabel(defenseTypeSet: RaidDefenseTypeSet) {
@@ -174,6 +174,7 @@ export default function RaidPage() {
         <div className="my-4">
           {!pathname.endsWith("/videos") && (
             <FilterButtons
+              surface="page"
               key={`filters-${currentRaid.uid}`}
               Icon={ShieldCheckIcon}
               buttonProps={currentRaid.defenseTypeSets.map((defenseTypeSet) => ({

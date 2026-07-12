@@ -228,7 +228,7 @@ function ItemSelector({
               key={itemUid}
               className={cn(
                 "rounded-md transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                active && "bg-blue-50 ring-2 ring-blue-400/80 dark:bg-blue-950/30 dark:ring-blue-500/80",
+                active && "bg-primary/10 ring-2 ring-primary/60",
               )}
               onClick={() => onSelectItem(itemUid)}
             >
@@ -346,7 +346,7 @@ function useIsRelationshipGiftSheetViewport() {
 
 function GiftDetailEmptyState() {
   return (
-    <div className="hidden rounded-lg border border-dashed border-border bg-muted/30 px-4 py-10 text-center 2xl:block">
+    <div className="hidden rounded-lg bg-muted/30 px-4 py-10 text-center 2xl:block">
       <p className="text-sm font-semibold text-foreground">선물을 선택해 주세요</p>
       <p className="mt-1 text-xs text-muted-foreground">선호 학생과 입력 수량을 여기에서 확인할 수 있어요.</p>
     </div>
@@ -605,7 +605,7 @@ function FavoriteLevelCardEditMode({
             ))}
           </div>
         ) : (
-          <div className="rounded-md border border-dashed border-border px-3 py-8 text-center">
+          <div className="rounded-md bg-muted/30 px-3 py-8 text-center">
             <p className="text-sm font-medium text-foreground">입력된 학생이 없어요</p>
             <p className="mt-1 text-xs text-muted-foreground">학생 이름을 검색해서 추가해 주세요.</p>
           </div>

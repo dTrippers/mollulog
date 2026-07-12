@@ -2,8 +2,8 @@ import { HeartIcon } from "@heroicons/react/16/solid";
 import { useMemo } from "react";
 import { StudentSelectForm } from "~/components/features/forms";
 import { ProfileImage } from "~/components/primitives";
+import { cn } from "~/lib/utils";
 import { formatVisibleName } from "~/models/student";
-import { sanitizeClassName } from "~/prophandlers";
 
 type RelationshipStudent = {
   uid: string;
@@ -27,7 +27,11 @@ export default function RelationshipStudentPicker({
     [selectedStudentUid, students],
   );
   const savedStudents = useMemo(
-    () => sortStudentsByLevel(students.filter((student) => student.currentLevel !== null), students),
+    () =>
+      sortStudentsByLevel(
+        students.filter((student) => student.currentLevel !== null),
+        students,
+      ),
     [students],
   );
 
@@ -38,10 +42,10 @@ export default function RelationshipStudentPicker({
         initialStudentUids={selectedStudentUid ? [selectedStudentUid] : undefined}
         placeholder={selectedStudent ? "다른 학생 검색..." : "이름으로 찾기..."}
         searchPlaceholder="학생 이름으로 검색"
-        className="max-w-none"
+        className="max-w-none border-0 bg-transparent px-2 shadow-none hover:bg-muted/70 focus-visible:border-transparent"
         containerClassName="mt-0 mb-0"
         onSelect={(value) => {
-          onSelectStudentUid(Array.isArray(value) ? (value[0] ?? null) : (value || null));
+          onSelectStudentUid(Array.isArray(value) ? (value[0] ?? null) : value || null);
         }}
       />
 
@@ -85,9 +89,9 @@ function SavedStudentButton({
   return (
     <button
       type="button"
-      className={sanitizeClassName(`
-        flex w-full items-center gap-1.5 rounded-md border px-2 py-1 text-left transition-colors
-        ${selected ? "border-blue-300 bg-blue-50 hover:bg-blue-500/10 dark:border-blue-700 dark:bg-blue-950/30" : "border-border bg-background hover:bg-muted"}
+      className={cn(`
+        flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-left transition-colors
+        ${selected ? "bg-primary/10 hover:bg-primary/15" : "bg-transparent hover:bg-muted"}
       `)}
       onClick={onSelect}
     >
@@ -104,7 +108,6 @@ function SavedStudentButton({
     </button>
   );
 }
-
 
 function sortStudentsByLevel(candidates: RelationshipStudent[], students: RelationshipStudent[]) {
   return [...candidates].sort((a, b) => {

@@ -1,6 +1,6 @@
 import { Form, Link } from "react-router";
 import { useState } from "react";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 export type ActionCardAction = {
   text: string;
@@ -10,7 +10,7 @@ export type ActionCardAction = {
     method: "post" | "patch" | "delete";
     hiddenInputs: { name: string; value: string }[];
   };
-  popup?: ((close: () => void) => React.ReactNode);
+  popup?: (close: () => void) => React.ReactNode;
   onClick?: () => void;
   danger?: boolean;
 };
@@ -25,9 +25,7 @@ export default function ActionCard({ children, actions }: ActionCardProps) {
 
   return (
     <div className="my-4 p-4 md:p-6 rounded-lg bg-neutral-100 dark:bg-neutral-900">
-      <div>
-        {children}
-      </div>
+      <div>{children}</div>
 
       {actions.length > 0 && (
         <div className="mt-4 -mb-2 flex items-center justify-end">
@@ -37,14 +35,16 @@ export default function ActionCard({ children, actions }: ActionCardProps) {
               <ActionButton action={{ text: "취소", onClick: () => setRemindDangerAction(null) }} />
               <ActionButton action={remindDangerAction} />
             </>
-          ) : actions.map((action) => (
-            <ActionButton key={getActionKey(action)} action={action} setRemindDangerAction={setRemindDangerAction} />
-          ))}
+          ) : (
+            actions.map((action) => (
+              <ActionButton key={getActionKey(action)} action={action} setRemindDangerAction={setRemindDangerAction} />
+            ))
+          )}
         </div>
       )}
     </div>
   );
-};
+}
 
 type ActionButtonProps = {
   action: ActionCardAction;
@@ -120,7 +120,7 @@ function getActionKey(action: ActionCardAction) {
 }
 
 function getActionButtonClassName(color: ActionCardAction["color"]) {
-  return sanitizeClassName(`
+  return cn(`
     -mx-1 px-4 py-2 hover:bg-neutral-200 dark:hover:bg-neutral-700 font-semibold text-sm transition rounded-lg
     ${color === "red" ? "text-red-500" : "text-neutral-500 dark:text-neutral-200"}
   `);

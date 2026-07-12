@@ -5,7 +5,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
-import { PanelOptionChip } from "~/components/primitives";
+import { PanelActionRow, PanelBody, PanelOptionChip } from "~/components/primitives";
 import { getLogger } from "~/lib/observability.server";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
@@ -105,8 +105,7 @@ export default function ResourcePlannerLayout() {
     <Page
       title="재화 관리/파밍 계산기"
       description="보유 재화와 필요한 장비 파밍 계획을 확인해보세요."
-      contentArea="full"
-      layout="horizontal"
+      contentWidth="full"
       panels={
         pathname === "/utils/resources/farming"
           ? [
@@ -175,12 +174,10 @@ function FarmingPlannerSettingsPanel({
   onPrioritizeHighTierChange: (value: boolean) => void;
 }) {
   return (
-    <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
-      <div className="rounded-md px-2 py-1 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70">
-        <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
-          <div className="min-w-0 grow">
-            <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">스테이지 난이도</p>
-          </div>
+    <PanelBody className="space-y-2">
+      <PanelActionRow
+        title="스테이지 난이도"
+        actions={
           <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
             <PanelOptionChip
               label="노말"
@@ -195,24 +192,22 @@ function FarmingPlannerSettingsPanel({
               onClick={() => onShowHardChange(!showHard)}
             />
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      <div className="rounded-md px-2 py-1 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70">
-        <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
-          <div className="min-w-0 grow">
-            <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">상위티어 우선</p>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">설계도 단가를 반영하여 계산해요</p>
-          </div>
+      <PanelActionRow
+        title="상위티어 우선"
+        description="설계도 단가를 반영하여 계산해요"
+        actions={
           <PanelOptionChip
             label="적용"
             active={prioritizeHighTier}
             Icon={prioritizeHighTier ? EyeIcon : EyeSlashIcon}
             onClick={() => onPrioritizeHighTierChange(!prioritizeHighTier)}
           />
-        </div>
-      </div>
-    </div>
+        }
+      />
+    </PanelBody>
   );
 }
 

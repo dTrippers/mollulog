@@ -36,11 +36,8 @@ export default function Progress({ ratio, color }: ProgressProps) {
   }
 
   return (
-    <div className="relative h-2 w-full my-2 bg-neutral-200 dark:bg-neutral-700 rounded-full">
-      <div
-        className={`absolute h-2 top-0 left-0 ${colorClass} rounded-full`}
-        style={{ width: `${ratio * 100}%` }}
-      />
+    <div className="relative my-2 h-2 w-full rounded-full bg-muted">
+      <div className={`absolute h-2 top-0 left-0 ${colorClass} rounded-full`} style={{ width: `${ratio * 100}%` }} />
     </div>
   );
 }

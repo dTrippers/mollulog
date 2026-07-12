@@ -118,11 +118,7 @@ export default function RaidSummary() {
 
   return (
     <div className="space-y-4 py-4">
-      <SubTitle
-        text="플래티넘 통계"
-        description="일본 서버 플래티넘 클리어 기준 편성 통계 정보를 확인해보세요."
-        className="mt-0"
-      />
+      <SubTitle text="플래티넘 통계" description="일본 서버 플래티넘 클리어 기준 편성 통계 정보를 확인해보세요." />
 
       <RaidScoreHistogram
         raidType={currentRaid.raidType as RaidType}

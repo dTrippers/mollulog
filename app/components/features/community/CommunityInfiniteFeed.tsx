@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import { EmptyView, LoadingSkeleton } from "~/components/primitives";
+import { Button, EmptyView, LoadingSkeleton } from "~/components/primitives";
 import CommunityFeed, { type CommunityFeedPostItem } from "./CommunityFeed";
 
 type CommunityInfiniteFeedPageData = {
@@ -111,14 +111,9 @@ export default function CommunityInfiniteFeed({
       {hasMore && (
         <div ref={sentinelRef} className="flex flex-col items-center gap-3 py-5">
           {loading && <LoadingSkeleton />}
-          <button
-            type="button"
-            className="rounded-full bg-neutral-100 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-            onClick={loadNextPage}
-            disabled={loading}
-          >
+          <Button variant="secondary" onClick={loadNextPage} disabled={loading}>
             {loading ? "불러오는 중" : "더 보기"}
-          </button>
+          </Button>
         </div>
       )}
     </div>

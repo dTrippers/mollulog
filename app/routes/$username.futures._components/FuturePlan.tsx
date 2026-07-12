@@ -2,11 +2,20 @@ import { useState, useEffect } from "react";
 import { useFetcher } from "react-router";
 import { Link } from "react-router";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
-import { MultilineText, OptionBadge } from "~/components/primitives";
+import { AttributeBadge, MultilineText } from "~/components/primitives";
 import { ResourceCards, StudentCard } from "~/components/features/students";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
-import { attackTypeColor, attackTypeLocale, defenseTypeColor, defenseTypeLocale, recruitmentLabelLocale, roleColor, roleLocale, schoolNameLocale } from "~/locales/ko";
+import {
+  attackTypeColor,
+  attackTypeLocale,
+  defenseTypeColor,
+  defenseTypeLocale,
+  recruitmentLabelLocale,
+  roleColor,
+  roleLocale,
+  schoolNameLocale,
+} from "~/locales/ko";
 import type { Role } from "~/models/content.d";
 import type { Attack, Defense } from "~/graphql/graphql";
 import ContentCommentView from "~/components/features/contents/ContentCommentView";
@@ -70,7 +79,11 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
   }, [comments, fetcher.data, fetcher.state]);
 
   const submit = (data: CommentActionData) => {
-    fetcher.submit(data, { action: `/api/contents/${event.uid}/comments`, method: "post", encType: "application/json" });
+    fetcher.submit(data, {
+      action: `/api/contents/${event.uid}/comments`,
+      method: "post",
+      encType: "application/json",
+    });
   };
 
   // Find pinned comment UID
@@ -95,11 +108,14 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
   const dDay = parseUtcTimestamp(event.since).startOf("day").diff(parseUtcTimestamp(nowUtcIso()).startOf("day"), "day");
 
   // Group resources by student instead of aggregating
-  const studentResources: Record<string, {
-    equipments: string[];
-    mainSkillItems: string[];
-    subSkillItems: string[];
-  }> = {};
+  const studentResources: Record<
+    string,
+    {
+      equipments: string[];
+      mainSkillItems: string[];
+      subSkillItems: string[];
+    }
+  > = {};
 
   for (const { student } of favoritedRecruitments) {
     if (!studentResources[student.uid]) {
@@ -169,7 +185,10 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
                 </div>
 
                 <div className="flex-grow">
-                  <Link to={`/students/${student.uid}`} className="text-lg font-bold hover:underline flex items-center gap-1">
+                  <Link
+                    to={`/students/${student.uid}`}
+                    className="text-lg font-bold hover:underline flex items-center gap-1"
+                  >
                     <p>{student.name}</p>
                     <ChevronRightIcon className="size-4 inline" />
                   </Link>
@@ -179,9 +198,15 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
                       {recruitmentLabelLocale({ recruitmentType, rerun })} &middot; {schoolNameLocale[student.school]}
                     </p>
                     <div className="py-2 flex text-sm gap-x-1">
-                      <OptionBadge text={attackTypeLocale[student.attackType]} color={attackTypeColor[student.attackType]} bgColor="light" />
-                      <OptionBadge text={defenseTypeLocale[student.defenseType]} color={defenseTypeColor[student.defenseType]} bgColor="light"/>
-                      <OptionBadge text={roleLocale[student.role]} color={roleColor[student.role]} bgColor="light"/>
+                      <AttributeBadge
+                        text={attackTypeLocale[student.attackType]}
+                        color={attackTypeColor[student.attackType]}
+                      />
+                      <AttributeBadge
+                        text={defenseTypeLocale[student.defenseType]}
+                        color={defenseTypeColor[student.defenseType]}
+                      />
+                      <AttributeBadge text={roleLocale[student.role]} color={roleColor[student.role]} />
                     </div>
                   </div>
 
@@ -215,11 +240,8 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
 
       {/* Comment */}
       <div className="mt-2">
-        <ContentCommentView
-          comments={allComments}
-          placeholder="남긴 의견이 없어요"
-        />
+        <ContentCommentView comments={allComments} placeholder="남긴 의견이 없어요" />
       </div>
     </div>
-  ); 
+  );
 }

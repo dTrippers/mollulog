@@ -50,8 +50,8 @@ function EditPopup({ show, title, value, onValueChange, onCancel, onSave, onRese
       leaveTo="opacity-0 scale-95"
       className="absolute inset-x-0 top-full z-20 mt-2 md:right-0 md:left-auto"
     >
-      <div className="bg-white/90 dark:bg-black/80 backdrop-blur-sm border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-4 md:w-auto md:min-w-[280px]">
-        <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">{title}</p>
+      <div className="rounded-lg bg-popover/90 p-4 text-popover-foreground shadow-lg backdrop-blur-sm md:w-auto md:min-w-[280px]">
+        <p className="mb-2 text-sm text-muted-foreground">{title}</p>
         <div className="mb-4">
           <NumberInput value={value} onChange={onValueChange} />
         </div>
@@ -70,14 +70,14 @@ function EditPopup({ show, title, value, onValueChange, onCancel, onSave, onRese
           <div className="flex gap-2">
             <button
               type="button"
-              className="px-2.5 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 bg-neutral-50 dark:bg-neutral-900/20 hover:bg-neutral-100 dark:hover:bg-neutral-900/30 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap"
+              className="whitespace-nowrap rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
               onClick={onCancel}
             >
               취소
             </button>
             <button
               type="button"
-              className="px-2.5 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md transition whitespace-nowrap"
+              className="whitespace-nowrap rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
               onClick={onSave}
             >
               저장
@@ -91,18 +91,18 @@ function EditPopup({ show, title, value, onValueChange, onCancel, onSave, onRese
 
 function BreakdownLines({ lines }: { lines: BreakdownLine[] }) {
   if (lines.length === 0) {
-    return <div className="text-neutral-500 dark:text-neutral-400 text-xs">획득처 없음</div>;
+    return <div className="text-xs text-muted-foreground">획득처 없음</div>;
   }
 
   return (
     <>
       {lines.map(({ label, value }) => (
         <div key={label} className="flex justify-between items-center">
-          <span className="text-neutral-500 dark:text-neutral-500">
+          <span className="text-muted-foreground">
             <span className="mr-1.5">·</span>
             {label}
           </span>
-          <span className="text-neutral-500 dark:text-neutral-500">{Math.floor(value).toLocaleString()}</span>
+          <span className="text-muted-foreground">{Math.floor(value).toLocaleString()}</span>
         </div>
       ))}
     </>
@@ -213,10 +213,8 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     <>
       <div className="pb-4 mb-4">
         <div className="mb-4">
-          <h2 className="font-semibold text-lg text-neutral-900 dark:text-neutral-100">최종 결과</h2>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-            필요한 AP와 아이템 수량을 확인할 수 있어요
-          </p>
+          <h2 className="text-lg font-semibold text-foreground">최종 결과</h2>
+          <p className="mt-1 text-sm text-muted-foreground">필요한 AP와 아이템 수량을 확인할 수 있어요</p>
         </div>
         <div>
           {totalApWithExtras > 0 && (
@@ -253,9 +251,9 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
             </div>
           )}
 
-          <div className="p-3 border border-neutral-200 dark:border-neutral-700 rounded-lg grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             {allItemUids.size === 0 && (
-              <p className="w-full py-8 text-neutral-500 dark:text-neutral-400 text-center col-span-2 text-sm">
+              <p className="col-span-2 w-full py-8 text-center text-sm text-muted-foreground">
                 구매할 아이템과 스테이지를 선택하세요
               </p>
             )}
@@ -295,24 +293,21 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                 : [];
 
               return (
-                <div
-                  key={itemUid}
-                  className="p-3 bg-neutral-50 dark:bg-neutral-900 rounded-lg flex items-start gap-2 relative"
-                >
+                <div key={itemUid} className="relative flex items-start gap-2 rounded-md bg-card p-3">
                   <ResourceCard itemUid={itemUid} resourceType={resourceType} rarity={1} name={itemName} />
                   <div className="grow space-y-3 text-sm relative">
                     {/* 필요 수량 */}
                     {(toBuyCount > 0 || toPlayMinigameCount > 0 || hasOverride) && (
                       <div className="space-y-1">
                         <div className="flex justify-between items-center">
-                          <span className="font-medium text-neutral-800 dark:text-neutral-200">필요 수량</span>
-                          <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                          <span className="font-medium text-foreground">필요 수량</span>
+                          <span className="font-semibold text-foreground">
                             {Math.floor(actualRequired).toLocaleString()}
                           </span>
                         </div>
                         <div className="pl-2 space-y-1">
                           {hasOverride ? (
-                            <p className="text-neutral-500 dark:text-neutral-500 text-xs">입력한 목표 수량</p>
+                            <p className="text-xs text-muted-foreground">입력한 목표 수량</p>
                           ) : (
                             <BreakdownLines lines={requiredLines} />
                           )}
@@ -323,9 +318,9 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                     {/* 획득 수량 */}
                     <div className="space-y-1">
                       <div className="flex justify-between items-center">
-                        <span className="font-medium text-neutral-800 dark:text-neutral-200">획득 수량</span>
+                        <span className="font-medium text-foreground">획득 수량</span>
                         {acquiredSubtotal > 0 && (
-                          <span className="font-semibold text-neutral-800 dark:text-neutral-200">
+                          <span className="font-semibold text-foreground">
                             {Math.floor(acquiredSubtotal).toLocaleString()}
                           </span>
                         )}
@@ -336,9 +331,9 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                     </div>
 
                     {/* 남은/부족 수량 */}
-                    <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700">
+                    <div className="pt-2">
                       <div className="flex justify-between items-center">
-                        <span className="font-medium text-neutral-800 dark:text-neutral-200">
+                        <span className="font-medium text-foreground">
                           {remainingCount >= 0 ? "남은" : "부족"} 수량
                         </span>
                         <span
@@ -359,7 +354,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                             setEditingItemUid(itemUid);
                             setEditingRequiredItemUid(null);
                           }}
-                          className="px-3 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap cursor-pointer"
+                          className="cursor-pointer whitespace-nowrap rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
                         >
                           보유 수량 입력
                         </button>
@@ -389,7 +384,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                             setEditingRequiredItemUid(itemUid);
                             setEditingItemUid(null);
                           }}
-                          className="px-3 py-1.5 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:text-neutral-900 dark:hover:text-neutral-100 border border-neutral-200 dark:border-neutral-800 rounded-md transition whitespace-nowrap cursor-pointer"
+                          className="cursor-pointer whitespace-nowrap rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
                         >
                           목표 수량 입력
                         </button>
@@ -418,8 +413,8 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
           </div>
 
           {mergedBoughtResources.length > 0 && (
-            <div className="my-4 p-3 border border-neutral-200 dark:border-neutral-700 rounded-lg">
-              <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">획득 보상</p>
+            <div className="my-4 rounded-md bg-card p-3">
+              <p className="text-sm font-medium text-foreground">획득 보상</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {mergedBoughtResources.map(({ resource, totalQuantity }) => (
                   <ResourceCard

@@ -6,20 +6,20 @@ import { RaidStatisticsSlotCount } from "~/components/features/raids";
 import { RecruitmentHistories } from "~/components/features/students";
 import { Callout, EmptyView, FilterButtons, LoadingSkeleton, SubTitle } from "~/components/primitives";
 import type { Defense } from "~/graphql/graphql";
-import { type UtcIsoString, compareInstantAsc, compareInstantDesc, getInstantTime } from "~/lib/date-time";
-import { type RaidStatistics, fetchRaidStatisticsByStudent } from "~/lib/ranks/stats";
-import { type StudentAnalysisSynergyPartner, fetchStudentAnalysis } from "~/lib/ranks/student-analysis";
+import { compareInstantAsc, compareInstantDesc, getInstantTime, type UtcIsoString } from "~/lib/date-time";
+import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/lib/ranks/stats";
+import { fetchStudentAnalysis, type StudentAnalysisSynergyPartner } from "~/lib/ranks/student-analysis";
 import type { RaidType, Terrain } from "~/models/content.d";
 import { getMaxTierAt } from "~/models/student";
 import type { StudentDetailPageContext } from "./students.$id";
 import StudentBossUsageChart from "./students.$id._components/StudentBossUsageChart";
 import StudentDifficultyUsageChart from "./students.$id._components/StudentDifficultyUsageChart";
 import {
-  type StudentBossUsageSummary,
-  type StudentDifficultyUsage,
   aggregateBossUsage,
   aggregateDifficultyUsage,
   buildStudentAnalysisScopeLookup,
+  type StudentBossUsageSummary,
+  type StudentDifficultyUsage,
 } from "./students.$id._components/StudentDifficultyUsageModel";
 import StudentGradingChart from "./students.$id._components/StudentGradingChart";
 import StudentRaidInvestmentChart from "./students.$id._components/StudentRaidInvestmentChart";
@@ -249,6 +249,7 @@ export default function StudentDetail() {
               <SubTitle text="총력전/대결전 통계" />
               <div className="mt-4">
                 <FilterButtons
+                  surface="page"
                   Icon={BarsArrowDownIcon}
                   buttonProps={[
                     {

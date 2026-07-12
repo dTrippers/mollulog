@@ -204,8 +204,8 @@ export default function StudentDetailPage() {
           ? [
               {
                 Icon: ArrowTopRightOnSquareIcon,
-                title: "샬레DB",
-                description: "스킬/스탯/무기 등 상세 정보 확인",
+                title: "Schale DB",
+                description: "스킬, 능력치 등의 구체적인 수치를 확인",
                 to: `https://schaledb.com/student/${student.schaleDbId}`,
               },
             ]
@@ -213,15 +213,15 @@ export default function StudentDetailPage() {
       }
       screens={[
         {
-          text: "기본 정보",
-          description: "통계 정보, 모집 일정",
+          text: "학생 정보",
+          description: "각종 통계 분석 정보와 모집 일정",
           Icon: InformationCircleIcon,
           link: `/students/${student.uid}`,
           active: pathname === `/students/${student.uid}`,
         },
         {
-          text: "학생 평가",
-          description: "평가 목록 및 태그 통계",
+          text: "평가",
+          description: "선생님들의 평가 의견",
           Icon: ChatBubbleLeftRightIcon,
           link: `/students/${student.uid}/gradings`,
           active: pathname === `/students/${student.uid}/gradings` || pathname === `/students/${student.uid}/grade`,

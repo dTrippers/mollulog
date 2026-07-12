@@ -176,7 +176,7 @@ export default function ManagePage() {
                 type="submit"
                 name="intent"
                 value="cache.refresh"
-                variant="tint-blue"
+                variant="primary"
                 icon={ArrowPathIcon}
                 text={isRefreshing ? "Refreshing..." : "Refresh cache"}
                 disabled={isRefreshing}

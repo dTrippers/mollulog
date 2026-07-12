@@ -1,9 +1,17 @@
-import { ArrowsRightLeftIcon, ArrowsUpDownIcon, BarsArrowDownIcon, FireIcon, MagnifyingGlassIcon, ShieldCheckIcon, UserGroupIcon } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useState } from "react";
+import {
+  ArrowsRightLeftIcon,
+  ArrowsUpDownIcon,
+  BarsArrowDownIcon,
+  FireIcon,
+  ShieldCheckIcon,
+  UserGroupIcon,
+} from "@heroicons/react/24/outline";
 import hangul from "hangul-js";
-import type { Position, Role, TacticRole } from "~/models/content.d";
+import { useCallback, useEffect, useState } from "react";
+import { PanelBody, PanelFilterButtonRow, PanelSearchField } from "~/components/primitives";
 import { Attack, Defense } from "~/graphql/graphql";
-import { FilterButtons, Input } from "~/components/primitives";
+import { defenseTypeShortLocale } from "~/locales/ko";
+import type { Position, Role, TacticRole } from "~/models/content.d";
 
 export type StudentFilterState = {
   attackTypes: Attack[];
@@ -27,7 +35,7 @@ type StudentFilterProps = {
   useFilter?: boolean;
   sortBy?: SortBy[];
   useSearch?: boolean;
-}
+};
 
 const attackFilterOptions = [
   { text: "폭발", color: "red" as const, value: Attack.Explosive },
@@ -38,11 +46,11 @@ const attackFilterOptions = [
 ];
 
 const defenseFilterOptions = [
-  { text: "경장갑", color: "red" as const, value: Defense.Light },
-  { text: "중장갑", color: "yellow" as const, value: Defense.Heavy },
-  { text: "특수장갑", color: "blue" as const, value: Defense.Special },
-  { text: "탄력장갑", color: "purple" as const, value: Defense.Elastic },
-  { text: "복합장갑", color: "green" as const, value: Defense.Composite },
+  { text: defenseTypeShortLocale.light, color: "red" as const, value: Defense.Light },
+  { text: defenseTypeShortLocale.heavy, color: "yellow" as const, value: Defense.Heavy },
+  { text: defenseTypeShortLocale.special, color: "blue" as const, value: Defense.Special },
+  { text: defenseTypeShortLocale.elastic, color: "purple" as const, value: Defense.Elastic },
+  { text: defenseTypeShortLocale.composite, color: "green" as const, value: Defense.Composite },
 ];
 
 const roleFilterOptions = [
@@ -102,13 +110,16 @@ export default function StudentFilter({
     createStudentFilterState(sortBy?.[0] || "recent"),
   );
   const state = controlledState ?? internalState;
-  const setFilterState = useCallback((updater: React.SetStateAction<StudentFilterState>) => {
-    const nextState = typeof updater === "function" ? updater(state) : updater;
-    if (!controlledState) {
-      setInternalState(nextState);
-    }
-    onStateChange?.(nextState);
-  }, [controlledState, onStateChange, state]);
+  const setFilterState = useCallback(
+    (updater: React.SetStateAction<StudentFilterState>) => {
+      const nextState = typeof updater === "function" ? updater(state) : updater;
+      if (!controlledState) {
+        setInternalState(nextState);
+      }
+      onStateChange?.(nextState);
+    },
+    [controlledState, onStateChange, state],
+  );
 
   const [localSearch, setLocalSearch] = useState("");
 
@@ -149,10 +160,10 @@ export default function StudentFilter({
   };
 
   return (
-    <>
+    <PanelBody className="space-y-2">
       {useFilter && (
         <>
-          <FilterButtons
+          <PanelFilterButtonRow
             Icon={FireIcon}
             buttonProps={attackFilterOptions.map(({ text, color, value }) => ({
               text,
@@ -162,7 +173,7 @@ export default function StudentFilter({
             }))}
             size="sm"
           />
-          <FilterButtons
+          <PanelFilterButtonRow
             Icon={ShieldCheckIcon}
             buttonProps={defenseFilterOptions.map(({ text, color, value }) => ({
               text,
@@ -172,7 +183,7 @@ export default function StudentFilter({
             }))}
             size="sm"
           />
-          <FilterButtons
+          <PanelFilterButtonRow
             Icon={ArrowsUpDownIcon}
             buttonProps={roleFilterOptions.map(({ text, color, value }) => ({
               text,
@@ -182,7 +193,7 @@ export default function StudentFilter({
             }))}
             size="sm"
           />
-          <FilterButtons
+          <PanelFilterButtonRow
             Icon={ArrowsRightLeftIcon}
             buttonProps={positionFilterOptions.map(({ text, value }) => ({
               text,
@@ -191,7 +202,7 @@ export default function StudentFilter({
             }))}
             size="sm"
           />
-          <FilterButtons
+          <PanelFilterButtonRow
             Icon={UserGroupIcon}
             buttonProps={tacticRoleFilterOptions.map(({ text, value }) => ({
               text,
@@ -203,7 +214,7 @@ export default function StudentFilter({
         </>
       )}
       {sortBy && sortBy.length > 0 && (
-        <FilterButtons
+        <PanelFilterButtonRow
           Icon={BarsArrowDownIcon}
           buttonProps={sortBy.map((sort) => ({
             text: sortFilterOptions[sort],
@@ -220,16 +231,15 @@ export default function StudentFilter({
         />
       )}
       {useSearch && (
-        <div className="mb-2 flex items-center">
-          <MagnifyingGlassIcon className="size-5 mr-2" strokeWidth={2} />
-          <Input
-            placeholder="이름으로 찾기" className="-my-4 text-sm"
-            value={localSearch}
-            onChange={(value: string) => setLocalSearch(value)}
-          />
-        </div>
+        <PanelSearchField
+          label="이름으로 찾기"
+          value={localSearch}
+          placeholder="학생 이름"
+          className="pt-1"
+          onChange={setLocalSearch}
+        />
       )}
-    </>
+    </PanelBody>
   );
 }
 
@@ -246,7 +256,9 @@ type FilterableStudent = {
   order: number;
 };
 
-function updateFilterState<K extends keyof Pick<StudentFilterState, "attackTypes" | "defenseTypes" | "roles" | "tacticRoles" | "positions">>(
+function updateFilterState<
+  K extends keyof Pick<StudentFilterState, "attackTypes" | "defenseTypes" | "roles" | "tacticRoles" | "positions">,
+>(
   key: K,
   value: StudentFilterState[K][number],
   activated: boolean,
@@ -254,9 +266,7 @@ function updateFilterState<K extends keyof Pick<StudentFilterState, "attackTypes
 ) {
   setState((prev) => ({
     ...prev,
-    [key]: activated
-      ? [...prev[key], value]
-      : prev[key].filter((item) => item !== value),
+    [key]: activated ? [...prev[key], value] : prev[key].filter((item) => item !== value),
   }));
 }
 

@@ -5,19 +5,21 @@ import {
   Button,
   FilterButtons,
   NumberInput,
+  PanelActionRow,
+  PanelBody,
+  PanelBodySection,
   PanelOptionChip,
   PanelOptionIconButton,
 } from "~/components/primitives";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
-import { PYROXENE_AP_CHARGE_MAX_COUNT } from "~/domain/pyroxene-sources";
 import type { PyroxeneMonthlyPackageType } from "~/domain/pyroxene-sources";
 import {
   calculateDailyApChargePyroxene,
   isPyroxeneTimelineSourceVisible,
+  PYROXENE_AP_CHARGE_MAX_COUNT,
   togglePyroxeneTimelineSourceVisibility,
 } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
-import { cn } from "~/lib/utils";
 import type { PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 import AttendanceInput from "./planner-input/AttendanceInput";
 import BuyInput from "./planner-input/BuyInput";
@@ -95,62 +97,58 @@ export default function PyroxenePlannerSourcePanel({
 
   return (
     <>
-      <div className="space-y-5 lg:space-y-3">
+      <PanelBody className="space-y-5 lg:space-y-4">
         {sourceGroupOrder.map((group) => {
           const rows = PYROXENE_SOURCE_ROW_DEFINITIONS.filter((row) => row.group === group);
 
           return (
-            <section key={group} className="space-y-2 lg:space-y-1.5">
-              <h3 className="text-xs font-bold text-neutral-500 dark:text-neutral-400">
-                {PYROXENE_SOURCE_ROW_GROUP_LABELS[group]}
-              </h3>
-              <div className="space-y-1 rounded-lg border border-neutral-200/80 p-1 dark:border-neutral-700/80">
+            <PanelBodySection key={group} title={PYROXENE_SOURCE_ROW_GROUP_LABELS[group]}>
+              <div className="space-y-0.5">
                 {rows.map((row) => (
-                  <div
+                  <PanelActionRow
                     key={row.id}
-                    className="rounded-md px-2 py-1 transition-colors hover:bg-neutral-100/70 dark:hover:bg-neutral-700/70"
-                  >
-                    <div className="flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5">
-                      <div className="min-w-0 grow">
-                        <p className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{row.label}</p>
-                        <SelectedOptionText rowId={row.id} options={options} />
-                      </div>
-                      {row.action !== "none" && (
-                        <IconButton
-                          label={row.action === "add" ? `${row.label} 추가` : `${row.label} 설정`}
-                          Icon={row.action === "add" ? PlusIcon : Cog6ToothIcon}
-                          onClick={() => setOpenRowId(row.id)}
-                        />
-                      )}
-                      {row.visibilityTargets.length === 1 ? (
-                        <VisibilityButton
-                          label={`${row.label} 타임라인 표시`}
-                          visible={isPyroxeneTimelineSourceVisible(
-                            options.timeline.display,
-                            row.visibilityTargets[0].type,
-                          )}
-                          onClick={() => toggleSource(row.visibilityTargets[0].type)}
-                        />
-                      ) : (
-                        <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
-                          {row.visibilityTargets.map((target) => (
-                            <VisibilityChip
-                              key={target.type}
-                              label={target.label ?? row.label}
-                              visible={isPyroxeneTimelineSourceVisible(options.timeline.display, target.type)}
-                              onClick={() => toggleSource(target.type)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                    title={row.label}
+                    description={getSelectedOptionText(row.id, options)}
+                    className="rounded-md px-1.5 transition-colors hover:bg-muted/70"
+                    actions={
+                      <>
+                        {row.action !== "none" && (
+                          <IconButton
+                            label={row.action === "add" ? `${row.label} 추가` : `${row.label} 설정`}
+                            Icon={row.action === "add" ? PlusIcon : Cog6ToothIcon}
+                            onClick={() => setOpenRowId(row.id)}
+                          />
+                        )}
+                        {row.visibilityTargets.length === 1 ? (
+                          <VisibilityButton
+                            label={`${row.label} 타임라인 표시`}
+                            visible={isPyroxeneTimelineSourceVisible(
+                              options.timeline.display,
+                              row.visibilityTargets[0].type,
+                            )}
+                            onClick={() => toggleSource(row.visibilityTargets[0].type)}
+                          />
+                        ) : (
+                          <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
+                            {row.visibilityTargets.map((target) => (
+                              <VisibilityChip
+                                key={target.type}
+                                label={target.label ?? row.label}
+                                visible={isPyroxeneTimelineSourceVisible(options.timeline.display, target.type)}
+                                onClick={() => toggleSource(target.type)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    }
+                  />
                 ))}
               </div>
-            </section>
+            </PanelBodySection>
           );
         })}
-      </div>
+      </PanelBody>
 
       {openRow && (
         <BottomSheet
@@ -238,9 +236,7 @@ function SourceSheetContent({
   if (rowId === "raid") {
     return (
       <div>
-        <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">
-          타임라인에 반영할 총력전/대결전 등급을 선택해주세요
-        </p>
+        <p className="mb-2 text-sm text-muted-foreground">타임라인에 반영할 총력전/대결전 등급을 선택해주세요</p>
         <FilterButtons
           exclusive
           atLeastOne
@@ -257,9 +253,7 @@ function SourceSheetContent({
   if (rowId === "tactical") {
     return (
       <div>
-        <p className="mb-2 text-sm text-neutral-500 dark:text-neutral-400">
-          매일 보상 수령 시점의 대략적인 순위를 선택해주세요
-        </p>
+        <p className="mb-2 text-sm text-muted-foreground">매일 보상 수령 시점의 대략적인 순위를 선택해주세요</p>
         <FilterButtons
           exclusive
           atLeastOne
@@ -280,7 +274,7 @@ function SourceSheetContent({
   return null;
 }
 
-function SelectedOptionText({ rowId, options }: { rowId: string; options: PyroxenePlannerOptions }) {
+function getSelectedOptionText(rowId: string, options: PyroxenePlannerOptions) {
   let text: string | null = null;
   if (rowId === "raid") {
     text = raidTierLabels[options.raid.tier];
@@ -290,11 +284,7 @@ function SelectedOptionText({ rowId, options }: { rowId: string; options: Pyroxe
     text = options.consumption.apChargeCount === 0 ? "0회" : `매일 ${options.consumption.apChargeCount}회`;
   }
 
-  if (!text) {
-    return null;
-  }
-
-  return <p className="mt-0.5 truncate text-xs text-neutral-500 dark:text-neutral-400">{text}</p>;
+  return text;
 }
 
 function ApChargeInput({
@@ -325,7 +315,7 @@ function ApChargeInput({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-neutral-500 dark:text-neutral-400">
+      <p className="text-sm text-muted-foreground">
         매일 진행할 AP 충전 횟수를 선택해주세요. 0회로 두면 청휘석을 소비하지 않습니다.
       </p>
       <NumberInput
@@ -338,8 +328,8 @@ function ApChargeInput({
         showMax
         onChange={setApChargeCount}
       />
-      <p className="text-xs text-neutral-500 dark:text-neutral-400">매일 {dailyPyroxene.toLocaleString()}개 소비</p>
-      <Button text="저장" variant="tint-blue" fullWidth onClick={handleSave} />
+      <p className="text-xs text-muted-foreground">매일 {dailyPyroxene.toLocaleString()}개 소비</p>
+      <Button text="저장" variant="primary" fullWidth onClick={handleSave} />
     </div>
   );
 }
@@ -348,7 +338,7 @@ function IconButton({ label, Icon, onClick }: { label: string; Icon: ElementType
   return (
     <button
       type="button"
-      className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-neutral-200 bg-neutral-50 text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300 dark:hover:bg-neutral-700 lg:size-7"
+      className="inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md bg-muted text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground lg:size-7"
       aria-label={label}
       onClick={onClick}
     >

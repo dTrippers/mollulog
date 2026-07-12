@@ -3,7 +3,7 @@ import { CheckIcon, HeartIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/s
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
-import { OptionBadge } from "~/components/primitives";
+import { AttributeBadge } from "~/components/primitives";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import type { Attack, Defense } from "~/graphql/graphql";
 import {
@@ -17,7 +17,7 @@ import {
 import { studentImageUrl } from "~/models/assets";
 import type { Role } from "~/models/content.d";
 import { parseVisibleNames } from "~/models/student";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type StudentCardProps = {
   uid: string | null;
@@ -376,14 +376,14 @@ export function StudentCardPopup({ student, popups, onClose }: StudentCardPopupP
   const { name, attackType, defenseType, role } = student;
 
   return (
-    <div className="m-4 rounded-xl border border-neutral-200 bg-white/90 text-base leading-normal text-black shadow-lg backdrop-blur-sm md:m-0 dark:border-neutral-800 dark:bg-black/80 dark:text-white">
+    <div className="m-4 rounded-lg border border-border bg-white/90 text-base leading-normal text-black shadow-lg backdrop-blur-sm md:m-0 dark:bg-black/80 dark:text-white">
       <div className="px-4 pt-4 pb-2">
         <p className="text-lg font-bold">{name}</p>
         {attackType && defenseType && role && (
           <div className="py-2 flex text-sm gap-x-1">
-            <OptionBadge text={attackTypeLocale[attackType]} color={attackTypeColor[attackType]} bgColor="light" />
-            <OptionBadge text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} bgColor="light" />
-            <OptionBadge text={roleLocale[role]} color={roleColor[role]} bgColor="light" />
+            <AttributeBadge text={attackTypeLocale[attackType]} color={attackTypeColor[attackType]} />
+            <AttributeBadge text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} />
+            <AttributeBadge text={roleLocale[role]} color={roleColor[role]} />
           </div>
         )}
         <button
@@ -397,7 +397,7 @@ export function StudentCardPopup({ student, popups, onClose }: StudentCardPopupP
       </div>
       <div>
         {popups.map((popup, index) => {
-          const itemClassName = sanitizeClassName(`
+          const itemClassName = cn(`
             w-full px-4 py-3 flex items-center text-left hover:bg-neutral-200/80 dark:hover:bg-neutral-700/80 transition gap-x-2 border-t border-neutral-200 dark:border-neutral-800
             ${index === popups.length - 1 ? "rounded-b-lg" : ""}
           `);

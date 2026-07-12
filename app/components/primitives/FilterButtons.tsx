@@ -1,16 +1,29 @@
 import { useEffect, useState } from "react";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
+import { semanticColorStripeClass } from "./AttributeBadge";
 
 // === FilterButtons
-type FilterButtonsProps = {
-  Icon?: React.ElementType,
-  buttonProps: FilterButtonProps[],
+export type FilterButtonsProps = {
+  Icon?: React.ElementType;
+  buttonProps: FilterButtonProps[];
   exclusive?: boolean;
   atLeastOne?: boolean;
   size?: "sm" | "md";
+  surface?: "page" | "panel";
+  className?: string;
+  buttonGroupClassName?: string;
 };
 
-export default function FilterButtons({ Icon, buttonProps, exclusive, atLeastOne, size = "md" }: FilterButtonsProps) {
+export default function FilterButtons({
+  Icon,
+  buttonProps,
+  exclusive,
+  atLeastOne,
+  size = "md",
+  surface = "panel",
+  className,
+  buttonGroupClassName,
+}: FilterButtonsProps) {
   const [actives, setActives] = useState(() => getActiveStates(buttonProps));
 
   useEffect(() => {
@@ -18,9 +31,9 @@ export default function FilterButtons({ Icon, buttonProps, exclusive, atLeastOne
   }, [buttonProps]);
 
   return (
-    <div className="my-2 flex items-start gap-x-1 md:gap-x-1.5">
+    <div className={cn("my-2 flex items-start gap-x-1 md:gap-x-1.5", className)}>
       {Icon && <Icon className="h-5 w-5 mt-2 shrink-0" strokeWidth={2} />}
-      <div className="flex flex-wrap items-center gap-x-1 md:gap-x-1.5 gap-y-1.5">
+      <div className={cn("flex flex-wrap items-center gap-x-1 gap-y-1.5 md:gap-x-1.5", buttonGroupClassName)}>
         {buttonProps.map((prop, index) => (
           <FilterButton
             key={`${prop.text}-${prop.subText ?? "none"}`}
@@ -45,6 +58,7 @@ export default function FilterButtons({ Icon, buttonProps, exclusive, atLeastOne
               prop.onToggle(activated);
             }}
             size={size}
+            surface={surface}
           />
         ))}
       </div>
@@ -53,21 +67,12 @@ export default function FilterButtons({ Icon, buttonProps, exclusive, atLeastOne
 }
 
 // === FilterButton
-type FilterButtonProps = {
+export type FilterButtonProps = {
   text: string;
   subText?: string;
   color?: "red" | "yellow" | "green" | "blue" | "purple" | "grey";
   active?: boolean;
   onToggle: (activated: boolean) => void;
-};
-
-const buttonColors = {
-  red: "bg-red-500",
-  yellow: "bg-yellow-500",
-  green: "bg-green-600",
-  blue: "bg-blue-500",
-  purple: "bg-purple-500",
-  grey: "bg-neutral-500",
 };
 
 function getActiveStates(buttonProps: FilterButtonProps[]) {
@@ -98,7 +103,15 @@ function getNextActiveStates({
   return nextActives;
 }
 
-function FilterButton({ text, subText, color, active, onToggle, size = "md" }: FilterButtonProps & { size: "sm" | "md" }) {
+function FilterButton({
+  text,
+  subText,
+  color,
+  active,
+  onToggle,
+  size = "md",
+  surface,
+}: FilterButtonProps & { size: "sm" | "md"; surface: NonNullable<FilterButtonsProps["surface"]> }) {
   let textSizeClass = "text-sm";
   if (size === "md") {
     textSizeClass = "text-base";
@@ -108,17 +121,26 @@ function FilterButton({ text, subText, color, active, onToggle, size = "md" }: F
     <button
       type="button"
       aria-pressed={active}
-      className={sanitizeClassName(`
-        inline-flex items-center px-2 py-1 rounded-lg transition-colors border border-neutral-200 dark:border-neutral-700 gap-x-1
-        ${active ?
-          "bg-neutral-800 hover:bg-neutral-700 dark:bg-neutral-200 dark:hover:bg-neutral-300 text-neutral-200 dark:text-neutral-700" :
-          "bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-700 dark:hover:bg-neutral-600 text-neutral-700 dark:text-neutral-200"}
+      className={cn(`
+        inline-flex items-center gap-x-1 rounded-md px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
+        ${
+          active
+            ? "bg-foreground text-background hover:bg-foreground/90"
+            : surface === "page"
+              ? "bg-card text-foreground shadow-sm shadow-black/5 hover:bg-foreground/10 dark:bg-muted dark:shadow-none"
+              : "bg-muted text-foreground hover:bg-foreground/10"
+        }
+        ${color ? `relative overflow-hidden pl-2.5 before:absolute before:inset-y-0 before:left-0 before:w-1 ${semanticColorStripeClass[color]}` : ""}
       `)}
-      onClick={() => { onToggle(!active); }}
+      data-colored={color ? "true" : undefined}
+      onClick={() => {
+        onToggle(!active);
+      }}
     >
-      {color && <div className={`size-2.5 rounded-full ${buttonColors[color]}`} />}
       <span className={`${textSizeClass} tracking-tighter shrink-0`}>{text}</span>
-      {subText && <span className={`text-xs ${active ? "text-neutral-300 dark:text-neutral-700" : "text-neutral-500 dark:text-neutral-400"}`}>{subText}</span>}
+      {subText && (
+        <span className={`text-xs ${active ? "text-background/70" : "text-muted-foreground"}`}>{subText}</span>
+      )}
     </button>
   );
 }

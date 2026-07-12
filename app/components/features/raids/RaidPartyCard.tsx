@@ -3,6 +3,7 @@ import type { ElementType, ReactNode } from "react";
 import { useState } from "react";
 import { StudentCard } from "~/components/features/students";
 import type { Attack, Defense } from "~/graphql/graphql";
+import { cn } from "~/lib/utils";
 import type { Role } from "~/models/content.d";
 
 export type RaidPartyStudentAction = {
@@ -43,9 +44,10 @@ type RaidPartyCardProps = {
   summaryItems: RaidPartySummaryItem[];
   actions?: ReactNode;
   popupIdPrefix: string;
-  surface?: "default" | "elevated";
   visibleRowCount?: number;
   emptyText?: string;
+  className?: string;
+  summaryClassName?: string;
   getStudentActions?: (slot: RaidPartySlot, rowIndex: number, slotIndex: number) => RaidPartyStudentAction[];
 };
 
@@ -58,9 +60,10 @@ export default function RaidPartyCard({
   summaryItems,
   actions,
   popupIdPrefix,
-  surface = "default",
   visibleRowCount,
   emptyText = "편성 데이터가 없어요",
+  className,
+  summaryClassName,
   getStudentActions,
 }: RaidPartyCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -68,24 +71,13 @@ export default function RaidPartyCard({
   const visibleRows = shouldCollapse && !expanded ? rows.slice(0, visibleRowCount) : rows;
   const hiddenRowCount = shouldCollapse ? rows.length - visibleRows.length : 0;
 
-  const cardClassName =
-    surface === "elevated"
-      ? "rounded-lg bg-neutral-100 p-3 dark:bg-neutral-900/80 md:p-4"
-      : "rounded-lg bg-neutral-100 p-3 dark:bg-neutral-800/50 md:p-4";
-  const summaryClassName =
-    surface === "elevated"
-      ? "grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-white/70 p-3 text-sm dark:bg-neutral-950/50 sm:grid-cols-3 lg:w-48 lg:grid-cols-1"
-      : "grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-white/70 p-3 text-sm dark:bg-neutral-900/40 sm:grid-cols-3 lg:w-48 lg:grid-cols-1";
-
   return (
-    <article className={cardClassName}>
+    <article className={cn("rounded-lg bg-card p-3 md:p-4", className)}>
       <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="text-lg font-bold leading-tight text-neutral-900 dark:text-neutral-100">{primaryLabel}</span>
+          <span className="text-lg font-bold leading-tight text-foreground">{primaryLabel}</span>
           {secondaryLabel ? (
-            <span className="text-sm font-semibold tabular-nums text-neutral-500 dark:text-neutral-400">
-              {secondaryLabel}
-            </span>
+            <span className="text-sm font-semibold tabular-nums text-muted-foreground">{secondaryLabel}</span>
           ) : null}
         </div>
         {actions ? <div className="flex shrink-0 flex-wrap items-center gap-1">{actions}</div> : null}
@@ -106,18 +98,21 @@ export default function RaidPartyCard({
               ))}
             </div>
           ) : (
-            <p className="py-4 text-center text-sm text-neutral-500 dark:text-neutral-400">{emptyText}</p>
+            <p className="py-4 text-center text-sm text-muted-foreground">{emptyText}</p>
           )}
         </div>
 
         {summaryItems.length > 0 ? (
-          <dl className={summaryClassName}>
+          <dl
+            className={cn(
+              "grid shrink-0 grid-cols-2 gap-x-4 gap-y-2 rounded-md bg-background/70 p-3 text-sm sm:grid-cols-3 lg:w-48 lg:grid-cols-1",
+              summaryClassName,
+            )}
+          >
             {summaryItems.map((item) => (
               <div key={item.label} className="min-w-0">
-                <dt className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{item.label}</dt>
-                <dd className="mt-0.5 truncate font-semibold tabular-nums text-neutral-900 dark:text-neutral-100">
-                  {item.value}
-                </dd>
+                <dt className="text-xs font-medium text-muted-foreground">{item.label}</dt>
+                <dd className="mt-0.5 truncate font-semibold tabular-nums text-foreground">{item.value}</dd>
               </div>
             ))}
           </dl>
@@ -127,7 +122,7 @@ export default function RaidPartyCard({
       {shouldCollapse ? (
         <button
           type="button"
-          className="mt-3 flex w-full items-center justify-center gap-1 rounded-md py-1.5 text-xs font-medium text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+          className="mt-3 flex w-full items-center justify-center gap-1 rounded-md py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           onClick={() => setExpanded((current) => !current)}
         >
           {expanded ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
@@ -153,7 +148,7 @@ function PartyRow({
 
   return (
     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
-      <span className="shrink-0 text-xs font-medium tabular-nums text-neutral-500 dark:text-neutral-400 sm:mt-2 sm:w-10">
+      <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground sm:mt-2 sm:w-10">
         {row.label}
       </span>
       <div className="grid w-full min-w-0 grid-cols-6 gap-1.5 sm:w-fit sm:flex-none">
@@ -186,7 +181,7 @@ function PartyStudentCard({
   if (!slot.uid) {
     return (
       <div className="min-w-0 sm:w-12">
-        <div className="aspect-square w-full rounded-lg bg-neutral-200/60 dark:bg-neutral-700/50" />
+        <div className="aspect-square w-full rounded-lg bg-muted/60" />
       </div>
     );
   }

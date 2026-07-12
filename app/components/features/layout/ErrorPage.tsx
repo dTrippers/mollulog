@@ -17,16 +17,20 @@ export default function ErrorPage({ Icon, status, title, message, showButtons = 
   return (
     <div className="my-16 md:my-48 w-full flex flex-col items-center justify-center">
       <ShowingIcon className="my-2 w-16 h-16" strokeWidth={2} />
-      {status && <p className="text-sm font-semibold text-neutral-500 dark:text-neutral-400">{status}</p>}
+      {status && <p className="text-sm font-semibold text-muted-foreground">{status}</p>}
       <p className="my-2 text-2xl font-bold">{displayTitle}</p>
-      {displayMessage && <p className="text-sm text-neutral-600 dark:text-neutral-400">{displayMessage}</p>}
+      {displayMessage && <p className="text-sm text-muted-foreground">{displayMessage}</p>}
 
       {showButtons && (
         <div className="my-4 flex gap-2">
-          <Link to="/" className="px-4 py-2 bg-neutral-100 dark:bg-neutral-700 rounded-md cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors">
+          <Link to="/" className="cursor-pointer rounded-md bg-muted px-4 py-2 transition-colors hover:bg-muted/80">
             첫 화면으로
           </Link>
-          <button type="button" className="px-4 py-2 bg-neutral-100 dark:bg-neutral-700 rounded-md cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors" onClick={() => window.location.reload()}>
+          <button
+            type="button"
+            className="cursor-pointer rounded-md bg-muted px-4 py-2 transition-colors hover:bg-muted/80"
+            onClick={() => window.location.reload()}
+          >
             새로고침
           </button>
         </div>

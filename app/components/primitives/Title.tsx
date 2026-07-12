@@ -1,31 +1,30 @@
 import { ChevronLeftIcon } from "@heroicons/react/24/solid";
 import { Link } from "react-router";
+import { cn } from "~/lib/utils";
 
 type TitleProps = {
   text: string;
   description?: string;
   className?: string;
   parentPath?: string;
-}
+};
 
 export default function Title({ text, description, className, parentPath }: TitleProps) {
   return (
-    <div className="my-8">
-      <div className={`flex items-center gap-x-2 ${className ?? ""}`}>
+    <header className={cn("py-6", className)}>
+      <div className="flex items-center gap-2">
         {parentPath && (
           <Link
             to={parentPath}
-            className="rounded-lg p-1 transition hover:bg-neutral-100 hover:text-neutral-500 dark:hover:bg-neutral-800"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="상위 페이지로 이동"
           >
-            <ChevronLeftIcon className="size-8" strokeWidth={2} />
+            <ChevronLeftIcon className="size-7" strokeWidth={2} />
           </Link>
         )}
-        <h1 className="font-black text-3xl md:text-4xl drop-shadow-xl drop-shadow-neutral-300/50 dark:drop-shadow-neutral-700/50">
-          {text}
-        </h1>
+        <h1 className="text-2xl font-bold text-foreground md:text-3xl">{text}</h1>
       </div>
-      {description && <p className="my-4 text-neutral-500 dark:text-neutral-400">{description}</p>}
-    </div>
+      {description ? <p className="mt-2 text-sm text-muted-foreground">{description}</p> : null}
+    </header>
   );
 }

@@ -1,6 +1,6 @@
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
-const stripeColorClass = {
+export const semanticColorStripeClass = {
   red: "before:bg-red-500",
   yellow: "before:bg-yellow-500",
   green: "before:bg-green-600",
@@ -9,20 +9,20 @@ const stripeColorClass = {
   grey: "before:bg-neutral-500",
 };
 
-export type AttributeBadgeColor = keyof typeof stripeColorClass;
+export type AttributeBadgeColor = keyof typeof semanticColorStripeClass;
 
 type AttributeBadgeProps = {
   text: string;
-  color: AttributeBadgeColor;
+  color?: AttributeBadgeColor;
 };
 
-export default function AttributeBadge({ text, color }: AttributeBadgeProps) {
+export default function AttributeBadge({ text, color = "grey" }: AttributeBadgeProps) {
   return (
     <div
-      className={sanitizeClassName(`
-        relative inline-flex w-fit justify-self-start flex-shrink-0 overflow-hidden rounded-l-sm rounded-r-md bg-neutral-200 py-0.5 pr-1.5 pl-2 text-xs leading-none text-neutral-800
-        before:absolute before:inset-y-0 before:left-0 before:w-1 dark:bg-neutral-800 dark:text-neutral-200
-        ${stripeColorClass[color]}
+      className={cn(`
+        relative inline-flex w-fit shrink-0 justify-self-start overflow-hidden rounded-md bg-muted py-1 pr-2 pl-2.5 text-xs leading-none text-foreground
+        before:absolute before:inset-y-0 before:left-0 before:w-1
+        ${semanticColorStripeClass[color]}
       `)}
     >
       {text}

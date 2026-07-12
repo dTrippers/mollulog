@@ -1,13 +1,13 @@
 import { Link } from "react-router";
 import { AttributeBadge } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import type { Difficulty } from "~/domain/raid-score";
 import type { Defense } from "~/graphql/graphql";
-import { type UtcIsoString, formatInstant } from "~/lib/date-time";
+import { formatInstant, type UtcIsoString } from "~/lib/date-time";
+import { cn } from "~/lib/utils";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType, Terrain } from "~/models/content.d";
-import type { Difficulty } from "~/domain/raid-score";
-import { sanitizeClassName } from "~/prophandlers";
 
 export type RaidListItemRaid = {
   raidBoss: { uid: string; name: string };
@@ -37,6 +37,8 @@ type RaidListItemProps = {
   actions?: RaidListItemAction[];
   reserveRightAccessorySpace?: boolean;
   className?: string;
+  imageClassName?: string;
+  contentClassName?: string;
 };
 
 export default function RaidListItem({
@@ -44,6 +46,8 @@ export default function RaidListItem({
   actions,
   reserveRightAccessorySpace = false,
   className,
+  imageClassName,
+  contentClassName,
 }: RaidListItemProps) {
   const displayTimeZone = useDisplayTimeZone();
   const { raidBoss, raidType, seasonIndex, startAt, endAt, terrain } = raid;
@@ -51,32 +55,32 @@ export default function RaidListItem({
 
   return (
     <div
-      className={sanitizeClassName(`
-        relative overflow-hidden rounded-lg bg-white transition-colors hover:bg-neutral-100
-        dark:bg-neutral-900 dark:hover:bg-neutral-800
+      className={cn(`
+        relative overflow-hidden rounded-lg bg-card shadow-md shadow-black/5 transition-colors hover:bg-muted dark:shadow-sm dark:shadow-black/20
         ${className ?? ""}
       `)}
     >
       <img
         src={bossImageUrl(raidBoss.uid)}
         alt="보스 이미지"
-        className="absolute top-0 right-0 h-full object-cover opacity-70"
+        className={cn("absolute top-0 right-0 h-full object-cover opacity-70", imageClassName)}
         loading="lazy"
       />
       <div
-        className={sanitizeClassName(`
-          relative w-full rounded-lg bg-white/90 p-4 transition-colors dark:bg-neutral-900/80
-          ${reserveRightAccessorySpace ? "pr-10" : ""}
-        `)}
+        className={cn(
+          "relative w-full rounded-lg bg-card/90 p-4 transition-colors",
+          reserveRightAccessorySpace && "pr-10",
+          contentClassName,
+        )}
       >
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="text-xs text-muted-foreground">
               {raidTypeLocale[raidType as RaidType] ?? raidType}
               {seasonIndex != null ? ` #${seasonIndex}` : ""} · {terrainLocale[terrain]}
             </p>
             <p className="truncate text-sm font-bold lg:text-base">{raidBoss.name}</p>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="whitespace-nowrap text-xs text-muted-foreground">
               {startAt ? formatInstant(startAt, { timeZone: displayTimeZone, format: "YYYY.MM.DD" }) : "-"} ~{" "}
               {endAt ? formatInstant(endAt, { timeZone: displayTimeZone, format: "MM.DD" }) : "-"}
             </p>
@@ -86,7 +90,7 @@ export default function RaidListItem({
                   <Link
                     key={`${text}-${to}`}
                     to={to}
-                    className="rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-600 transition hover:bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-black"
+                    className="rounded-md bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                   >
                     {text}
                   </Link>
@@ -98,7 +102,7 @@ export default function RaidListItem({
             {displayDefenseTypeSets.map(({ defenseTypes: setDefenseTypes, difficulty }) => (
               <div key={`${difficulty ?? "none"}-${setDefenseTypes.join("-")}`} className="flex items-center gap-1.5">
                 {difficulty && (
-                  <span className="whitespace-nowrap text-xs text-neutral-500 dark:text-neutral-400">
+                  <span className="whitespace-nowrap text-xs text-muted-foreground">
                     {difficultyLocale[difficulty] ?? difficulty}
                   </span>
                 )}

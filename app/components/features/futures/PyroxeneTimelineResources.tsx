@@ -49,11 +49,11 @@ export default function PyroxeneTimelineResources({
   const showCollectedAction = collectable && collectedSourceKey && onCollectedSourceChange;
 
   return (
-    <div className="my-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-neutral-200 px-3 py-2 transition-opacity dark:border-neutral-700">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md border-b border-border/70 px-2 py-2.5 transition-colors last:border-b-0 hover:bg-muted/60 sm:px-3">
       <div className="min-w-0 flex-1">
         <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
           <p className="shrink-0 text-xs font-semibold sm:text-sm">
-            {date.format("YYYY-MM-DD")}({date.format("ddd")})
+            {date.format("MM.DD")}({date.format("ddd")})
           </p>
           <TimelineResourceDescription description={description} />
         </div>
@@ -94,7 +94,7 @@ export default function PyroxeneTimelineResources({
         {showCollectedAction && (
           <div className="flex justify-end">
             <Button
-              variant={collected ? "tint" : "tint-blue"}
+              variant={collected ? "secondary" : "primary"}
               size="xs"
               onClick={() => onCollectedSourceChange(collectedSourceKey, !collected)}
               className="group"
@@ -112,7 +112,7 @@ export default function PyroxeneTimelineResources({
         )}
         {itemUid && onDeleteItem && (
           <div className="flex justify-end">
-            <Button text="삭제" variant="tint-red" size="xs" onClick={handleDeleteClick} />
+            <Button text="삭제" variant="danger-subtle" size="xs" onClick={handleDeleteClick} />
           </div>
         )}
       </div>
@@ -129,7 +129,7 @@ function TimelineResourceDescription({ description }: { description: string }) {
   });
 
   return (
-    <div className="min-w-0 text-xs leading-snug text-neutral-500 dark:text-neutral-400 sm:text-sm">
+    <div className="min-w-0 text-xs leading-snug text-muted-foreground sm:text-sm">
       {lines.map(({ key, line }) => (
         <span key={key} className="block truncate">
           {line}

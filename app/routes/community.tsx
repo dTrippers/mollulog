@@ -200,19 +200,19 @@ function CommunityPostTypeFilter({ selectedPostTypes }: { selectedPostTypes: Com
     <div ref={rootRef} className="relative z-50 w-fit">
       <button
         type="button"
-        className="inline-flex min-h-8 items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-xs font-medium text-neutral-800 shadow-xs transition-colors hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800"
+        className="inline-flex min-h-8 items-center justify-between gap-2 rounded-md border border-input bg-background px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted"
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((prev) => !prev)}
       >
         <span className="inline-flex items-center gap-1.5">
-          <Squares2X2Icon className="size-3.5 text-neutral-500 dark:text-neutral-400" />
+          <Squares2X2Icon className="size-3.5 text-muted-foreground" />
           {label}
         </span>
-        <ChevronDownIcon className={cn("size-4 text-neutral-500 transition-transform", isOpen && "rotate-180")} />
+        <ChevronDownIcon className={cn("size-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
       </button>
       {isOpen && (
-        <div className="mt-1 w-64 overflow-hidden rounded-md border border-neutral-200 bg-white py-1 text-xs shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+        <div className="absolute top-full left-0 z-20 mt-2 w-64 overflow-hidden rounded-md bg-popover py-1 text-xs text-popover-foreground shadow-lg">
           {COMMUNITY_POST_TYPE_FILTERS.map(({ type, label, Icon }) => {
             const active = selectedSet.has(type);
             const disabled = active && selectedCount <= 1;
@@ -221,7 +221,7 @@ function CommunityPostTypeFilter({ selectedPostTypes }: { selectedPostTypes: Com
                 key={type}
                 type="button"
                 className={cn(
-                  "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-neutral-700 transition-colors hover:bg-neutral-50 dark:text-neutral-200 dark:hover:bg-neutral-800",
+                  "flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-foreground transition-colors hover:bg-muted",
                   disabled && "cursor-not-allowed opacity-60",
                 )}
                 role="menuitemcheckbox"
@@ -230,12 +230,12 @@ function CommunityPostTypeFilter({ selectedPostTypes }: { selectedPostTypes: Com
                 onClick={() => navigate(getNextUrl(type, active))}
               >
                 <span className="inline-flex min-w-0 items-center gap-2">
-                  <Icon className="size-4 shrink-0 text-neutral-500 dark:text-neutral-400" />
+                  <Icon className="size-4 shrink-0 text-muted-foreground" />
                   <span className="truncate font-medium">{label}</span>
                 </span>
                 <input
                   type="checkbox"
-                  className="size-4 shrink-0 rounded border-neutral-300 text-blue-600 focus:ring-2 focus:ring-blue-500/20 dark:border-neutral-600 dark:bg-neutral-900"
+                  className="size-4 shrink-0 rounded-sm border-input bg-background text-primary focus:ring-2 focus:ring-ring/30"
                   checked={active}
                   disabled={disabled}
                   readOnly

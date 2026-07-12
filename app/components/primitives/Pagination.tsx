@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/20/solid";
+import { useState } from "react";
 
 type PaginationProps = {
   currentPage: number;
@@ -75,7 +75,7 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
           type="button"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="p-1.5 rounded transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          className="cursor-pointer rounded-md p-1.5 transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="이전 페이지"
         >
           <ChevronLeftIcon className="w-5 h-5" />
@@ -86,7 +86,10 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
             const previousPage = pageNumbers[index - 1];
             const nextPage = pageNumbers[index + 1];
             return (
-              <span key={`ellipsis-${previousPage ?? "start"}-${nextPage ?? "end"}`} className="px-2 text-neutral-500">
+              <span
+                key={`ellipsis-${previousPage ?? "start"}-${nextPage ?? "end"}`}
+                className="px-2 text-muted-foreground"
+              >
                 ...
               </span>
             );
@@ -99,10 +102,8 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
               key={pageNum}
               type="button"
               onClick={() => onPageChange(pageNum)}
-              className={`px-3 py-1 text-sm rounded transition ${
-                isActive
-                  ? "bg-neutral-900 dark:bg-neutral-100 text-white dark:text-neutral-900 font-medium"
-                  : "hover:bg-neutral-100 dark:hover:bg-neutral-900 cursor-pointer"
+              className={`cursor-pointer rounded-md px-3 py-1 text-sm transition-colors ${
+                isActive ? "bg-primary font-medium text-primary-foreground" : "hover:bg-muted"
               }`}
               aria-label={`페이지 ${pageNum}`}
               aria-current={isActive ? "page" : undefined}
@@ -111,12 +112,12 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
             </button>
           );
         })}
-        
+
         <button
           type="button"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="p-1.5 rounded transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          className="cursor-pointer rounded-md p-1.5 transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
           aria-label="다음 페이지"
         >
           <ChevronRightIcon className="w-5 h-5" />
@@ -132,13 +133,13 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
           onChange={(e) => setJumpPage(e.target.value)}
           onKeyDown={handleJumpInputKeyDown}
           placeholder="페이지"
-          className="w-20 px-2 py-1 text-sm border border-neutral-200 dark:border-neutral-700 dark:bg-neutral-900 rounded transition focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:focus:ring-neutral-600 no-decoration"
+          className="no-decoration w-20 rounded-md border border-input bg-background px-2 py-1 text-sm transition focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
         />
         <button
           type="button"
           onClick={handleJumpToPage}
           disabled={!jumpPage || Number.isNaN(Number.parseInt(jumpPage, 10))}
-          className="px-3 py-1 text-sm rounded transition disabled:opacity-40 disabled:cursor-not-allowed hover:bg-neutral-100 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-700"
+          className="cursor-pointer rounded-md bg-card px-3 py-1 text-sm shadow-sm shadow-black/5 transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40 dark:bg-muted dark:shadow-none"
         >
           이동
         </button>

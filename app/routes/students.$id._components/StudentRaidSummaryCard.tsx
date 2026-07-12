@@ -1,4 +1,6 @@
+import { SectionCard } from "~/components/primitives";
 import type { StudentRaidSummary } from "./StudentRaidSummaryModel";
+
 type StudentRaidSummaryCardProps = {
   summary: StudentRaidSummary;
 };
@@ -9,14 +11,8 @@ export default function StudentRaidSummaryCard({ summary }: StudentRaidSummaryCa
   const { decision } = summary;
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <p className="text-base font-bold">모집 vs 조력</p>
-        </div>
-      </div>
-
-      <div className="mt-4">
+    <SectionCard title="모집 vs 조력">
+      <div>
         <div className="flex h-3 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
           <div className="h-full bg-emerald-500 dark:bg-emerald-400" style={{ width: `${ownRatio * 100}%` }} />
           <div className="h-full bg-blue-500 dark:bg-blue-400" style={{ width: `${assistRatio * 100}%` }} />
@@ -41,7 +37,7 @@ export default function StudentRaidSummaryCard({ summary }: StudentRaidSummaryCa
         <span className="font-semibold text-neutral-700 dark:text-neutral-300">{decision.value}</span> ·{" "}
         {decision.description}
       </p>
-    </div>
+    </SectionCard>
   );
 }
 

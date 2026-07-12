@@ -7,6 +7,7 @@ type FormGroupProps = {
   children: ReactNode | ReactNode[];
   submitOnChange?: boolean;
   showSavingIndicator?: boolean;
+  itemHover?: boolean;
 };
 
 const FormGroupContext = createContext<{
@@ -20,6 +21,7 @@ export default function FormGroup({
   children,
   submitOnChange,
   showSavingIndicator,
+  itemHover = true,
 }: FormGroupProps) {
   const childrenArray = Children.toArray(children);
   const navigation = useNavigation();
@@ -43,15 +45,11 @@ export default function FormGroup({
 
   const layout = (
     <>
-      <div className="rounded-lg bg-neutral-100 dark:bg-neutral-900">
+      <div className="rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
         {childrenArray.map((child) => (
           <div
-            key={
-              isValidElement(child)
-                ? (child.key ?? child.type?.toString?.() ?? "child")
-                : String(child)
-            }
-            className="border-neutral-200 transition first:rounded-t-lg last:rounded-b-lg hover:bg-neutral-200 not-last:border-b dark:border-neutral-800 dark:hover:bg-neutral-950"
+            key={isValidElement(child) ? (child.key ?? child.type?.toString?.() ?? "child") : String(child)}
+            className={`border-border transition-colors first:rounded-t-lg last:rounded-b-lg not-last:border-b ${itemHover ? "hover:bg-muted" : ""}`}
           >
             {child}
           </div>

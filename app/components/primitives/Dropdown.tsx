@@ -37,14 +37,6 @@ export default function Dropdown<T extends string>({
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const selectedOption = options.find((option) => option.value === value) ?? options[0];
-  const buttonClassName = {
-    sm: "min-h-9 px-3 py-1.5 text-sm",
-    xs: "min-h-8 px-2.5 py-1 text-xs",
-  }[size];
-  const menuClassName = {
-    sm: "py-2 text-sm",
-    xs: "py-1.5 text-xs",
-  }[size];
 
   useEffect(() => {
     if (!isOpen) {
@@ -63,25 +55,27 @@ export default function Dropdown<T extends string>({
 
   return (
     <div ref={rootRef} className={cn("relative w-fit", className)}>
-      {label && <p className="mb-1 text-xs font-medium text-neutral-500 dark:text-neutral-400">{label}</p>}
+      {label && <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>}
       <button
         type="button"
         className={cn(
-          "inline-flex items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white font-medium text-neutral-800 shadow-xs transition-colors hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-100 dark:hover:bg-neutral-800",
-          buttonClassName,
+          "inline-flex items-center justify-between gap-2 rounded-md border border-input bg-background font-medium text-foreground shadow-xs transition-colors hover:bg-muted",
+          size === "xs" ? "min-h-8 px-2.5 py-1 text-xs" : "min-h-9 px-3 py-1.5 text-sm",
         )}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={() => setIsOpen((prev) => !prev)}
       >
         <span className="inline-flex items-center gap-1.5">
-          {selectedOption?.color && <span className={cn("size-2.5 rounded-full", optionColors[selectedOption.color])} />}
+          {selectedOption?.color && (
+            <span className={cn("size-2.5 rounded-full", optionColors[selectedOption.color])} />
+          )}
           {selectedOption?.label}
         </span>
-        <ChevronDownIcon className={cn("size-4 text-neutral-500 transition-transform", isOpen && "rotate-180")} />
+        <ChevronDownIcon className={cn("size-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
       </button>
       {isOpen && (
-        <div className="absolute left-0 z-20 mt-1 min-w-full overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg dark:border-neutral-700 dark:bg-neutral-900">
+        <div className="absolute left-0 z-20 mt-1 min-w-full overflow-hidden rounded-md bg-popover py-1 text-popover-foreground shadow-lg">
           {options.map((option) => {
             const selected = option.value === value;
             return (
@@ -90,10 +84,8 @@ export default function Dropdown<T extends string>({
                 type="button"
                 className={cn(
                   "flex w-full items-center justify-between gap-3 px-3 text-left whitespace-nowrap transition-colors",
-                  menuClassName,
-                  selected
-                    ? "bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
-                    : "text-neutral-700 hover:bg-neutral-50 dark:text-neutral-200 dark:hover:bg-neutral-800",
+                  size === "xs" ? "py-1.5 text-xs" : "py-2 text-sm",
+                  selected ? "bg-muted text-foreground" : "text-foreground hover:bg-muted/60",
                 )}
                 onClick={() => {
                   onChange(option.value);

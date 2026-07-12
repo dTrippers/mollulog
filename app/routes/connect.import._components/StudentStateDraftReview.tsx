@@ -233,7 +233,7 @@ export default function StudentStateDraftReview({
         {visibleRows.length > 0 ? (
           <>
             <div className="max-w-full overflow-x-auto">
-              <div className="inline-block overflow-hidden rounded-xl border border-neutral-200 align-top dark:border-neutral-700">
+              <div className="inline-block overflow-hidden rounded-lg border border-neutral-200 align-top dark:border-neutral-700">
                 <StudentStateComparisonTable
                   rows={visibleRows}
                   disabled={navigation.state === "submitting" || !isPending}
@@ -506,10 +506,7 @@ function ReadonlyStudentStateRow({
         <td colSpan={fields.length} className={cn(cellBase, "relative px-3 py-2")}>
           <div className="pointer-events-none flex select-none items-center gap-2 opacity-20 blur-sm">
             {fields.map((field) => (
-              <div
-                key={field.label}
-                className={cn("h-4 rounded bg-neutral-400 dark:bg-neutral-500", getSkeletonWidth(field))}
-              />
+              <div key={field.label} className={cn("h-4 rounded-sm bg-muted", getSkeletonWidth(field))} />
             ))}
           </div>
           <div className="absolute inset-0 flex items-center justify-center">
@@ -540,13 +537,7 @@ function ReadonlyStudentStateRow({
   );
 }
 
-function StudentStateReadonlyCell({
-  field,
-  value,
-}: {
-  field: StudentStateDisplayField;
-  value: number | null;
-}) {
+function StudentStateReadonlyCell({ field, value }: { field: StudentStateDisplayField; value: number | null }) {
   return <span>{formatFieldValue(field, value)}</span>;
 }
 

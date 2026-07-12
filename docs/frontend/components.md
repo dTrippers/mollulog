@@ -33,11 +33,13 @@ Examples:
 - buttons, inputs, textareas, fields
 - empty states
 - profile images
-- shared section / panel wrappers
+- `SectionCard` for a static titled surface
+- `Section` for a content section that may be collapsible
 
 Notes:
 
 - Do not build two generic controls with the same responsibility.
+- Do not combine unrelated surfaces behind a visual `variant`. Prefer responsibility-based components such as `SectionCard` and `Section`.
 - When domain vocabulary appears, `features` is usually the better fit.
 
 ### `app/components/features/<domain>`
@@ -52,6 +54,8 @@ Examples:
 - raid selector
 - community feed
 - event info card
+
+Layout-only components such as `PagePanel`, `PageLink`, and `PageScreenSelector` stay in `features/layout`. They are not app-wide primitives because their behavior is coupled to the responsive `Page` shell.
 
 ### Route-local components
 
@@ -97,6 +101,7 @@ Good examples:
 ## Component API
 
 - Low-level components keep a small, predictable prop API.
+- Variants express semantic responsibility, not a raw color or a one-off layout. Avoid APIs such as `tint-blue`, `size="list"`, or generic `card` / `section` switches.
 - Domain components prefer props expressing domain intent over layout props.
 - Encapsulate route `action` and hidden form serialization in the component closest to the screen.
 - When one-off boolean combinations make intent ambiguous, prefer splitting the component again.

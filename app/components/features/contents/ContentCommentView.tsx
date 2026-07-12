@@ -1,7 +1,7 @@
 import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/react/16/solid";
 import { ClickableSurface } from "~/components/primitives";
 import type { ContentCommentSummary } from "~/models/content";
-import { sanitizeClassName } from "~/prophandlers";
+import { cn } from "~/lib/utils";
 
 type ContentCommentViewProps = {
   comments?: {
@@ -55,8 +55,8 @@ export default function ContentCommentView({ comments, summary, placeholder, onC
     : null;
   return (
     <ClickableSurface
-      className={sanitizeClassName(`
-        w-full p-2 flex items-center gap-x-1.5 bg-neutral-100 dark:bg-neutral-900 rounded-lg text-sm transition
+      className={cn(`
+        w-full p-2 flex items-center gap-x-1.5 rounded-lg bg-neutral-100 text-sm shadow-xs shadow-black/5 transition dark:bg-neutral-900 dark:shadow-none
         ${onClick ? "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700" : ""}
       `)}
       onClick={onClick}

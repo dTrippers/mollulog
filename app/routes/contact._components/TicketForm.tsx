@@ -16,7 +16,7 @@ type TicketFormProps = {
 
 export default function TicketForm({ errors, values, submitting = false }: TicketFormProps) {
   return (
-    <section className="rounded-xl border border-border bg-card p-5 text-card-foreground">
+    <section className="rounded-lg bg-card p-5 text-card-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
       <div className="mb-6">
         <h2 className="text-lg font-semibold">새 문의 작성</h2>
       </div>

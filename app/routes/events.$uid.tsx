@@ -1,6 +1,6 @@
 import { InformationCircleIcon, ListBulletIcon, ShoppingCartIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
-import { EventSelector } from "~/components/features/events";
+import { PanelEventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
 import { compareInstantAsc } from "~/lib/date-time";
 import { getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
@@ -51,7 +51,7 @@ export default function EventPage() {
                 title: "이벤트 선택",
                 description: "상점 계산기를 사용할 이벤트 선택",
                 Icon: ListBulletIcon,
-                children: <EventSelector events={shopAvailableEvents} currentEventUid={uid ?? ""} />,
+                children: <PanelEventSelector events={shopAvailableEvents} currentEventUid={uid ?? ""} />,
               },
             ]
           : undefined

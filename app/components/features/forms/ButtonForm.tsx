@@ -7,19 +7,14 @@ type ButtonFormProps = {
   onClick?: () => void;
 };
 
-export default function ButtonForm({
-  type = "button",
-  label,
-  color = "default",
-  onClick,
-}: ButtonFormProps) {
+export default function ButtonForm({ type = "button", label, color = "default", onClick }: ButtonFormProps) {
   return (
     <Button
       type={type}
       text={label}
-      variant="list"
-      size="list"
-      className={color === "blue" ? "text-blue-500" : color === "red" ? "text-red-500" : ""}
+      className={`min-h-12 justify-start border-transparent bg-transparent p-4 text-left shadow-none hover:bg-muted ${
+        color === "blue" ? "text-primary" : color === "red" ? "text-destructive" : ""
+      }`}
       onClick={onClick}
       fullWidth
     />

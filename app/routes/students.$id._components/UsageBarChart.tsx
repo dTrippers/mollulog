@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { EmptyView, LoadingSkeleton } from "~/components/primitives";
+import { EmptyView, LoadingSkeleton, SectionCard } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 
 type UsageChartCardProps = {
@@ -35,17 +35,14 @@ export function UsageChartCard({
   children,
 }: UsageChartCardProps) {
   return (
-    <div className="flex h-full flex-col rounded-lg border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
-      <div className="mb-4">
-        <div className="flex flex-wrap items-end justify-between gap-2">
-          <p className="text-base font-bold">{title}</p>
-          {summary ? <div className="text-xs text-neutral-500 dark:text-neutral-400">{summary}</div> : null}
-        </div>
-        {description ? <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{description}</p> : null}
-      </div>
-
+    <SectionCard
+      title={title}
+      description={description}
+      action={summary ? <div className="text-xs text-muted-foreground">{summary}</div> : null}
+      className="flex h-full flex-col"
+    >
       {loading ? (
-        <LoadingSkeleton noOuterMargin className="-mt-4" />
+        <LoadingSkeleton noOuterMargin />
       ) : empty ? (
         <div className="flex flex-1 items-center justify-center">
           <EmptyView className="my-0" text={emptyText} />
@@ -53,7 +50,7 @@ export function UsageChartCard({
       ) : (
         children
       )}
-    </div>
+    </SectionCard>
   );
 }
 

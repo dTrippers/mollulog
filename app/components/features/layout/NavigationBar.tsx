@@ -17,24 +17,23 @@ import {
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
-  UserCircleIcon as UserCircleIconSolid,
 } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { type UtcIsoString, parseUtcTimestamp } from "~/lib/date-time";
+import { parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
+import { cn } from "~/lib/utils";
 import { timelineContentTypeLocale } from "~/locales/ko";
 import { studentImageUrl } from "~/models/assets";
-import { sanitizeClassName } from "~/prophandlers";
 import { submitPreference } from "~/routes/api.preference";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import {
-  type NavigationItem,
-  type NavigationSectionStates,
   getMobileNavigationItems,
   getNavigationSectionStates,
   getNavigationSections,
+  type NavigationItem,
+  type NavigationSectionStates,
 } from "./navigation-menu";
 
 type NavigationBarProps = {
@@ -114,13 +113,13 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
   const showPopup = Boolean(isPopupOpen && (!hasQuery || fetcher.data));
   const isLoading = fetcher.state !== "idle";
 
-  const inputClassName = sanitizeClassName(`
-    w-full rounded-md bg-neutral-100 py-2 pr-3 pl-9 text-sm outline-none placeholder:text-neutral-400 dark:bg-neutral-700 dark:placeholder:text-neutral-500
+  const inputClassName = cn(`
+    w-full rounded-md bg-background py-2 pr-3 pl-9 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring/30
   `);
 
   return (
     <div ref={rootRef} className={variant === "desktop" ? "relative" : "relative w-full"}>
-      <div className="pointer-events-none absolute left-2.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-neutral-400 dark:text-neutral-500">
+      <div className="pointer-events-none absolute left-2.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-muted-foreground">
         {isLoading ? (
           <span
             className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
@@ -153,8 +152,8 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
           onResultClick={() => setIsPopupOpen(false)}
           className={
             variant === "desktop"
-              ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg shadow-neutral-200/50 dark:border-neutral-700 dark:bg-neutral-800 dark:shadow-neutral-950/30"
-              : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg shadow-neutral-200/50 dark:border-neutral-700 dark:bg-neutral-800 dark:shadow-neutral-950/30"
+              ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
+              : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
           }
         />
       )}
@@ -182,18 +181,18 @@ function SearchResultPopup({
           <Link
             key={`${result.type}:${result.to}`}
             to={result.to}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-neutral-800 transition-colors hover:bg-neutral-100 dark:text-neutral-100 dark:hover:bg-neutral-700"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
             onClick={onResultClick}
           >
             <SearchResultBadge result={result} />
             <div className="min-w-0 flex-1">
-              <div className="text-xs text-neutral-400 dark:text-neutral-500">{getSearchResultLabel(result)}</div>
+              <div className="text-xs text-muted-foreground">{getSearchResultLabel(result)}</div>
               <div className="whitespace-pre-line">{result.name}</div>
             </div>
           </Link>
         ))
       ) : (
-        <p className="px-3 py-3 text-sm text-neutral-500 dark:text-neutral-400">결과가 없어요</p>
+        <p className="px-3 py-3 text-sm text-muted-foreground">결과가 없어요</p>
       )}
     </div>
   );
@@ -202,11 +201,11 @@ function SearchResultPopup({
 function SearchEmptyView() {
   return (
     <div className="px-4 py-4 text-center text-sm">
-      <div className="mx-auto flex size-8 items-center justify-center rounded-md bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300">
+      <div className="mx-auto flex size-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
         <MagnifyingGlassIcon className="size-4" strokeWidth={2} />
       </div>
-      <p className="mt-2 font-medium text-neutral-700 dark:text-neutral-200">학생, 이벤트, 기능을 검색할 수 있어요</p>
-      <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">검색어를 입력해 원하는 항목을 찾아보세요</p>
+      <p className="mt-2 font-medium text-foreground">학생, 이벤트, 기능을 검색할 수 있어요</p>
+      <p className="mt-1 text-xs text-muted-foreground">검색어를 입력해 원하는 항목을 찾아보세요</p>
     </div>
   );
 }
@@ -217,7 +216,7 @@ function SearchResultBadge({ result }: { result: SearchResult }) {
       <img
         src={studentImageUrl(result.uid)}
         alt=""
-        className="size-6 shrink-0 rounded-md bg-neutral-100 object-cover object-center dark:bg-neutral-700 dark:opacity-90"
+        className="size-6 shrink-0 rounded-md bg-muted object-cover object-center dark:opacity-90"
         loading="lazy"
       />
     );
@@ -226,7 +225,7 @@ function SearchResultBadge({ result }: { result: SearchResult }) {
   const Icon = result.type === "menu" ? RectangleGroupIconOutline : CalendarIconOutline;
 
   return (
-    <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-neutral-100 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300">
+    <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
       <Icon className="size-4" strokeWidth={2} />
     </span>
   );
@@ -265,8 +264,7 @@ export default function NavigationBar({
     <>
       <aside
         className="
-          hidden lg:flex lg:relative lg:z-layer-navigation lg:h-screen lg:w-72 xl:w-84 lg:flex-col bg-white/90 dark:bg-neutral-800/90 backdrop-blur-sm
-          lg:border-r border-neutral-200 dark:border-neutral-700 shadow-sm shadow-neutral-200/30 dark:shadow-neutral-900/30
+          hidden bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex lg:h-screen lg:w-72 lg:flex-col xl:w-84
         "
       >
         <div className="flex h-16 items-center px-5">
@@ -275,7 +273,7 @@ export default function NavigationBar({
             alt="몰루로그 로고"
             className="mr-2 h-8 xl:h-9 aspect-4/3 object-cover"
           />
-          <h1 className="text-xl xl:text-2xl font-ingame text-neutral-900 dark:text-neutral-100">
+          <h1 className="font-ingame text-xl text-foreground xl:text-2xl">
             <span className="font-semibold">몰루</span>로그
           </h1>
         </div>
@@ -341,6 +339,11 @@ function MobileBrandHeader({
   const submit = useSubmit();
 
   useEffect(() => {
+    setIsSearchOpen(false);
+    setIsMenuOpen(false);
+  }, [searchResetKey]);
+
+  useEffect(() => {
     if (!isMenuOpen) {
       return;
     }
@@ -356,10 +359,9 @@ function MobileBrandHeader({
   }, [isMenuOpen]);
 
   const toggleDarkMode = () => {
-    setDarkMode((prev) => {
-      submitPreference(submit, { darkMode: !prev });
-      return !prev;
-    });
+    const nextDarkMode = !darkMode;
+    submitPreference(submit, { darkMode: nextDarkMode });
+    setDarkMode(() => nextDarkMode);
     setIsMenuOpen(false);
   };
   const ModeIcon = darkMode ? SunIcon : MoonIcon;
@@ -368,14 +370,13 @@ function MobileBrandHeader({
     <header
       className="
         lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex flex-col
-        border-b border-neutral-200/60 bg-white/95 backdrop-blur-sm
-        dark:border-neutral-700/60 dark:bg-neutral-800/95
+        border-border border-b bg-background
       "
     >
       <div className="flex h-[var(--mobile-header-height)] w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
         <Link
           to="/"
-          className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-800"
+          className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         >
           <img
             src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
@@ -391,9 +392,8 @@ function MobileBrandHeader({
           <button
             type="button"
             className="
-              inline-flex size-9 items-center justify-center rounded-md text-neutral-700
-              transition-colors hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
-              dark:text-neutral-200 dark:hover:bg-neutral-700 dark:focus-visible:ring-offset-neutral-800
+              inline-flex size-9 items-center justify-center rounded-md bg-transparent text-foreground
+              transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
             "
             onClick={() => {
               setIsSearchOpen((prev) => !prev);
@@ -407,9 +407,8 @@ function MobileBrandHeader({
           <button
             type="button"
             className="
-              relative inline-flex size-9 items-center justify-center rounded-md text-neutral-700
-              transition-colors hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
-              dark:text-neutral-200 dark:hover:bg-neutral-700 dark:focus-visible:ring-offset-neutral-800
+              relative inline-flex size-9 items-center justify-center rounded-md bg-transparent text-foreground
+              transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
             "
             onClick={() => {
               setIsMenuOpen((prev) => !prev);
@@ -442,8 +441,7 @@ function MobileBrandHeader({
           />
           <div
             className="
-              absolute right-3 top-full z-layer-navigation-menu mt-2 flex w-56 flex-col gap-1 rounded-lg border border-neutral-200 bg-white p-2 shadow-lg shadow-neutral-200/50
-              dark:border-neutral-700 dark:bg-neutral-800 dark:shadow-neutral-950/30
+              absolute right-3 top-full z-layer-navigation-menu mt-2 flex w-56 flex-col gap-1 rounded-lg border border-border/70 bg-card p-2 text-card-foreground shadow-lg
             "
           >
             <MobileHeaderMenuButton
@@ -502,15 +500,14 @@ function MobileHeaderMenuButton({
   tone = "default",
   onClick,
 }: MobileHeaderMenuButtonProps) {
-  const className = sanitizeClassName(`
+  const className = cn(`
     relative flex min-h-10 w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors
-    hover:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2
-    dark:hover:bg-neutral-700 dark:focus-visible:ring-offset-neutral-800
-    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-neutral-700 dark:text-neutral-200"}
+    hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
+    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-foreground"}
   `);
-  const iconClassName = sanitizeClassName(`
+  const iconClassName = cn(`
     size-4 shrink-0
-    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-neutral-500 dark:text-neutral-400"}
+    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-foreground/70"}
   `);
   const content = (
     <>
@@ -552,18 +549,17 @@ function MobileBottomNavigation({
     <nav
       className="
         lg:hidden fixed inset-x-0 bottom-0 z-layer-navigation h-[var(--mobile-nav-height)]
-        border-t border-neutral-200 bg-white/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
-        dark:border-neutral-700 dark:bg-neutral-800/95
+        bg-card/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
       "
       aria-label="주요 메뉴"
     >
       <div className="mx-auto grid h-12 max-w-xl grid-cols-5">
         {items.map((item) => {
           const Icon = item.isActive ? item.SolidIcon : item.OutlineIcon;
-          const className = sanitizeClassName(`
+          const className = cn(`
             relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-xs font-medium transition-colors
-            focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-800
-            ${item.isActive ? "font-bold text-neutral-950 dark:text-neutral-50" : "text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100"}
+            focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
+            ${item.isActive ? "font-bold text-foreground" : "text-foreground/70 hover:text-foreground"}
           `);
           const content = (
             <>
@@ -594,12 +590,14 @@ interface MenuItemProps extends NavigationItem {
 }
 
 function DesktopMenuGroupLabel({ children }: { children: React.ReactNode }) {
-  return <div className="mt-5 mb-1.5 px-2 text-sm font-medium text-neutral-500 dark:text-neutral-400">{children}</div>;
+  return <div className="mt-5 mb-1.5 px-2 text-sm font-medium text-foreground/65">{children}</div>;
 }
 
 function DesktopMenuSectionList({
   section,
-}: { section: NonNullable<ReturnType<typeof getNavigationSections>[number]> }) {
+}: {
+  section: NonNullable<ReturnType<typeof getNavigationSections>[number]>;
+}) {
   return (
     <>
       <DesktopMenuGroupLabel>{section.name}</DesktopMenuGroupLabel>
@@ -722,12 +720,12 @@ function DesktopUtilityFooter({
   const ModeIcon = darkMode ? SunIcon : MoonIcon;
 
   return (
-    <div className="shrink-0 border-neutral-200 border-t px-3 py-2 dark:border-neutral-700">
+    <div className="shrink-0 px-3 py-2">
       <div className="flex items-center gap-2">
         {currentUsername ? (
           <Link
             to={`/@${currentUsername}`}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700/40 dark:hover:text-neutral-100"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-background px-2 py-1.5 text-sm font-medium text-foreground/75 transition-colors hover:bg-muted hover:text-foreground"
           >
             {currentProfileStudentId ? (
               <ProfileImage studentUid={currentProfileStudentId} imageSize={6} />
@@ -741,7 +739,7 @@ function DesktopUtilityFooter({
         ) : (
           <button
             type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-700/40 dark:hover:text-neutral-100"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-background px-2 py-1.5 text-left text-sm font-medium text-foreground/75 transition-colors hover:bg-muted hover:text-foreground"
             onClick={onShowSignIn}
           >
             <span className="flex size-5 items-center justify-center">
@@ -752,12 +750,11 @@ function DesktopUtilityFooter({
         )}
         <button
           type="button"
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-neutral-200/70 text-neutral-500 transition-colors hover:border-neutral-300 hover:bg-neutral-100 hover:text-neutral-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-neutral-700/80 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:bg-neutral-700/40 dark:hover:text-neutral-200 dark:focus-visible:ring-offset-neutral-800"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           onClick={() => {
-            onDarkModeToggle((prev) => {
-              submitPreference(submit, { darkMode: !prev });
-              return !prev;
-            });
+            const nextDarkMode = !darkMode;
+            submitPreference(submit, { darkMode: nextDarkMode });
+            onDarkModeToggle(() => nextDarkMode);
           }}
           aria-label={darkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
           title={darkMode ? "라이트 모드" : "다크 모드"}
@@ -770,27 +767,25 @@ function DesktopUtilityFooter({
 }
 
 function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, showRedDot, badgeLabel, disabled }: MenuItemProps) {
-  const className = sanitizeClassName(
-    `my-0.5 grid grid-cols-[1.25rem_1fr] items-center gap-3 px-2 py-1 text-sm rounded-md transition-colors relative hover:bg-neutral-100 hover:text-neutral-950 dark:hover:bg-neutral-700 dark:hover:text-neutral-50 ${
-      isActive
-        ? "bg-neutral-100/80 font-medium text-neutral-900 dark:bg-neutral-700/60 dark:text-neutral-50"
-        : "font-normal text-neutral-700 dark:text-neutral-300"
+  const className = cn(
+    `relative my-0.5 grid grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-sm transition-colors hover:bg-background hover:text-foreground ${
+      isActive ? "bg-background font-medium text-foreground" : "font-normal text-foreground/75"
     } ${disabled ? "opacity-40" : ""}`,
   );
   const content = (
     <>
       <span className="flex size-5 items-center justify-center">
         {isActive ? (
-          <SolidIcon className="size-4 text-neutral-800 dark:text-neutral-100" />
+          <SolidIcon className="size-4 text-foreground" />
         ) : (
-          <OutlineIcon className="size-4 text-neutral-500 dark:text-neutral-400" />
+          <OutlineIcon className="size-4 text-foreground/70" />
         )}
       </span>
       <span className="min-w-0">
         <span className="relative inline-block">
           {name}
           {badgeLabel && (
-            <span className="ml-1 inline-block origin-left scale-90 align-super text-xs font-normal leading-none text-neutral-400 dark:text-neutral-500">
+            <span className="ml-1 inline-block origin-left scale-90 align-super text-xs font-normal leading-none text-muted-foreground/70">
               {badgeLabel}
             </span>
           )}
@@ -820,7 +815,7 @@ type DesktopMenuLinkProps = {
 
 function DesktopMenuLink({ to, label, Icon, showRedDot = false }: DesktopMenuLinkProps) {
   const className =
-    "relative my-0.5 grid w-full grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-left text-sm font-normal text-neutral-700 transition-colors hover:bg-neutral-100 hover:text-neutral-950 dark:text-neutral-300 dark:hover:bg-neutral-700 dark:hover:text-neutral-50";
+    "relative my-0.5 grid w-full grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-left text-sm font-normal text-foreground/75 transition-colors hover:bg-background hover:text-foreground";
   const content = (
     <>
       <span className="flex size-5 items-center justify-center">

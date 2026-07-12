@@ -1,4 +1,5 @@
 export { default as Page } from "./Page";
+export type { PagePanelProps } from "./PagePanel";
 export { default as NavigationBar } from "./NavigationBar";
 export { default as MobileMoreTabNoticeBanner } from "./MobileMoreTabNoticeBanner";
 export { default as Footer } from "./Footer";

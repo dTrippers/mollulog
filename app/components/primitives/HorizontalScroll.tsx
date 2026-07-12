@@ -76,12 +76,12 @@ function HorizontalScroll({
         <button
           type="button"
           onClick={scrollLeft}
-          className={`absolute left-1 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-neutral-800 shadow-lg rounded-full p-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors ${
+          className={`absolute left-1 top-1/2 z-10 -translate-y-1/2 rounded-full bg-card p-1.5 shadow-lg transition-colors hover:bg-muted ${
             showArrowsOnMobile ? "" : "hidden md:block"
           }`}
           aria-label="Scroll left"
         >
-          <ChevronLeftIcon className="size-5 text-neutral-600 dark:text-neutral-400" />
+          <ChevronLeftIcon className="size-5 text-muted-foreground" />
         </button>
       )}
 
@@ -90,12 +90,12 @@ function HorizontalScroll({
         <button
           type="button"
           onClick={scrollRight}
-          className={`absolute right-1 top-1/2 -translate-y-1/2 z-10 bg-white dark:bg-neutral-800 shadow-lg rounded-full p-1.5 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors ${
+          className={`absolute right-1 top-1/2 z-10 -translate-y-1/2 rounded-full bg-card p-1.5 shadow-lg transition-colors hover:bg-muted ${
             showArrowsOnMobile ? "" : "hidden md:block"
           }`}
           aria-label="Scroll right"
         >
-          <ChevronRightIcon className="size-5 text-neutral-600 dark:text-neutral-400" />
+          <ChevronRightIcon className="size-5 text-muted-foreground" />
         </button>
       )}
 
@@ -117,7 +117,14 @@ function HorizontalScroll({
             return null;
           }
           return (
-            <div key={typeof child === "object" && "key" in child && child.key != null ? child.key : `scroll-item-${String(child)}`} className={`shrink-0 ${itemWidth.mobile} ${itemWidth.desktop}`}>
+            <div
+              key={
+                typeof child === "object" && "key" in child && child.key != null
+                  ? child.key
+                  : `scroll-item-${String(child)}`
+              }
+              className={`shrink-0 ${itemWidth.mobile} ${itemWidth.desktop}`}
+            >
               {child}
             </div>
           );

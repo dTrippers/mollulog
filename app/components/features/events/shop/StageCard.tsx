@@ -34,19 +34,17 @@ export const StageCard = memo(function StageCard({
   );
 
   return (
-    <div className="relative px-4 py-3 rounded-lg border border-neutral-200 dark:border-neutral-700">
+    <div className="relative rounded-lg bg-card px-4 py-3">
       <div className="flex items-center gap-2">
-        <div className="shrink-0 size-6 border border-neutral-200 dark:border-neutral-700 rounded flex items-center justify-center text-sm">
-          {index}
-        </div>
+        <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-sm">{index}</div>
         <div className="grow">
           <div className="my-0.5 flex items-center gap-1.5">
-            <div className="flex items-center gap-0.5 border border-green-600 text-green-600 text-xs font-medium px-1 rounded">
+            <div className="flex items-center gap-0.5 rounded-sm bg-green-500/10 px-1 text-xs font-medium text-green-600">
               <BoltIcon className="size-2.5" />
               <span>{entryAp}</span>
             </div>
             {calculatedRuns > 0 && (
-              <span className="border border-blue-500 dark:border-blue-600 bg-blue-500 dark:bg-blue-600 text-white text-xs px-1.5 rounded">
+              <span className="rounded-sm bg-blue-500 px-1.5 text-xs text-white dark:bg-blue-600">
                 {calculatedRuns.toLocaleString()}회 소탕
               </span>
             )}

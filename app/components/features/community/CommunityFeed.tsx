@@ -218,7 +218,7 @@ function CommunityPostCard({
               {post.author ? (
                 <Link
                   to={`/@${post.author.username}`}
-                  className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
+                  className="min-w-0 truncate font-semibold text-foreground hover:underline"
                 >
                   @{post.author.username}
                 </Link>
@@ -227,23 +227,21 @@ function CommunityPostCard({
                   href={post.sourceUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="min-w-0 truncate font-semibold text-neutral-900 hover:underline dark:text-neutral-100"
+                  className="min-w-0 truncate font-semibold text-foreground hover:underline"
                 >
                   {getPostSourceName(post)}
                 </a>
               ) : (
-                <span className="min-w-0 truncate font-semibold text-neutral-900 dark:text-neutral-100">
-                  {getPostSourceName(post)}
-                </span>
+                <span className="min-w-0 truncate font-semibold text-foreground">{getPostSourceName(post)}</span>
               )}
-              <span className="text-neutral-600 dark:text-neutral-400">{getPostTypeLabel(post)}</span>
-              <span className="text-neutral-400 dark:text-neutral-500">·</span>
-              <time className="shrink-0 text-neutral-500 dark:text-neutral-400" dateTime={timestamp.dateTime}>
+              <span className="text-muted-foreground">{getPostTypeLabel(post)}</span>
+              <span className="text-muted-foreground/60">·</span>
+              <time className="shrink-0 text-muted-foreground" dateTime={timestamp.dateTime}>
                 {timestamp.text}
               </time>
-              {timestamp.edited && <span className="text-neutral-400 dark:text-neutral-500">수정됨</span>}
+              {timestamp.edited && <span className="text-muted-foreground/70">수정됨</span>}
               {visibilityLabel && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   <LockClosedIcon className="size-3.5" />
                   {visibilityLabel}
                 </span>
@@ -264,7 +262,7 @@ function CommunityPostCard({
           )}
 
           {!preview && (canComment || canLike) && (
-            <div className="mt-4 flex max-w-md items-center gap-2 text-neutral-500 dark:text-neutral-400">
+            <div className="mt-4 flex max-w-md items-center gap-2 text-muted-foreground">
               {canComment && (
                 <button
                   type="button"
@@ -291,11 +289,11 @@ function CommunityPostCard({
           )}
 
           {!preview && canComment && !commentEditing && recentComments.length > 0 && (
-            <div className="mt-2 space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
+            <div className="mt-2 space-y-1 text-sm text-muted-foreground">
               {commentCount > recentComments.length && (
                 <button
                   type="button"
-                  className="text-xs text-neutral-500 transition hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                  className="text-xs text-muted-foreground transition-colors hover:text-foreground"
                   onClick={() => setCommentEditing(true)}
                 >
                   댓글 {commentCount}개 모두 보기
@@ -305,10 +303,10 @@ function CommunityPostCard({
                 <button
                   key={comment.uid}
                   type="button"
-                  className="block w-full text-left transition hover:text-neutral-900 dark:hover:text-neutral-100"
+                  className="block w-full text-left transition-colors hover:text-foreground"
                   onClick={() => setCommentEditing(true)}
                 >
-                  <span className="font-medium text-neutral-800 dark:text-neutral-200">@{comment.sensei.username}</span>{" "}
+                  <span className="font-medium text-foreground">@{comment.sensei.username}</span>{" "}
                   <span className="line-clamp-1 align-middle">{comment.body}</span>
                 </button>
               ))}
@@ -318,7 +316,7 @@ function CommunityPostCard({
       </div>
       {!preview && canComment && commentEditing && (
         <div className={getCommentEditorPanelClassName({ groupedWithPrevious })}>
-          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-700 dark:text-neutral-200">
+          <div className="mb-2 flex items-center gap-2 text-sm font-medium text-foreground">
             <ChatBubbleLeftEllipsisIcon className="size-4" />
             <span>댓글</span>
           </div>
@@ -366,14 +364,14 @@ function PostSubjectMeta({
       <div className={getSubjectMetaClassName(post.postType)}>
         <Link
           to={`/events/${post.subjectContentUid}`}
-          className="inline-flex max-w-full items-center gap-1.5 text-neutral-500 hover:text-neutral-800 hover:underline dark:text-neutral-400 dark:hover:text-neutral-200"
+          className="inline-flex max-w-full items-center gap-1.5 text-muted-foreground hover:text-foreground hover:underline"
         >
-          <UserGroupIcon className="size-3.5 shrink-0 text-neutral-400 dark:text-neutral-500" />
+          <UserGroupIcon className="size-3.5 shrink-0 text-muted-foreground/70" />
           <span className="max-w-64 truncate sm:max-w-md">{post.subjectContentName ?? "이벤트 보기"}</span>
         </Link>
         {pickupStudentSummary && pickupStudentSummary.visibleStudents.length > 0 && (
           <div className="flex flex-wrap items-center gap-x-1 gap-y-1">
-            <span className="mr-0.5 shrink-0 text-neutral-400 dark:text-neutral-500">픽업</span>
+            <span className="mr-0.5 shrink-0 text-muted-foreground/70">픽업</span>
             {pickupStudentSummary.visibleStudents.map((student) => (
               <StudentSubjectLink
                 key={`${post.uid}-${student.uid}`}
@@ -384,9 +382,7 @@ function PostSubjectMeta({
               />
             ))}
             {pickupStudentSummary.remainingCount > 0 && (
-              <span className="ml-0.5 shrink-0 text-neutral-500 dark:text-neutral-400">
-                외 {pickupStudentSummary.remainingCount}명
-              </span>
+              <span className="ml-0.5 shrink-0 text-muted-foreground">외 {pickupStudentSummary.remainingCount}명</span>
             )}
           </div>
         )}
@@ -412,7 +408,7 @@ function StudentSubjectLink({
     <Link
       to={`/students/${uid}`}
       title={name}
-      className="inline-flex min-w-0 items-center gap-1.5 text-neutral-500 transition hover:text-neutral-800 hover:underline dark:text-neutral-400 dark:hover:text-neutral-200"
+      className="inline-flex min-w-0 items-center gap-1.5 text-muted-foreground transition-colors hover:text-foreground hover:underline"
     >
       <ProfileImage studentUid={uid} imageSize={imageSize} />
       <span className={nameClassName}>{name}</span>
@@ -434,10 +430,7 @@ function PostContent({
         {post.tags && post.tags.length > 0 && (
           <div className="flex flex-wrap gap-x-3 gap-y-1">
             {sortStudentGradingTags(post.tags).map((tag) => (
-              <div
-                key={tag}
-                className="inline-flex cursor-default items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400"
-              >
+              <div key={tag} className="inline-flex cursor-default items-center gap-1 text-xs text-muted-foreground">
                 <TagIcon tag={tag} size="sm" />
                 <span>{STUDENT_GRADING_TAG_DISPLAY[tag]}</span>
               </div>
@@ -468,11 +461,9 @@ function PostContent({
   return (
     <div className="space-y-3">
       {post.postType === "youtube_video" && post.title ? (
-        <h3 className="text-base font-semibold leading-6 text-neutral-900 dark:text-neutral-100">
-          {getDisplayYoutubeTitle(post.title)}
-        </h3>
+        <h3 className="text-base font-semibold leading-6 text-foreground">{getDisplayYoutubeTitle(post.title)}</h3>
       ) : (
-        post.title && <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{post.title}</h3>
+        post.title && <h3 className="text-lg font-semibold text-foreground">{post.title}</h3>
       )}
       <PostBlocks post={post} studentsByUid={studentsByUid} />
     </div>
@@ -487,11 +478,11 @@ function RecruitmentResultStats({ stats }: { stats: NonNullable<CommunityFeedPos
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
       {items.map((item) => (
         <span key={item.label} className="inline-flex items-baseline gap-1">
           <span>{item.label}</span>
-          <span className="font-semibold text-neutral-800 dark:text-neutral-100">{item.value}</span>
+          <span className="font-semibold text-foreground">{item.value}</span>
         </span>
       ))}
     </div>
@@ -528,11 +519,7 @@ function BlockView({
       return null;
     }
 
-    return (
-      <p className="whitespace-pre-wrap text-sm leading-6 text-neutral-900 dark:text-neutral-100 sm:text-base">
-        {block.text}
-      </p>
-    );
+    return <p className="whitespace-pre-wrap text-sm leading-6 text-foreground sm:text-base">{block.text}</p>;
   }
 
   if (block.type === "markdown") {
@@ -548,12 +535,12 @@ function BlockView({
   }
 
   return (
-    <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 dark:border-neutral-700 dark:bg-neutral-900/60">
+    <div className="rounded-lg bg-card p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">{block.title ?? "편성 정보"}</p>
+          <p className="text-sm font-semibold text-foreground">{block.title ?? "편성 정보"}</p>
           {(block.raidType || block.seasonIndex !== null) && (
-            <p className="text-xs text-neutral-500 dark:text-neutral-400">
+            <p className="text-xs text-muted-foreground">
               {[
                 block.raidType,
                 block.seasonIndex !== null && block.seasonIndex !== undefined ? `#${block.seasonIndex}` : null,
@@ -567,7 +554,7 @@ function BlockView({
       <div className="space-y-3">
         {block.units.map((unit, index) => (
           <div key={`${block.title ?? "unit"}-${index}`}>
-            <p className="mb-2 text-xs font-medium text-neutral-500 dark:text-neutral-400">{index + 1}번째 파티</p>
+            <p className="mb-2 text-xs font-medium text-muted-foreground">{index + 1}번째 파티</p>
             <StudentCards
               students={unit.map((uid) =>
                 uid
@@ -623,13 +610,13 @@ function YoutubePreviewBlock({
       href={watchUrl}
       target="_blank"
       rel="noreferrer"
-      className="group relative block aspect-video w-full overflow-hidden rounded-lg border border-neutral-200 bg-neutral-100 text-left shadow-sm transition hover:border-neutral-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-2 dark:border-neutral-700 dark:bg-neutral-900 dark:hover:border-neutral-600 dark:focus-visible:ring-offset-neutral-800 md:max-w-md"
+      className="group relative block aspect-video w-full overflow-hidden rounded-lg bg-muted text-left shadow-sm transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 md:max-w-md"
       aria-label={`YouTube에서 동영상 보기: ${title}`}
     >
       {thumbnailUrl ? (
         <img src={thumbnailUrl} alt="" className="size-full object-cover" loading="lazy" />
       ) : (
-        <div className="size-full bg-neutral-200 dark:bg-neutral-800" />
+        <div className="size-full bg-muted" />
       )}
       <div className="absolute inset-0 bg-black/10 transition group-hover:bg-black/15" />
       <span className="absolute inset-0 flex items-center justify-center">

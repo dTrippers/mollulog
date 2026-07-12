@@ -1,16 +1,12 @@
 import { Link } from "react-router";
 import { useState } from "react";
-import { Button, Label, SubTitle, Toggle } from "~/components/primitives";
+import { Button, SubTitle, Toggle } from "~/components/primitives";
 import { AddContentButton, PartyUnitEditor } from "~/components/features/editor";
 import { StudentCards } from "~/components/features/students";
 import { ContentSelectForm, FormGroup, InputForm, TextareaForm } from "~/components/features/forms";
 import { raidTypeLocale } from "~/locales/ko";
 import type { RaidType, Role } from "~/models/content.d";
-import {
-  getPartyRaidReference,
-  serializePartyRaidReference,
-  type Party,
-} from "~/models/party";
+import { getPartyRaidReference, serializePartyRaidReference, type Party } from "~/models/party";
 import type { RaidScheduleListItem } from "~/models/raid";
 
 type PartyGeneratorProps = {
@@ -71,8 +67,11 @@ export default function PartyGenerator({ party, raids, students }: PartyGenerato
       <SubTitle text="편성" />
       <input type="hidden" name="studentIds" value={JSON.stringify(units)} />
       {units.map((unit, index) => (
-        <div className="my-4 px-4 py-2 md:px-6 md:py-4 bg-neutral-100 dark:bg-neutral-900 rounded-xl" key={unit.map((uid, unitIndex) => uid ?? `empty-${unitIndex}`).join(":")}>
-          <Label text={`${index + 1}번째 파티`} />
+        <div
+          className="my-4 rounded-lg bg-neutral-100 px-4 py-2 dark:bg-neutral-900 md:px-6 md:py-4"
+          key={unit.map((uid, unitIndex) => uid ?? `empty-${unitIndex}`).join(":")}
+        >
+          <p className="my-2 font-semibold">{index + 1}번째 파티</p>
           <StudentCards
             students={unit.map((uid) => {
               const student = uid ? studentsMap.get(uid) : null;
@@ -96,7 +95,7 @@ export default function PartyGenerator({ party, raids, students }: PartyGenerato
           </div>
         </div>
       ))}
-      {showPartyEditor ?
+      {showPartyEditor ? (
         <PartyUnitEditor
           index={units.length}
           students={students}
@@ -105,9 +104,10 @@ export default function PartyGenerator({ party, raids, students }: PartyGenerato
             setShowPartyEditor(false);
           }}
           onCancel={() => setShowPartyEditor(false)}
-        /> :
+        />
+      ) : (
         <AddContentButton text="파티 추가하기" onClick={() => setShowPartyEditor(true)} />
-      }
+      )}
 
       <div className="flex gap-x-1">
         <Button type="submit" text="저장" variant="primary" />

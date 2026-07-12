@@ -182,31 +182,31 @@ export default function UserPickups() {
   return (
     <div className="my-8">
       <SubTitle text="모집 통계" />
-      <div className="px-2 md:px-4 py-4 md:py-6 flex grid grid-cols-3 border border-neutral-200 dark:border-neutral-700 rounded-lg">
+      <div className="grid grid-cols-3 rounded-lg bg-card px-2 py-4 shadow-md shadow-black/5 dark:shadow-sm dark:shadow-black/20 md:px-4 md:py-6">
         <div className="text-center">
-          <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">총 모집 횟수</p>
-          <p className="text-lg md:text-2xl font-bold">{recruitmentStats.trial} 회</p>
+          <p className="text-xs text-muted-foreground md:text-base">총 모집 횟수</p>
+          <p className="text-lg font-bold text-foreground md:text-2xl">{recruitmentStats.trial} 회</p>
         </div>
         <div className="text-center">
-          <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 획득 수</p>
-          <p className="text-lg md:text-2xl font-bold">{recruitmentStats.tier3Count} 회</p>
+          <p className="text-xs text-muted-foreground md:text-base">★3 획득 수</p>
+          <p className="text-lg font-bold text-foreground md:text-2xl">{recruitmentStats.tier3Count} 회</p>
           {recruitmentStats.trial > 0 && (
-            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
+            <p className="text-xs text-muted-foreground md:text-sm">
               {((recruitmentStats.tier3RateCount / recruitmentStats.trial) * 100).toFixed(2)} %
             </p>
           )}
         </div>
         <div className="text-center">
-          <p className="text-xs md:text-base text-neutral-500 dark:text-neutral-400">★3 픽업 획득 수</p>
-          <p className="text-lg md:text-2xl font-bold">{recruitmentStats.pickupCount} 회</p>
+          <p className="text-xs text-muted-foreground md:text-base">★3 픽업 획득 수</p>
+          <p className="text-lg font-bold text-foreground md:text-2xl">{recruitmentStats.pickupCount} 회</p>
           {recruitmentStats.trial > 0 && (
-            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
+            <p className="text-xs text-muted-foreground md:text-sm">
               {((recruitmentStats.pickupRateCount / recruitmentStats.trial) * 100).toFixed(2)} %
             </p>
           )}
         </div>
       </div>
-      <p className="mt-4 mb-16 text-xs md:text-sm text-neutral-500 dark:text-neutral-400">
+      <p className="mt-4 text-xs text-muted-foreground md:text-sm">
         페스 기간에 모집한 ★3 학생은 확률을 0.5배로 계산했어요.
       </p>
 

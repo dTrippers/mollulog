@@ -14,7 +14,7 @@ import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
 import { enrichCommunityFeedPosts } from "~/views/community";
-import { type IndexRecruitment, getIndexContents } from "~/views/home";
+import { getIndexContents, type IndexRecruitment } from "~/views/home";
 import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
 
 const homeMoreMenuBannerDismissalStorageKey = "home::dismissed-more-menu-banner";
@@ -126,59 +126,61 @@ export default function Index() {
   } = useLoaderData<typeof loader>();
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
-      <div className="min-w-0 lg:flex-1">
-        <Title text="진행중인 컨텐츠" />
+    <div className="w-full">
+      <Title text="진행중인 컨텐츠" />
 
-        <MainEvent event={mainEvent} />
+      <div className="mt-4 flex flex-col gap-8 lg:mt-6 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
+        <div className="min-w-0 lg:flex-1">
+          <MainEvent event={mainEvent} />
 
-        <MobileMoreTabNoticeBanner
-          className="-mt-5"
-          dismissStorageKey={homeMoreMenuBannerDismissalStorageKey}
-          message={'전체 메뉴는 "더보기" 탭에서 확인할 수 있어요'}
-        />
-
-        {currentRecruitments.length > 0 && (
-          <CurrentRecruitments
-            recruitments={currentRecruitments}
-            favoritedStudentUids={favoritedStudentUids}
-            favoritedCounts={favoritedCounts}
-            signedIn={signedIn}
+          <MobileMoreTabNoticeBanner
+            className="mt-2"
+            dismissStorageKey={homeMoreMenuBannerDismissalStorageKey}
+            message={'전체 메뉴는 "더보기" 탭에서 확인할 수 있어요'}
           />
-        )}
 
-        <div className="my-6 grid grid-cols-1 gap-2 md:grid-cols-2">
-          {currentTotalAssualt && (
-            <Link
-              to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`}
-              className="hover:opacity-75 transition-opacity"
-            >
-              <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
-            </Link>
+          {currentRecruitments.length > 0 && (
+            <CurrentRecruitments
+              recruitments={currentRecruitments}
+              favoritedStudentUids={favoritedStudentUids}
+              favoritedCounts={favoritedCounts}
+              signedIn={signedIn}
+            />
           )}
-          {currentUnlimit && (
-            <Link
-              to={`/raids/${raidTypeToParam(currentUnlimit.raidType)}/${currentUnlimit.seasonIndex}`}
-              className="hover:opacity-75 transition-opacity"
-            >
-              <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
-            </Link>
-          )}
-        </div>
-      </div>
-      <div className="min-w-0 lg:w-full lg:max-w-72 xl:max-w-xs lg:flex-none">
-        <Suspense fallback={<HomeRightRailSkeleton />}>
-          <Await resolve={rightRail}>
-            {({ recentCommunityPosts, studentsByUid, youtubeSections }) => (
-              <HomeRightRail
-                recentCommunityPosts={recentCommunityPosts}
-                signedIn={signedIn}
-                studentsByUid={studentsByUid}
-                youtubeSections={youtubeSections}
-              />
+
+          <div className="my-6 grid grid-cols-1 gap-2 md:grid-cols-2">
+            {currentTotalAssualt && (
+              <Link
+                to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`}
+                className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
+              >
+                <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
+              </Link>
             )}
-          </Await>
-        </Suspense>
+            {currentUnlimit && (
+              <Link
+                to={`/raids/${raidTypeToParam(currentUnlimit.raidType)}/${currentUnlimit.seasonIndex}`}
+                className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
+              >
+                <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
+              </Link>
+            )}
+          </div>
+        </div>
+        <div className="min-w-0 lg:w-full lg:max-w-72 xl:max-w-xs lg:flex-none">
+          <Suspense fallback={<HomeRightRailSkeleton />}>
+            <Await resolve={rightRail}>
+              {({ recentCommunityPosts, studentsByUid, youtubeSections }) => (
+                <HomeRightRail
+                  recentCommunityPosts={recentCommunityPosts}
+                  signedIn={signedIn}
+                  studentsByUid={studentsByUid}
+                  youtubeSections={youtubeSections}
+                />
+              )}
+            </Await>
+          </Suspense>
+        </div>
       </div>
     </div>
   );
@@ -187,26 +189,27 @@ export default function Index() {
 function MainEvent({ event }: { event: TimelineContent | null }) {
   if (!event) {
     return (
-      <div className="my-8 p-8 text-center border border-neutral-200 dark:border-neutral-700 rounded-xl bg-neutral-50 dark:bg-neutral-800">
-        <p className="text-neutral-600 dark:text-neutral-400">현재 진행중인 이벤트가 없어요</p>
+      <div className="rounded-lg bg-card p-8 text-center shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
+        <p className="text-muted-foreground">현재 진행중인 이벤트가 없어요</p>
       </div>
     );
   }
 
   return (
-    <div className="my-8">
-      <Link to={`/events/${event.uid}`} className="block hover:opacity-75 transition-opacity">
-        <EventHeader
-          name={event.name}
-          type={event.contentType}
-          runType={event.runType}
-          since={event.startAt}
-          until={event.endAt}
-          endless={event.endless}
-          imageUrl={event.imageUrl}
-        />
-      </Link>
-    </div>
+    <Link
+      to={`/events/${event.uid}`}
+      className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
+    >
+      <EventHeader
+        name={event.name}
+        type={event.contentType}
+        runType={event.runType}
+        since={event.startAt}
+        until={event.endAt}
+        endless={event.endless}
+        imageUrl={event.imageUrl}
+      />
+    </Link>
   );
 }
 

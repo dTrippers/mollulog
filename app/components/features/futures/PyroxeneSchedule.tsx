@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import { useMemo } from "react";
-import { EmptyView, SubTitle } from "~/components/primitives";
+import { Callout, EmptyView, Section, SectionCard } from "~/components/primitives";
 import type { PyroxeneCalculationOptions, PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import type { PyroxeneCollectedSourceCandidate, PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
@@ -190,7 +190,7 @@ export default function PyroxeneSchedule({
         return [
           {
             sourceKey,
-            title: `이벤트/스토리 · ${item.event.name}`,
+            title: item.event.name,
           },
         ];
       }
@@ -199,106 +199,127 @@ export default function PyroxeneSchedule({
     });
   }, [scheduleItems, collectedSourceKeySet]);
 
+  let displayedYear: number | null = null;
+
   return (
-    <>
-      <SubTitle
-        text="현재 보유 재화"
+    <div className="space-y-10">
+      <Section
+        title="현재 보유 재화"
         description={
           initialDate
             ? `마지막 입력 : ${dayjs(initialDate).format("YYYY-MM-DD HH:mm")}`
             : "현재 보유중인 재화 수량을 입력해주세요"
         }
-      />
-      {!initialDate && (
-        <div className="my-4 p-4 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-950/30 dark:to-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-          <p className="text-green-800 dark:text-green-200">현재 보유중인 재화 수량을 입력해주세요</p>
+      >
+        <div className="space-y-3">
+          {!initialDate && <Callout>현재 보유중인 재화 수량을 입력해주세요.</Callout>}
+          <PyroxeneInitialResources
+            resources={initialResources}
+            collectedSourceCandidates={collectedSourceCandidates}
+            onUpdateResources={(resources, selectedCollectedSourceKeys) =>
+              onPickupComplete(null, resources, selectedCollectedSourceKeys)
+            }
+          />
+          {availableOneTimePackages.length > 0 && (
+            <PyroxeneAvailableOneTimePackages packages={availableOneTimePackages} onDeleteItem={onDeleteItem} />
+          )}
         </div>
-      )}
-      <PyroxeneInitialResources
-        resources={initialResources}
-        collectedSourceCandidates={collectedSourceCandidates}
-        onUpdateResources={(resources, selectedCollectedSourceKeys) =>
-          onPickupComplete(null, resources, selectedCollectedSourceKeys)
-        }
-      />
-      {availableOneTimePackages.length > 0 && (
-        <PyroxeneAvailableOneTimePackages packages={availableOneTimePackages} onDeleteItem={onDeleteItem} />
-      )}
+      </Section>
 
-      <SubTitle text="청휘석 시뮬레이션" description={simulationDescription} />
-      <div className="relative">
-        {isTimelinePending && (
-          <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white/90 px-2 py-1 text-xs font-medium text-neutral-600 shadow-sm backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/90 dark:text-neutral-300">
-            <span className="inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-            <span>계산 중...</span>
-          </div>
-        )}
-        <PyroxeneChart timeline={timeline} />
-      </div>
+      <Section title="청휘석 시뮬레이션" description={simulationDescription}>
+        <SectionCard className="relative p-2 shadow-md dark:shadow-md md:p-3">
+          {isTimelinePending && (
+            <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-border bg-popover/95 px-2 py-1 text-xs font-medium text-muted-foreground shadow-md backdrop-blur">
+              <span className="inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+              <span>계산 중...</span>
+            </div>
+          )}
+          <PyroxeneChart timeline={timeline} />
+        </SectionCard>
+      </Section>
 
-      <SubTitle
-        text="타임라인"
+      <Section
+        title="타임라인"
         description="미래시 페이지에서 등록한 관심 학생의 모집 시점의 예상 청휘석을 확인할 수 있어요"
-      />
-      {!isTimelinePending &&
-        timeline.every(({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type)) && (
-          <EmptyView text="표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해보세요." />
-        )}
-      {timeline.map(({ date, accumulatedResources, resourceDelta, source }, index) => {
-        if (source.type !== "event" && !options.timeline.display.includes(source.type)) {
-          return null;
-        }
+      >
+        <div className="space-y-2">
+          {!isTimelinePending &&
+            timeline.every(
+              ({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type),
+            ) && <EmptyView text="표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해보세요." />}
+          {timeline.map(({ date, accumulatedResources, resourceDelta, source }, index) => {
+            if (source.type !== "event" && !options.timeline.display.includes(source.type)) {
+              return null;
+            }
 
-        if (source.event) {
-          const { event } = source;
-          const eventData = eventDataMap.get(event.uid);
-          return (
-            <PyroxeneTimelineEvent
-              key={`event-${event.uid}`}
-              event={event}
-              completed={eventData?.completed ?? false}
-              expectedTrials={eventData?.expectedTrials ?? null}
-              pickupChance={options.event.pickupChance}
-              accumulatedResources={accumulatedResources}
-              resourceDelta={resourceDelta}
-              onDeletePickupComplete={onDeletePickupComplete}
-              onPickupComplete={onPickupComplete}
-              onUpdateEventData={onUpdateEventData}
-            />
-          );
-        }
-        if (source.description) {
-          const itemUid = source.uid && deletableTimelineSourceTypes.has(source.type) ? source.uid : undefined;
-          const collectedSourceKey =
-            source.collectedSourceKey && !source.uid?.endsWith("::ten-time-ticket-expiry")
-              ? source.collectedSourceKey
-              : undefined;
-          const collected = collectedSourceKey ? collectedSourceKeySet.has(collectedSourceKey) : false;
-          const displayResources =
-            collected && collectedSourceKey
-              ? (collectedSourceDisplayResources.get(collectedSourceKey) ?? resourceDelta)
-              : resourceDelta;
-          return (
-            <PyroxeneTimelineResources
-              key={
-                source.uid
-                  ? `${source.uid}-${date.toISOString()}-${index}`
-                  : `${source.description}-${date.toISOString()}-${index}`
-              }
-              date={date}
-              description={source.description}
-              resources={displayResources}
-              itemUid={itemUid}
-              onDeleteItem={onDeleteItem}
-              collectedSourceKey={collectedSourceKey}
-              collectable={collectedSourceKey ? collectableSourceKeySet.has(collectedSourceKey) : false}
-              collected={collected}
-              onCollectedSourceChange={onCollectedSourceChange}
-            />
-          );
-        }
-        return null;
-      })}
-    </>
+            const year = date.year();
+            const showYearDivider = year !== displayedYear;
+            displayedYear = year;
+
+            if (source.event) {
+              const { event } = source;
+              const eventData = eventDataMap.get(event.uid);
+              return (
+                <div key={`event-${event.uid}`}>
+                  {showYearDivider ? <TimelineYearDivider year={year} /> : null}
+                  <PyroxeneTimelineEvent
+                    event={event}
+                    completed={eventData?.completed ?? false}
+                    expectedTrials={eventData?.expectedTrials ?? null}
+                    pickupChance={options.event.pickupChance}
+                    accumulatedResources={accumulatedResources}
+                    resourceDelta={resourceDelta}
+                    onDeletePickupComplete={onDeletePickupComplete}
+                    onPickupComplete={onPickupComplete}
+                    onUpdateEventData={onUpdateEventData}
+                  />
+                </div>
+              );
+            }
+            if (source.description) {
+              const itemUid = source.uid && deletableTimelineSourceTypes.has(source.type) ? source.uid : undefined;
+              const collectedSourceKey =
+                source.collectedSourceKey && !source.uid?.endsWith("::ten-time-ticket-expiry")
+                  ? source.collectedSourceKey
+                  : undefined;
+              const collected = collectedSourceKey ? collectedSourceKeySet.has(collectedSourceKey) : false;
+              const displayResources =
+                collected && collectedSourceKey
+                  ? (collectedSourceDisplayResources.get(collectedSourceKey) ?? resourceDelta)
+                  : resourceDelta;
+              const itemKey = source.uid
+                ? `${source.uid}-${date.toISOString()}-${index}`
+                : `${source.description}-${date.toISOString()}-${index}`;
+              return (
+                <div key={itemKey}>
+                  {showYearDivider ? <TimelineYearDivider year={year} /> : null}
+                  <PyroxeneTimelineResources
+                    date={date}
+                    description={source.description}
+                    resources={displayResources}
+                    itemUid={itemUid}
+                    onDeleteItem={onDeleteItem}
+                    collectedSourceKey={collectedSourceKey}
+                    collectable={collectedSourceKey ? collectableSourceKeySet.has(collectedSourceKey) : false}
+                    collected={collected}
+                    onCollectedSourceChange={onCollectedSourceChange}
+                  />
+                </div>
+              );
+            }
+            return null;
+          })}
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+function TimelineYearDivider({ year }: { year: number }) {
+  return (
+    <div className="flex items-center gap-3 pb-2 pt-3">
+      <span className="text-sm font-semibold tabular-nums text-muted-foreground">{year}</span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
   );
 }

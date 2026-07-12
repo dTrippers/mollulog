@@ -634,8 +634,6 @@ export default function FutureContents() {
     <Page
       title="미래시"
       description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요"
-      contentArea="3xl"
-      layout="horizontal"
       showMobileScreens={false}
       screens={[
         {
@@ -674,6 +672,7 @@ export default function FutureContents() {
             completedRecruitmentStudents={completedRecruitmentStudents}
             recruitmentResultEditLinks={recruitmentResultEditLinks}
             signedIn={signedIn}
+            recruitmentStudentMobileGrid={5}
             showFeatureBanners={view === "timeline"}
             revealedSpoilerContentUids={revealedSpoilerContentUids}
             onRevealSpoiler={revealSpoiler}

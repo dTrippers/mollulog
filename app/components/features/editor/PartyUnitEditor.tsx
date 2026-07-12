@@ -1,7 +1,7 @@
 import { ChatBubbleOvalLeftEllipsisIcon, MagnifyingGlassIcon, UserPlusIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { StudentCard, StudentCards } from "~/components/features/students";
-import { Label, Toggle } from "~/components/primitives";
+import { Toggle } from "~/components/primitives";
 import { filterStudentByName } from "~/filters/student";
 import type { Role } from "~/models/content.d";
 
@@ -19,9 +19,7 @@ type PartyUnitEditorProps = {
   onCancel(): void;
 };
 
-export default function PartyUnitEditor(
-  { index, students, onComplete, onCancel }: PartyUnitEditorProps,
-) {
+export default function PartyUnitEditor({ index, students, onComplete, onCancel }: PartyUnitEditorProps) {
   const [filteredStudents, setFilteredStudents] = useState<EditorStudent[]>(students);
   const [partySize, setPartySize] = useState<6 | 10>(6);
   const [unitStudents, setUnitStudents] = useState<(EditorStudent | null)[]>(new Array(6).fill(null));
@@ -110,11 +108,11 @@ export default function PartyUnitEditor(
     }
   };
 
-  const completable = (unitStudents.filter((state) => state !== null).length > 0);
+  const completable = unitStudents.filter((state) => state !== null).length > 0;
 
   return (
     <>
-      <Label text={`${index + 1}번째 파티`} />
+      <p className="my-2 font-semibold">{index + 1}번째 파티</p>
       <div className="mt-4 p-4 flex items-center border border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900 rounded-t-lg">
         <MagnifyingGlassIcon className="h-4 w-4 mr-2" strokeWidth={2} />
         <input
@@ -125,47 +123,46 @@ export default function PartyUnitEditor(
       </div>
 
       <div className="max-h-64 md:max-h-80 overflow-auto p-4 bg-neutral-100 dark:bg-neutral-900 border-l border-r border-neutral-200 dark:border-neutral-700">
-        {filteredStudents.length > 0 ?
+        {filteredStudents.length > 0 ? (
           <StudentCards
             students={filteredStudents}
             onSelect={(uid) => addPartyStudent(uid)}
             mobileGrid={6}
             pcGrid={10}
-          /> :
+          />
+        ) : (
           <div className="w-full h-64 md:h-80 flex flex-col items-center justify-center text-neutral-500">
             <ChatBubbleOvalLeftEllipsisIcon className="my-2 w-16 h-16" strokeWidth={2} />
             <p className="my-2 text-sm">검색 결과가 없어요</p>
           </div>
-        }
+        )}
       </div>
 
       <div className="p-4 border border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-900 rounded-b-lg">
         {error && <p className="text-sm text-red-500">{error}</p>}
 
         <div className="my-4">
-          <Toggle
-            label={`파티 인원 조정 (${partySize}명)`}
-            onChange={(value) => setPartySize(value ? 10 : 6)}
-            colorClass="bg-blue-500 data-checked:bg-purple-500"
-          />
+          <Toggle label={`파티 인원 조정 (${partySize}명)`} onChange={(value) => setPartySize(value ? 10 : 6)} />
         </div>
 
-        <Label text="선택한 학생" />
-        {unitStudents.find((student) => student !== null) ?
+        <p className="my-2 font-semibold">선택한 학생</p>
+        {unitStudents.find((student) => student !== null) ? (
           <div className="grid grid-cols-6 md:grid-cols-10 gap-1 gap-2">
             {unitStudents.map((student, index) => (
               <div key={`partyGen-${student?.uid ?? index}`} className="rounded-lg">
-                {student ?
-                  <StudentCard {...student} nameSize="small" /> :
+                {student ? (
+                  <StudentCard {...student} nameSize="small" />
+                ) : (
                   <div className="w-full h-full bg-neutral-200 dark:bg-neutral-800 rounded-lg flex items-center justify-center">
                     <UserPlusIcon className="size-6" />
                   </div>
-                }
+                )}
               </div>
             ))}
-          </div> :
+          </div>
+        ) : (
           <p className="my-4 text-center text-sm text-neutral-500">파티에 추가할 학생을 선택하세요</p>
-        }
+        )}
 
         <div className="flex justify-end">
           <button

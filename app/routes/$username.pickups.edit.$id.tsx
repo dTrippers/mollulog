@@ -11,7 +11,7 @@ import {
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
-import { Button, FormContainer, Textarea, Title } from "~/components/primitives";
+import { Button, SectionCard, Textarea, Title } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import {
   createRecruitmentResultStudentsFromPickupHistory,
@@ -452,7 +452,7 @@ export default function EditPickup() {
     <div className="space-y-8">
       <Title text="모집 이력 관리" />
 
-      <FormContainer title="모집 이벤트">
+      <SectionCard title="모집 이벤트">
         {isEditing ? (
           initialEvent && (
             <div className="rounded-lg border border-border bg-background p-4">
@@ -478,17 +478,14 @@ export default function EditPickup() {
             }}
           />
         )}
-      </FormContainer>
+      </SectionCard>
 
-      <FormContainer
-        title="모집 결과"
-        description="총 모집 횟수와 획득한 ★3 학생, 모집 포인트 교환 학생을 입력해주세요."
-      >
+      <SectionCard title="모집 결과" description="총 모집 횟수와 획득한 ★3 학생, 모집 포인트 교환 학생을 입력해주세요.">
         <div>
           <Button
             text={showImporter ? "외부 데이터 닫기" : "외부 데이터 가져오기"}
             icon={DocumentArrowDownIcon}
-            variant="tint"
+            variant="secondary"
             onClick={() => setShowImporter((prev) => !prev)}
           />
         </div>
@@ -531,7 +528,7 @@ export default function EditPickup() {
           onChange={setComment}
           containerClassName="mt-0 mb-0"
         />
-      </FormContainer>
+      </SectionCard>
 
       <div className="flex flex-col items-start gap-2">
         <Button
