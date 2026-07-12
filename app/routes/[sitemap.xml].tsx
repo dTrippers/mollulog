@@ -14,8 +14,14 @@ type SitemapItem = {
 };
 
 const HOST = "https://mollulog.net";
+// Canonical and crawler rendering fixes materially updated every event, raid, and student page on this date.
+const SEO_REINDEXED_AT = dayjs("2026-07-12");
 
 const EVENT_CONTENT_TYPES = new Set(["event", "fes", "collab", "immortal_event", "main_story", "pickup", "mini_event", "allied"]);
+
+function applySeoReindexFloor(lastmod: Dayjs) {
+  return lastmod.isAfter(SEO_REINDEXED_AT) ? lastmod : SEO_REINDEXED_AT;
+}
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -52,9 +58,10 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 
     const until = content.endAt ? dayjs(content.endAt) : now;
     const isOutdated = until.isBefore(now);
+    const lastmod = isOutdated ? until : now;
     items.push({
       link,
-      lastmod: isOutdated ? until : now,
+      lastmod: applySeoReindexFloor(lastmod),
       changefreq: isOutdated ? "yearly" : "daily",
       priority: isOutdated ? 0.3 : 1.0,
     });
@@ -64,7 +71,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   for (const student of students) {
     items.push({
       link: `${HOST}/students/${student.uid}`,
-      lastmod: beginningOfMonth,
+      lastmod: applySeoReindexFloor(beginningOfMonth),
       changefreq: "monthly",
       priority: 0.5,
     });
