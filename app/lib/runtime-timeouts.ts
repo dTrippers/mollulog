@@ -8,6 +8,9 @@ export const RUNTIME_TIMEOUTS = {
     query: 5000,
     slowWarn: 1000,
   },
+  postgres: {
+    connect: 5000,
+  },
   kv: {
     operation: 2000,
     cooldownAfterTimeout: 15000,

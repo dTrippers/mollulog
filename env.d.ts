@@ -2,6 +2,7 @@ interface Env {
   KV_CACHE: KVNamespace;
   KV_SESSION: KVNamespace;
   DB: D1Database;
+  HYPERDRIVE: Hyperdrive;
   EVENTS?: Queue;
   HOST: string;
   CONNECT_API_URL?: string;

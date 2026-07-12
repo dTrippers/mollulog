@@ -41,6 +41,9 @@
       "migrations_dir": "db/migrations"
     }
   ],
+  "hyperdrive": [
+    { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
+  ],
   "queues": {
     "producers": [
       { "binding": "EVENTS", "queue": "mollulog-events" }
@@ -84,6 +87,9 @@
           "migrations_dir": "db/migrations"
         }
       ],
+      "hyperdrive": [
+        { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
+      ],
       "queues": {
         "producers": [
           { "binding": "EVENTS", "queue": "mollulog-events-staging" }
@@ -117,6 +123,9 @@
           "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
           "migrations_dir": "db/migrations"
         }
+      ],
+      "hyperdrive": [
+        { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
       ],
       "queues": {
         "producers": [
