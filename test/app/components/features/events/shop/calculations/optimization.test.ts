@@ -24,7 +24,6 @@ function createStageInfo(overrides: Partial<StageInfo>): StageInfo {
     index: overrides.index ?? "1-1",
     entryAp: overrides.entryAp ?? new Decimal(10),
     rewardPerItem: overrides.rewardPerItem ?? {},
-    contributes: overrides.contributes ?? true,
   };
 }
 
@@ -60,7 +59,7 @@ describe("calculateStageInfos", () => {
       }),
     ];
 
-    const [stageInfo] = calculateStageInfos(stages, { "coin-stage": true }, {}, [["coin", 1]]);
+    const [stageInfo] = calculateStageInfos(stages, { "coin-stage": true }, {});
 
     expect(Object.keys(stageInfo.rewardPerItem)).toEqual(["coin"]);
     expect(stageInfo.rewardPerItem.coin.toNumber()).toBe(100);
@@ -81,9 +80,7 @@ describe("calculateStageInfos", () => {
       }),
     ];
 
-    const [stageInfo] = calculateStageInfos(stages, { "coin-stage": true }, { coin: new Decimal(0.125) }, [
-      ["coin", 1],
-    ]);
+    const [stageInfo] = calculateStageInfos(stages, { "coin-stage": true }, { coin: new Decimal(0.125) });
 
     // 100 + ceil(0.125 * 100) = 100 + 13 = 113
     expect(stageInfo.rewardPerItem.coin.toNumber()).toBe(113);
@@ -92,31 +89,9 @@ describe("calculateStageInfos", () => {
   it("excludes stages that are not enabled", () => {
     const stages = [createStage({ uid: "enabled" }), createStage({ uid: "disabled" })];
 
-    const result = calculateStageInfos(stages, { enabled: true, disabled: false }, {}, []);
+    const result = calculateStageInfos(stages, { enabled: true, disabled: false }, {});
 
     expect(result.map((s) => s.uid)).toEqual(["enabled"]);
-  });
-
-  it("marks a stage as not contributing when it has no target rewards", () => {
-    const stages = [
-      createStage({
-        uid: "coin-stage",
-        rewards: [
-          {
-            amount: 100,
-            rewardRequirement: null,
-            chance: null,
-            item: { uid: "coin", name: "코인", category: "coin", rarity: 1 },
-          },
-        ],
-      }),
-    ];
-
-    const [withTarget] = calculateStageInfos(stages, { "coin-stage": true }, {}, [["coin", 1]]);
-    const [withoutMatchingTarget] = calculateStageInfos(stages, { "coin-stage": true }, {}, [["other-item", 1]]);
-
-    expect(withTarget.contributes).toBe(true);
-    expect(withoutMatchingTarget.contributes).toBe(false);
   });
 });
 
@@ -130,7 +105,10 @@ describe("optimizeStageRuns", () => {
   it("returns an empty result when the target item cannot be obtained from any stage", () => {
     const stages = [createStageInfo({ uid: "a", rewardPerItem: { x: new Decimal(1) } })];
 
-    expect(toPlainStageRuns(optimizeStageRuns(stages, [["unobtainable", 5]]))).toEqual({ stageRuns: {}, totalAp: 0 });
+    const result = optimizeStageRuns(stages, [["unobtainable", 5]]);
+
+    expect(toPlainStageRuns(result)).toEqual({ stageRuns: {}, totalAp: 0 });
+    expect(result.unobtainableTargets).toEqual({ unobtainable: 5 });
   });
 
   it("picks the cheaper-per-item stage when two stages provide the same reward", () => {
@@ -188,5 +166,44 @@ describe("optimizeStageRuns", () => {
     ]);
 
     expect(toPlainStageRuns(result)).toEqual({ stageRuns: { g: 3 }, totalAp: 30 });
+  });
+
+  it("solves the stage counts as integers instead of rounding a fractional LP result", () => {
+    const stages = [
+      createStageInfo({
+        uid: "a",
+        entryAp: new Decimal(14),
+        rewardPerItem: { x: new Decimal(6), y: new Decimal(7) },
+      }),
+      createStageInfo({
+        uid: "b",
+        entryAp: new Decimal(11),
+        rewardPerItem: { x: new Decimal(1), y: new Decimal(8) },
+      }),
+      createStageInfo({
+        uid: "c",
+        entryAp: new Decimal(7),
+        rewardPerItem: { x: new Decimal(6), y: new Decimal(3) },
+      }),
+    ];
+
+    const result = optimizeStageRuns(stages, [
+      ["x", 1],
+      ["y", 18],
+    ]);
+
+    expect(toPlainStageRuns(result)).toEqual({ stageRuns: { b: 2, c: 1 }, totalAp: 29 });
+  });
+
+  it("returns a valid plan for obtainable targets and reports the rest", () => {
+    const stages = [createStageInfo({ uid: "a", rewardPerItem: { x: new Decimal(2) } })];
+
+    const result = optimizeStageRuns(stages, [
+      ["x", 4],
+      ["missing", 3],
+    ]);
+
+    expect(toPlainStageRuns(result)).toEqual({ stageRuns: { a: 2 }, totalAp: 20 });
+    expect(result.unobtainableTargets).toEqual({ missing: 3 });
   });
 });

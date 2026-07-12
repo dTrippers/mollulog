@@ -1,19 +1,29 @@
 import type Decimal from "decimal.js";
-import type { MinigameConfig, MinigamePayment } from "~/domain/event-shop";
-import type { CollectableResource, ShopResource, Stage } from "~/domain/event-shop";
-import type { ResourceTypeEnum } from "~/graphql/graphql";
+import type { MinigameConfig, MinigamePayment, ShopResource, Stage } from "~/domain/event-shop";
 
 export type StageInfo = {
   uid: string;
   index: string;
   entryAp: Decimal;
   rewardPerItem: Record<string, Decimal>;
-  contributes: boolean;
 };
 
 export type OptimizationResult = {
   stageRuns: Record<string, number>;
   totalAp: Decimal;
+  unobtainableTargets: Record<string, number>;
+};
+
+export type ResourceLedger = {
+  requiredForShopItems: Record<string, number>;
+  requiredForMinigame: Record<string, number>;
+  requiredTotals: Record<string, number>;
+  existing: Record<string, number>;
+  fromFirstRun: Record<string, number>;
+  fromShop: Record<string, number>;
+  fromMinigame: Record<string, number>;
+  acquiredBeforeSweeps: Record<string, number>;
+  remainingToFarm: Record<string, number>;
 };
 
 export type ItemBreakdownInput = {
@@ -22,16 +32,8 @@ export type ItemBreakdownInput = {
   stageRuns: Record<string, number>;
   extraStageRuns: Record<string, number>;
   appliedBonusRatio: Record<string, Decimal>;
-  paymentItemQuantities: Record<string, number>;
   includeFirstClear: boolean;
-  minigamePlayCount: number;
-  minigameConfig?: MinigameConfig | null;
-  minigameRewards?: Record<string, { resourceType: unknown; resourceUid: string; quantity: number }[]>;
-  shopResources: ShopResource[];
-  itemQuantities: Record<string, number>;
-  itemPurchaseDays: Record<string, number>;
-  collectableResources: CollectableResource[];
-  minigamePaymentCosts?: MinigamePayment[];
+  resourceLedger: ResourceLedger;
 };
 
 export type ItemBreakdownResult = {
@@ -40,10 +42,11 @@ export type ItemBreakdownResult = {
   questSweepAp: number;
   extraSweepAp: number;
   totalApWithExtras: number;
-  collectedTotals: Record<string, number>;
   itemBreakdown: {
     fromFirstRun: Record<string, number>;
     fromRepeatedRuns: Record<string, number>;
+    existing: Record<string, number>;
+    fromShop: Record<string, number>;
     toPlayMinigame: Record<string, number>;
     toBuyShopItems: Record<string, number>;
     fromMinigame: Record<string, number>;
@@ -53,7 +56,6 @@ export type ItemBreakdownResult = {
 
 export type RequiredQuantitiesInput = {
   shopResources: ShopResource[];
-  collectableResources: CollectableResource[];
   itemQuantities: Record<string, number>;
   itemPurchaseDays: Record<string, number>;
   existingPaymentItemQuantities: Record<string, number>;
@@ -61,9 +63,6 @@ export type RequiredQuantitiesInput = {
   includeFirstClear: boolean;
   minigamePlayCount: number;
   minigameConfig?: MinigameConfig | null;
-  minigameRewards?: { resourceType: ResourceTypeEnum; resourceUid: string; quantity: number }[];
   minigamePaymentCosts?: MinigamePayment[];
-  enabledStages?: Record<string, boolean>;
-  appliedBonusRatio?: Record<string, Decimal>;
   overriddenRequiredQuantities?: Record<string, number>;
 };
