@@ -109,7 +109,7 @@ export default function Page({
           <VerticalDesktopTabBar screens={screens} isSticky={isTabBarSticky} />
         )}
 
-        <div className={`relative z-0 grow lg:p-4 ${contentAreaClass}`}>{children}</div>
+        <div className={`relative z-0 min-w-0 grow lg:p-4 ${contentAreaClass}`}>{children}</div>
       </div>
 
       {((links && links.length > 0) || (panels && panels.length > 0)) && (

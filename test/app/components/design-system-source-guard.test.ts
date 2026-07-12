@@ -92,6 +92,10 @@ describe("design system source guard", () => {
     expect(pageSource).not.toContain("function VerticalDesktopTabItem");
   });
 
+  it("allows Page content to shrink within horizontal layouts", () => {
+    expect(pageSource).toContain("relative z-0 min-w-0 grow");
+  });
+
   it("does not reintroduce removed color and list button variants", () => {
     expect(findViolations(/(?:tint-blue|tint-red|variant=["']list["']|size=["']list["'])/)).toEqual([]);
   });
