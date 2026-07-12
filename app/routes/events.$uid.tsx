@@ -2,6 +2,7 @@ import { InformationCircleIcon, ListBulletIcon, ShoppingCartIcon, SparklesIcon }
 import { type LoaderFunctionArgs, Outlet, useLoaderData, useLocation, useParams } from "react-router";
 import { PanelEventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
+import { withD1Session } from "~/lib/d1-session";
 import { compareInstantAsc } from "~/lib/date-time";
 import { getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
 
@@ -11,12 +12,13 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
   const { env } = context.cloudflare;
-  const eventMetadata = await getEventMetadata(env, uid);
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const eventMetadata = await getEventMetadata(publicReadEnv, uid);
   if (!eventMetadata) {
     throw new Response("Not Found", { status: 404 });
   }
   const pathname = new URL(request.url).pathname;
-  const shopAvailableEvents = pathname.endsWith("/shop") ? await getShopAvailableEvents(env) : [];
+  const shopAvailableEvents = pathname.endsWith("/shop") ? await getShopAvailableEvents(publicReadEnv) : [];
   if (
     pathname.endsWith("/shop") &&
     eventMetadata.shopAvailable &&

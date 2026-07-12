@@ -7,6 +7,7 @@ import { MobileMoreTabNoticeBanner } from "~/components/features/layout";
 import { RaidCard } from "~/components/features/raids";
 import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
 import { raidTypeToParam } from "~/domain/raid";
+import { withD1Session } from "~/lib/d1-session";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
 import { getCommunityFeedPage } from "~/models/community";
@@ -38,8 +39,11 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   return ctx.tracing.enterSpan("_index.loader", async (span) => {
     const currentUser = await ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
     const currentUserId = currentUser?.id;
+    const publicReadEnv = withD1Session(env, "first-unconstrained");
 
-    const indexContentsPromise = ctx.tracing.enterSpan("index_contents", () => getIndexContents(env, false, ctx));
+    const indexContentsPromise = ctx.tracing.enterSpan("index_contents", () =>
+      getIndexContents(publicReadEnv, false, ctx),
+    );
     const recentCommunityPagePromise = ctx.tracing.enterSpan("community", () =>
       getCommunityFeedPage(env, {
         currentUserId,

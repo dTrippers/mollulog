@@ -5,6 +5,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { Page } from "~/components/features/layout";
 import { EmptyView, PanelBody, PanelIconToggleRow, PanelSearchField } from "~/components/primitives";
+import { withD1Session } from "~/lib/d1-session";
 import { formatInstant, nowUtcIso } from "~/lib/date-time";
 import type { RunType } from "~/models/timeline-content";
 import { type EventFilterState, filterEventList } from "~/views/event-list-filter";
@@ -40,7 +41,8 @@ export const meta: MetaFunction = () => {
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const now = nowUtcIso();
-  return { events: await getEventList(env, now, false, ctx), now };
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  return { events: await getEventList(publicReadEnv, now, false, ctx), now };
 };
 
 function formatEventDate(value: string, format = "YY.MM.DD"): string {

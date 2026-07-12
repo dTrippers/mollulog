@@ -1,4 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { getAllTimelineContentsMeta } from "~/models/timeline-content";
 import { loader } from "../../../app/routes/api.search";
 
 jest.mock("~/components/features/layout/navigation-menu", () => ({
@@ -27,10 +28,15 @@ jest.mock("~/models/student", () => ({
 }));
 
 jest.mock("~/models/timeline-content", () => ({
-  getAllTimelineContentsMeta: () => Promise.resolve([]),
+  getAllTimelineContentsMeta: jest.fn(() => Promise.resolve([])),
 }));
 
-const env = { KV_CACHE: {} } as Env;
+const sessionDb = {} as D1DatabaseSession;
+const primaryDb = { withSession: jest.fn(() => sessionDb) } as unknown as D1Database;
+const env = { DB: primaryDb, KV_CACHE: {} } as Env;
+const mockedGetAllTimelineContentsMeta = getAllTimelineContentsMeta as jest.MockedFunction<
+  typeof getAllTimelineContentsMeta
+>;
 
 async function callLoader(q: string) {
   return loader({
@@ -50,5 +56,7 @@ describe("api.search", () => {
       uid: "10002",
       to: "/students/10002",
     });
+    expect(primaryDb.withSession).toHaveBeenCalledWith("first-unconstrained");
+    expect(mockedGetAllTimelineContentsMeta.mock.calls[0][0].DB).toBe(sessionDb);
   });
 });

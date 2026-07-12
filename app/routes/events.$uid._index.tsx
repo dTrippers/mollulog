@@ -4,6 +4,7 @@ import { redirect, useLoaderData, useNavigate } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, EventInfoCard, Recruitments } from "~/components/features/events";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
+import { withD1Session } from "~/lib/d1-session";
 import { toUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
 import { getNestedContentComments } from "~/models/content";
@@ -23,7 +24,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
   const { env } = context.cloudflare;
-  const content = await getTimelineContent(env, timelineUid);
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const content = await getTimelineContent(publicReadEnv, timelineUid);
   if (!content) {
     throw new Response("Not Found", { status: 404 });
   }
@@ -36,7 +38,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     content.recruitmentStudentUids,
   );
   const siblingEvents = content.recruitmentGroupUid
-    ? (await getTimelineContentsByRecruitmentGroupUids(env, [content.recruitmentGroupUid])).filter(
+    ? (await getTimelineContentsByRecruitmentGroupUids(publicReadEnv, [content.recruitmentGroupUid])).filter(
         (sibling) => sibling.uid !== content.uid,
       )
     : [];
@@ -58,8 +60,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const [favoritedStudents, favoritedCounts, allComments] = await Promise.all([
     currentUser ? getUserFavoritedStudents(env, currentUser.id, timelineUid) : [],
-    getFavoritedCounts(env, studentUids),
-    getNestedContentComments(env, timelineUid, currentUser),
+    getFavoritedCounts(currentUser ? env : publicReadEnv, studentUids),
+    getNestedContentComments(currentUser ? env : publicReadEnv, timelineUid, currentUser),
   ]);
 
   const recruitmentsWithFavorites = eventContent.recruitments.map((recruitment) => ({

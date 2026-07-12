@@ -1,8 +1,9 @@
 import hangul from "hangul-js";
 import type { LoaderFunctionArgs } from "react-router";
 import { getSearchableMenuItems } from "~/components/features/layout/navigation-menu";
+import { withD1Session } from "~/lib/d1-session";
 import { formatStudentFullName, getAllStudents } from "~/models/student";
-import { type TimelineContent, getAllTimelineContentsMeta } from "~/models/timeline-content";
+import { getAllTimelineContentsMeta, type TimelineContent } from "~/models/timeline-content";
 
 const SEARCHABLE_TIMELINE_CONTENT_TYPES = ["event", "main_story", "pickup"] as const;
 const SEARCH_RESULT_LIMIT = 5;
@@ -175,6 +176,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
   }
 
   const env = context.cloudflare.env;
-  const index = await getSearchIndex(env);
+  const index = await getSearchIndex(withD1Session(env, "first-unconstrained"));
   return { results: searchIndex(index, q) };
 };

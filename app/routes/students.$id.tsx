@@ -5,6 +5,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { createPageErrorBoundary, Page } from "~/components/features/layout";
 import { StudentInfo } from "~/components/features/students";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
+import { withD1Session } from "~/lib/d1-session";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
@@ -51,6 +52,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
   const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const logger = getLogger(env, ctx, {
     route: "students.$id.loader",
     studentUid: uid,
@@ -96,7 +98,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   );
 
   const [timelineContents, currentUser, rawAllStudents, tagCounts, allGradings, allRaids] = await Promise.all([
-    getTimelineContentsByRecruitmentGroupUids(env, recruitmentGroupUids),
+    getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids),
     currentUserPromise,
     rawAllStudentsPromise,
     tagCountsPromise,

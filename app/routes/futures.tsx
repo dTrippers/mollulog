@@ -49,7 +49,10 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const ctx: ExecutionContext = context.cloudflare.ctx;
 
   return ctx.tracing.enterSpan("futures.loader", async (span) => {
-    const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () => getFutureContents(env, false, ctx));
+    const publicReadEnv = withD1Session(env, "first-unconstrained");
+    const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () =>
+      getFutureContents(publicReadEnv, false, ctx),
+    );
     const currentUserPromise = ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
     const [rawContents, currentUser] = await Promise.all([rawContentsPromise, currentUserPromise]);
     const contents: FutureContentsLoaderContent[] = rawContents.map((content: FutureContent) => ({
@@ -78,7 +81,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
     const currentUserId = currentUser?.id;
     const signedIn = currentUser !== null;
-    const publicReadEnv = withD1Session(env, "first-unconstrained");
     const runD1Query = createConcurrencyGate(4);
     const recruitmentGroupUids = contents
       .map((content) => content.recruitmentGroupUid)
