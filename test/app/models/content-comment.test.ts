@@ -35,20 +35,36 @@ class FakeD1Statement {
   }
 
   async raw(): Promise<unknown[][]> {
-    return this.db.selectRows(this.sql, this.params);
+    return this.db.executeSelect(this.sql, this.params);
   }
 
   async all(): Promise<{ results: unknown[][] }> {
-    return { results: this.db.selectRows(this.sql, this.params) };
+    return { results: await this.raw() };
   }
 }
 
 class FakeContentCommentD1Database {
   readonly posts: CommunityPostRow[] = [];
   readonly comments: CommunityCommentRow[] = [];
+  activeQueries = 0;
+  maxConcurrentQueries = 0;
+  queryDelayMs = 0;
 
   prepare(sql: string): FakeD1Statement {
     return new FakeD1Statement(this, sql);
+  }
+
+  async executeSelect(sql: string, params: unknown[]): Promise<unknown[][]> {
+    this.activeQueries += 1;
+    this.maxConcurrentQueries = Math.max(this.maxConcurrentQueries, this.activeQueries);
+    try {
+      if (this.queryDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.queryDelayMs));
+      }
+      return this.selectRows(sql, params);
+    } finally {
+      this.activeQueries -= 1;
+    }
   }
 
   selectRows(sql: string, params: unknown[]): unknown[][] {
@@ -229,5 +245,15 @@ describe("getContentsCommentSummaries", () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it("limits concurrent summary batch reads", async () => {
+    const { db, env } = createEnv();
+    db.queryDelayMs = 5;
+    const contentIds = Array.from({ length: 451 }, (_, index) => `content-${index}`);
+
+    await getContentsCommentSummaries(env, contentIds, 10);
+
+    expect(db.maxConcurrentQueries).toBe(4);
   });
 });

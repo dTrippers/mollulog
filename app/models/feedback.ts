@@ -1,5 +1,5 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
+import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
+import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import { index, int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 
@@ -30,7 +30,9 @@ export const feedbackRepliesTable = sqliteTable(
   {
     id: int().primaryKey({ autoIncrement: true }),
     uid: text().notNull(),
-    ticketId: int().notNull().references(() => feedbackTicketsTable.id, { onDelete: "cascade" }),
+    ticketId: int()
+      .notNull()
+      .references(() => feedbackTicketsTable.id, { onDelete: "cascade" }),
     userId: int().notNull(),
     isAdmin: int().notNull().default(0),
     content: text().notNull(),
@@ -116,7 +118,11 @@ export async function getFeedbackTicketsByUserId(env: Env, userId: number): Prom
   return rows.map(toFeedbackTicket);
 }
 
-export async function getFeedbackTicketByUidForUser(env: Env, uid: string, userId: number): Promise<FeedbackTicket | null> {
+export async function getFeedbackTicketByUidForUser(
+  env: Env,
+  uid: string,
+  userId: number,
+): Promise<FeedbackTicket | null> {
   const db = drizzle(env.DB);
   const row = await db
     .select()
@@ -138,7 +144,11 @@ export async function getFeedbackRepliesByTicketId(env: Env, ticketId: number): 
   return rows.map(toFeedbackReply);
 }
 
-export async function getFeedbackThreadByUidForUser(env: Env, uid: string, userId: number): Promise<FeedbackThread | null> {
+export async function getFeedbackThreadByUidForUser(
+  env: Env,
+  uid: string,
+  userId: number,
+): Promise<FeedbackThread | null> {
   const ticket = await getFeedbackTicketByUidForUser(env, uid, userId);
   if (!ticket) {
     return null;
@@ -150,23 +160,25 @@ export async function getFeedbackThreadByUidForUser(env: Env, uid: string, userI
   };
 }
 
-export async function hasUnreadAdminFeedbackReplies(env: Env, userId: number): Promise<boolean> {
-  const db = drizzle(env.DB);
-  const row = await db
-    .select({ exists: sql<number>`1` })
+export function buildUnreadAdminFeedbackRepliesQuery(db: DrizzleD1Database, userId: number) {
+  return db
+    .select({ id: feedbackRepliesTable.id })
     .from(feedbackTicketsTable)
     .innerJoin(
       feedbackRepliesTable,
       and(
         eq(feedbackRepliesTable.ticketId, feedbackTicketsTable.id),
         eq(feedbackRepliesTable.isAdmin, 1),
-        sql`${feedbackRepliesTable.id} > ${feedbackTicketsTable.lastSeenAdminReplyId}`,
+        gt(feedbackRepliesTable.id, feedbackTicketsTable.lastSeenAdminReplyId),
       ),
     )
     .where(eq(feedbackTicketsTable.userId, userId))
-    .limit(1)
-    .get();
-  return row !== undefined;
+    .limit(1);
+}
+
+export async function hasUnreadAdminFeedbackReplies(env: Env, userId: number): Promise<boolean> {
+  const rows = await buildUnreadAdminFeedbackRepliesQuery(drizzle(env.DB), userId);
+  return rows.length > 0;
 }
 
 export function getLatestAdminFeedbackReplyId(replies: FeedbackReply[]): number {
@@ -216,7 +228,12 @@ export async function createFeedbackTicket(
   return uid;
 }
 
-export async function createFeedbackReply(env: Env, ticketId: number, userId: number, content: string): Promise<string> {
+export async function createFeedbackReply(
+  env: Env,
+  ticketId: number,
+  userId: number,
+  content: string,
+): Promise<string> {
   const db = drizzle(env.DB);
   const uid = nanoid(8);
 

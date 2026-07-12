@@ -2,30 +2,28 @@ import { Bars3BottomLeftIcon, FunnelIcon, QueueListIcon, TableCellsIcon } from "
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ContentTimeline, ContentTimelineCompact } from "~/components/features/contents";
 import type { ContentTimelineProps } from "~/components/features/contents";
+import { ContentTimeline, ContentTimelineCompact } from "~/components/features/contents";
 import { ContentFilterPanel } from "~/components/features/futures";
 import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
 import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { raidTypeToParam } from "~/domain/raid";
+import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
+import { applyRecruitmentResultStudentCompletion } from "~/domain/recruitment-result";
+import { createConcurrencyGate } from "~/lib/concurrency";
+import { withD1Session } from "~/lib/d1-session";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import { canonicalLink } from "~/lib/seo";
-import {
-  type ContentCommentSummary,
-  type NestedComment,
-  getContentsCommentSummaries,
-} from "~/models/content";
-import { type FutureContent, getFutureContents } from "~/views/futures";
+import { type ContentCommentSummary, getContentsCommentSummaries, type NestedComment } from "~/models/content";
 import type { EventType, RaidType } from "~/models/content.d";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
-import { raidTypeToParam } from "~/domain/raid";
-import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import {
-  type RecruitmentCompletionMeta,
   getRecruitmentResultsByRecruitmentGroupUids,
+  type RecruitmentCompletionMeta,
 } from "~/models/recruitment-result";
-import { applyRecruitmentResultStudentCompletion } from "~/domain/recruitment-result";
+import { type FutureContent, getFutureContents } from "~/views/futures";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
 import type { ActionData as RecruitmentResultActionData } from "./api.recruitment-results";
@@ -80,24 +78,29 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
     const currentUserId = currentUser?.id;
     const signedIn = currentUser !== null;
+    const publicReadEnv = withD1Session(env, "first-unconstrained");
+    const runD1Query = createConcurrencyGate(4);
     const recruitmentGroupUids = contents
       .map((content) => content.recruitmentGroupUid)
       .filter((uid): uid is string => uid !== null);
     const [commentSummaries, favoritedStudents, favoritedCounts, recruitmentResults] = await Promise.all([
       ctx.tracing.enterSpan("comment_summaries", () =>
         getContentsCommentSummaries(
-          env,
+          currentUserId ? env : publicReadEnv,
           contents.map((content: FutureContentsLoaderContent) => content.uid),
           currentUserId,
+          runD1Query,
         ),
       ),
       currentUserId
-        ? ctx.tracing.enterSpan("favorited_students", () => getUserFavoritedStudents(env, currentUserId))
+        ? ctx.tracing.enterSpan("favorited_students", () =>
+            runD1Query(() => getUserFavoritedStudents(env, currentUserId)),
+          )
         : null,
-      ctx.tracing.enterSpan("favorited_counts", () => getFavoritedCounts(env, allStudentUids)),
+      ctx.tracing.enterSpan("favorited_counts", () => getFavoritedCounts(publicReadEnv, allStudentUids, runD1Query)),
       currentUserId
         ? ctx.tracing.enterSpan("recruitment_results", () =>
-            getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids),
+            getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids, runD1Query),
           )
         : [],
     ]);

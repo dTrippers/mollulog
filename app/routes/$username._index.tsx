@@ -8,7 +8,7 @@ import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { getCommunityFeedPage } from "~/models/community";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
-import { getFollowerIds, getFollowingIds } from "~/models/followership";
+import { getFollowershipSummary } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
 import { sanitizeClassName } from "~/prophandlers";
@@ -24,38 +24,28 @@ function parsePage(request: Request) {
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const sensei = await getRouteSensei(env, params);
+  const [sensei, currentUser] = await Promise.all([getRouteSensei(env, params), getActiveSensei(env, request)]);
   const page = parsePage(request);
 
-  // Get a relationship
-  const followingIds = await getFollowingIds(env, sensei.id);
-  const followerIds = await getFollowerIds(env, sensei.id);
-
-  const relationship = { followed: false, following: false };
-  const currentUser = await getActiveSensei(env, request);
-  if (currentUser) {
-    relationship.followed = followingIds.includes(currentUser.id);
-    relationship.following = followerIds.includes(currentUser.id);
-  }
-
-  // Get student tiers
-  const [recruitedStudents, allReleasedStudents] = await Promise.all([
+  const [followership, recruitedStudents, allReleasedStudents, feedPage] = await Promise.all([
+    getFollowershipSummary(env, sensei.id, currentUser?.id),
     getRecruitedStudents(env, sensei.id),
     getAllStudents(env),
+    getCommunityFeedPage(env, {
+      currentUserId: currentUser?.id,
+      authorUserId: sensei.id,
+      postTypes: [...COMMUNITY_VISIBLE_POST_TYPES],
+      page,
+      pageSize: COMMUNITY_FEED_PAGE_SIZE,
+      ctx,
+    }),
   ]);
+
   const tierCounts: { [key: number]: number } = {};
   for (const { tier } of recruitedStudents) {
     tierCounts[tier] = (tierCounts[tier] ?? 0) + 1;
   }
 
-  const feedPage = await getCommunityFeedPage(env, {
-    currentUserId: currentUser?.id,
-    authorUserId: sensei.id,
-    postTypes: [...COMMUNITY_VISIBLE_POST_TYPES],
-    page,
-    pageSize: COMMUNITY_FEED_PAGE_SIZE,
-    ctx,
-  });
   const enrichedFeed = await enrichCommunityFeedPosts(env, feedPage.items);
 
   return {
@@ -66,9 +56,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       bio: sensei.bio ?? null,
       friendCode: sensei.friendCode ?? null,
     },
-    relationship,
-    followingCount: followingIds.length,
-    followerCount: followerIds.length,
+    relationship: { followed: followership.followed, following: followership.following },
+    followingCount: followership.followingCount,
+    followerCount: followership.followerCount,
     tierCounts,
     recruitedStudentCount: recruitedStudents.length,
     totalStudentCount: allReleasedStudents.length,

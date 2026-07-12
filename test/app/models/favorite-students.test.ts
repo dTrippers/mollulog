@@ -1,22 +1,39 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { favoriteStudent, unfavoriteStudent } from "../../../app/models/favorite-students";
+import { favoriteStudent, getFavoritedCounts, unfavoriteStudent } from "../../../app/models/favorite-students";
 
-type PreparedStatement = {
-  sql: string;
-  params: unknown[];
-};
+class PreparedStatement {
+  constructor(
+    private readonly db: FakeD1Database,
+    readonly sql: string,
+    readonly params: unknown[],
+  ) {}
+
+  async raw(): Promise<unknown[][]> {
+    return this.db.selectRows(this.sql, this.params);
+  }
+
+  async all(): Promise<{ results: unknown[][] }> {
+    return { results: await this.raw() };
+  }
+}
 
 class FakeD1Statement {
-  constructor(private readonly sql: string) {}
+  constructor(
+    private readonly db: FakeD1Database,
+    private readonly sql: string,
+  ) {}
 
   bind(...params: unknown[]): PreparedStatement {
-    return { sql: this.sql, params };
+    return new PreparedStatement(this.db, this.sql, params);
   }
 }
 
 class FakeD1Database {
   readonly favorites = new Set<string>();
   readonly counts = new Map<string, number>();
+  activeReads = 0;
+  maxConcurrentReads = 0;
+  readDelayMs = 0;
   private lastChanges = 0;
 
   readonly batch = jest.fn(async (statements: PreparedStatement[]) => {
@@ -27,7 +44,25 @@ class FakeD1Database {
   });
 
   prepare(sql: string): FakeD1Statement {
-    return new FakeD1Statement(sql);
+    return new FakeD1Statement(this, sql);
+  }
+
+  async selectRows(sql: string, _params: unknown[]): Promise<unknown[][]> {
+    const normalizedSql = sql.replaceAll('"', "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!normalizedSql.includes("from content_favorite_counts")) {
+      throw new Error(`Unexpected SELECT SQL: ${sql}`);
+    }
+
+    this.activeReads += 1;
+    this.maxConcurrentReads = Math.max(this.maxConcurrentReads, this.activeReads);
+    try {
+      if (this.readDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, this.readDelayMs));
+      }
+      return [];
+    } finally {
+      this.activeReads -= 1;
+    }
   }
 
   private favoriteKey(userId: unknown, studentId: unknown, contentId: unknown): string {
@@ -121,5 +156,15 @@ describe("favorite-students", () => {
     await unfavoriteStudent(env, 1, "student-a", "event-a");
 
     expect(db.counts.get("student-a:event-a")).toBe(0);
+  });
+
+  it("limits concurrent favorite-count batch reads", async () => {
+    const { db, env } = createEnv();
+    db.readDelayMs = 5;
+    const studentIds = Array.from({ length: 451 }, (_, index) => `student-${index}`);
+
+    await expect(getFavoritedCounts(env, studentIds)).resolves.toEqual([]);
+
+    expect(db.maxConcurrentReads).toBe(4);
   });
 });

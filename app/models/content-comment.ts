@@ -1,7 +1,8 @@
-import { type SQLWrapper, and, eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or, type SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
-import { type UtcIsoString, nowUtcIso } from "~/lib/date-time";
+import { type ConcurrencyGate, mapWithConcurrencyLimit } from "~/lib/concurrency";
+import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import {
   communityCommentsTable,
   communityPostsTable,
@@ -17,6 +18,7 @@ import { senseisTable } from "./sensei";
 
 type ContentCommentVisibility = "private" | "public";
 const IN_QUERY_BATCH_SIZE = 90;
+const COMMENT_SUMMARY_QUERY_CONCURRENCY = 4;
 
 type ContentComment = {
   id: number;
@@ -247,12 +249,14 @@ export async function getContentsCommentSummaries(
   env: Env,
   contentIds: string[],
   userId?: number,
+  concurrencyGate?: ConcurrencyGate,
 ): Promise<Record<string, ContentCommentSummary>> {
   if (contentIds.length === 0) {
     return {};
   }
 
   const db = drizzle(env.DB);
+  const runQuery: ConcurrencyGate = concurrencyGate ?? ((task) => task());
   const uniqueContentIds = [...new Set(contentIds)];
   const result = uniqueContentIds.reduce<Record<string, ContentCommentSummary>>((acc, contentUid) => {
     acc[contentUid] = {
@@ -265,53 +269,55 @@ export async function getContentsCommentSummaries(
   const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
   const isRecent = (createdAt: string) => new Date(normalizeCommunityTimestamp(createdAt)) >= threeDaysAgo;
 
-  const postsPromise = Promise.all(
-    splitIntoBatches(uniqueContentIds).map((batch) =>
-      db
-        .select({
-          id: communityPostsTable.id,
-          uid: communityPostsTable.uid,
-          userId: communityPostsTable.userId,
-          subjectContentUid: communityPostsTable.subjectContentUid,
-          pinned: communityPostsTable.pinned,
-          createdAt: communityPostsTable.createdAt,
-        })
-        .from(communityPostsTable)
-        .where(
-          and(
-            eq(communityPostsTable.postType, "event_opinion"),
-            inArray(communityPostsTable.subjectContentUid, batch),
-            visibilityFilter(userId),
-          ),
-        ),
-    ),
-  );
-
-  // The pinned-preview lookup only depends on contentIds (not on the posts/subcomments
-  // results), so kick it off concurrently instead of running it as a third serial round-trip.
-  const pinnedPostsPromise: Promise<{ subjectContentUid: string | null; blocks: string }[]> = userId
-    ? Promise.all(
-        splitIntoBatches(uniqueContentIds).map((batch) =>
-          db
-            .select({
-              subjectContentUid: communityPostsTable.subjectContentUid,
-              blocks: communityPostsTable.blocks,
-            })
-            .from(communityPostsTable)
-            .where(
-              and(
-                eq(communityPostsTable.userId, userId),
-                eq(communityPostsTable.postType, "event_opinion"),
-                eq(communityPostsTable.pinned, 1),
-                inArray(communityPostsTable.subjectContentUid, batch),
-                visibilityFilter(userId),
-              ),
+  const posts = (
+    await mapWithConcurrencyLimit(splitIntoBatches(uniqueContentIds), COMMENT_SUMMARY_QUERY_CONCURRENCY, (batch) =>
+      runQuery(() =>
+        db
+          .select({
+            id: communityPostsTable.id,
+            uid: communityPostsTable.uid,
+            userId: communityPostsTable.userId,
+            subjectContentUid: communityPostsTable.subjectContentUid,
+            pinned: communityPostsTable.pinned,
+            createdAt: communityPostsTable.createdAt,
+          })
+          .from(communityPostsTable)
+          .where(
+            and(
+              eq(communityPostsTable.postType, "event_opinion"),
+              inArray(communityPostsTable.subjectContentUid, batch),
+              visibilityFilter(userId),
             ),
-        ),
-      ).then((batches) => batches.flat())
-    : Promise.resolve([]);
+          ),
+      ),
+    )
+  ).flat();
 
-  const posts = (await postsPromise).flat();
+  // Keep phases sequential so signed-in post and pinned-preview batches share
+  // one effective concurrency ceiling instead of creating independent pools.
+  const pinnedPosts: { subjectContentUid: string | null; blocks: string }[] = userId
+    ? (
+        await mapWithConcurrencyLimit(splitIntoBatches(uniqueContentIds), COMMENT_SUMMARY_QUERY_CONCURRENCY, (batch) =>
+          runQuery(() =>
+            db
+              .select({
+                subjectContentUid: communityPostsTable.subjectContentUid,
+                blocks: communityPostsTable.blocks,
+              })
+              .from(communityPostsTable)
+              .where(
+                and(
+                  eq(communityPostsTable.userId, userId),
+                  eq(communityPostsTable.postType, "event_opinion"),
+                  eq(communityPostsTable.pinned, 1),
+                  inArray(communityPostsTable.subjectContentUid, batch),
+                  visibilityFilter(userId),
+                ),
+              ),
+          ),
+        )
+      ).flat()
+    : [];
   const postMap = new Map(
     posts.map((post) => [
       post.uid,
@@ -335,16 +341,19 @@ export async function getContentsCommentSummaries(
     posts.length === 0
       ? []
       : (
-          await Promise.all(
-            splitIntoBatches(posts.map((post) => post.uid)).map((batch) =>
-              db
-                .select({
-                  postUid: communityCommentsTable.postUid,
-                  createdAt: communityCommentsTable.createdAt,
-                })
-                .from(communityCommentsTable)
-                .where(and(inArray(communityCommentsTable.postUid, batch), commentVisibilityFilter(userId))),
-            ),
+          await mapWithConcurrencyLimit(
+            splitIntoBatches(posts.map((post) => post.uid)),
+            COMMENT_SUMMARY_QUERY_CONCURRENCY,
+            (batch) =>
+              runQuery(() =>
+                db
+                  .select({
+                    postUid: communityCommentsTable.postUid,
+                    createdAt: communityCommentsTable.createdAt,
+                  })
+                  .from(communityCommentsTable)
+                  .where(and(inArray(communityCommentsTable.postUid, batch), commentVisibilityFilter(userId))),
+              ),
           )
         ).flat();
 
@@ -362,7 +371,7 @@ export async function getContentsCommentSummaries(
     summary.hasRecentComment = summary.hasRecentComment || isRecent(comment.createdAt);
   }
 
-  for (const post of await pinnedPostsPromise) {
+  for (const post of pinnedPosts) {
     const contentUid = post.subjectContentUid ?? "";
     const summary = result[contentUid];
     if (!summary || summary.pinnedPreviewBody !== null) {

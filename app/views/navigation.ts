@@ -1,10 +1,17 @@
-import { compareInstantAsc, type UtcIsoString, isInstantAfter, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
-import { getAllCoupons, hasUnregisteredActiveCoupons } from "~/models/coupon";
-import { hasUnreadAdminFeedbackReplies } from "~/models/feedback";
+import {
+  compareInstantAsc,
+  isInstantAfter,
+  isInstantBefore,
+  nowUtcIso,
+  toUtcIso,
+  type UtcIsoString,
+} from "~/lib/date-time";
+import { getAllCoupons } from "~/models/coupon";
+import { getPersonalNavigationState } from "~/models/personal-navigation";
 import { getLatestPostTime } from "~/models/post";
-import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 import type { TimelineContent } from "~/models/timeline-content";
+import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 
 const NAVIGATION_BAR_CONTENTS_RAW_CACHE_KEY = cacheKey("route", "navigation-bar", 1, "raw");
 
@@ -75,13 +82,12 @@ export async function getNavigationBarContents(
   ctx?: ExecutionContext,
 ): Promise<NavigationBarContents> {
   const now = nowUtcIso();
-  const [raw, personalRedDots] = await Promise.all([
+  const [raw, personalNavigation] = await Promise.all([
     getNavigationBarContentsRaw(env, forceRefresh, ctx),
     userId
-      ? Promise.all([hasUnregisteredActiveCoupons(env, userId), hasUnreadAdminFeedbackReplies(env, userId)])
-      : Promise.resolve([false, false] as const),
+      ? getPersonalNavigationState(env, userId)
+      : Promise.resolve({ hasUnconsumedCoupons: false, hasUnreadFeedbackReplies: false }),
   ]);
-  const [hasUnconsumedCoupons, hasUnreadFeedbackReplies] = personalRedDots;
   const upcomingEventContent = raw.eventCandidates
     .filter((content) => content.endAt && isInstantAfter(content.endAt, now))
     .sort((a, b) => compareInstantAsc(a.startAt, b.startAt))[0];
@@ -102,7 +108,7 @@ export async function getNavigationBarContents(
     hasActiveCoupons: raw.couponActivePeriods.some(
       (period) => period.endAt === null || isInstantAfter(period.endAt, now),
     ),
-    hasUnconsumedCoupons,
-    hasUnreadFeedbackReplies,
+    hasUnconsumedCoupons: personalNavigation.hasUnconsumedCoupons,
+    hasUnreadFeedbackReplies: personalNavigation.hasUnreadFeedbackReplies,
   };
 }

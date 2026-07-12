@@ -9,7 +9,8 @@ import {
   sanitizeRecruitmentResultStudents,
 } from "~/domain/recruitment-result";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
-import { type UtcIsoString, nowUtcIso } from "~/lib/date-time";
+import { type ConcurrencyGate, mapWithConcurrencyLimit } from "~/lib/concurrency";
+import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import {
   communityPostsTable,
   createRecruitmentResultCommunityPost,
@@ -152,6 +153,7 @@ export async function getRecruitmentResultsByRecruitmentGroupUids(
   env: Env,
   userId: number,
   recruitmentGroupUids: string[],
+  concurrencyGate?: ConcurrencyGate,
 ): Promise<RecruitmentResult[]> {
   const uniqueUids = [...new Set(recruitmentGroupUids)].filter((uid) => uid.length > 0);
   if (uniqueUids.length === 0) {
@@ -159,9 +161,10 @@ export async function getRecruitmentResultsByRecruitmentGroupUids(
   }
 
   const db = drizzle(env.DB);
+  const runQuery: ConcurrencyGate = concurrencyGate ?? ((task) => task());
   const rows = (
-    await Promise.all(
-      splitIntoBatches(uniqueUids).map((batch) =>
+    await mapWithConcurrencyLimit(splitIntoBatches(uniqueUids), 4, (batch) =>
+      runQuery(() =>
         db
           .select()
           .from(recruitmentResultsTable)

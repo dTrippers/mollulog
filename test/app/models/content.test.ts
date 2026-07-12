@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fetchRouteCached } from "~/lib/cache";
-import { getAllCoupons, hasUnregisteredActiveCoupons } from "~/models/coupon";
-import { hasUnreadAdminFeedbackReplies } from "~/models/feedback";
+import { getAllCoupons } from "~/models/coupon";
+import { getPersonalNavigationState } from "~/models/personal-navigation";
 import { getLatestPostTime } from "~/models/post";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
 
@@ -21,11 +21,10 @@ jest.mock("~/lib/cache", () => ({
 
 jest.mock("~/models/coupon", () => ({
   getAllCoupons: jest.fn(),
-  hasUnregisteredActiveCoupons: jest.fn(),
 }));
 
-jest.mock("~/models/feedback", () => ({
-  hasUnreadAdminFeedbackReplies: jest.fn(),
+jest.mock("~/models/personal-navigation", () => ({
+  getPersonalNavigationState: jest.fn(),
 }));
 
 jest.mock("~/models/post", () => ({
@@ -53,11 +52,8 @@ import { getNavigationBarContents } from "../../../app/views/navigation";
 
 const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
 const mockedGetAllCoupons = getAllCoupons as jest.MockedFunction<typeof getAllCoupons>;
-const mockedHasUnregisteredActiveCoupons = hasUnregisteredActiveCoupons as jest.MockedFunction<
-  typeof hasUnregisteredActiveCoupons
->;
-const mockedHasUnreadAdminFeedbackReplies = hasUnreadAdminFeedbackReplies as jest.MockedFunction<
-  typeof hasUnreadAdminFeedbackReplies
+const mockedGetPersonalNavigationState = getPersonalNavigationState as jest.MockedFunction<
+  typeof getPersonalNavigationState
 >;
 const mockedGetLatestPostTime = getLatestPostTime as jest.MockedFunction<typeof getLatestPostTime>;
 const mockedGetTimelineContentsByContentTypes = getTimelineContentsByContentTypes as jest.MockedFunction<
@@ -101,8 +97,10 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
     );
     mockedGetLatestPostTime.mockResolvedValue(null);
     mockedGetAllCoupons.mockResolvedValue([]);
-    mockedHasUnregisteredActiveCoupons.mockResolvedValue(false);
-    mockedHasUnreadAdminFeedbackReplies.mockResolvedValue(false);
+    mockedGetPersonalNavigationState.mockResolvedValue({
+      hasUnconsumedCoupons: false,
+      hasUnreadFeedbackReplies: false,
+    });
   });
 
   it("picks the upcomingEvent against the request-time clock, not the cached snapshot time", async () => {
@@ -190,19 +188,19 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
 
   it("adds personal red dots only for authenticated navigation requests", async () => {
     mockedGetTimelineContentsByContentTypes.mockResolvedValue([]);
-    mockedHasUnregisteredActiveCoupons.mockResolvedValue(true);
-    mockedHasUnreadAdminFeedbackReplies.mockResolvedValue(true);
+    mockedGetPersonalNavigationState.mockResolvedValue({
+      hasUnconsumedCoupons: true,
+      hasUnreadFeedbackReplies: true,
+    });
 
     const anonymousResult = await getNavigationBarContents(env);
     expect(anonymousResult.hasUnconsumedCoupons).toBe(false);
     expect(anonymousResult.hasUnreadFeedbackReplies).toBe(false);
-    expect(mockedHasUnregisteredActiveCoupons).not.toHaveBeenCalled();
-    expect(mockedHasUnreadAdminFeedbackReplies).not.toHaveBeenCalled();
+    expect(mockedGetPersonalNavigationState).not.toHaveBeenCalled();
 
     const authenticatedResult = await getNavigationBarContents(env, false, 42);
     expect(authenticatedResult.hasUnconsumedCoupons).toBe(true);
     expect(authenticatedResult.hasUnreadFeedbackReplies).toBe(true);
-    expect(mockedHasUnregisteredActiveCoupons).toHaveBeenCalledWith(env, 42);
-    expect(mockedHasUnreadAdminFeedbackReplies).toHaveBeenCalledWith(env, 42);
+    expect(mockedGetPersonalNavigationState).toHaveBeenCalledWith(env, 42);
   });
 });
