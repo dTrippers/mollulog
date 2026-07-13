@@ -1,0 +1,14 @@
+alter table content_favorite_students
+  rename column student_id to student_uid;
+
+alter table content_favorite_students
+  rename column content_id to timeline_content_uid;
+
+alter index content_favorite_students_user_content_student_uidx
+  rename to content_favorite_students_user_timeline_content_student_uidx;
+
+alter index content_favorite_students_student_content_idx
+  rename to content_favorite_students_student_timeline_content_idx;
+
+alter index content_favorite_students_user_content_idx
+  rename to content_favorite_students_user_timeline_content_idx;

@@ -75,7 +75,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       }),
     );
     const favoritedStudentsPromise = currentUserId
-      ? ctx.tracing.enterSpan("favorites", () => getUserFavoritedStudents(env, currentUserId))
+      ? ctx.tracing.enterSpan("favorites", () => getUserFavoritedStudents(env, currentUserId, undefined, { ctx }))
       : Promise.resolve([]);
     const rightRailPromise = ctx.tracing.enterSpan("index_right_rail", () =>
       Promise.all([recentCommunityRailPromise, youtubeSectionsPromise]).then(([communityRail, youtubeSections]) => ({

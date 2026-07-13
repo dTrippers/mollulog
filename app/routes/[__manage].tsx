@@ -5,6 +5,10 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, Callout, Title } from "~/components/primitives";
 import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { syncEventContentsList } from "~/models/event-content";
+import {
+  type FavoriteReconciliationResult,
+  reconcileFavoriteStudents,
+} from "~/models/favorite-student-reconciliation.server";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
@@ -53,7 +57,10 @@ type RefreshResult = {
   errors?: Partial<Record<RefreshTaskName, string>>;
 };
 
-type ManageActionData = { intent: "cache.refresh"; result: RefreshResult } | { intent: "unknown"; error: string };
+type ManageActionData =
+  | { intent: "cache.refresh"; result: RefreshResult }
+  | { intent: "favorites.reconcile"; result: FavoriteReconciliationResult }
+  | { intent: "unknown"; error: string };
 
 const SOURCE_REFRESH_CONCURRENCY = 1;
 
@@ -148,6 +155,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (intent === "cache.refresh") {
     return data<ManageActionData>({ intent, result: await refreshCache(env, ctx) });
   }
+  if (intent === "favorites.reconcile") {
+    return data<ManageActionData>({ intent, result: await reconcileFavoriteStudents(env, { ctx }) });
+  }
 
   return data<ManageActionData>({ intent: "unknown", error: `Unsupported intent: ${intent}` }, { status: 400 });
 }
@@ -159,10 +169,11 @@ export default function ManagePage() {
   const navigation = useNavigation();
   const submittingIntent = navigation.formData?.get("intent");
   const isRefreshing = navigation.state === "submitting" && submittingIntent === "cache.refresh";
+  const isReconciling = navigation.state === "submitting" && submittingIntent === "favorites.reconcile";
 
   return (
     <div className="max-w-3xl">
-      <Title text="관리" description="캐시 작업" />
+      <Title text="관리" description="캐시 및 데이터 이관 작업" />
 
       <div className="space-y-6">
         <section className="rounded-lg border border-border bg-card p-5 md:p-6">
@@ -185,6 +196,28 @@ export default function ManagePage() {
           </div>
         </section>
 
+        <section className="rounded-lg border border-border bg-card p-5 md:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Favorite reconciliation</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                D1 canonical row를 PostgreSQL에 반영하고 전체 parity를 확인합니다.
+              </p>
+            </div>
+            <Form method="post">
+              <Button
+                type="submit"
+                name="intent"
+                value="favorites.reconcile"
+                variant="primary"
+                icon={ArrowPathIcon}
+                text={isReconciling ? "Reconciling..." : "Reconcile favorites"}
+                disabled={isReconciling}
+              />
+            </Form>
+          </div>
+        </section>
+
         {actionData && <ActionResult data={actionData} />}
       </div>
     </div>
@@ -200,6 +233,40 @@ function ActionResult({ data }: { data: ManageActionData }) {
         title="요청을 처리하지 못했어요."
         description={data.error}
       />
+    );
+  }
+
+  if (data.intent === "favorites.reconcile") {
+    const { result } = data;
+    return (
+      <Callout
+        Icon={result.matched ? CheckCircleIcon : ExclamationTriangleIcon}
+        tone={result.matched ? "success" : "warning"}
+        title={result.matched ? "Favorite parity 일치" : "Favorite parity 불일치"}
+        description={`D1 ${result.sourceCount}행 · PostgreSQL ${result.targetCount}행 · ${Math.round(result.durationMs)}ms`}
+      >
+        <dl className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+          {[
+            ["Upserted", result.upsertedRows],
+            ["Deleted", result.deletedRows],
+            ["Missing", result.missingTargetCount],
+            ["Unexpected", result.unexpectedTargetCount],
+            ["Mismatched", result.mismatchedCount],
+          ].map(([label, value]) => (
+            <div key={label} className="flex items-center justify-between gap-3 rounded-md bg-background/60 px-3 py-2">
+              <dt className="font-medium">{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+        {result.missingTargetUids.length + result.unexpectedTargetUids.length + result.mismatchedUids.length > 0 && (
+          <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+            {result.missingTargetUids.length > 0 && <p>Missing: {result.missingTargetUids.join(", ")}</p>}
+            {result.unexpectedTargetUids.length > 0 && <p>Unexpected: {result.unexpectedTargetUids.join(", ")}</p>}
+            {result.mismatchedUids.length > 0 && <p>Mismatched: {result.mismatchedUids.join(", ")}</p>}
+          </div>
+        )}
+      </Callout>
     );
   }
 

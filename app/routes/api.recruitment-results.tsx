@@ -1,19 +1,19 @@
 import type { ActionFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { nowUtcIso } from "~/lib/date-time";
-import { withD1Session } from "~/lib/d1-session";
-import { getFutureContents } from "~/views/futures";
-import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
+import { withD1Session } from "~/lib/d1-session";
+import { nowUtcIso } from "~/lib/date-time";
+import { getUserFavoritedStudents } from "~/models/favorite-students";
 import {
   addRecruitedStudentToResult,
   deleteRecruitmentResult,
+  type RecruitmentResultStudent,
   removeRecruitedStudentFromResult,
   setRecruitmentResultCompletion,
   upsertRecruitmentResult,
-  type RecruitmentResultStudent,
 } from "~/models/recruitment-result";
+import { getFutureContents } from "~/views/futures";
 
 export type ActionData =
   | {
@@ -92,7 +92,7 @@ async function canCompleteRecruitmentAction(
   const publicReadEnv = withD1Session(env, "first-unconstrained");
   const [contents, favoritedStudents] = await Promise.all([
     getFutureContents(publicReadEnv, false, ctx),
-    getUserFavoritedStudents(env, userId),
+    getUserFavoritedStudents(env, userId, undefined, { ctx }),
   ]);
 
   for (const content of contents) {
@@ -108,9 +108,7 @@ async function canCompleteRecruitmentAction(
       continue;
     }
 
-    const recruitment = content.recruitments.find(
-      (item) => item.student?.uid === actionData.studentUid,
-    );
+    const recruitment = content.recruitments.find((item) => item.student?.uid === actionData.studentUid);
     if (!recruitment) {
       continue;
     }

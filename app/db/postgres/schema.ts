@@ -59,3 +59,26 @@ export const pgPostsTable = pgTable(
     index("posts_board_created_at_uid_idx").on(table.board, table.createdAt.desc(), table.uid.desc()),
   ],
 );
+
+export const pgFavoriteStudentsTable = pgTable(
+  "content_favorite_students",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    studentUid: text("student_uid").notNull(),
+    timelineContentUid: text("timeline_content_uid").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("content_favorite_students_uid_uidx").on(table.uid),
+    uniqueIndex("content_favorite_students_user_timeline_content_student_uidx").on(
+      table.userId,
+      table.timelineContentUid,
+      table.studentUid,
+    ),
+    index("content_favorite_students_student_timeline_content_idx").on(table.studentUid, table.timelineContentUid),
+    index("content_favorite_students_user_timeline_content_idx").on(table.userId, table.timelineContentUid),
+  ],
+);

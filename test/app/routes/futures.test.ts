@@ -111,7 +111,7 @@ describe("futures loader D1 routing", () => {
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], 42, expect.any(Function));
     expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
     expect(mockedGetFavoritedCounts.mock.calls[0][0].DB).toBe(sessionDb);
-    expect(mockedGetUserFavoritedStudents).toHaveBeenCalledWith(env, 42);
+    expect(mockedGetUserFavoritedStudents).toHaveBeenCalledWith(env, 42, undefined, { ctx });
     expect(mockedGetRecruitmentResults).toHaveBeenCalledWith(env, 42, [], expect.any(Function));
     expect(mockedGetContentsCommentSummaries.mock.calls[0][3]).toBe(mockedGetFavoritedCounts.mock.calls[0][2]);
     expect(mockedGetContentsCommentSummaries.mock.calls[0][3]).toBe(mockedGetRecruitmentResults.mock.calls[0][3]);

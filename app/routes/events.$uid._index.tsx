@@ -59,8 +59,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const studentUids = eventContent.recruitments.map(getRecruitmentFavoriteKey);
 
   const [favoritedStudents, favoritedCounts, allComments] = await Promise.all([
-    currentUser ? getUserFavoritedStudents(env, currentUser.id, timelineUid) : [],
-    getFavoritedCounts(currentUser ? env : publicReadEnv, studentUids),
+    currentUser ? getUserFavoritedStudents(env, currentUser.id, timelineUid, { ctx }) : [],
+    getFavoritedCounts(currentUser ? env : publicReadEnv, studentUids, undefined, { ctx }),
     getNestedContentComments(currentUser ? env : publicReadEnv, timelineUid, currentUser),
   ]);
 
@@ -93,7 +93,7 @@ type ActionData = {
 };
 
 export const action = async ({ params, context, request }: ActionFunctionArgs) => {
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
@@ -107,7 +107,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
   if (actionData.favorite) {
     const { studentUid, favorited } = actionData.favorite;
     const run = favorited ? favoriteStudent : unfavoriteStudent;
-    await run(env, currentUser.id, studentUid, eventUid);
+    await run(env, currentUser.id, studentUid, eventUid, { ctx });
   }
 
   return {};

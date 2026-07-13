@@ -98,7 +98,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     recruitmentResults,
     collectedSources,
   ] = await Promise.all([
-    getUserFavoritedStudents(env, currentUser.id),
+    getUserFavoritedStudents(env, currentUser.id, undefined, { ctx }),
     getLatestPyroxeneOwnedResource(env, currentUser.id),
     getPyroxenePlannerOptions(env, currentUser.id),
     getAllPyroxeneEventData(env, currentUser.id),

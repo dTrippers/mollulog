@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { syncEventContentsList } from "~/models/event-content";
+import { reconcileFavoriteStudents } from "~/models/favorite-student-reconciliation.server";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
@@ -37,6 +38,10 @@ jest.mock("~/auth/authenticator.server", () => ({
 
 jest.mock("~/models/main-story", () => ({
   getMainStories: jest.fn(),
+}));
+
+jest.mock("~/models/favorite-student-reconciliation.server", () => ({
+  reconcileFavoriteStudents: jest.fn(),
 }));
 
 jest.mock("~/models/resource", () => ({
@@ -102,6 +107,9 @@ import { action, loader } from "../../../app/routes/[__manage]";
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedSyncRawStudents = syncRawStudents as jest.MockedFunction<typeof syncRawStudents>;
+const mockedReconcileFavoriteStudents = reconcileFavoriteStudents as jest.MockedFunction<
+  typeof reconcileFavoriteStudents
+>;
 const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
 const mockedGetStudentSkillItemsBatch = getStudentSkillItemsBatch as jest.MockedFunction<
   typeof getStudentSkillItemsBatch
@@ -133,12 +141,15 @@ const mockedWarmRecruitmentCache = warmRecruitmentCache as jest.MockedFunction<t
 const mockedWarmRaidCache = warmRaidCache as jest.MockedFunction<typeof warmRaidCache>;
 
 type ManageActionResponse = {
-  intent: "cache.refresh" | "unknown";
+  intent: "cache.refresh" | "favorites.reconcile" | "unknown";
   result?: {
-    ok: boolean;
-    ranAt: string;
+    ok?: boolean;
+    ranAt?: string;
     durations?: Record<string, number>;
     errors?: Record<string, string>;
+    matched?: boolean;
+    sourceCount?: number;
+    targetCount?: number;
   };
   error?: string;
 };
@@ -215,6 +226,20 @@ beforeEach(() => {
     latestNewsTime: null,
     couponActivePeriods: [],
   });
+  mockedReconcileFavoriteStudents.mockResolvedValue({
+    matched: true,
+    upsertedRows: 28_644,
+    deletedRows: 0,
+    sourceCount: 28_644,
+    targetCount: 28_644,
+    missingTargetCount: 0,
+    unexpectedTargetCount: 0,
+    mismatchedCount: 0,
+    missingTargetUids: [],
+    unexpectedTargetUids: [],
+    mismatchedUids: [],
+    durationMs: 1234,
+  });
 });
 
 describe("__manage route", () => {
@@ -271,11 +296,7 @@ describe("__manage route", () => {
     expect(mockedGetAllStudents).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(expect.anything(), ["10000", "10001"], true);
     expect(mockedGetStudentGearData).toHaveBeenCalledWith(expect.anything(), ["10000", "10001"], true);
-    expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(
-      expect.anything(),
-      true,
-      expect.anything(),
-    );
+    expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetEventList).toHaveBeenCalledWith(expect.anything(), undefined, true, expect.anything());
@@ -284,6 +305,26 @@ describe("__manage route", () => {
     expect(mockedGetNavigationBarContentsRaw).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
     expect(mockedWarmRecruitmentCache).toHaveBeenCalledWith(expect.anything());
     expect(mockedWarmRaidCache).toHaveBeenCalledWith(expect.anything());
+  });
+
+  it("reconciles favorite rows for admins", async () => {
+    mockedGetActiveSensei.mockResolvedValue(makeSensei({ id: 1, role: "admin" }));
+
+    const response = expectDataResult<ManageActionResponse>(await action(createActionArgs("favorites.reconcile")));
+
+    expect(dataStatus(response)).toBe(200);
+    expect(response.data).toMatchObject({
+      intent: "favorites.reconcile",
+      result: {
+        matched: true,
+        sourceCount: 28_644,
+        targetCount: 28_644,
+      },
+    });
+    expect(mockedReconcileFavoriteStudents).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ ctx: expect.anything() }),
+    );
   });
 
   it("captures elapsed duration and skips composite refresh when a leaf task fails", async () => {

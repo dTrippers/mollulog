@@ -12,7 +12,7 @@ export type ActionData = {
 
 // @deprecated use api.contents.$uid.memos and api.contents.$uid.favorites instead
 export const action = async ({ request, context }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
@@ -21,9 +21,13 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   const actionData = await request.json<ActionData>();
   if (actionData.favorite) {
     if (actionData.favorite.favorited) {
-      await favoriteStudent(env, currentUser.id, actionData.favorite.studentUid, actionData.favorite.contentUid);
+      await favoriteStudent(env, currentUser.id, actionData.favorite.studentUid, actionData.favorite.contentUid, {
+        ctx,
+      });
     } else {
-      await unfavoriteStudent(env, currentUser.id, actionData.favorite.studentUid, actionData.favorite.contentUid);
+      await unfavoriteStudent(env, currentUser.id, actionData.favorite.studentUid, actionData.favorite.contentUid, {
+        ctx,
+      });
     }
   }
 

@@ -1,5 +1,6 @@
 import { buildPyroxeneScheduleItems } from "~/domain/pyroxene-schedule";
 import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
+import { withD1Session } from "~/lib/d1-session";
 import { getInstantTime, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { countUnregisteredActiveCoupons } from "~/models/coupon";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
@@ -16,7 +17,6 @@ import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import type { Sensei } from "~/models/sensei";
-import { withD1Session } from "~/lib/d1-session";
 import { getNavigationBarContents } from "~/views/navigation";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
@@ -81,7 +81,7 @@ function getMorePersonalSummary(env: Env, senseiId: number, ctx?: ExecutionConte
     getPickupHistories(env, senseiId),
     getLatestPyroxeneOwnedResource(env, senseiId),
     pyroxeneContentsPromise,
-    getUserFavoritedStudents(env, senseiId),
+    getUserFavoritedStudents(env, senseiId, undefined, { ctx }),
     getPyroxenePlannerOptions(env, senseiId),
     getAllPyroxeneEventData(env, senseiId),
     getPyroxeneTimelineItems(env, senseiId),

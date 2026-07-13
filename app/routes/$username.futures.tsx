@@ -1,18 +1,17 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { SubTitle } from "~/components/primitives";
+import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { withD1Session } from "~/lib/d1-session";
+import type { NestedComment } from "~/models/content";
 import { getContentsComments, nestComments } from "~/models/content";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
+import type { Role } from "~/models/student";
+import { getAllStudentsMap, getStudentSkillItemsBatch } from "~/models/student";
+import { getFutureContents } from "~/views/futures";
 import { getRouteSensei } from "./$username";
 import FuturePlan from "./$username.futures._components/FuturePlan";
-import { getActiveSensei } from "~/auth/authenticator.server";
-import type { NestedComment } from "~/models/content";
-import { getFutureContents } from "~/views/futures";
-import { getAllStudentsMap } from "~/models/student";
-import { getStudentSkillItemsBatch } from "~/models/student";
-import type { RecruitmentTypeEnum } from "~/graphql/graphql";
-import type { Role } from "~/models/student";
 
 export const meta: MetaFunction = ({ params }) => {
   return [
@@ -30,7 +29,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   const currentUser = await getActiveSensei(env, request);
 
   const [favoritedStudents, futureContents, studentsMap] = await Promise.all([
-    getUserFavoritedStudents(env, sensei.id),
+    getUserFavoritedStudents(env, sensei.id, undefined, { ctx }),
     getFutureContents(publicReadEnv, false, ctx),
     getAllStudentsMap(env, true),
   ]);
@@ -46,9 +45,9 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   // Collect favorited student UIDs across matched events
   const favoritedStudentUids = new Set(favoritedStudents.map(({ studentId }) => studentId));
   const relevantStudentUids = new Set(
-    matchedContents.flatMap((c) =>
-      c.recruitments.map((r) => r.student?.uid).filter((uid): uid is string => uid != null),
-    ).filter((uid) => favoritedStudentUids.has(uid)),
+    matchedContents
+      .flatMap((c) => c.recruitments.map((r) => r.student?.uid).filter((uid): uid is string => uid != null))
+      .filter((uid) => favoritedStudentUids.has(uid)),
   );
 
   // Fetch skill items only for favorited students that appear in matched events
@@ -95,7 +94,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     allComments,
     isMe: currentUser?.id === sensei.id,
   };
-}
+};
 
 export default function UserFutures() {
   const { events, favoritedStudents, allComments } = useLoaderData<typeof loader>();
