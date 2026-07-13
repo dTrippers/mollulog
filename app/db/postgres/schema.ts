@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 
@@ -40,5 +40,22 @@ export const pgTimelineContentsTable = pgTable(
     check("timeline_contents_tags_array", sql`jsonb_typeof(${table.tags}) = 'array'`),
     check("timeline_contents_name_i18n_object", sql`jsonb_typeof(${table.nameI18n}) = 'object'`),
     check("timeline_contents_occurrence_positive", sql`${table.occurrence} is null or ${table.occurrence} > 0`),
+  ],
+);
+
+export const pgPostsTable = pgTable(
+  "posts",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    title: text().notNull(),
+    content: text().notNull(),
+    board: text().notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("posts_uid_uidx").on(table.uid),
+    index("posts_board_created_at_uid_idx").on(table.board, table.createdAt.desc(), table.uid.desc()),
   ],
 );

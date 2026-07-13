@@ -50,7 +50,7 @@ export async function getNavigationBarContentsRaw(
       const [contents, latestNewsTime, coupons] = await Promise.all([
         // Limit results to active and future events (endAt >= now).
         getTimelineContentsByContentTypes(env, ["event"], now, { ctx }),
-        getLatestPostTime(env, "news"),
+        getLatestPostTime(env, "news", { ctx }),
         getAllCoupons(env),
       ]);
 

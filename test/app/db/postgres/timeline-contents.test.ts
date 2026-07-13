@@ -14,7 +14,7 @@ import {
   getPostgresUpcomingEvent,
 } from "~/db/postgres/timeline-contents";
 
-function postgresRow(uid = "future-event") {
+function postgresRow(uid = "future-event"): unknown[] {
   return [
     uid,
     new Date("2099-08-25T02:00:00.000Z"),
