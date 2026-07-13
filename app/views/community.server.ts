@@ -1,0 +1,88 @@
+import { filterRecruitmentsByStudentUids } from "~/domain/recruitment-identity";
+import type { CommunityFeedPost } from "~/models/community";
+import {
+  type CommunityFeedStatsRecruitmentGroup,
+  type CommunityFeedStatsTimelineContent,
+  getRecruitmentFeedStatsByPostUid,
+} from "~/models/community-feed";
+import { getRecruitmentGroupsByUids } from "~/models/recruitment";
+import { getAllStudentsMap } from "~/models/student";
+import { getGradingTagsByGradingUids } from "~/models/student-grading-tag";
+import { getTimelineContentsByUids } from "~/models/timeline-content.server";
+import type { EnrichedCommunityFeedPost } from "~/views/community";
+
+export { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES } from "~/views/community";
+
+export async function enrichCommunityFeedPosts(
+  env: Env,
+  posts: CommunityFeedPost[],
+  ctx?: ExecutionContext,
+): Promise<{
+  posts: EnrichedCommunityFeedPost[];
+  studentsByUid: Record<string, { name: string }>;
+}> {
+  const allStudentsMap = await getAllStudentsMap(env, true);
+  const contentUids = posts.map((post) => post.subjectContentUid).filter((uid): uid is string => uid !== null);
+
+  const [timelineContents, gradingTags] = await Promise.all([
+    contentUids.length > 0 ? getTimelineContentsByUids(env, contentUids, { ctx }) : [],
+    getGradingTagsByGradingUids(
+      env,
+      posts.filter((post) => post.postType === "student_review").map((post) => post.uid),
+    ),
+  ]);
+
+  const timelineContentMap = new Map<string, CommunityFeedStatsTimelineContent>(
+    timelineContents.map((content) => [content.uid, content]),
+  );
+  const recruitmentGroupUids = timelineContents
+    .map((content) => content.recruitmentGroupUid)
+    .filter((uid): uid is string => uid !== null);
+  const recruitmentGroups =
+    recruitmentGroupUids.length > 0 ? await getRecruitmentGroupsByUids(env, recruitmentGroupUids) : [];
+  const recruitmentGroupMap = new Map<string, CommunityFeedStatsRecruitmentGroup>(
+    recruitmentGroups.map((group) => [group.uid, group]),
+  );
+  const recruitmentStatsByPostUid = await getRecruitmentFeedStatsByPostUid(env, posts, {
+    allStudentsMap,
+    recruitmentGroupMap,
+    timelineContentMap,
+  });
+
+  return {
+    studentsByUid: Object.fromEntries(
+      Object.entries(allStudentsMap).map(([uid, student]) => [
+        uid,
+        {
+          name: student.name,
+        },
+      ]),
+    ),
+    posts: posts.map((post) => ({
+      ...post,
+      tags: gradingTags[post.uid]?.map((tag) => tag.tagValue) ?? [],
+      subjectStudentName: post.subjectStudentUid ? (allStudentsMap[post.subjectStudentUid]?.name ?? null) : null,
+      subjectContentName: post.subjectContentUid
+        ? (timelineContentMap.get(post.subjectContentUid)?.name ?? null)
+        : null,
+      recruitmentStats: recruitmentStatsByPostUid.get(post.uid) ?? null,
+      pickupStudents: post.subjectContentUid
+        ? (() => {
+            const subjectContent = timelineContentMap.get(post.subjectContentUid);
+            const group = recruitmentGroupMap.get(subjectContent?.recruitmentGroupUid ?? "");
+            return filterRecruitmentsByStudentUids(
+              group?.recruitments ?? [],
+              subjectContent?.recruitmentStudentUids ?? null,
+            )
+              .filter(
+                (recruitment) => recruitment.pickup && recruitment.recruitmentType !== "given" && recruitment.student,
+              )
+              .map((recruitment) => ({
+                uid: recruitment.student?.uid ?? "",
+                name: recruitment.student?.name ?? recruitment.studentName,
+              }));
+          })()
+        : [],
+    })),
+  };
+}

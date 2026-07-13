@@ -28,6 +28,7 @@ import {
   nowUtcIso,
   toUtcIso,
 } from "~/lib/date-time";
+import { withD1Session } from "~/lib/d1-session";
 import { routeError } from "~/lib/http-errors";
 import { getPickupHistory, type PickupHistory } from "~/models/pickup-history";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
@@ -40,7 +41,7 @@ import { getAllStudents } from "~/models/student";
 import {
   getTimelineContentsByRecruitmentGroupUids,
   groupTimelineContentsByRecruitmentGroupUid,
-} from "~/models/timeline-content";
+} from "~/models/timeline-content.server";
 import PickupHistoryEditor from "./$username.pickups._components/PickupHistoryEditor";
 import PickupHistoryImporter from "./$username.pickups._components/PickupHistoryImporter";
 
@@ -142,7 +143,8 @@ export function shouldSkipTier3StudentListInitially(tier3Count?: number, tier3St
 }
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
@@ -168,8 +170,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     (g) => g.recruitments.some((r) => r.pickup && r.student) && isInstantBefore(g.startAt, now),
   );
   const timelineContents = await getTimelineContentsByRecruitmentGroupUids(
-    env,
+    publicReadEnv,
     pickupGroups.map((group) => group.uid),
+    { ctx },
   );
   const timelineContentsByGroupUid = groupTimelineContentsByRecruitmentGroupUid(timelineContents);
   const allStudentsMap = Object.fromEntries(allStudentsList.map((student) => [student.uid, student] as const));
@@ -260,7 +263,8 @@ type ActionData = {
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
@@ -279,8 +283,10 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   // When the group is shared by multiple events, default to the earliest one as the
   // representative content (e.g. for community post linking). See TODO in project notes:
   // this policy isn't user-facing yet.
-  const groupTimelineContents = (await getTimelineContentsByRecruitmentGroupUids(env, [data.eventUid])).sort((a, b) =>
-    compareInstantAsc(a.startAt, b.startAt),
+  const groupTimelineContents = (
+    await getTimelineContentsByRecruitmentGroupUids(publicReadEnv, [data.eventUid], { ctx })
+  ).sort(
+    (a, b) => compareInstantAsc(a.startAt, b.startAt),
   );
   const timelineContent = groupTimelineContents[0];
   const exchangeableStudentMap = new Map(

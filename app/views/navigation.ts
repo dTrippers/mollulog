@@ -11,9 +11,7 @@ import { getAllCoupons } from "~/models/coupon";
 import { getPersonalNavigationState } from "~/models/personal-navigation";
 import { getLatestPostTime } from "~/models/post";
 import type { TimelineContent } from "~/models/timeline-content";
-import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
-
-const NAVIGATION_BAR_CONTENTS_RAW_CACHE_KEY = cacheKey("route", "navigation-bar", 1, "raw");
+import { getTimelineContentsByContentTypes } from "~/models/timeline-content.server";
 
 export type NavigationBarContents = {
   upcomingEvent: {
@@ -46,12 +44,12 @@ export async function getNavigationBarContentsRaw(
   return fetchRouteCached(
     env,
     ctx,
-    NAVIGATION_BAR_CONTENTS_RAW_CACHE_KEY,
+    cacheKey("route", "navigation-bar", 3, "raw"),
     async () => {
       const now = nowUtcIso();
       const [contents, latestNewsTime, coupons] = await Promise.all([
-        // Limit D1 results to active and future events (endAt >= now).
-        getTimelineContentsByContentTypes(env, ["event"], now),
+        // Limit results to active and future events (endAt >= now).
+        getTimelineContentsByContentTypes(env, ["event"], now, { ctx }),
         getLatestPostTime(env, "news"),
         getAllCoupons(env),
       ]);
@@ -80,10 +78,11 @@ export async function getNavigationBarContents(
   forceRefresh = false,
   userId?: number,
   ctx?: ExecutionContext,
+  publicReadEnv: Env = env,
 ): Promise<NavigationBarContents> {
   const now = nowUtcIso();
   const [raw, personalNavigation] = await Promise.all([
-    getNavigationBarContentsRaw(env, forceRefresh, ctx),
+    getNavigationBarContentsRaw(publicReadEnv, forceRefresh, ctx),
     userId
       ? getPersonalNavigationState(env, userId)
       : Promise.resolve({ hasUnconsumedCoupons: false, hasUnreadFeedbackReplies: false }),

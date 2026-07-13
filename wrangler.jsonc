@@ -5,6 +5,9 @@
   "main": "./workers/app.ts",
   "workers_dev": false,
   "preview_urls": false,
+  "placement": {
+    "region": "aws:ap-northeast-1"
+  },
 
   "assets": {
     "directory": "./build/client",
@@ -50,8 +53,7 @@
     ]
   },
   "vars": {
-    "CONNECT_API_URL": "http://localhost:8787",
-    "TIMELINE_CONTENT_SOURCE_MODE": "d1"
+    "CONNECT_API_URL": "http://localhost:8787"
   },
 
   // Secrets configuration
@@ -74,8 +76,7 @@
       "vars": {
         "HOST": "https://staging.mollulog.net",
         "CONNECT_API_URL": "https://connect-staging.mollulog.net",
-        "STAGE": "staging",
-        "TIMELINE_CONTENT_SOURCE_MODE": "compare"
+        "STAGE": "staging"
       },
       "kv_namespaces": [
         { "binding": "KV_CACHE", "id": "b957557c116a41168c42136666ef5808" },
@@ -112,8 +113,7 @@
       "vars": {
         "HOST": "https://mollulog.net",
         "CONNECT_API_URL": "https://connect.mollulog.net",
-        "STAGE": "prod",
-        "TIMELINE_CONTENT_SOURCE_MODE": "compare"
+        "STAGE": "prod"
       },
       "kv_namespaces": [
         { "binding": "KV_CACHE", "id": "a613bc84ffeb4362b3deaa05c617a7b3"},

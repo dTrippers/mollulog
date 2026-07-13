@@ -13,7 +13,7 @@ jest.mock("~/domain/recruitment-identity", () => ({
   ).filterRecruitmentsByStudentUids,
 }));
 
-jest.mock("~/models/timeline-content", () => ({
+jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContents: jest.fn(),
 }));
 

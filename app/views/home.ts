@@ -10,10 +10,8 @@ import {
   findEventsForRecruitmentStudent,
   getTimelineContentsByContentTypes,
   groupTimelineContentsByRecruitmentGroupUid,
-} from "~/models/timeline-content";
+} from "~/models/timeline-content.server";
 import { getUpcomingRaidContents, type RaidScheduleMeta } from "./raid-content";
-
-const INDEX_CONTENTS_CACHE_KEY = cacheKey("route", "index", 1, "all");
 
 export type IndexRecruitment = {
   student: { uid: string; name: string; attackType: Attack; defenseType: Defense; role: Role } | null;
@@ -37,20 +35,21 @@ export async function getIndexContents(env: Env, forceRefresh = false, ctx?: Exe
   return fetchRouteCached<IndexContents>(
     env,
     ctx,
-    INDEX_CONTENTS_CACHE_KEY,
+    cacheKey("route", "index", 3, "all"),
     async () => {
       const now = nowUtcIso();
       const nowDate = new Date(now);
       const eventContentTypes: TimelineContentType[] = ["event", "main_story", "mini_event", "campaign"];
 
       const [allEvents, currentRaids, allRecruitmentGroups] = await Promise.all([
-        getTimelineContentsByContentTypes(env, eventContentTypes, now).then((events) =>
+        getTimelineContentsByContentTypes(env, eventContentTypes, now, { ctx }).then((events) =>
           events.filter((content) => !content.endAt || isInstantAfter(content.endAt, now)),
         ),
         getUpcomingRaidContents(env, {
           limit: 4,
           forceRefresh,
           raidTypes: ["total_assault", "elimination", "unlimit"],
+          ctx,
         }).then((contents) => contents.flatMap((content) => (content.raidSchedule ? [content.raidSchedule] : []))),
         getAllRecruitmentGroups(env, forceRefresh),
       ]);

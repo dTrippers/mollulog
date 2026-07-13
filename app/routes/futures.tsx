@@ -24,7 +24,6 @@ import {
   type RecruitmentCompletionMeta,
 } from "~/models/recruitment-result";
 import { type FutureContent, getFutureContents } from "~/views/futures";
-import { resolveTimelineContentSourceMode } from "~/views/timeline-content-source";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
 import type { ActionData as RecruitmentResultActionData } from "./api.recruitment-results";
@@ -51,10 +50,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
   return ctx.tracing.enterSpan("futures.loader", async (span) => {
     const publicReadEnv = withD1Session(env, "first-unconstrained");
-    const timelineContentSourceMode = resolveTimelineContentSourceMode(env.TIMELINE_CONTENT_SOURCE_MODE);
-    const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () =>
-      getFutureContents(publicReadEnv, false, ctx, { timelineContentSourceMode }),
-    );
+    const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () => getFutureContents(env, false, ctx));
     const currentUserPromise = ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
     const [rawContents, currentUser] = await Promise.all([rawContentsPromise, currentUserPromise]);
     const contents: FutureContentsLoaderContent[] = rawContents.map((content: FutureContent) => ({
@@ -119,7 +115,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     };
 
     span.setAttribute("signedIn", signedIn);
-    span.setAttribute("timeline.source_mode", timelineContentSourceMode);
 
     return payload;
   });

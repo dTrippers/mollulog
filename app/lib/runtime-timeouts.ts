@@ -10,6 +10,7 @@ export const RUNTIME_TIMEOUTS = {
   },
   postgres: {
     connect: 5000,
+    query: 5000,
   },
   kv: {
     operation: 2000,

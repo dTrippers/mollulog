@@ -8,7 +8,7 @@ import {
 } from "~/models/recruitment-result";
 import { getSenseiByUsername } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
-import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import { action, loader } from "../../../app/routes/$username.pickups._index";
 
 jest.mock("~/components/features/layout", () => ({
@@ -35,8 +35,8 @@ jest.mock("~/models/student", () => ({
   getAllStudentsMap: jest.fn(),
 }));
 
-jest.mock("~/models/timeline-content", () => ({
-  ...jest.requireActual<typeof import("~/models/timeline-content")>("~/models/timeline-content"),
+jest.mock("~/models/timeline-content.server", () => ({
+  ...jest.requireActual<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
   getTimelineContentsByRecruitmentGroupUids: jest.fn(),
 }));
 
@@ -62,7 +62,11 @@ const mockedGetRecruitmentPoolStudents = getRecruitmentPoolStudents as unknown a
   (...args: unknown[]) => Promise<unknown[]>
 >;
 
-const env = {} as Env;
+const env = {
+  DB: {
+    withSession: jest.fn(() => ({})),
+  },
+} as unknown as Env;
 
 function createLoaderArgs() {
   return {

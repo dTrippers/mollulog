@@ -1,12 +1,13 @@
-import { useLoaderData } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { calculateShopPurchaseDays } from "~/components/features/events/shop/calculations";
-import { getEventContentSchedule, getEventMetadata, getEventShopContent } from "~/models/event-content";
 import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
+import { withD1Session } from "~/lib/d1-session";
+import { getEventContentSchedule, getEventMetadata, getEventShopContent } from "~/models/event-content";
 import { getEventShopState } from "~/models/event-shop-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
-import { getTimelineContentDatesByContentUid } from "~/models/timeline-content";
+import { getTimelineContentDatesByContentUid } from "~/models/timeline-content.server";
 import EventShopContent from "./events.$uid._components/EventShopContent";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -14,18 +15,19 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   if (!timelineUid) {
     throw new Response("Not Found", { status: 404 });
   }
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
 
-  const metadata = await getEventMetadata(env, timelineUid);
+  const metadata = await getEventMetadata(publicReadEnv, timelineUid, ctx);
   if (!metadata) {
     throw new Response("Not Found", { status: 404 });
   }
-  const shopContent = await getEventShopContent(env, timelineUid);
+  const shopContent = await getEventShopContent(publicReadEnv, timelineUid, false, ctx);
   const shopSchedule = metadata.shopContentUid
     ? await getEventContentSchedule(env, metadata.shopContentUid, metadata.runType)
     : null;
   const canonicalShopDates = metadata.shopContentUid
-    ? await getTimelineContentDatesByContentUid(env, metadata.shopContentUid)
+    ? await getTimelineContentDatesByContentUid(publicReadEnv, metadata.shopContentUid, { ctx })
     : null;
   const shopSince = shopSchedule?.startAt ?? canonicalShopDates?.startAt ?? metadata.since;
   const shopUntil = shopSchedule?.endAt ?? canonicalShopDates?.endAt ?? metadata.until;

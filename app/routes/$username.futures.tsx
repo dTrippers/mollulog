@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { SubTitle } from "~/components/primitives";
+import { withD1Session } from "~/lib/d1-session";
 import { getContentsComments, nestComments } from "~/models/content";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRouteSensei } from "./$username";
@@ -23,13 +24,14 @@ export const meta: MetaFunction = ({ params }) => {
 };
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const sensei = await getRouteSensei(env, params);
   const currentUser = await getActiveSensei(env, request);
 
   const [favoritedStudents, futureContents, studentsMap] = await Promise.all([
     getUserFavoritedStudents(env, sensei.id),
-    getFutureContents(env),
+    getFutureContents(publicReadEnv, false, ctx),
     getAllStudentsMap(env, true),
   ]);
 

@@ -84,10 +84,7 @@ describe("futures loader D1 routing", () => {
       recruitmentResults: [],
     });
     expect(primaryDb.withSession).toHaveBeenCalledWith("first-unconstrained");
-    expect(mockedGetFutureContents.mock.calls[0][0].DB).toBe(sessionDb);
-    expect(mockedGetFutureContents).toHaveBeenCalledWith(expect.anything(), false, ctx, {
-      timelineContentSourceMode: "d1",
-    });
+    expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
     expect(mockedGetContentsCommentSummaries.mock.calls[0][0].DB).toBe(sessionDb);
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(
       expect.anything(),
@@ -112,7 +109,7 @@ describe("futures loader D1 routing", () => {
       recruitmentResults: [],
     });
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], 42, expect.any(Function));
-    expect(mockedGetFutureContents.mock.calls[0][0].DB).toBe(sessionDb);
+    expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
     expect(mockedGetFavoritedCounts.mock.calls[0][0].DB).toBe(sessionDb);
     expect(mockedGetUserFavoritedStudents).toHaveBeenCalledWith(env, 42);
     expect(mockedGetRecruitmentResults).toHaveBeenCalledWith(env, 42, [], expect.any(Function));

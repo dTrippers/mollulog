@@ -16,6 +16,7 @@ import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import type { Sensei } from "~/models/sensei";
+import { withD1Session } from "~/lib/d1-session";
 import { getNavigationBarContents } from "~/views/navigation";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
@@ -46,9 +47,10 @@ export type MoreCurrentUser = {
 };
 
 export async function getMoreViewData(env: Env, ctx: ExecutionContext, sensei: Sensei | null) {
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const [navigationBarContents, personalSummary] = await Promise.all([
-    getNavigationBarContents(env, false, undefined, ctx),
-    sensei ? getMorePersonalSummary(env, sensei.id) : Promise.resolve(null),
+    getNavigationBarContents(env, false, undefined, ctx, publicReadEnv),
+    sensei ? getMorePersonalSummary(env, sensei.id, ctx, publicReadEnv) : Promise.resolve(null),
   ]);
   const currentUser = sensei && personalSummary ? buildCurrentUserSummary(sensei, personalSummary) : null;
 
@@ -65,8 +67,8 @@ export async function getMoreViewData(env: Env, ctx: ExecutionContext, sensei: S
 
 type MorePersonalSummary = Awaited<ReturnType<typeof getMorePersonalSummary>>;
 
-function getMorePersonalSummary(env: Env, senseiId: number) {
-  const pyroxeneContentsPromise = getPyroxenePlannerContents(env);
+function getMorePersonalSummary(env: Env, senseiId: number, ctx?: ExecutionContext, publicReadEnv: Env = env) {
+  const pyroxeneContentsPromise = getPyroxenePlannerContents(publicReadEnv, false, ctx);
   const recruitmentResultsPromise = pyroxeneContentsPromise.then((pyroxeneContents) => {
     const recruitmentGroupUids = pyroxeneContents.flatMap((content) =>
       content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],

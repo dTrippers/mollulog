@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { nowUtcIso } from "~/lib/date-time";
+import { withD1Session } from "~/lib/d1-session";
 import { getFutureContents } from "~/views/futures";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
@@ -82,9 +83,15 @@ function getStudentsFromAction(actionData: Extract<ActionData, { action: "comple
 
 type CompleteStudentActionData = Extract<ActionData, { action: "completeStudent" }>;
 
-async function canCompleteRecruitmentAction(env: Env, userId: number, actionData: CompleteStudentActionData) {
+async function canCompleteRecruitmentAction(
+  env: Env,
+  userId: number,
+  actionData: CompleteStudentActionData,
+  ctx?: ExecutionContext,
+) {
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const [contents, favoritedStudents] = await Promise.all([
-    getFutureContents(env),
+    getFutureContents(publicReadEnv, false, ctx),
     getUserFavoritedStudents(env, userId),
   ]);
 
@@ -123,7 +130,7 @@ async function canCompleteRecruitmentAction(env: Env, userId: number, actionData
 }
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data({ error: "Unauthorized" }, { status: 401 });
@@ -151,7 +158,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       return data({ error: "studentUid is required" }, { status: 400 });
     }
 
-    if (!(await canCompleteRecruitmentAction(env, currentUser.id, actionData))) {
+    if (!(await canCompleteRecruitmentAction(env, currentUser.id, actionData, ctx))) {
       return data({ error: "Recruitment completion is not allowed" }, { status: 400 });
     }
 

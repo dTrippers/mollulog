@@ -26,7 +26,11 @@ jest.mock("~/models/recruitment-result", () => ({
   upsertRecruitmentResult: jest.fn(),
 }));
 
-const env = {} as Env;
+const env = {
+  DB: {
+    withSession: jest.fn(() => ({})),
+  },
+} as unknown as Env;
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetFutureContents = getFutureContents as jest.MockedFunction<typeof getFutureContents>;
 const mockedGetUserFavoritedStudents = getUserFavoritedStudents as jest.MockedFunction<typeof getUserFavoritedStudents>;

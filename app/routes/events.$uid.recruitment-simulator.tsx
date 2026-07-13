@@ -4,14 +4,15 @@ import { type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react
 import { StudentCard } from "~/components/features/students";
 import { Button, EmptyView, HorizontalScroll, Input, SubTitle } from "~/components/primitives";
 import {
-  type RecruitmentDrawResult,
-  type SimulationStudent,
   buildRecruitmentPoolSnapshotFromBaql,
   drawRecruitmentTenPull,
+  type RecruitmentDrawResult,
+  type SimulationStudent,
 } from "~/domain/recruitment-simulator";
-import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
-import { getTimelineContent } from "~/models/timeline-content";
 import { cn } from "~/lib/utils";
+import { withD1Session } from "~/lib/d1-session";
+import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
+import { getTimelineContent } from "~/models/timeline-content.server";
 
 type PullRow = {
   id: string;
@@ -35,8 +36,9 @@ export const loader = async ({ params, context }: LoaderFunctionArgs) => {
     throw new Response("Not Found", { status: 404 });
   }
 
-  const { env } = context.cloudflare;
-  const content = await getTimelineContent(env, timelineUid);
+  const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const content = await getTimelineContent(publicReadEnv, timelineUid, { ctx });
   if (!content || !content.recruitmentGroupUid) {
     throw new Response("Not Found", { status: 404 });
   }

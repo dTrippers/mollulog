@@ -15,7 +15,7 @@ import {
   unfavoriteStudent,
 } from "~/models/favorite-students";
 import { getRecruitmentGroupByUid } from "~/models/recruitment";
-import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import EventComment from "./events.$uid._components/EventComment";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -23,9 +23,9 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   if (!timelineUid) {
     throw new Response("Not Found", { status: 404 });
   }
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const content = await getTimelineContent(publicReadEnv, timelineUid);
+  const content = await getTimelineContent(publicReadEnv, timelineUid, { ctx });
   if (!content) {
     throw new Response("Not Found", { status: 404 });
   }
@@ -38,7 +38,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     content.recruitmentStudentUids,
   );
   const siblingEvents = content.recruitmentGroupUid
-    ? (await getTimelineContentsByRecruitmentGroupUids(publicReadEnv, [content.recruitmentGroupUid])).filter(
+    ? (await getTimelineContentsByRecruitmentGroupUids(publicReadEnv, [content.recruitmentGroupUid], { ctx })).filter(
         (sibling) => sibling.uid !== content.uid,
       )
     : [];

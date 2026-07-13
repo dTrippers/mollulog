@@ -21,6 +21,7 @@ export function createPostgresClient(env: HyperdriveEnv): Client {
   return new Client({
     connectionString: env.HYPERDRIVE.connectionString,
     connectionTimeoutMillis: RUNTIME_TIMEOUTS.postgres.connect,
+    query_timeout: RUNTIME_TIMEOUTS.postgres.query,
   });
 }
 

@@ -1,9 +1,9 @@
 import hangul from "hangul-js";
 import type { LoaderFunctionArgs } from "react-router";
 import { getSearchableMenuItems } from "~/components/features/layout/navigation-menu";
-import { withD1Session } from "~/lib/d1-session";
 import { formatStudentFullName, getAllStudents } from "~/models/student";
-import { getAllTimelineContentsMeta, type TimelineContent } from "~/models/timeline-content";
+import type { TimelineContent } from "~/models/timeline-content";
+import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
 
 const SEARCHABLE_TIMELINE_CONTENT_TYPES = ["event", "main_story", "pickup"] as const;
 const SEARCH_RESULT_LIMIT = 5;
@@ -80,7 +80,7 @@ function deduplicateTimelineContentsByContentUid(contents: TimelineContent[]): T
   return [...contentsWithoutContentUid, ...latestContentByContentUid.values()];
 }
 
-async function getSearchIndex(env: Env): Promise<SearchIndexEntry[]> {
+async function getSearchIndex(env: Env, ctx?: ExecutionContext): Promise<SearchIndexEntry[]> {
   const cacheKey = env.KV_CACHE;
   const cached = searchIndexCaches.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
@@ -89,7 +89,7 @@ async function getSearchIndex(env: Env): Promise<SearchIndexEntry[]> {
 
   const nextCache: SearchIndexCache = {
     expiresAt: Number.POSITIVE_INFINITY,
-    promise: buildSearchIndex(env),
+    promise: buildSearchIndex(env, ctx),
   };
 
   searchIndexCaches.set(cacheKey, nextCache);
@@ -110,11 +110,11 @@ async function getSearchIndex(env: Env): Promise<SearchIndexEntry[]> {
   return nextCache.promise;
 }
 
-async function buildSearchIndex(env: Env): Promise<SearchIndexEntry[]> {
+async function buildSearchIndex(env: Env, ctx?: ExecutionContext): Promise<SearchIndexEntry[]> {
   const [menuItems, students, timelineContents] = await Promise.all([
     Promise.resolve(getSearchableMenuItems()),
     getAllStudents(env, true),
-    getAllTimelineContentsMeta(env),
+    getAllTimelineContentsMeta(env, { ctx }),
   ]);
 
   const menuEntries: SearchIndexEntry[] = menuItems.map((item) => ({
@@ -175,7 +175,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
     return { results: [] };
   }
 
-  const env = context.cloudflare.env;
-  const index = await getSearchIndex(withD1Session(env, "first-unconstrained"));
+  const { env, ctx } = context.cloudflare;
+  const index = await getSearchIndex(env, ctx);
   return { results: searchIndex(index, q) };
 };

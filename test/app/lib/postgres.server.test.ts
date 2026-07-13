@@ -39,6 +39,7 @@ describe("request-scoped PostgreSQL client", () => {
         port: 5432,
         user: "local",
         connect_timeout: 5,
+        query_timeout: 5000,
       }),
     );
   });

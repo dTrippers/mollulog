@@ -5,6 +5,7 @@ import { AddContentButton } from "~/components/features/editor";
 import { SubTitle } from "~/components/primitives";
 import { getRecruitmentResultCountStats, resolveRecruitmentResultStudents } from "~/domain/recruitment-result";
 import { compareInstantAsc, compareInstantDesc } from "~/lib/date-time";
+import { withD1Session } from "~/lib/d1-session";
 import { routeError } from "~/lib/http-errors";
 import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import {
@@ -16,7 +17,7 @@ import { getAllStudentsMap } from "~/models/student";
 import {
   getTimelineContentsByRecruitmentGroupUids,
   groupTimelineContentsByRecruitmentGroupUid,
-} from "~/models/timeline-content";
+} from "~/models/timeline-content.server";
 import { getRouteSensei } from "./$username";
 import PickupHistoryView from "./$username.pickups._components/PickupHistoryView";
 
@@ -52,7 +53,8 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 };
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const sensei = await getRouteSensei(env, params);
 
   const [recruitmentResults, allStudentsMap] = await Promise.all([
@@ -63,7 +65,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const [groups, timelineContents, poolStudents] = await Promise.all([
     getRecruitmentGroupsByUids(env, eventUids),
-    getTimelineContentsByRecruitmentGroupUids(env, eventUids),
+    getTimelineContentsByRecruitmentGroupUids(publicReadEnv, eventUids, { ctx }),
     getRecruitmentPoolStudents(env),
   ]);
   const commentMap = await getRecruitmentResultComments(

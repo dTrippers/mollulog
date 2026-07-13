@@ -15,7 +15,7 @@ jest.mock("~/models/recruitment", () => ({
 }));
 jest.mock("~/models/raid", () => ({ getRaidSchedule: jest.fn() }));
 jest.mock("~/models/student", () => ({ getAllStudentsMap: jest.fn() }));
-jest.mock("~/models/timeline-content", () => ({
+jest.mock("~/models/timeline-content.server", () => ({
   getFutureRaidContents: jest.fn(),
   getTimelineContents: jest.fn(),
 }));
