@@ -116,7 +116,7 @@ export async function getIndexContents(env: Env, forceRefresh = false, ctx?: Exe
         );
 
       const allStudentUids = currentRecruitments.map(({ recruitment }) => recruitment.favoriteKey);
-      const favoritedCounts = (await getFavoritedCounts(env, allStudentUids, undefined, { ctx })).filter((favorited) =>
+      const favoritedCounts = (await getFavoritedCounts(env, allStudentUids, { ctx })).filter((favorited) =>
         currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId),
       );
 

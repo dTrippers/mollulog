@@ -60,7 +60,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const [favoritedStudents, favoritedCounts, allComments] = await Promise.all([
     currentUser ? getUserFavoritedStudents(env, currentUser.id, timelineUid, { ctx }) : [],
-    getFavoritedCounts(currentUser ? env : publicReadEnv, studentUids, undefined, { ctx }),
+    getFavoritedCounts(env, studentUids, { ctx }),
     getNestedContentComments(currentUser ? env : publicReadEnv, timelineUid, currentUser),
   ]);
 

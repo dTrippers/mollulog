@@ -94,12 +94,10 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       ),
       currentUserId
         ? ctx.tracing.enterSpan("favorited_students", () =>
-            runD1Query(() => getUserFavoritedStudents(env, currentUserId, undefined, { ctx })),
+            getUserFavoritedStudents(env, currentUserId, undefined, { ctx }),
           )
         : null,
-      ctx.tracing.enterSpan("favorited_counts", () =>
-        getFavoritedCounts(publicReadEnv, allStudentUids, runD1Query, { ctx }),
-      ),
+      ctx.tracing.enterSpan("favorited_counts", () => getFavoritedCounts(env, allStudentUids, { ctx })),
       currentUserId
         ? ctx.tracing.enterSpan("recruitment_results", () =>
             getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids, runD1Query),

@@ -1,7 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
 import {
-  applyPostgresFavoriteState,
   getPostgresFavoritedCounts,
   getPostgresUserFavoritedStudents,
   setPostgresFavoriteState,
@@ -53,25 +52,6 @@ describe("PostgreSQL favorite students", () => {
     expect(sql).toContain('"timeline_content_uid"');
     expect(sql).not.toContain("content_favorite_counts");
     expect((query.mock.calls[0]?.[1] as unknown[]).filter((value) => value === "student-1")).toHaveLength(1);
-  });
-
-  it("applies shadow state with the D1 row identity", async () => {
-    const { client, query } = createClient(() => []);
-    const record = {
-      id: 42,
-      uid: "favorite-42",
-      userId: 10,
-      studentId: "student-1",
-      contentId: "content-1",
-      createdAt: "2026-07-14T00:00:00.000Z",
-      updatedAt: "2026-07-14T00:00:00.000Z",
-    } as const;
-
-    await applyPostgresFavoriteState(env, record, record, { createClient: () => client });
-
-    const sql = (query.mock.calls[0]?.[0] as { text: string }).text;
-    expect(sql).toContain('insert into "content_favorite_students"');
-    expect(sql).toContain('on conflict ("user_id","timeline_content_uid","student_uid") do update');
   });
 
   it("keeps direct PostgreSQL favorite and unfavorite idempotent", async () => {

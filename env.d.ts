@@ -9,7 +9,6 @@ interface Env {
   CONNECT_INTERNAL_TOKEN?: string;
   STAGE?: "staging" | "prod";
   DISABLE_CACHE?: string;
-  FAVORITE_STUDENT_SOURCE_MODE?: "d1" | "compare" | "hyperdrive";
   SESSION_SECRET: string;
   GOOGLE_CLIENT_SECRET: string;
   GITHUB_CLIENT_ID: string;
