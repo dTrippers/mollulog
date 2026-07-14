@@ -6,13 +6,15 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { withD1Session } from "~/lib/d1-session";
+import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
 import { getFollowershipSummary } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
-import { cn } from "~/lib/utils";
-import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES, enrichCommunityFeedPosts } from "~/views/community";
+import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES } from "~/views/community";
+import { enrichCommunityFeedPosts } from "~/views/community.server";
 import { getRouteSensei } from "./$username";
 import type { ActionData } from "./api.followerships";
 
@@ -24,6 +26,7 @@ function parsePage(request: Request) {
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const [sensei, currentUser] = await Promise.all([getRouteSensei(env, params), getActiveSensei(env, request)]);
   const page = parsePage(request);
 
@@ -46,7 +49,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     tierCounts[tier] = (tierCounts[tier] ?? 0) + 1;
   }
 
-  const enrichedFeed = await enrichCommunityFeedPosts(env, feedPage.items);
+  const enrichedFeed = await enrichCommunityFeedPosts(publicReadEnv, feedPage.items, ctx);
 
   return {
     currentUsername: currentUser?.username ?? null,

@@ -8,10 +8,10 @@ import type {
 import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, cacheQuery, fetchLazySourceCached, fetchSourceCached } from "~/lib/cache";
-import { type UtcIsoString, compareInstantAsc, toUtcIso } from "~/lib/date-time";
+import { compareInstantAsc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { getAllRecruitmentGroups, getRecruitmentGroupsByUids } from "~/models/recruitment";
-import { getTimelineContent, getTimelineContents } from "./timeline-content";
 import type { RunType } from "./timeline-content";
+import { getTimelineContent, getTimelineContents } from "./timeline-content.server";
 
 const EVENT_CONTENTS_LIST_CACHE_KEY = cacheKey("source", "event-content", 1, "list");
 const EVENT_STATIC_CONTENT_TTL = 7 * 24 * 60 * 60;
@@ -23,10 +23,10 @@ function toRunTypeEnum(runType: RunType): RunTypeEnum {
 }
 
 //
-// Get Event Metadata (from D1 timeline_contents)
+// Get Event Metadata (from PostgreSQL timeline_contents)
 //
-export async function getEventMetadata(env: Env, timelineUid: string) {
-  const content = await getTimelineContent(env, timelineUid);
+export async function getEventMetadata(env: Env, timelineUid: string, ctx?: ExecutionContext) {
+  const content = await getTimelineContent(env, timelineUid, { ctx });
   if (!content) {
     return null;
   }
@@ -114,8 +114,8 @@ export async function getEventContentSchedule(
   };
 }
 
-export async function getShopAvailableEvents(env: Env): Promise<ShopAvailableEvent[]> {
-  const contents = await getTimelineContents(env);
+export async function getShopAvailableEvents(env: Env, ctx?: ExecutionContext): Promise<ShopAvailableEvent[]> {
+  const contents = await getTimelineContents(env, undefined, { ctx });
   return contents
     .filter(
       (content) =>
@@ -412,8 +412,8 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
   };
 }
 
-export async function getEventShopContent(env: Env, timelineUid: string, forceRefresh = false) {
-  const metadata = await getEventMetadata(env, timelineUid);
+export async function getEventShopContent(env: Env, timelineUid: string, forceRefresh = false, ctx?: ExecutionContext) {
+  const metadata = await getEventMetadata(env, timelineUid, ctx);
   if (!metadata) {
     return null;
   }

@@ -11,14 +11,14 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   if (!uid) {
     throw new Response("Not Found", { status: 404 });
   }
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const eventMetadata = await getEventMetadata(publicReadEnv, uid);
+  const eventMetadata = await getEventMetadata(publicReadEnv, uid, ctx);
   if (!eventMetadata) {
     throw new Response("Not Found", { status: 404 });
   }
   const pathname = new URL(request.url).pathname;
-  const shopAvailableEvents = pathname.endsWith("/shop") ? await getShopAvailableEvents(publicReadEnv) : [];
+  const shopAvailableEvents = pathname.endsWith("/shop") ? await getShopAvailableEvents(publicReadEnv, ctx) : [];
   if (
     pathname.endsWith("/shop") &&
     eventMetadata.shopAvailable &&

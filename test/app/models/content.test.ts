@@ -3,7 +3,7 @@ import { fetchRouteCached } from "~/lib/cache";
 import { getAllCoupons } from "~/models/coupon";
 import { getPersonalNavigationState } from "~/models/personal-navigation";
 import { getLatestPostTime } from "~/models/post";
-import { getTimelineContentsByContentTypes } from "~/models/timeline-content";
+import { getTimelineContentsByContentTypes } from "~/models/timeline-content.server";
 
 jest.mock("~/lib/cache", () => ({
   cacheKey: (category: string, domain: string, version: number, query: string) =>
@@ -31,7 +31,7 @@ jest.mock("~/models/post", () => ({
   getLatestPostTime: jest.fn(),
 }));
 
-jest.mock("~/models/timeline-content", () => ({
+jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContentsByContentTypes: jest.fn(),
   // Empty stubs for other exports imported from the same module by content.ts.
   getFutureRaidContents: jest.fn(),
@@ -180,7 +180,9 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
       jest.setSystemTime(new Date("2026-05-11T00:00:00.000Z").getTime());
       await getNavigationBarContents(env);
       // Regression guard: this must not be called without the endAfter parameter.
-      expect(mockedGetTimelineContentsByContentTypes).toHaveBeenCalledWith(env, ["event"], expect.any(String));
+      expect(mockedGetTimelineContentsByContentTypes).toHaveBeenCalledWith(env, ["event"], expect.any(String), {
+        ctx: undefined,
+      });
     } finally {
       jest.useRealTimers();
     }

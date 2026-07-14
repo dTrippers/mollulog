@@ -19,7 +19,9 @@ export const meta: MetaFunction = ({ location }) => {
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const page = parsePage(request);
-  const postPage = await getNewsPosts(context.cloudflare.env, page, PAGE_SIZE);
+  const postPage = await getNewsPosts(context.cloudflare.env, page, PAGE_SIZE, {
+    ctx: context.cloudflare.ctx,
+  });
 
   return {
     posts: postPage.items,

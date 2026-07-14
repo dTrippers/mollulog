@@ -1,5 +1,6 @@
 import { buildPyroxeneScheduleItems } from "~/domain/pyroxene-schedule";
 import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
+import { withD1Session } from "~/lib/d1-session";
 import { getInstantTime, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { countUnregisteredActiveCoupons } from "~/models/coupon";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
@@ -46,9 +47,10 @@ export type MoreCurrentUser = {
 };
 
 export async function getMoreViewData(env: Env, ctx: ExecutionContext, sensei: Sensei | null) {
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const [navigationBarContents, personalSummary] = await Promise.all([
-    getNavigationBarContents(env, false, undefined, ctx),
-    sensei ? getMorePersonalSummary(env, sensei.id) : Promise.resolve(null),
+    getNavigationBarContents(env, false, undefined, ctx, publicReadEnv),
+    sensei ? getMorePersonalSummary(env, sensei.id, ctx, publicReadEnv) : Promise.resolve(null),
   ]);
   const currentUser = sensei && personalSummary ? buildCurrentUserSummary(sensei, personalSummary) : null;
 
@@ -65,8 +67,8 @@ export async function getMoreViewData(env: Env, ctx: ExecutionContext, sensei: S
 
 type MorePersonalSummary = Awaited<ReturnType<typeof getMorePersonalSummary>>;
 
-function getMorePersonalSummary(env: Env, senseiId: number) {
-  const pyroxeneContentsPromise = getPyroxenePlannerContents(env);
+function getMorePersonalSummary(env: Env, senseiId: number, ctx?: ExecutionContext, publicReadEnv: Env = env) {
+  const pyroxeneContentsPromise = getPyroxenePlannerContents(publicReadEnv, false, ctx);
   const recruitmentResultsPromise = pyroxeneContentsPromise.then((pyroxeneContents) => {
     const recruitmentGroupUids = pyroxeneContents.flatMap((content) =>
       content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
@@ -79,7 +81,7 @@ function getMorePersonalSummary(env: Env, senseiId: number) {
     getPickupHistories(env, senseiId),
     getLatestPyroxeneOwnedResource(env, senseiId),
     pyroxeneContentsPromise,
-    getUserFavoritedStudents(env, senseiId),
+    getUserFavoritedStudents(env, senseiId, undefined, { ctx }),
     getPyroxenePlannerOptions(env, senseiId),
     getAllPyroxeneEventData(env, senseiId),
     getPyroxeneTimelineItems(env, senseiId),

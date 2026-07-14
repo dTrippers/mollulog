@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
 import { fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "~/lib/cache";
-import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "~/models/timeline-content";
+import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "~/models/timeline-content.server";
 import {
   getEventContentSchedule,
   getEventMetadata,
@@ -10,7 +10,7 @@ import {
 } from "../../../app/models/event-content";
 import { getEventList } from "../../../app/views/events";
 
-jest.mock("~/models/timeline-content", () => ({
+jest.mock("~/models/timeline-content.server", () => ({
   getAllTimelineContentsMeta: jest.fn(),
   getTimelineContent: jest.fn(),
   getTimelineContents: jest.fn(),
@@ -194,7 +194,7 @@ describe("getEventList", () => {
     expect(mockedFetchRouteCached).toHaveBeenCalledWith(
       env,
       undefined,
-      "route::events::v1::list",
+      "route::events::v3::list",
       expect.any(Function),
       false,
     );
@@ -245,7 +245,7 @@ describe("getEventList", () => {
     expect(mockedFetchRouteCached).toHaveBeenCalledWith(
       env,
       undefined,
-      "route::events::v1::list",
+      "route::events::v3::list",
       expect.any(Function),
       true,
     );

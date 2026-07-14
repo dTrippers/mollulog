@@ -13,7 +13,7 @@ import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
-import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
+import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { warmActiveUpcomingEventContent } from "~/views/events";
 
@@ -67,7 +67,7 @@ async function warmStudentSourceCaches(env: Env, forceRefresh = false): Promise<
   );
 }
 
-async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
+async function warmPeriodicLazySourceCaches(env: Env, ctx?: ExecutionContext): Promise<void> {
   if (await isKvCacheWindowFresh(env, SOURCE_WARM_MARKER_KEY, SOURCE_WARM_WINDOW_SECONDS)) {
     return;
   }
@@ -77,13 +77,13 @@ async function warmPeriodicLazySourceCaches(env: Env): Promise<void> {
   // full hour. Cron runs are ~60s-capped and 10 min apart, so they never overlap
   // and there is no concurrency window to protect against by claiming first.
   await runSourceRefreshTasks(
-    [() => warmStudentSourceCaches(env, false), () => warmActiveUpcomingEventContent(env, false)],
+    [() => warmStudentSourceCaches(env, false), () => warmActiveUpcomingEventContent(env, false, ctx)],
     "One or more periodic lazy source cache warm tasks failed",
   );
   await markKvCacheWindow(env, SOURCE_WARM_MARKER_KEY);
 }
 
-async function refreshForcedSourceCaches(env: Env): Promise<void> {
+async function refreshForcedSourceCaches(env: Env, ctx?: ExecutionContext): Promise<void> {
   // These BAQL-sourced snapshots change at most a few times a day. Read paths use
   // fetchSourceCached (long freshness window) so a normal request never blocks on
   // them; this hourly gate is what lets cron force a refresh instead, without
@@ -98,7 +98,7 @@ async function refreshForcedSourceCaches(env: Env): Promise<void> {
     () => warmRaidCache(env, true),
     () => getMainStories(env, true),
     () => getAllStudentsFavoriteItems(env, true),
-    () => syncAllTimelineContentsMeta(env, true),
+    () => syncAllTimelineContentsMeta(env, true, { ctx }),
     () => syncEventContentsList(env, true),
     () => getItemCatalogResources(env, true),
     () => getCampaignFarmingStages(env, true),
@@ -108,10 +108,10 @@ async function refreshForcedSourceCaches(env: Env): Promise<void> {
   await markKvCacheWindow(env, SOURCE_FORCED_REFRESH_MARKER_KEY);
 }
 
-async function refreshSourceCaches(env: Env): Promise<void> {
+async function refreshSourceCaches(env: Env, ctx?: ExecutionContext): Promise<void> {
   const tasks: Array<() => Promise<unknown>> = [
-    () => refreshForcedSourceCaches(env),
-    () => warmPeriodicLazySourceCaches(env),
+    () => refreshForcedSourceCaches(env, ctx),
+    () => warmPeriodicLazySourceCaches(env, ctx),
   ];
 
   await runSourceRefreshTasks(tasks, "One or more source cache refresh tasks failed");
@@ -125,7 +125,7 @@ export async function runScheduledJobs(
   const logger = getLogger(env, ctx, { job: "scheduled" });
   const jobs: ScheduledJob[] = [
     { name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env) },
-    { name: "refreshSourceCaches", run: () => refreshSourceCaches(env) },
+    { name: "refreshSourceCaches", run: () => refreshSourceCaches(env, ctx) },
   ];
 
   const results = await Promise.allSettled(

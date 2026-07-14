@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import type { TimelineContent } from "~/models/timeline-content";
+import type { TimelineContent } from "~/models/timeline-content.server";
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
 jest.mock("~/components/features/layout", () => ({

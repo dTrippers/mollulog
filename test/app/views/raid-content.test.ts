@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import type { RaidSchedule } from "~/models/raid";
 import { getAllRaidSchedules, getRaidSchedule } from "~/models/raid";
-import type { TimelineContent } from "~/models/timeline-content";
-import { getFutureRaidContents } from "~/models/timeline-content";
+import type { TimelineContent } from "~/models/timeline-content.server";
+import { getFutureRaidContents } from "~/models/timeline-content.server";
 import { getUpcomingRaidContents } from "../../../app/views/raid-content";
 
-jest.mock("~/models/timeline-content", () => ({
+jest.mock("~/models/timeline-content.server", () => ({
   getFutureRaidContents: jest.fn(),
 }));
 

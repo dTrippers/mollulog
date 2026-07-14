@@ -62,7 +62,7 @@ function createLoaderArgs() {
   } as never;
 }
 
-describe("futures loader D1 routing", () => {
+describe("futures loader data source routing", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedGetFutureContents.mockResolvedValue([]);
@@ -84,7 +84,7 @@ describe("futures loader D1 routing", () => {
       recruitmentResults: [],
     });
     expect(primaryDb.withSession).toHaveBeenCalledWith("first-unconstrained");
-    expect(mockedGetFutureContents.mock.calls[0][0].DB).toBe(sessionDb);
+    expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
     expect(mockedGetContentsCommentSummaries.mock.calls[0][0].DB).toBe(sessionDb);
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(
       expect.anything(),
@@ -92,7 +92,7 @@ describe("futures loader D1 routing", () => {
       undefined,
       expect.any(Function),
     );
-    expect(mockedGetFavoritedCounts.mock.calls[0][0].DB).toBe(sessionDb);
+    expect(mockedGetFavoritedCounts).toHaveBeenCalledWith(env, [], { ctx });
     expect(mockedGetUserFavoritedStudents).not.toHaveBeenCalled();
     expect(mockedGetRecruitmentResults).not.toHaveBeenCalled();
   });
@@ -109,11 +109,10 @@ describe("futures loader D1 routing", () => {
       recruitmentResults: [],
     });
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], 42, expect.any(Function));
-    expect(mockedGetFutureContents.mock.calls[0][0].DB).toBe(sessionDb);
-    expect(mockedGetFavoritedCounts.mock.calls[0][0].DB).toBe(sessionDb);
-    expect(mockedGetUserFavoritedStudents).toHaveBeenCalledWith(env, 42);
+    expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
+    expect(mockedGetFavoritedCounts).toHaveBeenCalledWith(env, [], { ctx });
+    expect(mockedGetUserFavoritedStudents).toHaveBeenCalledWith(env, 42, undefined, { ctx });
     expect(mockedGetRecruitmentResults).toHaveBeenCalledWith(env, 42, [], expect.any(Function));
-    expect(mockedGetContentsCommentSummaries.mock.calls[0][3]).toBe(mockedGetFavoritedCounts.mock.calls[0][2]);
     expect(mockedGetContentsCommentSummaries.mock.calls[0][3]).toBe(mockedGetRecruitmentResults.mock.calls[0][3]);
   });
 });

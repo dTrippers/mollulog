@@ -1,21 +1,15 @@
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
 import {
-  type UtcIsoString,
   compareInstantAsc,
   compareInstantDesc,
   getInstantTime,
   nowUtcIso,
   toUtcIso,
+  type UtcIsoString,
 } from "~/lib/date-time";
-import {
-  getEventContentSchedule,
-  getEventContentsList,
-  getEventShopContent,
-} from "~/models/event-content";
-import { getAllTimelineContentsMeta } from "~/models/timeline-content";
+import { getEventContentSchedule, getEventContentsList, getEventShopContent } from "~/models/event-content";
 import type { RunType } from "~/models/timeline-content";
-
-const EVENT_LIST_CACHE_KEY = cacheKey("route", "events", 1, "list");
+import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
 
 type EventContentListSource = Awaited<ReturnType<typeof getEventContentsList>>[number];
 type EventContentListSourceSchedule = EventContentListSource["schedules"][number];
@@ -126,11 +120,11 @@ async function getEventListCachedItems(
   return fetchRouteCached<CachedEventListItem[]>(
     env,
     ctx,
-    EVENT_LIST_CACHE_KEY,
+    cacheKey("route", "events", 3, "list"),
     async () => {
       const [eventContents, timelineContents] = await Promise.all([
         getEventContentsList(env, forceRefresh),
-        getAllTimelineContentsMeta(env),
+        getAllTimelineContentsMeta(env, { ctx }),
       ]);
 
       const timelineContentByContentUid = new Map<
@@ -193,8 +187,12 @@ export async function getEventList(
   return cachedEvents.map((event) => addEventListScheduleStatuses(event, now));
 }
 
-export async function warmActiveUpcomingEventContent(env: Env, forceRefresh = false): Promise<void> {
-  const events = await getEventList(env, undefined, forceRefresh);
+export async function warmActiveUpcomingEventContent(
+  env: Env,
+  forceRefresh = false,
+  ctx?: ExecutionContext,
+): Promise<void> {
+  const events = await getEventList(env, undefined, forceRefresh, ctx);
   const scheduleTasks: Array<Promise<unknown>> = [];
   const shopTimelineUids = new Set<string>();
 
@@ -214,6 +212,6 @@ export async function warmActiveUpcomingEventContent(env: Env, forceRefresh = fa
 
   await Promise.all([
     ...scheduleTasks,
-    ...[...shopTimelineUids].map((timelineUid) => getEventShopContent(env, timelineUid, forceRefresh)),
+    ...[...shopTimelineUids].map((timelineUid) => getEventShopContent(env, timelineUid, forceRefresh, ctx)),
   ]);
 }

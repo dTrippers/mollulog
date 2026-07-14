@@ -18,7 +18,7 @@ import {
   getFutureRaidContents,
   getTimelineContents,
   groupTimelineContentsByRecruitmentGroupUid,
-} from "~/models/timeline-content";
+} from "~/models/timeline-content.server";
 
 const EVENT_CONTENT_TYPES: TimelineContentType[] = ["event", "main_story", "pickup"];
 const MAIN_STORY_REWARD_REGION = "gl";
@@ -158,11 +158,15 @@ function buildRecruitmentPoolInfo(
   };
 }
 
-export async function getPyroxenePlannerContents(env: Env, forceRefresh = false): Promise<PyroxenePlannerContent[]> {
+export async function getPyroxenePlannerContents(
+  env: Env,
+  forceRefresh = false,
+  ctx?: ExecutionContext,
+): Promise<PyroxenePlannerContent[]> {
   // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
   const [eventContents, raidContents, mainStories] = await Promise.all([
-    getTimelineContents(env),
-    getFutureRaidContents(env, ["raid"]),
+    getTimelineContents(env, undefined, { ctx }),
+    getFutureRaidContents(env, ["raid"], { ctx }),
     getMainStories(env, forceRefresh),
   ]);
   const raidUids = new Set(raidContents.map((c) => c.uid));

@@ -8,7 +8,7 @@ import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
-import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
+import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { warmActiveUpcomingEventContent } from "~/views/events";
 
@@ -26,7 +26,7 @@ jest.mock("~/models/student", () => ({
   syncRawStudents: jest.fn(),
 }));
 
-jest.mock("~/models/timeline-content", () => ({
+jest.mock("~/models/timeline-content.server", () => ({
   syncAllTimelineContentsMeta: jest.fn(),
 }));
 
@@ -151,12 +151,12 @@ describe("runScheduledJobs", () => {
     expect(mockedWarmRaidCache).toHaveBeenCalledWith(env, true);
     expect(mockedGetMainStories).toHaveBeenCalledWith(env, true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(env, true);
-    expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(env, true);
+    expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(env, true, { ctx });
     expect(mockedSyncEventContentsList).toHaveBeenCalledWith(env, true);
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedGetStudentGearData).toHaveBeenCalledWith(env, ["10000", "10001"], false);
-    expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false);
+    expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false, expect.anything());
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(env, true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(env, true);
     expect(kv.put).toHaveBeenCalledWith(
@@ -229,7 +229,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedGetStudentGearData).toHaveBeenCalledWith(env, ["10000", "10001"], false);
-    expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false);
+    expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false, expect.anything());
   });
 
   it("does not record the warm marker when the periodic warm fails", async () => {

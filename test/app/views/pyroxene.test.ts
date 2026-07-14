@@ -1,6 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { MainStoryVolume } from "~/models/main-story";
-import type { TimelineContent } from "~/models/timeline-content";
+import type { TimelineContent } from "~/models/timeline-content.server";
 import { buildMainStoryRewardContents, getPyroxenePlannerContents } from "~/views/pyroxene";
 
 jest.mock("~/models/recruitment", () => ({
@@ -13,8 +13,8 @@ jest.mock("~/models/main-story", () => ({
   ...jest.requireActual<typeof import("~/models/main-story")>("~/models/main-story"),
   getMainStories: jest.fn(),
 }));
-jest.mock("~/models/timeline-content", () => ({
-  ...jest.requireActual<typeof import("~/models/timeline-content")>("~/models/timeline-content"),
+jest.mock("~/models/timeline-content.server", () => ({
+  ...jest.requireActual<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
   getFutureRaidContents: jest.fn(),
   getTimelineContents: jest.fn(),
 }));
@@ -149,7 +149,7 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
     const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
     const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
     const { getFutureRaidContents, getTimelineContents } =
-      jest.requireMock<typeof import("~/models/timeline-content")>("~/models/timeline-content");
+      jest.requireMock<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server");
 
     const eventA = timelineContent({
       uid: "event-a",

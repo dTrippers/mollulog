@@ -10,7 +10,7 @@ import {
   upsertRecruitmentResult,
 } from "~/models/recruitment-result";
 import { getAllStudents } from "~/models/student";
-import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content";
+import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import {
   action,
   getVisibleTier3StudentUids,
@@ -81,8 +81,8 @@ jest.mock("~/models/student", () => ({
   getAllStudents: jest.fn(),
 }));
 
-jest.mock("~/models/timeline-content", () => ({
-  ...jest.requireActual<typeof import("~/models/timeline-content")>("~/models/timeline-content"),
+jest.mock("~/models/timeline-content.server", () => ({
+  ...jest.requireActual<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
   getTimelineContentsByRecruitmentGroupUids: jest.fn(),
 }));
 
@@ -111,7 +111,11 @@ const mockedGetRecruitmentGroupByUid = getRecruitmentGroupByUid as unknown as je
   (...args: unknown[]) => Promise<unknown | null>
 >;
 
-const env = {} as Env;
+const env = {
+  DB: {
+    withSession: jest.fn(() => ({})),
+  },
+} as unknown as Env;
 
 function createGroup(uid: string, startAt: string) {
   return {

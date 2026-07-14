@@ -5,10 +5,8 @@ import { isInstantAfter, normalizeInstant, nowUtcIso, toUtcIso, type UtcIsoStrin
 import type { Role } from "~/models/content.d";
 import { type getRecruitmentGroupByUid, getRecruitmentGroupsByUids } from "~/models/recruitment";
 import type { TimelineContent } from "~/models/timeline-content";
-import { getTimelineContents } from "~/models/timeline-content";
+import { getTimelineContents } from "~/models/timeline-content.server";
 import { getUpcomingRaidContents, type RaidInfo } from "./raid-content";
-
-const FUTURE_CONTENTS_CACHE_KEY = cacheKey("route", "futures", 1, "all");
 
 export type RecruitmentInfo = {
   recruitmentType: RecruitmentTypeEnum;
@@ -88,11 +86,11 @@ export async function getFutureContents(
   const allEnriched = await fetchRouteCached(
     env,
     ctx,
-    FUTURE_CONTENTS_CACHE_KEY,
+    cacheKey("route", "futures", 2, "all"),
     async () => {
       const [contents, upcomingRaidContents] = await Promise.all([
-        getTimelineContents(env),
-        getUpcomingRaidContents(env, { forceRefresh }),
+        getTimelineContents(env, nowUtcIso(), { ctx }),
+        getUpcomingRaidContents(env, { forceRefresh, ctx }),
       ]);
       const upcomingRaidMap = new Map(upcomingRaidContents.map((content) => [content.uid, content]));
       const recruitmentGroupUids = contents

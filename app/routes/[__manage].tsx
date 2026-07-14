@@ -1,6 +1,6 @@
 import { ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, data, redirect, useActionData, useNavigation } from "react-router";
+import { data, Form, redirect, useActionData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, Callout, Title } from "~/components/primitives";
 import { mapWithConcurrencyLimit } from "~/lib/concurrency";
@@ -14,7 +14,7 @@ import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
 import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
-import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
+import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { getEventList, warmActiveUpcomingEventContent } from "~/views/events";
 import { getFutureContents } from "~/views/futures";
@@ -87,11 +87,11 @@ async function refreshCache(env: Env, ctx: ExecutionContext): Promise<RefreshRes
     ["warmRaidCache", () => warmRaidCache(env)],
     ["getMainStories", () => getMainStories(env, true)],
     ["getAllStudentsFavoriteItems", () => getAllStudentsFavoriteItems(env, true)],
-    ["syncAllTimelineContentsMeta", () => syncAllTimelineContentsMeta(env)],
+    ["syncAllTimelineContentsMeta", () => syncAllTimelineContentsMeta(env, true, { ctx })],
     ["syncEventContentsList", () => syncEventContentsList(env)],
     ["warmStudentSkillItems", async () => getStudentSkillItemsBatch(env, await getStudentUids(), true)],
     ["warmStudentGearData", async () => getStudentGearData(env, await getStudentUids(), true)],
-    ["warmActiveUpcomingEventContent", () => warmActiveUpcomingEventContent(env, true)],
+    ["warmActiveUpcomingEventContent", () => warmActiveUpcomingEventContent(env, true, ctx)],
     ["getItemCatalogResources", () => getItemCatalogResources(env, true)],
     ["getCampaignFarmingStages", () => getCampaignFarmingStages(env, true)],
   ];
@@ -148,7 +148,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (intent === "cache.refresh") {
     return data<ManageActionData>({ intent, result: await refreshCache(env, ctx) });
   }
-
   return data<ManageActionData>({ intent: "unknown", error: `Unsupported intent: ${intent}` }, { status: 400 });
 }
 
@@ -162,7 +161,7 @@ export default function ManagePage() {
 
   return (
     <div className="max-w-3xl">
-      <Title text="관리" description="캐시 작업" />
+      <Title text="관리" description="캐시 및 데이터 이관 작업" />
 
       <div className="space-y-6">
         <section className="rounded-lg border border-border bg-card p-5 md:p-6">

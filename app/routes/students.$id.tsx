@@ -15,11 +15,9 @@ import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { formatStudentFullName, getAllStudentsMap, getStudentDetail } from "~/models/student";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
 import { getTagCountsByStudent } from "~/models/student-grading-tag";
-import {
-  findEventsForRecruitmentStudent,
-  getTimelineContentsByRecruitmentGroupUids,
-  groupTimelineContentsByRecruitmentGroupUid,
-} from "~/models/timeline-content";
+import type { TimelineContent } from "~/models/timeline-content";
+import { findEventsForRecruitmentStudent, groupTimelineContentsByRecruitmentGroupUid } from "~/models/timeline-content";
+import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 
 /**
  * Restricts the events shown on a student's page to the ones actually listing that student,
@@ -27,7 +25,7 @@ import {
  * counterpart) that each only feature a subset of the group's students.
  */
 export function getStudentRelevantTimelineContents(
-  timelineContents: Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>,
+  timelineContents: TimelineContent[],
   recruitmentGroupUids: string[],
   studentUid: string,
 ) {
@@ -98,7 +96,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   );
 
   const [timelineContents, currentUser, rawAllStudents, tagCounts, allGradings, allRaids] = await Promise.all([
-    getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids),
+    getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids, { ctx }),
     currentUserPromise,
     rawAllStudentsPromise,
     tagCountsPromise,

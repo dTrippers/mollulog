@@ -22,6 +22,7 @@ import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { captureClientError } from "./lib/observability.client";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
+import { withD1Session } from "./lib/d1-session";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
 
@@ -51,8 +52,9 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   return ctx.tracing.enterSpan("root.loader", async (span) => {
     const sensei = await ctx.tracing.enterSpan("root_auth", () => getActiveSensei(env, request));
     const preference = await ctx.tracing.enterSpan("root_preference", () => getPreference(env, request));
+    const publicReadEnv = withD1Session(env, "first-unconstrained");
     const navigationBarContents = await ctx.tracing.enterSpan("root_nav", () =>
-      getNavigationBarContents(env, false, sensei?.id, ctx),
+      getNavigationBarContents(env, false, sensei?.id, ctx, publicReadEnv),
     );
 
     span.setAttribute("signedIn", sensei !== null);

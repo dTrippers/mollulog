@@ -7,17 +7,18 @@ import {
   UsersIcon,
 } from "@heroicons/react/24/outline";
 import { type ElementType, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { Page } from "~/components/features/layout";
+import { withD1Session } from "~/lib/d1-session";
 import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
-import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES, enrichCommunityFeedPosts } from "~/views/community";
+import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES } from "~/views/community";
+import { enrichCommunityFeedPosts } from "~/views/community.server";
 
 type CommunityVisiblePostType = (typeof COMMUNITY_VISIBLE_POST_TYPES)[number];
 
@@ -71,6 +72,7 @@ function parsePage(request: Request) {
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const currentUser = await getActiveSensei(env, request);
   const postTypes = parseCommunityPostTypes(request);
   const page = parsePage(request);
@@ -83,7 +85,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     pageSize: COMMUNITY_FEED_PAGE_SIZE,
     ctx,
   });
-  const enrichedFeed = await enrichCommunityFeedPosts(env, feedPage.items);
+  const enrichedFeed = await enrichCommunityFeedPosts(publicReadEnv, feedPage.items, ctx);
 
   return {
     postTypes,

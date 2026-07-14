@@ -3,8 +3,8 @@ import type { CommunityFeedPost } from "~/models/community";
 import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
 import { getGradingTagsByGradingUids } from "~/models/student-grading-tag";
-import { getTimelineContentsByUids } from "~/models/timeline-content";
-import { enrichCommunityFeedPosts } from "~/views/community";
+import { getTimelineContentsByUids } from "~/models/timeline-content.server";
+import { enrichCommunityFeedPosts } from "~/views/community.server";
 
 jest.mock("~/models/student", () => ({
   getAllStudentsMap: jest.fn(),
@@ -14,7 +14,7 @@ jest.mock("~/models/student-grading-tag", () => ({
   getGradingTagsByGradingUids: jest.fn(),
 }));
 
-jest.mock("~/models/timeline-content", () => ({
+jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContentsByUids: jest.fn(),
 }));
 

@@ -50,9 +50,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
   return ctx.tracing.enterSpan("futures.loader", async (span) => {
     const publicReadEnv = withD1Session(env, "first-unconstrained");
-    const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () =>
-      getFutureContents(publicReadEnv, false, ctx),
-    );
+    const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () => getFutureContents(env, false, ctx));
     const currentUserPromise = ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
     const [rawContents, currentUser] = await Promise.all([rawContentsPromise, currentUserPromise]);
     const contents: FutureContentsLoaderContent[] = rawContents.map((content: FutureContent) => ({
@@ -96,10 +94,10 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       ),
       currentUserId
         ? ctx.tracing.enterSpan("favorited_students", () =>
-            runD1Query(() => getUserFavoritedStudents(env, currentUserId)),
+            getUserFavoritedStudents(env, currentUserId, undefined, { ctx }),
           )
         : null,
-      ctx.tracing.enterSpan("favorited_counts", () => getFavoritedCounts(publicReadEnv, allStudentUids, runD1Query)),
+      ctx.tracing.enterSpan("favorited_counts", () => getFavoritedCounts(env, allStudentUids, { ctx })),
       currentUserId
         ? ctx.tracing.enterSpan("recruitment_results", () =>
             getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids, runD1Query),

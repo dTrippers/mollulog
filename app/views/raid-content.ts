@@ -2,14 +2,14 @@ import type { Attack, Defense, Terrain } from "~/graphql/graphql";
 import { compareInstantAsc, getInstantTime } from "~/lib/date-time";
 import type { RaidType } from "~/models/content.d";
 import {
-  type RaidSchedule,
-  type RaidScheduleListItem,
   getAllRaidSchedules,
   getRaidSchedule,
   getRaidScheduleByTypeAndSeason,
+  type RaidSchedule,
+  type RaidScheduleListItem,
 } from "~/models/raid";
-import { getFutureRaidContents } from "~/models/timeline-content";
 import type { TimelineContent } from "~/models/timeline-content";
+import { getFutureRaidContents } from "~/models/timeline-content.server";
 
 export type RaidInfo = {
   raidType: RaidType;
@@ -94,9 +94,10 @@ export async function getUpcomingRaidContents(
     limit,
     forceRefresh = false,
     raidTypes,
-  }: { limit?: number; forceRefresh?: boolean; raidTypes?: readonly RaidType[] } = {},
+    ctx,
+  }: { limit?: number; forceRefresh?: boolean; raidTypes?: readonly RaidType[]; ctx?: ExecutionContext } = {},
 ): Promise<TimelineRaidContent[]> {
-  const raidContents = await getFutureRaidContents(env, ["raid"]);
+  const raidContents = await getFutureRaidContents(env, ["raid"], { ctx });
   const sortedRaidContents = [...raidContents].sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
 
   if (raidTypes?.length) {
@@ -147,13 +148,14 @@ export async function getUpcomingRaidContentByTypeAndSeason(
   env: Env,
   raidType: RaidType,
   seasonIndex: number,
+  ctx?: ExecutionContext,
 ): Promise<TimelineRaidContent | null> {
   const schedule = await getRaidScheduleByTypeAndSeason(env, raidType, seasonIndex);
   if (!schedule) {
     return null;
   }
 
-  const raidContents = await getFutureRaidContents(env, ["raid"]);
+  const raidContents = await getFutureRaidContents(env, ["raid"], { ctx });
   const matchingContent = findRaidContentForSchedule(raidContents, schedule);
 
   if (!matchingContent) {

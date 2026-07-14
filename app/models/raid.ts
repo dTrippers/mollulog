@@ -2,8 +2,7 @@ import { graphql } from "~/graphql";
 import type { Defense, Difficulty as GraphqlDifficulty } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, cacheQuery, fetchSourceCached } from "~/lib/cache";
-import { type UtcIsoString, compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso } from "~/lib/date-time";
-import { getTimelineContentDatesByContentUids } from "./timeline-content";
+import { compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 
 const ALL_RAID_SCHEDULES_CACHE_KEY = cacheKey("source", "raid-schedule", 1, cacheQuery({ region: "gl" }));
 
@@ -246,33 +245,4 @@ export async function warmRaidCache(env: Env, forceRefresh = true) {
   );
 
   return schedules;
-}
-
-// ============================================================
-// Timeline date fallback
-// ============================================================
-
-/**
- * Falls back to dates from timeline_contents when RaidSchedule startAt/endAt is null.
- */
-export async function applyTimelineDateFallback<
-  T extends { uid: string; startAt: UtcIsoString | null; endAt: UtcIsoString | null },
->(env: Env, schedules: T[]): Promise<T[]> {
-  const nullDateSchedules = schedules.filter((s) => !s.startAt || !s.endAt);
-  if (nullDateSchedules.length === 0) return schedules;
-
-  const timelineDatesMap = await getTimelineContentDatesByContentUids(
-    env,
-    nullDateSchedules.map((s) => s.uid),
-  );
-
-  return schedules.map((s) => {
-    if (s.startAt && s.endAt) return s;
-    const dates = timelineDatesMap.get(s.uid);
-    return {
-      ...s,
-      startAt: s.startAt ?? dates?.startAt ?? null,
-      endAt: s.endAt ?? dates?.endAt ?? null,
-    };
-  });
 }

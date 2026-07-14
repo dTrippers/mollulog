@@ -14,7 +14,7 @@ import { getCommunityFeedPage } from "~/models/community";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
-import { enrichCommunityFeedPosts } from "~/views/community";
+import { enrichCommunityFeedPosts } from "~/views/community.server";
 import { getIndexContents, type IndexRecruitment } from "~/views/home";
 import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
 
@@ -54,7 +54,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       }),
     );
     const recentCommunityFeedPromise = recentCommunityPagePromise.then((recentCommunityPage) =>
-      ctx.tracing.enterSpan("enrich", () => enrichCommunityFeedPosts(env, recentCommunityPage.items)),
+      ctx.tracing.enterSpan("enrich", () => enrichCommunityFeedPosts(publicReadEnv, recentCommunityPage.items, ctx)),
     );
     const recentCommunityRailPromise = recentCommunityFeedPromise
       .then((recentCommunityFeed) => ({
@@ -75,7 +75,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       }),
     );
     const favoritedStudentsPromise = currentUserId
-      ? ctx.tracing.enterSpan("favorites", () => getUserFavoritedStudents(env, currentUserId))
+      ? ctx.tracing.enterSpan("favorites", () => getUserFavoritedStudents(env, currentUserId, undefined, { ctx }))
       : Promise.resolve([]);
     const rightRailPromise = ctx.tracing.enterSpan("index_right_rail", () =>
       Promise.all([recentCommunityRailPromise, youtubeSectionsPromise]).then(([communityRail, youtubeSections]) => ({

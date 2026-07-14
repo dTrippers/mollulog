@@ -10,7 +10,7 @@ import { getAllStudentsFavoriteItems } from "~/models/resource";
 import type { Sensei } from "~/models/sensei";
 import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
-import { syncAllTimelineContentsMeta } from "~/models/timeline-content";
+import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { getEventList, warmActiveUpcomingEventContent } from "~/views/events";
 import { getFutureContents } from "~/views/futures";
@@ -49,7 +49,7 @@ jest.mock("~/models/student", () => ({
   syncRawStudents: jest.fn(),
 }));
 
-jest.mock("~/models/timeline-content", () => ({
+jest.mock("~/models/timeline-content.server", () => ({
   syncAllTimelineContentsMeta: jest.fn(),
 }));
 
@@ -262,12 +262,16 @@ describe("__manage route", () => {
     expect(mockedSyncYoutubeCommunityPosts).toHaveBeenCalledWith(expect.anything());
     expect(mockedGetMainStories).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetAllStudentsFavoriteItems).toHaveBeenCalledWith(expect.anything(), true);
-    expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(expect.anything());
+    expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledWith(
+      expect.anything(),
+      true,
+      expect.objectContaining({ ctx: expect.anything() }),
+    );
     expect(mockedSyncEventContentsList).toHaveBeenCalledWith(expect.anything());
     expect(mockedGetAllStudents).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(expect.anything(), ["10000", "10001"], true);
     expect(mockedGetStudentGearData).toHaveBeenCalledWith(expect.anything(), ["10000", "10001"], true);
-    expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(expect.anything(), true);
+    expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(expect.anything(), true, expect.anything());
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(expect.anything(), true);
     expect(mockedGetEventList).toHaveBeenCalledWith(expect.anything(), undefined, true, expect.anything());

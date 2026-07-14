@@ -2,9 +2,10 @@ import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import type { LoaderFunctionArgs } from "react-router";
 import { raidTypeToParam } from "~/domain/raid";
+import { withD1Session } from "~/lib/d1-session";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getAllStudents } from "~/models/student";
-import { getAllTimelineContentsMeta } from "~/models/timeline-content";
+import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
 
 type SitemapItem = {
   link: string;
@@ -17,14 +18,24 @@ const HOST = "https://mollulog.net";
 // Canonical and crawler rendering fixes materially updated every event, raid, and student page on this date.
 const SEO_REINDEXED_AT = dayjs("2026-07-12");
 
-const EVENT_CONTENT_TYPES = new Set(["event", "fes", "collab", "immortal_event", "main_story", "pickup", "mini_event", "allied"]);
+const EVENT_CONTENT_TYPES = new Set([
+  "event",
+  "fes",
+  "collab",
+  "immortal_event",
+  "main_story",
+  "pickup",
+  "mini_event",
+  "allied",
+]);
 
 function applySeoReindexFloor(lastmod: Dayjs) {
   return lastmod.isAfter(SEO_REINDEXED_AT) ? lastmod : SEO_REINDEXED_AT;
 }
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const items: SitemapItem[] = [
     { link: `${HOST}/futures`, lastmod: dayjs(), changefreq: "daily", priority: 1.0 },
     { link: `${HOST}/utils`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
@@ -35,7 +46,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
 
   const now = dayjs();
   const [contents, students, raidSchedules] = await Promise.all([
-    getAllTimelineContentsMeta(env),
+    getAllTimelineContentsMeta(publicReadEnv, { ctx }),
     getAllStudents(env),
     getAllRaidSchedules(env),
   ]);
@@ -77,16 +88,18 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
     });
   }
 
-  const xmlUrls = items.map((item) => {
-    return `
+  const xmlUrls = items
+    .map((item) => {
+      return `
 <url>
   <loc>${item.link}</loc>
   <lastmod>${item.lastmod.format("YYYY-MM-DD")}</lastmod>
   <priority>${item.priority.toFixed(1)}</priority>
 </url>`.trim();
-  }).join("\n");
+    })
+    .join("\n");
 
-  const xmlPrefix = "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">";
+  const xmlPrefix = '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">';
   const xmlPostfix = "</urlset>";
   const sitemap = [xmlPrefix, xmlUrls, xmlPostfix].join("\n");
 
@@ -95,7 +108,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
     headers: {
       "Content-Type": "application/xml",
       "xml-version": "1.0",
-      "encoding": "utf-8",
+      encoding: "utf-8",
     },
   });
 };
