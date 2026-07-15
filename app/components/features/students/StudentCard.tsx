@@ -40,6 +40,7 @@ type StudentCardProps = {
   checked?: boolean;
   hideName?: boolean;
   circular?: boolean;
+  flush?: boolean;
 
   onSelect?: (id: string) => void;
   popups?: StudentCardPopupProps["popups"];
@@ -133,6 +134,7 @@ export default function StudentCard({
   checked,
   hideName,
   circular,
+  flush = false,
   onSelect,
   popups,
   popupId = uid,
@@ -250,7 +252,7 @@ export default function StudentCard({
   return (
     <div ref={rootRef} className="relative">
       <StudentCardFrame interactive={interactive} onClick={handleCardClick}>
-        <div className="my-1">
+        <div className={flush ? "" : "my-1"}>
           <div className="relative">
             <div
               className={`relative ${circular ? "rounded-full" : "rounded-lg"} overflow-hidden ${cardAspectClassName}`}

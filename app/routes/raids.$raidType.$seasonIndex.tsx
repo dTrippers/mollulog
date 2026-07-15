@@ -1,4 +1,10 @@
-import { InformationCircleIcon, ShieldCheckIcon, TrophyIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import {
+  InformationCircleIcon,
+  QueueListIcon,
+  ShieldCheckIcon,
+  TrophyIcon,
+  VideoCameraIcon,
+} from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -215,6 +221,13 @@ export default function RaidPage() {
           description: "공략 영상과 해당 영상에서 사용한 편성 정보",
           link: `${raidPath}/videos`,
           active: pathname === `${raidPath}/videos`,
+        },
+        {
+          text: "공략 타임라인",
+          Icon: QueueListIcon,
+          description: "작성자가 공유한 실전 공략 순서",
+          link: `${raidPath}/timelines`,
+          active: pathname === `${raidPath}/timelines`,
         },
       ]}
     >

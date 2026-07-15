@@ -8,10 +8,19 @@ type ToggleProps = {
   initialState?: boolean;
   disabled?: boolean;
   className?: string;
+  trackClassName?: string;
   onChange?: (value: boolean) => void;
 };
 
-export default function Toggle({ name, label, initialState, disabled, className, onChange }: ToggleProps) {
+export default function Toggle({
+  name,
+  label,
+  initialState,
+  disabled,
+  className,
+  trackClassName,
+  onChange,
+}: ToggleProps) {
   const [enabled, setEnabled] = useState(initialState ?? false);
 
   useEffect(() => {
@@ -23,11 +32,14 @@ export default function Toggle({ name, label, initialState, disabled, className,
       <Field className={`${className ?? "my-4"} flex items-center`}>
         <Switch
           disabled={disabled}
-          className={cn(`
+          className={cn(
+            `
             h-5 w-10 p-0.5 group relative flex rounded-full transition-colors duration-200 ease-in-out
             bg-input data-checked:bg-primary
             ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-          `)}
+          `,
+            trackClassName,
+          )}
           checked={enabled}
           onChange={(value) => {
             onChange?.(value);
