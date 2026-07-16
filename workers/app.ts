@@ -4,7 +4,6 @@ import * as serverBuild from "virtual:react-router/server-build";
 import { watchIo } from "~/lib/io-watchdog";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { withD1Timeout } from "./d1-timeout";
-import { handleEdgeCachedDocumentRequest } from "./edge-cache";
 
 type ObservabilityEnv = Env & {
   SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
@@ -26,15 +25,13 @@ const requestHandler = createRequestHandler(serverBuild, import.meta.env.MODE);
 const handler: ExportedHandler<ObservabilityEnv> = {
   async fetch(request, env, ctx) {
     const appEnv: ObservabilityEnv = { ...env, DB: withD1Timeout(env.DB) };
-    return handleEdgeCachedDocumentRequest(request, ctx, () =>
-      watchIo(
-        "request",
-        requestHandler(request, {
-          cloudflare: { env: appEnv, ctx, colo: request.cf?.colo },
-        }),
-        { method: request.method, path: new URL(request.url).pathname },
-        RUNTIME_TIMEOUTS.watchdogWarnMs.request,
-      ),
+    return watchIo(
+      "request",
+      requestHandler(request, {
+        cloudflare: { env: appEnv, ctx, colo: request.cf?.colo },
+      }),
+      { method: request.method, path: new URL(request.url).pathname },
+      RUNTIME_TIMEOUTS.watchdogWarnMs.request,
     );
   },
 };
