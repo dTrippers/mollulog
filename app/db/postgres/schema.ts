@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import type { CouponReward } from "~/domain/coupon";
+import type { FeedbackAdditional } from "~/domain/feedback";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 
@@ -80,5 +82,86 @@ export const pgFavoriteStudentsTable = pgTable(
     ),
     index("content_favorite_students_student_timeline_content_idx").on(table.studentUid, table.timelineContentUid),
     index("content_favorite_students_user_timeline_content_idx").on(table.userId, table.timelineContentUid),
+  ],
+);
+
+export const pgCouponsTable = pgTable(
+  "coupons",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    name: text().notNull(),
+    code: text().notNull(),
+    imageUrl: text("image_url"),
+    rewards: jsonb().$type<CouponReward[]>().notNull().default([]),
+    linkUrl: text("link_url"),
+    linkLabel: text("link_label"),
+    expiresAt: timestamptz("expires_at"),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("coupons_uid_uidx").on(table.uid),
+    uniqueIndex("coupons_code_uidx").on(table.code),
+    index("coupons_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
+export const pgCouponRegistrationsTable = pgTable(
+  "coupon_registrations",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    couponId: integer("coupon_id")
+      .notNull()
+      .references(() => pgCouponsTable.id, { onDelete: "cascade" }),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("coupon_registrations_user_coupon_uidx").on(table.userId, table.couponId),
+    index("coupon_registrations_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgFeedbackTicketsTable = pgTable(
+  "feedback_tickets",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    title: text().notNull(),
+    content: text().notNull(),
+    additional: jsonb().$type<FeedbackAdditional>(),
+    status: text().notNull().default("waiting"),
+    replyEmail: text("reply_email"),
+    lastSeenAdminReplyId: integer("last_seen_admin_reply_id").notNull().default(0),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("feedback_tickets_uid_uidx").on(table.uid),
+    index("feedback_tickets_user_updated_at_idx").on(table.userId, table.updatedAt.desc(), table.id.desc()),
+  ],
+);
+
+export const pgFeedbackRepliesTable = pgTable(
+  "feedback_replies",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    ticketId: integer("ticket_id")
+      .notNull()
+      .references(() => pgFeedbackTicketsTable.id, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull(),
+    isAdmin: boolean("is_admin").notNull().default(false),
+    content: text().notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("feedback_replies_uid_uidx").on(table.uid),
+    index("feedback_replies_ticket_created_at_idx").on(table.ticketId, table.createdAt, table.id),
+    index("feedback_replies_ticket_admin_id_idx").on(table.ticketId, table.isAdmin, table.id),
   ],
 );

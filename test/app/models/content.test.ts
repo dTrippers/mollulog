@@ -203,6 +203,6 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
     const authenticatedResult = await getNavigationBarContents(env, false, 42);
     expect(authenticatedResult.hasUnconsumedCoupons).toBe(true);
     expect(authenticatedResult.hasUnreadFeedbackReplies).toBe(true);
-    expect(mockedGetPersonalNavigationState).toHaveBeenCalledWith(env, 42);
+    expect(mockedGetPersonalNavigationState).toHaveBeenCalledWith(env, 42, { ctx: undefined });
   });
 });

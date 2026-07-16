@@ -8,9 +8,9 @@ import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import {
   createFeedbackReply,
-  getLatestAdminFeedbackReplyId,
   getFeedbackThreadByUidForUser,
   getFeedbackTicketByUidForUser,
+  getLatestAdminFeedbackReplyId,
   markFeedbackTicketAdminRepliesSeen,
 } from "~/models/feedback";
 import ReplyForm from "./contact._components/ReplyForm";
@@ -39,12 +39,12 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     throw notFoundResponse();
   }
 
-  const thread = await getFeedbackThreadByUidForUser(env, uid, sensei.id);
+  const thread = await getFeedbackThreadByUidForUser(env, uid, sensei.id, { ctx });
   if (!thread) {
     throw notFoundResponse();
   }
 
-  await markFeedbackTicketAdminRepliesSeen(env, thread.ticket, getLatestAdminFeedbackReplyId(thread.replies));
+  await markFeedbackTicketAdminRepliesSeen(env, thread.ticket, getLatestAdminFeedbackReplyId(thread.replies), { ctx });
 
   return thread;
 };
@@ -64,7 +64,7 @@ export const action = async ({ request, context, params }: ActionFunctionArgs) =
     throw notFoundResponse();
   }
 
-  const ticket = await getFeedbackTicketByUidForUser(env, uid, currentUser.id);
+  const ticket = await getFeedbackTicketByUidForUser(env, uid, currentUser.id, { ctx });
   if (!ticket) {
     throw notFoundResponse();
   }
@@ -85,7 +85,7 @@ export const action = async ({ request, context, params }: ActionFunctionArgs) =
   }
 
   try {
-    await createFeedbackReply(env, ticket.id, currentUser.id, trimmedContent);
+    await createFeedbackReply(env, ticket.id, currentUser.id, trimmedContent, { ctx });
     publishEvent(env, ctx, {
       type: "feedback.reply_created",
       occurredAt: new Date().toISOString(),
@@ -130,10 +130,7 @@ export default function ContactDetail() {
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8">
-      <Title
-        text="문의 내용 확인"
-        parentPath="/contact"
-      />
+      <Title text="문의 내용 확인" parentPath="/contact" />
       <ThreadView ticket={ticket} replies={replies} />
       <ReplyForm />
     </div>
