@@ -48,6 +48,7 @@ export type RaidVideoItem = {
   youtubeId: string;
   thumbnailUrl: string;
   publishedAt: string;
+  defenseType?: Defense;
   sourceParties?: RaidVideoSourceParties[];
   rankMatch?: RaidVideoRankMatch;
   rankHint?: RaidVideoRankHint;

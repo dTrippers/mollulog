@@ -1,7 +1,8 @@
-import { PlayIcon } from "@heroicons/react/24/outline";
+import { PlayIcon, TrophyIcon } from "@heroicons/react/24/outline";
 import type { RefObject } from "react";
 import { Link } from "react-router";
-import { EmptyView, LoadingSkeleton } from "~/components/primitives";
+import { Button, EmptyView, LoadingSkeleton } from "~/components/primitives";
+import { buildExactPartiesPath, compactExactParties } from "~/domain/raid-exact-parties";
 import { getRaidVideoParties, type RaidVideoItem } from "~/models/raid-videos";
 import RaidPartyCard from "./RaidPartyCard";
 import { type RaidPartyStudentMap, toRaidPartyRow } from "./toRaidPartyRow";
@@ -15,6 +16,7 @@ export type RaidVideosScreenProps = {
   maxLevel: number;
   recruitedStudentTiers: Record<string, number>;
   showUnrecruitedStudents: boolean;
+  ranksPath: string;
   emptyText?: string;
 };
 
@@ -27,6 +29,7 @@ export default function RaidVideosScreen({
   maxLevel,
   recruitedStudentTiers,
   showUnrecruitedStudents,
+  ranksPath,
   emptyText = "공략 영상을 준비중이에요",
 }: RaidVideosScreenProps) {
   return (
@@ -44,6 +47,7 @@ export default function RaidVideosScreen({
                 maxLevel={maxLevel}
                 recruitedStudentTiers={recruitedStudentTiers}
                 showUnrecruitedStudents={showUnrecruitedStudents}
+                ranksPath={ranksPath}
               />
             ))}
           </div>
@@ -78,13 +82,17 @@ function VideoCard({
   maxLevel,
   recruitedStudentTiers,
   showUnrecruitedStudents,
+  ranksPath,
 }: RaidVideoItem & {
   allStudents: RaidPartyStudentMap;
   maxLevel: number;
   recruitedStudentTiers: Record<string, number>;
   showUnrecruitedStudents: boolean;
+  ranksPath: string;
 }) {
   const parties = getRaidVideoParties({ sourceParties, rankMatch });
+  const exactParties = compactExactParties(parties.map((party) => party.slots.map((slot) => slot.studentUid)));
+  const exactRanksPath = buildExactPartiesPath(ranksPath, exactParties);
   const recordLabel = rankMatch
     ? rankMatch.finalRank > 0
       ? `종합 ${rankMatch.finalRank.toLocaleString()}위`
@@ -128,25 +136,32 @@ function VideoCard({
       </Link>
 
       {parties.length > 0 ? (
-        <RaidPartyCard
-          rows={parties.map((party) => ({
-            ...toRaidPartyRow({
-              party,
-              allStudents,
-              maxLevel,
-              recruitedStudentTiers,
-              showUnrecruitedStudents,
-              showLevel: false,
-            }),
-            label: String(party.partyIndex + 1),
-          }))}
-          summaryItems={[]}
-          visibleRowCount={parties.length >= 3 ? 1 : undefined}
-          centerRowLabels
-          emptyText="편성 정보가 없어요"
-          popupIdPrefix={`video-${youtubeId}`}
-          className="grow rounded-none pt-0 md:pt-0"
-        />
+        <>
+          <RaidPartyCard
+            rows={parties.map((party) => ({
+              ...toRaidPartyRow({
+                party,
+                allStudents,
+                maxLevel,
+                recruitedStudentTiers,
+                showUnrecruitedStudents,
+                showLevel: false,
+              }),
+              label: String(party.partyIndex + 1),
+            }))}
+            summaryItems={[]}
+            visibleRowCount={parties.length >= 3 ? 1 : undefined}
+            centerRowLabels
+            emptyText="편성 정보가 없어요"
+            popupIdPrefix={`video-${youtubeId}`}
+            className="grow rounded-none pt-0 md:pt-0"
+          />
+          {exactParties.length > 0 ? (
+            <div className="flex justify-end px-3 pb-3">
+              <Button text="이 편성 순위 보기" to={exactRanksPath} icon={TrophyIcon} size="xs" className="shadow-xs" />
+            </div>
+          ) : null}
+        </>
       ) : null}
     </article>
   );

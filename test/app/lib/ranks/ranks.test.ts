@@ -1,5 +1,15 @@
-import { describe, expect, it } from "@jest/globals";
-import { convertRawPartySlot, convertToTotalTier } from "../../../../app/lib/ranks/ranks";
+import { describe, expect, it, jest } from "@jest/globals";
+import { Defense } from "~/graphql/graphql";
+import { fetchProtobuf } from "~/lib/ranks/base";
+import { convertRawPartySlot, convertToTotalTier, fetchRanks } from "~/lib/ranks/ranks";
+
+jest.mock("~/lib/ranks/base", () => ({
+  RANK_API_BASE_URL: "http://localhost:8080",
+  createProtobufRootCache: jest.fn(() => jest.fn()),
+  fetchProtobuf: jest.fn(),
+}));
+
+const mockedFetchProtobuf = jest.mocked(fetchProtobuf);
 
 describe("raid rank party conversion", () => {
   it("combines equipment and weapon tiers from a video party slot", () => {
@@ -35,5 +45,39 @@ describe("raid rank party conversion", () => {
 
   it("converts stored equipment and weapon tiers to the combined tier", () => {
     expect(convertToTotalTier(5, 3)).toBe(8);
+  });
+
+  it("sends exact parties in the rank request body", async () => {
+    mockedFetchProtobuf.mockResolvedValue({ totalCount: 0, ranks: [] });
+
+    await fetchRanks({
+      raidType: "total_assault",
+      season: 84,
+      defenseType: Defense.Special,
+      exactParties: [
+        ["A", "B", "C", "D", "E", "F"],
+        ["G", "H", "I", "J", "K", "L"],
+      ],
+      includeStudents: [],
+      excludeStudents: [],
+      perPage: 10,
+      page: 1,
+    });
+
+    expect(mockedFetchProtobuf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          perPage: 10,
+          page: 1,
+          includeStudents: [],
+          excludeStudents: [],
+          exactParties: [
+            ["A", "B", "C", "D", "E", "F"],
+            ["G", "H", "I", "J", "K", "L"],
+          ],
+        }),
+      }),
+    );
   });
 });

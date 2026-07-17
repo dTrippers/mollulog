@@ -93,6 +93,7 @@ export default function RaidRankScreen({
     }
 
     return {
+      exactParties: filterState.exactParties,
       includeStudents,
       excludeStudents,
       score: getRaidDifficultyScoreRange(filterState.difficulty),
@@ -100,6 +101,7 @@ export default function RaidRankScreen({
   }, [
     allStudents,
     filterState.difficulty,
+    filterState.exactParties,
     filterState.excludeStudents,
     filterState.filterNotOwned,
     filterState.includeStudents,
@@ -130,13 +132,14 @@ export default function RaidRankScreen({
 
     const loadRanks = async () => {
       try {
-        const { includeStudents, excludeStudents } = apiFilter;
+        const { exactParties, includeStudents, excludeStudents } = apiFilter;
 
         const result = await fetchRanks({
           raidType: currentRaid.raidType,
           season: currentRaid.seasonIndex,
           defenseType: currentRaid.defenseType,
           score: apiFilter.score,
+          exactParties,
           includeStudents,
           excludeStudents,
           perPage: ITEMS_PER_PAGE,

@@ -1,3 +1,4 @@
+import { Defense } from "~/graphql/graphql";
 import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import type { RaidVideosData, VideoSort } from "~/models/raid-videos";
@@ -57,6 +58,18 @@ export type RaidVideosQueryOptions = {
 
 const RANK_VIDEOS_FETCH_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.ranksVideosFetch;
 const RANK_VIDEOS_BODY_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.ranksVideosBody;
+const RAID_VIDEO_DEFENSE_TYPES = new Set<Defense>([
+  Defense.Light,
+  Defense.Heavy,
+  Defense.Special,
+  Defense.Elastic,
+  Defense.Composite,
+  Defense.Normal,
+]);
+
+function parseRaidVideoDefenseType(value: string | null | undefined): Defense | null {
+  return value && RAID_VIDEO_DEFENSE_TYPES.has(value as Defense) ? (value as Defense) : null;
+}
 
 export async function fetchRaidVideos({
   raidType,
@@ -105,41 +118,45 @@ export async function fetchRaidVideos({
   })) as VideosApiResponse;
   return {
     videos:
-      data.videos?.map((video) => ({
-        title: video.title ?? "",
-        channelTitle: video.channelTitle ?? "",
-        score: typeof video.score === "number" ? video.score : undefined,
-        youtubeId: video.youtubeId ?? "",
-        thumbnailUrl: video.thumbnailUrl ?? "",
-        publishedAt: video.publishedAt ?? "",
-        sourceParties: video.sourceParties?.map((source) => ({
-          source: source.source ?? "",
-          parties: (source.parties ?? []).map((party, partyIndex) => ({
-            partyIndex,
-            slots: (party?.students ?? []).map((slot, slotIndex) => ({
-              slotIndex,
-              tier: null,
-              level: null,
-              isAssist: null,
-              studentUid: slot?.uid ?? null,
+      data.videos?.map((video) => {
+        const defenseType = parseRaidVideoDefenseType(video.defenseType);
+        return {
+          title: video.title ?? "",
+          channelTitle: video.channelTitle ?? "",
+          score: typeof video.score === "number" ? video.score : undefined,
+          youtubeId: video.youtubeId ?? "",
+          thumbnailUrl: video.thumbnailUrl ?? "",
+          publishedAt: video.publishedAt ?? "",
+          ...(defenseType ? { defenseType } : {}),
+          sourceParties: video.sourceParties?.map((source) => ({
+            source: source.source ?? "",
+            parties: (source.parties ?? []).map((party, partyIndex) => ({
+              partyIndex,
+              slots: (party?.students ?? []).map((slot, slotIndex) => ({
+                slotIndex,
+                tier: null,
+                level: null,
+                isAssist: null,
+                studentUid: slot?.uid ?? null,
+              })),
             })),
           })),
-        })),
-        rankMatch: video.rankMatch
-          ? {
-              rank: video.rankMatch.rank ?? 0,
-              finalRank: video.rankMatch.finalRank ?? 0,
-              parties: (video.rankMatch.parties ?? []).map((party, partyIndex) => ({
-                partyIndex,
-                slots: (party?.students ?? []).map((slot, slotIndex) => convertRawPartySlot(slot, slotIndex)),
-              })),
-            }
-          : undefined,
-        rankHint:
-          typeof video.rankHint?.rank === "number" && video.rankHint.rank > 0
-            ? { rank: video.rankHint.rank }
+          rankMatch: video.rankMatch
+            ? {
+                rank: video.rankMatch.rank ?? 0,
+                finalRank: video.rankMatch.finalRank ?? 0,
+                parties: (video.rankMatch.parties ?? []).map((party, partyIndex) => ({
+                  partyIndex,
+                  slots: (party?.students ?? []).map((slot, slotIndex) => convertRawPartySlot(slot, slotIndex)),
+                })),
+              }
             : undefined,
-      })) ?? [],
+          rankHint:
+            typeof video.rankHint?.rank === "number" && video.rankHint.rank > 0
+              ? { rank: video.rankHint.rank }
+              : undefined,
+        };
+      }) ?? [],
     total: data.total ?? 0,
     hasMore: data.hasMore ?? false,
   };

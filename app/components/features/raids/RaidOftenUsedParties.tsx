@@ -1,4 +1,6 @@
-import { IdentificationIcon } from "@heroicons/react/24/outline";
+import { IdentificationIcon, TrophyIcon } from "@heroicons/react/24/outline";
+import { Button } from "~/components/primitives";
+import { buildExactPartiesPath, compactExactParties } from "~/domain/raid-exact-parties";
 import type { Attack, Defense } from "~/graphql/graphql";
 import type { Role } from "~/models/content.d";
 import RaidPartyCard, { type RaidPartyRow, type RaidPartySlot } from "./RaidPartyCard";
@@ -35,6 +37,7 @@ type RaidOftenUsedPartiesProps = {
   showUnrecruitedStudents?: boolean;
   cardClassName?: string;
   summaryClassName?: string;
+  ranksPath?: string;
 };
 
 const VISIBLE_PARTY_COUNT = 3;
@@ -46,6 +49,7 @@ export default function RaidOftenUsedParties({
   showUnrecruitedStudents = false,
   cardClassName,
   summaryClassName,
+  ranksPath,
 }: RaidOftenUsedPartiesProps) {
   if (oftenUsedParties.length === 0) {
     return <div className="py-8 text-center text-muted-foreground">많이 사용된 편성 데이터가 없어요</div>;
@@ -63,6 +67,7 @@ export default function RaidOftenUsedParties({
           showUnrecruitedStudents={showUnrecruitedStudents}
           cardClassName={cardClassName}
           summaryClassName={summaryClassName}
+          ranksPath={ranksPath}
         />
       ))}
     </div>
@@ -77,6 +82,7 @@ function OftenUsedPartyCard({
   showUnrecruitedStudents,
   cardClassName,
   summaryClassName,
+  ranksPath,
 }: {
   rank: number;
   oftenUsedParty: RaidOftenUsedParty;
@@ -85,6 +91,7 @@ function OftenUsedPartyCard({
   showUnrecruitedStudents: boolean;
   cardClassName?: string;
   summaryClassName?: string;
+  ranksPath?: string;
 }) {
   const rows = oftenUsedParty.parties.map((party, partyIndex) =>
     toRaidPartyRow({
@@ -105,6 +112,10 @@ function OftenUsedPartyCard({
       value: `${oftenUsedParty.maxScore.toLocaleString()}점`,
     },
   ];
+  const exactParties = compactExactParties(
+    oftenUsedParty.parties.map((party) => party.students.map((slot) => slot.student?.uid)),
+  );
+  const exactRanksPath = ranksPath && exactParties.length > 0 ? buildExactPartiesPath(ranksPath, exactParties) : null;
 
   return (
     <RaidPartyCard
@@ -112,6 +123,11 @@ function OftenUsedPartyCard({
       secondaryLabel={`${oftenUsedParty.count.toLocaleString()}회`}
       rows={rows}
       summaryItems={summaryItems}
+      actions={
+        exactRanksPath ? (
+          <Button text="이 편성 순위 보기" to={exactRanksPath} icon={TrophyIcon} size="xs" className="shadow-xs" />
+        ) : undefined
+      }
       popupIdPrefix={`often-used-${rank}`}
       visibleRowCount={VISIBLE_PARTY_COUNT}
       className={cardClassName}

@@ -7,7 +7,7 @@ import { getMaxLevelAt, RaidVideosScreen } from "~/components/features/raids";
 import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
 import { getFilterableRaidDifficulties, getRaidDifficultyScoreRange, parseDifficulty } from "~/domain/raid-score";
 import { fetchRaidVideos } from "~/lib/ranks";
-import { getRaidDefenseTypeSetByQuery, getRaidScheduleByTypeAndSeason } from "~/models/raid";
+import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, getRaidScheduleByTypeAndSeason } from "~/models/raid";
 import { getRaidVideoParties, parseVideoSort, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudentsMap } from "~/models/student";
@@ -96,12 +96,17 @@ export default function RaidVideos() {
     seasonIndex: currentRaid.seasonIndex,
     defenseType,
   });
-  const [onlyWithParty, setOnlyWithParty] = useState(false);
+  const [onlyWithParty, setOnlyWithParty] = useState(true);
   const [showUnrecruitedStudents, setShowUnrecruitedStudents] = useState(true);
   const filterableDifficulties = useMemo(
     () => getFilterableRaidDifficulties(defenseTypeSet.difficulty),
     [defenseTypeSet.difficulty],
   );
+  const ranksSearchParams = new URLSearchParams({
+    defenseTypeSet: getRaidDefenseTypeSetKey(defenseTypeSet),
+    defenseType,
+  });
+  const ranksPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}/ranks?${ranksSearchParams.toString()}`;
 
   useEffect(() => {
     if (difficulty && !filterableDifficulties.includes(difficulty)) {
@@ -154,6 +159,7 @@ export default function RaidVideos() {
       maxLevel={getMaxLevelAt(currentRaid.startAt ?? new Date())}
       recruitedStudentTiers={recruitedStudentTiers}
       showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
+      ranksPath={ranksPath}
       emptyText={onlyWithParty ? "편성 정보가 있는 공략 영상이 없어요" : undefined}
     />
   );

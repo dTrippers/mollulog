@@ -198,12 +198,14 @@ export async function fetchRanks(params: {
   season: number;
   defenseType: Defense;
   score?: { gte?: number; lt?: number };
+  exactParties?: string[][];
   includeStudents: { uid: string; tiers: Array<[number] | [number, number]> }[];
   excludeStudents: { uid: string; tiers: Array<[number] | [number, number]> }[];
   perPage: number;
   page: number;
 }): Promise<{ totalCount: number; ranks: ParsedRaidRankDocument[] }> {
-  const { raidType, season, defenseType, score, includeStudents, excludeStudents, perPage, page } = params;
+  const { raidType, season, defenseType, score, exactParties, includeStudents, excludeStudents, perPage, page } =
+    params;
 
   const queryParams = new URLSearchParams({
     raidType,
@@ -218,6 +220,7 @@ export async function fetchRanks(params: {
       gte?: number;
       lt?: number;
     };
+    exactParties?: string[][];
     includeStudents: typeof includeStudents;
     excludeStudents: typeof excludeStudents;
   } = {
@@ -226,6 +229,10 @@ export async function fetchRanks(params: {
     includeStudents,
     excludeStudents,
   };
+
+  if (exactParties && exactParties.length > 0) {
+    body.exactParties = exactParties;
+  }
 
   if (score) {
     body.score = {};

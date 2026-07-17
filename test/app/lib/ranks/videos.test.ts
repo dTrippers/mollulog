@@ -29,6 +29,7 @@ describe("fetchRaidVideos", () => {
               youtubeId: "abc123",
               thumbnailUrl: "https://img.youtube.com/vi/abc123/maxresdefault.jpg",
               publishedAt: "2026-04-01T03:00:00Z",
+              defenseType: "special",
               sourceParties: [
                 {
                   source: "tl_search",
@@ -87,6 +88,7 @@ describe("fetchRaidVideos", () => {
           youtubeId: "abc123",
           thumbnailUrl: "https://img.youtube.com/vi/abc123/maxresdefault.jpg",
           publishedAt: "2026-04-01T03:00:00Z",
+          defenseType: "special",
           sourceParties: [
             {
               source: "tl_search",

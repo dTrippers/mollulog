@@ -18,6 +18,11 @@ export async function decompressGzip(data: ArrayBuffer): Promise<ArrayBuffer> {
   return await new Response(stream).arrayBuffer();
 }
 
+function hasGzipHeader(data: ArrayBuffer): boolean {
+  const bytes = new Uint8Array(data, 0, Math.min(data.byteLength, 2));
+  return bytes[0] === 0x1f && bytes[1] === 0x8b;
+}
+
 export function createProtobufRootCache() {
   const roots = new Map<string, protobuf.Root>();
 
@@ -61,7 +66,19 @@ export async function fetchProtobuf<T>(params: {
   messageType: string;
   getRoot: (schema: string) => Promise<protobuf.Root>;
 }): Promise<T> {
-  const { url, method = "GET", headers = {}, body, schema, messageType, getRoot } = params;
+  const { schema, messageType, getRoot, ...fetchParams } = params;
+  const arrayBuffer = await fetchProtobufBytes(fetchParams);
+
+  return await parseProtobufResponse<T>(arrayBuffer, schema, messageType, getRoot);
+}
+
+export async function fetchProtobufBytes(params: {
+  url: string;
+  method?: "GET" | "POST";
+  headers?: Record<string, string>;
+  body?: string;
+}): Promise<ArrayBuffer> {
+  const { url, method = "GET", headers = {}, body } = params;
 
   const response = await fetchWithTimeout(
     url,
@@ -82,14 +99,11 @@ export async function fetchProtobuf<T>(params: {
     throw new Error(`Failed to fetch: ${response.statusText}`);
   }
 
-  let arrayBuffer = await readBodyWithTimeout(
-    () => response.arrayBuffer(),
-    RANK_BODY_TIMEOUT_MS,
-    "ranks.body",
-    { url },
-  );
+  let arrayBuffer = await readBodyWithTimeout(() => response.arrayBuffer(), RANK_BODY_TIMEOUT_MS, "ranks.body", {
+    url,
+  });
   const contentEncoding = response.headers.get("Content-Encoding");
-  if (contentEncoding === "gzip" || contentEncoding?.includes("gzip")) {
+  if ((contentEncoding === "gzip" || contentEncoding?.includes("gzip")) && hasGzipHeader(arrayBuffer)) {
     arrayBuffer = await readBodyWithTimeout(
       () => decompressGzip(arrayBuffer),
       RANK_DECOMPRESS_TIMEOUT_MS,
@@ -98,5 +112,5 @@ export async function fetchProtobuf<T>(params: {
     );
   }
 
-  return await parseProtobufResponse<T>(arrayBuffer, schema, messageType, getRoot);
+  return arrayBuffer;
 }
