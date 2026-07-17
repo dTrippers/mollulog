@@ -7,7 +7,7 @@ import { getMaxLevelAt, RaidVideosScreen } from "~/components/features/raids";
 import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
 import { fetchRaidVideos } from "~/lib/ranks";
 import { getRaidDefenseTypeSetByQuery, getRaidScheduleByTypeAndSeason } from "~/models/raid";
-import { getVideoDateRange, parseVideoSort, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
+import { getRaidVideoParties, parseVideoSort, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudentsMap } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
@@ -45,11 +45,7 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     url.searchParams.get("defenseTypeSet"),
     url.searchParams.get("defenseType"),
   );
-  const [rawAllStudents, videoDateRange, sensei] = await Promise.all([
-    getAllStudentsMap(env, true),
-    getVideoDateRange(env, currentRaid),
-    getActiveSensei(env, request),
-  ]);
+  const [rawAllStudents, sensei] = await Promise.all([getAllStudentsMap(env, true), getActiveSensei(env, request)]);
   const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
   const allStudents = Object.fromEntries(
     Object.entries(rawAllStudents).map(([uid, student]) => [
@@ -63,22 +59,11 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     ]),
   );
 
-  if (!videoDateRange) {
-    return {
-      initialData: null,
-      allStudents,
-      recruitedStudentTiers,
-      hasRecruitedStudentData: sensei !== null,
-    };
-  }
-
   try {
     const initialData = await fetchRaidVideos({
       raidType: currentRaid.raidType,
       boss: currentRaid.raidBoss.uid,
-      defenseType: currentRaid.raidType === "elimination" ? defenseTypeSet?.primaryDefenseType : undefined,
-      from: videoDateRange.from,
-      to: videoDateRange.to,
+      defenseType: defenseTypeSet?.primaryDefenseType,
       limit: RAID_VIDEOS_PAGE_SIZE,
       offset: 0,
       sort,
@@ -96,8 +81,7 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
 
 export default function RaidVideos() {
   const { currentRaid, defenseType, setPanel } = useOutletContext<RaidPageContext>();
-  const { initialData, allStudents, recruitedStudentTiers, hasRecruitedStudentData } =
-    useLoaderData<typeof loader>();
+  const { initialData, allStudents, recruitedStudentTiers, hasRecruitedStudentData } = useLoaderData<typeof loader>();
   const { allVideos, hasMore, isLoading, loadingRef, sort, setSort } = useRaidVideosFeed({
     initialData,
     raidType: raidTypeToParam(currentRaid.raidType),
@@ -107,7 +91,7 @@ export default function RaidVideos() {
   const [onlyWithParty, setOnlyWithParty] = useState(false);
   const [showUnrecruitedStudents, setShowUnrecruitedStudents] = useState(true);
   const visibleVideos = useMemo(
-    () => (onlyWithParty ? allVideos.filter((video) => (video.rankMatch?.parties.length ?? 0) > 0) : allVideos),
+    () => (onlyWithParty ? allVideos.filter((video) => getRaidVideoParties(video).length > 0) : allVideos),
     [allVideos, onlyWithParty],
   );
 

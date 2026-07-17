@@ -29,6 +29,12 @@ describe("fetchRaidVideos", () => {
               youtubeId: "abc123",
               thumbnailUrl: "https://img.youtube.com/vi/abc123/maxresdefault.jpg",
               publishedAt: "2026-04-01T03:00:00Z",
+              sourceParties: [
+                {
+                  source: "tl_search",
+                  parties: [{ students: [{ uid: "10085" }, { uid: "10123" }] }],
+                },
+              ],
               rankMatch: {
                 rank: 123,
                 finalRank: 120,
@@ -45,6 +51,13 @@ describe("fetchRaidVideos", () => {
               youtubeId: "def456",
               thumbnailUrl: "https://img.youtube.com/vi/def456/maxresdefault.jpg",
               publishedAt: "2026-04-02T03:00:00Z",
+              sourceParties: [
+                {
+                  source: "tl_search",
+                  parties: [{ students: [{ uid: "10123" }, { uid: "10085" }] }],
+                },
+              ],
+              rankHint: { rank: 456 },
             },
           ],
           total: 142,
@@ -58,8 +71,6 @@ describe("fetchRaidVideos", () => {
       fetchRaidVideos({
         raidType: "elimination",
         boss: "hovercraft",
-        from: "2026-04-01T03:00:00.000Z",
-        to: "2026-04-29T03:00:00.000Z",
         limit: 12,
         offset: 24,
         sort: "published_at_desc",
@@ -74,6 +85,32 @@ describe("fetchRaidVideos", () => {
           youtubeId: "abc123",
           thumbnailUrl: "https://img.youtube.com/vi/abc123/maxresdefault.jpg",
           publishedAt: "2026-04-01T03:00:00Z",
+          sourceParties: [
+            {
+              source: "tl_search",
+              parties: [
+                {
+                  partyIndex: 0,
+                  slots: [
+                    {
+                      slotIndex: 0,
+                      tier: null,
+                      level: null,
+                      isAssist: null,
+                      studentUid: "10085",
+                    },
+                    {
+                      slotIndex: 1,
+                      tier: null,
+                      level: null,
+                      isAssist: null,
+                      studentUid: "10123",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
           rankMatch: {
             rank: 123,
             finalRank: 120,
@@ -99,6 +136,7 @@ describe("fetchRaidVideos", () => {
               },
             ],
           },
+          rankHint: undefined,
         },
         {
           title: "시로쿠로 인세인",
@@ -107,7 +145,34 @@ describe("fetchRaidVideos", () => {
           youtubeId: "def456",
           thumbnailUrl: "https://img.youtube.com/vi/def456/maxresdefault.jpg",
           publishedAt: "2026-04-02T03:00:00Z",
+          sourceParties: [
+            {
+              source: "tl_search",
+              parties: [
+                {
+                  partyIndex: 0,
+                  slots: [
+                    {
+                      slotIndex: 0,
+                      tier: null,
+                      level: null,
+                      isAssist: null,
+                      studentUid: "10123",
+                    },
+                    {
+                      slotIndex: 1,
+                      tier: null,
+                      level: null,
+                      isAssist: null,
+                      studentUid: "10085",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
           rankMatch: undefined,
+          rankHint: { rank: 456 },
         },
       ],
       total: 142,
@@ -123,8 +188,8 @@ describe("fetchRaidVideos", () => {
     expect(url.searchParams.get("raidType")).toBe("elimination");
     expect(url.searchParams.get("boss")).toBe("hovercraft");
     expect(url.searchParams.get("defenseType")).toBe("special");
-    expect(url.searchParams.get("from")).toBe("2026-04-01T03:00:00.000Z");
-    expect(url.searchParams.get("to")).toBe("2026-04-29T03:00:00.000Z");
+    expect(url.searchParams.has("from")).toBe(false);
+    expect(url.searchParams.has("to")).toBe(false);
     expect(url.searchParams.get("sort")).toBe("published_at_desc");
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("offset")).toBe("24");

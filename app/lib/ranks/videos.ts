@@ -14,6 +14,15 @@ export type RankMatchApiResponse = {
   parties?: Array<{ students?: RawPartySlotStudent[] | null } | null> | null;
 };
 
+export type SourcePartiesApiResponse = {
+  source?: string | null;
+  parties?: Array<{ students?: RawPartySlotStudent[] | null } | null> | null;
+};
+
+export type RankHintApiResponse = {
+  rank?: number | null;
+};
+
 export type VideosApiResponse = {
   videos?: Array<{
     youtubeId?: string | null;
@@ -25,7 +34,9 @@ export type VideosApiResponse = {
     boss?: string | null;
     defenseType?: string | null;
     score?: number | null;
+    sourceParties?: SourcePartiesApiResponse[] | null;
     rankMatch?: RankMatchApiResponse | null;
+    rankHint?: RankHintApiResponse | null;
   }> | null;
   total?: number | null;
   hasMore?: boolean | null;
@@ -35,8 +46,8 @@ export type RaidVideosQueryOptions = {
   raidType: string;
   boss: string;
   defenseType?: string;
-  from: string;
-  to: string;
+  from?: string;
+  to?: string;
   limit?: number;
   offset?: number;
   sort?: VideoSort;
@@ -58,14 +69,18 @@ export async function fetchRaidVideos({
   const url = new URL("/v1/videos", RANK_API_BASE_URL);
   url.searchParams.set("raidType", raidType);
   url.searchParams.set("boss", boss);
-  url.searchParams.set("from", from);
-  url.searchParams.set("to", to);
   url.searchParams.set("limit", String(Math.min(Math.max(limit, 1), 100)));
   url.searchParams.set("offset", String(Math.max(offset, 0)));
   url.searchParams.set("sort", sort);
 
   if (defenseType) {
     url.searchParams.set("defenseType", defenseType);
+  }
+  if (from) {
+    url.searchParams.set("from", from);
+  }
+  if (to) {
+    url.searchParams.set("to", to);
   }
 
   const response = await fetchWithTimeout(url, {}, RANK_VIDEOS_FETCH_TIMEOUT_MS, "ranks.videos.fetch", {
@@ -87,6 +102,19 @@ export async function fetchRaidVideos({
         youtubeId: video.youtubeId ?? "",
         thumbnailUrl: video.thumbnailUrl ?? "",
         publishedAt: video.publishedAt ?? "",
+        sourceParties: video.sourceParties?.map((source) => ({
+          source: source.source ?? "",
+          parties: (source.parties ?? []).map((party, partyIndex) => ({
+            partyIndex,
+            slots: (party?.students ?? []).map((slot, slotIndex) => ({
+              slotIndex,
+              tier: null,
+              level: null,
+              isAssist: null,
+              studentUid: slot?.uid ?? null,
+            })),
+          })),
+        })),
         rankMatch: video.rankMatch
           ? {
               rank: video.rankMatch.rank ?? 0,
@@ -97,6 +125,10 @@ export async function fetchRaidVideos({
               })),
             }
           : undefined,
+        rankHint:
+          typeof video.rankHint?.rank === "number" && video.rankHint.rank > 0
+            ? { rank: video.rankHint.rank }
+            : undefined,
       })) ?? [],
     total: data.total ?? 0,
     hasMore: data.hasMore ?? false,

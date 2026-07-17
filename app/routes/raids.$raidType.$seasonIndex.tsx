@@ -12,6 +12,7 @@ import { routeError } from "~/lib/http-errors";
 import { canonicalLink } from "~/lib/seo";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
 import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
+import { buildRaidYoutubeSearchUrl, getVideoDateRange } from "~/models/raid-videos";
 import { loadRaidSeasonPage } from "~/views/raid";
 
 function getDefenseTypeSetLabel(defenseTypeSet: RaidDefenseTypeSet) {
@@ -46,10 +47,19 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
     throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");
   }
 
+  const videoDateRange = await getVideoDateRange(env, currentRaid);
+
   return {
     currentRaid,
     allRaids,
     signedIn,
+    youtubeSearchDateRange:
+      videoDateRange?.youtubeSearchTo
+        ? {
+            from: videoDateRange.youtubeSearchFrom,
+            to: videoDateRange.youtubeSearchTo,
+          }
+        : null,
   };
 };
 
@@ -88,7 +98,7 @@ export type RaidPageContext = {
 };
 
 export default function RaidPage() {
-  const { currentRaid, allRaids, signedIn } = useLoaderData<typeof loader>();
+  const { currentRaid, allRaids, signedIn, youtubeSearchDateRange } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
@@ -132,6 +142,15 @@ export default function RaidPage() {
   };
   const selectedDefenseTypeSetKey = getRaidDefenseTypeSetKey(selectedDefenseTypeSet);
   const selectedDefense = selectedDefenseTypeSet.primaryDefenseType;
+  const youtubeSearchUrl = youtubeSearchDateRange
+    ? buildRaidYoutubeSearchUrl({
+        raidType: currentRaid.raidType,
+        bossName: currentRaid.raidBoss.nameJa,
+        defenseType: selectedDefense,
+        from: youtubeSearchDateRange.from,
+        to: youtubeSearchDateRange.to,
+      })
+    : null;
 
   return (
     <Page
@@ -139,6 +158,19 @@ export default function RaidPage() {
       description="총력전/대결전의 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
       belowTitle={<RaidSelector raids={allRaids} currentRaid={currentRaid ?? null} />}
       panels={panel ? [panel] : undefined}
+      links={
+        youtubeSearchUrl
+          ? [
+              {
+                Icon: VideoCameraIcon,
+                title: "YouTube에서 영상 검색",
+                shortTitle: "YouTube 검색",
+                description: "일본 서버 개최 시점의 영상을 확인해보세요",
+                to: youtubeSearchUrl,
+              },
+            ]
+          : undefined
+      }
       contentWidth={pathname.endsWith("/videos") ? "full" : "narrow"}
       screens={[
         {

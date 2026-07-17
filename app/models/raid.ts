@@ -3,7 +3,6 @@ import type { Defense, Difficulty as GraphqlDifficulty } from "~/graphql/graphql
 import { runQuery } from "~/lib/baql";
 import { cacheKey, cacheQuery, fetchSourceCached } from "~/lib/cache";
 import { compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
-import { getTimelineContentDatesByContentUids } from "./timeline-content";
 
 const ALL_RAID_SCHEDULES_CACHE_KEY = cacheKey("source", "raid-schedule", 1, cacheQuery({ region: "gl" }));
 
@@ -142,7 +141,11 @@ const raidScheduleDetailQuery = graphql(`
   query RaidScheduleDetail($uid: String!) {
     raidSchedule(uid: $uid) {
       uid raidType seasonIndex region terrain startAt endAt attackType
-      raidBoss { uid name }
+      raidBoss {
+        uid
+        name
+        nameJa: name(lang: "ja")
+      }
       defenseTypeSets { difficulty defenseTypes }
       jpSchedule { uid seasonIndex startAt }
     }
@@ -152,7 +155,7 @@ const raidScheduleDetailQuery = graphql(`
 export function getRaidSchedule(env: Env, uid: string, forceRefresh = false) {
   return fetchSourceCached(
     env,
-    cacheKey("source", "raid-schedule", 1, cacheQuery({ uid })),
+    cacheKey("source", "raid-schedule", 2, cacheQuery({ uid })),
     async () => {
       const schedule = await runRaidScheduleDetailQuery(env, uid);
       return schedule ? normalizeRaidSchedule(schedule) : null;

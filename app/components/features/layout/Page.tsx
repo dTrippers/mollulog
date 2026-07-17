@@ -251,13 +251,13 @@ function MobileActionBar({
   );
 }
 
-function MobileActionLink({ Icon, title, to }: PageLinkProps) {
+function MobileActionLink({ Icon, title, shortTitle, to }: PageLinkProps) {
   const className =
     "w-20 flex flex-col justify-center items-center rounded-full p-2 text-foreground transition-colors hover:bg-muted";
   const inner = (
     <>
       <Icon className="mb-1 size-5 shrink-0" strokeWidth={2} />
-      <span className="text-xs font-medium whitespace-nowrap">{title}</span>
+      <span className="text-xs font-medium whitespace-nowrap">{shortTitle ?? title}</span>
     </>
   );
 

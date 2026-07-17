@@ -213,8 +213,8 @@ export default function App() {
           />
           <div className="mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0">
             <div
-              className={`mx-auto w-full px-4 pt-2 pb-6 md:px-8 lg:min-h-screen lg:py-6 ${
-                isWideRaidVideosPage ? "max-w-[110rem]" : "max-w-7xl"
+              className={`mx-auto w-full px-4 pt-2 pb-6 transition-all duration-300 ease-out motion-reduce:transition-none md:px-8 lg:min-h-screen lg:py-6 ${
+                isWideRaidVideosPage ? "max-w-screen-2xl" : "max-w-7xl"
               }`}
             >
               <TimeZoneProvider timeZone={displayTimeZone}>

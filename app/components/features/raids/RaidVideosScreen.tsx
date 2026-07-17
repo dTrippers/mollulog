@@ -2,7 +2,7 @@ import { PlayIcon } from "@heroicons/react/24/outline";
 import type { RefObject } from "react";
 import { Link } from "react-router";
 import { EmptyView, LoadingSkeleton } from "~/components/primitives";
-import type { RaidVideoItem } from "~/models/raid-videos";
+import { getRaidVideoParties, type RaidVideoItem } from "~/models/raid-videos";
 import RaidPartyCard from "./RaidPartyCard";
 import { type RaidPartyStudentMap, toRaidPartyRow } from "./toRaidPartyRow";
 
@@ -72,6 +72,8 @@ function VideoCard({
   thumbnailUrl,
   publishedAt,
   rankMatch,
+  rankHint,
+  sourceParties,
   allStudents,
   maxLevel,
   recruitedStudentTiers,
@@ -82,11 +84,14 @@ function VideoCard({
   recruitedStudentTiers: Record<string, number>;
   showUnrecruitedStudents: boolean;
 }) {
+  const parties = getRaidVideoParties({ sourceParties, rankMatch });
   const recordLabel = rankMatch
     ? rankMatch.finalRank > 0
       ? `최종 ${rankMatch.finalRank.toLocaleString()}위`
       : "순위 정보 없음"
-    : null;
+    : rankHint && rankHint.rank > 0
+      ? `최대 ${rankHint.rank.toLocaleString()}위`
+      : null;
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
@@ -118,10 +123,9 @@ function VideoCard({
         </div>
       </Link>
 
-      {rankMatch ? (
+      {parties.length > 0 ? (
         <RaidPartyCard
-          primaryLabel="파티 편성"
-          rows={rankMatch.parties.map((party) =>
+          rows={parties.map((party) =>
             toRaidPartyRow({
               party,
               allStudents,
@@ -131,7 +135,7 @@ function VideoCard({
             }),
           )}
           summaryItems={[]}
-          visibleRowCount={1}
+          visibleRowCount={parties.length >= 3 ? 1 : undefined}
           emptyText="편성 정보가 없어요"
           popupIdPrefix={`video-${youtubeId}`}
           className="grow rounded-none border-t border-border bg-muted/30"
