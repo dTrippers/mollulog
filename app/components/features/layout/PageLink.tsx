@@ -4,6 +4,7 @@ import { Link } from "react-router";
 export type PageLinkProps = {
   Icon: React.ElementType;
   title: string;
+  shortTitle?: string;
   description: string;
   to: string;
   preventScrollReset?: boolean;

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "@jest/globals";
-import { ALL_TOTAL_ASSUALT_BOSS, normalizeBossUid, timeToScore } from "~/domain/raid-score";
+import {
+  ALL_TOTAL_ASSUALT_BOSS,
+  getFilterableRaidDifficulties,
+  getRaidDifficultyScoreRange,
+  normalizeBossUid,
+  parseDifficulty,
+  timeToScore,
+} from "~/domain/raid-score";
 
 describe("raid score data", () => {
   it("uses BAQL raid boss uids", () => {
@@ -26,5 +33,19 @@ describe("raid score data", () => {
 
   it("supports the 180-second lunatic floor score", () => {
     expect(timeToScore("binah", "lunatic", 3600000)).toBe(43235000);
+  });
+
+  it("uses the same difficulty options and score ranges across raid screens", () => {
+    expect(getFilterableRaidDifficulties("lunatic")).toEqual(["lunatic", "torment", "insane"]);
+    expect(getFilterableRaidDifficulties("torment")).toEqual(["torment", "insane"]);
+    expect(getFilterableRaidDifficulties("insane")).toEqual(["insane", "extreme"]);
+    expect(getRaidDifficultyScoreRange("torment")).toEqual({ gte: 31076000, lt: 44025000 });
+    expect(getRaidDifficultyScoreRange(null)).toBeUndefined();
+  });
+
+  it("parses only known raid difficulties", () => {
+    expect(parseDifficulty("insane")).toBe("insane");
+    expect(parseDifficulty("unknown")).toBeNull();
+    expect(parseDifficulty(null)).toBeNull();
   });
 });

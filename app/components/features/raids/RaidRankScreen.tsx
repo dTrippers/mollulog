@@ -1,13 +1,14 @@
-import { IdentificationIcon, MinusCircleIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
+import { IdentificationIcon, MinusCircleIcon, PlayIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EmptyView, Pagination } from "~/components/primitives";
-import { normalizeBossUid, scoreToDifficultyAndTime } from "~/domain/raid-score";
-import type { Attack, Defense } from "~/graphql/graphql";
+import { Button, EmptyView, Pagination } from "~/components/primitives";
+import { getRaidDifficultyScoreRange, normalizeBossUid, scoreToDifficultyAndTime } from "~/domain/raid-score";
+import type { Defense } from "~/graphql/graphql";
 import type { UtcIsoString } from "~/lib/date-time";
-import { type ParsedRaidRankDocument, convertTier, fetchRanks } from "~/lib/ranks/ranks";
-import type { RaidType, Role } from "~/models/content.d";
-import RaidPartyCard, { type RaidPartyRow, type RaidPartySlot } from "./RaidPartyCard";
+import { convertTier, fetchRanks, type ParsedRaidRankDocument } from "~/lib/ranks/ranks";
+import type { RaidType } from "~/models/content.d";
+import RaidPartyCard, { type RaidPartySlot } from "./RaidPartyCard";
 import type { RaidRankFilterState } from "./RaidRankFilter";
+import { getMaxLevelAt, type RaidPartyStudentMap, toRaidPartyRow } from "./toRaidPartyRow";
 
 type RaidRankScreenProps = {
   currentRaid: {
@@ -22,58 +23,11 @@ type RaidRankScreenProps = {
   onIncludeStudent: (student: { uid: string; tier: number }) => void;
   onExcludeStudent: (student: { uid: string; tier: number }) => void;
 
-  allStudents: {
-    [uid: string]: {
-      name: string;
-      attackType: Attack;
-      defenseType: Defense;
-      role: Role;
-    };
-  };
+  allStudents: RaidPartyStudentMap;
   recruitedStudentTiers: Record<string, number>;
 };
 
-const maximumLevels: Record<string, number> = {
-  "2021-11-09": 70,
-  "2022-03-22": 73,
-  "2022-05-17": 75,
-  "2022-09-06": 78,
-  "2022-12-20": 80,
-  "2023-03-28": 83,
-  "2023-07-25": 85,
-  "2024-01-30": 88,
-  "2024-07-23": 90,
-};
-
-function getMaxLevelAt(date: UtcIsoString | Date): number {
-  const targetDate = date instanceof Date ? date : new Date(date);
-  const dates = Object.keys(maximumLevels).sort();
-  for (let i = dates.length - 1; i >= 0; i--) {
-    if (targetDate >= new Date(dates[i])) {
-      return maximumLevels[dates[i]];
-    }
-  }
-  return 70;
-}
-
 const ITEMS_PER_PAGE = 10;
-
-function getScoreRange(difficulty: string | null): { gte?: number; lt?: number } | undefined {
-  if (!difficulty) return undefined;
-  if (difficulty === "lunatic") {
-    return { gte: 44025000, lt: 99999999 };
-  }
-  if (difficulty === "torment") {
-    return { gte: 31076000, lt: 44025000 };
-  }
-  if (difficulty === "insane") {
-    return { gte: 19249600, lt: 31076000 };
-  }
-  if (difficulty === "extreme") {
-    return { gte: 0, lt: 19249600 };
-  }
-  return undefined;
-}
 
 export default function RaidRankScreen({
   currentRaid,
@@ -139,13 +93,15 @@ export default function RaidRankScreen({
     }
 
     return {
+      exactParties: filterState.exactParties,
       includeStudents,
       excludeStudents,
-      score: getScoreRange(filterState.difficulty),
+      score: getRaidDifficultyScoreRange(filterState.difficulty),
     };
   }, [
     allStudents,
     filterState.difficulty,
+    filterState.exactParties,
     filterState.excludeStudents,
     filterState.filterNotOwned,
     filterState.includeStudents,
@@ -176,13 +132,14 @@ export default function RaidRankScreen({
 
     const loadRanks = async () => {
       try {
-        const { includeStudents, excludeStudents } = apiFilter;
+        const { exactParties, includeStudents, excludeStudents } = apiFilter;
 
         const result = await fetchRanks({
           raidType: currentRaid.raidType,
           season: currentRaid.seasonIndex,
           defenseType: currentRaid.defenseType,
           score: apiFilter.score,
+          exactParties,
           includeStudents,
           excludeStudents,
           perPage: ITEMS_PER_PAGE,
@@ -230,7 +187,7 @@ export default function RaidRankScreen({
   const maxLevel = getMaxLevelAt(currentRaid.since);
   return (
     <div className="space-y-3">
-      {filteredRanks.map(({ rank, score, parties }) => {
+      {filteredRanks.map(({ rank, score, parties, youtubeIds }) => {
         const clearTimeLabel = getClearTimeLabel({
           raidType: currentRaid.raidType,
           bossUid: currentRaid.boss,
@@ -246,6 +203,17 @@ export default function RaidRankScreen({
               { label: "점수", value: `${score.toLocaleString()}점` },
               ...(clearTimeLabel ? [{ label: "클리어 시간", value: clearTimeLabel }] : []),
             ]}
+            actions={youtubeIds.map((youtubeId) => (
+              <Button
+                key={youtubeId}
+                href={`https://www.youtube.com/watch?v=${youtubeId}`}
+                target="_blank"
+                variant="secondary"
+                size="xs"
+                icon={PlayIcon}
+                text="영상 보기"
+              />
+            ))}
             popupIdPrefix={`rank-${rank}-${score}`}
             getStudentActions={(slot) => getRankStudentActions(slot, onIncludeStudent, onExcludeStudent)}
           />
@@ -255,42 +223,6 @@ export default function RaidRankScreen({
       <Pagination currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
     </div>
   );
-}
-
-function toRaidPartyRow({
-  party,
-  allStudents,
-  maxLevel,
-}: {
-  party: ParsedRaidRankDocument["parties"][number];
-  allStudents: RaidRankScreenProps["allStudents"];
-  maxLevel: number;
-}): RaidPartyRow {
-  return {
-    key: `party-${party.partyIndex}`,
-    label: `${party.partyIndex + 1}편성`,
-    slots: party.slots.map(({ studentUid, tier, level, isAssist }) => {
-      if (!studentUid) {
-        return { uid: null };
-      }
-
-      const student = allStudents[studentUid];
-      if (!student) {
-        return { uid: null };
-      }
-
-      return {
-        uid: studentUid,
-        name: student.name,
-        attackType: student.attackType,
-        defenseType: student.defenseType,
-        role: student.role,
-        tier,
-        level: level && level < maxLevel ? level : undefined,
-        isAssist,
-      };
-    }),
-  };
 }
 
 function getRankStudentActions(
@@ -369,6 +301,7 @@ function LoadingRanks() {
     <div className="my-16 flex flex-col items-center justify-center gap-y-4 text-foreground">
       <div
         className="animate-spin inline-block size-10 border-3 border-current border-t-transparent rounded-full"
+        role="status"
         aria-label="loading"
       >
         <span className="sr-only">Loading...</span>

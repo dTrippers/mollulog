@@ -1,6 +1,6 @@
 import type { Defense } from "~/graphql/graphql";
 import type { RaidType } from "~/models/content.d";
-import { RANK_API_BASE_URL, createProtobufRootCache, fetchProtobuf } from "./base";
+import { createProtobufRootCache, fetchProtobuf, RANK_API_BASE_URL } from "./base";
 
 const PROTO_SCHEMA = `
 syntax = "proto3";
@@ -19,6 +19,7 @@ message Rank {
   int32 rank = 2;
   int32 final_rank = 3;
   repeated Party parties = 4;
+  repeated string youtube_ids = 5;
 }
 
 message Party {
@@ -66,6 +67,7 @@ type ServerRank = {
   rank: number;
   finalRank: number;
   parties: ServerParty[];
+  youtubeIds?: string[];
 };
 
 type ServerRankResponse = {
@@ -92,7 +94,37 @@ export type ParsedRaidRankDocument = {
       studentUid: string | null;
     }[];
   }[];
+  youtubeIds: string[];
 };
+
+export type RawPartySlotStudent =
+  | {
+      uid?: string | null;
+      level?: number | null;
+      tier?: number | null;
+      weaponTier?: number | null;
+      isAssist?: boolean | null;
+    }
+  | null
+  | undefined;
+
+export function convertRawPartySlot(
+  slot: RawPartySlotStudent,
+  slotIndex: number,
+): ParsedRaidRankDocument["parties"][number]["slots"][number] {
+  if (!slot?.uid) {
+    return { slotIndex, tier: null, level: null, isAssist: null, studentUid: null };
+  }
+
+  const totalTier = convertToTotalTier(Number(slot.tier || 0), slot.weaponTier ?? 0);
+  return {
+    slotIndex,
+    tier: totalTier > 0 ? totalTier : null,
+    level: slot.level ? Number(slot.level) : null,
+    isAssist: slot.isAssist ?? false,
+    studentUid: slot.uid,
+  };
+}
 
 export function convertTier(totalTier: number): { tier: number; weaponTier?: number } {
   if (totalTier <= 5) {
@@ -102,7 +134,7 @@ export function convertTier(totalTier: number): { tier: number; weaponTier?: num
   return { tier: 5, weaponTier: totalTier - 5 };
 }
 
-function convertToTotalTier(tier: number, weaponTier?: number): number {
+export function convertToTotalTier(tier: number, weaponTier?: number): number {
   return tier + (weaponTier || 0);
 }
 
@@ -157,6 +189,7 @@ function convertServerRankToParsed(
     finalRank: Number(serverRank.finalRank),
     score: Number(serverRank.score),
     parties,
+    youtubeIds: serverRank.youtubeIds ?? [],
   };
 }
 
@@ -165,12 +198,14 @@ export async function fetchRanks(params: {
   season: number;
   defenseType: Defense;
   score?: { gte?: number; lt?: number };
+  exactParties?: string[][];
   includeStudents: { uid: string; tiers: Array<[number] | [number, number]> }[];
   excludeStudents: { uid: string; tiers: Array<[number] | [number, number]> }[];
   perPage: number;
   page: number;
 }): Promise<{ totalCount: number; ranks: ParsedRaidRankDocument[] }> {
-  const { raidType, season, defenseType, score, includeStudents, excludeStudents, perPage, page } = params;
+  const { raidType, season, defenseType, score, exactParties, includeStudents, excludeStudents, perPage, page } =
+    params;
 
   const queryParams = new URLSearchParams({
     raidType,
@@ -185,6 +220,7 @@ export async function fetchRanks(params: {
       gte?: number;
       lt?: number;
     };
+    exactParties?: string[][];
     includeStudents: typeof includeStudents;
     excludeStudents: typeof excludeStudents;
   } = {
@@ -193,6 +229,10 @@ export async function fetchRanks(params: {
     includeStudents,
     excludeStudents,
   };
+
+  if (exactParties && exactParties.length > 0) {
+    body.exactParties = exactParties;
+  }
 
   if (score) {
     body.score = {};

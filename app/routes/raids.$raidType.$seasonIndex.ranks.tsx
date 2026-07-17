@@ -1,17 +1,17 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
-import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
+import { type LoaderFunctionArgs, useLoaderData, useOutletContext, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { RaidRankScreen } from "~/components/features/raids";
 import RaidRankFilter, {
   mergeFilteredStudents,
   type RaidRankFilterState,
 } from "~/components/features/raids/RaidRankFilter";
-import { Difficulty } from "~/graphql/graphql";
+import { EXACT_PARTY_SEARCH_PARAM, parseExactParties } from "~/domain/raid-exact-parties";
+import { getFilterableRaidDifficulties } from "~/domain/raid-score";
 import { nowUtcIso } from "~/lib/date-time";
 import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import type { RaidType } from "~/models/content.d";
-import type { Difficulty as DifficultyType } from "~/domain/raid-score";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudentsMap } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
@@ -44,12 +44,9 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 export default function RaidRanks() {
   const { currentRaid, defenseType, defenseTypeSet, setPanel, signedIn } = useOutletContext<RaidPageContext>();
   const { allStudents, recruitedStudentTiers } = useLoaderData<typeof loader>();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const jpSeasonIndex = currentRaid.jpSchedule?.seasonIndex ?? null;
-
-  if (jpSeasonIndex === null) {
-    return <RaidUnavailableState raidType={currentRaid.raidType as RaidType} />;
-  }
 
   // Get all students for current raid
   const [filterableStudents, setFilterableStudents] = useState<{ uid: string; name: string; tiers: number[] }[]>([]);
@@ -81,6 +78,7 @@ export default function RaidRanks() {
 
   const [rankFilterState, setRankFilterState] = useState<RaidRankFilterState>({
     filterNotOwned: false,
+    exactParties: parseExactParties(searchParams),
     includeStudents: [],
     excludeStudents: [],
     difficulty: null,
@@ -90,21 +88,16 @@ export default function RaidRanks() {
     setRankFilterState((prev) => ({ ...prev, defenseType, difficulty: null }));
   }, [defenseType]);
 
-  const filterableDifficulties = useMemo(() => {
-    const difficulty = defenseTypeSet.difficulty;
-    if (difficulty === Difficulty.Lunatic) {
-      return ["lunatic", "torment", "insane"] as DifficultyType[];
-    }
-    if (difficulty === Difficulty.Torment) {
-      return ["torment", "insane"] as DifficultyType[];
-    }
-    if (difficulty === Difficulty.Insane) {
-      return ["insane", "extreme"] as DifficultyType[];
-    }
-    return [] as DifficultyType[];
-  }, [defenseTypeSet.difficulty]);
+  const filterableDifficulties = useMemo(
+    () => getFilterableRaidDifficulties(defenseTypeSet.difficulty),
+    [defenseTypeSet.difficulty],
+  );
 
   useEffect(() => {
+    if (jpSeasonIndex === null) {
+      return;
+    }
+
     setPanel({
       title: "편성 찾기",
       description: "특정 학생을 포함/제외한 편성을 찾아보세요",
@@ -114,39 +107,52 @@ export default function RaidRanks() {
           state={rankFilterState}
           setState={setRankFilterState}
           signedIn={signedIn}
+          onClearExactParties={() => {
+            setRankFilterState((prev) => ({ ...prev, exactParties: [] }));
+            setSearchParams(
+              (prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete(EXACT_PARTY_SEARCH_PARAM);
+                return next;
+              },
+              { replace: true },
+            );
+          }}
           filterableStudents={filterableStudents}
           filterableDifficulties={filterableDifficulties}
         />
       ),
     });
-  }, [rankFilterState, setPanel, signedIn, filterableStudents, filterableDifficulties]);
+  }, [filterableDifficulties, filterableStudents, jpSeasonIndex, rankFilterState, setPanel, setSearchParams, signedIn]);
+
+  if (jpSeasonIndex === null) {
+    return <RaidUnavailableState raidType={currentRaid.raidType as RaidType} />;
+  }
 
   return (
-    <>
-      <RaidRankScreen
-        currentRaid={{
-          boss: currentRaid.raidBoss.uid,
-          since: currentRaid.startAt ?? nowUtcIso(),
-          raidType: currentRaid.raidType as RaidType,
-          seasonIndex: jpSeasonIndex,
-          defenseType,
-        }}
-        filterState={rankFilterState}
-        allStudents={allStudents}
-        recruitedStudentTiers={recruitedStudentTiers}
-        onIncludeStudent={({ uid }) => {
-          setRankFilterState((prev) => ({
-            ...prev,
-            includeStudents: mergeFilteredStudents(prev.includeStudents, { uid, tiers: [] }),
-          }));
-        }}
-        onExcludeStudent={({ uid }) => {
-          setRankFilterState((prev) => ({
-            ...prev,
-            excludeStudents: mergeFilteredStudents(prev.excludeStudents, { uid, tiers: [] }),
-          }));
-        }}
-      />
-    </>
+    <RaidRankScreen
+      currentRaid={{
+        boss: currentRaid.raidBoss.uid,
+        since: currentRaid.startAt ?? nowUtcIso(),
+        raidType: currentRaid.raidType as RaidType,
+        seasonIndex: jpSeasonIndex,
+        defenseType,
+      }}
+      filterState={rankFilterState}
+      allStudents={allStudents}
+      recruitedStudentTiers={recruitedStudentTiers}
+      onIncludeStudent={({ uid }) => {
+        setRankFilterState((prev) => ({
+          ...prev,
+          includeStudents: mergeFilteredStudents(prev.includeStudents, { uid, tiers: [] }),
+        }));
+      }}
+      onExcludeStudent={({ uid }) => {
+        setRankFilterState((prev) => ({
+          ...prev,
+          excludeStudents: mergeFilteredStudents(prev.excludeStudents, { uid, tiers: [] }),
+        }));
+      }}
+    />
   );
 }

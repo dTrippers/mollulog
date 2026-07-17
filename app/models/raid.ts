@@ -33,6 +33,28 @@ export function getRaidDefenseTypeSetKey(defenseTypeSet: {
   return `${defenseTypeSet.difficulty ?? "none"}:${defenseTypeSet.defenseTypes.join(",")}`;
 }
 
+export function getRaidDefenseTypeSetByQuery(
+  defenseTypeSets: RaidDefenseTypeSet[],
+  requestedDefenseTypeSet: string | null,
+  requestedDefenseType: string | null,
+): RaidDefenseTypeSet | null {
+  if (defenseTypeSets.length === 0) {
+    return null;
+  }
+
+  const requestedSet = defenseTypeSets.find(
+    (defenseTypeSet) => getRaidDefenseTypeSetKey(defenseTypeSet) === requestedDefenseTypeSet,
+  );
+  if (requestedSet) {
+    return requestedSet;
+  }
+
+  const requestedPrimaryDefense = defenseTypeSets.find(
+    ({ primaryDefenseType }) => primaryDefenseType === requestedDefenseType,
+  );
+  return requestedPrimaryDefense ?? defenseTypeSets[0];
+}
+
 export type NormalizedRaidSchedule = Omit<RawRaidSchedule, "startAt" | "endAt" | "jpSchedule" | "defenseTypeSets"> & {
   startAt: UtcIsoString | null;
   endAt: UtcIsoString | null;
@@ -103,7 +125,7 @@ function normalizeRaidSchedule<
   };
 }
 
-async function runRaidScheduleDetailQuery(env: Env, uid: string) {
+async function runRaidScheduleDetailQuery(_env: Env, uid: string) {
   const { data, error } = await runQuery(raidScheduleDetailQuery, { uid });
   if (error) {
     throw "failed to fetch raid schedule";
@@ -119,7 +141,11 @@ const raidScheduleDetailQuery = graphql(`
   query RaidScheduleDetail($uid: String!) {
     raidSchedule(uid: $uid) {
       uid raidType seasonIndex region terrain startAt endAt attackType
-      raidBoss { uid name }
+      raidBoss {
+        uid
+        name
+        nameJa: name(lang: "ja")
+      }
       defenseTypeSets { difficulty defenseTypes }
       jpSchedule { uid seasonIndex startAt }
     }
@@ -129,7 +155,7 @@ const raidScheduleDetailQuery = graphql(`
 export function getRaidSchedule(env: Env, uid: string, forceRefresh = false) {
   return fetchSourceCached(
     env,
-    cacheKey("source", "raid-schedule", 1, cacheQuery({ uid })),
+    cacheKey("source", "raid-schedule", 2, cacheQuery({ uid })),
     async () => {
       const schedule = await runRaidScheduleDetailQuery(env, uid);
       return schedule ? normalizeRaidSchedule(schedule) : null;

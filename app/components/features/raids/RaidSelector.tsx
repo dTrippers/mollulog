@@ -1,13 +1,13 @@
 import { Transition } from "@headlessui/react";
 import { ChevronDownIcon, XMarkIcon } from "@heroicons/react/16/solid";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { FilterButtons } from "~/components/primitives";
-import type { Attack, Defense } from "~/graphql/graphql";
-import { type UtcIsoString, compareInstantDesc, nowUtcIso } from "~/lib/date-time";
-import type { RaidType, Terrain } from "~/models/content.d";
 import { raidTypeToParam } from "~/domain/raid";
+import type { Attack, Defense } from "~/graphql/graphql";
+import { compareInstantDesc, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
+import type { Terrain } from "~/models/content.d";
 import RaidListItem from "./RaidListItem";
 
 type SelectableRaid = {
@@ -26,9 +26,10 @@ type SelectableRaid = {
 type RaidSelectorProps = {
   raids: SelectableRaid[];
   currentRaid: SelectableRaid | null;
+  belowSelector?: ReactNode;
 };
 
-export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) {
+export default function RaidSelector({ raids, currentRaid, belowSelector }: RaidSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [raidType, setRaidType] = useState<string>(currentRaid?.raidType ?? "total_assault");
 
@@ -74,6 +75,8 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
         </div>
       </button>
 
+      {!isOpen ? belowSelector : null}
+
       <Transition
         show={isOpen}
         as="div"
@@ -83,9 +86,9 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
         leave="transition duration-100 ease-in"
         leaveFrom="opacity-100 scale-100"
         leaveTo="opacity-0 scale-95"
-        className="mt-4 mb-2 w-full rounded-lg bg-popover p-2 text-popover-foreground shadow-lg lg:absolute lg:top-full lg:left-0 lg:z-30"
+        className="mt-1 mb-2 w-full overflow-hidden rounded-lg bg-card text-card-foreground shadow-xl shadow-black/10 dark:shadow-black/40 lg:absolute lg:top-full lg:left-2 lg:z-30 lg:w-[calc(100%-1rem)]"
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between px-3 py-2">
           <FilterButtons
             buttonProps={[
               { text: "총력전", active: raidType === "total_assault", onToggle: () => setRaidType("total_assault") },
@@ -93,6 +96,8 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
             ]}
             exclusive
             atLeastOne
+            size="sm"
+            className="my-0"
           />
           <button
             type="button"
@@ -100,25 +105,36 @@ export default function RaidSelector({ raids, currentRaid }: RaidSelectorProps) 
             className="cursor-pointer rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             aria-label="총력전 선택 닫기"
           >
-            <XMarkIcon className="size-6" strokeWidth={2} />
+            <XMarkIcon className="size-5" strokeWidth={2} />
           </button>
         </div>
-        <div className="no-scrollbar mt-2 max-h-64 divide-y divide-border/60 overflow-y-auto lg:max-h-96">
-          {selectableRaids.map((raid) => (
-            <Link
-              to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
-              key={raid.uid}
-              className="group block cursor-pointer"
-              onClick={() => setIsOpen(false)}
-            >
-              <RaidListItem
-                raid={raid}
-                className="rounded-none bg-transparent shadow-none hover:bg-transparent dark:shadow-none"
-                imageClassName="scale-105 opacity-20 blur-[1px]"
-                contentClassName="rounded-md bg-transparent px-3 py-3 group-hover:bg-foreground/10"
-              />
-            </Link>
-          ))}
+        <div className="no-scrollbar max-h-64 divide-y divide-border/60 overflow-x-hidden overflow-y-auto border-t border-border/60 lg:max-h-96">
+          {selectableRaids.map((raid) => {
+            const isCurrent =
+              currentRaid !== null &&
+              raid.raidType === currentRaid.raidType &&
+              raid.seasonIndex === currentRaid.seasonIndex;
+            return (
+              <Link
+                to={`/raids/${raidTypeToParam(raid.raidType)}/${raid.seasonIndex}`}
+                key={raid.uid}
+                className="group block cursor-pointer"
+                onClick={() => setIsOpen(false)}
+                aria-current={isCurrent ? "page" : undefined}
+              >
+                <RaidListItem
+                  raid={raid}
+                  className="rounded-none bg-transparent shadow-none hover:bg-transparent dark:shadow-none"
+                  imageClassName="w-full scale-105 opacity-20 blur-[1px]"
+                  contentClassName={cn(
+                    "rounded-none bg-transparent bg-linear-to-r from-card from-40% via-card/90 via-70% to-card/35 px-3 py-2.5 group-hover:from-muted/80 group-hover:via-muted/60 group-hover:to-muted/30",
+                    isCurrent &&
+                      "before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-primary before:content-['']",
+                  )}
+                />
+              </Link>
+            );
+          })}
         </div>
       </Transition>
     </div>

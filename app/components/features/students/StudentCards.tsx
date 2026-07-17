@@ -25,7 +25,7 @@ type StudentCardsProps = {
     };
   }[];
   mobileGrid?: 4 | 5 | 6 | 8;
-  pcGrid?: 4 | 6 | 8 | 10 | 12;
+  pcGrid?: 4 | 5 | 6 | 8 | 10 | 12;
   layout?: "grid" | "wrap" | "responsive-wrap";
   cardSize?: "xs" | "sm" | "md" | "lg";
   gap?: "normal" | "tight";
@@ -57,6 +57,8 @@ export default function StudentCards({
   let pcGridClass = "md:grid-cols-8";
   if (pcGrid === 4) {
     pcGridClass = "md:grid-cols-4";
+  } else if (pcGrid === 5) {
+    pcGridClass = "md:grid-cols-5";
   } else if (pcGrid === 6) {
     pcGridClass = "md:grid-cols-6";
   } else if (pcGrid === 10) {

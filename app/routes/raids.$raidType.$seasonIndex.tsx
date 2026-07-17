@@ -2,16 +2,17 @@ import { InformationCircleIcon, ShieldCheckIcon, TrophyIcon, VideoCameraIcon } f
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
+import { Link, Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
 import { createPageErrorBoundary, Page, type PagePanelProps } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons } from "~/components/primitives";
-import { raidTypeToParam } from "~/domain/raid";
+import { findCurrentOrClosestRaidSchedule, raidTypeToParam } from "~/domain/raid";
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
 import { canonicalLink } from "~/lib/seo";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
-import { getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
+import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
+import { buildRaidYoutubeSearchUrl, getVideoDateRange } from "~/models/raid-videos";
 import { loadRaidSeasonPage } from "~/views/raid";
 
 function getDefenseTypeSetLabel(defenseTypeSet: RaidDefenseTypeSet) {
@@ -23,17 +24,9 @@ function getAvailableDefenseTypeSet(
   requestedDefenseTypeSet: string | null,
   requestedDefenseType: string | null,
 ): RaidDefenseTypeSet {
-  const requestedSet = defenseTypeSets.find(
-    (defenseTypeSet) => getRaidDefenseTypeSetKey(defenseTypeSet) === requestedDefenseTypeSet,
+  return (
+    getRaidDefenseTypeSetByQuery(defenseTypeSets, requestedDefenseTypeSet, requestedDefenseType) ?? defenseTypeSets[0]
   );
-  if (requestedSet) {
-    return requestedSet;
-  }
-
-  const requestedPrimaryDefense = defenseTypeSets.find(
-    ({ primaryDefenseType }) => primaryDefenseType === requestedDefenseType,
-  );
-  return requestedPrimaryDefense ?? defenseTypeSets[0];
 }
 
 export const loader = async ({ request, context, params }: LoaderFunctionArgs) => {
@@ -54,10 +47,20 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
     throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");
   }
 
+  const videoDateRange = await getVideoDateRange(env, currentRaid);
+  const currentOrClosestRaid = findCurrentOrClosestRaidSchedule(allRaids, currentRaid.raidType);
+
   return {
     currentRaid,
+    currentOrClosestRaid,
     allRaids,
     signedIn,
+    youtubeSearchDateRange: videoDateRange?.youtubeSearchTo
+      ? {
+          from: videoDateRange.youtubeSearchFrom,
+          to: videoDateRange.youtubeSearchTo,
+        }
+      : null,
   };
 };
 
@@ -96,14 +99,19 @@ export type RaidPageContext = {
 };
 
 export default function RaidPage() {
-  const { currentRaid, allRaids, signedIn } = useLoaderData<typeof loader>();
+  const { currentRaid, currentOrClosestRaid, allRaids, signedIn, youtubeSearchDateRange } =
+    useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
+  const currentOrClosestRaidPath = currentOrClosestRaid
+    ? `/raids/${raidTypeToParam(currentOrClosestRaid.raidType)}/${currentOrClosestRaid.seasonIndex}`
+    : null;
+  const showCurrentOrClosestRaidLink = currentOrClosestRaidPath !== null && currentOrClosestRaidPath !== raidPath;
 
   const [panel, setPanel] = useState<PagePanelProps | undefined>(undefined);
   useEffect(() => {
-    if (pathname !== `${raidPath}/ranks`) {
+    if (pathname !== `${raidPath}/ranks` && pathname !== `${raidPath}/videos`) {
       setPanel(undefined);
     }
   }, [pathname, raidPath]);
@@ -133,6 +141,7 @@ export default function RaidPage() {
         const next = new URLSearchParams(prev);
         next.set("defenseTypeSet", getRaidDefenseTypeSetKey(defenseTypeSet));
         next.set("defenseType", defenseTypeSet.primaryDefenseType);
+        next.delete("difficulty");
         return next;
       },
       { replace: true },
@@ -140,13 +149,51 @@ export default function RaidPage() {
   };
   const selectedDefenseTypeSetKey = getRaidDefenseTypeSetKey(selectedDefenseTypeSet);
   const selectedDefense = selectedDefenseTypeSet.primaryDefenseType;
+  const youtubeSearchUrl = youtubeSearchDateRange
+    ? buildRaidYoutubeSearchUrl({
+        raidType: currentRaid.raidType,
+        bossName: currentRaid.raidBoss.nameJa,
+        defenseType: selectedDefense,
+        from: youtubeSearchDateRange.from,
+        to: youtubeSearchDateRange.to,
+      })
+    : null;
 
   return (
     <Page
       title={`${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} 정보`}
       description="총력전/대결전의 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
-      belowTitle={<RaidSelector raids={allRaids} currentRaid={currentRaid ?? null} />}
+      belowTitle={
+        <RaidSelector
+          raids={allRaids}
+          currentRaid={currentRaid ?? null}
+          belowSelector={
+            showCurrentOrClosestRaidLink ? (
+              <Link
+                to={currentOrClosestRaidPath}
+                className="mt-2 block text-right text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {`이번 개최 ${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType}으로 이동 →`}
+              </Link>
+            ) : null
+          }
+        />
+      }
       panels={panel ? [panel] : undefined}
+      links={
+        youtubeSearchUrl
+          ? [
+              {
+                Icon: VideoCameraIcon,
+                title: "YouTube에서 영상 검색",
+                shortTitle: "YouTube 검색",
+                description: "일본 서버 개최 시점의 영상을 확인해보세요",
+                to: youtubeSearchUrl,
+              },
+            ]
+          : undefined
+      }
+      contentWidth={pathname.endsWith("/videos") ? "full" : "narrow"}
       screens={[
         {
           text: "시즌 통계",
@@ -165,6 +212,7 @@ export default function RaidPage() {
         {
           text: "공략 영상",
           Icon: VideoCameraIcon,
+          description: "공략 영상과 해당 영상에서 사용한 편성 정보",
           link: `${raidPath}/videos`,
           active: pathname === `${raidPath}/videos`,
         },
@@ -172,22 +220,20 @@ export default function RaidPage() {
     >
       {currentRaid.defenseTypeSets.length > 1 && !pathname.endsWith("/compare") && (
         <div className="my-4">
-          {!pathname.endsWith("/videos") && (
-            <FilterButtons
-              surface="page"
-              key={`filters-${currentRaid.uid}`}
-              Icon={ShieldCheckIcon}
-              buttonProps={currentRaid.defenseTypeSets.map((defenseTypeSet) => ({
-                text: getDefenseTypeSetLabel(defenseTypeSet),
-                subText: defenseTypeSet.difficulty ? difficultyLocale[defenseTypeSet.difficulty] : undefined,
-                color: defenseTypeColor[defenseTypeSet.primaryDefenseType],
-                active: getRaidDefenseTypeSetKey(defenseTypeSet) === selectedDefenseTypeSetKey,
-                onToggle: () => selectDefenseTypeSet(defenseTypeSet),
-              }))}
-              exclusive
-              atLeastOne
-            />
-          )}
+          <FilterButtons
+            surface="page"
+            key={`filters-${currentRaid.uid}`}
+            Icon={ShieldCheckIcon}
+            buttonProps={currentRaid.defenseTypeSets.map((defenseTypeSet) => ({
+              text: getDefenseTypeSetLabel(defenseTypeSet),
+              subText: defenseTypeSet.difficulty ? difficultyLocale[defenseTypeSet.difficulty] : undefined,
+              color: defenseTypeColor[defenseTypeSet.primaryDefenseType],
+              active: getRaidDefenseTypeSetKey(defenseTypeSet) === selectedDefenseTypeSetKey,
+              onToggle: () => selectDefenseTypeSet(defenseTypeSet),
+            }))}
+            exclusive
+            atLeastOne
+          />
         </div>
       )}
       <Outlet

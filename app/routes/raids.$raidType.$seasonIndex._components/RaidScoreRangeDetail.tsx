@@ -92,6 +92,7 @@ export default function RaidScoreRangeDetail({
             showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
             cardClassName="border border-border/70 bg-transparent"
             summaryClassName="bg-neutral-100 dark:bg-neutral-800"
+            ranksPath={`ranks${search}`}
           />
           <RanksPageLink to={`ranks${search}`} />
         </SectionCard>

@@ -1,21 +1,35 @@
-import { type LoaderFunctionArgs, redirect } from "react-router";
-import { createPageErrorBoundary } from "~/components/features/layout";
-import { raidTypeToParam } from "~/domain/raid";
-import { routeError } from "~/lib/http-errors";
-import { getUpcomingRaidSchedules } from "~/models/raid";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useLoaderData } from "react-router";
+import { createPageErrorBoundary, Page } from "~/components/features/layout";
+import { canonicalLink } from "~/lib/seo";
+import { getRaidPortalData } from "~/views/raid-portal";
+import RaidPortalScreen from "./raids._components/RaidPortalScreen";
+
+export const meta: MetaFunction = ({ location }) => [
+  { title: "총력전·대결전 정보 | 몰루로그" },
+  {
+    name: "description",
+    content: "총력전·대결전 일정과 시즌 통계, 상위권 편성, 공략 영상을 한곳에서 확인해보세요.",
+  },
+  canonicalLink(location.pathname),
+];
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
-  const { env } = context.cloudflare;
-
-  const upcomingRaids = await getUpcomingRaidSchedules(env);
-  const latestRaid = upcomingRaids.find((schedule) => ["total_assault", "elimination"].includes(schedule.raidType));
-  if (!latestRaid) {
-    throw routeError(404, "raid.not_found", "예정된 총력전/대결전 정보를 찾을 수 없어요");
-  }
-  return redirect(`/raids/${raidTypeToParam(latestRaid.raidType)}/${latestRaid.seasonIndex}`);
+  const { env, ctx } = context.cloudflare;
+  return getRaidPortalData(env, ctx);
 };
 
+export default function RaidsPortalPage() {
+  const data = useLoaderData<typeof loader>();
+
+  return (
+    <Page title="총력전/대결전" contentWidth="full" layout="vertical">
+      <RaidPortalScreen {...data} />
+    </Page>
+  );
+}
+
 export const ErrorBoundary = createPageErrorBoundary({
-  title: "총력전 정보",
-  description: "일본 서버에서 개최된 총력전/대결전의 최상위권 편성, 통계, 공략 영상 정보를 확인할 수 있어요",
+  title: "총력전/대결전",
+  description: "총력전·대결전 정보를 불러오지 못했어요",
 });

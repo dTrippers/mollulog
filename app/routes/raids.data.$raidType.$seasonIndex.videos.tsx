@@ -1,8 +1,9 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { raidTypeFromParam } from "~/domain/raid";
+import { getFilterableRaidDifficulties, getRaidDifficultyScoreRange, parseDifficulty } from "~/domain/raid-score";
 import { fetchRaidVideos } from "~/lib/ranks";
-import { getRaidScheduleByTypeAndSeason } from "~/models/raid";
-import { RAID_VIDEOS_PAGE_SIZE, type RaidVideosData, getVideoDateRange, parseVideoSort } from "~/models/raid-videos";
+import { getRaidDefenseTypeSetByQuery, getRaidScheduleByTypeAndSeason } from "~/models/raid";
+import { parseVideoSort, RAID_VIDEOS_PAGE_SIZE, type RaidVideosData } from "~/models/raid-videos";
 
 export type { RaidVideosData };
 
@@ -36,17 +37,23 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
   const limit = Number.isNaN(parsedLimit) ? RAID_VIDEOS_PAGE_SIZE : parsedLimit;
   const offset = Number.isNaN(parsedOffset) ? 0 : parsedOffset;
   const sort = parseVideoSort(url.searchParams.get("sort"));
-  const videoDateRange = await getVideoDateRange(env, currentRaid);
-  if (!videoDateRange) {
-    return null;
-  }
-
+  const defenseTypeSet = getRaidDefenseTypeSetByQuery(
+    currentRaid.defenseTypeSets,
+    url.searchParams.get("defenseTypeSet"),
+    url.searchParams.get("defenseType"),
+  );
+  const requestedDifficulty = parseDifficulty(url.searchParams.get("difficulty"));
+  const filterableDifficulties = getFilterableRaidDifficulties(defenseTypeSet?.difficulty);
+  const difficulty =
+    requestedDifficulty && filterableDifficulties.includes(requestedDifficulty) ? requestedDifficulty : null;
+  const scoreRange = getRaidDifficultyScoreRange(difficulty);
   try {
     return await fetchRaidVideos({
       raidType: currentRaid.raidType,
       boss: currentRaid.raidBoss.uid,
-      from: videoDateRange.from,
-      to: videoDateRange.to,
+      defenseType: defenseTypeSet?.primaryDefenseType,
+      scoreGte: scoreRange?.gte,
+      scoreLt: scoreRange?.lt,
       limit,
       offset,
       sort,

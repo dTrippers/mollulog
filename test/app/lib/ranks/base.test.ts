@@ -162,6 +162,25 @@ describe("fetchProtobuf", () => {
     expect(result.totalCount).toBe("42");
   });
 
+  it("does not decompress a response that the runtime already decoded", async () => {
+    const bytes = encodeSample();
+    jest.spyOn(global, "fetch").mockResolvedValue({
+      ok: true,
+      statusText: "OK",
+      arrayBuffer: async () => toArrayBuffer(bytes),
+      headers: new Headers({ "Content-Encoding": "gzip" }),
+    } as Response);
+
+    const result = await fetchProtobuf<{ totalCount: string }>({
+      url: "https://ranks.example/api",
+      schema: SCHEMA,
+      messageType: "ranks.RankResponse",
+      getRoot: createProtobufRootCache(),
+    });
+
+    expect(result.totalCount).toBe("42");
+  });
+
   it("throws when the response is not ok", async () => {
     jest.spyOn(global, "fetch").mockResolvedValue({
       ok: false,

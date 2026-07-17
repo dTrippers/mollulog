@@ -23,6 +23,7 @@ export type RaidPartySlot = {
   level?: number | null;
   isAssist?: boolean | null;
   grayscale?: boolean;
+  unrecruited?: boolean;
   badge?: ReactNode;
 };
 
@@ -38,13 +39,14 @@ type RaidPartySummaryItem = {
 };
 
 type RaidPartyCardProps = {
-  primaryLabel: ReactNode;
+  primaryLabel?: ReactNode;
   secondaryLabel?: ReactNode;
   rows: RaidPartyRow[];
   summaryItems: RaidPartySummaryItem[];
   actions?: ReactNode;
   popupIdPrefix: string;
   visibleRowCount?: number;
+  centerRowLabels?: boolean;
   emptyText?: string;
   className?: string;
   summaryClassName?: string;
@@ -61,6 +63,7 @@ export default function RaidPartyCard({
   actions,
   popupIdPrefix,
   visibleRowCount,
+  centerRowLabels = false,
   emptyText = "편성 데이터가 없어요",
   className,
   summaryClassName,
@@ -70,18 +73,23 @@ export default function RaidPartyCard({
   const shouldCollapse = visibleRowCount !== undefined && rows.length > visibleRowCount;
   const visibleRows = shouldCollapse && !expanded ? rows.slice(0, visibleRowCount) : rows;
   const hiddenRowCount = shouldCollapse ? rows.length - visibleRows.length : 0;
+  const hasHeader = primaryLabel != null || secondaryLabel != null || actions != null;
 
   return (
     <article className={cn("rounded-lg bg-card p-3 md:p-4", className)}>
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-          <span className="text-lg font-bold leading-tight text-foreground">{primaryLabel}</span>
-          {secondaryLabel ? (
-            <span className="text-sm font-semibold tabular-nums text-muted-foreground">{secondaryLabel}</span>
-          ) : null}
+      {hasHeader ? (
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            {primaryLabel != null ? (
+              <span className="text-lg font-bold leading-tight text-foreground">{primaryLabel}</span>
+            ) : null}
+            {secondaryLabel != null ? (
+              <span className="text-sm font-semibold tabular-nums text-muted-foreground">{secondaryLabel}</span>
+            ) : null}
+          </div>
+          {actions ? <div className="flex shrink-0 flex-wrap items-center gap-1">{actions}</div> : null}
         </div>
-        {actions ? <div className="flex shrink-0 flex-wrap items-center gap-1">{actions}</div> : null}
-      </div>
+      ) : null}
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
@@ -93,6 +101,7 @@ export default function RaidPartyCard({
                   row={row}
                   rowIndex={rowIndex}
                   popupIdPrefix={popupIdPrefix}
+                  centerRowLabel={centerRowLabels}
                   getStudentActions={getStudentActions}
                 />
               ))}
@@ -137,21 +146,30 @@ function PartyRow({
   row,
   rowIndex,
   popupIdPrefix,
+  centerRowLabel,
   getStudentActions,
 }: {
   row: RaidPartyRow;
   rowIndex: number;
   popupIdPrefix: string;
+  centerRowLabel: boolean;
   getStudentActions?: RaidPartyCardProps["getStudentActions"];
 }) {
   const slots = getFixedPartySlots(row.slots);
 
   return (
-    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-3">
-      <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground sm:mt-2 sm:w-10">
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 sm:flex-row sm:gap-2",
+        centerRowLabel ? "sm:items-center" : "sm:items-start",
+      )}
+    >
+      <span
+        className={cn("shrink-0 text-xs font-medium tabular-nums text-muted-foreground", !centerRowLabel && "sm:mt-2")}
+      >
         {row.label}
       </span>
-      <div className="grid w-full min-w-0 grid-cols-6 gap-1.5 sm:w-fit sm:flex-none">
+      <div className="grid w-full min-w-0 grid-cols-6 gap-1.5 sm:max-w-80 sm:flex-1">
         {slots.map((slot, slotIndex) => (
           <PartyStudentCard
             key={`${slot.uid ?? "empty"}-${slotIndex}`}
@@ -180,14 +198,14 @@ function PartyStudentCard({
 }) {
   if (!slot.uid) {
     return (
-      <div className="min-w-0 sm:w-12">
+      <div className="min-w-0">
         <div className="aspect-square w-full rounded-lg bg-muted/60" />
       </div>
     );
   }
 
   return (
-    <div className="relative min-w-0 sm:w-12">
+    <div className="relative min-w-0">
       <StudentCard
         uid={slot.uid}
         name={slot.name}
@@ -203,7 +221,12 @@ function PartyStudentCard({
         popups={slot.name && actions.length > 0 ? actions : undefined}
         popupId={slot.name && actions.length > 0 ? popupId : undefined}
       />
-      {slot.badge}
+      {slot.badge ??
+        (slot.unrecruited ? (
+          <span className="pointer-events-none absolute top-1 right-0 origin-top-right scale-75 rounded-sm bg-neutral-900/80 px-1 py-0.5 text-xs font-bold leading-none text-white shadow-sm dark:bg-neutral-50/90 dark:text-neutral-900">
+            미모집
+          </span>
+        ) : null)}
     </div>
   );
 }
