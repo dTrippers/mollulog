@@ -19,10 +19,11 @@ import { ErrorPage, Footer, NavigationBar, ServerErrorPage } from "./components/
 import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
+import { withD1Session } from "./lib/d1-session";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
+import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "./lib/google-analytics.client";
 import { captureClientError } from "./lib/observability.client";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
-import { withD1Session } from "./lib/d1-session";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
 
@@ -186,8 +187,25 @@ export default function App() {
 
   const location = useLocation();
   const pathname = location.pathname;
+  const pagePath = `${location.pathname}${location.search}`;
+  const analyticsEnabled = loaderData.publicEnv.STAGE === "prod";
   const isWideRaidVideosPage = /^\/raids\/[^/]+\/[^/]+\/videos\/?$/.test(pathname);
   const routeKey = location.key;
+
+  useEffect(() => {
+    if (!analyticsEnabled) {
+      return;
+    }
+    initializeGoogleAnalytics();
+  }, [analyticsEnabled]);
+
+  useEffect(() => {
+    if (!analyticsEnabled) {
+      return;
+    }
+    trackCurrentGoogleAnalyticsPageView(pagePath);
+  }, [analyticsEnabled, pagePath]);
+
   useEffect(() => {
     void routeKey;
     const scrollableContainer = document.querySelector(".mllg-content-area") as HTMLElement;
