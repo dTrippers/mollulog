@@ -51,7 +51,7 @@ export async function getNavigationBarContentsRaw(
         // Limit results to active and future events (endAt >= now).
         getTimelineContentsByContentTypes(env, ["event"], now, { ctx }),
         getLatestPostTime(env, "news", { ctx }),
-        getAllCoupons(env),
+        getAllCoupons(env, { ctx }),
       ]);
 
       return {
@@ -84,7 +84,7 @@ export async function getNavigationBarContents(
   const [raw, personalNavigation] = await Promise.all([
     getNavigationBarContentsRaw(publicReadEnv, forceRefresh, ctx),
     userId
-      ? getPersonalNavigationState(env, userId)
+      ? getPersonalNavigationState(env, userId, { ctx })
       : Promise.resolve({ hasUnconsumedCoupons: false, hasUnreadFeedbackReplies: false }),
   ]);
   const upcomingEventContent = raw.eventCandidates

@@ -53,18 +53,19 @@ export default function BugReportModal({
       stageCalculations,
       shopState,
     };
-
-    const logContent = JSON.stringify(debugLog, null, 2);
-    const fullContent = description.trim()
-      ? `${description}\n\n--- 디버그 로그 ---\n\n${logContent}`
-      : `--- 디버그 로그 ---\n\n${logContent}`;
+    const additional = {
+      type: "event_shop_bug_report",
+      version: 1,
+      payload: debugLog,
+    };
 
     // Auto-generate title
     const title = `이벤트 상점 계산기 오류 제보 (${eventUid})`;
 
     const formData = new FormData();
     formData.append("title", title);
-    formData.append("content", fullContent);
+    formData.append("content", description.trim() || "추가 설명이 입력되지 않았습니다.");
+    formData.append("additional", JSON.stringify(additional));
 
     fetcher.submit(formData, {
       method: "post",

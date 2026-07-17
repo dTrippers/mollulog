@@ -87,7 +87,7 @@ function getMorePersonalSummary(env: Env, senseiId: number, ctx?: ExecutionConte
     getPyroxeneTimelineItems(env, senseiId),
     getCollectedSourceKeys(env, senseiId),
     getRelationshipLevels(env, senseiId),
-    countUnregisteredActiveCoupons(env, senseiId),
+    countUnregisteredActiveCoupons(env, senseiId, { ctx }),
     recruitmentResultsPromise,
   ]);
 }

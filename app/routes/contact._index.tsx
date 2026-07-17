@@ -1,9 +1,10 @@
+import { EnvelopeIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
-import { EnvelopeIcon } from "@heroicons/react/24/outline";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { RouteErrorBoundary } from "~/components/features/layout";
 import { Callout, Title } from "~/components/primitives";
+import { parseFeedbackAdditional } from "~/domain/feedback";
 import { publishEvent } from "~/lib/events.server";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
@@ -31,7 +32,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
   return {
     authenticated: true as const,
-    tickets: await getFeedbackTicketsByUserId(env, sensei.id),
+    tickets: await getFeedbackTicketsByUserId(env, sensei.id, { ctx }),
   };
 };
 
@@ -46,6 +47,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   const formData = await request.formData();
   const title = String(formData.get("title") ?? "");
   const content = String(formData.get("content") ?? "");
+  const additionalValue = formData.get("additional");
   const trimmedTitle = title.trim();
   const trimmedContent = content.trim();
 
@@ -61,8 +63,17 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     return data<ContactActionData>({ error, values: { title, content } }, { status: 400 });
   }
 
+  let additional: ReturnType<typeof parseFeedbackAdditional>;
   try {
-    const ticketUid = await createFeedbackTicket(env, currentUser.id, trimmedTitle, trimmedContent, null);
+    additional = parseFeedbackAdditional(typeof additionalValue === "string" ? additionalValue : null);
+  } catch {
+    throw routeError(400, "feedback.additional_invalid", "오류 제보 정보를 확인할 수 없어요.");
+  }
+
+  try {
+    const ticketUid = await createFeedbackTicket(env, currentUser.id, trimmedTitle, trimmedContent, null, additional, {
+      ctx,
+    });
     publishEvent(env, ctx, {
       type: "feedback.ticket_created",
       occurredAt: new Date().toISOString(),

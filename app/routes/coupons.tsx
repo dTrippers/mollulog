@@ -29,13 +29,13 @@ export const meta: MetaFunction = ({ location }) => [
 ];
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const coupons = await getAllCoupons(env);
+  const { env, ctx } = context.cloudflare;
+  const coupons = await getAllCoupons(env, { ctx });
 
-  const sensei = await getActiveSensei(env, request);
+  const sensei = await getActiveSensei(env, request, ctx);
   const currentUserData = sensei
     ? {
-        registeredCouponIds: await getCouponRegistrations(env, sensei.id),
+        registeredCouponIds: await getCouponRegistrations(env, sensei.id, { ctx }),
         memberCode: (await getSenseiPrivacyByUserId(env, sensei.id))?.memberCode ?? null,
       }
     : null;
@@ -47,8 +47,8 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const sensei = await getActiveSensei(env, request);
+  const { env, ctx } = context.cloudflare;
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) return data({ error: "Unauthorized" }, { status: 401 });
 
   const formData = await request.formData();
@@ -58,9 +58,9 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 
   if (request.method === "POST") {
-    await registerCoupon(env, sensei.id, couponId);
+    await registerCoupon(env, sensei.id, couponId, { ctx });
   } else if (request.method === "DELETE") {
-    await unregisterCoupon(env, sensei.id, couponId);
+    await unregisterCoupon(env, sensei.id, couponId, { ctx });
   } else {
     return data({ error: "Method not allowed" }, { status: 405 });
   }
