@@ -1,5 +1,54 @@
 export type Difficulty = "normal" | "hard" | "very_hard" | "hardcore" | "extreme" | "insane" | "torment" | "lunatic";
 
+export type RaidScoreRange = {
+  gte?: number;
+  lt?: number;
+};
+
+const DIFFICULTIES: Difficulty[] = [
+  "normal",
+  "hard",
+  "very_hard",
+  "hardcore",
+  "extreme",
+  "insane",
+  "torment",
+  "lunatic",
+];
+
+export function parseDifficulty(value: string | null | undefined): Difficulty | null {
+  return DIFFICULTIES.includes(value as Difficulty) ? (value as Difficulty) : null;
+}
+
+export function getFilterableRaidDifficulties(maxDifficulty: string | null | undefined): Difficulty[] {
+  if (maxDifficulty === "lunatic") {
+    return ["lunatic", "torment", "insane"];
+  }
+  if (maxDifficulty === "torment") {
+    return ["torment", "insane"];
+  }
+  if (maxDifficulty === "insane") {
+    return ["insane", "extreme"];
+  }
+  return [];
+}
+
+export function getRaidDifficultyScoreRange(difficulty: Difficulty | null): RaidScoreRange | undefined {
+  if (difficulty === "lunatic") {
+    return { gte: 44025000, lt: 99999999 };
+  }
+  if (difficulty === "torment") {
+    return { gte: 31076000, lt: 44025000 };
+  }
+  if (difficulty === "insane") {
+    return { gte: 19249600, lt: 31076000 };
+  }
+  if (difficulty === "extreme") {
+    return { gte: 0, lt: 19249600 };
+  }
+  return undefined;
+}
+
 export const TOTAL_ASSAULT_BOSS_UIDS = [
   "binah",
   "chesed",

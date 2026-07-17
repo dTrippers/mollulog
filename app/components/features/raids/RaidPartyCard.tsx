@@ -46,6 +46,7 @@ type RaidPartyCardProps = {
   actions?: ReactNode;
   popupIdPrefix: string;
   visibleRowCount?: number;
+  centerRowLabels?: boolean;
   emptyText?: string;
   className?: string;
   summaryClassName?: string;
@@ -62,6 +63,7 @@ export default function RaidPartyCard({
   actions,
   popupIdPrefix,
   visibleRowCount,
+  centerRowLabels = false,
   emptyText = "편성 데이터가 없어요",
   className,
   summaryClassName,
@@ -99,6 +101,7 @@ export default function RaidPartyCard({
                   row={row}
                   rowIndex={rowIndex}
                   popupIdPrefix={popupIdPrefix}
+                  centerRowLabel={centerRowLabels}
                   getStudentActions={getStudentActions}
                 />
               ))}
@@ -143,18 +146,27 @@ function PartyRow({
   row,
   rowIndex,
   popupIdPrefix,
+  centerRowLabel,
   getStudentActions,
 }: {
   row: RaidPartyRow;
   rowIndex: number;
   popupIdPrefix: string;
+  centerRowLabel: boolean;
   getStudentActions?: RaidPartyCardProps["getStudentActions"];
 }) {
   const slots = getFixedPartySlots(row.slots);
 
   return (
-    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-start sm:gap-2">
-      <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground sm:mt-2">
+    <div
+      className={cn(
+        "flex flex-col gap-1.5 sm:flex-row sm:gap-2",
+        centerRowLabel ? "sm:items-center" : "sm:items-start",
+      )}
+    >
+      <span
+        className={cn("shrink-0 text-xs font-medium tabular-nums text-muted-foreground", !centerRowLabel && "sm:mt-2")}
+      >
         {row.label}
       </span>
       <div className="grid w-full min-w-0 grid-cols-6 gap-1.5 sm:max-w-80 sm:flex-1">

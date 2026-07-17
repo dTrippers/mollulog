@@ -31,7 +31,7 @@ export default function RaidVideosScreen({
 }: RaidVideosScreenProps) {
   return (
     <div>
-      <p className="mb-4 text-sm text-muted-foreground">제목을 기준으로 자동 분류되어 정확하지 않을 수 있어요.</p>
+      <p className="mb-4 text-sm text-muted-foreground">편성 정보는 자동 분류되어 정확하지 않을 수 있어요.</p>
 
       {videos.length > 0 ? (
         <div className="space-y-4">
@@ -87,11 +87,13 @@ function VideoCard({
   const parties = getRaidVideoParties({ sourceParties, rankMatch });
   const recordLabel = rankMatch
     ? rankMatch.finalRank > 0
-      ? `최종 ${rankMatch.finalRank.toLocaleString()}위`
+      ? `종합 ${rankMatch.finalRank.toLocaleString()}위`
       : "순위 정보 없음"
     : rankHint && rankHint.rank > 0
-      ? `최대 ${rankHint.rank.toLocaleString()}위`
+      ? `편성 최고 ${rankHint.rank.toLocaleString()}위`
       : null;
+  const scoreLabel = typeof score === "number" ? `${score.toLocaleString()}점` : null;
+  const publishedDateLabel = publishedAt ? publishedAt.slice(0, 10).replaceAll("-", ".") : null;
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
@@ -107,38 +109,43 @@ function VideoCard({
           <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity hover:opacity-100">
             <PlayIcon className="size-12 text-white" />
           </div>
-          {recordLabel ? (
-            <span className="absolute top-2 left-2 rounded-md bg-black/70 px-2 py-1 text-xs font-semibold text-white">
-              {recordLabel}
+          {recordLabel || scoreLabel ? (
+            <div className="absolute top-2 left-2 flex flex-col items-center rounded-md bg-black/70 px-2 py-1 text-center text-white">
+              {recordLabel ? <span className="text-xs font-semibold">{recordLabel}</span> : null}
+              {scoreLabel ? <span className="text-[11px] font-normal">{scoreLabel}</span> : null}
+            </div>
+          ) : null}
+          {publishedDateLabel ? (
+            <span className="absolute top-2 right-2 rounded-md bg-black/70 px-2 py-1 text-xs font-semibold text-white">
+              {publishedDateLabel}
             </span>
           ) : null}
         </div>
         <div className="p-4">
-          <h3 className="mb-2 line-clamp-2 text-sm font-semibold">{title}</h3>
-          <p className="mb-2 line-clamp-1 text-xs text-muted-foreground">{channelTitle}</p>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{typeof score === "number" ? `${score.toLocaleString()}점` : "점수 정보 없음"}</span>
-            <span>{publishedAt.slice(0, 10).replaceAll("-", ".")}</span>
-          </div>
+          <h3 className="mb-2 h-10 line-clamp-2 text-sm font-semibold">{title}</h3>
+          <p className="line-clamp-1 text-xs text-muted-foreground">{channelTitle}</p>
         </div>
       </Link>
 
       {parties.length > 0 ? (
         <RaidPartyCard
-          rows={parties.map((party) =>
-            toRaidPartyRow({
+          rows={parties.map((party) => ({
+            ...toRaidPartyRow({
               party,
               allStudents,
               maxLevel,
               recruitedStudentTiers,
               showUnrecruitedStudents,
+              showLevel: false,
             }),
-          )}
+            label: String(party.partyIndex + 1),
+          }))}
           summaryItems={[]}
           visibleRowCount={parties.length >= 3 ? 1 : undefined}
+          centerRowLabels
           emptyText="편성 정보가 없어요"
           popupIdPrefix={`video-${youtubeId}`}
-          className="grow rounded-none border-t border-border bg-muted/30"
+          className="grow rounded-none pt-0 md:pt-0"
         />
       ) : null}
     </article>

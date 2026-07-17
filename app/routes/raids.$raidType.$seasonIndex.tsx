@@ -2,11 +2,11 @@ import { InformationCircleIcon, ShieldCheckIcon, TrophyIcon, VideoCameraIcon } f
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
+import { Link, Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
 import { createPageErrorBoundary, Page, type PagePanelProps } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons } from "~/components/primitives";
-import { raidTypeToParam } from "~/domain/raid";
+import { findCurrentOrClosestRaidSchedule, raidTypeToParam } from "~/domain/raid";
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
 import { canonicalLink } from "~/lib/seo";
@@ -48,18 +48,19 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
   }
 
   const videoDateRange = await getVideoDateRange(env, currentRaid);
+  const currentOrClosestRaid = findCurrentOrClosestRaidSchedule(allRaids, currentRaid.raidType);
 
   return {
     currentRaid,
+    currentOrClosestRaid,
     allRaids,
     signedIn,
-    youtubeSearchDateRange:
-      videoDateRange?.youtubeSearchTo
-        ? {
-            from: videoDateRange.youtubeSearchFrom,
-            to: videoDateRange.youtubeSearchTo,
-          }
-        : null,
+    youtubeSearchDateRange: videoDateRange?.youtubeSearchTo
+      ? {
+          from: videoDateRange.youtubeSearchFrom,
+          to: videoDateRange.youtubeSearchTo,
+        }
+      : null,
   };
 };
 
@@ -98,10 +99,15 @@ export type RaidPageContext = {
 };
 
 export default function RaidPage() {
-  const { currentRaid, allRaids, signedIn, youtubeSearchDateRange } = useLoaderData<typeof loader>();
+  const { currentRaid, currentOrClosestRaid, allRaids, signedIn, youtubeSearchDateRange } =
+    useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
+  const currentOrClosestRaidPath = currentOrClosestRaid
+    ? `/raids/${raidTypeToParam(currentOrClosestRaid.raidType)}/${currentOrClosestRaid.seasonIndex}`
+    : null;
+  const showCurrentOrClosestRaidLink = currentOrClosestRaidPath !== null && currentOrClosestRaidPath !== raidPath;
 
   const [panel, setPanel] = useState<PagePanelProps | undefined>(undefined);
   useEffect(() => {
@@ -156,7 +162,22 @@ export default function RaidPage() {
     <Page
       title={`${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} 정보`}
       description="총력전/대결전의 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
-      belowTitle={<RaidSelector raids={allRaids} currentRaid={currentRaid ?? null} />}
+      belowTitle={
+        <RaidSelector
+          raids={allRaids}
+          currentRaid={currentRaid ?? null}
+          belowSelector={
+            showCurrentOrClosestRaidLink ? (
+              <Link
+                to={currentOrClosestRaidPath}
+                className="mt-2 block text-right text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                {`이번 개최 ${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType}으로 이동 →`}
+              </Link>
+            ) : null
+          }
+        />
+      }
       panels={panel ? [panel] : undefined}
       links={
         youtubeSearchUrl
@@ -190,6 +211,7 @@ export default function RaidPage() {
         {
           text: "공략 영상",
           Icon: VideoCameraIcon,
+          description: "공략 영상과 해당 영상에서 사용한 편성 정보",
           link: `${raidPath}/videos`,
           active: pathname === `${raidPath}/videos`,
         },

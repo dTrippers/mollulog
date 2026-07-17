@@ -7,11 +7,10 @@ import RaidRankFilter, {
   mergeFilteredStudents,
   type RaidRankFilterState,
 } from "~/components/features/raids/RaidRankFilter";
-import { Difficulty } from "~/graphql/graphql";
+import { getFilterableRaidDifficulties } from "~/domain/raid-score";
 import { nowUtcIso } from "~/lib/date-time";
 import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
 import type { RaidType } from "~/models/content.d";
-import type { Difficulty as DifficultyType } from "~/domain/raid-score";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudentsMap } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
@@ -90,19 +89,10 @@ export default function RaidRanks() {
     setRankFilterState((prev) => ({ ...prev, defenseType, difficulty: null }));
   }, [defenseType]);
 
-  const filterableDifficulties = useMemo(() => {
-    const difficulty = defenseTypeSet.difficulty;
-    if (difficulty === Difficulty.Lunatic) {
-      return ["lunatic", "torment", "insane"] as DifficultyType[];
-    }
-    if (difficulty === Difficulty.Torment) {
-      return ["torment", "insane"] as DifficultyType[];
-    }
-    if (difficulty === Difficulty.Insane) {
-      return ["insane", "extreme"] as DifficultyType[];
-    }
-    return [] as DifficultyType[];
-  }, [defenseTypeSet.difficulty]);
+  const filterableDifficulties = useMemo(
+    () => getFilterableRaidDifficulties(defenseTypeSet.difficulty),
+    [defenseTypeSet.difficulty],
+  );
 
   useEffect(() => {
     setPanel({

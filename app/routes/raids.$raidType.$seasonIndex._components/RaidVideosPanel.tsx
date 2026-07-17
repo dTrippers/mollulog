@@ -1,8 +1,13 @@
 import { ArrowsUpDownIcon } from "@heroicons/react/24/outline";
 import { PanelBody, PanelFilterButtonsSection, PanelSwitchRow } from "~/components/primitives";
+import type { Difficulty } from "~/domain/raid-score";
+import { difficultyLocale } from "~/locales/ko";
 import type { VideoSort } from "~/models/raid-videos";
 
 type RaidVideosPanelProps = {
+  difficulty: Difficulty | null;
+  filterableDifficulties: Difficulty[];
+  onDifficultyChange: (difficulty: Difficulty | null) => void;
   sort: VideoSort;
   onSortChange: (sort: VideoSort) => void;
   onlyWithParty: boolean;
@@ -13,6 +18,9 @@ type RaidVideosPanelProps = {
 };
 
 export default function RaidVideosPanel({
+  difficulty,
+  filterableDifficulties,
+  onDifficultyChange,
   sort,
   onSortChange,
   onlyWithParty,
@@ -23,6 +31,18 @@ export default function RaidVideosPanel({
 }: RaidVideosPanelProps) {
   return (
     <PanelBody>
+      {filterableDifficulties.length > 0 ? (
+        <PanelFilterButtonsSection
+          title="난이도"
+          buttonProps={filterableDifficulties.map((filterableDifficulty) => ({
+            text: difficultyLocale[filterableDifficulty],
+            active: difficulty === filterableDifficulty,
+            onToggle: (activated) => onDifficultyChange(activated ? filterableDifficulty : null),
+          }))}
+          exclusive
+          size="sm"
+        />
+      ) : null}
       <PanelFilterButtonsSection
         title="정렬"
         Icon={ArrowsUpDownIcon}

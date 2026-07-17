@@ -1,7 +1,7 @@
 import { IdentificationIcon, MinusCircleIcon, PlayIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, EmptyView, Pagination } from "~/components/primitives";
-import { normalizeBossUid, scoreToDifficultyAndTime } from "~/domain/raid-score";
+import { getRaidDifficultyScoreRange, normalizeBossUid, scoreToDifficultyAndTime } from "~/domain/raid-score";
 import type { Defense } from "~/graphql/graphql";
 import type { UtcIsoString } from "~/lib/date-time";
 import { convertTier, fetchRanks, type ParsedRaidRankDocument } from "~/lib/ranks/ranks";
@@ -28,23 +28,6 @@ type RaidRankScreenProps = {
 };
 
 const ITEMS_PER_PAGE = 10;
-
-function getScoreRange(difficulty: string | null): { gte?: number; lt?: number } | undefined {
-  if (!difficulty) return undefined;
-  if (difficulty === "lunatic") {
-    return { gte: 44025000, lt: 99999999 };
-  }
-  if (difficulty === "torment") {
-    return { gte: 31076000, lt: 44025000 };
-  }
-  if (difficulty === "insane") {
-    return { gte: 19249600, lt: 31076000 };
-  }
-  if (difficulty === "extreme") {
-    return { gte: 0, lt: 19249600 };
-  }
-  return undefined;
-}
 
 export default function RaidRankScreen({
   currentRaid,
@@ -112,7 +95,7 @@ export default function RaidRankScreen({
     return {
       includeStudents,
       excludeStudents,
-      score: getScoreRange(filterState.difficulty),
+      score: getRaidDifficultyScoreRange(filterState.difficulty),
     };
   }, [
     allStudents,

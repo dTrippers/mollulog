@@ -75,6 +75,8 @@ describe("fetchRaidVideos", () => {
         offset: 24,
         sort: "published_at_desc",
         defenseType: "special",
+        scoreGte: 31076000,
+        scoreLt: 44025000,
       }),
     ).resolves.toEqual({
       videos: [
@@ -191,6 +193,8 @@ describe("fetchRaidVideos", () => {
     expect(url.searchParams.has("from")).toBe(false);
     expect(url.searchParams.has("to")).toBe(false);
     expect(url.searchParams.get("sort")).toBe("published_at_desc");
+    expect(url.searchParams.get("scoreGte")).toBe("31076000");
+    expect(url.searchParams.get("scoreLt")).toBe("44025000");
     expect(url.searchParams.get("limit")).toBe("12");
     expect(url.searchParams.get("offset")).toBe("24");
   });

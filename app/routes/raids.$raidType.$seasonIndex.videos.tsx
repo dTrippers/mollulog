@@ -5,6 +5,7 @@ import { useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getMaxLevelAt, RaidVideosScreen } from "~/components/features/raids";
 import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
+import { getFilterableRaidDifficulties, getRaidDifficultyScoreRange, parseDifficulty } from "~/domain/raid-score";
 import { fetchRaidVideos } from "~/lib/ranks";
 import { getRaidDefenseTypeSetByQuery, getRaidScheduleByTypeAndSeason } from "~/models/raid";
 import { getRaidVideoParties, parseVideoSort, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
@@ -45,6 +46,11 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     url.searchParams.get("defenseTypeSet"),
     url.searchParams.get("defenseType"),
   );
+  const requestedDifficulty = parseDifficulty(url.searchParams.get("difficulty"));
+  const filterableDifficulties = getFilterableRaidDifficulties(defenseTypeSet?.difficulty);
+  const difficulty =
+    requestedDifficulty && filterableDifficulties.includes(requestedDifficulty) ? requestedDifficulty : null;
+  const scoreRange = getRaidDifficultyScoreRange(difficulty);
   const [rawAllStudents, sensei] = await Promise.all([getAllStudentsMap(env, true), getActiveSensei(env, request)]);
   const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
   const allStudents = Object.fromEntries(
@@ -64,6 +70,8 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
       raidType: currentRaid.raidType,
       boss: currentRaid.raidBoss.uid,
       defenseType: defenseTypeSet?.primaryDefenseType,
+      scoreGte: scoreRange?.gte,
+      scoreLt: scoreRange?.lt,
       limit: RAID_VIDEOS_PAGE_SIZE,
       offset: 0,
       sort,
@@ -80,9 +88,9 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
 };
 
 export default function RaidVideos() {
-  const { currentRaid, defenseType, setPanel } = useOutletContext<RaidPageContext>();
+  const { currentRaid, defenseType, defenseTypeSet, setPanel } = useOutletContext<RaidPageContext>();
   const { initialData, allStudents, recruitedStudentTiers, hasRecruitedStudentData } = useLoaderData<typeof loader>();
-  const { allVideos, hasMore, isLoading, loadingRef, sort, setSort } = useRaidVideosFeed({
+  const { allVideos, hasMore, isLoading, loadingRef, difficulty, setDifficulty, sort, setSort } = useRaidVideosFeed({
     initialData,
     raidType: raidTypeToParam(currentRaid.raidType),
     seasonIndex: currentRaid.seasonIndex,
@@ -90,6 +98,16 @@ export default function RaidVideos() {
   });
   const [onlyWithParty, setOnlyWithParty] = useState(false);
   const [showUnrecruitedStudents, setShowUnrecruitedStudents] = useState(true);
+  const filterableDifficulties = useMemo(
+    () => getFilterableRaidDifficulties(defenseTypeSet.difficulty),
+    [defenseTypeSet.difficulty],
+  );
+
+  useEffect(() => {
+    if (difficulty && !filterableDifficulties.includes(difficulty)) {
+      setDifficulty(null);
+    }
+  }, [difficulty, filterableDifficulties, setDifficulty]);
   const visibleVideos = useMemo(
     () => (onlyWithParty ? allVideos.filter((video) => getRaidVideoParties(video).length > 0) : allVideos),
     [allVideos, onlyWithParty],
@@ -101,6 +119,9 @@ export default function RaidVideos() {
       Icon: FunnelIcon,
       children: (
         <RaidVideosPanel
+          difficulty={difficulty}
+          filterableDifficulties={filterableDifficulties}
+          onDifficultyChange={setDifficulty}
           sort={sort}
           onSortChange={setSort}
           onlyWithParty={onlyWithParty}
@@ -111,7 +132,17 @@ export default function RaidVideos() {
         />
       ),
     });
-  }, [hasRecruitedStudentData, onlyWithParty, setPanel, setSort, showUnrecruitedStudents, sort]);
+  }, [
+    difficulty,
+    filterableDifficulties,
+    hasRecruitedStudentData,
+    onlyWithParty,
+    setDifficulty,
+    setPanel,
+    setSort,
+    showUnrecruitedStudents,
+    sort,
+  ]);
 
   return (
     <RaidVideosScreen

@@ -42,12 +42,14 @@ export function toRaidPartyRow({
   maxLevel,
   recruitedStudentTiers,
   showUnrecruitedStudents = false,
+  showLevel = true,
 }: {
   party: ParsedRaidRankDocument["parties"][number];
   allStudents: RaidPartyStudentMap;
   maxLevel: number;
   recruitedStudentTiers?: Record<string, number>;
   showUnrecruitedStudents?: boolean;
+  showLevel?: boolean;
 }): RaidPartyRow {
   return {
     key: `party-${party.partyIndex}`,
@@ -74,7 +76,7 @@ export function toRaidPartyRow({
         defenseType: student.defenseType,
         role: student.role,
         tier,
-        level: level && level < maxLevel ? level : undefined,
+        level: showLevel && level && level < maxLevel ? level : undefined,
         isAssist,
         grayscale: isUnrecruited,
         unrecruited: isUnrecruited,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator, useSearchParams } from "react-router";
+import { type Difficulty, parseDifficulty } from "~/domain/raid-score";
 import { parseVideoSort, RAID_VIDEOS_PAGE_SIZE, type RaidVideoItem, type VideoSort } from "~/models/raid-videos";
 import type { RaidVideosData } from "~/routes/raids.data.$raidType.$seasonIndex.videos";
 
@@ -16,7 +17,9 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
 
   const [searchParams, setSearchParams] = useSearchParams();
   const initialSort = parseVideoSort(searchParams.get("sort"));
+  const initialDifficulty = parseDifficulty(searchParams.get("difficulty"));
   const [sort, setSort] = useState<VideoSort>(initialSort);
+  const [difficulty, setDifficulty] = useState<Difficulty | null>(initialDifficulty);
   const [allVideos, setAllVideos] = useState<RaidVideoItem[]>(initialData?.videos ?? []);
   const [hasMore, setHasMore] = useState(initialData?.hasMore ?? false);
   const [offset, setOffset] = useState(initialData?.videos.length ?? 0);
@@ -25,6 +28,7 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement | null>(null);
   const prevSortRef = useRef<VideoSort>(sort);
+  const prevDifficultyRef = useRef<Difficulty | null>(difficulty);
   const prevDefenseTypeRef = useRef(defenseType);
   const isResettingRef = useRef(false);
   const lastInitialDataKeyRef = useRef<string | null>(null);
@@ -47,6 +51,27 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
   }, [revalidator, setSearchParams, sort]);
 
   useEffect(() => {
+    if (prevDifficultyRef.current !== difficulty) {
+      prevDifficultyRef.current = difficulty;
+      isResettingRef.current = true;
+      setAllVideos([]);
+      setHasMore(false);
+      setOffset(0);
+      setIsLoading(true);
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        if (difficulty) {
+          next.set("difficulty", difficulty);
+        } else {
+          next.delete("difficulty");
+        }
+        return next;
+      });
+      revalidator.revalidate();
+    }
+  }, [difficulty, revalidator, setSearchParams]);
+
+  useEffect(() => {
     if (prevDefenseTypeRef.current === defenseType) {
       return;
     }
@@ -57,6 +82,7 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
     setHasMore(false);
     setOffset(0);
     setIsLoading(true);
+    setDifficulty(null);
   }, [defenseType]);
 
   useEffect(() => {
@@ -65,7 +91,8 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
     }
 
     const currentSort = parseVideoSort(searchParams.get("sort"));
-    const currentKey = `${raidType}:${seasonIndex}:${defenseType}:${currentSort}`;
+    const currentDifficulty = parseDifficulty(searchParams.get("difficulty"));
+    const currentKey = `${raidType}:${seasonIndex}:${defenseType}:${currentSort}:${currentDifficulty ?? "all"}`;
     if (isResettingRef.current || lastInitialDataKeyRef.current !== currentKey) {
       lastInitialDataKeyRef.current = currentKey;
       isResettingRef.current = false;
@@ -109,9 +136,12 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
     params.set("sort", sort);
     params.set("offset", String(offset));
     params.set("defenseType", defenseType);
+    if (difficulty) {
+      params.set("difficulty", difficulty);
+    }
 
     fetcher.load(`/raids/data/${raidType}/${seasonIndex}/videos?${params.toString()}`);
-  }, [defenseType, fetcher, hasMore, isLoading, offset, raidType, seasonIndex, sort]);
+  }, [defenseType, difficulty, fetcher, hasMore, isLoading, offset, raidType, seasonIndex, sort]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -138,6 +168,8 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
     hasMore,
     isLoading,
     loadingRef,
+    difficulty,
+    setDifficulty,
     sort,
     setSort,
   };

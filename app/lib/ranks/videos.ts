@@ -48,6 +48,8 @@ export type RaidVideosQueryOptions = {
   defenseType?: string;
   from?: string;
   to?: string;
+  scoreGte?: number;
+  scoreLt?: number;
   limit?: number;
   offset?: number;
   sort?: VideoSort;
@@ -62,6 +64,8 @@ export async function fetchRaidVideos({
   defenseType,
   from,
   to,
+  scoreGte,
+  scoreLt,
   limit = RAID_VIDEOS_PAGE_SIZE,
   offset = 0,
   sort = DEFAULT_VIDEO_SORT,
@@ -81,6 +85,12 @@ export async function fetchRaidVideos({
   }
   if (to) {
     url.searchParams.set("to", to);
+  }
+  if (scoreGte !== undefined) {
+    url.searchParams.set("scoreGte", String(scoreGte));
+  }
+  if (scoreLt !== undefined) {
+    url.searchParams.set("scoreLt", String(scoreLt));
   }
 
   const response = await fetchWithTimeout(url, {}, RANK_VIDEOS_FETCH_TIMEOUT_MS, "ranks.videos.fetch", {
