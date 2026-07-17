@@ -15,9 +15,13 @@ export type RankMatchApiResponse = {
   parties?: Array<{ students?: RawPartySlotStudent[] | null } | null> | null;
 };
 
+type SourcePartySlotStudent = {
+  uid?: string | null;
+};
+
 export type SourcePartiesApiResponse = {
   source?: string | null;
-  parties?: Array<{ students?: RawPartySlotStudent[] | null } | null> | null;
+  parties?: Array<{ students?: SourcePartySlotStudent[] | null } | null> | null;
 };
 
 export type RankHintApiResponse = {

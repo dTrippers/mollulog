@@ -86,7 +86,7 @@ export default function RaidSelector({ raids, currentRaid, belowSelector }: Raid
         leave="transition duration-100 ease-in"
         leaveFrom="opacity-100 scale-100"
         leaveTo="opacity-0 scale-95"
-        className="mt-1 mb-2 w-full overflow-hidden rounded-xl bg-card text-card-foreground shadow-xl shadow-black/10 dark:shadow-black/40 lg:absolute lg:top-full lg:left-2 lg:z-30 lg:w-[calc(100%-1rem)]"
+        className="mt-1 mb-2 w-full overflow-hidden rounded-lg bg-card text-card-foreground shadow-xl shadow-black/10 dark:shadow-black/40 lg:absolute lg:top-full lg:left-2 lg:z-30 lg:w-[calc(100%-1rem)]"
       >
         <div className="flex items-center justify-between px-3 py-2">
           <FilterButtons

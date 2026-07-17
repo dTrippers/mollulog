@@ -141,6 +141,7 @@ export default function RaidPage() {
         const next = new URLSearchParams(prev);
         next.set("defenseTypeSet", getRaidDefenseTypeSetKey(defenseTypeSet));
         next.set("defenseType", defenseTypeSet.primaryDefenseType);
+        next.delete("difficulty");
         return next;
       },
       { replace: true },

@@ -82,6 +82,7 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
     setHasMore(false);
     setOffset(0);
     setIsLoading(true);
+    prevDifficultyRef.current = null;
     setDifficulty(null);
   }, [defenseType]);
 
