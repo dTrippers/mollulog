@@ -3,7 +3,6 @@ import {
   ArrowUpIcon,
   ChevronDownIcon,
   DocumentArrowDownIcon,
-  DocumentDuplicateIcon,
   ExclamationTriangleIcon,
   PlusIcon,
   TrashIcon,
@@ -17,8 +16,10 @@ import Dropdown from "~/components/primitives/Dropdown";
 import Field from "~/components/primitives/Field";
 import Input from "~/components/primitives/Input";
 import ProfileImage from "~/components/primitives/ProfileImage";
+import SubTitle from "~/components/primitives/SubTitle";
 import Textarea from "~/components/primitives/Textarea";
 import {
+  isWalkthroughTimelineVisibility,
   parseWalkthroughTimelineDocument,
   type TimelineAction,
   type TimelineStep,
@@ -34,7 +35,10 @@ import {
 import { extractCertainTimelineImport, type ImportStudent } from "~/domain/walkthrough-timeline-import";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import WalkthroughBossSelect from "./WalkthroughBossSelect";
-import WalkthroughPartyFormationEditor, { resizeWalkthroughParty } from "./WalkthroughPartyFormationEditor";
+import WalkthroughPartyFormationEditor, {
+  resizeWalkthroughParty,
+  WalkthroughPartyGrowthEditor,
+} from "./WalkthroughPartyFormationEditor";
 
 type BossOption = {
   uid: string;
@@ -67,7 +71,8 @@ export type WalkthroughTimelineEditorActionState = {
 
 export type WalkthroughTimelineEditorHandle = {
   addParty: () => void;
-  deleteActiveParty: () => void;
+  deleteParty: (partyIndex: number) => void;
+  save: () => void;
   undo: () => void;
   redo: () => void;
 };
@@ -366,6 +371,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
     const [draggedStep, setDraggedStep] = useState<{ partyUid: string; index: number } | null>(null);
     const [draftReady, setDraftReady] = useState(false);
     const navigation = useNavigation();
+    const formRef = useRef<HTMLFormElement>(null);
     const isSavingRef = useRef(false);
     const initialStateRef = useRef(
       JSON.stringify({
@@ -399,12 +405,12 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
           };
           if (draft.version === WALKTHROUGH_TIMELINE_DRAFT_VERSION) {
             const restoredDocument = parseWalkthroughTimelineDocument(draft.document);
-            if (typeof draft.title !== "string" || !["private", "public"].includes(String(draft.visibility))) {
+            if (typeof draft.title !== "string" || !isWalkthroughTimelineVisibility(draft.visibility)) {
               throw new Error("invalid timeline draft");
             }
             setTitle(draft.title.slice(0, 100));
             setDescription(typeof draft.description === "string" ? draft.description : initialDescription);
-            setVisibility(draft.visibility as WalkthroughTimelineVisibility);
+            setVisibility(draft.visibility);
             setDocument(restoredDocument);
             if (typeof draft.importText === "string" && draft.importText) {
               setImportText(draft.importText);
@@ -516,13 +522,18 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
       onActivePartyIndexChange(nextPartyIndex);
     };
 
-    const deleteActiveParty = () => {
-      if (!document.parties[activePartyIndex]) return;
-      const nextPartyIndex = Math.min(activePartyIndex, Math.max(document.parties.length - 2, 0));
+    const deleteParty = (partyIndex: number) => {
+      if (!document.parties[partyIndex]) return;
+      const nextPartyIndex =
+        partyIndex < activePartyIndex
+          ? activePartyIndex - 1
+          : partyIndex === activePartyIndex
+            ? Math.min(activePartyIndex, Math.max(document.parties.length - 2, 0))
+            : activePartyIndex;
       commit((current) => ({
         ...current,
         parties: current.parties
-          .filter((_, index) => index !== activePartyIndex)
+          .filter((_, index) => index !== partyIndex)
           .map((party, index) => ({ ...party, order: index })),
       }));
       onActivePartyIndexChange(nextPartyIndex);
@@ -546,7 +557,8 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
 
     useImperativeHandle(ref, () => ({
       addParty,
-      deleteActiveParty,
+      deleteParty,
+      save: () => formRef.current?.requestSubmit(),
       undo,
       redo,
     }));
@@ -554,6 +566,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
     const selectedBoss = bosses.find((boss) => boss.uid === document.context.bossUid);
     return (
       <Form
+        ref={formRef}
         id="walkthrough-timeline-editor"
         method="post"
         className="space-y-5"
@@ -567,135 +580,138 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
         }}
       >
         <input type="hidden" name="document" value={JSON.stringify(document)} />
-        <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-          <h2 className="text-lg font-bold">공략 설정</h2>
-          <div className="mt-4 space-y-4">
-            <div className="grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(12rem,1fr)]">
-              <Input
-                name="title"
-                label="제목"
-                value={title}
-                onChange={setTitle}
-                required
-                maxLength={100}
-                className="max-w-none"
+        <section className="space-y-3">
+          <h2 className="text-lg font-bold">공략 정보</h2>
+          <div className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
+            <div className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-[minmax(0,3fr)_minmax(12rem,1fr)]">
+                <Input
+                  name="title"
+                  label="제목"
+                  value={title}
+                  onChange={setTitle}
+                  required
+                  maxLength={100}
+                  className="max-w-none"
+                />
+                <Field label="공개 범위" htmlFor="visibility">
+                  <select
+                    id="visibility"
+                    name="visibility"
+                    value={visibility}
+                    onChange={(event) => setVisibility(event.target.value as WalkthroughTimelineVisibility)}
+                    className="min-h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  >
+                    <option value="private">나만 보기</option>
+                    <option value="unlisted">목록 미노출</option>
+                    <option value="public">전체 공개</option>
+                  </select>
+                </Field>
+              </div>
+
+              <Textarea
+                name="description"
+                label="공략 설명"
+                value={description}
+                onChange={setDescription}
+                rows={5}
+                placeholder="공략의 특징이나 주의사항을 입력해주세요."
               />
-              <Field label="공개 범위" htmlFor="visibility">
-                <select
-                  id="visibility"
-                  name="visibility"
-                  value={visibility}
-                  onChange={(event) => setVisibility(event.target.value as WalkthroughTimelineVisibility)}
-                  className="min-h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                >
-                  <option value="private">나만 보기</option>
-                  <option value="public">전체 공개</option>
-                </select>
-              </Field>
-            </div>
 
-            <Textarea
-              name="description"
-              label="공략 설명"
-              value={description}
-              onChange={setDescription}
-              rows={5}
-              placeholder="공략의 특징이나 주의사항을 입력해주세요."
-            />
-
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
-              <Field label="보스">
-                <WalkthroughBossSelect
-                  value={document.context.bossUid}
-                  options={bosses}
-                  onChange={(bossUid) => {
-                    const boss = bosses.find((candidate) => candidate.uid === bossUid);
-                    if (!boss) return;
-                    const defenseType = boss.defenseTypes.includes(document.context.defenseType)
-                      ? document.context.defenseType
-                      : boss.defenseTypes[0];
-                    const terrain = boss.terrains.includes(document.context.terrain)
-                      ? document.context.terrain
-                      : boss.terrains[0];
-                    if (!defenseType || !terrain) return;
-                    commit((current) => ({
-                      ...current,
-                      partySize: boss.partySize,
-                      context: {
-                        ...current.context,
-                        bossUid: boss.uid,
-                        terrain,
-                        defenseType,
-                      },
-                      parties: current.parties.map((party) =>
-                        resizeWalkthroughParty(party, current.partySize, boss.partySize),
-                      ),
-                    }));
-                  }}
-                />
-              </Field>
-              <Field label="지형" htmlFor="terrain">
-                <select
-                  id="terrain"
-                  value={document.context.terrain}
-                  className="min-h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  onChange={(event) =>
-                    commit((current) => ({
-                      ...current,
-                      context: {
-                        ...current.context,
-                        terrain: event.target.value as WalkthroughTimelineTerrain,
-                      },
-                    }))
-                  }
-                >
-                  {selectedBoss?.terrains.map((terrain) => (
-                    <option key={terrain} value={terrain}>
-                      {terrainLocale[terrain]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="방어 타입">
-                <Dropdown
-                  value={document.context.defenseType}
-                  options={(selectedBoss?.defenseTypes ?? []).map((defenseType) => ({
-                    value: defenseType,
-                    label: defenseTypeLocale[defenseType],
-                    color: defenseTypeColor[defenseType],
-                  }))}
-                  size="md"
-                  fullWidth
-                  onChange={(defenseType) =>
-                    commit((current) => ({
-                      ...current,
-                      context: { ...current.context, defenseType },
-                    }))
-                  }
-                />
-              </Field>
-              <Field label="난이도" htmlFor="max-difficulty">
-                <select
-                  id="max-difficulty"
-                  value={document.context.maxDifficulty}
-                  className="min-h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                  onChange={(event) =>
-                    commit((current) => ({
-                      ...current,
-                      context: {
-                        ...current.context,
-                        maxDifficulty: event.target.value as WalkthroughTimelineDocument["context"]["maxDifficulty"],
-                      },
-                    }))
-                  }
-                >
-                  {WALKTHROUGH_TIMELINE_DIFFICULTIES.map((difficulty) => (
-                    <option key={difficulty} value={difficulty}>
-                      {difficultyLocale[difficulty]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
+                <Field label="보스">
+                  <WalkthroughBossSelect
+                    value={document.context.bossUid}
+                    options={bosses}
+                    onChange={(bossUid) => {
+                      const boss = bosses.find((candidate) => candidate.uid === bossUid);
+                      if (!boss) return;
+                      const defenseType = boss.defenseTypes.includes(document.context.defenseType)
+                        ? document.context.defenseType
+                        : boss.defenseTypes[0];
+                      const terrain = boss.terrains.includes(document.context.terrain)
+                        ? document.context.terrain
+                        : boss.terrains[0];
+                      if (!defenseType || !terrain) return;
+                      commit((current) => ({
+                        ...current,
+                        partySize: boss.partySize,
+                        context: {
+                          ...current.context,
+                          bossUid: boss.uid,
+                          terrain,
+                          defenseType,
+                        },
+                        parties: current.parties.map((party) =>
+                          resizeWalkthroughParty(party, current.partySize, boss.partySize),
+                        ),
+                      }));
+                    }}
+                  />
+                </Field>
+                <Field label="지형" htmlFor="terrain">
+                  <select
+                    id="terrain"
+                    value={document.context.terrain}
+                    className="min-h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    onChange={(event) =>
+                      commit((current) => ({
+                        ...current,
+                        context: {
+                          ...current.context,
+                          terrain: event.target.value as WalkthroughTimelineTerrain,
+                        },
+                      }))
+                    }
+                  >
+                    {selectedBoss?.terrains.map((terrain) => (
+                      <option key={terrain} value={terrain}>
+                        {terrainLocale[terrain]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="방어 타입">
+                  <Dropdown
+                    value={document.context.defenseType}
+                    options={(selectedBoss?.defenseTypes ?? []).map((defenseType) => ({
+                      value: defenseType,
+                      label: defenseTypeLocale[defenseType],
+                      color: defenseTypeColor[defenseType],
+                    }))}
+                    size="md"
+                    fullWidth
+                    onChange={(defenseType) =>
+                      commit((current) => ({
+                        ...current,
+                        context: { ...current.context, defenseType },
+                      }))
+                    }
+                  />
+                </Field>
+                <Field label="난이도" htmlFor="max-difficulty">
+                  <select
+                    id="max-difficulty"
+                    value={document.context.maxDifficulty}
+                    className="min-h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    onChange={(event) =>
+                      commit((current) => ({
+                        ...current,
+                        context: {
+                          ...current.context,
+                          maxDifficulty: event.target.value as WalkthroughTimelineDocument["context"]["maxDifficulty"],
+                        },
+                      }))
+                    }
+                  >
+                    {WALKTHROUGH_TIMELINE_DIFFICULTIES.map((difficulty) => (
+                      <option key={difficulty} value={difficulty}>
+                        {difficultyLocale[difficulty]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
             </div>
           </div>
         </section>
@@ -703,579 +719,559 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
         <section className="space-y-5 pt-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold">편성 정보 편집</h2>
+              <h2 className="text-lg font-bold">편성 정보</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {activePartyIndex + 1}번째 파티에 편성할 학생을 선택해주세요.
+              </p>
             </div>
           </div>
 
           {document.parties.map((party, partyIndex) =>
             partyIndex === activePartyIndex ? (
               <article key={party.uid} className="space-y-5">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-lg font-bold">파티 {partyIndex + 1}</h3>
-                  <Button
-                    icon={TrashIcon}
-                    text="파티 삭제"
-                    variant="danger-subtle"
-                    size="sm"
-                    onClick={deleteActiveParty}
-                  />
-                </div>
                 <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-                  <h4 className="font-bold">편성 및 학생 성장도</h4>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {partyIndex + 1} 번째 파티의 편성 학생과 성장도(선택) 정보를 입력해주세요
-                  </p>
-                  <div className="mt-4">
-                    <WalkthroughPartyFormationEditor
+                  <WalkthroughPartyFormationEditor
+                    party={party}
+                    partySize={document.partySize}
+                    students={students}
+                    recruitedSnapshots={recruitedSnapshots}
+                    onChange={(next) => updateParty(partyIndex, () => next)}
+                  />
+                </section>
+                <section className="space-y-3 pt-5">
+                  <div>
+                    <h3 className="text-lg font-bold">학생 성장도</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      이 공략에 사용된 학생 성장도를 입력해주세요. 성급 외의 능력치는 입력하지 않아도 저장할 수 있어요.
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
+                    <WalkthroughPartyGrowthEditor
                       party={party}
-                      partySize={document.partySize}
                       students={students}
-                      recruitedSnapshots={recruitedSnapshots}
                       onChange={(next) => updateParty(partyIndex, () => next)}
                     />
                   </div>
                 </section>
-                <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <h4 className="font-bold">타임라인 정보</h4>
-                    {party.steps.length === 0 ? (
-                      <Button
-                        text="텍스트에서 가져오기"
-                        icon={DocumentArrowDownIcon}
-                        variant="secondary"
-                        size="sm"
-                        pressed={showImporter}
-                        onClick={() => setShowImporter((current) => !current)}
-                      />
-                    ) : (
-                      <Button
-                        text="전체 초기화"
-                        icon={TrashIcon}
-                        variant="danger"
-                        size="sm"
-                        onClick={() => {
-                          updateParty(partyIndex, (currentParty) => ({ ...currentParty, steps: [] }));
-                          setExpandedStepUid(null);
-                        }}
-                      />
-                    )}
-                  </div>
-                  {party.steps.length === 0 && showImporter && (
-                    <div className="mt-4 rounded-lg border border-border p-4">
-                      <Textarea
-                        aria-label="커뮤니티 공략 글"
-                        value={importText}
-                        onChange={setImportText}
-                        rows={7}
-                        className="font-mono"
-                        placeholder="커뮤니티의 공략 글을 붙여넣어주세요."
-                      />
-                      <div className="mt-3 flex justify-end gap-2">
-                        <Button text="취소" size="sm" onClick={() => setShowImporter(false)} />
+                <section className="pt-5">
+                  <div className="flex flex-wrap items-end justify-between gap-3">
+                    <SubTitle text="타임라인 정보" />
+                    <div className="pb-3">
+                      {party.steps.length === 0 ? (
                         <Button
-                          text={`${importDraft.steps.length}개 단계 추가`}
-                          variant="primary"
+                          text="텍스트에서 가져오기"
+                          icon={DocumentArrowDownIcon}
+                          variant="secondary"
                           size="sm"
-                          disabled={importDraft.steps.length === 0}
+                          pressed={showImporter}
+                          onClick={() => setShowImporter((current) => !current)}
+                        />
+                      ) : (
+                        <Button
+                          text="전체 초기화"
+                          icon={TrashIcon}
+                          variant="danger"
+                          size="sm"
                           onClick={() => {
-                            updateParty(activePartyIndex, (currentParty) => ({
-                              ...currentParty,
-                              steps: importDraft.steps
-                                .slice(0, WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty)
-                                .map((step, index) => ({ ...step.parsed, order: index })),
-                            }));
+                            updateParty(partyIndex, (currentParty) => ({ ...currentParty, steps: [] }));
                             setExpandedStepUid(null);
-                            setImportText("");
-                            setShowImporter(false);
                           }}
                         />
-                      </div>
+                      )}
                     </div>
-                  )}
-                  <ol className="mt-4 list-none space-y-1.5" aria-label={`파티 ${partyIndex + 1} 단계`}>
-                    {party.steps.map((step, stepIndex) => {
-                      const expanded = expandedStepUid === step.uid;
-                      const stepLabel = step.kind === "divider" ? `설명글 ${stepIndex + 1}` : `단계 ${stepIndex + 1}`;
-                      return (
-                        <li
-                          key={step.uid}
-                          className={`group overflow-hidden rounded-md border transition-colors ${
-                            expanded ? "border-primary/40 bg-primary/3" : "border-border bg-background"
-                          }`}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={() => {
-                            if (!draggedStep || draggedStep.partyUid !== party.uid || draggedStep.index === stepIndex)
-                              return;
-                            updateParty(partyIndex, (item) => ({
-                              ...item,
-                              steps: reorder(item.steps, draggedStep.index, stepIndex).map((value, index) => ({
-                                ...value,
-                                order: index,
-                              })),
-                            }));
-                            setDraggedStep(null);
-                          }}
-                        >
-                          <div className="flex items-center gap-0.5 px-2 py-2">
-                            <button
-                              type="button"
-                              draggable
-                              aria-expanded={expanded}
-                              aria-label={`${stepLabel} ${expanded ? "접기" : "편집"}`}
-                              className="flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted/70 active:cursor-grabbing"
-                              onClick={() => setExpandedStepUid(expanded ? null : step.uid)}
-                              onKeyDown={(event) => {
-                                if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
-                                event.preventDefault();
-                                const nextIndex = event.key === "ArrowUp" ? stepIndex - 1 : stepIndex + 1;
-                                updateParty(partyIndex, (item) => ({
-                                  ...item,
-                                  steps: reorder(item.steps, stepIndex, nextIndex).map((value, index) => ({
-                                    ...value,
-                                    order: index,
-                                  })),
-                                }));
-                              }}
-                              onDragStart={() => setDraggedStep({ partyUid: party.uid, index: stepIndex })}
-                              onDragEnd={() => setDraggedStep(null)}
-                            >
-                              <ChevronDownIcon
-                                className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
-                              />
-                              <span className="w-6 shrink-0 text-xs font-bold text-muted-foreground">
-                                {stepIndex + 1}
-                              </span>
-                              {step.kind === "divider" ? (
-                                <span className="flex min-w-0 flex-1 items-center gap-2">
-                                  <span className="h-px flex-1 bg-border" />
-                                  <span className="truncate text-xs font-semibold text-muted-foreground">
-                                    {step.note || "설명글"}
-                                  </span>
-                                  <span className="h-px flex-1 bg-border" />
+                  </div>
+                  <div className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
+                    {party.steps.length === 0 && showImporter && (
+                      <div className="rounded-lg border border-border p-4">
+                        <Textarea
+                          aria-label="커뮤니티 공략 글"
+                          value={importText}
+                          onChange={setImportText}
+                          rows={7}
+                          className="font-mono"
+                          placeholder="커뮤니티의 공략 글을 붙여넣어주세요."
+                        />
+                        <div className="mt-3 flex justify-end gap-2">
+                          <Button text="취소" size="sm" onClick={() => setShowImporter(false)} />
+                          <Button
+                            text={`${importDraft.steps.length}개 단계 추가`}
+                            variant="primary"
+                            size="sm"
+                            disabled={importDraft.steps.length === 0}
+                            onClick={() => {
+                              updateParty(activePartyIndex, (currentParty) => ({
+                                ...currentParty,
+                                steps: importDraft.steps
+                                  .slice(0, WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty)
+                                  .map((step, index) => ({ ...step.parsed, order: index })),
+                              }));
+                              setExpandedStepUid(null);
+                              setImportText("");
+                              setShowImporter(false);
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    <ol className="mt-4 list-none space-y-1.5" aria-label={`파티 ${partyIndex + 1} 단계`}>
+                      {party.steps.map((step, stepIndex) => {
+                        const expanded = expandedStepUid === step.uid;
+                        const stepLabel = step.kind === "divider" ? `설명글 ${stepIndex + 1}` : `단계 ${stepIndex + 1}`;
+                        return (
+                          <li
+                            key={step.uid}
+                            className={`group overflow-hidden rounded-md border transition-colors ${
+                              expanded ? "border-primary/40 bg-primary/3" : "border-border bg-background"
+                            }`}
+                            onDragOver={(event) => event.preventDefault()}
+                            onDrop={() => {
+                              if (!draggedStep || draggedStep.partyUid !== party.uid || draggedStep.index === stepIndex)
+                                return;
+                              updateParty(partyIndex, (item) => ({
+                                ...item,
+                                steps: reorder(item.steps, draggedStep.index, stepIndex).map((value, index) => ({
+                                  ...value,
+                                  order: index,
+                                })),
+                              }));
+                              setDraggedStep(null);
+                            }}
+                          >
+                            <div className="flex items-center gap-0.5 px-2 py-2">
+                              <button
+                                type="button"
+                                draggable
+                                aria-expanded={expanded}
+                                aria-label={`${stepLabel} ${expanded ? "접기" : "편집"}`}
+                                className="flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted/70 active:cursor-grabbing"
+                                onClick={() => setExpandedStepUid(expanded ? null : step.uid)}
+                                onKeyDown={(event) => {
+                                  if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+                                  event.preventDefault();
+                                  const nextIndex = event.key === "ArrowUp" ? stepIndex - 1 : stepIndex + 1;
+                                  updateParty(partyIndex, (item) => ({
+                                    ...item,
+                                    steps: reorder(item.steps, stepIndex, nextIndex).map((value, index) => ({
+                                      ...value,
+                                      order: index,
+                                    })),
+                                  }));
+                                }}
+                                onDragStart={() => setDraggedStep({ partyUid: party.uid, index: stepIndex })}
+                                onDragEnd={() => setDraggedStep(null)}
+                              >
+                                <ChevronDownIcon
+                                  className={`size-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+                                />
+                                <span className="w-6 shrink-0 text-xs font-bold text-muted-foreground">
+                                  {stepIndex + 1}
                                 </span>
-                              ) : (
-                                <>
-                                  <span
-                                    className={`w-24 shrink-0 truncate text-sm font-semibold tabular-nums sm:w-28 ${
-                                      step.marker?.value ? "text-primary" : "text-muted-foreground/60"
-                                    }`}
-                                  >
-                                    {step.marker?.value || "시점 입력"}
-                                  </span>
-                                  <span className="min-w-0 flex-1">
-                                    <span className="flex min-w-0 flex-wrap items-center gap-1">
-                                      {step.actions.map((action, actionIndex) => (
-                                        <span
-                                          // Actions have no identity beyond their persisted order within the step.
-                                          // biome-ignore lint/suspicious/noArrayIndexKey: duplicate actions must remain visible in source order.
-                                          key={`${step.uid}-summary-action-${actionIndex}`}
-                                          className="inline-flex min-w-0 items-center gap-1"
-                                        >
-                                          {actionIndex > 0 ? (
-                                            <span className="text-xs text-muted-foreground">→</span>
-                                          ) : null}
-                                          <ActionSummaryTag
-                                            action={action}
-                                            studentsByUid={studentsByUid}
-                                            invalid={actionHasPartyValidationError(action, party)}
-                                          />
-                                        </span>
-                                      ))}
+                                {step.kind === "divider" ? (
+                                  <span className="flex min-w-0 flex-1 items-center gap-2">
+                                    <span className="h-px flex-1 bg-border" />
+                                    <span className="truncate text-xs font-semibold text-muted-foreground">
+                                      {step.note || "설명글"}
                                     </span>
-                                    {step.sourceText?.trim() ? (
-                                      <span
-                                        className="mt-1 block truncate text-[11px] leading-tight text-muted-foreground/70"
-                                        title={step.sourceText}
-                                      >
-                                        {step.sourceText}
-                                      </span>
-                                    ) : null}
+                                    <span className="h-px flex-1 bg-border" />
                                   </span>
-                                  {step.note?.trim() && (
-                                    <span className="hidden max-w-40 truncate text-xs text-muted-foreground xl:block">
-                                      {step.note}
-                                    </span>
-                                  )}
-                                </>
-                              )}
-                            </button>
-                            {stepIndex > 0 && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateParty(partyIndex, (item) => ({
-                                    ...item,
-                                    steps: reorder(item.steps, stepIndex, stepIndex - 1).map((value, index) => ({
-                                      ...value,
-                                      order: index,
-                                    })),
-                                  }))
-                                }
-                                aria-label={`${stepLabel} 위로 이동`}
-                                className={`rounded-md p-1.5 transition-opacity hover:bg-muted ${
-                                  expanded
-                                    ? "opacity-100"
-                                    : "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
-                                }`}
-                              >
-                                <ArrowUpIcon className="size-4" />
-                              </button>
-                            )}
-                            {stepIndex < party.steps.length - 1 && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  updateParty(partyIndex, (item) => ({
-                                    ...item,
-                                    steps: reorder(item.steps, stepIndex, stepIndex + 1).map((value, index) => ({
-                                      ...value,
-                                      order: index,
-                                    })),
-                                  }))
-                                }
-                                aria-label={`${stepLabel} 아래로 이동`}
-                                className={`rounded-md p-1.5 transition-opacity hover:bg-muted ${
-                                  expanded
-                                    ? "opacity-100"
-                                    : "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
-                                }`}
-                              >
-                                <ArrowDownIcon className="size-4" />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              disabled={party.steps.length >= WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty}
-                              onClick={() => {
-                                const duplicatedStep = { ...structuredClone(step), uid: nanoid(8) };
-                                updateParty(partyIndex, (item) => ({
-                                  ...item,
-                                  steps: [
-                                    ...item.steps.slice(0, stepIndex + 1),
-                                    duplicatedStep,
-                                    ...item.steps.slice(stepIndex + 1),
-                                  ]
-                                    .slice(0, WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty)
-                                    .map((value, index) => ({ ...value, order: index })),
-                                }));
-                                setExpandedStepUid(duplicatedStep.uid);
-                              }}
-                              aria-label={`${stepLabel} 복제`}
-                              className={`rounded-md p-1.5 transition-opacity hover:bg-muted disabled:cursor-not-allowed disabled:opacity-20 ${
-                                expanded
-                                  ? "opacity-100"
-                                  : "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
-                              }`}
-                            >
-                              <DocumentDuplicateIcon className="size-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (expanded) setExpandedStepUid(null);
-                                updateParty(partyIndex, (item) => ({
-                                  ...item,
-                                  steps: item.steps
-                                    .filter((_, index) => index !== stepIndex)
-                                    .map((value, index) => ({ ...value, order: index })),
-                                }));
-                              }}
-                              aria-label={`${stepLabel} 삭제`}
-                              className={`rounded-md p-1.5 text-destructive transition-opacity hover:bg-destructive/10 ${
-                                expanded
-                                  ? "opacity-100"
-                                  : "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
-                              }`}
-                            >
-                              <TrashIcon className="size-4" />
-                            </button>
-                          </div>
-
-                          {expanded && (
-                            <div className="border-t border-border/70 p-3 md:p-4">
-                              {step.kind === "divider" ? (
-                                <label className="block text-sm font-semibold">
-                                  설명글
-                                  <input
-                                    value={step.note ?? ""}
-                                    onChange={(event) =>
-                                      updateParty(partyIndex, (item) => ({
-                                        ...item,
-                                        steps: item.steps.map((value, index) =>
-                                          index === stepIndex ? { ...value, note: event.target.value } : value,
-                                        ),
-                                      }))
-                                    }
-                                    className="mt-2 min-h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                                    placeholder="2페이즈 진입"
-                                  />
-                                </label>
-                              ) : (
-                                <div className="space-y-3">
-                                  <div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-end">
-                                    <label className="block text-sm font-semibold">
-                                      시점
-                                      <input
-                                        autoFocus
-                                        value={step.marker?.value ?? ""}
-                                        onChange={(event) =>
-                                          updateParty(partyIndex, (item) => ({
-                                            ...item,
-                                            steps: item.steps.map((value, index) =>
-                                              index === stepIndex
-                                                ? {
-                                                    ...value,
-                                                    marker: {
-                                                      kind: value.marker?.kind ?? "manual",
-                                                      value: event.target.value,
-                                                    },
-                                                  }
-                                                : value,
-                                            ),
-                                          }))
-                                        }
-                                        onKeyDown={(event) => {
-                                          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                                            event.preventDefault();
-                                            insertActionStepAfter(partyIndex, stepIndex);
-                                          }
-                                        }}
-                                        className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm font-normal"
-                                        placeholder="3:07.0 · 9코 · 즉시"
-                                      />
-                                    </label>
-                                    <label className="block text-sm font-semibold">
-                                      메모
-                                      <input
-                                        value={step.note ?? ""}
-                                        onChange={(event) =>
-                                          updateParty(partyIndex, (item) => ({
-                                            ...item,
-                                            steps: item.steps.map((value, index) =>
-                                              index === stepIndex ? { ...value, note: event.target.value } : value,
-                                            ),
-                                          }))
-                                        }
-                                        onKeyDown={(event) => {
-                                          if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-                                            event.preventDefault();
-                                            insertActionStepAfter(partyIndex, stepIndex);
-                                          }
-                                        }}
-                                        className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm font-normal"
-                                        placeholder="메모"
-                                      />
-                                    </label>
-                                    <button
-                                      type="button"
-                                      disabled={party.steps.length >= WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty}
-                                      onClick={() => insertActionStepAfter(partyIndex, stepIndex)}
-                                      className="flex h-9 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                                ) : (
+                                  <>
+                                    <span
+                                      className={`w-24 shrink-0 truncate text-sm font-semibold tabular-nums sm:w-28 ${
+                                        step.marker?.value ? "text-primary" : "text-muted-foreground/60"
+                                      }`}
                                     >
-                                      <PlusIcon className="size-4" />
-                                      다음 단계
-                                    </button>
-                                  </div>
-                                  <div className="space-y-2">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <p className="text-sm font-semibold">사용 스킬</p>
-                                      {step.actions.length === 1 && step.actions[0]?.kind === "free_text" ? (
-                                        <Button
-                                          text="설명글로 변경"
-                                          variant="secondary"
-                                          size="xs"
-                                          onClick={() =>
+                                      {step.marker?.value || "시점 입력"}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                      <span className="flex min-w-0 flex-wrap items-center gap-1">
+                                        {step.actions.map((action, actionIndex) => (
+                                          <span
+                                            // Actions have no identity beyond their persisted order within the step.
+                                            // biome-ignore lint/suspicious/noArrayIndexKey: duplicate actions must remain visible in source order.
+                                            key={`${step.uid}-summary-action-${actionIndex}`}
+                                            className="inline-flex min-w-0 items-center gap-1"
+                                          >
+                                            {actionIndex > 0 ? (
+                                              <span className="text-xs text-muted-foreground">→</span>
+                                            ) : null}
+                                            <ActionSummaryTag
+                                              action={action}
+                                              studentsByUid={studentsByUid}
+                                              invalid={actionHasPartyValidationError(action, party)}
+                                            />
+                                          </span>
+                                        ))}
+                                      </span>
+                                      {step.sourceText?.trim() ? (
+                                        <span
+                                          className="mt-1 block truncate text-[11px] leading-tight text-muted-foreground/70"
+                                          title={step.sourceText}
+                                        >
+                                          {step.sourceText}
+                                        </span>
+                                      ) : null}
+                                    </span>
+                                    {step.note?.trim() && (
+                                      <span className="hidden max-w-40 truncate text-xs text-muted-foreground xl:block">
+                                        {step.note}
+                                      </span>
+                                    )}
+                                  </>
+                                )}
+                              </button>
+                              {stepIndex > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateParty(partyIndex, (item) => ({
+                                      ...item,
+                                      steps: reorder(item.steps, stepIndex, stepIndex - 1).map((value, index) => ({
+                                        ...value,
+                                        order: index,
+                                      })),
+                                    }))
+                                  }
+                                  aria-label={`${stepLabel} 위로 이동`}
+                                  className={`rounded-md p-1.5 transition-opacity hover:bg-muted ${
+                                    expanded
+                                      ? "opacity-100"
+                                      : "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+                                  }`}
+                                >
+                                  <ArrowUpIcon className="size-4" />
+                                </button>
+                              )}
+                              {stepIndex < party.steps.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    updateParty(partyIndex, (item) => ({
+                                      ...item,
+                                      steps: reorder(item.steps, stepIndex, stepIndex + 1).map((value, index) => ({
+                                        ...value,
+                                        order: index,
+                                      })),
+                                    }))
+                                  }
+                                  aria-label={`${stepLabel} 아래로 이동`}
+                                  className={`rounded-md p-1.5 transition-opacity hover:bg-muted ${
+                                    expanded
+                                      ? "opacity-100"
+                                      : "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+                                  }`}
+                                >
+                                  <ArrowDownIcon className="size-4" />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (expanded) setExpandedStepUid(null);
+                                  updateParty(partyIndex, (item) => ({
+                                    ...item,
+                                    steps: item.steps
+                                      .filter((_, index) => index !== stepIndex)
+                                      .map((value, index) => ({ ...value, order: index })),
+                                  }));
+                                }}
+                                aria-label={`${stepLabel} 삭제`}
+                                className={`rounded-md p-1.5 text-destructive transition-opacity hover:bg-destructive/10 ${
+                                  expanded
+                                    ? "opacity-100"
+                                    : "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100"
+                                }`}
+                              >
+                                <TrashIcon className="size-4" />
+                              </button>
+                            </div>
+
+                            {expanded && (
+                              <div className="border-t border-border/70 p-3 md:p-4">
+                                {step.kind === "divider" ? (
+                                  <label className="block text-sm font-semibold">
+                                    설명글
+                                    <input
+                                      value={step.note ?? ""}
+                                      onChange={(event) =>
+                                        updateParty(partyIndex, (item) => ({
+                                          ...item,
+                                          steps: item.steps.map((value, index) =>
+                                            index === stepIndex ? { ...value, note: event.target.value } : value,
+                                          ),
+                                        }))
+                                      }
+                                      className="mt-2 min-h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                                      placeholder="2페이즈 진입"
+                                    />
+                                  </label>
+                                ) : (
+                                  <div className="space-y-3">
+                                    <div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)_auto] sm:items-end">
+                                      <label className="block text-sm font-semibold">
+                                        시점
+                                        <input
+                                          autoFocus
+                                          value={step.marker?.value ?? ""}
+                                          onChange={(event) =>
                                             updateParty(partyIndex, (item) => ({
                                               ...item,
                                               steps: item.steps.map((value, index) =>
                                                 index === stepIndex
                                                   ? {
                                                       ...value,
-                                                      kind: "divider",
-                                                      marker: undefined,
-                                                      actions: [],
-                                                      note:
-                                                        value.actions[0]?.text?.trim() ||
-                                                        value.sourceText?.trim() ||
-                                                        value.note ||
-                                                        "설명글",
+                                                      marker: {
+                                                        kind: value.marker?.kind ?? "manual",
+                                                        value: event.target.value,
+                                                      },
                                                     }
                                                   : value,
                                               ),
                                             }))
                                           }
+                                          onKeyDown={(event) => {
+                                            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                                              event.preventDefault();
+                                              insertActionStepAfter(partyIndex, stepIndex);
+                                            }
+                                          }}
+                                          className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm font-normal"
+                                          placeholder="3:07.0 · 9코 · 즉시"
                                         />
-                                      ) : null}
+                                      </label>
+                                      <label className="block text-sm font-semibold">
+                                        메모
+                                        <input
+                                          value={step.note ?? ""}
+                                          onChange={(event) =>
+                                            updateParty(partyIndex, (item) => ({
+                                              ...item,
+                                              steps: item.steps.map((value, index) =>
+                                                index === stepIndex ? { ...value, note: event.target.value } : value,
+                                              ),
+                                            }))
+                                          }
+                                          onKeyDown={(event) => {
+                                            if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                                              event.preventDefault();
+                                              insertActionStepAfter(partyIndex, stepIndex);
+                                            }
+                                          }}
+                                          className="mt-1.5 h-9 w-full rounded-md border border-input bg-background px-3 text-sm font-normal"
+                                          placeholder="메모"
+                                        />
+                                      </label>
+                                      <button
+                                        type="button"
+                                        disabled={party.steps.length >= WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty}
+                                        onClick={() => insertActionStepAfter(partyIndex, stepIndex)}
+                                        className="flex h-9 items-center gap-1.5 rounded-md border border-input px-3 text-sm font-semibold hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                                      >
+                                        <PlusIcon className="size-4" />
+                                        다음 단계
+                                      </button>
                                     </div>
-                                    {step.actions.length > 0 ? (
-                                      <div className="divide-y divide-border/70">
-                                        {step.actions.map((action, actionIndex) => {
-                                          const invalid = actionHasPartyValidationError(action, party);
-                                          return (
-                                            <div
-                                              // Actions have no identity beyond their persisted order within the step.
-                                              // biome-ignore lint/suspicious/noArrayIndexKey: duplicate actions must remain independently editable.
-                                              key={`${step.uid}-action-editor-${actionIndex}`}
-                                              aria-invalid={invalid || undefined}
-                                              className={`py-2 first:pt-0 last:pb-0 ${
-                                                invalid ? "rounded-md bg-amber-500/5 px-2" : ""
-                                              }`}
-                                            >
-                                              <ActionEditor
-                                                action={action}
-                                                order={actionIndex + 1}
-                                                canMoveUp={actionIndex > 0}
-                                                canMoveDown={actionIndex < step.actions.length - 1}
-                                                selectedStudent={students.find(
-                                                  (student) => student.uid === action.studentUid,
-                                                )}
-                                                targetStudent={students.find(
-                                                  (student) => student.uid === action.targetStudentUid,
-                                                )}
-                                                students={party.units.flatMap((unit) => {
-                                                  const student = students.find(
-                                                    (candidate) => candidate.uid === unit.studentUid,
-                                                  );
-                                                  return student ? [student] : [];
-                                                })}
-                                                onChange={(next) =>
-                                                  updateParty(partyIndex, (item) => ({
-                                                    ...item,
-                                                    steps: item.steps.map((value, index) =>
-                                                      index === stepIndex
-                                                        ? {
-                                                            ...value,
-                                                            actions: value.actions.map((current, index) =>
-                                                              index === actionIndex ? next : current,
-                                                            ),
-                                                          }
-                                                        : value,
-                                                    ),
-                                                  }))
-                                                }
-                                                onDelete={() =>
-                                                  updateParty(partyIndex, (item) => ({
-                                                    ...item,
-                                                    steps: item.steps.map((value, index) =>
-                                                      index === stepIndex
-                                                        ? {
-                                                            ...value,
-                                                            actions: value.actions.filter(
-                                                              (_, index) => index !== actionIndex,
-                                                            ),
-                                                          }
-                                                        : value,
-                                                    ),
-                                                  }))
-                                                }
-                                                onMoveUp={() => {
-                                                  if (actionIndex <= 0) return;
-                                                  updateParty(partyIndex, (item) => ({
-                                                    ...item,
-                                                    steps: item.steps.map((value, index) =>
-                                                      index === stepIndex
-                                                        ? {
-                                                            ...value,
-                                                            actions: reorder(
-                                                              value.actions,
-                                                              actionIndex,
-                                                              actionIndex - 1,
-                                                            ),
-                                                          }
-                                                        : value,
-                                                    ),
-                                                  }));
-                                                }}
-                                                onMoveDown={() => {
-                                                  if (actionIndex >= step.actions.length - 1) return;
-                                                  updateParty(partyIndex, (item) => ({
-                                                    ...item,
-                                                    steps: item.steps.map((value, index) =>
-                                                      index === stepIndex
-                                                        ? {
-                                                            ...value,
-                                                            actions: reorder(
-                                                              value.actions,
-                                                              actionIndex,
-                                                              actionIndex + 1,
-                                                            ),
-                                                          }
-                                                        : value,
-                                                    ),
-                                                  }));
-                                                }}
-                                              />
-                                            </div>
-                                          );
-                                        })}
+                                    <div className="space-y-2">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <p className="text-sm font-semibold">사용 스킬</p>
+                                        {step.actions.length === 1 && step.actions[0]?.kind === "free_text" ? (
+                                          <Button
+                                            text="설명글로 변경"
+                                            variant="secondary"
+                                            size="xs"
+                                            onClick={() =>
+                                              updateParty(partyIndex, (item) => ({
+                                                ...item,
+                                                steps: item.steps.map((value, index) =>
+                                                  index === stepIndex
+                                                    ? {
+                                                        ...value,
+                                                        kind: "divider",
+                                                        marker: undefined,
+                                                        actions: [],
+                                                        note:
+                                                          value.actions[0]?.text?.trim() ||
+                                                          value.sourceText?.trim() ||
+                                                          value.note ||
+                                                          "설명글",
+                                                      }
+                                                    : value,
+                                                ),
+                                              }))
+                                            }
+                                          />
+                                        ) : null}
                                       </div>
-                                    ) : (
-                                      <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
-                                        스킬을 추가해주세요.
-                                      </div>
-                                    )}
-                                    <Button
-                                      icon={PlusIcon}
-                                      text="스킬 추가"
-                                      size="sm"
-                                      disabled={
-                                        step.actions.length >= WALKTHROUGH_TIMELINE_LIMITS.actionsPerStep ||
-                                        party.units.every((unit) => !unit.studentUid)
-                                      }
-                                      onClick={() => {
-                                        const onlyAction = step.actions[0];
-                                        const reuseEmptyAction =
-                                          step.actions.length === 1 &&
-                                          !onlyAction?.studentUid &&
-                                          !onlyAction?.text?.trim();
-                                        if (reuseEmptyAction) return;
-                                        updateParty(partyIndex, (item) => ({
-                                          ...item,
-                                          steps: item.steps.map((value, index) =>
-                                            index === stepIndex
-                                              ? {
-                                                  ...value,
-                                                  kind: "actions",
-                                                  actions: [
-                                                    ...value.actions,
-                                                    { kind: "student_ex" as const, studentUid: "" },
-                                                  ],
-                                                }
-                                              : value,
-                                          ),
-                                        }));
-                                      }}
-                                    />
+                                      {step.actions.length > 0 ? (
+                                        <div className="divide-y divide-border/70">
+                                          {step.actions.map((action, actionIndex) => {
+                                            const invalid = actionHasPartyValidationError(action, party);
+                                            return (
+                                              <div
+                                                // Actions have no identity beyond their persisted order within the step.
+                                                // biome-ignore lint/suspicious/noArrayIndexKey: duplicate actions must remain independently editable.
+                                                key={`${step.uid}-action-editor-${actionIndex}`}
+                                                aria-invalid={invalid || undefined}
+                                                className={`py-2 first:pt-0 last:pb-0 ${
+                                                  invalid ? "rounded-md bg-amber-500/5 px-2" : ""
+                                                }`}
+                                              >
+                                                <ActionEditor
+                                                  action={action}
+                                                  order={actionIndex + 1}
+                                                  canMoveUp={actionIndex > 0}
+                                                  canMoveDown={actionIndex < step.actions.length - 1}
+                                                  selectedStudent={students.find(
+                                                    (student) => student.uid === action.studentUid,
+                                                  )}
+                                                  targetStudent={students.find(
+                                                    (student) => student.uid === action.targetStudentUid,
+                                                  )}
+                                                  students={party.units.flatMap((unit) => {
+                                                    const student = students.find(
+                                                      (candidate) => candidate.uid === unit.studentUid,
+                                                    );
+                                                    return student ? [student] : [];
+                                                  })}
+                                                  onChange={(next) =>
+                                                    updateParty(partyIndex, (item) => ({
+                                                      ...item,
+                                                      steps: item.steps.map((value, index) =>
+                                                        index === stepIndex
+                                                          ? {
+                                                              ...value,
+                                                              actions: value.actions.map((current, index) =>
+                                                                index === actionIndex ? next : current,
+                                                              ),
+                                                            }
+                                                          : value,
+                                                      ),
+                                                    }))
+                                                  }
+                                                  onDelete={() =>
+                                                    updateParty(partyIndex, (item) => ({
+                                                      ...item,
+                                                      steps: item.steps.map((value, index) =>
+                                                        index === stepIndex
+                                                          ? {
+                                                              ...value,
+                                                              actions: value.actions.filter(
+                                                                (_, index) => index !== actionIndex,
+                                                              ),
+                                                            }
+                                                          : value,
+                                                      ),
+                                                    }))
+                                                  }
+                                                  onMoveUp={() => {
+                                                    if (actionIndex <= 0) return;
+                                                    updateParty(partyIndex, (item) => ({
+                                                      ...item,
+                                                      steps: item.steps.map((value, index) =>
+                                                        index === stepIndex
+                                                          ? {
+                                                              ...value,
+                                                              actions: reorder(
+                                                                value.actions,
+                                                                actionIndex,
+                                                                actionIndex - 1,
+                                                              ),
+                                                            }
+                                                          : value,
+                                                      ),
+                                                    }));
+                                                  }}
+                                                  onMoveDown={() => {
+                                                    if (actionIndex >= step.actions.length - 1) return;
+                                                    updateParty(partyIndex, (item) => ({
+                                                      ...item,
+                                                      steps: item.steps.map((value, index) =>
+                                                        index === stepIndex
+                                                          ? {
+                                                              ...value,
+                                                              actions: reorder(
+                                                                value.actions,
+                                                                actionIndex,
+                                                                actionIndex + 1,
+                                                              ),
+                                                            }
+                                                          : value,
+                                                      ),
+                                                    }));
+                                                  }}
+                                                />
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      ) : (
+                                        <div className="rounded-md border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">
+                                          스킬을 추가해주세요.
+                                        </div>
+                                      )}
+                                      <Button
+                                        icon={PlusIcon}
+                                        text="스킬 추가"
+                                        size="sm"
+                                        disabled={
+                                          step.actions.length >= WALKTHROUGH_TIMELINE_LIMITS.actionsPerStep ||
+                                          party.units.every((unit) => !unit.studentUid)
+                                        }
+                                        onClick={() => {
+                                          const onlyAction = step.actions[0];
+                                          const reuseEmptyAction =
+                                            step.actions.length === 1 &&
+                                            !onlyAction?.studentUid &&
+                                            !onlyAction?.text?.trim();
+                                          if (reuseEmptyAction) return;
+                                          updateParty(partyIndex, (item) => ({
+                                            ...item,
+                                            steps: item.steps.map((value, index) =>
+                                              index === stepIndex
+                                                ? {
+                                                    ...value,
+                                                    kind: "actions",
+                                                    actions: [
+                                                      ...value.actions,
+                                                      { kind: "student_ex" as const, studentUid: "" },
+                                                    ],
+                                                  }
+                                                : value,
+                                            ),
+                                          }));
+                                        }}
+                                      />
+                                    </div>
                                   </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ol>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      icon={PlusIcon}
-                      text="단계 추가"
-                      variant="primary"
-                      disabled={party.steps.length >= WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty}
-                      onClick={() => insertActionStepAfter(partyIndex, party.steps.length - 1)}
-                    />
-                    <Button
-                      icon={PlusIcon}
-                      text="설명글 추가"
-                      disabled={party.steps.length >= WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty}
-                      onClick={() => {
-                        const nextDivider = emptyDivider(party.steps.length);
-                        updateParty(partyIndex, (item) => ({
-                          ...item,
-                          steps: [...item.steps, nextDivider],
-                        }));
-                        setExpandedStepUid(nextDivider.uid);
-                      }}
-                    />
+                                )}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ol>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        icon={PlusIcon}
+                        text="단계 추가"
+                        variant="primary"
+                        disabled={party.steps.length >= WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty}
+                        onClick={() => insertActionStepAfter(partyIndex, party.steps.length - 1)}
+                      />
+                      <Button
+                        icon={PlusIcon}
+                        text="설명글 추가"
+                        disabled={party.steps.length >= WALKTHROUGH_TIMELINE_LIMITS.stepsPerParty}
+                        onClick={() => {
+                          const nextDivider = emptyDivider(party.steps.length);
+                          updateParty(partyIndex, (item) => ({
+                            ...item,
+                            steps: [...item.steps, nextDivider],
+                          }));
+                          setExpandedStepUid(nextDivider.uid);
+                        }}
+                      />
+                    </div>
                   </div>
                 </section>
               </article>

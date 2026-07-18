@@ -196,13 +196,6 @@ export const pgWalkthroughTimelinesTable = pgTable(
       table.visibility,
       table.updatedAt.desc(),
     ),
-    check("raid_walkthroughs_visibility", sql`${table.visibility} in ('public', 'private')`),
-    check("raid_walkthroughs_terrain", sql`${table.terrain} in ('indoor', 'outdoor', 'street')`),
-    check("raid_walkthroughs_defense_type", sql`${table.defenseType} in ('light', 'heavy', 'special', 'elastic')`),
-    check(
-      "raid_walkthroughs_max_difficulty",
-      sql`${table.maxDifficulty} in ('normal', 'hard', 'very_hard', 'hardcore', 'extreme', 'insane', 'torment', 'lunatic')`,
-    ),
     check("raid_walkthroughs_document_object", sql`jsonb_typeof(${table.document}) = 'object'`),
   ],
 );

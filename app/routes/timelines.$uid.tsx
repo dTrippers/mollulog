@@ -1,6 +1,7 @@
 import {
   DocumentDuplicateIcon,
   InformationCircleIcon,
+  LinkIcon,
   ListBulletIcon,
   LockClosedIcon,
   LockOpenIcon,
@@ -16,6 +17,7 @@ import LikeButton from "~/components/features/engagement/LikeButton";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import {
   flattenTimelineParties,
+  WalkthroughTimelineFeedbackButton,
   WalkthroughTimelineReadOnly,
   WalkthroughTimelineViewerLauncher,
 } from "~/components/features/walkthrough-timeline";
@@ -174,10 +176,16 @@ export default function WalkthroughTimelineDetailPage() {
                 <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                   {timeline.visibility === "public" ? (
                     <LockOpenIcon className="size-3.5" />
+                  ) : timeline.visibility === "unlisted" ? (
+                    <LinkIcon className="size-3.5" />
                   ) : (
                     <LockClosedIcon className="size-3.5" />
                   )}
-                  {timeline.visibility === "public" ? "전체 공개" : "나만 보기"}
+                  {timeline.visibility === "public"
+                    ? "전체 공개"
+                    : timeline.visibility === "unlisted"
+                      ? "목록 미노출"
+                      : "나만 보기"}
                 </span>
               </PanelBodyRow>
               <PanelBodyRow title="작성자">
@@ -226,6 +234,7 @@ export default function WalkthroughTimelineDetailPage() {
           ),
         },
       ]}
+      belowPanels={<WalkthroughTimelineFeedbackButton signedIn={signedIn} />}
       links={
         latestBossTimelinePath
           ? [

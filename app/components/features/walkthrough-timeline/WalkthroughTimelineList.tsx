@@ -49,7 +49,7 @@ export function WalkthroughTimelineList({
                       <h2 className="truncate font-semibold">{timeline.title}</h2>
                       {timeline.visibility !== "public" && (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                          나만 보기
+                          {timeline.visibility === "unlisted" ? "목록 미노출" : "나만 보기"}
                         </span>
                       )}
                     </div>

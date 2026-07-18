@@ -5,9 +5,7 @@ import { TimelineActionSequence, TimelineStudentImage, type TimelineViewerStuden
 
 function formatGrowth(snapshot: WalkthroughParty["units"][number]["snapshot"]) {
   if (!snapshot) return ["성장도 미입력"];
-  const basic = [snapshot.tier ? `★${snapshot.tier}` : null, snapshot.level ? `Lv.${snapshot.level}` : null]
-    .filter(Boolean)
-    .join(" · ");
+  const basic = snapshot.level ? `Lv.${snapshot.level}` : null;
   const skills = [
     snapshot.skillEx ? `EX ${snapshot.skillEx}` : null,
     snapshot.skillNormal ? `기본 ${snapshot.skillNormal}` : null,
@@ -27,6 +25,33 @@ function formatGrowth(snapshot: WalkthroughParty["units"][number]["snapshot"]) {
     .filter(Boolean)
     .join(" · ");
   return [basic, skills, equipment, abilities ? `능력 해방 ${abilities}` : null].filter(Boolean);
+}
+
+function GrowthTier({ tier }: { tier: number }) {
+  if (tier <= 5) return <span>★{tier}</span>;
+
+  return (
+    <span className="inline-flex items-center gap-0.5" aria-label={`전용무기 ${tier - 5}`}>
+      <img className="size-3.5 shrink-0" src="/icons/exclusive_weapon.png" alt="" aria-hidden="true" />
+      <span>{tier - 5}</span>
+    </span>
+  );
+}
+
+function GrowthSummary({ snapshot }: { snapshot: WalkthroughParty["units"][number]["snapshot"] }) {
+  const details = formatGrowth(snapshot);
+
+  return (
+    <>
+      {snapshot?.tier ? (
+        <>
+          <GrowthTier tier={snapshot.tier} />
+          {details.length > 0 ? " · " : null}
+        </>
+      ) : null}
+      {details.join(" · ")}
+    </>
+  );
 }
 
 export function WalkthroughTimelineReadOnly({
@@ -102,7 +127,7 @@ export function WalkthroughTimelineReadOnly({
                           ) : null}
                         </div>
                         <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
-                          {formatGrowth(unit.snapshot).join(" · ")}
+                          <GrowthSummary snapshot={unit.snapshot} />
                         </p>
                       </div>
                     </div>

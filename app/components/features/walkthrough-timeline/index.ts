@@ -1,5 +1,6 @@
 export * from "./useWakeLock";
 export * from "./WalkthroughTimelineEditor";
+export * from "./WalkthroughTimelineFeedbackButton";
 export * from "./WalkthroughTimelineList";
 export { default as WalkthroughTimelinePartyPanel } from "./WalkthroughTimelinePartyPanel";
 export * from "./WalkthroughTimelineReadOnly";

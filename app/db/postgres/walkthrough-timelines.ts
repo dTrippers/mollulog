@@ -1,4 +1,4 @@
-import { and, desc, eq, exists, inArray } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import { pgWalkthroughTimelineLikesTable, pgWalkthroughTimelinesTable } from "~/db/postgres/schema";
@@ -182,13 +182,35 @@ export async function listPostgresPublicWalkthroughTimelines(
   } = {},
   options: PostgresWalkthroughTimelineOptions = {},
 ): Promise<WalkthroughTimelineRecord[]> {
+  return listPostgresVisibleWalkthroughTimelines(env, filters, options);
+}
+
+export async function listPostgresVisibleWalkthroughTimelines(
+  env: Pick<Env, "HYPERDRIVE">,
+  filters: {
+    bossUid?: string | null;
+    terrain?: WalkthroughTimelineTerrain | null;
+    defenseType?: WalkthroughTimelineDefenseType | null;
+    maxDifficulty?: WalkthroughTimelineDifficulty | null;
+    likedByUserId?: number | null;
+    viewerUserId?: number | null;
+  } = {},
+  options: PostgresWalkthroughTimelineOptions = {},
+): Promise<WalkthroughTimelineRecord[]> {
   return withWalkthroughTimelineDatabase(
     env,
-    "list_public",
+    filters.viewerUserId ? "list_visible" : "list_public",
     async (db) => {
       const conditions = [];
       if (filters.bossUid) conditions.push(eq(pgWalkthroughTimelinesTable.bossUid, filters.bossUid));
-      conditions.push(eq(pgWalkthroughTimelinesTable.visibility, "public"));
+      conditions.push(
+        filters.viewerUserId
+          ? or(
+              eq(pgWalkthroughTimelinesTable.visibility, "public"),
+              eq(pgWalkthroughTimelinesTable.userId, filters.viewerUserId),
+            )
+          : eq(pgWalkthroughTimelinesTable.visibility, "public"),
+      );
       if (filters.terrain) conditions.push(eq(pgWalkthroughTimelinesTable.terrain, filters.terrain));
       if (filters.defenseType) conditions.push(eq(pgWalkthroughTimelinesTable.defenseType, filters.defenseType));
       if (filters.maxDifficulty) {

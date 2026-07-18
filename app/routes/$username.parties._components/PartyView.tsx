@@ -1,16 +1,16 @@
-import dayjs from "dayjs";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import dayjs from "dayjs";
 import { useState } from "react";
 import { Link } from "react-router";
-import { ProfileImage, SubTitle } from "~/components/primitives";
-import { raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { ActionCard } from "~/components/features/editor";
+import { StudentCards } from "~/components/features/students";
+import { ProfileImage, SubTitle } from "~/components/primitives";
 import { raidTypeToParam } from "~/domain/raid";
+import { raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType } from "~/models/content.d";
 import type { Party } from "~/models/party";
 import type { RaidScheduleListItem } from "~/models/raid";
-import { StudentCards } from "~/components/features/students";
 
 type PartyViewProps = {
   party: Party;
@@ -23,19 +23,19 @@ type PartyViewProps = {
     name: string;
     tier: number | null;
   }[];
-  editable?: boolean;
+  deletable?: boolean;
   raids?: RaidScheduleListItem[];
 };
 
-export default function PartyView({ party, sensei, students, editable, raids }: PartyViewProps) {
+export default function PartyView({ party, sensei, students, deletable, raids }: PartyViewProps) {
   const [memoOpened, setMemoOpened] = useState(false);
   const studentsMap = new Map(students.map((student) => [student.uid, student]));
 
   const raid =
     raids && party.raidType && party.seasonIndex !== null
-      ? raids.find(
+      ? (raids.find(
           (candidate) => candidate.raidType === party.raidType && candidate.seasonIndex === party.seasonIndex,
-        ) ?? null
+        ) ?? null)
       : null;
   let raidText = "";
   if (raid) {
@@ -49,12 +49,20 @@ export default function PartyView({ party, sensei, students, editable, raids }: 
   }
 
   return (
-    <ActionCard actions={editable ?
-      [
-        { text: "편집", color: "default", link: `/my?path=parties/edit/${party.uid}` },
-        { text: "삭제", color: "red", danger: true, form: { method: "post", hiddenInputs: [{ name: "uid", value: party.uid }] } },
-      ] : []
-    }>
+    <ActionCard
+      actions={
+        deletable
+          ? [
+              {
+                text: "삭제",
+                color: "red",
+                danger: true,
+                form: { method: "post", hiddenInputs: [{ name: "uid", value: party.uid }] },
+              },
+            ]
+          : []
+      }
+    >
       <div className="-mt-4">
         <SubTitle text={party.name} />
       </div>
@@ -78,11 +86,9 @@ export default function PartyView({ party, sensei, students, editable, raids }: 
           />
           <div className="px-4 md:px-6 w-full">
             <p className="font-bold group-hover:underline">
-              {(raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType)} {raid.raidBoss.name}
+              {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} {raid.raidBoss.name}
             </p>
-            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-300">
-              {raidText}
-            </p>
+            <p className="text-xs md:text-sm text-neutral-500 dark:text-neutral-300">{raidText}</p>
             {party.showAsRaidTip && (
               <p className="flex my-1 text-xs md:text-sm text-neutral-500 dark:text-neutral-300 items-center">
                 <CheckCircleIcon className="mr-1 size-4 inline-block" />
@@ -94,7 +100,13 @@ export default function PartyView({ party, sensei, students, editable, raids }: 
       )}
 
       {party.studentIds.map((squad, index) => (
-        <div key={squad.map((studentUid) => studentUid ?? "empty").join("-") || `empty-squad-${party.uid}-${index > 0 ? "rest" : "first"}`} className={index > 0 ? "mt-2 pt-2 md:pt-0 border-t border-neutral-200 md:border-0" : undefined}>
+        <div
+          key={
+            squad.map((studentUid) => studentUid ?? "empty").join("-") ||
+            `empty-squad-${party.uid}-${index > 0 ? "rest" : "first"}`
+          }
+          className={index > 0 ? "mt-2 pt-2 md:pt-0 border-t border-neutral-200 md:border-0" : undefined}
+        >
           <StudentCards
             students={squad.map((uid) => {
               if (!uid) {
@@ -120,11 +132,7 @@ export default function PartyView({ party, sensei, students, editable, raids }: 
             <>
               <p className="pb-2">{party.memo}</p>
               {party.memo.length > 100 && (
-                <button
-                  type="button"
-                  className="text-neutral-500 hover:underline"
-                  onClick={() => setMemoOpened(false)}
-                >
+                <button type="button" className="text-neutral-500 hover:underline" onClick={() => setMemoOpened(false)}>
                   ... 감추기
                 </button>
               )}
@@ -133,11 +141,7 @@ export default function PartyView({ party, sensei, students, editable, raids }: 
             <p>
               {party.memo.slice(0, 100)}
               {party.memo.length > 100 && (
-                <button
-                  type="button"
-                  className="text-neutral-500 hover:underline"
-                  onClick={() => setMemoOpened(true)}
-                >
+                <button type="button" className="text-neutral-500 hover:underline" onClick={() => setMemoOpened(true)}>
                   ... 더보기
                 </button>
               )}

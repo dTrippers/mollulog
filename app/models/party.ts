@@ -1,21 +1,12 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { nanoid } from "nanoid/non-secure";
-import { nowUtcIso } from "~/lib/date-time";
 import {
-  type PartyInfoCommunityPostBlock,
   communityPostsTable,
-  createPlaintextCommunityPostBlocks,
   deleteCommunityPostByUid,
+  type PartyInfoCommunityPostBlock,
   parseCommunityPostBlocks,
-  serializeCommunityPostBlocks,
 } from "./community";
-import { type Sensei, getSenseisById, senseisTable } from "./sensei";
-
-export type PartyRaidReference = {
-  raidType: string;
-  seasonIndex: number;
-};
+import { getSenseisById, type Sensei, senseisTable } from "./sensei";
 
 export type DBParty = {
   uid: string;
@@ -40,47 +31,6 @@ export type Party = {
   memo: string | null;
   showAsRaidTip: boolean;
 };
-
-export function getPartyRaidReference(
-  party: { raidType: string | null; seasonIndex: number | null } | null | undefined,
-): PartyRaidReference | null {
-  if (!party?.raidType || party.seasonIndex === null) {
-    return null;
-  }
-
-  return {
-    raidType: party.raidType,
-    seasonIndex: party.seasonIndex,
-  };
-}
-
-export function serializePartyRaidReference(raid: PartyRaidReference | null | undefined): string | undefined {
-  if (!raid) {
-    return undefined;
-  }
-
-  return `${raid.raidType}:${raid.seasonIndex}`;
-}
-
-export function parsePartyRaidReference(
-  value: FormDataEntryValue | string | null | undefined,
-): PartyRaidReference | null {
-  if (typeof value !== "string" || value.length === 0) {
-    return null;
-  }
-
-  const [raidType, rawSeasonIndex, ...rest] = value.split(":");
-  if (!raidType || !rawSeasonIndex || rest.length > 0) {
-    return null;
-  }
-
-  const seasonIndex = Number.parseInt(rawSeasonIndex, 10);
-  if (Number.isNaN(seasonIndex)) {
-    return null;
-  }
-
-  return { raidType, seasonIndex };
-}
 
 function getPartyInfoBlock(blocks: ReturnType<typeof parseCommunityPostBlocks>): PartyInfoCommunityPostBlock | null {
   const block = blocks.find((entry): entry is PartyInfoCommunityPostBlock => entry.type === "party_info");
@@ -110,22 +60,6 @@ function toModel(row: DBParty): Party {
     memo,
     showAsRaidTip: row.visibility === "public",
   };
-}
-
-function buildGuideBlocks(fields: PartyCreateFields): string {
-  const blocks = [
-    ...createPlaintextCommunityPostBlocks(fields.memo),
-    {
-      type: "party_info" as const,
-      title: fields.name,
-      memo: fields.memo,
-      raidType: fields.raidType,
-      seasonIndex: fields.seasonIndex,
-      units: fields.studentIds,
-    },
-  ];
-
-  return serializeCommunityPostBlocks(blocks);
 }
 
 export async function getUserParties(
@@ -215,83 +149,4 @@ export async function getPartiesByRaidReference(
 
 export async function removePartyByUid(env: Env, userId: number, uid: string) {
   await deleteCommunityPostByUid(env, uid, userId);
-}
-
-type PartyCreateFields = Pick<Party, "name" | "studentIds" | "raidType" | "seasonIndex" | "showAsRaidTip" | "memo">;
-
-export async function createParty(env: Env, sensei: Sensei, fields: PartyCreateFields) {
-  const db = drizzle(env.DB);
-  const now = nowUtcIso();
-  await db.insert(communityPostsTable).values({
-    uid: nanoid(8),
-    userId: sensei.id,
-    postType: "guide",
-    title: fields.name,
-    visibility: fields.showAsRaidTip ? "public" : "unlisted",
-    subjectRaidType: fields.raidType,
-    subjectSeasonIndex: fields.seasonIndex,
-    blocks: buildGuideBlocks(fields),
-    displayAt: now,
-    createdAt: now,
-    updatedAt: now,
-  });
-}
-
-type PartyUpdateFields = Partial<PartyCreateFields>;
-
-export async function updateParty(env: Env, sensei: Sensei, uid: string, fields: PartyUpdateFields) {
-  const db = drizzle(env.DB);
-  const existingPost = await db
-    .select({
-      uid: communityPostsTable.uid,
-      title: communityPostsTable.title,
-      subjectRaidType: communityPostsTable.subjectRaidType,
-      subjectSeasonIndex: communityPostsTable.subjectSeasonIndex,
-      visibility: communityPostsTable.visibility,
-      blocks: communityPostsTable.blocks,
-    })
-    .from(communityPostsTable)
-    .where(
-      and(
-        eq(communityPostsTable.uid, uid),
-        eq(communityPostsTable.userId, sensei.id),
-        eq(communityPostsTable.postType, "guide"),
-      ),
-    )
-    .get();
-
-  if (!existingPost) {
-    return;
-  }
-
-  const existingParty = toModel({
-    uid: existingPost.uid,
-    title: existingPost.title,
-    userId: sensei.id,
-    subjectRaidType: existingPost.subjectRaidType,
-    subjectSeasonIndex: existingPost.subjectSeasonIndex,
-    visibility: existingPost.visibility,
-    blocks: existingPost.blocks,
-  });
-
-  const nextFields: PartyCreateFields = {
-    name: fields.name ?? existingParty.name,
-    studentIds: fields.studentIds ?? existingParty.studentIds,
-    raidType: fields.raidType ?? existingParty.raidType,
-    seasonIndex: fields.seasonIndex ?? existingParty.seasonIndex,
-    showAsRaidTip: fields.showAsRaidTip ?? existingParty.showAsRaidTip,
-    memo: fields.memo ?? existingParty.memo,
-  };
-
-  await db
-    .update(communityPostsTable)
-    .set({
-      title: nextFields.name,
-      visibility: nextFields.showAsRaidTip ? "public" : "unlisted",
-      subjectRaidType: nextFields.raidType,
-      subjectSeasonIndex: nextFields.seasonIndex,
-      blocks: buildGuideBlocks(nextFields),
-      updatedAt: nowUtcIso(),
-    })
-    .where(eq(communityPostsTable.uid, uid));
 }

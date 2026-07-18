@@ -95,16 +95,16 @@ export default function User() {
         },
         { text: "관심 학생", Icon: HeartIcon, link: `/@${username}/futures`, active: currentScreen === "futures" },
         {
-          text: "편성/공략",
-          Icon: DocumentTextIcon,
-          link: `/@${username}/parties`,
-          active: currentScreen === "parties",
-        },
-        {
           text: "공략 타임라인",
           Icon: QueueListIcon,
           link: `/@${username}/timelines`,
           active: currentScreen === "timelines",
+        },
+        {
+          text: "편성/공략",
+          Icon: DocumentTextIcon,
+          link: `/@${username}/parties`,
+          active: currentScreen === "parties",
         },
       ]}
     >

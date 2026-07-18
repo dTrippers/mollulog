@@ -1,23 +1,8 @@
-import type { ActionFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect } from "react-router";
-import { Form, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Title } from "~/components/primitives";
-import PartyGenerator from "./$username.parties._components/PartyGenerator";
-import {
-  createParty,
-  getUserParties,
-  parsePartyRaidReference,
-  updateParty,
-} from "~/models/party";
-import { getAllRaidSchedules } from "~/models/raid";
-import { getRecruitedStudentTiers } from "~/models/recruited-student";
-import { getAllStudents } from "~/models/student";
-import { compareInstantDesc, nowUtcIso } from "~/lib/date-time";
 
-export const meta: MetaFunction = () => [
-  { title: "편성/공략 관리 | 몰루로그" },
-];
+export const meta: MetaFunction = () => [{ title: "편성/공략 관리 | 몰루로그" }];
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -25,73 +10,18 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   if (!sensei) {
     return redirect("/unauthorized");
   }
-
-  let party = null;
-  if (params.id) {
-    party = (await getUserParties(env, sensei.username, { includePrivate: true })).find((p) => p.uid === params.id) ?? null;
-  }
-
-  return {
-    allStudents: (await getAllStudents(env, true)).sort((a, b) => a.order - b.order),
-    recruitedStudentTiers: await getRecruitedStudentTiers(env, sensei.id),
-    raids: (await getAllRaidSchedules(env)).sort(
-      (a, b) => compareInstantDesc(a.startAt ?? nowUtcIso(), b.startAt ?? nowUtcIso()),
-    ),
-    party,
-  };
+  return redirect(params.id === "new" ? "/timelines/new" : `/@${sensei.username}/parties`);
 };
 
-export const action: ActionFunction = async ({ context, request }) => {
+export const action = async ({ context, request }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }
-
-  const formData = await request.formData();
-  const selectedRaid = parsePartyRaidReference(formData.get("raid"));
-  const showAsRaidTip = formData.has("showAsRaidTip") ? formData.get("showAsRaidTip") === "true" : undefined;
-  const partyPatches = {
-    name: formData.get("name") as string,
-    studentIds: JSON.parse(formData.get("studentIds") as string),
-    raidType: selectedRaid?.raidType ?? null,
-    seasonIndex: selectedRaid?.seasonIndex ?? null,
-    showAsRaidTip,
-    memo: formData.get("memo") as string | null,
-  };
-
-  const uid = formData.get("uid");
-  if (!uid) {
-    await createParty(env, sensei, {
-      ...partyPatches,
-      showAsRaidTip: showAsRaidTip ?? false,
-    });
-  } else {
-    await updateParty(env, sensei, uid as string, partyPatches);
-  }
-
-  return redirect("/my?path=parties");
+  return redirect("/timelines/new");
 };
 
 export default function EditParties() {
-  const loaderData = useLoaderData<typeof loader>();
-
-  return (
-    <>
-      <Title text="편성/공략 관리" />
-      <Form method="post">
-        {loaderData.party && <input type="hidden" name="uid" value={loaderData.party.uid} />}
-        <div className="max-w-4xl">
-          <PartyGenerator
-            party={loaderData.party ?? undefined}
-            raids={loaderData.raids}
-            students={loaderData.allStudents.map((student) => ({
-              ...student,
-              tier: loaderData.recruitedStudentTiers[student.uid],
-            }))}
-          />
-        </div>
-      </Form>
-    </>
-  );
+  return null;
 }

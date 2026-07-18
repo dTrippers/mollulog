@@ -7,11 +7,12 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import LikeButton from "~/components/features/engagement/LikeButton";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import { RaidPartyCard, type RaidPartyRow } from "~/components/features/raids";
+import { WalkthroughTimelineFeedbackButton } from "~/components/features/walkthrough-timeline";
 import WalkthroughBossSelect from "~/components/features/walkthrough-timeline/WalkthroughBossSelect";
 import { AttributeBadge, Button, EmptyView, PanelFilterButtonsSection, PanelSwitchRow } from "~/components/primitives";
 import { PanelBody, PanelBodySection } from "~/components/primitives/PanelBody";
 import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
-import { listPostgresPublicWalkthroughTimelines } from "~/db/postgres/walkthrough-timelines";
+import { listPostgresVisibleWalkthroughTimelines } from "~/db/postgres/walkthrough-timelines";
 import {
   WALKTHROUGH_TIMELINE_DEFENSE_TYPES,
   WALKTHROUGH_TIMELINE_DIFFICULTIES,
@@ -68,9 +69,13 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       WALKTHROUGH_TIMELINE_DIFFICULTIES.find((difficulty) => difficulty === searchParams.get("difficulty")) ?? null,
     likedOnly,
   };
-  const timelines = await listPostgresPublicWalkthroughTimelines(
+  const timelines = await listPostgresVisibleWalkthroughTimelines(
     env,
-    { ...filters, likedByUserId: likedOnly ? sensei.id : null },
+    {
+      ...filters,
+      likedByUserId: likedOnly ? sensei.id : null,
+      viewerUserId: sensei?.id,
+    },
     { ctx },
   );
   const timelineUids = timelines.map((timeline) => timeline.uid);
@@ -224,6 +229,7 @@ export default function WalkthroughTimelineCatalogPage() {
           ),
         },
       ]}
+      belowPanels={<WalkthroughTimelineFeedbackButton signedIn={signedIn} />}
     >
       <div className="py-4">
         {signedIn ? (
@@ -312,10 +318,17 @@ function WalkthroughTimelineCard({
           <div className="relative min-w-0">
             <p className="mb-1 text-xs font-medium text-muted-foreground">{bossName ?? "보스 정보 확인 불가"}</p>
             <h2 className="line-clamp-2 text-lg font-bold text-foreground">{timeline.title}</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {author ? `@${author} · ` : ""}
-              {dayjs(timeline.updatedAt).format("YYYY.MM.DD")}
-            </p>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <span>
+                {author ? `@${author} · ` : ""}
+                {dayjs(timeline.updatedAt).format("YYYY.MM.DD")}
+              </span>
+              {timeline.visibility !== "public" ? (
+                <span className="rounded-full bg-muted px-2 py-0.5">
+                  {timeline.visibility === "unlisted" ? "목록 미노출" : "나만 보기"}
+                </span>
+              ) : null}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 px-4 py-3">
@@ -338,14 +351,22 @@ function WalkthroughTimelineCard({
         className="grow rounded-none pt-0 md:pt-0"
       />
       <div className="flex items-center justify-between gap-2 px-4 pb-4">
-        <LikeButton
-          targetUid={timeline.uid}
-          action={`/api/timelines/${timeline.uid}/likes`}
-          liked={engagement.liked}
-          likeCount={engagement.likeCount}
-          signedIn={signedIn}
+        {timeline.visibility === "public" ? (
+          <LikeButton
+            targetUid={timeline.uid}
+            action={`/api/timelines/${timeline.uid}/likes`}
+            liked={engagement.liked}
+            likeCount={engagement.likeCount}
+            signedIn={signedIn}
+          />
+        ) : null}
+        <Button
+          to={`/timelines/${timeline.uid}`}
+          text="자세히 보기"
+          icon={ArrowRightIcon}
+          size="xs"
+          className="ml-auto"
         />
-        <Button to={`/timelines/${timeline.uid}`} text="자세히 보기" icon={ArrowRightIcon} size="xs" />
       </div>
     </article>
   );

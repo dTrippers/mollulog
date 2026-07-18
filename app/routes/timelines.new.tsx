@@ -9,13 +9,14 @@ import {
   WalkthroughTimelineEditor,
   type WalkthroughTimelineEditorActionState,
   type WalkthroughTimelineEditorHandle,
+  WalkthroughTimelineFeedbackButton,
   WalkthroughTimelinePartyPanel,
 } from "~/components/features/walkthrough-timeline";
 import { createPostgresWalkthroughTimeline } from "~/db/postgres/walkthrough-timelines";
 import {
+  isWalkthroughTimelineVisibility,
   parseWalkthroughTimelineDocument,
   type WalkthroughParty,
-  type WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
 import { getLogger } from "~/lib/observability.server";
 import { syncWalkthroughTimelineCommunityPost } from "~/models/community";
@@ -54,8 +55,8 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   try {
     const document = parseWalkthroughTimelineDocument(JSON.parse(String(formData.get("document") ?? "null")));
-    const visibility = String(formData.get("visibility") ?? "private") as WalkthroughTimelineVisibility;
-    if (!["public", "private"].includes(visibility)) throw new Error("공개 범위를 확인해주세요.");
+    const visibility = String(formData.get("visibility") ?? "private");
+    if (!isWalkthroughTimelineVisibility(visibility)) throw new Error("공개 범위를 확인해주세요.");
     const timeline = await createPostgresWalkthroughTimeline(
       env,
       currentUser.id,
@@ -122,6 +123,8 @@ export default function NewWalkthroughTimelinePage() {
               activePartyIndex={activePartyIndex}
               onChange={setActivePartyIndex}
               onAddParty={() => editorRef.current?.addParty()}
+              onDeleteParty={(index) => editorRef.current?.deleteParty(index)}
+              onSave={() => editorRef.current?.save()}
               onUndo={() => editorRef.current?.undo()}
               onRedo={() => editorRef.current?.redo()}
               canUndo={actionState.canUndo}
@@ -130,6 +133,7 @@ export default function NewWalkthroughTimelinePage() {
           ),
         },
       ]}
+      belowPanels={<WalkthroughTimelineFeedbackButton signedIn />}
     >
       <div className="py-4">
         <WalkthroughTimelineEditor

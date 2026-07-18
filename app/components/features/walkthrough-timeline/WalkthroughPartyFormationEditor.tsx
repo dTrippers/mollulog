@@ -40,6 +40,8 @@ function CompactGrowthInput({
   min,
   max,
   disabled = false,
+  hideLabel = false,
+  grouped = false,
   inputProps,
   onChange,
 }: {
@@ -48,12 +50,14 @@ function CompactGrowthInput({
   min: number;
   max: number;
   disabled?: boolean;
+  hideLabel?: boolean;
+  grouped?: boolean;
   inputProps: NumberInputFlowNavigationInputProps;
   onChange: (value: number | null) => void;
 }) {
   return (
     <label className="block space-y-1 text-center text-xs text-muted-foreground">
-      <span className="block whitespace-nowrap">{label}</span>
+      <span className={hideLabel ? "sr-only" : "block whitespace-nowrap"}>{label}</span>
       <input
         {...inputProps}
         type="text"
@@ -64,7 +68,11 @@ function CompactGrowthInput({
         disabled={disabled}
         aria-label={label}
         title={`${label} ${min}~${max}`}
-        className="h-8 w-9 rounded-md border border-input bg-background px-1 text-center text-sm font-semibold text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
+        className={
+          grouped
+            ? "h-8 w-full min-w-0 border-0 bg-transparent px-1 text-center text-sm font-semibold text-foreground outline-none transition-colors focus:relative focus:z-10 focus:bg-background focus:ring-2 focus:ring-inset focus:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-50"
+            : "h-8 w-9 rounded-md border border-input bg-background px-1 text-center text-sm font-semibold text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50"
+        }
         onChange={(event) => {
           const digits = event.target.value.replace(/[^0-9]/g, "").slice(0, String(max).length);
           if (!digits) {
@@ -115,11 +123,9 @@ export default function WalkthroughPartyFormationEditor({
   const selectingSlotRef = useRef<number | null>(null);
   const slotRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const growthInputNavigation = useNumberInputFlowNavigation();
   const strikers = strikerCount(partySize);
   const selectedUnit = party.units.find((unit) => unit.slot === selectedSlot);
   const selectedStudent = students.find((student) => student.uid === selectedUnit?.studentUid);
-  const selectedTier = selectedUnit?.snapshot?.tier ?? selectedStudent?.initialTier;
   const requiredRole = selectedSlot < strikers ? "striker" : "special";
   const hasSearch = search.trim().length > 0;
   const occupiedStudentUids = useMemo(
@@ -138,24 +144,6 @@ export default function WalkthroughPartyFormationEditor({
   useEffect(() => {
     if (selectedSlot >= partySize) setSelectedSlot(0);
   }, [partySize, selectedSlot]);
-
-  const updateUnit = (update: (unit: WalkthroughUnit) => WalkthroughUnit) => {
-    if (!selectedUnit) return;
-    onChange({
-      ...party,
-      units: party.units.map((unit) => (unit.slot === selectedSlot ? update(unit) : unit)),
-    });
-  };
-
-  const updateSnapshotField = (field: keyof NonNullable<WalkthroughUnit["snapshot"]>, value: number | null) => {
-    updateUnit((unit) => ({
-      ...unit,
-      snapshot: {
-        ...unit.snapshot,
-        [field]: value ?? undefined,
-      },
-    }));
-  };
 
   const selectStudent = (studentUid: string) => {
     if (selectingSlotRef.current === selectedSlot) return;
@@ -245,6 +233,7 @@ export default function WalkthroughPartyFormationEditor({
             const student = students.find((candidate) => candidate.uid === unit?.studentUid);
             const roleLabel = slot < strikers ? "스트라이커" : "스페셜";
             const roleIndex = slot < strikers ? slot + 1 : slot - strikers + 1;
+            const isStartingSkill = Boolean(student && party.startingSkillStudentUids.includes(student.uid));
             return (
               <div
                 // Slots have stable numeric identities within a party, even when the party size changes.
@@ -272,6 +261,7 @@ export default function WalkthroughPartyFormationEditor({
                       name={student.name}
                       role={student.role}
                       namePlacement="overlay"
+                      label={isStartingSkill ? <span className="whitespace-nowrap">시작 스킬</span> : undefined}
                       flush
                     />
                   ) : (
@@ -380,123 +370,224 @@ export default function WalkthroughPartyFormationEditor({
       )}
 
       {selectedUnit?.studentUid && selectedStudent && (
-        <div>
-          {typeof selectedStudent.initialTier === "number" && typeof selectedTier === "number" ? (
-            <div className="flex w-full min-w-0 flex-wrap items-stretch gap-2">
-              <fieldset className="shrink-0 rounded-md border border-border/70 px-2 py-1.5">
-                <legend className="px-1 text-xs font-semibold text-muted-foreground">기본 정보</legend>
-                <div className="flex items-end gap-1.5">
-                  <div className="space-y-1 text-center">
-                    <span className="block text-xs text-muted-foreground">성급</span>
-                    <div className="flex h-8 items-center">
-                      <TierSelector
-                        initialTier={selectedStudent.initialTier}
-                        currentTier={selectedTier}
-                        iconSize="sm"
-                        onTierChange={(tier) => {
-                          const weaponLevel = selectedUnit.snapshot?.weaponLevel;
-                          const weaponLevelMax = getWeaponLevelMaxByTier(tier);
-                          updateUnit((unit) => ({
-                            ...unit,
-                            snapshot: {
-                              ...unit.snapshot,
-                              tier,
-                              ...(weaponLevel !== undefined && weaponLevel > weaponLevelMax
-                                ? { weaponLevel: weaponLevelMax }
-                                : {}),
-                            },
-                          }));
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <CompactGrowthInput
-                    label="학생 Lv"
-                    min={1}
-                    max={90}
-                    value={selectedUnit.snapshot?.level ?? null}
-                    inputProps={growthInputNavigation.getInputProps()}
-                    onChange={(value) => updateSnapshotField("level", value)}
-                  />
-                </div>
-              </fieldset>
-              <fieldset className="shrink-0 rounded-md border border-border/70 px-2 py-1.5">
-                <legend className="px-1 text-xs font-semibold text-muted-foreground">스킬</legend>
-                <div className="flex items-end gap-1.5">
-                  {GROWTH_FIELDS.map(({ field, label, min, max }) => (
-                    <CompactGrowthInput
-                      key={field}
-                      label={label}
-                      min={min}
-                      max={max}
-                      value={selectedUnit.snapshot?.[field] ?? null}
-                      inputProps={growthInputNavigation.getInputProps()}
-                      onChange={(value) => updateSnapshotField(field, value)}
-                    />
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset className="shrink-0 rounded-md border border-border/70 px-2 py-1.5">
-                <legend className="px-1 text-xs font-semibold text-muted-foreground">장비</legend>
-                <div className="flex items-end gap-1.5">
-                  {EQUIPMENT_FIELDS.map(({ field, label }) => (
-                    <CompactGrowthInput
-                      key={field}
-                      label={label}
-                      min={1}
-                      max={10}
-                      value={selectedUnit.snapshot?.[field] ?? null}
-                      inputProps={growthInputNavigation.getInputProps()}
-                      onChange={(value) => updateSnapshotField(field, value)}
-                    />
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset className="shrink-0 rounded-md border border-border/70 px-2 py-1.5">
-                <legend className="px-1 text-xs font-semibold text-muted-foreground">능력 해방</legend>
-                <div className="flex items-end gap-1.5">
-                  {ABILITY_FIELDS.map(({ field, label }) => (
-                    <CompactGrowthInput
-                      key={field}
-                      label={label}
-                      disabled={selectedTier <= 5}
-                      min={0}
-                      max={ABILITY_RELEASE_MAX_LEVEL}
-                      value={selectedUnit.snapshot?.[field] ?? null}
-                      inputProps={growthInputNavigation.getInputProps({ disabled: selectedTier <= 5 })}
-                      onChange={(value) => updateSnapshotField(field, value)}
-                    />
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset className="shrink-0 rounded-md border border-border/70 px-2 py-1.5">
-                <legend className="px-1 text-xs font-semibold text-muted-foreground">옵션</legend>
-                <label className="flex h-full min-h-8 items-center gap-1.5 text-xs">
-                  <input
-                    type="checkbox"
-                    checked={party.startingSkillStudentUids.includes(selectedUnit.studentUid)}
-                    disabled={
-                      !party.startingSkillStudentUids.includes(selectedUnit.studentUid) &&
-                      party.startingSkillStudentUids.length >= 3
-                    }
-                    onChange={(event) =>
-                      onChange({
-                        ...party,
-                        startingSkillStudentUids: event.target.checked
-                          ? [...new Set([...party.startingSkillStudentUids, selectedUnit.studentUid as string])]
-                          : party.startingSkillStudentUids.filter((uid) => uid !== selectedUnit.studentUid),
-                      })
-                    }
-                  />
-                  시작 스킬
-                </label>
-              </fieldset>
-            </div>
-          ) : (
-            <p className="text-sm text-destructive">학생의 기본 성급 정보를 불러올 수 없어요.</p>
-          )}
-        </div>
+        <label className="flex min-h-8 items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={party.startingSkillStudentUids.includes(selectedUnit.studentUid)}
+            disabled={
+              !party.startingSkillStudentUids.includes(selectedUnit.studentUid) &&
+              party.startingSkillStudentUids.length >= 3
+            }
+            onChange={(event) =>
+              onChange({
+                ...party,
+                startingSkillStudentUids: event.target.checked
+                  ? [...new Set([...party.startingSkillStudentUids, selectedUnit.studentUid as string])]
+                  : party.startingSkillStudentUids.filter((uid) => uid !== selectedUnit.studentUid),
+              })
+            }
+          />
+          <span>시작 스킬로 설정</span>
+        </label>
       )}
+    </div>
+  );
+}
+
+type GrowthEditorProps = Pick<Props, "party" | "students" | "onChange">;
+
+export function WalkthroughPartyGrowthEditor({ party, students, onChange }: GrowthEditorProps) {
+  const growthInputNavigation = useNumberInputFlowNavigation();
+  const units = [...party.units].filter((unit) => unit.studentUid).sort((left, right) => left.slot - right.slot);
+
+  const updateUnit = (slot: number, update: (unit: WalkthroughUnit) => WalkthroughUnit) => {
+    onChange({
+      ...party,
+      units: party.units.map((unit) => (unit.slot === slot ? update(unit) : unit)),
+    });
+  };
+
+  const updateSnapshotField = (
+    unit: WalkthroughUnit,
+    field: keyof NonNullable<WalkthroughUnit["snapshot"]>,
+    value: number | null,
+  ) => {
+    updateUnit(unit.slot, (current) => ({
+      ...current,
+      snapshot: {
+        ...current.snapshot,
+        [field]: value ?? undefined,
+      },
+    }));
+  };
+
+  if (units.length === 0) {
+    return <p className="py-6 text-center text-sm text-muted-foreground">편성된 학생이 없어요.</p>;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-md border border-border">
+      <table className="w-full min-w-[47rem] table-fixed border-collapse text-sm">
+        <thead className="bg-muted/70 text-xs text-muted-foreground">
+          <tr className="border-b border-border">
+            <th scope="col" className="w-14 px-3 py-2 text-center font-semibold">
+              <span className="sr-only">학생</span>
+            </th>
+            <th scope="col" className="w-44 border-l border-border px-3 py-2 font-semibold">
+              성급
+            </th>
+            <th scope="col" className="w-14 px-3 py-2 font-semibold">
+              Lv
+            </th>
+            <th scope="col" className="w-44 border-l border-border px-2 py-2 font-semibold">
+              <span>스킬</span>
+              <span className="mt-1 flex font-medium">
+                {GROWTH_FIELDS.map(({ field, label }) => (
+                  <span key={field} className="min-w-0 flex-1">
+                    {label}
+                  </span>
+                ))}
+              </span>
+            </th>
+            <th scope="col" className="w-36 border-l border-border px-2 py-2 font-semibold">
+              <span>장비</span>
+              <span className="mt-1 flex font-medium">
+                {EQUIPMENT_FIELDS.map(({ field, label }) => (
+                  <span key={field} className="min-w-0 flex-1">
+                    {label}
+                  </span>
+                ))}
+              </span>
+            </th>
+            <th scope="col" className="w-36 border-l border-border px-2 py-2 font-semibold">
+              <span>능력 해방</span>
+              <span className="mt-1 flex font-medium">
+                {ABILITY_FIELDS.map(({ field, label }) => (
+                  <span key={field} className="min-w-0 flex-1">
+                    {label}
+                  </span>
+                ))}
+              </span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {units.map((unit) => {
+            const student = students.find((candidate) => candidate.uid === unit.studentUid);
+            if (!student) return null;
+            const selectedTier = unit.snapshot?.tier ?? student.initialTier;
+            const canEditGrowth = typeof student.initialTier === "number" && typeof selectedTier === "number";
+
+            return (
+              <tr key={unit.slot} className="border-b border-border last:border-b-0">
+                <th scope="row" className="px-3 py-2 font-medium">
+                  <span className="sr-only">{student.name}</span>
+                  <div className="mx-auto size-9 overflow-hidden rounded-md" title={student.name}>
+                    <StudentCard uid={student.uid} name={student.name} role={student.role} hideName flush />
+                  </div>
+                </th>
+                {canEditGrowth ? (
+                  <>
+                    <td className="border-l border-border px-2 py-2">
+                      <div className="flex h-9 min-w-24 items-center justify-center px-2">
+                        <TierSelector
+                          initialTier={student.initialTier}
+                          currentTier={selectedTier}
+                          iconSize="sm"
+                          onTierChange={(tier) => {
+                            const weaponLevel = unit.snapshot?.weaponLevel;
+                            const weaponLevelMax = getWeaponLevelMaxByTier(tier);
+                            updateUnit(unit.slot, (current) => ({
+                              ...current,
+                              snapshot: {
+                                ...current.snapshot,
+                                tier,
+                                ...(weaponLevel !== undefined && weaponLevel > weaponLevelMax
+                                  ? { weaponLevel: weaponLevelMax }
+                                  : {}),
+                              },
+                            }));
+                          }}
+                        />
+                      </div>
+                    </td>
+                    <td className="px-2 py-2">
+                      <CompactGrowthInput
+                        label={`${student.name} 학생 레벨`}
+                        hideLabel
+                        min={1}
+                        max={90}
+                        value={unit.snapshot?.level ?? null}
+                        inputProps={growthInputNavigation.getInputProps()}
+                        onChange={(value) => updateSnapshotField(unit, "level", value)}
+                      />
+                    </td>
+                    <td className="border-l border-border px-2 py-2">
+                      <div className="flex h-9 overflow-hidden rounded-md border border-input bg-background">
+                        {GROWTH_FIELDS.map(({ field, label, min, max }, index) => (
+                          <div key={field} className={`min-w-0 flex-1 ${index === 0 ? "" : "border-l border-input"}`}>
+                            <CompactGrowthInput
+                              label={`${student.name} ${label} 스킬`}
+                              hideLabel
+                              grouped
+                              min={min}
+                              max={max}
+                              value={unit.snapshot?.[field] ?? null}
+                              inputProps={growthInputNavigation.getInputProps()}
+                              onChange={(value) => updateSnapshotField(unit, field, value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="border-l border-border px-2 py-2">
+                      <div className="flex h-9 overflow-hidden rounded-md border border-input bg-background">
+                        {EQUIPMENT_FIELDS.map(({ field, label }, index) => (
+                          <div key={field} className={`min-w-0 flex-1 ${index === 0 ? "" : "border-l border-input"}`}>
+                            <CompactGrowthInput
+                              label={`${student.name} 장비 ${label}`}
+                              hideLabel
+                              grouped
+                              min={1}
+                              max={10}
+                              value={unit.snapshot?.[field] ?? null}
+                              inputProps={growthInputNavigation.getInputProps()}
+                              onChange={(value) => updateSnapshotField(unit, field, value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="border-l border-border px-2 py-2">
+                      <div className="flex h-9 overflow-hidden rounded-md border border-input bg-background">
+                        {ABILITY_FIELDS.map(({ field, label }, index) => (
+                          <div key={field} className={`min-w-0 flex-1 ${index === 0 ? "" : "border-l border-input"}`}>
+                            <CompactGrowthInput
+                              label={`${student.name} 능력 해방 ${label}`}
+                              hideLabel
+                              grouped
+                              disabled={selectedTier <= 5}
+                              min={0}
+                              max={ABILITY_RELEASE_MAX_LEVEL}
+                              value={unit.snapshot?.[field] ?? null}
+                              inputProps={growthInputNavigation.getInputProps({ disabled: selectedTier <= 5 })}
+                              onChange={(value) => updateSnapshotField(unit, field, value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                  </>
+                ) : (
+                  <td colSpan={5} className="border-l border-border px-3 py-2 text-sm text-destructive">
+                    학생의 기본 성급 정보를 불러올 수 없어요.
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

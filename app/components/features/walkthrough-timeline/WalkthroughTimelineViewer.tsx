@@ -7,7 +7,6 @@ import {
 } from "@heroicons/react/24/outline";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Button from "~/components/primitives/Button";
-import Toggle from "~/components/primitives/Toggle";
 import type { TimelineAction, TimelineStep, WalkthroughParty } from "~/domain/walkthrough-timeline";
 import { cn } from "~/lib/utils";
 import { studentImageUrl } from "~/models/assets";
@@ -131,7 +130,7 @@ function TimelineActionItem({
   }
 
   return (
-    <div className={cn("flex shrink-0 items-center", preview ? "gap-0" : "gap-2")}>
+    <div className={cn("flex shrink-0 items-center", preview ? "gap-1.5" : "gap-2")}>
       <div className={cn("flex items-center", preview ? "gap-1" : "gap-1.5")}>
         <TimelineActionImage uid={action.studentUid} name={student?.name ?? "학생"} preview={preview} />
         {action.targetStudentUid && (
@@ -151,7 +150,16 @@ function TimelineActionItem({
           </>
         )}
       </div>
-      {!preview && detail && <span className="max-w-28 break-keep text-sm font-semibold leading-5">{detail}</span>}
+      {detail && (
+        <span
+          className={cn(
+            "max-w-28 break-keep font-semibold",
+            preview ? "text-xs leading-4 text-foreground/80" : "text-sm leading-5",
+          )}
+        >
+          {detail}
+        </span>
+      )}
     </div>
   );
 }
@@ -226,6 +234,11 @@ function StepPreview({
           <TimelineActionSequence actions={item.step.actions} studentsByUid={studentsByUid} preview />
         </div>
       )}
+      {item.step.note?.trim() && (
+        <p className="w-full whitespace-pre-wrap break-words text-sm leading-5 text-muted-foreground">
+          {item.step.note}
+        </p>
+      )}
     </div>
   );
 }
@@ -242,14 +255,12 @@ export function WalkthroughTimelineViewer({
   currentIndex,
   onCurrentIndexChange,
   allowFullscreen = false,
-  wakeLockControl,
 }: {
   items: TimelineViewerItem[];
   studentsByUid: Record<string, TimelineViewerStudent>;
   currentIndex: number;
   onCurrentIndexChange: (index: number) => void;
   allowFullscreen?: boolean;
-  wakeLockControl?: { enabled: boolean; active: boolean; unavailable: boolean; onToggle: () => void };
 }) {
   const containerRef = useRef<HTMLElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
@@ -381,21 +392,6 @@ export function WalkthroughTimelineViewer({
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
           <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress * 100}%` }} />
         </div>
-        {wakeLockControl && !wakeLockControl.unavailable && (
-          <div className="mt-3 flex items-center justify-between gap-3 md:hidden">
-            <div>
-              <p className="text-sm font-medium">화면 항상 켜기</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {wakeLockControl.active ? "전투 중 화면이 꺼지지 않습니다." : "진행 중 화면 꺼짐을 막습니다."}
-              </p>
-            </div>
-            <Toggle
-              initialState={wakeLockControl.enabled}
-              className="m-0 shrink-0"
-              onChange={wakeLockControl.onToggle}
-            />
-          </div>
-        )}
       </header>
 
       <main
@@ -465,8 +461,11 @@ export function WalkthroughTimelineViewer({
                   !active && !future && distance > 2 && "scale-[0.97] opacity-30 hover:opacity-60",
                 )}
                 aria-current={active ? "step" : undefined}
-                aria-label={`${itemNavigationPosition + 1}번째 단계로 이동`}
-                onClick={() => onCurrentIndexChange(index)}
+                aria-label={future ? "다음 단계로 이동" : `${itemNavigationPosition + 1}번째 단계로 이동`}
+                onClick={() => {
+                  if (future) goNext();
+                  else onCurrentIndexChange(index);
+                }}
               >
                 {active ? (
                   <article className="rounded-lg border border-border bg-card px-5 py-5 shadow-sm">

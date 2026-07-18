@@ -5,8 +5,12 @@ export const WALKTHROUGH_TIMELINE_LIMITS = {
   actionsPerStep: 20,
 } as const;
 
-export const WALKTHROUGH_TIMELINE_VISIBILITIES = ["public", "private"] as const;
+export const WALKTHROUGH_TIMELINE_VISIBILITIES = ["public", "unlisted", "private"] as const;
 export type WalkthroughTimelineVisibility = (typeof WALKTHROUGH_TIMELINE_VISIBILITIES)[number];
+
+export function isWalkthroughTimelineVisibility(value: unknown): value is WalkthroughTimelineVisibility {
+  return WALKTHROUGH_TIMELINE_VISIBILITIES.some((visibility) => visibility === value);
+}
 
 export const WALKTHROUGH_TIMELINE_DIFFICULTIES = [
   "normal",

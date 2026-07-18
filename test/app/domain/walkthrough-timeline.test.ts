@@ -1,10 +1,18 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  isWalkthroughTimelineVisibility,
   InvalidWalkthroughTimelineDocumentError,
   WALKTHROUGH_TIMELINE_DIFFICULTIES,
   parseWalkthroughTimelineDocument,
   type WalkthroughTimelineDocument,
 } from "~/domain/walkthrough-timeline";
+
+describe("walkthrough timeline visibility", () => {
+  it("accepts public, unlisted, and private visibility", () => {
+    expect(["public", "unlisted", "private"].every(isWalkthroughTimelineVisibility)).toBe(true);
+    expect(isWalkthroughTimelineVisibility("unknown")).toBe(false);
+  });
+});
 
 function validDocument(): WalkthroughTimelineDocument {
   return {
