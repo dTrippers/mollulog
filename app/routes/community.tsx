@@ -1,5 +1,6 @@
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import {
+  BookOpenIcon,
   ChatBubbleLeftRightIcon,
   PlayCircleIcon,
   SparklesIcon,
@@ -47,6 +48,11 @@ const COMMUNITY_POST_TYPE_FILTERS: {
     label: "모집 결과",
     Icon: SparklesIcon,
   },
+  {
+    type: "walkthrough_timeline",
+    label: "공략 타임라인",
+    Icon: BookOpenIcon,
+  },
 ];
 
 function isCommunityVisiblePostType(type: string): type is CommunityVisiblePostType {
@@ -85,7 +91,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     pageSize: COMMUNITY_FEED_PAGE_SIZE,
     ctx,
   });
-  const enrichedFeed = await enrichCommunityFeedPosts(publicReadEnv, feedPage.items, ctx);
+  const enrichedFeed = await enrichCommunityFeedPosts(publicReadEnv, feedPage.items, {
+    ctx,
+    currentUserId: currentUser?.id,
+  });
 
   return {
     postTypes,
@@ -106,8 +115,8 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({ actionResult, defau
 };
 
 export const meta: MetaFunction = ({ location }) => {
-  const title = "평가/의견 | 몰루로그";
-  const description = "블루 아카이브의 학생 평가와 이벤트 의견을 확인해보세요.";
+  const title = "피드 | 몰루로그";
+  const description = "선생님들의 학생 평가, 이벤트 의견, 모집 결과와 공략 타임라인을 확인해보세요.";
   return [
     { title },
     { name: "description", content: description },
@@ -135,8 +144,8 @@ export default function CommunityPage() {
 
   return (
     <Page
-      title="평가/의견"
-      description="선생님들의 학생 평가와 이벤트 의견을 한곳에서 확인해보세요"
+      title="피드"
+      description="선생님들의 평가, 의견, 모집 결과와 공략 타임라인을 한곳에서 확인해보세요"
       belowTitle={<CommunityPostTypeFilter selectedPostTypes={postTypes} />}
       layout="vertical"
     >
@@ -146,7 +155,7 @@ export default function CommunityPage() {
         studentsByUid={studentsByUid}
         page={page}
         totalPages={totalPages}
-        emptyText="아직 표시할 커뮤니티 게시물이 없어요"
+        emptyText="아직 표시할 피드 컨텐츠가 없어요"
         resetKey={postTypes.join(",")}
         getPageUrl={getPageUrl}
       />

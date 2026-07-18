@@ -8,7 +8,7 @@ import { ProfileImage, SubTitle, Title } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
-import { type MoreCurrentUser, getMoreViewData } from "~/views/more";
+import { getMoreViewData, type MoreCurrentUser } from "~/views/more";
 
 type MoreActionItem = {
   key: string;
@@ -44,7 +44,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 };
 
 export default function MoreIndexPage() {
-  const { currentUser, upcomingEvent, hasUnconsumedCoupons } = useLoaderData<typeof loader>();
+  const { currentUser, upcomingEvent, hasOngoingRaid, hasUnconsumedCoupons } = useLoaderData<typeof loader>();
   const { showSignIn } = useSignIn();
 
   const bottomNavigationPaths = new Set(
@@ -59,6 +59,7 @@ export default function MoreIndexPage() {
   const menuItems = getNavigationSections({
     pathname: "/more",
     upcomingEvent,
+    hasOngoingRaid,
     hasUnconsumedCoupons,
   }).flatMap((section) =>
     section.items

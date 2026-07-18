@@ -13,8 +13,9 @@ type DropdownProps<T extends string> = {
   value: T;
   options: DropdownOption<T>[];
   onChange: (value: T) => void;
-  size?: "sm" | "xs";
+  size?: "md" | "sm" | "xs";
   className?: string;
+  fullWidth?: boolean;
 };
 
 const optionColors = {
@@ -33,6 +34,7 @@ export default function Dropdown<T extends string>({
   onChange,
   size = "sm",
   className,
+  fullWidth = false,
 }: DropdownProps<T>) {
   const [isOpen, setIsOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -54,13 +56,18 @@ export default function Dropdown<T extends string>({
   }, [isOpen]);
 
   return (
-    <div ref={rootRef} className={cn("relative w-fit", className)}>
+    <div ref={rootRef} className={cn("relative", fullWidth ? "w-full" : "w-fit", className)}>
       {label && <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>}
       <button
         type="button"
         className={cn(
           "inline-flex items-center justify-between gap-2 rounded-md border border-input bg-background font-medium text-foreground shadow-xs transition-colors hover:bg-muted",
-          size === "xs" ? "min-h-8 px-2.5 py-1 text-xs" : "min-h-9 px-3 py-1.5 text-sm",
+          fullWidth && "w-full",
+          size === "xs"
+            ? "min-h-8 px-2.5 py-1 text-xs"
+            : size === "md"
+              ? "min-h-10 px-3 py-2 text-sm"
+              : "min-h-9 px-3 py-1.5 text-sm",
         )}
         aria-haspopup="menu"
         aria-expanded={isOpen}

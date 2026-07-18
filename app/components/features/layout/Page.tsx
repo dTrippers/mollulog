@@ -17,6 +17,7 @@ type PageProps = {
   screens?: PageScreenSelectorProps["screens"];
   showMobileScreens?: boolean;
   panels?: PagePanelProps[];
+  belowPanels?: React.ReactNode;
   links?: PageLinkProps[];
   contentWidth?: "narrow" | "full";
   layout?: "horizontal" | "vertical";
@@ -59,6 +60,7 @@ export default function Page({
   screens,
   showMobileScreens = true,
   panels,
+  belowPanels,
   links,
   contentWidth = "narrow",
   layout = "horizontal",
@@ -93,6 +95,7 @@ export default function Page({
           belowTitle={belowTitle}
           screens={screens}
           panels={panels}
+          belowPanels={belowPanels}
           links={links}
           layout={layout}
         />
@@ -124,6 +127,7 @@ export default function Page({
           onClose={() => setOpenPanelIndex(null)}
         >
           {openPanel.children}
+          {belowPanels ? <div className="mt-3">{belowPanels}</div> : null}
         </BottomSheet>
       )}
     </>
@@ -137,12 +141,13 @@ function PageSidebar({
   belowTitle,
   screens,
   panels,
+  belowPanels,
   links,
   layout = "horizontal",
 }: Omit<PageProps, "children" | "contentWidth">) {
   const isVertical = layout === "vertical";
   const containerClass = isVertical
-    ? "relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar"
+    ? "relative z-20 shrink-0 w-full overflow-visible"
     : "relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar lg:z-auto lg:h-screen lg:max-w-64 xl:max-w-xs lg:mr-4 xl:mr-6 lg:sticky lg:top-6 lg:self-start lg:overflow-y-scroll";
 
   return (
@@ -165,11 +170,14 @@ function PageSidebar({
       {(panels || links) && (
         <div className="my-8 hidden lg:block">
           {panels && panels.length > 0 && (
-            <div className="space-y-3">
-              {panels.map((panel) => (
-                <PagePanel key={panel.title} {...panel} />
-              ))}
-            </div>
+            <>
+              <div className="space-y-3">
+                {panels.map((panel) => (
+                  <PagePanel key={panel.title} {...panel} />
+                ))}
+              </div>
+              {belowPanels ? <div className="mt-3">{belowPanels}</div> : null}
+            </>
           )}
           {links && links.length > 0 && (
             <div className={cn("space-y-3", panels && panels.length > 0 && "mt-8")}>

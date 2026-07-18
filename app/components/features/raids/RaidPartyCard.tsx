@@ -50,6 +50,7 @@ type RaidPartyCardProps = {
   emptyText?: string;
   className?: string;
   summaryClassName?: string;
+  slotCount?: 6 | 10;
   getStudentActions?: (slot: RaidPartySlot, rowIndex: number, slotIndex: number) => RaidPartyStudentAction[];
 };
 
@@ -67,6 +68,7 @@ export default function RaidPartyCard({
   emptyText = "편성 데이터가 없어요",
   className,
   summaryClassName,
+  slotCount = PARTY_SLOT_COUNT,
   getStudentActions,
 }: RaidPartyCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -102,6 +104,7 @@ export default function RaidPartyCard({
                   rowIndex={rowIndex}
                   popupIdPrefix={popupIdPrefix}
                   centerRowLabel={centerRowLabels}
+                  slotCount={slotCount}
                   getStudentActions={getStudentActions}
                 />
               ))}
@@ -147,15 +150,17 @@ function PartyRow({
   rowIndex,
   popupIdPrefix,
   centerRowLabel,
+  slotCount,
   getStudentActions,
 }: {
   row: RaidPartyRow;
   rowIndex: number;
   popupIdPrefix: string;
   centerRowLabel: boolean;
+  slotCount: 6 | 10;
   getStudentActions?: RaidPartyCardProps["getStudentActions"];
 }) {
-  const slots = getFixedPartySlots(row.slots);
+  const slots = getFixedPartySlots(row.slots, slotCount);
 
   return (
     <div
@@ -169,9 +174,15 @@ function PartyRow({
       >
         {row.label}
       </span>
-      <div className="grid w-full min-w-0 grid-cols-6 gap-1.5 sm:max-w-80 sm:flex-1">
+      <div
+        className={cn(
+          "grid w-full min-w-0 sm:flex-1",
+          slotCount === 10 ? "grid-cols-10 gap-1 sm:max-w-[34rem] sm:gap-1.5" : "grid-cols-6 gap-1.5 sm:max-w-80",
+        )}
+      >
         {slots.map((slot, slotIndex) => (
           <PartyStudentCard
+            // biome-ignore lint/suspicious/noArrayIndexKey: party slots have stable positional identity
             key={`${slot.uid ?? "empty"}-${slotIndex}`}
             slot={slot}
             popupId={`${popupIdPrefix}-${rowIndex}-${slotIndex}-${slot.uid ?? "empty"}`}
@@ -183,8 +194,11 @@ function PartyRow({
   );
 }
 
-function getFixedPartySlots(slots: RaidPartySlot[]): RaidPartySlot[] {
-  return [...slots, ...Array<RaidPartySlot>(Math.max(PARTY_SLOT_COUNT - slots.length, 0)).fill({ uid: null })];
+function getFixedPartySlots(slots: RaidPartySlot[], slotCount: 6 | 10): RaidPartySlot[] {
+  return [...slots, ...Array<RaidPartySlot>(Math.max(slotCount - slots.length, 0)).fill({ uid: null })].slice(
+    0,
+    slotCount,
+  );
 }
 
 function PartyStudentCard({

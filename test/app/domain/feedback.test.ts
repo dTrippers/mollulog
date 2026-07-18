@@ -16,6 +16,20 @@ describe("parseFeedbackAdditional", () => {
     expect(parseFeedbackAdditional(JSON.stringify(value))).toEqual(value);
   });
 
+  it("accepts the versioned walkthrough timeline feedback envelope", () => {
+    const value = {
+      type: "walkthrough_timeline_feedback",
+      version: 1,
+      payload: {
+        timestamp: "2026-07-18T00:00:00.000Z",
+        path: "/timelines/timeline-1/edit",
+        viewport: { width: 390, height: 844 },
+      },
+    };
+
+    expect(parseFeedbackAdditional(JSON.stringify(value))).toEqual(value);
+  });
+
   it("rejects unknown envelopes and oversized diagnostics", () => {
     expect(() => parseFeedbackAdditional('{"type":"unknown","version":1,"payload":{}}')).toThrow(
       "Feedback additional payload is invalid",

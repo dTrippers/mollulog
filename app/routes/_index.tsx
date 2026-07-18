@@ -47,14 +47,16 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     const recentCommunityPagePromise = ctx.tracing.enterSpan("community", () =>
       getCommunityFeedPage(env, {
         currentUserId,
-        postTypes: ["student_review", "event_opinion"],
+        postTypes: ["student_review", "event_opinion", "walkthrough_timeline"],
         pageSize: 4,
         includeEngagement: false,
         ctx,
       }),
     );
     const recentCommunityFeedPromise = recentCommunityPagePromise.then((recentCommunityPage) =>
-      ctx.tracing.enterSpan("enrich", () => enrichCommunityFeedPosts(publicReadEnv, recentCommunityPage.items, ctx)),
+      ctx.tracing.enterSpan("enrich", () =>
+        enrichCommunityFeedPosts(publicReadEnv, recentCommunityPage.items, { ctx, includeEngagement: false }),
+      ),
     );
     const recentCommunityRailPromise = recentCommunityFeedPromise
       .then((recentCommunityFeed) => ({

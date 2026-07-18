@@ -9,7 +9,16 @@ export type EventShopBugReportAdditional = {
   };
 };
 
-export type FeedbackAdditional = EventShopBugReportAdditional;
+export type WalkthroughTimelineFeedbackAdditional = {
+  type: "walkthrough_timeline_feedback";
+  version: 1;
+  payload: Record<string, unknown> & {
+    timestamp: string;
+    path: string;
+  };
+};
+
+export type FeedbackAdditional = EventShopBugReportAdditional | WalkthroughTimelineFeedbackAdditional;
 
 export function parseFeedbackAdditional(value: string | null): FeedbackAdditional | null {
   if (!value) {
@@ -26,7 +35,6 @@ export function parseFeedbackAdditional(value: string | null): FeedbackAdditiona
     parsed === null ||
     Array.isArray(parsed) ||
     !("type" in parsed) ||
-    parsed.type !== "event_shop_bug_report" ||
     !("version" in parsed) ||
     parsed.version !== 1 ||
     !("payload" in parsed) ||
@@ -34,12 +42,26 @@ export function parseFeedbackAdditional(value: string | null): FeedbackAdditiona
     parsed.payload === null ||
     Array.isArray(parsed.payload) ||
     !("timestamp" in parsed.payload) ||
-    typeof parsed.payload.timestamp !== "string" ||
-    !("eventUid" in parsed.payload) ||
-    typeof parsed.payload.eventUid !== "string"
+    typeof parsed.payload.timestamp !== "string"
   ) {
     throw new Error("Feedback additional payload is invalid");
   }
 
-  return parsed as FeedbackAdditional;
+  if (
+    parsed.type === "event_shop_bug_report" &&
+    "eventUid" in parsed.payload &&
+    typeof parsed.payload.eventUid === "string"
+  ) {
+    return parsed as FeedbackAdditional;
+  }
+
+  if (
+    parsed.type === "walkthrough_timeline_feedback" &&
+    "path" in parsed.payload &&
+    typeof parsed.payload.path === "string"
+  ) {
+    return parsed as FeedbackAdditional;
+  }
+
+  throw new Error("Feedback additional payload is invalid");
 }

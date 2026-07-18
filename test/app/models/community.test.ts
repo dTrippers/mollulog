@@ -1,5 +1,12 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { getCommunityFeedPage, setCommunityPostLike, upsertYoutubeVideoCommunityPost } from "~/models/community";
+import type { WalkthroughTimelineDocument, WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
+import {
+  createWalkthroughTimelineCommunityPostBlocks,
+  getCommunityFeedPage,
+  setCommunityPostLike,
+  syncWalkthroughTimelineCommunityPost,
+  upsertYoutubeVideoCommunityPost,
+} from "~/models/community";
 
 type PreparedStatement = {
   sql: string;
@@ -129,6 +136,9 @@ class FakeCommunityD1Database {
     if (normalizedSql.includes("select") && normalizedSql.includes("from community_posts")) {
       const post = this.findPostForSelect(normalizedSql, params);
       if (!post) return [];
+      if (normalizedSql.includes("posttype") && normalizedSql.includes("visibility")) {
+        return [[post.uid, post.postType, post.visibility]];
+      }
       if (normalizedSql.includes("select community_posts.id") || normalizedSql.includes("select id"))
         return [[post.id]];
       return [[post.uid]];
@@ -188,7 +198,14 @@ class FakeCommunityD1Database {
     let rows = this.posts.filter((post) => post.visibility === "public");
     const stringParams = params.filter((param): param is string => typeof param === "string");
     const postTypes = stringParams.filter((param) =>
-      ["student_review", "event_opinion", "guide", "youtube_video", "recruitment_result"].includes(param),
+      [
+        "student_review",
+        "event_opinion",
+        "guide",
+        "youtube_video",
+        "recruitment_result",
+        "walkthrough_timeline",
+      ].includes(param),
     );
     if (sql.includes("community_posts.posttype in") && postTypes.length > 0) {
       rows = rows.filter((post) => postTypes.includes(post.postType));
@@ -536,6 +553,125 @@ describe("community model likes", () => {
     await setCommunityPostLike(createEnv(db), 10, "youtube-video-1", true);
 
     expect(db.likes).toEqual(new Set(["10:youtube-video-1"]));
+  });
+
+  it("does not store walkthrough timeline likes in the community model", async () => {
+    const db = new FakeCommunityD1Database();
+    db.posts.push(
+      createUserPost({ uid: "timeline-public", postType: "walkthrough_timeline", sourceType: "raid_walkthrough" }),
+      createUserPost({
+        id: 2,
+        uid: "timeline-private",
+        postType: "walkthrough_timeline",
+        sourceType: "raid_walkthrough",
+        visibility: "private",
+      }),
+    );
+
+    await setCommunityPostLike(createEnv(db), 10, "timeline-public", true);
+    await setCommunityPostLike(createEnv(db), 10, "timeline-private", true);
+
+    expect(db.likes).toEqual(new Set());
+  });
+});
+
+describe("walkthrough timeline community projection", () => {
+  it("builds a compact feed block with deduplicated students", () => {
+    const document: WalkthroughTimelineDocument = {
+      type: "walkthrough_timeline",
+      schemaVersion: 1,
+      partySize: 6,
+      context: { bossUid: "boss-1", terrain: "indoor", defenseType: "heavy", maxDifficulty: "torment" },
+      parties: [
+        {
+          uid: "party-1",
+          order: 0,
+          startingSkillStudentUids: [],
+          units: [
+            { slot: 0, studentUid: "student-1" },
+            { slot: 1, studentUid: "student-2" },
+          ],
+          steps: [
+            {
+              uid: "step-1",
+              order: 0,
+              kind: "actions",
+              actions: [{ kind: "student_ex", studentUid: "student-1", targetStudentUid: "student-3" }],
+            },
+          ],
+        },
+        {
+          uid: "party-2",
+          order: 1,
+          startingSkillStudentUids: [],
+          units: [{ slot: 0, studentUid: "student-4" }],
+          steps: [],
+        },
+      ],
+    };
+
+    expect(
+      createWalkthroughTimelineCommunityPostBlocks({
+        uid: "timeline-1",
+        description: "공략 설명",
+        bossUid: "boss-1",
+        terrain: "indoor",
+        defenseType: "heavy",
+        maxDifficulty: "torment",
+        document,
+      }),
+    ).toEqual([
+      { type: "plaintext", text: "공략 설명" },
+      {
+        type: "walkthrough_timeline",
+        timelineUid: "timeline-1",
+        bossUid: "boss-1",
+        terrain: "indoor",
+        defenseType: "heavy",
+        maxDifficulty: "torment",
+        partySize: 6,
+        partyCount: 2,
+        usedStudentUids: ["student-1", "student-2"],
+      },
+    ]);
+  });
+
+  it("creates a projection on first publication and keeps displayAt out of later updates", async () => {
+    const db = new FakeCommunityD1Database();
+    const timeline: WalkthroughTimelineRecord = {
+      uid: "timeline-1",
+      userId: 10,
+      title: "공략",
+      description: "공략 설명",
+      visibility: "private",
+      bossUid: "boss-1",
+      terrain: "indoor",
+      defenseType: "heavy",
+      maxDifficulty: "torment",
+      document: {
+        type: "walkthrough_timeline",
+        schemaVersion: 1,
+        partySize: 6,
+        context: { bossUid: "boss-1", terrain: "indoor", defenseType: "heavy", maxDifficulty: "torment" },
+        parties: [],
+      },
+      createdAt: new Date("2026-07-18T00:00:00Z"),
+      updatedAt: new Date("2026-07-18T00:00:00Z"),
+    };
+
+    await expect(syncWalkthroughTimelineCommunityPost(createEnv(db), timeline)).resolves.toBeNull();
+    expect(db.executedStatements).toHaveLength(0);
+
+    timeline.visibility = "public";
+    await expect(syncWalkthroughTimelineCommunityPost(createEnv(db), timeline)).resolves.toBe("timeline-1");
+    expect(normalizeSql(db.executedStatements[0]?.sql ?? "")).toContain("insert into community_posts");
+
+    timeline.title = "수정한 공략";
+    timeline.updatedAt = new Date("2026-07-19T00:00:00Z");
+    await expect(syncWalkthroughTimelineCommunityPost(createEnv(db), timeline)).resolves.toBe("timeline-1");
+    const updateSql = normalizeSql(db.executedStatements[1]?.sql ?? "");
+    expect(updateSql).toContain("update community_posts");
+    expect(updateSql).not.toContain("displayat");
   });
 });
 

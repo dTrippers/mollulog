@@ -1,5 +1,5 @@
 import { ChevronDownIcon } from "@heroicons/react/20/solid";
-import { ChartBarIcon, PlayIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import { ChartBarIcon, PlayIcon, QueueListIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { Link } from "react-router";
 import { getMaxLevelAt, type RaidPartyStudentMap } from "~/components/features/raids";
@@ -28,6 +28,16 @@ function getRaidKey(raid: Pick<RaidScheduleListItem, "raidType" | "seasonIndex">
 
 function getDefenseTypes(raid: RaidScheduleListItem) {
   return [...new Set(raid.defenseTypeSets.flatMap(({ defenseTypes }) => defenseTypes))];
+}
+
+function getRaidTimelinePath(raid: RaidScheduleListItem) {
+  const searchParams = new URLSearchParams({
+    bossUid: raid.raidBoss.uid,
+    terrain: raid.terrain,
+  });
+  const defenseTypes = getDefenseTypes(raid);
+  if (defenseTypes.length === 1) searchParams.set("defenseType", defenseTypes[0]);
+  return `/timelines?${searchParams.toString()}`;
 }
 
 export default function RaidPortalScreen({
@@ -75,6 +85,7 @@ function CurrentRaidSection({
 }) {
   const displayTimeZone = useDisplayTimeZone();
   const raidPath = getRaidPath(raid);
+  const timelinePath = getRaidTimelinePath(raid);
 
   return (
     <section>
@@ -120,6 +131,7 @@ function CurrentRaidSection({
               <Button text="통계" to={raidPath} icon={ChartBarIcon} size="sm" />
               <Button text="편성" to={`${raidPath}/ranks`} icon={UserGroupIcon} size="sm" />
               <Button text="영상" to={`${raidPath}/videos`} icon={PlayIcon} size="sm" />
+              <Button text="공략" to={timelinePath} icon={QueueListIcon} size="sm" />
             </div>
           </div>
         </div>
@@ -204,6 +216,7 @@ function UpcomingRaids({ upcomingRaids }: { upcomingRaids: RaidPortalUpcomingRai
           <div className="divide-y divide-border overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:hidden">
             {upcomingRaids.map(({ raid }) => {
               const raidPath = getRaidPath(raid);
+              const timelinePath = getRaidTimelinePath(raid);
               return (
                 <article key={raid.uid} className="px-3 py-3">
                   <div className="flex min-w-0 items-baseline gap-2">
@@ -236,6 +249,7 @@ function UpcomingRaids({ upcomingRaids }: { upcomingRaids: RaidPortalUpcomingRai
                       <Button text="통계" to={raidPath} size="xs" />
                       <Button text="편성" to={`${raidPath}/ranks`} size="xs" />
                       <Button text="영상" to={`${raidPath}/videos`} size="xs" />
+                      <Button text="공략" to={timelinePath} size="xs" />
                     </div>
                   </div>
                 </article>
@@ -258,6 +272,7 @@ function UpcomingRaids({ upcomingRaids }: { upcomingRaids: RaidPortalUpcomingRai
               <tbody>
                 {upcomingRaids.map(({ raid }) => {
                   const raidPath = getRaidPath(raid);
+                  const timelinePath = getRaidTimelinePath(raid);
                   return (
                     <tr key={raid.uid} className="border-b border-border/70">
                       <td className="whitespace-nowrap px-3 py-3 tabular-nums">
@@ -286,6 +301,7 @@ function UpcomingRaids({ upcomingRaids }: { upcomingRaids: RaidPortalUpcomingRai
                           <Button text="통계" to={raidPath} size="xs" />
                           <Button text="편성" to={`${raidPath}/ranks`} size="xs" />
                           <Button text="영상" to={`${raidPath}/videos`} size="xs" />
+                          <Button text="공략" to={timelinePath} size="xs" />
                         </div>
                       </td>
                     </tr>

@@ -13,8 +13,8 @@ describe("isCommunityEngagementActionResult", () => {
 
     expect(
       isCommunityEngagementActionResult({
-        kind: "communityPostLikeChanged",
-        postUid: "post-1",
+        kind: "likeChanged",
+        targetUid: "post-1",
         likeCount: 1,
         liked: true,
       }),
@@ -25,9 +25,7 @@ describe("isCommunityEngagementActionResult", () => {
     expect(isCommunityEngagementActionResult(null)).toBe(false);
     expect(isCommunityEngagementActionResult({ kind: "listChange" })).toBe(false);
     expect(isCommunityEngagementActionResult({ kind: "communityPostCommentsChanged", postUid: "post-1" })).toBe(false);
-    expect(
-      isCommunityEngagementActionResult({ kind: "communityPostLikeChanged", postUid: "post-1", likeCount: 1 }),
-    ).toBe(false);
+    expect(isCommunityEngagementActionResult({ kind: "likeChanged", targetUid: "post-1", likeCount: 1 })).toBe(false);
     expect(isCommunityEngagementActionResult({})).toBe(false);
   });
 });

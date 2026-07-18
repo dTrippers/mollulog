@@ -4,6 +4,13 @@ import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
+import type {
+  WalkthroughTimelineDefenseType,
+  WalkthroughTimelineDifficulty,
+  WalkthroughTimelineDocument,
+  WalkthroughTimelineTerrain,
+  WalkthroughTimelineVisibility,
+} from "~/domain/walkthrough-timeline";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -163,5 +170,48 @@ export const pgFeedbackRepliesTable = pgTable(
     uniqueIndex("feedback_replies_uid_uidx").on(table.uid),
     index("feedback_replies_ticket_created_at_idx").on(table.ticketId, table.createdAt, table.id),
     index("feedback_replies_ticket_admin_id_idx").on(table.ticketId, table.isAdmin, table.id),
+  ],
+);
+
+export const pgWalkthroughTimelinesTable = pgTable(
+  "raid_walkthroughs",
+  {
+    uid: text().primaryKey(),
+    userId: integer("user_id").notNull(),
+    title: text().notNull(),
+    description: text().notNull().default(""),
+    visibility: text().$type<WalkthroughTimelineVisibility>().notNull(),
+    bossUid: text("boss_uid").notNull(),
+    terrain: text().$type<WalkthroughTimelineTerrain>().notNull(),
+    defenseType: text("defense_type").$type<WalkthroughTimelineDefenseType>().notNull(),
+    maxDifficulty: text("max_difficulty").$type<WalkthroughTimelineDifficulty>().notNull(),
+    document: jsonb().$type<WalkthroughTimelineDocument>().notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    index("raid_walkthroughs_user_updated_at_idx").on(table.userId, table.updatedAt.desc()),
+    index("raid_walkthroughs_boss_visibility_updated_at_idx").on(
+      table.bossUid,
+      table.visibility,
+      table.updatedAt.desc(),
+    ),
+    check("raid_walkthroughs_document_object", sql`jsonb_typeof(${table.document}) = 'object'`),
+  ],
+);
+
+export const pgWalkthroughTimelineLikesTable = pgTable(
+  "raid_walkthrough_likes",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    walkthroughUid: text("walkthrough_uid")
+      .notNull()
+      .references(() => pgWalkthroughTimelinesTable.uid, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("raid_walkthrough_likes_walkthrough_user_uidx").on(table.walkthroughUid, table.userId),
+    index("raid_walkthrough_likes_user_walkthrough_idx").on(table.userId, table.walkthroughUid),
   ],
 );

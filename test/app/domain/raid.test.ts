@@ -33,24 +33,34 @@ const schedules: TestSchedule[] = [
     startAt: "2026-07-16T00:00:00.000Z",
     endAt: "2026-07-23T00:00:00.000Z",
   },
+  {
+    uid: "next-elimination",
+    raidType: "elimination",
+    startAt: "2026-07-28T00:00:00.000Z",
+    endAt: "2026-08-04T00:00:00.000Z",
+  },
+  {
+    uid: "next-unlimit",
+    raidType: "unlimit",
+    startAt: "2026-07-24T00:00:00.000Z",
+    endAt: "2026-07-31T00:00:00.000Z",
+  },
 ];
 
 describe("findCurrentOrClosestRaidSchedule", () => {
-  it("prefers an ongoing schedule of the requested raid type", () => {
-    expect(findCurrentOrClosestRaidSchedule(schedules, "total_assault", "2026-07-17T00:00:00.000Z")?.uid).toBe(
-      "ongoing-total-assault",
-    );
+  it("prefers the most recently started ongoing total or grand assault", () => {
+    expect(findCurrentOrClosestRaidSchedule(schedules, "2026-07-17T00:00:00.000Z")?.uid).toBe("ongoing-elimination");
   });
 
-  it("uses the next schedule when none is ongoing", () => {
-    expect(findCurrentOrClosestRaidSchedule(schedules, "total_assault", "2026-07-25T00:00:00.000Z")?.uid).toBe(
-      "next-total-assault",
-    );
+  it("uses the nearest upcoming total or grand assault regardless of type", () => {
+    expect(findCurrentOrClosestRaidSchedule(schedules, "2026-07-25T00:00:00.000Z")?.uid).toBe("next-elimination");
   });
 
-  it("falls back to the most recently completed schedule", () => {
-    expect(findCurrentOrClosestRaidSchedule(schedules, "total_assault", "2026-08-20T00:00:00.000Z")?.uid).toBe(
-      "next-total-assault",
-    );
+  it("ignores other raid types", () => {
+    expect(findCurrentOrClosestRaidSchedule(schedules, "2026-07-24T00:00:00.000Z")?.uid).toBe("next-elimination");
+  });
+
+  it("falls back to the most recently completed total or grand assault", () => {
+    expect(findCurrentOrClosestRaidSchedule(schedules, "2026-08-20T00:00:00.000Z")?.uid).toBe("next-total-assault");
   });
 });

@@ -28,12 +28,14 @@ type RaidSchedulePeriod = {
 
 export function findCurrentOrClosestRaidSchedule<T extends RaidSchedulePeriod>(
   schedules: T[],
-  raidType: string,
   now: UtcIsoString | Date = nowUtcIso(),
 ): T | null {
   const nowTime = getInstantTime(now);
   const candidates = schedules
-    .filter((schedule) => schedule.raidType === raidType && schedule.startAt !== null)
+    .filter(
+      (schedule) =>
+        (schedule.raidType === "total_assault" || schedule.raidType === "elimination") && schedule.startAt !== null,
+    )
     .map((schedule) => ({
       schedule,
       startTime: getInstantTime(schedule.startAt as UtcIsoString | Date),

@@ -37,6 +37,7 @@ function createPost(overrides: Partial<CommunityFeedPostItem> = {}): CommunityFe
     tags: [],
     pickupStudents: [],
     recruitmentStats: null,
+    likeTarget: null,
     ...overrides,
   };
 }

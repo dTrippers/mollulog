@@ -14,6 +14,7 @@ import {
   HomeIcon as HomeIconOutline,
   IdentificationIcon as IdentificationIconOutline,
   ListBulletIcon as ListBulletIconOutline,
+  QueueListIcon as QueueListIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
   TableCellsIcon as TableCellsIconOutline,
   TicketIcon as TicketIconOutline,
@@ -34,12 +35,13 @@ import {
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
   ListBulletIcon as ListBulletIconSolid,
+  QueueListIcon as QueueListIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
   TableCellsIcon as TableCellsIconSolid,
   TicketIcon as TicketIconSolid,
 } from "@heroicons/react/24/solid";
 import type { ComponentProps, ComponentType } from "react";
-import { type UtcIsoString, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
+import { isInstantAfter, isInstantBefore, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 
 type IconComponent = ComponentType<ComponentProps<"svg">>;
 
@@ -100,7 +102,9 @@ export function getNavigationSectionStates(
       isStudentActive ||
       pathname.startsWith("/mainstory"),
     isUtilActive:
-      pathname.startsWith("/utils") || !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
+      pathname.startsWith("/utils") ||
+      pathname.startsWith("/timelines") ||
+      !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
     isExternalActive: pathname.startsWith("/coupons"),
     isProfileActive:
       pathname.startsWith("/@") ||
@@ -115,12 +119,14 @@ export function getNavigationSections({
   pathname,
   upcomingEvent,
   now = nowUtcIso(),
+  hasOngoingRaid,
   hasUnconsumedCoupons,
   sectionStates = getNavigationSectionStates(pathname, upcomingEvent),
 }: {
   pathname: string;
   upcomingEvent: UpcomingNavigationEvent;
   now?: UtcIsoString;
+  hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
   sectionStates?: NavigationSectionStates;
 }): NavigationSection[] {
@@ -153,6 +159,7 @@ export function getNavigationSections({
           name: "총력전 / 대결전",
           description: "시즌 요약, 상위권 편성, 공략 영상을 확인해보세요",
           showRedDot: true,
+          badgeLabel: hasOngoingRaid ? "진행중" : undefined,
           OutlineIcon: FireIconOutline,
           SolidIcon: FireIconSolid,
           isActive: pathname.startsWith("/raids"),
@@ -182,6 +189,16 @@ export function getNavigationSections({
       SolidIcon: Cog6ToothIconSolid,
       isActive: sectionStates.isUtilActive,
       items: [
+        {
+          to: "/timelines",
+          name: "공략 타임라인",
+          description: "공략을 찾아보고 실전에서 순서대로 확인해보세요",
+          OutlineIcon: QueueListIconOutline,
+          SolidIcon: QueueListIconSolid,
+          isActive: pathname.startsWith("/timelines"),
+          badgeLabel: "베타",
+          showRedDot: true,
+        },
         {
           to: "/utils/pyroxene",
           name: "청휘석 플래너",
@@ -213,7 +230,10 @@ export function getNavigationSections({
               description: "이벤트 효율과 상점을 확인해보세요",
               OutlineIcon: BoltIconOutline,
               SolidIcon: BoltIconSolid,
-              showRedDot: isInstantBefore(upcomingEvent.since, now) && isInstantAfter(upcomingEvent.until, now),
+              badgeLabel:
+                isInstantBefore(upcomingEvent.since, now) && isInstantAfter(upcomingEvent.until, now)
+                  ? "개최중"
+                  : undefined,
               isActive: pathname.startsWith(`/events/${upcomingEvent.uid}`),
             }
           : {
@@ -267,6 +287,7 @@ export function getSearchableMenuItems(): SearchableMenuItem[] {
   const sections = getNavigationSections({
     pathname: "",
     upcomingEvent: null,
+    hasOngoingRaid: false,
     hasUnconsumedCoupons: false,
     sectionStates: {
       isCommunityActive: false,
@@ -280,7 +301,7 @@ export function getSearchableMenuItems(): SearchableMenuItem[] {
 
   return [
     { name: "홈", to: "/" },
-    { name: "평가/의견", to: "/community" },
+    { name: "피드", to: "/community" },
     ...sections.flatMap((section) =>
       section.items
         .filter((item) => item.disabled !== true)
@@ -320,7 +341,7 @@ export function getMobileNavigationItems({
     },
     {
       to: "/community",
-      name: "평가/의견",
+      name: "피드",
       OutlineIcon: ChatBubbleLeftRightIconOutline,
       SolidIcon: ChatBubbleLeftRightIconSolid,
       isActive: sectionStates.isCommunityActive,

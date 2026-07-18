@@ -49,7 +49,10 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     tierCounts[tier] = (tierCounts[tier] ?? 0) + 1;
   }
 
-  const enrichedFeed = await enrichCommunityFeedPosts(publicReadEnv, feedPage.items, ctx);
+  const enrichedFeed = await enrichCommunityFeedPosts(publicReadEnv, feedPage.items, {
+    ctx,
+    currentUserId: currentUser?.id,
+  });
 
   return {
     currentUsername: currentUser?.username ?? null,
@@ -152,7 +155,7 @@ export default function UserIndex() {
         studentsByUid={studentsByUid}
         page={page}
         totalPages={totalPages}
-        emptyText="아직 작성한 커뮤니티 게시글이 없어요"
+        emptyText="아직 작성한 피드 컨텐츠가 없어요"
         resetKey={sensei.username}
         getPageUrl={getPageUrl}
       />

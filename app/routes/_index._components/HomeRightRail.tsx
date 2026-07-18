@@ -31,7 +31,7 @@ export default function HomeRightRail({
 export function HomeRightRailSkeleton() {
   return (
     <aside className="space-y-4 lg:sticky lg:top-24">
-      <RailSection title="최근 평가/의견">
+      <RailSection title="최근 피드">
         <div className="space-y-2" aria-hidden="true">
           {["community-1", "community-2", "community-3"].map((key) => (
             <div key={key} className="rounded-md bg-background p-3">
@@ -70,7 +70,7 @@ function HomeRecentCommunitySection({
   studentsByUid,
 }: Pick<HomeRightRailProps, "recentCommunityPosts" | "signedIn" | "studentsByUid">) {
   return (
-    <RailSection title="최근 평가/의견">
+    <RailSection title="최근 피드">
       <CommunityFeed posts={recentCommunityPosts} signedIn={signedIn} studentsByUid={studentsByUid} preview />
       <Button text="더 보기" to="/community" variant="secondary" className="bg-background" fullWidth />
     </RailSection>

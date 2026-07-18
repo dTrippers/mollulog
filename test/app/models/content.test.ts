@@ -3,6 +3,7 @@ import { fetchRouteCached } from "~/lib/cache";
 import { getAllCoupons } from "~/models/coupon";
 import { getPersonalNavigationState } from "~/models/personal-navigation";
 import { getLatestPostTime } from "~/models/post";
+import { getAllRaidSchedules } from "~/models/raid";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content.server";
 
 jest.mock("~/lib/cache", () => ({
@@ -31,6 +32,10 @@ jest.mock("~/models/post", () => ({
   getLatestPostTime: jest.fn(),
 }));
 
+jest.mock("~/models/raid", () => ({
+  getAllRaidSchedules: jest.fn(),
+}));
+
 jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContentsByContentTypes: jest.fn(),
   // Empty stubs for other exports imported from the same module by content.ts.
@@ -38,7 +43,7 @@ jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContents: jest.fn(),
 }));
 
-// Stub to block cascading imports; getNavigationBarContents itself does not use this.
+// Stub to block cascading imports.
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
 }));
@@ -56,6 +61,7 @@ const mockedGetPersonalNavigationState = getPersonalNavigationState as jest.Mock
   typeof getPersonalNavigationState
 >;
 const mockedGetLatestPostTime = getLatestPostTime as jest.MockedFunction<typeof getLatestPostTime>;
+const mockedGetAllRaidSchedules = getAllRaidSchedules as jest.MockedFunction<typeof getAllRaidSchedules>;
 const mockedGetTimelineContentsByContentTypes = getTimelineContentsByContentTypes as jest.MockedFunction<
   typeof getTimelineContentsByContentTypes
 >;
@@ -96,6 +102,7 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
       <T>(_env: Env, _ctx: ExecutionContext | undefined, _key: string, fn: () => Promise<T>) => fn(),
     );
     mockedGetLatestPostTime.mockResolvedValue(null);
+    mockedGetAllRaidSchedules.mockResolvedValue([]);
     mockedGetAllCoupons.mockResolvedValue([]);
     mockedGetPersonalNavigationState.mockResolvedValue({
       hasUnconsumedCoupons: false,
@@ -167,6 +174,35 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
       jest.setSystemTime(new Date("2026-05-11T13:00:00.000Z").getTime());
       result = await getNavigationBarContents(env);
       expect(result.hasActiveCoupons).toBe(false);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("computes ongoing total and grand assault raids against the request-time clock", async () => {
+    mockedGetTimelineContentsByContentTypes.mockResolvedValue([]);
+    mockedGetAllRaidSchedules.mockResolvedValue([
+      {
+        raidType: "total_assault",
+        startAt: "2026-05-11T10:00:00.000Z",
+        endAt: "2026-05-11T12:00:00.000Z",
+      },
+      {
+        raidType: "unlimit",
+        startAt: "2026-05-11T10:00:00.000Z",
+        endAt: "2026-05-11T14:00:00.000Z",
+      },
+    ] as unknown as Awaited<ReturnType<typeof getAllRaidSchedules>>);
+
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date("2026-05-11T11:00:00.000Z").getTime());
+      let result = await getNavigationBarContents(env);
+      expect(result.hasOngoingRaid).toBe(true);
+
+      jest.setSystemTime(new Date("2026-05-11T13:00:00.000Z").getTime());
+      result = await getNavigationBarContents(env);
+      expect(result.hasOngoingRaid).toBe(false);
     } finally {
       jest.useRealTimers();
     }
