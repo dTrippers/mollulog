@@ -382,7 +382,7 @@ export default function WalkthroughPartyFormationEditor({
       {selectedUnit?.studentUid && selectedStudent && (
         <div>
           {typeof selectedStudent.initialTier === "number" && typeof selectedTier === "number" ? (
-            <div className="flex w-full flex-wrap items-stretch gap-2 xl:flex-nowrap">
+            <div className="flex w-full min-w-0 flex-wrap items-stretch gap-2">
               <fieldset className="shrink-0 rounded-md border border-border/70 px-2 py-1.5">
                 <legend className="px-1 text-xs font-semibold text-muted-foreground">기본 정보</legend>
                 <div className="flex items-end gap-1.5">

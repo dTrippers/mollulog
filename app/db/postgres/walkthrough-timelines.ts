@@ -8,6 +8,7 @@ import {
   type WalkthroughTimelineDifficulty,
   type WalkthroughTimelineDocument,
   type WalkthroughTimelineRecord,
+  type WalkthroughTimelineTerrain,
   type WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
@@ -21,8 +22,10 @@ export type PostgresWalkthroughTimelineOptions = {
 
 export type WalkthroughTimelineWriteInput = {
   title: string;
+  description: string;
   visibility: WalkthroughTimelineVisibility;
   bossUid: string;
+  terrain: WalkthroughTimelineTerrain;
   defenseType: WalkthroughTimelineDefenseType;
   maxDifficulty: WalkthroughTimelineDifficulty;
   document: WalkthroughTimelineDocument;
@@ -33,8 +36,10 @@ function toDomain(row: WalkthroughTimelineRow): WalkthroughTimelineRecord {
     uid: row.uid,
     userId: row.userId,
     title: row.title,
+    description: row.description,
     visibility: row.visibility,
     bossUid: row.bossUid,
+    terrain: row.terrain,
     defenseType: row.defenseType,
     maxDifficulty: row.maxDifficulty,
     document: parseWalkthroughTimelineDocument(row.document),
@@ -68,15 +73,17 @@ async function withWalkthroughTimelineDatabase<T>(
 
 function normalizeWriteInput(input: WalkthroughTimelineWriteInput): WalkthroughTimelineWriteInput {
   const title = input.title.trim();
+  const description = input.description.trim();
   if (!title) throw new Error("타임라인 제목을 입력해주세요.");
   if (
     input.document.context.bossUid !== input.bossUid ||
+    input.document.context.terrain !== input.terrain ||
     input.document.context.defenseType !== input.defenseType ||
     input.document.context.maxDifficulty !== input.maxDifficulty
   ) {
     throw new Error("타임라인 문서와 공략 설정이 일치하지 않아요.");
   }
-  return { ...input, title, document: parseWalkthroughTimelineDocument(input.document) };
+  return { ...input, title, description, document: parseWalkthroughTimelineDocument(input.document) };
 }
 
 export async function createPostgresWalkthroughTimeline(
@@ -153,18 +160,39 @@ export async function listPostgresWalkthroughTimelinesByUser(
 
 export async function listPostgresPublicWalkthroughTimelinesByBoss(
   env: Pick<Env, "HYPERDRIVE">,
-  boss: { bossUid: string; defenseType?: WalkthroughTimelineDefenseType | null },
+  boss: {
+    bossUid: string;
+    terrain?: WalkthroughTimelineTerrain | null;
+    defenseType?: WalkthroughTimelineDefenseType | null;
+    maxDifficulty?: WalkthroughTimelineDifficulty | null;
+  },
+  options: PostgresWalkthroughTimelineOptions = {},
+): Promise<WalkthroughTimelineRecord[]> {
+  return listPostgresPublicWalkthroughTimelines(env, boss, options);
+}
+
+export async function listPostgresPublicWalkthroughTimelines(
+  env: Pick<Env, "HYPERDRIVE">,
+  filters: {
+    bossUid?: string | null;
+    terrain?: WalkthroughTimelineTerrain | null;
+    defenseType?: WalkthroughTimelineDefenseType | null;
+    maxDifficulty?: WalkthroughTimelineDifficulty | null;
+  } = {},
   options: PostgresWalkthroughTimelineOptions = {},
 ): Promise<WalkthroughTimelineRecord[]> {
   return withWalkthroughTimelineDatabase(
     env,
-    "list_public_by_boss",
+    "list_public",
     async (db) => {
-      const conditions = [
-        eq(pgWalkthroughTimelinesTable.bossUid, boss.bossUid),
-        eq(pgWalkthroughTimelinesTable.visibility, "public"),
-      ];
-      if (boss.defenseType) conditions.push(eq(pgWalkthroughTimelinesTable.defenseType, boss.defenseType));
+      const conditions = [];
+      if (filters.bossUid) conditions.push(eq(pgWalkthroughTimelinesTable.bossUid, filters.bossUid));
+      conditions.push(eq(pgWalkthroughTimelinesTable.visibility, "public"));
+      if (filters.terrain) conditions.push(eq(pgWalkthroughTimelinesTable.terrain, filters.terrain));
+      if (filters.defenseType) conditions.push(eq(pgWalkthroughTimelinesTable.defenseType, filters.defenseType));
+      if (filters.maxDifficulty) {
+        conditions.push(eq(pgWalkthroughTimelinesTable.maxDifficulty, filters.maxDifficulty));
+      }
       const rows = await db
         .select()
         .from(pgWalkthroughTimelinesTable)
@@ -235,8 +263,10 @@ export async function clonePostgresWalkthroughTimeline(
     userId,
     {
       title: `${source.title} 복사본`,
+      description: source.description,
       visibility: "private",
       bossUid: source.bossUid,
+      terrain: source.terrain,
       defenseType: source.defenseType,
       maxDifficulty: source.maxDifficulty,
       document: structuredClone(source.document),

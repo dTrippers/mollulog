@@ -4,6 +4,7 @@ import {
   createPostgresWalkthroughTimeline,
   deletePostgresWalkthroughTimeline,
   getPostgresWalkthroughTimeline,
+  listPostgresPublicWalkthroughTimelines,
   listPostgresPublicWalkthroughTimelinesByBoss,
   updatePostgresWalkthroughTimeline,
 } from "~/db/postgres/walkthrough-timelines";
@@ -13,7 +14,7 @@ const document: WalkthroughTimelineDocument = {
   type: "walkthrough_timeline",
   schemaVersion: 1,
   partySize: 6,
-  context: { bossUid: "boss-1", defenseType: "heavy", maxDifficulty: "torment" },
+  context: { bossUid: "boss-1", terrain: "indoor", defenseType: "heavy", maxDifficulty: "torment" },
   parties: [],
 };
 
@@ -22,8 +23,10 @@ function postgresRow(uid = "timeline-1"): unknown[] {
     uid,
     10,
     "공략",
+    "공략 설명",
     "public",
     "boss-1",
+    "indoor",
     "heavy",
     "torment",
     document,
@@ -48,8 +51,10 @@ function createClient(rowsFor: (sql: string) => unknown[][]) {
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive };
 const input = {
   title: "공략",
+  description: "공략 설명",
   visibility: "public" as const,
   bossUid: "boss-1",
+  terrain: "indoor" as const,
   defenseType: "heavy" as const,
   maxDifficulty: "torment" as const,
   document,
@@ -60,6 +65,8 @@ describe("PostgreSQL walkthrough timelines", () => {
     const { client, query } = createClient(() => [postgresRow()]);
     const result = await createPostgresWalkthroughTimeline(env, 10, input, { createClient: () => client });
     expect(result.uid).toBe("timeline-1");
+    expect(result.description).toBe("공략 설명");
+    expect(result.terrain).toBe("indoor");
     const sql = (query.mock.calls[0]?.[0] as { text: string }).text;
     expect(sql).toContain('insert into "raid_walkthroughs"');
     expect(sql).not.toContain("community_posts");
@@ -73,11 +80,23 @@ describe("PostgreSQL walkthrough timelines", () => {
       uid: "timeline-1",
     });
     await expect(
-      listPostgresPublicWalkthroughTimelinesByBoss(env, { bossUid: "boss-1", defenseType: "heavy" }, options),
+      listPostgresPublicWalkthroughTimelinesByBoss(
+        env,
+        { bossUid: "boss-1", terrain: "indoor", defenseType: "heavy" },
+        options,
+      ),
     ).resolves.toHaveLength(1);
     const listSql = (query.mock.calls[1]?.[0] as { text: string }).text;
     expect(listSql).toContain('"visibility" = $2');
+    expect(listSql).toContain('"terrain" = $3');
     expect(listSql).toContain('order by "raid_walkthroughs"."updated_at" desc');
+
+    await expect(
+      listPostgresPublicWalkthroughTimelines(env, { maxDifficulty: "torment" }, options),
+    ).resolves.toHaveLength(1);
+    const filteredListSql = (query.mock.calls[2]?.[0] as { text: string }).text;
+    expect(filteredListSql).toContain('"visibility" = $1');
+    expect(filteredListSql).toContain('"max_difficulty" = $2');
   });
 
   it("scopes updates and deletes to the owner", async () => {
@@ -96,7 +115,7 @@ describe("PostgreSQL walkthrough timelines", () => {
 
   it("rejects a malformed JSONB document instead of rendering fallback data", async () => {
     const malformed = postgresRow();
-    malformed[7] = { type: "walkthrough_timeline", schemaVersion: 999 };
+    malformed[9] = { type: "walkthrough_timeline", schemaVersion: 999 };
     const { client } = createClient(() => [malformed]);
     await expect(getPostgresWalkthroughTimeline(env, "timeline-1", { createClient: () => client })).rejects.toThrow(
       "schemaVersion",

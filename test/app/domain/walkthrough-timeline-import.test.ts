@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { parseTimelineImport } from "~/domain/walkthrough-timeline-import";
+import { extractCertainTimelineImport, parseTimelineImport } from "~/domain/walkthrough-timeline-import";
 
 const students = [
   { uid: "rio", name: "리오", altNames: [] },
@@ -160,7 +160,7 @@ describe("parseTimelineImport", () => {
       "ako",
       "himari",
     ]);
-    expect(draft.steps[1].parsed).toMatchObject({ kind: "divider", note: "구분선", actions: [] });
+    expect(draft.steps[1].parsed).toMatchObject({ kind: "divider", note: "설명글", actions: [] });
   });
 
   it("parses the supplied community timeline without unresolved student expressions", () => {
@@ -311,5 +311,58 @@ describe("parseTimelineImport", () => {
       note: "4페 · 오른쪽 본체+졸1",
     });
     expect(draft.issues).toHaveLength(0);
+  });
+});
+
+describe("extractCertainTimelineImport", () => {
+  it("extracts only certain markers and exact student anchors from free-form text", () => {
+    const raw = `1코     아마리 -- 리오(아마리)
+3:34.3  아마리(복) -- 임리오(보라등불)
+3:27.0  수시노 -- 3:20.8 아마리 -- 리오(아마리)
+9.x코   1스 보고 아마리
+※ 마지막 리오 쓰기 전 페이즈 넘어가는 경우 넘어가서 발사`;
+    const draft = extractCertainTimelineImport(raw, students);
+
+    expect(draft.issues).toEqual([]);
+    expect(draft.steps).toHaveLength(5);
+    expect(draft.steps[0].parsed.sourceText).toBe("1코 아마리 -- 리오(아마리)");
+    expect(draft.steps[0].parsed).toMatchObject({
+      marker: { kind: "cost", value: "1코" },
+      actions: [{ studentUid: "amari" }, { studentUid: "rio", targetStudentUid: "amari" }],
+    });
+    expect(draft.steps[1].parsed).toMatchObject({
+      marker: { kind: "time_remaining", value: "3:34.3" },
+      actions: [{ studentUid: "amari", text: "복제 스킬" }, { studentUid: "idol-rio" }],
+      note: "보라등불",
+    });
+    expect(draft.steps[2].parsed).toMatchObject({
+      marker: { kind: "time_remaining", value: "3:27.0" },
+      actions: [
+        { studentUid: "swimsuit-hoshino" },
+        { studentUid: "amari", text: "3:20.8" },
+        { studentUid: "rio", targetStudentUid: "amari" },
+      ],
+    });
+    expect(draft.steps[3].parsed).toMatchObject({
+      marker: { kind: "cost", value: "9.x코" },
+      actions: [{ studentUid: "amari", text: "1스 보고" }],
+    });
+    expect(draft.steps[4].parsed.actions).toEqual([
+      { kind: "free_text", text: "※ 마지막 리오 쓰기 전 페이즈 넘어가는 경우 넘어가서 발사" },
+    ]);
+  });
+
+  it("does not match a student name inside ordinary Korean prose", () => {
+    const draft = extractCertainTimelineImport("마지막 공격 확인", students);
+    expect(draft.steps[0].parsed.actions).toEqual([{ kind: "free_text", text: "마지막 공격 확인" }]);
+  });
+
+  it("prepends copied skill information to an existing action detail", () => {
+    const draft = extractCertainTimelineImport("3:34.3 3:30.0 아마리(복)", students);
+    expect(draft.steps[0].parsed.actions[0]).toMatchObject({
+      studentUid: "amari",
+      text: "복제 스킬 / 3:30.0",
+    });
+    expect(draft.steps[0].parsed.actions[0]).not.toHaveProperty("copied");
   });
 });

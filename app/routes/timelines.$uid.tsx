@@ -1,22 +1,34 @@
-import { ClockIcon, DocumentDuplicateIcon, PencilSquareIcon, PlayIcon, TrashIcon } from "@heroicons/react/24/outline";
+import {
+  DocumentDuplicateIcon,
+  InformationCircleIcon,
+  ListBulletIcon,
+  LockClosedIcon,
+  LockOpenIcon,
+  PencilSquareIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
+import { QRCodeSVG } from "qrcode.react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import {
   flattenTimelineParties,
-  TimelineStudentImage,
+  WalkthroughTimelineReadOnly,
   WalkthroughTimelineViewerLauncher,
 } from "~/components/features/walkthrough-timeline";
-import Button from "~/components/primitives/Button";
+import { AttributeBadge, Button } from "~/components/primitives";
+import { PanelBody, PanelBodyRow } from "~/components/primitives/PanelBody";
 import {
   clonePostgresWalkthroughTimeline,
   deletePostgresWalkthroughTimeline,
   getPostgresWalkthroughTimeline,
 } from "~/db/postgres/walkthrough-timelines";
+import { compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import { defenseTypeLocale, difficultyLocale } from "~/locales/ko";
+import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
+import { bossImageUrl } from "~/models/assets";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getSenseiById } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
@@ -43,13 +55,33 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     getAllStudentsMap(env, true),
     getAllRaidSchedules(env),
   ]);
-  const bossName = raids.find((raid) => raid.raidBoss.uid === timeline.bossUid)?.raidBoss.name ?? null;
+  const bossSchedules = raids
+    .filter((raid) => raid.raidBoss.uid === timeline.bossUid)
+    .sort((left, right) => {
+      if (left.startAt && right.startAt) return compareInstantDesc(left.startAt, right.startAt);
+      if (left.startAt) return -1;
+      if (right.startAt) return 1;
+      return right.seasonIndex - left.seasonIndex;
+    });
+  const latestBossSchedule = bossSchedules[0] ?? null;
+  const bossName = latestBossSchedule?.raidBoss.name ?? null;
+  const detailUrl = new URL(`/timelines/${timeline.uid}`, request.url).toString();
+  const viewerUrl = new URL(`/timelines/${timeline.uid}/viewer`, request.url).toString();
   return {
     timeline,
     owner,
     signedIn: currentUser !== null,
     author: author ? { username: author.username } : null,
     bossName,
+    latestBossTimelinePath: latestBossSchedule
+      ? `/timelines?${new URLSearchParams({
+          bossUid: timeline.bossUid,
+          terrain: timeline.terrain,
+          defenseType: timeline.defenseType,
+        }).toString()}`
+      : null,
+    detailUrl,
+    viewerUrl,
     studentsByUid: Object.fromEntries(Object.entries(students).map(([uid, student]) => [uid, { name: student.name }])),
   };
 };
@@ -75,33 +107,108 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 };
 
 export default function WalkthroughTimelineDetailPage() {
-  const { timeline, owner, signedIn, author, bossName, studentsByUid } = useLoaderData<typeof loader>();
+  const { timeline, owner, signedIn, author, bossName, latestBossTimelinePath, studentsByUid, detailUrl, viewerUrl } =
+    useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const items = flattenTimelineParties(timeline.document.parties);
-  const usedStudentUids = [
-    ...new Set(
-      timeline.document.parties.flatMap((party) => [
-        ...party.units.flatMap((unit) => (unit.studentUid ? [unit.studentUid] : [])),
-        ...party.steps.flatMap((step) =>
-          step.actions.flatMap((action) => (action.studentUid ? [action.studentUid] : [])),
-        ),
-      ]),
-    ),
-  ];
-
   return (
     <Page
-      title={timeline.title}
-      description={author ? `@${author.username} 선생님의 공략 타임라인` : "공략 타임라인"}
+      title="공략 타임라인 상세"
+      description={timeline.title}
       contentWidth="full"
+      panels={[
+        {
+          title: "공략 정보",
+          Icon: InformationCircleIcon,
+          children: (
+            <PanelBody>
+              <div className="relative overflow-hidden rounded-md border border-border bg-background px-3 py-3">
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-y-0 right-0 w-2/3 bg-contain bg-right bg-no-repeat opacity-70"
+                  style={{ backgroundImage: `url(${bossImageUrl(timeline.bossUid)})` }}
+                />
+                <div className="relative">
+                  <p className="font-semibold">{bossName ?? "보스 정보 확인 불가"}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {terrainLocale[timeline.terrain]} · {defenseTypeLocale[timeline.defenseType]}
+                  </p>
+                </div>
+              </div>
+
+              <PanelBodyRow title="방어 타입">
+                <AttributeBadge
+                  text={defenseTypeLocale[timeline.defenseType]}
+                  color={defenseTypeColor[timeline.defenseType]}
+                />
+              </PanelBodyRow>
+              <PanelBodyRow title="난이도">
+                <span className="text-sm">{difficultyLocale[timeline.maxDifficulty]}</span>
+              </PanelBodyRow>
+              <PanelBodyRow title="공개 범위">
+                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  {timeline.visibility === "public" ? (
+                    <LockOpenIcon className="size-3.5" />
+                  ) : (
+                    <LockClosedIcon className="size-3.5" />
+                  )}
+                  {timeline.visibility === "public" ? "전체 공개" : "나만 보기"}
+                </span>
+              </PanelBodyRow>
+              <PanelBodyRow title="작성자">
+                {author ? (
+                  <Link to={`/@${author.username}`} className="text-sm text-primary hover:underline">
+                    @{author.username}
+                  </Link>
+                ) : (
+                  <span className="text-sm">작성자 정보 없음</span>
+                )}
+              </PanelBodyRow>
+              <PanelBodyRow title="수정일">
+                <span className="text-sm tabular-nums">{dayjs(timeline.updatedAt).format("YYYY.MM.DD")}</span>
+              </PanelBodyRow>
+
+              {owner ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    to={`/timelines/${timeline.uid}/edit`}
+                    icon={PencilSquareIcon}
+                    text="수정"
+                    size="sm"
+                    fullWidth
+                  />
+                  <Form
+                    method="post"
+                    onSubmit={(event) => {
+                      if (!window.confirm("이 타임라인을 삭제할까요?")) event.preventDefault();
+                    }}
+                  >
+                    <Button
+                      type="submit"
+                      name="intent"
+                      value="delete"
+                      icon={TrashIcon}
+                      text="삭제"
+                      size="sm"
+                      variant="danger-subtle"
+                      fullWidth
+                      disabled={navigation.state !== "idle"}
+                    />
+                  </Form>
+                </div>
+              ) : null}
+            </PanelBody>
+          ),
+        },
+      ]}
       links={
-        author
+        latestBossTimelinePath
           ? [
               {
-                title: "작성자 프로필",
-                description: "작성자의 다른 공략 타임라인 보기",
-                Icon: ClockIcon,
-                to: `/@${author.username}/timelines`,
+                title: "다른 공략 보기",
+                description: "해당 보스의 다른 공략/타임라인 확인",
+                Icon: ListBulletIcon,
+                to: latestBossTimelinePath,
               },
             ]
           : undefined
@@ -109,93 +216,39 @@ export default function WalkthroughTimelineDetailPage() {
     >
       <div className="space-y-4 py-4">
         <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="text-sm text-muted-foreground">
-              <p>{bossName ?? "보스 정보 확인 불가"}</p>
-              <p className="mt-1">
-                {defenseTypeLocale[timeline.defenseType as keyof typeof defenseTypeLocale] ?? timeline.defenseType} ·{" "}
-                {difficultyLocale[timeline.maxDifficulty]}
+          <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div>
+              <h2 className="font-bold">타임라인 뷰어 열기</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                공략 타임라인을 새 창에 띄워놓고 총력전/대결전을 진행해보세요
               </p>
-              <p className="mt-1">
-                {timeline.document.parties.length}파티 · {items.length}단계 ·{" "}
-                {dayjs(timeline.updatedAt).format("YYYY.MM.DD 수정")}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                to={`/timelines/${timeline.uid}/viewer`}
-                icon={PlayIcon}
-                text="전체 화면 뷰어"
-                variant="primary"
-              />
-              {owner && <Button to={`/timelines/${timeline.uid}/edit`} icon={PencilSquareIcon} text="수정" />}
-            </div>
-          </div>
-          {usedStudentUids.length > 0 && (
-            <fieldset className="mt-5 flex flex-wrap gap-2">
-              <legend className="sr-only">사용 학생</legend>
-              {usedStudentUids.map((uid) => (
-                <TimelineStudentImage
-                  key={uid}
-                  uid={uid}
-                  name={studentsByUid[uid]?.name ?? "학생"}
-                  className="size-12"
+              <div className="mt-4">
+                <WalkthroughTimelineViewerLauncher
+                  items={items}
+                  studentsByUid={studentsByUid}
+                  shareUrl={detailUrl}
+                  shareTitle={timeline.title}
                 />
-              ))}
-            </fieldset>
-          )}
-        </section>
-
-        <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-          <h2 className="font-bold">실전 진행</h2>
-          <p className="mt-1 text-sm text-muted-foreground">열 때마다 첫 단계부터 시작합니다.</p>
-          <div className="mt-4">
-            <WalkthroughTimelineViewerLauncher items={items} studentsByUid={studentsByUid} />
+              </div>
+            </div>
+            <div
+              role="img"
+              aria-label="모바일 뷰어 접속 QR 코드"
+              className="flex w-fit flex-col items-center gap-2 rounded-md border border-border bg-background p-2 text-center transition-colors hover:bg-muted"
+            >
+              <QRCodeSVG value={viewerUrl} size={104} level="M" includeMargin aria-label="모바일 뷰어 접속 QR 코드" />
+              <span className="text-xs text-muted-foreground">모바일에서 열기</span>
+            </div>
           </div>
         </section>
 
         <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-          <h2 className="font-bold">파티별 타임라인</h2>
-          <div className="mt-4 divide-y divide-border">
-            {timeline.document.parties.map((party, index) => (
-              <div key={party.uid} className="py-4">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-medium">{index + 1}파티</span>
-                  <span className="text-sm text-muted-foreground">{party.steps.length}단계</span>
-                </div>
-                {party.units.some((unit) => unit.studentUid) && (
-                  <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
-                    {party.units
-                      .filter((unit): unit is typeof unit & { studentUid: string } => Boolean(unit.studentUid))
-                      .map((unit) => (
-                        <div
-                          key={`${party.uid}-slot-${unit.slot}`}
-                          className="flex min-w-0 items-center gap-3 rounded-md bg-muted p-3"
-                        >
-                          <TimelineStudentImage
-                            uid={unit.studentUid}
-                            name={studentsByUid[unit.studentUid]?.name ?? "학생"}
-                            className="size-12 shrink-0"
-                          />
-                          <div className="min-w-0 text-xs">
-                            <p className="truncate font-medium">
-                              {studentsByUid[unit.studentUid]?.name ?? "학생 정보 없음"}
-                            </p>
-                            <p className="mt-1 text-muted-foreground">
-                              {unit.snapshot?.tier ? `★${unit.snapshot.tier}` : "성급 미입력"}
-                              {unit.snapshot?.level ? ` · Lv.${unit.snapshot.level}` : ""}
-                              {unit.snapshot?.skillEx ? ` · EX${unit.snapshot.skillEx}` : ""}
-                            </p>
-                            {party.startingSkillStudentUids.includes(unit.studentUid) && (
-                              <p className="mt-1 font-medium text-primary">시작 스킬</p>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            ))}
+          <h2 className="font-bold">타임라인</h2>
+          {timeline.description ? (
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6">{timeline.description}</p>
+          ) : null}
+          <div className="mt-4">
+            <WalkthroughTimelineReadOnly parties={timeline.document.parties} studentsByUid={studentsByUid} />
           </div>
         </section>
 
@@ -208,24 +261,6 @@ export default function WalkthroughTimelineDetailPage() {
                 value="clone"
                 icon={DocumentDuplicateIcon}
                 text="복제해서 내 타임라인 만들기"
-                disabled={navigation.state !== "idle"}
-              />
-            </Form>
-          )}
-          {owner && (
-            <Form
-              method="post"
-              onSubmit={(event) => {
-                if (!window.confirm("이 타임라인을 삭제할까요?")) event.preventDefault();
-              }}
-            >
-              <Button
-                type="submit"
-                name="intent"
-                value="delete"
-                icon={TrashIcon}
-                text="삭제"
-                variant="danger-subtle"
                 disabled={navigation.state !== "idle"}
               />
             </Form>

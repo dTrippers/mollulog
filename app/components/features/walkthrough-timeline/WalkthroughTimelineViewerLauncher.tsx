@@ -1,5 +1,5 @@
-import { WindowIcon } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import { CheckIcon, ShareIcon, WindowIcon } from "@heroicons/react/24/outline";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Button from "~/components/primitives/Button";
 import type { TimelineViewerItem, TimelineViewerStudent } from "./WalkthroughTimelineViewer";
@@ -10,7 +10,7 @@ type WindowWithDocumentPictureInPicture = Window & {
 };
 
 function prepareViewerDocument(target: Window) {
-  target.document.title = "몰루로그 실전 타임라인 뷰어";
+  target.document.title = "타임라인 뷰어 | 몰루로그";
   for (const node of document.querySelectorAll('link[rel="stylesheet"], style')) {
     target.document.head.appendChild(node.cloneNode(true));
   }
@@ -25,15 +25,21 @@ function prepareViewerDocument(target: Window) {
 export function WalkthroughTimelineViewerLauncher({
   items,
   studentsByUid,
+  shareUrl,
+  shareTitle,
 }: {
   items: TimelineViewerItem[];
   studentsByUid: Record<string, TimelineViewerStudent>;
+  shareUrl: string;
+  shareTitle: string;
 }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewerWindow, setViewerWindow] = useState<Window | null>(null);
   const [viewerRoot, setViewerRoot] = useState<HTMLElement | null>(null);
   const [mode, setMode] = useState<"pip" | "popup" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [shareState, setShareState] = useState<"idle" | "copied" | "error">("idle");
+  const shareStateTimer = useRef<number | null>(null);
 
   useEffect(() => {
     if (!viewerWindow) return;
@@ -45,6 +51,43 @@ export function WalkthroughTimelineViewerLauncher({
     viewerWindow.addEventListener("pagehide", handleClose);
     return () => viewerWindow.removeEventListener("pagehide", handleClose);
   }, [viewerWindow]);
+
+  useEffect(
+    () => () => {
+      if (shareStateTimer.current !== null) window.clearTimeout(shareStateTimer.current);
+    },
+    [],
+  );
+
+  const showTemporaryShareState = (state: "copied" | "error") => {
+    setShareState(state);
+    if (shareStateTimer.current !== null) window.clearTimeout(shareStateTimer.current);
+    shareStateTimer.current = window.setTimeout(() => setShareState("idle"), 2000);
+  };
+
+  const copyShareUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showTemporaryShareState("copied");
+    } catch {
+      showTemporaryShareState("error");
+    }
+  };
+
+  const shareTimeline = async () => {
+    const shareData = { title: shareTitle, text: shareTitle, url: shareUrl };
+    if (typeof navigator.share !== "function") {
+      await copyShareUrl();
+      return;
+    }
+
+    try {
+      await navigator.share(shareData);
+    } catch (shareError) {
+      if (shareError instanceof Error && shareError.name === "AbortError") return;
+      await copyShareUrl();
+    }
+  };
 
   const openViewer = async () => {
     if (viewerWindow && !viewerWindow.closed) {
@@ -79,15 +122,27 @@ export function WalkthroughTimelineViewerLauncher({
       <div className="flex flex-wrap items-center gap-3">
         <Button
           icon={WindowIcon}
-          text={mode ? "실전 뷰어로 돌아가기" : "실전 보조 창 열기"}
+          text={mode ? "뷰어로 돌아가기" : "새 창에서 열기"}
           variant="primary"
           onClick={openViewer}
+        />
+        <Button
+          icon={shareState === "copied" ? CheckIcon : ShareIcon}
+          text={shareState === "copied" ? "링크 복사됨" : "공유하기"}
+          onClick={shareTimeline}
         />
         {mode === "popup" && (
           <p className="text-xs text-muted-foreground">일반 팝업은 항상 위 표시를 보장하지 않습니다.</p>
         )}
       </div>
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+      {shareState === "error" && (
+        <p className="mt-2 text-sm text-destructive">링크를 복사하지 못했어요. 주소창의 URL을 복사해주세요.</p>
+      )}
+      <p className="sr-only" aria-live="polite">
+        {shareState === "copied" ? "타임라인 링크를 클립보드에 복사했습니다." : null}
+        {shareState === "error" ? "타임라인 링크를 복사하지 못했습니다." : null}
+      </p>
       {viewerRoot &&
         createPortal(
           <WalkthroughTimelineViewer

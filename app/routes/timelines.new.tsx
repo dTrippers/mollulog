@@ -34,8 +34,14 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const requestedRaidType = url.searchParams.get("raidType");
   const requestedSeasonIndex = Number.parseInt(url.searchParams.get("seasonIndex") ?? "", 10);
   const requestedScheduleKey = `${requestedRaidType}:${requestedSeasonIndex}`;
-  const preselectedBossIndex = options.bosses.findIndex((boss) => boss.scheduleKeys.includes(requestedScheduleKey));
-  return { ...options, preselectedBossIndex: preselectedBossIndex >= 0 ? preselectedBossIndex : 0 };
+  const preselectedBossIndex = options.bosses.findIndex((boss) =>
+    boss.schedules.some((schedule) => schedule.key === requestedScheduleKey),
+  );
+  const resolvedBossIndex = preselectedBossIndex >= 0 ? preselectedBossIndex : 0;
+  const preselectedTerrain = options.bosses[resolvedBossIndex]?.schedules.find(
+    (schedule) => schedule.key === requestedScheduleKey,
+  )?.terrain;
+  return { ...options, preselectedBossIndex: resolvedBossIndex, preselectedTerrain };
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
@@ -52,8 +58,10 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       currentUser.id,
       {
         title: String(formData.get("title") ?? ""),
+        description: String(formData.get("description") ?? ""),
         visibility,
         bossUid: document.context.bossUid,
+        terrain: document.context.terrain,
         defenseType: document.context.defenseType,
         maxDifficulty: document.context.maxDifficulty,
         document,
@@ -70,7 +78,8 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 };
 
 export default function NewWalkthroughTimelinePage() {
-  const { students, bosses, recruitedSnapshots, preselectedBossIndex } = useLoaderData<typeof loader>();
+  const { students, bosses, recruitedSnapshots, preselectedBossIndex, preselectedTerrain } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const editorRef = useRef<WalkthroughTimelineEditorHandle>(null);
   const [activePartyIndex, setActivePartyIndex] = useState(0);
@@ -81,7 +90,10 @@ export default function NewWalkthroughTimelinePage() {
   });
   const boss = bosses[preselectedBossIndex];
   const defenseType = boss?.defenseTypes[0];
-  if (!boss || !defenseType) throw new Response("보스의 방어 타입 정보를 찾을 수 없어요.", { status: 503 });
+  const terrain = preselectedTerrain ?? boss?.terrains[0];
+  if (!boss || !defenseType || !terrain) {
+    throw new Response("보스의 공략 설정 정보를 찾을 수 없어요.", { status: 503 });
+  }
   return (
     <Page
       title="공략 타임라인 작성"
@@ -111,13 +123,15 @@ export default function NewWalkthroughTimelinePage() {
         <WalkthroughTimelineEditor
           ref={editorRef}
           initialTitle=""
+          initialDescription=""
           initialVisibility="private"
           initialDocument={{
             type: "walkthrough_timeline",
             schemaVersion: 1,
-            partySize: 6,
+            partySize: boss.partySize,
             context: {
               bossUid: boss.uid,
+              terrain,
               defenseType,
               maxDifficulty: "extreme",
             },

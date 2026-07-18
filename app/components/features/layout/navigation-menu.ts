@@ -14,6 +14,7 @@ import {
   HomeIcon as HomeIconOutline,
   IdentificationIcon as IdentificationIconOutline,
   ListBulletIcon as ListBulletIconOutline,
+  QueueListIcon as QueueListIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
   TableCellsIcon as TableCellsIconOutline,
   TicketIcon as TicketIconOutline,
@@ -34,12 +35,13 @@ import {
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
   ListBulletIcon as ListBulletIconSolid,
+  QueueListIcon as QueueListIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
   TableCellsIcon as TableCellsIconSolid,
   TicketIcon as TicketIconSolid,
 } from "@heroicons/react/24/solid";
 import type { ComponentProps, ComponentType } from "react";
-import { type UtcIsoString, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
+import { isInstantAfter, isInstantBefore, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 
 type IconComponent = ComponentType<ComponentProps<"svg">>;
 
@@ -100,7 +102,9 @@ export function getNavigationSectionStates(
       isStudentActive ||
       pathname.startsWith("/mainstory"),
     isUtilActive:
-      pathname.startsWith("/utils") || !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
+      pathname.startsWith("/utils") ||
+      pathname.startsWith("/timelines") ||
+      !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
     isExternalActive: pathname.startsWith("/coupons"),
     isProfileActive:
       pathname.startsWith("/@") ||
@@ -182,6 +186,15 @@ export function getNavigationSections({
       SolidIcon: Cog6ToothIconSolid,
       isActive: sectionStates.isUtilActive,
       items: [
+        {
+          to: "/timelines",
+          name: "공략 타임라인",
+          description: "공략을 찾아보고 실전에서 순서대로 확인해보세요",
+          OutlineIcon: QueueListIconOutline,
+          SolidIcon: QueueListIconSolid,
+          isActive: pathname.startsWith("/timelines"),
+          badgeLabel: "베타",
+        },
         {
           to: "/utils/pyroxene",
           name: "청휘석 플래너",

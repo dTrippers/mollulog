@@ -13,6 +13,7 @@ import { createPageErrorBoundary, Page, type PagePanelProps } from "~/components
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons } from "~/components/primitives";
 import { findCurrentOrClosestRaidSchedule, raidTypeToParam } from "~/domain/raid";
+import { WALKTHROUGH_TIMELINE_DIFFICULTIES } from "~/domain/walkthrough-timeline";
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
 import { canonicalLink } from "~/lib/seo";
@@ -164,6 +165,15 @@ export default function RaidPage() {
         to: youtubeSearchDateRange.to,
       })
     : null;
+  const timelineSearchParams = new URLSearchParams({
+    bossUid: currentRaid.raidBoss.uid,
+    terrain: currentRaid.terrain,
+    defenseType: selectedDefense,
+  });
+  const selectedDifficulty = searchParams.get("difficulty");
+  if (selectedDifficulty && WALKTHROUGH_TIMELINE_DIFFICULTIES.some((difficulty) => difficulty === selectedDifficulty)) {
+    timelineSearchParams.set("difficulty", selectedDifficulty);
+  }
 
   return (
     <Page
@@ -203,7 +213,7 @@ export default function RaidPage() {
       screens={[
         {
           text: "시즌 통계",
-          description: "플래티넘 유저들의 클리어 통계",
+          description: "플래티넘 클리어 점수 및 통계 정보",
           Icon: InformationCircleIcon,
           link: raidPath,
           active: pathname === raidPath,
@@ -211,23 +221,23 @@ export default function RaidPage() {
         {
           text: "상위권 편성",
           Icon: TrophyIcon,
-          description: "특정 성장도의 학생을 포함/제외하는 편성 찾기",
+          description: "상위권 편성 정보를 학생/성장도로 찾기",
           link: `${raidPath}/ranks`,
           active: pathname === `${raidPath}/ranks`,
         },
         {
-          text: "공략 영상",
+          text: "영상",
           Icon: VideoCameraIcon,
-          description: "공략 영상과 해당 영상에서 사용한 편성 정보",
+          description: "공략 영상과 해당 영상에서 사용한 편성 정보 확인",
           link: `${raidPath}/videos`,
           active: pathname === `${raidPath}/videos`,
         },
         {
-          text: "공략 타임라인",
+          text: "타임라인 (β)",
           Icon: QueueListIcon,
-          description: "작성자가 공유한 실전 공략 순서",
-          link: `${raidPath}/timelines`,
-          active: pathname === `${raidPath}/timelines`,
+          description: "선생님들이 공유한 공략 타임라인 정보",
+          link: `/timelines?${timelineSearchParams.toString()}`,
+          active: false,
         },
       ]}
     >

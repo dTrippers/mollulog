@@ -55,8 +55,10 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       currentUser.id,
       {
         title: String(formData.get("title") ?? ""),
+        description: String(formData.get("description") ?? ""),
         visibility,
         bossUid: document.context.bossUid,
+        terrain: document.context.terrain,
         defenseType: document.context.defenseType,
         maxDifficulty: document.context.maxDifficulty,
         document,
@@ -114,6 +116,7 @@ export default function EditWalkthroughTimelinePage() {
         <WalkthroughTimelineEditor
           ref={editorRef}
           initialTitle={timeline.title}
+          initialDescription={timeline.description}
           initialVisibility={timeline.visibility}
           initialDocument={timeline.document}
           students={students}

@@ -55,6 +55,7 @@ export default function WalkthroughTimelineViewerPage() {
         wakeLockControl={{
           enabled: wakeLockEnabled,
           active: wakeLock.active,
+          unavailable: wakeLock.unavailable,
           onToggle: () => setWakeLockEnabled((enabled) => !enabled),
         }}
       />

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   InvalidWalkthroughTimelineDocumentError,
+  WALKTHROUGH_TIMELINE_DIFFICULTIES,
   parseWalkthroughTimelineDocument,
   type WalkthroughTimelineDocument,
 } from "~/domain/walkthrough-timeline";
@@ -10,7 +11,7 @@ function validDocument(): WalkthroughTimelineDocument {
     type: "walkthrough_timeline",
     schemaVersion: 1,
     partySize: 6,
-    context: { bossUid: "boss-1", defenseType: "heavy", maxDifficulty: "torment" },
+    context: { bossUid: "boss-1", terrain: "indoor", defenseType: "heavy", maxDifficulty: "torment" },
     parties: [
       {
         uid: "party-1",
@@ -24,6 +25,7 @@ function validDocument(): WalkthroughTimelineDocument {
             kind: "actions",
             marker: { kind: "immediate", value: "즉시" },
             actions: [{ kind: "student_ex", studentUid: "student-1" }],
+            sourceText: "즉시 학생 1",
           },
         ],
       },
@@ -36,10 +38,28 @@ describe("parseWalkthroughTimelineDocument", () => {
     expect(parseWalkthroughTimelineDocument(validDocument())).toEqual(validDocument());
   });
 
+  it("accepts every raid difficulty", () => {
+    for (const difficulty of WALKTHROUGH_TIMELINE_DIFFICULTIES) {
+      const document = validDocument();
+      document.context.maxDifficulty = difficulty;
+      expect(parseWalkthroughTimelineDocument(document)).toEqual(document);
+    }
+  });
+
   it("rejects unknown schema versions instead of applying a fallback", () => {
     expect(() => parseWalkthroughTimelineDocument({ ...validDocument(), schemaVersion: 2 })).toThrow(
       InvalidWalkthroughTimelineDocumentError,
     );
+  });
+
+  it("rejects an unsupported terrain", () => {
+    const document = validDocument();
+    expect(() =>
+      parseWalkthroughTimelineDocument({
+        ...document,
+        context: { ...document.context, terrain: "space" },
+      }),
+    ).toThrow("terrain");
   });
 
   it("rejects a student action without a student uid", () => {

@@ -8,10 +8,21 @@ export const WALKTHROUGH_TIMELINE_LIMITS = {
 export const WALKTHROUGH_TIMELINE_VISIBILITIES = ["public", "private"] as const;
 export type WalkthroughTimelineVisibility = (typeof WALKTHROUGH_TIMELINE_VISIBILITIES)[number];
 
-export const WALKTHROUGH_TIMELINE_DIFFICULTIES = ["extreme", "insane", "torment", "lunatic"] as const;
+export const WALKTHROUGH_TIMELINE_DIFFICULTIES = [
+  "normal",
+  "hard",
+  "very_hard",
+  "hardcore",
+  "extreme",
+  "insane",
+  "torment",
+  "lunatic",
+] as const;
 export type WalkthroughTimelineDifficulty = (typeof WALKTHROUGH_TIMELINE_DIFFICULTIES)[number];
 export const WALKTHROUGH_TIMELINE_DEFENSE_TYPES = ["light", "heavy", "special", "elastic"] as const;
 export type WalkthroughTimelineDefenseType = (typeof WALKTHROUGH_TIMELINE_DEFENSE_TYPES)[number];
+export const WALKTHROUGH_TIMELINE_TERRAINS = ["indoor", "outdoor", "street"] as const;
+export type WalkthroughTimelineTerrain = (typeof WALKTHROUGH_TIMELINE_TERRAINS)[number];
 
 export type WalkthroughTimelineDocument = {
   type: "walkthrough_timeline";
@@ -19,6 +30,7 @@ export type WalkthroughTimelineDocument = {
   partySize: 6 | 10;
   context: {
     bossUid: string;
+    terrain: WalkthroughTimelineTerrain;
     defenseType: WalkthroughTimelineDefenseType;
     maxDifficulty: WalkthroughTimelineDifficulty;
   };
@@ -74,14 +86,17 @@ export type TimelineStep = {
   marker?: TimelineMarker;
   actions: TimelineAction[];
   note?: string;
+  sourceText?: string;
 };
 
 export type WalkthroughTimelineRecord = {
   uid: string;
   userId: number;
   title: string;
+  description: string;
   visibility: WalkthroughTimelineVisibility;
   bossUid: string;
+  terrain: WalkthroughTimelineTerrain;
   defenseType: WalkthroughTimelineDefenseType;
   maxDifficulty: WalkthroughTimelineDifficulty;
   document: WalkthroughTimelineDocument;
@@ -176,6 +191,9 @@ function assertStep(value: unknown, path: string): asserts value is TimelineStep
   if (value.note !== undefined && typeof value.note !== "string") {
     throw new InvalidWalkthroughTimelineDocumentError(`${path}.note 값이 올바른 문자열이 아니에요.`);
   }
+  if (value.sourceText !== undefined && typeof value.sourceText !== "string") {
+    throw new InvalidWalkthroughTimelineDocumentError(`${path}.sourceText 값이 올바른 문자열이 아니에요.`);
+  }
 }
 
 function assertParty(value: unknown, path: string, partySize: 6 | 10): asserts value is WalkthroughParty {
@@ -264,6 +282,9 @@ export function parseWalkthroughTimelineDocument(value: unknown): WalkthroughTim
     throw new InvalidWalkthroughTimelineDocumentError("context 값이 올바르지 않아요.");
   }
   assertString(value.context.bossUid, "context.bossUid");
+  if (!WALKTHROUGH_TIMELINE_TERRAINS.includes(value.context.terrain as WalkthroughTimelineTerrain)) {
+    throw new InvalidWalkthroughTimelineDocumentError("context.terrain 값이 지원되지 않아요.");
+  }
   if (!WALKTHROUGH_TIMELINE_DEFENSE_TYPES.includes(value.context.defenseType as WalkthroughTimelineDefenseType)) {
     throw new InvalidWalkthroughTimelineDocumentError("context.defenseType 값이 지원되지 않아요.");
   }

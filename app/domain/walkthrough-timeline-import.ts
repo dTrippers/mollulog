@@ -73,6 +73,192 @@ function findStudentCandidates(index: StudentIndex, rawName: string): string[] {
   return canonical.length > 0 ? canonical : (index.aliases.get(key) ?? []);
 }
 
+type StudentNameEntry = {
+  name: string;
+  studentUids: string[];
+};
+
+function buildStudentNameEntries(students: ImportStudent[]): StudentNameEntry[] {
+  const names = new Map<string, Set<string>>();
+  for (const student of students) {
+    for (const name of [student.name, student.familyName, ...(student.altNames ?? [])]) {
+      const value = name?.trim();
+      if (!value) continue;
+      const current = names.get(value) ?? new Set<string>();
+      current.add(student.uid);
+      names.set(value, current);
+    }
+  }
+  return [...names.entries()]
+    .map(([name, studentUids]) => ({ name, studentUids: [...studentUids] }))
+    .sort((left, right) => right.name.length - left.name.length);
+}
+
+function isStudentNameCharacter(value: string | undefined) {
+  return Boolean(value && /[가-힣A-Za-z0-9]/.test(value));
+}
+
+function findExactStudentUid(entries: StudentNameEntry[], value: string) {
+  const matched = entries.find((entry) => entry.name === value.trim());
+  return matched?.studentUids.length === 1 ? matched.studentUids[0] : undefined;
+}
+
+function extractCertainMarker(line: string): { marker: TimelineMarker; body: string } {
+  const time = line.match(/^(\d{1,2}:\d{2}(?:[.:]\d{1,3})?)\s*/);
+  if (time) {
+    return {
+      marker: { kind: "time_remaining", value: time[1].replace(/:(\d{1,3})$/, ".$1") },
+      body: line.slice(time[0].length),
+    };
+  }
+  const cost = line.match(/^((?:약\s*)?\d+(?:\.(?:\d+|x))?\+?\s*코(?:쯤|~~)?)\s*/i);
+  if (cost) return { marker: { kind: "cost", value: cost[1].replace(/\s+/g, "") }, body: line.slice(cost[0].length) };
+  const immediate = line.match(/^(즉시|최속)\s*/);
+  if (immediate) return { marker: { kind: "immediate", value: immediate[1] }, body: line.slice(immediate[0].length) };
+  return { marker: { kind: "manual", value: "" }, body: line };
+}
+
+function cleanActionDetail(value: string) {
+  return value.replace(/^(?:\s*(?:--+|→|,|&|\/\/))+|(?:\s*(?:--+|→|,|&|\/\/))+$/g, "").trim();
+}
+
+/**
+ * Extracts only stable anchors for direct editing. It intentionally does not
+ * try to understand arbitrary prose or request mappings for leftover text.
+ */
+export function extractCertainTimelineImport(raw: string, students: ImportStudent[]): ImportDraft {
+  const normalized = normalizeTimelineImportText(raw);
+  const entries = buildStudentNameEntries(students);
+  const steps: ImportDraftStep[] = [];
+
+  for (const [lineIndex, rawLine] of normalized.split("\n").entries()) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const { marker, body } = extractCertainMarker(line);
+
+    if (/^※\s/.test(body)) {
+      steps.push({
+        sourceLine: lineIndex + 1,
+        raw: rawLine,
+        parsed: {
+          uid: nanoid(8),
+          order: steps.length,
+          kind: "actions",
+          marker,
+          actions: [{ kind: "free_text", text: body }],
+          sourceText: rawLine.trim(),
+        },
+        tokens: [],
+      });
+      continue;
+    }
+
+    const matches: Array<{
+      start: number;
+      end: number;
+      consumedStart: number;
+      consumedEnd: number;
+      name: string;
+      studentUid?: string;
+      copied: boolean;
+      targetStudentUid?: string;
+      note?: string;
+    }> = [];
+
+    for (let index = 0; index < body.length; ) {
+      const entry = entries.find((candidate) => body.startsWith(candidate.name, index));
+      if (!entry) {
+        index += 1;
+        continue;
+      }
+      const end = index + entry.name.length;
+      const prefixIsCopied =
+        (body[index - 1] === "c" || body[index - 1] === "C") && !isStudentNameCharacter(body[index - 2]);
+      const validPrefix = !isStudentNameCharacter(body[index - 1]) || prefixIsCopied;
+      const suffix = body.slice(end);
+      const validSuffix = !isStudentNameCharacter(body[end]) || /^\d+스/.test(suffix);
+      if (!validPrefix || !validSuffix) {
+        index += 1;
+        continue;
+      }
+
+      let consumedEnd = end;
+      let copied = prefixIsCopied;
+      let targetStudentUid: string | undefined;
+      let note: string | undefined;
+      const parenthetical = suffix.match(/^\(([^)]+)\)/);
+      if (parenthetical) {
+        consumedEnd += parenthetical[0].length;
+        const detail = parenthetical[1].trim();
+        targetStudentUid = findExactStudentUid(entries, detail);
+        if (/^(?:c|복|복사|복제|copied)$/i.test(detail)) copied = true;
+        else if (!targetStudentUid) note = detail;
+      }
+      matches.push({
+        start: index,
+        end,
+        consumedStart: prefixIsCopied ? index - 1 : index,
+        consumedEnd,
+        name: entry.name,
+        ...(entry.studentUids.length === 1 ? { studentUid: entry.studentUids[0] } : {}),
+        copied,
+        ...(targetStudentUid ? { targetStudentUid } : {}),
+        ...(note ? { note } : {}),
+      });
+      index = consumedEnd;
+    }
+
+    const actions: TimelineAction[] = [];
+    const tokens: ImportToken[] = [];
+    const notes: string[] = [];
+    let cursor = 0;
+    for (const match of matches) {
+      const detail = cleanActionDetail(body.slice(cursor, match.consumedStart));
+      const actionDetail = [match.copied ? "복제 스킬" : "", detail].filter(Boolean).join(" / ");
+      if (match.studentUid) {
+        actions.push({
+          kind: "student_ex",
+          studentUid: match.studentUid,
+          ...(match.targetStudentUid ? { targetStudentUid: match.targetStudentUid } : {}),
+          ...(actionDetail ? { text: actionDetail } : {}),
+        });
+        tokens.push({
+          raw: match.name,
+          status: "confirmed",
+          studentUid: match.studentUid,
+          candidates: [match.studentUid],
+        });
+      }
+      if (match.note) notes.push(match.note);
+      cursor = match.consumedEnd;
+    }
+    const trailing = cleanActionDetail(body.slice(cursor));
+    if (trailing) notes.push(trailing);
+
+    steps.push({
+      sourceLine: lineIndex + 1,
+      raw: rawLine,
+      parsed: {
+        uid: nanoid(8),
+        order: steps.length,
+        kind: "actions",
+        marker,
+        actions: actions.length > 0 ? actions : [{ kind: "free_text", text: body }],
+        ...(notes.length > 0 ? { note: notes.join(" · ") } : {}),
+        sourceText: rawLine.trim(),
+      },
+      tokens,
+    });
+  }
+
+  return {
+    source: { kind: "text", raw },
+    steps,
+    mappings: [],
+    issues: [],
+  };
+}
+
 export function normalizeTimelineImportText(raw: string): string {
   return raw
     .normalize("NFC")
@@ -334,7 +520,7 @@ export function parseTimelineImport(
       line.match(/^[【[]\s*(.+?)\s*[】\]]$/) ??
       line.match(/^[~～]+\s*(.+?)\s*[~～]+$/) ??
       line.match(/^\(\s*(.+?)\s*\)$/) ??
-      (/^-{3,}$/.test(line) ? [line, "구분선"] : null) ??
+      (/^-{3,}$/.test(line) ? [line, "설명글"] : null) ??
       line.match(/^-\s*(.+?)\s*-$/);
     if (divider) {
       steps.push({
