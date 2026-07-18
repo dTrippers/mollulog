@@ -12,6 +12,7 @@ import { QRCodeSVG } from "qrcode.react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, redirect, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import LikeButton from "~/components/features/engagement/LikeButton";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import {
   flattenTimelineParties,
@@ -20,6 +21,7 @@ import {
 } from "~/components/features/walkthrough-timeline";
 import { AttributeBadge, Button } from "~/components/primitives";
 import { PanelBody, PanelBodyRow } from "~/components/primitives/PanelBody";
+import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
 import {
   clonePostgresWalkthroughTimeline,
   deletePostgresWalkthroughTimeline,
@@ -27,8 +29,10 @@ import {
 } from "~/db/postgres/walkthrough-timelines";
 import { compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
+import { getLogger } from "~/lib/observability.server";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
+import { deleteCommunityPostByUid } from "~/models/community";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getSenseiById } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
@@ -50,10 +54,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   if (timeline.visibility === "private" && !owner) {
     throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
   }
-  const [author, students, raids] = await Promise.all([
+  const [author, students, raids, engagementByUid] = await Promise.all([
     getSenseiById(env, timeline.userId),
     getAllStudentsMap(env, true),
     getAllRaidSchedules(env),
+    getPostgresWalkthroughTimelineLikeSummaries(env, [timeline.uid], currentUser?.id, { ctx }),
   ]);
   const bossSchedules = raids
     .filter((raid) => raid.raidBoss.uid === timeline.bossUid)
@@ -69,6 +74,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const viewerUrl = new URL(`/timelines/${timeline.uid}/viewer`, request.url).toString();
   return {
     timeline,
+    engagement: engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 },
     owner,
     signedIn: currentUser !== null,
     author: author ? { username: author.username } : null,
@@ -88,6 +94,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "timelines.detail.action" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) return redirect("/unauthorized");
   if (!params.uid) throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
@@ -101,14 +108,32 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   if (intent === "delete") {
     const deleted = await deletePostgresWalkthroughTimeline(env, params.uid, currentUser.id, { ctx });
     if (!deleted) throw routeError(403, "timeline.forbidden", "이 타임라인을 삭제할 수 없어요.");
+    try {
+      await deleteCommunityPostByUid(env, params.uid, currentUser.id);
+    } catch (error) {
+      logger.error("Failed to delete walkthrough timeline community post", error, {
+        timelineUid: params.uid,
+        operation: "delete",
+      });
+    }
     return redirect(`/@${currentUser.username}/timelines`);
   }
   throw routeError(400, "timeline.invalid_action", "지원하지 않는 요청이에요.");
 };
 
 export default function WalkthroughTimelineDetailPage() {
-  const { timeline, owner, signedIn, author, bossName, latestBossTimelinePath, studentsByUid, detailUrl, viewerUrl } =
-    useLoaderData<typeof loader>();
+  const {
+    timeline,
+    engagement,
+    owner,
+    signedIn,
+    author,
+    bossName,
+    latestBossTimelinePath,
+    studentsByUid,
+    detailUrl,
+    viewerUrl,
+  } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const items = flattenTimelineParties(timeline.document.parties);
   return (
@@ -253,6 +278,15 @@ export default function WalkthroughTimelineDetailPage() {
         </section>
 
         <div className="flex flex-wrap gap-2">
+          {timeline.visibility === "public" ? (
+            <LikeButton
+              targetUid={timeline.uid}
+              action={`/api/timelines/${timeline.uid}/likes`}
+              liked={engagement.liked}
+              likeCount={engagement.likeCount}
+              signedIn={signedIn}
+            />
+          ) : null}
           {signedIn && !owner && (
             <Form method="post">
               <Button

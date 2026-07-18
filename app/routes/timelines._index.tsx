@@ -4,11 +4,13 @@ import { useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import LikeButton from "~/components/features/engagement/LikeButton";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import { RaidPartyCard, type RaidPartyRow } from "~/components/features/raids";
 import WalkthroughBossSelect from "~/components/features/walkthrough-timeline/WalkthroughBossSelect";
 import { AttributeBadge, Button, EmptyView, PanelFilterButtonsSection, PanelSwitchRow } from "~/components/primitives";
 import { PanelBody, PanelBodySection } from "~/components/primitives/PanelBody";
+import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
 import { listPostgresPublicWalkthroughTimelines } from "~/db/postgres/walkthrough-timelines";
 import {
   WALKTHROUGH_TIMELINE_DEFENSE_TYPES,
@@ -56,6 +58,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
   const searchParams = new URL(request.url).searchParams;
   const requestedBossUid = searchParams.get("bossUid");
+  const likedOnly = sensei !== null && searchParams.get("liked") === "1";
   const filters = {
     bossUid: bosses.some((boss) => boss.uid === requestedBossUid) ? requestedBossUid : null,
     terrain: WALKTHROUGH_TIMELINE_TERRAINS.find((terrain) => terrain === searchParams.get("terrain")) ?? null,
@@ -63,19 +66,27 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       WALKTHROUGH_TIMELINE_DEFENSE_TYPES.find((defenseType) => defenseType === searchParams.get("defenseType")) ?? null,
     maxDifficulty:
       WALKTHROUGH_TIMELINE_DIFFICULTIES.find((difficulty) => difficulty === searchParams.get("difficulty")) ?? null,
+    likedOnly,
   };
-  const timelines = await listPostgresPublicWalkthroughTimelines(env, filters, { ctx });
-  const [authors, recruitedStudentTiers] = await Promise.all([
+  const timelines = await listPostgresPublicWalkthroughTimelines(
+    env,
+    { ...filters, likedByUserId: likedOnly ? sensei.id : null },
+    { ctx },
+  );
+  const timelineUids = timelines.map((timeline) => timeline.uid);
+  const [authors, recruitedStudentTiers, engagementByUid] = await Promise.all([
     getSenseisById(
       env,
       timelines.map((timeline) => timeline.userId),
     ),
     sensei ? getRecruitedStudentTiers(env, sensei.id) : Promise.resolve({}),
+    getPostgresWalkthroughTimelineLikeSummaries(env, timelineUids, sensei?.id, { ctx }),
   ]);
 
   return {
     timelines,
     filters,
+    engagementByUid,
     bosses,
     authorsById: Object.fromEntries(authors.map((author) => [author.id, author.username])),
     studentsByUid: Object.fromEntries(
@@ -99,6 +110,7 @@ export default function WalkthroughTimelineCatalogPage() {
   const {
     timelines,
     filters,
+    engagementByUid,
     bosses,
     authorsById,
     studentsByUid,
@@ -189,12 +201,24 @@ export default function WalkthroughTimelineCatalogPage() {
                 atLeastOne
                 size="sm"
               />
-              {hasRecruitedStudentData ? (
-                <PanelSwitchRow
-                  title="미모집 학생 표시"
-                  checked={showUnrecruitedStudents}
-                  onChange={setShowUnrecruitedStudents}
-                />
+              {hasRecruitedStudentData || signedIn ? (
+                <div className="space-y-0">
+                  {hasRecruitedStudentData ? (
+                    <PanelSwitchRow
+                      title="미모집 학생 표시"
+                      checked={showUnrecruitedStudents}
+                      onChange={setShowUnrecruitedStudents}
+                    />
+                  ) : null}
+                  {signedIn ? (
+                    <PanelSwitchRow
+                      title="좋아요한 공략만 보기"
+                      checked={filters.likedOnly}
+                      onChange={(checked) => setFilter("liked", checked ? "1" : null)}
+                      className="border-t-0 pt-0"
+                    />
+                  ) : null}
+                </div>
               ) : null}
             </PanelBody>
           ),
@@ -219,6 +243,8 @@ export default function WalkthroughTimelineCatalogPage() {
                 studentsByUid={studentsByUid}
                 recruitedStudentTiers={recruitedStudentTiers}
                 showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
+                engagement={engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 }}
+                signedIn={signedIn}
               />
             ))}
           </div>
@@ -239,6 +265,8 @@ function WalkthroughTimelineCard({
   studentsByUid,
   recruitedStudentTiers,
   showUnrecruitedStudents,
+  engagement,
+  signedIn,
 }: {
   timeline: WalkthroughTimelineRecord;
   bossName: string | null;
@@ -246,6 +274,8 @@ function WalkthroughTimelineCard({
   studentsByUid: Record<string, TimelineStudent>;
   recruitedStudentTiers: Record<string, number>;
   showUnrecruitedStudents: boolean;
+  engagement: { liked: boolean; likeCount: number };
+  signedIn: boolean;
 }) {
   const rows: RaidPartyRow[] = timeline.document.parties.map((party, partyIndex) => ({
     key: party.uid,
@@ -307,8 +337,15 @@ function WalkthroughTimelineCard({
         emptyText="편성 정보가 없어요"
         className="grow rounded-none pt-0 md:pt-0"
       />
-      <div className="flex justify-end px-4 pb-4">
-        <Button to={`/timelines/${timeline.uid}`} text="자세히 보기" icon={ArrowRightIcon} size="sm" />
+      <div className="flex items-center justify-between gap-2 px-4 pb-4">
+        <LikeButton
+          targetUid={timeline.uid}
+          action={`/api/timelines/${timeline.uid}/likes`}
+          liked={engagement.liked}
+          likeCount={engagement.likeCount}
+          signedIn={signedIn}
+        />
+        <Button to={`/timelines/${timeline.uid}`} text="자세히 보기" icon={ArrowRightIcon} size="xs" />
       </div>
     </article>
   );

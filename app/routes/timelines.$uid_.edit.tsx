@@ -17,6 +17,8 @@ import {
   type WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
 import { routeError } from "~/lib/http-errors";
+import { getLogger } from "~/lib/observability.server";
+import { syncWalkthroughTimelineCommunityPost } from "~/models/community";
 import { loadTimelineEditorOptions } from "./timelines._components/timeline-route-data.server";
 
 type ActionData = { error: string };
@@ -41,6 +43,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "timelines.edit.action" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) return redirect("/unauthorized");
   if (!params.uid) throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
@@ -66,6 +69,15 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       { ctx },
     );
     if (!updated) throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
+    try {
+      await syncWalkthroughTimelineCommunityPost(env, updated);
+    } catch (error) {
+      logger.error("Failed to sync walkthrough timeline community post", error, {
+        timelineUid: updated.uid,
+        visibility: updated.visibility,
+        operation: "update",
+      });
+    }
     return redirect(`/timelines/${updated.uid}`);
   } catch (error) {
     if (error instanceof Response) throw error;

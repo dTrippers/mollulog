@@ -1,7 +1,7 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, exists, inArray } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { pgWalkthroughTimelinesTable } from "~/db/postgres/schema";
+import { pgWalkthroughTimelineLikesTable, pgWalkthroughTimelinesTable } from "~/db/postgres/schema";
 import {
   parseWalkthroughTimelineDocument,
   type WalkthroughTimelineDefenseType,
@@ -178,6 +178,7 @@ export async function listPostgresPublicWalkthroughTimelines(
     terrain?: WalkthroughTimelineTerrain | null;
     defenseType?: WalkthroughTimelineDefenseType | null;
     maxDifficulty?: WalkthroughTimelineDifficulty | null;
+    likedByUserId?: number | null;
   } = {},
   options: PostgresWalkthroughTimelineOptions = {},
 ): Promise<WalkthroughTimelineRecord[]> {
@@ -192,6 +193,21 @@ export async function listPostgresPublicWalkthroughTimelines(
       if (filters.defenseType) conditions.push(eq(pgWalkthroughTimelinesTable.defenseType, filters.defenseType));
       if (filters.maxDifficulty) {
         conditions.push(eq(pgWalkthroughTimelinesTable.maxDifficulty, filters.maxDifficulty));
+      }
+      if (filters.likedByUserId) {
+        conditions.push(
+          exists(
+            db
+              .select({ walkthroughUid: pgWalkthroughTimelineLikesTable.walkthroughUid })
+              .from(pgWalkthroughTimelineLikesTable)
+              .where(
+                and(
+                  eq(pgWalkthroughTimelineLikesTable.walkthroughUid, pgWalkthroughTimelinesTable.uid),
+                  eq(pgWalkthroughTimelineLikesTable.userId, filters.likedByUserId),
+                ),
+              ),
+          ),
+        );
       }
       const rows = await db
         .select()

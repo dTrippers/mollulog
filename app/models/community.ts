@@ -1,14 +1,27 @@
-import { type SQLWrapper, and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, type SQLWrapper, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
-import { type UtcIsoString, normalizeUtcTimestamp, nowUtcIso } from "~/lib/date-time";
-import { withD1Session } from "~/lib/d1-session";
-import { watchIo } from "~/lib/io-watchdog";
+import type {
+  WalkthroughTimelineDefenseType,
+  WalkthroughTimelineDifficulty,
+  WalkthroughTimelineDocument,
+  WalkthroughTimelineRecord,
+  WalkthroughTimelineTerrain,
+} from "~/domain/walkthrough-timeline";
 import { cacheKey, cacheQuery, fetchCached } from "~/lib/cache";
+import { withD1Session } from "~/lib/d1-session";
+import { normalizeUtcTimestamp, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { watchIo } from "~/lib/io-watchdog";
 import { senseisTable } from "./sensei";
 
-export type CommunityPostType = "student_review" | "event_opinion" | "guide" | "youtube_video" | "recruitment_result";
+export type CommunityPostType =
+  | "student_review"
+  | "event_opinion"
+  | "guide"
+  | "youtube_video"
+  | "recruitment_result"
+  | "walkthrough_timeline";
 export type CommunityPostOrigin = "user" | "curated";
 export type CommunityVisibility = "public" | "unlisted" | "private";
 export type CommunityCommentVisibility = "public" | "private";
@@ -38,11 +51,24 @@ export type PartyInfoCommunityPostBlock = {
   units: (string | null)[][];
 };
 
+export type WalkthroughTimelineCommunityPostBlock = {
+  type: "walkthrough_timeline";
+  timelineUid: string;
+  bossUid: string;
+  terrain: WalkthroughTimelineTerrain;
+  defenseType: WalkthroughTimelineDefenseType;
+  maxDifficulty: WalkthroughTimelineDifficulty;
+  partySize?: WalkthroughTimelineDocument["partySize"];
+  partyCount: number;
+  usedStudentUids: string[];
+};
+
 export type CommunityPostBlock =
   | PlaintextCommunityPostBlock
   | MarkdownCommunityPostBlock
   | YoutubeCommunityPostBlock
-  | PartyInfoCommunityPostBlock;
+  | PartyInfoCommunityPostBlock
+  | WalkthroughTimelineCommunityPostBlock;
 
 export type NestedCommunityComment = {
   uid: string;
@@ -479,7 +505,13 @@ async function loadCommunityFeedPage(
   }: CommunityFeedPageOptions = {},
 ): Promise<CommunityFeedPageResult> {
   const db = drizzle(env.DB);
-  const filters: SQLWrapper[] = [communityPostVisibilityFilter(currentUserId)];
+  const filters: SQLWrapper[] = [
+    communityPostVisibilityFilter(currentUserId),
+    sql`(
+      ${communityPostsTable.postType} <> 'walkthrough_timeline'
+      or ${communityPostsTable.visibility} = 'public'
+    )`,
+  ];
 
   if (postTypes && postTypes.length > 0) {
     filters.push(inArray(communityPostsTable.postType, postTypes));
@@ -566,6 +598,7 @@ async function loadCommunityFeedPage(
   );
 
   const postUids = rows.map((row) => row.uid);
+  const communityLikePostUids = rows.filter((row) => row.postType !== "walkthrough_timeline").map((row) => row.uid);
   const [commentsByPostUid, likeCounts, likedPostUids]: [
     Record<string, NestedCommunityComment[]>,
     Record<string, number>,
@@ -575,8 +608,8 @@ async function loadCommunityFeedPage(
         "community.feed.engagement",
         Promise.all([
           getNestedCommunityCommentsByPostUids(env, postUids, currentUserId),
-          getCommunityLikeCountsByPostUids(env, postUids),
-          currentUserId ? getLikedCommunityPostUids(env, currentUserId, postUids) : new Set<string>(),
+          getCommunityLikeCountsByPostUids(env, communityLikePostUids),
+          currentUserId ? getLikedCommunityPostUids(env, currentUserId, communityLikePostUids) : new Set<string>(),
         ]),
         traceContext,
         COMMUNITY_FEED_SLOW_WARN_MS,
@@ -795,12 +828,16 @@ export async function deleteCommunityComment(env: Env, userId: number, commentUi
 export async function setCommunityPostLike(env: Env, userId: number, postUid: string, liked: boolean): Promise<void> {
   const db = drizzle(env.DB);
   const post = await db
-    .select({ uid: communityPostsTable.uid })
+    .select({
+      uid: communityPostsTable.uid,
+      postType: communityPostsTable.postType,
+      visibility: communityPostsTable.visibility,
+    })
     .from(communityPostsTable)
     .where(and(eq(communityPostsTable.uid, postUid), communityPostVisibilityFilter(userId)))
     .get();
 
-  if (!post) {
+  if (!post || post.postType === "walkthrough_timeline") {
     return;
   }
 
@@ -833,6 +870,87 @@ export type YoutubeVideoCommunityPostInput = {
   channelName: string;
   channelUrl: string;
 };
+
+export function createWalkthroughTimelineCommunityPostBlocks({
+  uid,
+  description,
+  bossUid,
+  terrain,
+  defenseType,
+  maxDifficulty,
+  document,
+}: {
+  uid: string;
+  description: string;
+  bossUid: string;
+  terrain: WalkthroughTimelineTerrain;
+  defenseType: WalkthroughTimelineDefenseType;
+  maxDifficulty: WalkthroughTimelineDifficulty;
+  document: WalkthroughTimelineDocument;
+}): CommunityPostBlock[] {
+  const usedStudentUids = [
+    ...new Set(document.parties[0]?.units.flatMap((unit) => (unit.studentUid ? [unit.studentUid] : [])) ?? []),
+  ];
+
+  return [
+    ...createPlaintextCommunityPostBlocks(description),
+    {
+      type: "walkthrough_timeline",
+      timelineUid: uid,
+      bossUid,
+      terrain,
+      defenseType,
+      maxDifficulty,
+      partySize: document.partySize,
+      partyCount: document.parties.length,
+      usedStudentUids,
+    },
+  ];
+}
+
+export async function syncWalkthroughTimelineCommunityPost(
+  env: Env,
+  timeline: WalkthroughTimelineRecord,
+): Promise<string | null> {
+  const db = drizzle(env.DB);
+  const existing = await db
+    .select({ uid: communityPostsTable.uid })
+    .from(communityPostsTable)
+    .where(and(eq(communityPostsTable.sourceType, "raid_walkthrough"), eq(communityPostsTable.sourceUid, timeline.uid)))
+    .get();
+
+  if (!existing && timeline.visibility !== "public") {
+    return null;
+  }
+
+  const now = nowUtcIso();
+  const values = {
+    userId: timeline.userId,
+    postType: "walkthrough_timeline" as const,
+    origin: "user" as const,
+    title: timeline.title,
+    visibility: timeline.visibility,
+    pinned: 0,
+    blocks: serializeCommunityPostBlocks(createWalkthroughTimelineCommunityPostBlocks(timeline)),
+    sourceType: "raid_walkthrough",
+    sourceUid: timeline.uid,
+    sourceMetadata: "{}",
+    updatedAt: timeline.updatedAt.toISOString(),
+  };
+
+  if (existing) {
+    await db.update(communityPostsTable).set(values).where(eq(communityPostsTable.uid, existing.uid));
+    return existing.uid;
+  }
+
+  await db.insert(communityPostsTable).values({
+    ...values,
+    uid: timeline.uid,
+    displayAt: now,
+    createdAt: now,
+  });
+  return timeline.uid;
+}
 
 export async function upsertYoutubeVideoCommunityPost(env: Env, video: YoutubeVideoCommunityPostInput): Promise<void> {
   const db = drizzle(env.DB);

@@ -652,7 +652,7 @@ function DesktopMenuContent({
 
         <SubMenuItem
           to="/community"
-          name="평가/의견"
+          name="피드"
           OutlineIcon={ChatBubbleLeftRightIconOutline}
           SolidIcon={ChatBubbleLeftRightIconSolid}
           isActive={sectionStates.isCommunityActive}

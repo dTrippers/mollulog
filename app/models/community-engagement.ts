@@ -1,3 +1,4 @@
+import type { LikeChangedActionResult } from "~/domain/like";
 import type { NestedCommunityComment } from "./community";
 
 export type CommunityPostCommentsChangedActionResult = {
@@ -6,16 +7,7 @@ export type CommunityPostCommentsChangedActionResult = {
   comments: NestedCommunityComment[];
 };
 
-export type CommunityPostLikeChangedActionResult = {
-  kind: "communityPostLikeChanged";
-  postUid: string;
-  likeCount: number;
-  liked: boolean;
-};
-
-export type CommunityEngagementActionResult =
-  | CommunityPostCommentsChangedActionResult
-  | CommunityPostLikeChangedActionResult;
+export type CommunityEngagementActionResult = CommunityPostCommentsChangedActionResult | LikeChangedActionResult;
 
 export function isCommunityEngagementActionResult(value: unknown): value is CommunityEngagementActionResult {
   if (!value || typeof value !== "object" || !("kind" in value)) {
@@ -28,10 +20,10 @@ export function isCommunityEngagementActionResult(value: unknown): value is Comm
     );
   }
 
-  if (value.kind === "communityPostLikeChanged") {
+  if (value.kind === "likeChanged") {
     return (
-      "postUid" in value &&
-      typeof value.postUid === "string" &&
+      "targetUid" in value &&
+      typeof value.targetUid === "string" &&
       "likeCount" in value &&
       typeof value.likeCount === "number" &&
       "liked" in value &&

@@ -145,6 +145,39 @@ afterEach(() => {
 });
 
 describe("enrichCommunityFeedPosts", () => {
+  it("routes walkthrough likes to the source-owned timeline endpoint", async () => {
+    const db = new FakeCommunityFeedD1Database();
+    mockedGetAllStudentsMap.mockResolvedValue({});
+    mockedGetGradingTagsByGradingUids.mockResolvedValue({});
+    mockedGetTimelineContentsByUids.mockResolvedValue([]);
+    mockedGetRecruitmentGroupsByUids.mockResolvedValue([]);
+    const post: CommunityFeedPost = {
+      ...createRecruitmentResultPost(),
+      uid: "feed-projection-1",
+      postType: "walkthrough_timeline",
+      subjectContentUid: null,
+      blocks: [
+        {
+          type: "walkthrough_timeline",
+          timelineUid: "timeline-1",
+          bossUid: "boss-1",
+          terrain: "indoor",
+          defenseType: "heavy",
+          maxDifficulty: "torment",
+          partyCount: 1,
+          usedStudentUids: [],
+        },
+      ],
+    };
+
+    const enriched = await enrichCommunityFeedPosts(createEnv(db), [post], { includeEngagement: false });
+
+    expect(enriched.posts[0].likeTarget).toEqual({
+      uid: "timeline-1",
+      action: "/api/timelines/timeline-1/likes",
+    });
+  });
+
   it("adds recruitment result stats while excluding exchanged students from displayed counts", async () => {
     const db = new FakeCommunityFeedD1Database();
     db.recruitmentResults.push({

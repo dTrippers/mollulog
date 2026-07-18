@@ -206,3 +206,19 @@ export const pgWalkthroughTimelinesTable = pgTable(
     check("raid_walkthroughs_document_object", sql`jsonb_typeof(${table.document}) = 'object'`),
   ],
 );
+
+export const pgWalkthroughTimelineLikesTable = pgTable(
+  "raid_walkthrough_likes",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    walkthroughUid: text("walkthrough_uid")
+      .notNull()
+      .references(() => pgWalkthroughTimelinesTable.uid, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("raid_walkthrough_likes_walkthrough_user_uidx").on(table.walkthroughUid, table.userId),
+    index("raid_walkthrough_likes_user_walkthrough_idx").on(table.userId, table.walkthroughUid),
+  ],
+);

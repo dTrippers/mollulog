@@ -97,6 +97,12 @@ describe("PostgreSQL walkthrough timelines", () => {
     const filteredListSql = (query.mock.calls[2]?.[0] as { text: string }).text;
     expect(filteredListSql).toContain('"visibility" = $1');
     expect(filteredListSql).toContain('"max_difficulty" = $2');
+
+    await expect(listPostgresPublicWalkthroughTimelines(env, { likedByUserId: 10 }, options)).resolves.toHaveLength(1);
+    const likedListSql = (query.mock.calls[3]?.[0] as { text: string }).text;
+    expect(likedListSql).toContain("exists");
+    expect(likedListSql).toContain('from "raid_walkthrough_likes"');
+    expect(likedListSql).toContain('"raid_walkthrough_likes"."user_id" = $2');
   });
 
   it("scopes updates and deletes to the owner", async () => {

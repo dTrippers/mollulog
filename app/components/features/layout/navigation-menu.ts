@@ -293,7 +293,7 @@ export function getSearchableMenuItems(): SearchableMenuItem[] {
 
   return [
     { name: "홈", to: "/" },
-    { name: "평가/의견", to: "/community" },
+    { name: "피드", to: "/community" },
     ...sections.flatMap((section) =>
       section.items
         .filter((item) => item.disabled !== true)
@@ -333,7 +333,7 @@ export function getMobileNavigationItems({
     },
     {
       to: "/community",
-      name: "평가/의견",
+      name: "피드",
       OutlineIcon: ChatBubbleLeftRightIconOutline,
       SolidIcon: ChatBubbleLeftRightIconSolid,
       isActive: sectionStates.isCommunityActive,

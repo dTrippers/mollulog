@@ -1,6 +1,7 @@
 import { ArrowRightIcon, PlusIcon } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { Link } from "react-router";
+import LikeButton from "~/components/features/engagement/LikeButton";
 import Button from "~/components/primitives/Button";
 import type { WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
 import { TimelineStudentImage } from "./WalkthroughTimelineViewer";
@@ -8,10 +9,14 @@ import { TimelineStudentImage } from "./WalkthroughTimelineViewer";
 export function WalkthroughTimelineList({
   timelines,
   authorsById = {},
+  engagementByUid = {},
+  signedIn = false,
   showCreate = false,
 }: {
   timelines: WalkthroughTimelineRecord[];
   authorsById?: Record<number, string>;
+  engagementByUid?: Record<string, { liked: boolean; likeCount: number }>;
+  signedIn?: boolean;
   showCreate?: boolean;
 }) {
   return (
@@ -34,35 +39,52 @@ export function WalkthroughTimelineList({
               ),
             ].slice(0, 8);
             return (
-              <Link
+              <article
                 key={timeline.uid}
-                to={`/timelines/${timeline.uid}`}
-                className="flex items-center gap-4 p-4 transition-colors hover:bg-muted/50 md:p-5"
+                className="flex items-center gap-3 p-4 transition-colors hover:bg-muted/50 md:p-5"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate font-semibold">{timeline.title}</h2>
-                    {timeline.visibility !== "public" && (
-                      <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">나만 보기</span>
+                <Link to={`/timelines/${timeline.uid}`} className="flex min-w-0 flex-1 items-center gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="truncate font-semibold">{timeline.title}</h2>
+                      {timeline.visibility !== "public" && (
+                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                          나만 보기
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {authorsById[timeline.userId] ? `@${authorsById[timeline.userId]} · ` : ""}
+                      {timeline.document.parties.length}파티 ·{" "}
+                      {timeline.document.parties.reduce((count, party) => count + party.steps.length, 0)}단계 ·{" "}
+                      {dayjs(timeline.updatedAt).format("YYYY.MM.DD")}
+                    </p>
+                    {usedStudentUids.length > 0 && (
+                      <fieldset className="mt-3 flex -space-x-1">
+                        <legend className="sr-only">사용 학생</legend>
+                        {usedStudentUids.map((uid) => (
+                          <TimelineStudentImage
+                            key={uid}
+                            uid={uid}
+                            name="학생"
+                            className="size-8 border-2 border-card"
+                          />
+                        ))}
+                      </fieldset>
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {authorsById[timeline.userId] ? `@${authorsById[timeline.userId]} · ` : ""}
-                    {timeline.document.parties.length}파티 ·{" "}
-                    {timeline.document.parties.reduce((count, party) => count + party.steps.length, 0)}단계 ·{" "}
-                    {dayjs(timeline.updatedAt).format("YYYY.MM.DD")}
-                  </p>
-                  {usedStudentUids.length > 0 && (
-                    <fieldset className="mt-3 flex -space-x-1">
-                      <legend className="sr-only">사용 학생</legend>
-                      {usedStudentUids.map((uid) => (
-                        <TimelineStudentImage key={uid} uid={uid} name="학생" className="size-8 border-2 border-card" />
-                      ))}
-                    </fieldset>
-                  )}
-                </div>
-                <ArrowRightIcon className="size-5 shrink-0 text-muted-foreground" />
-              </Link>
+                  <ArrowRightIcon className="size-5 shrink-0 text-muted-foreground" />
+                </Link>
+                {timeline.visibility === "public" ? (
+                  <LikeButton
+                    targetUid={timeline.uid}
+                    action={`/api/timelines/${timeline.uid}/likes`}
+                    liked={engagementByUid[timeline.uid]?.liked ?? false}
+                    likeCount={engagementByUid[timeline.uid]?.likeCount ?? 0}
+                    signedIn={signedIn}
+                  />
+                ) : null}
+              </article>
             );
           })}
         </div>

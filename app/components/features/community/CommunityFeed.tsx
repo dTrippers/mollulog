@@ -1,23 +1,16 @@
-import {
-  ChatBubbleLeftEllipsisIcon,
-  HeartIcon,
-  LockClosedIcon,
-  PlayCircleIcon,
-  UserGroupIcon,
-} from "@heroicons/react/24/outline";
-import { PlayIcon, HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
+import { ChatBubbleLeftEllipsisIcon, LockClosedIcon, PlayCircleIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import { PlayIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import ContentCommentEditor from "~/components/features/contents/ContentCommentEditor";
-import { MarkdownText, ProfileImage, TagIcon } from "~/components/primitives";
-import { useSignIn } from "~/contexts/SignInProvider";
+import LikeButton from "~/components/features/engagement/LikeButton";
+import { AttributeBadge, MarkdownText, ProfileImage, TagIcon } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { compareInstantDesc } from "~/lib/date-time";
+import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
+import { bossImageUrl } from "~/models/assets";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
-import type {
-  CommunityPostCommentsChangedActionResult,
-  CommunityPostLikeChangedActionResult,
-} from "~/models/community-engagement";
+import type { CommunityPostCommentsChangedActionResult } from "~/models/community-engagement";
 import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
 import type { EnrichedCommunityFeedPost } from "~/views/community";
 import { StudentCards } from "../students";
@@ -79,6 +72,10 @@ function getPostTypeLabel(post: CommunityFeedPostItem) {
     return "모집 결과";
   }
 
+  if (post.postType === "walkthrough_timeline") {
+    return "공략 타임라인";
+  }
+
   return "공략";
 }
 
@@ -123,19 +120,16 @@ function CommunityPostCard({
   firstInFeed: boolean;
   groupedWithPrevious: boolean;
 }) {
-  const { showSignIn } = useSignIn();
   const displayTimeZone = useDisplayTimeZone();
   const [comments, setComments] = useState(post.comments);
-  const [liked, setLiked] = useState(post.liked);
-  const [likeCount, setLikeCount] = useState(post.likeCount);
   const [commentEditing, setCommentEditing] = useState(false);
   const commentFetcher = useFetcher<CommunityPostCommentsChangedActionResult>();
-  const likeFetcher = useFetcher<CommunityPostLikeChangedActionResult>();
   const timestamp = getCommunityPostTimestampMeta(post, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment =
     post.postType === "event_opinion" || post.postType === "youtube_video" || post.postType === "recruitment_result";
-  const canLike = post.postType === "guide" || post.postType === "youtube_video";
+  const likeTarget = post.likeTarget;
+  const canLike = likeTarget !== null;
   const bodyOrder = getCommunityPostBodyOrder(post.postType);
 
   useEffect(() => {
@@ -143,22 +137,10 @@ function CommunityPostCard({
   }, [post.comments]);
 
   useEffect(() => {
-    setLiked(post.liked);
-    setLikeCount(post.likeCount);
-  }, [post.liked, post.likeCount]);
-
-  useEffect(() => {
     if (commentFetcher.data?.kind === "communityPostCommentsChanged") {
       setComments(commentFetcher.data.comments);
     }
   }, [commentFetcher.data]);
-
-  useEffect(() => {
-    if (likeFetcher.data?.kind === "communityPostLikeChanged") {
-      setLiked(likeFetcher.data.liked);
-      setLikeCount(likeFetcher.data.likeCount);
-    }
-  }, [likeFetcher.data]);
 
   const commentCount = useMemo(
     () => comments.reduce((count, comment) => count + 1 + (comment.subcomments?.length ?? 0), 0),
@@ -177,25 +159,6 @@ function CommunityPostCard({
       method: "post",
       encType: "application/json",
     });
-  };
-
-  const toggleLike = () => {
-    if (!signedIn) {
-      showSignIn();
-      return;
-    }
-
-    const nextLiked = !liked;
-    setLiked(nextLiked);
-    setLikeCount((prev) => prev + (nextLiked ? 1 : -1));
-    likeFetcher.submit(
-      { liked: nextLiked },
-      {
-        action: `/api/community/posts/${post.uid}/likes`,
-        method: "post",
-        encType: "application/json",
-      },
-    );
   };
 
   return (
@@ -274,16 +237,14 @@ function CommunityPostCard({
                   <span>{commentCount}</span>
                 </button>
               )}
-              {canLike && (
-                <button
-                  type="button"
-                  className={getCommentToggleClassName({ active: liked })}
-                  onClick={toggleLike}
-                  aria-label={`좋아요 ${likeCount}개`}
-                >
-                  {liked ? <SolidHeartIcon className="size-4" /> : <HeartIcon className="size-4" />}
-                  <span>{likeCount}</span>
-                </button>
+              {likeTarget && (
+                <LikeButton
+                  targetUid={likeTarget.uid}
+                  action={likeTarget.action}
+                  liked={post.liked}
+                  likeCount={post.likeCount}
+                  signedIn={signedIn}
+                />
               )}
             </div>
           )}
@@ -519,7 +480,13 @@ function BlockView({
       return null;
     }
 
-    return <p className="whitespace-pre-wrap text-sm leading-6 text-foreground sm:text-base">{block.text}</p>;
+    return (
+      <p
+        className={`${post.postType === "walkthrough_timeline" ? "line-clamp-2" : ""} whitespace-pre-wrap text-sm leading-6 text-foreground sm:text-base`}
+      >
+        {block.text}
+      </p>
+    );
   }
 
   if (block.type === "markdown") {
@@ -532,6 +499,44 @@ function BlockView({
 
   if (block.type === "youtube") {
     return <YoutubePreviewBlock block={block} post={post} />;
+  }
+
+  if (block.type === "walkthrough_timeline") {
+    const firstPartyStudentUids = block.usedStudentUids.slice(0, block.partySize ?? 6);
+    return (
+      <Link
+        to={`/timelines/${block.timelineUid}`}
+        className="relative block overflow-hidden rounded-lg bg-muted/50 p-4 transition-colors hover:bg-muted"
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 w-2/3 bg-contain bg-right bg-no-repeat opacity-45"
+          style={{ backgroundImage: `url(${bossImageUrl(block.bossUid)})` }}
+        />
+        <span className="pointer-events-none absolute inset-0 bg-linear-to-r from-muted from-45% via-muted/85 via-70% to-muted/20" />
+        <div className="relative space-y-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <AttributeBadge text={terrainLocale[block.terrain]} color={null} />
+            <AttributeBadge text={defenseTypeLocale[block.defenseType]} color={defenseTypeColor[block.defenseType]} />
+            <AttributeBadge text={difficultyLocale[block.maxDifficulty]} color={null} />
+          </div>
+          {firstPartyStudentUids.length > 0 ? (
+            <div>
+              <p className="mb-2 text-xs font-medium text-muted-foreground">사용 학생</p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {firstPartyStudentUids.map((studentUid) => (
+                  <ProfileImage key={studentUid} studentUid={studentUid} imageSize={8} />
+                ))}
+                {block.partyCount > 1 ? (
+                  <span className="ml-1 text-xs font-medium text-muted-foreground">외 {block.partyCount - 1}편성</span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+          <p className="text-sm font-medium text-primary">공략 타임라인 자세히 보기</p>
+        </div>
+      </Link>
+    );
   }
 
   return (

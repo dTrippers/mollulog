@@ -455,7 +455,7 @@ export function WalkthroughTimelineViewer({
                 type="button"
                 data-timeline-step
                 className={cn(
-                  "block w-full origin-left text-left outline-none transition-[opacity,transform] duration-300 focus-visible:rounded-xl focus-visible:ring-2 focus-visible:ring-primary/50",
+                  "block w-full origin-left text-left outline-none transition-[opacity,transform] duration-300 focus-visible:rounded-lg focus-visible:ring-2 focus-visible:ring-primary/50",
                   active && "scale-100 opacity-100",
                   !active && future && distance === 1 && "scale-[0.995] opacity-95 hover:opacity-100",
                   !active && future && distance === 2 && "scale-[0.99] opacity-90 hover:opacity-100",
@@ -469,7 +469,7 @@ export function WalkthroughTimelineViewer({
                 onClick={() => onCurrentIndexChange(index)}
               >
                 {active ? (
-                  <article className="rounded-xl border border-border bg-card px-5 py-5 shadow-sm">
+                  <article className="rounded-lg border border-border bg-card px-5 py-5 shadow-sm">
                     {markerText(timelineItem.step) && (
                       <h2 className="break-keep text-3xl font-bold tabular-nums">{markerText(timelineItem.step)}</h2>
                     )}

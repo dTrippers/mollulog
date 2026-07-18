@@ -17,6 +17,8 @@ import {
   type WalkthroughParty,
   type WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
+import { getLogger } from "~/lib/observability.server";
+import { syncWalkthroughTimelineCommunityPost } from "~/models/community";
 import { loadTimelineEditorOptions } from "./timelines._components/timeline-route-data.server";
 
 type ActionData = { error: string };
@@ -46,6 +48,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "timelines.new.action" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) return redirect("/unauthorized");
   const formData = await request.formData();
@@ -68,6 +71,15 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       },
       { ctx },
     );
+    try {
+      await syncWalkthroughTimelineCommunityPost(env, timeline);
+    } catch (error) {
+      logger.error("Failed to sync walkthrough timeline community post", error, {
+        timelineUid: timeline.uid,
+        visibility: timeline.visibility,
+        operation: "create",
+      });
+    }
     return redirect(`/timelines/${timeline.uid}`);
   } catch (error) {
     return data<ActionData>(

@@ -8,6 +8,7 @@ export const COMMUNITY_VISIBLE_POST_TYPES = [
   "event_opinion",
   "youtube_video",
   "recruitment_result",
+  "walkthrough_timeline",
 ] as const;
 
 export type EnrichedCommunityFeedPost = CommunityFeedPost & {
@@ -16,4 +17,5 @@ export type EnrichedCommunityFeedPost = CommunityFeedPost & {
   tags: StudentGradingTagValue[];
   pickupStudents: { uid: string; name: string }[];
   recruitmentStats: RecruitmentFeedStats | null;
+  likeTarget: { uid: string; action: string } | null;
 };
