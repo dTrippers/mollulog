@@ -8,6 +8,7 @@ import {
   WalkthroughTimelineViewer,
 } from "~/components/features/walkthrough-timeline";
 import { getPostgresWalkthroughTimeline } from "~/db/postgres/walkthrough-timelines";
+import { DEMO_WALKTHROUGH_TIMELINE, isDemoWalkthroughTimelineUid } from "~/domain/walkthrough-timeline-demo";
 import { routeError } from "~/lib/http-errors";
 import { getAllStudentsMap } from "~/models/student";
 
@@ -18,15 +19,18 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => [
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const [timeline, currentUser] = await Promise.all([
-    params.uid ? getPostgresWalkthroughTimeline(env, params.uid, { ctx }) : null,
+  const demo = isDemoWalkthroughTimelineUid(params.uid);
+  const [storedTimeline, currentUser] = await Promise.all([
+    params.uid && !demo ? getPostgresWalkthroughTimeline(env, params.uid, { ctx }) : null,
     getActiveSensei(env, request),
   ]);
-  if (!timeline || (timeline.visibility === "private" && timeline.userId !== currentUser?.id)) {
+  const timeline = demo ? DEMO_WALKTHROUGH_TIMELINE : storedTimeline;
+  if (!timeline || (storedTimeline?.visibility === "private" && storedTimeline.userId !== currentUser?.id)) {
     throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
   }
   const students = await getAllStudentsMap(env, true);
   return {
+    uid: timeline.uid,
     title: timeline.title,
     parties: timeline.document.parties,
     studentsByUid: Object.fromEntries(Object.entries(students).map(([uid, student]) => [uid, { name: student.name }])),
@@ -34,7 +38,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export default function WalkthroughTimelineViewerPage() {
-  const { parties, studentsByUid } = useLoaderData<typeof loader>();
+  const { uid, parties, studentsByUid } = useLoaderData<typeof loader>();
   const [currentIndex, setCurrentIndex] = useState(0);
   useWakeLock(true);
   const items = flattenTimelineParties(parties);
@@ -47,6 +51,7 @@ export default function WalkthroughTimelineViewerPage() {
         currentIndex={currentIndex}
         onCurrentIndexChange={setCurrentIndex}
         allowFullscreen
+        detailHref={`/timelines/${uid}`}
       />
     </main>
   );

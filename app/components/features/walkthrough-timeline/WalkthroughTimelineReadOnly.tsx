@@ -31,7 +31,7 @@ function GrowthTier({ tier }: { tier: number }) {
   if (tier <= 5) return <span>★{tier}</span>;
 
   return (
-    <span className="inline-flex items-center gap-0.5" aria-label={`전용무기 ${tier - 5}`}>
+    <span className="inline-flex items-center gap-0.5" role="img" aria-label={`전용무기 ${tier - 5}`}>
       <img className="size-3.5 shrink-0" src="/icons/exclusive_weapon.png" alt="" aria-hidden="true" />
       <span>{tier - 5}</span>
     </span>
@@ -140,7 +140,14 @@ export function WalkthroughTimelineReadOnly({
                 {[...party.steps]
                   .sort((left, right) => left.order - right.order)
                   .map((step) => (
-                    <li key={step.uid} className="overflow-hidden rounded-md border border-border bg-background">
+                    <li
+                      key={step.uid}
+                      className={
+                        step.kind === "divider"
+                          ? "py-1"
+                          : "overflow-hidden rounded-md border border-border bg-background"
+                      }
+                    >
                       {step.kind === "divider" ? (
                         <div className="flex items-center gap-2 px-3 py-3 text-xs font-semibold text-muted-foreground">
                           <span className="h-px flex-1 bg-border" />

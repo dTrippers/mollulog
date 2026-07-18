@@ -1,11 +1,13 @@
 import {
   ArrowDownIcon,
+  ArrowLeftIcon,
   ArrowRightIcon,
-  ArrowUpIcon,
   ArrowsPointingOutIcon,
+  ArrowUpIcon,
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
 import Button from "~/components/primitives/Button";
 import type { TimelineAction, TimelineStep, WalkthroughParty } from "~/domain/walkthrough-timeline";
 import { cn } from "~/lib/utils";
@@ -114,7 +116,7 @@ function TimelineActionItem({
 }) {
   const student = action.studentUid ? studentsByUid[action.studentUid] : undefined;
   const target = action.targetStudentUid ? studentsByUid[action.targetStudentUid] : undefined;
-  const detail = viewerActionText(action) || (action.copied ? "복제 스킬" : "");
+  const detail = [action.copied ? "복제 스킬" : null, viewerActionText(action) || null].filter(Boolean).join(" · ");
 
   if (!action.studentUid) {
     return (
@@ -255,18 +257,21 @@ export function WalkthroughTimelineViewer({
   currentIndex,
   onCurrentIndexChange,
   allowFullscreen = false,
+  detailHref,
 }: {
   items: TimelineViewerItem[];
   studentsByUid: Record<string, TimelineViewerStudent>;
   currentIndex: number;
   onCurrentIndexChange: (index: number) => void;
   allowFullscreen?: boolean;
+  detailHref?: string;
 }) {
   const containerRef = useRef<HTMLElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
   const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const hasPositionedCurrentItem = useRef(false);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const [fullscreenAvailable, setFullscreenAvailable] = useState(false);
   const navigableIndices = useMemo(
     () => items.flatMap((timelineItem, index) => (timelineItem.step.kind === "divider" ? [] : [index])),
     [items],
@@ -278,6 +283,11 @@ export function WalkthroughTimelineViewer({
     const previousIndex = navigableIndices[Math.max(0, navigationPosition - 1)];
     if (previousIndex !== undefined) onCurrentIndexChange(previousIndex);
   }, [navigableIndices, navigationPosition, onCurrentIndexChange]);
+
+  useEffect(() => {
+    const ownerDocument = containerRef.current?.ownerDocument ?? document;
+    setFullscreenAvailable(Boolean(allowFullscreen && ownerDocument.fullscreenEnabled));
+  }, [allowFullscreen]);
   const goNext = useCallback(() => {
     const nextIndex = navigableIndices[Math.min(navigableIndices.length - 1, navigationPosition + 1)];
     if (nextIndex !== undefined) onCurrentIndexChange(nextIndex);
@@ -363,21 +373,42 @@ export function WalkthroughTimelineViewer({
         if (!start || !touch) return;
         const dx = touch.clientX - start.x;
         const dy = touch.clientY - start.y;
-        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy)) return;
-        if (dx > 0) goPrevious();
-        else goNext();
+        if (Math.abs(dx) >= 60 && Math.abs(dx) >= Math.abs(dy)) {
+          if (dx > 0) goPrevious();
+          else goNext();
+          return;
+        }
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) return;
+        if (!scrollContainerRef.current?.contains(event.target as Node)) return;
+        if ((event.target as HTMLElement).closest?.("button, a, input, textarea, select")) return;
+        if (navigationPosition >= navigableIndices.length - 1) return;
+
+        const currentItem = itemRefs.current[currentItemIndex];
+        if (currentItem && touch.clientY > currentItem.getBoundingClientRect().bottom) goNext();
       }}
     >
       <header className="z-10 shrink-0 border-b border-border bg-background px-4 py-3">
         <div className="flex items-center justify-between gap-3 text-sm font-medium">
-          <span>
-            {item.partyNumber}파티{item.phaseLabel ? ` · ${item.phaseLabel}` : ""}
-          </span>
+          <div className="flex min-w-0 items-center gap-2">
+            {detailHref ? (
+              <Link
+                to={detailHref}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                aria-label="타임라인 상세로 돌아가기"
+                title="타임라인 상세로 돌아가기"
+              >
+                <ArrowLeftIcon className="size-4" />
+              </Link>
+            ) : null}
+            <span className="truncate">
+              {item.partyNumber}파티{item.phaseLabel ? ` · ${item.phaseLabel}` : ""}
+            </span>
+          </div>
           <div className="flex items-center gap-2">
             <span aria-live="polite">
               {Math.max(0, navigationPosition + 1)} / {navigableIndices.length}
             </span>
-            {allowFullscreen && typeof document !== "undefined" && document.fullscreenEnabled && (
+            {fullscreenAvailable && (
               <button
                 type="button"
                 onClick={requestFullscreen}
@@ -405,13 +436,12 @@ export function WalkthroughTimelineViewer({
           const partyStarts = index > 0 && items[index - 1]?.partyNumber !== timelineItem.partyNumber;
           const partyTransition = partyStarts ? (
             <div
-              role="separator"
-              aria-label={`${timelineItem.partyNumber}파티 시작`}
               className={cn(
                 "flex items-center gap-3 py-4 transition-opacity duration-300",
                 future ? "opacity-100" : "opacity-60",
               )}
             >
+              <span className="sr-only">{timelineItem.partyNumber}파티 시작</span>
               <span className="h-px flex-1 bg-primary/50" aria-hidden="true" />
               <span className="shrink-0 rounded-full bg-primary/10 px-3 py-1.5 text-sm font-bold text-primary">
                 {timelineItem.partyNumber}파티 시작
@@ -494,11 +524,11 @@ export function WalkthroughTimelineViewer({
 
       <footer className="pointer-events-none fixed inset-x-0 bottom-0 z-20 mx-auto w-full max-w-sm bg-gradient-to-t from-background via-background/95 to-transparent px-4 pb-[max(env(safe-area-inset-bottom),1rem)] pt-8">
         <div className="pointer-events-auto p-2">
-          <p className="mb-2 hidden text-center text-xs text-muted-foreground [@media(hover:hover)_and_(pointer:fine)]:block">
+          <p className="mb-2 text-center text-xs text-muted-foreground [@media(any-pointer:coarse)]:hidden">
             ↑↓ 또는 Space로 넘기기
           </p>
-          <p className="mb-2 text-center text-xs text-muted-foreground [@media(hover:hover)_and_(pointer:fine)]:hidden">
-            버튼 또는 단계를 눌러 이동
+          <p className="mb-2 hidden text-center text-xs text-muted-foreground [@media(any-pointer:coarse)]:block">
+            ↑↓ 또는 하단 영역 터치로 넘기기
           </p>
           <div className="grid grid-cols-2 gap-2">
             <Button

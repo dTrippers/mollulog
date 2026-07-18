@@ -226,6 +226,7 @@ export default function App() {
             setDarkMode={setDarkMode}
             upcomingEvent={navigationBarContents.upcomingEvent}
             hasRecentNews={navigationBarContents.hasRecentNews}
+            hasOngoingRaid={navigationBarContents.hasOngoingRaid}
             hasUnconsumedCoupons={navigationBarContents.hasUnconsumedCoupons}
             hasUnreadFeedbackReplies={navigationBarContents.hasUnreadFeedbackReplies}
           />

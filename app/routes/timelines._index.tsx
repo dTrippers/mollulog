@@ -9,7 +9,7 @@ import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import { RaidPartyCard, type RaidPartyRow } from "~/components/features/raids";
 import { WalkthroughTimelineFeedbackButton } from "~/components/features/walkthrough-timeline";
 import WalkthroughBossSelect from "~/components/features/walkthrough-timeline/WalkthroughBossSelect";
-import { AttributeBadge, Button, EmptyView, PanelFilterButtonsSection, PanelSwitchRow } from "~/components/primitives";
+import { AttributeBadge, Button, PanelFilterButtonsSection, PanelSwitchRow } from "~/components/primitives";
 import { PanelBody, PanelBodySection } from "~/components/primitives/PanelBody";
 import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
 import { listPostgresVisibleWalkthroughTimelines } from "~/db/postgres/walkthrough-timelines";
@@ -19,6 +19,7 @@ import {
   WALKTHROUGH_TIMELINE_TERRAINS,
   type WalkthroughTimelineRecord,
 } from "~/domain/walkthrough-timeline";
+import { DEMO_WALKTHROUGH_BOSS_NAME, DEMO_WALKTHROUGH_TIMELINE } from "~/domain/walkthrough-timeline-demo";
 import {
   defenseTypeColor,
   defenseTypeLocale,
@@ -136,7 +137,7 @@ export default function WalkthroughTimelineCatalogPage() {
   return (
     <Page
       title="공략 타임라인 (β)"
-      description="총력전/대결전 공략과 타임라인을 확인해보세요"
+      description="다른 선생님들이 작성한 총력전/대결전 공략과 타임라인을 확인해보세요"
       contentWidth="full"
       panels={[
         {
@@ -238,25 +239,33 @@ export default function WalkthroughTimelineCatalogPage() {
           </div>
         ) : null}
 
-        {timelines.length > 0 ? (
-          <div className="grid gap-4 xl:grid-cols-2">
-            {timelines.map((timeline) => (
-              <WalkthroughTimelineCard
-                key={timeline.uid}
-                timeline={timeline}
-                bossName={bosses.find((boss) => boss.uid === timeline.bossUid)?.name ?? null}
-                author={authorsById[timeline.userId]}
-                studentsByUid={studentsByUid}
-                recruitedStudentTiers={recruitedStudentTiers}
-                showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
-                engagement={engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 }}
-                signedIn={signedIn}
-              />
-            ))}
-          </div>
-        ) : (
-          <EmptyView text="조건에 맞는 공략 타임라인이 없어요" />
-        )}
+        <div className="grid gap-4 xl:grid-cols-2">
+          <WalkthroughTimelineCard
+            timeline={DEMO_WALKTHROUGH_TIMELINE}
+            bossName={
+              bosses.find((boss) => boss.uid === DEMO_WALKTHROUGH_TIMELINE.bossUid)?.name ?? DEMO_WALKTHROUGH_BOSS_NAME
+            }
+            studentsByUid={studentsByUid}
+            recruitedStudentTiers={recruitedStudentTiers}
+            showUnrecruitedStudents={false}
+            engagement={{ liked: false, likeCount: 0 }}
+            signedIn={signedIn}
+            demo
+          />
+          {timelines.map((timeline) => (
+            <WalkthroughTimelineCard
+              key={timeline.uid}
+              timeline={timeline}
+              bossName={bosses.find((boss) => boss.uid === timeline.bossUid)?.name ?? null}
+              author={authorsById[timeline.userId]}
+              studentsByUid={studentsByUid}
+              recruitedStudentTiers={recruitedStudentTiers}
+              showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
+              engagement={engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 }}
+              signedIn={signedIn}
+            />
+          ))}
+        </div>
       </div>
     </Page>
   );
@@ -273,8 +282,9 @@ function WalkthroughTimelineCard({
   showUnrecruitedStudents,
   engagement,
   signedIn,
+  demo = false,
 }: {
-  timeline: WalkthroughTimelineRecord;
+  timeline: Omit<WalkthroughTimelineRecord, "userId">;
   bossName: string | null;
   author?: string;
   studentsByUid: Record<string, TimelineStudent>;
@@ -282,6 +292,7 @@ function WalkthroughTimelineCard({
   showUnrecruitedStudents: boolean;
   engagement: { liked: boolean; likeCount: number };
   signedIn: boolean;
+  demo?: boolean;
 }) {
   const rows: RaidPartyRow[] = timeline.document.parties.map((party, partyIndex) => ({
     key: party.uid,
@@ -306,7 +317,10 @@ function WalkthroughTimelineCard({
   }));
 
   return (
-    <article className="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
+    <article
+      className="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 ring-primary/30 dark:shadow-md dark:shadow-black/20 data-[demo=true]:ring-1"
+      data-demo={demo}
+    >
       <div>
         <div className="relative overflow-hidden p-4">
           <span
@@ -320,8 +334,9 @@ function WalkthroughTimelineCard({
             <h2 className="line-clamp-2 text-lg font-bold text-foreground">{timeline.title}</h2>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               <span>
-                {author ? `@${author} · ` : ""}
-                {dayjs(timeline.updatedAt).format("YYYY.MM.DD")}
+                {demo
+                  ? "데모 타임라인으로 동작을 확인해보세요"
+                  : `${author ? `@${author} · ` : ""}${dayjs(timeline.updatedAt).format("YYYY.MM.DD")}`}
               </span>
               {timeline.visibility !== "public" ? (
                 <span className="rounded-full bg-muted px-2 py-0.5">
@@ -351,7 +366,7 @@ function WalkthroughTimelineCard({
         className="grow rounded-none pt-0 md:pt-0"
       />
       <div className="flex items-center justify-between gap-2 px-4 pb-4">
-        {timeline.visibility === "public" ? (
+        {!demo && timeline.visibility === "public" ? (
           <LikeButton
             targetUid={timeline.uid}
             action={`/api/timelines/${timeline.uid}/likes`}

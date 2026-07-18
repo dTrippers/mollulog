@@ -119,12 +119,14 @@ export function getNavigationSections({
   pathname,
   upcomingEvent,
   now = nowUtcIso(),
+  hasOngoingRaid,
   hasUnconsumedCoupons,
   sectionStates = getNavigationSectionStates(pathname, upcomingEvent),
 }: {
   pathname: string;
   upcomingEvent: UpcomingNavigationEvent;
   now?: UtcIsoString;
+  hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
   sectionStates?: NavigationSectionStates;
 }): NavigationSection[] {
@@ -157,6 +159,7 @@ export function getNavigationSections({
           name: "총력전 / 대결전",
           description: "시즌 요약, 상위권 편성, 공략 영상을 확인해보세요",
           showRedDot: true,
+          badgeLabel: hasOngoingRaid ? "진행중" : undefined,
           OutlineIcon: FireIconOutline,
           SolidIcon: FireIconSolid,
           isActive: pathname.startsWith("/raids"),
@@ -194,6 +197,7 @@ export function getNavigationSections({
           SolidIcon: QueueListIconSolid,
           isActive: pathname.startsWith("/timelines"),
           badgeLabel: "베타",
+          showRedDot: true,
         },
         {
           to: "/utils/pyroxene",
@@ -226,7 +230,10 @@ export function getNavigationSections({
               description: "이벤트 효율과 상점을 확인해보세요",
               OutlineIcon: BoltIconOutline,
               SolidIcon: BoltIconSolid,
-              showRedDot: isInstantBefore(upcomingEvent.since, now) && isInstantAfter(upcomingEvent.until, now),
+              badgeLabel:
+                isInstantBefore(upcomingEvent.since, now) && isInstantAfter(upcomingEvent.until, now)
+                  ? "개최중"
+                  : undefined,
               isActive: pathname.startsWith(`/events/${upcomingEvent.uid}`),
             }
           : {
@@ -280,6 +287,7 @@ export function getSearchableMenuItems(): SearchableMenuItem[] {
   const sections = getNavigationSections({
     pathname: "",
     upcomingEvent: null,
+    hasOngoingRaid: false,
     hasUnconsumedCoupons: false,
     sectionStates: {
       isCommunityActive: false,

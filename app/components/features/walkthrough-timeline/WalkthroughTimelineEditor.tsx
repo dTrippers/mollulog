@@ -1011,7 +1011,6 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
                                       <label className="block text-sm font-semibold">
                                         시점
                                         <input
-                                          autoFocus
                                           value={step.marker?.value ?? ""}
                                           onChange={(event) =>
                                             updateParty(partyIndex, (item) => ({

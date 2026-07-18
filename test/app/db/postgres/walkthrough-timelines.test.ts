@@ -105,9 +105,7 @@ describe("PostgreSQL walkthrough timelines", () => {
     expect(likedListSql).toContain('from "raid_walkthrough_likes"');
     expect(likedListSql).toContain('"raid_walkthrough_likes"."user_id" = $2');
 
-    await expect(
-      listPostgresVisibleWalkthroughTimelines(env, { viewerUserId: 10 }, options),
-    ).resolves.toHaveLength(1);
+    await expect(listPostgresVisibleWalkthroughTimelines(env, { viewerUserId: 10 }, options)).resolves.toHaveLength(1);
     const visibleListSql = (query.mock.calls[4]?.[0] as { text: string }).text;
     expect(visibleListSql).toContain('"raid_walkthroughs"."visibility" = $1');
     expect(visibleListSql).toContain('"raid_walkthroughs"."user_id" = $2');

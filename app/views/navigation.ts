@@ -10,6 +10,7 @@ import {
 import { getAllCoupons } from "~/models/coupon";
 import { getPersonalNavigationState } from "~/models/personal-navigation";
 import { getLatestPostTime } from "~/models/post";
+import { getAllRaidSchedules } from "~/models/raid";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content.server";
 
@@ -20,6 +21,7 @@ export type NavigationBarContents = {
     until: UtcIsoString;
   } | null;
   hasRecentNews: boolean;
+  hasOngoingRaid: boolean;
   hasActiveCoupons: boolean;
   hasUnconsumedCoupons: boolean;
   hasUnreadFeedbackReplies: boolean;
@@ -33,6 +35,7 @@ export type NavigationBarContentsRaw = {
     runType: TimelineContent["runType"];
   }[];
   latestNewsTime: UtcIsoString | null;
+  raidActivePeriods: { startAt: UtcIsoString | null; endAt: UtcIsoString | null }[];
   couponActivePeriods: { endAt: UtcIsoString | null }[];
 };
 
@@ -44,13 +47,14 @@ export async function getNavigationBarContentsRaw(
   return fetchRouteCached(
     env,
     ctx,
-    cacheKey("route", "navigation-bar", 3, "raw"),
+    cacheKey("route", "navigation-bar", 4, "raw"),
     async () => {
       const now = nowUtcIso();
-      const [contents, latestNewsTime, coupons] = await Promise.all([
+      const [contents, latestNewsTime, raidSchedules, coupons] = await Promise.all([
         // Limit results to active and future events (endAt >= now).
         getTimelineContentsByContentTypes(env, ["event"], now, { ctx }),
         getLatestPostTime(env, "news", { ctx }),
+        getAllRaidSchedules(env, forceRefresh),
         getAllCoupons(env, { ctx }),
       ]);
 
@@ -64,6 +68,12 @@ export async function getNavigationBarContentsRaw(
             runType: content.runType,
           })),
         latestNewsTime: latestNewsTime ? toUtcIso(latestNewsTime) : null,
+        raidActivePeriods: raidSchedules
+          .filter((schedule) => schedule.raidType === "total_assault" || schedule.raidType === "elimination")
+          .map((schedule) => ({
+            startAt: schedule.startAt,
+            endAt: schedule.endAt,
+          })),
         couponActivePeriods: coupons.map((coupon) => ({
           endAt: coupon.expiresAt ? toUtcIso(coupon.expiresAt) : null,
         })),
@@ -104,6 +114,13 @@ export async function getNavigationBarContents(
   return {
     upcomingEvent,
     hasRecentNews: raw.latestNewsTime !== null && !isInstantBefore(raw.latestNewsTime, threeDaysAgo),
+    hasOngoingRaid: raw.raidActivePeriods.some(
+      (period) =>
+        period.startAt !== null &&
+        period.endAt !== null &&
+        !isInstantAfter(period.startAt, now) &&
+        isInstantAfter(period.endAt, now),
+    ),
     hasActiveCoupons: raw.couponActivePeriods.some(
       (period) => period.endAt === null || isInstantAfter(period.endAt, now),
     ),

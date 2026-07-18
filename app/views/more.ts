@@ -58,6 +58,7 @@ export async function getMoreViewData(env: Env, ctx: ExecutionContext, sensei: S
     currentUser,
     upcomingEvent: navigationBarContents.upcomingEvent,
     hasRecentNews: navigationBarContents.hasRecentNews,
+    hasOngoingRaid: navigationBarContents.hasOngoingRaid,
     hasUnconsumedCoupons: currentUser
       ? currentUser.availableCouponCount > 0
       : navigationBarContents.hasUnconsumedCoupons,

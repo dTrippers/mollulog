@@ -476,7 +476,10 @@ export function WalkthroughPartyGrowthEditor({ party, students, onChange }: Grow
             const student = students.find((candidate) => candidate.uid === unit.studentUid);
             if (!student) return null;
             const selectedTier = unit.snapshot?.tier ?? student.initialTier;
-            const canEditGrowth = typeof student.initialTier === "number" && typeof selectedTier === "number";
+            const growthTier =
+              typeof student.initialTier === "number" && typeof selectedTier === "number"
+                ? { initial: student.initialTier, current: selectedTier }
+                : null;
 
             return (
               <tr key={unit.slot} className="border-b border-border last:border-b-0">
@@ -486,13 +489,13 @@ export function WalkthroughPartyGrowthEditor({ party, students, onChange }: Grow
                     <StudentCard uid={student.uid} name={student.name} role={student.role} hideName flush />
                   </div>
                 </th>
-                {canEditGrowth ? (
+                {growthTier ? (
                   <>
                     <td className="border-l border-border px-2 py-2">
                       <div className="flex h-9 min-w-24 items-center justify-center px-2">
                         <TierSelector
-                          initialTier={student.initialTier}
-                          currentTier={selectedTier}
+                          initialTier={growthTier.initial}
+                          currentTier={growthTier.current}
                           iconSize="sm"
                           onTierChange={(tier) => {
                             const weaponLevel = unit.snapshot?.weaponLevel;
@@ -566,11 +569,11 @@ export function WalkthroughPartyGrowthEditor({ party, students, onChange }: Grow
                               label={`${student.name} 능력 해방 ${label}`}
                               hideLabel
                               grouped
-                              disabled={selectedTier <= 5}
+                              disabled={growthTier.current <= 5}
                               min={0}
                               max={ABILITY_RELEASE_MAX_LEVEL}
                               value={unit.snapshot?.[field] ?? null}
-                              inputProps={growthInputNavigation.getInputProps({ disabled: selectedTier <= 5 })}
+                              inputProps={growthInputNavigation.getInputProps({ disabled: growthTier.current <= 5 })}
                               onChange={(value) => updateSnapshotField(unit, field, value)}
                             />
                           </div>

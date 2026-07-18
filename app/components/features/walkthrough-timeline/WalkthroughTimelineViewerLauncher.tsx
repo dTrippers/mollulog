@@ -25,11 +25,13 @@ function prepareViewerDocument(target: Window) {
 export function WalkthroughTimelineViewerLauncher({
   items,
   studentsByUid,
+  viewerUrl,
   shareUrl,
   shareTitle,
 }: {
   items: TimelineViewerItem[];
   studentsByUid: Record<string, TimelineViewerStudent>;
+  viewerUrl: string;
   shareUrl: string;
   shareTitle: string;
 }) {
@@ -94,6 +96,7 @@ export function WalkthroughTimelineViewerLauncher({
       viewerWindow.focus();
       return;
     }
+    setCurrentIndex(0);
     setError(null);
     try {
       const pictureInPicture = (window as WindowWithDocumentPictureInPicture).documentPictureInPicture;
@@ -122,9 +125,18 @@ export function WalkthroughTimelineViewerLauncher({
       <div className="flex flex-wrap items-center gap-3">
         <Button
           icon={WindowIcon}
+          text="새 창에서 열기"
+          variant="primary"
+          href={viewerUrl}
+          target="_blank"
+          className="hidden [@media(any-pointer:coarse)]:inline-flex"
+        />
+        <Button
+          icon={WindowIcon}
           text={mode ? "뷰어로 돌아가기" : "새 창에서 열기"}
           variant="primary"
           onClick={openViewer}
+          className="[@media(any-pointer:coarse)]:hidden"
         />
         <Button
           icon={shareState === "copied" ? CheckIcon : ShareIcon}

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  isWalkthroughTimelineVisibility,
   InvalidWalkthroughTimelineDocumentError,
-  WALKTHROUGH_TIMELINE_DIFFICULTIES,
+  isWalkthroughTimelineVisibility,
   parseWalkthroughTimelineDocument,
+  WALKTHROUGH_TIMELINE_DIFFICULTIES,
   type WalkthroughTimelineDocument,
 } from "~/domain/walkthrough-timeline";
 

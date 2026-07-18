@@ -21,7 +21,7 @@ import {
   WalkthroughTimelineReadOnly,
   WalkthroughTimelineViewerLauncher,
 } from "~/components/features/walkthrough-timeline";
-import { AttributeBadge, Button } from "~/components/primitives";
+import { AttributeBadge, Button, Callout } from "~/components/primitives";
 import { PanelBody, PanelBodyRow } from "~/components/primitives/PanelBody";
 import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
 import {
@@ -29,6 +29,11 @@ import {
   deletePostgresWalkthroughTimeline,
   getPostgresWalkthroughTimeline,
 } from "~/db/postgres/walkthrough-timelines";
+import {
+  DEMO_WALKTHROUGH_BOSS_NAME,
+  DEMO_WALKTHROUGH_TIMELINE,
+  isDemoWalkthroughTimelineUid,
+} from "~/domain/walkthrough-timeline-demo";
 import { compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
@@ -47,20 +52,24 @@ export const ErrorBoundary = RouteErrorBoundary;
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const [timeline, currentUser] = await Promise.all([
-    params.uid ? getPostgresWalkthroughTimeline(env, params.uid, { ctx }) : null,
+  const demo = isDemoWalkthroughTimelineUid(params.uid);
+  const [storedTimeline, currentUser] = await Promise.all([
+    params.uid && !demo ? getPostgresWalkthroughTimeline(env, params.uid, { ctx }) : null,
     getActiveSensei(env, request),
   ]);
+  const timeline = demo ? DEMO_WALKTHROUGH_TIMELINE : storedTimeline;
   if (!timeline) throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
-  const owner = currentUser?.id === timeline.userId;
+  const owner = storedTimeline !== null && currentUser?.id === storedTimeline.userId;
   if (timeline.visibility === "private" && !owner) {
     throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
   }
   const [author, students, raids, engagementByUid] = await Promise.all([
-    getSenseiById(env, timeline.userId),
+    storedTimeline ? getSenseiById(env, storedTimeline.userId) : Promise.resolve(null),
     getAllStudentsMap(env, true),
     getAllRaidSchedules(env),
-    getPostgresWalkthroughTimelineLikeSummaries(env, [timeline.uid], currentUser?.id, { ctx }),
+    storedTimeline
+      ? getPostgresWalkthroughTimelineLikeSummaries(env, [storedTimeline.uid], currentUser?.id, { ctx })
+      : Promise.resolve<Record<string, { liked: boolean; likeCount: number }>>({}),
   ]);
   const bossSchedules = raids
     .filter((raid) => raid.raidBoss.uid === timeline.bossUid)
@@ -78,9 +87,10 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     timeline,
     engagement: engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 },
     owner,
+    demo,
     signedIn: currentUser !== null,
     author: author ? { username: author.username } : null,
-    bossName,
+    bossName: bossName ?? (demo ? DEMO_WALKTHROUGH_BOSS_NAME : null),
     latestBossTimelinePath: latestBossSchedule
       ? `/timelines?${new URLSearchParams({
           bossUid: timeline.bossUid,
@@ -100,6 +110,9 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) return redirect("/unauthorized");
   if (!params.uid) throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
+  if (isDemoWalkthroughTimelineUid(params.uid)) {
+    throw routeError(400, "timeline.invalid_action", "데모 타임라인은 변경할 수 없어요.");
+  }
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   if (intent === "clone") {
@@ -128,6 +141,7 @@ export default function WalkthroughTimelineDetailPage() {
     timeline,
     engagement,
     owner,
+    demo,
     signedIn,
     author,
     bossName,
@@ -189,7 +203,9 @@ export default function WalkthroughTimelineDetailPage() {
                 </span>
               </PanelBodyRow>
               <PanelBodyRow title="작성자">
-                {author ? (
+                {demo ? (
+                  <span className="text-sm">몰루로그</span>
+                ) : author ? (
                   <Link to={`/@${author.username}`} className="text-sm text-primary hover:underline">
                     @{author.username}
                   </Link>
@@ -197,9 +213,11 @@ export default function WalkthroughTimelineDetailPage() {
                   <span className="text-sm">작성자 정보 없음</span>
                 )}
               </PanelBodyRow>
-              <PanelBodyRow title="수정일">
-                <span className="text-sm tabular-nums">{dayjs(timeline.updatedAt).format("YYYY.MM.DD")}</span>
-              </PanelBodyRow>
+              {!demo ? (
+                <PanelBodyRow title="수정일">
+                  <span className="text-sm tabular-nums">{dayjs(timeline.updatedAt).format("YYYY.MM.DD")}</span>
+                </PanelBodyRow>
+              ) : null}
 
               {owner ? (
                 <div className="grid grid-cols-2 gap-2">
@@ -249,6 +267,14 @@ export default function WalkthroughTimelineDetailPage() {
       }
     >
       <div className="space-y-4 py-4">
+        {demo ? (
+          <Callout
+            Icon={InformationCircleIcon}
+            title="공략 타임라인 데모 예시입니다"
+            description="실제 공략이 아닌 기능 안내용 예시입니다. 편성, 학생 성장도와 여러 종류의 타임라인 단계를 둘러보세요."
+            tone="info"
+          />
+        ) : null}
         <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
           <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
             <div>
@@ -260,6 +286,7 @@ export default function WalkthroughTimelineDetailPage() {
                 <WalkthroughTimelineViewerLauncher
                   items={items}
                   studentsByUid={studentsByUid}
+                  viewerUrl={viewerUrl}
                   shareUrl={detailUrl}
                   shareTitle={timeline.title}
                 />
@@ -287,7 +314,7 @@ export default function WalkthroughTimelineDetailPage() {
         </section>
 
         <div className="flex flex-wrap gap-2">
-          {timeline.visibility === "public" ? (
+          {!demo && timeline.visibility === "public" ? (
             <LikeButton
               targetUid={timeline.uid}
               action={`/api/timelines/${timeline.uid}/likes`}
@@ -296,7 +323,7 @@ export default function WalkthroughTimelineDetailPage() {
               signedIn={signedIn}
             />
           ) : null}
-          {signedIn && !owner && (
+          {!demo && signedIn && !owner && (
             <Form method="post">
               <Button
                 type="submit"
@@ -308,7 +335,7 @@ export default function WalkthroughTimelineDetailPage() {
               />
             </Form>
           )}
-          {!signedIn && (
+          {!demo && !signedIn && (
             <Link to="/signin" className="text-sm text-primary hover:underline">
               로그인하면 내 타임라인으로 복제할 수 있어요.
             </Link>

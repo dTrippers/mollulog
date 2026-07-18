@@ -213,6 +213,7 @@ beforeEach(() => {
   mockedGetNavigationBarContentsRaw.mockResolvedValue({
     eventCandidates: [],
     latestNewsTime: null,
+    raidActivePeriods: [],
     couponActivePeriods: [],
   });
 });

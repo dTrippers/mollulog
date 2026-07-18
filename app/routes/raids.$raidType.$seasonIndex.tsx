@@ -55,7 +55,7 @@ export const loader = async ({ request, context, params }: LoaderFunctionArgs) =
   }
 
   const videoDateRange = await getVideoDateRange(env, currentRaid);
-  const currentOrClosestRaid = findCurrentOrClosestRaidSchedule(allRaids, currentRaid.raidType);
+  const currentOrClosestRaid = findCurrentOrClosestRaidSchedule(allRaids);
 
   return {
     currentRaid,
@@ -113,6 +113,9 @@ export default function RaidPage() {
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
   const currentOrClosestRaidPath = currentOrClosestRaid
     ? `/raids/${raidTypeToParam(currentOrClosestRaid.raidType)}/${currentOrClosestRaid.seasonIndex}`
+    : null;
+  const currentOrClosestRaidTypeLabel = currentOrClosestRaid
+    ? (raidTypeLocale[currentOrClosestRaid.raidType as keyof typeof raidTypeLocale] ?? currentOrClosestRaid.raidType)
     : null;
   const showCurrentOrClosestRaidLink = currentOrClosestRaidPath !== null && currentOrClosestRaidPath !== raidPath;
 
@@ -189,7 +192,7 @@ export default function RaidPage() {
                 to={currentOrClosestRaidPath}
                 className="mt-2 block text-right text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
-                {`이번 개최 ${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType}으로 이동 →`}
+                {`이번 개최 ${currentOrClosestRaidTypeLabel}으로 이동 →`}
               </Link>
             ) : null
           }

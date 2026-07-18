@@ -43,6 +43,7 @@ type NavigationBarProps = {
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   upcomingEvent: { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
   hasRecentNews: boolean;
+  hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
   hasUnreadFeedbackReplies: boolean;
 };
@@ -250,6 +251,7 @@ export default function NavigationBar({
   setDarkMode,
   upcomingEvent,
   hasRecentNews,
+  hasOngoingRaid,
   hasUnconsumedCoupons,
   hasUnreadFeedbackReplies,
 }: NavigationBarProps) {
@@ -288,6 +290,7 @@ export default function NavigationBar({
             pathname={pathname}
             hasRecentNews={hasRecentNews}
             upcomingEvent={upcomingEvent}
+            hasOngoingRaid={hasOngoingRaid}
             hasUnconsumedCoupons={hasUnconsumedCoupons}
             hasUnreadFeedbackReplies={hasUnreadFeedbackReplies}
             sectionStates={sectionStates}
@@ -339,6 +342,7 @@ function MobileBrandHeader({
   const submit = useSubmit();
 
   useEffect(() => {
+    void searchResetKey;
     setIsSearchOpen(false);
     setIsMenuOpen(false);
   }, [searchResetKey]);
@@ -615,6 +619,7 @@ interface DesktopMenuContentProps {
   pathname: string;
   hasRecentNews: boolean;
   upcomingEvent: NavigationBarProps["upcomingEvent"];
+  hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
   hasUnreadFeedbackReplies: boolean;
   sectionStates: NavigationSectionStates;
@@ -625,6 +630,7 @@ function DesktopMenuContent({
   pathname,
   hasRecentNews,
   upcomingEvent,
+  hasOngoingRaid,
   hasUnconsumedCoupons,
   hasUnreadFeedbackReplies,
   sectionStates,
@@ -632,6 +638,7 @@ function DesktopMenuContent({
   const menuSections = getNavigationSections({
     pathname,
     upcomingEvent,
+    hasOngoingRaid,
     hasUnconsumedCoupons,
     sectionStates,
   });
