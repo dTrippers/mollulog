@@ -40,9 +40,6 @@ export default function RelationshipGiftCalculationMode({
                 ? `총 ${ownedGiftCount.toLocaleString()}개로 ${ownedGiftExp.toLocaleString()} EXP를 얻을 수 있어요.`
                 : "재화 플래너에 등록된 보유 선물이 없어요."}
             </p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              다른 학생의 선물 계획은 차감하지 않고, 현재 보유 수량 그대로 계산해요.
-            </p>
           </div>
           <Button
             text="선물 계획으로 저장"
