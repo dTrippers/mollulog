@@ -34,6 +34,9 @@ import {
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { formatVisibleName, getAllStudents } from "~/models/student";
 import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
+import RelationshipGiftCalculationMode, {
+  type RelationshipGiftCalculationModeValue,
+} from "./utils.relationship._components/RelationshipGiftCalculationMode";
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "인연 랭크 계산기 | 몰루로그";
@@ -177,6 +180,7 @@ type RelationshipStudentState = {
 
 const RELATIONSHIP_STUDENT_PATH = "/utils/relationship";
 const RELATIONSHIP_ITEM_SEARCH = "?mode=item";
+const EMPTY_GIFT_QUANTITIES: Record<string, number> = {};
 
 const emptyRelationship: Relationship = {
   currentLevel: 1,
@@ -211,6 +215,7 @@ export default function RelationshipUtil() {
   const initialSelectedStudentUid =
     queryStudentUid && students.some((student) => student.uid === queryStudentUid) ? queryStudentUid : null;
   const [selectedStudentUid, setSelectedStudentUid] = useState<string | null>(initialSelectedStudentUid);
+  const [giftCalculationMode, setGiftCalculationMode] = useState<RelationshipGiftCalculationModeValue>("manual");
   const syncedQueryStudentUidRef = useRef<string | null>(initialSelectedStudentUid);
   const selectedStudent = useMemo(
     () => managedStudents.find((student) => student.uid === selectedStudentUid) ?? null,
@@ -224,8 +229,19 @@ export default function RelationshipUtil() {
     return buildRelationshipItemQuantityState(managedStudents);
   }, [isAuthenticated, managedStudents]);
   const [selectedItemExp, setSelectedItemExp] = useState<number>(0);
+
+  const handleGiftCalculationModeChange = (mode: RelationshipGiftCalculationModeValue) => {
+    if (mode === "owned" && !isAuthenticated) {
+      showSignIn();
+      return;
+    }
+    setSelectedItemExp(0);
+    setGiftCalculationMode(mode);
+  };
+
   const handleSelectStudentUid = (studentUid: string | null) => {
     setSaveSuccess(false);
+    setSelectedItemExp(0);
     setSelectedStudentUid(studentUid);
   };
 
@@ -277,6 +293,7 @@ export default function RelationshipUtil() {
 
     syncedQueryStudentUidRef.current = queryStudentUid;
     setSaveSuccess(false);
+    setSelectedItemExp(0);
     setSelectedStudentUid(queryStudentUid);
   }, [queryStudentUid, managedStudents]);
 
@@ -538,6 +555,7 @@ export default function RelationshipUtil() {
           selectedStudentUid={selectedStudentUid}
           selectedStudent={selectedStudent}
           currentRelationship={currentRelationship}
+          giftCalculationMode={giftCalculationMode}
           selectedItemExp={selectedItemExp}
           saveState={savePending ? "pending" : saveFetcher.state}
           saveError={saveError}
@@ -545,6 +563,7 @@ export default function RelationshipUtil() {
           itemRequiredQuantities={itemQuantityState?.requiredQuantities ?? null}
           itemQuantityBreakdowns={itemQuantityState?.breakdowns ?? null}
           ownedQuantities={ownedQuantities}
+          onGiftCalculationModeChange={handleGiftCalculationModeChange}
           onCurrentRelationshipChange={setCurrentRelationship}
           onSelectedItemExpChange={setSelectedItemExp}
           onDelete={handleDelete}
@@ -559,6 +578,7 @@ function RelationshipStudentScreen({
   selectedStudentUid,
   selectedStudent,
   currentRelationship,
+  giftCalculationMode,
   selectedItemExp,
   saveState,
   saveError,
@@ -566,6 +586,7 @@ function RelationshipStudentScreen({
   itemRequiredQuantities,
   itemQuantityBreakdowns,
   ownedQuantities,
+  onGiftCalculationModeChange,
   onCurrentRelationshipChange,
   onSelectedItemExpChange,
   onDelete,
@@ -574,6 +595,7 @@ function RelationshipStudentScreen({
   selectedStudentUid: string | null;
   selectedStudent: RelationshipStudentState | null;
   currentRelationship: Relationship;
+  giftCalculationMode: RelationshipGiftCalculationModeValue;
   selectedItemExp: number;
   saveState: SaveState;
   saveError: string | null;
@@ -581,10 +603,45 @@ function RelationshipStudentScreen({
   itemRequiredQuantities: Record<string, number> | null;
   itemQuantityBreakdowns: Record<string, ItemQuantityBreakdownEntry[]> | null;
   ownedQuantities: Record<string, number> | null;
+  onGiftCalculationModeChange: (mode: RelationshipGiftCalculationModeValue) => void;
   onCurrentRelationshipChange: Dispatch<SetStateAction<Relationship>>;
   onSelectedItemExpChange: (exp: number) => void;
   onDelete: () => void;
 }) {
+  const [ownedGiftPlan, setOwnedGiftPlan] = useState<{
+    studentUid: string;
+    quantities: Record<string, number>;
+  } | null>(null);
+  const ownedGiftQuantities =
+    ownedGiftPlan?.studentUid === selectedStudentUid ? ownedGiftPlan.quantities : EMPTY_GIFT_QUANTITIES;
+  const ownedGiftCount = useMemo(
+    () => Object.values(ownedGiftQuantities).reduce((total, quantity) => total + quantity, 0),
+    [ownedGiftQuantities],
+  );
+  const handleOwnedGiftQuantitiesChange = useCallback(
+    (quantities: Record<string, number>) => {
+      if (!selectedStudentUid) {
+        return;
+      }
+      setOwnedGiftPlan({ studentUid: selectedStudentUid, quantities });
+    },
+    [selectedStudentUid],
+  );
+
+  const handleSaveOwnedGiftPlan = () => {
+    if (ownedGiftCount <= 0) {
+      return;
+    }
+
+    const hasExistingGiftPlan = Object.values(currentRelationship.items).some((quantity) => quantity > 0);
+    if (hasExistingGiftPlan && !window.confirm("현재 학생의 기존 선물 계획을 보유 선물 수량으로 변경할까요?")) {
+      return;
+    }
+
+    onCurrentRelationshipChange((previous) => ({ ...previous, items: ownedGiftQuantities }));
+    onGiftCalculationModeChange("manual");
+  };
+
   return (
     <div className="min-w-0 overflow-x-hidden">
       {selectedStudentUid && selectedStudent ? (
@@ -594,6 +651,15 @@ function RelationshipStudentScreen({
             saveState={saveState}
             saveError={saveError}
             saveSuccess={saveSuccess}
+          />
+
+          <RelationshipGiftCalculationMode
+            mode={giftCalculationMode}
+            ownedGiftCount={ownedGiftCount}
+            ownedGiftExp={selectedItemExp}
+            canSaveOwnedGiftPlan={ownedGiftCount > 0}
+            onModeChange={onGiftCalculationModeChange}
+            onSaveOwnedGiftPlan={handleSaveOwnedGiftPlan}
           />
 
           <StudentRelationshipLevel
@@ -616,10 +682,12 @@ function RelationshipStudentScreen({
           <FavoriteItemSelector
             studentUid={selectedStudentUid}
             quantities={currentRelationship.items}
+            useOwnedQuantities={giftCalculationMode === "owned"}
             itemRequiredQuantities={itemRequiredQuantities}
             itemQuantityBreakdowns={itemQuantityBreakdowns}
             ownedQuantities={ownedQuantities}
             onQuantitiesChange={(quantities) => onCurrentRelationshipChange((prev) => ({ ...prev, items: quantities }))}
+            onOwnedGiftQuantitiesChange={handleOwnedGiftQuantitiesChange}
             onSelectedItemExpChange={onSelectedItemExpChange}
           />
 

@@ -9,10 +9,12 @@ type FavoriteItemSelectorProps = {
   studentUid: string;
 
   quantities: Record<string, number>;
+  useOwnedQuantities: boolean;
   itemRequiredQuantities: Record<string, number> | null;
   itemQuantityBreakdowns: Record<string, ItemQuantityBreakdownEntry[]> | null;
   ownedQuantities: Record<string, number> | null;
   onQuantitiesChange: (quantities: Record<string, number>) => void;
+  onOwnedGiftQuantitiesChange: (quantities: Record<string, number>) => void;
   onSelectedItemExpChange: (exp: number) => void;
 };
 
@@ -21,10 +23,12 @@ const INSUFFICIENT_QUANTITY_CLASS = "text-red-600 dark:text-red-400";
 export default function FavoriteItemSelector({
   studentUid,
   quantities,
+  useOwnedQuantities,
   itemRequiredQuantities,
   itemQuantityBreakdowns,
   ownedQuantities,
   onQuantitiesChange,
+  onOwnedGiftQuantitiesChange,
   onSelectedItemExpChange,
 }: FavoriteItemSelectorProps) {
   const [filterFavorited, setFilterFavorited] = useState(true);
@@ -48,13 +52,20 @@ export default function FavoriteItemSelector({
   }, [fetcher.data]);
 
   const favoriteItems = fetcher.data?.uid === studentUid ? fetcher.data.favoriteItems : cachedFavoriteItems[studentUid];
+  const ownedGiftQuantities = useMemo(
+    () => getOwnedGiftQuantities(favoriteItems, ownedQuantities),
+    [favoriteItems, ownedQuantities],
+  );
+  const calculationQuantities = useOwnedQuantities ? ownedGiftQuantities : quantities;
   const filteredItems = useMemo(() => {
     if (!favoriteItems) {
       return [];
     }
 
     return favoriteItems
-      .filter(({ favorited }) => (filterFavorited ? favorited : true))
+      .filter(({ favorited, item }) =>
+        useOwnedQuantities ? (ownedGiftQuantities[item.uid] ?? 0) > 0 : filterFavorited ? favorited : true,
+      )
       .sort((a, b) => {
         if (a.item.rarity !== b.item.rarity) {
           return b.item.rarity - a.item.rarity;
@@ -64,34 +75,48 @@ export default function FavoriteItemSelector({
         }
         return Number.parseInt(a.item.uid, 10) - Number.parseInt(b.item.uid, 10);
       });
-  }, [favoriteItems, filterFavorited]);
+  }, [favoriteItems, filterFavorited, ownedGiftQuantities, useOwnedQuantities]);
+
+  useEffect(() => {
+    onOwnedGiftQuantitiesChange(ownedGiftQuantities);
+  }, [onOwnedGiftQuantitiesChange, ownedGiftQuantities]);
 
   useEffect(() => {
     if (!favoriteItems) {
       return;
     }
-    onSelectedItemExpChange(favoriteItems.reduce((acc, item) => acc + item.exp * (quantities[item.item.uid] ?? 0), 0));
-  }, [favoriteItems, onSelectedItemExpChange, quantities]);
+    onSelectedItemExpChange(
+      favoriteItems.reduce((acc, item) => acc + item.exp * (calculationQuantities[item.item.uid] ?? 0), 0),
+    );
+  }, [calculationQuantities, favoriteItems, onSelectedItemExpChange]);
 
   return (
     <SectionCard
       title="선물 목록"
-      description="선물할 개수를 입력하고 예상 도달 랭크를 계산해보세요"
+      description={
+        useOwnedQuantities
+          ? "현재 보유한 모든 선물을 주었을 때의 결과에요"
+          : "선물할 개수를 입력하고 예상 도달 랭크를 계산해보세요"
+      }
       action={
-        <Toggle
-          label="좋아하는 선물만 보기"
-          initialState={filterFavorited}
-          className="my-0"
-          onChange={setFilterFavorited}
-        />
+        useOwnedQuantities ? undefined : (
+          <Toggle
+            label="좋아하는 선물만 보기"
+            initialState={filterFavorited}
+            className="my-0"
+            onChange={setFilterFavorited}
+          />
+        )
       }
     >
       {!favoriteItems ? (
         <LoadingSkeleton />
+      ) : useOwnedQuantities && filteredItems.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">재화 플래너에 등록된 보유 선물이 없어요.</p>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(5rem,1fr))] justify-items-center gap-x-1 gap-y-0">
           {filteredItems.map(({ item, favoriteLevel, exp }) => {
-            const quantity = quantities[item.uid] || 0;
+            const quantity = calculationQuantities[item.uid] || 0;
             const totalItemExp = exp * quantity;
             const requiredQuantity = itemRequiredQuantities?.[item.uid] ?? 0;
             const ownedQuantity = ownedQuantities?.[item.uid] ?? 0;
@@ -110,10 +135,19 @@ export default function FavoriteItemSelector({
                 currentQuantity={quantity}
                 draftQuantity={quantity}
                 quantityLabel="목표"
+                showQuantityInput={!useOwnedQuantities}
                 inputProps={numberInputFlowNavigation.getInputProps()}
                 metrics={[
                   { label: "EXP", value: exp.toLocaleString() },
-                  ...(showQuantityComparison
+                  ...(useOwnedQuantities
+                    ? [
+                        {
+                          label: "사용",
+                          value: quantity.toLocaleString(),
+                        },
+                      ]
+                    : []),
+                  ...(!useOwnedQuantities && showQuantityComparison
                     ? [
                         {
                           label: "필요",
@@ -138,12 +172,29 @@ export default function FavoriteItemSelector({
                     hidden: quantity === 0,
                   },
                 ]}
-                onQuantityChange={(value) => onQuantitiesChange({ ...quantities, [item.uid]: value })}
+                onQuantityChange={
+                  useOwnedQuantities ? undefined : (value) => onQuantitiesChange({ ...quantities, [item.uid]: value })
+                }
               />
             );
           })}
         </div>
       )}
     </SectionCard>
+  );
+}
+
+export function getOwnedGiftQuantities(
+  favoriteItems: { item: { uid: string } }[] | null | undefined,
+  ownedQuantities: Record<string, number> | null,
+): Record<string, number> {
+  if (!favoriteItems || !ownedQuantities) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    favoriteItems
+      .map(({ item }) => [item.uid, ownedQuantities[item.uid] ?? 0] as const)
+      .filter(([, quantity]) => quantity > 0),
   );
 }

@@ -34,6 +34,8 @@ export { default as ResourceCard } from "./ResourceCard";
 export { default as Section } from "./Section";
 export type { SectionCardProps } from "./SectionCard";
 export { default as SectionCard } from "./SectionCard";
+export type { SegmentedControlOption } from "./SegmentedControl";
+export { default as SegmentedControl } from "./SegmentedControl";
 export { default as SubTitle } from "./SubTitle";
 export { default as TagIcon } from "./TagIcon";
 export { default as Textarea } from "./Textarea";

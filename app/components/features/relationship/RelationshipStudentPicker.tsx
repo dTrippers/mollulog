@@ -42,7 +42,7 @@ export default function RelationshipStudentPicker({
         initialStudentUids={selectedStudentUid ? [selectedStudentUid] : undefined}
         placeholder={selectedStudent ? "다른 학생 검색..." : "이름으로 찾기..."}
         searchPlaceholder="학생 이름으로 검색"
-        className="max-w-none border-0 bg-transparent px-2 shadow-none hover:bg-muted/70 focus-visible:border-transparent"
+        className="max-w-none text-sm font-medium hover:border-foreground/30 hover:bg-background focus-visible:ring-ring"
         containerClassName="mt-0 mb-0"
         onSelect={(value) => {
           onSelectStudentUid(Array.isArray(value) ? (value[0] ?? null) : value || null);
