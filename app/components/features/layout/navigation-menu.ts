@@ -203,6 +203,7 @@ export function getNavigationSections({
           to: "/utils/pyroxene",
           name: "청휘석 플래너",
           description: "모집 시점의 청휘석을 계산해보세요",
+          badgeLabel: "로그인 없이 사용",
           OutlineIcon: CreditCardIconOutline,
           SolidIcon: CreditCardIconSolid,
           isActive: pathname.startsWith("/utils/pyroxene"),

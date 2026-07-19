@@ -6,6 +6,7 @@ import { Link } from "react-router";
 import { AttributeBadge } from "~/components/primitives";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import type { Attack, Defense } from "~/graphql/graphql";
+import { cn } from "~/lib/utils";
 import {
   attackTypeColor,
   attackTypeLocale,
@@ -17,7 +18,6 @@ import {
 import { studentImageUrl } from "~/models/assets";
 import type { Role } from "~/models/content.d";
 import { parseVisibleNames } from "~/models/student";
-import { cn } from "~/lib/utils";
 
 type StudentCardProps = {
   uid: string | null;
@@ -307,10 +307,14 @@ export default function StudentCard({
 
               {showsOverlayName ? (
                 <div className="absolute inset-0 bg-linear-15 from-black/60 from-10% via-transparent via-50% to-transparent px-1 pb-0.5 md:px-1.5 md:pb-1 text-left flex flex-col justify-end dark:from-black/80">
-                  <p className="whitespace-nowrap text-xs fond-bold scale-75 origin-left leading-none tracking-tighter text-white">
+                  <p
+                    className={`whitespace-nowrap font-bold scale-75 origin-left leading-none tracking-tighter text-white ${nameSize === "small" ? "text-[10px]" : "text-xs"}`}
+                  >
                     {overlaySubName}
                   </p>
-                  <p className="text-xs font-bold leading-tight tracking-tighter text-white line-clamp-1">
+                  <p
+                    className={`${nameSize === "small" ? "text-[10px]" : "text-xs"} font-bold leading-tight tracking-tighter text-white line-clamp-1`}
+                  >
                     {overlayMainName}
                   </p>
                 </div>

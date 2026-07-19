@@ -5,6 +5,7 @@ import type { PyroxeneCollectedSourceCandidate } from "~/domain/pyroxene-schedul
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import { cn } from "~/lib/utils";
 import ResourcesInput from "./planner-input/ResourcesInput";
 
 const resourceItems = [
@@ -111,24 +112,32 @@ export default function PyroxeneInitialResources({
             <div className="mt-4 border-t border-border pt-4">
               <p className="text-sm font-semibold">이미 받은 보상</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                선택한 이벤트 보상은 이후 그래프에서 중복 계산하지 않아요.
+                이미 받은 보상이 있다면 중복 계산이 되지 않도록 선택해주세요.
               </p>
               <div className="mt-3 space-y-2">
-                {collectedSourceCandidates.map((candidate) => (
-                  <Checkbox
-                    key={candidate.sourceKey}
-                    checked={selectedCollectedSourceKeys.includes(candidate.sourceKey)}
-                    onChange={(checked) => handleToggleCollectedSource(candidate.sourceKey, checked)}
-                    label={
-                      <span className="flex flex-col">
-                        <span className="font-medium">{candidate.title}</span>
-                        {candidate.description && (
-                          <span className="text-xs text-muted-foreground">{candidate.description}</span>
-                        )}
-                      </span>
-                    }
-                  />
-                ))}
+                {collectedSourceCandidates.map((candidate) => {
+                  const checked = selectedCollectedSourceKeys.includes(candidate.sourceKey);
+                  return (
+                    <Checkbox
+                      key={candidate.sourceKey}
+                      checked={checked}
+                      onChange={(nextChecked) => handleToggleCollectedSource(candidate.sourceKey, nextChecked)}
+                      className={cn(
+                        "w-full items-start rounded-lg border px-4 py-3 transition-colors",
+                        checked ? "border-primary/50 bg-primary/5" : "border-border bg-card hover:bg-muted/50",
+                      )}
+                      aria-label={candidate.title}
+                      label={
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-foreground">{candidate.title}</span>
+                          {candidate.description && (
+                            <span className="mt-0.5 block text-sm text-muted-foreground">{candidate.description}</span>
+                          )}
+                        </span>
+                      }
+                    />
+                  );
+                })}
               </div>
             </div>
           )}

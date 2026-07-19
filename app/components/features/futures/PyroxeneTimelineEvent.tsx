@@ -18,6 +18,9 @@ type PyroxeneTimelineEventProps = {
   completed: boolean;
   expectedTrials: number | null;
   pickupChance: PyroxenePickupChance;
+  allowPickupCompletion: boolean;
+  recruitedStudentUids: ReadonlySet<string>;
+  onFavoriteChange: (contentUid: string, studentUid: string, favorited: boolean) => void;
   onDeletePickupComplete: (eventUid: string) => void;
   onPickupComplete: (eventUid: string, resources: PickupResources) => void;
   onUpdateEventData: (eventUid: string, data: { expectedTrials?: number | null }) => void;
@@ -30,6 +33,9 @@ export default function PyroxeneTimelineEvent({
   completed,
   expectedTrials,
   pickupChance,
+  allowPickupCompletion,
+  recruitedStudentUids,
+  onFavoriteChange,
   onDeletePickupComplete,
   onPickupComplete,
   onUpdateEventData,
@@ -38,18 +44,31 @@ export default function PyroxeneTimelineEvent({
   const [showExpectedTrialsAction, setShowExpectedTrialsAction] = useState(false);
   const [expectedTrialsInputValue, setExpectedTrialsInputValue] = useState<number>(expectedTrials ?? 0);
   const [confirmingPickupDelete, setConfirmingPickupDelete] = useState(false);
-  const favoritedStudents = useMemo(
+  const pickupStudents = useMemo(
     () =>
-      event.recruitments.flatMap(({ favorited, student }) => {
-        if (!favorited || !student) {
+      event.recruitments.flatMap(({ pickup, favorited, sourceContentUid, student }) => {
+        if (!pickup || !student) {
           return [];
         }
-        return [{ uid: student.uid, name: student.name, tier: student.initialTier }];
+        const contentUid = sourceContentUid ?? event.uid;
+        return [
+          {
+            uid: student.uid,
+            selectionKey: `${contentUid}\u0000${student.uid}`,
+            contentUid,
+            name: student.name,
+            tier: recruitedStudentUids.has(student.uid) ? undefined : student.initialTier,
+            label: recruitedStudentUids.has(student.uid) ? "모집함" : undefined,
+            grayscale: !favorited,
+            state: { favorited },
+          },
+        ];
       }),
-    [event.recruitments],
+    [event.recruitments, event.uid, recruitedStudentUids],
   );
 
-  const canComplete = !completed && dayjs(event.since).isBefore(dayjs());
+  const canComplete = allowPickupCompletion && !completed && dayjs(event.since).isBefore(dayjs());
+  const selectedStudentCount = pickupStudents.filter((student) => student.state.favorited).length;
   const freeRecruitment100 = isFreeRecruitment100Event(event);
   const expectedTrialsLabel =
     expectedTrials !== null
@@ -70,6 +89,44 @@ export default function PyroxeneTimelineEvent({
     setTimeout(() => setConfirmingPickupDelete(false), 3000);
   };
 
+  if (!completed && selectedStudentCount === 0) {
+    return (
+      <div className="relative py-1">
+        <SectionCard className="p-3 shadow-md dark:shadow-md md:p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <span>
+                  {dayjs(event.since).format("MM/DD")} ~ {dayjs(event.until).format("MM/DD")}
+                </span>
+                {freeRecruitment100 && (
+                  <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                    <StarIcon className="mr-1 size-3.5" />
+                    100회 무료
+                  </span>
+                )}
+              </div>
+              <h3 className="line-clamp-2 whitespace-pre-line text-sm font-semibold leading-tight text-foreground md:text-base">
+                {event.name}
+              </h3>
+            </div>
+            <StudentCards
+              students={pickupStudents}
+              layout="wrap"
+              cardSize="xs"
+              gap="tight"
+              namePlacement="overlay"
+              onSelect={(selectionKey) => {
+                const [contentUid, studentUid] = selectionKey.split("\u0000");
+                if (contentUid && studentUid) onFavoriteChange(contentUid, studentUid, true);
+              }}
+            />
+          </div>
+        </SectionCard>
+      </div>
+    );
+  }
+
   return (
     <div className="relative py-1">
       <SectionCard className="p-4 shadow-md dark:shadow-md md:p-5">
@@ -78,7 +135,7 @@ export default function PyroxeneTimelineEvent({
             <div className="min-w-0">
               <div className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 <span>
-                  {dayjs(event.since).format("MM.DD")} ~ {dayjs(event.until).format("MM.DD")}
+                  {dayjs(event.since).format("MM/DD")} ~ {dayjs(event.until).format("MM/DD")}
                 </span>
                 {freeRecruitment100 && (
                   <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
@@ -92,14 +149,26 @@ export default function PyroxeneTimelineEvent({
               </h3>
             </div>
 
-            {favoritedStudents.length > 0 && (
-              <StudentCards
-                students={favoritedStudents}
-                layout="wrap"
-                cardSize="md"
-                gap="tight"
-                namePlacement="overlay"
-              />
+            {pickupStudents.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  모집 목표 {selectedStudentCount}명 · 학생을 눌러 변경할 수 있어요
+                </p>
+                <StudentCards
+                  students={pickupStudents}
+                  layout="wrap"
+                  cardSize="md"
+                  gap="tight"
+                  namePlacement="overlay"
+                  onSelect={(selectionKey) => {
+                    const [contentUid, studentUid] = selectionKey.split("\u0000");
+                    const student = pickupStudents.find((item) => item.selectionKey === selectionKey);
+                    if (contentUid && studentUid && student) {
+                      onFavoriteChange(contentUid, studentUid, !student.state.favorited);
+                    }
+                  }}
+                />
+              </div>
             )}
           </div>
 

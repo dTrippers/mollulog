@@ -187,7 +187,7 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
             domain={["dataMin", "dataMax"]}
             scale="time"
             ticks={monthlyTicks}
-            tickFormatter={(v) => dayjs(v as number).format("M/D")}
+            tickFormatter={(v) => dayjs(v as number).format("MM/DD")}
             tick={{ fontSize: 11, fill: axisColor }}
             axisLine={false}
             tickLine={false}
@@ -225,9 +225,7 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
                     padding: "8px 12px",
                   }}
                 >
-                  <p style={{ color: axisColor, fontSize: 11, marginBottom: 2 }}>
-                    {dayjs(item.ts).format("YYYY-MM-DD")}
-                  </p>
+                  <p style={{ color: axisColor, fontSize: 11, marginBottom: 2 }}>{dayjs(item.ts).format("MM/DD")}</p>
                   <p style={{ color: tooltipText, fontSize: 13, fontWeight: 600 }}>
                     {item.pyroxene.toLocaleString()}개
                   </p>

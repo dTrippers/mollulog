@@ -1,8 +1,10 @@
 import type { TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { UtcIsoString } from "~/lib/date-time";
+import dayjs from "~/lib/dayjs";
 import type { RaidType } from "~/models/content.d";
 import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
+import type { PickupResources, Timeline } from "./pyroxene-timeline";
 
 export type PyroxeneScheduleContent =
   | {
@@ -105,6 +107,46 @@ export type PyroxeneCollectedSourceCandidate = {
   title: string;
   description?: string;
 };
+
+export function buildPyroxeneDisplayTimeline(
+  timeline: Timeline,
+  scheduleItems: PyroxeneScheduleItem[],
+  displayStartDate: Date,
+  initialResources: PickupResources,
+): Timeline {
+  const timelineEventUids = new Set(
+    timeline.flatMap((entry) => (entry.source.type === "event" && entry.source.event ? [entry.source.event.uid] : [])),
+  );
+  const displayStart = dayjs(displayStartDate);
+  const missingEvents = scheduleItems.flatMap((item) => {
+    const event = item.event;
+    if (
+      !event ||
+      timelineEventUids.has(event.uid) ||
+      !event.recruitments.some(({ pickup, student }) => pickup && student) ||
+      !dayjs(event.until).isAfter(displayStart)
+    ) {
+      return [];
+    }
+
+    const date = dayjs(event.since);
+    let resources = initialResources;
+    for (const entry of timeline) {
+      if (entry.date.isAfter(date)) break;
+      resources = entry.accumulatedResources;
+    }
+    return [
+      {
+        date,
+        source: { type: "event" as const, event },
+        accumulatedResources: resources,
+        resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+      },
+    ];
+  });
+
+  return [...timeline, ...missingEvents].sort((a, b) => a.date.valueOf() - b.date.valueOf());
+}
 
 export function buildPyroxeneScheduleItems(
   contents: PyroxeneScheduleContent[],

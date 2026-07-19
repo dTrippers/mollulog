@@ -6,6 +6,7 @@ import StudentCard from "./StudentCard";
 type StudentCardsProps = {
   students?: {
     uid: string | null;
+    selectionKey?: string;
     name?: string | null;
     attackType?: Attack;
     defenseType?: Defense;
@@ -97,11 +98,12 @@ export default function StudentCards({
 
   return (
     <div className={containerClassName}>
-      {students?.map((student, index) => {
+      {students?.map((student) => {
         const { uid } = student;
+        const selectionKey = student.selectionKey ?? uid;
         return (
           <div
-            key={`student-card-${student.name ?? uid}-${index}`}
+            key={`student-card-${selectionKey ?? student.name ?? "unknown"}`}
             ref={(ref) => {
               if (uid) {
                 onRef?.(uid, ref);
@@ -112,10 +114,11 @@ export default function StudentCards({
             <StudentCard
               {...student}
               namePlacement={namePlacement}
+              nameSize={cardSize === "xs" && namePlacement === "overlay" ? "small" : undefined}
               favorited={student.state?.favorited}
               favoritedCount={student.state?.favoritedCount}
               completed={student.state?.completed}
-              onSelect={onSelect}
+              onSelect={selectionKey && onSelect ? () => onSelect(selectionKey) : undefined}
             />
           </div>
         );

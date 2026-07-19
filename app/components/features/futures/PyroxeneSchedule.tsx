@@ -1,8 +1,12 @@
 import dayjs from "dayjs";
-import { useMemo } from "react";
-import { Callout, EmptyView, Section, SectionCard } from "~/components/primitives";
+import { useEffect, useMemo, useState } from "react";
+import { EmptyView, Section, SectionCard, Toggle } from "~/components/primitives";
 import type { PyroxeneCalculationOptions, PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
-import type { PyroxeneCollectedSourceCandidate, PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
+import {
+  buildPyroxeneDisplayTimeline,
+  type PyroxeneCollectedSourceCandidate,
+  type PyroxeneScheduleItem,
+} from "~/domain/pyroxene-schedule";
 import { collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import PyroxeneAvailableOneTimePackages from "./PyroxeneAvailableOneTimePackages";
@@ -19,12 +23,15 @@ type PyroxeneScheduleProps = {
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxenePlannerOptions;
   collectedSourceKeys: string[];
+  recruitedStudentUids: string[];
 
   onPickupComplete: (eventUid: string | null, resources: PickupResources, collectedSourceKeys?: string[]) => void;
   onDeletePickupComplete: (eventUid: string) => void;
   onDeleteItem: (itemUid: string) => void;
   onUpdateEventData: (eventUid: string, data: { expectedTrials?: number | null }) => void;
   onCollectedSourceChange: (sourceKey: string, collected: boolean) => void;
+  allowPickupCompletion: boolean;
+  onFavoriteChange: (contentUid: string, studentUid: string, favorited: boolean) => void;
 };
 
 const deletableTimelineSourceTypes = new Set([
@@ -36,6 +43,7 @@ const deletableTimelineSourceTypes = new Set([
   "other",
 ]);
 const availablePackageSourceTypes = new Set(["package_onetime", "package_ap"]);
+const hideUnfavoritedEventsStorageKey = "pyroxene-planner::hide-unfavorited-events";
 
 function getAvailablePackageDate({
   date,
@@ -65,12 +73,34 @@ export default function PyroxeneSchedule({
   scheduleItems,
   options,
   collectedSourceKeys,
+  recruitedStudentUids,
   onPickupComplete,
   onDeletePickupComplete,
   onDeleteItem,
   onUpdateEventData,
   onCollectedSourceChange,
+  allowPickupCompletion,
+  onFavoriteChange,
 }: PyroxeneScheduleProps) {
+  const [hideUnfavoritedEvents, setHideUnfavoritedEvents] = useState(false);
+
+  useEffect(() => {
+    try {
+      setHideUnfavoritedEvents(localStorage.getItem(hideUnfavoritedEventsStorageKey) === "true");
+    } catch (_error) {
+      // Ignore unavailable local storage and keep the default display.
+    }
+  }, []);
+
+  const handleHideUnfavoritedEventsChange = (value: boolean) => {
+    setHideUnfavoritedEvents(value);
+    try {
+      localStorage.setItem(hideUnfavoritedEventsStorageKey, String(value));
+    } catch (_error) {
+      // Ignore unavailable local storage and keep the setting for this tab.
+    }
+  };
+
   // 표시 필터(timeline.display)는 계산 결과에 영향을 주지 않으므로 계산 입력에서 제외합니다.
   // 이렇게 하면 표시 토글이 무거운 재계산을 유발하지 않습니다.
   const calcOptions = useMemo<PyroxeneCalculationOptions>(
@@ -95,6 +125,22 @@ export default function PyroxeneSchedule({
     options.event.pickupChance === "ceil"
       ? "설정한 목표를 모두 천장으로 계산한 시뮬레이션 결과에요"
       : "설정한 목표와, 상위/하위 10% 범위의 시뮬레이션 결과에요";
+
+  // 관심 학생이 아직 없는 모집도 선택 진입점으로 보여주되 계산 결과에는 포함하지 않습니다.
+  const displayTimeline = useMemo(
+    () => buildPyroxeneDisplayTimeline(timeline, scheduleItems, initialDate ?? new Date(), initialResources),
+    [initialDate, initialResources, scheduleItems, timeline],
+  );
+  const visibleDisplayTimeline = useMemo(() => {
+    if (!hideUnfavoritedEvents) return displayTimeline;
+
+    return displayTimeline.filter(({ source }) => {
+      const event = source.event;
+      if (!event) return true;
+      if (eventDataMap.get(event.uid)?.completed) return true;
+      return event.recruitments.some(({ favorited, pickup, student }) => pickup && student && favorited);
+    });
+  }, [displayTimeline, eventDataMap, hideUnfavoritedEvents]);
 
   // 적용 중인 패키지는 삭제가 가능하도록 별도 레이아웃에서 표시
   const availableOneTimePackages = useMemo(() => {
@@ -143,6 +189,7 @@ export default function PyroxeneSchedule({
   }, [initialDate, scheduleItems]);
 
   const collectedSourceKeySet = useMemo(() => new Set(collectedSourceKeys), [collectedSourceKeys]);
+  const recruitedStudentUidSet = useMemo(() => new Set(recruitedStudentUids), [recruitedStudentUids]);
   const collectableSourceKeySet = useMemo(() => {
     const currentDate = dayjs();
     const sourceKeys = new Set<string>();
@@ -207,12 +254,11 @@ export default function PyroxeneSchedule({
         title="현재 보유 재화"
         description={
           initialDate
-            ? `마지막 입력 : ${dayjs(initialDate).format("YYYY-MM-DD HH:mm")}`
+            ? `마지막 입력 : ${dayjs(initialDate).format("MM/DD HH:mm")}`
             : "현재 보유중인 재화 수량을 입력해주세요"
         }
       >
         <div className="space-y-3">
-          {!initialDate && <Callout>현재 보유중인 재화 수량을 입력해주세요.</Callout>}
           <PyroxeneInitialResources
             resources={initialResources}
             collectedSourceCandidates={collectedSourceCandidates}
@@ -238,16 +284,25 @@ export default function PyroxeneSchedule({
         </SectionCard>
       </Section>
 
-      <Section
-        title="타임라인"
-        description="미래시 페이지에서 등록한 관심 학생의 모집 시점의 예상 청휘석을 확인할 수 있어요"
-      >
-        <div className="space-y-2">
+      <section>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0 grow">
+            <h2 className="text-lg font-semibold text-foreground">타임라인</h2>
+            <p className="mt-1 text-sm text-muted-foreground">관심 학생의 모집 시점의 예상 청휘석을 확인할 수 있어요</p>
+          </div>
+          <Toggle
+            label="관심 학생이 없는 이벤트 숨기기"
+            initialState={hideUnfavoritedEvents}
+            className="my-0 shrink-0"
+            onChange={handleHideUnfavoritedEventsChange}
+          />
+        </div>
+        <div className="mt-4 space-y-2">
           {!isTimelinePending &&
-            timeline.every(
+            visibleDisplayTimeline.every(
               ({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type),
             ) && <EmptyView text="표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해보세요." />}
-          {timeline.map(({ date, accumulatedResources, resourceDelta, source }, index) => {
+          {visibleDisplayTimeline.map(({ date, accumulatedResources, resourceDelta, source }, index) => {
             if (source.type !== "event" && !options.timeline.display.includes(source.type)) {
               return null;
             }
@@ -267,6 +322,9 @@ export default function PyroxeneSchedule({
                     completed={eventData?.completed ?? false}
                     expectedTrials={eventData?.expectedTrials ?? null}
                     pickupChance={options.event.pickupChance}
+                    allowPickupCompletion={allowPickupCompletion}
+                    recruitedStudentUids={recruitedStudentUidSet}
+                    onFavoriteChange={onFavoriteChange}
                     accumulatedResources={accumulatedResources}
                     resourceDelta={resourceDelta}
                     onDeletePickupComplete={onDeletePickupComplete}
@@ -310,7 +368,7 @@ export default function PyroxeneSchedule({
             return null;
           })}
         </div>
-      </Section>
+      </section>
     </div>
   );
 }

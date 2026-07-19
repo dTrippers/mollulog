@@ -212,6 +212,7 @@ function createOptimisticTimelineItem(input: OptimisticTimelineItemInput): Pyrox
 type OptimisticBuyTimelineOptions = {
   repeatType?: PyroxeneTimelineRepeatType;
   monthlyCount?: number;
+  uid?: string;
 };
 
 function normalizeMonthlyCount(monthlyCount: number | undefined): number {
@@ -230,6 +231,7 @@ export function createOptimisticBuyTimelineItems(
 
   return [
     createOptimisticTimelineItem({
+      uid: options.uid,
       eventAt: date,
       source: "buy",
       description: "청휘석 구매",
@@ -243,8 +245,9 @@ export function createOptimisticMonthlyPackageTimelineItems(
   startDate: Date,
   packageType: PyroxeneMonthlyPackageType,
   autoRepurchase = false,
+  baseUid = nanoid(8),
 ): PyroxeneTimelineItem[] {
-  const uid = nanoid(8);
+  const uid = baseUid;
   const eventAt = normalizePyroxeneTimelineEventAt(startDate);
   const { name, oneTime, daily, repurchaseIntervalDays } = PYROXENE_MONTHLY_PACKAGE_CONFIG[packageType];
 
@@ -275,8 +278,9 @@ export function createOptimisticMonthlyPackageTimelineItems(
 export function createOptimisticApPackageTimelineItems(
   startDate: Date,
   autoRepurchase = false,
+  baseUid = nanoid(8),
 ): PyroxeneTimelineItem[] {
-  const uid = nanoid(8);
+  const uid = baseUid;
   const eventAt = normalizePyroxeneTimelineEventAt(startDate);
 
   return [
@@ -293,8 +297,8 @@ export function createOptimisticApPackageTimelineItems(
   ];
 }
 
-export function createOptimisticAttendanceTimelineItems(startDate: Date): PyroxeneTimelineItem[] {
-  const uid = nanoid(8);
+export function createOptimisticAttendanceTimelineItems(startDate: Date, baseUid = nanoid(8)): PyroxeneTimelineItem[] {
+  const uid = baseUid;
   const start = dayjs(startDate);
 
   return PYROXENE_ATTENDANCE_CONFIG.map(({ day, pyroxene }) =>
@@ -313,9 +317,11 @@ export function createOptimisticOtherTimelineItems(
   resources: PickupResources,
   description: string,
   date: Date,
+  uid?: string,
 ): PyroxeneTimelineItem[] {
   return [
     createOptimisticTimelineItem({
+      uid,
       eventAt: date,
       source: "other",
       description,

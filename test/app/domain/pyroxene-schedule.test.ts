@@ -1,5 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
-import { buildPyroxeneScheduleItems, type PyroxeneScheduleContent } from "~/domain/pyroxene-schedule";
+import {
+  buildPyroxeneDisplayTimeline,
+  buildPyroxeneScheduleItems,
+  type PyroxeneScheduleContent,
+  type PyroxeneScheduleItem,
+} from "~/domain/pyroxene-schedule";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
 
 function recruitment(
@@ -67,5 +72,38 @@ describe("buildPyroxeneScheduleItems favorited resolution", () => {
     );
 
     expect(favoritedByStudentUid).toEqual({ a: true, b: false, c: true, d: false });
+  });
+});
+
+describe("buildPyroxeneDisplayTimeline", () => {
+  const resources = { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
+
+  function eventItem(uid: string, since: string, until: string): PyroxeneScheduleItem {
+    return {
+      event: {
+        uid,
+        name: uid,
+        since,
+        until,
+        earnablePyroxene: null,
+        tags: [],
+        recruitments: [{ ...recruitment(`${uid}-student`), favorited: false }],
+      },
+    };
+  }
+
+  it("shows ongoing and upcoming recruitments without an owned-resource baseline", () => {
+    const displayTimeline = buildPyroxeneDisplayTimeline(
+      [],
+      [
+        eventItem("ongoing", "2026-07-14T02:00:00.000Z", "2026-07-21T02:00:00.000Z"),
+        eventItem("upcoming", "2026-07-22T02:00:00.000Z", "2026-08-05T02:00:00.000Z"),
+        eventItem("finished", "2026-07-01T02:00:00.000Z", "2026-07-10T02:00:00.000Z"),
+      ],
+      new Date("2026-07-19T02:00:00.000Z"),
+      resources,
+    );
+
+    expect(displayTimeline.map(({ source }) => source.event?.uid)).toEqual(["ongoing", "upcoming"]);
   });
 });

@@ -1,5 +1,5 @@
 import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
-import { ArrowPathIcon, LockClosedIcon } from "@heroicons/react/24/solid";
+import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type ActionFunctionArgs,
@@ -13,10 +13,19 @@ import {
   PyroxenePlannerOptionsPanel,
   PyroxenePlannerSourcePanel,
   PyroxeneSchedule,
+  useGuestPyroxenePlanner,
   usePyroxeneScheduleItems,
 } from "~/components/features/futures";
-import { ErrorPage } from "~/components/features/layout";
 import Page from "~/components/features/layout/Page";
+import { Button, Callout } from "~/components/primitives";
+import { useSignIn } from "~/contexts/SignInProvider";
+import {
+  createGuestRecord,
+  type GuestPyroxeneRecord,
+  guestPyroxeneRecordToTimelineItems,
+  guestPyroxeneTimelineItems,
+  hasGuestPyroxenePlannerData,
+} from "~/domain/guest-pyroxene-planner";
 import { defaultPyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import {
   createOptimisticApPackageTimelineItems,
@@ -49,6 +58,7 @@ import {
   upsertPyroxeneEventData,
   upsertPyroxenePlannerOptions,
 } from "~/models/pyroxene-planner";
+import { getRecruitedStudents } from "~/models/recruited-student";
 import {
   deleteRecruitmentResult,
   getRecruitmentResultsByRecruitmentGroupUids,
@@ -80,6 +90,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       calcOptions: defaultPyroxenePlannerOptions,
       eventData: [],
       recruitmentResultCompletions: [],
+      recruitedStudentUids: [],
       collectedSourceKeys: [],
     };
   }
@@ -96,6 +107,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     eventData,
     timelineItems,
     recruitmentResults,
+    recruitedStudents,
     collectedSources,
   ] = await Promise.all([
     getUserFavoritedStudents(env, currentUser.id, undefined, { ctx }),
@@ -104,6 +116,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     getAllPyroxeneEventData(env, currentUser.id),
     getPyroxeneTimelineItems(env, currentUser.id),
     getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
+    getRecruitedStudents(env, currentUser.id),
     getCollectedSourceKeys(env, currentUser.id),
   ]);
 
@@ -133,6 +146,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       );
       return content ? [{ eventUid: content.uid, recruitmentGroupUid: result.recruitmentGroupUid }] : [];
     }),
+    recruitedStudentUids: recruitedStudents.map(({ studentUid }) => studentUid),
     collectedSourceKeys: [...collectedSources],
   };
 };
@@ -207,7 +221,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
           const content = (await getPyroxenePlannerContents(publicReadEnv, false, ctx)).find(
             (content) => content.kind === "event" && content.uid === eventUid,
           );
-          if (!content || content.kind !== "event" || !content.recruitmentGroupUid) {
+          if (content?.kind !== "event" || !content.recruitmentGroupUid) {
             throw new Error(`Cannot resolve recruitment group for pyroxene completion: eventUid=${eventUid}`);
           }
 
@@ -335,7 +349,9 @@ export const meta: MetaFunction = () => {
 
 export default function PyroxenePlanner() {
   const loaderData = useLoaderData<typeof loader>();
-  const { signedIn, contents, favoritedStudents } = loaderData;
+  const { signedIn, contents } = loaderData;
+  const { showSignIn } = useSignIn();
+  const guestPlanner = useGuestPyroxenePlanner();
 
   const [initialDate, setInitialDate] = useState<Date | null>(
     loaderData.latestResources.inputAt ? new Date(loaderData.latestResources.inputAt) : null,
@@ -351,8 +367,9 @@ export default function PyroxenePlanner() {
   const [localCollectedSourceKeys, setLocalCollectedSourceKeys] = useState<string[]>(
     loaderData.collectedSourceKeys ?? [],
   );
-
+  const [localFavoritedStudents, setLocalFavoritedStudents] = useState(loaderData.favoritedStudents ?? []);
   const fetcher = useFetcher<typeof action>();
+  const favoriteFetcher = useFetcher();
   const timelineSaveInFlight = useRef(false);
 
   // Sync from loader data after server revalidation
@@ -378,8 +395,32 @@ export default function PyroxenePlanner() {
   }, [loaderData.collectedSourceKeys]);
 
   useEffect(() => {
-    setOptions(loaderData.calcOptions);
-  }, [loaderData.calcOptions]);
+    setLocalFavoritedStudents(loaderData.favoritedStudents ?? []);
+  }, [loaderData.favoritedStudents]);
+
+  useEffect(() => {
+    if (signedIn || !guestPlanner.snapshot || guestPlanner.snapshot.status === "corrupt") return;
+    const data = guestPlanner.snapshot.envelope.data;
+    setInitialDate(data.resources ? new Date(data.resources.inputAt) : null);
+    setInitialResources(data.resources ?? { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 });
+    setLocalTimelineItems(guestPyroxeneTimelineItems(data));
+    setLocalEventData(
+      Object.entries(data.eventTrials).map(([eventUid, expectedTrials]) => ({
+        uid: `guest-${eventUid}`,
+        userId: 0,
+        eventUid,
+        completed: false,
+        expectedTrials,
+      })),
+    );
+    setLocalCollectedSourceKeys(data.collectedSourceKeys);
+    setLocalFavoritedStudents(data.favoriteStudents);
+    setOptions(data.options);
+  }, [guestPlanner.snapshot, signedIn]);
+
+  useEffect(() => {
+    if (signedIn) setOptions(loaderData.calcOptions);
+  }, [loaderData.calcOptions, signedIn]);
 
   useEffect(() => {
     if (fetcher.state === "idle") {
@@ -393,11 +434,12 @@ export default function PyroxenePlanner() {
     collectedSourceKeys: string[] = [],
   ) => {
     setInitialResources(resources);
-    setInitialDate(new Date());
+    const inputAt = new Date();
+    setInitialDate(inputAt);
     if (collectedSourceKeys.length > 0) {
       setLocalCollectedSourceKeys((prev) => [...new Set([...prev, ...collectedSourceKeys])]);
     }
-    if (eventUid) {
+    if (eventUid && signedIn) {
       const content = contents.find((content) => content.kind === "event" && content.uid === eventUid);
       if (content?.kind === "event" && content.recruitmentGroupUid) {
         const recruitmentGroupUid = content.recruitmentGroupUid;
@@ -408,6 +450,14 @@ export default function PyroxenePlanner() {
           return [...prev, { eventUid, recruitmentGroupUid }];
         });
       }
+    }
+    if (!signedIn) {
+      void guestPlanner.update((data) => ({
+        ...data,
+        resources: { ...resources, inputAt: inputAt.toISOString() },
+        collectedSourceKeys: [...new Set([...data.collectedSourceKeys, ...collectedSourceKeys])],
+      }));
+      return;
     }
     fetcher.submit(
       {
@@ -425,6 +475,15 @@ export default function PyroxenePlanner() {
       }
       return prev.filter((key) => key !== sourceKey);
     });
+    if (!signedIn) {
+      void guestPlanner.update((data) => ({
+        ...data,
+        collectedSourceKeys: collected
+          ? [...new Set([...data.collectedSourceKeys, sourceKey])]
+          : data.collectedSourceKeys.filter((key) => key !== sourceKey),
+      }));
+      return;
+    }
     fetcher.submit(
       { collectedSource: { sourceKey } },
       { method: collected ? "POST" : "DELETE", encType: "application/json" },
@@ -448,10 +507,20 @@ export default function PyroxenePlanner() {
         },
       ];
     });
+    if (!signedIn) {
+      void guestPlanner.update((current) => {
+        const eventTrials = { ...current.eventTrials };
+        if (data.expectedTrials === null || data.expectedTrials === undefined) delete eventTrials[eventUid];
+        else eventTrials[eventUid] = data.expectedTrials;
+        return { ...current, eventTrials };
+      });
+      return;
+    }
     fetcher.submit({ eventData: { eventUid, ...data } }, { method: "POST", encType: "application/json" });
   };
 
   const handleDeletePickupComplete = (eventUid: string) => {
+    if (!signedIn) return;
     const recruitmentResultCompletion = localRecruitmentResultCompletions.find(
       (completion) => completion.eventUid === eventUid,
     );
@@ -465,7 +534,53 @@ export default function PyroxenePlanner() {
   const handleDeleteItem = (itemUid: string) => {
     const baseUid = extractPyroxeneTimelineBaseUid(itemUid);
     setLocalTimelineItems((prev) => prev.filter((item) => !item.uid.startsWith(baseUid)));
+    if (!signedIn) {
+      void guestPlanner.update((data) => ({
+        ...data,
+        records: data.records.filter((record) => record.recordId !== baseUid),
+      }));
+      return;
+    }
     fetcher.submit({ deleteData: { itemUid } }, { method: "DELETE", encType: "application/json" });
+  };
+
+  const handleFavoriteChange = (contentUid: string, studentUid: string, favorited: boolean) => {
+    setLocalFavoritedStudents((current) => {
+      const withoutTarget = current.filter(
+        (favorite) => !(favorite.contentUid === contentUid && favorite.studentUid === studentUid),
+      );
+      return favorited ? [...withoutTarget, { contentUid, studentUid }] : withoutTarget;
+    });
+    if (!signedIn) {
+      void guestPlanner.update((data) => {
+        const withoutTarget = data.favoriteStudents.filter(
+          (favorite) => !(favorite.contentUid === contentUid && favorite.studentUid === studentUid),
+        );
+        return {
+          ...data,
+          favoriteStudents: favorited ? [...withoutTarget, { contentUid, studentUid }] : withoutTarget,
+        };
+      });
+      return;
+    }
+    favoriteFetcher.submit(
+      { favorite: { contentUid, studentUid, favorited } },
+      { action: "/api/contents", method: "POST", encType: "application/json" },
+    );
+  };
+
+  const saveGuestRecord = (record: GuestPyroxeneRecord, replaceAttendance = false) => {
+    setLocalTimelineItems((prev) => {
+      const current = replaceAttendance ? prev.filter((item) => item.source !== "attendance") : prev;
+      return [...current, ...guestPyroxeneRecordToTimelineItems(record)];
+    });
+    void guestPlanner.update((data) => ({
+      ...data,
+      records: [
+        ...(replaceAttendance ? data.records.filter((item) => item.kind !== "attendance") : data.records),
+        record,
+      ],
+    }));
   };
 
   const handleSaveBuy = (
@@ -477,6 +592,13 @@ export default function PyroxenePlanner() {
       return;
     }
     timelineSaveInFlight.current = true;
+    if (!signedIn) {
+      saveGuestRecord(
+        createGuestRecord({ kind: "buy", quantity, date: date.toISOString(), ...options }) as GuestPyroxeneRecord,
+      );
+      timelineSaveInFlight.current = false;
+      return;
+    }
     setLocalTimelineItems((prev) => [...prev, ...createOptimisticBuyTimelineItems(quantity, date, options)]);
     fetcher.submit(
       { createData: { buy: { quantity, date: date.toISOString(), ...options } } },
@@ -493,6 +615,19 @@ export default function PyroxenePlanner() {
       return;
     }
     timelineSaveInFlight.current = true;
+    if (!signedIn) {
+      saveGuestRecord(
+        createGuestRecord({
+          kind: "monthlyPackage",
+          startDate: startDate.toISOString(),
+          packageType,
+          autoRepurchase,
+        }) as GuestPyroxeneRecord,
+      );
+      ensureTimelineSourcesVisible(["package_onetime"]);
+      timelineSaveInFlight.current = false;
+      return;
+    }
     setLocalTimelineItems((prev) => [
       ...prev,
       ...createOptimisticMonthlyPackageTimelineItems(startDate, packageType, autoRepurchase),
@@ -512,6 +647,18 @@ export default function PyroxenePlanner() {
       return;
     }
     timelineSaveInFlight.current = true;
+    if (!signedIn) {
+      saveGuestRecord(
+        createGuestRecord({
+          kind: "apPackage",
+          startDate: startDate.toISOString(),
+          autoRepurchase,
+        }) as GuestPyroxeneRecord,
+      );
+      ensureTimelineSourcesVisible(["package_ap"]);
+      timelineSaveInFlight.current = false;
+      return;
+    }
     setLocalTimelineItems((prev) => [...prev, ...createOptimisticApPackageTimelineItems(startDate, autoRepurchase)]);
     const nextOptions = ensureTimelineSourcesVisible(["package_ap"]);
     fetcher.submit(
@@ -525,6 +672,14 @@ export default function PyroxenePlanner() {
       return;
     }
     timelineSaveInFlight.current = true;
+    if (!signedIn) {
+      saveGuestRecord(
+        createGuestRecord({ kind: "attendance", startDate: startDate.toISOString() }) as GuestPyroxeneRecord,
+        true,
+      );
+      timelineSaveInFlight.current = false;
+      return;
+    }
     setLocalTimelineItems((prev) => {
       const withoutAttendance = prev.filter((item) => item.source !== "attendance");
       return [...withoutAttendance, ...createOptimisticAttendanceTimelineItems(startDate)];
@@ -540,6 +695,13 @@ export default function PyroxenePlanner() {
       return;
     }
     timelineSaveInFlight.current = true;
+    if (!signedIn) {
+      saveGuestRecord(
+        createGuestRecord({ kind: "other", resources, description, date: date.toISOString() }) as GuestPyroxeneRecord,
+      );
+      timelineSaveInFlight.current = false;
+      return;
+    }
     setLocalTimelineItems((prev) => [...prev, ...createOptimisticOtherTimelineItems(resources, description, date)]);
     fetcher.submit(
       { createData: { other: { resources, description, date: date.toISOString() } } },
@@ -574,6 +736,9 @@ export default function PyroxenePlanner() {
       },
     };
     setOptions(nextOptions);
+    if (!signedIn) {
+      void guestPlanner.update((data) => ({ ...data, options: nextOptions, optionsChanged: true }));
+    }
     return nextOptions;
   };
 
@@ -583,6 +748,10 @@ export default function PyroxenePlanner() {
       clearTimeout(optionsSaveTimer.current);
     }
     optionsSaveTimer.current = setTimeout(() => {
+      if (!signedIn) {
+        void guestPlanner.update((data) => ({ ...data, options: newOptions, optionsChanged: true }));
+        return;
+      }
       fetcher.submit({ calcOptions: newOptions }, { method: "POST", encType: "application/json" });
     }, 500);
   };
@@ -605,9 +774,11 @@ export default function PyroxenePlanner() {
     return map;
   }, [localEventData, localRecruitmentResultCompletions]);
 
-  const scheduleItems = usePyroxeneScheduleItems(contents, favoritedStudents, localTimelineItems);
+  const scheduleItems = usePyroxeneScheduleItems(contents, localFavoritedStudents, localTimelineItems);
 
-  const isSaving = fetcher.state === "submitting" || fetcher.state === "loading";
+  const isSaving = Boolean(signedIn) && (fetcher.state === "submitting" || fetcher.state === "loading");
+  const guestDataStatus = guestPlanner.snapshot?.status;
+  const hasGuestData = guestPlanner.snapshot ? hasGuestPyroxenePlannerData(guestPlanner.snapshot.envelope.data) : false;
 
   return (
     <>
@@ -635,7 +806,6 @@ export default function PyroxenePlanner() {
             title: "수급/소비 계획",
             Icon: PlusIcon,
             description: "청휘석 수급/소비처를 등록해주세요",
-            disabled: !signedIn,
             children: (
               <PyroxenePlannerSourcePanel
                 options={options}
@@ -655,13 +825,47 @@ export default function PyroxenePlanner() {
             title: "플래너 설정",
             Icon: ChartBarIcon,
             description: "시뮬레이션 조건을 선택해주세요",
-            disabled: !signedIn,
-            collapsible: signedIn,
+            collapsible: true,
             children: <PyroxenePlannerOptionsPanel options={options} onOptionsChange={handleOptionsChange} />,
           },
         ]}
       >
-        {signedIn ? (
+        <div className="space-y-4">
+          <div className="space-y-3">
+            {signedIn && hasGuestData ? (
+              <Callout
+                tone="info"
+                title="비로그인 상태에서 입력한 데이터가 있어요"
+                description="계정에 저장된 내용과 비교 후 최근 데이터를 선택해주세요."
+              >
+                <div className="mt-2">
+                  <Button text="내용 확인" to="/utils/pyroxene/import" size="sm" variant="primary" />
+                </div>
+              </Callout>
+            ) : !signedIn && guestDataStatus === "memory" ? (
+              <Callout
+                tone="warning"
+                title="이 브라우저에 저장하지 못했어요"
+                description="현재 탭에서는 계속 사용할 수 있지만, 탭을 닫으면 입력한 내용이 사라져요."
+              />
+            ) : !signedIn && guestDataStatus === "corrupt" ? (
+              <Callout tone="destructive" title="저장된 데이터를 불러오지 못했어요">
+                <div className="mt-2">
+                  <Button text="저장된 데이터 초기화" size="sm" variant="danger-subtle" onClick={guestPlanner.reset} />
+                </div>
+              </Callout>
+            ) : !signedIn ? (
+              <Callout
+                tone="info"
+                title="로그인 후 더 많은 정보를 관리할 수 있어요"
+                description="정보를 안전하게 저장하고 필요할 때마다 불러와 사용해보세요."
+              >
+                <div className="mt-2">
+                  <Button text="로그인하기" size="sm" variant="primary" onClick={showSignIn} />
+                </div>
+              </Callout>
+            ) : null}
+          </div>
           <PyroxeneSchedule
             initialDate={initialDate}
             initialResources={initialResources}
@@ -669,6 +873,7 @@ export default function PyroxenePlanner() {
             scheduleItems={scheduleItems}
             options={options}
             collectedSourceKeys={localCollectedSourceKeys}
+            recruitedStudentUids={loaderData.recruitedStudentUids}
             onPickupComplete={(eventUid, resources, collectedSourceKeys) =>
               handleSaveOwnedResources(eventUid, resources, collectedSourceKeys)
             }
@@ -676,10 +881,10 @@ export default function PyroxenePlanner() {
             onDeleteItem={(itemUid) => handleDeleteItem(itemUid)}
             onUpdateEventData={handleUpdateEventData}
             onCollectedSourceChange={handleCollectedSourceChange}
+            allowPickupCompletion={Boolean(signedIn)}
+            onFavoriteChange={handleFavoriteChange}
           />
-        ) : (
-          <ErrorPage Icon={LockClosedIcon} message="로그인 후 이용할 수 있어요" showButtons={false} />
-        )}
+        </div>
       </Page>
     </>
   );
