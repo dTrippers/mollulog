@@ -640,6 +640,7 @@ function DesktopMenuContent({
     upcomingEvent,
     hasOngoingRaid,
     hasUnconsumedCoupons,
+    isSignedIn: currentUsername !== null,
     sectionStates,
   });
   const contentSection = menuSections.find((section) => section.name === "컨텐츠");

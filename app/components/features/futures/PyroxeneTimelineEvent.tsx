@@ -150,25 +150,20 @@ export default function PyroxeneTimelineEvent({
             </div>
 
             {pickupStudents.length > 0 && (
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground">
-                  모집 목표 {selectedStudentCount}명 · 학생을 눌러 변경할 수 있어요
-                </p>
-                <StudentCards
-                  students={pickupStudents}
-                  layout="wrap"
-                  cardSize="md"
-                  gap="tight"
-                  namePlacement="overlay"
-                  onSelect={(selectionKey) => {
-                    const [contentUid, studentUid] = selectionKey.split("\u0000");
-                    const student = pickupStudents.find((item) => item.selectionKey === selectionKey);
-                    if (contentUid && studentUid && student) {
-                      onFavoriteChange(contentUid, studentUid, !student.state.favorited);
-                    }
-                  }}
-                />
-              </div>
+              <StudentCards
+                students={pickupStudents}
+                layout="wrap"
+                cardSize="md"
+                gap="tight"
+                namePlacement="overlay"
+                onSelect={(selectionKey) => {
+                  const [contentUid, studentUid] = selectionKey.split("\u0000");
+                  const student = pickupStudents.find((item) => item.selectionKey === selectionKey);
+                  if (contentUid && studentUid && student) {
+                    onFavoriteChange(contentUid, studentUid, !student.state.favorited);
+                  }
+                }}
+              />
             )}
           </div>
 

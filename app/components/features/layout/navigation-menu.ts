@@ -121,6 +121,7 @@ export function getNavigationSections({
   now = nowUtcIso(),
   hasOngoingRaid,
   hasUnconsumedCoupons,
+  isSignedIn,
   sectionStates = getNavigationSectionStates(pathname, upcomingEvent),
 }: {
   pathname: string;
@@ -128,6 +129,7 @@ export function getNavigationSections({
   now?: UtcIsoString;
   hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
+  isSignedIn: boolean;
   sectionStates?: NavigationSectionStates;
 }): NavigationSection[] {
   return [
@@ -203,7 +205,7 @@ export function getNavigationSections({
           to: "/utils/pyroxene",
           name: "청휘석 플래너",
           description: "모집 시점의 청휘석을 계산해보세요",
-          badgeLabel: "로그인 없이 사용",
+          badgeLabel: isSignedIn ? undefined : "로그인 없이 사용",
           OutlineIcon: CreditCardIconOutline,
           SolidIcon: CreditCardIconSolid,
           isActive: pathname.startsWith("/utils/pyroxene"),
@@ -290,6 +292,7 @@ export function getSearchableMenuItems(): SearchableMenuItem[] {
     upcomingEvent: null,
     hasOngoingRaid: false,
     hasUnconsumedCoupons: false,
+    isSignedIn: false,
     sectionStates: {
       isCommunityActive: false,
       isContentActive: false,
