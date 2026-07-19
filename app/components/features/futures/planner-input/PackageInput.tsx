@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Checkbox, Field, FilterButtons, Input, NumberInput } from "~/components/primitives";
 import {
+  calculatePackageStartDateFromRemainingDays,
   PYROXENE_AP_PACKAGE_CONFIG,
   PYROXENE_MONTHLY_PACKAGE_CONFIG,
   type PyroxeneMonthlyPackageType,
-  calculatePackageStartDateFromRemainingDays,
 } from "~/domain/pyroxene-sources";
 import dayjs from "~/lib/dayjs";
 
@@ -98,7 +98,7 @@ function PackageStartDateInput({ packageDurationDays, startDate, onStartDateChan
             }}
           />
           <p className="text-xs text-muted-foreground">
-            {dayjs(calculatedStartDate).tz("Asia/Seoul").format("YYYY-MM-DD")} 패키지 시작
+            {dayjs(calculatedStartDate).tz("Asia/Seoul").format("MM/DD")} 패키지 시작
           </p>
         </div>
       )}

@@ -4,13 +4,15 @@ import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import {
+  defaultPyroxenePlannerOptions,
+  normalizePyroxenePlannerOptions,
   type PyroxenePlannerOptions,
   type StoredPyroxenePlannerOptions,
   type TimelineSourceType,
-  defaultPyroxenePlannerOptions,
-  normalizePyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
 import {
+  extractPyroxeneTimelineBaseUid,
+  normalizePyroxeneTimelineEventAt,
   PYROXENE_AP_PACKAGE_CONFIG,
   PYROXENE_ATTENDANCE_CONFIG,
   PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
@@ -18,10 +20,8 @@ import {
   PYROXENE_PACKAGE_DAILY_REPEAT_COUNT,
   PYROXENE_PACKAGE_DAILY_REPEAT_INTERVAL_DAYS,
   type PyroxeneMonthlyPackageType,
-  extractPyroxeneTimelineBaseUid,
-  normalizePyroxeneTimelineEventAt,
 } from "~/domain/pyroxene-sources";
-import { type UtcIsoString, nowUtcIso } from "~/lib/date-time";
+import { nowUtcIso } from "~/lib/date-time";
 
 /**
  * Pyroxene Owned Resources
@@ -74,10 +74,11 @@ export async function createPyroxeneOwnedResource(
   env: Env,
   userId: number,
   resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
+  options: { uid?: string; inputAt?: string } = {},
 ): Promise<void> {
   const db = drizzle(env.DB);
-  const uid = nanoid(8);
-  const inputAt = new Date().toISOString();
+  const uid = options.uid ?? nanoid(8);
+  const inputAt = options.inputAt ?? new Date().toISOString();
   const { pyroxene, oneTimeTicket, tenTimeTicket } = resources;
   await db.insert(pyroxeneOwnedResourcesTable).values({ uid, userId, inputAt, pyroxene, oneTimeTicket, tenTimeTicket });
 }
@@ -127,6 +128,16 @@ export async function upsertCollectedSource(env: Env, userId: number, sourceKey:
     .onConflictDoUpdate({
       target: [pyroxeneCollectedSourcesTable.userId, pyroxeneCollectedSourcesTable.sourceKey],
       set: { collectedAt },
+    });
+}
+
+export async function ensureCollectedSource(env: Env, userId: number, sourceKey: string): Promise<void> {
+  const db = drizzle(env.DB);
+  await db
+    .insert(pyroxeneCollectedSourcesTable)
+    .values({ uid: nanoid(8), userId, sourceKey, collectedAt: nowUtcIso() })
+    .onConflictDoNothing({
+      target: [pyroxeneCollectedSourcesTable.userId, pyroxeneCollectedSourcesTable.sourceKey],
     });
 }
 
@@ -220,6 +231,7 @@ export async function getPyroxeneTimelineItems(env: Env, userId: number): Promis
 type CreateBuyPyroxeneOptions = {
   repeatType?: PyroxeneTimelineRepeatType;
   monthlyCount?: number;
+  uid?: string;
 };
 
 function normalizeMonthlyCount(monthlyCount: number | undefined): number {
@@ -236,7 +248,7 @@ export async function createBuyPyroxene(
   quantity: number,
   options: CreateBuyPyroxeneOptions = {},
 ): Promise<void> {
-  const uid = nanoid(8);
+  const uid = options.uid ?? nanoid(8);
   const eventAt = normalizePyroxeneTimelineEventAt(date);
   const repeatType = options.repeatType ?? "fixed_days";
   const normalizedMonthlyCount = normalizeMonthlyCount(options.monthlyCount);
@@ -274,8 +286,8 @@ export async function createPyroxeneMonthlyPackage(
   startDate: Date | string,
   packageType: PyroxeneMonthlyPackageType,
   autoRepurchase = false,
+  uid = nanoid(8),
 ): Promise<void> {
-  const uid = nanoid(8);
   const eventAt = normalizePyroxeneTimelineEventAt(startDate);
 
   const {
@@ -324,8 +336,8 @@ export async function createPyroxeneApPackage(
   userId: number,
   startDate: Date | string,
   autoRepurchase = false,
+  uid = nanoid(8),
 ): Promise<void> {
-  const uid = nanoid(8);
   const eventAt = normalizePyroxeneTimelineEventAt(startDate);
   const autoRepurchaseValue = autoRepurchase ? 1 : 0;
 
@@ -345,15 +357,19 @@ export async function createPyroxeneApPackage(
   });
 }
 
-export async function createAttendance(env: Env, userId: number, startDate: Date | string): Promise<void> {
+export async function createAttendance(
+  env: Env,
+  userId: number,
+  startDate: Date | string,
+  uid = nanoid(8),
+): Promise<void> {
   const db = drizzle(env.DB);
-  await db
+  const deleteExisting = db
     .delete(pyroxeneTimelineItemsTable)
     .where(and(eq(pyroxeneTimelineItemsTable.userId, userId), eq(pyroxeneTimelineItemsTable.source, "attendance")));
 
-  const uid = nanoid(8);
   const startAt = dayjs(normalizePyroxeneTimelineEventAt(startDate));
-  await db.insert(pyroxeneTimelineItemsTable).values(
+  const insertReplacement = db.insert(pyroxeneTimelineItemsTable).values(
     PYROXENE_ATTENDANCE_CONFIG.map(({ day, pyroxene }) => ({
       uid: `${uid}::${day}`,
       userId,
@@ -367,6 +383,7 @@ export async function createAttendance(env: Env, userId: number, startDate: Date
       repeatCount: null,
     })),
   );
+  await db.batch([deleteExisting, insertReplacement]);
 }
 
 export async function createOtherPyroxeneGain(
@@ -377,10 +394,11 @@ export async function createOtherPyroxeneGain(
   oneTimeTicket: number,
   tenTimeTicket: number,
   description: string,
+  uid = nanoid(8),
 ): Promise<void> {
   const db = drizzle(env.DB);
   await db.insert(pyroxeneTimelineItemsTable).values({
-    uid: nanoid(8),
+    uid,
     userId,
     eventAt: normalizePyroxeneTimelineEventAt(date),
     source: "other",

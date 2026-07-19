@@ -61,6 +61,7 @@ export default function MoreIndexPage() {
     upcomingEvent,
     hasOngoingRaid,
     hasUnconsumedCoupons,
+    isSignedIn: currentUser !== null,
   }).flatMap((section) =>
     section.items
       .filter(

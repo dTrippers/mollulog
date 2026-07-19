@@ -53,7 +53,7 @@ export default function PyroxeneTimelineResources({
       <div className="min-w-0 flex-1">
         <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
           <p className="shrink-0 text-xs font-semibold sm:text-sm">
-            {date.format("MM.DD")}({date.format("ddd")})
+            {date.format("MM/DD")}({date.format("ddd")})
           </p>
           <TimelineResourceDescription description={description} />
         </div>
