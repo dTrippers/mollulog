@@ -1,5 +1,11 @@
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/16/solid";
-import { ArchiveBoxIcon, ChartBarIcon, MagnifyingGlassIcon, TableCellsIcon } from "@heroicons/react/24/outline";
+import {
+  ArchiveBoxIcon,
+  CameraIcon,
+  ChartBarIcon,
+  MagnifyingGlassIcon,
+  TableCellsIcon,
+} from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
@@ -129,6 +135,13 @@ export default function ResourcePlannerLayout() {
           : undefined
       }
       screens={[
+        {
+          text: "스크린샷 인식",
+          description: "인벤토리 사진에서 보유 재화를 인식",
+          Icon: CameraIcon,
+          link: "/utils/resources/scan",
+          active: pathname === "/utils/resources/scan",
+        },
         {
           text: "재화 관리",
           description: "각 재화별 보유/필요 수량을 관리",

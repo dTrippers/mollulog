@@ -3,10 +3,10 @@ import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import {
+  parseStudentStateDraftValue,
   type StudentStateDraftCurrentValue,
   type StudentStateDraftTargetValue,
   type StudentStateDraftValue,
-  parseStudentStateDraftValue,
 } from "~/domain/student-state";
 
 export const syncDraftsTable = sqliteTable("sync_drafts", {
@@ -75,6 +75,15 @@ export type SyncDraftEntryUpdateInput = {
   entryKey: string;
   value: unknown;
   valueJson?: string | null;
+};
+
+export type SyncDraftCreateInput = {
+  source: SyncDraftSource;
+  type: SyncDraftType;
+  toolName?: string | null;
+  toolVersion?: string | null;
+  catalogVersion?: string | null;
+  entries: Array<SyncDraftEntryUpdateInput & { meta?: unknown }>;
 };
 
 export function toSyncDraftSource(source: string): SyncDraftSource {
@@ -178,6 +187,47 @@ export async function listPendingSyncDrafts(env: Env, userId: number): Promise<S
     .orderBy(desc(syncDraftsTable.createdAt));
 
   return drafts.map(toSyncDraftSummaryModel);
+}
+
+export async function createSyncDraft(env: Env, userId: number, input: SyncDraftCreateInput): Promise<string> {
+  const entries = normalizeSyncDraftEntryUpdates(input.type, input.entries);
+  if (entries.length === 0) {
+    throw new Error("변경된 항목이 없어요");
+  }
+
+  const metaByEntryKey = new Map(
+    input.entries.map((entry) => [entry.entryKey.trim(), entry.meta == null ? null : JSON.stringify(entry.meta)]),
+  );
+  const draftUid = nanoid(12);
+  await env.DB.batch([
+    env.DB.prepare(`
+      insert into sync_drafts (
+        uid, userId, source, type, status, toolName, toolVersion, catalogVersion
+      ) values (?1, ?2, ?3, ?4, 'pending', ?5, ?6, ?7)
+    `).bind(
+      draftUid,
+      userId,
+      input.source,
+      input.type,
+      input.toolName ?? null,
+      input.toolVersion ?? null,
+      input.catalogVersion ?? null,
+    ),
+    ...entries.map((entry) =>
+      env.DB.prepare(`
+        insert into sync_draft_entries (uid, draftUid, entryKey, value, valueJson, meta)
+        values (?1, ?2, ?3, ?4, ?5, ?6)
+      `).bind(
+        nanoid(8),
+        draftUid,
+        entry.entryKey,
+        entry.value,
+        entry.valueJson,
+        metaByEntryKey.get(entry.entryKey) ?? null,
+      ),
+    ),
+  ]);
+  return draftUid;
 }
 
 export async function getSyncDraftEntryCounts(env: Env, draftUids: string[]): Promise<Record<string, number>> {

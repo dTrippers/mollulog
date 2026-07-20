@@ -4,6 +4,7 @@ import * as serverBuild from "virtual:react-router/server-build";
 import { watchIo } from "~/lib/io-watchdog";
 import { createRequestDiagnostics, type RequestDiagnostics } from "~/lib/request-diagnostics";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
+import { markOcrTaskDeadLetter, publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
 import { withD1Timeout } from "./d1-timeout";
 
 type ObservabilityEnv = Env & {
@@ -36,6 +37,27 @@ const handler: ExportedHandler<ObservabilityEnv> = {
       { method: request.method, path: new URL(request.url).pathname },
       RUNTIME_TIMEOUTS.watchdogWarnMs.request,
     );
+  },
+  async scheduled(_controller, env, ctx) {
+    const appEnv: ObservabilityEnv = { ...env, DB: withD1Timeout(env.DB) };
+    ctx.waitUntil(
+      (async () => {
+        await reconcileOcrJobs(appEnv, { ctx });
+        await publishPendingOcrOutbox(appEnv, 50, { ctx });
+      })(),
+    );
+  },
+  async queue(batch, env, ctx) {
+    const appEnv: ObservabilityEnv = { ...env, DB: withD1Timeout(env.DB) };
+    for (const message of batch.messages) {
+      try {
+        await markOcrTaskDeadLetter(appEnv, message.body, { ctx });
+        message.ack();
+      } catch (error) {
+        console.error("Failed to persist OCR dead letter", error);
+        message.retry({ delaySeconds: 60 });
+      }
+    }
   },
 };
 

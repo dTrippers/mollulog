@@ -8,6 +8,9 @@
   "placement": {
     "region": "aws:ap-northeast-1"
   },
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
 
   "assets": {
     "directory": "./build/client",
@@ -47,13 +50,21 @@
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
   ],
+  "r2_buckets": [
+    { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-local" }
+  ],
   "queues": {
     "producers": [
-      { "binding": "EVENTS", "queue": "mollulog-events" }
+      { "binding": "EVENTS", "queue": "mollulog-events" },
+      { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-local" }
+    ],
+    "consumers": [
+      { "queue": "mollulog-aoi-dlq-local", "max_batch_size": 10, "max_batch_timeout": 5 }
     ]
   },
   "vars": {
-    "CONNECT_API_URL": "http://localhost:8787"
+    "CONNECT_API_URL": "http://localhost:8787",
+    "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-local"
   },
 
   // Secrets configuration
@@ -64,6 +75,10 @@
   // - GITHUB_CLIENT_SECRET
   // - SERVER_BETTER_STACK_SOURCE_TOKEN
   // - SERVER_BETTER_STACK_SENTRY_DSN
+  // - OCR_R2_ACCOUNT_ID
+  // - OCR_R2_ACCESS_KEY_ID
+  // - OCR_R2_SECRET_ACCESS_KEY
+  // - OCR_WORKER_TOKEN
   // - FRONT_BETTER_STACK_SENTRY_DSN
   "env": {
     "staging": {
@@ -76,7 +91,8 @@
       "vars": {
         "HOST": "https://staging.mollulog.net",
         "CONNECT_API_URL": "https://connect-staging.mollulog.net",
-        "STAGE": "staging"
+        "STAGE": "staging",
+        "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-staging"
       },
       "kv_namespaces": [
         { "binding": "KV_CACHE", "id": "b957557c116a41168c42136666ef5808" },
@@ -93,9 +109,16 @@
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
       ],
+      "r2_buckets": [
+        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-staging" }
+      ],
       "queues": {
         "producers": [
-          { "binding": "EVENTS", "queue": "mollulog-events-staging" }
+          { "binding": "EVENTS", "queue": "mollulog-events-staging" },
+          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-staging" }
+        ],
+        "consumers": [
+          { "queue": "mollulog-aoi-dlq-staging", "max_batch_size": 10, "max_batch_timeout": 5 }
         ]
       }
     },
@@ -113,7 +136,8 @@
       "vars": {
         "HOST": "https://mollulog.net",
         "CONNECT_API_URL": "https://connect.mollulog.net",
-        "STAGE": "prod"
+        "STAGE": "prod",
+        "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-prod"
       },
       "kv_namespaces": [
         { "binding": "KV_CACHE", "id": "a613bc84ffeb4362b3deaa05c617a7b3"},
@@ -130,9 +154,16 @@
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
       ],
+      "r2_buckets": [
+        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
+      ],
       "queues": {
         "producers": [
-          { "binding": "EVENTS", "queue": "mollulog-events" }
+          { "binding": "EVENTS", "queue": "mollulog-events" },
+          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-prod" }
+        ],
+        "consumers": [
+          { "queue": "mollulog-aoi-dlq-prod", "max_batch_size": 10, "max_batch_timeout": 5 }
         ]
       },
       "logpush": true
