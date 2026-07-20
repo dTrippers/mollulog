@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import ResourceScanner from "./utils.resources.scan._components/ResourceScanner";
+import ResourceScanner from "./scanner.resource._components/ResourceScanner";
 
 export const meta: MetaFunction = () => [{ title: "재화 스크린샷 인식 | 몰루로그" }];
 

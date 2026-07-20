@@ -1,6 +1,6 @@
 export const OCR_CONTRACT_VERSION = "1";
 export const OCR_MAX_IMAGES = 30;
-export const OCR_MAX_IMAGE_BYTES = 12 * 1024 * 1024;
+export const OCR_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const OCR_MAX_JOB_BYTES = 120 * 1024 * 1024;
 export const OCR_UPLOAD_EXPIRES_SECONDS = 15 * 60;
 export const OCR_DOWNLOAD_EXPIRES_SECONDS = 5 * 60;
@@ -68,7 +68,7 @@ function parseOcrUploadInput(value: unknown): OcrUploadInput {
     throw new Error("PNG, JPEG, WebP 이미지만 제출할 수 있어요");
   }
   if (!Number.isInteger(byteSize) || (byteSize as number) <= 0 || (byteSize as number) > OCR_MAX_IMAGE_BYTES) {
-    throw new Error("이미지 한 장은 12MB를 넘을 수 없어요");
+    throw new Error("이미지 한 장은 10MB를 넘을 수 없어요");
   }
   if (!/^[a-f0-9]{64}$/.test(sha256)) {
     throw new Error("이미지 SHA-256 값을 확인해주세요");

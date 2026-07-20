@@ -16,7 +16,7 @@ describe("OCR contract validation", () => {
   it.each([
     [{ images: [] }, "1장부터"],
     [{ images: [{ ...validImage, contentType: "image/gif" }] }, "PNG, JPEG, WebP"],
-    [{ images: [{ ...validImage, byteSize: OCR_MAX_IMAGE_BYTES + 1 }] }, "12MB"],
+    [{ images: [{ ...validImage, byteSize: OCR_MAX_IMAGE_BYTES + 1 }] }, "10MB"],
     [{ images: [{ ...validImage, sha256: "bad" }] }, "SHA-256"],
   ])("rejects an invalid upload contract", (value, message) => {
     expect(() => parseOcrUploadInputs(value)).toThrow(message);

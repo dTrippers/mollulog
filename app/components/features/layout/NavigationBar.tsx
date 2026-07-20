@@ -2,6 +2,7 @@ import { MoonIcon, SunIcon } from "@heroicons/react/16/solid";
 import {
   ArrowsRightLeftIcon as ArrowsRightLeftIconOutline,
   CalendarIcon as CalendarIconOutline,
+  CameraIcon as CameraIconOutline,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
   Cog6ToothIcon,
   EnvelopeIcon,
@@ -14,6 +15,7 @@ import {
 } from "@heroicons/react/24/outline";
 import {
   ArrowsRightLeftIcon as ArrowsRightLeftIconSolid,
+  CameraIcon as CameraIconSolid,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
@@ -697,6 +699,13 @@ function DesktopMenuContent({
               OutlineIcon={ArrowsRightLeftIconOutline}
               SolidIcon={ArrowsRightLeftIconSolid}
               isActive={pathname.startsWith("/connect")}
+            />
+            <SubMenuItem
+              to="/scanner/resource"
+              name="스크린샷 인식기"
+              OutlineIcon={CameraIconOutline}
+              SolidIcon={CameraIconSolid}
+              isActive={pathname.startsWith("/scanner/resource")}
             />
           </div>
         </>
