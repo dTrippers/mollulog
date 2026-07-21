@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
+import { resourceImageUrl } from "~/models/assets";
 import HoverTooltip from "./HoverTooltip";
 
 type ResourceCardProps = {
@@ -37,15 +38,7 @@ function ResourceCard({
 }: ResourceCardProps) {
   let imageUrl = imageUrlProp;
   if (itemUid) {
-    if (resourceType === "furniture") {
-      imageUrl = furnitureImageUrl(itemUid);
-    } else if (resourceType === "equipment") {
-      imageUrl = equipmentImageUrl(itemUid);
-    } else if (resourceType === "currency") {
-      imageUrl = currencyImageUrl(itemUid);
-    } else {
-      imageUrl = itemImageUrl(itemUid);
-    }
+    imageUrl = resourceImageUrl(resourceType ?? "item", itemUid);
   }
 
   let sizeClass = "size-10";
@@ -122,22 +115,6 @@ function rarityBgClass(rarity: number | null | undefined): string {
     default:
       return "bg-neutral-100 dark:bg-neutral-500";
   }
-}
-
-function itemImageUrl(itemUid: string): string {
-  return `https://baql-assets.mollulog.net/images/items/${itemUid}`;
-}
-
-function furnitureImageUrl(furnitureUid: string): string {
-  return `https://baql-assets.mollulog.net/images/furnitures/${furnitureUid}`;
-}
-
-function equipmentImageUrl(equipmentUid: string): string {
-  return `https://baql-assets.mollulog.net/images/equipments/${equipmentUid}`;
-}
-
-function currencyImageUrl(currencyUid: string): string {
-  return `https://baql-assets.mollulog.net/images/currencies/${currencyUid}`;
 }
 
 function favoriteLevelImageUrl(favoriteLevel: number): string {

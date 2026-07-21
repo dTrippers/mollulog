@@ -56,7 +56,7 @@ export default function News() {
             <p className="text-sm text-neutral-500 dark:text-neutral-400">
               {dayjs(post.createdAt).format("YYYY-MM-DD")}
             </p>
-            <div className="mt-4">
+            <div className="mt-4 [&_img]:mx-auto [&_img]:max-h-[40svh] [&_img]:w-auto [&_img]:object-contain md:[&_img]:max-h-96">
               <MarkdownText text={post.content} />
             </div>
           </SectionCard>

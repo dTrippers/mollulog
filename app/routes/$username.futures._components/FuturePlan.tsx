@@ -22,6 +22,7 @@ import ContentCommentView from "~/components/features/contents/ContentCommentVie
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 import type { NestedComment } from "~/models/content";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
+import { equipmentImageUrl } from "~/models/assets";
 
 type FuturePlanStudents = {
   uid: string;
@@ -216,7 +217,7 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
                       cardProps={[
                         ...resources.equipments.map((equipment) => ({
                           id: `equipment-${student.uid}-${equipment}`,
-                          imageUrl: `https://assets.mollulog.net/assets/images/equipments/${equipment}`,
+                          imageUrl: equipmentImageUrl(equipment),
                         })),
                         ...resources.mainSkillItems.map((itemUid) => ({
                           id: `skillItem-${student.uid}-${itemUid}`,

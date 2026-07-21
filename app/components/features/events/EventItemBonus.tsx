@@ -1,5 +1,6 @@
 import Decimal from "decimal.js";
 import { StudentCards } from "~/components/features/students";
+import { itemImageUrl } from "~/models/assets";
 
 type EventItemBonusProps = {
   itemUid: string;
@@ -25,7 +26,7 @@ export default function EventItemBonus({ itemUid, itemName, appliedRatio, maxRat
   return (
     <div key={itemUid} className="mt-4 mb-8">
       <div className="my-2 p-4 bg-neutral-100 dark:bg-neutral-900 rounded-lg flex items-center gap-2">
-        <img src={`https://baql-assets.mollulog.net/images/items/${itemUid}`} alt={itemName} className="size-8 object-contain" />
+        <img src={itemImageUrl(itemUid)} alt={itemName} className="size-8 object-contain" />
         <div>
           <p className="font-bold">{itemName}</p>
           {signedIn ?

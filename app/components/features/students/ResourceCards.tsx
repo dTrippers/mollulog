@@ -1,3 +1,5 @@
+import { itemImageUrl } from "~/models/assets";
+
 type ResourceCardProps = {
   id: string;
 
@@ -10,6 +12,7 @@ type ResourceCardProps = {
 };
 
 function ResourceCard({ imageUrl, itemUid, backgroundColor, count }: ResourceCardProps) {
+  const resolvedImageUrl = imageUrl ?? (itemUid ? itemImageUrl(itemUid) : undefined);
   let backgroundColorClass = "bg-neutral-100 dark:bg-neutral-300";
   if (backgroundColor === "purple") {
     backgroundColorClass = "bg-purple-200 dark:bg-purple-300";
@@ -21,7 +24,7 @@ function ResourceCard({ imageUrl, itemUid, backgroundColor, count }: ResourceCar
 
   const card = (
     <div className={`relative p-1 flex items-center justify-center ${backgroundColorClass} transition rounded-lg`}>
-      <img src={imageUrl ?? `https://baql-assets.mollulog.net/images/items/${itemUid}`} alt="자원 정보" />
+      {resolvedImageUrl && <img src={resolvedImageUrl} alt="자원 정보" />}
       {(count !== undefined) && (
         <div className="px-2 absolute right-0 bottom-0 bg-red-500 text-white text-xs rounded-full">
           <span>{count}</span>

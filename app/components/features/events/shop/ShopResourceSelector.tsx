@@ -1,8 +1,8 @@
 import { memo, useMemo, useState } from "react";
 import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { CollectableResource, ShopResource } from "~/domain/event-shop";
-import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { formatResourceAmount } from "~/locales/ko";
+import { resourceImageUrl } from "~/models/assets";
 import { Tabs } from "./Tabs";
 import {
   calculateEffectiveShopPurchaseCount,
@@ -19,19 +19,6 @@ type ShopResourceSelectorProps = {
   actions: ShopActions;
   availablePurchaseDays: number;
 };
-
-function resourceImageUrl(resourceType: ResourceTypeEnum, resourceUid: string): string {
-  if (resourceType === "furniture") {
-    return `https://baql-assets.mollulog.net/images/furnitures/${resourceUid}`;
-  }
-  if (resourceType === "equipment") {
-    return `https://baql-assets.mollulog.net/images/equipments/${resourceUid}`;
-  }
-  if (resourceType === "currency") {
-    return `https://baql-assets.mollulog.net/images/currencies/${resourceUid}`;
-  }
-  return `https://baql-assets.mollulog.net/images/items/${resourceUid}`;
-}
 
 function formatUnitPriceLabel(purchaseTiers: ShopResource["purchaseTiers"]) {
   const unitPrices = [...new Set(purchaseTiers.map(({ unitPrice }) => unitPrice))];

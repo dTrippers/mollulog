@@ -17,6 +17,23 @@ export function studentStandingImageUrl(uid: string): string {
   return `https://assets.baql.net/images/students/standing/${uid}.webp`;
 }
 
+const RESOURCE_IMAGE_DIRECTORIES = {
+  item: "items",
+  currency: "currencies",
+  equipment: "equipments",
+  furniture: "furnitures",
+} as const;
+
+export type ResourceImageType = keyof typeof RESOURCE_IMAGE_DIRECTORIES;
+
+export function resourceImageUrl(resourceType: ResourceImageType, uid: string): string {
+  return `https://assets.baql.net/images/resources/${RESOURCE_IMAGE_DIRECTORIES[resourceType]}/${uid}.webp`;
+}
+
 export function itemImageUrl(item: string): string {
-  return `https://assets.mollulog.net/images/items/${item}`;
+  return resourceImageUrl("item", item);
+}
+
+export function equipmentImageUrl(equipment: string): string {
+  return resourceImageUrl("equipment", equipment);
 }
