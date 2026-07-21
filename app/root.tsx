@@ -125,14 +125,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
         <meta name="theme-color" content={theme.backgroundColor} />
         <meta name="background-color" content={theme.backgroundColor} />
-        <meta name="mollulog:stage" content={loaderData?.publicEnv.STAGE ?? "local"} />
-        <meta name="mollulog:render-id" content={loaderData?.requestDiagnostics.renderId ?? ""} />
-        <meta name="mollulog:request-path" content={loaderData?.requestDiagnostics.requestPath ?? ""} />
+        <meta name="mollulog:stage" content={loaderData?.publicEnv?.STAGE ?? "local"} />
+        <meta name="mollulog:render-id" content={loaderData?.requestDiagnostics?.renderId ?? ""} />
+        <meta name="mollulog:request-path" content={loaderData?.requestDiagnostics?.requestPath ?? ""} />
         <meta name="mollulog:render-path" content={location.pathname} />
-        <meta name="mollulog:build-id" content={loaderData?.requestDiagnostics.buildId ?? ""} />
+        <meta name="mollulog:build-id" content={loaderData?.requestDiagnostics?.buildId ?? ""} />
         <meta
           name="mollulog:front-better-stack-sentry-dsn"
-          content={loaderData?.publicEnv.FRONT_BETTER_STACK_SENTRY_DSN ?? ""}
+          content={loaderData?.publicEnv?.FRONT_BETTER_STACK_SENTRY_DSN ?? ""}
         />
         <Meta />
         <Links />
