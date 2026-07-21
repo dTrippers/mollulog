@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { FIRST_CLEAR_REWARD_REQUIREMENT } from "~/domain/event-shop";
 import { calculateMinigameRewards } from "../utils";
 import { calculateShopResourcePaymentCosts } from "./shop-costs";
 import { calculateBoughtResourceQuantities } from "./shop-rewards";
@@ -84,7 +85,7 @@ export function calculateResourceLedger({
         if (item?.category !== "coin") {
           continue;
         }
-        if (rewardRequirement === "first_clear" || stage.difficulty === 0) {
+        if (rewardRequirement === FIRST_CLEAR_REWARD_REQUIREMENT || stage.difficulty === 0) {
           addQuantity(fromFirstRun, item.uid, amount);
         }
       }

@@ -1,4 +1,5 @@
 import Decimal from "decimal.js";
+import { FIRST_CLEAR_REWARD_REQUIREMENT } from "~/domain/event-shop";
 import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
 
 /**
@@ -23,7 +24,9 @@ export function calculateItemBreakdowns({
 
   if (includeFirstClear) {
     for (const stage of stages) {
-      const hasFirstClearReward = stage.rewards.some(({ rewardRequirement }) => rewardRequirement === "first_clear");
+      const hasFirstClearReward = stage.rewards.some(
+        ({ rewardRequirement }) => rewardRequirement === FIRST_CLEAR_REWARD_REQUIREMENT,
+      );
       if (stage.difficulty === 0 || hasFirstClearReward) {
         firstClearAp += stage.entryAp;
       }
@@ -54,7 +57,7 @@ export function calculateItemBreakdowns({
       extraAp += extraRuns * stage.entryAp;
     }
 
-    // Calculate items from repeated runs (excluding first_clear)
+    // Calculate items from repeated runs (excluding first-clear rewards)
     if (totalRuns > 0) {
       for (const { item, rewardRequirement, amount } of stage.rewards) {
         if (item?.category !== "coin" || rewardRequirement !== null) {
