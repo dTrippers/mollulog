@@ -94,4 +94,40 @@ describe("calculateResourceLedger", () => {
     expect(ledger.acquiredBeforeSweeps).toEqual({ gamepad: 105 });
     expect(ledger.remainingToFarm).toEqual({ gamepad: 15 });
   });
+
+  it("applies BAQL FirstClear quest rewards only when first-clear rewards are enabled", () => {
+    const stages: Stage[] = [
+      {
+        uid: "quest",
+        index: "10",
+        entryAp: 20,
+        difficulty: 1,
+        rewards: [
+          {
+            amount: 50,
+            rewardRequirement: "FirstClear",
+            chance: "1.0",
+            item: { uid: gamepad.uid, name: gamepad.name, category: "coin", rarity: 1 },
+          },
+        ],
+      },
+    ];
+    const input = {
+      shopResources: [],
+      itemQuantities: {},
+      itemPurchaseDays: {},
+      existingPaymentItemQuantities: {},
+      stages,
+      minigamePlayCount: 0,
+      overriddenRequiredQuantities: { gamepad: 100 },
+    };
+
+    const withoutFirstClear = calculateResourceLedger({ ...input, includeFirstClear: false });
+    const withFirstClear = calculateResourceLedger({ ...input, includeFirstClear: true });
+
+    expect(withoutFirstClear.fromFirstRun).toEqual({});
+    expect(withoutFirstClear.remainingToFarm).toEqual({ gamepad: 100 });
+    expect(withFirstClear.fromFirstRun).toEqual({ gamepad: 50 });
+    expect(withFirstClear.remainingToFarm).toEqual({ gamepad: 50 });
+  });
 });

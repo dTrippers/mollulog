@@ -1,5 +1,7 @@
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 
+export const FIRST_CLEAR_REWARD_REQUIREMENT = "FirstClear";
+
 export const MINIGAME_PAYMENT_QUANTITY_MODES = ["expected", "min", "max"] as const;
 
 export type MinigamePaymentQuantityMode = (typeof MINIGAME_PAYMENT_QUANTITY_MODES)[number];

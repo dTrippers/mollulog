@@ -31,6 +31,12 @@ const stages: Stage[] = [
     difficulty: 1,
     rewards: [
       {
+        amount: 50,
+        rewardRequirement: "FirstClear",
+        chance: "1.0",
+        item: { uid: "coin", name: "이벤트 재화", category: "coin", rarity: 1 },
+      },
+      {
         amount: 10,
         rewardRequirement: null,
         chance: "1.0",
@@ -54,10 +60,10 @@ describe("calculateItemBreakdowns", () => {
 
     expect(result).toMatchObject({
       totalAp: 40,
-      firstClearAp: 5,
+      firstClearAp: 25,
       questSweepAp: 40,
       extraSweepAp: 20,
-      totalApWithExtras: 65,
+      totalApWithExtras: 85,
       itemBreakdown: {
         existing: { coin: 10 },
         fromFirstRun: { coin: 5 },
