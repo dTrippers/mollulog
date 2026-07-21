@@ -11,6 +11,10 @@ const SITE_URL = "https://mollulog.net";
  * preferred URL for each page.
  */
 export function canonicalLink(pathname: string): MetaDescriptor {
+  return { tagName: "link", rel: "canonical", href: canonicalUrl(pathname) };
+}
+
+export function canonicalUrl(pathname: string): string {
   const normalized = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
-  return { tagName: "link", rel: "canonical", href: `${SITE_URL}${normalized}` };
+  return `${SITE_URL}${normalized}`;
 }

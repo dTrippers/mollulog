@@ -5,6 +5,15 @@ import type { AppLoadContext, EntryContext, HandleErrorFunction } from "react-ro
 import { isRouteErrorResponse, ServerRouter } from "react-router";
 import { watchIo } from "./lib/io-watchdog";
 import { captureServerError, getLogger } from "./lib/observability.server";
+import { createRequestDiagnostics } from "./lib/request-diagnostics";
+import { canonicalUrl } from "./lib/seo";
+
+const SEO_DEBUG_HEADERS = {
+  renderId: "X-Mollulog-Render-Id",
+  requestPath: "X-Mollulog-Request-Path",
+  routerPath: "X-Mollulog-Router-Path",
+  buildId: "X-Mollulog-Build-Id",
+} as const;
 
 export default async function handleRequest(
   request: Request,
@@ -20,6 +29,10 @@ export default async function handleRequest(
     url: request.url,
   });
   const path = new URL(request.url).pathname;
+  const requestDiagnostics =
+    loadContext.cloudflare.requestDiagnostics ?? createRequestDiagnostics(request, reactRouterContext.manifest.version);
+  const routerPath = reactRouterContext.staticHandlerContext.location.pathname;
+  const matchedRouteIds = reactRouterContext.staticHandlerContext.matches.map((match) => match.route.id);
   const body = await watchIo(
     "ssr.render",
     renderToReadableStream(<ServerRouter context={reactRouterContext} url={request.url} />, {
@@ -43,6 +56,33 @@ export default async function handleRequest(
   }
 
   responseHeaders.set("Content-Type", "text/html");
+  responseHeaders.set(SEO_DEBUG_HEADERS.renderId, requestDiagnostics.renderId);
+  responseHeaders.set(SEO_DEBUG_HEADERS.requestPath, requestDiagnostics.requestPath);
+  responseHeaders.set(SEO_DEBUG_HEADERS.routerPath, routerPath);
+  responseHeaders.set(SEO_DEBUG_HEADERS.buildId, requestDiagnostics.buildId);
+
+  if (isbot(request.headers.get("user-agent"))) {
+    const context = {
+      renderId: requestDiagnostics.renderId,
+      cloudFrontRequestId: requestDiagnostics.cloudFrontRequestId,
+      cloudflareRayId: requestDiagnostics.cloudflareRayId,
+      requestPath: requestDiagnostics.requestPath,
+      routerPath,
+      matchedRouteIds,
+      expectedCanonical: canonicalUrl(requestDiagnostics.requestPath),
+      buildId: requestDiagnostics.buildId,
+      statusCode,
+      cacheControl: responseHeaders.get("Cache-Control"),
+      vary: responseHeaders.get("Vary"),
+    };
+
+    if (requestDiagnostics.requestPath !== routerPath) {
+      logger.error("[seo-debug] render_invariant_failed", undefined, context);
+    } else {
+      logger.info("[seo-debug] document_response", context);
+    }
+  }
+
   return new Response(body, {
     headers: responseHeaders,
     status: statusCode,

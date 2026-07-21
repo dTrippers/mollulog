@@ -23,6 +23,7 @@ import { withD1Session } from "./lib/d1-session";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "./lib/google-analytics.client";
 import { captureClientError } from "./lib/observability.client";
+import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
@@ -49,6 +50,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   };
   const ctx: ExecutionContext = context.cloudflare.ctx;
   const colo = context.cloudflare.colo;
+  const requestDiagnostics = context.cloudflare.requestDiagnostics ?? createRequestDiagnostics(request, "untracked");
 
   return ctx.tracing.enterSpan("root.loader", async (span) => {
     const sensei = await ctx.tracing.enterSpan("root_auth", () => getActiveSensei(env, request));
@@ -72,6 +74,11 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       publicEnv: {
         STAGE: env.STAGE ?? "local",
         FRONT_BETTER_STACK_SENTRY_DSN: env.FRONT_BETTER_STACK_SENTRY_DSN ?? "",
+      },
+      requestDiagnostics: {
+        renderId: requestDiagnostics.renderId,
+        requestPath: requestDiagnostics.requestPath,
+        buildId: requestDiagnostics.buildId,
       },
     };
   });
@@ -105,6 +112,7 @@ export const links: LinksFunction = () => [
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const loaderData = useLoaderData<typeof loader>();
+  const location = useLocation();
   const darkMode = loaderData?.darkMode ?? true;
   const theme = darkMode ? themeConfig.dark : themeConfig.light;
   return (
@@ -118,6 +126,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="theme-color" content={theme.backgroundColor} />
         <meta name="background-color" content={theme.backgroundColor} />
         <meta name="mollulog:stage" content={loaderData?.publicEnv.STAGE ?? "local"} />
+        <meta name="mollulog:render-id" content={loaderData?.requestDiagnostics.renderId ?? ""} />
+        <meta name="mollulog:request-path" content={loaderData?.requestDiagnostics.requestPath ?? ""} />
+        <meta name="mollulog:render-path" content={location.pathname} />
+        <meta name="mollulog:build-id" content={loaderData?.requestDiagnostics.buildId ?? ""} />
         <meta
           name="mollulog:front-better-stack-sentry-dsn"
           content={loaderData?.publicEnv.FRONT_BETTER_STACK_SENTRY_DSN ?? ""}
