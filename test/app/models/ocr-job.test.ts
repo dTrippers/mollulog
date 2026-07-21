@@ -1,6 +1,16 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
-import { claimOcrTask, commitOcrTaskResult, getOcrJob, publishPendingOcrOutbox, submitOcrJob } from "~/models/ocr-job";
+import {
+  claimOcrTask,
+  commitOcrTaskResult,
+  createOcrJob,
+  getOcrImageDownloadUrl,
+  getOcrJob,
+  listRecentOcrJobs,
+  publishPendingOcrOutbox,
+  reconcileOcrJobs,
+  submitOcrJob,
+} from "~/models/ocr-job";
 
 const jobRow = {
   uid: "job-1",
@@ -44,6 +54,7 @@ function createEnv(overrides: Partial<Env> = {}): Env {
     HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive,
     OCR_UPLOADS: {
       head: jest.fn(async () => ({ size: 12, httpMetadata: { contentType: "image/png" } })),
+      delete: jest.fn(async () => undefined),
     } as unknown as R2Bucket,
     OCR_R2_ACCOUNT_ID: "account",
     OCR_R2_ACCESS_KEY_ID: "access",
@@ -54,6 +65,22 @@ function createEnv(overrides: Partial<Env> = {}): Env {
 }
 
 describe("PostgreSQL OCR control plane", () => {
+  it("keeps newly created jobs for seven days", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
+    const { client, query } = createClient(() => []);
+
+    await createOcrJob(
+      createEnv(),
+      7,
+      [{ filename: "inventory.png", contentType: "image/png", byteSize: 12, sha256: "a".repeat(64) }],
+      { createClient: () => client },
+    );
+
+    const insertJob = query.mock.calls.find(([sql]) => (sql as string).includes("INSERT INTO ocr_jobs"));
+    expect((insertJob?.[1] as unknown[])[3]).toEqual(new Date("2026-07-28T00:00:00Z"));
+    jest.useRealTimers();
+  });
+
   it("returns only the owned job with progress and immutable result", async () => {
     const { client } = createClient((sql) => {
       if (sql.includes("FROM ocr_jobs")) return [jobRow];
@@ -73,17 +100,53 @@ describe("PostgreSQL OCR control plane", () => {
     );
   });
 
-  it("verifies R2 HEAD and creates one image outbox event transactionally", async () => {
+  it("lists only unexpired submitted jobs for the signed-in user", async () => {
+    const { client, query } = createClient((sql) =>
+      sql.includes("FROM ocr_jobs") ? [{ ...jobRow, status: "review_ready" }] : [],
+    );
+
+    await expect(listRecentOcrJobs(createEnv(), 7, { createClient: () => client })).resolves.toEqual([
+      expect.objectContaining({
+        uid: "job-1",
+        status: "review_ready",
+        progress: { completed: 0, failed: 0, total: 1 },
+      }),
+    ]);
+    expect(query.mock.calls[0][0]).toContain("status <> 'uploading' AND expires_at > now()");
+    expect(query.mock.calls[0][1]).toEqual([7]);
+  });
+
+  it("creates an owned, short-lived image preview URL", async () => {
+    const { client } = createClient((sql) =>
+      sql.includes("JOIN ocr_jobs") ? [{ objectKey: imageRow.objectKey }] : [],
+    );
+
+    await expect(
+      getOcrImageDownloadUrl(createEnv(), 7, "job-1", "image-1", { createClient: () => client }),
+    ).resolves.toContain("X-Amz-Expires=300");
+  });
+
+  it("verifies the uploaded object through a signed R2 HEAD request and creates one image outbox event", async () => {
     const { client, query } = createClient((sql) => {
       if (sql.includes("FROM ocr_jobs")) return [jobRow];
       if (sql.includes("FROM ocr_images")) return [imageRow];
       return [];
     });
     const env = createEnv();
+    const fetchObject = jest.fn(
+      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+        new Response(null, {
+          status: 200,
+          headers: { "content-length": "12", "content-type": "image/png" },
+        }),
+    );
 
-    await submitOcrJob(env, 7, "job-1", { createClient: () => client });
+    await submitOcrJob(env, 7, "job-1", {
+      createClient: () => client,
+      fetch: fetchObject as unknown as typeof fetch,
+    });
 
-    expect(env.OCR_UPLOADS.head).toHaveBeenCalledWith(imageRow.objectKey);
+    expect(fetchObject).toHaveBeenCalledWith(expect.stringContaining("X-Amz-Signature"), { method: "HEAD" });
     const sql = query.mock.calls.map(([text]) => text as string).join("\n");
     expect(sql).toContain("BEGIN");
     expect(sql).toContain("INSERT INTO ocr_outbox");
@@ -166,5 +229,55 @@ describe("PostgreSQL OCR control plane", () => {
     expect(send).toHaveBeenCalledWith(task, { contentType: "json" });
     const publishUpdate = query.mock.calls.find(([sql]) => (sql as string).includes("status = 'published'"));
     expect(publishUpdate).toBeDefined();
+  });
+
+  it("uses the Queue REST API when local E2E credentials are configured", async () => {
+    const task = { type: "ocr.image.recognize.v1", taskUid: "image-1", generation: 1 } as const;
+    const { client } = createClient((sql) =>
+      sql.includes("RETURNING o.uid, o.payload") ? [{ uid: "outbox-1", payload: task }] : [],
+    );
+    const send = jest.fn(async (_body: unknown, _options?: unknown) => undefined);
+    const fetchQueue = jest.fn(async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+      Response.json({ success: true }),
+    );
+
+    await expect(
+      publishPendingOcrOutbox(
+        createEnv({
+          OCR_TASKS: { send } as unknown as Queue,
+          OCR_QUEUE_API_URL: "https://api.cloudflare.com/client/v4/accounts/account/queues/queue",
+          OCR_QUEUE_API_TOKEN: "queue-token",
+        }),
+        25,
+        { createClient: () => client, fetch: fetchQueue as unknown as typeof fetch },
+      ),
+    ).resolves.toBe(1);
+
+    expect(send).not.toHaveBeenCalled();
+    expect(fetchQueue).toHaveBeenCalledWith(
+      "https://api.cloudflare.com/client/v4/accounts/account/queues/queue/messages",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ body: task, content_type: "json" }),
+      }),
+    );
+  });
+
+  it("deletes expired source images and their control-plane records", async () => {
+    const { client, query } = createClient((sql) =>
+      sql.includes("WITH expired_jobs")
+        ? [{ jobUid: "job-1", imageUid: "image-1", objectKey: imageRow.objectKey }]
+        : [],
+    );
+    const removeObjects = jest.fn(async (_keys: string | string[]) => undefined);
+
+    await reconcileOcrJobs(createEnv({ OCR_UPLOADS: { delete: removeObjects } as unknown as R2Bucket }), {
+      createClient: () => client,
+    });
+
+    expect(removeObjects).toHaveBeenCalledWith([imageRow.objectKey]);
+    const sql = query.mock.calls.map(([text]) => text as string).join("\n");
+    expect(sql).toContain("DELETE FROM ocr_jobs");
+    expect(sql).toContain("DELETE FROM ocr_attempts");
   });
 });

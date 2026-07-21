@@ -37,4 +37,22 @@ describe("R2 SigV4 presigning", () => {
       }),
     ).rejects.toThrow("1초부터 7일");
   });
+
+  it("signs HEAD as a distinct single-object operation", async () => {
+    const signed = new URL(
+      await createR2PresignedUrl({
+        accountId: "account",
+        accessKeyId: "access",
+        secretAccessKey: "secret",
+        bucket: "bucket",
+        key: "ocr/local/job/image",
+        method: "HEAD",
+        expiresSeconds: 60,
+        now: new Date("2026-07-20T10:20:30.000Z"),
+      }),
+    );
+
+    expect(signed.searchParams.get("X-Amz-Expires")).toBe("60");
+    expect(signed.searchParams.get("X-Amz-Signature")).toMatch(/^[a-f0-9]{64}$/);
+  });
 });

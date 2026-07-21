@@ -4,7 +4,8 @@ export const OCR_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const OCR_MAX_JOB_BYTES = 120 * 1024 * 1024;
 export const OCR_UPLOAD_EXPIRES_SECONDS = 15 * 60;
 export const OCR_DOWNLOAD_EXPIRES_SECONDS = 5 * 60;
-export const OCR_JOB_EXPIRES_HOURS = 24;
+export const OCR_JOB_RETENTION_DAYS = 7;
+export const OCR_CANDIDATE_SELECTION_LIMIT = 5;
 
 export const OCR_ALLOWED_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
 

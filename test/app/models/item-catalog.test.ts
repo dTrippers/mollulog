@@ -1,6 +1,7 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { GROWTH_RESOURCE_KIND_LABELS, GROWTH_RESOURCE_KIND_ORDER } from "../../../app/domain/growth-resource";
 import { ResourceTypeEnum } from "../../../app/graphql/graphql";
+import { runQuery } from "../../../app/lib/baql";
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
@@ -9,10 +10,45 @@ jest.mock("~/lib/baql", () => ({
 import {
   getGrowthPlannerCatalogResourceKindOrder,
   getGrowthPlannerCatalogResources,
+  getItemCatalogResourceDescriptionMap,
   type ItemCatalogResource,
 } from "../../../app/models/item-catalog";
 
+const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
+
+afterEach(() => {
+  jest.clearAllMocks();
+});
+
 describe("item-catalog", () => {
+  it("loads and normalizes descriptions for the requested resource UIDs", async () => {
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        items: [
+          { uid: "9998", description: "첫 번째 줄\n두 번째 줄" },
+          { uid: "empty", description: null },
+        ],
+        equipments: [{ uid: "101001", description: "  장비   설명  " }],
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    });
+
+    await expect(getItemCatalogResourceDescriptionMap(["9998", "101001"])).resolves.toEqual({
+      "9998": "첫 번째 줄 두 번째 줄",
+      "101001": "장비 설명",
+    });
+    expect(mockedRunQuery).toHaveBeenCalledWith(expect.any(Object), { uids: ["9998", "101001"] });
+  });
+
+  it("does not query the catalog when no resource UID is requested", async () => {
+    await expect(getItemCatalogResourceDescriptionMap([])).resolves.toEqual({});
+    expect(mockedRunQuery).not.toHaveBeenCalled();
+  });
+
   it("includes equipment blueprint choice boxes in the growth planner catalog", () => {
     const choiceBox: ItemCatalogResource = {
       uid: "150041",

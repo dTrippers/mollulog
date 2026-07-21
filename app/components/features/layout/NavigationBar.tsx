@@ -693,19 +693,21 @@ function DesktopMenuContent({
               isActive={pathname.startsWith("/@")}
             />
             <SubMenuItem
+              to="/scanner/resource"
+              name="스크린샷 인식기"
+              badgeLabel="베타"
+              showRedDot
+              OutlineIcon={CameraIconOutline}
+              SolidIcon={CameraIconSolid}
+              isActive={pathname.startsWith("/scanner/resource")}
+            />
+            <SubMenuItem
               to="/connect/import"
               name="외부 데이터 연동"
               badgeLabel="베타"
               OutlineIcon={ArrowsRightLeftIconOutline}
               SolidIcon={ArrowsRightLeftIconSolid}
               isActive={pathname.startsWith("/connect")}
-            />
-            <SubMenuItem
-              to="/scanner/resource"
-              name="스크린샷 인식기"
-              OutlineIcon={CameraIconOutline}
-              SolidIcon={CameraIconSolid}
-              isActive={pathname.startsWith("/scanner/resource")}
             />
           </div>
         </>

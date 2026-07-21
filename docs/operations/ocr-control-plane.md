@@ -5,13 +5,13 @@
 R2 presigned GET, MolluLog machine API만 outbound HTTPS로 호출합니다.
 
 `ocr_jobs`, `ocr_images`, `ocr_attempts`, `ocr_image_results`, `ocr_job_results`, `ocr_outbox`는
-모두 PostgreSQL 테이블입니다. 사용자가 결과를 보정한 뒤 만드는 `sync_drafts`만 기존
-MolluLog 승인 흐름과의 호환을 위해 현재 D1 저장 경로를 그대로 사용합니다.
+모두 PostgreSQL 테이블입니다. 사용자가 결과를 보정해 반영할 때 생성되는 `sync_drafts`와
+실제 아이템 보유 수량은 D1에 저장합니다. OCR job UID를 draft의 `sourceRef`로 기록해 같은
+결과가 중복 반영되지 않도록 합니다.
 
 ## 배포 전 준비
 
-1. `db/postgres/migrations/20260720000100_create_ocr_control_plane.sql`을 대상 PostgreSQL에
-   적용합니다.
+1. `db/postgres/migrations/`의 SQL migration을 파일명 순서대로 대상 PostgreSQL에 적용합니다.
 2. 환경별 R2 bucket과 task/DLQ Queue를 생성합니다.
 3. task Queue에 HTTP pull consumer를 연결하고 DLQ와 retry를 지정합니다.
 4. R2 S3 API credential, machine API token, Queue token을 각각 별도로 발급합니다.
@@ -54,6 +54,41 @@ k3s runner secrets:
 Queue token과 MolluLog machine token은 서로 다른 credential입니다. runner에는 R2 API
 credential이나 PostgreSQL connection string을 넣지 않습니다.
 
+## 로컬 E2E
+
+로컬 MolluLog와 로컬 PostgreSQL을 사용하면서 R2와 Queue만 개발 전용 원격 리소스에
+연결합니다. 브라우저 직접 업로드와 외부 AOI runner의 HTTP pull 계약을 production과 같은
+경로로 확인하기 위한 구성입니다.
+
+- R2 bucket: `mollulog-aoi-uploads-dev`
+- task Queue: `mollulog-aoi-tasks-dev`
+- DLQ: `mollulog-aoi-dlq-dev`
+- 개발용 R2 CORS: `deploy/cloudflare/ocr-r2-cors.dev.json`
+
+기본 `wrangler.jsonc`의 `OCR_UPLOADS`는 `remote: true`로 위 R2 bucket에 연결합니다.
+Wrangler 4.107.0은 Queue producer의 `remote: true`를 무시하고 로컬 broker로 보내므로,
+로컬 E2E의 `OCR_TASKS` publish만 `OCR_QUEUE_API_URL`과 Queue REST API를 사용합니다.
+staging과 production은 기존 Queue binding을 사용합니다. D1과 KV는 로컬 simulation을 유지하고, Hyperdrive는
+`CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE`로 로컬 PostgreSQL에 직접
+연결합니다.
+
+로컬 `.dev.vars`에는 다음 값을 설정합니다.
+
+- `OCR_R2_ACCOUNT_ID`
+- `OCR_R2_ACCESS_KEY_ID`
+- `OCR_R2_SECRET_ACCESS_KEY`
+- `OCR_QUEUE_API_URL` (`mollulog-aoi-tasks-dev`의 Queue REST endpoint)
+- `OCR_QUEUE_API_TOKEN` (AOI runner와 동일한 Queues Edit token)
+- `OCR_WORKER_TOKEN`
+
+AOI의 `.env.runner`에는 개발 Queue의 account/queue/token, 로컬 MolluLog URL, 동일한
+`OCR_WORKER_TOKEN`을 설정합니다. 이미지를 제출한 뒤 로컬 scheduled handler를 호출해
+image task를 publish하고, 이미지 처리가 끝나면 다시 호출해 finalize task를 publish합니다.
+
+```sh
+curl "http://localhost:5173/cdn-cgi/handler/scheduled?format=json"
+```
+
 ## 실행 계약
 
 1. 브라우저가 `/api/ocr/jobs`에서 object별 presigned PUT URL을 받습니다.
@@ -63,8 +98,8 @@ credential이나 PostgreSQL connection string을 넣지 않습니다.
 5. runner가 `batch_size=1`로 pull하고 `/internal/ocr/v1/tasks/:taskUid/claim`을 호출합니다.
 6. 결과 API가 PostgreSQL commit을 완료한 뒤 runner가 Queue lease를 ack합니다.
 7. 모든 image가 terminal이면 별도 finalize task가 batch 조정 결과를 만듭니다.
-8. 사용자가 결과를 보정하면 `first_party_ocr` sync draft를 만들고 기존 diff 화면에서
-   승인합니다.
+8. 스캐너가 D1의 현재 수량과 인식 수량을 함께 보여주며, 사용자가 확인한 항목은
+   `first_party_ocr` sync draft 생성과 아이템 수량 반영을 하나의 D1 batch로 처리합니다.
 
 Queue 전달은 at-least-once입니다. `(image_uid, generation)`과 `(job_uid, generation)` unique
 constraint가 결과 저장을 멱등하게 만들며, outbox 재전송도 안정된 task UID로 수렴합니다.
@@ -81,3 +116,8 @@ constraint가 결과 저장을 멱등하게 만들며, outbox 재전송도 안�
 
 초기 UI는 job 상태를 polling합니다. runner가 중단돼도 job은 Queue에서 대기하며, 다시 기동한
 replica가 같은 계약으로 처리를 재개합니다.
+
+원본 스크린샷과 인식 결과의 보관 기간은 생성 시점부터 7일입니다. 사용자는 그동안
+`/scanner/resource`의 최근 인식 목록에서 진행 상황과 결과를 다시 열 수 있습니다. 매분 실행되는
+application Worker의 scheduled handler는 만료된 R2 object를 먼저 삭제한 뒤 관련 PostgreSQL job,
+result, outbox, attempt 레코드를 정리합니다.

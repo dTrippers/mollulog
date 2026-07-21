@@ -3,7 +3,7 @@ import type { Client } from "pg";
 import {
   OCR_CONTRACT_VERSION,
   OCR_DOWNLOAD_EXPIRES_SECONDS,
-  OCR_JOB_EXPIRES_HOURS,
+  OCR_JOB_RETENTION_DAYS,
   OCR_UPLOAD_EXPIRES_SECONDS,
   type OcrResultEnvelope,
   type OcrTaskMessage,
@@ -13,7 +13,9 @@ import {
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 import { createR2PresignedUrl } from "~/lib/r2-presign.server";
 
-type OcrRepositoryOptions = { ctx?: ExecutionContext; createClient?: PostgresClientFactory };
+type OcrRepositoryOptions = { ctx?: ExecutionContext; createClient?: PostgresClientFactory; fetch?: typeof fetch };
+
+const OCR_HEAD_EXPIRES_SECONDS = 60;
 
 type OcrJobRow = {
   uid: string;
@@ -67,6 +69,8 @@ export type OcrJobView = {
   expiresAt: string;
 };
 
+export type OcrJobSummary = Pick<OcrJobView, "uid" | "status" | "progress" | "createdAt" | "updatedAt" | "expiresAt">;
+
 export type OcrClaimResult =
   | { disposition: "already_completed" | "cancelled" | "stale" }
   | {
@@ -86,7 +90,7 @@ export async function createOcrJob(
 ) {
   assertR2PresignConfig(env);
   const jobUid = nanoid(16);
-  const expiresAt = new Date(Date.now() + OCR_JOB_EXPIRES_HOURS * 60 * 60 * 1000);
+  const expiresAt = new Date(Date.now() + OCR_JOB_RETENTION_DAYS * 24 * 60 * 60 * 1000);
   const rows = images.map((image) => {
     const uid = nanoid(16);
     return { ...image, uid, objectKey: `ocr/${env.STAGE ?? "local"}/${jobUid}/${uid}` };
@@ -135,11 +139,16 @@ export async function submitOcrJob(
 
   const images = await withOcrClient(env, options, (client) => listImageRows(client, jobUid));
   for (const image of images) {
-    const object = await env.OCR_UPLOADS.head(image.objectKey);
-    if (!object || object.size !== image.byteSize) {
+    const response = await (options.fetch ?? fetch)(
+      await createR2Url(env, image.objectKey, "HEAD", OCR_HEAD_EXPIRES_SECONDS),
+      { method: "HEAD" },
+    );
+    const uploadedLength = response.headers.get("content-length");
+    const uploadedSize = uploadedLength === null ? Number.NaN : Number(uploadedLength);
+    if (!response.ok || !Number.isSafeInteger(uploadedSize) || uploadedSize !== image.byteSize) {
       throw new Error(`${image.originalFilename} 업로드를 확인할 수 없어요`);
     }
-    const uploadedType = object.httpMetadata?.contentType;
+    const uploadedType = response.headers.get("content-type");
     if (uploadedType && uploadedType !== image.contentType) {
       throw new Error(`${image.originalFilename} 파일 형식이 요청과 달라요`);
     }
@@ -215,6 +224,49 @@ export async function getOcrJob(
       expiresAt: toIso(job.expiresAt),
     };
   });
+}
+
+export async function listRecentOcrJobs(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  options: OcrRepositoryOptions = {},
+): Promise<OcrJobSummary[]> {
+  return withOcrClient(env, options, async (client) => {
+    const result = await client.query<OcrJobRow>(
+      `${JOB_SELECT}
+       WHERE user_id = $1 AND status <> 'uploading' AND expires_at > now()
+       ORDER BY created_at DESC`,
+      [userId],
+    );
+    return result.rows.map((job) => ({
+      uid: job.uid,
+      status: job.status,
+      progress: { completed: job.completedImages, failed: job.failedImages, total: job.totalImages },
+      createdAt: toIso(job.createdAt),
+      updatedAt: toIso(job.updatedAt),
+      expiresAt: toIso(job.expiresAt),
+    }));
+  });
+}
+
+export async function getOcrImageDownloadUrl(
+  env: Env,
+  userId: number,
+  jobUid: string,
+  imageUid: string,
+  options: OcrRepositoryOptions = {},
+): Promise<string | null> {
+  const objectKey = await withOcrClient(env, options, async (client) => {
+    const result = await client.query<{ objectKey: string }>(
+      `SELECT i.object_key AS "objectKey"
+       FROM ocr_images i
+       JOIN ocr_jobs j ON j.uid = i.job_uid
+       WHERE i.uid = $1 AND j.uid = $2 AND j.user_id = $3 AND j.expires_at > now()`,
+      [imageUid, jobUid, userId],
+    );
+    return result.rows[0]?.objectKey ?? null;
+  });
+  return objectKey ? createR2Url(env, objectKey, "GET", OCR_DOWNLOAD_EXPIRES_SECONDS) : null;
 }
 
 export async function claimOcrTask(
@@ -485,7 +537,7 @@ export async function publishPendingOcrOutbox(
   let published = 0;
   for (const row of rows) {
     try {
-      await env.OCR_TASKS.send(parseOcrTaskMessage(row.payload), { contentType: "json" });
+      await publishOcrTask(env, parseOcrTaskMessage(row.payload), options.fetch ?? fetch);
       await withOcrClient(env, options, (client) =>
         client.query(
           `UPDATE ocr_outbox SET status = 'published', attempts = attempts + 1,
@@ -509,8 +561,31 @@ export async function publishPendingOcrOutbox(
   return published;
 }
 
+async function publishOcrTask(env: Env, task: OcrTaskMessage, fetcher: typeof fetch): Promise<void> {
+  if (env.OCR_QUEUE_API_URL || env.OCR_QUEUE_API_TOKEN) {
+    if (!env.OCR_QUEUE_API_URL || !env.OCR_QUEUE_API_TOKEN) {
+      throw new Error("로컬 OCR Queue REST 설정이 완료되지 않았어요");
+    }
+    const response = await fetcher(`${env.OCR_QUEUE_API_URL.replace(/\/$/, "")}/messages`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${env.OCR_QUEUE_API_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ body: task, content_type: "json" }),
+    });
+    const result = (await response.json().catch(() => null)) as { success?: boolean } | null;
+    if (!response.ok || result?.success !== true) {
+      throw new Error(`Cloudflare Queue publish failed: HTTP ${response.status}`);
+    }
+    return;
+  }
+  if (!env.OCR_TASKS) throw new Error("OCR Queue binding을 찾을 수 없어요");
+  await env.OCR_TASKS.send(task, { contentType: "json" });
+}
+
 export async function reconcileOcrJobs(
-  env: Pick<Env, "HYPERDRIVE">,
+  env: Pick<Env, "HYPERDRIVE" | "OCR_UPLOADS">,
   options: OcrRepositoryOptions = {},
 ): Promise<void> {
   await withOcrClient(env, options, (client) =>
@@ -534,6 +609,32 @@ export async function reconcileOcrJobs(
          FOR UPDATE OF j`,
       );
       for (const job of terminalJobs.rows) await finalizeIfTerminal(client, job.uid, job.generation);
+    }),
+  );
+
+  const expiredRows = await withOcrClient(env, options, async (client) =>
+    client.query<{ jobUid: string; imageUid: string | null; objectKey: string | null }>(
+      `WITH expired_jobs AS (
+         SELECT uid FROM ocr_jobs WHERE expires_at < now() ORDER BY expires_at LIMIT 25
+       )
+       SELECT j.uid AS "jobUid", i.uid AS "imageUid", i.object_key AS "objectKey"
+       FROM expired_jobs j
+       LEFT JOIN ocr_images i ON i.job_uid = j.uid`,
+    ),
+  );
+  if (expiredRows.rows.length === 0) return;
+
+  const jobUids = [...new Set(expiredRows.rows.map((row) => row.jobUid))];
+  const imageUids = expiredRows.rows.flatMap((row) => (row.imageUid ? [row.imageUid] : []));
+  const objectKeys = expiredRows.rows.flatMap((row) => (row.objectKey ? [row.objectKey] : []));
+  if (objectKeys.length > 0) await env.OCR_UPLOADS.delete(objectKeys);
+
+  await withOcrClient(env, options, (client) =>
+    inTransaction(client, async () => {
+      const taskUids = [...jobUids, ...imageUids];
+      await client.query(`DELETE FROM ocr_outbox WHERE aggregate_uid = ANY($1::text[])`, [taskUids]);
+      await client.query(`DELETE FROM ocr_jobs WHERE uid = ANY($1::text[]) AND expires_at < now()`, [jobUids]);
+      await client.query(`DELETE FROM ocr_attempts WHERE task_uid = ANY($1::text[])`, [taskUids]);
     }),
   );
 }
@@ -689,7 +790,7 @@ function assertR2PresignConfig(
   }
 }
 
-function createR2Url(env: Env, key: string, method: "GET" | "PUT", expiresSeconds: number): Promise<string> {
+function createR2Url(env: Env, key: string, method: "GET" | "HEAD" | "PUT", expiresSeconds: number): Promise<string> {
   assertR2PresignConfig(env);
   return createR2PresignedUrl({
     accountId: env.OCR_R2_ACCOUNT_ID,

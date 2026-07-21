@@ -1,172 +1,243 @@
 {
-  "name": "mollulog",
-  "compatibility_date": "2025-06-17",  // https://developers.cloudflare.com/workers/platform/compatibility-dates
-  "compatibility_flags": ["nodejs_compat"],
-  "main": "./workers/app.ts",
-  "workers_dev": false,
-  "preview_urls": false,
-  "placement": {
-    "region": "aws:ap-northeast-1"
-  },
-  "triggers": {
-    "crons": ["* * * * *"]
-  },
-
-  "assets": {
-    "directory": "./build/client",
-    "not_found_handling": "single-page-application"
-  },
-  "observability": {
-    "enabled": true,
-    "head_sampling_rate": 1,
-    // Raised 0.1 -> 1 after measuring volume (2026-07-10): ~930k events/month
-    // against the 10M included in Workers Paid. Sampled traces made per-route
-    // percentiles and single-incident forensics unusable.
-    "traces": {
-      "enabled": true,
-      "head_sampling_rate": 1,
-      "destinations": ["axiom-traces"],
-      "persist": true
-    },
-    "logs": {
-      "head_sampling_rate": 1,
-      "destinations": ["axiom-logs"],
-      "persist": true
-    }
-  },
-
-  "kv_namespaces": [
-    { "binding": "KV_CACHE", "id": "local_KV_CACHE" },
-    { "binding": "KV_SESSION", "id": "local_kv_session" }
-  ],
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "local_mollulog_db",
-      "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
-      "migrations_dir": "db/migrations"
-    }
-  ],
-  "hyperdrive": [
-    { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
-  ],
-  "r2_buckets": [
-    { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-local" }
-  ],
-  "queues": {
-    "producers": [
-      { "binding": "EVENTS", "queue": "mollulog-events" },
-      { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-local" }
-    ],
-    "consumers": [
-      { "queue": "mollulog-aoi-dlq-local", "max_batch_size": 10, "max_batch_timeout": 5 }
-    ]
-  },
-  "vars": {
-    "CONNECT_API_URL": "http://localhost:8787",
-    "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-local"
-  },
-
-  // Secrets configuration
-  // - SESSION_SECRET
-  // - CONNECT_INTERNAL_TOKEN
-  // - GOOGLE_CLIENT_SECRET
-  // - GITHUB_CLIENT_ID
-  // - GITHUB_CLIENT_SECRET
-  // - SERVER_BETTER_STACK_SOURCE_TOKEN
-  // - SERVER_BETTER_STACK_SENTRY_DSN
-  // - OCR_R2_ACCOUNT_ID
-  // - OCR_R2_ACCESS_KEY_ID
-  // - OCR_R2_SECRET_ACCESS_KEY
-  // - OCR_WORKER_TOKEN
-  // - FRONT_BETTER_STACK_SENTRY_DSN
-  "env": {
-    "staging": {
-      "routes": [
-        {
-          "pattern": "staging.mollulog.net",
-          "custom_domain": true
-        }
-      ],
-      "vars": {
-        "HOST": "https://staging.mollulog.net",
-        "CONNECT_API_URL": "https://connect-staging.mollulog.net",
-        "STAGE": "staging",
-        "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-staging"
-      },
-      "kv_namespaces": [
-        { "binding": "KV_CACHE", "id": "b957557c116a41168c42136666ef5808" },
-        { "binding": "KV_SESSION", "id": "757ca5d838364689af06edc372cd4c56" }
-      ],
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "mollulog",
-          "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
-          "migrations_dir": "db/migrations"
-        }
-      ],
-      "hyperdrive": [
-        { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
-      ],
-      "r2_buckets": [
-        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-staging" }
-      ],
-      "queues": {
-        "producers": [
-          { "binding": "EVENTS", "queue": "mollulog-events-staging" },
-          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-staging" }
-        ],
-        "consumers": [
-          { "queue": "mollulog-aoi-dlq-staging", "max_batch_size": 10, "max_batch_timeout": 5 }
-        ]
-      }
-    },
-    "production": {
-      "routes": [
-        {
-          "pattern": "origin.mollulog.net",
-          "custom_domain": true
-        },
-        {
-          "pattern": "mollulog.net/*",
-          "zone_name": "mollulog.net"
-        }
-      ],
-      "vars": {
-        "HOST": "https://mollulog.net",
-        "CONNECT_API_URL": "https://connect.mollulog.net",
-        "STAGE": "prod",
-        "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-prod"
-      },
-      "kv_namespaces": [
-        { "binding": "KV_CACHE", "id": "a613bc84ffeb4362b3deaa05c617a7b3"},
-        { "binding": "KV_SESSION", "id": "757ca5d838364689af06edc372cd4c56" }
-      ],
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "mollulog",
-          "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
-          "migrations_dir": "db/migrations"
-        }
-      ],
-      "hyperdrive": [
-        { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
-      ],
-      "r2_buckets": [
-        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
-      ],
-      "queues": {
-        "producers": [
-          { "binding": "EVENTS", "queue": "mollulog-events" },
-          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-prod" }
-        ],
-        "consumers": [
-          { "queue": "mollulog-aoi-dlq-prod", "max_batch_size": 10, "max_batch_timeout": 5 }
-        ]
-      },
-      "logpush": true
-    }
-  }
+	"name": "mollulog",
+	"compatibility_date": "2025-06-17", // https://developers.cloudflare.com/workers/platform/compatibility-dates
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"main": "./workers/app.ts",
+	"workers_dev": false,
+	"preview_urls": false,
+	"placement": {
+		"region": "aws:ap-northeast-1"
+	},
+	"triggers": {
+		"crons": [
+			"* * * * *"
+		]
+	},
+	"assets": {
+		"directory": "./build/client",
+		"not_found_handling": "single-page-application"
+	},
+	"observability": {
+		"enabled": true,
+		"head_sampling_rate": 1,
+		// Raised 0.1 -> 1 after measuring volume (2026-07-10): ~930k events/month
+		// against the 10M included in Workers Paid. Sampled traces made per-route
+		// percentiles and single-incident forensics unusable.
+		"traces": {
+			"enabled": true,
+			"head_sampling_rate": 1,
+			"destinations": [
+				"axiom-traces"
+			],
+			"persist": true
+		},
+		"logs": {
+			"head_sampling_rate": 1,
+			"destinations": [
+				"axiom-logs"
+			],
+			"persist": true
+		}
+	},
+	"kv_namespaces": [
+		{
+			"binding": "KV_CACHE",
+			"id": "local_KV_CACHE"
+		},
+		{
+			"binding": "KV_SESSION",
+			"id": "local_kv_session"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "local_mollulog_db",
+			"database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
+			"migrations_dir": "db/migrations"
+		}
+	],
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "0531527296514c808ba518ad5cbaa3d2"
+		}
+	],
+	"r2_buckets": [
+		{
+			"binding": "OCR_UPLOADS",
+			"bucket_name": "mollulog-aoi-uploads-prod"
+		}
+	],
+	"queues": {
+		"producers": [
+			{
+				"binding": "EVENTS",
+				"queue": "mollulog-events"
+			},
+			{
+				"binding": "OCR_TASKS",
+				"queue": "mollulog-aoi-tasks-dev"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "mollulog-aoi-dlq-dev",
+				"max_batch_size": 10,
+				"max_batch_timeout": 5
+			}
+		]
+	},
+	"vars": {
+		"CONNECT_API_URL": "http://localhost:8787",
+		"OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-dev"
+	},
+	// Secrets configuration
+	// - SESSION_SECRET
+	// - CONNECT_INTERNAL_TOKEN
+	// - GOOGLE_CLIENT_SECRET
+	// - GITHUB_CLIENT_ID
+	// - GITHUB_CLIENT_SECRET
+	// - SERVER_BETTER_STACK_SOURCE_TOKEN
+	// - SERVER_BETTER_STACK_SENTRY_DSN
+	// - OCR_R2_ACCOUNT_ID
+	// - OCR_R2_ACCESS_KEY_ID
+	// - OCR_R2_SECRET_ACCESS_KEY
+	// - OCR_WORKER_TOKEN
+	// - FRONT_BETTER_STACK_SENTRY_DSN
+	"env": {
+		"staging": {
+			"routes": [
+				{
+					"pattern": "staging.mollulog.net",
+					"custom_domain": true
+				}
+			],
+			"vars": {
+				"HOST": "https://staging.mollulog.net",
+				"CONNECT_API_URL": "https://connect-staging.mollulog.net",
+				"STAGE": "staging",
+				"OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-prod"
+			},
+			"kv_namespaces": [
+				{
+					"binding": "KV_CACHE",
+					"id": "b957557c116a41168c42136666ef5808"
+				},
+				{
+					"binding": "KV_SESSION",
+					"id": "757ca5d838364689af06edc372cd4c56"
+				}
+			],
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "mollulog",
+					"database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
+					"migrations_dir": "db/migrations"
+				}
+			],
+			"hyperdrive": [
+				{
+					"binding": "HYPERDRIVE",
+					"id": "0531527296514c808ba518ad5cbaa3d2"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "OCR_UPLOADS",
+					"bucket_name": "mollulog-aoi-uploads-prod"
+				}
+			],
+			"queues": {
+				"producers": [
+					{
+						"binding": "EVENTS",
+						"queue": "mollulog-events"
+					},
+					{
+						"binding": "OCR_TASKS",
+						"queue": "mollulog-aoi-tasks-prod"
+					}
+				],
+				"consumers": [
+					{
+						"queue": "mollulog-aoi-dlq-prod",
+						"max_batch_size": 10,
+						"max_batch_timeout": 5
+					}
+				]
+			}
+		},
+		"production": {
+			"routes": [
+				{
+					"pattern": "origin.mollulog.net",
+					"custom_domain": true
+				},
+				{
+					"pattern": "mollulog.net/*",
+					"zone_name": "mollulog.net"
+				}
+			],
+			"vars": {
+				"HOST": "https://mollulog.net",
+				"CONNECT_API_URL": "https://connect.mollulog.net",
+				"STAGE": "prod",
+				"OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-prod"
+			},
+			"kv_namespaces": [
+				{
+					"binding": "KV_CACHE",
+					"id": "a613bc84ffeb4362b3deaa05c617a7b3"
+				},
+				{
+					"binding": "KV_SESSION",
+					"id": "757ca5d838364689af06edc372cd4c56"
+				}
+			],
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "mollulog",
+					"database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
+					"migrations_dir": "db/migrations"
+				}
+			],
+			"hyperdrive": [
+				{
+					"binding": "HYPERDRIVE",
+					"id": "0531527296514c808ba518ad5cbaa3d2"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "OCR_UPLOADS",
+					"bucket_name": "mollulog-aoi-uploads-prod"
+				}
+			],
+			"queues": {
+				"producers": [
+					{
+						"binding": "EVENTS",
+						"queue": "mollulog-events"
+					},
+					{
+						"binding": "OCR_TASKS",
+						"queue": "mollulog-aoi-tasks-prod"
+					}
+				],
+				"consumers": [
+					{
+						"queue": "mollulog-aoi-dlq-prod",
+						"max_batch_size": 10,
+						"max_batch_timeout": 5
+					}
+				]
+			},
+			"logpush": true
+		}
+	}
 }

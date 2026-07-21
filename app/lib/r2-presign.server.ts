@@ -6,7 +6,7 @@ type R2PresignOptions = {
   secretAccessKey: string;
   bucket: string;
   key: string;
-  method: "GET" | "PUT";
+  method: "GET" | "HEAD" | "PUT";
   expiresSeconds: number;
   now?: Date;
 };
