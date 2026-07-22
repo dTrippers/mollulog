@@ -56,6 +56,7 @@ export default async function handleRequest(
   }
 
   responseHeaders.set("Content-Type", "text/html");
+  responseHeaders.set("Cache-Control", "no-store, no-transform");
   responseHeaders.set(SEO_DEBUG_HEADERS.renderId, requestDiagnostics.renderId);
   responseHeaders.set(SEO_DEBUG_HEADERS.requestPath, requestDiagnostics.requestPath);
   responseHeaders.set(SEO_DEBUG_HEADERS.routerPath, routerPath);
