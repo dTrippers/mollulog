@@ -1,7 +1,19 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  bigint,
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
+import type { OcrTaskMessage } from "~/domain/ocr";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 import type {
@@ -213,5 +225,141 @@ export const pgWalkthroughTimelineLikesTable = pgTable(
   (table) => [
     uniqueIndex("raid_walkthrough_likes_walkthrough_user_uidx").on(table.walkthroughUid, table.userId),
     index("raid_walkthrough_likes_user_walkthrough_idx").on(table.userId, table.walkthroughUid),
+  ],
+);
+
+export const pgOcrJobsTable = pgTable(
+  "ocr_jobs",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    userId: integer("user_id").notNull(),
+    status: text().notNull().default("uploading"),
+    generation: integer().notNull().default(1),
+    totalImages: integer("total_images").notNull(),
+    completedImages: integer("completed_images").notNull().default(0),
+    failedImages: integer("failed_images").notNull().default(0),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    submittedAt: timestamptz("submitted_at"),
+    completedAt: timestamptz("completed_at"),
+    expiresAt: timestamptz("expires_at").notNull(),
+    purgeAfter: timestamptz("purge_after").notNull(),
+    trainingConsentAt: timestamptz("training_consent_at"),
+    trainingConsentVersion: text("training_consent_version"),
+  },
+  (table) => [
+    index("ocr_jobs_user_created_idx").on(table.userId, table.createdAt.desc()),
+    index("ocr_jobs_status_updated_idx").on(table.status, table.updatedAt),
+    index("ocr_jobs_purge_after_idx").on(table.purgeAfter),
+  ],
+);
+
+export const pgOcrImagesTable = pgTable(
+  "ocr_images",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    jobUid: text("job_uid")
+      .notNull()
+      .references(() => pgOcrJobsTable.uid, { onDelete: "cascade" }),
+    objectKey: text("object_key").notNull().unique(),
+    originalFilename: text("original_filename").notNull(),
+    contentType: text("content_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    inputSha256: text("input_sha256").notNull(),
+    status: text().notNull().default("pending_upload"),
+    generation: integer().notNull().default(1),
+    currentAttemptUid: text("current_attempt_uid"),
+    lastErrorCode: text("last_error_code"),
+    lastErrorMessage: text("last_error_message"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    completedAt: timestamptz("completed_at"),
+  },
+  (table) => [index("ocr_images_job_status_idx").on(table.jobUid, table.status)],
+);
+
+export const pgOcrAttemptsTable = pgTable(
+  "ocr_attempts",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    taskType: text("task_type").notNull(),
+    taskUid: text("task_uid").notNull(),
+    generation: integer().notNull(),
+    workerId: text("worker_id").notNull(),
+    status: text().notNull().default("processing"),
+    queueAttempts: integer("queue_attempts").notNull().default(1),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    startedAt: timestamptz("started_at").notNull().defaultNow(),
+    finishedAt: timestamptz("finished_at"),
+  },
+  (table) => [index("ocr_attempts_task_idx").on(table.taskType, table.taskUid, table.generation)],
+);
+
+export const pgOcrImageResultsTable = pgTable(
+  "ocr_image_results",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    imageUid: text("image_uid")
+      .notNull()
+      .references(() => pgOcrImagesTable.uid, { onDelete: "cascade" }),
+    generation: integer().notNull(),
+    attemptUid: text("attempt_uid")
+      .notNull()
+      .references(() => pgOcrAttemptsTable.uid),
+    resultJson: jsonb("result_json").notNull(),
+    modelVersion: text("model_version").notNull(),
+    catalogVersion: text("catalog_version").notNull(),
+    schemaVersion: text("schema_version").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("ocr_image_results_image_generation_uidx").on(table.imageUid, table.generation)],
+);
+
+export const pgOcrJobResultsTable = pgTable(
+  "ocr_job_results",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    jobUid: text("job_uid")
+      .notNull()
+      .references(() => pgOcrJobsTable.uid, { onDelete: "cascade" }),
+    generation: integer().notNull(),
+    attemptUid: text("attempt_uid")
+      .notNull()
+      .references(() => pgOcrAttemptsTable.uid),
+    resultJson: jsonb("result_json").notNull(),
+    modelVersion: text("model_version").notNull(),
+    catalogVersion: text("catalog_version").notNull(),
+    schemaVersion: text("schema_version").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("ocr_job_results_job_generation_uidx").on(table.jobUid, table.generation)],
+);
+
+export const pgOcrOutboxTable = pgTable(
+  "ocr_outbox",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    eventType: text("event_type").notNull(),
+    aggregateUid: text("aggregate_uid").notNull(),
+    generation: integer().notNull(),
+    payload: jsonb().$type<OcrTaskMessage>().notNull(),
+    status: text().notNull().default("pending"),
+    attempts: integer().notNull().default(0),
+    availableAt: timestamptz("available_at").notNull().defaultNow(),
+    publishedAt: timestamptz("published_at"),
+    lastError: text("last_error"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ocr_outbox_event_aggregate_generation_uidx").on(table.eventType, table.aggregateUid, table.generation),
+    index("ocr_outbox_dispatch_idx").on(table.status, table.availableAt, table.id),
   ],
 );

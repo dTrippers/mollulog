@@ -1,5 +1,14 @@
+import { and, asc, desc, eq, exists, gt, inArray, isNull, lt, lte, ne, not, notInArray } from "drizzle-orm";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import type { Client } from "pg";
+import {
+  pgOcrAttemptsTable,
+  pgOcrImageResultsTable,
+  pgOcrImagesTable,
+  pgOcrJobResultsTable,
+  pgOcrJobsTable,
+  pgOcrOutboxTable,
+} from "~/db/postgres/schema";
 import {
   OCR_CONTRACT_VERSION,
   OCR_DOWNLOAD_EXPIRES_SECONDS,
@@ -20,42 +29,10 @@ import { createR2PresignedUrl } from "~/lib/r2-presign.server";
 type OcrRepositoryOptions = { ctx?: ExecutionContext; createClient?: PostgresClientFactory; fetch?: typeof fetch };
 
 const OCR_HEAD_EXPIRES_SECONDS = 60;
-const OCR_QUOTA_ADVISORY_LOCK_NAMESPACE = 20260723;
+const OCR_SERIALIZABLE_RETRY_LIMIT = 3;
 
-type OcrJobRow = {
-  uid: string;
-  userId: number;
-  status: string;
-  generation: number;
-  totalImages: number;
-  completedImages: number;
-  failedImages: number;
-  createdAt: Date | string;
-  updatedAt: Date | string;
-  expiresAt: Date | string;
-  purgeAfter: Date | string;
-};
-
-type OcrImageRow = {
-  uid: string;
-  jobUid: string;
-  objectKey: string;
-  originalFilename: string;
-  contentType: string;
-  byteSize: number;
-  inputSha256: string;
-  status: string;
-  generation: number;
-  lastErrorCode: string | null;
-  lastErrorMessage: string | null;
-};
-
-type OcrResultRow = {
-  resultJson: unknown;
-  modelVersion: string;
-  catalogVersion: string;
-  schemaVersion: string;
-};
+type OcrImageRow = typeof pgOcrImagesTable.$inferSelect;
+type OcrDatabase = Pick<NodePgDatabase, "select" | "insert" | "update" | "delete">;
 
 export type OcrJobView = {
   uid: string;
@@ -121,40 +98,46 @@ export async function createOcrJob(
     return { ...image, uid, objectKey: `ocr/${env.STAGE ?? "local"}/${jobUid}/${uid}` };
   });
 
-  const quota = await withOcrClient(env, options, (client) =>
-    inTransaction(client, async () => {
-      await client.query("SELECT pg_advisory_xact_lock($1, $2)", [OCR_QUOTA_ADVISORY_LOCK_NAMESPACE, userId]);
-      const currentQuota = await readOcrUploadQuota(client, userId);
-      if (rows.length > currentQuota.remaining) throw new OcrQuotaExceededError(currentQuota);
-      await client.query(
-        `INSERT INTO ocr_jobs (
-           uid, user_id, status, generation, total_images, expires_at, purge_after,
-           training_consent_at, training_consent_version
-         ) VALUES ($1, $2, 'uploading', 1, $3, $4, $5, $6, $7)`,
-        [
-          jobUid,
-          userId,
-          rows.length,
-          expiresAt,
-          purgeAfter,
-          input.trainingConsent ? new Date() : null,
-          input.trainingConsent ? OCR_TRAINING_CONSENT_VERSION : null,
-        ],
-      );
-      for (const image of rows) {
-        await client.query(
-          `INSERT INTO ocr_images (
-             uid, job_uid, object_key, original_filename, content_type, byte_size, input_sha256, status, generation
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending_upload', 1)`,
-          [image.uid, jobUid, image.objectKey, image.filename, image.contentType, image.byteSize, image.sha256],
-        );
-      }
-      return applyQuotaUsage(
-        currentQuota,
-        rows.length,
-        new Date(Date.now() + OCR_UPLOAD_EXPIRES_SECONDS * 1000).toISOString(),
-      );
-    }),
+  const quota = await withOcrDatabase(env, options, (db) =>
+    withSerializableRetry(() =>
+      db.transaction(
+        async (tx) => {
+          const currentQuota = await readOcrUploadQuota(tx, userId);
+          if (rows.length > currentQuota.remaining) throw new OcrQuotaExceededError(currentQuota);
+          const now = new Date();
+          await tx.insert(pgOcrJobsTable).values({
+            uid: jobUid,
+            userId,
+            status: "uploading",
+            generation: 1,
+            totalImages: rows.length,
+            expiresAt,
+            purgeAfter,
+            trainingConsentAt: input.trainingConsent ? now : null,
+            trainingConsentVersion: input.trainingConsent ? OCR_TRAINING_CONSENT_VERSION : null,
+          });
+          await tx.insert(pgOcrImagesTable).values(
+            rows.map((image) => ({
+              uid: image.uid,
+              jobUid,
+              objectKey: image.objectKey,
+              originalFilename: image.filename,
+              contentType: image.contentType,
+              byteSize: image.byteSize,
+              inputSha256: image.sha256,
+              status: "pending_upload",
+              generation: 1,
+            })),
+          );
+          return applyQuotaUsage(
+            currentQuota,
+            rows.length,
+            new Date(now.getTime() + OCR_UPLOAD_EXPIRES_SECONDS * 1000).toISOString(),
+          );
+        },
+        { isolationLevel: "serializable" },
+      ),
+    ),
   );
 
   return {
@@ -181,7 +164,7 @@ export async function submitOcrJob(
   if (!current) throw new Error("OCR 작업을 찾을 수 없어요");
   if (current.status !== "uploading") return current;
 
-  const images = await withOcrClient(env, options, (client) => listImageRows(client, jobUid));
+  const images = await withOcrDatabase(env, options, (db) => listImageRows(db, jobUid));
   for (const image of images) {
     const response = await (options.fetch ?? fetch)(
       await createR2Url(env, image.objectKey, "HEAD", OCR_HEAD_EXPIRES_SECONDS),
@@ -198,27 +181,36 @@ export async function submitOcrJob(
     }
   }
 
-  await withOcrClient(env, options, (client) =>
-    inTransaction(client, async () => {
-      const locked = await getOwnedJobRow(client, userId, jobUid, true);
+  await withOcrDatabase(env, options, (db) =>
+    db.transaction(async (tx) => {
+      const locked = await getOwnedJobRow(tx, userId, jobUid, true);
       if (!locked) throw new Error("OCR 작업을 찾을 수 없어요");
       if (locked.status !== "uploading") return;
       const submittedAt = new Date();
       const expiresAt = new Date(submittedAt.getTime() + OCR_JOB_VISIBILITY_DAYS * 24 * 60 * 60 * 1000);
       const purgeAfter = new Date(expiresAt.getTime() + OCR_JOB_PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
-      await client.query(
-        `UPDATE ocr_jobs
-         SET status = 'queued', submitted_at = $3, expires_at = $4, purge_after = $5, updated_at = now()
-         WHERE uid = $1 AND user_id = $2 AND status = 'uploading'`,
-        [jobUid, userId, submittedAt, expiresAt, purgeAfter],
-      );
-      for (const image of images) {
-        await client.query(
-          `UPDATE ocr_images SET status = 'queued', updated_at = now()
-           WHERE uid = $1 AND job_uid = $2 AND status = 'pending_upload'`,
-          [image.uid, jobUid],
+      await tx
+        .update(pgOcrJobsTable)
+        .set({ status: "queued", submittedAt, expiresAt, purgeAfter, updatedAt: submittedAt })
+        .where(
+          and(
+            eq(pgOcrJobsTable.uid, jobUid),
+            eq(pgOcrJobsTable.userId, userId),
+            eq(pgOcrJobsTable.status, "uploading"),
+          ),
         );
-        await insertOutbox(client, {
+      for (const image of images) {
+        await tx
+          .update(pgOcrImagesTable)
+          .set({ status: "queued", updatedAt: submittedAt })
+          .where(
+            and(
+              eq(pgOcrImagesTable.uid, image.uid),
+              eq(pgOcrImagesTable.jobUid, jobUid),
+              eq(pgOcrImagesTable.status, "pending_upload"),
+            ),
+          );
+        await insertOutbox(tx, {
           type: "ocr.image.recognize.v1",
           taskUid: image.uid,
           generation: image.generation,
@@ -235,19 +227,23 @@ export async function getOcrJob(
   jobUid: string,
   options: OcrRepositoryOptions = {},
 ): Promise<OcrJobView | null> {
-  return withOcrClient(env, options, async (client) => {
-    const job = await getOwnedJobRow(client, userId, jobUid);
+  return withOcrDatabase(env, options, async (db) => {
+    const job = await getOwnedJobRow(db, userId, jobUid);
     if (!job) return null;
-    const [images, resultQuery] = await Promise.all([
-      listImageRows(client, jobUid),
-      client.query<OcrResultRow>(
-        `SELECT result_json AS "resultJson", model_version AS "modelVersion",
-                catalog_version AS "catalogVersion", schema_version AS "schemaVersion"
-         FROM ocr_job_results WHERE job_uid = $1 AND generation = $2`,
-        [jobUid, job.generation],
-      ),
+    const [images, results] = await Promise.all([
+      listImageRows(db, jobUid),
+      db
+        .select({
+          resultJson: pgOcrJobResultsTable.resultJson,
+          modelVersion: pgOcrJobResultsTable.modelVersion,
+          catalogVersion: pgOcrJobResultsTable.catalogVersion,
+          schemaVersion: pgOcrJobResultsTable.schemaVersion,
+        })
+        .from(pgOcrJobResultsTable)
+        .where(and(eq(pgOcrJobResultsTable.jobUid, jobUid), eq(pgOcrJobResultsTable.generation, job.generation)))
+        .limit(1),
     ]);
-    const result = resultQuery.rows[0];
+    const result = results[0];
     return {
       uid: job.uid,
       status: job.status,
@@ -278,14 +274,19 @@ export async function listRecentOcrJobs(
   userId: number,
   options: OcrRepositoryOptions = {},
 ): Promise<OcrJobSummary[]> {
-  return withOcrClient(env, options, async (client) => {
-    const result = await client.query<OcrJobRow>(
-      `${JOB_SELECT}
-       WHERE user_id = $1 AND status <> 'uploading' AND expires_at > now()
-       ORDER BY created_at DESC`,
-      [userId],
-    );
-    return result.rows.map((job) => ({
+  return withOcrDatabase(env, options, async (db) => {
+    const jobs = await db
+      .select()
+      .from(pgOcrJobsTable)
+      .where(
+        and(
+          eq(pgOcrJobsTable.userId, userId),
+          ne(pgOcrJobsTable.status, "uploading"),
+          gt(pgOcrJobsTable.expiresAt, new Date()),
+        ),
+      )
+      .orderBy(desc(pgOcrJobsTable.createdAt));
+    return jobs.map((job) => ({
       uid: job.uid,
       status: job.status,
       progress: { completed: job.completedImages, failed: job.failedImages, total: job.totalImages },
@@ -301,7 +302,7 @@ export async function getOcrUploadQuota(
   userId: number,
   options: OcrRepositoryOptions = {},
 ): Promise<OcrUploadQuota> {
-  return withOcrClient(env, options, (client) => readOcrUploadQuota(client, userId));
+  return withOcrDatabase(env, options, (db) => readOcrUploadQuota(db, userId));
 }
 
 export async function getOcrImageDownloadUrl(
@@ -311,15 +312,21 @@ export async function getOcrImageDownloadUrl(
   imageUid: string,
   options: OcrRepositoryOptions = {},
 ): Promise<string | null> {
-  const objectKey = await withOcrClient(env, options, async (client) => {
-    const result = await client.query<{ objectKey: string }>(
-      `SELECT i.object_key AS "objectKey"
-       FROM ocr_images i
-       JOIN ocr_jobs j ON j.uid = i.job_uid
-       WHERE i.uid = $1 AND j.uid = $2 AND j.user_id = $3 AND j.purge_after > now()`,
-      [imageUid, jobUid, userId],
-    );
-    return result.rows[0]?.objectKey ?? null;
+  const objectKey = await withOcrDatabase(env, options, async (db) => {
+    const rows = await db
+      .select({ objectKey: pgOcrImagesTable.objectKey })
+      .from(pgOcrImagesTable)
+      .innerJoin(pgOcrJobsTable, eq(pgOcrJobsTable.uid, pgOcrImagesTable.jobUid))
+      .where(
+        and(
+          eq(pgOcrImagesTable.uid, imageUid),
+          eq(pgOcrJobsTable.uid, jobUid),
+          eq(pgOcrJobsTable.userId, userId),
+          gt(pgOcrJobsTable.purgeAfter, new Date()),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.objectKey ?? null;
   });
   return objectKey ? createR2Url(env, objectKey, "GET", OCR_DOWNLOAD_EXPIRES_SECONDS) : null;
 }
@@ -331,35 +338,42 @@ export async function claimOcrTask(
   queueAttempts: number,
   options: OcrRepositoryOptions = {},
 ): Promise<OcrClaimResult> {
-  const claim = await withOcrClient(env, options, (client) =>
-    inTransaction(
-      client,
-      async (): Promise<Omit<Extract<OcrClaimResult, { disposition: "ready" }>, "input"> | OcrClaimResult> => {
+  const claim = await withOcrDatabase(env, options, (db) =>
+    db.transaction(
+      async (tx): Promise<Omit<Extract<OcrClaimResult, { disposition: "ready" }>, "input"> | OcrClaimResult> => {
         if (task.type === "ocr.image.recognize.v1") {
-          const imageQuery = await client.query<OcrImageRow & { jobStatus: string }>(
-            `${IMAGE_SELECT}, j.status AS "jobStatus"
-           FROM ocr_images i JOIN ocr_jobs j ON j.uid = i.job_uid
-           WHERE i.uid = $1 FOR UPDATE OF i, j`,
-            [task.taskUid],
-          );
-          const image = imageQuery.rows[0];
+          const imageRows = await tx
+            .select({
+              image: pgOcrImagesTable,
+              jobStatus: pgOcrJobsTable.status,
+            })
+            .from(pgOcrImagesTable)
+            .innerJoin(pgOcrJobsTable, eq(pgOcrJobsTable.uid, pgOcrImagesTable.jobUid))
+            .where(eq(pgOcrImagesTable.uid, task.taskUid))
+            .for("update", { of: [pgOcrImagesTable, pgOcrJobsTable] });
+          const row = imageRows[0];
+          const image = row?.image;
           if (!image || image.generation !== task.generation) return { disposition: "stale" };
-          if (["cancelled", "expired", "failed"].includes(image.jobStatus)) return { disposition: "cancelled" };
+          if (["cancelled", "expired", "failed"].includes(row.jobStatus)) return { disposition: "cancelled" };
           if (["succeeded", "failed"].includes(image.status)) return { disposition: "already_completed" };
 
           const attemptUid = nanoid(16);
-          await insertAttempt(client, task, attemptUid, workerId, queueAttempts);
-          await client.query(
-            `UPDATE ocr_images
-           SET status = 'processing', current_attempt_uid = $2, updated_at = now()
-           WHERE uid = $1 AND generation = $3 AND status IN ('queued', 'processing')`,
-            [task.taskUid, attemptUid, task.generation],
-          );
-          await client.query(
-            `UPDATE ocr_jobs SET status = 'processing', updated_at = now()
-           WHERE uid = $1 AND status IN ('queued', 'processing')`,
-            [image.jobUid],
-          );
+          const now = new Date();
+          await insertAttempt(tx, task, attemptUid, workerId, queueAttempts);
+          await tx
+            .update(pgOcrImagesTable)
+            .set({ status: "processing", currentAttemptUid: attemptUid, updatedAt: now })
+            .where(
+              and(
+                eq(pgOcrImagesTable.uid, task.taskUid),
+                eq(pgOcrImagesTable.generation, task.generation),
+                inArray(pgOcrImagesTable.status, ["queued", "processing"]),
+              ),
+            );
+          await tx
+            .update(pgOcrJobsTable)
+            .set({ status: "processing", updatedAt: now })
+            .where(and(eq(pgOcrJobsTable.uid, image.jobUid), inArray(pgOcrJobsTable.status, ["queued", "processing"])));
           return {
             disposition: "ready",
             attemptUid,
@@ -380,33 +394,51 @@ export async function claimOcrTask(
           };
         }
 
-        const jobQuery = await client.query<OcrJobRow>(`${JOB_SELECT} WHERE uid = $1 FOR UPDATE`, [task.taskUid]);
-        const job = jobQuery.rows[0];
+        const jobRows = await tx
+          .select()
+          .from(pgOcrJobsTable)
+          .where(eq(pgOcrJobsTable.uid, task.taskUid))
+          .for("update");
+        const job = jobRows[0];
         if (!job || job.generation !== task.generation) return { disposition: "stale" };
         if (["cancelled", "expired", "failed"].includes(job.status)) return { disposition: "cancelled" };
         if (job.status === "review_ready") return { disposition: "already_completed" };
-        const resultQuery = await client.query<{ uid: string; filename: string; result: unknown }>(
-          `SELECT i.uid, i.original_filename AS filename, r.result_json AS result
-         FROM ocr_images i
-         JOIN ocr_image_results r ON r.image_uid = i.uid AND r.generation = i.generation
-         WHERE i.job_uid = $1 AND i.status = 'succeeded' ORDER BY i.id`,
-          [job.uid],
-        );
-        if (resultQuery.rows.length === 0) return { disposition: "cancelled" };
+        const results = await tx
+          .select({
+            uid: pgOcrImagesTable.uid,
+            filename: pgOcrImagesTable.originalFilename,
+            result: pgOcrImageResultsTable.resultJson,
+          })
+          .from(pgOcrImagesTable)
+          .innerJoin(
+            pgOcrImageResultsTable,
+            and(
+              eq(pgOcrImageResultsTable.imageUid, pgOcrImagesTable.uid),
+              eq(pgOcrImageResultsTable.generation, pgOcrImagesTable.generation),
+            ),
+          )
+          .where(and(eq(pgOcrImagesTable.jobUid, job.uid), eq(pgOcrImagesTable.status, "succeeded")))
+          .orderBy(asc(pgOcrImagesTable.id));
+        if (results.length === 0) return { disposition: "cancelled" };
 
         const attemptUid = nanoid(16);
-        await insertAttempt(client, task, attemptUid, workerId, queueAttempts);
-        await client.query(
-          `UPDATE ocr_jobs SET status = 'finalizing', updated_at = now()
-         WHERE uid = $1 AND generation = $2 AND status IN ('processing', 'finalizing')`,
-          [job.uid, job.generation],
-        );
+        await insertAttempt(tx, task, attemptUid, workerId, queueAttempts);
+        await tx
+          .update(pgOcrJobsTable)
+          .set({ status: "finalizing", updatedAt: new Date() })
+          .where(
+            and(
+              eq(pgOcrJobsTable.uid, job.uid),
+              eq(pgOcrJobsTable.generation, job.generation),
+              inArray(pgOcrJobsTable.status, ["processing", "finalizing"]),
+            ),
+          );
         return {
           disposition: "ready",
           attemptUid,
           contractVersion: OCR_CONTRACT_VERSION,
           task,
-          images: resultQuery.rows,
+          images: results,
         };
       },
     ),
@@ -439,32 +471,42 @@ export async function commitOcrTaskResult(
   envelope: OcrResultEnvelope,
   options: OcrRepositoryOptions = {},
 ): Promise<{ accepted: true; duplicate: boolean }> {
-  return withOcrClient(env, options, (client) =>
-    inTransaction(client, async () => {
-      const attemptQuery = await client.query<{ uid: string }>(
-        `SELECT uid FROM ocr_attempts
-         WHERE uid = $1 AND task_type = $2 AND task_uid = $3 AND generation = $4 FOR UPDATE`,
-        [envelope.attemptUid, task.type, task.taskUid, task.generation],
-      );
-      if (!attemptQuery.rows[0]) throw new Error("유효한 OCR 시도를 찾을 수 없어요");
+  return withOcrDatabase(env, options, (db) =>
+    db.transaction(async (tx) => {
+      const attempts = await tx
+        .select({ uid: pgOcrAttemptsTable.uid })
+        .from(pgOcrAttemptsTable)
+        .where(
+          and(
+            eq(pgOcrAttemptsTable.uid, envelope.attemptUid),
+            eq(pgOcrAttemptsTable.taskType, task.type),
+            eq(pgOcrAttemptsTable.taskUid, task.taskUid),
+            eq(pgOcrAttemptsTable.generation, task.generation),
+          ),
+        )
+        .for("update");
+      if (!attempts[0]) throw new Error("유효한 OCR 시도를 찾을 수 없어요");
 
       if (task.type === "ocr.image.recognize.v1") {
-        const imageQuery = await client.query<OcrImageRow>(
-          `${IMAGE_SELECT} FROM ocr_images i WHERE i.uid = $1 FOR UPDATE`,
-          [task.taskUid],
-        );
-        const image = imageQuery.rows[0];
+        const images = await tx
+          .select()
+          .from(pgOcrImagesTable)
+          .where(eq(pgOcrImagesTable.uid, task.taskUid))
+          .for("update");
+        const image = images[0];
         if (!image || image.generation !== task.generation) throw new Error("OCR 이미지를 찾을 수 없어요");
-        const existing = await client.query(
-          "SELECT uid FROM ocr_image_results WHERE image_uid = $1 AND generation = $2",
-          [image.uid, task.generation],
-        );
-        if (existing.rows[0] || image.status === "failed") {
-          await client.query(
-            `UPDATE ocr_attempts SET status = $2, finished_at = now()
-             WHERE uid = $1 AND status = 'processing'`,
-            [envelope.attemptUid, existing.rows[0] ? "succeeded" : "failed"],
-          );
+        const existing = await tx
+          .select({ uid: pgOcrImageResultsTable.uid })
+          .from(pgOcrImageResultsTable)
+          .where(
+            and(eq(pgOcrImageResultsTable.imageUid, image.uid), eq(pgOcrImageResultsTable.generation, task.generation)),
+          )
+          .limit(1);
+        if (existing[0] || image.status === "failed") {
+          await tx
+            .update(pgOcrAttemptsTable)
+            .set({ status: existing[0] ? "succeeded" : "failed", finishedAt: new Date() })
+            .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
           return { accepted: true, duplicate: true } as const;
         }
         if (envelope.status === "succeeded" && envelope.inputSha256 !== image.inputSha256) {
@@ -472,95 +514,110 @@ export async function commitOcrTaskResult(
         }
 
         if (envelope.status === "succeeded") {
-          await client.query(
-            `INSERT INTO ocr_image_results (
-               uid, image_uid, generation, attempt_uid, result_json, model_version, catalog_version, schema_version
-             ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
-             ON CONFLICT (image_uid, generation) DO NOTHING`,
-            [
-              nanoid(16),
-              image.uid,
-              task.generation,
-              envelope.attemptUid,
-              JSON.stringify(envelope.result),
-              envelope.modelVersion,
-              envelope.catalogVersion,
-              envelope.schemaVersion,
-            ],
-          );
+          await tx
+            .insert(pgOcrImageResultsTable)
+            .values({
+              uid: nanoid(16),
+              imageUid: image.uid,
+              generation: task.generation,
+              attemptUid: envelope.attemptUid,
+              resultJson: envelope.result,
+              modelVersion: envelope.modelVersion,
+              catalogVersion: envelope.catalogVersion,
+              schemaVersion: envelope.schemaVersion,
+            })
+            .onConflictDoNothing({ target: [pgOcrImageResultsTable.imageUid, pgOcrImageResultsTable.generation] });
         }
         const terminalStatus = envelope.status === "succeeded" ? "succeeded" : "failed";
-        await client.query(
-          `UPDATE ocr_images
-           SET status = $2, last_error_code = $3, last_error_message = $4,
-               completed_at = now(), updated_at = now()
-           WHERE uid = $1 AND generation = $5 AND status IN ('queued', 'processing')`,
-          [image.uid, terminalStatus, envelope.error?.code ?? null, envelope.error?.message ?? null, task.generation],
-        );
-        await client.query(
-          `UPDATE ocr_attempts
-           SET status = $2, error_code = $3, error_message = $4, finished_at = now()
-           WHERE uid = $1 AND status = 'processing'`,
-          [envelope.attemptUid, terminalStatus, envelope.error?.code ?? null, envelope.error?.message ?? null],
-        );
-        await updateJobCounts(client, image.jobUid);
-        await finalizeIfTerminal(client, image.jobUid, task.generation);
+        const finishedAt = new Date();
+        await tx
+          .update(pgOcrImagesTable)
+          .set({
+            status: terminalStatus,
+            lastErrorCode: envelope.error?.code ?? null,
+            lastErrorMessage: envelope.error?.message ?? null,
+            completedAt: finishedAt,
+            updatedAt: finishedAt,
+          })
+          .where(
+            and(
+              eq(pgOcrImagesTable.uid, image.uid),
+              eq(pgOcrImagesTable.generation, task.generation),
+              inArray(pgOcrImagesTable.status, ["queued", "processing"]),
+            ),
+          );
+        await tx
+          .update(pgOcrAttemptsTable)
+          .set({
+            status: terminalStatus,
+            errorCode: envelope.error?.code ?? null,
+            errorMessage: envelope.error?.message ?? null,
+            finishedAt,
+          })
+          .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
+        await updateJobCounts(tx, image.jobUid);
+        await finalizeIfTerminal(tx, image.jobUid, task.generation);
         return { accepted: true, duplicate: false } as const;
       }
 
-      const existing = await client.query("SELECT uid FROM ocr_job_results WHERE job_uid = $1 AND generation = $2", [
-        task.taskUid,
-        task.generation,
-      ]);
-      if (existing.rows[0]) {
-        await client.query(
-          "UPDATE ocr_attempts SET status = 'succeeded', finished_at = now() WHERE uid = $1 AND status = 'processing'",
-          [envelope.attemptUid],
-        );
+      const existing = await tx
+        .select({ uid: pgOcrJobResultsTable.uid })
+        .from(pgOcrJobResultsTable)
+        .where(and(eq(pgOcrJobResultsTable.jobUid, task.taskUid), eq(pgOcrJobResultsTable.generation, task.generation)))
+        .limit(1);
+      if (existing[0]) {
+        await tx
+          .update(pgOcrAttemptsTable)
+          .set({ status: "succeeded", finishedAt: new Date() })
+          .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
         return { accepted: true, duplicate: true } as const;
       }
       if (envelope.status === "failed") {
-        await client.query(
-          `UPDATE ocr_attempts SET status = 'failed', error_code = $2, error_message = $3, finished_at = now()
-           WHERE uid = $1`,
-          [
-            envelope.attemptUid,
-            envelope.error?.code ?? "finalize_failed",
-            envelope.error?.message ?? "Finalize failed",
-          ],
-        );
-        await client.query(
-          `UPDATE ocr_jobs SET status = 'failed', completed_at = now(), updated_at = now()
-           WHERE uid = $1 AND generation = $2`,
-          [task.taskUid, task.generation],
-        );
+        const finishedAt = new Date();
+        await tx
+          .update(pgOcrAttemptsTable)
+          .set({
+            status: "failed",
+            errorCode: envelope.error?.code ?? "finalize_failed",
+            errorMessage: envelope.error?.message ?? "Finalize failed",
+            finishedAt,
+          })
+          .where(eq(pgOcrAttemptsTable.uid, envelope.attemptUid));
+        await tx
+          .update(pgOcrJobsTable)
+          .set({ status: "failed", completedAt: finishedAt, updatedAt: finishedAt })
+          .where(and(eq(pgOcrJobsTable.uid, task.taskUid), eq(pgOcrJobsTable.generation, task.generation)));
         return { accepted: true, duplicate: false } as const;
       }
 
-      await client.query(
-        `INSERT INTO ocr_job_results (
-           uid, job_uid, generation, attempt_uid, result_json, model_version, catalog_version, schema_version
-         ) VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)
-         ON CONFLICT (job_uid, generation) DO NOTHING`,
-        [
-          nanoid(16),
-          task.taskUid,
-          task.generation,
-          envelope.attemptUid,
-          JSON.stringify(envelope.result),
-          envelope.modelVersion,
-          envelope.catalogVersion,
-          envelope.schemaVersion,
-        ],
-      );
-      await client.query("UPDATE ocr_attempts SET status = 'succeeded', finished_at = now() WHERE uid = $1", [
-        envelope.attemptUid,
-      ]);
-      await client.query(
-        `UPDATE ocr_jobs SET status = 'review_ready', completed_at = now(), updated_at = now()
-         WHERE uid = $1 AND generation = $2 AND status IN ('processing', 'finalizing')`,
-        [task.taskUid, task.generation],
-      );
+      await tx
+        .insert(pgOcrJobResultsTable)
+        .values({
+          uid: nanoid(16),
+          jobUid: task.taskUid,
+          generation: task.generation,
+          attemptUid: envelope.attemptUid,
+          resultJson: envelope.result,
+          modelVersion: envelope.modelVersion,
+          catalogVersion: envelope.catalogVersion,
+          schemaVersion: envelope.schemaVersion,
+        })
+        .onConflictDoNothing({ target: [pgOcrJobResultsTable.jobUid, pgOcrJobResultsTable.generation] });
+      const finishedAt = new Date();
+      await tx
+        .update(pgOcrAttemptsTable)
+        .set({ status: "succeeded", finishedAt })
+        .where(eq(pgOcrAttemptsTable.uid, envelope.attemptUid));
+      await tx
+        .update(pgOcrJobsTable)
+        .set({ status: "review_ready", completedAt: finishedAt, updatedAt: finishedAt })
+        .where(
+          and(
+            eq(pgOcrJobsTable.uid, task.taskUid),
+            eq(pgOcrJobsTable.generation, task.generation),
+            inArray(pgOcrJobsTable.status, ["processing", "finalizing"]),
+          ),
+        );
       return { accepted: true, duplicate: false } as const;
     }),
   );
@@ -572,20 +629,30 @@ export async function publishPendingOcrOutbox(
   options: OcrRepositoryOptions = {},
 ): Promise<number> {
   if (!env.OCR_TASKS) return 0;
-  const rows = await withOcrClient(env, options, (client) =>
-    inTransaction(client, async () => {
-      const claimed = await client.query<{ uid: string; payload: unknown }>(
-        `WITH candidates AS (
-           SELECT id FROM ocr_outbox
-           WHERE status = 'pending' AND available_at <= now()
-           ORDER BY id FOR UPDATE SKIP LOCKED LIMIT $1
-         )
-         UPDATE ocr_outbox o SET status = 'publishing', updated_at = now()
-         FROM candidates c WHERE o.id = c.id
-         RETURNING o.uid, o.payload`,
-        [limit],
-      );
-      return claimed.rows;
+  const rows = await withOcrDatabase(env, options, (db) =>
+    db.transaction(async (tx) => {
+      const candidates = await tx
+        .select({ id: pgOcrOutboxTable.id })
+        .from(pgOcrOutboxTable)
+        .where(and(eq(pgOcrOutboxTable.status, "pending"), lte(pgOcrOutboxTable.availableAt, new Date())))
+        .orderBy(asc(pgOcrOutboxTable.id))
+        .limit(limit)
+        .for("update", { skipLocked: true });
+      if (candidates.length === 0) return [];
+      return tx
+        .update(pgOcrOutboxTable)
+        .set({ status: "publishing", updatedAt: new Date() })
+        .where(
+          inArray(
+            pgOcrOutboxTable.id,
+            candidates.map(({ id }) => id),
+          ),
+        )
+        .returning({
+          uid: pgOcrOutboxTable.uid,
+          payload: pgOcrOutboxTable.payload,
+          attempts: pgOcrOutboxTable.attempts,
+        });
     }),
   );
 
@@ -593,24 +660,34 @@ export async function publishPendingOcrOutbox(
   for (const row of rows) {
     try {
       await publishOcrTask(env, parseOcrTaskMessage(row.payload), options.fetch ?? fetch);
-      await withOcrClient(env, options, (client) =>
-        client.query(
-          `UPDATE ocr_outbox SET status = 'published', attempts = attempts + 1,
-             published_at = now(), updated_at = now(), last_error = NULL
-           WHERE uid = $1 AND status = 'publishing'`,
-          [row.uid],
-        ),
+      await withOcrDatabase(env, options, (db) =>
+        db
+          .update(pgOcrOutboxTable)
+          .set({
+            status: "published",
+            attempts: row.attempts + 1,
+            publishedAt: new Date(),
+            updatedAt: new Date(),
+            lastError: null,
+          })
+          .where(and(eq(pgOcrOutboxTable.uid, row.uid), eq(pgOcrOutboxTable.status, "publishing"))),
       );
       published += 1;
     } catch (error) {
-      await withOcrClient(env, options, (client) =>
-        client.query(
-          `UPDATE ocr_outbox SET status = 'pending', attempts = attempts + 1,
-             last_error = $2, available_at = now() + make_interval(secs => LEAST(300, (attempts + 1) * (attempts + 1))),
-             updated_at = now() WHERE uid = $1 AND status = 'publishing'`,
-          [row.uid, error instanceof Error ? error.message.slice(0, 500) : "Queue publish failed"],
-        ),
-      );
+      await withOcrDatabase(env, options, (db) => {
+        const now = new Date();
+        const attempts = row.attempts + 1;
+        return db
+          .update(pgOcrOutboxTable)
+          .set({
+            status: "pending",
+            attempts,
+            lastError: error instanceof Error ? error.message.slice(0, 500) : "Queue publish failed",
+            availableAt: new Date(now.getTime() + Math.min(300, attempts * attempts) * 1000),
+            updatedAt: now,
+          })
+          .where(and(eq(pgOcrOutboxTable.uid, row.uid), eq(pgOcrOutboxTable.status, "publishing")));
+      });
     }
   }
   return published;
@@ -643,54 +720,89 @@ export async function reconcileOcrJobs(
   env: Pick<Env, "HYPERDRIVE" | "OCR_UPLOADS">,
   options: OcrRepositoryOptions = {},
 ): Promise<void> {
-  await withOcrClient(env, options, (client) =>
-    inTransaction(client, async () => {
-      await client.query(
-        `UPDATE ocr_outbox SET status = 'pending', updated_at = now()
-         WHERE status = 'publishing' AND updated_at < now() - interval '5 minutes'`,
-      );
-      await client.query(
-        `UPDATE ocr_jobs
-         SET status = 'expired', purge_after = now(), updated_at = now(), completed_at = now()
-         WHERE status = 'uploading' AND created_at < now() - interval '15 minutes'`,
-      );
-      const terminalJobs = await client.query<{ uid: string; generation: number }>(
-        `SELECT j.uid, j.generation FROM ocr_jobs j
-         WHERE j.status IN ('processing', 'finalizing')
-           AND NOT EXISTS (
-             SELECT 1 FROM ocr_images i WHERE i.job_uid = j.uid
-             AND i.status NOT IN ('succeeded', 'failed', 'cancelled')
-           )
-           AND EXISTS (SELECT 1 FROM ocr_images i WHERE i.job_uid = j.uid AND i.status = 'succeeded')
-         FOR UPDATE OF j`,
-      );
-      for (const job of terminalJobs.rows) await finalizeIfTerminal(client, job.uid, job.generation);
+  await withOcrDatabase(env, options, (db) =>
+    db.transaction(async (tx) => {
+      const now = new Date();
+      await tx
+        .update(pgOcrOutboxTable)
+        .set({ status: "pending", updatedAt: now })
+        .where(
+          and(
+            eq(pgOcrOutboxTable.status, "publishing"),
+            lt(pgOcrOutboxTable.updatedAt, new Date(now.getTime() - 5 * 60 * 1000)),
+          ),
+        );
+      await tx
+        .update(pgOcrJobsTable)
+        .set({ status: "expired", purgeAfter: now, updatedAt: now, completedAt: now })
+        .where(
+          and(
+            eq(pgOcrJobsTable.status, "uploading"),
+            lt(pgOcrJobsTable.createdAt, new Date(now.getTime() - OCR_UPLOAD_EXPIRES_SECONDS * 1000)),
+          ),
+        );
+      const terminalJobs = await tx
+        .select({ uid: pgOcrJobsTable.uid, generation: pgOcrJobsTable.generation })
+        .from(pgOcrJobsTable)
+        .where(
+          and(
+            inArray(pgOcrJobsTable.status, ["processing", "finalizing"]),
+            exists(
+              tx
+                .select({ uid: pgOcrImagesTable.uid })
+                .from(pgOcrImagesTable)
+                .where(and(eq(pgOcrImagesTable.jobUid, pgOcrJobsTable.uid), eq(pgOcrImagesTable.status, "succeeded"))),
+            ),
+            not(
+              exists(
+                tx
+                  .select({ uid: pgOcrImagesTable.uid })
+                  .from(pgOcrImagesTable)
+                  .where(
+                    and(
+                      eq(pgOcrImagesTable.jobUid, pgOcrJobsTable.uid),
+                      notInArray(pgOcrImagesTable.status, ["succeeded", "failed", "cancelled"]),
+                    ),
+                  ),
+              ),
+            ),
+          ),
+        )
+        .for("update", { of: pgOcrJobsTable });
+      for (const job of terminalJobs) await finalizeIfTerminal(tx, job.uid, job.generation);
     }),
   );
 
-  const expiredRows = await withOcrClient(env, options, async (client) =>
-    client.query<{ jobUid: string; imageUid: string | null; objectKey: string | null }>(
-      `WITH expired_jobs AS (
-         SELECT uid FROM ocr_jobs WHERE purge_after < now() ORDER BY purge_after LIMIT 25
-       )
-       SELECT j.uid AS "jobUid", i.uid AS "imageUid", i.object_key AS "objectKey"
-       FROM expired_jobs j
-       LEFT JOIN ocr_images i ON i.job_uid = j.uid`,
-    ),
-  );
-  if (expiredRows.rows.length === 0) return;
+  const expired = await withOcrDatabase(env, options, async (db) => {
+    const jobs = await db
+      .select({ uid: pgOcrJobsTable.uid })
+      .from(pgOcrJobsTable)
+      .where(lt(pgOcrJobsTable.purgeAfter, new Date()))
+      .orderBy(asc(pgOcrJobsTable.purgeAfter))
+      .limit(25);
+    const jobUids = jobs.map(({ uid }) => uid);
+    if (jobUids.length === 0) return { jobUids, images: [] };
+    const images = await db
+      .select({ uid: pgOcrImagesTable.uid, objectKey: pgOcrImagesTable.objectKey })
+      .from(pgOcrImagesTable)
+      .where(inArray(pgOcrImagesTable.jobUid, jobUids));
+    return { jobUids, images };
+  });
+  if (expired.jobUids.length === 0) return;
 
-  const jobUids = [...new Set(expiredRows.rows.map((row) => row.jobUid))];
-  const imageUids = expiredRows.rows.flatMap((row) => (row.imageUid ? [row.imageUid] : []));
-  const objectKeys = expiredRows.rows.flatMap((row) => (row.objectKey ? [row.objectKey] : []));
+  const jobUids = expired.jobUids;
+  const imageUids = expired.images.map(({ uid }) => uid);
+  const objectKeys = expired.images.map(({ objectKey }) => objectKey);
   if (objectKeys.length > 0) await env.OCR_UPLOADS.delete(objectKeys);
 
-  await withOcrClient(env, options, (client) =>
-    inTransaction(client, async () => {
+  await withOcrDatabase(env, options, (db) =>
+    db.transaction(async (tx) => {
       const taskUids = [...jobUids, ...imageUids];
-      await client.query(`DELETE FROM ocr_outbox WHERE aggregate_uid = ANY($1::text[])`, [taskUids]);
-      await client.query(`DELETE FROM ocr_jobs WHERE uid = ANY($1::text[]) AND purge_after < now()`, [jobUids]);
-      await client.query(`DELETE FROM ocr_attempts WHERE task_uid = ANY($1::text[])`, [taskUids]);
+      await tx.delete(pgOcrOutboxTable).where(inArray(pgOcrOutboxTable.aggregateUid, taskUids));
+      await tx
+        .delete(pgOcrJobsTable)
+        .where(and(inArray(pgOcrJobsTable.uid, jobUids), lt(pgOcrJobsTable.purgeAfter, new Date())));
+      await tx.delete(pgOcrAttemptsTable).where(inArray(pgOcrAttemptsTable.taskUid, taskUids));
     }),
   );
 }
@@ -701,68 +813,103 @@ export async function markOcrTaskDeadLetter(
   options: OcrRepositoryOptions = {},
 ): Promise<void> {
   const task = parseOcrTaskMessage(value);
-  await withOcrClient(env, options, (client) =>
-    inTransaction(client, async () => {
+  await withOcrDatabase(env, options, (db) =>
+    db.transaction(async (tx) => {
       if (task.type === "ocr.image.recognize.v1") {
-        const image = await client.query<{ jobUid: string }>(
-          `UPDATE ocr_images SET status = 'failed', last_error_code = 'queue_retries_exhausted',
-             last_error_message = '처리 재시도 횟수를 초과했어요', completed_at = now(), updated_at = now()
-           WHERE uid = $1 AND generation = $2 AND status NOT IN ('succeeded', 'failed', 'cancelled')
-           RETURNING job_uid AS "jobUid"`,
-          [task.taskUid, task.generation],
-        );
-        const jobUid = image.rows[0]?.jobUid;
+        const completedAt = new Date();
+        const images = await tx
+          .update(pgOcrImagesTable)
+          .set({
+            status: "failed",
+            lastErrorCode: "queue_retries_exhausted",
+            lastErrorMessage: "처리 재시도 횟수를 초과했어요",
+            completedAt,
+            updatedAt: completedAt,
+          })
+          .where(
+            and(
+              eq(pgOcrImagesTable.uid, task.taskUid),
+              eq(pgOcrImagesTable.generation, task.generation),
+              notInArray(pgOcrImagesTable.status, ["succeeded", "failed", "cancelled"]),
+            ),
+          )
+          .returning({ jobUid: pgOcrImagesTable.jobUid });
+        const jobUid = images[0]?.jobUid;
         if (jobUid) {
-          await updateJobCounts(client, jobUid);
-          await finalizeIfTerminal(client, jobUid, task.generation);
+          await updateJobCounts(tx, jobUid);
+          await finalizeIfTerminal(tx, jobUid, task.generation);
         }
         return;
       }
-      await client.query(
-        `UPDATE ocr_jobs SET status = 'failed', completed_at = now(), updated_at = now()
-         WHERE uid = $1 AND generation = $2 AND status NOT IN ('review_ready', 'failed', 'cancelled', 'expired')`,
-        [task.taskUid, task.generation],
-      );
+      const completedAt = new Date();
+      await tx
+        .update(pgOcrJobsTable)
+        .set({ status: "failed", completedAt, updatedAt: completedAt })
+        .where(
+          and(
+            eq(pgOcrJobsTable.uid, task.taskUid),
+            eq(pgOcrJobsTable.generation, task.generation),
+            notInArray(pgOcrJobsTable.status, ["review_ready", "failed", "cancelled", "expired"]),
+          ),
+        );
     }),
   );
 }
 
-const JOB_SELECT = `SELECT uid, user_id AS "userId", status, generation,
-  total_images AS "totalImages", completed_images AS "completedImages", failed_images AS "failedImages",
-  created_at AS "createdAt", updated_at AS "updatedAt", expires_at AS "expiresAt",
-  purge_after AS "purgeAfter" FROM ocr_jobs`;
-
-const IMAGE_SELECT = `SELECT i.uid, i.job_uid AS "jobUid", i.object_key AS "objectKey",
-  i.original_filename AS "originalFilename", i.content_type AS "contentType", i.byte_size AS "byteSize",
-  i.input_sha256 AS "inputSha256", i.status, i.generation,
-  i.last_error_code AS "lastErrorCode", i.last_error_message AS "lastErrorMessage"`;
-
-async function getOwnedJobRow(client: Client, userId: number, jobUid: string, lock = false) {
-  const result = await client.query<OcrJobRow>(
-    `${JOB_SELECT} WHERE uid = $1 AND user_id = $2 AND purge_after > now()${lock ? " FOR UPDATE" : ""}`,
-    [jobUid, userId],
-  );
-  return result.rows[0] ?? null;
+async function getOwnedJobRow(db: OcrDatabase, userId: number, jobUid: string, lock = false) {
+  const query = db
+    .select()
+    .from(pgOcrJobsTable)
+    .where(
+      and(eq(pgOcrJobsTable.uid, jobUid), eq(pgOcrJobsTable.userId, userId), gt(pgOcrJobsTable.purgeAfter, new Date())),
+    )
+    .limit(1);
+  const rows = lock ? await query.for("update") : await query;
+  return rows[0] ?? null;
 }
 
-async function readOcrUploadQuota(client: Client, userId: number): Promise<OcrUploadQuota> {
-  const result = await client.query<{ used: number; nextAvailableAt: Date | string | null }>(
-    `SELECT COALESCE(SUM(total_images), 0)::integer AS used,
-            MIN(releases_at) AS "nextAvailableAt"
-     FROM (
-       SELECT total_images, submitted_at + ($2::integer * interval '1 day') AS releases_at
-       FROM ocr_jobs
-       WHERE user_id = $1 AND submitted_at > now() - ($2::integer * interval '1 day')
-       UNION ALL
-       SELECT total_images, created_at + ($3::integer * interval '1 second') AS releases_at
-       FROM ocr_jobs
-       WHERE user_id = $1 AND submitted_at IS NULL AND status = 'uploading'
-         AND created_at > now() - ($3::integer * interval '1 second')
-     ) quota_usage`,
-    [userId, OCR_QUOTA_WINDOW_DAYS, OCR_UPLOAD_EXPIRES_SECONDS],
+async function readOcrUploadQuota(db: OcrDatabase, userId: number): Promise<OcrUploadQuota> {
+  const now = new Date();
+  const submittedSince = new Date(now.getTime() - OCR_QUOTA_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const reservationSince = new Date(now.getTime() - OCR_UPLOAD_EXPIRES_SECONDS * 1000);
+  const [submittedJobs, uploadReservations] = await Promise.all([
+    db
+      .select({ totalImages: pgOcrJobsTable.totalImages, submittedAt: pgOcrJobsTable.submittedAt })
+      .from(pgOcrJobsTable)
+      .where(and(eq(pgOcrJobsTable.userId, userId), gt(pgOcrJobsTable.submittedAt, submittedSince))),
+    db
+      .select({ totalImages: pgOcrJobsTable.totalImages, createdAt: pgOcrJobsTable.createdAt })
+      .from(pgOcrJobsTable)
+      .where(
+        and(
+          eq(pgOcrJobsTable.userId, userId),
+          isNull(pgOcrJobsTable.submittedAt),
+          eq(pgOcrJobsTable.status, "uploading"),
+          gt(pgOcrJobsTable.createdAt, reservationSince),
+        ),
+      ),
+  ]);
+  const usages = [
+    ...submittedJobs.flatMap((job) =>
+      job.submittedAt
+        ? [
+            {
+              totalImages: job.totalImages,
+              releasesAt: new Date(job.submittedAt.getTime() + OCR_QUOTA_WINDOW_DAYS * 24 * 60 * 60 * 1000),
+            },
+          ]
+        : [],
+    ),
+    ...uploadReservations.map((job) => ({
+      totalImages: job.totalImages,
+      releasesAt: new Date(job.createdAt.getTime() + OCR_UPLOAD_EXPIRES_SECONDS * 1000),
+    })),
+  ];
+  const used = usages.reduce((sum, usage) => sum + usage.totalImages, 0);
+  const nextAvailableAt = usages.reduce<Date | null>(
+    (earliest, usage) => (!earliest || usage.releasesAt < earliest ? usage.releasesAt : earliest),
+    null,
   );
-  const used = Number(result.rows[0]?.used ?? 0);
-  const nextAvailableAt = result.rows[0]?.nextAvailableAt;
   return {
     limit: OCR_ROLLING_IMAGE_LIMIT,
     used,
@@ -780,95 +927,124 @@ function applyQuotaUsage(quota: OcrUploadQuota, imageCount: number, reservationE
   return { ...quota, used, remaining: Math.max(0, quota.limit - used), nextAvailableAt };
 }
 
-async function listImageRows(client: Client, jobUid: string): Promise<OcrImageRow[]> {
-  const result = await client.query<OcrImageRow>(
-    `${IMAGE_SELECT} FROM ocr_images i WHERE i.job_uid = $1 ORDER BY i.id`,
-    [jobUid],
-  );
-  return result.rows;
+async function listImageRows(db: OcrDatabase, jobUid: string): Promise<OcrImageRow[]> {
+  return db
+    .select()
+    .from(pgOcrImagesTable)
+    .where(eq(pgOcrImagesTable.jobUid, jobUid))
+    .orderBy(asc(pgOcrImagesTable.id));
 }
 
 async function insertAttempt(
-  client: Client,
+  db: OcrDatabase,
   task: OcrTaskMessage,
   attemptUid: string,
   workerId: string,
   queueAttempts: number,
 ) {
-  await client.query(
-    `INSERT INTO ocr_attempts (uid, task_type, task_uid, generation, worker_id, status, queue_attempts)
-     VALUES ($1, $2, $3, $4, $5, 'processing', $6)`,
-    [attemptUid, task.type, task.taskUid, task.generation, workerId, queueAttempts],
+  await db.insert(pgOcrAttemptsTable).values({
+    uid: attemptUid,
+    taskType: task.type,
+    taskUid: task.taskUid,
+    generation: task.generation,
+    workerId,
+    status: "processing",
+    queueAttempts,
+  });
+}
+
+async function insertOutbox(db: OcrDatabase, task: OcrTaskMessage) {
+  await db
+    .insert(pgOcrOutboxTable)
+    .values({
+      uid: nanoid(16),
+      eventType: task.type,
+      aggregateUid: task.taskUid,
+      generation: task.generation,
+      payload: task,
+    })
+    .onConflictDoNothing({
+      target: [pgOcrOutboxTable.eventType, pgOcrOutboxTable.aggregateUid, pgOcrOutboxTable.generation],
+    });
+}
+
+async function readJobImageCounts(db: OcrDatabase, jobUid: string) {
+  const images = await db
+    .select({ status: pgOcrImagesTable.status })
+    .from(pgOcrImagesTable)
+    .where(eq(pgOcrImagesTable.jobUid, jobUid));
+  return images.reduce(
+    (counts, image) => {
+      if (image.status === "succeeded") counts.succeeded += 1;
+      if (image.status === "failed") counts.failed += 1;
+      if (!["succeeded", "failed", "cancelled"].includes(image.status)) counts.active += 1;
+      return counts;
+    },
+    { active: 0, succeeded: 0, failed: 0 },
   );
 }
 
-async function insertOutbox(client: Client, task: OcrTaskMessage) {
-  await client.query(
-    `INSERT INTO ocr_outbox (uid, event_type, aggregate_uid, generation, payload)
-     VALUES ($1, $2, $3, $4, $5::jsonb)
-     ON CONFLICT (event_type, aggregate_uid, generation) DO NOTHING`,
-    [nanoid(16), task.type, task.taskUid, task.generation, JSON.stringify(task)],
-  );
+async function updateJobCounts(db: OcrDatabase, jobUid: string) {
+  const counts = await readJobImageCounts(db, jobUid);
+  await db
+    .update(pgOcrJobsTable)
+    .set({ completedImages: counts.succeeded, failedImages: counts.failed, updatedAt: new Date() })
+    .where(eq(pgOcrJobsTable.uid, jobUid));
 }
 
-async function updateJobCounts(client: Client, jobUid: string) {
-  await client.query(
-    `UPDATE ocr_jobs j SET
-       completed_images = counts.completed,
-       failed_images = counts.failed,
-       updated_at = now()
-     FROM (
-       SELECT count(*) FILTER (WHERE status = 'succeeded')::integer AS completed,
-              count(*) FILTER (WHERE status = 'failed')::integer AS failed
-       FROM ocr_images WHERE job_uid = $1
-     ) counts WHERE j.uid = $1`,
-    [jobUid],
-  );
-}
-
-async function finalizeIfTerminal(client: Client, jobUid: string, generation: number) {
-  const counts = await client.query<{ active: number; succeeded: number }>(
-    `SELECT count(*) FILTER (WHERE status NOT IN ('succeeded', 'failed', 'cancelled'))::integer AS active,
-            count(*) FILTER (WHERE status = 'succeeded')::integer AS succeeded
-     FROM ocr_images WHERE job_uid = $1`,
-    [jobUid],
-  );
-  const state = counts.rows[0];
-  if (!state || state.active > 0) return;
+async function finalizeIfTerminal(db: OcrDatabase, jobUid: string, generation: number) {
+  const state = await readJobImageCounts(db, jobUid);
+  if (state.active > 0) return;
   if (state.succeeded === 0) {
-    await client.query(
-      `UPDATE ocr_jobs SET status = 'failed', completed_at = now(), updated_at = now()
-       WHERE uid = $1 AND status NOT IN ('review_ready', 'cancelled', 'expired')`,
-      [jobUid],
-    );
+    const completedAt = new Date();
+    await db
+      .update(pgOcrJobsTable)
+      .set({ status: "failed", completedAt, updatedAt: completedAt })
+      .where(
+        and(
+          eq(pgOcrJobsTable.uid, jobUid),
+          notInArray(pgOcrJobsTable.status, ["review_ready", "cancelled", "expired"]),
+        ),
+      );
     return;
   }
-  await insertOutbox(client, { type: "ocr.job.finalize.v1", taskUid: jobUid, generation });
-  await client.query(
-    `UPDATE ocr_jobs SET status = 'finalizing', updated_at = now()
-     WHERE uid = $1 AND status IN ('queued', 'processing', 'finalizing')`,
-    [jobUid],
-  );
+  await insertOutbox(db, { type: "ocr.job.finalize.v1", taskUid: jobUid, generation });
+  await db
+    .update(pgOcrJobsTable)
+    .set({ status: "finalizing", updatedAt: new Date() })
+    .where(and(eq(pgOcrJobsTable.uid, jobUid), inArray(pgOcrJobsTable.status, ["queued", "processing", "finalizing"])));
 }
 
-async function inTransaction<T>(client: Client, operation: () => Promise<T>): Promise<T> {
-  await client.query("BEGIN");
-  try {
-    const result = await operation();
-    await client.query("COMMIT");
-    return result;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
+async function withSerializableRetry<T>(operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt >= OCR_SERIALIZABLE_RETRY_LIMIT || getPostgresErrorCode(error) !== "40001") throw error;
+    }
   }
 }
 
-function withOcrClient<T>(
+function getPostgresErrorCode(error: unknown): string | null {
+  let current = error;
+  for (let depth = 0; depth < 3 && typeof current === "object" && current !== null; depth += 1) {
+    if ("code" in current && typeof current.code === "string") return current.code;
+    current = "cause" in current ? current.cause : null;
+  }
+  return null;
+}
+
+function withOcrDatabase<T>(
   env: Pick<Env, "HYPERDRIVE">,
   options: OcrRepositoryOptions,
-  operation: (client: Client) => Promise<T>,
+  operation: (db: NodePgDatabase) => Promise<T>,
 ) {
-  return withPostgresClient(env, operation, options.createClient ?? createPostgresClient, options.ctx);
+  return withPostgresClient(
+    env,
+    (client) => operation(drizzle(client)),
+    options.createClient ?? createPostgresClient,
+    options.ctx,
+  );
 }
 
 function assertR2PresignConfig(

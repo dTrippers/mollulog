@@ -33,16 +33,27 @@ export type OcrUploadRequest = {
   trainingConsent: boolean;
 };
 
-export type OcrResultEnvelope = {
-  attemptUid: string;
-  status: "succeeded" | "failed";
-  inputSha256?: string;
-  modelVersion?: string;
-  catalogVersion?: string;
-  schemaVersion?: string;
-  result?: unknown;
-  error?: { code: string; message: string };
-};
+export type OcrResultEnvelope =
+  | {
+      attemptUid: string;
+      status: "succeeded";
+      inputSha256: string;
+      modelVersion: string;
+      catalogVersion: string;
+      schemaVersion: string;
+      result: unknown;
+      error?: never;
+    }
+  | {
+      attemptUid: string;
+      status: "failed";
+      error: { code: string; message: string };
+      inputSha256?: never;
+      modelVersion?: never;
+      catalogVersion?: never;
+      schemaVersion?: never;
+      result?: never;
+    };
 
 export function parseOcrUploadInputs(value: unknown): OcrUploadInput[] {
   if (!value || typeof value !== "object" || !Array.isArray((value as { images?: unknown }).images)) {
