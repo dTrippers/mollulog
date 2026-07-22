@@ -7,6 +7,8 @@ import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { markOcrTaskDeadLetter, publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
 import { withD1Timeout } from "./d1-timeout";
 
+export { CacheRefreshWorkflow } from "./cache-refresh-workflow";
+
 type ObservabilityEnv = Env & {
   SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
   SERVER_BETTER_STACK_SENTRY_DSN?: string;
