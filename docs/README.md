@@ -20,10 +20,6 @@ These documents describe the project's durable structure and conventions — whe
 - [data/baql.md](./data/baql.md) — BAQL GraphQL queries, codegen, and read placement.
 - [data/date-time.md](./data/date-time.md) — date and time conventions.
 
-### Operations
-
-- [operations/ocr-control-plane.md](./operations/ocr-control-plane.md) — PostgreSQL, R2, Queue HTTP pull, DLQ, and k3s runner provisioning.
-
 ### Contributing
 
 - [contributing/code-review.md](./contributing/code-review.md) — pull request review checklist.
