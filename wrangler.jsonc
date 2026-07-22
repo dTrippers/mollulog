@@ -47,6 +47,13 @@
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
   ],
+  "workflows": [
+    {
+      "binding": "CACHE_REFRESH_WORKFLOW",
+      "name": "mollulog-cache-refresh-local",
+      "class_name": "CacheRefreshWorkflow"
+    }
+  ],
   "queues": {
     "producers": [
       { "binding": "EVENTS", "queue": "mollulog-events" }
@@ -93,6 +100,13 @@
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
       ],
+      "workflows": [
+        {
+          "binding": "CACHE_REFRESH_WORKFLOW",
+          "name": "mollulog-cache-refresh-staging",
+          "class_name": "CacheRefreshWorkflow"
+        }
+      ],
       "queues": {
         "producers": [
           { "binding": "EVENTS", "queue": "mollulog-events-staging" }
@@ -129,6 +143,13 @@
       ],
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
+      ],
+      "workflows": [
+        {
+          "binding": "CACHE_REFRESH_WORKFLOW",
+          "name": "mollulog-cache-refresh",
+          "class_name": "CacheRefreshWorkflow"
+        }
       ],
       "queues": {
         "producers": [
