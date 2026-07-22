@@ -8,9 +8,6 @@
   "placement": {
     "region": "aws:ap-northeast-1"
   },
-  "triggers": {
-    "crons": ["* * * * *"]
-  },
 
   "assets": {
     "directory": "./build/client",
@@ -56,9 +53,6 @@
       "name": "mollulog-cache-refresh-local",
       "class_name": "CacheRefreshWorkflow"
     }
-  ],
-  "r2_buckets": [
-    { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-dev" }
   ],
   "queues": {
     "producers": [
@@ -127,9 +121,6 @@
           "class_name": "CacheRefreshWorkflow"
         }
       ],
-      "r2_buckets": [
-        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
-      ],
       "queues": {
         "producers": [
           { "binding": "EVENTS", "queue": "mollulog-events-staging" },
@@ -182,9 +173,6 @@
           "name": "mollulog-cache-refresh",
           "class_name": "CacheRefreshWorkflow"
         }
-      ],
-      "r2_buckets": [
-        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
       ],
       "queues": {
         "producers": [
