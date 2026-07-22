@@ -68,7 +68,7 @@
 	"r2_buckets": [
 		{
 			"binding": "OCR_UPLOADS",
-			"bucket_name": "mollulog-aoi-uploads-prod"
+			"bucket_name": "mollulog-aoi-uploads-dev"
 		}
 	],
 	"queues": {

@@ -1,5 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
+import { OcrTaskResultRejectedError } from "~/domain/ocr";
 import {
   claimOcrTask,
   commitOcrTaskResult,
@@ -306,6 +307,50 @@ describe("PostgreSQL OCR control plane", () => {
     );
   });
 
+  it("verifies multiple uploaded objects concurrently", async () => {
+    const secondImage = {
+      ...imageRow,
+      uid: "image-2",
+      objectKey: "ocr/local/job-1/image-2",
+      originalFilename: "inventory-2.png",
+    };
+    const { client } = createClient((sql) => {
+      if (sql.includes('from "ocr_jobs"')) return [jobDatabaseRow({ totalImages: 2 })];
+      if (sql.includes('from "ocr_images"')) return [imageDatabaseRow(), imageDatabaseRow(secondImage)];
+      return [];
+    });
+    let releaseRequests: () => void = () => undefined;
+    const requestGate = new Promise<void>((resolve) => {
+      releaseRequests = resolve;
+    });
+    let activeRequests = 0;
+    let maxActiveRequests = 0;
+    const fetchObject = jest.fn(async () => {
+      activeRequests += 1;
+      maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
+      await requestGate;
+      activeRequests -= 1;
+      return new Response(null, {
+        status: 200,
+        headers: { "content-length": "12", "content-type": "image/png" },
+      });
+    });
+
+    const submission = submitOcrJob(createEnv(), 7, "job-1", {
+      createClient: () => client,
+      fetch: fetchObject as unknown as typeof fetch,
+    });
+    for (let attempt = 0; attempt < 100 && fetchObject.mock.calls.length < 2; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    const requestsStartedTogether = fetchObject.mock.calls.length === 2;
+    releaseRequests();
+    await submission;
+
+    expect(requestsStartedTogether).toBe(true);
+    expect(maxActiveRequests).toBe(2);
+  });
+
   it("claims an image with a single-object signed URL and a distinct attempt", async () => {
     const { client, query } = createClient((sql) => {
       if (sql.includes('inner join "ocr_jobs"')) return [[...imageDatabaseRow(), "processing"]];
@@ -365,6 +410,27 @@ describe("PostgreSQL OCR control plane", () => {
     expect(sql).toContain('insert into "ocr_image_results"');
     expect(sql).toContain('update "ocr_jobs" set "completed_images" = $1, "failed_images" = $2, "updated_at" = $3');
     expect(query.mock.calls.some(([, values]) => values?.includes("ocr.job.finalize.v1"))).toBe(true);
+  });
+
+  it("rejects a result for an unknown attempt with a contract error", async () => {
+    const { client } = createClient(() => []);
+
+    await expect(
+      commitOcrTaskResult(
+        createEnv(),
+        { type: "ocr.image.recognize.v1", taskUid: "image-1", generation: 1 },
+        {
+          attemptUid: "missing-attempt",
+          status: "succeeded",
+          inputSha256: imageRow.inputSha256,
+          modelVersion: "model-1",
+          catalogVersion: "catalog-1",
+          schemaVersion: "1",
+          result: { observations: [] },
+        },
+        { createClient: () => client },
+      ),
+    ).rejects.toBeInstanceOf(OcrTaskResultRejectedError);
   });
 
   it("publishes a claimed outbox row and only then marks it published", async () => {

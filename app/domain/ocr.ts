@@ -55,6 +55,10 @@ export type OcrResultEnvelope =
       result?: never;
     };
 
+export class OcrTaskResultRejectedError extends Error {
+  override readonly name = "OcrTaskResultRejectedError";
+}
+
 export function parseOcrUploadInputs(value: unknown): OcrUploadInput[] {
   if (!value || typeof value !== "object" || !Array.isArray((value as { images?: unknown }).images)) {
     throw new Error("이미지 목록을 확인해주세요");

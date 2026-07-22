@@ -20,6 +20,7 @@ import {
   OCR_UPLOAD_EXPIRES_SECONDS,
   type OcrResultEnvelope,
   type OcrTaskMessage,
+  OcrTaskResultRejectedError,
   type OcrUploadInput,
   parseOcrTaskMessage,
 } from "~/domain/ocr";
@@ -165,21 +166,23 @@ export async function submitOcrJob(
   if (current.status !== "uploading") return current;
 
   const images = await withOcrDatabase(env, options, (db) => listImageRows(db, jobUid));
-  for (const image of images) {
-    const response = await (options.fetch ?? fetch)(
-      await createR2Url(env, image.objectKey, "HEAD", OCR_HEAD_EXPIRES_SECONDS),
-      { method: "HEAD" },
-    );
-    const uploadedLength = response.headers.get("content-length");
-    const uploadedSize = uploadedLength === null ? Number.NaN : Number(uploadedLength);
-    if (!response.ok || !Number.isSafeInteger(uploadedSize) || uploadedSize !== image.byteSize) {
-      throw new Error(`${image.originalFilename} 업로드를 확인할 수 없어요`);
-    }
-    const uploadedType = response.headers.get("content-type");
-    if (uploadedType && uploadedType !== image.contentType) {
-      throw new Error(`${image.originalFilename} 파일 형식이 요청과 달라요`);
-    }
-  }
+  await Promise.all(
+    images.map(async (image) => {
+      const response = await (options.fetch ?? fetch)(
+        await createR2Url(env, image.objectKey, "HEAD", OCR_HEAD_EXPIRES_SECONDS),
+        { method: "HEAD" },
+      );
+      const uploadedLength = response.headers.get("content-length");
+      const uploadedSize = uploadedLength === null ? Number.NaN : Number(uploadedLength);
+      if (!response.ok || !Number.isSafeInteger(uploadedSize) || uploadedSize !== image.byteSize) {
+        throw new Error(`${image.originalFilename} 업로드를 확인할 수 없어요`);
+      }
+      const uploadedType = response.headers.get("content-type");
+      if (uploadedType && uploadedType !== image.contentType) {
+        throw new Error(`${image.originalFilename} 파일 형식이 요청과 달라요`);
+      }
+    }),
+  );
 
   await withOcrDatabase(env, options, (db) =>
     db.transaction(async (tx) => {
@@ -485,7 +488,7 @@ export async function commitOcrTaskResult(
           ),
         )
         .for("update");
-      if (!attempts[0]) throw new Error("유효한 OCR 시도를 찾을 수 없어요");
+      if (!attempts[0]) throw new OcrTaskResultRejectedError("유효한 OCR 시도를 찾을 수 없어요");
 
       if (task.type === "ocr.image.recognize.v1") {
         const images = await tx
@@ -494,7 +497,9 @@ export async function commitOcrTaskResult(
           .where(eq(pgOcrImagesTable.uid, task.taskUid))
           .for("update");
         const image = images[0];
-        if (!image || image.generation !== task.generation) throw new Error("OCR 이미지를 찾을 수 없어요");
+        if (!image || image.generation !== task.generation) {
+          throw new OcrTaskResultRejectedError("OCR 이미지를 찾을 수 없어요");
+        }
         const existing = await tx
           .select({ uid: pgOcrImageResultsTable.uid })
           .from(pgOcrImageResultsTable)
@@ -510,7 +515,7 @@ export async function commitOcrTaskResult(
           return { accepted: true, duplicate: true } as const;
         }
         if (envelope.status === "succeeded" && envelope.inputSha256 !== image.inputSha256) {
-          throw new Error("입력 이미지 hash가 일치하지 않아요");
+          throw new OcrTaskResultRejectedError("입력 이미지 hash가 일치하지 않아요");
         }
 
         if (envelope.status === "succeeded") {
