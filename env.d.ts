@@ -3,6 +3,7 @@ interface Env {
   KV_SESSION: KVNamespace;
   DB: D1Database;
   HYPERDRIVE: Hyperdrive;
+  CACHE_REFRESH_WORKFLOW: Workflow<{ requestedBy: number }>;
   EVENTS?: Queue;
   HOST: string;
   CONNECT_API_URL?: string;
