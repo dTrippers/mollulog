@@ -25,6 +25,7 @@ import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "
 import { captureClientError } from "./lib/observability.client";
 import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
+import { isGoogleSearchCrawler } from "./lib/seo-crawler";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
 
@@ -75,6 +76,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
         STAGE: env.STAGE ?? "local",
         FRONT_BETTER_STACK_SENTRY_DSN: env.FRONT_BETTER_STACK_SENTRY_DSN ?? "",
       },
+      staticCrawlerResponse: isGoogleSearchCrawler(request.headers.get("user-agent")),
       requestDiagnostics: {
         renderId: requestDiagnostics.renderId,
         requestPath: requestDiagnostics.requestPath,
@@ -139,8 +141,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
-        <ScrollRestoration />
-        <Scripts />
+        {!loaderData?.staticCrawlerResponse && (
+          <>
+            <ScrollRestoration />
+            <Scripts />
+          </>
+        )}
       </body>
     </html>
   );
