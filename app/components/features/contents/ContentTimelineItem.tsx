@@ -23,22 +23,22 @@ import { StudentCards } from "~/components/features/students";
 import { BottomSheet, Button } from "~/components/primitives";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
 import {
-  type UtcIsoString,
   formatInstant,
   formatInstantDateKey,
   isInstantAfter,
   isInstantBefore,
   nowUtcIso,
   parseUtcTimestamp,
+  type UtcIsoString,
 } from "~/lib/date-time";
 import { contentTypeLocale, recruitmentLabelLocale, remainingTime } from "~/locales/ko";
 import type { ContentCommentSummary } from "~/models/content";
-import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { EventType, RaidType, Role } from "~/models/content.d";
+import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
-import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
 import { TimelineItemBanner } from "./TimelineItemBanner";
@@ -81,6 +81,7 @@ export type ContentTimelineItemProps = {
     }[];
   }[];
   commentSummary?: ContentCommentSummary;
+  commentsUnavailable?: boolean;
 
   onCommentOpen?: () => void;
   onCommentCreate?: (body: string, visibility: "private" | "public") => void;
@@ -166,6 +167,7 @@ export function ContentTimelineItem({
   onCommentPin,
   onCommentUnpin,
   commentSummary,
+  commentsUnavailable = false,
   onCommentOpen,
   isLoadingComments = false,
   isSubmittingComment,
@@ -292,13 +294,14 @@ export function ContentTimelineItem({
           <ContentCommentView
             comments={allComments}
             summary={commentSummary}
+            unavailable={commentsUnavailable}
             onClick={() => {
               onCommentOpen?.();
               setCommentEditing(true);
             }}
           />
 
-          {commentEditing && (
+          {commentEditing && !commentsUnavailable && (
             <BottomSheet
               Icon={ChatBubbleOvalLeftEllipsisIcon}
               title="이벤트 의견"

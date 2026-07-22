@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { type UtcIsoString, formatInstant, formatInstantDateKey, nowUtcIso, parseUtcTimestamp } from "~/lib/date-time";
+import { formatInstant, formatInstantDateKey, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import type { EventType, RaidType } from "~/models/content.d";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import type { ContentTimelineFeatureBannerId, ContentTimelineItemProps } from "./ContentTimelineItem";
@@ -47,6 +47,7 @@ export type ContentTimelineProps = {
 
     allComments?: ContentTimelineItemProps["allComments"];
     commentSummary?: ContentTimelineItemProps["commentSummary"];
+    commentsUnavailable?: boolean;
     isLoadingComments?: boolean;
   }[];
 
@@ -193,6 +194,7 @@ export default function ContentTimeline({
                       onHideSpoiler={content.isSpoiler ? () => onHideSpoiler?.(content.uid) : undefined}
                       allComments={content.allComments}
                       commentSummary={content.commentSummary}
+                      commentsUnavailable={content.commentsUnavailable}
                       isLoadingComments={content.isLoadingComments}
                       onCommentOpen={showComments ? () => onCommentOpen?.(content.uid) : undefined}
                       onCommentCreate={

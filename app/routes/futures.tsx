@@ -15,6 +15,7 @@ import { createConcurrencyGate } from "~/lib/concurrency";
 import { withD1Session } from "~/lib/d1-session";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
+import { captureServerError, getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
 import { type ContentCommentSummary, getContentsCommentSummaries, type NestedComment } from "~/models/content";
 import type { EventType, RaidType } from "~/models/content.d";
@@ -47,6 +48,7 @@ export const meta: MetaFunction = ({ location }) => {
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const ctx: ExecutionContext = context.cloudflare.ctx;
+  const logger = getLogger(env, ctx, { route: "futures.loader" });
 
   return ctx.tracing.enterSpan("futures.loader", async (span) => {
     const publicReadEnv = withD1Session(env, "first-unconstrained");
@@ -83,15 +85,30 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     const recruitmentGroupUids = contents
       .map((content) => content.recruitmentGroupUid)
       .filter((uid): uid is string => uid !== null);
-    const [commentSummaries, favoritedStudents, favoritedCounts, recruitmentResults] = await Promise.all([
-      ctx.tracing.enterSpan("comment_summaries", () =>
+    const commentSummariesPromise: Promise<CommentSummariesState> = ctx.tracing
+      .enterSpan("comment_summaries", () =>
         getContentsCommentSummaries(
           currentUserId ? env : publicReadEnv,
           contents.map((content: FutureContentsLoaderContent) => content.uid),
           currentUserId,
           runD1Query,
         ),
-      ),
+      )
+      .then<CommentSummariesState>((summaries) => ({ status: "available", summaries }))
+      .catch((error): CommentSummariesState => {
+        const errorContext = {
+          route: "futures.loader",
+          operation: "comment_summaries",
+          signedIn,
+          contentCount: contents.length,
+        };
+        logger.error("Failed to load futures comment summaries", error, errorContext);
+        captureServerError(error, errorContext);
+        return { status: "unavailable" };
+      });
+
+    const [commentSummaries, favoritedStudents, favoritedCounts, recruitmentResults] = await Promise.all([
+      commentSummariesPromise,
       currentUserId
         ? ctx.tracing.enterSpan("favorited_students", () =>
             getUserFavoritedStudents(env, currentUserId, undefined, { ctx }),
@@ -115,6 +132,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     };
 
     span.setAttribute("signedIn", signedIn);
+    span.setAttribute("commentSummariesAvailable", commentSummaries.status === "available");
 
     return payload;
   });
@@ -168,13 +186,16 @@ type RecruitmentResultState = {
 };
 type FavoriteStudentLoaderData = { contentId: string; studentId: string };
 type FavoritedCountLoaderData = FavoriteStudentLoaderData & { count: number };
+type CommentSummariesState =
+  | { status: "available"; summaries: Record<string, ContentCommentSummary> }
+  | { status: "unavailable" };
 type FutureContentsLoaderData = {
   signedIn: boolean;
   contents: FutureContentsLoaderContent[];
   favoritedStudents: FavoriteStudentLoaderData[] | null;
   favoritedCounts: FavoritedCountLoaderData[];
   recruitmentResults: RecruitmentResultState[];
-  commentSummaries: Record<string, ContentCommentSummary>;
+  commentSummaries: CommentSummariesState;
 };
 type AllCommentsState = Record<string, NestedComment[]>;
 type FutureRecruitment = FutureContent["recruitments"][number];
@@ -581,7 +602,8 @@ export default function FutureContents() {
           showStudentAnalysisFeatureBanner: content.uid === studentAnalysisFeatureBannerContentUid,
           showPendingStudentFavoriteFeatureBanner: hasPendingStudentRecruitment(content),
           allComments: allComments[content.uid],
-          commentSummary: commentSummaries[content.uid],
+          commentSummary: commentSummaries.status === "available" ? commentSummaries.summaries[content.uid] : undefined,
+          commentsUnavailable: commentSummaries.status === "unavailable",
           isLoadingComments: commentLoadRequest?.uid === content.uid,
         };
       }),

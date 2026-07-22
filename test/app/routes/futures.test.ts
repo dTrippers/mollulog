@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { captureServerError, getLogger } from "~/lib/observability.server";
 import { getContentsCommentSummaries } from "~/models/content";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
@@ -12,6 +13,11 @@ jest.mock("~/auth/authenticator.server", () => ({
 
 jest.mock("~/models/content", () => ({
   getContentsCommentSummaries: jest.fn(),
+}));
+
+jest.mock("~/lib/observability.server", () => ({
+  captureServerError: jest.fn(),
+  getLogger: jest.fn(),
 }));
 
 jest.mock("~/models/favorite-students", () => ({
@@ -34,6 +40,8 @@ const primaryDb = {
 const env = { DB: primaryDb } as Env;
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
+const mockedCaptureServerError = captureServerError as jest.MockedFunction<typeof captureServerError>;
+const mockedGetLogger = getLogger as jest.MockedFunction<typeof getLogger>;
 const mockedGetContentsCommentSummaries = getContentsCommentSummaries as jest.MockedFunction<
   typeof getContentsCommentSummaries
 >;
@@ -43,6 +51,12 @@ const mockedGetRecruitmentResults = getRecruitmentResultsByRecruitmentGroupUids 
   typeof getRecruitmentResultsByRecruitmentGroupUids
 >;
 const mockedGetFutureContents = getFutureContents as jest.MockedFunction<typeof getFutureContents>;
+const logger = {
+  debug: jest.fn(),
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+};
 
 const span = { setAttribute: jest.fn() };
 const ctx = {
@@ -66,6 +80,7 @@ describe("futures loader data source routing", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedGetFutureContents.mockResolvedValue([]);
+    mockedGetLogger.mockReturnValue(logger);
     mockedGetContentsCommentSummaries.mockResolvedValue({});
     mockedGetFavoritedCounts.mockResolvedValue([]);
     mockedGetUserFavoritedStudents.mockResolvedValue([]);
@@ -82,6 +97,7 @@ describe("futures loader data source routing", () => {
       favoritedStudents: null,
       favoritedCounts: [],
       recruitmentResults: [],
+      commentSummaries: { status: "available", summaries: {} },
     });
     expect(primaryDb.withSession).toHaveBeenCalledWith("first-unconstrained");
     expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
@@ -114,5 +130,34 @@ describe("futures loader data source routing", () => {
     expect(mockedGetUserFavoritedStudents).toHaveBeenCalledWith(env, 42, undefined, { ctx });
     expect(mockedGetRecruitmentResults).toHaveBeenCalledWith(env, 42, [], expect.any(Function));
     expect(mockedGetContentsCommentSummaries.mock.calls[0][3]).toBe(mockedGetRecruitmentResults.mock.calls[0][3]);
+  });
+
+  it("keeps the futures loader available when comment summaries fail", async () => {
+    const error = new Error("D1 timeout");
+    mockedGetActiveSensei.mockResolvedValue(null);
+    mockedGetContentsCommentSummaries.mockRejectedValue(error);
+
+    const result = await loader(createLoaderArgs());
+
+    expect(result).toMatchObject({
+      signedIn: false,
+      favoritedStudents: null,
+      favoritedCounts: [],
+      recruitmentResults: [],
+      commentSummaries: { status: "unavailable" },
+    });
+    expect(logger.error).toHaveBeenCalledWith("Failed to load futures comment summaries", error, {
+      route: "futures.loader",
+      operation: "comment_summaries",
+      signedIn: false,
+      contentCount: 0,
+    });
+    expect(mockedCaptureServerError).toHaveBeenCalledWith(error, {
+      route: "futures.loader",
+      operation: "comment_summaries",
+      signedIn: false,
+      contentCount: 0,
+    });
+    expect(span.setAttribute).toHaveBeenCalledWith("commentSummariesAvailable", false);
   });
 });
