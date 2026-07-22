@@ -15,7 +15,15 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { type DragEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Callout, HorizontalScroll, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
+import {
+  Button,
+  Callout,
+  Checkbox,
+  HorizontalScroll,
+  NumberInput,
+  ResourceCard,
+  SubTitle,
+} from "~/components/primitives";
 import {
   OCR_ALLOWED_CONTENT_TYPES,
   OCR_CANDIDATE_SELECTION_LIMIT,
@@ -48,6 +56,15 @@ type JobSummary = Pick<
   JobStatus,
   "uid" | "status" | "progress" | "application" | "createdAt" | "updatedAt" | "expiresAt"
 >;
+
+type OcrUploadQuota = {
+  limit: number;
+  used: number;
+  remaining: number;
+  nextAvailableAt: string | null;
+};
+
+type OcrJobsOverview = { jobs: JobSummary[]; quota: OcrUploadQuota };
 
 type BatchItem = {
   resource_uid: string;
@@ -96,6 +113,8 @@ type CandidatePickerState = {
 export default function ResourceScanner() {
   const [files, setFiles] = useState<File[]>([]);
   const [phase, setPhase] = useState<"idle" | "uploading" | "waiting" | "review" | "applying" | "applied">("idle");
+  const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
+  const [uploadQuota, setUploadQuota] = useState<OcrUploadQuota | null>(null);
   const [job, setJob] = useState<JobStatus | null>(null);
   const [recentJobs, setRecentJobs] = useState<JobSummary[]>([]);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
@@ -131,10 +150,27 @@ export default function ResourceScanner() {
   }, []);
 
   useEffect(() => {
-    requestJson<{ jobs: JobSummary[] }>("/api/ocr/jobs")
-      .then(({ jobs }) => setRecentJobs(jobs))
+    requestJson<OcrJobsOverview>("/api/ocr/jobs")
+      .then(({ jobs, quota }) => {
+        setRecentJobs(jobs);
+        setUploadQuota(quota);
+      })
       .catch((loadError) => setError(toErrorMessage(loadError)));
   }, []);
+
+  useEffect(() => {
+    if (uploadQuota?.remaining !== 0 || !uploadQuota.nextAvailableAt) return;
+    const delay = Math.max(1000, new Date(uploadQuota.nextAvailableAt).getTime() - Date.now() + 1000);
+    const timer = window.setTimeout(() => {
+      requestJson<OcrJobsOverview>("/api/ocr/jobs")
+        .then(({ jobs, quota }) => {
+          setRecentJobs(jobs);
+          setUploadQuota(quota);
+        })
+        .catch((loadError) => setError(toErrorMessage(loadError)));
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [uploadQuota]);
 
   useEffect(() => {
     const jobUid = new URLSearchParams(window.location.search).get("job");
@@ -236,6 +272,7 @@ export default function ResourceScanner() {
   );
 
   const isUploadLocked = phase === "uploading" || phase === "applying";
+  const isFileSelectionDisabled = isUploadLocked || uploadQuota?.remaining === 0;
 
   function setReviewPositionHighlight(position: number, highlighted: boolean) {
     setHighlightedReviewPosition((current) => (highlighted ? position : current === position ? null : current));
@@ -292,7 +329,7 @@ export default function ResourceScanner() {
   }
 
   function addFiles(candidates: File[]) {
-    if (isUploadLocked || candidates.length === 0) return;
+    if (isFileSelectionDisabled || candidates.length === 0) return;
 
     const nextFiles = job ? [] : [...files];
     for (const file of candidates) {
@@ -320,6 +357,10 @@ export default function ResourceScanner() {
       setError(`스크린샷은 최대 ${OCR_MAX_IMAGES}장까지 첨부할 수 있어요.`);
       return;
     }
+    if (uploadQuota && nextFiles.length > uploadQuota.remaining) {
+      setError(`현재 업로드할 수 있는 스크린샷은 ${uploadQuota.remaining}장이에요.`);
+      return;
+    }
     if (nextFiles.reduce((total, file) => total + file.size, 0) > OCR_MAX_JOB_BYTES) {
       setError("첨부한 스크린샷의 전체 용량은 120MB를 넘을 수 없어요.");
       return;
@@ -333,7 +374,7 @@ export default function ResourceScanner() {
 
   function handleDragEnter(event: DragEvent<HTMLLabelElement>) {
     event.preventDefault();
-    if (isUploadLocked || !event.dataTransfer.types.includes("Files")) return;
+    if (isFileSelectionDisabled || !event.dataTransfer.types.includes("Files")) return;
     dragDepthRef.current += 1;
     setIsDragging(true);
   }
@@ -367,8 +408,13 @@ export default function ResourceScanner() {
       );
       const created = await requestJson<{
         jobUid: string;
+        quota: OcrUploadQuota;
         images: Array<{ imageUid: string; filename: string; uploadUrl: string }>;
-      }>("/api/ocr/jobs", { method: "POST", body: JSON.stringify({ images: descriptors }) });
+      }>("/api/ocr/jobs", {
+        method: "POST",
+        body: JSON.stringify({ images: descriptors, trainingConsent: allowsTrainingDataUse }),
+      });
+      setUploadQuota(created.quota);
       await Promise.all(
         created.images.map(async (upload, index) => {
           const response = await fetch(upload.uploadUrl, {
@@ -379,7 +425,11 @@ export default function ResourceScanner() {
           if (!response.ok) throw new Error(`${files[index].name} 업로드에 실패했어요`);
         }),
       );
-      const submitted = await requestJson<JobStatus>(`/api/ocr/jobs/${created.jobUid}/submit`, { method: "POST" });
+      const submitted = await requestJson<JobStatus & { quota: OcrUploadQuota }>(
+        `/api/ocr/jobs/${created.jobUid}/submit`,
+        { method: "POST" },
+      );
+      setUploadQuota(submitted.quota);
       window.history.replaceState(null, "", `${window.location.pathname}?job=${encodeURIComponent(created.jobUid)}`);
       setJob({
         ...submitted,
@@ -389,9 +439,11 @@ export default function ResourceScanner() {
         application: null,
       });
       setFiles([]);
+      setAllowsTrainingDataUse(false);
       setRecentJobs((current) => upsertJobSummary(current, { ...submitted, application: null }));
       setPhase("waiting");
     } catch (startError) {
+      if (startError instanceof ApiRequestError && startError.quota) setUploadQuota(startError.quota);
       setError(toErrorMessage(startError));
       setPhase("idle");
     }
@@ -460,7 +512,14 @@ export default function ResourceScanner() {
   return (
     <div className="space-y-8 pb-12 pt-6 lg:pt-2">
       <section>
-        <SubTitle text="스크린샷 업로드" description="게임 내 [메뉴] > [아이템] 페이지의 스크린샷을 첨부해주세요" />
+        <div className="flex items-end justify-between gap-4">
+          <SubTitle text="스크린샷 업로드" description="게임 내 [메뉴] > [아이템] 페이지의 스크린샷을 첨부해주세요" />
+          {uploadQuota ? (
+            <div className="shrink-0 pb-3">
+              <UploadQuotaMeter quota={uploadQuota} />
+            </div>
+          ) : null}
+        </div>
         <div className="space-y-5 rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
           <div className="focus-within:rounded-lg focus-within:ring-2 focus-within:ring-ring/30">
             <input
@@ -468,7 +527,7 @@ export default function ResourceScanner() {
               type="file"
               accept={OCR_ALLOWED_CONTENT_TYPES.join(",")}
               multiple
-              disabled={isUploadLocked}
+              disabled={isFileSelectionDisabled}
               aria-describedby="resource-scanner-file-help"
               className="sr-only"
               onChange={(event) => {
@@ -487,7 +546,7 @@ export default function ResourceScanner() {
                 isDragging
                   ? "border-primary bg-primary/5"
                   : "border-border bg-muted/20 hover:border-primary/60 hover:bg-muted/40",
-                isUploadLocked && "cursor-not-allowed opacity-60",
+                isFileSelectionDisabled && "cursor-not-allowed opacity-60",
               )}
             >
               <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -523,9 +582,30 @@ export default function ResourceScanner() {
               </div>
             </fieldset>
           ) : null}
-          <Button variant="primary" disabled={files.length === 0 || isUploadLocked} onClick={startRecognition}>
-            {phase === "uploading" ? "업로드 중..." : "인식 시작"}
-          </Button>
+          <div className="space-y-4 pt-4">
+            <Checkbox
+              checked={allowsTrainingDataUse}
+              disabled={isUploadLocked}
+              onChange={setAllowsTrainingDataUse}
+              className="w-full items-start"
+              label={
+                <span>
+                  스크린샷 데이터를 인식률 향상에 사용하는 것에 동의합니다. (
+                  <strong className="font-semibold">동의하지 않아도 사용할 수 있어요</strong>.)
+                </span>
+              }
+            />
+            <div className="flex justify-end">
+              <Button
+                variant="primary"
+                className="w-full sm:w-fit"
+                disabled={files.length === 0 || isUploadLocked || !uploadQuota || files.length > uploadQuota.remaining}
+                onClick={startRecognition}
+              >
+                {phase === "uploading" ? "업로드 중..." : "인식 시작"}
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -810,6 +890,47 @@ export default function ResourceScanner() {
           onClose={() => setIsImageExpanded(false)}
         />
       ) : null}
+    </div>
+  );
+}
+
+function UploadQuotaMeter({ quota }: { quota: OcrUploadQuota }) {
+  const isExhausted = quota.remaining === 0;
+  const isLow = quota.remaining > 0 && quota.remaining <= 5;
+  const percentage = (quota.remaining / quota.limit) * 100;
+  return (
+    <div
+      className={cn(
+        "w-28 sm:w-36",
+        isExhausted ? "text-destructive" : isLow ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+      )}
+      title={
+        isExhausted && quota.nextAvailableAt
+          ? `${formatQuotaAvailability(quota.nextAvailableAt)}부터 다시 업로드할 수 있어요`
+          : undefined
+      }
+    >
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] leading-none">
+        <span>최근 7일</span>
+        <span className="font-mono font-medium text-foreground">
+          {quota.remaining}/{quota.limit}장
+        </span>
+      </div>
+      <progress
+        aria-label={`최근 7일 업로드 가능 스크린샷 ${quota.remaining}장`}
+        max={quota.limit}
+        value={quota.remaining}
+        className="sr-only"
+      />
+      <div
+        aria-hidden="true"
+        className={cn("h-1.5 overflow-hidden rounded-full", isExhausted ? "bg-destructive/20" : "bg-muted")}
+      >
+        <div
+          className={cn("h-full rounded-full transition-[width]", isLow ? "bg-amber-500" : "bg-primary")}
+          style={{ width: `${percentage}%` }}
+        />
+      </div>
     </div>
   );
 }
@@ -1423,9 +1544,19 @@ function jobStatusDotClass(job: JobSummary): string {
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
-  const body = (await response.json().catch(() => ({}))) as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? "요청을 처리하지 못했어요");
+  const body = (await response.json().catch(() => ({}))) as T & { error?: string; quota?: OcrUploadQuota };
+  if (!response.ok) throw new ApiRequestError(body.error ?? "요청을 처리하지 못했어요", body.quota);
   return body;
+}
+
+class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly quota?: OcrUploadQuota,
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
 }
 
 async function sha256Hex(file: File): Promise<string> {
@@ -1435,6 +1566,15 @@ async function sha256Hex(file: File): Promise<string> {
 
 function formatBytes(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)}KB` : `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function formatQuotaAvailability(value: string): string {
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function toErrorMessage(error: unknown): string {

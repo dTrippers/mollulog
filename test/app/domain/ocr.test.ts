@@ -1,5 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
-import { OCR_MAX_IMAGE_BYTES, parseOcrResultEnvelope, parseOcrTaskMessage, parseOcrUploadInputs } from "~/domain/ocr";
+import {
+  OCR_MAX_IMAGE_BYTES,
+  parseOcrResultEnvelope,
+  parseOcrTaskMessage,
+  parseOcrUploadInputs,
+  parseOcrUploadRequest,
+} from "~/domain/ocr";
 
 const validImage = {
   filename: "inventory.png",
@@ -11,6 +17,14 @@ const validImage = {
 describe("OCR contract validation", () => {
   it("accepts supported images without depending on resolution or aspect ratio", () => {
     expect(parseOcrUploadInputs({ images: [validImage] })).toEqual([validImage]);
+  });
+
+  it("treats training consent as an explicit opt-in", () => {
+    expect(parseOcrUploadRequest({ images: [validImage], trainingConsent: true })).toEqual({
+      images: [validImage],
+      trainingConsent: true,
+    });
+    expect(parseOcrUploadRequest({ images: [validImage], trainingConsent: "true" }).trainingConsent).toBe(false);
   });
 
   it.each([

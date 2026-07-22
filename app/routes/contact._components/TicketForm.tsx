@@ -43,7 +43,7 @@ export default function TicketForm({ errors, values, submitting = false }: Ticke
           containerClassName="mt-6 mb-0"
         />
 
-        <div className="mt-6 flex justify-end border-t border-border pt-4">
+        <div className="mt-6 flex justify-end pt-4">
           <Button type="submit" variant="primary" disabled={submitting}>
             {submitting ? <ArrowPathIcon className="size-4 animate-spin" /> : null}
             {submitting ? "제출 중..." : "등록하기"}

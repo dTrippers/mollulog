@@ -6,6 +6,7 @@ import {
   createOcrJob,
   getOcrImageDownloadUrl,
   getOcrJob,
+  getOcrUploadQuota,
   listRecentOcrJobs,
   publishPendingOcrOutbox,
   reconcileOcrJobs,
@@ -23,6 +24,7 @@ const jobRow = {
   createdAt: new Date("2026-07-20T00:00:00Z"),
   updatedAt: new Date("2026-07-20T00:00:00Z"),
   expiresAt: new Date("2026-07-21T00:00:00Z"),
+  purgeAfter: new Date("2026-07-24T00:00:00Z"),
 };
 
 const imageRow = {
@@ -65,19 +67,25 @@ function createEnv(overrides: Partial<Env> = {}): Env {
 }
 
 describe("PostgreSQL OCR control plane", () => {
-  it("keeps newly created jobs for seven days", async () => {
+  it("exposes newly created jobs for seven days and purges them after a three-day grace period", async () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
     const { client, query } = createClient(() => []);
 
     await createOcrJob(
       createEnv(),
       7,
-      [{ filename: "inventory.png", contentType: "image/png", byteSize: 12, sha256: "a".repeat(64) }],
+      {
+        images: [{ filename: "inventory.png", contentType: "image/png", byteSize: 12, sha256: "a".repeat(64) }],
+        trainingConsent: true,
+      },
       { createClient: () => client },
     );
 
     const insertJob = query.mock.calls.find(([sql]) => (sql as string).includes("INSERT INTO ocr_jobs"));
     expect((insertJob?.[1] as unknown[])[3]).toEqual(new Date("2026-07-28T00:00:00Z"));
+    expect((insertJob?.[1] as unknown[])[4]).toEqual(new Date("2026-07-31T00:00:00Z"));
+    expect((insertJob?.[1] as unknown[])[5]).toEqual(new Date("2026-07-21T00:00:00Z"));
+    expect((insertJob?.[1] as unknown[])[6]).toBe("2026-07-23-v1");
     jest.useRealTimers();
   });
 
@@ -116,14 +124,51 @@ describe("PostgreSQL OCR control plane", () => {
     expect(query.mock.calls[0][1]).toEqual([7]);
   });
 
+  it("reports the rolling seven-day image quota", async () => {
+    const { client, query } = createClient((sql) =>
+      sql.includes("quota_usage") ? [{ used: 23, nextAvailableAt: new Date("2026-07-25T00:00:00Z") }] : [],
+    );
+
+    await expect(getOcrUploadQuota(createEnv(), 7, { createClient: () => client })).resolves.toEqual({
+      limit: 30,
+      used: 23,
+      remaining: 7,
+      nextAvailableAt: "2026-07-25T00:00:00.000Z",
+    });
+    expect(query.mock.calls[0][1]).toEqual([7, 7, 900]);
+  });
+
+  it("rejects a job that would exceed the rolling image quota before issuing upload URLs", async () => {
+    const { client, query } = createClient((sql) =>
+      sql.includes("quota_usage") ? [{ used: 29, nextAvailableAt: new Date("2026-07-25T00:00:00Z") }] : [],
+    );
+
+    await expect(
+      createOcrJob(
+        createEnv(),
+        7,
+        {
+          images: [
+            { filename: "one.png", contentType: "image/png", byteSize: 12, sha256: "a".repeat(64) },
+            { filename: "two.png", contentType: "image/png", byteSize: 12, sha256: "b".repeat(64) },
+          ],
+          trainingConsent: false,
+        },
+        { createClient: () => client },
+      ),
+    ).rejects.toMatchObject({ quota: expect.objectContaining({ remaining: 1 }) });
+    expect(query.mock.calls.some(([sql]) => (sql as string).includes("INSERT INTO ocr_jobs"))).toBe(false);
+  });
+
   it("creates an owned, short-lived image preview URL", async () => {
-    const { client } = createClient((sql) =>
+    const { client, query } = createClient((sql) =>
       sql.includes("JOIN ocr_jobs") ? [{ objectKey: imageRow.objectKey }] : [],
     );
 
     await expect(
       getOcrImageDownloadUrl(createEnv(), 7, "job-1", "image-1", { createClient: () => client }),
     ).resolves.toContain("X-Amz-Expires=300");
+    expect(query.mock.calls[0][0]).toContain("j.purge_after > now()");
   });
 
   it("verifies the uploaded object through a signed R2 HEAD request and creates one image outbox event", async () => {
@@ -152,6 +197,9 @@ describe("PostgreSQL OCR control plane", () => {
     expect(sql).toContain("INSERT INTO ocr_outbox");
     expect(sql).toContain("ON CONFLICT (event_type, aggregate_uid, generation) DO NOTHING");
     expect(sql).toContain("COMMIT");
+    const submitUpdate = query.mock.calls.find(([text]) => (text as string).includes("submitted_at = $3"));
+    const submitValues = submitUpdate?.[1] as Date[];
+    expect(submitValues[4].getTime() - submitValues[3].getTime()).toBe(3 * 24 * 60 * 60 * 1000);
   });
 
   it("claims an image with a single-object signed URL and a distinct attempt", async () => {
@@ -279,5 +327,6 @@ describe("PostgreSQL OCR control plane", () => {
     const sql = query.mock.calls.map(([text]) => text as string).join("\n");
     expect(sql).toContain("DELETE FROM ocr_jobs");
     expect(sql).toContain("DELETE FROM ocr_attempts");
+    expect(sql).toContain("purge_after < now()");
   });
 });

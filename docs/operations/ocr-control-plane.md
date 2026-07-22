@@ -16,6 +16,7 @@ R2 presigned GET, MolluLog machine API만 outbound HTTPS로 호출합니다.
 3. task Queue에 HTTP pull consumer를 연결하고 DLQ와 retry를 지정합니다.
 4. R2 S3 API credential, machine API token, Queue token을 각각 별도로 발급합니다.
 5. MolluLog Worker secrets와 k3s Secret을 설정한 뒤 배포합니다.
+6. OCR 원본 삭제의 backstop으로 bucket의 `ocr/` prefix에 10일 lifecycle rule을 설정합니다.
 
 예시 명령은 staging 기준입니다.
 
@@ -31,6 +32,8 @@ wrangler queues consumer http add mollulog-aoi-tasks-staging \
   --dead-letter-queue mollulog-aoi-dlq-staging
 wrangler r2 bucket cors set mollulog-aoi-uploads-staging \
   --file deploy/cloudflare/ocr-r2-cors.json
+wrangler r2 bucket lifecycle add OCR_BUCKET_NAME \
+  "Expire OCR images after grace period" "ocr/" --expire-days 10
 ```
 
 HTTP pull consumer는 Wrangler 설정 파일에서 활성화할 수 없으므로 위 명령 또는 Dashboard를
@@ -117,7 +120,14 @@ constraint가 결과 저장을 멱등하게 만들며, outbox 재전송도 안�
 초기 UI는 job 상태를 polling합니다. runner가 중단돼도 job은 Queue에서 대기하며, 다시 기동한
 replica가 같은 계약으로 처리를 재개합니다.
 
-원본 스크린샷과 인식 결과의 보관 기간은 생성 시점부터 7일입니다. 사용자는 그동안
-`/scanner/resource`의 최근 인식 목록에서 진행 상황과 결과를 다시 열 수 있습니다. 매분 실행되는
-application Worker의 scheduled handler는 만료된 R2 object를 먼저 삭제한 뒤 관련 PostgreSQL job,
-result, outbox, attempt 레코드를 정리합니다.
+submit된 원본 스크린샷과 인식 결과는 7일 동안 `/scanner/resource`의 최근 인식 목록에 노출합니다.
+7일이 지난 job은 목록에서 숨기되 이미 결과를 열어 둔 사용자를 위해 3일의 grace period 동안
+직접 조회·검토·반영을 허용합니다. 매분 실행되는 application Worker의 scheduled handler는 총 10일이
+지난 R2 object를 먼저 삭제한 뒤 관련 PostgreSQL job, result, outbox, attempt 레코드를 정리합니다.
+R2 lifecycle rule은 application cleanup이 실패했을 때의 backstop입니다. 원본, crop, overlay 등 이미지
+artifact에는 같은 삭제 기한을 적용합니다. 생성 후 submit하지 않은 upload session은 15분 뒤 정리합니다.
+
+사용자별 업로드 제한은 PostgreSQL의 `ocr_jobs`를 기준으로 rolling 7일 동안 30장입니다. submit된
+이미지와 아직 15분 upload session이 살아 있는 예약분을 함께 세며, job 생성 transaction에서 사용자별
+advisory lock을 사용해 동시 요청의 quota 초과를 막습니다. 학습 동의 여부는 PostgreSQL에만 기록하고
+R2 object key 구조에는 반영하지 않습니다.

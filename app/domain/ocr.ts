@@ -4,7 +4,11 @@ export const OCR_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const OCR_MAX_JOB_BYTES = 120 * 1024 * 1024;
 export const OCR_UPLOAD_EXPIRES_SECONDS = 15 * 60;
 export const OCR_DOWNLOAD_EXPIRES_SECONDS = 5 * 60;
-export const OCR_JOB_RETENTION_DAYS = 7;
+export const OCR_JOB_VISIBILITY_DAYS = 7;
+export const OCR_JOB_PURGE_GRACE_DAYS = 3;
+export const OCR_ROLLING_IMAGE_LIMIT = 30;
+export const OCR_QUOTA_WINDOW_DAYS = 7;
+export const OCR_TRAINING_CONSENT_VERSION = "2026-07-23-v1";
 export const OCR_CANDIDATE_SELECTION_LIMIT = 5;
 
 export const OCR_ALLOWED_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
@@ -22,6 +26,11 @@ export type OcrUploadInput = {
   contentType: (typeof OCR_ALLOWED_CONTENT_TYPES)[number];
   byteSize: number;
   sha256: string;
+};
+
+export type OcrUploadRequest = {
+  images: OcrUploadInput[];
+  trainingConsent: boolean;
 };
 
 export type OcrResultEnvelope = {
@@ -50,6 +59,15 @@ export function parseOcrUploadInputs(value: unknown): OcrUploadInput[] {
     throw new Error("한 작업의 이미지 전체 용량은 120MB를 넘을 수 없어요");
   }
   return parsed;
+}
+
+export function parseOcrUploadRequest(value: unknown): OcrUploadRequest {
+  return {
+    images: parseOcrUploadInputs(value),
+    trainingConsent: Boolean(
+      value && typeof value === "object" && (value as { trainingConsent?: unknown }).trainingConsent === true,
+    ),
+  };
 }
 
 function parseOcrUploadInput(value: unknown): OcrUploadInput {

@@ -3,7 +3,11 @@ import type { Client } from "pg";
 import {
   OCR_CONTRACT_VERSION,
   OCR_DOWNLOAD_EXPIRES_SECONDS,
-  OCR_JOB_RETENTION_DAYS,
+  OCR_JOB_PURGE_GRACE_DAYS,
+  OCR_JOB_VISIBILITY_DAYS,
+  OCR_QUOTA_WINDOW_DAYS,
+  OCR_ROLLING_IMAGE_LIMIT,
+  OCR_TRAINING_CONSENT_VERSION,
   OCR_UPLOAD_EXPIRES_SECONDS,
   type OcrResultEnvelope,
   type OcrTaskMessage,
@@ -16,6 +20,7 @@ import { createR2PresignedUrl } from "~/lib/r2-presign.server";
 type OcrRepositoryOptions = { ctx?: ExecutionContext; createClient?: PostgresClientFactory; fetch?: typeof fetch };
 
 const OCR_HEAD_EXPIRES_SECONDS = 60;
+const OCR_QUOTA_ADVISORY_LOCK_NAMESPACE = 20260723;
 
 type OcrJobRow = {
   uid: string;
@@ -28,6 +33,7 @@ type OcrJobRow = {
   createdAt: Date | string;
   updatedAt: Date | string;
   expiresAt: Date | string;
+  purgeAfter: Date | string;
 };
 
 type OcrImageRow = {
@@ -71,6 +77,24 @@ export type OcrJobView = {
 
 export type OcrJobSummary = Pick<OcrJobView, "uid" | "status" | "progress" | "createdAt" | "updatedAt" | "expiresAt">;
 
+export type OcrUploadQuota = {
+  limit: number;
+  used: number;
+  remaining: number;
+  nextAvailableAt: string | null;
+};
+
+export class OcrQuotaExceededError extends Error {
+  constructor(readonly quota: OcrUploadQuota) {
+    super(
+      quota.remaining === 0
+        ? "최근 7일 동안 업로드할 수 있는 스크린샷 수를 모두 사용했어요"
+        : `현재 업로드할 수 있는 스크린샷은 ${quota.remaining}장이에요`,
+    );
+    this.name = "OcrQuotaExceededError";
+  }
+}
+
 export type OcrClaimResult =
   | { disposition: "already_completed" | "cancelled" | "stale" }
   | {
@@ -85,23 +109,37 @@ export type OcrClaimResult =
 export async function createOcrJob(
   env: Env,
   userId: number,
-  images: OcrUploadInput[],
+  input: { images: OcrUploadInput[]; trainingConsent: boolean },
   options: OcrRepositoryOptions = {},
 ) {
   assertR2PresignConfig(env);
   const jobUid = nanoid(16);
-  const expiresAt = new Date(Date.now() + OCR_JOB_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  const rows = images.map((image) => {
+  const expiresAt = new Date(Date.now() + OCR_JOB_VISIBILITY_DAYS * 24 * 60 * 60 * 1000);
+  const purgeAfter = new Date(expiresAt.getTime() + OCR_JOB_PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+  const rows = input.images.map((image) => {
     const uid = nanoid(16);
     return { ...image, uid, objectKey: `ocr/${env.STAGE ?? "local"}/${jobUid}/${uid}` };
   });
 
-  await withOcrClient(env, options, (client) =>
+  const quota = await withOcrClient(env, options, (client) =>
     inTransaction(client, async () => {
+      await client.query("SELECT pg_advisory_xact_lock($1, $2)", [OCR_QUOTA_ADVISORY_LOCK_NAMESPACE, userId]);
+      const currentQuota = await readOcrUploadQuota(client, userId);
+      if (rows.length > currentQuota.remaining) throw new OcrQuotaExceededError(currentQuota);
       await client.query(
-        `INSERT INTO ocr_jobs (uid, user_id, status, generation, total_images, expires_at)
-         VALUES ($1, $2, 'uploading', 1, $3, $4)`,
-        [jobUid, userId, rows.length, expiresAt],
+        `INSERT INTO ocr_jobs (
+           uid, user_id, status, generation, total_images, expires_at, purge_after,
+           training_consent_at, training_consent_version
+         ) VALUES ($1, $2, 'uploading', 1, $3, $4, $5, $6, $7)`,
+        [
+          jobUid,
+          userId,
+          rows.length,
+          expiresAt,
+          purgeAfter,
+          input.trainingConsent ? new Date() : null,
+          input.trainingConsent ? OCR_TRAINING_CONSENT_VERSION : null,
+        ],
       );
       for (const image of rows) {
         await client.query(
@@ -111,12 +149,18 @@ export async function createOcrJob(
           [image.uid, jobUid, image.objectKey, image.filename, image.contentType, image.byteSize, image.sha256],
         );
       }
+      return applyQuotaUsage(
+        currentQuota,
+        rows.length,
+        new Date(Date.now() + OCR_UPLOAD_EXPIRES_SECONDS * 1000).toISOString(),
+      );
     }),
   );
 
   return {
     jobUid,
     expiresAt: expiresAt.toISOString(),
+    quota,
     images: await Promise.all(
       rows.map(async (image) => ({
         imageUid: image.uid,
@@ -159,11 +203,14 @@ export async function submitOcrJob(
       const locked = await getOwnedJobRow(client, userId, jobUid, true);
       if (!locked) throw new Error("OCR 작업을 찾을 수 없어요");
       if (locked.status !== "uploading") return;
+      const submittedAt = new Date();
+      const expiresAt = new Date(submittedAt.getTime() + OCR_JOB_VISIBILITY_DAYS * 24 * 60 * 60 * 1000);
+      const purgeAfter = new Date(expiresAt.getTime() + OCR_JOB_PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
       await client.query(
         `UPDATE ocr_jobs
-         SET status = 'queued', submitted_at = now(), updated_at = now()
+         SET status = 'queued', submitted_at = $3, expires_at = $4, purge_after = $5, updated_at = now()
          WHERE uid = $1 AND user_id = $2 AND status = 'uploading'`,
-        [jobUid, userId],
+        [jobUid, userId, submittedAt, expiresAt, purgeAfter],
       );
       for (const image of images) {
         await client.query(
@@ -249,6 +296,14 @@ export async function listRecentOcrJobs(
   });
 }
 
+export async function getOcrUploadQuota(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  options: OcrRepositoryOptions = {},
+): Promise<OcrUploadQuota> {
+  return withOcrClient(env, options, (client) => readOcrUploadQuota(client, userId));
+}
+
 export async function getOcrImageDownloadUrl(
   env: Env,
   userId: number,
@@ -261,7 +316,7 @@ export async function getOcrImageDownloadUrl(
       `SELECT i.object_key AS "objectKey"
        FROM ocr_images i
        JOIN ocr_jobs j ON j.uid = i.job_uid
-       WHERE i.uid = $1 AND j.uid = $2 AND j.user_id = $3 AND j.expires_at > now()`,
+       WHERE i.uid = $1 AND j.uid = $2 AND j.user_id = $3 AND j.purge_after > now()`,
       [imageUid, jobUid, userId],
     );
     return result.rows[0]?.objectKey ?? null;
@@ -595,8 +650,9 @@ export async function reconcileOcrJobs(
          WHERE status = 'publishing' AND updated_at < now() - interval '5 minutes'`,
       );
       await client.query(
-        `UPDATE ocr_jobs SET status = 'expired', updated_at = now(), completed_at = now()
-         WHERE status = 'uploading' AND expires_at < now()`,
+        `UPDATE ocr_jobs
+         SET status = 'expired', purge_after = now(), updated_at = now(), completed_at = now()
+         WHERE status = 'uploading' AND created_at < now() - interval '15 minutes'`,
       );
       const terminalJobs = await client.query<{ uid: string; generation: number }>(
         `SELECT j.uid, j.generation FROM ocr_jobs j
@@ -615,7 +671,7 @@ export async function reconcileOcrJobs(
   const expiredRows = await withOcrClient(env, options, async (client) =>
     client.query<{ jobUid: string; imageUid: string | null; objectKey: string | null }>(
       `WITH expired_jobs AS (
-         SELECT uid FROM ocr_jobs WHERE expires_at < now() ORDER BY expires_at LIMIT 25
+         SELECT uid FROM ocr_jobs WHERE purge_after < now() ORDER BY purge_after LIMIT 25
        )
        SELECT j.uid AS "jobUid", i.uid AS "imageUid", i.object_key AS "objectKey"
        FROM expired_jobs j
@@ -633,7 +689,7 @@ export async function reconcileOcrJobs(
     inTransaction(client, async () => {
       const taskUids = [...jobUids, ...imageUids];
       await client.query(`DELETE FROM ocr_outbox WHERE aggregate_uid = ANY($1::text[])`, [taskUids]);
-      await client.query(`DELETE FROM ocr_jobs WHERE uid = ANY($1::text[]) AND expires_at < now()`, [jobUids]);
+      await client.query(`DELETE FROM ocr_jobs WHERE uid = ANY($1::text[]) AND purge_after < now()`, [jobUids]);
       await client.query(`DELETE FROM ocr_attempts WHERE task_uid = ANY($1::text[])`, [taskUids]);
     }),
   );
@@ -673,7 +729,8 @@ export async function markOcrTaskDeadLetter(
 
 const JOB_SELECT = `SELECT uid, user_id AS "userId", status, generation,
   total_images AS "totalImages", completed_images AS "completedImages", failed_images AS "failedImages",
-  created_at AS "createdAt", updated_at AS "updatedAt", expires_at AS "expiresAt" FROM ocr_jobs`;
+  created_at AS "createdAt", updated_at AS "updatedAt", expires_at AS "expiresAt",
+  purge_after AS "purgeAfter" FROM ocr_jobs`;
 
 const IMAGE_SELECT = `SELECT i.uid, i.job_uid AS "jobUid", i.object_key AS "objectKey",
   i.original_filename AS "originalFilename", i.content_type AS "contentType", i.byte_size AS "byteSize",
@@ -682,10 +739,45 @@ const IMAGE_SELECT = `SELECT i.uid, i.job_uid AS "jobUid", i.object_key AS "obje
 
 async function getOwnedJobRow(client: Client, userId: number, jobUid: string, lock = false) {
   const result = await client.query<OcrJobRow>(
-    `${JOB_SELECT} WHERE uid = $1 AND user_id = $2${lock ? " FOR UPDATE" : ""}`,
+    `${JOB_SELECT} WHERE uid = $1 AND user_id = $2 AND purge_after > now()${lock ? " FOR UPDATE" : ""}`,
     [jobUid, userId],
   );
   return result.rows[0] ?? null;
+}
+
+async function readOcrUploadQuota(client: Client, userId: number): Promise<OcrUploadQuota> {
+  const result = await client.query<{ used: number; nextAvailableAt: Date | string | null }>(
+    `SELECT COALESCE(SUM(total_images), 0)::integer AS used,
+            MIN(releases_at) AS "nextAvailableAt"
+     FROM (
+       SELECT total_images, submitted_at + ($2::integer * interval '1 day') AS releases_at
+       FROM ocr_jobs
+       WHERE user_id = $1 AND submitted_at > now() - ($2::integer * interval '1 day')
+       UNION ALL
+       SELECT total_images, created_at + ($3::integer * interval '1 second') AS releases_at
+       FROM ocr_jobs
+       WHERE user_id = $1 AND submitted_at IS NULL AND status = 'uploading'
+         AND created_at > now() - ($3::integer * interval '1 second')
+     ) quota_usage`,
+    [userId, OCR_QUOTA_WINDOW_DAYS, OCR_UPLOAD_EXPIRES_SECONDS],
+  );
+  const used = Number(result.rows[0]?.used ?? 0);
+  const nextAvailableAt = result.rows[0]?.nextAvailableAt;
+  return {
+    limit: OCR_ROLLING_IMAGE_LIMIT,
+    used,
+    remaining: Math.max(0, OCR_ROLLING_IMAGE_LIMIT - used),
+    nextAvailableAt: nextAvailableAt ? toIso(nextAvailableAt) : null,
+  };
+}
+
+function applyQuotaUsage(quota: OcrUploadQuota, imageCount: number, reservationExpiresAt: string): OcrUploadQuota {
+  const used = quota.used + imageCount;
+  const nextAvailableAt =
+    quota.nextAvailableAt && quota.nextAvailableAt < reservationExpiresAt
+      ? quota.nextAvailableAt
+      : reservationExpiresAt;
+  return { ...quota, used, remaining: Math.max(0, quota.limit - used), nextAvailableAt };
 }
 
 async function listImageRows(client: Client, jobUid: string): Promise<OcrImageRow[]> {
