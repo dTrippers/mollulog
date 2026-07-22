@@ -251,3 +251,25 @@ export async function failCacheRefreshJob(env: Pick<Env, "DB">, uid: string): Pr
     })
     .where(eq(cacheRefreshJobsTable.uid, uid));
 }
+
+export async function failStaleCacheRefreshJob(
+  env: Pick<Env, "DB">,
+  uid: string,
+  staleAfterHours: number,
+): Promise<boolean> {
+  const result = await env.DB.prepare(
+    `update cache_refresh_jobs
+       set status = 'failed',
+           activeSlot = null,
+           currentTask = null,
+           finishedAt = current_timestamp,
+           updatedAt = current_timestamp
+     where uid = ?1
+       and activeSlot = 1
+       and updatedAt <= datetime('now', ?2)`,
+  )
+    .bind(uid, `-${staleAfterHours} hours`)
+    .run();
+
+  return result.meta.changes > 0;
+}

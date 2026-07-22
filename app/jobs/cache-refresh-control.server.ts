@@ -6,12 +6,13 @@ import {
   completeCacheRefreshJob,
   createCacheRefreshJob,
   failCacheRefreshJob,
+  failStaleCacheRefreshJob,
   getActiveCacheRefreshJob,
   getCacheRefreshJob,
   getLatestCacheRefreshJob,
 } from "~/models/cache-refresh-job";
 
-type CacheRefreshControlEnv = Pick<Env, "CACHE_REFRESH_WORKFLOW" | "DB"> & Env;
+const CACHE_REFRESH_JOB_STALE_AFTER_HOURS = 24;
 
 export type StartCacheRefreshResult = {
   job: CacheRefreshJob;
@@ -30,8 +31,30 @@ function isWorkflowOutput(value: unknown): value is CacheRefreshWorkflowOutput {
   );
 }
 
+async function recoverStaleCacheRefreshJob(
+  env: Env,
+  job: CacheRefreshJob,
+  logger: ReturnType<typeof getLogger>,
+): Promise<CacheRefreshJob> {
+  try {
+    const released = await failStaleCacheRefreshJob(env, job.uid, CACHE_REFRESH_JOB_STALE_AFTER_HOURS);
+    if (released) {
+      logger.warn("Released stale cache refresh job after reconciliation repeatedly failed", {
+        staleAfterHours: CACHE_REFRESH_JOB_STALE_AFTER_HOURS,
+      });
+      return (await getCacheRefreshJob(env, job.uid)) ?? job;
+    }
+  } catch (error) {
+    logger.error("Failed to release stale cache refresh job", error, {
+      staleAfterHours: CACHE_REFRESH_JOB_STALE_AFTER_HOURS,
+    });
+  }
+
+  return job;
+}
+
 async function reconcileCacheRefreshJob(
-  env: CacheRefreshControlEnv,
+  env: Env,
   ctx: ExecutionContext,
   job: CacheRefreshJob,
 ): Promise<CacheRefreshJob> {
@@ -53,17 +76,19 @@ async function reconcileCacheRefreshJob(
     } else if (workflowStatus.status === "errored" || workflowStatus.status === "terminated") {
       logger.error("Cache refresh workflow stopped", workflowStatus.error, { workflowStatus: workflowStatus.status });
       await failCacheRefreshJob(env, job.uid);
+    } else if (workflowStatus.status === "unknown") {
+      return recoverStaleCacheRefreshJob(env, job, logger);
     }
   } catch (error) {
     logger.error("Failed to reconcile cache refresh workflow status", error);
-    return job;
+    return recoverStaleCacheRefreshJob(env, job, logger);
   }
 
   return (await getCacheRefreshJob(env, job.uid)) ?? job;
 }
 
 export async function startCacheRefresh(
-  env: CacheRefreshControlEnv,
+  env: Env,
   ctx: ExecutionContext,
   requestedBy: number,
 ): Promise<StartCacheRefreshResult> {
@@ -106,7 +131,7 @@ export async function startCacheRefresh(
 }
 
 export async function getCacheRefreshStatus(
-  env: CacheRefreshControlEnv,
+  env: Env,
   ctx: ExecutionContext,
   uid?: string | null,
 ): Promise<CacheRefreshJob | null> {
