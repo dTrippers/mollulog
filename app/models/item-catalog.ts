@@ -1,7 +1,7 @@
 import {
-  GROWTH_RESOURCE_KIND_ORDER,
   classifyGrowthResourceKind,
   compareGrowthResourceKindOrder,
+  GROWTH_RESOURCE_KIND_ORDER,
   getEquipmentBlueprintChoiceBoxTier,
   getEquipmentTier,
   getEquipmentTypeOrder,
@@ -23,6 +23,17 @@ const itemCatalogQuery = graphql(`
     }
     equipments {
       uid name rarity type category
+    }
+  }
+`);
+
+const itemCatalogResourceDescriptionsQuery = graphql(`
+  query ItemCatalogResourceDescriptions($uids: [String!]) {
+    items(uids: $uids) {
+      uid description
+    }
+    equipments(uids: $uids) {
+      uid description
     }
   }
 `);
@@ -74,6 +85,24 @@ export async function getItemCatalogResources(env: Env, forceRefresh = false): P
 export async function getItemCatalogResourceMap(env: Env): Promise<Record<string, ItemCatalogResource>> {
   const resources = await getItemCatalogResources(env);
   return Object.fromEntries(resources.map((resource) => [resource.uid, resource]));
+}
+
+export async function getItemCatalogResourceDescriptionMap(itemUids: string[]): Promise<Record<string, string>> {
+  if (itemUids.length === 0) {
+    return {};
+  }
+
+  const { data, error } = await runQuery(itemCatalogResourceDescriptionsQuery, { uids: itemUids });
+  if (error) {
+    throw error;
+  }
+
+  return Object.fromEntries(
+    [...(data?.items ?? []), ...(data?.equipments ?? [])].flatMap((resource) => {
+      const description = resource.description?.replaceAll(/\s+/g, " ").trim();
+      return description ? [[resource.uid, description]] : [];
+    }),
+  );
 }
 
 export function getGrowthPlannerCatalogResources(resources: ItemCatalogResource[]): ItemCatalogResource[] {

@@ -1,9 +1,11 @@
-import type { BatchItem } from "drizzle-orm/batch";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { growthResourceInventoryTable } from "./growth-resource-inventory";
+
+const D1_IN_QUERY_CHUNK_SIZE = 90;
 
 export type UserResourceInventory = {
   uid: string;
@@ -141,10 +143,22 @@ export async function getUserResourceInventoryMapByItemUids(
   }
 
   const db = drizzle(env.DB);
-  const inventories = await db
-    .select()
-    .from(growthResourceInventoryTable)
-    .where(and(eq(growthResourceInventoryTable.userId, userId), inArray(growthResourceInventoryTable.itemUid, uniqueItemUids)));
+  const inventories: (typeof growthResourceInventoryTable.$inferSelect)[] = [];
+
+  for (let offset = 0; offset < uniqueItemUids.length; offset += D1_IN_QUERY_CHUNK_SIZE) {
+    const itemUidChunk = uniqueItemUids.slice(offset, offset + D1_IN_QUERY_CHUNK_SIZE);
+    const chunkInventories = await db
+      .select()
+      .from(growthResourceInventoryTable)
+      .where(
+        and(
+          eq(growthResourceInventoryTable.userId, userId),
+          inArray(growthResourceInventoryTable.itemUid, itemUidChunk),
+        ),
+      );
+
+    inventories.push(...chunkInventories);
+  }
 
   return inventories.reduce(
     (acc, inventory) => {
@@ -215,7 +229,9 @@ export async function getUserResourceInventoryDraft(
   const [draft] = await db
     .select()
     .from(userResourceInventoryDraftsTable)
-    .where(and(eq(userResourceInventoryDraftsTable.uid, draftUid), eq(userResourceInventoryDraftsTable.userId, userId)));
+    .where(
+      and(eq(userResourceInventoryDraftsTable.uid, draftUid), eq(userResourceInventoryDraftsTable.userId, userId)),
+    );
 
   if (!draft) {
     return null;

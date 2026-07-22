@@ -99,7 +99,7 @@ export function PanelSwitchRow({
     <PanelActionRow
       title={title}
       description={description}
-      className={cn("border-t border-border/70 pt-3", className)}
+      className={cn("pt-3", className)}
       actions={
         <Toggle name={name} initialState={checked} disabled={disabled} className="m-0 shrink-0" onChange={onChange} />
       }

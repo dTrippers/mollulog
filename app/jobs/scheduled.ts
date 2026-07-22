@@ -8,6 +8,7 @@ import { syncEventContentsList } from "~/models/event-content";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
+import { publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
 import { warmRaidCache } from "~/models/raid";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
@@ -17,7 +18,7 @@ import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { warmActiveUpcomingEventContent } from "~/views/events";
 
-type ScheduledJobName = "syncYoutubeCommunityPosts" | "refreshSourceCaches";
+type ScheduledJobName = "maintainOcrJobs" | "syncYoutubeCommunityPosts" | "refreshSourceCaches";
 
 type ScheduledJob = {
   name: ScheduledJobName;
@@ -30,6 +31,7 @@ type ScheduledRunContext = {
 };
 
 const SCHEDULED_JOB_TIMEOUT_MS = RUNTIME_TIMEOUTS.scheduled.job;
+export const OCR_MAINTENANCE_CRON = "* * * * *";
 const SOURCE_REFRESH_CONCURRENCY = 1;
 const SOURCE_WARM_WINDOW_SECONDS = 60 * 60;
 const SOURCE_WARM_MARKER_KEY = cacheKey("source", "cron-source-warm", 1, cacheQuery({ name: "students-events" }));
@@ -123,10 +125,21 @@ export async function runScheduledJobs(
   runContext: ScheduledRunContext = {},
 ): Promise<void> {
   const logger = getLogger(env, ctx, { job: "scheduled" });
-  const jobs: ScheduledJob[] = [
-    { name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env) },
-    { name: "refreshSourceCaches", run: () => refreshSourceCaches(env, ctx) },
-  ];
+  const jobs: ScheduledJob[] =
+    runContext.cron === OCR_MAINTENANCE_CRON
+      ? [
+          {
+            name: "maintainOcrJobs",
+            run: async () => {
+              await reconcileOcrJobs(env, { ctx });
+              await publishPendingOcrOutbox(env, 50, { ctx });
+            },
+          },
+        ]
+      : [
+          { name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env) },
+          { name: "refreshSourceCaches", run: () => refreshSourceCaches(env, ctx) },
+        ];
 
   const results = await Promise.allSettled(
     jobs.map(async (job) => {

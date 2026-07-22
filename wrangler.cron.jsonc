@@ -22,7 +22,7 @@
     }
   },
   "triggers": {
-    "crons": ["*/10 * * * *"]
+    "crons": ["* * * * *", "*/10 * * * *"]
   },
 
   "kv_namespaces": [
@@ -39,6 +39,14 @@
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
   ],
+  "r2_buckets": [
+    { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-dev" }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-dev" }
+    ]
+  },
   "vars": {
     "STAGE": "local"
   },
@@ -69,7 +77,15 @@
       ],
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
-      ]
+      ],
+      "r2_buckets": [
+        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
+      ],
+      "queues": {
+        "producers": [
+          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-prod" }
+        ]
+      }
     },
     "production": {
       "vars": {
@@ -89,6 +105,14 @@
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
       ],
+      "r2_buckets": [
+        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
+      ],
+      "queues": {
+        "producers": [
+          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-prod" }
+        ]
+      },
       "logpush": true
     }
   }

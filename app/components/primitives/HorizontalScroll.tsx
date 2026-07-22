@@ -11,6 +11,8 @@ type HorizontalScrollProps = {
   showArrowsOnMobile?: boolean;
   className?: string;
   fadeEdges?: boolean;
+  previousButtonLabel?: string;
+  nextButtonLabel?: string;
 };
 
 function HorizontalScroll({
@@ -20,6 +22,8 @@ function HorizontalScroll({
   showArrowsOnMobile = false,
   className = "",
   fadeEdges = false,
+  previousButtonLabel = "Scroll left",
+  nextButtonLabel = "Scroll right",
 }: HorizontalScrollProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -76,10 +80,10 @@ function HorizontalScroll({
         <button
           type="button"
           onClick={scrollLeft}
-          className={`absolute left-1 top-1/2 z-10 -translate-y-1/2 rounded-full bg-card p-1.5 shadow-lg transition-colors hover:bg-muted ${
+          className={`absolute left-1 top-1/2 z-10 -translate-y-1/2 cursor-pointer rounded-full bg-card p-1.5 shadow-lg transition-colors hover:bg-muted ${
             showArrowsOnMobile ? "" : "hidden md:block"
           }`}
-          aria-label="Scroll left"
+          aria-label={previousButtonLabel}
         >
           <ChevronLeftIcon className="size-5 text-muted-foreground" />
         </button>
@@ -90,10 +94,10 @@ function HorizontalScroll({
         <button
           type="button"
           onClick={scrollRight}
-          className={`absolute right-1 top-1/2 z-10 -translate-y-1/2 rounded-full bg-card p-1.5 shadow-lg transition-colors hover:bg-muted ${
+          className={`absolute right-1 top-1/2 z-10 -translate-y-1/2 cursor-pointer rounded-full bg-card p-1.5 shadow-lg transition-colors hover:bg-muted ${
             showArrowsOnMobile ? "" : "hidden md:block"
           }`}
-          aria-label="Scroll right"
+          aria-label={nextButtonLabel}
         >
           <ChevronRightIcon className="size-5 text-muted-foreground" />
         </button>

@@ -110,7 +110,8 @@ export function getNavigationSectionStates(
       pathname.startsWith("/@") ||
       pathname.startsWith("/edit") ||
       pathname.startsWith("/my") ||
-      pathname.startsWith("/connect"),
+      pathname.startsWith("/connect") ||
+      pathname.startsWith("/scanner"),
     isMoreActive,
   };
 }

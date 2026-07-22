@@ -1,5 +1,5 @@
 import { ChevronRightIcon, HeartIcon } from "@heroicons/react/16/solid";
-import { PlusIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { CameraIcon, PlusIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -184,8 +184,34 @@ function MorePersonalPlannerSection({ currentUser }: { currentUser: MoreCurrentU
           isSignedIn={currentUser !== null}
           showTopBorder={currentUser !== null}
         />
+        {currentUser ? <ResourceScannerRow /> : null}
       </div>
     </section>
+  );
+}
+
+function ResourceScannerRow() {
+  return (
+    <Link
+      to="/scanner/resource"
+      className={cn(`
+        group flex items-center gap-3 border-neutral-200 border-t py-3 pl-4 pr-2 transition-colors
+        hover:bg-neutral-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset
+        dark:border-neutral-800 dark:hover:bg-neutral-800/40
+      `)}
+    >
+      <CameraIcon className="size-5 shrink-0 text-neutral-500 dark:text-neutral-400" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-base font-semibold text-neutral-900 dark:text-neutral-100">스크린샷 인식기</p>
+        <p className="mt-1 text-sm leading-snug text-neutral-500 dark:text-neutral-400">
+          아이템 화면 스크린샷에서 보유 재화를 인식해요
+        </p>
+      </div>
+      <ChevronRightIcon
+        className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5"
+        aria-hidden="true"
+      />
+    </Link>
   );
 }
 

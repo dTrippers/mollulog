@@ -7,6 +7,7 @@ type SyncDraftRow = {
   userId: number;
   apiKeyUid: string | null;
   source: string;
+  sourceRef: string | null;
   type: string;
   status: string;
   toolName: string | null;
@@ -324,6 +325,7 @@ function createDraftRow(overrides: Partial<SyncDraftRow> = {}): SyncDraftRow {
     userId: 1,
     apiKeyUid: null,
     source: "web",
+    sourceRef: null,
     type: "student_state",
     status: "pending",
     toolName: null,

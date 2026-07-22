@@ -3,10 +3,10 @@ import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import {
+  parseStudentStateDraftValue,
   type StudentStateDraftCurrentValue,
   type StudentStateDraftTargetValue,
   type StudentStateDraftValue,
-  parseStudentStateDraftValue,
 } from "~/domain/student-state";
 
 export const syncDraftsTable = sqliteTable("sync_drafts", {
@@ -15,6 +15,7 @@ export const syncDraftsTable = sqliteTable("sync_drafts", {
   userId: int().notNull(),
   apiKeyUid: text(),
   source: text().notNull().default("connect"),
+  sourceRef: text(),
   type: text().notNull(),
   status: text().notNull().default("pending"),
   toolName: text(),
@@ -56,6 +57,7 @@ export type SyncDraftSummary = {
   userId: number;
   apiKeyUid: string | null;
   source: SyncDraftSource;
+  sourceRef: string | null;
   type: SyncDraftType;
   status: SyncDraftStatus;
   toolName: string | null;
@@ -75,6 +77,16 @@ export type SyncDraftEntryUpdateInput = {
   entryKey: string;
   value: unknown;
   valueJson?: string | null;
+};
+
+export type SyncDraftCreateInput = {
+  source: SyncDraftSource;
+  sourceRef?: string | null;
+  type: SyncDraftType;
+  toolName?: string | null;
+  toolVersion?: string | null;
+  catalogVersion?: string | null;
+  entries: Array<SyncDraftEntryUpdateInput & { meta?: unknown }>;
 };
 
 export function toSyncDraftSource(source: string): SyncDraftSource {
@@ -119,6 +131,7 @@ export function toSyncDraftSummaryModel(draft: typeof syncDraftsTable.$inferSele
     userId: draft.userId,
     apiKeyUid: draft.apiKeyUid,
     source: toSyncDraftSource(draft.source),
+    sourceRef: draft.sourceRef,
     type: toSyncDraftType(draft.type),
     status: toSyncDraftStatus(draft.status),
     toolName: draft.toolName,
@@ -169,6 +182,51 @@ export async function getSyncDraft(env: Env, userId: number, uid: string): Promi
   return toSyncDraftModel(draft, entries);
 }
 
+export async function getSyncDraftBySourceRef(
+  env: Env,
+  userId: number,
+  source: SyncDraftSource,
+  sourceRef: string,
+): Promise<SyncDraftSummary | null> {
+  const db = drizzle(env.DB);
+  const [draft] = await db
+    .select()
+    .from(syncDraftsTable)
+    .where(
+      and(
+        eq(syncDraftsTable.userId, userId),
+        eq(syncDraftsTable.source, source),
+        eq(syncDraftsTable.sourceRef, sourceRef),
+      ),
+    );
+  return draft ? toSyncDraftSummaryModel(draft) : null;
+}
+
+export async function listSyncDraftsBySourceRefs(
+  env: Env,
+  userId: number,
+  source: SyncDraftSource,
+  sourceRefs: string[],
+): Promise<Record<string, SyncDraftSummary>> {
+  const uniqueSourceRefs = [...new Set(sourceRefs)];
+  if (uniqueSourceRefs.length === 0) return {};
+
+  const db = drizzle(env.DB);
+  const drafts = await db
+    .select()
+    .from(syncDraftsTable)
+    .where(
+      and(
+        eq(syncDraftsTable.userId, userId),
+        eq(syncDraftsTable.source, source),
+        inArray(syncDraftsTable.sourceRef, uniqueSourceRefs),
+      ),
+    );
+  return Object.fromEntries(
+    drafts.flatMap((draft) => (draft.sourceRef ? [[draft.sourceRef, toSyncDraftSummaryModel(draft)]] : [])),
+  );
+}
+
 export async function listPendingSyncDrafts(env: Env, userId: number): Promise<SyncDraftSummary[]> {
   const db = drizzle(env.DB);
   const drafts = await db
@@ -178,6 +236,116 @@ export async function listPendingSyncDrafts(env: Env, userId: number): Promise<S
     .orderBy(desc(syncDraftsTable.createdAt));
 
   return drafts.map(toSyncDraftSummaryModel);
+}
+
+export async function createSyncDraft(env: Env, userId: number, input: SyncDraftCreateInput): Promise<string> {
+  const entries = normalizeSyncDraftEntryUpdates(input.type, input.entries);
+  if (entries.length === 0) {
+    throw new Error("변경된 항목이 없어요");
+  }
+
+  const metaByEntryKey = new Map(
+    input.entries.map((entry) => [entry.entryKey.trim(), entry.meta == null ? null : JSON.stringify(entry.meta)]),
+  );
+  const draftUid = nanoid(12);
+  await env.DB.batch([
+    env.DB.prepare(`
+      insert into sync_drafts (
+        uid, userId, source, sourceRef, type, status, toolName, toolVersion, catalogVersion
+      ) values (?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?8)
+    `).bind(
+      draftUid,
+      userId,
+      input.source,
+      input.sourceRef ?? null,
+      input.type,
+      input.toolName ?? null,
+      input.toolVersion ?? null,
+      input.catalogVersion ?? null,
+    ),
+    ...entries.map((entry) =>
+      env.DB.prepare(`
+        insert into sync_draft_entries (uid, draftUid, entryKey, value, valueJson, meta)
+        values (?1, ?2, ?3, ?4, ?5, ?6)
+      `).bind(
+        nanoid(8),
+        draftUid,
+        entry.entryKey,
+        entry.value,
+        entry.valueJson,
+        metaByEntryKey.get(entry.entryKey) ?? null,
+      ),
+    ),
+  ]);
+  return draftUid;
+}
+
+export async function createAndApplySyncDraft(
+  env: Env,
+  userId: number,
+  input: SyncDraftCreateInput & { sourceRef: string },
+): Promise<{ draft: SyncDraftSummary; alreadyApplied: boolean }> {
+  const existing = await getSyncDraftBySourceRef(env, userId, input.source, input.sourceRef);
+  if (existing) {
+    if (existing.status === "applied") return { draft: existing, alreadyApplied: true };
+    throw new Error("이미 처리 중인 인식 결과예요");
+  }
+
+  const entries = normalizeSyncDraftEntryUpdates(input.type, input.entries);
+  if (entries.length === 0) throw new Error("변경된 항목이 없어요");
+  const metaByEntryKey = new Map(
+    input.entries.map((entry) => [entry.entryKey.trim(), entry.meta == null ? null : JSON.stringify(entry.meta)]),
+  );
+  const draftUid = nanoid(12);
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`
+        insert into sync_drafts (
+          uid, userId, source, sourceRef, type, status, toolName, toolVersion, catalogVersion
+        ) values (?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?8)
+      `).bind(
+        draftUid,
+        userId,
+        input.source,
+        input.sourceRef,
+        input.type,
+        input.toolName ?? null,
+        input.toolVersion ?? null,
+        input.catalogVersion ?? null,
+      ),
+      ...entries.map((entry) =>
+        env.DB.prepare(`
+          insert into sync_draft_entries (uid, draftUid, entryKey, value, valueJson, meta)
+          values (?1, ?2, ?3, ?4, ?5, ?6)
+        `).bind(
+          nanoid(8),
+          draftUid,
+          entry.entryKey,
+          entry.value,
+          entry.valueJson,
+          metaByEntryKey.get(entry.entryKey) ?? null,
+        ),
+      ),
+      ...entries.flatMap((entry) => createConditionalApplyStatements(env, userId, draftUid, input.type, entry)),
+      env.DB.prepare(`
+        update sync_drafts
+        set status = 'applied',
+            updatedAt = current_timestamp,
+            appliedAt = current_timestamp
+        where uid = ?1
+          and userId = ?2
+          and status = 'pending'
+      `).bind(draftUid, userId),
+    ]);
+  } catch (error) {
+    const concurrent = await getSyncDraftBySourceRef(env, userId, input.source, input.sourceRef);
+    if (concurrent?.status === "applied") return { draft: concurrent, alreadyApplied: true };
+    throw error;
+  }
+
+  const applied = await getSyncDraftBySourceRef(env, userId, input.source, input.sourceRef);
+  if (applied?.status !== "applied") throw new Error("인식 결과를 반영하지 못했어요");
+  return { draft: applied, alreadyApplied: false };
 }
 
 export async function getSyncDraftEntryCounts(env: Env, draftUids: string[]): Promise<Record<string, number>> {

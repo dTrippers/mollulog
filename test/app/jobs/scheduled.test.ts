@@ -3,6 +3,7 @@ import { syncEventContentsList } from "~/models/event-content";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
+import { publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
 import { warmRaidCache } from "~/models/raid";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
@@ -14,6 +15,11 @@ import { warmActiveUpcomingEventContent } from "~/views/events";
 
 jest.mock("~/models/main-story", () => ({
   getMainStories: jest.fn(),
+}));
+
+jest.mock("~/models/ocr-job", () => ({
+  publishPendingOcrOutbox: jest.fn(),
+  reconcileOcrJobs: jest.fn(),
 }));
 
 jest.mock("~/models/resource", () => ({
@@ -86,6 +92,8 @@ const mockedSyncAllTimelineContentsMeta = syncAllTimelineContentsMeta as jest.Mo
   typeof syncAllTimelineContentsMeta
 >;
 const mockedGetMainStories = getMainStories as jest.MockedFunction<typeof getMainStories>;
+const mockedPublishPendingOcrOutbox = publishPendingOcrOutbox as jest.MockedFunction<typeof publishPendingOcrOutbox>;
+const mockedReconcileOcrJobs = reconcileOcrJobs as jest.MockedFunction<typeof reconcileOcrJobs>;
 const mockedGetAllStudentsFavoriteItems = getAllStudentsFavoriteItems as jest.MockedFunction<
   typeof getAllStudentsFavoriteItems
 >;
@@ -131,6 +139,8 @@ beforeEach(() => {
   mockedWarmActiveUpcomingEventContent.mockResolvedValue();
   mockedGetItemCatalogResources.mockResolvedValue([]);
   mockedGetCampaignFarmingStages.mockResolvedValue([]);
+  mockedReconcileOcrJobs.mockResolvedValue();
+  mockedPublishPendingOcrOutbox.mockResolvedValue(0);
 });
 
 afterEach(() => {
@@ -138,6 +148,21 @@ afterEach(() => {
 });
 
 describe("runScheduledJobs", () => {
+  it("runs only OCR maintenance for the per-minute cron", async () => {
+    const { env } = createEnv();
+    const ctx = {} as ExecutionContext;
+
+    await runScheduledJobs(env, ctx, { cron: "* * * * *" });
+
+    expect(mockedReconcileOcrJobs).toHaveBeenCalledWith(env, { ctx });
+    expect(mockedPublishPendingOcrOutbox).toHaveBeenCalledWith(env, 50, { ctx });
+    expect(mockedReconcileOcrJobs.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedPublishPendingOcrOutbox.mock.invocationCallOrder[0],
+    );
+    expect(mockedSyncYoutubeCommunityPosts).not.toHaveBeenCalled();
+    expect(mockedSyncRawStudents).not.toHaveBeenCalled();
+  });
+
   it("runs scheduled sync jobs", async () => {
     const now = 1_800_000_000_000;
     jest.spyOn(Date, "now").mockReturnValue(now);
