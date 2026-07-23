@@ -1,5 +1,11 @@
 import { EyeIcon, EyeSlashIcon } from "@heroicons/react/16/solid";
-import { ArchiveBoxIcon, ChartBarIcon, MagnifyingGlassIcon, TableCellsIcon } from "@heroicons/react/24/outline";
+import {
+  ArchiveBoxIcon,
+  CameraIcon,
+  ChartBarIcon,
+  MagnifyingGlassIcon,
+  TableCellsIcon,
+} from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
@@ -145,6 +151,12 @@ export default function ResourcePlannerLayout() {
         },
       ]}
       links={[
+        {
+          title: "스크린샷 인식기",
+          description: "아이템 화면 스크린샷에서 보유 재화를 인식할 수 있어요",
+          to: "/scanner/resource",
+          Icon: CameraIcon,
+        },
         {
           title: "학생 성장 플래너",
           description: "학생들의 성장 목표를 입력하면 필요한 재화를 계산할 수 있어요",

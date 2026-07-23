@@ -18,7 +18,18 @@ export type WalkthroughTimelineFeedbackAdditional = {
   };
 };
 
-export type FeedbackAdditional = EventShopBugReportAdditional | WalkthroughTimelineFeedbackAdditional;
+export type ResourceScannerFeedbackAdditional = {
+  type: "resource_scanner_feedback";
+  version: 1;
+  payload: Record<string, unknown> & {
+    timestamp: string;
+    path: string;
+  };
+};
+
+export type PathFeedbackAdditional = WalkthroughTimelineFeedbackAdditional | ResourceScannerFeedbackAdditional;
+
+export type FeedbackAdditional = EventShopBugReportAdditional | PathFeedbackAdditional;
 
 export function parseFeedbackAdditional(value: string | null): FeedbackAdditional | null {
   if (!value) {
@@ -56,7 +67,7 @@ export function parseFeedbackAdditional(value: string | null): FeedbackAdditiona
   }
 
   if (
-    parsed.type === "walkthrough_timeline_feedback" &&
+    (parsed.type === "walkthrough_timeline_feedback" || parsed.type === "resource_scanner_feedback") &&
     "path" in parsed.payload &&
     typeof parsed.payload.path === "string"
   ) {

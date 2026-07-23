@@ -30,6 +30,20 @@ describe("parseFeedbackAdditional", () => {
     expect(parseFeedbackAdditional(JSON.stringify(value))).toEqual(value);
   });
 
+  it("accepts the versioned resource scanner feedback envelope", () => {
+    const value = {
+      type: "resource_scanner_feedback",
+      version: 1,
+      payload: {
+        timestamp: "2026-07-24T00:00:00.000Z",
+        path: "/scanner/resource?job=job-1",
+        viewport: { width: 390, height: 844 },
+      },
+    };
+
+    expect(parseFeedbackAdditional(JSON.stringify(value))).toEqual(value);
+  });
+
   it("rejects unknown envelopes and oversized diagnostics", () => {
     expect(() => parseFeedbackAdditional('{"type":"unknown","version":1,"payload":{}}')).toThrow(
       "Feedback additional payload is invalid",

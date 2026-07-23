@@ -15,6 +15,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { type DragEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import FeatureFeedbackButton from "~/components/features/feedback/FeatureFeedbackButton";
 import {
   Button,
   Callout,
@@ -117,6 +118,7 @@ export default function ResourceScanner() {
   const [uploadQuota, setUploadQuota] = useState<OcrUploadQuota | null>(null);
   const [job, setJob] = useState<JobStatus | null>(null);
   const [recentJobs, setRecentJobs] = useState<JobSummary[]>([]);
+  const [isRecentJobsLoading, setIsRecentJobsLoading] = useState(true);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [highlightedSources, setHighlightedSources] = useState<string[]>([]);
   const [highlightedReviewPosition, setHighlightedReviewPosition] = useState<number | null>(null);
@@ -155,7 +157,8 @@ export default function ResourceScanner() {
         setRecentJobs(jobs);
         setUploadQuota(quota);
       })
-      .catch((loadError) => setError(toErrorMessage(loadError)));
+      .catch((loadError) => setError(toErrorMessage(loadError)))
+      .finally(() => setIsRecentJobsLoading(false));
   }, []);
 
   useEffect(() => {
@@ -609,34 +612,43 @@ export default function ResourceScanner() {
         </div>
       </section>
 
-      {recentJobs.length > 0 ? (
-        <section>
-          <SubTitle text="진행 상황 확인" description="인식 결과는 최대 7일동안 확인할 수 있어요" />
-          <div className="space-y-4 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5">
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {recentJobs.map((recentJob) => (
-                <button
-                  key={recentJob.uid}
-                  type="button"
-                  onClick={() => selectJob(recentJob.uid)}
-                  aria-current={job?.uid === recentJob.uid ? "true" : undefined}
-                  className={cn(
-                    "flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/30",
-                    job?.uid === recentJob.uid ? "border-primary bg-primary/5" : "border-border",
-                  )}
-                >
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-foreground">
-                      {formatJobDate(recentJob.createdAt)}
-                    </span>
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {recentJob.progress.total}장 · {formatJobStatus(recentJob)}
-                    </span>
-                  </span>
-                  <span className={cn("size-2 shrink-0 rounded-full", jobStatusDotClass(recentJob))} />
-                </button>
-              ))}
+      {isRecentJobsLoading || recentJobs.length > 0 ? (
+        <section aria-busy={isRecentJobsLoading}>
+          <div className="flex items-end justify-between gap-4">
+            <SubTitle text="진행 상황 확인" description="인식 결과는 최대 7일동안 확인할 수 있어요" />
+            <div className="shrink-0 pb-3">
+              <FeatureFeedbackButton featureName="스크린샷 인식기" feedbackType="resource_scanner_feedback" />
             </div>
+          </div>
+          <div className="space-y-4 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5">
+            {isRecentJobsLoading ? (
+              <RecentJobsSkeleton />
+            ) : (
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {recentJobs.map((recentJob) => (
+                  <button
+                    key={recentJob.uid}
+                    type="button"
+                    onClick={() => selectJob(recentJob.uid)}
+                    aria-current={job?.uid === recentJob.uid ? "true" : undefined}
+                    className={cn(
+                      "flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/30",
+                      job?.uid === recentJob.uid ? "border-primary bg-primary/5" : "border-border",
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">
+                        {formatJobDate(recentJob.createdAt)}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {recentJob.progress.total}장 · {formatJobStatus(recentJob)}
+                      </span>
+                    </span>
+                    <span className={cn("size-2 shrink-0 rounded-full", jobStatusDotClass(recentJob))} />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       ) : null}
@@ -891,6 +903,28 @@ export default function ResourceScanner() {
         />
       ) : null}
     </div>
+  );
+}
+
+function RecentJobsSkeleton() {
+  return (
+    <>
+      <p className="sr-only">진행 상황을 불러오는 중이에요</p>
+      <div className="grid animate-pulse gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
+        {["first", "second", "third"].map((key) => (
+          <div
+            key={key}
+            className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-2.5"
+          >
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <div className="h-4 w-24 rounded-sm bg-muted" />
+              <div className="h-3 w-16 rounded-sm bg-muted" />
+            </div>
+            <div className="size-2 shrink-0 rounded-full bg-muted" />
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
