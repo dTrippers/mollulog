@@ -7,6 +7,7 @@ import { Page } from "~/components/features/layout";
 import { EmptyView, PanelBody, PanelIconToggleRow, PanelSearchField } from "~/components/primitives";
 import { withD1Session } from "~/lib/d1-session";
 import { formatInstant, nowUtcIso } from "~/lib/date-time";
+import { canonicalLink } from "~/lib/seo";
 import type { RunType } from "~/models/timeline-content";
 import { type EventFilterState, filterEventList } from "~/views/event-list-filter";
 import { type EventListItem, type EventListSchedule, getEventList } from "~/views/events";
@@ -25,7 +26,7 @@ const defaultFilter: EventFilterState = {
   search: "",
 };
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
   const title = "블루 아카이브 이벤트";
   const description = "블루 아카이브의 이벤트 개최 일정을 확인해보세요";
   return [
@@ -35,6 +36,7 @@ export const meta: MetaFunction = () => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
+    canonicalLink(location.pathname),
   ];
 };
 

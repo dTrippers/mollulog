@@ -95,8 +95,12 @@ describe("Google search crawler SEO containment", () => {
 
   it("requires canonical validation only for public canonicalized routes", () => {
     expect(requiresSelfCanonical("/")).toBe(true);
+    expect(requiresSelfCanonical("/events")).toBe(true);
     expect(requiresSelfCanonical("/raids/grand-assault/31")).toBe(true);
     expect(requiresSelfCanonical("/students/10000")).toBe(true);
+    expect(requiresSelfCanonical("/timelines")).toBe(true);
+    expect(requiresSelfCanonical("/utils/pyroxene")).toBe(true);
+    expect(requiresSelfCanonical("/utils/raidscore")).toBe(true);
     expect(requiresSelfCanonical("/api/preference")).toBe(false);
     expect(requiresSelfCanonical("/@someone")).toBe(false);
   });

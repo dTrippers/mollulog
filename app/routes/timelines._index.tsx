@@ -20,6 +20,7 @@ import {
   type WalkthroughTimelineRecord,
 } from "~/domain/walkthrough-timeline";
 import { DEMO_WALKTHROUGH_BOSS_NAME, DEMO_WALKTHROUGH_TIMELINE } from "~/domain/walkthrough-timeline-demo";
+import { canonicalLink } from "~/lib/seo";
 import {
   defenseTypeColor,
   defenseTypeLocale,
@@ -33,12 +34,13 @@ import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getSenseisById } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 
-export const meta: MetaFunction = () => [
+export const meta: MetaFunction = ({ location }) => [
   { title: "공략 타임라인 | 몰루로그" },
   {
     name: "description",
     content: "보스와 지형, 방어 타입, 난이도에 맞는 공략 타임라인을 찾아보세요.",
   },
+  canonicalLink(location.pathname),
 ];
 
 export const ErrorBoundary = RouteErrorBoundary;

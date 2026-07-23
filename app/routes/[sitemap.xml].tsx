@@ -38,8 +38,12 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   const publicReadEnv = withD1Session(env, "first-unconstrained");
   const items: SitemapItem[] = [
     { link: `${HOST}/futures`, lastmod: dayjs(), changefreq: "daily", priority: 1.0 },
-    { link: `${HOST}/utils`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
+    { link: `${HOST}/more`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
+    { link: `${HOST}/events`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
     { link: `${HOST}/utils/relationship`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
+    { link: `${HOST}/utils/pyroxene`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
+    { link: `${HOST}/utils/raidscore`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
+    { link: `${HOST}/timelines`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
     { link: `${HOST}/coupons`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },
     { link: `${HOST}/students`, lastmod: dayjs(), changefreq: "monthly", priority: 0.5 },
   ];

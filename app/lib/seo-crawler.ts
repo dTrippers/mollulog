@@ -6,12 +6,16 @@ const SELF_CANONICAL_PATHS = new Set([
   "/",
   "/community",
   "/coupons",
+  "/events",
   "/futures",
   "/mainstory",
   "/more",
   "/news",
   "/raids",
   "/students",
+  "/timelines",
+  "/utils/pyroxene",
+  "/utils/raidscore",
   "/utils/relationship",
 ]);
 
