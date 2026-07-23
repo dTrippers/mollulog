@@ -123,15 +123,8 @@
       ],
       "queues": {
         "producers": [
-          { "binding": "EVENTS", "queue": "mollulog-events-staging" },
+          { "binding": "EVENTS", "queue": "mollulog-events" },
           { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-prod" }
-        ],
-        "consumers": [
-          {
-            "queue": "mollulog-aoi-dlq-prod",
-            "max_batch_size": 10,
-            "max_batch_timeout": 5
-          }
         ]
       }
     },
