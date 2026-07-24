@@ -657,14 +657,7 @@ export default function ResourceScanner() {
 
       {error ? <Callout tone="destructive" title="처리 중 오류가 발생했어요" description={error} /> : null}
 
-      {job && phase === "waiting" ? (
-        <Callout
-          tone="info"
-          Icon={ArrowPathIcon}
-          title="스크린샷을 인식하고 있어요"
-          description={`${job.progress.total}장 중 ${job.progress.completed + job.progress.failed}장 인식 완료 · 페이지를 닫아도 작업은 계속돼요.`}
-        />
-      ) : null}
+      {job && phase === "waiting" ? <RecognitionProgressCard job={job} /> : null}
 
       {phase === "review" || phase === "applying" || phase === "applied" ? (
         <section>
@@ -925,6 +918,75 @@ function RecentJobsSkeleton() {
         ))}
       </div>
     </>
+  );
+}
+
+function RecognitionProgressCard({ job }: { job: JobStatus }) {
+  const processed = job.progress.completed + job.progress.failed;
+  const remaining = Math.max(0, job.progress.total - processed);
+  const percentage = job.progress.total > 0 ? (processed / job.progress.total) * 100 : 0;
+
+  return (
+    <section
+      aria-live="polite"
+      aria-busy="true"
+      className="rounded-lg border border-primary/20 bg-primary/10 p-4 md:p-5"
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <ArrowPathIcon className="size-5 animate-spin" aria-hidden="true" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="font-semibold text-foreground">스크린샷을 인식하고 있어요</h2>
+              <p className="mt-1 text-sm text-muted-foreground">페이지를 닫아도 작업은 계속돼요.</p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-lg font-semibold tabular-nums text-foreground">
+                {processed}/{job.progress.total}
+              </p>
+              <p className="text-xs text-muted-foreground">이미지 처리</p>
+            </div>
+          </div>
+
+          <progress
+            aria-label={`스크린샷 ${job.progress.total}장 중 ${processed}장 처리`}
+            max={job.progress.total}
+            value={processed}
+            className="sr-only"
+          />
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-primary/15" aria-hidden="true">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-500"
+              style={{ width: `${percentage}%` }}
+            />
+          </div>
+          <div className="mt-2 flex gap-1" aria-hidden="true">
+            {job.images.map((image) => (
+              <span
+                key={image.uid}
+                className={cn(
+                  "h-1.5 min-w-1 flex-1 rounded-full",
+                  image.status === "succeeded"
+                    ? "bg-primary"
+                    : image.status === "failed"
+                      ? "bg-destructive"
+                      : image.status === "processing"
+                        ? "animate-pulse bg-primary/60"
+                        : "animate-pulse bg-primary/20",
+                )}
+              />
+            ))}
+          </div>
+
+          <div className="mt-3 flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>{remaining > 0 ? `${remaining}장 남았어요` : "인식 결과를 정리하고 있어요"}</span>
+            <span>이미지 수에 따라 최대 1분 정도 소요될 수 있어요.</span>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
