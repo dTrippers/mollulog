@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { createAndApplySyncDraft, createSyncDraft } from "~/models/sync-draft";
+import { createAndApplySyncDraft, createSyncDraft, type SyncDraftCreateInput } from "~/models/sync-draft";
 
 class CaptureStatement {
   params: unknown[] = [];
@@ -39,7 +39,7 @@ describe("first-party OCR sync draft creation", () => {
 
   it("applies an OCR inventory result once and returns the existing application on retry", async () => {
     const db = new ApplyingD1Database();
-    const input = {
+    const input: SyncDraftCreateInput & { sourceRef: string } = {
       source: "first_party_ocr" as const,
       sourceRef: "job-1",
       type: "item_inventory" as const,
@@ -54,6 +54,50 @@ describe("first-party OCR sync draft creation", () => {
     expect(retried).toMatchObject({ alreadyApplied: true, draft: { uid: first.draft.uid } });
     expect(db.batchCalls).toBe(1);
     expect(db.statements.some((statement) => statement.sql.includes("growth_resource_inventory"))).toBe(true);
+  });
+
+  it("keeps unconfirmed student state columns when applying a partial OCR draft", async () => {
+    const db = new ApplyingD1Database();
+    const input: SyncDraftCreateInput & { sourceRef: string } = {
+      source: "first_party_ocr",
+      sourceRef: "student-video-job",
+      type: "student_state",
+      toolName: "학생 성장도 영상 인식",
+      entries: [
+        {
+          entryKey: "10000",
+          value: 7,
+          valueJson: JSON.stringify({
+            current: {
+              tier: 7,
+              bond: null,
+              level: null,
+              weaponLevel: 0,
+              skillEx: null,
+              skillNormal: null,
+              skillEnhanced: null,
+              skillSub: null,
+              equip1: null,
+              equip2: null,
+              equip3: null,
+              equipSpecial: null,
+              abilityHp: 0,
+              abilityAtk: 0,
+              abilityHeal: 0,
+            },
+            target: null,
+          }),
+        },
+      ],
+    };
+    const first = await createAndApplySyncDraft({ DB: db as unknown as D1Database } as Env, 7, input);
+    const retried = await createAndApplySyncDraft({ DB: db as unknown as D1Database } as Env, 7, input);
+
+    const statement = db.statements.find((candidate) => candidate.sql.includes("insert into recruited_students"));
+    expect(statement?.sql).toContain("level = coalesce(excluded.level, recruited_students.level)");
+    expect(statement?.sql).toContain("weaponLevel = coalesce(excluded.weaponLevel, recruited_students.weaponLevel)");
+    expect(first.alreadyApplied).toBe(false);
+    expect(retried.alreadyApplied).toBe(true);
   });
 });
 

@@ -2,18 +2,72 @@ import type { LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { OCR_CANDIDATE_SELECTION_LIMIT } from "~/domain/ocr";
+import { parseStudentDetailVideoResult } from "~/domain/student-video-ocr";
+import { getLogger } from "~/lib/observability.server";
 import { getItemCatalogResourceDescriptionMap, getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getOcrJob } from "~/models/ocr-job";
+import { getRecruitedStudents, type RecruitedStudent } from "~/models/recruited-student";
+import { getRelationshipLevels } from "~/models/relationship-level";
+import { getAllStudentsMap } from "~/models/student";
 import { getSyncDraftBySourceRef } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "api.ocr.jobs.detail", jobUid: params.jobUid });
   const sensei = await getActiveSensei(env, request);
   if (!sensei) return data({ error: "로그인이 필요해요" }, { status: 401 });
   if (!params.jobUid) return data({ error: "OCR 작업 UID가 필요해요" }, { status: 400 });
   const job = await getOcrJob(env, sensei.id, params.jobUid, { ctx });
   if (!job) return data({ error: "OCR 작업을 찾을 수 없어요" }, { status: 404 });
+
+  if (job.jobKind === "student_detail_video_v1") {
+    let result = null;
+    if (job.result) {
+      try {
+        result = parseStudentDetailVideoResult(job.result);
+      } catch (error) {
+        logger.error("Stored student video OCR result is invalid", error);
+        return data({ error: "인식 결과를 불러오지 못했어요. 잠시 후 다시 시도해 주세요." }, { status: 500 });
+      }
+    }
+    const [recruitedStudents, relationshipLevels, draft, studentsMap] = await Promise.all([
+      getRecruitedStudents(env, sensei.id),
+      getRelationshipLevels(env, sensei.id),
+      getSyncDraftBySourceRef(env, sensei.id, "first_party_ocr", job.uid),
+      getAllStudentsMap(env, true),
+    ]);
+    const relationshipByStudentUid = new Map(
+      relationshipLevels.map((relationship) => [relationship.studentId, relationship.currentLevel]),
+    );
+    const currentStudentStates: Record<
+      string,
+      Partial<RecruitedStudent> & { studentUid: string; bond: number | null }
+    > = Object.fromEntries(
+      recruitedStudents.map((student) => [
+        student.studentUid,
+        { ...student, bond: relationshipByStudentUid.get(student.studentUid) ?? null },
+      ]),
+    );
+    for (const relationship of relationshipLevels) {
+      currentStudentStates[relationship.studentId] ??= {
+        studentUid: relationship.studentId,
+        bond: relationship.currentLevel,
+      };
+    }
+    return data({
+      ...job,
+      result,
+      currentStudentStates,
+      studentCatalog: Object.fromEntries(
+        (result?.students ?? []).flatMap(({ studentUid }) => {
+          const student = studentsMap[studentUid];
+          return student ? [[studentUid, { uid: student.uid, name: student.name }]] : [];
+        }),
+      ),
+      application: draft ? { status: draft.status, appliedAt: draft.appliedAt } : null,
+    });
+  }
 
   const candidateUids = [...new Set(getResultCandidateUids(job.result))];
   const itemUids = [...new Set([...getResultItemUids(job.result), ...candidateUids])];

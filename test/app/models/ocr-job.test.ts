@@ -13,10 +13,12 @@ import {
   reconcileOcrJobs,
   submitOcrJob,
 } from "~/models/ocr-job";
+import studentVideoResult from "../../fixtures/student-detail-video-result.v1.json";
 
 const jobRow = {
   uid: "job-1",
   userId: 7,
+  jobKind: "item_inventory_images_v1",
   status: "uploading",
   generation: 1,
   totalImages: 1,
@@ -42,12 +44,28 @@ const imageRow = {
   lastErrorMessage: null,
 };
 
+const videoRow = {
+  uid: "video-1",
+  jobUid: "job-1",
+  objectKey: "ocr/local/job-1/video-1",
+  originalFilename: "students.mp4",
+  contentType: "video/mp4",
+  byteSize: 1024,
+  inputSha256: "b".repeat(64),
+  status: "processing",
+  generation: 1,
+  lastErrorCode: null as string | null,
+  lastErrorMessage: null as string | null,
+  rawInputPurgeAfter: new Date("2026-07-21T01:00:00Z"),
+};
+
 function jobDatabaseRow(overrides: Partial<typeof jobRow> = {}): unknown[] {
   const row = { ...jobRow, ...overrides };
   return [
     1,
     row.uid,
     row.userId,
+    row.jobKind,
     row.status,
     row.generation,
     row.totalImages,
@@ -80,6 +98,35 @@ function imageDatabaseRow(overrides: Partial<typeof imageRow> = {}): unknown[] {
     null,
     row.lastErrorCode,
     row.lastErrorMessage,
+    new Date("2026-07-20T00:00:00Z"),
+    new Date("2026-07-20T00:00:00Z"),
+    null,
+  ];
+}
+
+function videoDatabaseRow(overrides: Partial<typeof videoRow> = {}): unknown[] {
+  const row = { ...videoRow, ...overrides };
+  return [
+    1,
+    row.uid,
+    row.jobUid,
+    row.objectKey,
+    row.originalFilename,
+    row.contentType,
+    row.byteSize,
+    row.inputSha256,
+    row.status,
+    row.generation,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    row.lastErrorCode,
+    row.lastErrorMessage,
+    row.rawInputPurgeAfter,
+    null,
     new Date("2026-07-20T00:00:00Z"),
     new Date("2026-07-20T00:00:00Z"),
     null,
@@ -138,10 +185,10 @@ describe("PostgreSQL OCR control plane", () => {
     const insertJob = query.mock.calls.find(([queryConfig]) =>
       queryText(queryConfig).includes('insert into "ocr_jobs"'),
     );
-    expect((insertJob?.[1] as unknown[])[5]).toBe("2026-07-28T00:00:00.000Z");
-    expect((insertJob?.[1] as unknown[])[6]).toBe("2026-07-31T00:00:00.000Z");
-    expect((insertJob?.[1] as unknown[])[7]).toBe("2026-07-21T00:00:00.000Z");
-    expect((insertJob?.[1] as unknown[])[8]).toBe("2026-07-23-v1");
+    expect((insertJob?.[1] as unknown[])[6]).toBe("2026-07-28T00:00:00.000Z");
+    expect((insertJob?.[1] as unknown[])[7]).toBe("2026-07-31T00:00:00.000Z");
+    expect((insertJob?.[1] as unknown[])[8]).toBe("2026-07-21T00:00:00.000Z");
+    expect((insertJob?.[1] as unknown[])[9]).toBe("2026-07-23-v1");
     expect(
       query.mock.calls
         .filter(([queryConfig]) => !["begin isolation level serializable", "commit"].includes(queryText(queryConfig)))
@@ -167,6 +214,33 @@ describe("PostgreSQL OCR control plane", () => {
         result: { items: [] },
       }),
     );
+  });
+
+  it("does not expose worker error details in a student video job response", async () => {
+    const { client } = createClient((sql) => {
+      if (sql.includes('from "ocr_jobs"')) {
+        return [jobDatabaseRow({ jobKind: "student_detail_video_v1", status: "failed" })];
+      }
+      if (sql.includes('from "ocr_video_inputs"')) {
+        return [
+          videoDatabaseRow({
+            status: "failed",
+            lastErrorCode: "ffprobe_missing",
+            lastErrorMessage: "ffprobe binary was not found at /private/internal/path",
+          }),
+        ];
+      }
+      return [];
+    });
+
+    const job = await getOcrJob(createEnv(), 7, "job-1", { createClient: () => client });
+
+    expect(job?.video?.error).toEqual({
+      code: "recognition_failed",
+      message: "영상을 인식하지 못했어요",
+    });
+    expect(JSON.stringify(job)).not.toContain("ffprobe");
+    expect(JSON.stringify(job)).not.toContain("/private/internal/path");
   });
 
   it("lists only unexpired submitted jobs for the signed-in user", async () => {
@@ -198,7 +272,7 @@ describe("PostgreSQL OCR control plane", () => {
       remaining: 7,
       nextAvailableAt: "2026-07-25T00:00:00.000Z",
     });
-    expect(query.mock.calls[0][1]).toEqual([7, "2026-07-14T00:00:00.000Z"]);
+    expect(query.mock.calls[0][1]).toEqual([7, "item_inventory_images_v1", "2026-07-14T00:00:00.000Z"]);
     jest.useRealTimers();
   });
 
@@ -267,6 +341,72 @@ describe("PostgreSQL OCR control plane", () => {
       getOcrImageDownloadUrl(createEnv(), 7, "job-1", "image-1", { createClient: () => client }),
     ).resolves.toContain("X-Amz-Expires=300");
     expect(queryText(query.mock.calls[0][0])).toContain('"ocr_jobs"."purge_after" > $4');
+  });
+
+  it("creates one direct-upload input for a student video job", async () => {
+    const { client, query } = createClient(() => []);
+
+    await expect(
+      createOcrJob(
+        createEnv(),
+        7,
+        {
+          jobKind: "student_detail_video_v1",
+          video: {
+            filename: "students.mp4",
+            contentType: "video/mp4",
+            byteSize: 1024,
+            sha256: "b".repeat(64),
+          },
+          trainingConsent: false,
+        },
+        { createClient: () => client },
+      ),
+    ).resolves.toMatchObject({
+      jobKind: "student_detail_video_v1",
+      video: {
+        filename: "students.mp4",
+        uploadUrl: expect.stringContaining("X-Amz-Signature"),
+      },
+    });
+
+    const sql = query.mock.calls.map(([queryConfig]) => queryText(queryConfig)).join("\n");
+    expect(sql).toContain('insert into "ocr_jobs"');
+    expect(sql).toContain('insert into "ocr_video_inputs"');
+    expect(query.mock.calls.some(([, values]) => values?.includes("student_detail_video_v1"))).toBe(true);
+  });
+
+  it("verifies and queues one whole-video recognition task", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('from "ocr_jobs"')) {
+        return [jobDatabaseRow({ jobKind: "student_detail_video_v1", status: "uploading" })];
+      }
+      if (sql.includes('from "ocr_video_inputs"')) {
+        return [videoDatabaseRow({ status: "pending_upload" })];
+      }
+      return [];
+    });
+    const fetchObject = jest.fn(
+      async (_input: Parameters<typeof fetch>[0], _init?: Parameters<typeof fetch>[1]) =>
+        new Response(null, {
+          status: 200,
+          headers: { "content-length": "1024", "content-type": "video/mp4" },
+        }),
+    );
+
+    await submitOcrJob(createEnv(), 7, "job-1", {
+      createClient: () => client,
+      fetch: fetchObject as unknown as typeof fetch,
+    });
+
+    expect(fetchObject).toHaveBeenCalledWith(expect.stringContaining("X-Amz-Signature"), { method: "HEAD" });
+    expect(
+      query.mock.calls.some(
+        ([queryConfig, values]) =>
+          queryText(queryConfig).includes('insert into "ocr_outbox"') &&
+          values?.includes("ocr.student_detail_video.recognize.v1"),
+      ),
+    ).toBe(true);
   });
 
   it("verifies the uploaded object through a signed R2 HEAD request and creates one image outbox event", async () => {
@@ -376,6 +516,100 @@ describe("PostgreSQL OCR control plane", () => {
     expect(
       query.mock.calls.some(([queryConfig]) => queryText(queryConfig).includes('insert into "ocr_attempts"')),
     ).toBe(true);
+  });
+
+  it("claims a student video as one contract-v2 task with integrity metadata", async () => {
+    const { client } = createClient((sql) => {
+      if (sql.includes('from "ocr_video_inputs"') && sql.includes('inner join "ocr_jobs"')) {
+        return [[...videoDatabaseRow({ status: "queued" }), "queued"]];
+      }
+      return [];
+    });
+
+    await expect(
+      claimOcrTask(
+        createEnv(),
+        { type: "ocr.student_detail_video.recognize.v1", taskUid: "job-1", generation: 1 },
+        "video-worker",
+        1,
+        { createClient: () => client },
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        disposition: "ready",
+        contractVersion: "2",
+        input: expect.objectContaining({
+          inputUid: "video-1",
+          filename: "students.mp4",
+          contentType: "video/mp4",
+          byteSize: 1024,
+          sha256: "b".repeat(64),
+          downloadUrl: expect.stringContaining("X-Amz-Signature"),
+        }),
+      }),
+    );
+  });
+
+  it("commits a validated student video result directly to review-ready", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('from "ocr_attempts"')) return [["attempt-video"]];
+      if (sql.includes('from "ocr_video_inputs"')) return [videoDatabaseRow()];
+      if (sql.includes('from "ocr_job_results"')) return [];
+      return [];
+    });
+
+    await expect(
+      commitOcrTaskResult(
+        createEnv(),
+        { type: "ocr.student_detail_video.recognize.v1", taskUid: "job-1", generation: 1 },
+        {
+          attemptUid: "attempt-video",
+          status: "succeeded",
+          inputSha256: "b".repeat(64),
+          modelVersion: "0.1.0",
+          catalogVersion: "catalog-1",
+          schemaVersion: "student-detail-video-result.v1",
+          result: studentVideoResult,
+        },
+        { createClient: () => client },
+      ),
+    ).resolves.toEqual({ accepted: true, duplicate: false });
+
+    const sql = query.mock.calls.map(([queryConfig]) => queryText(queryConfig)).join("\n");
+    expect(sql).toContain('insert into "ocr_job_results"');
+    expect(sql).toContain('"status" = $1');
+    expect(
+      query.mock.calls.some(
+        ([queryConfig, values]) =>
+          queryText(queryConfig).includes('update "ocr_jobs"') && (values as unknown[])?.includes("review_ready"),
+      ),
+    ).toBe(true);
+  });
+
+  it("accepts a redelivered student video result as an idempotent duplicate", async () => {
+    const { client } = createClient((sql) => {
+      if (sql.includes('from "ocr_attempts"')) return [["attempt-video-redelivery"]];
+      if (sql.includes('from "ocr_video_inputs"')) return [videoDatabaseRow()];
+      if (sql.includes('from "ocr_job_results"')) return [["result-1"]];
+      return [];
+    });
+
+    await expect(
+      commitOcrTaskResult(
+        createEnv(),
+        { type: "ocr.student_detail_video.recognize.v1", taskUid: "job-1", generation: 1 },
+        {
+          attemptUid: "attempt-video-redelivery",
+          status: "succeeded",
+          inputSha256: "b".repeat(64),
+          modelVersion: "0.1.0",
+          catalogVersion: "catalog-1",
+          schemaVersion: "student-detail-video-result.v1",
+          result: studentVideoResult,
+        },
+        { createClient: () => client },
+      ),
+    ).resolves.toEqual({ accepted: true, duplicate: true });
   });
 
   it("stores the result, updates counts, and enqueues finalize before accepting", async () => {
@@ -490,6 +724,32 @@ describe("PostgreSQL OCR control plane", () => {
     );
   });
 
+  it("publishes student video tasks to the existing OCR queue", async () => {
+    const task = {
+      type: "ocr.student_detail_video.recognize.v1",
+      taskUid: "job-1",
+      generation: 1,
+    } as const;
+    const { client } = createClient((sql) => {
+      if (sql.includes('select "id" from "ocr_outbox"')) return [[1]];
+      if (sql.includes('returning "uid", "payload", "attempts"')) return [["outbox-video", task, 0]];
+      return [];
+    });
+    const send = jest.fn(async (_body: unknown, _options?: unknown) => undefined);
+
+    await expect(
+      publishPendingOcrOutbox(
+        createEnv({
+          OCR_TASKS: { send } as unknown as Queue,
+        }),
+        25,
+        { createClient: () => client },
+      ),
+    ).resolves.toBe(1);
+
+    expect(send).toHaveBeenCalledWith(task, { contentType: "json" });
+  });
+
   it("deletes expired source images and their control-plane records", async () => {
     const { client, query } = createClient((sql) => {
       if (sql.includes('select "uid" from "ocr_jobs"') && sql.includes('"purge_after" <')) return [["job-1"]];
@@ -509,5 +769,29 @@ describe("PostgreSQL OCR control plane", () => {
     expect(sql).toContain('delete from "ocr_jobs"');
     expect(sql).toContain('delete from "ocr_attempts"');
     expect(sql).toContain('"ocr_jobs"."purge_after" <');
+  });
+
+  it("purges completed video input independently from the seven-day result", async () => {
+    const { client, query } = createClient((sql) => {
+      if (
+        sql.includes('select "uid", "object_key" from "ocr_video_inputs"') &&
+        sql.includes('"raw_input_deleted_at" is null')
+      ) {
+        return [["video-1", videoRow.objectKey]];
+      }
+      return [];
+    });
+    const removeObjects = jest.fn(async (_keys: string | string[]) => undefined);
+
+    await reconcileOcrJobs(createEnv({ OCR_UPLOADS: { delete: removeObjects } as unknown as R2Bucket }), {
+      createClient: () => client,
+    });
+
+    expect(removeObjects).toHaveBeenCalledWith([videoRow.objectKey]);
+    expect(
+      query.mock.calls.some(([queryConfig]) =>
+        queryText(queryConfig).includes('update "ocr_video_inputs" set "raw_input_deleted_at"'),
+      ),
+    ).toBe(true);
   });
 });

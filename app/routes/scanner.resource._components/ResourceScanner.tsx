@@ -152,7 +152,7 @@ export default function ResourceScanner() {
   }, []);
 
   useEffect(() => {
-    requestJson<OcrJobsOverview>("/api/ocr/jobs")
+    requestJson<OcrJobsOverview>("/api/ocr/jobs?jobKind=item_inventory_images_v1")
       .then(({ jobs, quota }) => {
         setRecentJobs(jobs);
         setUploadQuota(quota);

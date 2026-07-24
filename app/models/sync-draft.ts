@@ -293,6 +293,13 @@ export async function createAndApplySyncDraft(
 
   const entries = normalizeSyncDraftEntryUpdates(input.type, input.entries);
   if (entries.length === 0) throw new Error("변경된 항목이 없어요");
+  const applyEntries =
+    input.type === "student_state"
+      ? entries.map((entry) => ({
+          entryKey: entry.entryKey,
+          value: parseStudentStateDraftValue(entry),
+        }))
+      : entries;
   const metaByEntryKey = new Map(
     input.entries.map((entry) => [entry.entryKey.trim(), entry.meta == null ? null : JSON.stringify(entry.meta)]),
   );
@@ -326,7 +333,7 @@ export async function createAndApplySyncDraft(
           metaByEntryKey.get(entry.entryKey) ?? null,
         ),
       ),
-      ...entries.flatMap((entry) => createConditionalApplyStatements(env, userId, draftUid, input.type, entry)),
+      ...applyEntries.flatMap((entry) => createConditionalApplyStatements(env, userId, draftUid, input.type, entry)),
       env.DB.prepare(`
         update sync_drafts
         set status = 'applied',
@@ -667,19 +674,19 @@ function createConditionalStudentStateStatement(
     )
     on conflict(userId, studentUid) do update set
       tier = excluded.tier,
-      level = excluded.level,
-      skillEx = excluded.skillEx,
-      skillNormal = excluded.skillNormal,
-      skillEnhanced = excluded.skillEnhanced,
-      skillSub = excluded.skillSub,
-      equip1 = excluded.equip1,
-      equip2 = excluded.equip2,
-      equip3 = excluded.equip3,
-      equipSpecial = excluded.equipSpecial,
-      weaponLevel = excluded.weaponLevel,
-      abilityHp = excluded.abilityHp,
-      abilityAtk = excluded.abilityAtk,
-      abilityHeal = excluded.abilityHeal,
+      level = coalesce(excluded.level, recruited_students.level),
+      skillEx = coalesce(excluded.skillEx, recruited_students.skillEx),
+      skillNormal = coalesce(excluded.skillNormal, recruited_students.skillNormal),
+      skillEnhanced = coalesce(excluded.skillEnhanced, recruited_students.skillEnhanced),
+      skillSub = coalesce(excluded.skillSub, recruited_students.skillSub),
+      equip1 = coalesce(excluded.equip1, recruited_students.equip1),
+      equip2 = coalesce(excluded.equip2, recruited_students.equip2),
+      equip3 = coalesce(excluded.equip3, recruited_students.equip3),
+      equipSpecial = coalesce(excluded.equipSpecial, recruited_students.equipSpecial),
+      weaponLevel = coalesce(excluded.weaponLevel, recruited_students.weaponLevel),
+      abilityHp = coalesce(excluded.abilityHp, recruited_students.abilityHp),
+      abilityAtk = coalesce(excluded.abilityAtk, recruited_students.abilityAtk),
+      abilityHeal = coalesce(excluded.abilityHeal, recruited_students.abilityHeal),
       updatedAt = current_timestamp
   `).bind(
     nanoid(8),

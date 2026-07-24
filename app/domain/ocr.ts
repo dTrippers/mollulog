@@ -1,7 +1,11 @@
 export const OCR_CONTRACT_VERSION = "1";
+export const OCR_STUDENT_VIDEO_CONTRACT_VERSION = "2";
 export const OCR_MAX_IMAGES = 30;
 export const OCR_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const OCR_MAX_JOB_BYTES = 120 * 1024 * 1024;
+export const OCR_MAX_VIDEO_BYTES = 512 * 1024 * 1024;
+export const OCR_MAX_VIDEO_DURATION_SECONDS = 10 * 60;
+export const OCR_MAX_VIDEO_DIMENSION = 4096;
 export const OCR_UPLOAD_EXPIRES_SECONDS = 15 * 60;
 export const OCR_DOWNLOAD_EXPIRES_SECONDS = 5 * 60;
 export const OCR_JOB_VISIBILITY_DAYS = 7;
@@ -12,8 +16,10 @@ export const OCR_TRAINING_CONSENT_VERSION = "2026-07-23-v1";
 export const OCR_CANDIDATE_SELECTION_LIMIT = 5;
 
 export const OCR_ALLOWED_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export const OCR_ALLOWED_VIDEO_CONTENT_TYPES = ["video/mp4"] as const;
 
-export type OcrTaskType = "ocr.image.recognize.v1" | "ocr.job.finalize.v1";
+export type OcrJobKind = "item_inventory_images_v1" | "student_detail_video_v1";
+export type OcrTaskType = "ocr.image.recognize.v1" | "ocr.job.finalize.v1" | "ocr.student_detail_video.recognize.v1";
 
 export type OcrTaskMessage = {
   type: OcrTaskType;
@@ -28,10 +34,26 @@ export type OcrUploadInput = {
   sha256: string;
 };
 
-export type OcrUploadRequest = {
+export type OcrImageUploadRequest = {
+  jobKind: "item_inventory_images_v1";
   images: OcrUploadInput[];
   trainingConsent: boolean;
 };
+
+export type OcrVideoUploadInput = {
+  filename: string;
+  contentType: (typeof OCR_ALLOWED_VIDEO_CONTENT_TYPES)[number];
+  byteSize: number;
+  sha256: string;
+};
+
+export type OcrStudentVideoUploadRequest = {
+  jobKind: "student_detail_video_v1";
+  video: OcrVideoUploadInput;
+  trainingConsent: boolean;
+};
+
+export type OcrUploadRequest = OcrImageUploadRequest | OcrStudentVideoUploadRequest;
 
 export type OcrResultEnvelope =
   | {
@@ -59,25 +81,59 @@ export class OcrTaskResultRejectedError extends Error {
   override readonly name = "OcrTaskResultRejectedError";
 }
 
+export class OcrPublicError extends Error {
+  override readonly name = "OcrPublicError";
+
+  constructor(
+    message: string,
+    readonly status = 400,
+  ) {
+    super(message);
+  }
+}
+
+export function toPublicOcrError(
+  error: unknown,
+  fallback: string,
+): { message: string; status: number; expected: boolean } {
+  return error instanceof OcrPublicError
+    ? { message: error.message, status: error.status, expected: true }
+    : { message: fallback, status: 500, expected: false };
+}
+
 export function parseOcrUploadInputs(value: unknown): OcrUploadInput[] {
   if (!value || typeof value !== "object" || !Array.isArray((value as { images?: unknown }).images)) {
-    throw new Error("이미지 목록을 확인해주세요");
+    throw new OcrPublicError("이미지 목록을 확인해주세요");
   }
 
   const images = (value as { images: unknown[] }).images;
   if (images.length === 0 || images.length > OCR_MAX_IMAGES) {
-    throw new Error(`이미지는 1장부터 ${OCR_MAX_IMAGES}장까지 제출할 수 있어요`);
+    throw new OcrPublicError(`이미지는 1장부터 ${OCR_MAX_IMAGES}장까지 제출할 수 있어요`);
   }
 
   const parsed = images.map(parseOcrUploadInput);
   if (parsed.reduce((total, image) => total + image.byteSize, 0) > OCR_MAX_JOB_BYTES) {
-    throw new Error("한 작업의 이미지 전체 용량은 120MB를 넘을 수 없어요");
+    throw new OcrPublicError("한 작업의 이미지 전체 용량은 120MB를 넘을 수 없어요");
   }
   return parsed;
 }
 
 export function parseOcrUploadRequest(value: unknown): OcrUploadRequest {
+  if (value && typeof value === "object") {
+    const jobKind = (value as { jobKind?: unknown }).jobKind;
+    if (jobKind === "student_detail_video_v1") {
+      return {
+        jobKind,
+        video: parseOcrVideoUploadInput((value as { video?: unknown }).video),
+        trainingConsent: (value as { trainingConsent?: unknown }).trainingConsent === true,
+      };
+    }
+    if (jobKind !== undefined && jobKind !== "item_inventory_images_v1") {
+      throw new OcrPublicError("요청한 인식 방식은 현재 사용할 수 없어요");
+    }
+  }
   return {
+    jobKind: "item_inventory_images_v1",
     images: parseOcrUploadInputs(value),
     trainingConsent: Boolean(
       value && typeof value === "object" && (value as { trainingConsent?: unknown }).trainingConsent === true,
@@ -85,9 +141,9 @@ export function parseOcrUploadRequest(value: unknown): OcrUploadRequest {
   };
 }
 
-function parseOcrUploadInput(value: unknown): OcrUploadInput {
+function parseOcrVideoUploadInput(value: unknown): OcrVideoUploadInput {
   if (!value || typeof value !== "object") {
-    throw new Error("이미지 정보를 확인해주세요");
+    throw new OcrPublicError("영상 정보를 확인해주세요");
   }
   const input = value as Record<string, unknown>;
   const filename = typeof input.filename === "string" ? input.filename.trim() : "";
@@ -96,16 +152,42 @@ function parseOcrUploadInput(value: unknown): OcrUploadInput {
   const sha256 = typeof input.sha256 === "string" ? input.sha256.toLowerCase() : "";
 
   if (!filename || filename.length > 255 || filename.includes("\0")) {
-    throw new Error("이미지 파일명을 확인해주세요");
+    throw new OcrPublicError("영상 파일명을 확인해주세요");
   }
-  if (!OCR_ALLOWED_CONTENT_TYPES.includes(contentType as OcrUploadInput["contentType"])) {
-    throw new Error("PNG, JPEG, WebP 이미지만 제출할 수 있어요");
+  if (!OCR_ALLOWED_VIDEO_CONTENT_TYPES.includes(contentType as OcrVideoUploadInput["contentType"])) {
+    throw new OcrPublicError("MP4 영상만 제출할 수 있어요");
   }
-  if (!Number.isInteger(byteSize) || (byteSize as number) <= 0 || (byteSize as number) > OCR_MAX_IMAGE_BYTES) {
-    throw new Error("이미지 한 장은 10MB를 넘을 수 없어요");
+  if (!Number.isInteger(byteSize) || (byteSize as number) <= 0 || (byteSize as number) > OCR_MAX_VIDEO_BYTES) {
+    throw new OcrPublicError("영상은 512MB를 넘을 수 없어요");
   }
   if (!/^[a-f0-9]{64}$/.test(sha256)) {
-    throw new Error("이미지 SHA-256 값을 확인해주세요");
+    throw new OcrPublicError("영상 파일 정보를 다시 확인해주세요");
+  }
+
+  return { filename, contentType: "video/mp4", byteSize: byteSize as number, sha256 };
+}
+
+function parseOcrUploadInput(value: unknown): OcrUploadInput {
+  if (!value || typeof value !== "object") {
+    throw new OcrPublicError("이미지 정보를 확인해주세요");
+  }
+  const input = value as Record<string, unknown>;
+  const filename = typeof input.filename === "string" ? input.filename.trim() : "";
+  const contentType = typeof input.contentType === "string" ? input.contentType : "";
+  const byteSize = input.byteSize;
+  const sha256 = typeof input.sha256 === "string" ? input.sha256.toLowerCase() : "";
+
+  if (!filename || filename.length > 255 || filename.includes("\0")) {
+    throw new OcrPublicError("이미지 파일명을 확인해주세요");
+  }
+  if (!OCR_ALLOWED_CONTENT_TYPES.includes(contentType as OcrUploadInput["contentType"])) {
+    throw new OcrPublicError("PNG, JPEG, WebP 이미지만 제출할 수 있어요");
+  }
+  if (!Number.isInteger(byteSize) || (byteSize as number) <= 0 || (byteSize as number) > OCR_MAX_IMAGE_BYTES) {
+    throw new OcrPublicError("이미지 한 장은 10MB를 넘을 수 없어요");
+  }
+  if (!/^[a-f0-9]{64}$/.test(sha256)) {
+    throw new OcrPublicError("이미지 파일 정보를 다시 확인해주세요");
   }
 
   return { filename, contentType: contentType as OcrUploadInput["contentType"], byteSize: byteSize as number, sha256 };
@@ -116,7 +198,11 @@ export function parseOcrTaskMessage(value: unknown): OcrTaskMessage {
     throw new Error("작업 메시지를 확인해주세요");
   }
   const message = value as Record<string, unknown>;
-  if (message.type !== "ocr.image.recognize.v1" && message.type !== "ocr.job.finalize.v1") {
+  if (
+    message.type !== "ocr.image.recognize.v1" &&
+    message.type !== "ocr.job.finalize.v1" &&
+    message.type !== "ocr.student_detail_video.recognize.v1"
+  ) {
     throw new Error("지원하지 않는 OCR 작업이에요");
   }
   if (typeof message.taskUid !== "string" || !message.taskUid.trim()) {

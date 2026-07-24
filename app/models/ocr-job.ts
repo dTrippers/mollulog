@@ -8,35 +8,51 @@ import {
   pgOcrJobResultsTable,
   pgOcrJobsTable,
   pgOcrOutboxTable,
+  pgOcrVideoInputsTable,
 } from "~/db/postgres/schema";
 import {
   OCR_CONTRACT_VERSION,
   OCR_DOWNLOAD_EXPIRES_SECONDS,
   OCR_JOB_PURGE_GRACE_DAYS,
   OCR_JOB_VISIBILITY_DAYS,
+  OCR_MAX_VIDEO_DIMENSION,
+  OCR_MAX_VIDEO_DURATION_SECONDS,
   OCR_QUOTA_WINDOW_DAYS,
   OCR_ROLLING_IMAGE_LIMIT,
+  OCR_STUDENT_VIDEO_CONTRACT_VERSION,
   OCR_TRAINING_CONSENT_VERSION,
   OCR_UPLOAD_EXPIRES_SECONDS,
+  type OcrJobKind,
+  OcrPublicError,
   type OcrResultEnvelope,
+  type OcrStudentVideoUploadRequest,
   type OcrTaskMessage,
   OcrTaskResultRejectedError,
   type OcrUploadInput,
+  type OcrUploadRequest,
   parseOcrTaskMessage,
 } from "~/domain/ocr";
+import { parseStudentDetailVideoEnvelope } from "~/domain/student-video-ocr";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 import { createR2PresignedUrl } from "~/lib/r2-presign.server";
 
-type OcrRepositoryOptions = { ctx?: ExecutionContext; createClient?: PostgresClientFactory; fetch?: typeof fetch };
+type OcrRepositoryOptions = {
+  ctx?: ExecutionContext;
+  createClient?: PostgresClientFactory;
+  fetch?: typeof fetch;
+  jobKind?: OcrJobKind;
+};
 
 const OCR_HEAD_EXPIRES_SECONDS = 60;
 const OCR_SERIALIZABLE_RETRY_LIMIT = 3;
+const OCR_VIDEO_RAW_INPUT_GRACE_MS = 24 * 60 * 60 * 1000;
 
 type OcrImageRow = typeof pgOcrImagesTable.$inferSelect;
 type OcrDatabase = Pick<NodePgDatabase, "select" | "insert" | "update" | "delete">;
 
 export type OcrJobView = {
   uid: string;
+  jobKind: OcrJobKind;
   status: string;
   generation: number;
   progress: { completed: number; failed: number; total: number };
@@ -46,6 +62,13 @@ export type OcrJobView = {
     status: string;
     error: { code: string; message: string } | null;
   }>;
+  video: {
+    inputUid: string;
+    filename: string;
+    status: string;
+    error: { code: string; message: string } | null;
+    evidenceAvailableUntil: string | null;
+  } | null;
   result: unknown | null;
   versions: { model: string; catalog: string; schema: string } | null;
   createdAt: string;
@@ -53,7 +76,10 @@ export type OcrJobView = {
   expiresAt: string;
 };
 
-export type OcrJobSummary = Pick<OcrJobView, "uid" | "status" | "progress" | "createdAt" | "updatedAt" | "expiresAt">;
+export type OcrJobSummary = Pick<
+  OcrJobView,
+  "uid" | "jobKind" | "status" | "progress" | "createdAt" | "updatedAt" | "expiresAt"
+>;
 
 export type OcrUploadQuota = {
   limit: number;
@@ -80,16 +106,34 @@ export type OcrClaimResult =
       attemptUid: string;
       contractVersion: string;
       task: OcrTaskMessage;
-      input?: { filename: string; contentType: string; byteSize: number; sha256: string; downloadUrl: string };
+      input?: {
+        inputUid?: string;
+        filename: string;
+        contentType: string;
+        byteSize: number;
+        sha256: string;
+        downloadUrl: string;
+        validation?: {
+          allowedContainers: string[];
+          allowedCodecs: string[];
+          maxDurationSeconds: number;
+          maxDimension: number;
+        };
+      };
       images?: Array<{ uid: string; filename: string; result: unknown }>;
     };
 
 export async function createOcrJob(
   env: Env,
   userId: number,
-  input: { images: OcrUploadInput[]; trainingConsent: boolean },
+  input:
+    | OcrUploadRequest
+    | { images: OcrUploadInput[]; trainingConsent: boolean; jobKind?: "item_inventory_images_v1" },
   options: OcrRepositoryOptions = {},
 ) {
+  if ("video" in input) {
+    return createStudentVideoOcrJob(env, userId, input, options);
+  }
   assertR2PresignConfig(env);
   const jobUid = nanoid(16);
   const expiresAt = new Date(Date.now() + OCR_JOB_VISIBILITY_DAYS * 24 * 60 * 60 * 1000);
@@ -109,6 +153,7 @@ export async function createOcrJob(
           await tx.insert(pgOcrJobsTable).values({
             uid: jobUid,
             userId,
+            jobKind: "item_inventory_images_v1",
             status: "uploading",
             generation: 1,
             totalImages: rows.length,
@@ -143,6 +188,7 @@ export async function createOcrJob(
 
   return {
     jobUid,
+    jobKind: "item_inventory_images_v1" as const,
     expiresAt: expiresAt.toISOString(),
     quota,
     images: await Promise.all(
@@ -155,6 +201,62 @@ export async function createOcrJob(
   };
 }
 
+async function createStudentVideoOcrJob(
+  env: Env,
+  userId: number,
+  input: OcrStudentVideoUploadRequest,
+  options: OcrRepositoryOptions,
+) {
+  assertR2PresignConfig(env);
+  const jobUid = nanoid(16);
+  const inputUid = nanoid(16);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + OCR_JOB_VISIBILITY_DAYS * 24 * 60 * 60 * 1000);
+  const purgeAfter = new Date(expiresAt.getTime() + OCR_JOB_PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+  const rawInputPurgeAfter = new Date(now.getTime() + OCR_UPLOAD_EXPIRES_SECONDS * 1000);
+  const objectKey = `ocr/${env.STAGE ?? "local"}/${jobUid}/${inputUid}`;
+
+  await withOcrDatabase(env, options, (db) =>
+    db.transaction(async (tx) => {
+      await tx.insert(pgOcrJobsTable).values({
+        uid: jobUid,
+        userId,
+        jobKind: "student_detail_video_v1",
+        status: "uploading",
+        generation: 1,
+        totalImages: 1,
+        expiresAt,
+        purgeAfter,
+        trainingConsentAt: input.trainingConsent ? now : null,
+        trainingConsentVersion: input.trainingConsent ? OCR_TRAINING_CONSENT_VERSION : null,
+      });
+      await tx.insert(pgOcrVideoInputsTable).values({
+        uid: inputUid,
+        jobUid,
+        objectKey,
+        originalFilename: input.video.filename,
+        contentType: input.video.contentType,
+        byteSize: input.video.byteSize,
+        inputSha256: input.video.sha256,
+        status: "pending_upload",
+        generation: 1,
+        rawInputPurgeAfter,
+      });
+    }),
+  );
+
+  return {
+    jobUid,
+    jobKind: "student_detail_video_v1" as const,
+    expiresAt: expiresAt.toISOString(),
+    video: {
+      inputUid,
+      filename: input.video.filename,
+      uploadUrl: await createR2Url(env, objectKey, "PUT", OCR_UPLOAD_EXPIRES_SECONDS),
+    },
+  };
+}
+
 export async function submitOcrJob(
   env: Env,
   userId: number,
@@ -162,8 +264,11 @@ export async function submitOcrJob(
   options: OcrRepositoryOptions = {},
 ): Promise<OcrJobView> {
   const current = await getOcrJob(env, userId, jobUid, options);
-  if (!current) throw new Error("OCR 작업을 찾을 수 없어요");
+  if (!current) throw new OcrPublicError("인식 작업을 찾을 수 없어요", 404);
   if (current.status !== "uploading") return current;
+  if (current.jobKind === "student_detail_video_v1") {
+    return submitStudentVideoOcrJob(env, userId, jobUid, current, options);
+  }
 
   const images = await withOcrDatabase(env, options, (db) => listImageRows(db, jobUid));
   await Promise.all(
@@ -175,11 +280,11 @@ export async function submitOcrJob(
       const uploadedLength = response.headers.get("content-length");
       const uploadedSize = uploadedLength === null ? Number.NaN : Number(uploadedLength);
       if (!response.ok || !Number.isSafeInteger(uploadedSize) || uploadedSize !== image.byteSize) {
-        throw new Error(`${image.originalFilename} 업로드를 확인할 수 없어요`);
+        throw new OcrPublicError(`${image.originalFilename} 업로드를 확인할 수 없어요`);
       }
       const uploadedType = response.headers.get("content-type");
       if (uploadedType && uploadedType !== image.contentType) {
-        throw new Error(`${image.originalFilename} 파일 형식이 요청과 달라요`);
+        throw new OcrPublicError(`${image.originalFilename} 파일 형식이 요청과 달라요`);
       }
     }),
   );
@@ -187,7 +292,7 @@ export async function submitOcrJob(
   await withOcrDatabase(env, options, (db) =>
     db.transaction(async (tx) => {
       const locked = await getOwnedJobRow(tx, userId, jobUid, true);
-      if (!locked) throw new Error("OCR 작업을 찾을 수 없어요");
+      if (!locked) throw new OcrPublicError("인식 작업을 찾을 수 없어요", 404);
       if (locked.status !== "uploading") return;
       const submittedAt = new Date();
       const expiresAt = new Date(submittedAt.getTime() + OCR_JOB_VISIBILITY_DAYS * 24 * 60 * 60 * 1000);
@@ -224,6 +329,66 @@ export async function submitOcrJob(
   return (await getOcrJob(env, userId, jobUid, options)) as OcrJobView;
 }
 
+async function submitStudentVideoOcrJob(
+  env: Env,
+  userId: number,
+  jobUid: string,
+  current: OcrJobView,
+  options: OcrRepositoryOptions,
+): Promise<OcrJobView> {
+  const video = await withOcrDatabase(env, options, async (db) => {
+    const rows = await db.select().from(pgOcrVideoInputsTable).where(eq(pgOcrVideoInputsTable.jobUid, jobUid)).limit(1);
+    return rows[0] ?? null;
+  });
+  if (!video) throw new OcrPublicError("업로드한 영상 정보를 찾을 수 없어요", 404);
+
+  const response = await (options.fetch ?? fetch)(
+    await createR2Url(env, video.objectKey, "HEAD", OCR_HEAD_EXPIRES_SECONDS),
+    { method: "HEAD" },
+  );
+  const uploadedLength = response.headers.get("content-length");
+  const uploadedSize = uploadedLength === null ? Number.NaN : Number(uploadedLength);
+  if (!response.ok || !Number.isSafeInteger(uploadedSize) || uploadedSize !== video.byteSize) {
+    throw new OcrPublicError("영상 업로드를 확인할 수 없어요");
+  }
+  const uploadedType = response.headers.get("content-type");
+  if (uploadedType && uploadedType !== video.contentType) {
+    throw new OcrPublicError("업로드된 영상 형식이 요청과 달라요");
+  }
+
+  await withOcrDatabase(env, options, (db) =>
+    db.transaction(async (tx) => {
+      const locked = await getOwnedJobRow(tx, userId, jobUid, true);
+      if (!locked) throw new OcrPublicError("인식 작업을 찾을 수 없어요", 404);
+      if (locked.status !== "uploading") return;
+      const submittedAt = new Date();
+      const expiresAt = new Date(submittedAt.getTime() + OCR_JOB_VISIBILITY_DAYS * 24 * 60 * 60 * 1000);
+      const purgeAfter = new Date(expiresAt.getTime() + OCR_JOB_PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
+      const rawInputPurgeAfter = new Date(submittedAt.getTime() + OCR_VIDEO_RAW_INPUT_GRACE_MS);
+      await tx
+        .update(pgOcrJobsTable)
+        .set({ status: "queued", submittedAt, expiresAt, purgeAfter, updatedAt: submittedAt })
+        .where(
+          and(
+            eq(pgOcrJobsTable.uid, jobUid),
+            eq(pgOcrJobsTable.userId, userId),
+            eq(pgOcrJobsTable.status, "uploading"),
+          ),
+        );
+      await tx
+        .update(pgOcrVideoInputsTable)
+        .set({ status: "queued", rawInputPurgeAfter, updatedAt: submittedAt })
+        .where(and(eq(pgOcrVideoInputsTable.jobUid, jobUid), eq(pgOcrVideoInputsTable.status, "pending_upload")));
+      await insertOutbox(tx, {
+        type: "ocr.student_detail_video.recognize.v1",
+        taskUid: jobUid,
+        generation: locked.generation,
+      });
+    }),
+  );
+  return (await getOcrJob(env, userId, jobUid, options)) ?? current;
+}
+
 export async function getOcrJob(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
@@ -233,8 +398,11 @@ export async function getOcrJob(
   return withOcrDatabase(env, options, async (db) => {
     const job = await getOwnedJobRow(db, userId, jobUid);
     if (!job) return null;
-    const [images, results] = await Promise.all([
-      listImageRows(db, jobUid),
+    const [images, videos, results] = await Promise.all([
+      job.jobKind === "item_inventory_images_v1" ? listImageRows(db, jobUid) : Promise.resolve([]),
+      job.jobKind === "student_detail_video_v1"
+        ? db.select().from(pgOcrVideoInputsTable).where(eq(pgOcrVideoInputsTable.jobUid, jobUid)).limit(1)
+        : Promise.resolve([]),
       db
         .select({
           resultJson: pgOcrJobResultsTable.resultJson,
@@ -247,8 +415,10 @@ export async function getOcrJob(
         .limit(1),
     ]);
     const result = results[0];
+    const video = videos[0];
     return {
       uid: job.uid,
+      jobKind: job.jobKind,
       status: job.status,
       generation: job.generation,
       progress: { completed: job.completedImages, failed: job.failedImages, total: job.totalImages },
@@ -258,9 +428,24 @@ export async function getOcrJob(
         status: image.status,
         error:
           image.lastErrorCode && image.lastErrorMessage
-            ? { code: image.lastErrorCode, message: image.lastErrorMessage }
+            ? { code: "recognition_failed", message: "이미지를 인식하지 못했어요" }
             : null,
       })),
+      video: video
+        ? {
+            inputUid: video.uid,
+            filename: video.originalFilename,
+            status: video.status,
+            error:
+              video.lastErrorCode && video.lastErrorMessage
+                ? { code: "recognition_failed", message: "영상을 인식하지 못했어요" }
+                : null,
+            evidenceAvailableUntil:
+              video.rawInputDeletedAt || video.rawInputPurgeAfter <= new Date()
+                ? null
+                : toIso(video.rawInputPurgeAfter),
+          }
+        : null,
       result: result?.resultJson ?? null,
       versions: result
         ? { model: result.modelVersion, catalog: result.catalogVersion, schema: result.schemaVersion }
@@ -284,6 +469,7 @@ export async function listRecentOcrJobs(
       .where(
         and(
           eq(pgOcrJobsTable.userId, userId),
+          options.jobKind ? eq(pgOcrJobsTable.jobKind, options.jobKind) : undefined,
           ne(pgOcrJobsTable.status, "uploading"),
           gt(pgOcrJobsTable.expiresAt, new Date()),
         ),
@@ -291,6 +477,7 @@ export async function listRecentOcrJobs(
       .orderBy(desc(pgOcrJobsTable.createdAt));
     return jobs.map((job) => ({
       uid: job.uid,
+      jobKind: job.jobKind,
       status: job.status,
       progress: { completed: job.completedImages, failed: job.failedImages, total: job.totalImages },
       createdAt: toIso(job.createdAt),
@@ -334,6 +521,32 @@ export async function getOcrImageDownloadUrl(
   return objectKey ? createR2Url(env, objectKey, "GET", OCR_DOWNLOAD_EXPIRES_SECONDS) : null;
 }
 
+export async function getOcrVideoDownloadUrl(
+  env: Env,
+  userId: number,
+  jobUid: string,
+  options: OcrRepositoryOptions = {},
+): Promise<string | null> {
+  const objectKey = await withOcrDatabase(env, options, async (db) => {
+    const rows = await db
+      .select({ objectKey: pgOcrVideoInputsTable.objectKey })
+      .from(pgOcrVideoInputsTable)
+      .innerJoin(pgOcrJobsTable, eq(pgOcrJobsTable.uid, pgOcrVideoInputsTable.jobUid))
+      .where(
+        and(
+          eq(pgOcrJobsTable.uid, jobUid),
+          eq(pgOcrJobsTable.userId, userId),
+          eq(pgOcrJobsTable.jobKind, "student_detail_video_v1"),
+          isNull(pgOcrVideoInputsTable.rawInputDeletedAt),
+          gt(pgOcrVideoInputsTable.rawInputPurgeAfter, new Date()),
+        ),
+      )
+      .limit(1);
+    return rows[0]?.objectKey ?? null;
+  });
+  return objectKey ? createR2Url(env, objectKey, "GET", OCR_DOWNLOAD_EXPIRES_SECONDS) : null;
+}
+
 export async function claimOcrTask(
   env: Env,
   task: OcrTaskMessage,
@@ -344,6 +557,65 @@ export async function claimOcrTask(
   const claim = await withOcrDatabase(env, options, (db) =>
     db.transaction(
       async (tx): Promise<Omit<Extract<OcrClaimResult, { disposition: "ready" }>, "input"> | OcrClaimResult> => {
+        if (task.type === "ocr.student_detail_video.recognize.v1") {
+          const videoRows = await tx
+            .select({
+              video: pgOcrVideoInputsTable,
+              jobStatus: pgOcrJobsTable.status,
+            })
+            .from(pgOcrVideoInputsTable)
+            .innerJoin(pgOcrJobsTable, eq(pgOcrJobsTable.uid, pgOcrVideoInputsTable.jobUid))
+            .where(eq(pgOcrJobsTable.uid, task.taskUid))
+            .for("update", { of: [pgOcrVideoInputsTable, pgOcrJobsTable] });
+          const row = videoRows[0];
+          const video = row?.video;
+          if (!video || video.generation !== task.generation) return { disposition: "stale" };
+          if (["cancelled", "expired", "failed"].includes(row.jobStatus)) return { disposition: "cancelled" };
+          if (["succeeded", "failed"].includes(video.status)) return { disposition: "already_completed" };
+
+          const attemptUid = nanoid(16);
+          const now = new Date();
+          await insertAttempt(tx, task, attemptUid, workerId, queueAttempts);
+          await tx
+            .update(pgOcrVideoInputsTable)
+            .set({ status: "processing", currentAttemptUid: attemptUid, updatedAt: now })
+            .where(
+              and(
+                eq(pgOcrVideoInputsTable.uid, video.uid),
+                eq(pgOcrVideoInputsTable.generation, task.generation),
+                inArray(pgOcrVideoInputsTable.status, ["queued", "processing"]),
+              ),
+            );
+          await tx
+            .update(pgOcrJobsTable)
+            .set({ status: "processing", updatedAt: now })
+            .where(
+              and(
+                eq(pgOcrJobsTable.uid, task.taskUid),
+                eq(pgOcrJobsTable.jobKind, "student_detail_video_v1"),
+                inArray(pgOcrJobsTable.status, ["queued", "processing"]),
+              ),
+            );
+          return {
+            disposition: "ready",
+            attemptUid,
+            contractVersion: OCR_STUDENT_VIDEO_CONTRACT_VERSION,
+            task,
+            images: [
+              {
+                uid: video.uid,
+                filename: video.originalFilename,
+                result: {
+                  objectKey: video.objectKey,
+                  contentType: video.contentType,
+                  byteSize: video.byteSize,
+                  sha256: video.inputSha256,
+                },
+              },
+            ],
+          };
+        }
+
         if (task.type === "ocr.image.recognize.v1") {
           const imageRows = await tx
             .select({
@@ -447,7 +719,12 @@ export async function claimOcrTask(
     ),
   );
 
-  if (claim.disposition !== "ready" || task.type !== "ocr.image.recognize.v1") return claim;
+  if (
+    claim.disposition !== "ready" ||
+    (task.type !== "ocr.image.recognize.v1" && task.type !== "ocr.student_detail_video.recognize.v1")
+  ) {
+    return claim;
+  }
   const source = claim.images?.[0];
   const metadata = source?.result as
     | { objectKey: string; contentType: string; byteSize: number; sha256: string }
@@ -459,11 +736,22 @@ export async function claimOcrTask(
     contractVersion: claim.contractVersion,
     task,
     input: {
+      ...(task.type === "ocr.student_detail_video.recognize.v1" ? { inputUid: source.uid } : {}),
       filename: source.filename,
       contentType: metadata.contentType,
       byteSize: metadata.byteSize,
       sha256: metadata.sha256,
       downloadUrl: await createR2Url(env, metadata.objectKey, "GET", OCR_DOWNLOAD_EXPIRES_SECONDS),
+      ...(task.type === "ocr.student_detail_video.recognize.v1"
+        ? {
+            validation: {
+              allowedContainers: ["mp4"],
+              allowedCodecs: ["h264", "hevc", "av1", "mpeg4"],
+              maxDurationSeconds: OCR_MAX_VIDEO_DURATION_SECONDS,
+              maxDimension: OCR_MAX_VIDEO_DIMENSION,
+            },
+          }
+        : {}),
     },
   };
 }
@@ -489,6 +777,105 @@ export async function commitOcrTaskResult(
         )
         .for("update");
       if (!attempts[0]) throw new OcrTaskResultRejectedError("유효한 OCR 시도를 찾을 수 없어요");
+
+      if (task.type === "ocr.student_detail_video.recognize.v1") {
+        const videos = await tx
+          .select()
+          .from(pgOcrVideoInputsTable)
+          .where(eq(pgOcrVideoInputsTable.jobUid, task.taskUid))
+          .for("update");
+        const video = videos[0];
+        if (!video || video.generation !== task.generation) {
+          throw new OcrTaskResultRejectedError("OCR 영상 입력을 찾을 수 없어요");
+        }
+        const existing = await tx
+          .select({ uid: pgOcrJobResultsTable.uid })
+          .from(pgOcrJobResultsTable)
+          .where(
+            and(eq(pgOcrJobResultsTable.jobUid, task.taskUid), eq(pgOcrJobResultsTable.generation, task.generation)),
+          )
+          .limit(1);
+        if (existing[0] || video.status === "failed") {
+          await tx
+            .update(pgOcrAttemptsTable)
+            .set({ status: existing[0] ? "succeeded" : "failed", finishedAt: new Date() })
+            .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
+          return { accepted: true, duplicate: true } as const;
+        }
+        if (envelope.status === "succeeded" && envelope.inputSha256 !== video.inputSha256) {
+          throw new OcrTaskResultRejectedError("입력 영상 hash가 일치하지 않아요");
+        }
+
+        const parsedEnvelope = envelope.status === "succeeded" ? parseStudentDetailVideoEnvelope(envelope) : envelope;
+        if (parsedEnvelope.status === "succeeded") {
+          await tx
+            .insert(pgOcrJobResultsTable)
+            .values({
+              uid: nanoid(16),
+              jobUid: task.taskUid,
+              generation: task.generation,
+              attemptUid: envelope.attemptUid,
+              resultJson: parsedEnvelope.result,
+              modelVersion: parsedEnvelope.modelVersion,
+              catalogVersion: parsedEnvelope.catalogVersion,
+              schemaVersion: parsedEnvelope.schemaVersion,
+            })
+            .onConflictDoNothing({ target: [pgOcrJobResultsTable.jobUid, pgOcrJobResultsTable.generation] });
+        }
+
+        const finishedAt = new Date();
+        const status = parsedEnvelope.status === "succeeded" ? "succeeded" : "failed";
+        const videoMetadata = parsedEnvelope.status === "succeeded" ? parsedEnvelope.result.video : null;
+        await tx
+          .update(pgOcrVideoInputsTable)
+          .set({
+            status,
+            durationMs: videoMetadata ? Math.round(videoMetadata.durationSeconds * 1000) : null,
+            width: videoMetadata?.width ?? null,
+            height: videoMetadata?.height ?? null,
+            codec: videoMetadata?.codec ?? null,
+            container: videoMetadata?.container ?? null,
+            lastErrorCode: parsedEnvelope.error?.code ?? null,
+            lastErrorMessage: parsedEnvelope.error?.message ?? null,
+            rawInputPurgeAfter: new Date(finishedAt.getTime() + OCR_VIDEO_RAW_INPUT_GRACE_MS),
+            completedAt: finishedAt,
+            updatedAt: finishedAt,
+          })
+          .where(
+            and(
+              eq(pgOcrVideoInputsTable.uid, video.uid),
+              eq(pgOcrVideoInputsTable.generation, task.generation),
+              inArray(pgOcrVideoInputsTable.status, ["queued", "processing"]),
+            ),
+          );
+        await tx
+          .update(pgOcrAttemptsTable)
+          .set({
+            status,
+            errorCode: parsedEnvelope.error?.code ?? null,
+            errorMessage: parsedEnvelope.error?.message ?? null,
+            finishedAt,
+          })
+          .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
+        await tx
+          .update(pgOcrJobsTable)
+          .set({
+            status: status === "succeeded" ? "review_ready" : "failed",
+            completedImages: status === "succeeded" ? 1 : 0,
+            failedImages: status === "failed" ? 1 : 0,
+            completedAt: finishedAt,
+            updatedAt: finishedAt,
+          })
+          .where(
+            and(
+              eq(pgOcrJobsTable.uid, task.taskUid),
+              eq(pgOcrJobsTable.generation, task.generation),
+              eq(pgOcrJobsTable.jobKind, "student_detail_video_v1"),
+              inArray(pgOcrJobsTable.status, ["queued", "processing"]),
+            ),
+          );
+        return { accepted: true, duplicate: false } as const;
+      }
 
       if (task.type === "ocr.image.recognize.v1") {
         const images = await tx
@@ -778,6 +1165,31 @@ export async function reconcileOcrJobs(
     }),
   );
 
+  const purgeableVideos = await withOcrDatabase(env, options, (db) =>
+    db
+      .select({ uid: pgOcrVideoInputsTable.uid, objectKey: pgOcrVideoInputsTable.objectKey })
+      .from(pgOcrVideoInputsTable)
+      .where(
+        and(isNull(pgOcrVideoInputsTable.rawInputDeletedAt), lte(pgOcrVideoInputsTable.rawInputPurgeAfter, new Date())),
+      )
+      .orderBy(asc(pgOcrVideoInputsTable.rawInputPurgeAfter))
+      .limit(25),
+  );
+  if (purgeableVideos.length > 0) {
+    await env.OCR_UPLOADS.delete(purgeableVideos.map(({ objectKey }) => objectKey));
+    await withOcrDatabase(env, options, (db) =>
+      db
+        .update(pgOcrVideoInputsTable)
+        .set({ rawInputDeletedAt: new Date(), updatedAt: new Date() })
+        .where(
+          inArray(
+            pgOcrVideoInputsTable.uid,
+            purgeableVideos.map(({ uid }) => uid),
+          ),
+        ),
+    );
+  }
+
   const expired = await withOcrDatabase(env, options, async (db) => {
     const jobs = await db
       .select({ uid: pgOcrJobsTable.uid })
@@ -786,23 +1198,37 @@ export async function reconcileOcrJobs(
       .orderBy(asc(pgOcrJobsTable.purgeAfter))
       .limit(25);
     const jobUids = jobs.map(({ uid }) => uid);
-    if (jobUids.length === 0) return { jobUids, images: [] };
-    const images = await db
-      .select({ uid: pgOcrImagesTable.uid, objectKey: pgOcrImagesTable.objectKey })
-      .from(pgOcrImagesTable)
-      .where(inArray(pgOcrImagesTable.jobUid, jobUids));
-    return { jobUids, images };
+    if (jobUids.length === 0) return { jobUids, images: [], videos: [] };
+    const [images, videos] = await Promise.all([
+      db
+        .select({ uid: pgOcrImagesTable.uid, objectKey: pgOcrImagesTable.objectKey })
+        .from(pgOcrImagesTable)
+        .where(inArray(pgOcrImagesTable.jobUid, jobUids)),
+      db
+        .select({
+          uid: pgOcrVideoInputsTable.uid,
+          objectKey: pgOcrVideoInputsTable.objectKey,
+          deletedAt: pgOcrVideoInputsTable.rawInputDeletedAt,
+        })
+        .from(pgOcrVideoInputsTable)
+        .where(inArray(pgOcrVideoInputsTable.jobUid, jobUids)),
+    ]);
+    return { jobUids, images, videos };
   });
   if (expired.jobUids.length === 0) return;
 
   const jobUids = expired.jobUids;
   const imageUids = expired.images.map(({ uid }) => uid);
-  const objectKeys = expired.images.map(({ objectKey }) => objectKey);
+  const videoUids = expired.videos.map(({ uid }) => uid);
+  const objectKeys = [
+    ...expired.images.map(({ objectKey }) => objectKey),
+    ...expired.videos.flatMap(({ objectKey, deletedAt }) => (deletedAt ? [] : [objectKey])),
+  ];
   if (objectKeys.length > 0) await env.OCR_UPLOADS.delete(objectKeys);
 
   await withOcrDatabase(env, options, (db) =>
     db.transaction(async (tx) => {
-      const taskUids = [...jobUids, ...imageUids];
+      const taskUids = [...jobUids, ...imageUids, ...videoUids];
       await tx.delete(pgOcrOutboxTable).where(inArray(pgOcrOutboxTable.aggregateUid, taskUids));
       await tx
         .delete(pgOcrJobsTable)
@@ -820,6 +1246,40 @@ export async function markOcrTaskDeadLetter(
   const task = parseOcrTaskMessage(value);
   await withOcrDatabase(env, options, (db) =>
     db.transaction(async (tx) => {
+      if (task.type === "ocr.student_detail_video.recognize.v1") {
+        const completedAt = new Date();
+        const videos = await tx
+          .update(pgOcrVideoInputsTable)
+          .set({
+            status: "failed",
+            lastErrorCode: "queue_retries_exhausted",
+            lastErrorMessage: "처리 재시도 횟수를 초과했어요",
+            rawInputPurgeAfter: new Date(completedAt.getTime() + OCR_VIDEO_RAW_INPUT_GRACE_MS),
+            completedAt,
+            updatedAt: completedAt,
+          })
+          .where(
+            and(
+              eq(pgOcrVideoInputsTable.jobUid, task.taskUid),
+              eq(pgOcrVideoInputsTable.generation, task.generation),
+              notInArray(pgOcrVideoInputsTable.status, ["succeeded", "failed", "cancelled"]),
+            ),
+          )
+          .returning({ jobUid: pgOcrVideoInputsTable.jobUid });
+        if (videos[0]) {
+          await tx
+            .update(pgOcrJobsTable)
+            .set({ status: "failed", failedImages: 1, completedAt, updatedAt: completedAt })
+            .where(
+              and(
+                eq(pgOcrJobsTable.uid, task.taskUid),
+                eq(pgOcrJobsTable.generation, task.generation),
+                notInArray(pgOcrJobsTable.status, ["review_ready", "failed", "cancelled", "expired"]),
+              ),
+            );
+        }
+        return;
+      }
       if (task.type === "ocr.image.recognize.v1") {
         const completedAt = new Date();
         const images = await tx
@@ -881,13 +1341,20 @@ async function readOcrUploadQuota(db: OcrDatabase, userId: number): Promise<OcrU
     db
       .select({ totalImages: pgOcrJobsTable.totalImages, submittedAt: pgOcrJobsTable.submittedAt })
       .from(pgOcrJobsTable)
-      .where(and(eq(pgOcrJobsTable.userId, userId), gt(pgOcrJobsTable.submittedAt, submittedSince))),
+      .where(
+        and(
+          eq(pgOcrJobsTable.userId, userId),
+          eq(pgOcrJobsTable.jobKind, "item_inventory_images_v1"),
+          gt(pgOcrJobsTable.submittedAt, submittedSince),
+        ),
+      ),
     db
       .select({ totalImages: pgOcrJobsTable.totalImages, createdAt: pgOcrJobsTable.createdAt })
       .from(pgOcrJobsTable)
       .where(
         and(
           eq(pgOcrJobsTable.userId, userId),
+          eq(pgOcrJobsTable.jobKind, "item_inventory_images_v1"),
           isNull(pgOcrJobsTable.submittedAt),
           eq(pgOcrJobsTable.status, "uploading"),
           gt(pgOcrJobsTable.createdAt, reservationSince),

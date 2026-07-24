@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
-import type { OcrTaskMessage } from "~/domain/ocr";
+import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 import type {
@@ -234,6 +234,7 @@ export const pgOcrJobsTable = pgTable(
     id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
     uid: text().notNull().unique(),
     userId: integer("user_id").notNull(),
+    jobKind: text("job_kind").$type<OcrJobKind>().notNull().default("item_inventory_images_v1"),
     status: text().notNull().default("uploading"),
     generation: integer().notNull().default(1),
     totalImages: integer("total_images").notNull(),
@@ -278,6 +279,39 @@ export const pgOcrImagesTable = pgTable(
     completedAt: timestamptz("completed_at"),
   },
   (table) => [index("ocr_images_job_status_idx").on(table.jobUid, table.status)],
+);
+
+export const pgOcrVideoInputsTable = pgTable(
+  "ocr_video_inputs",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    jobUid: text("job_uid")
+      .notNull()
+      .unique()
+      .references(() => pgOcrJobsTable.uid, { onDelete: "cascade" }),
+    objectKey: text("object_key").notNull().unique(),
+    originalFilename: text("original_filename").notNull(),
+    contentType: text("content_type").notNull(),
+    byteSize: bigint("byte_size", { mode: "number" }).notNull(),
+    inputSha256: text("input_sha256").notNull(),
+    status: text().notNull().default("pending_upload"),
+    generation: integer().notNull().default(1),
+    currentAttemptUid: text("current_attempt_uid"),
+    durationMs: integer("duration_ms"),
+    width: integer(),
+    height: integer(),
+    codec: text(),
+    container: text(),
+    lastErrorCode: text("last_error_code"),
+    lastErrorMessage: text("last_error_message"),
+    rawInputPurgeAfter: timestamptz("raw_input_purge_after").notNull(),
+    rawInputDeletedAt: timestamptz("raw_input_deleted_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    completedAt: timestamptz("completed_at"),
+  },
+  (table) => [index("ocr_video_inputs_status_purge_idx").on(table.status, table.rawInputPurgeAfter)],
 );
 
 export const pgOcrAttemptsTable = pgTable(
