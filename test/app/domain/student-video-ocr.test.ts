@@ -46,12 +46,12 @@ describe("student detail video result contract", () => {
     }
   });
 
-  it("rejects unknown envelope schema and model versions", () => {
+  it("rejects unknown envelope schema and accepts unlisted model versions", () => {
     const envelope = {
       attemptUid: "attempt",
       status: "succeeded",
       inputSha256: "a".repeat(64),
-      modelVersion: "0.1.0",
+      modelVersion: "student-video-0.1.1",
       catalogVersion: "catalog",
       schemaVersion: "student-detail-video-result.v1",
       result: fixture,
@@ -61,9 +61,7 @@ describe("student detail video result contract", () => {
     expect(() => parseStudentDetailVideoEnvelope({ ...envelope, schemaVersion: "v2" })).toThrow(
       "지원하지 않는 학생 영상 결과 schema",
     );
-    expect(() => parseStudentDetailVideoEnvelope({ ...envelope, modelVersion: "future" })).toThrow(
-      "지원하지 않는 학생 영상 인식 모델",
-    );
+    expect(parseStudentDetailVideoEnvelope({ ...envelope, modelVersion: "future" }).result.students).toHaveLength(1);
   });
 
   it("does not impose duration or resolution limits on valid video metadata", () => {

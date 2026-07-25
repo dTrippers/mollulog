@@ -1,7 +1,6 @@
 import { OCR_ALLOWED_VIDEO_CONTAINERS, type OcrResultEnvelope, OcrTaskResultRejectedError } from "~/domain/ocr";
 
 export const STUDENT_VIDEO_RESULT_SCHEMA_VERSION = "student-detail-video-result.v1";
-export const SUPPORTED_STUDENT_VIDEO_MODEL_VERSIONS = ["0.1.0", "student-video-0.1.0"] as const;
 
 export const studentVideoFieldNames = [
   "tier",
@@ -90,9 +89,6 @@ export function parseStudentDetailVideoEnvelope(
   }
   if (envelope.schemaVersion !== STUDENT_VIDEO_RESULT_SCHEMA_VERSION) {
     throw new OcrTaskResultRejectedError("지원하지 않는 학생 영상 결과 schema예요");
-  }
-  if (!SUPPORTED_STUDENT_VIDEO_MODEL_VERSIONS.includes(envelope.modelVersion as never)) {
-    throw new OcrTaskResultRejectedError("지원하지 않는 학생 영상 인식 모델이에요");
   }
   return { ...envelope, result: parseStudentDetailVideoResult(envelope.result) };
 }
