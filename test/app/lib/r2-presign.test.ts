@@ -55,4 +55,26 @@ describe("R2 SigV4 presigning", () => {
     expect(signed.searchParams.get("X-Amz-Expires")).toBe("60");
     expect(signed.searchParams.get("X-Amz-Signature")).toMatch(/^[a-f0-9]{64}$/);
   });
+
+  it("binds artifact PUT URLs to the checksum and WebP content type headers", async () => {
+    const signed = new URL(
+      await createR2PresignedUrl({
+        accountId: "account",
+        accessKeyId: "access",
+        secretAccessKey: "secret",
+        bucket: "bucket",
+        key: "ocr/local/job/artifact.webp",
+        method: "PUT",
+        expiresSeconds: 900,
+        signedHeaders: {
+          "Content-Type": "image/webp",
+          "X-Amz-Checksum-Sha256": "checksum",
+        },
+        now: new Date("2026-07-20T10:20:30.000Z"),
+      }),
+    );
+
+    expect(signed.searchParams.get("X-Amz-SignedHeaders")).toBe("content-type;host;x-amz-checksum-sha256");
+    expect(signed.searchParams.get("X-Amz-Signature")).toMatch(/^[a-f0-9]{64}$/);
+  });
 });

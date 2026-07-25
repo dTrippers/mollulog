@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
@@ -9,6 +9,8 @@ import {
   assertWeaponLevelRange,
   getWeaponLevelMaxByTier,
 } from "~/domain/student-growth-state";
+
+const D1_IN_QUERY_CHUNK_SIZE = 90;
 
 export const recruitedStudentsTable = sqliteTable("recruited_students", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -117,9 +119,36 @@ export function validateRecruitedStudentCurrentStateInput(input: RecruitedStuden
   }
 }
 
-export async function getRecruitedStudents(env: Env, senseiId: number): Promise<RecruitedStudent[]> {
+export async function getRecruitedStudents(
+  env: Env,
+  senseiId: number,
+  studentUids?: readonly string[],
+): Promise<RecruitedStudent[]> {
+  if (studentUids?.length === 0) return [];
   const db = drizzle(env.DB);
-  const recruitedStudents = await db.select().from(recruitedStudentsTable).where(eq(recruitedStudentsTable.userId, senseiId));
+  if (!studentUids) {
+    const recruitedStudents = await db
+      .select()
+      .from(recruitedStudentsTable)
+      .where(eq(recruitedStudentsTable.userId, senseiId));
+    return recruitedStudents.map(toModel);
+  }
+
+  const uniqueStudentUids = [...new Set(studentUids)];
+  const recruitedStudents: (typeof recruitedStudentsTable.$inferSelect)[] = [];
+  for (let offset = 0; offset < uniqueStudentUids.length; offset += D1_IN_QUERY_CHUNK_SIZE) {
+    const studentUidChunk = uniqueStudentUids.slice(offset, offset + D1_IN_QUERY_CHUNK_SIZE);
+    const chunkStudents = await db
+      .select()
+      .from(recruitedStudentsTable)
+      .where(
+        and(
+          eq(recruitedStudentsTable.userId, senseiId),
+          inArray(recruitedStudentsTable.studentUid, studentUidChunk),
+        ),
+      );
+    recruitedStudents.push(...chunkStudents);
+  }
   return recruitedStudents.map(toModel);
 }
 

@@ -7,24 +7,10 @@ import {
   PopoverButton,
   PopoverPanel,
 } from "@headlessui/react";
-import {
-  ArrowPathIcon,
-  ArrowsPointingOutIcon,
-  CheckCircleIcon,
-  PhotoIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
-import { type DragEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import FeatureFeedbackButton from "~/components/features/feedback/FeatureFeedbackButton";
-import {
-  Button,
-  Callout,
-  Checkbox,
-  HorizontalScroll,
-  NumberInput,
-  ResourceCard,
-  SubTitle,
-} from "~/components/primitives";
+import { ArrowPathIcon, ArrowsPointingOutIcon, PhotoIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
+import { Button, Callout, HorizontalScroll, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
 import {
   OCR_ALLOWED_CONTENT_TYPES,
   OCR_CANDIDATE_SELECTION_LIMIT,
@@ -33,6 +19,20 @@ import {
   OCR_MAX_JOB_BYTES,
 } from "~/domain/ocr";
 import { cn } from "~/lib/utils";
+import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
+import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
+import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
+import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
+import {
+  formatScannerBytes,
+  requestScannerJson,
+  ScannerApiRequestError,
+  type ScannerPhase,
+  toScannerErrorMessage,
+} from "../scanner._components/scanner-client";
+import { sha256FileNative } from "../scanner._components/sha256-client";
+import type { ScannerUploadQuota } from "../scanner._components/UploadQuotaMeter";
+import { useScannerQuota } from "../scanner._components/useScannerQuota";
 import { buildImageReviewSlots, type ReviewLayoutComponent } from "./resource-review-layout";
 
 type JobStatus = {
@@ -53,19 +53,7 @@ type JobStatus = {
 
 type JobApplication = { status: "pending" | "applied" | "discarded" | "expired"; appliedAt: string | null } | null;
 
-type JobSummary = Pick<
-  JobStatus,
-  "uid" | "status" | "progress" | "application" | "createdAt" | "updatedAt" | "expiresAt"
->;
-
-type OcrUploadQuota = {
-  limit: number;
-  used: number;
-  remaining: number;
-  nextAvailableAt: string | null;
-};
-
-type OcrJobsOverview = { jobs: JobSummary[]; quota: OcrUploadQuota };
+type OcrUploadQuota = ScannerUploadQuota;
 
 type BatchItem = {
   resource_uid: string;
@@ -111,24 +99,35 @@ type CandidatePickerState = {
   observation: BatchObservation;
 };
 
+const TERMINAL_JOB_STATUSES = new Set(["failed", "cancelled", "expired"]);
+
+function getTerminalJobTitle(status: string): string {
+  if (status === "cancelled") return "스크린샷 인식 작업이 취소됐어요";
+  if (status === "expired") return "스크린샷 인식 작업이 만료됐어요";
+  return "스크린샷을 인식하지 못했어요";
+}
+
+function getTerminalJobDescription(status: string): string {
+  if (status === "cancelled") return "새 스크린샷을 선택해 다시 인식을 시작해 주세요.";
+  if (status === "expired") return "보관 기간이 지난 작업이에요. 새 스크린샷을 선택해 다시 시도해 주세요.";
+  return "실패한 이미지를 확인한 뒤 새 스크린샷으로 다시 시도해 주세요.";
+}
+
 export default function ResourceScanner() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [files, setFiles] = useState<File[]>([]);
-  const [phase, setPhase] = useState<"idle" | "uploading" | "waiting" | "review" | "applying" | "applied">("idle");
+  const [phase, setPhase] = useState<ScannerPhase>("idle");
   const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
-  const [uploadQuota, setUploadQuota] = useState<OcrUploadQuota | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [uploadQuota, setUploadQuota] = useScannerQuota("item_inventory_images_v1", setError);
   const [job, setJob] = useState<JobStatus | null>(null);
-  const [recentJobs, setRecentJobs] = useState<JobSummary[]>([]);
-  const [isRecentJobsLoading, setIsRecentJobsLoading] = useState(true);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [highlightedSources, setHighlightedSources] = useState<string[]>([]);
   const [highlightedReviewPosition, setHighlightedReviewPosition] = useState<number | null>(null);
   const [items, setItems] = useState<EditableItem[]>([]);
   const [candidateOverrides, setCandidateOverrides] = useState<Record<string, CandidateOverride>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [isImageExpanded, setIsImageExpanded] = useState(false);
-  const dragDepthRef = useRef(0);
+  const selectedJobUid = searchParams.get("job");
 
   const showJob = useCallback((next: JobStatus) => {
     setJob(next);
@@ -138,46 +137,27 @@ export default function ResourceScanner() {
     setIsImageExpanded(false);
     setCandidateOverrides({});
     if (next.status === "review_ready") {
-      setItems(toEditableItems(next));
-      setPhase(next.application?.status === "applied" ? "applied" : "review");
+      const isApplied = next.application?.status === "applied";
+      setItems(isApplied ? [] : toEditableItems(next));
+      setPhase(isApplied ? "applied" : "review");
       setError(null);
     } else if (["queued", "processing", "finalizing"].includes(next.status)) {
       setItems([]);
       setPhase("waiting");
       setError(null);
+    } else if (TERMINAL_JOB_STATUSES.has(next.status)) {
+      setItems([]);
+      setPhase("idle");
+      setError(null);
     } else {
       setItems([]);
       setPhase("idle");
+      setError("인식 작업 상태를 확인하지 못했어요. 새 스크린샷으로 다시 시도해 주세요.");
     }
   }, []);
 
   useEffect(() => {
-    requestJson<OcrJobsOverview>("/api/ocr/jobs")
-      .then(({ jobs, quota }) => {
-        setRecentJobs(jobs);
-        setUploadQuota(quota);
-      })
-      .catch((loadError) => setError(toErrorMessage(loadError)))
-      .finally(() => setIsRecentJobsLoading(false));
-  }, []);
-
-  useEffect(() => {
-    if (uploadQuota?.remaining !== 0 || !uploadQuota.nextAvailableAt) return;
-    const delay = Math.max(1000, new Date(uploadQuota.nextAvailableAt).getTime() - Date.now() + 1000);
-    const timer = window.setTimeout(() => {
-      requestJson<OcrJobsOverview>("/api/ocr/jobs")
-        .then(({ jobs, quota }) => {
-          setRecentJobs(jobs);
-          setUploadQuota(quota);
-        })
-        .catch((loadError) => setError(toErrorMessage(loadError)));
-    }, delay);
-    return () => window.clearTimeout(timer);
-  }, [uploadQuota]);
-
-  useEffect(() => {
-    const jobUid = new URLSearchParams(window.location.search).get("job");
-    if (!jobUid) {
+    if (!selectedJobUid) {
       setJob(null);
       setItems([]);
       setSelectedSource(null);
@@ -187,29 +167,26 @@ export default function ResourceScanner() {
       setPhase("idle");
       return;
     }
-    requestJson<JobStatus>(`/api/ocr/jobs/${jobUid}`)
+    requestScannerJson<JobStatus>(`/api/ocr/jobs/${selectedJobUid}`)
       .then((savedJob) => {
         showJob(savedJob);
       })
       .catch((loadError) => {
-        window.history.replaceState(null, "", window.location.pathname);
-        setError(toErrorMessage(loadError));
+        setSearchParams({}, { replace: true });
+        setError(toScannerErrorMessage(loadError));
       });
-  }, [showJob]);
+  }, [selectedJobUid, setSearchParams, showJob]);
 
   useEffect(() => {
     if (!job || !["queued", "processing", "finalizing"].includes(job.status)) return;
     const delay = job.progress.completed === 0 ? 2000 : 3500;
     const timer = window.setTimeout(async () => {
       try {
-        const next = await requestJson<JobStatus>(`/api/ocr/jobs/${job.uid}`);
+        const next = await requestScannerJson<JobStatus>(`/api/ocr/jobs/${job.uid}`);
         showJob(next);
-        setRecentJobs((current) => upsertJobSummary(current, next));
-        if (["failed", "cancelled", "expired"].includes(next.status)) {
-          setError("인식 작업을 완료하지 못했어요. 실패한 이미지를 확인하고 다시 시도해 주세요.");
-        }
+        if (!["queued", "processing", "finalizing"].includes(next.status)) notifyScannerJobsChanged();
       } catch (pollError) {
-        setError(toErrorMessage(pollError));
+        setError(toScannerErrorMessage(pollError));
         setJob((current) => (current ? { ...current } : current));
       }
     }, delay);
@@ -305,20 +282,12 @@ export default function ResourceScanner() {
     });
   }
 
-  async function selectJob(jobUid: string) {
-    setError(null);
-    setSuccess(null);
-    try {
-      const selectedJob = await requestJson<JobStatus>(`/api/ocr/jobs/${jobUid}`);
-      window.history.replaceState(null, "", `${window.location.pathname}?job=${encodeURIComponent(jobUid)}`);
-      showJob(selectedJob);
-    } catch (selectError) {
-      setError(toErrorMessage(selectError));
+  function clearSelectedJob(confirmUnappliedResult = false) {
+    if (confirmUnappliedResult && !window.confirm("현재 인식 결과를 반영하지 않고 새 스크린샷을 업로드할까요?")) {
+      return;
     }
-  }
-
-  function clearSelectedJob() {
-    window.history.replaceState(null, "", window.location.pathname);
+    setSearchParams({}, { replace: true });
+    setFiles([]);
     setJob(null);
     setItems([]);
     setSelectedSource(null);
@@ -327,7 +296,6 @@ export default function ResourceScanner() {
     setIsImageExpanded(false);
     setCandidateOverrides({});
     setError(null);
-    setSuccess(null);
     setPhase("idle");
   }
 
@@ -372,33 +340,11 @@ export default function ResourceScanner() {
     if (job) clearSelectedJob();
     setFiles(nextFiles);
     setError(null);
-    setSuccess(null);
-  }
-
-  function handleDragEnter(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    if (isFileSelectionDisabled || !event.dataTransfer.types.includes("Files")) return;
-    dragDepthRef.current += 1;
-    setIsDragging(true);
-  }
-
-  function handleDragLeave(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-    if (dragDepthRef.current === 0) setIsDragging(false);
-  }
-
-  function handleDrop(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    dragDepthRef.current = 0;
-    setIsDragging(false);
-    addFiles(Array.from(event.dataTransfer.files));
   }
 
   async function startRecognition() {
     if (files.length === 0) return;
     setError(null);
-    setSuccess(null);
     setPhase("uploading");
     try {
       const descriptors = await Promise.all(
@@ -406,10 +352,10 @@ export default function ResourceScanner() {
           filename: file.name,
           contentType: file.type,
           byteSize: file.size,
-          sha256: await sha256Hex(file),
+          sha256: await sha256FileNative(file),
         })),
       );
-      const created = await requestJson<{
+      const created = await requestScannerJson<{
         jobUid: string;
         quota: OcrUploadQuota;
         images: Array<{ imageUid: string; filename: string; uploadUrl: string }>;
@@ -428,12 +374,12 @@ export default function ResourceScanner() {
           if (!response.ok) throw new Error(`${files[index].name} 업로드에 실패했어요`);
         }),
       );
-      const submitted = await requestJson<JobStatus & { quota: OcrUploadQuota }>(
+      const submitted = await requestScannerJson<JobStatus & { quota: OcrUploadQuota }>(
         `/api/ocr/jobs/${created.jobUid}/submit`,
         { method: "POST" },
       );
       setUploadQuota(submitted.quota);
-      window.history.replaceState(null, "", `${window.location.pathname}?job=${encodeURIComponent(created.jobUid)}`);
+      setSearchParams({ job: created.jobUid }, { replace: true });
       setJob({
         ...submitted,
         currentQuantities: {},
@@ -443,11 +389,11 @@ export default function ResourceScanner() {
       });
       setFiles([]);
       setAllowsTrainingDataUse(false);
-      setRecentJobs((current) => upsertJobSummary(current, { ...submitted, application: null }));
       setPhase("waiting");
+      notifyScannerJobsChanged();
     } catch (startError) {
-      if (startError instanceof ApiRequestError && startError.quota) setUploadQuota(startError.quota);
-      setError(toErrorMessage(startError));
+      if (startError instanceof ScannerApiRequestError && startError.quota) setUploadQuota(startError.quota);
+      setError(toScannerErrorMessage(startError));
       setPhase("idle");
     }
   }
@@ -455,7 +401,6 @@ export default function ResourceScanner() {
   async function applyResult() {
     if (!job) return;
     setError(null);
-    setSuccess(null);
     setPhase("applying");
     try {
       const recognized = items
@@ -484,93 +429,60 @@ export default function ResourceScanner() {
         };
       });
       const selected = mergeApplyItems(recognized, manuallySelected);
-      const applied = await requestJson<{ application: NonNullable<JobApplication> }>(
+      const response = await requestScannerJson<{ application: NonNullable<JobApplication> }>(
         `/api/ocr/jobs/${job.uid}/apply`,
         {
           method: "POST",
           body: JSON.stringify({ items: selected }),
         },
       );
-      setRecentJobs((current) =>
-        current.map((recentJob) =>
-          recentJob.uid === job.uid ? { ...recentJob, application: applied.application } : recentJob,
-        ),
-      );
-      window.history.replaceState(null, "", window.location.pathname);
-      setJob(null);
+      setJob({ ...job, application: response.application });
       setItems([]);
       setSelectedSource(null);
       setHighlightedSources([]);
       setHighlightedReviewPosition(null);
       setIsImageExpanded(false);
       setCandidateOverrides({});
-      setPhase("idle");
-      setSuccess("아이템 수량을 반영했어요.");
+      setPhase("applied");
+      notifyScannerJobsChanged();
     } catch (applyError) {
-      setError(toErrorMessage(applyError));
+      setError(toScannerErrorMessage(applyError));
       setPhase("review");
     }
   }
 
   return (
     <div className="space-y-8 pb-12 pt-6 lg:pt-2">
-      <section>
-        <div className="flex items-end justify-between gap-4">
-          <SubTitle text="스크린샷 업로드" description="게임 내 [메뉴] > [아이템] 페이지의 스크린샷을 첨부해주세요" />
-          {uploadQuota ? (
-            <div className="shrink-0 pb-3">
-              <UploadQuotaMeter quota={uploadQuota} />
-            </div>
-          ) : null}
-        </div>
-        <div className="space-y-5 rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-          <div className="focus-within:rounded-lg focus-within:ring-2 focus-within:ring-ring/30">
-            <input
-              id="resource-scanner-files"
-              type="file"
-              accept={OCR_ALLOWED_CONTENT_TYPES.join(",")}
-              multiple
-              disabled={isFileSelectionDisabled}
-              aria-describedby="resource-scanner-file-help"
-              className="sr-only"
-              onChange={(event) => {
-                addFiles(Array.from(event.currentTarget.files ?? []));
-                event.currentTarget.value = "";
-              }}
-            />
-            <label
-              htmlFor="resource-scanner-files"
-              onDragEnter={handleDragEnter}
-              onDragOver={(event) => event.preventDefault()}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              className={cn(
-                "flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-5 py-8 text-center transition-colors",
-                isDragging
-                  ? "border-primary bg-primary/5"
-                  : "border-border bg-muted/20 hover:border-primary/60 hover:bg-muted/40",
-                isFileSelectionDisabled && "cursor-not-allowed opacity-60",
-              )}
-            >
-              <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <PhotoIcon className="size-6" aria-hidden="true" />
-              </span>
-              <span className="mt-3 font-medium text-foreground">
-                {files.length > 0 ? "스크린샷 더 추가하기" : "스크린샷을 선택하거나 이곳에 끌어다 놓으세요"}
-              </span>
-              <span id="resource-scanner-file-help" className="mt-1 text-sm text-muted-foreground">
-                PNG, JPEG, WebP · 장당 10MB · 전체 120MB · 최대 30장
-              </span>
-            </label>
-          </div>
-
+      {!selectedJobUid ? (
+        <ScannerUploadSection
+          title="아이템 스크린샷 업로드"
+          description="게임 내 [메뉴] > [아이템] 페이지의 스크린샷을 첨부해주세요"
+          quota={uploadQuota}
+          quotaUnit="장"
+          quotaSubject="스크린샷"
+          inputId="resource-scanner-files"
+          accept={OCR_ALLOWED_CONTENT_TYPES.join(",")}
+          multiple
+          selectionDisabled={isFileSelectionDisabled}
+          onFiles={addFiles}
+          icon={<PhotoIcon className="size-6" aria-hidden="true" />}
+          dropLabel={files.length > 0 ? "스크린샷 더 추가하기" : "스크린샷을 선택하거나 이곳에 끌어다 놓아주세요"}
+          helpText="PNG, JPEG, WebP · 장당 10MB · 전체 120MB · 최대 30장"
+          consentChecked={allowsTrainingDataUse}
+          consentDisabled={isUploadLocked}
+          onConsentChange={setAllowsTrainingDataUse}
+          consentDataLabel="스크린샷 데이터"
+          actionDisabled={files.length === 0 || isUploadLocked || !uploadQuota || files.length > uploadQuota.remaining}
+          actionLabel={phase === "uploading" ? "업로드 중..." : "인식 시작"}
+          onAction={startRecognition}
+        >
           {files.length > 0 ? (
             <fieldset className="space-y-3">
               <legend className="sr-only">선택한 스크린샷</legend>
               <div className="flex items-center justify-between gap-3 text-sm">
                 <p className="font-medium text-foreground">선택한 스크린샷</p>
                 <p className="text-muted-foreground" aria-live="polite">
-                  {files.length}장 · {formatBytes(files.reduce((sum, file) => sum + file.size, 0))}
+                  {files.length}장 · {formatScannerBytes(files.reduce((sum, file) => sum + file.size, 0))}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -585,92 +497,24 @@ export default function ResourceScanner() {
               </div>
             </fieldset>
           ) : null}
-          <div className="space-y-4 pt-4">
-            <Checkbox
-              checked={allowsTrainingDataUse}
-              disabled={isUploadLocked}
-              onChange={setAllowsTrainingDataUse}
-              className="w-full items-start"
-              label={
-                <span>
-                  스크린샷 데이터를 인식률 향상에 사용하는 것에 동의합니다. (
-                  <strong className="font-semibold">동의하지 않아도 사용할 수 있어요</strong>.)
-                </span>
-              }
-            />
-            <div className="flex justify-end">
-              <Button
-                variant="primary"
-                className="w-full sm:w-fit"
-                disabled={files.length === 0 || isUploadLocked || !uploadQuota || files.length > uploadQuota.remaining}
-                onClick={startRecognition}
-              >
-                {phase === "uploading" ? "업로드 중..." : "인식 시작"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {isRecentJobsLoading || recentJobs.length > 0 ? (
-        <section aria-busy={isRecentJobsLoading}>
-          <div className="flex items-end justify-between gap-4">
-            <SubTitle text="진행 상황 확인" description="인식 결과는 최대 7일동안 확인할 수 있어요" />
-            <div className="shrink-0 pb-3">
-              <FeatureFeedbackButton featureName="스크린샷 인식기" feedbackType="resource_scanner_feedback" />
-            </div>
-          </div>
-          <div className="space-y-4 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5">
-            {isRecentJobsLoading ? (
-              <RecentJobsSkeleton />
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {recentJobs.map((recentJob) => (
-                  <button
-                    key={recentJob.uid}
-                    type="button"
-                    onClick={() => selectJob(recentJob.uid)}
-                    aria-current={job?.uid === recentJob.uid ? "true" : undefined}
-                    className={cn(
-                      "flex min-w-0 cursor-pointer items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring/30",
-                      job?.uid === recentJob.uid ? "border-primary bg-primary/5" : "border-border",
-                    )}
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-foreground">
-                        {formatJobDate(recentJob.createdAt)}
-                      </span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {recentJob.progress.total}장 · {formatJobStatus(recentJob)}
-                      </span>
-                    </span>
-                    <span className={cn("size-2 shrink-0 rounded-full", jobStatusDotClass(recentJob))} />
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
+        </ScannerUploadSection>
       ) : null}
-
-      {success ? <Callout tone="success" Icon={CheckCircleIcon} title={success} /> : null}
 
       {error ? <Callout tone="destructive" title="처리 중 오류가 발생했어요" description={error} /> : null}
 
+      {selectedJobUid && !job ? <ScannerJobSkeleton variant="resource" /> : null}
+
       {job && phase === "waiting" ? <RecognitionProgressCard job={job} /> : null}
 
-      {phase === "review" || phase === "applying" || phase === "applied" ? (
-        <section>
-          <SubTitle text="결과 검토" description="인식 결과를 검토 후 반영 여부를 선택해주세요" />
+      {phase === "review" || phase === "applying" ? (
+        <section className="space-y-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <SubTitle text="결과 검토" description="인식 결과를 검토 후 반영 여부를 선택해주세요" />
+            <Button size="sm" onClick={() => clearSelectedJob(true)}>
+              새 스크린샷 업로드
+            </Button>
+          </div>
           <div className="space-y-4 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5">
-            {phase === "applied" ? (
-              <Callout
-                tone="success"
-                Icon={CheckCircleIcon}
-                title="이미 반영이 완료되었어요"
-                description="보유 수량을 갱신하려면 새로운 이미지를 업로드해주세요"
-              />
-            ) : null}
             {unknownCount > 0 ? (
               <Callout
                 tone="warning"
@@ -796,7 +640,7 @@ export default function ResourceScanner() {
                               rarity={job?.resourceRarities[override.itemUid]}
                               resourceRarities={job?.resourceRarities ?? {}}
                               resourceDescriptions={job?.resourceDescriptions ?? {}}
-                              disabled={phase === "applying" || phase === "applied"}
+                              disabled={phase === "applying"}
                               onHighlightChange={(highlighted) =>
                                 setReviewPositionHighlight(slot.position, highlighted)
                               }
@@ -826,7 +670,7 @@ export default function ResourceScanner() {
                             resourceDescriptions={job?.resourceDescriptions ?? {}}
                             hasCandidates={candidates.length > 0}
                             hasDuplicateVisualIdentity={hasDuplicateVisualIdentity}
-                            disabled={phase === "applying" || phase === "applied"}
+                            disabled={phase === "applying"}
                             onHighlightChange={(highlighted) => setReviewPositionHighlight(slot.position, highlighted)}
                             onSelectCandidate={(candidate) => {
                               if (pickerState) selectCandidate(pickerState, candidate);
@@ -842,8 +686,8 @@ export default function ResourceScanner() {
                           item={item}
                           currentQuantity={job?.currentQuantities[item.resource_uid] ?? 0}
                           rarity={job?.resourceRarities[item.resource_uid]}
-                          disabled={phase === "applying" || phase === "applied"}
-                          applied={phase === "applied"}
+                          disabled={phase === "applying"}
+                          applied={false}
                           onHighlightChange={(highlighted) => setReviewPositionHighlight(slot.position, highlighted)}
                           onToggle={() => {
                             setHighlightedSources(item.source_images);
@@ -877,17 +721,35 @@ export default function ResourceScanner() {
                 ) : null}
               </div>
             </div>
-            {phase !== "applied" ? (
-              <div className="flex justify-end">
-                <Button variant="primary" disabled={phase === "applying" || !hasChanges} onClick={applyResult}>
-                  {phase === "applying" ? "반영 중..." : "수량 반영"}
-                </Button>
-              </div>
-            ) : null}
+            <div className="flex justify-end">
+              <Button variant="primary" disabled={phase === "applying" || !hasChanges} onClick={applyResult}>
+                {phase === "applying" ? "반영 중..." : "수량 반영"}
+              </Button>
+            </div>
           </div>
         </section>
       ) : null}
-      {job && selectedImage ? (
+
+      {job?.status === "review_ready" && job.application?.status === "applied" ? (
+        <ScannerCompletionState
+          title="아이템 수량 반영이 완료됐어요"
+          description="새로운 스크린샷을 업로드하려면 아래 버튼을 눌러주세요."
+          actionLabel="새 스크린샷 업로드"
+          onStartNew={() => clearSelectedJob()}
+        />
+      ) : null}
+
+      {job && TERMINAL_JOB_STATUSES.has(job.status) ? (
+        <ScannerCompletionState
+          tone="destructive"
+          title={getTerminalJobTitle(job.status)}
+          description={getTerminalJobDescription(job.status)}
+          actionLabel="새 스크린샷 업로드"
+          onStartNew={() => clearSelectedJob()}
+        />
+      ) : null}
+
+      {job && selectedImage && phase !== "applied" ? (
         <SourceImageDialog
           open={isImageExpanded}
           jobUid={job.uid}
@@ -896,28 +758,6 @@ export default function ResourceScanner() {
         />
       ) : null}
     </div>
-  );
-}
-
-function RecentJobsSkeleton() {
-  return (
-    <>
-      <p className="sr-only">진행 상황을 불러오는 중이에요</p>
-      <div className="grid animate-pulse gap-2 sm:grid-cols-2 lg:grid-cols-3" aria-hidden="true">
-        {["first", "second", "third"].map((key) => (
-          <div
-            key={key}
-            className="flex min-w-0 items-center justify-between gap-3 rounded-md border border-border px-3 py-2.5"
-          >
-            <div className="min-w-0 flex-1 space-y-1.5">
-              <div className="h-4 w-24 rounded-sm bg-muted" />
-              <div className="h-3 w-16 rounded-sm bg-muted" />
-            </div>
-            <div className="size-2 shrink-0 rounded-full bg-muted" />
-          </div>
-        ))}
-      </div>
-    </>
   );
 }
 
@@ -990,47 +830,6 @@ function RecognitionProgressCard({ job }: { job: JobStatus }) {
   );
 }
 
-function UploadQuotaMeter({ quota }: { quota: OcrUploadQuota }) {
-  const isExhausted = quota.remaining === 0;
-  const isLow = quota.remaining > 0 && quota.remaining <= 5;
-  const percentage = (quota.remaining / quota.limit) * 100;
-  return (
-    <div
-      className={cn(
-        "w-28 sm:w-36",
-        isExhausted ? "text-destructive" : isLow ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
-      )}
-      title={
-        isExhausted && quota.nextAvailableAt
-          ? `${formatQuotaAvailability(quota.nextAvailableAt)}부터 다시 업로드할 수 있어요`
-          : undefined
-      }
-    >
-      <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] leading-none">
-        <span>최근 7일</span>
-        <span className="font-mono font-medium text-foreground">
-          {quota.remaining}/{quota.limit}장
-        </span>
-      </div>
-      <progress
-        aria-label={`최근 7일 업로드 가능 스크린샷 ${quota.remaining}장`}
-        max={quota.limit}
-        value={quota.remaining}
-        className="sr-only"
-      />
-      <div
-        aria-hidden="true"
-        className={cn("h-1.5 overflow-hidden rounded-full", isExhausted ? "bg-destructive/20" : "bg-muted")}
-      >
-        <div
-          className={cn("h-full rounded-full transition-[width]", isLow ? "bg-amber-500" : "bg-primary")}
-          style={{ width: `${percentage}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function SelectedFilePreview({ file, disabled, onRemove }: { file: File; disabled: boolean; onRemove: () => void }) {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -1051,7 +850,7 @@ function SelectedFilePreview({ file, disabled, onRemove }: { file: File; disable
         <p className="truncate text-xs font-medium text-foreground" title={file.name}>
           {file.name}
         </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{formatBytes(file.size)}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{formatScannerBytes(file.size)}</p>
       </div>
       <button
         type="button"
@@ -1603,78 +1402,6 @@ function UnrecognizedResourceTile({
       </span>
     </div>
   );
-}
-
-function upsertJobSummary(current: JobSummary[], job: JobSummary): JobSummary[] {
-  return [job, ...current.filter((entry) => entry.uid !== job.uid)].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-}
-
-function formatJobDate(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatJobStatus(job: JobSummary): string {
-  if (job.application?.status === "applied") return "반영 완료";
-  if (job.status === "review_ready") return "인식 완료";
-  if (["queued", "processing", "finalizing"].includes(job.status)) {
-    return `${job.progress.completed + job.progress.failed}/${job.progress.total}장 처리`;
-  }
-  if (job.status === "failed") return "인식 실패";
-  if (job.status === "cancelled") return "취소됨";
-  if (job.status === "expired") return "만료됨";
-  return "처리 중";
-}
-
-function jobStatusDotClass(job: JobSummary): string {
-  if (job.application?.status === "applied" || job.status === "review_ready") return "bg-emerald-500";
-  if (["queued", "processing", "finalizing"].includes(job.status)) return "bg-blue-500";
-  return "bg-destructive";
-}
-
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
-  const body = (await response.json().catch(() => ({}))) as T & { error?: string; quota?: OcrUploadQuota };
-  if (!response.ok) throw new ApiRequestError(body.error ?? "요청을 처리하지 못했어요", body.quota);
-  return body;
-}
-
-class ApiRequestError extends Error {
-  constructor(
-    message: string,
-    readonly quota?: OcrUploadQuota,
-  ) {
-    super(message);
-    this.name = "ApiRequestError";
-  }
-}
-
-async function sha256Hex(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
-}
-
-function formatBytes(bytes: number): string {
-  return bytes < 1024 * 1024 ? `${Math.ceil(bytes / 1024)}KB` : `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-}
-
-function formatQuotaAvailability(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "요청을 처리하지 못했어요";
 }
 
 function toEditableItems(job: JobStatus): EditableItem[] {

@@ -694,12 +694,12 @@ function DesktopMenuContent({
             />
             <SubMenuItem
               to="/scanner/resource"
-              name="스크린샷 인식기"
+              name="스크린샷/영상 인식기"
               badgeLabel="베타"
               showRedDot
               OutlineIcon={CameraIconOutline}
               SolidIcon={CameraIconSolid}
-              isActive={pathname.startsWith("/scanner/resource")}
+              isActive={pathname.startsWith("/scanner")}
             />
             <SubMenuItem
               to="/connect/import"

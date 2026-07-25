@@ -72,6 +72,7 @@ class FakeD1Statement {
 
 class FakeD1Database {
   readonly rows: RecruitedStudentRow[] = [];
+  readonly selectParameterCounts: number[] = [];
 
   prepare(sql: string): FakeD1Statement {
     return new FakeD1Statement(this, sql);
@@ -80,8 +81,12 @@ class FakeD1Database {
   selectRows(sql: string, params: unknown[]): RecruitedStudentRow[] {
     const normalizedSql = normalizeSql(sql);
     if (normalizedSql.includes("from recruited_students")) {
+      this.selectParameterCounts.push(params.length);
       const userId = Number(params[0]);
-      const rows = this.rows.filter((row) => row.userId === userId);
+      const requestedStudentUids = normalizedSql.includes("studentuid in") ? new Set(params.slice(1).map(String)) : null;
+      const rows = this.rows.filter(
+        (row) => row.userId === userId && (!requestedStudentUids || requestedStudentUids.has(row.studentUid)),
+      );
       if (normalizedSql.includes("select tier")) {
         return rows.map((row) => ({ tier: row.tier }) as RecruitedStudentRow);
       }
@@ -315,5 +320,18 @@ describe("recruited-student current state", () => {
         equip1: 7,
       }),
     ]);
+  });
+
+  it("loads a large student UID filter within the D1 bind parameter limit", async () => {
+    const { db, env } = createEnv();
+    const studentUids = Array.from({ length: 181 }, (_, index) => `student-${index}`);
+    db.rows.push(
+      ...studentUids.map((studentUid, index) =>
+        createRecruitedStudentRow({ id: index + 1, uid: `recruited-${index}`, studentUid }),
+      ),
+    );
+
+    await expect(getRecruitedStudents(env, 1, [...studentUids, studentUids[0]])).resolves.toHaveLength(181);
+    expect(db.selectParameterCounts).toEqual([91, 91, 2]);
   });
 });

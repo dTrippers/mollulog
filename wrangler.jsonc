@@ -47,6 +47,9 @@
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
   ],
+  "r2_buckets": [
+    { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-dev", "remote": true }
+  ],
   "workflows": [
     {
       "binding": "CACHE_REFRESH_WORKFLOW",
@@ -114,6 +117,9 @@
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
       ],
+      "r2_buckets": [
+        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
+      ],
       "workflows": [
         {
           "binding": "CACHE_REFRESH_WORKFLOW",
@@ -159,6 +165,9 @@
       ],
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
+      ],
+      "r2_buckets": [
+        { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
       ],
       "workflows": [
         {

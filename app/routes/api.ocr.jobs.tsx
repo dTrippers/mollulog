@@ -1,7 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { parseOcrUploadRequest } from "~/domain/ocr";
+import { parseOcrUploadRequest, toPublicOcrError } from "~/domain/ocr";
+import { getLogger } from "~/lib/observability.server";
 import { createOcrJob, getOcrUploadQuota, listRecentOcrJobs, OcrQuotaExceededError } from "~/models/ocr-job";
 import { listSyncDraftsBySourceRefs } from "~/models/sync-draft";
 
@@ -9,9 +10,16 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const sensei = await getActiveSensei(env, request);
   if (!sensei) return data({ error: "로그인이 필요해요" }, { status: 401 });
+  const requestedJobKind = new URL(request.url).searchParams.get("jobKind");
+  const jobKind =
+    requestedJobKind === "all"
+      ? undefined
+      : requestedJobKind === "student_detail_video_v1"
+        ? "student_detail_video_v1"
+        : "item_inventory_images_v1";
   const [jobs, quota] = await Promise.all([
-    listRecentOcrJobs(env, sensei.id, { ctx }),
-    getOcrUploadQuota(env, sensei.id, { ctx }),
+    listRecentOcrJobs(env, sensei.id, { ctx, jobKind }),
+    getOcrUploadQuota(env, sensei.id, { ctx, jobKind }),
   ]);
   const applications = await listSyncDraftsBySourceRefs(
     env,
@@ -31,6 +39,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   if (request.method !== "POST") return data({ error: "Method not allowed" }, { status: 405 });
   const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "api.ocr.jobs.create" });
   const sensei = await getActiveSensei(env, request);
   if (!sensei) return data({ error: "로그인이 필요해요" }, { status: 401 });
   try {
@@ -40,7 +49,9 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     if (error instanceof OcrQuotaExceededError) {
       return data({ error: error.message, quota: error.quota }, { status: 429 });
     }
-    return data({ error: error instanceof Error ? error.message : "OCR 작업을 만들지 못했어요" }, { status: 400 });
+    const publicError = toPublicOcrError(error, "인식 작업을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    if (!publicError.expected) logger.error("OCR job creation failed", error);
+    return data({ error: publicError.message }, { status: publicError.status });
   }
 };
 

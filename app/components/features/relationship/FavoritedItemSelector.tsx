@@ -7,6 +7,7 @@ import {
   BottomSheet,
   Button,
   ClickableSurface,
+  FloatingActionBar,
   HoverTooltip,
   Input,
   LoadingSkeleton,
@@ -16,7 +17,7 @@ import {
   SubTitle,
 } from "~/components/primitives";
 import { cn } from "~/lib/utils";
-import { COMMON_FAVORITE_ITEM_UIDS, type AllStudentsFavoriteItems } from "~/models/resource";
+import { type AllStudentsFavoriteItems, COMMON_FAVORITE_ITEM_UIDS } from "~/models/resource";
 import type { action } from "~/routes/utils.relationship";
 import { type ItemQuantityBreakdownEntry, QuantityBreakdownTooltipContent } from "./QuantityBreakdownTooltip";
 
@@ -613,10 +614,10 @@ function FavoriteLevelCardEditMode({
       </div>
 
       <div className="sticky bottom-0 z-10 mt-4 py-3">
-        <div className="flex items-center justify-between gap-2">
+        <FloatingActionBar className="flex items-center justify-between gap-2 p-3">
           <div className="min-w-0 flex-1">
             {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
-            {saveSuccess && <p className="text-xs text-green-600 dark:text-green-400">저장 완료</p>}
+            {saveSuccess && <p className="text-xs text-green-700 dark:text-green-400">저장 완료</p>}
           </div>
           <div className="flex items-center gap-2">
             <Button size="xs" text="취소" onClick={onCancel} />
@@ -628,7 +629,7 @@ function FavoriteLevelCardEditMode({
               disabled={!hasChanges || isSaving}
             />
           </div>
-        </div>
+        </FloatingActionBar>
       </div>
     </div>
   );

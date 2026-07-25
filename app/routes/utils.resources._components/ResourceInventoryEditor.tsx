@@ -16,6 +16,7 @@ import {
   Button,
   EmptyView,
   FilterButtons,
+  FloatingActionBar,
   type NumberInputFlowNavigationInputProps,
   SectionCard,
   useNumberInputFlowNavigation,
@@ -214,7 +215,7 @@ export default function ResourceInventoryEditor({
 
       {hasChanges ? (
         <div className="fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-layer-navigation px-4 py-3 lg:bottom-0 lg:left-72 xl:left-84">
-          <div className="mx-auto flex max-w-4xl flex-col gap-3 rounded-lg border border-border bg-card/95 p-4 shadow-lg shadow-black/10 backdrop-blur-sm md:flex-row md:items-center md:justify-between dark:shadow-black/30">
+          <FloatingActionBar className="mx-auto flex max-w-4xl flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-sm font-semibold text-foreground">변경 사항이 있습니다</p>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -230,7 +231,7 @@ export default function ResourceInventoryEditor({
                 {isSubmitting ? "저장 중..." : "저장"}
               </Button>
             </div>
-          </div>
+          </FloatingActionBar>
         </div>
       ) : null}
     </>

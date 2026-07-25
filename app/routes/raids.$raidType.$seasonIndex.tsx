@@ -213,6 +213,7 @@ export default function RaidPage() {
           : undefined
       }
       contentWidth={pathname.endsWith("/videos") ? "full" : "narrow"}
+      maxWidth={pathname.endsWith("/videos") ? "wide" : "default"}
       screens={[
         {
           text: "시즌 통계",

@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
-import type { OcrTaskMessage } from "~/domain/ocr";
+import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 import type {
@@ -234,6 +234,7 @@ export const pgOcrJobsTable = pgTable(
     id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
     uid: text().notNull().unique(),
     userId: integer("user_id").notNull(),
+    jobKind: text("job_kind").$type<OcrJobKind>().notNull().default("item_inventory_images_v1"),
     status: text().notNull().default("uploading"),
     generation: integer().notNull().default(1),
     totalImages: integer("total_images").notNull(),
@@ -250,6 +251,7 @@ export const pgOcrJobsTable = pgTable(
   },
   (table) => [
     index("ocr_jobs_user_created_idx").on(table.userId, table.createdAt.desc()),
+    index("ocr_jobs_user_kind_created_idx").on(table.userId, table.jobKind, table.createdAt.desc()),
     index("ocr_jobs_status_updated_idx").on(table.status, table.updatedAt),
     index("ocr_jobs_purge_after_idx").on(table.purgeAfter),
   ],
@@ -278,6 +280,36 @@ export const pgOcrImagesTable = pgTable(
     completedAt: timestamptz("completed_at"),
   },
   (table) => [index("ocr_images_job_status_idx").on(table.jobUid, table.status)],
+);
+
+export const pgOcrVideoInputsTable = pgTable(
+  "ocr_video_inputs",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    jobUid: text("job_uid").notNull().unique(),
+    objectKey: text("object_key").notNull().unique(),
+    originalFilename: text("original_filename").notNull(),
+    contentType: text("content_type").notNull(),
+    byteSize: bigint("byte_size", { mode: "number" }).notNull(),
+    inputSha256: text("input_sha256").notNull(),
+    status: text().notNull().default("pending_upload"),
+    generation: integer().notNull().default(1),
+    currentAttemptUid: text("current_attempt_uid"),
+    durationMs: integer("duration_ms"),
+    width: integer(),
+    height: integer(),
+    codec: text(),
+    container: text(),
+    lastErrorCode: text("last_error_code"),
+    lastErrorMessage: text("last_error_message"),
+    rawInputPurgeAfter: timestamptz("raw_input_purge_after").notNull(),
+    rawInputDeletedAt: timestamptz("raw_input_deleted_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    completedAt: timestamptz("completed_at"),
+  },
+  (table) => [index("ocr_video_inputs_status_purge_idx").on(table.status, table.rawInputPurgeAfter)],
 );
 
 export const pgOcrAttemptsTable = pgTable(
@@ -339,6 +371,37 @@ export const pgOcrJobResultsTable = pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [uniqueIndex("ocr_job_results_job_generation_uidx").on(table.jobUid, table.generation)],
+);
+
+export const pgOcrResultArtifactsTable = pgTable(
+  "ocr_result_artifacts",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    jobUid: text("job_uid").notNull(),
+    attemptUid: text("attempt_uid").notNull(),
+    taskUid: text("task_uid").notNull(),
+    generation: integer().notNull(),
+    studentUid: text("student_uid").notNull(),
+    sourceFrame: integer("source_frame").notNull(),
+    timestampMs: integer("timestamp_ms").notNull(),
+    objectKey: text("object_key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    sha256: text().notNull(),
+    width: integer().notNull(),
+    height: integer().notNull(),
+    status: text().notNull().default("pending"),
+    purgeAfter: timestamptz("purge_after").notNull(),
+    deletedAt: timestamptz("deleted_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ocr_result_artifacts_attempt_student_uidx").on(table.attemptUid, table.studentUid),
+    index("ocr_result_artifacts_job_generation_status_idx").on(table.jobUid, table.generation, table.status),
+    index("ocr_result_artifacts_status_purge_idx").on(table.status, table.purgeAfter),
+  ],
 );
 
 export const pgOcrOutboxTable = pgTable(

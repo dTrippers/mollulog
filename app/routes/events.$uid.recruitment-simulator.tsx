@@ -2,15 +2,15 @@ import { EnvelopeIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react-router";
 import { StudentCard } from "~/components/features/students";
-import { Button, EmptyView, HorizontalScroll, Input, SubTitle } from "~/components/primitives";
+import { Button, EmptyView, FloatingActionBar, HorizontalScroll, Input, SubTitle } from "~/components/primitives";
 import {
   buildRecruitmentPoolSnapshotFromBaql,
   drawRecruitmentTenPull,
   type RecruitmentDrawResult,
   type SimulationStudent,
 } from "~/domain/recruitment-simulator";
-import { cn } from "~/lib/utils";
 import { withD1Session } from "~/lib/d1-session";
+import { cn } from "~/lib/utils";
 import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content.server";
 
@@ -359,7 +359,7 @@ function RecruitmentStatusBar({
 }) {
   return (
     <div className="fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-layer-navigation px-4 py-3 lg:bottom-0 lg:left-72 xl:left-84">
-      <div className="mx-auto flex max-w-4xl flex-col gap-3 rounded-lg border border-border bg-background/95 p-4 shadow-lg backdrop-blur-sm md:flex-row md:items-center md:justify-between">
+      <FloatingActionBar className="mx-auto flex max-w-4xl flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-sm font-semibold text-foreground">총 {totalCount.toLocaleString()}회 모집</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -377,7 +377,7 @@ function RecruitmentStatusBar({
             초기화
           </Button>
         </div>
-      </div>
+      </FloatingActionBar>
     </div>
   );
 }
