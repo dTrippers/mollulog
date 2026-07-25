@@ -10,6 +10,7 @@ export { default as Dropdown } from "./Dropdown";
 export { default as EmptyView } from "./EmptyView";
 export { default as Field } from "./Field";
 export { default as FilterButtons } from "./FilterButtons";
+export { default as FloatingActionBar } from "./FloatingActionBar";
 export { default as HorizontalScroll } from "./HorizontalScroll";
 export { default as HoverTooltip } from "./HoverTooltip";
 export { default as Input } from "./Input";

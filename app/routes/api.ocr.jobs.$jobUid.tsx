@@ -62,7 +62,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       studentCatalog: Object.fromEntries(
         (result?.students ?? []).flatMap(({ studentUid }) => {
           const student = studentsMap[studentUid];
-          return student ? [[studentUid, { uid: student.uid, name: student.name }]] : [];
+          return student
+            ? [[studentUid, { uid: student.uid, name: student.name, initialTier: student.initialTier }]]
+            : [];
         }),
       ),
       application: draft ? { status: draft.status, appliedAt: draft.appliedAt } : null,

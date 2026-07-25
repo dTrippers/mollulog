@@ -3,6 +3,7 @@ import {
   OCR_MAX_IMAGE_BYTES,
   OCR_MAX_VIDEO_BYTES,
   OcrPublicError,
+  parseOcrArtifactPreparationRequest,
   parseOcrResultEnvelope,
   parseOcrTaskMessage,
   parseOcrUploadInputs,
@@ -140,6 +141,72 @@ describe("OCR contract validation", () => {
         result: {},
       }),
     ).toEqual(expect.objectContaining({ status: "succeeded" }));
+  });
+
+  it("validates bounded per-student WebP artifact manifests", () => {
+    const artifact = {
+      studentUid: "10000",
+      sourceFrame: 12,
+      timestampSeconds: 0.4,
+      contentType: "image/webp",
+      byteSize: 4096,
+      sha256: "a".repeat(64),
+      width: 1040,
+      height: 480,
+    };
+
+    expect(
+      parseOcrArtifactPreparationRequest({
+        attemptUid: "attempt-1",
+        artifacts: [artifact],
+      }),
+    ).toEqual({ attemptUid: "attempt-1", artifacts: [artifact] });
+    expect(() =>
+      parseOcrArtifactPreparationRequest({
+        attemptUid: "attempt-1",
+        artifacts: [artifact, artifact],
+      }),
+    ).toThrow("중복");
+    expect(() =>
+      parseOcrArtifactPreparationRequest({
+        attemptUid: "attempt-1",
+        artifacts: [{ ...artifact, contentType: "image/png" }],
+      }),
+    ).toThrow("content type");
+  });
+
+  it("accepts only explicit artifact UID and student UID result references", () => {
+    const result = parseOcrResultEnvelope({
+      attemptUid: "attempt",
+      status: "succeeded",
+      inputSha256: "hash",
+      modelVersion: "model",
+      catalogVersion: "catalog",
+      schemaVersion: "1",
+      result: {},
+      artifacts: [{ artifactUid: "artifact-1", studentUid: "10000" }],
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        artifacts: [{ artifactUid: "artifact-1", studentUid: "10000" }],
+      }),
+    );
+    expect(() =>
+      parseOcrResultEnvelope({
+        attemptUid: "attempt",
+        status: "succeeded",
+        inputSha256: "hash",
+        modelVersion: "model",
+        catalogVersion: "catalog",
+        schemaVersion: "1",
+        result: {},
+        artifacts: [
+          { artifactUid: "same", studentUid: "10000" },
+          { artifactUid: "same", studentUid: "10001" },
+        ],
+      }),
+    ).toThrow("중복");
   });
 
   it("exposes only explicitly public errors at API boundaries", () => {

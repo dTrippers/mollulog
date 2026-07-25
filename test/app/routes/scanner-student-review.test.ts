@@ -1,14 +1,17 @@
 import { describe, expect, it } from "@jest/globals";
 import { parseStudentDetailVideoResult } from "~/domain/student-video-ocr";
-import { buildStudentVideoApplyRequest, createReviewState } from "~/routes/scanner.student._components/StudentScanner";
+import {
+  buildStudentVideoApplyRequest,
+  createReviewState,
+  getFieldComparison,
+} from "~/routes/scanner.student._components/StudentScanner";
 import fixture from "../../fixtures/student-detail-video-result.v1.json";
 
 describe("student scanner review", () => {
   const result = parseStudentDetailVideoResult(fixture);
 
-  it("sends only selected students and confirmed recognized fields while preserving zero", () => {
+  it("sends every student with a confirmed tier while preserving zero", () => {
     const review = createReviewState(result);
-    review["10000"].included = true;
     review["10000"].confirmed.level = false;
 
     expect(buildStudentVideoApplyRequest(result, review)).toEqual({
@@ -44,7 +47,40 @@ describe("student scanner review", () => {
     });
   });
 
-  it("does not submit unselected students", () => {
-    expect(buildStudentVideoApplyRequest(result, createReviewState(result))).toEqual({ students: [] });
+  it("excludes students that are not in the current catalog", () => {
+    expect(buildStudentVideoApplyRequest(result, createReviewState(result), new Set())).toEqual({ students: [] });
+  });
+
+  it("excludes a student until a failed tier has been corrected", () => {
+    const review = createReviewState(result);
+    review["10000"].confirmed.tier = false;
+    review["10000"].values.tier = "";
+
+    expect(buildStudentVideoApplyRequest(result, review)).toEqual({ students: [] });
+  });
+
+  it("classifies recognized values relative to the saved value", () => {
+    const level = result.students[0].fieldDetails.level;
+    const conflict = result.students[0].fieldDetails.equip3;
+
+    expect(getFieldComparison(level, "90", 90)).toBe("same");
+    expect(getFieldComparison(level, "89", 90)).toBe("decreased");
+    expect(getFieldComparison(level, "90", 89)).toBeNull();
+    expect(getFieldComparison(level, "90", null)).toBeNull();
+    expect(getFieldComparison(conflict, "8", 9)).toBeNull();
+    expect(getFieldComparison(conflict, "8", 9, true)).toBe("decreased");
+  });
+
+  it("submits a failed field after the user enters a replacement value", () => {
+    const review = createReviewState(result);
+    review["10000"].confirmed.equip3 = true;
+    review["10000"].values.equip3 = "8";
+
+    expect(buildStudentVideoApplyRequest(result, review).students[0]).toEqual(
+      expect.objectContaining({
+        current: expect.objectContaining({ equip3: 8 }),
+        confirmedFields: expect.arrayContaining(["equip3"]),
+      }),
+    );
   });
 });

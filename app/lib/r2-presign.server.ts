@@ -8,6 +8,7 @@ type R2PresignOptions = {
   key: string;
   method: "GET" | "HEAD" | "PUT";
   expiresSeconds: number;
+  signedHeaders?: Record<string, string>;
   now?: Date;
 };
 
@@ -22,13 +23,21 @@ export async function createR2PresignedUrl(options: R2PresignOptions): Promise<s
   const scope = `${shortDate}/auto/s3/aws4_request`;
   const host = `${options.accountId}.r2.cloudflarestorage.com`;
   const canonicalUri = `/${encodePath(options.bucket)}/${encodePath(options.key)}`;
+  const signedHeaderEntries = Object.entries(options.signedHeaders ?? {})
+    .map(([name, value]) => [name.toLowerCase().trim(), value.trim().replace(/\s+/g, " ")] as const)
+    .filter(([name]) => name !== "host")
+    .sort(([left], [right]) => left.localeCompare(right));
+  const canonicalHeaders = [["host", host] as const, ...signedHeaderEntries].sort(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  const signedHeaders = canonicalHeaders.map(([name]) => name).join(";");
   const params = new URLSearchParams({
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
     "X-Amz-Content-Sha256": "UNSIGNED-PAYLOAD",
     "X-Amz-Credential": `${options.accessKeyId}/${scope}`,
     "X-Amz-Date": amzDate,
     "X-Amz-Expires": String(options.expiresSeconds),
-    "X-Amz-SignedHeaders": "host",
+    "X-Amz-SignedHeaders": signedHeaders,
   });
   params.sort();
 
@@ -36,8 +45,8 @@ export async function createR2PresignedUrl(options: R2PresignOptions): Promise<s
     options.method,
     canonicalUri,
     params.toString(),
-    `host:${host}\n`,
-    "host",
+    `${canonicalHeaders.map(([name, value]) => `${name}:${value}`).join("\n")}\n`,
+    signedHeaders,
     "UNSIGNED-PAYLOAD",
   ].join("\n");
   const stringToSign = ["AWS4-HMAC-SHA256", amzDate, scope, await sha256Hex(canonicalRequest)].join("\n");

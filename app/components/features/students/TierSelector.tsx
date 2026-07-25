@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
 import { StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
+import { useEffect, useState } from "react";
 
 type TierSelectorProps = {
   initialTier: number;
-  currentTier: number;
+  currentTier: number | null;
   iconSize?: "sm" | "md";
   onTierChange: (tier: number) => void;
 };
@@ -29,7 +29,7 @@ export default function TierSelector({ initialTier, currentTier, iconSize = "md"
   return (
     <div className="flex items-center">
       {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((eachTier) => {
-        const Icon = eachTier <= tier ? StarIconSolid : StarIconOutline;
+        const Icon = tier !== null && eachTier <= tier ? StarIconSolid : StarIconOutline;
 
         const selectable = eachTier >= initialTier;
         const colorClasses = [];
@@ -48,7 +48,7 @@ export default function TierSelector({ initialTier, currentTier, iconSize = "md"
         if (eachTier === 5) {
           colorClasses.push("mr-1");
         }
-        if (eachTier > tier) {
+        if (tier === null || eachTier > tier) {
           colorClasses.push("opacity-25 hover:opacity-100");
         }
 

@@ -123,8 +123,8 @@ function parseApplyStudent(
   const current = createEmptyCurrent(parseSubmittedInteger(submitted.tier, "성급"));
   for (const field of confirmedFields) {
     const resultField = toResultField(field);
-    if (resultStudent.fieldDetails[resultField].state !== "recognized") {
-      throw new OcrPublicError(`${field}은(는) 판독된 값만 반영할 수 있어요`);
+    if (resultStudent.fieldDetails[resultField].state === "not_applicable") {
+      throw new OcrPublicError(`${field}은(는) 미장착 상태라 반영할 수 없어요`);
     }
     current[field] = parseSubmittedInteger(submitted[field], field);
   }

@@ -4,6 +4,9 @@ export const OCR_MAX_IMAGES = 30;
 export const OCR_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const OCR_MAX_JOB_BYTES = 120 * 1024 * 1024;
 export const OCR_MAX_VIDEO_BYTES = 250 * 1024 * 1024;
+export const OCR_MAX_STUDENT_ARTIFACTS = 300;
+export const OCR_MAX_ARTIFACT_BYTES = 1024 * 1024;
+export const OCR_MAX_ARTIFACT_WIDTH = 1040;
 export const OCR_UPLOAD_EXPIRES_SECONDS = 15 * 60;
 export const OCR_DOWNLOAD_EXPIRES_SECONDS = 5 * 60;
 export const OCR_JOB_VISIBILITY_DAYS = 7;
@@ -55,6 +58,27 @@ export type OcrStudentVideoUploadRequest = {
 
 export type OcrUploadRequest = OcrImageUploadRequest | OcrStudentVideoUploadRequest;
 
+export type OcrResultArtifactReference = {
+  artifactUid: string;
+  studentUid: string;
+};
+
+export type OcrArtifactManifest = {
+  studentUid: string;
+  sourceFrame: number;
+  timestampSeconds: number;
+  contentType: "image/webp";
+  byteSize: number;
+  sha256: string;
+  width: number;
+  height: number;
+};
+
+export type OcrArtifactPreparationRequest = {
+  attemptUid: string;
+  artifacts: OcrArtifactManifest[];
+};
+
 export type OcrResultEnvelope =
   | {
       attemptUid: string;
@@ -64,6 +88,7 @@ export type OcrResultEnvelope =
       catalogVersion: string;
       schemaVersion: string;
       result: unknown;
+      artifacts?: OcrResultArtifactReference[];
       error?: never;
     }
   | {
@@ -230,6 +255,64 @@ export function parseOcrTaskMessage(value: unknown): OcrTaskMessage {
   };
 }
 
+export function parseOcrArtifactPreparationRequest(value: unknown): OcrArtifactPreparationRequest {
+  if (!value || typeof value !== "object") {
+    throw new Error("OCR artifact 요청을 확인해주세요");
+  }
+  const input = value as Record<string, unknown>;
+  if (typeof input.attemptUid !== "string" || !input.attemptUid) {
+    throw new Error("attemptUid가 필요해요");
+  }
+  if (
+    !Array.isArray(input.artifacts) ||
+    input.artifacts.length === 0 ||
+    input.artifacts.length > OCR_MAX_STUDENT_ARTIFACTS
+  ) {
+    throw new Error("OCR artifact 목록을 확인해주세요");
+  }
+  const artifacts = input.artifacts.map((value) => {
+    if (!value || typeof value !== "object") throw new Error("OCR artifact 정보를 확인해주세요");
+    const artifact = value as Record<string, unknown>;
+    const studentUid = typeof artifact.studentUid === "string" ? artifact.studentUid.trim() : "";
+    const sourceFrame = artifact.sourceFrame;
+    const timestampSeconds = artifact.timestampSeconds;
+    const byteSize = artifact.byteSize;
+    const width = artifact.width;
+    const height = artifact.height;
+    const sha256 = typeof artifact.sha256 === "string" ? artifact.sha256.toLowerCase() : "";
+    if (!studentUid || studentUid.length > 128) throw new Error("studentUid를 확인해주세요");
+    if (!Number.isInteger(sourceFrame) || (sourceFrame as number) < 0) throw new Error("sourceFrame을 확인해주세요");
+    if (typeof timestampSeconds !== "number" || !Number.isFinite(timestampSeconds) || timestampSeconds < 0) {
+      throw new Error("timestampSeconds를 확인해주세요");
+    }
+    if (artifact.contentType !== "image/webp") throw new Error("artifact content type을 확인해주세요");
+    if (!Number.isInteger(byteSize) || (byteSize as number) <= 0 || (byteSize as number) > OCR_MAX_ARTIFACT_BYTES) {
+      throw new Error("artifact byte size를 확인해주세요");
+    }
+    if (!/^[a-f0-9]{64}$/.test(sha256)) throw new Error("artifact SHA-256을 확인해주세요");
+    if (!Number.isInteger(width) || (width as number) <= 0 || (width as number) > OCR_MAX_ARTIFACT_WIDTH) {
+      throw new Error("artifact width를 확인해주세요");
+    }
+    if (!Number.isInteger(height) || (height as number) <= 0 || (height as number) > 4096) {
+      throw new Error("artifact height를 확인해주세요");
+    }
+    return {
+      studentUid,
+      sourceFrame: sourceFrame as number,
+      timestampSeconds,
+      contentType: "image/webp" as const,
+      byteSize: byteSize as number,
+      sha256,
+      width: width as number,
+      height: height as number,
+    };
+  });
+  if (new Set(artifacts.map(({ studentUid }) => studentUid)).size !== artifacts.length) {
+    throw new Error("같은 학생의 artifact가 중복되었어요");
+  }
+  return { attemptUid: input.attemptUid, artifacts };
+}
+
 export function parseOcrResultEnvelope(value: unknown): OcrResultEnvelope {
   if (!value || typeof value !== "object") {
     throw new Error("OCR 결과를 확인해주세요");
@@ -249,6 +332,24 @@ export function parseOcrResultEnvelope(value: unknown): OcrResultEnvelope {
     }
     if (!("result" in result)) {
       throw new Error("인식 결과가 필요해요");
+    }
+    if (result.artifacts !== undefined) {
+      if (!Array.isArray(result.artifacts)) throw new Error("artifact 참조를 확인해주세요");
+      const references = result.artifacts.map((value) => {
+        if (!value || typeof value !== "object") throw new Error("artifact 참조를 확인해주세요");
+        const reference = value as Record<string, unknown>;
+        if (typeof reference.artifactUid !== "string" || !reference.artifactUid) {
+          throw new Error("artifactUid가 필요해요");
+        }
+        if (typeof reference.studentUid !== "string" || !reference.studentUid) {
+          throw new Error("artifact studentUid가 필요해요");
+        }
+        return { artifactUid: reference.artifactUid, studentUid: reference.studentUid };
+      });
+      if (new Set(references.map(({ artifactUid }) => artifactUid)).size !== references.length) {
+        throw new Error("artifact 참조가 중복되었어요");
+      }
+      result.artifacts = references;
     }
   } else {
     const error = result.error;

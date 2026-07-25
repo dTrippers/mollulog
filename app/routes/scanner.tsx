@@ -41,7 +41,7 @@ export default function ScannerLayout() {
         },
         {
           text: "학생 성장도",
-          description: "학생 기본 정보 녹화 영상을 인식",
+          description: "학생 리스트 화면 녹화 영상을 인식",
           Icon: AcademicCapIcon,
           link: "/scanner/student",
           active: pathname.startsWith("/scanner/student"),

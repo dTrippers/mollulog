@@ -55,8 +55,36 @@ describe("student video selective apply adapter", () => {
     });
   });
 
-  it("does not allow unknown, conflict, or not-applicable fields to be confirmed", () => {
-    for (const field of ["skillEnhanced", "skillSub", "equip3", "equipSpecial"]) {
+  it("allows manually corrected unknown and conflict fields", () => {
+    const entries = buildStudentVideoSyncDraftEntries(
+      fixture,
+      {
+        students: [
+          {
+            studentUid: "10000",
+            current: { tier: 7, skillSub: 8, equip3: 9 },
+            confirmedFields: ["tier", "skillSub", "equip3"],
+          },
+        ],
+      },
+      new Set(["10000"]),
+    );
+
+    expect(JSON.parse(entries[0].valueJson as string).current).toMatchObject({
+      tier: 7,
+      skillSub: 8,
+      equip3: 9,
+    });
+    expect(entries[0].meta).toMatchObject({
+      fields: {
+        skillSub: { ocrValue: null, submittedValue: 8, corrected: true },
+        equip3: { ocrValue: null, submittedValue: 9, corrected: true },
+      },
+    });
+  });
+
+  it("does not allow not-applicable fields to be confirmed", () => {
+    for (const field of ["skillEnhanced", "equipSpecial"]) {
       expect(() =>
         buildStudentVideoSyncDraftEntries(
           fixture,
@@ -71,7 +99,7 @@ describe("student video selective apply adapter", () => {
           },
           new Set(["10000"]),
         ),
-      ).toThrow("판독된 값만 반영");
+      ).toThrow("미장착 상태라 반영할 수 없어요");
     }
   });
 

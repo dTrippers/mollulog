@@ -8,7 +8,9 @@ import {
   getOcrImageDownloadUrl,
   getOcrJob,
   getOcrUploadQuota,
+  getOwnedOcrArtifactObjectKey,
   listRecentOcrJobs,
+  prepareOcrResultArtifacts,
   publishPendingOcrOutbox,
   reconcileOcrJobs,
   submitOcrJob,
@@ -57,6 +59,26 @@ const videoRow = {
   lastErrorCode: null as string | null,
   lastErrorMessage: null as string | null,
   rawInputPurgeAfter: new Date("2026-07-21T01:00:00Z"),
+};
+
+const artifactRow = {
+  uid: "artifact-1",
+  jobUid: "job-1",
+  attemptUid: "attempt-video",
+  taskUid: "job-1",
+  generation: 1,
+  studentUid: studentVideoResult.students[0].studentUid,
+  sourceFrame: studentVideoResult.students[0].sourceFrames[0],
+  timestampMs: Math.round(studentVideoResult.students[0].sourceTimestampsSeconds[0] * 1000),
+  objectKey: "ocr/local/job-1/artifacts/1/artifact-1.webp",
+  contentType: "image/webp",
+  byteSize: 4096,
+  sha256: "c".repeat(64),
+  width: 1040,
+  height: 480,
+  status: "pending",
+  purgeAfter: new Date("2026-07-24T00:00:00Z"),
+  deletedAt: null,
 };
 
 function jobDatabaseRow(overrides: Partial<typeof jobRow> = {}): unknown[] {
@@ -133,6 +155,32 @@ function videoDatabaseRow(overrides: Partial<typeof videoRow> = {}): unknown[] {
   ];
 }
 
+function artifactDatabaseRow(overrides: Partial<typeof artifactRow> = {}): unknown[] {
+  const row = { ...artifactRow, ...overrides };
+  return [
+    1,
+    row.uid,
+    row.jobUid,
+    row.attemptUid,
+    row.taskUid,
+    row.generation,
+    row.studentUid,
+    row.sourceFrame,
+    row.timestampMs,
+    row.objectKey,
+    row.contentType,
+    row.byteSize,
+    row.sha256,
+    row.width,
+    row.height,
+    row.status,
+    row.purgeAfter,
+    row.deletedAt,
+    new Date("2026-07-20T00:00:00Z"),
+    new Date("2026-07-20T00:00:00Z"),
+  ];
+}
+
 type QueryConfig = { text: string; rowMode?: string };
 
 function queryText(query: string | QueryConfig): string {
@@ -156,7 +204,11 @@ function createEnv(overrides: Partial<Env> = {}): Env {
   return {
     HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive,
     OCR_UPLOADS: {
-      head: jest.fn(async () => ({ size: 12, httpMetadata: { contentType: "image/png" } })),
+      head: jest.fn(async () => ({
+        size: artifactRow.byteSize,
+        httpMetadata: { contentType: "image/webp" },
+        checksums: { sha256: new Uint8Array(32).fill(0xcc).buffer },
+      })),
       delete: jest.fn(async () => undefined),
     } as unknown as R2Bucket,
     OCR_R2_ACCOUNT_ID: "account",
@@ -612,11 +664,125 @@ describe("PostgreSQL OCR control plane", () => {
     );
   });
 
+  it("prepares one checksum-bound private artifact per student for the exact processing attempt", async () => {
+    let artifactSelectCount = 0;
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('from "ocr_attempts"')) {
+        return [
+          [
+            1,
+            "attempt-video",
+            "ocr.student_detail_video.recognize.v1",
+            "job-1",
+            1,
+            "worker-1",
+            "processing",
+            1,
+            null,
+            null,
+            new Date("2026-07-20T00:00:00Z"),
+            null,
+          ],
+        ];
+      }
+      if (sql.includes('select "generation", "purge_after" from "ocr_jobs"')) {
+        return [[1, jobRow.purgeAfter]];
+      }
+      if (sql.includes('from "ocr_result_artifacts"')) {
+        artifactSelectCount += 1;
+        return artifactSelectCount === 1 ? [] : [artifactDatabaseRow()];
+      }
+      return [];
+    });
+
+    const prepared = await prepareOcrResultArtifacts(
+      createEnv(),
+      { type: "ocr.student_detail_video.recognize.v1", taskUid: "job-1", generation: 1 },
+      {
+        attemptUid: "attempt-video",
+        artifacts: [
+          {
+            studentUid: artifactRow.studentUid,
+            sourceFrame: artifactRow.sourceFrame,
+            timestampSeconds: artifactRow.timestampMs / 1000,
+            contentType: "image/webp",
+            byteSize: artifactRow.byteSize,
+            sha256: artifactRow.sha256,
+            width: artifactRow.width,
+            height: artifactRow.height,
+          },
+        ],
+      },
+      { createClient: () => client },
+    );
+
+    expect(prepared.artifacts[0]).toEqual(
+      expect.objectContaining({
+        artifactUid: "artifact-1",
+        studentUid: artifactRow.studentUid,
+        requiredHeaders: {
+          "content-type": "image/webp",
+          "x-amz-checksum-sha256": expect.any(String),
+        },
+      }),
+    );
+    const signed = new URL(prepared.artifacts[0].uploadUrl);
+    expect(signed.searchParams.get("X-Amz-SignedHeaders")).toBe("content-type;host;x-amz-checksum-sha256");
+    expect(
+      query.mock.calls.some(([queryConfig]) => queryText(queryConfig).includes('insert into "ocr_result_artifacts"')),
+    ).toBe(true);
+  });
+
+  it("resolves an artifact only through job, user, generation, and committed-state ownership", async () => {
+    const { client, query } = createClient((sql) =>
+      sql.includes('from "ocr_result_artifacts"') ? [[artifactRow.objectKey]] : [],
+    );
+
+    await expect(
+      getOwnedOcrArtifactObjectKey(createEnv(), 7, "job-1", "artifact-1", {
+        createClient: () => client,
+      }),
+    ).resolves.toBe(artifactRow.objectKey);
+
+    const [queryConfig, values] = query.mock.calls.find(([config]) =>
+      queryText(config).includes('from "ocr_result_artifacts"'),
+    ) as [QueryConfig, unknown[]];
+    expect(queryText(queryConfig)).toContain('"ocr_result_artifacts"."generation" = "ocr_jobs"."generation"');
+    expect(values).toEqual(expect.arrayContaining(["artifact-1", "job-1", "committed", 7]));
+  });
+
+  it("rejects an artifact that is not owned by the submitted attempt", async () => {
+    const { client } = createClient(() => []);
+
+    await expect(
+      commitOcrTaskResult(
+        createEnv(),
+        { type: "ocr.student_detail_video.recognize.v1", taskUid: "job-1", generation: 1 },
+        {
+          attemptUid: "attempt-video",
+          status: "succeeded",
+          inputSha256: "b".repeat(64),
+          modelVersion: "0.1.0",
+          catalogVersion: "catalog-1",
+          schemaVersion: "student-detail-video-result.v1",
+          result: studentVideoResult,
+          artifacts: [{ artifactUid: "artifact-from-another-attempt", studentUid: artifactRow.studentUid }],
+        },
+        { createClient: () => client },
+      ),
+    ).rejects.toThrow("현재 OCR 시도의 인식 화면");
+  });
+
   it("commits a validated student video result directly to review-ready", async () => {
     const { client, query } = createClient((sql) => {
+      if (sql.includes('update "ocr_result_artifacts"') && sql.includes('returning "uid"')) {
+        return [[artifactRow.uid]];
+      }
+      if (sql.includes('from "ocr_result_artifacts"')) return [artifactDatabaseRow()];
       if (sql.includes('from "ocr_attempts"')) return [["attempt-video"]];
       if (sql.includes('from "ocr_video_inputs"')) return [videoDatabaseRow()];
       if (sql.includes('from "ocr_job_results"')) return [];
+      if (sql.includes('select "expires_at" from "ocr_jobs"')) return [[jobRow.expiresAt]];
       return [];
     });
 
@@ -632,6 +798,12 @@ describe("PostgreSQL OCR control plane", () => {
           catalogVersion: "catalog-1",
           schemaVersion: "student-detail-video-result.v1",
           result: studentVideoResult,
+          artifacts: [
+            {
+              artifactUid: artifactRow.uid,
+              studentUid: artifactRow.studentUid,
+            },
+          ],
         },
         { createClient: () => client },
       ),
@@ -639,6 +811,7 @@ describe("PostgreSQL OCR control plane", () => {
 
     const sql = query.mock.calls.map(([queryConfig]) => queryText(queryConfig)).join("\n");
     expect(sql).toContain('insert into "ocr_job_results"');
+    expect(sql).toContain('update "ocr_result_artifacts" set "status" = $1');
     expect(sql).toContain('"status" = $1');
     expect(
       query.mock.calls.some(
@@ -650,9 +823,12 @@ describe("PostgreSQL OCR control plane", () => {
 
   it("accepts a redelivered student video result as an idempotent duplicate", async () => {
     const { client } = createClient((sql) => {
+      if (sql.includes('from "ocr_result_artifacts"')) {
+        return [artifactDatabaseRow({ attemptUid: "attempt-video-redelivery", status: "committed" })];
+      }
       if (sql.includes('from "ocr_attempts"')) return [["attempt-video-redelivery"]];
       if (sql.includes('from "ocr_video_inputs"')) return [videoDatabaseRow()];
-      if (sql.includes('from "ocr_job_results"')) return [["result-1"]];
+      if (sql.includes('from "ocr_job_results"')) return [["result-1", "attempt-video-redelivery"]];
       return [];
     });
 
@@ -668,6 +844,12 @@ describe("PostgreSQL OCR control plane", () => {
           catalogVersion: "catalog-1",
           schemaVersion: "student-detail-video-result.v1",
           result: studentVideoResult,
+          artifacts: [
+            {
+              artifactUid: artifactRow.uid,
+              studentUid: artifactRow.studentUid,
+            },
+          ],
         },
         { createClient: () => client },
       ),
@@ -855,5 +1037,48 @@ describe("PostgreSQL OCR control plane", () => {
         queryText(queryConfig).includes('update "ocr_video_inputs" set "raw_input_deleted_at"'),
       ),
     ).toBe(true);
+  });
+
+  it("purges an uncommitted or obsolete artifact after its short retention window", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('select "uid", "object_key" from "ocr_result_artifacts"') && sql.includes('"status" in')) {
+        return [["artifact-1", artifactRow.objectKey]];
+      }
+      return [];
+    });
+    const removeObjects = jest.fn(async (_keys: string | string[]) => undefined);
+
+    await reconcileOcrJobs(createEnv({ OCR_UPLOADS: { delete: removeObjects } as unknown as R2Bucket }), {
+      createClient: () => client,
+    });
+
+    expect(removeObjects).toHaveBeenCalledWith([artifactRow.objectKey]);
+    expect(
+      query.mock.calls.some(([queryConfig]) =>
+        queryText(queryConfig).includes('update "ocr_result_artifacts" set "deleted_at"'),
+      ),
+    ).toBe(true);
+  });
+
+  it("deletes committed representative frames when the owning job expires", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('select "uid" from "ocr_jobs"') && sql.includes('"purge_after" <')) {
+        return [["job-1"]];
+      }
+      if (sql.includes('from "ocr_result_artifacts"') && sql.includes('"job_uid" in') && !sql.includes('"status" in')) {
+        return [[artifactRow.uid, artifactRow.objectKey, null]];
+      }
+      return [];
+    });
+    const removeObjects = jest.fn(async (_keys: string | string[]) => undefined);
+
+    await reconcileOcrJobs(createEnv({ OCR_UPLOADS: { delete: removeObjects } as unknown as R2Bucket }), {
+      createClient: () => client,
+    });
+
+    expect(removeObjects).toHaveBeenCalledWith([artifactRow.objectKey]);
+    expect(query.mock.calls.some(([queryConfig]) => queryText(queryConfig).includes('delete from "ocr_jobs"'))).toBe(
+      true,
+    );
   });
 });

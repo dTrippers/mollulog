@@ -375,6 +375,37 @@ export const pgOcrJobResultsTable = pgTable(
   (table) => [uniqueIndex("ocr_job_results_job_generation_uidx").on(table.jobUid, table.generation)],
 );
 
+export const pgOcrResultArtifactsTable = pgTable(
+  "ocr_result_artifacts",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    jobUid: text("job_uid").notNull(),
+    attemptUid: text("attempt_uid").notNull(),
+    taskUid: text("task_uid").notNull(),
+    generation: integer().notNull(),
+    studentUid: text("student_uid").notNull(),
+    sourceFrame: integer("source_frame").notNull(),
+    timestampMs: integer("timestamp_ms").notNull(),
+    objectKey: text("object_key").notNull().unique(),
+    contentType: text("content_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    sha256: text().notNull(),
+    width: integer().notNull(),
+    height: integer().notNull(),
+    status: text().notNull().default("pending"),
+    purgeAfter: timestamptz("purge_after").notNull(),
+    deletedAt: timestamptz("deleted_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ocr_result_artifacts_attempt_student_uidx").on(table.attemptUid, table.studentUid),
+    index("ocr_result_artifacts_job_generation_status_idx").on(table.jobUid, table.generation, table.status),
+    index("ocr_result_artifacts_status_purge_idx").on(table.status, table.purgeAfter),
+  ],
+);
+
 export const pgOcrOutboxTable = pgTable(
   "ocr_outbox",
   {

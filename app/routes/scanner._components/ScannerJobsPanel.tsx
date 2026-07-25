@@ -185,7 +185,7 @@ function getJobLink(job: ScannerJobSummary) {
 }
 
 function jobKindLabel(jobKind: ScannerJobSummary["jobKind"]) {
-  return jobKind === "item_inventory_images_v1" ? "아이템" : "학생 기본 정보";
+  return jobKind === "item_inventory_images_v1" ? "아이템" : "학생 성장도";
 }
 
 function jobInputLabel(job: ScannerJobSummary) {
