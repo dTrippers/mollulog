@@ -13,7 +13,7 @@ import { cacheKey, cacheQuery, fetchCached } from "~/lib/cache";
 import { withD1Session } from "~/lib/d1-session";
 import { normalizeUtcTimestamp, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { watchIo } from "~/lib/io-watchdog";
-import { senseisTable } from "./sensei";
+import { senseiProfileVisibilityFilter, senseisTable } from "./sensei";
 
 export type CommunityPostType =
   | "student_review"
@@ -289,6 +289,19 @@ function communityCommentVisibilityFilter(currentUserId?: number | null): SQLWra
   return or(publicCondition, eq(communityCommentsTable.userId, currentUserId)) ?? publicCondition;
 }
 
+function communityPostAuthorProfileVisibilityFilter(currentUserId?: number | null): SQLWrapper {
+  return (
+    or(
+      eq(communityPostsTable.origin, "curated"),
+      senseiProfileVisibilityFilter(currentUserId, communityPostsTable.userId),
+    ) ?? senseiProfileVisibilityFilter(currentUserId, communityPostsTable.userId)
+  );
+}
+
+function communityCommentAuthorProfileVisibilityFilter(currentUserId?: number | null): SQLWrapper {
+  return senseiProfileVisibilityFilter(currentUserId, communityCommentsTable.userId);
+}
+
 function toNestedCommunityComment(
   comment: CommunityCommentRow,
   currentUserId?: number | null,
@@ -368,7 +381,13 @@ export async function getNestedCommunityCommentsByPostUids(
     })
     .from(communityCommentsTable)
     .innerJoin(senseisTable, eq(communityCommentsTable.userId, senseisTable.id))
-    .where(and(inArray(communityCommentsTable.postUid, postUids), communityCommentVisibilityFilter(currentUserId)))
+    .where(
+      and(
+        inArray(communityCommentsTable.postUid, postUids),
+        communityCommentVisibilityFilter(currentUserId),
+        communityCommentAuthorProfileVisibilityFilter(currentUserId),
+      ),
+    )
     .orderBy(sql`unixepoch(${communityCommentsTable.createdAt})`, communityCommentsTable.id);
 
   const result = postUids.reduce<Record<string, NestedCommunityComment[]>>((acc, postUid) => {
@@ -507,6 +526,7 @@ async function loadCommunityFeedPage(
   const db = drizzle(env.DB);
   const filters: SQLWrapper[] = [
     communityPostVisibilityFilter(currentUserId),
+    communityPostAuthorProfileVisibilityFilter(currentUserId),
     sql`(
       ${communityPostsTable.postType} <> 'walkthrough_timeline'
       or ${communityPostsTable.visibility} = 'public'
@@ -546,7 +566,13 @@ async function loadCommunityFeedPage(
 
   const [{ count }] = await watchIo(
     "community.feed.count",
-    Promise.resolve(db.select({ count: sql<number>`count(*)` }).from(communityPostsTable).where(where)),
+    Promise.resolve(
+      db
+        .select({ count: sql<number>`count(*)` })
+        .from(communityPostsTable)
+        .leftJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+        .where(where),
+    ),
     traceContext,
     COMMUNITY_FEED_SLOW_WARN_MS,
   );
@@ -685,7 +711,13 @@ export async function getCommunityPostByUid(
     })
     .from(communityPostsTable)
     .leftJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
-    .where(and(eq(communityPostsTable.uid, postUid), communityPostVisibilityFilter(currentUserId)))
+    .where(
+      and(
+        eq(communityPostsTable.uid, postUid),
+        communityPostVisibilityFilter(currentUserId),
+        communityPostAuthorProfileVisibilityFilter(currentUserId),
+      ),
+    )
     .get();
 
   if (!row) {
@@ -742,7 +774,14 @@ export async function createCommunityComment(
   const post = await db
     .select({ uid: communityPostsTable.uid })
     .from(communityPostsTable)
-    .where(and(eq(communityPostsTable.uid, postUid), communityPostVisibilityFilter(userId)))
+    .leftJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+    .where(
+      and(
+        eq(communityPostsTable.uid, postUid),
+        communityPostVisibilityFilter(userId),
+        communityPostAuthorProfileVisibilityFilter(userId),
+      ),
+    )
     .get();
 
   if (!post) {
@@ -757,7 +796,14 @@ export async function createCommunityComment(
         parentUid: communityCommentsTable.parentUid,
       })
       .from(communityCommentsTable)
-      .where(and(eq(communityCommentsTable.uid, targetParentUid), communityCommentVisibilityFilter(userId)))
+      .innerJoin(senseisTable, eq(communityCommentsTable.userId, senseisTable.id))
+      .where(
+        and(
+          eq(communityCommentsTable.uid, targetParentUid),
+          communityCommentVisibilityFilter(userId),
+          communityCommentAuthorProfileVisibilityFilter(userId),
+        ),
+      )
       .get();
 
     if (!parentComment || parentComment.postUid !== postUid) {
@@ -834,7 +880,14 @@ export async function setCommunityPostLike(env: Env, userId: number, postUid: st
       visibility: communityPostsTable.visibility,
     })
     .from(communityPostsTable)
-    .where(and(eq(communityPostsTable.uid, postUid), communityPostVisibilityFilter(userId)))
+    .leftJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+    .where(
+      and(
+        eq(communityPostsTable.uid, postUid),
+        communityPostVisibilityFilter(userId),
+        communityPostAuthorProfileVisibilityFilter(userId),
+      ),
+    )
     .get();
 
   if (!post || post.postType === "walkthrough_timeline") {

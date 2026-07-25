@@ -3,7 +3,7 @@ import { redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
 import { follow, unfollow } from "~/models/followership";
-import { getSenseiByUsername } from "~/models/sensei";
+import { getSenseiByUsername, isSenseiProfileVisibleTo } from "~/models/sensei";
 
 export const action: ActionFunction = async ({ request, context }) => {
   const { env, ctx } = context.cloudflare;
@@ -29,6 +29,9 @@ export const action: ActionFunction = async ({ request, context }) => {
 
   try {
     if (request.method === "POST") {
+      if (!isSenseiProfileVisibleTo(followee, follower.id)) {
+        return errorResponse(403, "비공개 프로필은 팔로우할 수 없어요.");
+      }
       await follow(env, follower.id, followee.id);
     } else if (request.method === "DELETE") {
       await unfollow(env, follower.id, followee.id);

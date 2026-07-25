@@ -10,6 +10,7 @@ import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { canonicalUrl } from "./lib/seo";
 import {
   isGoogleSearchCrawler,
+  isSenseiProfilePath,
   materializeReactSuspenseBoundaries,
   requiresSelfCanonical,
   stripExecutableScripts,
@@ -81,6 +82,9 @@ export default async function handleRequest(
 
   responseHeaders.set("Content-Type", "text/html");
   responseHeaders.set("Cache-Control", "no-store, no-transform");
+  if (isSenseiProfilePath(path)) {
+    responseHeaders.set("X-Robots-Tag", "noindex");
+  }
   appendVary(responseHeaders, "User-Agent");
   responseHeaders.set(SEO_DEBUG_HEADERS.renderId, requestDiagnostics.renderId);
   responseHeaders.set(SEO_DEBUG_HEADERS.requestPath, requestDiagnostics.requestPath);

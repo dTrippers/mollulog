@@ -29,6 +29,7 @@ jest.mock("~/models/recruitment-result", () => ({
 
 jest.mock("~/models/sensei", () => ({
   getSenseiByUsername: jest.fn(),
+  isSenseiProfileVisibleTo: jest.fn(() => true),
 }));
 
 jest.mock("~/models/student", () => ({

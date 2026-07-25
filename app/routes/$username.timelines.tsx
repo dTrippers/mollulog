@@ -12,7 +12,8 @@ export const meta: MetaFunction = ({ params }) => [
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const [sensei, currentUser] = await Promise.all([getRouteSensei(env, params), getActiveSensei(env, request)]);
+  const currentUser = await getActiveSensei(env, request);
+  const sensei = await getRouteSensei(env, params, currentUser?.id);
   const me = sensei.id === currentUser?.id;
   const timelines = await listPostgresWalkthroughTimelinesByUser(env, sensei.id, me, { ctx });
   const timelineUids = timelines.map((timeline) => timeline.uid);

@@ -33,6 +33,14 @@ export function isGoogleSearchCrawler(userAgent: string | null): boolean {
   return GOOGLE_SEARCH_CRAWLER_PATTERN.test(userAgent ?? "");
 }
 
+export function isSenseiProfilePath(pathname: string): boolean {
+  try {
+    return /^\/@[^/]+(?:\/|$)/.test(decodeURIComponent(pathname));
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Google Search only needs the fully rendered server HTML. Removing executable
  * scripts prevents WRS from hydrating into a different route while preserving

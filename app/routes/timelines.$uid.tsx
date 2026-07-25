@@ -41,7 +41,7 @@ import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } 
 import { bossImageUrl } from "~/models/assets";
 import { deleteCommunityPostByUid } from "~/models/community";
 import { getAllRaidSchedules } from "~/models/raid";
-import { getSenseiById } from "~/models/sensei";
+import { getSenseiById, isSenseiProfileVisibleTo } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
@@ -63,8 +63,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   if (timeline.visibility === "private" && !owner) {
     throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
   }
-  const [author, students, raids, engagementByUid] = await Promise.all([
-    storedTimeline ? getSenseiById(env, storedTimeline.userId) : Promise.resolve(null),
+  const author = storedTimeline ? await getSenseiById(env, storedTimeline.userId) : null;
+  if (storedTimeline && (!author || !isSenseiProfileVisibleTo(author, currentUser?.id))) {
+    throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
+  }
+  const [students, raids, engagementByUid] = await Promise.all([
     getAllStudentsMap(env, true),
     getAllRaidSchedules(env),
     storedTimeline
@@ -116,6 +119,16 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const formData = await request.formData();
   const intent = String(formData.get("intent") ?? "");
   if (intent === "clone") {
+    const source = await getPostgresWalkthroughTimeline(env, params.uid, { ctx });
+    const sourceAuthor = source ? await getSenseiById(env, source.userId) : null;
+    if (
+      !source ||
+      !sourceAuthor ||
+      (source.visibility === "private" && source.userId !== currentUser.id) ||
+      !isSenseiProfileVisibleTo(sourceAuthor, currentUser.id)
+    ) {
+      throw routeError(404, "timeline.not_found", "복제할 타임라인을 찾을 수 없어요.");
+    }
     const cloned = await clonePostgresWalkthroughTimeline(env, params.uid, currentUser.id, { ctx });
     if (!cloned) throw routeError(404, "timeline.not_found", "복제할 타임라인을 찾을 수 없어요.");
     return redirect(`/timelines/${cloned.uid}/edit`);

@@ -88,16 +88,16 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   // Per-uid reads only start once the uid is confirmed to be a real student, so
   // bot-scanned/invalid uids don't trigger extra D1 lookups.
+  const currentUser = await currentUserPromise;
   const tagCountsPromise = getTagCountsByStudent(env, uid);
-  const allGradingsPromise = getStudentGradingsByStudentWithUsers(env, uid, true);
+  const allGradingsPromise = getStudentGradingsByStudentWithUsers(env, uid, true, currentUser?.id);
 
   const recruitmentGroupUids = student.recruitments.map(
     (recruitment: { recruitmentGroup: { uid: string } }) => recruitment.recruitmentGroup.uid,
   );
 
-  const [timelineContents, currentUser, rawAllStudents, tagCounts, allGradings, allRaids] = await Promise.all([
+  const [timelineContents, rawAllStudents, tagCounts, allGradings, allRaids] = await Promise.all([
     getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids, { ctx }),
-    currentUserPromise,
     rawAllStudentsPromise,
     tagCountsPromise,
     allGradingsPromise,

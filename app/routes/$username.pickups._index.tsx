@@ -4,8 +4,8 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { AddContentButton } from "~/components/features/editor";
 import { SubTitle } from "~/components/primitives";
 import { getRecruitmentResultCountStats, resolveRecruitmentResultStudents } from "~/domain/recruitment-result";
-import { compareInstantAsc, compareInstantDesc } from "~/lib/date-time";
 import { withD1Session } from "~/lib/d1-session";
+import { compareInstantAsc, compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import {
@@ -37,7 +37,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     return redirect("/unauthorized");
   }
 
-  const routeSensei = await getRouteSensei(env, params);
+  const routeSensei = await getRouteSensei(env, params, sensei.id);
   if (routeSensei.username !== sensei.username) {
     return data({ error: "Forbidden" }, { status: 403 });
   }
@@ -55,7 +55,8 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const sensei = await getRouteSensei(env, params);
+  const currentUser = await getActiveSensei(env, request);
+  const sensei = await getRouteSensei(env, params, currentUser?.id);
 
   const [recruitmentResults, allStudentsMap] = await Promise.all([
     getRecruitmentResults(env, sensei.id),
@@ -161,7 +162,6 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     })
     .sort((a, b) => compareInstantDesc(a.event.since, b.event.since));
 
-  const currentUser = await getActiveSensei(env, request);
   return {
     me: sensei.username === currentUser?.username,
     recruitmentHistories: aggregatedHistories,

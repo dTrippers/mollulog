@@ -31,7 +31,7 @@ import {
 import { bossImageUrl } from "~/models/assets";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
-import { getSenseisById } from "~/models/sensei";
+import { getVisibleSenseisById } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 
 export const meta: MetaFunction = ({ location }) => [
@@ -81,18 +81,21 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     },
     { ctx },
   );
-  const timelineUids = timelines.map((timeline) => timeline.uid);
-  const [authors, recruitedStudentTiers, engagementByUid] = await Promise.all([
-    getSenseisById(
-      env,
-      timelines.map((timeline) => timeline.userId),
-    ),
+  const authors = await getVisibleSenseisById(
+    env,
+    timelines.map((timeline) => timeline.userId),
+    sensei?.id,
+  );
+  const visibleAuthorIds = new Set(authors.map((author) => author.id));
+  const visibleTimelines = timelines.filter((timeline) => visibleAuthorIds.has(timeline.userId));
+  const timelineUids = visibleTimelines.map((timeline) => timeline.uid);
+  const [recruitedStudentTiers, engagementByUid] = await Promise.all([
     sensei ? getRecruitedStudentTiers(env, sensei.id) : Promise.resolve({}),
     getPostgresWalkthroughTimelineLikeSummaries(env, timelineUids, sensei?.id, { ctx }),
   ]);
 
   return {
-    timelines,
+    timelines: visibleTimelines,
     filters,
     engagementByUid,
     bosses,

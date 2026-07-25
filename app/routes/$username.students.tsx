@@ -1,20 +1,25 @@
-import type { LoaderFunctionArgs, MetaFunction, ActionFunctionArgs } from "react-router";
-import { useLoaderData, data, useFetcher, useOutletContext } from "react-router";
-import { StudentCards, TierSelector } from "~/components/features/students";
+import { FunnelIcon, IdentificationIcon, MinusCircleIcon, PlusCircleIcon } from "@heroicons/react/24/outline";
+import { useEffect, useMemo, useState } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { data, useFetcher, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import {
+  createStudentFilterState,
+  getFilteredStudentUids,
+  StudentCards,
+  StudentFilter,
+  TierSelector,
+} from "~/components/features/students";
 import { Button, SubTitle, Toggle } from "~/components/primitives";
-import { getRouteSensei } from "./$username";
+import { getRecruitedStudents, removeRecruitedStudent, upsertRecruitedStudent } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
-import { getRecruitedStudents, upsertRecruitedStudent, removeRecruitedStudent } from "~/models/recruited-student";
-import { MinusCircleIcon, IdentificationIcon, PlusCircleIcon, FunnelIcon } from "@heroicons/react/24/outline";
-import { useEffect, useState, useMemo } from "react";
-import { createStudentFilterState, getFilteredStudentUids, StudentFilter } from "~/components/features/students";
+import { getRouteSensei } from "./$username";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getActiveSensei(env, request);
 
-  const sensei = await getRouteSensei(env, params);
+  const sensei = await getRouteSensei(env, params, currentUser?.id);
   const recruitedStudents = await getRecruitedStudents(env, sensei.id);
   const recruitedStudentTiers = recruitedStudents.reduce(
     (acc, { studentUid, tier }) => {
@@ -59,7 +64,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     return data({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const sensei = await getRouteSensei(env, params);
+  const sensei = await getRouteSensei(env, params, currentUser.id);
   if (currentUser.username !== sensei.username) {
     return data({ error: "Forbidden" }, { status: 403 });
   }

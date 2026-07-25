@@ -1,10 +1,11 @@
-import { eq, inArray } from "drizzle-orm";
+import { type AnyColumn, and, eq, inArray, or, type SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { isUniqueConstraintError } from "~/lib/db";
 
 type SenseiRole = "guest" | "admin";
+export type ProfileVisibility = "public" | "private";
 
 export const senseisTable = sqliteTable("senseis", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -17,6 +18,7 @@ export const senseisTable = sqliteTable("senseis", {
   githubId: text(),
   role: text().notNull().$type<SenseiRole>(),
   active: int().notNull().default(0),
+  profileVisibility: text().notNull().default("public").$type<ProfileVisibility>(),
 });
 
 export type Sensei = {
@@ -28,6 +30,7 @@ export type Sensei = {
   bio: string | null;
   active: boolean;
   role: SenseiRole;
+  profileVisibility: ProfileVisibility;
   config?: {
     darkMode?: boolean;
   };
@@ -57,10 +60,44 @@ export async function getSenseiByUsername(env: Env, username: string): Promise<S
 
 export async function getSenseisById(env: Env, ids: number[]): Promise<Sensei[]> {
   const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) {
+    return [];
+  }
   const db = drizzle(env.DB);
   const senseis = await db.select().from(senseisTable).where(inArray(senseisTable.id, uniqueIds));
 
   return senseis.map((row) => toSenseiModel(row));
+}
+
+export async function getVisibleSenseisById(env: Env, ids: number[], viewerUserId?: number): Promise<Sensei[]> {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length === 0) {
+    return [];
+  }
+
+  const db = drizzle(env.DB);
+  const senseis = await db
+    .select()
+    .from(senseisTable)
+    .where(and(inArray(senseisTable.id, uniqueIds), senseiProfileVisibilityFilter(viewerUserId)));
+
+  return senseis.map((row) => toSenseiModel(row));
+}
+
+export function isSenseiProfileVisibleTo(sensei: Sensei, viewerUserId?: number): boolean {
+  return sensei.profileVisibility === "public" || sensei.id === viewerUserId;
+}
+
+export function senseiProfileVisibilityFilter(
+  viewerUserId?: number | null,
+  ownerUserIdColumn: AnyColumn = senseisTable.id,
+): SQLWrapper {
+  const publicCondition = eq(senseisTable.profileVisibility, "public");
+  if (!viewerUserId) {
+    return publicCondition;
+  }
+
+  return or(publicCondition, eq(ownerUserIdColumn, viewerUserId)) ?? publicCondition;
 }
 
 export async function createSensei(
@@ -101,7 +138,9 @@ export async function createSensei(
 }
 
 // Update a sensei
-type SenseiUpdateFields = Partial<Pick<Sensei, "username" | "friendCode" | "profileStudentId" | "active" | "bio">>;
+type SenseiUpdateFields = Partial<
+  Pick<Sensei, "username" | "friendCode" | "profileStudentId" | "active" | "bio" | "profileVisibility">
+>;
 
 function nullableFieldToUpdate<T>(value: T | null | undefined, existingValue: T | null): T | null {
   if (value === undefined) {
@@ -130,6 +169,7 @@ export async function updateSensei(
         profileStudentId: nullableFieldToUpdate(fields.profileStudentId, existingSensei.profileStudentId),
         bio: nullableFieldToUpdate(fields.bio, existingSensei.bio),
         active: (fields.active ?? existingSensei.active) ? 1 : 0,
+        profileVisibility: fields.profileVisibility ?? existingSensei.profileVisibility,
       })
       .where(eq(senseisTable.id, id));
   } catch (e) {
@@ -156,5 +196,6 @@ export function toSenseiModel(row: typeof senseisTable.$inferSelect): Sensei {
     bio: row.bio,
     active: row.active === 1,
     role: row.role,
+    profileVisibility: row.profileVisibility ?? "public",
   };
 }

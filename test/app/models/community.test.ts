@@ -17,6 +17,7 @@ type FakeSenseiRow = {
   id: number;
   username: string;
   profileStudentId: string | null;
+  profileVisibility: "public" | "private";
 };
 
 type FakeCommunityPostRow = {
@@ -95,6 +96,19 @@ class FakeCommunityD1Database {
 
     if (normalizedSql.includes("count(*)") && normalizedSql.includes("from community_posts")) {
       return [[this.filterPosts(normalizedSql, params).length]];
+    }
+
+    if (
+      normalizedSql.includes("from community_posts") &&
+      normalizedSql.includes("left join senseis") &&
+      !normalizedSql.startsWith("select community_posts.id,")
+    ) {
+      const post = this.findPostForSelect(normalizedSql, params);
+      if (!post || !this.isAuthorProfileVisible(post, normalizedSql, params)) return [];
+      if (normalizedSql.includes("posttype") && normalizedSql.includes("visibility")) {
+        return [[post.uid, post.postType, post.visibility]];
+      }
+      return [[post.uid]];
     }
 
     if (normalizedSql.includes("from community_posts") && normalizedSql.includes("left join senseis")) {
@@ -196,6 +210,12 @@ class FakeCommunityD1Database {
 
   private filterPosts(sql: string, params: unknown[]): FakeCommunityPostRow[] {
     let rows = this.posts.filter((post) => post.visibility === "public");
+    if (sql.includes("senseis.profilevisibility")) {
+      const hasOwnerException = sql.includes("community_posts.userid = ?");
+      rows = rows.filter((post) => {
+        return this.isAuthorProfileVisible(post, sql, params, hasOwnerException);
+      });
+    }
     const stringParams = params.filter((param): param is string => typeof param === "string");
     const postTypes = stringParams.filter((param) =>
       [
@@ -225,6 +245,20 @@ class FakeCommunityD1Database {
       });
     }
     return rows;
+  }
+
+  private isAuthorProfileVisible(
+    post: FakeCommunityPostRow,
+    sql: string,
+    params: unknown[],
+    hasOwnerException = sql.includes("community_posts.userid = ?"),
+  ): boolean {
+    if (post.origin === "curated") return true;
+    const sensei = this.senseis.find((candidate) => candidate.id === post.userId);
+    return (
+      sensei?.profileVisibility === "public" ||
+      (hasOwnerException && params.some((param) => Number(param) === post.userId))
+    );
   }
 
   private findPostForSelect(sql: string, params: unknown[]): FakeCommunityPostRow | undefined {
@@ -412,7 +446,7 @@ function createEnv(db: FakeCommunityD1Database): Env {
 describe("community model feed queries", () => {
   it("keeps existing user-authored posts visible with author data and created-at fallback displayAt", async () => {
     const db = new FakeCommunityD1Database();
-    db.senseis.push({ id: 1, username: "sensei", profileStudentId: "student-profile" });
+    db.senseis.push({ id: 1, username: "sensei", profileStudentId: "student-profile", profileVisibility: "public" });
     db.posts.push(createUserPost());
 
     const page = await getCommunityFeedPage(createEnv(db), {
@@ -439,7 +473,7 @@ describe("community model feed queries", () => {
 
   it("orders curated YouTube posts by displayAt while existing user posts fall back to createdAt", async () => {
     const db = new FakeCommunityD1Database();
-    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null });
+    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null, profileVisibility: "public" });
     db.posts.push(
       createUserPost({ updatedAt: "2026-05-09T00:00:00.000Z" }),
       createYoutubePost({
@@ -471,7 +505,7 @@ describe("community model feed queries", () => {
 
   it("does not move old user-authored posts to the top when they are updated", async () => {
     const db = new FakeCommunityD1Database();
-    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null });
+    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null, profileVisibility: "public" });
     db.posts.push(
       createUserPost({
         id: 1,
@@ -500,7 +534,7 @@ describe("community model feed queries", () => {
 
   it("can limit YouTube feed items by channel without hiding user-authored posts", async () => {
     const db = new FakeCommunityD1Database();
-    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null });
+    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null, profileVisibility: "public" });
     db.posts.push(
       createUserPost({ uid: "post-user-review", updatedAt: "2026-05-09T00:00:00.000Z" }),
       createYoutubePost({ uid: "youtube-kr", sourceUid: "video-kr", displayAt: "2026-05-10T00:00:00.000Z" }),
@@ -527,11 +561,33 @@ describe("community model feed queries", () => {
 
     expect(page.items.map((item) => item.uid)).toEqual(["youtube-kr", "post-user-review"]);
   });
+
+  it("hides a private profile's posts from others while keeping them visible to the owner", async () => {
+    const db = new FakeCommunityD1Database();
+    db.senseis.push({ id: 1, username: "private-sensei", profileStudentId: null, profileVisibility: "private" });
+    db.posts.push(createUserPost());
+
+    const publicPage = await getCommunityFeedPage(createEnv(db), {
+      postTypes: ["student_review"],
+      pageSize: 20,
+      includeEngagement: false,
+    });
+    const ownerPage = await getCommunityFeedPage(createEnv(db), {
+      currentUserId: 1,
+      postTypes: ["student_review"],
+      pageSize: 20,
+      includeEngagement: false,
+    });
+
+    expect(publicPage.items).toEqual([]);
+    expect(ownerPage.items.map((item) => item.uid)).toEqual(["post-user-review"]);
+  });
 });
 
 describe("community model likes", () => {
   it("keeps existing post likes idempotent", async () => {
     const db = new FakeCommunityD1Database();
+    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null, profileVisibility: "public" });
     db.posts.push(createUserPost());
 
     await setCommunityPostLike(createEnv(db), 10, "post-user-review", true);
@@ -557,6 +613,7 @@ describe("community model likes", () => {
 
   it("does not store walkthrough timeline likes in the community model", async () => {
     const db = new FakeCommunityD1Database();
+    db.senseis.push({ id: 1, username: "sensei", profileStudentId: null, profileVisibility: "public" });
     db.posts.push(
       createUserPost({ uid: "timeline-public", postType: "walkthrough_timeline", sourceType: "raid_walkthrough" }),
       createUserPost({

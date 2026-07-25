@@ -14,7 +14,7 @@ import {
   parseCommunityPostBlocks,
   serializeCommunityPostBlocks,
 } from "./community";
-import { senseisTable } from "./sensei";
+import { senseiProfileVisibilityFilter, senseisTable } from "./sensei";
 
 type ContentCommentVisibility = "private" | "public";
 const IN_QUERY_BATCH_SIZE = 90;
@@ -98,6 +98,14 @@ function commentVisibilityFilter(userId?: number): SQLWrapper {
   );
 }
 
+function postAuthorProfileVisibilityFilter(userId?: number): SQLWrapper {
+  return senseiProfileVisibilityFilter(userId, communityPostsTable.userId);
+}
+
+function commentAuthorProfileVisibilityFilter(userId?: number): SQLWrapper {
+  return senseiProfileVisibilityFilter(userId, communityCommentsTable.userId);
+}
+
 export async function getUserComments(env: Env, userId: number): Promise<ContentComment[]> {
   const db = drizzle(env.DB);
   const rows = await db
@@ -157,6 +165,7 @@ export async function getContentsComments(
             eq(communityPostsTable.postType, "event_opinion"),
             inArray(communityPostsTable.subjectContentUid, batch),
             visibilityFilter(userId),
+            postAuthorProfileVisibilityFilter(userId),
           ),
         ),
     ),
@@ -212,7 +221,13 @@ export async function getContentsComments(
                 })
                 .from(communityCommentsTable)
                 .innerJoin(senseisTable, eq(communityCommentsTable.userId, senseisTable.id))
-                .where(and(inArray(communityCommentsTable.postUid, batch), commentVisibilityFilter(userId))),
+                .where(
+                  and(
+                    inArray(communityCommentsTable.postUid, batch),
+                    commentVisibilityFilter(userId),
+                    commentAuthorProfileVisibilityFilter(userId),
+                  ),
+                ),
             ),
           )
         ).flat();

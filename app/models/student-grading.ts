@@ -1,7 +1,7 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, type SQLWrapper, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
-import { type UtcIsoString, nowUtcIso } from "~/lib/date-time";
+import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import {
   communityPostsTable,
   createPlaintextCommunityPostBlocks,
@@ -11,7 +11,7 @@ import {
   parseCommunityPostBlocks,
   serializeCommunityPostBlocks,
 } from "./community";
-import { senseisTable } from "./sensei";
+import { senseiProfileVisibilityFilter, senseisTable } from "./sensei";
 import type { StudentGradingTagValue } from "./student-grading-tag";
 import {
   getGradingTags,
@@ -61,6 +61,10 @@ function studentReviewWhere(studentUid?: string) {
     eq(communityPostsTable.postType, "student_review"),
     studentUid ? eq(communityPostsTable.subjectStudentUid, studentUid) : undefined,
   );
+}
+
+function authorProfileVisibilityFilter(viewerUserId?: number): SQLWrapper {
+  return senseiProfileVisibilityFilter(viewerUserId, communityPostsTable.userId);
 }
 
 export async function getStudentGrading(
@@ -156,6 +160,7 @@ export async function getStudentGradingsByStudentWithUsers(
   env: Env,
   studentUid: string,
   includeTags = false,
+  viewerUserId?: number,
 ): Promise<StudentGradingWithUser[]> {
   const db = drizzle(env.DB);
   const gradings = await db
@@ -170,7 +175,7 @@ export async function getStudentGradingsByStudentWithUsers(
     })
     .from(communityPostsTable)
     .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
-    .where(studentReviewWhere(studentUid));
+    .where(and(studentReviewWhere(studentUid), authorProfileVisibilityFilter(viewerUserId)));
 
   const result: StudentGradingWithUser[] = gradings.map((grading) => ({
     uid: grading.uid,
@@ -229,6 +234,7 @@ export async function getRecentStudentGradingsWithUsers(
   env: Env,
   limit = 3,
   includeTags = false,
+  viewerUserId?: number,
 ): Promise<StudentGradingWithUser[]> {
   const db = drizzle(env.DB);
   const gradings = await db
@@ -243,7 +249,7 @@ export async function getRecentStudentGradingsWithUsers(
     })
     .from(communityPostsTable)
     .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
-    .where(eq(communityPostsTable.postType, "student_review"))
+    .where(and(eq(communityPostsTable.postType, "student_review"), authorProfileVisibilityFilter(viewerUserId)))
     .orderBy(
       desc(sql`unixepoch(${communityPostsTable.updatedAt})`),
       desc(sql`unixepoch(${communityPostsTable.createdAt})`),
@@ -279,6 +285,7 @@ export async function getRecentStudentGradingsPageWithUsers(
   page = 1,
   pageSize = 20,
   includeTags = false,
+  viewerUserId?: number,
 ): Promise<StudentGradingPageWithUser> {
   const db = drizzle(env.DB);
   const safePage = Math.max(1, page);
@@ -286,7 +293,8 @@ export async function getRecentStudentGradingsPageWithUsers(
   const [{ count }] = await db
     .select({ count: sql<number>`count(*)` })
     .from(communityPostsTable)
-    .where(eq(communityPostsTable.postType, "student_review"));
+    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
+    .where(and(eq(communityPostsTable.postType, "student_review"), authorProfileVisibilityFilter(viewerUserId)));
 
   const totalCount = Number(count);
   const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
@@ -305,7 +313,7 @@ export async function getRecentStudentGradingsPageWithUsers(
     })
     .from(communityPostsTable)
     .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
-    .where(eq(communityPostsTable.postType, "student_review"))
+    .where(and(eq(communityPostsTable.postType, "student_review"), authorProfileVisibilityFilter(viewerUserId)))
     .orderBy(
       desc(sql`unixepoch(${communityPostsTable.updatedAt})`),
       desc(sql`unixepoch(${communityPostsTable.createdAt})`),
