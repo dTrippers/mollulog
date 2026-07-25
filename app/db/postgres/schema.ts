@@ -72,12 +72,14 @@ export const pgPostsTable = pgTable(
     title: text().notNull(),
     content: text().notNull(),
     board: text().notNull(),
+    timelineContentUid: text("timeline_content_uid"),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (table) => [
     uniqueIndex("posts_uid_uidx").on(table.uid),
     index("posts_board_created_at_uid_idx").on(table.board, table.createdAt.desc(), table.uid.desc()),
+    index("posts_timeline_content_uid_idx").on(table.timelineContentUid),
   ],
 );
 

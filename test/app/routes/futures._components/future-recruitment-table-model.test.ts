@@ -396,12 +396,23 @@ describe("buildFutureRecruitmentTableRows", () => {
         endAt: "2026-09-12T02:00:00.000Z",
         contentType: "campaign",
       }),
+      content({
+        uid: "live-content",
+        name: "공식 방송",
+        startAt: "2026-09-06T06:00:00.000Z",
+        endAt: "2026-09-07T14:59:59.000Z",
+        contentType: "live",
+        endless: true,
+      }),
     ]);
 
     expect(rows).toHaveLength(1);
     expect(rows[0].events.map((item) => item.name)).toEqual(["이벤트"]);
     expect(rows[0].raids.map((item) => item.name)).toEqual(["총력전"]);
     expect(rows[0].campaigns.map((item) => item.name)).toEqual(["캠페인"]);
+    expect([...rows[0].events, ...rows[0].raids, ...rows[0].campaigns]).not.toContainEqual(
+      expect.objectContaining({ uid: "live-content" }),
+    );
   });
 
   it("places the recruitment owner content in auxiliary columns", () => {

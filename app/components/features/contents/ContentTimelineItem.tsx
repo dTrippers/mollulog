@@ -37,7 +37,11 @@ import {
 import { contentTypeLocale, recruitmentLabelLocale, remainingTime } from "~/locales/ko";
 import type { ContentCommentSummary } from "~/models/content";
 import type { EventType, RaidType, Role } from "~/models/content.d";
-import { SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
+import {
+  COMMENT_ENABLED_WITHOUT_RECRUITMENT_CONTENT_TYPES,
+  SHOW_LINK_CONTENT_TYPES,
+  SHOW_LINK_RAID_TYPES,
+} from "~/models/content-rules";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
@@ -46,6 +50,7 @@ import { TimelineItemBanner } from "./TimelineItemBanner";
 export type ContentTimelineItemProps = {
   uid: string;
   name: string;
+  imageUrl?: string | null;
   contentType: EventType | RaidType;
   runType: "first" | "rerun" | "permanent";
   endless: boolean;
@@ -147,6 +152,7 @@ export type ContentTimelineFeatureBannerId = "student-analysis" | "pending-stude
 
 export function ContentTimelineItem({
   name,
+  imageUrl,
   contentType,
   runType,
   endless,
@@ -187,7 +193,8 @@ export function ContentTimelineItem({
 }: ContentTimelineItemProps) {
   const displayTimeZone = useDisplayTimeZone();
   const { setActivePopupId } = useStudentCardPopup();
-  const showComments = recruitments && recruitments.length > 0;
+  const showComments =
+    (recruitments?.length ?? 0) > 0 || COMMENT_ENABLED_WITHOUT_RECRUITMENT_CONTENT_TYPES.includes(contentType);
   const [commentEditing, setCommentEditing] = useState(false);
 
   let daysLabel = null;
@@ -204,49 +211,67 @@ export function ContentTimelineItem({
   }
 
   const headerLinked = isContentHeaderLinked({ contentType, raidInfo, isSpoiler, spoilerVisible });
+  const titleContent = <ContentTitles name={name} showLink={headerLinked} />;
   const headerContent = headerLinked ? (
     <Link to={link} className="block cursor-pointer hover:underline tracking-tight">
-      <ContentTitles name={name} showLink={true} />
+      {titleContent}
       {raidInfo && <RaidInfo raid={raidInfo} since={since ?? null} until={until} />}
     </Link>
   ) : (
     <>
-      <ContentTitles name={name} showLink={false} />
+      {titleContent}
       {raidInfo && <RaidInfo raid={raidInfo} since={since ?? null} until={until} />}
     </>
   );
+  const showThumbnail = contentType === "live" && imageUrl && (!isSpoiler || spoilerVisible);
 
   return (
     <div className="my-4 md:my-6">
-      {/* 컨텐츠 분류 */}
-      <div className="flex items-center gap-x-1 md:my-1">
-        <div className="my-1 flex flex-wrap gap-1 text-sm">
-          <span className="pr-1 py-0.5 text-neutral-500 dark:text-neutral-400">
-            {(contentType === "event" || contentType === "pickup") && runType === "rerun" && "복각 "}
-            {contentType === "event" && runType === "permanent" ? "이벤트 상설화" : contentTypeLocale[contentType]}
-          </span>
-          {!endless && daysLabel && (
-            <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />
-          )}
-          {confirmed && since && isInstantAfter(since, now) && (
-            <ContentTag Icon={CheckCircleSolidIcon} text="확정" color="green" />
-          )}
-          {tags.includes("recruit_free_100") &&
-            recruitments?.every(({ until }) => until !== null && isInstantAfter(until, now)) && (
-              <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
-            )}
-          {tags.includes("shop") && <ContentTag Icon={CalculatorIcon} text="이벤트 상점" color="default" />}
-        </div>
-      </div>
+      <div className={showThumbnail ? "sm:grid sm:grid-cols-[minmax(0,1fr)_10rem] sm:items-start sm:gap-4" : undefined}>
+        <div className="min-w-0">
+          {/* 컨텐츠 분류 */}
+          <div className="flex items-center gap-x-1 md:my-1">
+            <div className="my-1 flex flex-wrap gap-1 text-sm">
+              <span className="pr-1 py-0.5 text-neutral-500 dark:text-neutral-400">
+                {(contentType === "event" || contentType === "pickup") && runType === "rerun" && "복각 "}
+                {contentType === "event" && runType === "permanent" ? "이벤트 상설화" : contentTypeLocale[contentType]}
+              </span>
+              {!endless && daysLabel && (
+                <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />
+              )}
+              {confirmed && since && isInstantAfter(since, now) && (
+                <ContentTag Icon={CheckCircleSolidIcon} text="확정" color="green" />
+              )}
+              {tags.includes("recruit_free_100") &&
+                recruitments?.every(({ until }) => until !== null && isInstantAfter(until, now)) && (
+                  <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
+                )}
+              {tags.includes("shop") && <ContentTag Icon={CalculatorIcon} text="이벤트 상점" color="default" />}
+            </div>
+          </div>
 
-      {/* 컨텐츠 이름 */}
-      <SpoilerHeader
-        hidden={isSpoiler && !spoilerVisible}
-        onReveal={onRevealSpoiler}
-        onHide={isSpoiler && spoilerVisible ? onHideSpoiler : undefined}
-      >
-        {headerContent}
-      </SpoilerHeader>
+          {/* 컨텐츠 이름 */}
+          <SpoilerHeader
+            hidden={isSpoiler && !spoilerVisible}
+            onReveal={onRevealSpoiler}
+            onHide={isSpoiler && spoilerVisible ? onHideSpoiler : undefined}
+          >
+            {headerContent}
+          </SpoilerHeader>
+        </div>
+
+        {showThumbnail && (
+          <Link to={link} className="mt-3 block w-28 sm:mt-1 sm:w-40" aria-label={`${name} 상세 보기`}>
+            <img
+              src={imageUrl}
+              alt={`${name.replaceAll("\n", " ")} 썸네일`}
+              className="aspect-video w-full rounded-lg object-cover shadow-sm"
+              loading="lazy"
+              decoding="async"
+            />
+          </Link>
+        )}
+      </div>
 
       {/* 모집 정보 */}
       {recruitments && recruitments.length > 0 && (
@@ -291,20 +316,22 @@ export function ContentTimelineItem({
       {/* 댓글 */}
       {showComments && onCommentCreate && (
         <>
-          <ContentCommentView
-            comments={allComments}
-            summary={commentSummary}
-            unavailable={commentsUnavailable}
-            onClick={() => {
-              onCommentOpen?.();
-              setCommentEditing(true);
-            }}
-          />
+          <div className={(recruitments?.length ?? 0) === 0 ? "mt-3" : undefined}>
+            <ContentCommentView
+              comments={allComments}
+              summary={commentSummary}
+              unavailable={commentsUnavailable}
+              onClick={() => {
+                onCommentOpen?.();
+                setCommentEditing(true);
+              }}
+            />
+          </div>
 
           {commentEditing && !commentsUnavailable && (
             <BottomSheet
               Icon={ChatBubbleOvalLeftEllipsisIcon}
-              title="이벤트 의견"
+              title={contentType === "live" ? "공식 방송 의견" : "이벤트 의견"}
               onClose={() => setCommentEditing(false)}
             >
               <ContentCommentEditor

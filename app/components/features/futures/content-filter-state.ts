@@ -15,6 +15,7 @@ const legacyTypeMap: Partial<Record<string, EventType | RaidType>> = {
 };
 
 const allowedFilterTypes = new Set<EventType | RaidType>([
+  "live",
   "event",
   "immortal_event",
   "fes",

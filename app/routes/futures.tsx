@@ -597,6 +597,7 @@ export default function FutureContents() {
         return {
           ...common,
           name: common.raidInfo ? common.raidInfo.name : content.name,
+          imageUrl: content.imageUrl,
           recruitmentGroupUid: content.recruitmentGroupUid,
           recruitments: content.recruitments.length > 0 ? content.recruitments : undefined,
           showStudentAnalysisFeatureBanner: content.uid === studentAnalysisFeatureBannerContentUid,

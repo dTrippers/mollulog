@@ -77,6 +77,7 @@ export const difficultyLocale: Record<string, string> = {
 };
 
 export const eventTypeLocale: Record<EventType, string> = {
+  live: "공식 방송",
   event: "이벤트",
   immortal_event: "이벤트 상설화",
   mini_event: "미니 이벤트",
@@ -93,6 +94,7 @@ export const eventTypeLocale: Record<EventType, string> = {
 };
 
 export const timelineContentTypeLocale: Record<TimelineContentType, string> = {
+  live: "공식 방송",
   event: "이벤트",
   mini_event: "미니 이벤트",
   pickup: "픽업 모집",

@@ -9,8 +9,8 @@ import { contentTypeLocale } from "~/locales/ko";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import type { ContentTimelineProps } from "./ContentTimeline";
 import { getRecruitmentStudentCards, isContentHeaderLinked } from "./ContentTimelineItem";
-import { TimelineDateMarker } from "./TimelineDateMarker";
 import { groupContents } from "./content-timeline-grouping";
+import { TimelineDateMarker } from "./TimelineDateMarker";
 
 export type ContentTimelineCompactProps = {
   contents: ContentTimelineProps["contents"];
@@ -61,7 +61,8 @@ export default function ContentTimelineCompact({
   }
 
   const today = nowUtcIso();
-  const showsTerminalMarker = !!contents[contents.length - 1].until;
+  const terminalContent = contents.at(-1);
+  const showsTerminalMarker = !!terminalContent?.until && !terminalContent.endless;
   return (
     <div className="relative">
       <div
@@ -128,7 +129,7 @@ export default function ContentTimelineCompact({
 
       {showsTerminalMarker && (
         <TimelineDateMarker compact>
-          {`남은 미래시까지 D-${parseUtcTimestamp(contents[contents.length - 1].until ?? today).diff(parseUtcTimestamp(today), "day")}`}
+          {`남은 미래시까지 D-${parseUtcTimestamp(terminalContent.until ?? today).diff(parseUtcTimestamp(today), "day")}`}
         </TimelineDateMarker>
       )}
     </div>

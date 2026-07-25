@@ -1,9 +1,14 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
-import { getPostgresLatestPostTime, getPostgresNewsPosts, getPostgresPosts } from "~/db/postgres/posts";
+import {
+  getPostgresLatestPostTime,
+  getPostgresNewsPosts,
+  getPostgresPostByTimelineContentUid,
+  getPostgresPosts,
+} from "~/db/postgres/posts";
 
-function postRow(uid = "post-1", createdAt = "2026-07-14T00:00:00.000Z") {
-  return [1, uid, "제목", "본문", "news", new Date(createdAt), new Date(createdAt)];
+function postRow(uid = "post-1", createdAt = "2026-07-14T00:00:00.000Z", timelineContentUid: string | null = null) {
+  return [1, uid, "제목", "본문", "news", timelineContentUid, new Date(createdAt), new Date(createdAt)];
 }
 
 describe("PostgreSQL posts read", () => {
@@ -24,6 +29,7 @@ describe("PostgreSQL posts read", () => {
         title: "제목",
         content: "본문",
         board: "news",
+        timelineContentUid: null,
         createdAt: "2026-07-14T00:00:00.000Z",
         updatedAt: "2026-07-14T00:00:00.000Z",
       },
@@ -34,6 +40,33 @@ describe("PostgreSQL posts read", () => {
     expect(text).toContain('order by "posts"."created_at" desc, "posts"."uid" desc');
     expect(values).toEqual(["news"]);
     expect(client.end).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads the operationally unique post linked to a timeline content", async () => {
+    const client = {
+      connect: jest.fn(async () => undefined),
+      end: jest.fn(async () => undefined),
+      query: jest.fn(async () => ({
+        rows: [postRow("live-post", "2026-07-26T00:00:00.000Z", "live-stream-1")],
+        rowCount: 1,
+      })),
+    } as unknown as Client;
+
+    await expect(
+      getPostgresPostByTimelineContentUid(
+        { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive },
+        "live-stream-1",
+        { createClient: () => client },
+      ),
+    ).resolves.toMatchObject({
+      uid: "live-post",
+      timelineContentUid: "live-stream-1",
+    });
+
+    const [{ text }, values] = (client.query as jest.Mock).mock.calls[0] as [{ text: string }, unknown[]];
+    expect(text).toContain('where "posts"."timeline_content_uid" = $1');
+    expect(text).toContain('order by "posts"."created_at" desc, "posts"."uid" desc');
+    expect(values).toEqual(["live-stream-1", 1]);
   });
 
   it("preserves page clamping and uses one Hyperdrive connection for count and rows", async () => {

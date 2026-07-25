@@ -305,6 +305,7 @@ describe("getEventMetadata", () => {
     mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
 
     await expect(getEventMetadata(env, "main-story-timeline")).resolves.toMatchObject({
+      contentType: "main_story",
       contentUid: "main-story-part",
       shopContentUid: "linked-event",
       shopAvailable: true,
