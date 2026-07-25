@@ -1,6 +1,6 @@
 import { ArrowLeftIcon } from "@heroicons/react/16/solid";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { BottomSheet } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import PageLink, { type PageLinkProps } from "./PageLink";
@@ -20,6 +20,7 @@ type PageProps = {
   belowPanels?: React.ReactNode;
   links?: PageLinkProps[];
   contentWidth?: "narrow" | "full";
+  maxWidth?: "default" | "wide";
   layout?: "horizontal" | "vertical";
 
   backward?: {
@@ -63,14 +64,21 @@ export default function Page({
   belowPanels,
   links,
   contentWidth = "narrow",
+  maxWidth = "default",
   layout = "horizontal",
   backward,
   children,
 }: PageProps) {
+  const location = useLocation();
   const [openPanelIndex, setOpenPanelIndex] = useState<number | null>(null);
   const tabBarSentinelRef = useRef<HTMLDivElement>(null);
   const [isTabBarSticky, setIsTabBarSticky] = useState(false);
   const openPanel = openPanelIndex === null ? undefined : panels?.[openPanelIndex];
+
+  useEffect(() => {
+    void location.key;
+    setOpenPanelIndex(null);
+  }, [location.key]);
 
   useEffect(() => {
     const sentinel = tabBarSentinelRef.current;
@@ -87,7 +95,7 @@ export default function Page({
 
   return (
     <>
-      <div className={`flex flex-col ${layout === "horizontal" ? "lg:flex-row" : ""}`}>
+      <div data-page-max-width={maxWidth} className={`flex flex-col ${layout === "horizontal" ? "lg:flex-row" : ""}`}>
         <PageSidebar
           title={title}
           description={description}
@@ -144,7 +152,7 @@ function PageSidebar({
   belowPanels,
   links,
   layout = "horizontal",
-}: Omit<PageProps, "children" | "contentWidth">) {
+}: Omit<PageProps, "children" | "contentWidth" | "maxWidth">) {
   const isVertical = layout === "vertical";
   const containerClass = isVertical
     ? "relative z-20 shrink-0 w-full overflow-visible"

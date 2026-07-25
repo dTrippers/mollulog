@@ -11,14 +11,14 @@ import {
   pgOcrVideoInputsTable,
 } from "~/db/postgres/schema";
 import {
+  OCR_ALLOWED_VIDEO_CONTAINERS,
   OCR_CONTRACT_VERSION,
   OCR_DOWNLOAD_EXPIRES_SECONDS,
   OCR_JOB_PURGE_GRACE_DAYS,
   OCR_JOB_VISIBILITY_DAYS,
-  OCR_MAX_VIDEO_DIMENSION,
-  OCR_MAX_VIDEO_DURATION_SECONDS,
   OCR_QUOTA_WINDOW_DAYS,
   OCR_ROLLING_IMAGE_LIMIT,
+  OCR_ROLLING_VIDEO_LIMIT,
   OCR_STUDENT_VIDEO_CONTRACT_VERSION,
   OCR_TRAINING_CONSENT_VERSION,
   OCR_UPLOAD_EXPIRES_SECONDS,
@@ -65,6 +65,7 @@ export type OcrJobView = {
   video: {
     inputUid: string;
     filename: string;
+    contentType: string;
     status: string;
     error: { code: string; message: string } | null;
     evidenceAvailableUntil: string | null;
@@ -89,11 +90,16 @@ export type OcrUploadQuota = {
 };
 
 export class OcrQuotaExceededError extends Error {
-  constructor(readonly quota: OcrUploadQuota) {
+  constructor(
+    readonly quota: OcrUploadQuota,
+    kind: "image" | "video" = "image",
+  ) {
     super(
-      quota.remaining === 0
-        ? "최근 7일 동안 업로드할 수 있는 스크린샷 수를 모두 사용했어요"
-        : `현재 업로드할 수 있는 스크린샷은 ${quota.remaining}장이에요`,
+      kind === "video"
+        ? "최근 7일 동안 업로드할 수 있는 영상을 모두 사용했어요"
+        : quota.remaining === 0
+          ? "최근 7일 동안 업로드할 수 있는 스크린샷 수를 모두 사용했어요"
+          : `현재 업로드할 수 있는 스크린샷은 ${quota.remaining}장이에요`,
     );
     this.name = "OcrQuotaExceededError";
   }
@@ -116,8 +122,6 @@ export type OcrClaimResult =
         validation?: {
           allowedContainers: string[];
           allowedCodecs: string[];
-          maxDurationSeconds: number;
-          maxDimension: number;
         };
       };
       images?: Array<{ uid: string; filename: string; result: unknown }>;
@@ -216,39 +220,52 @@ async function createStudentVideoOcrJob(
   const rawInputPurgeAfter = new Date(now.getTime() + OCR_UPLOAD_EXPIRES_SECONDS * 1000);
   const objectKey = `ocr/${env.STAGE ?? "local"}/${jobUid}/${inputUid}`;
 
-  await withOcrDatabase(env, options, (db) =>
-    db.transaction(async (tx) => {
-      await tx.insert(pgOcrJobsTable).values({
-        uid: jobUid,
-        userId,
-        jobKind: "student_detail_video_v1",
-        status: "uploading",
-        generation: 1,
-        totalImages: 1,
-        expiresAt,
-        purgeAfter,
-        trainingConsentAt: input.trainingConsent ? now : null,
-        trainingConsentVersion: input.trainingConsent ? OCR_TRAINING_CONSENT_VERSION : null,
-      });
-      await tx.insert(pgOcrVideoInputsTable).values({
-        uid: inputUid,
-        jobUid,
-        objectKey,
-        originalFilename: input.video.filename,
-        contentType: input.video.contentType,
-        byteSize: input.video.byteSize,
-        inputSha256: input.video.sha256,
-        status: "pending_upload",
-        generation: 1,
-        rawInputPurgeAfter,
-      });
-    }),
+  const quota = await withOcrDatabase(env, options, (db) =>
+    withSerializableRetry(() =>
+      db.transaction(
+        async (tx) => {
+          const currentQuota = await readOcrVideoUploadQuota(tx, userId);
+          if (currentQuota.remaining === 0) throw new OcrQuotaExceededError(currentQuota, "video");
+          await tx.insert(pgOcrJobsTable).values({
+            uid: jobUid,
+            userId,
+            jobKind: "student_detail_video_v1",
+            status: "uploading",
+            generation: 1,
+            totalImages: 1,
+            expiresAt,
+            purgeAfter,
+            trainingConsentAt: input.trainingConsent ? now : null,
+            trainingConsentVersion: input.trainingConsent ? OCR_TRAINING_CONSENT_VERSION : null,
+          });
+          await tx.insert(pgOcrVideoInputsTable).values({
+            uid: inputUid,
+            jobUid,
+            objectKey,
+            originalFilename: input.video.filename,
+            contentType: input.video.contentType,
+            byteSize: input.video.byteSize,
+            inputSha256: input.video.sha256,
+            status: "pending_upload",
+            generation: 1,
+            rawInputPurgeAfter,
+          });
+          return applyQuotaUsage(
+            currentQuota,
+            1,
+            new Date(now.getTime() + OCR_QUOTA_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString(),
+          );
+        },
+        { isolationLevel: "serializable" },
+      ),
+    ),
   );
 
   return {
     jobUid,
     jobKind: "student_detail_video_v1" as const,
     expiresAt: expiresAt.toISOString(),
+    quota,
     video: {
       inputUid,
       filename: input.video.filename,
@@ -435,6 +452,7 @@ export async function getOcrJob(
         ? {
             inputUid: video.uid,
             filename: video.originalFilename,
+            contentType: video.contentType,
             status: video.status,
             error:
               video.lastErrorCode && video.lastErrorMessage
@@ -492,7 +510,11 @@ export async function getOcrUploadQuota(
   userId: number,
   options: OcrRepositoryOptions = {},
 ): Promise<OcrUploadQuota> {
-  return withOcrDatabase(env, options, (db) => readOcrUploadQuota(db, userId));
+  return withOcrDatabase(env, options, (db) =>
+    options.jobKind === "student_detail_video_v1"
+      ? readOcrVideoUploadQuota(db, userId)
+      : readOcrUploadQuota(db, userId),
+  );
 }
 
 export async function getOcrImageDownloadUrl(
@@ -745,10 +767,8 @@ export async function claimOcrTask(
       ...(task.type === "ocr.student_detail_video.recognize.v1"
         ? {
             validation: {
-              allowedContainers: ["mp4"],
+              allowedContainers: [...OCR_ALLOWED_VIDEO_CONTAINERS],
               allowedCodecs: ["h264", "hevc", "av1", "mpeg4"],
-              maxDurationSeconds: OCR_MAX_VIDEO_DURATION_SECONDS,
-              maxDimension: OCR_MAX_VIDEO_DIMENSION,
             },
           }
         : {}),
@@ -1390,8 +1410,33 @@ async function readOcrUploadQuota(db: OcrDatabase, userId: number): Promise<OcrU
   };
 }
 
-function applyQuotaUsage(quota: OcrUploadQuota, imageCount: number, reservationExpiresAt: string): OcrUploadQuota {
-  const used = quota.used + imageCount;
+async function readOcrVideoUploadQuota(db: OcrDatabase, userId: number): Promise<OcrUploadQuota> {
+  const now = new Date();
+  const createdSince = new Date(now.getTime() - OCR_QUOTA_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  const jobs = await db
+    .select({ createdAt: pgOcrJobsTable.createdAt })
+    .from(pgOcrJobsTable)
+    .where(
+      and(
+        eq(pgOcrJobsTable.userId, userId),
+        eq(pgOcrJobsTable.jobKind, "student_detail_video_v1"),
+        gt(pgOcrJobsTable.createdAt, createdSince),
+      ),
+    );
+  const nextAvailableAt = jobs.reduce<Date | null>((earliest, job) => {
+    const releasesAt = new Date(job.createdAt.getTime() + OCR_QUOTA_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    return !earliest || releasesAt < earliest ? releasesAt : earliest;
+  }, null);
+  return {
+    limit: OCR_ROLLING_VIDEO_LIMIT,
+    used: jobs.length,
+    remaining: Math.max(0, OCR_ROLLING_VIDEO_LIMIT - jobs.length),
+    nextAvailableAt: nextAvailableAt ? toIso(nextAvailableAt) : null,
+  };
+}
+
+function applyQuotaUsage(quota: OcrUploadQuota, usageCount: number, reservationExpiresAt: string): OcrUploadQuota {
+  const used = quota.used + usageCount;
   const nextAvailableAt =
     quota.nextAvailableAt && quota.nextAvailableAt < reservationExpiresAt
       ? quota.nextAvailableAt

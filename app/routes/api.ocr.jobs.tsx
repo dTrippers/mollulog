@@ -12,10 +12,14 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   if (!sensei) return data({ error: "로그인이 필요해요" }, { status: 401 });
   const requestedJobKind = new URL(request.url).searchParams.get("jobKind");
   const jobKind =
-    requestedJobKind === "student_detail_video_v1" ? "student_detail_video_v1" : "item_inventory_images_v1";
+    requestedJobKind === "all"
+      ? undefined
+      : requestedJobKind === "student_detail_video_v1"
+        ? "student_detail_video_v1"
+        : "item_inventory_images_v1";
   const [jobs, quota] = await Promise.all([
     listRecentOcrJobs(env, sensei.id, { ctx, jobKind }),
-    getOcrUploadQuota(env, sensei.id, { ctx }),
+    getOcrUploadQuota(env, sensei.id, { ctx, jobKind }),
   ]);
   const applications = await listSyncDraftsBySourceRefs(
     env,

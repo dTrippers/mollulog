@@ -3,20 +3,20 @@ export const OCR_STUDENT_VIDEO_CONTRACT_VERSION = "2";
 export const OCR_MAX_IMAGES = 30;
 export const OCR_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const OCR_MAX_JOB_BYTES = 120 * 1024 * 1024;
-export const OCR_MAX_VIDEO_BYTES = 512 * 1024 * 1024;
-export const OCR_MAX_VIDEO_DURATION_SECONDS = 10 * 60;
-export const OCR_MAX_VIDEO_DIMENSION = 4096;
+export const OCR_MAX_VIDEO_BYTES = 250 * 1024 * 1024;
 export const OCR_UPLOAD_EXPIRES_SECONDS = 15 * 60;
 export const OCR_DOWNLOAD_EXPIRES_SECONDS = 5 * 60;
 export const OCR_JOB_VISIBILITY_DAYS = 7;
 export const OCR_JOB_PURGE_GRACE_DAYS = 3;
 export const OCR_ROLLING_IMAGE_LIMIT = 30;
+export const OCR_ROLLING_VIDEO_LIMIT = 5;
 export const OCR_QUOTA_WINDOW_DAYS = 7;
 export const OCR_TRAINING_CONSENT_VERSION = "2026-07-23-v1";
 export const OCR_CANDIDATE_SELECTION_LIMIT = 5;
 
 export const OCR_ALLOWED_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
-export const OCR_ALLOWED_VIDEO_CONTENT_TYPES = ["video/mp4"] as const;
+export const OCR_ALLOWED_VIDEO_CONTENT_TYPES = ["video/mp4", "video/quicktime"] as const;
+export const OCR_ALLOWED_VIDEO_CONTAINERS = ["mp4", "mov"] as const;
 
 export type OcrJobKind = "item_inventory_images_v1" | "student_detail_video_v1";
 export type OcrTaskType = "ocr.image.recognize.v1" | "ocr.job.finalize.v1" | "ocr.student_detail_video.recognize.v1";
@@ -155,16 +155,28 @@ function parseOcrVideoUploadInput(value: unknown): OcrVideoUploadInput {
     throw new OcrPublicError("영상 파일명을 확인해주세요");
   }
   if (!OCR_ALLOWED_VIDEO_CONTENT_TYPES.includes(contentType as OcrVideoUploadInput["contentType"])) {
-    throw new OcrPublicError("MP4 영상만 제출할 수 있어요");
+    throw new OcrPublicError("MP4 또는 MOV 영상만 제출할 수 있어요");
+  }
+  const extension = filename.toLowerCase().match(/\.([^.]+)$/)?.[1];
+  if (
+    (contentType === "video/mp4" && extension !== "mp4") ||
+    (contentType === "video/quicktime" && extension !== "mov")
+  ) {
+    throw new OcrPublicError("영상 파일의 확장자와 형식을 확인해주세요");
   }
   if (!Number.isInteger(byteSize) || (byteSize as number) <= 0 || (byteSize as number) > OCR_MAX_VIDEO_BYTES) {
-    throw new OcrPublicError("영상은 512MB를 넘을 수 없어요");
+    throw new OcrPublicError("영상은 250MB를 넘을 수 없어요");
   }
   if (!/^[a-f0-9]{64}$/.test(sha256)) {
     throw new OcrPublicError("영상 파일 정보를 다시 확인해주세요");
   }
 
-  return { filename, contentType: "video/mp4", byteSize: byteSize as number, sha256 };
+  return {
+    filename,
+    contentType: contentType as OcrVideoUploadInput["contentType"],
+    byteSize: byteSize as number,
+    sha256,
+  };
 }
 
 function parseOcrUploadInput(value: unknown): OcrUploadInput {

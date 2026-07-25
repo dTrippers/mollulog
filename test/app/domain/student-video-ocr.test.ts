@@ -65,4 +65,29 @@ describe("student detail video result contract", () => {
       "지원하지 않는 학생 영상 인식 모델",
     );
   });
+
+  it("does not impose duration or resolution limits on valid video metadata", () => {
+    const result = JSON.parse(JSON.stringify(fixture));
+    result.video.width = 7680;
+    result.video.height = 4320;
+    result.video.fps = 30;
+    result.video.frameCount = 30 * 60 * 60;
+    result.video.durationSeconds = 60 * 60;
+
+    expect(parseStudentDetailVideoResult(result).video).toEqual(
+      expect.objectContaining({
+        width: 7680,
+        height: 4320,
+        durationSeconds: 60 * 60,
+      }),
+    );
+  });
+
+  it("accepts MOV container metadata", () => {
+    const result = JSON.parse(JSON.stringify(fixture));
+    result.video.filename = "student-roster.mov";
+    result.video.container = "mov";
+
+    expect(parseStudentDetailVideoResult(result).video.container).toBe("mov");
+  });
 });

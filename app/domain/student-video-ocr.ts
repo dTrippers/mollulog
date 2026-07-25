@@ -1,9 +1,4 @@
-import {
-  OCR_MAX_VIDEO_DIMENSION,
-  OCR_MAX_VIDEO_DURATION_SECONDS,
-  type OcrResultEnvelope,
-  OcrTaskResultRejectedError,
-} from "~/domain/ocr";
+import { OCR_ALLOWED_VIDEO_CONTAINERS, type OcrResultEnvelope, OcrTaskResultRejectedError } from "~/domain/ocr";
 
 export const STUDENT_VIDEO_RESULT_SCHEMA_VERSION = "student-detail-video-result.v1";
 export const SUPPORTED_STUDENT_VIDEO_MODEL_VERSIONS = ["0.1.0", "student-video-0.1.0"] as const;
@@ -210,9 +205,6 @@ function parseVideoMetadata(value: unknown): StudentDetailVideoResult["video"] {
   const video = asRecord(value, "영상 메타데이터");
   const width = parsePositiveInteger(video.width, "영상 너비");
   const height = parsePositiveInteger(video.height, "영상 높이");
-  if (width > OCR_MAX_VIDEO_DIMENSION || height > OCR_MAX_VIDEO_DIMENSION) {
-    throw new Error("영상 해상도는 4K를 넘을 수 없어요");
-  }
   const fps = parsePositiveNumber(video.fps, "영상 FPS");
   const frameCount = parsePositiveInteger(video.frameCount, "영상 프레임 수");
   const calculatedDuration = frameCount / fps;
@@ -221,15 +213,12 @@ function parseVideoMetadata(value: unknown): StudentDetailVideoResult["video"] {
   if (Math.abs(durationSeconds - calculatedDuration) > 1) {
     throw new Error("영상 길이와 프레임 메타데이터가 일치하지 않아요");
   }
-  if (durationSeconds > OCR_MAX_VIDEO_DURATION_SECONDS || calculatedDuration > OCR_MAX_VIDEO_DURATION_SECONDS + 1) {
-    throw new Error("영상 길이는 10분을 넘을 수 없어요");
-  }
   const codec = typeof video.codec === "string" ? video.codec.toLowerCase() : undefined;
   const container = typeof video.container === "string" ? video.container.toLowerCase() : undefined;
   if (codec && !["h264", "hevc", "av1", "mpeg4"].includes(codec)) {
     throw new Error("지원하지 않는 영상 codec이에요");
   }
-  if (container && container !== "mp4") {
+  if (container && !OCR_ALLOWED_VIDEO_CONTAINERS.includes(container as (typeof OCR_ALLOWED_VIDEO_CONTAINERS)[number])) {
     throw new Error("지원하지 않는 영상 container예요");
   }
 

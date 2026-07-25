@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { Sha256 } from "~/routes/scanner.student._components/sha256";
+import { Sha256 } from "~/routes/scanner._components/sha256";
 
 describe("student scanner streaming SHA-256", () => {
   it("matches standard vectors across arbitrary chunk boundaries", () => {

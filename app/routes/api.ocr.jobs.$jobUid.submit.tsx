@@ -14,7 +14,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   if (!params.jobUid) return data({ error: "OCR 작업 UID가 필요해요" }, { status: 400 });
   try {
     const job = await submitOcrJob(env, sensei.id, params.jobUid, { ctx });
-    const quota = await getOcrUploadQuota(env, sensei.id, { ctx });
+    const quota = await getOcrUploadQuota(env, sensei.id, { ctx, jobKind: job.jobKind });
     ctx.waitUntil(publishPendingOcrOutbox(env, 25, { ctx }));
     return data({ ...job, quota });
   } catch (error) {

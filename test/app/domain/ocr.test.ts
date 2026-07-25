@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   OCR_MAX_IMAGE_BYTES,
+  OCR_MAX_VIDEO_BYTES,
   OcrPublicError,
   parseOcrResultEnvelope,
   parseOcrTaskMessage,
@@ -57,6 +58,7 @@ describe("OCR contract validation", () => {
           byteSize: 1024,
           sha256: "a".repeat(64),
         },
+        trainingConsent: true,
       }),
     ).toEqual({
       jobKind: "student_detail_video_v1",
@@ -66,9 +68,47 @@ describe("OCR contract validation", () => {
         byteSize: 1024,
         sha256: "a".repeat(64),
       },
-      trainingConsent: false,
+      trainingConsent: true,
     });
     expect(() => parseOcrUploadRequest({ jobKind: "future" })).toThrow("현재 사용할 수 없어요");
+  });
+
+  it("accepts MOV student videos with the QuickTime content type", () => {
+    const video = {
+      filename: "students.MOV",
+      contentType: "video/quicktime" as const,
+      byteSize: 1024,
+      sha256: "a".repeat(64),
+    };
+
+    expect(parseOcrUploadRequest({ jobKind: "student_detail_video_v1", video })).toEqual(
+      expect.objectContaining({ video }),
+    );
+    expect(() =>
+      parseOcrUploadRequest({
+        jobKind: "student_detail_video_v1",
+        video: { ...video, contentType: "video/mp4" },
+      }),
+    ).toThrow("확장자와 형식");
+  });
+
+  it("limits student video uploads to 250MB", () => {
+    const video = {
+      filename: "students.mp4",
+      contentType: "video/mp4",
+      byteSize: OCR_MAX_VIDEO_BYTES,
+      sha256: "a".repeat(64),
+    };
+
+    expect(parseOcrUploadRequest({ jobKind: "student_detail_video_v1", video })).toEqual(
+      expect.objectContaining({ video }),
+    );
+    expect(() =>
+      parseOcrUploadRequest({
+        jobKind: "student_detail_video_v1",
+        video: { ...video, byteSize: OCR_MAX_VIDEO_BYTES + 1 },
+      }),
+    ).toThrow("250MB");
   });
 
   it("parses the video task type without changing image task parsing", () => {

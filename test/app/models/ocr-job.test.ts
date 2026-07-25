@@ -276,6 +276,29 @@ describe("PostgreSQL OCR control plane", () => {
     jest.useRealTimers();
   });
 
+  it("reports the rolling seven-day video quota separately", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
+    const createdAt = new Date("2026-07-18T00:00:00Z");
+    const { client } = createClient((sql, values) =>
+      sql.includes('select "created_at"') && values?.includes("student_detail_video_v1")
+        ? Array.from({ length: 4 }, () => [createdAt])
+        : [],
+    );
+
+    await expect(
+      getOcrUploadQuota(createEnv(), 7, {
+        createClient: () => client,
+        jobKind: "student_detail_video_v1",
+      }),
+    ).resolves.toEqual({
+      limit: 5,
+      used: 4,
+      remaining: 1,
+      nextAvailableAt: "2026-07-25T00:00:00.000Z",
+    });
+    jest.useRealTimers();
+  });
+
   it("rejects a job that would exceed the rolling image quota before issuing upload URLs", async () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
     const { client, query } = createClient((sql) =>
@@ -291,7 +314,7 @@ describe("PostgreSQL OCR control plane", () => {
             { filename: "one.png", contentType: "image/png", byteSize: 12, sha256: "a".repeat(64) },
             { filename: "two.png", contentType: "image/png", byteSize: 12, sha256: "b".repeat(64) },
           ],
-          trainingConsent: false,
+          trainingConsent: true,
         },
         { createClient: () => client },
       ),
@@ -358,7 +381,7 @@ describe("PostgreSQL OCR control plane", () => {
             byteSize: 1024,
             sha256: "b".repeat(64),
           },
-          trainingConsent: false,
+          trainingConsent: true,
         },
         { createClient: () => client },
       ),
@@ -374,6 +397,42 @@ describe("PostgreSQL OCR control plane", () => {
     expect(sql).toContain('insert into "ocr_jobs"');
     expect(sql).toContain('insert into "ocr_video_inputs"');
     expect(query.mock.calls.some(([, values]) => values?.includes("student_detail_video_v1"))).toBe(true);
+    expect(query.mock.calls.some(([, values]) => values?.includes("2026-07-23-v1"))).toBe(true);
+  });
+
+  it("rejects a sixth student video within the rolling seven-day window", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
+    const createdAt = new Date("2026-07-18T00:00:00Z");
+    const { client, query } = createClient((sql, values) =>
+      sql.includes('select "created_at"') && values?.includes("student_detail_video_v1")
+        ? Array.from({ length: 5 }, () => [createdAt])
+        : [],
+    );
+
+    await expect(
+      createOcrJob(
+        createEnv(),
+        7,
+        {
+          jobKind: "student_detail_video_v1",
+          video: {
+            filename: "students.mp4",
+            contentType: "video/mp4",
+            byteSize: 1024,
+            sha256: "b".repeat(64),
+          },
+          trainingConsent: false,
+        },
+        { createClient: () => client },
+      ),
+    ).rejects.toMatchObject({
+      message: "최근 7일 동안 업로드할 수 있는 영상을 모두 사용했어요",
+      quota: { limit: 5, used: 5, remaining: 0, nextAvailableAt: "2026-07-25T00:00:00.000Z" },
+    });
+    expect(query.mock.calls.some(([queryConfig]) => queryText(queryConfig).includes('insert into "ocr_jobs"'))).toBe(
+      false,
+    );
+    jest.useRealTimers();
   });
 
   it("verifies and queues one whole-video recognition task", async () => {
@@ -545,6 +604,9 @@ describe("PostgreSQL OCR control plane", () => {
           byteSize: 1024,
           sha256: "b".repeat(64),
           downloadUrl: expect.stringContaining("X-Amz-Signature"),
+          validation: expect.objectContaining({
+            allowedContainers: ["mp4", "mov"],
+          }),
         }),
       }),
     );

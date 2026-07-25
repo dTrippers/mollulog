@@ -1,14 +1,26 @@
-import { ArrowPathIcon, CheckCircleIcon, ClockIcon, FilmIcon, PlayIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, CheckCircleIcon, ClockIcon, FilmIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { Button, Callout, Checkbox, SectionCard, SubTitle } from "~/components/primitives";
-import { OCR_MAX_VIDEO_BYTES } from "~/domain/ocr";
+import { OCR_MAX_VIDEO_BYTES, type OcrVideoUploadInput } from "~/domain/ocr";
 import type {
   StudentDetailVideoResult,
   StudentVideoFieldName,
   StudentVideoFieldState,
 } from "~/domain/student-video-ocr";
 import { cn } from "~/lib/utils";
-import { sha256File } from "./sha256";
+import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
+import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
+import {
+  formatScannerBytes,
+  requestScannerJson,
+  ScannerApiRequestError,
+  type ScannerPhase,
+  toScannerErrorMessage,
+} from "../scanner._components/scanner-client";
+import { sha256File } from "../scanner._components/sha256";
+import type { ScannerUploadQuota } from "../scanner._components/UploadQuotaMeter";
+import { useScannerQuota } from "../scanner._components/useScannerQuota";
 
 type ApplyFieldName =
   | "tier"
@@ -67,6 +79,7 @@ type StudentVideoJob = {
   video: {
     inputUid: string;
     filename: string;
+    contentType: string;
     status: string;
     evidenceAvailableUntil: string | null;
   } | null;
@@ -79,11 +92,6 @@ type StudentVideoJob = {
   expiresAt: string;
 };
 
-type JobSummary = Pick<
-  StudentVideoJob,
-  "uid" | "jobKind" | "status" | "progress" | "application" | "createdAt" | "updatedAt" | "expiresAt"
->;
-
 type ReviewStudent = {
   included: boolean;
   confirmed: Record<ApplyFieldName, boolean>;
@@ -92,16 +100,26 @@ type ReviewStudent = {
 
 export type ReviewState = Record<string, ReviewStudent>;
 
+function getVideoContentType(file: File): OcrVideoUploadInput["contentType"] | null {
+  const extension = file.name.toLowerCase().match(/\.([^.]+)$/)?.[1];
+  if (extension === "mp4") return "video/mp4";
+  if (extension === "mov") return "video/quicktime";
+  return null;
+}
+
 export default function StudentScanner() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [file, setFile] = useState<File | null>(null);
-  const [job, setJob] = useState<StudentVideoJob | null>(null);
-  const [recentJobs, setRecentJobs] = useState<JobSummary[]>([]);
-  const [review, setReview] = useState<ReviewState>({});
-  const [phase, setPhase] = useState<"idle" | "uploading" | "waiting" | "review" | "applying" | "applied">("idle");
-  const [hashProgress, setHashProgress] = useState(0);
+  const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadQuota, setUploadQuota] = useScannerQuota("student_detail_video_v1", setError);
+  const [job, setJob] = useState<StudentVideoJob | null>(null);
+  const [review, setReview] = useState<ReviewState>({});
+  const [phase, setPhase] = useState<ScannerPhase>("idle");
+  const [hashProgress, setHashProgress] = useState(0);
   const [success, setSuccess] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const selectedJobUid = searchParams.get("job");
 
   const showJob = useCallback((next: StudentVideoJob) => {
     setJob(next);
@@ -119,17 +137,29 @@ export default function StudentScanner() {
   }, []);
 
   useEffect(() => {
-    requestJson<{ jobs: JobSummary[] }>("/api/ocr/jobs?jobKind=student_detail_video_v1")
-      .then(({ jobs }) => setRecentJobs(jobs))
-      .catch((loadError) => setError(toErrorMessage(loadError)));
-  }, []);
+    if (!selectedJobUid) {
+      setJob(null);
+      setReview({});
+      setPhase("idle");
+      return;
+    }
+    requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${selectedJobUid}`)
+      .then(showJob)
+      .catch((loadError) => {
+        setSearchParams({}, { replace: true });
+        setError(toScannerErrorMessage(loadError));
+      });
+  }, [selectedJobUid, setSearchParams, showJob]);
 
   useEffect(() => {
     if (phase !== "waiting" || !job) return;
     const timeout = window.setTimeout(() => {
-      requestJson<StudentVideoJob>(`/api/ocr/jobs/${job.uid}`)
-        .then(showJob)
-        .catch((pollError) => setError(toErrorMessage(pollError)));
+      requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${job.uid}`)
+        .then((next) => {
+          showJob(next);
+          notifyScannerJobsChanged();
+        })
+        .catch((pollError) => setError(toScannerErrorMessage(pollError)));
     }, 2000);
     return () => window.clearTimeout(timeout);
   }, [job, phase, showJob]);
@@ -138,13 +168,19 @@ export default function StudentScanner() {
 
   async function startRecognition() {
     if (!file) return;
+    const contentType = getVideoContentType(file);
+    if (!contentType) {
+      setError("MP4 또는 MOV 영상 한 개만 선택할 수 있어요.");
+      return;
+    }
     setError(null);
     setSuccess(null);
     setPhase("uploading");
     try {
       const sha256 = await sha256File(file, (processed) => setHashProgress(processed / file.size));
-      const created = await requestJson<{
+      const created = await requestScannerJson<{
         jobUid: string;
+        quota: ScannerUploadQuota;
         video: { uploadUrl: string };
       }>("/api/ocr/jobs", {
         method: "POST",
@@ -152,36 +188,31 @@ export default function StudentScanner() {
           jobKind: "student_detail_video_v1",
           video: {
             filename: file.name,
-            contentType: "video/mp4",
+            contentType,
             byteSize: file.size,
             sha256,
           },
-          trainingConsent: false,
+          trainingConsent: allowsTrainingDataUse,
         }),
       });
+      setUploadQuota(created.quota);
       const uploaded = await fetch(created.video.uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": "video/mp4" },
+        headers: { "Content-Type": contentType },
         body: file,
       });
       if (!uploaded.ok) throw new Error("영상 업로드에 실패했어요");
-      const submitted = await requestJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
+      const submitted = await requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
         method: "POST",
       });
       showJob(submitted);
-      setRecentJobs((current) => upsertJobSummary(current, submitted));
+      setSearchParams({ job: submitted.uid }, { replace: true });
+      setAllowsTrainingDataUse(false);
+      notifyScannerJobsChanged();
     } catch (uploadError) {
       setPhase("idle");
-      setError(toErrorMessage(uploadError));
-    }
-  }
-
-  async function openJob(jobUid: string) {
-    setError(null);
-    try {
-      showJob(await requestJson<StudentVideoJob>(`/api/ocr/jobs/${jobUid}`));
-    } catch (loadError) {
-      setError(toErrorMessage(loadError));
+      if (uploadError instanceof ScannerApiRequestError && uploadError.quota) setUploadQuota(uploadError.quota);
+      setError(toScannerErrorMessage(uploadError));
     }
   }
 
@@ -196,30 +227,32 @@ export default function StudentScanner() {
     setPhase("applying");
     setError(null);
     try {
-      const response = await requestJson<{ application: NonNullable<JobApplication> }>(
+      const response = await requestScannerJson<{ application: NonNullable<JobApplication> }>(
         `/api/ocr/jobs/${job.uid}/apply`,
         { method: "POST", body: JSON.stringify({ students }) },
       );
       setJob({ ...job, application: response.application });
-      setRecentJobs((current) =>
-        current.map((recent) => (recent.uid === job.uid ? { ...recent, application: response.application } : recent)),
-      );
       setPhase("applied");
       setSuccess(`${students.length}명의 선택한 성장도를 반영했어요.`);
+      notifyScannerJobsChanged();
     } catch (applyError) {
       setPhase("review");
-      setError(toErrorMessage(applyError));
+      setError(toScannerErrorMessage(applyError));
     }
   }
 
-  function selectFile(next: File | null) {
-    if (!next) return;
-    if (!next.name.toLowerCase().endsWith(".mp4") || (next.type && next.type !== "video/mp4")) {
-      setError("MP4 영상 한 개만 선택할 수 있어요.");
+  function selectFiles(candidates: File[]) {
+    if (candidates.length !== 1) {
+      setError("MP4 또는 MOV 영상 한 개만 선택할 수 있어요.");
+      return;
+    }
+    const [next] = candidates;
+    if (!getVideoContentType(next)) {
+      setError("MP4 또는 MOV 영상 한 개만 선택할 수 있어요.");
       return;
     }
     if (next.size <= 0 || next.size > OCR_MAX_VIDEO_BYTES) {
-      setError("영상은 512MB를 넘을 수 없어요.");
+      setError("영상은 250MB를 넘을 수 없어요.");
       return;
     }
     setFile(next);
@@ -240,56 +273,35 @@ export default function StudentScanner() {
       {error ? <Callout tone="destructive">{error}</Callout> : null}
       {success ? <Callout tone="success" Icon={CheckCircleIcon} description={success} /> : null}
 
-      <section>
-        <SubTitle
-          text="학생부 녹화 영상 업로드"
-          description="학생의 기본 정보 화면을 안정적으로 보여 준 뒤 다음 학생으로 넘긴 MP4를 첨부해 주세요"
-        />
-        <div className="space-y-5 rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-          <Callout
-            tone="info"
-            title="녹화 안내"
-            description="학생 순서와 필터는 자유입니다. 알림·화면 분할·편집 전환 효과를 피하고 가능하면 720p 이상으로 녹화해 주세요."
-          />
-          <div className="focus-within:rounded-lg focus-within:ring-2 focus-within:ring-ring/30">
-            <input
-              id="student-scanner-video"
-              type="file"
-              accept="video/mp4,.mp4"
-              className="sr-only"
-              disabled={phase !== "idle"}
-              onChange={(event) => {
-                selectFile(event.currentTarget.files?.[0] ?? null);
-                event.currentTarget.value = "";
-              }}
-            />
-            <label
-              htmlFor="student-scanner-video"
-              className={cn(
-                "flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/20 px-5 py-8 text-center transition-colors hover:border-primary/60 hover:bg-muted/40",
-                phase !== "idle" && "cursor-not-allowed opacity-60",
-              )}
-            >
-              <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <FilmIcon className="size-6" aria-hidden="true" />
-              </span>
-              <span className="mt-3 font-medium text-foreground">{file ? file.name : "MP4 영상을 선택하세요"}</span>
-              <span className="mt-1 text-sm text-muted-foreground">MP4 한 개 · 최대 512MB · 최대 10분 · 최대 4K</span>
-              {file ? (
-                <span className="mt-2 text-xs text-muted-foreground">
-                  {formatBytes(file.size)}
-                  {phase === "uploading" ? ` · 무결성 계산 ${Math.round(hashProgress * 100)}%` : ""}
-                </span>
-              ) : null}
-            </label>
-          </div>
-          <div className="flex justify-end">
-            <Button variant="primary" disabled={!file || phase !== "idle"} onClick={startRecognition}>
-              {phase === "uploading" ? "업로드 준비 중..." : "영상 인식 시작"}
-            </Button>
-          </div>
-        </div>
-      </section>
+      <ScannerUploadSection
+        title="학생 기본 정보 녹화 영상 업로드"
+        description="게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄운 후, 좌/우 화살표로 이동하는 화면을 녹화해주세요."
+        quota={uploadQuota}
+        quotaUnit="개"
+        quotaSubject="영상"
+        inputId="student-scanner-video"
+        accept="video/mp4,video/quicktime,.mp4,.mov"
+        selectionDisabled={phase !== "idle" || uploadQuota?.remaining === 0}
+        onFiles={selectFiles}
+        icon={<FilmIcon className="size-6" aria-hidden="true" />}
+        dropLabel={file ? file.name : "영상을 선택하거나 이곳에 끌어다 놓아주세요"}
+        helpText="MP4, MOV 파일 · 최대 250MB"
+        dropDetail={
+          file ? (
+            <span className="mt-2 text-xs text-muted-foreground">
+              {formatScannerBytes(file.size)}
+              {phase === "uploading" ? ` · 무결성 계산 ${Math.round(hashProgress * 100)}%` : ""}
+            </span>
+          ) : null
+        }
+        consentChecked={allowsTrainingDataUse}
+        consentDisabled={phase !== "idle"}
+        onConsentChange={setAllowsTrainingDataUse}
+        consentDataLabel="녹화 영상 데이터"
+        actionDisabled={!file || phase !== "idle" || !uploadQuota || uploadQuota.remaining === 0}
+        actionLabel={phase === "uploading" ? "업로드 준비 중..." : "인식 시작"}
+        onAction={startRecognition}
+      />
 
       {phase === "waiting" && job ? (
         <SectionCard title="영상을 인식하고 있어요" description="페이지를 닫아도 작업은 계속됩니다.">
@@ -311,29 +323,6 @@ export default function StudentScanner() {
           onSeek={seekEvidence}
           onApply={applyReview}
         />
-      ) : null}
-
-      {recentJobs.length > 0 ? (
-        <SectionCard title="최근 영상 인식 작업">
-          <div className="divide-y divide-border">
-            {recentJobs.map((recent) => (
-              <button
-                key={recent.uid}
-                type="button"
-                className="flex w-full items-center justify-between gap-4 py-3 text-left first:pt-0 last:pb-0"
-                onClick={() => openJob(recent.uid)}
-              >
-                <span>
-                  <span className="block text-sm font-medium">{formatJobDate(recent.createdAt)}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {statusLabel(recent.status)} · 완료 {recent.progress.completed}/{recent.progress.total}
-                  </span>
-                </span>
-                <PlayIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-              </button>
-            ))}
-          </div>
-        </SectionCard>
       ) : null}
     </div>
   );
@@ -378,7 +367,7 @@ function ReviewPanel({
         >
           {/* biome-ignore lint/a11y/useMediaCaption: Student detail screen recordings do not contain required spoken content. */}
           <video ref={videoRef} controls preload="metadata" className="max-h-96 w-full rounded-md bg-black">
-            <source src={`/api/ocr/jobs/${job.uid}/video`} type="video/mp4" />
+            <source src={`/api/ocr/jobs/${job.uid}/video`} type={job.video?.contentType} />
           </video>
         </SectionCard>
       ) : (
@@ -575,41 +564,6 @@ function fieldStateLabel(state: StudentVideoFieldState): string {
   }[state];
 }
 
-function statusLabel(status: string): string {
-  return (
-    {
-      queued: "대기 중",
-      processing: "인식 중",
-      review_ready: "검토 가능",
-      failed: "실패",
-    }[status] ?? status
-  );
-}
-
-function upsertJobSummary(current: JobSummary[], job: StudentVideoJob): JobSummary[] {
-  return [job, ...current.filter(({ uid }) => uid !== job.uid)].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-}
-
-async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  const body = (await response.json().catch(() => null)) as ({ error?: string } & T) | null;
-  if (!response.ok) throw new Error(body?.error ?? "요청을 처리하지 못했어요");
-  return body as T;
-}
-
-function toErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "요청을 처리하지 못했어요";
-}
-
-function formatBytes(bytes: number): string {
-  return `${(bytes / 1024 / 1024).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)}MB`;
-}
-
 function formatConfidence(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
@@ -621,15 +575,6 @@ function formatTimestamp(seconds: number): string {
 }
 
 function formatEvidenceExpiry(value: string): string {
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-}
-
-function formatJobDate(value: string): string {
   return new Intl.DateTimeFormat("ko-KR", {
     month: "numeric",
     day: "numeric",
