@@ -34,10 +34,15 @@ export function isGoogleSearchCrawler(userAgent: string | null): boolean {
 }
 
 export function isSenseiProfilePath(pathname: string): boolean {
-  try {
-    return /^\/@[^/]+(?:\/|$)/.test(decodeURIComponent(pathname));
-  } catch {
+  const usernameSegment = pathname.split("/", 2)[1];
+  if (!usernameSegment) {
     return false;
+  }
+
+  try {
+    return /^@.+$/.test(decodeURIComponent(usernameSegment));
+  } catch {
+    return /^@.+$/.test(usernameSegment) || /^%40.+$/i.test(usernameSegment);
   }
 }
 

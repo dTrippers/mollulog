@@ -1,19 +1,17 @@
-export { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "./content-rules";
+export type { ContentCommentSummary, NestedComment } from "./content-comment";
 export {
   contentComments,
-  getUserComments,
-  getContentComments,
-  getContentsComments,
-  getContentsCommentSummaries,
   createComment,
   createSubcomment,
-  updateComment,
   deleteComment,
   getCommentIdByUid,
-  pinComment,
-  unpinComment,
-  getPinnedComment,
+  getContentComments,
+  getContentsCommentSummaries,
+  getContentsComments,
   getNestedContentComments,
   nestComments,
+  pinComment,
+  unpinComment,
+  updateComment,
 } from "./content-comment";
-export type { ContentCommentSummary, NestedComment } from "./content-comment";
+export { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "./content-rules";

@@ -6,7 +6,7 @@ const ROUTES_DIRECTORY = join(process.cwd(), "app", "routes");
 const MODELS_DIRECTORY = join(process.cwd(), "app", "models");
 
 describe("profile route privacy guard", () => {
-  it("keeps every public @username data route behind getRouteSensei", () => {
+  it("keeps every public @username data route behind getRouteSensei as a coarse architecture backstop", () => {
     const unguardedRoutes = readdirSync(ROUTES_DIRECTORY)
       .filter((file) => file.startsWith("$username") && file.endsWith(".tsx"))
       .filter((file) => !file.includes(".edit."))
@@ -19,7 +19,7 @@ describe("profile route privacy guard", () => {
     expect(unguardedRoutes).toEqual([]);
   });
 
-  it("uses the shared profile policy in models that expose sensei identity", () => {
+  it("uses the shared profile policy in model files that expose sensei identity as a coarse architecture backstop", () => {
     const unguardedModels = readdirSync(MODELS_DIRECTORY)
       .filter((file) => file.endsWith(".ts"))
       .filter((file) => {

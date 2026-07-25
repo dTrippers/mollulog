@@ -8,8 +8,7 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
-import { type LoaderFunctionArgs, Outlet, type Params, useLocation, useParams, useRouteError } from "react-router";
-import { getActiveSensei } from "~/auth/authenticator.server";
+import { Outlet, type Params, useLocation, useParams, useRouteError } from "react-router";
 import { ErrorPage, Page, ServerErrorPage } from "~/components/features/layout";
 import { Title } from "~/components/primitives";
 import { routeError } from "~/lib/http-errors";
@@ -33,13 +32,6 @@ export async function getRouteSensei(env: Env, params: Params<string>, viewerUse
 
   return sensei;
 }
-
-export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const currentUser = await getActiveSensei(env, request);
-  await getRouteSensei(env, params, currentUser?.id);
-  return null;
-};
 
 export const ErrorBoundary = () => {
   const error = useRouteError();

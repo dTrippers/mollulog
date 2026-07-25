@@ -1,6 +1,13 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { serializeCommunityPostBlocks } from "~/models/community";
-import { getContentsCommentSummaries } from "~/models/content-comment";
+import { getContentsCommentSummaries, getContentsComments } from "~/models/content-comment";
+
+type SenseiRow = {
+  id: number;
+  username: string;
+  profileStudentId: string | null;
+  profileVisibility: "public" | "private";
+};
 
 type CommunityPostRow = {
   id: number;
@@ -15,8 +22,12 @@ type CommunityPostRow = {
 };
 
 type CommunityCommentRow = {
+  id?: number;
+  uid?: string;
   postUid: string;
   userId: number;
+  parentUid?: string | null;
+  body?: string;
   visibility: "public" | "private";
   createdAt: string;
 };
@@ -46,6 +57,7 @@ class FakeD1Statement {
 class FakeContentCommentD1Database {
   readonly posts: CommunityPostRow[] = [];
   readonly comments: CommunityCommentRow[] = [];
+  readonly senseis: SenseiRow[] = [];
   activeQueries = 0;
   maxConcurrentQueries = 0;
   queryDelayMs = 0;
@@ -70,12 +82,60 @@ class FakeContentCommentD1Database {
   selectRows(sql: string, params: unknown[]): unknown[][] {
     const normalizedSql = normalizeSql(sql);
 
+    if (normalizedSql.includes("from community_posts") && normalizedSql.includes("inner join senseis")) {
+      return this.filterPosts(params)
+        .filter((post) => this.isAuthorProfileVisible(post.userId, normalizedSql, params, "community_posts"))
+        .flatMap((post) => {
+          const sensei = this.senseis.find((candidate) => candidate.id === post.userId);
+          if (!sensei) {
+            return [];
+          }
+          return [
+            [
+              post.id,
+              post.uid,
+              post.subjectContentUid,
+              post.blocks,
+              post.visibility,
+              post.pinned,
+              post.createdAt,
+              sensei.username,
+              sensei.profileStudentId,
+            ],
+          ];
+        });
+    }
+
     if (normalizedSql.includes("from community_posts")) {
       const posts = this.filterPosts(params);
       if (normalizedSql.includes("blocks")) {
         return posts.filter((post) => post.pinned === 1).map((post) => [post.subjectContentUid, post.blocks]);
       }
       return posts.map((post) => [post.id, post.uid, post.userId, post.subjectContentUid, post.pinned, post.createdAt]);
+    }
+
+    if (normalizedSql.includes("from community_comments") && normalizedSql.includes("inner join senseis")) {
+      return this.filterComments(params)
+        .filter((comment) => this.isAuthorProfileVisible(comment.userId, normalizedSql, params, "community_comments"))
+        .flatMap((comment) => {
+          const sensei = this.senseis.find((candidate) => candidate.id === comment.userId);
+          if (!sensei) {
+            return [];
+          }
+          return [
+            [
+              comment.id ?? 0,
+              comment.uid ?? "",
+              comment.postUid,
+              comment.parentUid ?? null,
+              comment.body ?? "",
+              comment.visibility,
+              comment.createdAt,
+              sensei.username,
+              sensei.profileStudentId,
+            ],
+          ];
+        });
     }
 
     if (normalizedSql.includes("from community_comments")) {
@@ -120,6 +180,23 @@ class FakeContentCommentD1Database {
       return comment.visibility === "public" || (comment.visibility === "private" && comment.userId === userId);
     });
   }
+
+  private isAuthorProfileVisible(
+    authorUserId: number,
+    sql: string,
+    params: unknown[],
+    authorTable: "community_posts" | "community_comments",
+  ): boolean {
+    if (!sql.includes("senseis.profilevisibility")) {
+      return true;
+    }
+
+    const sensei = this.senseis.find((candidate) => candidate.id === authorUserId);
+    const hasOwnerException = sql.includes(`${authorTable}.userid = ?`);
+    return (
+      sensei?.profileVisibility === "public" || (hasOwnerException && params.some((param) => param === authorUserId))
+    );
+  }
 }
 
 function createEnv(db = new FakeContentCommentD1Database()): { db: FakeContentCommentD1Database; env: Env } {
@@ -145,6 +222,51 @@ function post(overrides: Partial<CommunityPostRow> & Pick<CommunityPostRow, "uid
 function normalizeSql(sql: string): string {
   return sql.replaceAll('"', "").replace(/\s+/g, " ").trim().toLowerCase();
 }
+
+describe("getContentsComments profile visibility", () => {
+  it("hides a private profile's posts and subcomments from others while keeping them visible to the owner", async () => {
+    const { db, env } = createEnv();
+    db.senseis.push(
+      {
+        id: 10,
+        username: "private-sensei",
+        profileStudentId: null,
+        profileVisibility: "private",
+      },
+      {
+        id: 20,
+        username: "public-sensei",
+        profileStudentId: "student-20",
+        profileVisibility: "public",
+      },
+    );
+    db.posts.push(
+      post({ uid: "post-1", userId: 10, subjectContentUid: "content-a" }),
+      post({ uid: "post-2", userId: 20, subjectContentUid: "content-a" }),
+    );
+    db.comments.push({
+      id: 101,
+      uid: "comment-1",
+      postUid: "post-2",
+      userId: 10,
+      body: "private profile subcomment",
+      visibility: "public",
+      createdAt: "2026-06-02T00:00:00.000Z",
+    });
+
+    const anonymousComments = await getContentsComments(env, ["content-a"]);
+    const otherUserComments = await getContentsComments(env, ["content-a"], 20);
+    const ownerComments = await getContentsComments(env, ["content-a"], 10);
+
+    expect(anonymousComments["content-a"].map((comment) => comment.sensei.username)).toEqual(["public-sensei"]);
+    expect(otherUserComments["content-a"].map((comment) => comment.sensei.username)).toEqual(["public-sensei"]);
+    expect(ownerComments["content-a"].map((comment) => comment.sensei.username)).toEqual([
+      "private-sensei",
+      "public-sensei",
+      "private-sensei",
+    ]);
+  });
+});
 
 describe("getContentsCommentSummaries", () => {
   it("counts visible comments and subcomments, detects recent activity, and returns pinned preview", async () => {

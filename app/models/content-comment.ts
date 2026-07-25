@@ -106,24 +106,6 @@ function commentAuthorProfileVisibilityFilter(userId?: number): SQLWrapper {
   return senseiProfileVisibilityFilter(userId, communityCommentsTable.userId);
 }
 
-export async function getUserComments(env: Env, userId: number): Promise<ContentComment[]> {
-  const db = drizzle(env.DB);
-  const rows = await db
-    .select({
-      id: communityPostsTable.id,
-      uid: communityPostsTable.uid,
-      subjectContentUid: communityPostsTable.subjectContentUid,
-      blocks: communityPostsTable.blocks,
-      visibility: communityPostsTable.visibility,
-      pinned: communityPostsTable.pinned,
-      createdAt: communityPostsTable.createdAt,
-    })
-    .from(communityPostsTable)
-    .where(and(eq(communityPostsTable.userId, userId), eq(communityPostsTable.postType, "event_opinion")));
-
-  return rows.map((row) => toContentCommentFromPost(row));
-}
-
 export async function getContentComments(
   env: Env,
   contentId: string,
@@ -608,49 +590,6 @@ export async function unpinComment(env: Env, userId: number, contentId: string):
         eq(communityPostsTable.pinned, 1),
       ),
     );
-}
-
-export async function getPinnedComment(
-  env: Env,
-  contentId: string,
-  userId: number,
-): Promise<ContentCommentWithSensei | null> {
-  const db = drizzle(env.DB);
-  const result = await db
-    .select({
-      id: communityPostsTable.id,
-      uid: communityPostsTable.uid,
-      subjectContentUid: communityPostsTable.subjectContentUid,
-      blocks: communityPostsTable.blocks,
-      visibility: communityPostsTable.visibility,
-      pinned: communityPostsTable.pinned,
-      createdAt: communityPostsTable.createdAt,
-      username: senseisTable.username,
-      profileStudentId: senseisTable.profileStudentId,
-    })
-    .from(communityPostsTable)
-    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
-    .where(
-      and(
-        eq(communityPostsTable.subjectContentUid, contentId),
-        eq(communityPostsTable.userId, userId),
-        eq(communityPostsTable.postType, "event_opinion"),
-        eq(communityPostsTable.pinned, 1),
-      ),
-    )
-    .get();
-
-  if (!result) {
-    return null;
-  }
-
-  return {
-    ...toContentCommentFromPost(result),
-    sensei: {
-      username: result.username,
-      profileStudentId: result.profileStudentId,
-    },
-  };
 }
 
 export type NestedComment = {
