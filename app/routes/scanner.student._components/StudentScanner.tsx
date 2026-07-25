@@ -29,6 +29,8 @@ import type {
   StudentVideoFieldState,
 } from "~/domain/student-video-ocr";
 import { cn } from "~/lib/utils";
+import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
+import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
 import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
 import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
 import {
@@ -215,14 +217,14 @@ export default function StudentScanner() {
   const [review, setReview] = useState<ReviewState>({});
   const [phase, setPhase] = useState<ScannerPhase>("idle");
   const [hashProgress, setHashProgress] = useState(0);
-  const [success, setSuccess] = useState<string | null>(null);
   const selectedJobUid = searchParams.get("job");
 
   const showJob = useCallback((next: StudentVideoJob) => {
     setJob(next);
     if (next.status === "review_ready" && next.result) {
-      setReview(createReviewState(next.result));
-      setPhase(next.application?.status === "applied" ? "applied" : "review");
+      const isApplied = next.application?.status === "applied";
+      setReview(isApplied ? {} : createReviewState(next.result));
+      setPhase(isApplied ? "applied" : "review");
       setError(null);
     } else if (["queued", "processing"].includes(next.status)) {
       setPhase("waiting");
@@ -269,7 +271,6 @@ export default function StudentScanner() {
       return;
     }
     setError(null);
-    setSuccess(null);
     setPhase("uploading");
     try {
       const sha256 = await sha256File(file, (processed) => setHashProgress(processed / file.size));
@@ -336,7 +337,6 @@ export default function StudentScanner() {
       );
       setJob({ ...job, application: response.application });
       setPhase("applied");
-      setSuccess(`${students.length}명의 성장도를 반영했어요.`);
       notifyScannerJobsChanged();
     } catch (applyError) {
       setPhase("review");
@@ -361,43 +361,58 @@ export default function StudentScanner() {
     setFile(next);
     setHashProgress(0);
     setError(null);
-    setSuccess(null);
+  }
+
+  function clearSelectedJob(confirmUnappliedResult = false) {
+    if (confirmUnappliedResult && !window.confirm("현재 인식 결과를 반영하지 않고 새 영상을 인식할까요?")) {
+      return;
+    }
+    setSearchParams({}, { replace: true });
+    setFile(null);
+    setJob(null);
+    setReview({});
+    setHashProgress(0);
+    setError(null);
+    setPhase("idle");
   }
 
   return (
     <div className="space-y-8 pb-12 pt-6 lg:pt-2">
       {error ? <Callout tone="destructive">{error}</Callout> : null}
-      {success ? <Callout tone="success" Icon={CheckCircleIcon} description={success} /> : null}
 
-      <ScannerUploadSection
-        title="학생 성장도 녹화 영상 업로드"
-        description="게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄운 후, 좌/우 화살표로 이동하는 화면을 녹화해주세요."
-        quota={uploadQuota}
-        quotaUnit="개"
-        quotaSubject="영상"
-        inputId="student-scanner-video"
-        accept="video/mp4,video/quicktime,.mp4,.mov"
-        selectionDisabled={phase !== "idle" || uploadQuota?.remaining === 0}
-        onFiles={selectFiles}
-        icon={<FilmIcon className="size-6" aria-hidden="true" />}
-        dropLabel={file ? file.name : "영상을 선택하거나 이곳에 끌어다 놓아주세요"}
-        helpText="MP4, MOV 파일 · 최대 250MB"
-        dropDetail={
-          file ? (
-            <span className="mt-2 text-xs text-muted-foreground">
-              {formatScannerBytes(file.size)}
-              {phase === "uploading" ? ` · 무결성 계산 ${Math.round(hashProgress * 100)}%` : ""}
-            </span>
-          ) : null
-        }
-        consentChecked={allowsTrainingDataUse}
-        consentDisabled={phase !== "idle"}
-        onConsentChange={setAllowsTrainingDataUse}
-        consentDataLabel="녹화 영상 데이터"
-        actionDisabled={!file || phase !== "idle" || !uploadQuota || uploadQuota.remaining === 0}
-        actionLabel={phase === "uploading" ? "업로드 준비 중..." : "인식 시작"}
-        onAction={startRecognition}
-      />
+      {!selectedJobUid ? (
+        <ScannerUploadSection
+          title="학생 성장도 녹화 영상 업로드"
+          description="게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄운 후, 좌/우 화살표로 이동하는 화면을 녹화해주세요."
+          quota={uploadQuota}
+          quotaUnit="개"
+          quotaSubject="영상"
+          inputId="student-scanner-video"
+          accept="video/mp4,video/quicktime,.mp4,.mov"
+          selectionDisabled={phase !== "idle" || uploadQuota?.remaining === 0}
+          onFiles={selectFiles}
+          icon={<FilmIcon className="size-6" aria-hidden="true" />}
+          dropLabel={file ? file.name : "영상을 선택하거나 이곳에 끌어다 놓아주세요"}
+          helpText="MP4, MOV 파일 · 최대 250MB"
+          dropDetail={
+            file ? (
+              <span className="mt-2 text-xs text-muted-foreground">
+                {formatScannerBytes(file.size)}
+                {phase === "uploading" ? ` · 무결성 계산 ${Math.round(hashProgress * 100)}%` : ""}
+              </span>
+            ) : null
+          }
+          consentChecked={allowsTrainingDataUse}
+          consentDisabled={phase !== "idle"}
+          onConsentChange={setAllowsTrainingDataUse}
+          consentDataLabel="녹화 영상 데이터"
+          actionDisabled={!file || phase !== "idle" || !uploadQuota || uploadQuota.remaining === 0}
+          actionLabel={phase === "uploading" ? "업로드 준비 중..." : "인식 시작"}
+          onAction={startRecognition}
+        />
+      ) : null}
+
+      {selectedJobUid && !job ? <ScannerJobSkeleton variant="student" /> : null}
 
       {phase === "waiting" && job ? (
         <SectionCard
@@ -411,7 +426,7 @@ export default function StudentScanner() {
         </SectionCard>
       ) : null}
 
-      {job?.status === "review_ready" && job.result ? (
+      {job?.status === "review_ready" && job.result && phase !== "applied" ? (
         <ReviewPanel
           key={job.uid}
           job={{ ...job, result: job.result }}
@@ -419,6 +434,16 @@ export default function StudentScanner() {
           phase={phase}
           onReviewChange={setReview}
           onApply={applyReview}
+          onStartNew={() => clearSelectedJob(true)}
+        />
+      ) : null}
+
+      {job?.status === "review_ready" && job.application?.status === "applied" ? (
+        <ScannerCompletionState
+          title="학생 성장도 반영이 완료됐어요"
+          description="새로운 영상을 인식하려면 아래 버튼을 눌러주세요."
+          actionLabel="새 영상 인식"
+          onStartNew={() => clearSelectedJob()}
         />
       ) : null}
     </div>
@@ -431,12 +456,14 @@ function ReviewPanel({
   phase,
   onReviewChange,
   onApply,
+  onStartNew,
 }: {
   job: StudentVideoJob & { result: StudentDetailVideoResult };
   review: ReviewState;
   phase: ScannerPhase;
   onReviewChange: React.Dispatch<React.SetStateAction<ReviewState>>;
   onApply: (remainingReviewStudentCount: number) => void;
+  onStartNew: () => void;
 }) {
   const [reviewFilterStudentUids, setReviewFilterStudentUids] = useState<string[] | null>(null);
   const [selectedPreview, setSelectedPreview] = useState<{
@@ -470,20 +497,25 @@ function ReviewPanel({
           text="인식 결과 검토"
           description={`${job.result.students.length}명 인식 · 미해결 필드 ${job.result.unresolvedCount}개`}
         />
-        <Button
-          size="sm"
-          variant={showReviewRequiredOnly ? "inverse" : "default"}
-          pressed={showReviewRequiredOnly}
-          className="gap-1.5"
-          onClick={() =>
-            setReviewFilterStudentUids((current) =>
-              current === null ? remainingReviewStudents.map(({ studentUid }) => studentUid) : null,
-            )
-          }
-        >
-          <FunnelIcon className="size-4 shrink-0" aria-hidden="true" />
-          <span>검토가 필요한 데이터만 보기</span>
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button size="sm" onClick={onStartNew}>
+            새 영상 인식
+          </Button>
+          <Button
+            size="sm"
+            variant={showReviewRequiredOnly ? "inverse" : "default"}
+            pressed={showReviewRequiredOnly}
+            className="gap-1.5"
+            onClick={() =>
+              setReviewFilterStudentUids((current) =>
+                current === null ? remainingReviewStudents.map(({ studentUid }) => studentUid) : null,
+              )
+            }
+          >
+            <FunnelIcon className="size-4 shrink-0" aria-hidden="true" />
+            <span>검토가 필요한 데이터만 보기</span>
+          </Button>
+        </div>
       </div>
 
       {unresolvedStudents.length > 0 ? (

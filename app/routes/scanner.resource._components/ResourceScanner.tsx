@@ -7,13 +7,7 @@ import {
   PopoverButton,
   PopoverPanel,
 } from "@headlessui/react";
-import {
-  ArrowPathIcon,
-  ArrowsPointingOutIcon,
-  CheckCircleIcon,
-  PhotoIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ArrowsPointingOutIcon, PhotoIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Button, Callout, HorizontalScroll, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
@@ -25,6 +19,8 @@ import {
   OCR_MAX_JOB_BYTES,
 } from "~/domain/ocr";
 import { cn } from "~/lib/utils";
+import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
+import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
 import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
 import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
 import {
@@ -116,7 +112,6 @@ export default function ResourceScanner() {
   const [highlightedReviewPosition, setHighlightedReviewPosition] = useState<number | null>(null);
   const [items, setItems] = useState<EditableItem[]>([]);
   const [candidateOverrides, setCandidateOverrides] = useState<Record<string, CandidateOverride>>({});
-  const [success, setSuccess] = useState<string | null>(null);
   const [isImageExpanded, setIsImageExpanded] = useState(false);
   const selectedJobUid = searchParams.get("job");
 
@@ -128,8 +123,9 @@ export default function ResourceScanner() {
     setIsImageExpanded(false);
     setCandidateOverrides({});
     if (next.status === "review_ready") {
-      setItems(toEditableItems(next));
-      setPhase(next.application?.status === "applied" ? "applied" : "review");
+      const isApplied = next.application?.status === "applied";
+      setItems(isApplied ? [] : toEditableItems(next));
+      setPhase(isApplied ? "applied" : "review");
       setError(null);
     } else if (["queued", "processing", "finalizing"].includes(next.status)) {
       setItems([]);
@@ -270,8 +266,12 @@ export default function ResourceScanner() {
     });
   }
 
-  function clearSelectedJob() {
+  function clearSelectedJob(confirmUnappliedResult = false) {
+    if (confirmUnappliedResult && !window.confirm("현재 인식 결과를 반영하지 않고 새 스크린샷을 인식할까요?")) {
+      return;
+    }
     setSearchParams({}, { replace: true });
+    setFiles([]);
     setJob(null);
     setItems([]);
     setSelectedSource(null);
@@ -280,7 +280,6 @@ export default function ResourceScanner() {
     setIsImageExpanded(false);
     setCandidateOverrides({});
     setError(null);
-    setSuccess(null);
     setPhase("idle");
   }
 
@@ -325,13 +324,11 @@ export default function ResourceScanner() {
     if (job) clearSelectedJob();
     setFiles(nextFiles);
     setError(null);
-    setSuccess(null);
   }
 
   async function startRecognition() {
     if (files.length === 0) return;
     setError(null);
-    setSuccess(null);
     setPhase("uploading");
     try {
       const descriptors = await Promise.all(
@@ -388,7 +385,6 @@ export default function ResourceScanner() {
   async function applyResult() {
     if (!job) return;
     setError(null);
-    setSuccess(null);
     setPhase("applying");
     try {
       const recognized = items
@@ -417,20 +413,21 @@ export default function ResourceScanner() {
         };
       });
       const selected = mergeApplyItems(recognized, manuallySelected);
-      await requestScannerJson<{ application: NonNullable<JobApplication> }>(`/api/ocr/jobs/${job.uid}/apply`, {
-        method: "POST",
-        body: JSON.stringify({ items: selected }),
-      });
-      setSearchParams({}, { replace: true });
-      setJob(null);
+      const response = await requestScannerJson<{ application: NonNullable<JobApplication> }>(
+        `/api/ocr/jobs/${job.uid}/apply`,
+        {
+          method: "POST",
+          body: JSON.stringify({ items: selected }),
+        },
+      );
+      setJob({ ...job, application: response.application });
       setItems([]);
       setSelectedSource(null);
       setHighlightedSources([]);
       setHighlightedReviewPosition(null);
       setIsImageExpanded(false);
       setCandidateOverrides({});
-      setPhase("idle");
-      setSuccess("아이템 수량을 반영했어요.");
+      setPhase("applied");
       notifyScannerJobsChanged();
     } catch (applyError) {
       setError(toScannerErrorMessage(applyError));
@@ -440,69 +437,68 @@ export default function ResourceScanner() {
 
   return (
     <div className="space-y-8 pb-12 pt-6 lg:pt-2">
-      <ScannerUploadSection
-        title="아이템 스크린샷 업로드"
-        description="게임 내 [메뉴] > [아이템] 페이지의 스크린샷을 첨부해주세요"
-        quota={uploadQuota}
-        quotaUnit="장"
-        quotaSubject="스크린샷"
-        inputId="resource-scanner-files"
-        accept={OCR_ALLOWED_CONTENT_TYPES.join(",")}
-        multiple
-        selectionDisabled={isFileSelectionDisabled}
-        onFiles={addFiles}
-        icon={<PhotoIcon className="size-6" aria-hidden="true" />}
-        dropLabel={files.length > 0 ? "스크린샷 더 추가하기" : "스크린샷을 선택하거나 이곳에 끌어다 놓아주세요"}
-        helpText="PNG, JPEG, WebP · 장당 10MB · 전체 120MB · 최대 30장"
-        consentChecked={allowsTrainingDataUse}
-        consentDisabled={isUploadLocked}
-        onConsentChange={setAllowsTrainingDataUse}
-        consentDataLabel="스크린샷 데이터"
-        actionDisabled={files.length === 0 || isUploadLocked || !uploadQuota || files.length > uploadQuota.remaining}
-        actionLabel={phase === "uploading" ? "업로드 중..." : "인식 시작"}
-        onAction={startRecognition}
-      >
-        {files.length > 0 ? (
-          <fieldset className="space-y-3">
-            <legend className="sr-only">선택한 스크린샷</legend>
-            <div className="flex items-center justify-between gap-3 text-sm">
-              <p className="font-medium text-foreground">선택한 스크린샷</p>
-              <p className="text-muted-foreground" aria-live="polite">
-                {files.length}장 · {formatScannerBytes(files.reduce((sum, file) => sum + file.size, 0))}
-              </p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {files.map((file, index) => (
-                <SelectedFilePreview
-                  key={`${file.name}-${file.size}-${file.lastModified}`}
-                  file={file}
-                  disabled={isUploadLocked}
-                  onRemove={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}
-                />
-              ))}
-            </div>
-          </fieldset>
-        ) : null}
-      </ScannerUploadSection>
-
-      {success ? <Callout tone="success" Icon={CheckCircleIcon} title={success} /> : null}
+      {!selectedJobUid ? (
+        <ScannerUploadSection
+          title="아이템 스크린샷 업로드"
+          description="게임 내 [메뉴] > [아이템] 페이지의 스크린샷을 첨부해주세요"
+          quota={uploadQuota}
+          quotaUnit="장"
+          quotaSubject="스크린샷"
+          inputId="resource-scanner-files"
+          accept={OCR_ALLOWED_CONTENT_TYPES.join(",")}
+          multiple
+          selectionDisabled={isFileSelectionDisabled}
+          onFiles={addFiles}
+          icon={<PhotoIcon className="size-6" aria-hidden="true" />}
+          dropLabel={files.length > 0 ? "스크린샷 더 추가하기" : "스크린샷을 선택하거나 이곳에 끌어다 놓아주세요"}
+          helpText="PNG, JPEG, WebP · 장당 10MB · 전체 120MB · 최대 30장"
+          consentChecked={allowsTrainingDataUse}
+          consentDisabled={isUploadLocked}
+          onConsentChange={setAllowsTrainingDataUse}
+          consentDataLabel="스크린샷 데이터"
+          actionDisabled={files.length === 0 || isUploadLocked || !uploadQuota || files.length > uploadQuota.remaining}
+          actionLabel={phase === "uploading" ? "업로드 중..." : "인식 시작"}
+          onAction={startRecognition}
+        >
+          {files.length > 0 ? (
+            <fieldset className="space-y-3">
+              <legend className="sr-only">선택한 스크린샷</legend>
+              <div className="flex items-center justify-between gap-3 text-sm">
+                <p className="font-medium text-foreground">선택한 스크린샷</p>
+                <p className="text-muted-foreground" aria-live="polite">
+                  {files.length}장 · {formatScannerBytes(files.reduce((sum, file) => sum + file.size, 0))}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {files.map((file, index) => (
+                  <SelectedFilePreview
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    file={file}
+                    disabled={isUploadLocked}
+                    onRemove={() => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}
+                  />
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+        </ScannerUploadSection>
+      ) : null}
 
       {error ? <Callout tone="destructive" title="처리 중 오류가 발생했어요" description={error} /> : null}
 
+      {selectedJobUid && !job ? <ScannerJobSkeleton variant="resource" /> : null}
+
       {job && phase === "waiting" ? <RecognitionProgressCard job={job} /> : null}
 
-      {phase === "review" || phase === "applying" || phase === "applied" ? (
+      {phase === "review" || phase === "applying" ? (
         <section>
-          <SubTitle text="결과 검토" description="인식 결과를 검토 후 반영 여부를 선택해주세요" />
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <SubTitle text="결과 검토" description="인식 결과를 검토 후 반영 여부를 선택해주세요" />
+            <Button size="sm" onClick={() => clearSelectedJob(true)}>
+              새 스크린샷 인식
+            </Button>
+          </div>
           <div className="space-y-4 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5">
-            {phase === "applied" ? (
-              <Callout
-                tone="success"
-                Icon={CheckCircleIcon}
-                title="이미 반영이 완료되었어요"
-                description="보유 수량을 갱신하려면 새로운 이미지를 업로드해주세요"
-              />
-            ) : null}
             {unknownCount > 0 ? (
               <Callout
                 tone="warning"
@@ -628,7 +624,7 @@ export default function ResourceScanner() {
                               rarity={job?.resourceRarities[override.itemUid]}
                               resourceRarities={job?.resourceRarities ?? {}}
                               resourceDescriptions={job?.resourceDescriptions ?? {}}
-                              disabled={phase === "applying" || phase === "applied"}
+                              disabled={phase === "applying"}
                               onHighlightChange={(highlighted) =>
                                 setReviewPositionHighlight(slot.position, highlighted)
                               }
@@ -658,7 +654,7 @@ export default function ResourceScanner() {
                             resourceDescriptions={job?.resourceDescriptions ?? {}}
                             hasCandidates={candidates.length > 0}
                             hasDuplicateVisualIdentity={hasDuplicateVisualIdentity}
-                            disabled={phase === "applying" || phase === "applied"}
+                            disabled={phase === "applying"}
                             onHighlightChange={(highlighted) => setReviewPositionHighlight(slot.position, highlighted)}
                             onSelectCandidate={(candidate) => {
                               if (pickerState) selectCandidate(pickerState, candidate);
@@ -674,8 +670,8 @@ export default function ResourceScanner() {
                           item={item}
                           currentQuantity={job?.currentQuantities[item.resource_uid] ?? 0}
                           rarity={job?.resourceRarities[item.resource_uid]}
-                          disabled={phase === "applying" || phase === "applied"}
-                          applied={phase === "applied"}
+                          disabled={phase === "applying"}
+                          applied={false}
                           onHighlightChange={(highlighted) => setReviewPositionHighlight(slot.position, highlighted)}
                           onToggle={() => {
                             setHighlightedSources(item.source_images);
@@ -709,17 +705,25 @@ export default function ResourceScanner() {
                 ) : null}
               </div>
             </div>
-            {phase !== "applied" ? (
-              <div className="flex justify-end">
-                <Button variant="primary" disabled={phase === "applying" || !hasChanges} onClick={applyResult}>
-                  {phase === "applying" ? "반영 중..." : "수량 반영"}
-                </Button>
-              </div>
-            ) : null}
+            <div className="flex justify-end">
+              <Button variant="primary" disabled={phase === "applying" || !hasChanges} onClick={applyResult}>
+                {phase === "applying" ? "반영 중..." : "수량 반영"}
+              </Button>
+            </div>
           </div>
         </section>
       ) : null}
-      {job && selectedImage ? (
+
+      {job?.status === "review_ready" && job.application?.status === "applied" ? (
+        <ScannerCompletionState
+          title="아이템 수량 반영이 완료됐어요"
+          description="새로운 스크린샷을 인식하려면 아래 버튼을 눌러주세요."
+          actionLabel="새 스크린샷 인식"
+          onStartNew={() => clearSelectedJob()}
+        />
+      ) : null}
+
+      {job && selectedImage && phase !== "applied" ? (
         <SourceImageDialog
           open={isImageExpanded}
           jobUid={job.uid}
