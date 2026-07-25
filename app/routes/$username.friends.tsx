@@ -2,6 +2,7 @@ import { SparklesIcon, UsersIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { ErrorPage } from "~/components/features/layout";
 import { FilterButtons, SubTitle } from "~/components/primitives";
 import { getFollowers, getFollowings } from "~/models/followership";
@@ -9,12 +10,13 @@ import type { Sensei } from "~/models/sensei";
 import { getRouteSensei } from "./$username";
 import SenseiList from "./$username.friends._components/SenseiList";
 
-export const loader = async ({ params, context }: LoaderFunctionArgs) => {
+export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const sensei = await getRouteSensei(env, params);
+  const currentUser = await getActiveSensei(env, request);
+  const sensei = await getRouteSensei(env, params, currentUser?.id);
   return {
-    following: await getFollowings(env, sensei.id),
-    followers: await getFollowers(env, sensei.id),
+    following: await getFollowings(env, sensei.id, currentUser?.id),
+    followers: await getFollowers(env, sensei.id, currentUser?.id),
   };
 };
 

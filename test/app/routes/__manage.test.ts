@@ -14,6 +14,7 @@ function makeSensei(overrides: Partial<Sensei>): Sensei {
     bio: null,
     active: true,
     role: "guest",
+    profileVisibility: "public",
     ...overrides,
   };
 }

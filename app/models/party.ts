@@ -6,7 +6,7 @@ import {
   type PartyInfoCommunityPostBlock,
   parseCommunityPostBlocks,
 } from "./community";
-import { getSenseisById, type Sensei, senseisTable } from "./sensei";
+import { getSenseisById, type Sensei, senseiProfileVisibilityFilter, senseisTable } from "./sensei";
 
 export type DBParty = {
   uid: string;
@@ -109,10 +109,12 @@ export async function getPartiesByRaidReference(
       blocks: communityPostsTable.blocks,
     })
     .from(communityPostsTable)
+    .innerJoin(senseisTable, eq(communityPostsTable.userId, senseisTable.id))
     .where(
       and(
         eq(communityPostsTable.postType, "guide"),
         eq(communityPostsTable.visibility, "public"),
+        senseiProfileVisibilityFilter(),
         eq(communityPostsTable.subjectRaidType, raidType),
         eq(communityPostsTable.subjectSeasonIndex, seasonIndex),
       ),

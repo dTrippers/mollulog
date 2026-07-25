@@ -21,8 +21,8 @@ export const meta: MetaFunction = ({ params }) => {
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
-  const sensei = await getRouteSensei(env, params);
   const currentUser = await getActiveSensei(env, request);
+  const sensei = await getRouteSensei(env, params, currentUser?.id);
   const me = sensei.username === currentUser?.username;
 
   const allStudents = await getAllStudents(env, true);

@@ -3,10 +3,10 @@ import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
 import { ArrowRightStartOnRectangleIcon, KeyIcon, LinkIcon } from "@heroicons/react/24/outline";
 import { type ElementType, useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
-import { Button, Input, SectionCard, Title } from "~/components/primitives";
+import { Button, Input, SectionCard, Title, Toggle } from "~/components/primitives";
 import { nowUtcIso } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
@@ -36,6 +36,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       bio: senseiData.bio,
       profileStudentId: senseiData.profileStudentId,
       friendCode: senseiData.friendCode,
+      profileVisibility: senseiData.profileVisibility,
       memberCode: senseiPrivacy?.memberCode ?? null,
     },
     allStudents: (await getAllStudents(env, true))
@@ -111,6 +112,11 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     const profileStudentId = toNullable(getOptionalString("profileStudentId"));
     const friendCodeInput = toNullable(getOptionalString("friendCode"));
     const friendCode = typeof friendCodeInput === "string" ? friendCodeInput.toUpperCase() : friendCodeInput;
+    const profileVisibility = formData.has("profilePrivate")
+      ? formData.get("profilePrivate") === "true"
+        ? "private"
+        : "public"
+      : undefined;
 
     if (!username) {
       return data<ActionData>({ intent, error: { username: "닉네임을 입력해주세요." } }, { status: 400 });
@@ -128,7 +134,13 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       return data<ActionData>({ intent, error: { friendCode: "친구 코드는 알파벳 8글자에요." } }, { status: 400 });
     }
 
-    const result = await updateSensei(env, sensei.id, { username, bio, profileStudentId, friendCode });
+    const result = await updateSensei(env, sensei.id, {
+      username,
+      bio,
+      profileStudentId,
+      friendCode,
+      profileVisibility,
+    });
     if (result.error) {
       return data<ActionData>({ intent, error: result.error }, { status: 400 });
     }
@@ -139,6 +151,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     if (bio !== undefined) sensei.bio = bio;
     if (profileStudentId !== undefined) sensei.profileStudentId = profileStudentId;
     if (friendCode !== undefined) sensei.friendCode = friendCode;
+    if (profileVisibility !== undefined) sensei.profileVisibility = profileVisibility;
     session.set(authenticator.sessionKey, sensei);
 
     return data<ActionData>(
@@ -176,6 +189,26 @@ function SaveSubmitButton({
       {isSaved && !isSubmitting ? <CheckCircleIcon className="size-4" /> : null}
       {isSubmitting ? "저장 중..." : isSaved ? "저장됨" : idleLabel}
     </Button>
+  );
+}
+
+function ProfileVisibilityField({ initialPrivate }: { initialPrivate: boolean }) {
+  const [privateProfile, setPrivateProfile] = useState(initialPrivate);
+
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold">프로필 공개 범위</p>
+      <p className="text-sm text-muted-foreground">프로필과 작성한 컨텐츠를 숨겨요.</p>
+      <div className="flex min-h-10 items-center">
+        <Toggle
+          name="profilePrivate"
+          label={privateProfile ? "비공개" : "공개"}
+          initialState={initialPrivate}
+          className="my-0"
+          onChange={setPrivateProfile}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -275,7 +308,7 @@ export default function EditProfile() {
     <div className="space-y-8">
       <Title text="프로필 관리" />
 
-      <SectionCard title="프로필 정보" description="프로필 정보는 다른 사람에게 표시돼요">
+      <SectionCard title="프로필 정보" description="프로필 정보와 공개 범위를 관리할 수 있어요">
         <Form
           method="put"
           className="space-y-6"
@@ -285,7 +318,12 @@ export default function EditProfile() {
           }}
         >
           <input type="hidden" name="intent" value="profile" />
-          <ProfileEditor students={allStudents} initialData={sensei} error={profileActionData?.error} />
+          <ProfileEditor
+            students={allStudents}
+            initialData={sensei}
+            profileVisibilityField={<ProfileVisibilityField initialPrivate={sensei.profileVisibility === "private"} />}
+            error={profileActionData?.error}
+          />
           <div className="flex justify-end">
             <SaveSubmitButton
               idleLabel="프로필 저장"

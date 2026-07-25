@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   isGoogleSearchCrawler,
+  isSenseiProfilePath,
   materializeReactSuspenseBoundaries,
   requiresSelfCanonical,
   stripExecutableScripts,
@@ -15,6 +16,19 @@ describe("Google search crawler SEO containment", () => {
     expect(isGoogleSearchCrawler("Mozilla/5.0 (compatible; Google-InspectionTool/1.0;)")).toBe(true);
     expect(isGoogleSearchCrawler("Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36")).toBe(false);
     expect(isGoogleSearchCrawler(null)).toBe(false);
+  });
+
+  it("recognizes every sensei profile path for noindex", () => {
+    expect(isSenseiProfilePath("/@someone")).toBe(true);
+    expect(isSenseiProfilePath("/@someone/")).toBe(true);
+    expect(isSenseiProfilePath("/@someone/timelines/example")).toBe(true);
+    expect(isSenseiProfilePath("/%40someone/students")).toBe(true);
+    expect(isSenseiProfilePath("/@someone/%E0%A4%A")).toBe(true);
+    expect(isSenseiProfilePath("/%40someone/%E0%A4%A")).toBe(true);
+    expect(isSenseiProfilePath("/%40some%ZZ/students")).toBe(true);
+    expect(isSenseiProfilePath("/students/@someone")).toBe(false);
+    expect(isSenseiProfilePath("/api/followerships")).toBe(false);
+    expect(isSenseiProfilePath("/%E0%A4%A")).toBe(false);
   });
 
   it("removes executable scripts while preserving JSON-LD", () => {

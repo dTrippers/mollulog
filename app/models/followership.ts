@@ -2,7 +2,7 @@ import { and, count, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import type { Sensei } from "./sensei";
-import { getSenseisById } from "./sensei";
+import { getVisibleSenseisById } from "./sensei";
 
 const followershipsTable = sqliteTable("followerships", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -97,8 +97,8 @@ export async function getFollowerIds(env: Env, followeeId: number): Promise<numb
   return result.map((each) => each.followerId);
 }
 
-export async function getFollowers(env: Env, followeeId: number): Promise<Sensei[]> {
-  return getSenseisById(env, await getFollowerIds(env, followeeId));
+export async function getFollowers(env: Env, followeeId: number, viewerId?: number): Promise<Sensei[]> {
+  return getVisibleSenseisById(env, await getFollowerIds(env, followeeId), viewerId);
 }
 
 export async function getFollowingIds(env: Env, followerId: number): Promise<number[]> {
@@ -110,6 +110,6 @@ export async function getFollowingIds(env: Env, followerId: number): Promise<num
   return result.map((each) => each.followeeId);
 }
 
-export async function getFollowings(env: Env, followerId: number): Promise<Sensei[]> {
-  return getSenseisById(env, await getFollowingIds(env, followerId));
+export async function getFollowings(env: Env, followerId: number, viewerId?: number): Promise<Sensei[]> {
+  return getVisibleSenseisById(env, await getFollowingIds(env, followerId), viewerId);
 }

@@ -27,7 +27,8 @@ function parsePage(request: Request) {
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const [sensei, currentUser] = await Promise.all([getRouteSensei(env, params), getActiveSensei(env, request)]);
+  const currentUser = await getActiveSensei(env, request);
+  const sensei = await getRouteSensei(env, params, currentUser?.id);
   const page = parsePage(request);
 
   const [followership, recruitedStudents, allReleasedStudents, feedPage] = await Promise.all([

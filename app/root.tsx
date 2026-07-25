@@ -25,7 +25,7 @@ import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "
 import { captureClientError } from "./lib/observability.client";
 import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
-import { isGoogleSearchCrawler } from "./lib/seo-crawler";
+import { isGoogleSearchCrawler, isSenseiProfilePath } from "./lib/seo-crawler";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
 
@@ -132,6 +132,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="mollulog:request-path" content={loaderData?.requestDiagnostics?.requestPath ?? ""} />
         <meta name="mollulog:render-path" content={location.pathname} />
         <meta name="mollulog:build-id" content={loaderData?.requestDiagnostics?.buildId ?? ""} />
+        {isSenseiProfilePath(location.pathname) ? <meta name="robots" content="noindex" /> : null}
         <meta
           name="mollulog:front-better-stack-sentry-dsn"
           content={loaderData?.publicEnv?.FRONT_BETTER_STACK_SENTRY_DSN ?? ""}

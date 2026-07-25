@@ -3,6 +3,7 @@ import {
   DocumentTextIcon,
   HeartIcon,
   IdentificationIcon,
+  LockClosedIcon,
   QueueListIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
@@ -12,11 +13,11 @@ import { ErrorPage, Page, ServerErrorPage } from "~/components/features/layout";
 import { Title } from "~/components/primitives";
 import { routeError } from "~/lib/http-errors";
 import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
-import { getSenseiByUsername, type Sensei } from "~/models/sensei";
+import { getSenseiByUsername, isSenseiProfileVisibleTo, type Sensei } from "~/models/sensei";
 
-export async function getRouteSensei(env: Env, params: Params<string>): Promise<Sensei> {
+export async function getRouteSensei(env: Env, params: Params<string>, viewerUserId?: number): Promise<Sensei> {
   const usernameParam = params.username;
-  if (!usernameParam || !usernameParam.startsWith("@")) {
+  if (!usernameParam?.startsWith("@")) {
     throw routeError(404, "sensei.not_found", "선생님을 찾을 수 없어요");
   }
 
@@ -24,6 +25,9 @@ export async function getRouteSensei(env: Env, params: Params<string>): Promise<
   const sensei = await getSenseiByUsername(env, username);
   if (!sensei) {
     throw routeError(404, "sensei.not_found", "선생님을 찾을 수 없어요", { username });
+  }
+  if (!isSenseiProfileVisibleTo(sensei, viewerUserId)) {
+    throw routeError(403, "sensei.profile_private", "이 프로필은 비공개예요", { username });
   }
 
   return sensei;
@@ -41,6 +45,23 @@ export const ErrorBoundary = () => {
     typeof details === "object" && details !== null && "username" in details && typeof details.username === "string"
       ? details.username
       : undefined;
+
+  if (normalized.code === "sensei.profile_private") {
+    return (
+      <div className="space-y-6">
+        {username && <Title text={`@${username}`} />}
+        <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-lg border border-border bg-card px-6 text-center">
+          <LockClosedIcon className="size-10 text-muted-foreground" />
+          <div>
+            <p className="text-lg font-semibold">비공개 프로필이에요</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              이 프로필의 정보와 작성한 콘텐츠는 본인만 볼 수 있어요.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>

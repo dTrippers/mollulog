@@ -25,8 +25,8 @@ export const meta: MetaFunction = ({ params }) => {
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const sensei = await getRouteSensei(env, params);
   const currentUser = await getActiveSensei(env, request);
+  const sensei = await getRouteSensei(env, params, currentUser?.id);
 
   const [favoritedStudents, futureContents, studentsMap] = await Promise.all([
     getUserFavoritedStudents(env, sensei.id, undefined, { ctx }),

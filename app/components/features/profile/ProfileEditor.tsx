@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { StudentSelectForm } from "~/components/features/forms";
 import { Input, Textarea } from "~/components/primitives";
 
@@ -19,6 +20,7 @@ type Profile = {
 type ProfileEditorProps = {
   students: ProfileStudent[];
   initialData?: Partial<Profile>;
+  profileVisibilityField?: ReactNode;
   error?: {
     username?: string;
     friendCode?: string;
@@ -26,10 +28,37 @@ type ProfileEditorProps = {
   };
 };
 
-export default function ProfileEditor({ students, initialData, error }: ProfileEditorProps) {
+export default function ProfileEditor({ students, initialData, profileVisibilityField, error }: ProfileEditorProps) {
   const initialProfileStudentId = initialData?.profileStudentId
     ? students.find(({ uid }) => initialData.profileStudentId === uid)?.uid
     : undefined;
+
+  const profileStudentField = (
+    <StudentSelectForm
+      label="프로필 학생"
+      name="profileStudentId"
+      description="학생을 프로필 이미지로 설정할 수 있어요"
+      students={students}
+      initialStudentUids={initialProfileStudentId ? [initialProfileStudentId] : undefined}
+      placeholder="프로필 학생 선택"
+      searchPlaceholder="학생 이름으로 검색"
+      className="max-w-none"
+      containerClassName="mt-0 mb-0"
+    />
+  );
+
+  const friendCodeField = (
+    <Input
+      label="친구 코드"
+      type="text"
+      name="friendCode"
+      defaultValue={initialData?.friendCode ?? undefined}
+      description="8자리 영문자"
+      placeholder="[소셜] > [친구] > [ID 카드] 에서 확인"
+      error={error?.friendCode}
+      className={profileVisibilityField ? "max-w-none" : "max-w-none md:max-w-md"}
+    />
+  );
 
   return (
     <div className="space-y-6">
@@ -45,29 +74,17 @@ export default function ProfileEditor({ students, initialData, error }: ProfileE
           required
           className="max-w-none"
         />
-        <StudentSelectForm
-          label="프로필 학생"
-          name="profileStudentId"
-          description="학생을 프로필 이미지로 설정할 수 있어요"
-          students={students}
-          initialStudentUids={initialProfileStudentId ? [initialProfileStudentId] : undefined}
-          placeholder="프로필 학생 선택"
-          searchPlaceholder="학생 이름으로 검색"
-          className="max-w-none"
-          containerClassName="mt-0 mb-0"
-        />
+        {profileVisibilityField ?? profileStudentField}
       </div>
 
-      <Input
-        label="친구 코드"
-        type="text"
-        name="friendCode"
-        defaultValue={initialData?.friendCode ?? undefined}
-        description="8자리 영문자"
-        placeholder="[소셜] > [친구] > [ID 카드] 에서 확인"
-        error={error?.friendCode}
-        className="max-w-none md:max-w-md"
-      />
+      {profileVisibilityField ? (
+        <div className="grid gap-6 md:grid-cols-2">
+          {profileStudentField}
+          {friendCodeField}
+        </div>
+      ) : (
+        friendCodeField
+      )}
 
       <Textarea
         label="자기소개"
