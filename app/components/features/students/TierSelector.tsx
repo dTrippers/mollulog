@@ -6,10 +6,17 @@ type TierSelectorProps = {
   initialTier: number;
   currentTier: number | null;
   iconSize?: "sm" | "md";
+  disabled?: boolean;
   onTierChange: (tier: number) => void;
 };
 
-export default function TierSelector({ initialTier, currentTier, iconSize = "md", onTierChange }: TierSelectorProps) {
+export default function TierSelector({
+  initialTier,
+  currentTier,
+  iconSize = "md",
+  disabled = false,
+  onTierChange,
+}: TierSelectorProps) {
   const [tier, setTier] = useState(currentTier);
   const iconSizeClass = iconSize === "sm" ? "size-4" : "size-5";
 
@@ -27,7 +34,7 @@ export default function TierSelector({ initialTier, currentTier, iconSize = "md"
   };
 
   return (
-    <div className="flex items-center">
+    <fieldset className="flex items-center" aria-label="성급 선택">
       {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((eachTier) => {
         const Icon = tier !== null && eachTier <= tier ? StarIconSolid : StarIconOutline;
 
@@ -53,13 +60,19 @@ export default function TierSelector({ initialTier, currentTier, iconSize = "md"
         }
 
         return (
-          <Icon
+          <button
             key={eachTier}
-            className={`${iconSizeClass} ${colorClasses.join(" ")} transition`}
+            type="button"
+            aria-label={eachTier <= 5 ? `${eachTier}성` : `고유무기 ${eachTier - 5}성`}
+            aria-pressed={tier === eachTier}
+            disabled={disabled || !selectable}
+            className="inline-flex cursor-pointer rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default"
             onClick={() => handleTierChange(eachTier)}
-          />
+          >
+            <Icon className={`${iconSizeClass} ${colorClasses.join(" ")} transition`} aria-hidden="true" />
+          </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }

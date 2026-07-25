@@ -72,11 +72,13 @@ export default function Page({
   const location = useLocation();
   const [openPanelIndex, setOpenPanelIndex] = useState<number | null>(null);
   const tabBarSentinelRef = useRef<HTMLDivElement>(null);
+  const previousLocationKeyRef = useRef(location.key);
   const [isTabBarSticky, setIsTabBarSticky] = useState(false);
   const openPanel = openPanelIndex === null ? undefined : panels?.[openPanelIndex];
 
   useEffect(() => {
-    void location.key;
+    if (previousLocationKeyRef.current === location.key) return;
+    previousLocationKeyRef.current = location.key;
     setOpenPanelIndex(null);
   }, [location.key]);
 

@@ -251,6 +251,7 @@ export const pgOcrJobsTable = pgTable(
   },
   (table) => [
     index("ocr_jobs_user_created_idx").on(table.userId, table.createdAt.desc()),
+    index("ocr_jobs_user_kind_created_idx").on(table.userId, table.jobKind, table.createdAt.desc()),
     index("ocr_jobs_status_updated_idx").on(table.status, table.updatedAt),
     index("ocr_jobs_purge_after_idx").on(table.purgeAfter),
   ],
@@ -286,10 +287,7 @@ export const pgOcrVideoInputsTable = pgTable(
   {
     id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
     uid: text().notNull().unique(),
-    jobUid: text("job_uid")
-      .notNull()
-      .unique()
-      .references(() => pgOcrJobsTable.uid, { onDelete: "cascade" }),
+    jobUid: text("job_uid").notNull().unique(),
     objectKey: text("object_key").notNull().unique(),
     originalFilename: text("original_filename").notNull(),
     contentType: text("content_type").notNull(),

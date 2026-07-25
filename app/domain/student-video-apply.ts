@@ -6,7 +6,6 @@ import {
 } from "~/domain/student-state";
 import {
   parseStudentDetailVideoResult,
-  type StudentDetailVideoResult,
   type StudentDetailVideoStudent,
   type StudentVideoFieldName,
 } from "~/domain/student-video-ocr";
@@ -45,7 +44,7 @@ export function buildStudentVideoSyncDraftEntries(
 ): SyncDraftCreateInput["entries"] {
   const result = parseStudentDetailVideoResult(rawResult);
   const resultByUid = new Map(result.students.map((student) => [student.studentUid, student]));
-  const students = parseApplyRequest(request, result, resultByUid, validStudentUids);
+  const students = parseApplyRequest(request, resultByUid, validStudentUids);
 
   return students.map(({ studentUid, current, confirmedFields }) => {
     const resultStudent = resultByUid.get(studentUid) as StudentDetailVideoStudent;
@@ -78,7 +77,6 @@ export function buildStudentVideoSyncDraftEntries(
 
 function parseApplyRequest(
   value: unknown,
-  _result: StudentDetailVideoResult,
   resultByUid: ReadonlyMap<string, StudentDetailVideoStudent>,
   validStudentUids: ReadonlySet<string>,
 ): ParsedStudentApply[] {

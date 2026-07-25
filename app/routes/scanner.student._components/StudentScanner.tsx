@@ -8,7 +8,7 @@ import {
   PhotoIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { StudentCard, TierSelector } from "~/components/features/students";
 import {
@@ -39,8 +39,9 @@ import {
   ScannerApiRequestError,
   type ScannerPhase,
   toScannerErrorMessage,
+  uploadScannerFile,
 } from "../scanner._components/scanner-client";
-import { sha256File } from "../scanner._components/sha256";
+import { sha256FileInWorker } from "../scanner._components/sha256-client";
 import type { ScannerUploadQuota } from "../scanner._components/UploadQuotaMeter";
 import { useScannerQuota } from "../scanner._components/useScannerQuota";
 
@@ -157,6 +158,7 @@ const fields: readonly FieldDefinition[] = [
 ] as const;
 
 const LOW_ACCURACY_THRESHOLD = 0.8;
+const TERMINAL_JOB_STATUSES = new Set(["failed", "cancelled", "expired"]);
 const BASIC_GROUP_GRID = "grid-cols-[10rem_repeat(3,minmax(0,1fr))]";
 
 type CurrentStudentState = Partial<Record<ApplyFieldName, number | null>> & {
@@ -207,6 +209,18 @@ function getVideoContentType(file: File): OcrVideoUploadInput["contentType"] | n
   return null;
 }
 
+function getTerminalJobTitle(status: string): string {
+  if (status === "cancelled") return "영상 인식 작업이 취소됐어요";
+  if (status === "expired") return "영상 인식 작업이 만료됐어요";
+  return "영상을 인식하지 못했어요";
+}
+
+function getTerminalJobDescription(status: string): string {
+  if (status === "cancelled") return "새 영상을 선택해 다시 인식을 시작해 주세요.";
+  if (status === "expired") return "보관 기간이 지난 작업이에요. 새 영상을 선택해 다시 시도해 주세요.";
+  return "녹화 안내를 확인한 뒤 새 영상으로 다시 시도해 주세요.";
+}
+
 export default function StudentScanner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [file, setFile] = useState<File | null>(null);
@@ -217,6 +231,8 @@ export default function StudentScanner() {
   const [review, setReview] = useState<ReviewState>({});
   const [phase, setPhase] = useState<ScannerPhase>("idle");
   const [hashProgress, setHashProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const pollAttemptRef = useRef(0);
   const selectedJobUid = searchParams.get("job");
 
   const showJob = useCallback((next: StudentVideoJob) => {
@@ -226,12 +242,15 @@ export default function StudentScanner() {
       setReview(isApplied ? {} : createReviewState(next.result));
       setPhase(isApplied ? "applied" : "review");
       setError(null);
-    } else if (["queued", "processing"].includes(next.status)) {
+    } else if (["queued", "processing", "finalizing"].includes(next.status)) {
       setPhase("waiting");
       setError(null);
-    } else if (next.status === "failed") {
+    } else if (TERMINAL_JOB_STATUSES.has(next.status)) {
       setPhase("idle");
-      setError("영상을 인식하지 못했어요. 녹화 안내를 확인한 뒤 다시 시도해 주세요.");
+      setError(null);
+    } else {
+      setPhase("idle");
+      setError("인식 작업 상태를 확인하지 못했어요. 새 영상으로 다시 시도해 주세요.");
     }
   }, []);
 
@@ -240,8 +259,10 @@ export default function StudentScanner() {
       setJob(null);
       setReview({});
       setPhase("idle");
+      pollAttemptRef.current = 0;
       return;
     }
+    pollAttemptRef.current = 0;
     requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${selectedJobUid}`)
       .then(showJob)
       .catch((loadError) => {
@@ -252,14 +273,20 @@ export default function StudentScanner() {
 
   useEffect(() => {
     if (phase !== "waiting" || !job) return;
+    const delay = Math.min(10_000, Math.round(2000 * 1.5 ** pollAttemptRef.current));
     const timeout = window.setTimeout(() => {
       requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${job.uid}`)
         .then((next) => {
+          pollAttemptRef.current += 1;
           showJob(next);
-          notifyScannerJobsChanged();
+          if (!["queued", "processing", "finalizing"].includes(next.status)) notifyScannerJobsChanged();
         })
-        .catch((pollError) => setError(toScannerErrorMessage(pollError)));
-    }, 2000);
+        .catch((pollError) => {
+          pollAttemptRef.current += 1;
+          setError(toScannerErrorMessage(pollError));
+          setJob((current) => (current ? { ...current } : current));
+        });
+    }, delay);
     return () => window.clearTimeout(timeout);
   }, [job, phase, showJob]);
 
@@ -272,8 +299,10 @@ export default function StudentScanner() {
     }
     setError(null);
     setPhase("uploading");
+    setHashProgress(0);
+    setUploadProgress(0);
     try {
-      const sha256 = await sha256File(file, (processed) => setHashProgress(processed / file.size));
+      const sha256 = await sha256FileInWorker(file, (processed) => setHashProgress(processed / file.size));
       const created = await requestScannerJson<{
         jobUid: string;
         quota: ScannerUploadQuota;
@@ -292,15 +321,16 @@ export default function StudentScanner() {
         }),
       });
       setUploadQuota(created.quota);
-      const uploaded = await fetch(created.video.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": contentType },
-        body: file,
+      await uploadScannerFile({
+        url: created.video.uploadUrl,
+        file,
+        contentType,
+        onProgress: (uploadedBytes) => setUploadProgress(uploadedBytes / file.size),
       });
-      if (!uploaded.ok) throw new Error("영상 업로드에 실패했어요");
       const submitted = await requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
         method: "POST",
       });
+      pollAttemptRef.current = 0;
       showJob(submitted);
       setSearchParams({ job: submitted.uid }, { replace: true });
       setAllowsTrainingDataUse(false);
@@ -318,19 +348,19 @@ export default function StudentScanner() {
       return;
     }
 
-    const { students } = buildStudentVideoApplyRequest(
-      job.result,
-      review,
-      new Set(Object.keys(job.studentCatalog ?? {})),
-    );
-    if (students.length === 0) {
-      setError("저장할 수 있는 학생 데이터가 없어요.");
-      return;
-    }
-
-    setPhase("applying");
     setError(null);
     try {
+      const { students } = buildStudentVideoApplyRequest(
+        job.result,
+        review,
+        new Set(Object.keys(job.studentCatalog ?? {})),
+      );
+      if (students.length === 0) {
+        setError("저장할 수 있는 학생 데이터가 없어요.");
+        return;
+      }
+
+      setPhase("applying");
       const response = await requestScannerJson<{ application: NonNullable<JobApplication> }>(
         `/api/ocr/jobs/${job.uid}/apply`,
         { method: "POST", body: JSON.stringify({ students }) },
@@ -364,7 +394,7 @@ export default function StudentScanner() {
   }
 
   function clearSelectedJob(confirmUnappliedResult = false) {
-    if (confirmUnappliedResult && !window.confirm("현재 인식 결과를 반영하지 않고 새 영상을 인식할까요?")) {
+    if (confirmUnappliedResult && !window.confirm("현재 인식 결과를 반영하지 않고 새 영상을 업로드할까요?")) {
       return;
     }
     setSearchParams({}, { replace: true });
@@ -372,6 +402,8 @@ export default function StudentScanner() {
     setJob(null);
     setReview({});
     setHashProgress(0);
+    setUploadProgress(0);
+    pollAttemptRef.current = 0;
     setError(null);
     setPhase("idle");
   }
@@ -396,9 +428,23 @@ export default function StudentScanner() {
           helpText="MP4, MOV 파일 · 최대 250MB"
           dropDetail={
             file ? (
-              <span className="mt-2 text-xs text-muted-foreground">
-                {formatScannerBytes(file.size)}
-                {phase === "uploading" ? ` · 무결성 계산 ${Math.round(hashProgress * 100)}%` : ""}
+              <span className="mt-2 flex flex-col items-center gap-1.5 text-xs text-muted-foreground">
+                <span>
+                  {formatScannerBytes(file.size)}
+                  {phase === "uploading"
+                    ? hashProgress < 1
+                      ? ` · 파일 확인 ${Math.round(hashProgress * 100)}%`
+                      : ` · 업로드 ${Math.round(uploadProgress * 100)}%`
+                    : ""}
+                </span>
+                {phase === "uploading" ? (
+                  <progress
+                    aria-label={hashProgress < 1 ? "영상 파일 확인 진행률" : "영상 업로드 진행률"}
+                    className="h-1.5 w-40 accent-primary"
+                    max={1}
+                    value={hashProgress < 1 ? hashProgress : uploadProgress}
+                  />
+                ) : null}
               </span>
             ) : null
           }
@@ -407,7 +453,13 @@ export default function StudentScanner() {
           onConsentChange={setAllowsTrainingDataUse}
           consentDataLabel="녹화 영상 데이터"
           actionDisabled={!file || phase !== "idle" || !uploadQuota || uploadQuota.remaining === 0}
-          actionLabel={phase === "uploading" ? "업로드 준비 중..." : "인식 시작"}
+          actionLabel={
+            phase === "uploading"
+              ? hashProgress < 1
+                ? "파일 확인 중..."
+                : `업로드 ${Math.round(uploadProgress * 100)}%`
+              : "인식 시작"
+          }
           onAction={startRecognition}
         />
       ) : null}
@@ -441,8 +493,18 @@ export default function StudentScanner() {
       {job?.status === "review_ready" && job.application?.status === "applied" ? (
         <ScannerCompletionState
           title="학생 성장도 반영이 완료됐어요"
-          description="새로운 영상을 인식하려면 아래 버튼을 눌러주세요."
-          actionLabel="새 영상 인식"
+          description="새로운 영상을 업로드하려면 아래 버튼을 눌러주세요."
+          actionLabel="새 영상 업로드"
+          onStartNew={() => clearSelectedJob()}
+        />
+      ) : null}
+
+      {job && TERMINAL_JOB_STATUSES.has(job.status) ? (
+        <ScannerCompletionState
+          tone="destructive"
+          title={getTerminalJobTitle(job.status)}
+          description={getTerminalJobDescription(job.status)}
+          actionLabel="새 영상 업로드"
           onStartNew={() => clearSelectedJob()}
         />
       ) : null}
@@ -499,7 +561,7 @@ function ReviewPanel({
         />
         <div className="flex flex-wrap justify-end gap-2">
           <Button size="sm" onClick={onStartNew}>
-            새 영상 인식
+            새 영상 업로드
           </Button>
           <Button
             size="sm"
@@ -576,43 +638,58 @@ function ReviewPanel({
                 }));
 
               return (
-                <tr key={student.studentUid} className="border-b border-border align-middle last:border-b-0">
-                  <th scope="row" className="sticky left-0 z-10 bg-card px-1 py-1.5 font-medium">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <div className="relative w-11 shrink-0">
-                        <StudentCard
-                          uid={catalogStudent?.uid ?? null}
-                          name={catalogStudent?.name ?? student.studentName}
-                          nameSize="small"
-                          namePlacement="overlay"
-                          flush
-                        />
-                        {reviewIssueCount > 0 ? (
-                          <span
-                            title={`${reviewIssueCount}개 확인 필요`}
-                            className="absolute -top-1.5 -right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-full border border-amber-500/50 bg-card/95 text-amber-500 shadow-sm shadow-black/25 backdrop-blur-sm dark:border-amber-400/40 dark:bg-muted/95 dark:text-amber-300"
-                          >
-                            <ExclamationTriangleIcon className="size-4" strokeWidth={2.25} aria-hidden="true" />
-                            <span className="sr-only">{reviewIssueCount}개 확인 필요</span>
-                          </span>
+                <tr
+                  key={student.studentUid}
+                  aria-disabled={!catalogStudent || undefined}
+                  className={cn(
+                    "border-b border-border align-middle last:border-b-0",
+                    !catalogStudent && "bg-muted/30",
+                  )}
+                >
+                  <th
+                    scope="row"
+                    className={cn("sticky left-0 z-10 bg-card px-1 py-1.5 font-medium", !catalogStudent && "bg-muted")}
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <div className="relative w-11 shrink-0">
+                          <StudentCard
+                            uid={catalogStudent?.uid ?? null}
+                            name={catalogStudent?.name ?? student.studentName}
+                            nameSize="small"
+                            namePlacement="overlay"
+                            flush
+                          />
+                          {reviewIssueCount > 0 ? (
+                            <span
+                              title={`${reviewIssueCount}개 확인 필요`}
+                              className="absolute -top-1.5 -right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-full border border-amber-500/50 bg-card/95 text-amber-500 shadow-sm shadow-black/25 backdrop-blur-sm dark:border-amber-400/40 dark:bg-muted/95 dark:text-amber-300"
+                            >
+                              <ExclamationTriangleIcon className="size-4" strokeWidth={2.25} aria-hidden="true" />
+                              <span className="sr-only">{reviewIssueCount}개 확인 필요</span>
+                            </span>
+                          ) : null}
+                        </div>
+                        {artifact ? (
+                          <HoverTooltip content="인식 화면 보기">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedPreview({
+                                  artifact,
+                                  studentName: catalogStudent?.name ?? student.studentName,
+                                })
+                              }
+                              aria-label={`${catalogStudent?.name ?? student.studentName} 인식 화면 보기`}
+                              className="inline-flex size-7 shrink-0 cursor-zoom-in items-center justify-center rounded-full text-muted-foreground/60 outline-none transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+                            >
+                              <PhotoIcon className="size-4" aria-hidden="true" />
+                            </button>
+                          </HoverTooltip>
                         ) : null}
                       </div>
-                      {artifact ? (
-                        <HoverTooltip content="인식 화면 보기">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setSelectedPreview({
-                                artifact,
-                                studentName: catalogStudent?.name ?? student.studentName,
-                              })
-                            }
-                            aria-label={`${catalogStudent?.name ?? student.studentName} 인식 화면 보기`}
-                            className="inline-flex size-7 shrink-0 cursor-zoom-in items-center justify-center rounded-full text-muted-foreground/60 outline-none transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
-                          >
-                            <PhotoIcon className="size-4" aria-hidden="true" />
-                          </button>
-                        </HoverTooltip>
+                      {!catalogStudent ? (
+                        <span className="text-xs font-semibold text-destructive">반영 불가</span>
                       ) : null}
                     </div>
                   </th>
@@ -623,7 +700,7 @@ function ReviewPanel({
                       student={student}
                       state={state}
                       currentState={job.currentStudentStates?.[student.studentUid]}
-                      disabled={phase === "applied"}
+                      disabled={phase === "applied" || !catalogStudent}
                       getInputProps={numberInputNavigation.getInputProps}
                       onValueChange={updateValue}
                     />
@@ -634,7 +711,7 @@ function ReviewPanel({
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
                     fields={skillFields}
-                    disabled={phase === "applied"}
+                    disabled={phase === "applied" || !catalogStudent}
                     getInputProps={numberInputNavigation.getInputProps}
                     onValueChange={updateValue}
                   />
@@ -644,7 +721,7 @@ function ReviewPanel({
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
                     fields={equipmentFields}
-                    disabled={phase === "applied"}
+                    disabled={phase === "applied" || !catalogStudent}
                     getInputProps={numberInputNavigation.getInputProps}
                     onValueChange={updateValue}
                   />
@@ -654,7 +731,7 @@ function ReviewPanel({
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
                     fields={abilityFields}
-                    disabled={phase === "applied"}
+                    disabled={phase === "applied" || !catalogStudent}
                     getInputProps={numberInputNavigation.getInputProps}
                     onValueChange={updateValue}
                   />
@@ -674,13 +751,13 @@ function ReviewPanel({
       <div className="sticky bottom-[var(--mobile-bottom-offset)] z-layer-navigation lg:bottom-4">
         <FloatingActionBar className="mx-3 flex items-center justify-between gap-4 p-4 md:mx-5">
           {remainingReviewStudents.length > 0 ? (
-            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-300">
-              <ExclamationTriangleIcon className="size-4.5 shrink-0" aria-hidden="true" />
+            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300">
+              <ExclamationTriangleIcon className="size-4 shrink-0" aria-hidden="true" />
               {remainingReviewStudents.length}명의 데이터 검토 필요
             </p>
           ) : (
-            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-300">
-              <CheckCircleIcon className="size-4.5 shrink-0" aria-hidden="true" />
+            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
+              <CheckCircleIcon className="size-4 shrink-0" aria-hidden="true" />
               모든 데이터 검토 완료
             </p>
           )}
@@ -823,8 +900,9 @@ function ReviewBasicGroup({
                 initialTier={initialTier}
                 currentTier={tierValue}
                 iconSize="sm"
+                disabled={disabled}
                 onTierChange={(tier) => {
-                  if (!disabled) onValueChange("tier", tier);
+                  onValueChange("tier", tier);
                 }}
               />
             </div>
@@ -1044,7 +1122,7 @@ function ReviewFieldMeta({
   return (
     <span
       className={cn(
-        "flex min-w-0 flex-col items-center px-0.5 text-center text-[10px] leading-3 text-muted-foreground",
+        "flex min-w-0 flex-col items-center px-0.5 text-center text-xs leading-3 text-muted-foreground",
         comparison === "same" && "opacity-50",
         comparison === "decreased" && "text-red-700 dark:text-red-300",
       )}

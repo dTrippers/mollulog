@@ -33,7 +33,7 @@ export function UploadQuotaMeter({
           : undefined
       }
     >
-      <div className="mb-1.5 flex items-center justify-between gap-2 text-[11px] leading-none">
+      <div className="mb-1.5 flex items-center justify-between gap-2 text-xs leading-none">
         <span>최근 7일</span>
         <span className="font-mono font-medium text-foreground">
           {quota.remaining}/{quota.limit}

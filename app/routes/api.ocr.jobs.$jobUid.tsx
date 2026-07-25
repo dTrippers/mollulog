@@ -31,9 +31,20 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         return data({ error: "인식 결과를 불러오지 못했어요. 잠시 후 다시 시도해 주세요." }, { status: 500 });
       }
     }
+    if (job.status !== "review_ready" || !result) {
+      return data({
+        ...job,
+        result,
+        currentStudentStates: {},
+        studentCatalog: {},
+        application: null,
+      });
+    }
+
+    const resultStudentUids = [...new Set(result.students.map(({ studentUid }) => studentUid))];
     const [recruitedStudents, relationshipLevels, draft, studentsMap] = await Promise.all([
-      getRecruitedStudents(env, sensei.id),
-      getRelationshipLevels(env, sensei.id),
+      getRecruitedStudents(env, sensei.id, resultStudentUids),
+      getRelationshipLevels(env, sensei.id, resultStudentUids),
       getSyncDraftBySourceRef(env, sensei.id, "first_party_ocr", job.uid),
       getAllStudentsMap(env, true),
     ]);

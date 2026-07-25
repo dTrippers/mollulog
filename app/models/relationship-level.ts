@@ -1,8 +1,10 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import { RELATIONSHIP_EXP_TABLE } from "./constants";
+
+const D1_IN_QUERY_CHUNK_SIZE = 90;
 
 export const relationshipLevelsTable = sqliteTable("user_relationship_levels", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -90,12 +92,36 @@ export function resolveRelationshipLevelInput(
   return { currentLevel, currentExp, targetLevel };
 }
 
-export async function getRelationshipLevels(env: Env, senseiId: number): Promise<RelationshipLevel[]> {
+export async function getRelationshipLevels(
+  env: Env,
+  senseiId: number,
+  studentIds?: readonly string[],
+): Promise<RelationshipLevel[]> {
+  if (studentIds?.length === 0) return [];
   const db = drizzle(env.DB);
-  const relationshipLevels = await db
-    .select()
-    .from(relationshipLevelsTable)
-    .where(eq(relationshipLevelsTable.userId, senseiId));
+  if (!studentIds) {
+    const relationshipLevels = await db
+      .select()
+      .from(relationshipLevelsTable)
+      .where(eq(relationshipLevelsTable.userId, senseiId));
+    return relationshipLevels.map(toModel);
+  }
+
+  const uniqueStudentIds = [...new Set(studentIds)];
+  const relationshipLevels: (typeof relationshipLevelsTable.$inferSelect)[] = [];
+  for (let offset = 0; offset < uniqueStudentIds.length; offset += D1_IN_QUERY_CHUNK_SIZE) {
+    const studentIdChunk = uniqueStudentIds.slice(offset, offset + D1_IN_QUERY_CHUNK_SIZE);
+    const chunkLevels = await db
+      .select()
+      .from(relationshipLevelsTable)
+      .where(
+        and(
+          eq(relationshipLevelsTable.userId, senseiId),
+          inArray(relationshipLevelsTable.studentId, studentIdChunk),
+        ),
+      );
+    relationshipLevels.push(...chunkLevels);
+  }
   return relationshipLevels.map(toModel);
 }
 

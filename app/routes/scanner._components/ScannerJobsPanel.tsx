@@ -30,8 +30,11 @@ export default function ScannerJobsPanel() {
   const [jobs, setJobs] = useState<ScannerJobSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const hasActiveJobs = useMemo(() => jobs.some((job) => ACTIVE_JOB_STATUSES.has(job.status)), [jobs]);
   const selectedJobUid = new URLSearchParams(location.search).get("job");
+  const hasBackgroundActiveJobs = useMemo(
+    () => jobs.some((job) => job.uid !== selectedJobUid && ACTIVE_JOB_STATUSES.has(job.status)),
+    [jobs, selectedJobUid],
+  );
 
   const loadJobs = useCallback(async () => {
     try {
@@ -55,10 +58,10 @@ export default function ScannerJobsPanel() {
   }, [loadJobs]);
 
   useEffect(() => {
-    if (!hasActiveJobs) return;
+    if (!hasBackgroundActiveJobs) return;
     const interval = window.setInterval(() => void loadJobs(), 3000);
     return () => window.clearInterval(interval);
-  }, [hasActiveJobs, loadJobs]);
+  }, [hasBackgroundActiveJobs, loadJobs]);
 
   if (isLoading) {
     return <ScannerJobsSkeleton />;

@@ -30,7 +30,7 @@ import {
   type ScannerPhase,
   toScannerErrorMessage,
 } from "../scanner._components/scanner-client";
-import { sha256File } from "../scanner._components/sha256";
+import { sha256FileNative } from "../scanner._components/sha256-client";
 import type { ScannerUploadQuota } from "../scanner._components/UploadQuotaMeter";
 import { useScannerQuota } from "../scanner._components/useScannerQuota";
 import { buildImageReviewSlots, type ReviewLayoutComponent } from "./resource-review-layout";
@@ -99,6 +99,20 @@ type CandidatePickerState = {
   observation: BatchObservation;
 };
 
+const TERMINAL_JOB_STATUSES = new Set(["failed", "cancelled", "expired"]);
+
+function getTerminalJobTitle(status: string): string {
+  if (status === "cancelled") return "스크린샷 인식 작업이 취소됐어요";
+  if (status === "expired") return "스크린샷 인식 작업이 만료됐어요";
+  return "스크린샷을 인식하지 못했어요";
+}
+
+function getTerminalJobDescription(status: string): string {
+  if (status === "cancelled") return "새 스크린샷을 선택해 다시 인식을 시작해 주세요.";
+  if (status === "expired") return "보관 기간이 지난 작업이에요. 새 스크린샷을 선택해 다시 시도해 주세요.";
+  return "실패한 이미지를 확인한 뒤 새 스크린샷으로 다시 시도해 주세요.";
+}
+
 export default function ResourceScanner() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [files, setFiles] = useState<File[]>([]);
@@ -131,9 +145,14 @@ export default function ResourceScanner() {
       setItems([]);
       setPhase("waiting");
       setError(null);
+    } else if (TERMINAL_JOB_STATUSES.has(next.status)) {
+      setItems([]);
+      setPhase("idle");
+      setError(null);
     } else {
       setItems([]);
       setPhase("idle");
+      setError("인식 작업 상태를 확인하지 못했어요. 새 스크린샷으로 다시 시도해 주세요.");
     }
   }, []);
 
@@ -165,10 +184,7 @@ export default function ResourceScanner() {
       try {
         const next = await requestScannerJson<JobStatus>(`/api/ocr/jobs/${job.uid}`);
         showJob(next);
-        notifyScannerJobsChanged();
-        if (["failed", "cancelled", "expired"].includes(next.status)) {
-          setError("인식 작업을 완료하지 못했어요. 실패한 이미지를 확인하고 다시 시도해 주세요.");
-        }
+        if (!["queued", "processing", "finalizing"].includes(next.status)) notifyScannerJobsChanged();
       } catch (pollError) {
         setError(toScannerErrorMessage(pollError));
         setJob((current) => (current ? { ...current } : current));
@@ -267,7 +283,7 @@ export default function ResourceScanner() {
   }
 
   function clearSelectedJob(confirmUnappliedResult = false) {
-    if (confirmUnappliedResult && !window.confirm("현재 인식 결과를 반영하지 않고 새 스크린샷을 인식할까요?")) {
+    if (confirmUnappliedResult && !window.confirm("현재 인식 결과를 반영하지 않고 새 스크린샷을 업로드할까요?")) {
       return;
     }
     setSearchParams({}, { replace: true });
@@ -336,7 +352,7 @@ export default function ResourceScanner() {
           filename: file.name,
           contentType: file.type,
           byteSize: file.size,
-          sha256: await sha256File(file),
+          sha256: await sha256FileNative(file),
         })),
       );
       const created = await requestScannerJson<{
@@ -491,11 +507,11 @@ export default function ResourceScanner() {
       {job && phase === "waiting" ? <RecognitionProgressCard job={job} /> : null}
 
       {phase === "review" || phase === "applying" ? (
-        <section>
+        <section className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <SubTitle text="결과 검토" description="인식 결과를 검토 후 반영 여부를 선택해주세요" />
             <Button size="sm" onClick={() => clearSelectedJob(true)}>
-              새 스크린샷 인식
+              새 스크린샷 업로드
             </Button>
           </div>
           <div className="space-y-4 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5">
@@ -717,8 +733,18 @@ export default function ResourceScanner() {
       {job?.status === "review_ready" && job.application?.status === "applied" ? (
         <ScannerCompletionState
           title="아이템 수량 반영이 완료됐어요"
-          description="새로운 스크린샷을 인식하려면 아래 버튼을 눌러주세요."
-          actionLabel="새 스크린샷 인식"
+          description="새로운 스크린샷을 업로드하려면 아래 버튼을 눌러주세요."
+          actionLabel="새 스크린샷 업로드"
+          onStartNew={() => clearSelectedJob()}
+        />
+      ) : null}
+
+      {job && TERMINAL_JOB_STATUSES.has(job.status) ? (
+        <ScannerCompletionState
+          tone="destructive"
+          title={getTerminalJobTitle(job.status)}
+          description={getTerminalJobDescription(job.status)}
+          actionLabel="새 스크린샷 업로드"
           onStartNew={() => clearSelectedJob()}
         />
       ) : null}

@@ -5,7 +5,7 @@ export default function FloatingActionBar({ className, ...props }: ComponentProp
   return (
     <div
       className={cn(
-        "rounded-lg border border-border bg-floating/95 text-floating-foreground shadow-2xl shadow-black/20 ring-1 ring-black/5 backdrop-blur-xl dark:border-white/15 dark:shadow-black/60 dark:ring-white/10",
+        "floating-surface rounded-lg border border-border bg-floating/95 text-floating-foreground shadow-lg shadow-black/10 backdrop-blur-xl dark:shadow-2xl dark:shadow-black/50 dark:ring-1 dark:ring-white/10",
         className,
       )}
       {...props}

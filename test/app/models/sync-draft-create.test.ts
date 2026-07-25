@@ -99,6 +99,47 @@ describe("first-party OCR sync draft creation", () => {
     expect(first.alreadyApplied).toBe(false);
     expect(retried.alreadyApplied).toBe(true);
   });
+
+  it("keeps overwrite semantics for non-OCR student state drafts", async () => {
+    const db = new ApplyingD1Database();
+    const input: SyncDraftCreateInput & { sourceRef: string } = {
+      source: "connect",
+      sourceRef: "connect-import",
+      type: "student_state",
+      entries: [
+        {
+          entryKey: "10000",
+          value: 7,
+          valueJson: JSON.stringify({
+            current: {
+              tier: 7,
+              bond: null,
+              level: null,
+              weaponLevel: 0,
+              skillEx: null,
+              skillNormal: null,
+              skillEnhanced: null,
+              skillSub: null,
+              equip1: null,
+              equip2: null,
+              equip3: null,
+              equipSpecial: null,
+              abilityHp: 0,
+              abilityAtk: 0,
+              abilityHeal: 0,
+            },
+            target: null,
+          }),
+        },
+      ],
+    };
+
+    await createAndApplySyncDraft({ DB: db as unknown as D1Database } as Env, 7, input);
+
+    const statement = db.statements.find((candidate) => candidate.sql.includes("insert into recruited_students"));
+    expect(statement?.sql).toContain("level = excluded.level");
+    expect(statement?.sql).not.toContain("level = coalesce");
+  });
 });
 
 type DraftRow = {

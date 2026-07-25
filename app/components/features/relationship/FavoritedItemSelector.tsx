@@ -617,7 +617,7 @@ function FavoriteLevelCardEditMode({
         <FloatingActionBar className="flex items-center justify-between gap-2 p-3">
           <div className="min-w-0 flex-1">
             {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
-            {saveSuccess && <p className="text-xs text-green-600 dark:text-green-400">저장 완료</p>}
+            {saveSuccess && <p className="text-xs text-green-700 dark:text-green-400">저장 완료</p>}
           </div>
           <div className="flex items-center gap-2">
             <Button size="xs" text="취소" onClick={onCancel} />

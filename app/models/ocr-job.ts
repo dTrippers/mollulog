@@ -153,7 +153,7 @@ export async function createOcrJob(
   const purgeAfter = new Date(expiresAt.getTime() + OCR_JOB_PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
   const rows = input.images.map((image) => {
     const uid = nanoid(16);
-    return { ...image, uid, objectKey: `ocr/${env.STAGE ?? "local"}/${jobUid}/${uid}` };
+    return { ...image, uid, objectKey: `ocr/${getOcrObjectStage(env)}/${jobUid}/${uid}` };
   });
 
   const quota = await withOcrDatabase(env, options, (db) =>
@@ -227,7 +227,7 @@ async function createStudentVideoOcrJob(
   const expiresAt = new Date(now.getTime() + OCR_JOB_VISIBILITY_DAYS * 24 * 60 * 60 * 1000);
   const purgeAfter = new Date(expiresAt.getTime() + OCR_JOB_PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
   const rawInputPurgeAfter = new Date(now.getTime() + OCR_UPLOAD_EXPIRES_SECONDS * 1000);
-  const objectKey = `ocr/${env.STAGE ?? "local"}/${jobUid}/${inputUid}`;
+  const objectKey = `ocr/${getOcrObjectStage(env)}/${jobUid}/${inputUid}`;
 
   const quota = await withOcrDatabase(env, options, (db) =>
     withSerializableRetry(() =>
@@ -390,7 +390,6 @@ async function submitStudentVideoOcrJob(
       const submittedAt = new Date();
       const expiresAt = new Date(submittedAt.getTime() + OCR_JOB_VISIBILITY_DAYS * 24 * 60 * 60 * 1000);
       const purgeAfter = new Date(expiresAt.getTime() + OCR_JOB_PURGE_GRACE_DAYS * 24 * 60 * 60 * 1000);
-      const rawInputPurgeAfter = new Date(submittedAt.getTime() + OCR_VIDEO_RAW_INPUT_GRACE_MS);
       await tx
         .update(pgOcrJobsTable)
         .set({ status: "queued", submittedAt, expiresAt, purgeAfter, updatedAt: submittedAt })
@@ -403,7 +402,7 @@ async function submitStudentVideoOcrJob(
         );
       await tx
         .update(pgOcrVideoInputsTable)
-        .set({ status: "queued", rawInputPurgeAfter, updatedAt: submittedAt })
+        .set({ status: "queued", rawInputPurgeAfter: purgeAfter, updatedAt: submittedAt })
         .where(and(eq(pgOcrVideoInputsTable.jobUid, jobUid), eq(pgOcrVideoInputsTable.status, "pending_upload")));
       await insertOutbox(tx, {
         type: "ocr.student_detail_video.recognize.v1",
@@ -706,7 +705,6 @@ export async function prepareOcrResultArtifacts(
           .values(
             missing.map((manifest) => {
               const uid = crypto.randomUUID();
-              const stage = (env.STAGE || "local").replace(/[^a-zA-Z0-9_-]/g, "_");
               return {
                 uid,
                 jobUid: task.taskUid,
@@ -716,7 +714,7 @@ export async function prepareOcrResultArtifacts(
                 studentUid: manifest.studentUid,
                 sourceFrame: manifest.sourceFrame,
                 timestampMs: Math.round(manifest.timestampSeconds * 1000),
-                objectKey: `ocr/${stage}/${task.taskUid}/artifacts/${task.generation}/${uid}.webp`,
+                objectKey: `ocr/${getOcrObjectStage(env)}/${task.taskUid}/artifacts/${task.generation}/${uid}.webp`,
                 contentType: manifest.contentType,
                 byteSize: manifest.byteSize,
                 sha256: manifest.sha256,
@@ -735,7 +733,15 @@ export async function prepareOcrResultArtifacts(
       const prepared = await tx
         .select()
         .from(pgOcrResultArtifactsTable)
-        .where(eq(pgOcrResultArtifactsTable.attemptUid, request.attemptUid));
+        .where(
+          and(
+            eq(pgOcrResultArtifactsTable.attemptUid, request.attemptUid),
+            inArray(
+              pgOcrResultArtifactsTable.studentUid,
+              request.artifacts.map(({ studentUid }) => studentUid),
+            ),
+          ),
+        );
       if (
         prepared.length !== request.artifacts.length ||
         prepared.some((row) => row.status !== "pending" || row.deletedAt)
@@ -1626,12 +1632,14 @@ export async function reconcileOcrJobs(
     ...expired.videos.flatMap(({ objectKey, deletedAt }) => (deletedAt ? [] : [objectKey])),
     ...expired.artifacts.flatMap(({ objectKey, deletedAt }) => (deletedAt ? [] : [objectKey])),
   ];
-  if (objectKeys.length > 0) await env.OCR_UPLOADS.delete(objectKeys);
+  await deleteR2Objects(env.OCR_UPLOADS, objectKeys);
 
   await withOcrDatabase(env, options, (db) =>
     db.transaction(async (tx) => {
       const taskUids = [...jobUids, ...imageUids, ...videoUids];
       await tx.delete(pgOcrOutboxTable).where(inArray(pgOcrOutboxTable.aggregateUid, taskUids));
+      await tx.delete(pgOcrResultArtifactsTable).where(inArray(pgOcrResultArtifactsTable.jobUid, jobUids));
+      await tx.delete(pgOcrVideoInputsTable).where(inArray(pgOcrVideoInputsTable.jobUid, jobUids));
       await tx
         .delete(pgOcrJobsTable)
         .where(and(inArray(pgOcrJobsTable.uid, jobUids), lt(pgOcrJobsTable.purgeAfter, new Date())));
@@ -1981,6 +1989,16 @@ function sha256HexToBase64(value: string): string {
   const bytes = value.match(/.{2}/g)?.map((pair) => Number.parseInt(pair, 16));
   if (bytes?.length !== 32) throw new Error("SHA-256 값을 확인해주세요");
   return btoa(String.fromCharCode(...bytes));
+}
+
+async function deleteR2Objects(bucket: R2Bucket, objectKeys: string[]): Promise<void> {
+  for (let offset = 0; offset < objectKeys.length; offset += 1000) {
+    await bucket.delete(objectKeys.slice(offset, offset + 1000));
+  }
+}
+
+function getOcrObjectStage(env: Pick<Env, "STAGE">): string {
+  return (env.STAGE ?? "local").replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
 function bytesToHex(bytes: Uint8Array): string {
