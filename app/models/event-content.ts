@@ -33,6 +33,7 @@ export async function getEventMetadata(env: Env, timelineUid: string, ctx?: Exec
 
   return {
     name: content.name,
+    contentType: content.contentType,
     runType: content.runType,
     since: content.startAt,
     until: content.endAt,

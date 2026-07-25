@@ -3,6 +3,7 @@ import { selectTimelineContentName } from "~/domain/timeline-content-name-i18n";
 import type { UtcIsoString } from "~/lib/date-time";
 
 export type TimelineContentType =
+  | "live"
   | "event"
   | "mini_event"
   | "pickup"

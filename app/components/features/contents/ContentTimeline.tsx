@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, formatInstantDateKey, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import type { EventType, RaidType } from "~/models/content.d";
+import { COMMENT_ENABLED_WITHOUT_RECRUITMENT_CONTENT_TYPES } from "~/models/content-rules";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import type { ContentTimelineFeatureBannerId, ContentTimelineItemProps } from "./ContentTimelineItem";
 import { ContentTimelineItem } from "./ContentTimelineItem";
@@ -29,6 +30,7 @@ function parseDismissedFeatureBannerIds(value: string | null): ContentTimelineFe
 export type ContentTimelineProps = {
   contents: {
     name: string;
+    imageUrl?: string | null;
     since: UtcIsoString;
     until: UtcIsoString | null;
     endless: boolean;
@@ -151,6 +153,7 @@ export default function ContentTimeline({
   }
 
   const today = nowUtcIso();
+  const terminalContent = contents.at(-1);
   return (
     <>
       {contentGroups.map((group) => {
@@ -182,7 +185,10 @@ export default function ContentTimeline({
               </div>
               <div className="min-w-0 flex-1 pl-3 pb-4 md:pl-5 md:pb-8">
                 {group.contents.map((content) => {
-                  const showComments = !!onCommentCreate && !!content.recruitments && content.recruitments.length > 0;
+                  const showComments =
+                    !!onCommentCreate &&
+                    ((content.recruitments?.length ?? 0) > 0 ||
+                      COMMENT_ENABLED_WITHOUT_RECRUITMENT_CONTENT_TYPES.includes(content.contentType));
                   const spoilerVisible = !content.isSpoiler || revealedSpoilerContentUids.includes(content.uid);
                   return (
                     <ContentTimelineItem
@@ -277,11 +283,11 @@ export default function ContentTimeline({
         );
       })}
 
-      {contents[contents.length - 1].until && (
+      {terminalContent && !terminalContent.endless && terminalContent.until && (
         <div className="flex items-center">
           <div className="inline-block size-3 bg-neutral-500 dark:bg-neutral-400 rounded-full" />
           <span className="mx-2 md:mx-4 font-bold text-neutral-500 dark:text-neutral-400 text-sm ">
-            {`남은 미래시까지 D-${parseUtcTimestamp(contents[contents.length - 1].until ?? today).diff(parseUtcTimestamp(today), "day")}`}
+            {`남은 미래시까지 D-${parseUtcTimestamp(terminalContent.until).diff(parseUtcTimestamp(today), "day")}`}
           </span>
         </div>
       )}

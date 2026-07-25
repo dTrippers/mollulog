@@ -50,6 +50,11 @@ export default function ContentFilterPanel({ filter, onFilterChange }: ContentFi
       active: filter.types.includes("pickup"),
       onToggle: (activated: boolean) => onToggleType(activated, ["pickup"]),
     },
+    {
+      text: "공식 방송",
+      active: filter.types.includes("live"),
+      onToggle: (activated: boolean) => onToggleType(activated, ["live"]),
+    },
   ];
 
   const contentFilterProps = [

@@ -11,6 +11,7 @@ export type Post = {
   title: string;
   content: string;
   board: string;
+  timelineContentUid: string | null;
   createdAt: UtcIsoString;
   updatedAt: UtcIsoString;
 };
@@ -38,6 +39,7 @@ export function toPost(row: PostgresPostRow): Post {
     title: row.title,
     content: row.content,
     board: row.board,
+    timelineContentUid: row.timelineContentUid,
     createdAt: toUtcIso(row.createdAt),
     updatedAt: toUtcIso(row.updatedAt),
   };
@@ -122,6 +124,27 @@ export async function getPostgresNewsPosts(
         totalCount,
         totalPages,
       };
+    },
+    options,
+  );
+}
+
+export async function getPostgresPostByTimelineContentUid(
+  env: Pick<Env, "HYPERDRIVE">,
+  timelineContentUid: string,
+  options: PostgresPostsOptions = {},
+): Promise<Post | null> {
+  return withPostsDatabase(
+    env,
+    "get_by_timeline_content_uid",
+    async (db) => {
+      const [row] = await db
+        .select()
+        .from(pgPostsTable)
+        .where(eq(pgPostsTable.timelineContentUid, timelineContentUid))
+        .orderBy(desc(pgPostsTable.createdAt), desc(pgPostsTable.uid))
+        .limit(1);
+      return row ? toPost(row) : null;
     },
     options,
   );

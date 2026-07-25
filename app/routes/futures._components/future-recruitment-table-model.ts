@@ -1,15 +1,20 @@
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
 import {
-  type UtcIsoString,
   compareInstantAsc,
   formatInstant,
   formatInstantDateKey,
   getInstantTime,
   normalizeTimeZone,
+  type UtcIsoString,
 } from "~/lib/date-time";
 import dayjs from "~/lib/dayjs";
-import { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES, SHOW_LINK_RAID_TYPES } from "~/models/content-rules";
 import type { EventType, RaidType, Role } from "~/models/content.d";
+import {
+  CONTENT_ORDER,
+  SHOW_LINK_CONTENT_TYPES,
+  SHOW_LINK_RAID_TYPES,
+  TIMELINE_ONLY_CONTENT_TYPES,
+} from "~/models/content-rules";
 
 export type FutureRecruitmentTableRecruitment = {
   recruitmentType: RecruitmentTypeEnum;
@@ -186,7 +191,7 @@ function isEventContent(content: FutureRecruitmentTableContent): boolean {
 }
 
 function isHeldContent(content: FutureRecruitmentTableContent): boolean {
-  return content.contentType !== "pickup";
+  return content.contentType !== "pickup" && !TIMELINE_ONLY_CONTENT_TYPES.includes(content.contentType);
 }
 
 function getContentOrderIndex(content: FutureRecruitmentTableContent): number {
