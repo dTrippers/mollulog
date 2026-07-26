@@ -1,49 +1,255 @@
-import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
-import { BarsArrowDownIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useState } from "react";
-import { useOutletContext } from "react-router";
-import { RaidStatisticsSlotCount } from "~/components/features/raids";
+import { ChartBarIcon } from "@heroicons/react/24/outline";
+import { useEffect, useState } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { data, useLoaderData } from "react-router";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { RecruitmentHistories } from "~/components/features/students";
-import { Callout, EmptyView, FilterButtons, LoadingSkeleton, SubTitle } from "~/components/primitives";
-import type { Defense } from "~/graphql/graphql";
-import { compareInstantAsc, compareInstantDesc, getInstantTime, type UtcIsoString } from "~/lib/date-time";
+import { Button, Callout, EmptyView, LoadingSkeleton, SubTitle } from "~/components/primitives";
+import { isStudentNotFoundError } from "~/lib/baql/errors";
+import { withD1Session } from "~/lib/d1-session";
+import { toUtcIso } from "~/lib/date-time";
+import { routeError } from "~/lib/http-errors";
+import { getLogger } from "~/lib/observability.server";
 import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/lib/ranks/stats";
-import { fetchStudentAnalysis, type StudentAnalysisSynergyPartner } from "~/lib/ranks/student-analysis";
-import type { RaidType, Terrain } from "~/models/content.d";
-import { getMaxTierAt } from "~/models/student";
-import type { StudentDetailPageContext } from "./students.$id";
-import StudentBossUsageChart from "./students.$id._components/StudentBossUsageChart";
-import StudentDifficultyUsageChart from "./students.$id._components/StudentDifficultyUsageChart";
+import { getAllRaidSchedules } from "~/models/raid";
 import {
-  aggregateBossUsage,
-  aggregateDifficultyUsage,
-  buildStudentAnalysisScopeLookup,
-  type StudentBossUsageSummary,
-  type StudentDifficultyUsage,
-} from "./students.$id._components/StudentDifficultyUsageModel";
+  getRecruitedStudents,
+  type RecruitedStudentCurrentStateInput,
+  upsertRecruitedStudentState,
+} from "~/models/recruited-student";
+import { getRelationshipLevels, upsertRelationshipLevel } from "~/models/relationship-level";
+import { getStudentDetailData, getStudentVariantIdentity } from "~/models/student";
+import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
+import { getTagCountsByStudent } from "~/models/student-grading-tag";
+import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
+import { getStudentRelevantTimelineContents } from "./students.$id";
+import StudentBasicInfo from "./students.$id._components/StudentBasicInfo";
 import StudentGradingChart from "./students.$id._components/StudentGradingChart";
-import StudentRaidInvestmentChart from "./students.$id._components/StudentRaidInvestmentChart";
-import StudentRaidSummaryCard from "./students.$id._components/StudentRaidSummaryCard";
-import {
-  buildStudentRaidInvestment,
-  buildStudentRaidSummary,
-} from "./students.$id._components/StudentRaidSummaryModel";
 import StudentRaidUsageChart from "./students.$id._components/StudentRaidUsageChart";
-import StudentSynergyPartners from "./students.$id._components/StudentSynergyPartners";
 
-type EnrichedRaidStatistics = Omit<RaidStatistics, "raid"> & {
-  raid: {
-    raidType: RaidType;
-    seasonIndex: number;
-    name: string;
-    boss: string;
-    jpSeasonIndex: number;
-    startAt: UtcIsoString;
-    endAt: UtcIsoString;
-    terrain: Terrain;
-    defenseType: Defense;
-    difficulty: string | null;
+const currentStateFieldKeys = [
+  "level",
+  "skillEx",
+  "skillNormal",
+  "skillEnhanced",
+  "skillSub",
+  "equip1",
+  "equip2",
+  "equip3",
+  "equipSpecial",
+  "weaponLevel",
+  "abilityHp",
+  "abilityAtk",
+  "abilityHeal",
+] as const satisfies (keyof RecruitedStudentCurrentStateInput)[];
+
+type StudentBasicInfoActionData =
+  | { ok: true }
+  | {
+      ok: false;
+      error: string;
+    };
+
+function parseNullableInteger(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "number" && Number.isInteger(value)) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value);
+  throw new Error("숫자 형식이 올바르지 않아요");
+}
+
+function parseRelatedBonds(value: unknown): Record<string, number> {
+  if (value == null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("다른 의상 인연 정보가 올바르지 않아요");
+  }
+  const entries = Object.entries(value);
+  if (entries.length > 20) {
+    throw new Error("다른 의상 인연 정보가 너무 많아요");
+  }
+  return Object.fromEntries(
+    entries.map(([studentUid, rawBond]) => {
+      const bond = parseNullableInteger(rawBond);
+      if (!studentUid || bond == null || bond < 1 || bond > 100) {
+        throw new Error("다른 의상 인연 랭크는 1부터 100 사이만 입력할 수 있어요");
+      }
+      return [studentUid, bond];
+    }),
+  );
+}
+
+export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
+  const uid = params.id;
+  if (!uid) {
+    throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
+  }
+
+  const { env, ctx } = context.cloudflare;
+  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const logger = getLogger(env, ctx, {
+    route: "students.$id._index.loader",
+    studentUid: uid,
+  });
+  const currentUserPromise = getActiveSensei(env, request);
+  const allRaidsPromise = getAllRaidSchedules(env);
+  currentUserPromise.catch(() => {});
+  allRaidsPromise.catch(() => {});
+
+  let studentDetailData: Awaited<ReturnType<typeof getStudentDetailData>>;
+  try {
+    studentDetailData = await getStudentDetailData(env, uid);
+  } catch (error) {
+    logger.error("Failed to load student detail", error);
+    if (isStudentNotFoundError(error)) {
+      throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
+    }
+    throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
+  }
+
+  if (studentDetailData === undefined) {
+    logger.error("Failed to load student detail without response data");
+    throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
+  }
+  const student = studentDetailData.student;
+  if (!student) {
+    throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
+  }
+
+  const currentUser = await currentUserPromise;
+  const recruitmentGroupUids = student.recruitments.map(({ recruitmentGroup }) => recruitmentGroup.uid);
+  const variantPrimaryStudentUids = student.character.studentVariants.map((variant) => variant.primaryStudent.uid);
+  const recruitedStudentsPromise = currentUser ? getRecruitedStudents(env, currentUser.id) : Promise.resolve([]);
+  const relationshipLevelsPromise = currentUser
+    ? getRelationshipLevels(env, currentUser.id, variantPrimaryStudentUids)
+    : Promise.resolve(null);
+
+  const [timelineContents, tagCounts, allGradings, allRaids, recruitedStudents, relationshipLevels] = await Promise.all(
+    [
+      getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids, { ctx }),
+      getTagCountsByStudent(env, uid),
+      getStudentGradingsByStudentWithUsers(env, uid, true, currentUser?.id),
+      allRaidsPromise,
+      recruitedStudentsPromise,
+      relationshipLevelsPromise,
+    ],
+  );
+
+  const stateStudentUid = student.studentVariant.primaryStudent.uid;
+  const myStudentState =
+    recruitedStudents.find((recruitedStudent) => recruitedStudent.studentUid === stateStudentUid) ?? null;
+  const sortedGradings = [...allGradings].sort((a, b) => {
+    const updatedDiff = new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    if (updatedDiff !== 0) return updatedDiff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  return {
+    student: {
+      ...student,
+      releaseAt: student.releaseAt ? toUtcIso(student.releaseAt) : null,
+    },
+    studentCatalog: studentDetailData.studentCatalog,
+    myStudentState,
+    myRelationshipLevels: Object.fromEntries(
+      (relationshipLevels ?? []).map((relationshipLevel) => [
+        relationshipLevel.studentId,
+        relationshipLevel.currentLevel,
+      ]),
+    ),
+    recruitments: getStudentRelevantTimelineContents(timelineContents, recruitmentGroupUids, student.uid).map(
+      (content) => ({
+        uid: content.uid,
+        name: content.name,
+        since: content.startAt,
+        until: content.endAt,
+        imageUrl: content.imageUrl ?? null,
+      }),
+    ),
+    tagCounts,
+    allGradings: sortedGradings.map((grading) => ({
+      ...grading,
+      student: { uid: student.uid, name: student.name },
+    })),
+    currentUser,
+    allRaids,
   };
+};
+
+export const action = async ({ params, context, request }: ActionFunctionArgs) => {
+  if (request.method !== "POST") {
+    return data<StudentBasicInfoActionData>({ ok: false, error: "지원하지 않는 요청 방식이에요" }, { status: 405 });
+  }
+
+  const studentUid = params.id;
+  if (!studentUid) {
+    return data<StudentBasicInfoActionData>({ ok: false, error: "학생 정보가 필요해요" }, { status: 400 });
+  }
+
+  const env = context.cloudflare.env;
+  const currentUser = await getActiveSensei(env, request);
+  if (!currentUser) {
+    return data<StudentBasicInfoActionData>({ ok: false, error: "로그인이 필요해요" }, { status: 401 });
+  }
+
+  try {
+    const payload = await request.json<Record<string, unknown>>();
+    const student = await getStudentVariantIdentity(env, studentUid);
+    if (!student) {
+      return data<StudentBasicInfoActionData>({ ok: false, error: "존재하지 않는 학생이에요" }, { status: 400 });
+    }
+    if (!student.released) {
+      return data<StudentBasicInfoActionData>({ ok: false, error: "출시되지 않은 학생이에요" }, { status: 400 });
+    }
+
+    const tier = parseNullableInteger(payload.tier) ?? student.initialTier;
+    if (tier < student.initialTier) {
+      throw new Error(`성급은 최초 성급인 ${student.initialTier}성보다 낮게 설정할 수 없어요`);
+    }
+    const currentState = currentStateFieldKeys.reduce((result, field) => {
+      result[field] = parseNullableInteger(payload[field]);
+      return result;
+    }, {} as RecruitedStudentCurrentStateInput);
+    const bond = parseNullableInteger(payload.bond);
+    if (bond != null && (bond < 1 || bond > 100)) {
+      throw new Error("인연 랭크는 1부터 100 사이만 입력할 수 있어요");
+    }
+    const relatedBonds = parseRelatedBonds(payload.relatedBonds);
+    const allowedRelationshipStudentUids = new Set(
+      student.character.studentVariants.map((variant) => variant.primaryStudent.uid),
+    );
+    if (Object.keys(relatedBonds).some((uid) => !allowedRelationshipStudentUids.has(uid))) {
+      throw new Error("같은 학생의 다른 의상만 함께 저장할 수 있어요");
+    }
+
+    const stateStudentUid = student.studentVariant.primaryStudent.uid;
+    await upsertRecruitedStudentState(env, currentUser.id, stateStudentUid, tier, currentState);
+
+    const relationshipBonds = new Map(Object.entries(relatedBonds));
+    if (bond != null) relationshipBonds.set(stateStudentUid, bond);
+    const existingRelationships = await getRelationshipLevels(env, currentUser.id, [...relationshipBonds.keys()]);
+    const existingRelationshipsByStudentUid = new Map(
+      existingRelationships.map((relationship) => [relationship.studentId, relationship]),
+    );
+    for (const [relationshipStudentUid, relationshipBond] of relationshipBonds) {
+      const existingRelationship = existingRelationshipsByStudentUid.get(relationshipStudentUid);
+      const targetRelationshipLevel = Math.max(relationshipBond, existingRelationship?.targetLevel ?? relationshipBond);
+      await upsertRelationshipLevel(
+        env,
+        currentUser.id,
+        relationshipStudentUid,
+        relationshipBond,
+        existingRelationship?.currentLevel === relationshipBond ? existingRelationship.currentExp : null,
+        targetRelationshipLevel,
+        existingRelationship?.items ?? {},
+      );
+    }
+
+    return data<StudentBasicInfoActionData>({ ok: true });
+  } catch (error) {
+    return data<StudentBasicInfoActionData>(
+      { ok: false, error: error instanceof Error ? error.message : "육성 상태를 저장하지 못했어요" },
+      { status: 400 },
+    );
+  }
 };
 
 export default function StudentDetail() {
@@ -53,61 +259,13 @@ export default function StudentDetail() {
     tagCounts,
     allGradings,
     currentUser,
-    myStudentTier,
-    recruitedStudentTiers,
-    allStudents,
     allRaids,
-  } = useOutletContext<StudentDetailPageContext>();
-  const [raidShowMore, setRaidShowMore] = useState(false);
-  const [sort, setSort] = useState<"recent" | "old">("recent");
+    studentCatalog,
+    myStudentState,
+    myRelationshipLevels,
+  } = useLoaderData<typeof loader>();
   const [statisticsLoading, setStatisticsLoading] = useState(true);
-
-  const enrichRaidStatistics = useMemo(() => {
-    return (stats: RaidStatistics[]): EnrichedRaidStatistics[] => {
-      return stats
-        .map((stat): EnrichedRaidStatistics | null => {
-          const raid = allRaids.find(
-            (currentRaid) =>
-              currentRaid.raidType === stat.raid.raidType && currentRaid.jpSchedule?.seasonIndex === stat.raid.season,
-          );
-          if (!raid || !raid.startAt || !raid.endAt) {
-            return null;
-          }
-
-          if (Number.isNaN(getInstantTime(raid.startAt)) || Number.isNaN(getInstantTime(raid.endAt))) {
-            return null;
-          }
-
-          const defenseTypeSet = raid.defenseTypeSets.find(
-            ({ primaryDefenseType }) => primaryDefenseType === stat.raid.defenseType,
-          );
-          const difficulty = defenseTypeSet?.difficulty ?? null;
-          return {
-            ...stat,
-            raid: {
-              raidType: raid.raidType as RaidType,
-              seasonIndex: raid.seasonIndex,
-              name: raid.raidBoss.name,
-              boss: raid.raidBoss.uid,
-              jpSeasonIndex: stat.raid.season,
-              startAt: raid.startAt,
-              endAt: raid.endAt,
-              terrain: raid.terrain as Terrain,
-              defenseType: stat.raid.defenseType,
-              difficulty,
-            },
-          };
-        })
-        .filter((stat): stat is EnrichedRaidStatistics => stat !== null);
-    };
-  }, [allRaids]);
-
   const [rawStatistics, setRawStatistics] = useState<RaidStatistics[]>([]);
-  const [statistics, setStatistics] = useState<EnrichedRaidStatistics[]>([]);
-  const [studentAnalysisLoading, setStudentAnalysisLoading] = useState(false);
-  const [bossUsage, setBossUsage] = useState<StudentBossUsageSummary | null>(null);
-  const [difficultyUsage, setDifficultyUsage] = useState<StudentDifficultyUsage[]>([]);
-  const [synergyPartners, setSynergyPartners] = useState<StudentAnalysisSynergyPartner[]>([]);
   useEffect(() => {
     let cancelled = false;
     const loadStatistics = async () => {
@@ -117,7 +275,6 @@ export default function StudentDetail() {
           return;
         }
         setRawStatistics(rawStatistics);
-        setStatistics(enrichRaidStatistics(rawStatistics));
       } catch {
         // Keep the existing graceful empty-state behavior without alerting.
       } finally {
@@ -130,67 +287,7 @@ export default function StudentDetail() {
     return () => {
       cancelled = true;
     };
-  }, [enrichRaidStatistics, student.uid]);
-
-  const analysisScopeLookup = useMemo(() => {
-    return buildStudentAnalysisScopeLookup({ allRaids });
-  }, [allRaids]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const loadStudentAnalysis = async () => {
-      try {
-        setStudentAnalysisLoading(true);
-        const response = await fetchStudentAnalysis({
-          studentUid: student.uid,
-        });
-        if (cancelled) {
-          return;
-        }
-        setBossUsage(aggregateBossUsage({ response, scopeLookup: analysisScopeLookup }));
-        setDifficultyUsage(aggregateDifficultyUsage({ response }));
-        setSynergyPartners(response.synergy);
-      } catch {
-        if (cancelled) {
-          return;
-        }
-        setBossUsage(null);
-        setDifficultyUsage([]);
-        setSynergyPartners([]);
-      } finally {
-        if (!cancelled) {
-          setStudentAnalysisLoading(false);
-        }
-      }
-    };
-
-    loadStudentAnalysis();
-    return () => {
-      cancelled = true;
-    };
-  }, [analysisScopeLookup, student.uid]);
-
-  const listedStatistics = useMemo(() => {
-    return statistics
-      .filter((stat) => stat.slotsCount > 100)
-      .sort((a, b) => {
-        if (sort === "recent") {
-          return compareInstantDesc(a.raid.startAt, b.raid.startAt);
-        }
-        return compareInstantAsc(a.raid.startAt, b.raid.startAt);
-      });
-  }, [statistics, sort]);
-
-  const filteredStatistics = useMemo(() => {
-    const sorted = listedStatistics;
-    return raidShowMore ? sorted : sorted.slice(0, 5);
-  }, [listedStatistics, raidShowMore]);
-
-  const raidSummary = useMemo(() => buildStudentRaidSummary({ statistics }), [statistics]);
-  const raidInvestment = useMemo(
-    () => buildStudentRaidInvestment({ statistics, myStudentTier }),
-    [statistics, myStudentTier],
-  );
+  }, [student.uid]);
 
   const recentReview = allGradings[0];
   const currentUserReview = allGradings.find(
@@ -199,7 +296,41 @@ export default function StudentDetail() {
 
   return (
     <>
-      <div className="mt-8">
+      <div className="mt-6 md:mt-8">
+        {studentCatalog && student.catalog ? (
+          <StudentBasicInfo
+            key={student.uid}
+            student={student}
+            catalog={studentCatalog}
+            signedIn={currentUser !== null}
+            currentUserId={currentUser?.id ?? null}
+            released={student.released}
+            recruited={myStudentState !== null}
+            relatedRelationshipLevels={myRelationshipLevels}
+            savedState={{
+              level: myStudentState?.level ?? null,
+              tier: myStudentState?.tier ?? null,
+              bond: myRelationshipLevels[student.studentVariant.primaryStudent.uid] ?? null,
+              skillEx: myStudentState?.skillEx ?? null,
+              skillNormal: myStudentState?.skillNormal ?? null,
+              skillEnhanced: myStudentState?.skillEnhanced ?? null,
+              skillSub: myStudentState?.skillSub ?? null,
+              equip1: myStudentState?.equip1 ?? null,
+              equip2: myStudentState?.equip2 ?? null,
+              equip3: myStudentState?.equip3 ?? null,
+              equipSpecial: myStudentState?.equipSpecial ?? null,
+              weaponLevel: myStudentState?.weaponLevel ?? null,
+              abilityHp: myStudentState?.abilityHp ?? null,
+              abilityAtk: myStudentState?.abilityAtk ?? null,
+              abilityHeal: myStudentState?.abilityHeal ?? null,
+            }}
+          />
+        ) : (
+          <Callout tone="warning" title="학생 기본 정보를 준비하고 있어요" />
+        )}
+      </div>
+
+      <div className="mt-6 md:mt-8">
         <SubTitle text="학생 평가 요약" />
       </div>
       <StudentGradingChart
@@ -211,99 +342,37 @@ export default function StudentDetail() {
         currentUserReview={currentUserReview}
       />
 
-      <div className="mt-10">
-        <SubTitle text="학생 분석" description="2024년 3월 이후의 총력전/대결전 통계를 분석했어요" />
-      </div>
-      <div className="mt-4">
-        {statisticsLoading ? (
-          <LoadingSkeleton />
-        ) : statistics.length === 0 ? (
-          <EmptyView text="편성된 총력전/대결전 정보가 없어요" />
-        ) : (
-          <>
-            <div>
-              <Callout
-                className="mb-4"
-                tone="warning"
-                title="총력전/대결전 통계만 포함되어 있어요"
-                description="제약해제결전 등 다른 컨텐츠에서 활약하는 학생은 추천도가 낮게 표현될 수 있어요"
+      <div className="mt-8 md:mt-10">
+        <SubTitle text="역대 편성 통계" />
+        <div className="mt-3 md:mt-4">
+          {statisticsLoading ? (
+            <LoadingSkeleton />
+          ) : rawStatistics.length === 0 ? (
+            <EmptyView text="편성된 총력전/대결전 정보가 없어요" />
+          ) : (
+            <>
+              <StudentRaidUsageChart
+                releaseAt={student.releaseAt}
+                raids={allRaids}
+                statistics={rawStatistics}
+                title={null}
               />
-              <StudentRaidUsageChart releaseAt={student.releaseAt} raids={allRaids} statistics={rawStatistics} />
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <StudentRaidInvestmentChart investment={raidInvestment} signedIn={currentUser !== null} />
-                <StudentBossUsageChart summary={bossUsage} loading={studentAnalysisLoading} />
-              </div>
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <StudentRaidSummaryCard summary={raidSummary} />
-                <StudentDifficultyUsageChart rows={difficultyUsage} loading={studentAnalysisLoading} />
-              </div>
-            </div>
-            <StudentSynergyPartners
-              className="mt-4"
-              partners={synergyPartners}
-              loading={studentAnalysisLoading}
-              allStudents={allStudents}
-              recruitedStudentTiers={recruitedStudentTiers}
-            />
-            <div className="mt-10">
-              <SubTitle text="총력전/대결전 통계" />
-              <div className="mt-4">
-                <FilterButtons
-                  surface="page"
-                  Icon={BarsArrowDownIcon}
-                  buttonProps={[
-                    {
-                      text: "최신순",
-                      onToggle: () => setSort("recent"),
-                      active: sort === "recent",
-                    },
-                    {
-                      text: "과거순",
-                      onToggle: () => setSort("old"),
-                      active: sort === "old",
-                    },
-                  ]}
-                  exclusive
-                  atLeastOne
+              <div className="mt-3 flex justify-end">
+                <Button
+                  text="상세 통계 보기"
+                  icon={ChartBarIcon}
+                  variant="primary"
+                  size="sm"
+                  to={`/students/${student.uid}/statistics`}
                 />
-                {listedStatistics.length === 0 ? (
-                  <div className="mt-4">
-                    <EmptyView text="100회를 초과해 편성된 총력전/대결전 정보가 없어요" />
-                  </div>
-                ) : (
-                  filteredStatistics.map((stat) => {
-                    const { raid, slotsByTier, slotsCount, assistsCount, assistsByTier } = stat;
-                    return (
-                      <RaidStatisticsSlotCount
-                        key={`${raid.raidType}-${raid.seasonIndex}-${raid.defenseType}`}
-                        raid={raid}
-                        slotsCount={slotsCount}
-                        slotsByTier={slotsByTier}
-                        assistsCount={assistsCount}
-                        assistsByTier={assistsByTier}
-                        maxTier={getMaxTierAt(raid.startAt)}
-                      />
-                    );
-                  })
-                )}
-                {listedStatistics.length > 5 && (
-                  <button
-                    type="button"
-                    className="mb-4 flex w-full items-center justify-center py-2 text-center hover:underline"
-                    onClick={() => setRaidShowMore(!raidShowMore)}
-                  >
-                    {raidShowMore ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
-                    <span className="ml-1">{raidShowMore ? "접기" : "더 보기"}</span>
-                  </button>
-                )}
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {recruitments.length > 0 && (
-        <div className="mt-10">
+        <div className="mt-8 md:mt-10">
           <SubTitle text="모집 일정" />
           <RecruitmentHistories recruitments={recruitments} />
         </div>

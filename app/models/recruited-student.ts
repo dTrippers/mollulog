@@ -1,13 +1,13 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
-import { sqliteTable, text, int } from "drizzle-orm/sqlite-core";
+import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
-  WEAPON_LEVEL_MAX_LEVEL,
   assertAbilityReleaseAvailable,
   assertWeaponLevelRange,
   getWeaponLevelMaxByTier,
+  WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
 
 const D1_IN_QUERY_CHUNK_SIZE = 90;
@@ -142,10 +142,7 @@ export async function getRecruitedStudents(
       .select()
       .from(recruitedStudentsTable)
       .where(
-        and(
-          eq(recruitedStudentsTable.userId, senseiId),
-          inArray(recruitedStudentsTable.studentUid, studentUidChunk),
-        ),
+        and(eq(recruitedStudentsTable.userId, senseiId), inArray(recruitedStudentsTable.studentUid, studentUidChunk)),
       );
     recruitedStudents.push(...chunkStudents);
   }
@@ -154,10 +151,13 @@ export async function getRecruitedStudents(
 
 export async function getRecruitedStudentTiers(env: Env, senseiId: number): Promise<Record<string, number>> {
   const recruitedStudents = await getRecruitedStudents(env, senseiId);
-  return recruitedStudents.reduce((acc, { studentUid, tier }) => {
-    acc[studentUid] = tier;
-    return acc;
-  }, {} as Record<string, number>);
+  return recruitedStudents.reduce(
+    (acc, { studentUid, tier }) => {
+      acc[studentUid] = tier;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
 }
 
 export async function upsertRecruitedStudent(env: Env, senseiId: number, studentUid: string, tier: number) {
@@ -179,17 +179,16 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
   if (existing?.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
     throw new Error("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
   }
-  assertAbilityReleaseAvailable(
-    [existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal],
-    tier,
-    "능력 해방",
-  );
+  assertAbilityReleaseAvailable([existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal], tier, "능력 해방");
 
   const uid = nanoid(8);
-  await db.insert(recruitedStudentsTable).values({ uid, userId: senseiId, studentUid, tier }).onConflictDoUpdate({
-    target: [recruitedStudentsTable.userId, recruitedStudentsTable.studentUid],
-    set: { tier },
-  });
+  await db
+    .insert(recruitedStudentsTable)
+    .values({ uid, userId: senseiId, studentUid, tier })
+    .onConflictDoUpdate({
+      target: [recruitedStudentsTable.userId, recruitedStudentsTable.studentUid],
+      set: { tier },
+    });
 }
 
 export async function upsertRecruitedStudentFromRecruitmentResult(
@@ -243,8 +242,34 @@ export async function updateRecruitedStudentCurrentState(
     .where(and(eq(recruitedStudentsTable.userId, senseiId), eq(recruitedStudentsTable.studentUid, studentUid)));
 }
 
+export async function upsertRecruitedStudentState(
+  env: Env,
+  senseiId: number,
+  studentUid: string,
+  tier: number,
+  input: RecruitedStudentCurrentStateInput,
+) {
+  if (!Number.isInteger(tier) || tier < 1 || tier > 9) {
+    throw new Error("성급 범위가 올바르지 않아요");
+  }
+  validateRecruitedStudentCurrentStateInput(input);
+  assertWeaponLevelRange(input.weaponLevel, tier, "고유무기 레벨");
+  assertAbilityReleaseAvailable([input.abilityHp, input.abilityAtk, input.abilityHeal], tier, "능력 해방");
+
+  const db = drizzle(env.DB);
+  const uid = nanoid(8);
+  await db
+    .insert(recruitedStudentsTable)
+    .values({ uid, userId: senseiId, studentUid, tier, ...input })
+    .onConflictDoUpdate({
+      target: [recruitedStudentsTable.userId, recruitedStudentsTable.studentUid],
+      set: { tier, ...input, updatedAt: sql`current_timestamp` },
+    });
+}
+
 export async function removeRecruitedStudent(env: Env, senseiId: number, studentUid: string) {
   const db = drizzle(env.DB);
-  await db.delete(recruitedStudentsTable)
+  await db
+    .delete(recruitedStudentsTable)
     .where(and(eq(recruitedStudentsTable.userId, senseiId), eq(recruitedStudentsTable.studentUid, studentUid)));
 }

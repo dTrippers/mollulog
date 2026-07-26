@@ -37,3 +37,7 @@ export function itemImageUrl(item: string): string {
 export function equipmentImageUrl(equipment: string): string {
   return resourceImageUrl("equipment", equipment);
 }
+
+export function terrainAdaptationIconUrl(rank: "D" | "C" | "B" | "A" | "S" | "SS"): string {
+  return `https://assets.mollulog.net/assets/images/ui/terrain-${rank}.png`;
+}

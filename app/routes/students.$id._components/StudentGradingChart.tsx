@@ -6,13 +6,6 @@ import { ProfileImage, SectionCard, TagIcon } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
 
-const COMPACT_TAG_LABELS: Record<StudentGradingTagValue, string> = {
-  performance: "성능",
-  universal: "범용",
-  growth: "저성급",
-  love: "애정",
-};
-
 type StudentGradingChartProps = {
   student: { uid: string; name: string };
   tagCounts: Array<{ tag: StudentGradingTagValue; displayName: string; count: number }>;
@@ -35,14 +28,14 @@ export default function StudentGradingChart({
   const maxCount = Math.max(...tagCounts.map((tagCount) => tagCount.count), 1);
 
   return (
-    <SectionCard>
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-x-6">
+    <SectionCard className="space-y-3 p-3 md:p-5">
+      <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2 md:gap-x-6">
         {tagCounts.map(({ tag, displayName, count }) => (
           <GradingTagMeter key={tag} tag={tag} displayName={displayName} count={count} maxCount={maxCount} />
         ))}
       </div>
 
-      <div className="mt-4 space-y-2 border-neutral-200 border-t pt-3 dark:border-neutral-700">
+      <div className="space-y-1.5">
         {showRecentReview ? (
           <ReviewSummaryRow label="최근 평가">
             {recentReview ? (
@@ -94,10 +87,12 @@ type GradingTagMeterProps = {
 
 function GradingTagMeter({ tag, displayName, count, maxCount }: GradingTagMeterProps) {
   return (
-    <div className="flex min-w-0 items-center gap-2" aria-label={`${displayName} ${count}개`}>
+    <div className="flex min-w-0 items-center gap-2">
       <TagIcon tag={tag} />
-      <div className="flex w-18 shrink-0 items-baseline gap-1">
-        <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{COMPACT_TAG_LABELS[tag]}</span>
+      <div className="flex w-36 shrink-0 items-baseline gap-1">
+        <span className="whitespace-nowrap text-sm font-medium text-neutral-700 dark:text-neutral-300">
+          {displayName}
+        </span>
         <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400">{count}</span>
       </div>
       <div className="relative h-2 flex-1 rounded-full bg-neutral-200 dark:bg-neutral-700">
