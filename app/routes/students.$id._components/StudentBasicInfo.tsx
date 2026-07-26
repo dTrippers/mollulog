@@ -1,9 +1,15 @@
-import { ArrowTrendingUpIcon, HeartIcon, SparklesIcon, StarIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowTopRightOnSquareIcon,
+  ArrowTrendingUpIcon,
+  HeartIcon,
+  SparklesIcon,
+  StarIcon,
+} from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
-import { useFetcher } from "react-router";
+import { Link, useFetcher } from "react-router";
 import { TierSelector } from "~/components/features/students";
-import { Button, Callout, EmptyView, HoverTooltip, NumberInput, SectionCard } from "~/components/primitives";
+import { Button, Callout, EmptyView, HoverTooltip, NumberInput, SectionCard, SubTitle } from "~/components/primitives";
 import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import {
   calculateStudentStats,
@@ -30,6 +36,7 @@ import { equipmentImageUrl } from "~/models/assets";
 
 type StudentBasicInfoProps = {
   student: StudentCalculatorSource;
+  schaleDbId: string | null;
   catalog: StudentCalculatorCatalog;
   signedIn: boolean;
   currentUserId: number | null;
@@ -37,6 +44,7 @@ type StudentBasicInfoProps = {
   recruited: boolean;
   savedState: StudentCalculatorState;
   relatedRelationshipLevels: Record<string, number>;
+  gradingSummary?: React.ReactNode;
 };
 
 type SaveResult = { ok: true } | { ok: false; error: string };
@@ -77,6 +85,7 @@ const weaponStars = [1, 2, 3, 4] as const;
 
 export default function StudentBasicInfo({
   student,
+  schaleDbId,
   catalog,
   signedIn,
   currentUserId,
@@ -84,6 +93,7 @@ export default function StudentBasicInfo({
   recruited,
   savedState,
   relatedRelationshipLevels,
+  gradingSummary,
 }: StudentBasicInfoProps) {
   const fetcher = useFetcher<SaveResult>();
   const stateStudentUid = student.studentVariant.primaryStudent.uid;
@@ -324,7 +334,34 @@ export default function StudentBasicInfo({
             ))}
           </div>
         </SectionCard>
+        {schaleDbId ? (
+          <div className="mt-2.5 flex justify-end">
+            <Button
+              text="Schale DB에서 보기"
+              icon={ArrowTopRightOnSquareIcon}
+              variant="secondary"
+              size="xs"
+              href={`https://schaledb.com/student/${schaleDbId}`}
+              target="_blank"
+            />
+          </div>
+        ) : null}
       </section>
+
+      {gradingSummary ? (
+        <section>
+          <div className="flex items-end justify-between gap-3">
+            <SubTitle text="학생 평가 요약" />
+            <Link
+              to={`/students/${student.uid}/gradings`}
+              className="mb-3 shrink-0 text-xs font-medium text-primary hover:underline"
+            >
+              전체 평가 보기
+            </Link>
+          </div>
+          {gradingSummary}
+        </section>
+      ) : null}
 
       <section>
         <h2 className="text-lg font-semibold">스킬</h2>
@@ -634,7 +671,7 @@ function SkillRow({
           />
         </svg>
         {skill.iconUrl ? (
-          <img src={skill.iconUrl} alt="" className="relative z-10 size-8 object-contain drop-shadow-sm" />
+          <img src={skill.iconUrl} alt="" className="relative z-10 size-12 object-contain drop-shadow-sm" />
         ) : null}
       </div>
       <div className="min-w-0">

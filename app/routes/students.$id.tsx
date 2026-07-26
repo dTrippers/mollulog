@@ -1,8 +1,8 @@
 import {
-  ArrowTopRightOnSquareIcon,
   ChartBarIcon,
   ChatBubbleLeftRightIcon,
   InformationCircleIcon,
+  VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
@@ -88,7 +88,7 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   const { student } = data;
   const studentFullName = formatStudentFullName(student);
   const title = `${studentFullName} - 학생 정보`;
-  const description = `블루 아카이브 ${student.name} - 학생의 총력전/대결전 통계 정보, 선생님들의 성능 평가를 확인해보세요.`;
+  const description = `블루 아카이브 ${student.name}의 프로필, 스킬, 성장도별 능력치와 총력전·대결전 통계 및 평가를 확인해보세요.`;
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
@@ -119,18 +119,14 @@ export default function StudentDetailPage() {
       description="학생들의 프로필, 통계 정보와 선생님들의 평가를 확인해보세요"
       backward={{ title: "학생 목록", to: "/students" }}
       belowTitle={<StudentInfo student={student} />}
-      links={
-        student.schaleDbId
-          ? [
-              {
-                Icon: ArrowTopRightOnSquareIcon,
-                title: "Schale DB",
-                description: "학생의 상세 정보와 수치값을 확인",
-                to: `https://schaledb.com/student/${student.schaleDbId}`,
-              },
-            ]
-          : undefined
-      }
+      links={[
+        {
+          Icon: VideoCameraIcon,
+          title: "영상 인식기",
+          description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
+          to: "/scanner/student",
+        },
+      ]}
       screens={[
         {
           text: "학생 정보",

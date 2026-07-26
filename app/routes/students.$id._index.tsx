@@ -301,12 +301,24 @@ export default function StudentDetail() {
           <StudentBasicInfo
             key={student.uid}
             student={student}
+            schaleDbId={student.schaleDbId}
             catalog={studentCatalog}
             signedIn={currentUser !== null}
             currentUserId={currentUser?.id ?? null}
             released={student.released}
             recruited={myStudentState !== null}
             relatedRelationshipLevels={myRelationshipLevels}
+            gradingSummary={
+              <StudentGradingChart
+                student={student}
+                tagCounts={tagCounts}
+                noGrading={allGradings.length === 0}
+                signedIn={currentUser !== null}
+                recentReview={recentReview}
+                currentUserReview={currentUserReview}
+                variant="embedded"
+              />
+            }
             savedState={{
               level: myStudentState?.level ?? null,
               tier: myStudentState?.tier ?? null,
@@ -329,18 +341,6 @@ export default function StudentDetail() {
           <Callout tone="warning" title="학생 기본 정보를 준비하고 있어요" />
         )}
       </div>
-
-      <div className="mt-6 md:mt-8">
-        <SubTitle text="학생 평가 요약" />
-      </div>
-      <StudentGradingChart
-        student={student}
-        tagCounts={tagCounts}
-        noGrading={allGradings.length === 0}
-        signedIn={currentUser !== null}
-        recentReview={recentReview}
-        currentUserReview={currentUserReview}
-      />
 
       <div className="mt-8 md:mt-10">
         <SubTitle text="역대 편성 통계" />
