@@ -1,4 +1,4 @@
-import { ChatBubbleLeftRightIcon, FunnelIcon, IdentificationIcon } from "@heroicons/react/24/outline";
+import { ChatBubbleLeftRightIcon, FunnelIcon, IdentificationIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
 import { useMemo, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
@@ -29,7 +29,8 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "학생부 | 몰루로그";
-  const description = "블루 아카이브 학생들의 프로필과 통계, 평가 정보를 확인해보세요.";
+  const description =
+    "블루 아카이브 학생들의 프로필, 스킬, 스탯, 성장도별 능력치와 총력전·대결전 통계를 확인해보세요.";
   return [
     { title },
     { name: "description", content: description },
@@ -88,6 +89,18 @@ export default function StudentsLayout() {
                     useSearch
                   />
                 ),
+              },
+            ]
+          : undefined
+      }
+      links={
+        isStudentsIndex
+          ? [
+              {
+                Icon: VideoCameraIcon,
+                title: "영상 인식기",
+                description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
+                to: "/scanner/student",
               },
             ]
           : undefined

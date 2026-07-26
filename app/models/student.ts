@@ -1,7 +1,13 @@
 import { graphql } from "~/graphql";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { cacheKey, cacheQuery, fetchLazySourceCached, fetchLazySourceCachedBatch, fetchSourceCached } from "~/lib/cache";
+import {
+  cacheKey,
+  cacheQuery,
+  fetchLazySourceCached,
+  fetchLazySourceCachedBatch,
+  fetchSourceCached,
+} from "~/lib/cache";
 import type { Position, TacticRole } from "./content.d";
 
 export type Role = "striker" | "special";
@@ -35,12 +41,168 @@ const allStudentsQuery = graphql(`
 
 const studentDetailQuery = graphql(`
   query StudentDetail($uid: String!) {
+    studentCatalog {
+      version
+      statLevelInterpolationEndLevel
+      statLevelInterpolations {
+        level
+        ratios { growthType value }
+      }
+      equipment {
+        uid
+        category
+        tier
+        maxLevel
+        growthType
+        name
+        modifiers { stat kind level1 levelMax }
+      }
+    }
     student(uid: $uid) {
-      name familyName uid attackType defenseType role school schaleDbId releaseAt
+      name familyName uid attackType defenseType role school schaleDbId releaseAt released
+      initialTier position tacticRole equipments
+      character {
+        uid
+        studentVariants {
+          uid
+          isMulticlass
+          primaryStudent {
+            uid name position tacticRole
+            catalog {
+              favorRewards {
+                level
+                modifiers { stat kind value }
+              }
+            }
+          }
+          students { uid name position tacticRole }
+        }
+      }
+      studentVariant {
+        uid
+        isMulticlass
+        primaryStudent { uid name }
+        students { uid name position tacticRole }
+      }
       recruitments {
         since rerun
         recruitmentGroup { uid startAt endAt }
       }
+      catalog {
+        profile {
+          familyName personalName introduction hobby age schoolYear height weaponName
+        }
+        statProfile {
+          growthType
+          levelStats { stat level1 level100 }
+          fixedStats { stat value }
+        }
+        terrainAdaptations { street outdoor indoor }
+        starBonuses { star modifiers { stat kind value } }
+        potentialBonuses {
+          stat
+          levels { level rate }
+        }
+        favorRewards {
+          level
+          modifiers { stat kind value }
+        }
+        weapon {
+          name description imageUrl growthType
+          levelStats { stat level1 level100 }
+          stages {
+            stage unlocked maxLevel learnSkillSlot learnSkillPosition
+            modifiers { stat kind value }
+          }
+        }
+        gear {
+          name description
+          tiers {
+            tier openFavorLevel maxLevel growthType learnSkillSlot learnSkillPosition
+            modifiers { stat kind level1 levelMax }
+          }
+        }
+        skillConfigurations {
+          formIndex minimumWeaponStar minimumGearTier selectExSkillActionSlot
+          slots { slot skills { position skillUid } }
+        }
+      }
+      skills(includeVariants: true) {
+        uid skillType name iconUrl maxLevel
+        levels {
+          level cost
+          statModifiers { stat kind value activation persistence }
+        }
+        description {
+          template
+          parameters {
+            id emphasized
+            values { level text }
+          }
+        }
+        additionalSkillUids
+        selectableSkills { condition skillUid }
+      }
+    }
+  }
+`);
+
+const studentHeaderQuery = graphql(`
+  query StudentHeader($uid: String!) {
+    student(uid: $uid) {
+      name
+      familyName
+      uid
+      attackType
+      defenseType
+      role
+      school
+      schaleDbId
+      releaseAt
+      position
+      tacticRole
+      club {
+        name
+      }
+      catalog {
+        profile {
+          schoolYear
+          age
+          height
+          hobby
+        }
+        terrainAdaptations {
+          street
+          outdoor
+          indoor
+        }
+      }
+      character {
+        uid
+        studentVariants {
+          uid
+          isMulticlass
+          primaryStudent { uid name }
+        }
+      }
+      studentVariant {
+        uid
+        isMulticlass
+        primaryStudent { uid name }
+        students { uid name }
+      }
+    }
+  }
+`);
+
+const studentVariantIdentityQuery = graphql(`
+  query StudentVariantIdentity($uid: String!) {
+    student(uid: $uid) {
+      uid
+      released
+      initialTier
+      studentVariant { primaryStudent { uid } }
+      character { studentVariants { primaryStudent { uid } } }
     }
   }
 `);
@@ -87,7 +249,28 @@ async function getRawStudents(env: Env): Promise<Student[]> {
 }
 
 export async function getStudentDetail(env: Env, uid: string) {
+  const data = await getStudentDetailData(env, uid);
+  return data?.student;
+}
+
+export async function getStudentDetailData(_env: Env, uid: string) {
   const { data, error } = await runQuery(studentDetailQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  return data;
+}
+
+export async function getStudentHeader(_env: Env, uid: string) {
+  const { data, error } = await runQuery(studentHeaderQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  return data?.student;
+}
+
+export async function getStudentVariantIdentity(_env: Env, uid: string) {
+  const { data, error } = await runQuery(studentVariantIdentityQuery, { uid });
   if (error) {
     throw error;
   }
@@ -176,10 +359,7 @@ export async function getStudentSkillItemsBatch(
   );
 }
 
-export async function getStudentSkillItems(
-  env: Env,
-  uid: string,
-): Promise<StudentSkillItems> {
+export async function getStudentSkillItems(env: Env, uid: string): Promise<StudentSkillItems> {
   return fetchLazySourceCached(
     env,
     buildStudentSkillItemsCacheKey(uid),

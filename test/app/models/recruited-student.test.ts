@@ -3,6 +3,7 @@ import {
   getRecruitedStudents,
   updateRecruitedStudentCurrentState,
   upsertRecruitedStudent,
+  upsertRecruitedStudentState,
 } from "~/models/recruited-student";
 
 type RecruitedStudentRow = {
@@ -83,7 +84,9 @@ class FakeD1Database {
     if (normalizedSql.includes("from recruited_students")) {
       this.selectParameterCounts.push(params.length);
       const userId = Number(params[0]);
-      const requestedStudentUids = normalizedSql.includes("studentuid in") ? new Set(params.slice(1).map(String)) : null;
+      const requestedStudentUids = normalizedSql.includes("studentuid in")
+        ? new Set(params.slice(1).map(String))
+        : null;
       const rows = this.rows.filter(
         (row) => row.userId === userId && (!requestedStudentUids || requestedStudentUids.has(row.studentUid)),
       );
@@ -125,17 +128,32 @@ class FakeD1Database {
     if (normalizedSql.startsWith("insert into recruited_students")) {
       const userId = Number(params[1]);
       const studentUid = String(params[2]);
-      const tier = Number(params.at(-1));
+      const writesCurrentState = params.length > 5;
+      const tier = Number(writesCurrentState ? params[4 + currentStateFields.length] : params.at(-1));
       const recruitedRow = this.rows.find(
         (candidate) => candidate.userId === userId && candidate.studentUid === studentUid,
       );
       if (recruitedRow) {
         recruitedRow.tier = tier;
+        if (writesCurrentState) {
+          currentStateFields.forEach((field, index) => {
+            const value = params[5 + currentStateFields.length + index];
+            recruitedRow[field] = value == null ? null : Number(value);
+          });
+        }
         recruitedRow.updatedAt = "current_timestamp";
         return 1;
       }
 
-      this.rows.push(createRecruitedStudentRow({ uid: String(params[0]), userId, studentUid, tier }));
+      const currentState = writesCurrentState
+        ? Object.fromEntries(
+            currentStateFields.map((field, index) => [
+              field,
+              params[4 + index] == null ? null : Number(params[4 + index]),
+            ]),
+          )
+        : {};
+      this.rows.push(createRecruitedStudentRow({ uid: String(params[0]), userId, studentUid, tier, ...currentState }));
       return 1;
     }
 
@@ -237,6 +255,40 @@ describe("recruited-student current state", () => {
     });
 
     expect(db.rows).toHaveLength(0);
+  });
+
+  it("creates a recruited student with its nullable current state", async () => {
+    const { db, env } = createEnv();
+
+    await upsertRecruitedStudentState(env, 1, "student-a", 6, {
+      level: 80,
+      weaponLevel: 20,
+      abilityHp: null,
+      abilityAtk: 10,
+      abilityHeal: null,
+      skillEx: 5,
+      skillNormal: null,
+      skillEnhanced: 8,
+      skillSub: null,
+      equip1: 10,
+      equip2: null,
+      equip3: 8,
+      equipSpecial: null,
+    });
+
+    expect(db.rows).toHaveLength(1);
+    expect(db.rows[0]).toMatchObject({
+      studentUid: "student-a",
+      tier: 6,
+      level: 80,
+      weaponLevel: 20,
+      abilityHp: null,
+      abilityAtk: 10,
+      skillEx: 5,
+      skillNormal: null,
+      equip1: 10,
+      equip2: null,
+    });
   });
 
   it("keeps current fields when tier is updated", async () => {

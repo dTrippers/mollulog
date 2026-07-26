@@ -20,6 +20,7 @@ type StudentRaidUsageChartProps = {
   releaseAt: UtcIsoString | null;
   raids: RaidScheduleListItem[];
   statistics: RaidStatistics[];
+  title?: string | null;
 };
 
 const DEFENSE_FILTERS: Array<{
@@ -72,7 +73,12 @@ function getRaidDetailPath(row: StudentRaidUsageChartRow) {
   return `${path}?${params.toString()}`;
 }
 
-export default function StudentRaidUsageChart({ releaseAt, raids, statistics }: StudentRaidUsageChartProps) {
+export default function StudentRaidUsageChart({
+  releaseAt,
+  raids,
+  statistics,
+  title = "역대 편성 횟수",
+}: StudentRaidUsageChartProps) {
   const displayTimeZone = useDisplayTimeZone();
   const navigate = useNavigate();
   const [selectedDefenseType, setSelectedDefenseType] = useState<StudentRaidUsageDefenseFilter>("all");
@@ -100,7 +106,7 @@ export default function StudentRaidUsageChart({ releaseAt, raids, statistics }: 
   }
 
   return (
-    <SectionCard title="역대 편성 횟수">
+    <SectionCard title={title ?? undefined}>
       <div>
         <Dropdown
           label="방어 타입"

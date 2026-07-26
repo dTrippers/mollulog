@@ -943,6 +943,7 @@ export type Query = {
   stage: Maybe<Stage>;
   stages: Array<Stage>;
   student: Student;
+  studentCatalog: Maybe<StudentCatalog>;
   students: Array<Student>;
 };
 
@@ -1305,8 +1306,25 @@ export type ShiftContentSchedulesPayload = {
 
 export type Skill = {
   __typename?: 'Skill';
+  additionalSkillUids: Array<Scalars['String']['output']>;
+  description: Maybe<StudentSkillDescription>;
+  iconUrl: Maybe<Scalars['String']['output']>;
+  levels: Array<StudentSkillLevel>;
+  maxLevel: Scalars['Int']['output'];
   name: Scalars['String']['output'];
+  selectableSkills: Array<StudentSelectableSkill>;
   skillType: StudentSkillTypeEnum;
+  uid: Scalars['String']['output'];
+};
+
+
+export type SkillDescriptionArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+
+export type SkillNameArgs = {
+  lang?: InputMaybe<Language>;
 };
 
 export type SkillItem = {
@@ -1371,6 +1389,9 @@ export type Student = {
   archiveAt: Maybe<Scalars['ISO8601DateTime']['output']>;
   attackType: Attack;
   birthday: Maybe<Scalars['ISO8601Date']['output']>;
+  catalog: Maybe<StudentCatalogData>;
+  character: StudentCharacter;
+  club: Maybe<StudentClub>;
   defenseType: Defense;
   equipments: Array<Scalars['String']['output']>;
   familyName: Maybe<Scalars['String']['output']>;
@@ -1389,6 +1410,7 @@ export type Student = {
   school: Scalars['String']['output'];
   skillItems: Array<SkillItem>;
   skills: Array<Skill>;
+  studentVariant: StudentVariant;
   tacticRole: TacticRole;
   uid: Scalars['String']['output'];
 };
@@ -1411,7 +1433,337 @@ export type StudentSkillItemsArgs = {
 
 
 export type StudentSkillsArgs = {
+  includeVariants?: InputMaybe<Scalars['Boolean']['input']>;
   skillType: InputMaybe<StudentSkillTypeEnum>;
+};
+
+export type StudentCatalog = {
+  __typename?: 'StudentCatalog';
+  assetsVersion: Maybe<Scalars['String']['output']>;
+  clientVersion: Maybe<Scalars['String']['output']>;
+  databaseSha256: Scalars['String']['output'];
+  equipment: Array<StudentCatalogEquipment>;
+  statLevelInterpolationEndLevel: Scalars['Int']['output'];
+  statLevelInterpolations: Array<StudentCatalogStatLevelInterpolation>;
+  terrainAdaptationFactors: Array<StudentCatalogTerrainAdaptationFactor>;
+  version: Scalars['String']['output'];
+};
+
+export type StudentCatalogData = {
+  __typename?: 'StudentCatalogData';
+  favorRewards: Array<StudentCatalogFavorReward>;
+  gear: Maybe<StudentCatalogGear>;
+  potentialBonuses: Array<StudentCatalogPotentialBonus>;
+  profile: StudentCatalogProfile;
+  skillConfigurations: Array<StudentCatalogSkillConfiguration>;
+  starBonuses: Array<StudentCatalogStarBonus>;
+  statProfile: StudentCatalogStatProfile;
+  terrainAdaptations: StudentCatalogTerrainAdaptations;
+  weapon: StudentCatalogWeapon;
+};
+
+
+export type StudentCatalogDataProfileArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+export type StudentCatalogEquipment = {
+  __typename?: 'StudentCatalogEquipment';
+  category: Scalars['String']['output'];
+  description: Maybe<Scalars['String']['output']>;
+  growthType: StudentCatalogStatGrowthType;
+  maxLevel: Scalars['Int']['output'];
+  modifiers: Array<StudentCatalogEquipmentModifier>;
+  name: Scalars['String']['output'];
+  tier: Scalars['Int']['output'];
+  uid: Scalars['String']['output'];
+};
+
+
+export type StudentCatalogEquipmentDescriptionArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+
+export type StudentCatalogEquipmentNameArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+export type StudentCatalogEquipmentModifier = {
+  __typename?: 'StudentCatalogEquipmentModifier';
+  kind: StudentCatalogStatModifierKind;
+  level1: Scalars['Int']['output'];
+  levelMax: Scalars['Int']['output'];
+  stat: StudentCatalogStat;
+};
+
+export type StudentCatalogFavorReward = {
+  __typename?: 'StudentCatalogFavorReward';
+  level: Scalars['Int']['output'];
+  modifiers: Array<StudentCatalogStatModifier>;
+};
+
+export type StudentCatalogFixedStat = {
+  __typename?: 'StudentCatalogFixedStat';
+  stat: StudentCatalogStat;
+  value: Scalars['Int']['output'];
+};
+
+export type StudentCatalogGear = {
+  __typename?: 'StudentCatalogGear';
+  description: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  tiers: Array<StudentCatalogGearTier>;
+};
+
+
+export type StudentCatalogGearDescriptionArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+
+export type StudentCatalogGearNameArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+export type StudentCatalogGearTier = {
+  __typename?: 'StudentCatalogGearTier';
+  growthType: StudentCatalogStatGrowthType;
+  learnSkillPosition: Maybe<Scalars['Int']['output']>;
+  learnSkillSlot: Maybe<StudentSkillTypeEnum>;
+  maxLevel: Scalars['Int']['output'];
+  modifiers: Array<StudentCatalogEquipmentModifier>;
+  openFavorLevel: Scalars['Int']['output'];
+  tier: Scalars['Int']['output'];
+};
+
+export type StudentCatalogGrowthRatio = {
+  __typename?: 'StudentCatalogGrowthRatio';
+  growthType: StudentCatalogStatGrowthType;
+  value: Scalars['Int']['output'];
+};
+
+export type StudentCatalogLevelStat = {
+  __typename?: 'StudentCatalogLevelStat';
+  level1: Scalars['Int']['output'];
+  level100: Scalars['Int']['output'];
+  stat: StudentCatalogStat;
+};
+
+export type StudentCatalogPotentialBonus = {
+  __typename?: 'StudentCatalogPotentialBonus';
+  levels: Array<StudentCatalogPotentialLevel>;
+  stat: StudentCatalogStat;
+  unnecessary: Scalars['Boolean']['output'];
+};
+
+export type StudentCatalogPotentialLevel = {
+  __typename?: 'StudentCatalogPotentialLevel';
+  level: Scalars['Int']['output'];
+  rate: Scalars['Int']['output'];
+};
+
+export type StudentCatalogProfile = {
+  __typename?: 'StudentCatalogProfile';
+  age: Maybe<Scalars['String']['output']>;
+  familyName: Maybe<Scalars['String']['output']>;
+  height: Maybe<Scalars['String']['output']>;
+  hobby: Maybe<Scalars['String']['output']>;
+  introduction: Maybe<Scalars['String']['output']>;
+  personalName: Maybe<Scalars['String']['output']>;
+  schoolYear: Maybe<Scalars['String']['output']>;
+  weaponName: Maybe<Scalars['String']['output']>;
+};
+
+export type StudentCatalogSkillConfiguration = {
+  __typename?: 'StudentCatalogSkillConfiguration';
+  formIndex: Scalars['Int']['output'];
+  minimumGearTier: Scalars['Int']['output'];
+  minimumWeaponStar: Scalars['Int']['output'];
+  selectExSkillActionSlot: Maybe<Scalars['Int']['output']>;
+  slots: Array<StudentCatalogSkillConfigurationSlot>;
+};
+
+export type StudentCatalogSkillConfigurationSlot = {
+  __typename?: 'StudentCatalogSkillConfigurationSlot';
+  skills: Array<StudentCatalogSkillReference>;
+  slot: StudentSkillTypeEnum;
+};
+
+export type StudentCatalogSkillReference = {
+  __typename?: 'StudentCatalogSkillReference';
+  position: Scalars['Int']['output'];
+  skillUid: Maybe<Scalars['String']['output']>;
+};
+
+export type StudentCatalogStarBonus = {
+  __typename?: 'StudentCatalogStarBonus';
+  modifiers: Array<StudentCatalogStatModifier>;
+  star: Scalars['Int']['output'];
+};
+
+export enum StudentCatalogStat {
+  AccuracyPoint = 'ACCURACY_POINT',
+  AmmoCost = 'AMMO_COST',
+  AmmoCount = 'AMMO_COUNT',
+  AttackPower = 'ATTACK_POWER',
+  BlockRate = 'BLOCK_RATE',
+  CriticalChanceRate = 'CRITICAL_CHANCE_RATE',
+  CriticalChanceResistPoint = 'CRITICAL_CHANCE_RESIST_POINT',
+  CriticalDamageRate = 'CRITICAL_DAMAGE_RATE',
+  CriticalDamageResistRate = 'CRITICAL_DAMAGE_RESIST_RATE',
+  CriticalPoint = 'CRITICAL_POINT',
+  CriticalResistPoint = 'CRITICAL_RESIST_POINT',
+  DamagedRatio = 'DAMAGED_RATIO',
+  DamagedRatio2Decrease = 'DAMAGED_RATIO2_DECREASE',
+  DamagedRatio2Increase = 'DAMAGED_RATIO2_INCREASE',
+  DamageRatio = 'DAMAGE_RATIO',
+  DamageRatio2Decrease = 'DAMAGE_RATIO2_DECREASE',
+  DamageRatio2Increase = 'DAMAGE_RATIO2_INCREASE',
+  DefensePenetration = 'DEFENSE_PENETRATION',
+  DefensePenetrationResist = 'DEFENSE_PENETRATION_RESIST',
+  DefensePower = 'DEFENSE_POWER',
+  DodgePoint = 'DODGE_POINT',
+  EnhanceBasicsDamageRate = 'ENHANCE_BASICS_DAMAGE_RATE',
+  EnhanceChemicalRate = 'ENHANCE_CHEMICAL_RATE',
+  EnhanceCompositeArmorRate = 'ENHANCE_COMPOSITE_ARMOR_RATE',
+  EnhanceElasticArmorRate = 'ENHANCE_ELASTIC_ARMOR_RATE',
+  EnhanceExplosionRate = 'ENHANCE_EXPLOSION_RATE',
+  EnhanceExDamageRate = 'ENHANCE_EX_DAMAGE_RATE',
+  EnhanceHeavyArmorRate = 'ENHANCE_HEAVY_ARMOR_RATE',
+  EnhanceLightArmorRate = 'ENHANCE_LIGHT_ARMOR_RATE',
+  EnhanceMysticRate = 'ENHANCE_MYSTIC_RATE',
+  EnhanceNormalArmorRate = 'ENHANCE_NORMAL_ARMOR_RATE',
+  EnhanceNormalRate = 'ENHANCE_NORMAL_RATE',
+  EnhancePierceRate = 'ENHANCE_PIERCE_RATE',
+  EnhanceSiegeRate = 'ENHANCE_SIEGE_RATE',
+  EnhanceSonicRate = 'ENHANCE_SONIC_RATE',
+  EnhanceStructureRate = 'ENHANCE_STRUCTURE_RATE',
+  EnhanceUnarmedRate = 'ENHANCE_UNARMED_RATE',
+  ExtendBuffDuration = 'EXTEND_BUFF_DURATION',
+  ExtendCrowdControlDuration = 'EXTEND_CROWD_CONTROL_DURATION',
+  ExtendDebuffDuration = 'EXTEND_DEBUFF_DURATION',
+  ExSkillUpgrade = 'EX_SKILL_UPGRADE',
+  HealEffectivenessRate = 'HEAL_EFFECTIVENESS_RATE',
+  HealPower = 'HEAL_POWER',
+  HealRate = 'HEAL_RATE',
+  HpRecoverOnKill = 'HP_RECOVER_ON_KILL',
+  IgnoreDelayCount = 'IGNORE_DELAY_COUNT',
+  IndoorBattleAdaptation = 'INDOOR_BATTLE_ADAPTATION',
+  MaxBulletCount = 'MAX_BULLET_COUNT',
+  MaxCostIncrease = 'MAX_COST_INCREASE',
+  MaxHp = 'MAX_HP',
+  MoveSpeed = 'MOVE_SPEED',
+  NormalAttackSpeed = 'NORMAL_ATTACK_SPEED',
+  OppressionPower = 'OPPRESSION_POWER',
+  OppressionResist = 'OPPRESSION_RESIST',
+  OutdoorBattleAdaptation = 'OUTDOOR_BATTLE_ADAPTATION',
+  Range = 'RANGE',
+  ReduceWeakDamagedRate = 'REDUCE_WEAK_DAMAGED_RATE',
+  RegenCost = 'REGEN_COST',
+  SightRange = 'SIGHT_RANGE',
+  StabilityPoint = 'STABILITY_POINT',
+  StabilityRate = 'STABILITY_RATE',
+  StreetBattleAdaptation = 'STREET_BATTLE_ADAPTATION',
+  WeaponRange = 'WEAPON_RANGE'
+}
+
+export enum StudentCatalogStatGrowthType {
+  LateBloom = 'LATE_BLOOM',
+  Obstacle = 'OBSTACLE',
+  Premature = 'PREMATURE',
+  Standard = 'STANDARD',
+  TimeAttack = 'TIME_ATTACK'
+}
+
+export type StudentCatalogStatLevelInterpolation = {
+  __typename?: 'StudentCatalogStatLevelInterpolation';
+  level: Scalars['Int']['output'];
+  ratios: Array<StudentCatalogGrowthRatio>;
+};
+
+export type StudentCatalogStatModifier = {
+  __typename?: 'StudentCatalogStatModifier';
+  kind: StudentCatalogStatModifierKind;
+  stat: StudentCatalogStat;
+  value: Scalars['Int']['output'];
+};
+
+export enum StudentCatalogStatModifierKind {
+  Base = 'BASE',
+  Coefficient = 'COEFFICIENT',
+  Special = 'SPECIAL'
+}
+
+export type StudentCatalogStatProfile = {
+  __typename?: 'StudentCatalogStatProfile';
+  fixedStats: Array<StudentCatalogFixedStat>;
+  growthType: StudentCatalogStatGrowthType;
+  levelStats: Array<StudentCatalogLevelStat>;
+};
+
+export type StudentCatalogTerrainAdaptationFactor = {
+  __typename?: 'StudentCatalogTerrainAdaptationFactor';
+  accuracyFactor: Scalars['Int']['output'];
+  attackPowerFactor: Scalars['Int']['output'];
+  blockFactor: Scalars['Int']['output'];
+  dodgeFactor: Scalars['Int']['output'];
+  rank: StudentTerrainAdaptationRank;
+  shotFactor: Scalars['Int']['output'];
+};
+
+export type StudentCatalogTerrainAdaptations = {
+  __typename?: 'StudentCatalogTerrainAdaptations';
+  indoor: StudentTerrainAdaptationRank;
+  outdoor: StudentTerrainAdaptationRank;
+  street: StudentTerrainAdaptationRank;
+};
+
+export type StudentCatalogWeapon = {
+  __typename?: 'StudentCatalogWeapon';
+  description: Maybe<Scalars['String']['output']>;
+  growthType: StudentCatalogStatGrowthType;
+  imageUrl: Maybe<Scalars['String']['output']>;
+  levelStats: Array<StudentCatalogLevelStat>;
+  name: Scalars['String']['output'];
+  stages: Array<StudentCatalogWeaponStage>;
+};
+
+
+export type StudentCatalogWeaponDescriptionArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+
+export type StudentCatalogWeaponNameArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+export type StudentCatalogWeaponStage = {
+  __typename?: 'StudentCatalogWeaponStage';
+  learnSkillPosition: Maybe<Scalars['Int']['output']>;
+  learnSkillSlot: Maybe<StudentSkillTypeEnum>;
+  maxLevel: Scalars['Int']['output'];
+  modifiers: Array<StudentCatalogStatModifier>;
+  stage: Scalars['Int']['output'];
+  unlocked: Scalars['Boolean']['output'];
+};
+
+export type StudentCharacter = {
+  __typename?: 'StudentCharacter';
+  studentVariants: Array<StudentVariant>;
+  uid: Scalars['String']['output'];
+};
+
+export type StudentClub = {
+  __typename?: 'StudentClub';
+  name: Maybe<Scalars['String']['output']>;
+  uid: Scalars['String']['output'];
+};
+
+
+export type StudentClubNameArgs = {
+  lang?: InputMaybe<Language>;
 };
 
 export type StudentRecruitmentDateUpdate = {
@@ -1424,10 +1776,66 @@ export type StudentRecruitmentDateUpdate = {
   uid: Scalars['String']['output'];
 };
 
+export type StudentSelectableSkill = {
+  __typename?: 'StudentSelectableSkill';
+  condition: StudentSkillSelectionCondition;
+  skillUid: Scalars['String']['output'];
+};
+
+export type StudentSkillDescription = {
+  __typename?: 'StudentSkillDescription';
+  parameters: Array<StudentSkillDescriptionParameter>;
+  template: Scalars['String']['output'];
+};
+
+export type StudentSkillDescriptionParameter = {
+  __typename?: 'StudentSkillDescriptionParameter';
+  emphasized: Scalars['Boolean']['output'];
+  id: Scalars['Int']['output'];
+  values: Array<StudentSkillDescriptionParameterValue>;
+};
+
+export type StudentSkillDescriptionParameterValue = {
+  __typename?: 'StudentSkillDescriptionParameterValue';
+  level: Scalars['Int']['output'];
+  text: Scalars['String']['output'];
+};
+
 export enum StudentSkillItemTypeEnum {
   Ex = 'ex',
   Normal = 'normal'
 }
+
+export type StudentSkillLevel = {
+  __typename?: 'StudentSkillLevel';
+  cost: Maybe<Scalars['Int']['output']>;
+  level: Scalars['Int']['output'];
+  statModifiers: Array<StudentSkillStatModifier>;
+};
+
+export enum StudentSkillModifierActivation {
+  Conditional = 'CONDITIONAL',
+  Unconditional = 'UNCONDITIONAL'
+}
+
+export enum StudentSkillModifierPersistence {
+  Permanent = 'PERMANENT',
+  Temporary = 'TEMPORARY'
+}
+
+export enum StudentSkillSelectionCondition {
+  Enemy = 'ENEMY',
+  Self = 'SELF'
+}
+
+export type StudentSkillStatModifier = {
+  __typename?: 'StudentSkillStatModifier';
+  activation: StudentSkillModifierActivation;
+  kind: StudentCatalogStatModifierKind;
+  persistence: StudentSkillModifierPersistence;
+  stat: StudentCatalogStat;
+  value: Scalars['Int']['output'];
+};
 
 export enum StudentSkillTypeEnum {
   Ex = 'ex',
@@ -1435,6 +1843,23 @@ export enum StudentSkillTypeEnum {
   Passive = 'passive',
   Public = 'public'
 }
+
+export enum StudentTerrainAdaptationRank {
+  A = 'A',
+  B = 'B',
+  C = 'C',
+  D = 'D',
+  S = 'S',
+  Ss = 'SS'
+}
+
+export type StudentVariant = {
+  __typename?: 'StudentVariant';
+  isMulticlass: Scalars['Boolean']['output'];
+  primaryStudent: Student;
+  students: Array<Student>;
+  uid: Scalars['String']['output'];
+};
 
 export enum TacticRole {
   Attacker = 'attacker',
@@ -1942,7 +2367,21 @@ export type StudentDetailQueryVariables = Exact<{
 }>;
 
 
-export type StudentDetailQuery = { __typename?: 'Query', student: { __typename?: 'Student', name: string, familyName: string | null, uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, school: string, schaleDbId: string | null, releaseAt: Date | null, recruitments: Array<{ __typename?: 'Recruitment', since: Date, rerun: boolean, recruitmentGroup: { __typename?: 'RecruitmentGroup', uid: string, startAt: Date, endAt: Date | null } }> } };
+export type StudentDetailQuery = { __typename?: 'Query', studentCatalog: { __typename?: 'StudentCatalog', version: string, statLevelInterpolationEndLevel: number, statLevelInterpolations: Array<{ __typename?: 'StudentCatalogStatLevelInterpolation', level: number, ratios: Array<{ __typename?: 'StudentCatalogGrowthRatio', growthType: StudentCatalogStatGrowthType, value: number }> }>, equipment: Array<{ __typename?: 'StudentCatalogEquipment', uid: string, category: string, tier: number, maxLevel: number, growthType: StudentCatalogStatGrowthType, name: string, modifiers: Array<{ __typename?: 'StudentCatalogEquipmentModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, level1: number, levelMax: number }> }> } | null, student: { __typename?: 'Student', name: string, familyName: string | null, uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, school: string, schaleDbId: string | null, releaseAt: Date | null, released: boolean, initialTier: number, position: Position, tacticRole: TacticRole, equipments: Array<string>, character: { __typename?: 'StudentCharacter', uid: string, studentVariants: Array<{ __typename?: 'StudentVariant', uid: string, isMulticlass: boolean, primaryStudent: { __typename?: 'Student', uid: string, name: string, position: Position, tacticRole: TacticRole, catalog: { __typename?: 'StudentCatalogData', favorRewards: Array<{ __typename?: 'StudentCatalogFavorReward', level: number, modifiers: Array<{ __typename?: 'StudentCatalogStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }> } | null }, students: Array<{ __typename?: 'Student', uid: string, name: string, position: Position, tacticRole: TacticRole }> }> }, studentVariant: { __typename?: 'StudentVariant', uid: string, isMulticlass: boolean, primaryStudent: { __typename?: 'Student', uid: string, name: string }, students: Array<{ __typename?: 'Student', uid: string, name: string, position: Position, tacticRole: TacticRole }> }, recruitments: Array<{ __typename?: 'Recruitment', since: Date, rerun: boolean, recruitmentGroup: { __typename?: 'RecruitmentGroup', uid: string, startAt: Date, endAt: Date | null } }>, catalog: { __typename?: 'StudentCatalogData', profile: { __typename?: 'StudentCatalogProfile', familyName: string | null, personalName: string | null, introduction: string | null, hobby: string | null, age: string | null, schoolYear: string | null, height: string | null, weaponName: string | null }, statProfile: { __typename?: 'StudentCatalogStatProfile', growthType: StudentCatalogStatGrowthType, levelStats: Array<{ __typename?: 'StudentCatalogLevelStat', stat: StudentCatalogStat, level1: number, level100: number }>, fixedStats: Array<{ __typename?: 'StudentCatalogFixedStat', stat: StudentCatalogStat, value: number }> }, terrainAdaptations: { __typename?: 'StudentCatalogTerrainAdaptations', street: StudentTerrainAdaptationRank, outdoor: StudentTerrainAdaptationRank, indoor: StudentTerrainAdaptationRank }, starBonuses: Array<{ __typename?: 'StudentCatalogStarBonus', star: number, modifiers: Array<{ __typename?: 'StudentCatalogStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }>, potentialBonuses: Array<{ __typename?: 'StudentCatalogPotentialBonus', stat: StudentCatalogStat, levels: Array<{ __typename?: 'StudentCatalogPotentialLevel', level: number, rate: number }> }>, favorRewards: Array<{ __typename?: 'StudentCatalogFavorReward', level: number, modifiers: Array<{ __typename?: 'StudentCatalogStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }>, weapon: { __typename?: 'StudentCatalogWeapon', name: string, description: string | null, imageUrl: string | null, growthType: StudentCatalogStatGrowthType, levelStats: Array<{ __typename?: 'StudentCatalogLevelStat', stat: StudentCatalogStat, level1: number, level100: number }>, stages: Array<{ __typename?: 'StudentCatalogWeaponStage', stage: number, unlocked: boolean, maxLevel: number, learnSkillSlot: StudentSkillTypeEnum | null, learnSkillPosition: number | null, modifiers: Array<{ __typename?: 'StudentCatalogStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }> }, gear: { __typename?: 'StudentCatalogGear', name: string, description: string | null, tiers: Array<{ __typename?: 'StudentCatalogGearTier', tier: number, openFavorLevel: number, maxLevel: number, growthType: StudentCatalogStatGrowthType, learnSkillSlot: StudentSkillTypeEnum | null, learnSkillPosition: number | null, modifiers: Array<{ __typename?: 'StudentCatalogEquipmentModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, level1: number, levelMax: number }> }> } | null, skillConfigurations: Array<{ __typename?: 'StudentCatalogSkillConfiguration', formIndex: number, minimumWeaponStar: number, minimumGearTier: number, selectExSkillActionSlot: number | null, slots: Array<{ __typename?: 'StudentCatalogSkillConfigurationSlot', slot: StudentSkillTypeEnum, skills: Array<{ __typename?: 'StudentCatalogSkillReference', position: number, skillUid: string | null }> }> }> } | null, skills: Array<{ __typename?: 'Skill', uid: string, skillType: StudentSkillTypeEnum, name: string, iconUrl: string | null, maxLevel: number, additionalSkillUids: Array<string>, levels: Array<{ __typename?: 'StudentSkillLevel', level: number, cost: number | null, statModifiers: Array<{ __typename?: 'StudentSkillStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number, activation: StudentSkillModifierActivation, persistence: StudentSkillModifierPersistence }> }>, description: { __typename?: 'StudentSkillDescription', template: string, parameters: Array<{ __typename?: 'StudentSkillDescriptionParameter', id: number, emphasized: boolean, values: Array<{ __typename?: 'StudentSkillDescriptionParameterValue', level: number, text: string }> }> } | null, selectableSkills: Array<{ __typename?: 'StudentSelectableSkill', condition: StudentSkillSelectionCondition, skillUid: string }> }> } };
+
+export type StudentHeaderQueryVariables = Exact<{
+  uid: Scalars['String']['input'];
+}>;
+
+
+export type StudentHeaderQuery = { __typename?: 'Query', student: { __typename?: 'Student', name: string, familyName: string | null, uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, school: string, schaleDbId: string | null, releaseAt: Date | null, position: Position, tacticRole: TacticRole, club: { __typename?: 'StudentClub', name: string | null } | null, catalog: { __typename?: 'StudentCatalogData', profile: { __typename?: 'StudentCatalogProfile', schoolYear: string | null, age: string | null, height: string | null, hobby: string | null }, terrainAdaptations: { __typename?: 'StudentCatalogTerrainAdaptations', street: StudentTerrainAdaptationRank, outdoor: StudentTerrainAdaptationRank, indoor: StudentTerrainAdaptationRank } } | null, character: { __typename?: 'StudentCharacter', uid: string, studentVariants: Array<{ __typename?: 'StudentVariant', uid: string, isMulticlass: boolean, primaryStudent: { __typename?: 'Student', uid: string, name: string } }> }, studentVariant: { __typename?: 'StudentVariant', uid: string, isMulticlass: boolean, primaryStudent: { __typename?: 'Student', uid: string, name: string }, students: Array<{ __typename?: 'Student', uid: string, name: string }> } } };
+
+export type StudentVariantIdentityQueryVariables = Exact<{
+  uid: Scalars['String']['input'];
+}>;
+
+
+export type StudentVariantIdentityQuery = { __typename?: 'Query', student: { __typename?: 'Student', uid: string, released: boolean, initialTier: number, studentVariant: { __typename?: 'StudentVariant', primaryStudent: { __typename?: 'Student', uid: string } }, character: { __typename?: 'StudentCharacter', studentVariants: Array<{ __typename?: 'StudentVariant', primaryStudent: { __typename?: 'Student', uid: string } }> } } };
 
 export type StudentGradeDetailQueryVariables = Exact<{
   uid: Scalars['String']['input'];
@@ -1977,6 +2416,8 @@ export const AllStudentsFavoriteItemsDocument = {"kind":"Document","definitions"
 export const StudentFavoriteItemDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentFavoriteItem"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"favoriteItems"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"favorited"}},{"kind":"Field","name":{"kind":"Name","value":"favoriteLevel"}},{"kind":"Field","name":{"kind":"Name","value":"exp"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentFavoriteItemQuery, StudentFavoriteItemQueryVariables>;
 export const FarmingStagesDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"FarmingStages"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"category"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stages"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"category"},"value":{"kind":"Variable","name":{"kind":"Name","value":"category"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"stageNumber"}},{"kind":"Field","name":{"kind":"Name","value":"area"}},{"kind":"Field","name":{"kind":"Name","value":"difficulty"}},{"kind":"Field","name":{"kind":"Name","value":"terrain"}},{"kind":"Field","name":{"kind":"Name","value":"entryCosts"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"rewards"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"region"},"value":{"kind":"EnumValue","value":"gl"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"rewardType"}},{"kind":"Field","name":{"kind":"Name","value":"rewardTag"}},{"kind":"Field","name":{"kind":"Name","value":"probability"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Equipment"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"gachaGroup"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"region"},"value":{"kind":"EnumValue","value":"gl"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"chance"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Equipment"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}}]}}]}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<FarmingStagesQuery, FarmingStagesQueryVariables>;
 export const AllStudentsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"AllStudents"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"familyName"}},{"kind":"Field","name":{"kind":"Name","value":"altNames"}},{"kind":"Field","name":{"kind":"Name","value":"school"}},{"kind":"Field","name":{"kind":"Name","value":"initialTier"}},{"kind":"Field","name":{"kind":"Name","value":"order"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"tacticRole"}},{"kind":"Field","name":{"kind":"Name","value":"birthday"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"equipments"}},{"kind":"Field","name":{"kind":"Name","value":"released"}}]}}]}}]} as unknown as DocumentNode<AllStudentsQuery, AllStudentsQueryVariables>;
-export const StudentDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"familyName"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"school"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}},{"kind":"Field","name":{"kind":"Name","value":"releaseAt"}},{"kind":"Field","name":{"kind":"Name","value":"recruitments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"since"}},{"kind":"Field","name":{"kind":"Name","value":"rerun"}},{"kind":"Field","name":{"kind":"Name","value":"recruitmentGroup"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"startAt"}},{"kind":"Field","name":{"kind":"Name","value":"endAt"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentDetailQuery, StudentDetailQueryVariables>;
+export const StudentDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"studentCatalog"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"version"}},{"kind":"Field","name":{"kind":"Name","value":"statLevelInterpolationEndLevel"}},{"kind":"Field","name":{"kind":"Name","value":"statLevelInterpolations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"level"}},{"kind":"Field","name":{"kind":"Name","value":"ratios"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"growthType"}},{"kind":"Field","name":{"kind":"Name","value":"value"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"equipment"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"tier"}},{"kind":"Field","name":{"kind":"Name","value":"maxLevel"}},{"kind":"Field","name":{"kind":"Name","value":"growthType"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"modifiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"level1"}},{"kind":"Field","name":{"kind":"Name","value":"levelMax"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"familyName"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"school"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}},{"kind":"Field","name":{"kind":"Name","value":"releaseAt"}},{"kind":"Field","name":{"kind":"Name","value":"released"}},{"kind":"Field","name":{"kind":"Name","value":"initialTier"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"tacticRole"}},{"kind":"Field","name":{"kind":"Name","value":"equipments"}},{"kind":"Field","name":{"kind":"Name","value":"character"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"studentVariants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"isMulticlass"}},{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"tacticRole"}},{"kind":"Field","name":{"kind":"Name","value":"catalog"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"favorRewards"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"level"}},{"kind":"Field","name":{"kind":"Name","value":"modifiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"value"}}]}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"tacticRole"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"studentVariant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"isMulticlass"}},{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"tacticRole"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"recruitments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"since"}},{"kind":"Field","name":{"kind":"Name","value":"rerun"}},{"kind":"Field","name":{"kind":"Name","value":"recruitmentGroup"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"startAt"}},{"kind":"Field","name":{"kind":"Name","value":"endAt"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"catalog"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"profile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"familyName"}},{"kind":"Field","name":{"kind":"Name","value":"personalName"}},{"kind":"Field","name":{"kind":"Name","value":"introduction"}},{"kind":"Field","name":{"kind":"Name","value":"hobby"}},{"kind":"Field","name":{"kind":"Name","value":"age"}},{"kind":"Field","name":{"kind":"Name","value":"schoolYear"}},{"kind":"Field","name":{"kind":"Name","value":"height"}},{"kind":"Field","name":{"kind":"Name","value":"weaponName"}}]}},{"kind":"Field","name":{"kind":"Name","value":"statProfile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"growthType"}},{"kind":"Field","name":{"kind":"Name","value":"levelStats"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"level1"}},{"kind":"Field","name":{"kind":"Name","value":"level100"}}]}},{"kind":"Field","name":{"kind":"Name","value":"fixedStats"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"value"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"terrainAdaptations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"street"}},{"kind":"Field","name":{"kind":"Name","value":"outdoor"}},{"kind":"Field","name":{"kind":"Name","value":"indoor"}}]}},{"kind":"Field","name":{"kind":"Name","value":"starBonuses"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"star"}},{"kind":"Field","name":{"kind":"Name","value":"modifiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"value"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"potentialBonuses"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"levels"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"level"}},{"kind":"Field","name":{"kind":"Name","value":"rate"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"favorRewards"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"level"}},{"kind":"Field","name":{"kind":"Name","value":"modifiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"value"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"weapon"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}},{"kind":"Field","name":{"kind":"Name","value":"growthType"}},{"kind":"Field","name":{"kind":"Name","value":"levelStats"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"level1"}},{"kind":"Field","name":{"kind":"Name","value":"level100"}}]}},{"kind":"Field","name":{"kind":"Name","value":"stages"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stage"}},{"kind":"Field","name":{"kind":"Name","value":"unlocked"}},{"kind":"Field","name":{"kind":"Name","value":"maxLevel"}},{"kind":"Field","name":{"kind":"Name","value":"learnSkillSlot"}},{"kind":"Field","name":{"kind":"Name","value":"learnSkillPosition"}},{"kind":"Field","name":{"kind":"Name","value":"modifiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"value"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"gear"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"tiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"tier"}},{"kind":"Field","name":{"kind":"Name","value":"openFavorLevel"}},{"kind":"Field","name":{"kind":"Name","value":"maxLevel"}},{"kind":"Field","name":{"kind":"Name","value":"growthType"}},{"kind":"Field","name":{"kind":"Name","value":"learnSkillSlot"}},{"kind":"Field","name":{"kind":"Name","value":"learnSkillPosition"}},{"kind":"Field","name":{"kind":"Name","value":"modifiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"level1"}},{"kind":"Field","name":{"kind":"Name","value":"levelMax"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"skillConfigurations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"formIndex"}},{"kind":"Field","name":{"kind":"Name","value":"minimumWeaponStar"}},{"kind":"Field","name":{"kind":"Name","value":"minimumGearTier"}},{"kind":"Field","name":{"kind":"Name","value":"selectExSkillActionSlot"}},{"kind":"Field","name":{"kind":"Name","value":"slots"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"slot"}},{"kind":"Field","name":{"kind":"Name","value":"skills"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"skillUid"}}]}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"skills"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"includeVariants"},"value":{"kind":"BooleanValue","value":true}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"skillType"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"iconUrl"}},{"kind":"Field","name":{"kind":"Name","value":"maxLevel"}},{"kind":"Field","name":{"kind":"Name","value":"levels"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"level"}},{"kind":"Field","name":{"kind":"Name","value":"cost"}},{"kind":"Field","name":{"kind":"Name","value":"statModifiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stat"}},{"kind":"Field","name":{"kind":"Name","value":"kind"}},{"kind":"Field","name":{"kind":"Name","value":"value"}},{"kind":"Field","name":{"kind":"Name","value":"activation"}},{"kind":"Field","name":{"kind":"Name","value":"persistence"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"description"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"template"}},{"kind":"Field","name":{"kind":"Name","value":"parameters"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"emphasized"}},{"kind":"Field","name":{"kind":"Name","value":"values"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"level"}},{"kind":"Field","name":{"kind":"Name","value":"text"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"additionalSkillUids"}},{"kind":"Field","name":{"kind":"Name","value":"selectableSkills"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"condition"}},{"kind":"Field","name":{"kind":"Name","value":"skillUid"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentDetailQuery, StudentDetailQueryVariables>;
+export const StudentHeaderDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentHeader"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"familyName"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"school"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}},{"kind":"Field","name":{"kind":"Name","value":"releaseAt"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"tacticRole"}},{"kind":"Field","name":{"kind":"Name","value":"club"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"catalog"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"profile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"schoolYear"}},{"kind":"Field","name":{"kind":"Name","value":"age"}},{"kind":"Field","name":{"kind":"Name","value":"height"}},{"kind":"Field","name":{"kind":"Name","value":"hobby"}}]}},{"kind":"Field","name":{"kind":"Name","value":"terrainAdaptations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"street"}},{"kind":"Field","name":{"kind":"Name","value":"outdoor"}},{"kind":"Field","name":{"kind":"Name","value":"indoor"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"character"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"studentVariants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"isMulticlass"}},{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"studentVariant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"isMulticlass"}},{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentHeaderQuery, StudentHeaderQueryVariables>;
+export const StudentVariantIdentityDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentVariantIdentity"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"released"}},{"kind":"Field","name":{"kind":"Name","value":"initialTier"}},{"kind":"Field","name":{"kind":"Name","value":"studentVariant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"character"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"studentVariants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentVariantIdentityQuery, StudentVariantIdentityQueryVariables>;
 export const StudentGradeDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentGradeDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"familyName"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"school"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}}]}}]}}]} as unknown as DocumentNode<StudentGradeDetailQuery, StudentGradeDetailQueryVariables>;
 export const StudentSkillItemsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentSkillItems"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uids"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uids"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uids"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}},{"kind":"Field","name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"ex"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"5"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentSkillItemsQuery, StudentSkillItemsQueryVariables>;
