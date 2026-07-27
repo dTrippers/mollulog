@@ -232,6 +232,7 @@ export default function StudentScanner() {
   const [phase, setPhase] = useState<ScannerPhase>("idle");
   const [hashProgress, setHashProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isCancelling, setIsCancelling] = useState(false);
   const pollAttemptRef = useRef(0);
   const selectedJobUid = searchParams.get("job");
 
@@ -403,9 +404,31 @@ export default function StudentScanner() {
     setReview({});
     setHashProgress(0);
     setUploadProgress(0);
+    setIsCancelling(false);
     pollAttemptRef.current = 0;
     setError(null);
     setPhase("idle");
+  }
+
+  async function cancelResult() {
+    if (job?.status !== "review_ready" || isCancelling) return;
+    if (!window.confirm("이 인식 결과를 취소할까요? 결과는 반영되지 않고 최근 작업에서 사라집니다.")) {
+      return;
+    }
+
+    setIsCancelling(true);
+    setError(null);
+    try {
+      await requestScannerJson<{ uid: string; status: "cancelled" }>(`/api/ocr/jobs/${job.uid}/cancel`, {
+        method: "POST",
+      });
+      clearSelectedJob();
+      notifyScannerJobsChanged();
+    } catch (cancelError) {
+      setError(toScannerErrorMessage(cancelError));
+    } finally {
+      setIsCancelling(false);
+    }
   }
 
   return (
@@ -486,7 +509,9 @@ export default function StudentScanner() {
           phase={phase}
           onReviewChange={setReview}
           onApply={applyReview}
+          onCancel={cancelResult}
           onStartNew={() => clearSelectedJob(true)}
+          isCancelling={isCancelling}
         />
       ) : null}
 
@@ -518,14 +543,18 @@ function ReviewPanel({
   phase,
   onReviewChange,
   onApply,
+  onCancel,
   onStartNew,
+  isCancelling,
 }: {
   job: StudentVideoJob & { result: StudentDetailVideoResult };
   review: ReviewState;
   phase: ScannerPhase;
   onReviewChange: React.Dispatch<React.SetStateAction<ReviewState>>;
   onApply: (remainingReviewStudentCount: number) => void;
+  onCancel: () => void;
   onStartNew: () => void;
+  isCancelling: boolean;
 }) {
   const [reviewFilterStudentUids, setReviewFilterStudentUids] = useState<string[] | null>(null);
   const [selectedPreview, setSelectedPreview] = useState<{
@@ -761,13 +790,22 @@ function ReviewPanel({
               모든 데이터 검토 완료
             </p>
           )}
-          <Button
-            variant="primary"
-            disabled={phase === "applying" || phase === "applied"}
-            onClick={() => onApply(remainingReviewStudents.length)}
-          >
-            {phase === "applying" ? "반영 중..." : phase === "applied" ? "반영 완료" : "성장도 저장"}
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="danger-subtle"
+              disabled={phase === "applying" || phase === "applied" || isCancelling}
+              onClick={onCancel}
+            >
+              {isCancelling ? "취소 중..." : "인식 결과 삭제"}
+            </Button>
+            <Button
+              variant="primary"
+              disabled={phase === "applying" || phase === "applied" || isCancelling}
+              onClick={() => onApply(remainingReviewStudents.length)}
+            >
+              {phase === "applying" ? "반영 중..." : phase === "applied" ? "반영 완료" : "성장도 저장"}
+            </Button>
+          </div>
         </FloatingActionBar>
       </div>
       <RepresentativeFrameDialog jobUid={job.uid} selected={selectedPreview} onClose={() => setSelectedPreview(null)} />

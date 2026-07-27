@@ -2,6 +2,7 @@ import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
 import { OcrTaskResultRejectedError } from "~/domain/ocr";
 import {
+  cancelOcrJob,
   claimOcrTask,
   commitOcrTaskResult,
   createOcrJob,
@@ -220,6 +221,57 @@ function createEnv(overrides: Partial<Env> = {}): Env {
 }
 
 describe("PostgreSQL OCR control plane", () => {
+  it("cancels a review-ready job without changing its purge schedule", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-07-21T12:00:00Z"));
+    const { client, query } = createClient((sql) =>
+      sql.includes('from "ocr_jobs"') ? [jobDatabaseRow({ status: "review_ready", generation: 3 })] : [],
+    );
+
+    await expect(cancelOcrJob(createEnv(), 7, "job-1", { createClient: () => client })).resolves.toEqual({
+      uid: "job-1",
+      status: "cancelled",
+    });
+
+    const updateJob = query.mock.calls.find(([queryConfig]) =>
+      queryText(queryConfig).includes('update "ocr_jobs" set'),
+    );
+    expect(updateJob).toBeDefined();
+    expect(queryText(updateJob?.[0] as QueryConfig)).toContain('"status" = $1');
+    expect(queryText(updateJob?.[0] as QueryConfig)).toContain('"generation" = $2');
+    expect(queryText(updateJob?.[0] as QueryConfig)).toContain('"expires_at" =');
+    expect(queryText(updateJob?.[0] as QueryConfig)).not.toContain('"purge_after" =');
+    expect(updateJob?.[1]).toEqual(expect.arrayContaining(["cancelled", 4, "2026-07-21T12:00:00.000Z"]));
+    jest.useRealTimers();
+  });
+
+  it("treats cancelling an already-cancelled job as an idempotent success", async () => {
+    const { client, query } = createClient((sql) =>
+      sql.includes('from "ocr_jobs"') ? [jobDatabaseRow({ status: "cancelled" })] : [],
+    );
+
+    await expect(cancelOcrJob(createEnv(), 7, "job-1", { createClient: () => client })).resolves.toEqual({
+      uid: "job-1",
+      status: "cancelled",
+    });
+    expect(query.mock.calls.some(([queryConfig]) => queryText(queryConfig).includes('update "ocr_jobs" set'))).toBe(
+      false,
+    );
+  });
+
+  it("rejects cancelling a job that is not ready for review", async () => {
+    const { client, query } = createClient((sql) =>
+      sql.includes('from "ocr_jobs"') ? [jobDatabaseRow({ status: "processing" })] : [],
+    );
+
+    await expect(cancelOcrJob(createEnv(), 7, "job-1", { createClient: () => client })).rejects.toMatchObject({
+      message: "검토할 수 있는 인식 결과만 취소할 수 있어요",
+      status: 409,
+    });
+    expect(query.mock.calls.some(([queryConfig]) => queryText(queryConfig).includes('update "ocr_jobs" set'))).toBe(
+      false,
+    );
+  });
+
   it("exposes newly created jobs for seven days and purges them after a three-day grace period", async () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
     const { client, query } = createClient(() => []);

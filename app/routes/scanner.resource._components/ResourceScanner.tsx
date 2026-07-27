@@ -127,6 +127,7 @@ export default function ResourceScanner() {
   const [items, setItems] = useState<EditableItem[]>([]);
   const [candidateOverrides, setCandidateOverrides] = useState<Record<string, CandidateOverride>>({});
   const [isImageExpanded, setIsImageExpanded] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
   const selectedJobUid = searchParams.get("job");
 
   const showJob = useCallback((next: JobStatus) => {
@@ -295,8 +296,30 @@ export default function ResourceScanner() {
     setHighlightedReviewPosition(null);
     setIsImageExpanded(false);
     setCandidateOverrides({});
+    setIsCancelling(false);
     setError(null);
     setPhase("idle");
+  }
+
+  async function cancelResult() {
+    if (job?.status !== "review_ready" || isCancelling) return;
+    if (!window.confirm("이 인식 결과를 취소할까요? 결과는 반영되지 않고 최근 작업에서 사라집니다.")) {
+      return;
+    }
+
+    setIsCancelling(true);
+    setError(null);
+    try {
+      await requestScannerJson<{ uid: string; status: "cancelled" }>(`/api/ocr/jobs/${job.uid}/cancel`, {
+        method: "POST",
+      });
+      clearSelectedJob();
+      notifyScannerJobsChanged();
+    } catch (cancelError) {
+      setError(toScannerErrorMessage(cancelError));
+    } finally {
+      setIsCancelling(false);
+    }
   }
 
   function addFiles(candidates: File[]) {
@@ -721,8 +744,15 @@ export default function ResourceScanner() {
                 ) : null}
               </div>
             </div>
-            <div className="flex justify-end">
-              <Button variant="primary" disabled={phase === "applying" || !hasChanges} onClick={applyResult}>
+            <div className="flex flex-wrap justify-between gap-2">
+              <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
+                {isCancelling ? "취소 중..." : "인식 결과 삭제"}
+              </Button>
+              <Button
+                variant="primary"
+                disabled={phase === "applying" || isCancelling || !hasChanges}
+                onClick={applyResult}
+              >
                 {phase === "applying" ? "반영 중..." : "수량 반영"}
               </Button>
             </div>

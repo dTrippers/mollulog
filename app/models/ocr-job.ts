@@ -355,6 +355,43 @@ export async function submitOcrJob(
   return (await getOcrJob(env, userId, jobUid, options)) as OcrJobView;
 }
 
+export async function cancelOcrJob(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  jobUid: string,
+  options: OcrRepositoryOptions = {},
+): Promise<{ uid: string; status: "cancelled" }> {
+  return withOcrDatabase(env, options, (db) =>
+    db.transaction(async (tx) => {
+      const job = await getOwnedJobRow(tx, userId, jobUid, true);
+      if (!job) throw new OcrPublicError("인식 작업을 찾을 수 없어요", 404);
+      if (job.status === "cancelled") return { uid: job.uid, status: "cancelled" };
+      if (job.status !== "review_ready") {
+        throw new OcrPublicError("검토할 수 있는 인식 결과만 취소할 수 있어요", 409);
+      }
+
+      const cancelledAt = new Date();
+      await tx
+        .update(pgOcrJobsTable)
+        .set({
+          status: "cancelled",
+          generation: job.generation + 1,
+          expiresAt: cancelledAt,
+          updatedAt: cancelledAt,
+        })
+        .where(
+          and(
+            eq(pgOcrJobsTable.uid, job.uid),
+            eq(pgOcrJobsTable.userId, userId),
+            eq(pgOcrJobsTable.status, "review_ready"),
+            eq(pgOcrJobsTable.generation, job.generation),
+          ),
+        );
+      return { uid: job.uid, status: "cancelled" };
+    }),
+  );
+}
+
 async function submitStudentVideoOcrJob(
   env: Env,
   userId: number,

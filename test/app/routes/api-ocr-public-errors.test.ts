@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
-import { createOcrJob, getOcrJob, submitOcrJob } from "~/models/ocr-job";
+import { cancelOcrJob, createOcrJob, getOcrJob, submitOcrJob } from "~/models/ocr-job";
+import { getSyncDraftBySourceRef } from "~/models/sync-draft";
 import { action as createAction } from "~/routes/api.ocr.jobs";
 import { action as applyAction } from "~/routes/api.ocr.jobs.$jobUid.apply";
+import { action as cancelAction } from "~/routes/api.ocr.jobs.$jobUid.cancel";
 import { action as submitAction } from "~/routes/api.ocr.jobs.$jobUid.submit";
 
 jest.mock("~/auth/authenticator.server", () => ({
@@ -16,6 +18,7 @@ jest.mock("~/lib/observability.server", () => ({
 
 jest.mock("~/models/ocr-job", () => ({
   OcrQuotaExceededError: class OcrQuotaExceededError extends Error {},
+  cancelOcrJob: jest.fn(),
   createOcrJob: jest.fn(),
   getOcrJob: jest.fn(),
   getOcrUploadQuota: jest.fn(),
@@ -46,9 +49,11 @@ type DataResult<T> = {
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetLogger = getLogger as jest.MockedFunction<typeof getLogger>;
+const mockedCancelOcrJob = cancelOcrJob as jest.MockedFunction<typeof cancelOcrJob>;
 const mockedCreateOcrJob = createOcrJob as jest.MockedFunction<typeof createOcrJob>;
 const mockedGetOcrJob = getOcrJob as jest.MockedFunction<typeof getOcrJob>;
 const mockedSubmitOcrJob = submitOcrJob as jest.MockedFunction<typeof submitOcrJob>;
+const mockedGetSyncDraftBySourceRef = getSyncDraftBySourceRef as jest.MockedFunction<typeof getSyncDraftBySourceRef>;
 const logger = {
   debug: jest.fn(),
   info: jest.fn(),
@@ -153,5 +158,46 @@ describe("public OCR API errors", () => {
     expect(response.data.error).toBe("인식 결과를 반영하지 못했어요. 잠시 후 다시 시도해 주세요.");
     expect(JSON.stringify(response.data)).not.toContain("ocr_jobs");
     expect(logger.error).toHaveBeenCalledWith("OCR job application failed", internalError);
+  });
+
+  it("does not expose database failures while cancelling a result", async () => {
+    const internalError = new Error("relation ocr_jobs does not exist");
+    mockedCancelOcrJob.mockRejectedValue(internalError);
+
+    const response = expectDataResult<{ error: string }>(
+      await cancelAction(createArgs("/api/ocr/jobs/job-1/cancel", undefined, { jobUid: "job-1" })),
+    );
+
+    expect(response.init?.status).toBe(500);
+    expect(response.data.error).toBe("인식 결과를 취소하지 못했어요. 잠시 후 다시 시도해 주세요.");
+    expect(JSON.stringify(response.data)).not.toContain("ocr_jobs");
+    expect(logger.error).toHaveBeenCalledWith("OCR job cancellation failed", internalError);
+  });
+
+  it("cancels an unapplied review result", async () => {
+    mockedCancelOcrJob.mockResolvedValue({ uid: "job-1", status: "cancelled" });
+
+    const response = expectDataResult<{ uid: string; status: string }>(
+      await cancelAction(createArgs("/api/ocr/jobs/job-1/cancel", undefined, { jobUid: "job-1" })),
+    );
+
+    expect(response.init).toBeNull();
+    expect(response.data).toEqual({ uid: "job-1", status: "cancelled" });
+    expect(mockedGetSyncDraftBySourceRef).toHaveBeenCalledWith(env, 7, "first_party_ocr", "job-1");
+    expect(mockedCancelOcrJob).toHaveBeenCalledWith(env, 7, "job-1", { ctx });
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("rejects cancelling an already-applied result", async () => {
+    mockedGetSyncDraftBySourceRef.mockResolvedValue({ status: "applied" } as never);
+
+    const response = expectDataResult<{ error: string }>(
+      await cancelAction(createArgs("/api/ocr/jobs/job-1/cancel", undefined, { jobUid: "job-1" })),
+    );
+
+    expect(response.init?.status).toBe(409);
+    expect(response.data.error).toBe("이미 반영한 인식 결과는 취소할 수 없어요");
+    expect(mockedCancelOcrJob).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
   });
 });
