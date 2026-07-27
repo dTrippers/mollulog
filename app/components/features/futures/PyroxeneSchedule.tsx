@@ -247,6 +247,7 @@ export default function PyroxeneSchedule({
   }, [scheduleItems, collectedSourceKeySet]);
 
   let displayedYear: number | null = null;
+  let displayedRecruitmentReworkDivider = false;
 
   return (
     <div className="space-y-10">
@@ -314,9 +315,13 @@ export default function PyroxeneSchedule({
             if (source.event) {
               const { event } = source;
               const eventData = eventDataMap.get(event.uid);
+              const showRecruitmentReworkDivider =
+                !displayedRecruitmentReworkDivider && event.recruitmentRuleSet === "call_charge_v1";
+              displayedRecruitmentReworkDivider ||= showRecruitmentReworkDivider;
               return (
                 <div key={`event-${event.uid}`}>
                   {showYearDivider ? <TimelineYearDivider year={year} /> : null}
+                  {showRecruitmentReworkDivider ? <TimelineRecruitmentReworkDivider /> : null}
                   <PyroxeneTimelineEvent
                     event={event}
                     completed={eventData?.completed ?? false}
@@ -378,6 +383,15 @@ function TimelineYearDivider({ year }: { year: number }) {
     <div className="flex items-center gap-3 pb-2 pt-3">
       <span className="text-sm font-semibold tabular-nums text-muted-foreground">{year}</span>
       <span className="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+function TimelineRecruitmentReworkDivider() {
+  return (
+    <div className="flex items-center gap-3 pb-2 pt-3">
+      <span className="text-sm font-semibold text-primary">모집 시스템 개편 기준 적용</span>
+      <span className="h-px flex-1 bg-primary/50" />
     </div>
   );
 }
