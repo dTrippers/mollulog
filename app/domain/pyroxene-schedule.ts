@@ -1,4 +1,5 @@
 import type { TimelineSourceType } from "~/domain/pyroxene-planner";
+import type { RecruitmentRuleSet } from "~/domain/recruitment-cost";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { UtcIsoString } from "~/lib/date-time";
 import dayjs from "~/lib/dayjs";
@@ -16,12 +17,13 @@ export type PyroxeneScheduleContent =
       rewardAt?: UtcIsoString;
       earnablePyroxene: number | null;
       tags: string[];
+      recruitmentRuleSet?: RecruitmentRuleSet;
       recruitments: {
         recruitmentType: RecruitmentTypeEnum;
         pickup: boolean;
         rerun: boolean;
         until: UtcIsoString | null;
-        student: { uid: string; name: string; initialTier: number } | null;
+        student: { uid: string; imageUid?: string | null; name: string; initialTier: number } | null;
         // Set when this content merges recruitments from multiple events sharing one
         // recruitment group; identifies which event this particular recruitment belongs to,
         // since favorites are stored per-event rather than per-group.
@@ -55,12 +57,13 @@ export type PyroxeneScheduleItem = {
     rewardAt?: UtcIsoString | Date;
     earnablePyroxene: number | null;
     tags: string[];
+    recruitmentRuleSet?: RecruitmentRuleSet;
     recruitments: {
       recruitmentType: RecruitmentTypeEnum;
       pickup: boolean;
       rerun: boolean;
       until: UtcIsoString | null;
-      student: { uid: string; name: string; initialTier: number } | null;
+      student: { uid: string; imageUid?: string | null; name: string; initialTier: number } | null;
       favorited: boolean;
       sourceContentUid?: string;
     }[];
@@ -167,6 +170,7 @@ export function buildPyroxeneScheduleItems(
           rewardAt: content.rewardAt,
           earnablePyroxene: content.earnablePyroxene ?? null,
           tags: content.tags,
+          recruitmentRuleSet: content.recruitmentRuleSet,
           recruitmentPool: content.recruitmentPool,
           recruitments: content.recruitments.map((recruitment) => ({
             ...recruitment,

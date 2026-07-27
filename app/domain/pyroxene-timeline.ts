@@ -2,6 +2,13 @@ import type { Dayjs } from "dayjs";
 import type { PyroxeneCalculationOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { calculateDailyApChargePyroxene, collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
+import {
+  convolvePullCostDistributions,
+  type PullCostDistribution,
+  type RecruitmentCostPeriod,
+  simulateRecruitmentCost,
+  splitRecruitmentCostPeriodByChargeScope,
+} from "~/domain/recruitment-cost";
 import { DEFAULT_PICKUP_STUDENT_RATE_BY_TIER } from "~/domain/recruitment-simulator";
 import dayjs from "~/lib/dayjs";
 
@@ -70,7 +77,7 @@ const MIN_PROBABILITY = 1e-6;
 const RESOURCE_STATE_MIN_PROBABILITY = 1e-12;
 const MAX_PICKUP_TRIAL_COST_DISTRIBUTION_CACHE_SIZE = 200;
 
-type TrialDistribution = number[];
+type TrialDistribution = PullCostDistribution;
 
 export { calculateDailyApChargePyroxene } from "~/domain/pyroxene-sources";
 
@@ -533,6 +540,7 @@ function getPickupTrialCostDistributionCacheKey(
   return [
     mode,
     event.uid,
+    event.recruitmentRuleSet ?? "legacy_points",
     isFreeRecruitment100Event(event) ? "free100" : "paid",
     event.recruitmentPool?.tier2Count ?? "",
     event.recruitmentPool?.tier3Count ?? "",
@@ -554,6 +562,32 @@ function getPickupTrialCostDistribution(
   const cached = pickupTrialCostDistributionCache.get(cacheKey);
   if (cached) {
     return cached;
+  }
+
+  if (mode === "with_pity" && event.recruitmentRuleSet === "call_charge_v1") {
+    const tier2TargetCount = pickupRecruitments.filter(
+      (recruitment) => getRecruitmentStudentTier(recruitment) === 2,
+    ).length;
+    const tier3TargetCount = pickupRecruitments.length - tier2TargetCount;
+    const recruitmentPeriod: RecruitmentCostPeriod = {
+      uid: event.uid,
+      recruitmentType: pickupRecruitments[0]?.recruitmentType ?? "usual",
+      targets: pickupRecruitments.map((recruitment) => ({
+        key: recruitment.student?.uid ?? "unlisted",
+        initialTier: getRecruitmentStudentTier(recruitment),
+        recruitmentType: recruitment.recruitmentType,
+      })),
+      tier2PoolCount: Math.max(event.recruitmentPool?.tier2Count ?? 1, tier2TargetCount),
+      tier3PoolCount: Math.max(event.recruitmentPool?.tier3Count ?? 1, tier3TargetCount),
+      freePulls: isFreeRecruitment100Event(event) ? PYROXENE.FREE_RECRUITMENT_TRIAL : 0,
+    };
+    const distribution = splitRecruitmentCostPeriodByChargeScope(recruitmentPeriod).reduce(
+      (combined, scopedPeriod) =>
+        convolvePullCostDistributions(combined, simulateRecruitmentCost(scopedPeriod, "call_charge_v1")),
+      [1] as PullCostDistribution,
+    );
+    cachePickupTrialCostDistribution(cacheKey, distribution);
+    return distribution;
   }
 
   const distribution: TrialDistribution = [];

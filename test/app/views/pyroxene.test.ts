@@ -16,6 +16,7 @@ jest.mock("~/models/main-story", () => ({
 jest.mock("~/models/timeline-content.server", () => ({
   ...jest.requireActual<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
   getFutureRaidContents: jest.fn(),
+  getTimelineContent: jest.fn(),
   getTimelineContents: jest.fn(),
 }));
 
@@ -148,8 +149,9 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
       jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
     const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
     const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
-    const { getFutureRaidContents, getTimelineContents } =
-      jest.requireMock<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server");
+    const { getFutureRaidContents, getTimelineContent, getTimelineContents } = jest.requireMock<
+      typeof import("~/models/timeline-content.server")
+    >("~/models/timeline-content.server");
 
     const eventA = timelineContent({
       uid: "event-a",
@@ -174,6 +176,13 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
 
     (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([eventA, eventB]);
     (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([]);
+    (getTimelineContent as jest.MockedFunction<typeof getTimelineContent>).mockResolvedValue(
+      timelineContent({
+        uid: "pandemonium-cruise",
+        startAt: "2026-11-24T02:00:00.000Z",
+        endAt: "2026-12-08T02:00:00.000Z",
+      }),
+    );
     (getMainStories as jest.MockedFunction<typeof getMainStories>).mockResolvedValue([]);
     (getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>).mockResolvedValue({});
     (getRecruitmentPoolStudents as jest.MockedFunction<typeof getRecruitmentPoolStudents>).mockResolvedValue([]);
@@ -222,5 +231,75 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
       ["c", "event-b"],
       ["d", "event-b"],
     ]);
+  });
+});
+
+describe("getPyroxenePlannerContents with an unregistered pickup student", () => {
+  it("keeps the target as a provisional three-star and switches rules at the anchor event", async () => {
+    const { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } =
+      jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
+    const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
+    const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
+    const { getFutureRaidContents, getTimelineContent, getTimelineContents } = jest.requireMock<
+      typeof import("~/models/timeline-content.server")
+    >("~/models/timeline-content.server");
+    const event = timelineContent({
+      uid: "pandemonium-cruise-schedule",
+      name: "판데모니엄 크루즈",
+      startAt: "2026-11-24T02:00:00.000Z",
+      endAt: "2026-12-08T02:00:00.000Z",
+      recruitmentGroupUid: "anchor-group",
+    });
+
+    (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([event]);
+    (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([]);
+    (getTimelineContent as jest.MockedFunction<typeof getTimelineContent>).mockResolvedValue(
+      timelineContent({
+        uid: "pandemonium-cruise",
+        startAt: "2026-11-24T02:00:00.000Z",
+        endAt: "2026-12-08T02:00:00.000Z",
+      }),
+    );
+    (getMainStories as jest.MockedFunction<typeof getMainStories>).mockResolvedValue([]);
+    (getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>).mockResolvedValue({});
+    (getRecruitmentPoolStudents as jest.MockedFunction<typeof getRecruitmentPoolStudents>).mockResolvedValue([]);
+    (getRecruitmentGroupsByUids as jest.MockedFunction<typeof getRecruitmentGroupsByUids>).mockResolvedValue([
+      {
+        uid: "anchor-group",
+        startAt: "2026-11-24T02:00:00.000Z",
+        endAt: "2026-12-08T02:00:00.000Z",
+        recruitmentType: "usual",
+        recruitments: [
+          {
+            recruitmentType: "usual",
+            pickup: true,
+            rerun: false,
+            since: "2026-11-24T02:00:00.000Z",
+            until: null,
+            studentName: "미등록 학생",
+            student: null,
+          },
+        ],
+      },
+    ] as unknown as Awaited<ReturnType<typeof getRecruitmentGroupsByUids>>);
+
+    const content = (await getPyroxenePlannerContents({} as Env)).find(
+      (candidate) => candidate.kind === "event" && candidate.uid === event.uid,
+    );
+
+    expect(content).toMatchObject({
+      recruitmentRuleSet: "call_charge_v1",
+      recruitmentPool: { tier3Count: 1 },
+      recruitments: [
+        {
+          student: {
+            uid: expect.stringMatching(/^provisional:/),
+            imageUid: null,
+            name: "미등록 학생",
+            initialTier: 3,
+          },
+        },
+      ],
+    });
   });
 });

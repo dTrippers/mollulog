@@ -7,6 +7,7 @@ import {
   type PickupResources,
   type PyroxeneTimelineBandMode,
 } from "~/domain/pyroxene-timeline";
+import type { RecruitmentRuleSet } from "~/domain/recruitment-cost";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
 
 jest.mock("~/models/recruitment", () => ({
@@ -62,6 +63,7 @@ function eventItem({
   earnablePyroxene = null,
   recruitments = [pickupRecruitment()],
   recruitmentPool = { tier2Count: 150, tier3Count: 202 },
+  recruitmentRuleSet,
   tags = [],
 }: {
   uid: string;
@@ -70,6 +72,7 @@ function eventItem({
   earnablePyroxene?: number | null;
   recruitments?: NonNullable<PyroxeneScheduleItem["event"]>["recruitments"];
   recruitmentPool?: NonNullable<PyroxeneScheduleItem["event"]>["recruitmentPool"];
+  recruitmentRuleSet?: RecruitmentRuleSet;
   tags?: string[];
 }): PyroxeneScheduleItem {
   return {
@@ -80,6 +83,7 @@ function eventItem({
       until,
       earnablePyroxene,
       tags,
+      recruitmentRuleSet,
       recruitments,
       recruitmentPool,
     },
@@ -392,6 +396,25 @@ describe("buildTimeline pyroxene balance band", () => {
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(87_040);
     expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(87_040);
     expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(76_000);
+  });
+
+  it("switches the planner probability distribution to call charge for post-anchor events", () => {
+    const options = { ...defaultOptions, event: { pickupChance: "average_pity" as const } };
+    const legacy = buildTestTimeline({
+      scheduleItems: [eventItem({ uid: "legacy", recruitmentRuleSet: "legacy_points" })],
+      options,
+    });
+    const callCharge = buildTestTimeline({
+      scheduleItems: [eventItem({ uid: "call-charge", recruitmentRuleSet: "call_charge_v1" })],
+      options,
+    });
+    const legacyCost =
+      100_000 - (legacy.find((entry) => entry.source.event?.uid === "legacy")?.accumulatedResources.pyroxene ?? 0);
+    const callChargeCost =
+      100_000 -
+      (callCharge.find((entry) => entry.source.event?.uid === "call-charge")?.accumulatedResources.pyroxene ?? 0);
+
+    expect(callChargeCost).toBeLessThan(legacyCost);
   });
 
   it("uses the average-mode linear central path while keeping ticket spending order unchanged", () => {
