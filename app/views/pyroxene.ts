@@ -1,4 +1,9 @@
-import { filterRecruitmentsByStudentUids } from "~/domain/recruitment-identity";
+import {
+  CALL_CHARGE_ANCHOR_TIMELINE_UID,
+  getRecruitmentRuleSet,
+  type RecruitmentRuleSet,
+} from "~/domain/recruitment-cost";
+import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { buildRecruitmentPoolSnapshot } from "~/domain/recruitment-simulator";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { compareInstantAsc, compareInstantDesc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
@@ -16,6 +21,7 @@ import type { TimelineContent, TimelineContentType } from "~/models/timeline-con
 import {
   findEventsForRecruitmentStudent,
   getFutureRaidContents,
+  getTimelineContent,
   getTimelineContents,
   groupTimelineContentsByRecruitmentGroupUid,
 } from "~/models/timeline-content.server";
@@ -36,12 +42,13 @@ export type PyroxenePlannerContent =
       rewardAt?: UtcIsoString;
       earnablePyroxene: number | null;
       tags: string[];
+      recruitmentRuleSet: RecruitmentRuleSet;
       recruitments: {
         recruitmentType: RecruitmentTypeEnum;
         pickup: boolean;
         rerun: boolean;
         until: UtcIsoString | null;
-        student: { uid: string; name: string; initialTier: number } | null;
+        student: { uid: string; imageUid: string | null; name: string; initialTier: number } | null;
         // Which event this recruitment "belongs to" when its group is shared by multiple
         // events. Only set on the merged recruitment entry (see buildGroupRecruitmentContent);
         // absent elsewhere, where recruitment.uid === content.uid already disambiguates.
@@ -85,6 +92,7 @@ export function buildMainStoryRewardContents(volumes: MainStoryVolume[]): Pyroxe
           rewardAt,
           earnablePyroxene: episodeCount * MAIN_STORY_PYROXENE_PER_EPISODE,
           tags: ["main_story_reward"],
+          recruitmentRuleSet: "legacy_points",
           recruitments: [],
         });
       }
@@ -136,11 +144,14 @@ function toRecruitmentDetail(
     pickup: recruitment.pickup,
     rerun: recruitment.rerun,
     until: recruitment.until ? toUtcIso(recruitment.until) : null,
-    student: recruitment.student
+    student: recruitment.pickup
       ? {
-          uid: recruitment.student.uid,
-          name: recruitment.student.name,
-          initialTier: studentsMap[recruitment.student.uid]?.initialTier ?? 0,
+          uid: getRecruitmentFavoriteKey(recruitment),
+          imageUid: recruitment.student?.uid ?? null,
+          name: recruitment.student?.name ?? recruitment.studentName,
+          initialTier: recruitment.student
+            ? (studentsMap[recruitment.student.uid]?.initialTier ?? recruitment.student.initialTier ?? 3)
+            : 3,
         }
       : null,
     ...(sourceContentUid ? { sourceContentUid } : {}),
@@ -152,9 +163,12 @@ function buildRecruitmentPoolInfo(
   recruitmentPoolStudents: Awaited<ReturnType<typeof getRecruitmentPoolStudents>>,
 ): PyroxeneEventVariant["recruitmentPool"] {
   const snapshot = buildRecruitmentPoolSnapshot({ recruitmentGroup: group, students: recruitmentPoolStudents });
+  const provisionalTier3PickupCount = group.recruitments.filter(
+    (recruitment) => recruitment.pickup && recruitment.recruitmentType !== "given" && recruitment.student === null,
+  ).length;
   return {
     tier2Count: snapshot.nonPickupStudentsByTier.tier2.length,
-    tier3Count: snapshot.nonPickupStudentsByTier.tier3.length,
+    tier3Count: snapshot.nonPickupStudentsByTier.tier3.length + provisionalTier3PickupCount,
   };
 }
 
@@ -164,11 +178,15 @@ export async function getPyroxenePlannerContents(
   ctx?: ExecutionContext,
 ): Promise<PyroxenePlannerContent[]> {
   // Events require syncedAt (confirmed by BAQL); raids are fetched regardless of syncedAt
-  const [eventContents, raidContents, mainStories] = await Promise.all([
+  const [eventContents, raidContents, mainStories, callChargeAnchor] = await Promise.all([
     getTimelineContents(env, undefined, { ctx }),
     getFutureRaidContents(env, ["raid"], { ctx }),
     getMainStories(env, forceRefresh),
+    getTimelineContent(env, CALL_CHARGE_ANCHOR_TIMELINE_UID, { ctx }),
   ]);
+  if (!callChargeAnchor) {
+    throw new Error(`call-charge anchor timeline is missing: ${CALL_CHARGE_ANCHOR_TIMELINE_UID}`);
+  }
   const raidUids = new Set(raidContents.map((c) => c.uid));
   const mainStoryRewardContents = buildMainStoryRewardContents(mainStories);
   const allContents: (TimelineContent | PyroxenePlannerContent)[] = [
@@ -231,6 +249,9 @@ export async function getPyroxenePlannerContents(
               until,
               earnablePyroxene,
               tags: content.tags,
+              recruitmentRuleSet: group
+                ? getRecruitmentRuleSet(group.startAt, callChargeAnchor.startAt)
+                : "legacy_points",
               recruitments,
               recruitmentPool: group ? buildRecruitmentPoolInfo(group, recruitmentPoolStudents) : undefined,
             },
@@ -246,6 +267,7 @@ export async function getPyroxenePlannerContents(
           until,
           earnablePyroxene,
           tags: content.tags,
+          recruitmentRuleSet: "legacy_points",
           recruitments: [],
         };
 
@@ -275,6 +297,9 @@ export async function getPyroxenePlannerContents(
             until: group?.endAt ? toUtcIso(group.endAt) : until,
             earnablePyroxene: null,
             tags: [...new Set(sortedSiblings.flatMap((sibling) => sibling.tags))],
+            recruitmentRuleSet: group
+              ? getRecruitmentRuleSet(group.startAt, callChargeAnchor.startAt)
+              : "legacy_points",
             recruitments: mergedRecruitments,
             recruitmentPool: group ? buildRecruitmentPoolInfo(group, recruitmentPoolStudents) : undefined,
           },

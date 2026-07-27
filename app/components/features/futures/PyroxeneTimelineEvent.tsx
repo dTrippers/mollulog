@@ -53,7 +53,7 @@ export default function PyroxeneTimelineEvent({
         const contentUid = sourceContentUid ?? event.uid;
         return [
           {
-            uid: student.uid,
+            uid: student.imageUid === null ? "unlisted" : (student.imageUid ?? student.uid),
             selectionKey: `${contentUid}\u0000${student.uid}`,
             contentUid,
             name: student.name,
