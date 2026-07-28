@@ -1,6 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  applyRecruitmentFunding,
   convolvePullCostDistributions,
+  getFundedRecruitmentPulls,
   getRecruitmentChargeScope,
   getRecruitmentRuleSet,
   type PullCostDistribution,
@@ -59,10 +61,10 @@ describe("simulateRecruitmentCost", () => {
     expect(distribution.some((probability, pulls) => probability > 0 && pulls % 10 !== 0)).toBe(false);
   });
 
-  it("counts free pulls toward progress while removing them from paid cost", () => {
-    const distribution = simulateRecruitmentCost(period(1, { freePulls: 100 }), "call_charge_v1");
-    expect(distribution[0]).toBeGreaterThan(0.5);
-    expect(distribution.length - 1).toBe(100);
+  it("keeps total recruitment count separate from funding", () => {
+    const distribution = simulateRecruitmentCost(period(), "call_charge_v1");
+    expect(distribution.findIndex((probability) => probability > 0)).toBe(10);
+    expect(distribution.length - 1).toBe(200);
   });
 
   it("uses the actual pickup tier for provisional tier-two targets", () => {
@@ -84,28 +86,64 @@ describe("distribution helpers", () => {
     expect(convolvePullCostDistributions([1], [0, 0.5, 0.5])).toEqual([0, 0.5, 0.5]);
   });
 
-  it("shares charge only between limited and fes recruitment types", () => {
-    expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Limited)).toBe("limited_fes");
-    expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Fes)).toBe("limited_fes");
-    expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Usual)).toBe("usual");
+  it("maps recruitment types to their shared charge scopes", () => {
+    expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Usual)).toBe("regular");
+    expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Limited)).toBe("limited");
+    expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Fes)).toBe("limited");
+    expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Recollect)).toBe("limited");
+    expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Encore)).toBe("limited");
+    expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Archive)).toBeNull();
     expect(getRecruitmentChargeScope(RecruitmentTypeEnum.Given)).toBeNull();
   });
 
-  it("splits independent charge scopes while applying free pulls only once", () => {
+  it("splits independent charge scopes without splitting shared recruitment benefits", () => {
     const scopedPeriods = splitRecruitmentCostPeriodByChargeScope({
-      ...period(3, { freePulls: 100 }),
+      ...period(5),
       targets: [
         { key: "limited", initialTier: 3, recruitmentType: RecruitmentTypeEnum.Limited },
         { key: "fes", initialTier: 3, recruitmentType: RecruitmentTypeEnum.Fes },
+        { key: "recollect", initialTier: 3, recruitmentType: RecruitmentTypeEnum.Recollect },
+        { key: "encore", initialTier: 3, recruitmentType: RecruitmentTypeEnum.Encore },
         { key: "usual", initialTier: 3, recruitmentType: RecruitmentTypeEnum.Usual },
       ],
     });
 
     expect(scopedPeriods.map((scopedPeriod) => scopedPeriod.targets.map((target) => target.key))).toEqual([
-      ["limited", "fes"],
+      ["limited", "fes", "recollect", "encore"],
       ["usual"],
     ]);
-    expect(scopedPeriods.map((scopedPeriod) => scopedPeriod.freePulls)).toEqual([100, 0]);
+  });
+
+  it.each([
+    [70, 70],
+    [80, 70],
+    [130, 120],
+    [140, 120],
+    [150, 130],
+    [160, 130],
+    [170, 140],
+    [180, 140],
+    [200, 160],
+    [400, 320],
+  ])("funds %i total pulls as %i pulls after recruitment perks", (totalPulls, fundedPulls) => {
+    expect(getFundedRecruitmentPulls(totalPulls, { recruitmentPerks: true })).toBe(fundedPulls);
+  });
+
+  it("counts free recruitment toward perk thresholds", () => {
+    expect(getFundedRecruitmentPulls(100, { freePulls: 100, recruitmentPerks: true })).toBe(0);
+    expect(getFundedRecruitmentPulls(110, { freePulls: 100, recruitmentPerks: true })).toBe(0);
+    expect(getFundedRecruitmentPulls(120, { freePulls: 100, recruitmentPerks: true })).toBe(10);
+  });
+
+  it("applies shared recruitment benefits once after charge-scope distributions are combined", () => {
+    const totalPullDistribution = convolvePullCostDistributions(
+      Object.assign(Array(81).fill(0), { 80: 1 }),
+      Object.assign(Array(61).fill(0), { 60: 1 }),
+    );
+    const fundedDistribution = applyRecruitmentFunding(totalPullDistribution, { recruitmentPerks: true });
+
+    expect(fundedDistribution[120]).toBe(1);
+    expect(fundedDistribution.reduce((sum, probability) => sum + (probability ?? 0), 0)).toBe(1);
   });
 });
 

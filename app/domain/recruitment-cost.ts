@@ -16,12 +16,18 @@ export type RecruitmentCostPeriod = {
   targets: RecruitmentCostTarget[];
   tier2PoolCount: number;
   tier3PoolCount: number;
-  freePulls?: number;
 };
 
 export type PullCostDistribution = number[];
 
-export type RecruitmentChargeScope = "limited_fes" | Exclude<RecruitmentTypeEnum, "limited" | "fes" | "given">;
+export type RecruitmentChargeScope = "regular" | "limited";
+
+export type RecruitmentFundingOptions = {
+  freePulls?: number;
+  recruitmentPerks?: boolean;
+};
+
+export const RECRUITMENT_PERK_TEN_PULL_THRESHOLDS = [70, 130, 150, 170, 270, 330, 350, 370] as const;
 
 const PULLS_PER_BATCH = 10;
 const LEGACY_EXCHANGE_INTERVAL = 200;
@@ -31,9 +37,9 @@ const MIN_PROBABILITY = 1e-14;
 const MAX_TARGETS_PER_PERIOD = 20;
 
 export function getRecruitmentChargeScope(recruitmentType: RecruitmentTypeEnum): RecruitmentChargeScope | null {
-  if (recruitmentType === "given") return null;
-  if (recruitmentType === "limited" || recruitmentType === "fes") return "limited_fes";
-  return recruitmentType;
+  if (recruitmentType === "usual") return "regular";
+  if (["limited", "fes", "recollect", "encore"].includes(recruitmentType)) return "limited";
+  return null;
 }
 
 export function splitRecruitmentCostPeriodByChargeScope(period: RecruitmentCostPeriod): RecruitmentCostPeriod[] {
@@ -46,13 +52,41 @@ export function splitRecruitmentCostPeriodByChargeScope(period: RecruitmentCostP
     targetsByScope.set(scope, targets);
   }
 
-  return [...targetsByScope.entries()].map(([scope, targets], index) => ({
+  return [...targetsByScope.entries()].map(([scope, targets]) => ({
     ...period,
     uid: `${period.uid}:${scope}`,
     recruitmentType: targets[0]?.recruitmentType ?? period.recruitmentType,
     targets,
-    freePulls: index === 0 ? period.freePulls : 0,
   }));
+}
+
+export function getUsableRecruitmentPerkTenPullTicketCount(totalPulls: number): number {
+  return RECRUITMENT_PERK_TEN_PULL_THRESHOLDS.filter((threshold) => totalPulls >= threshold + PULLS_PER_BATCH).length;
+}
+
+export function getFundedRecruitmentPulls(
+  totalPulls: number,
+  { freePulls = 0, recruitmentPerks = false }: RecruitmentFundingOptions = {},
+): number {
+  const normalizedTotalPulls = Math.max(0, totalPulls);
+  const normalizedFreePulls = Math.max(0, freePulls);
+  const perkPulls = recruitmentPerks
+    ? getUsableRecruitmentPerkTenPullTicketCount(normalizedTotalPulls) * PULLS_PER_BATCH
+    : 0;
+  return Math.max(0, normalizedTotalPulls - normalizedFreePulls - perkPulls);
+}
+
+export function applyRecruitmentFunding(
+  distribution: PullCostDistribution,
+  options: RecruitmentFundingOptions,
+): PullCostDistribution {
+  const fundedDistribution: PullCostDistribution = [];
+  for (let pulls = 0; pulls < distribution.length; pulls += 1) {
+    const probability = distribution[pulls] ?? 0;
+    if (probability <= MIN_PROBABILITY) continue;
+    addDistributionProbability(fundedDistribution, getFundedRecruitmentPulls(pulls, options), probability);
+  }
+  return fundedDistribution;
 }
 
 type BatchState = {
@@ -85,15 +119,13 @@ function directPickupRate(target: RecruitmentCostTarget): number {
   return targetTier(target) === 2 ? 0.03 : 0.007;
 }
 
-function tier3SlotRate(period: RecruitmentCostPeriod): number {
-  return period.recruitmentType === "fes" || period.targets.some((target) => target.recruitmentType === "fes")
-    ? 0.06
-    : 0.03;
+function tier3SlotRate(activeTarget: RecruitmentCostTarget): number {
+  return activeTarget.recruitmentType === "fes" ? 0.06 : 0.03;
 }
 
-function tierSlotRate(period: RecruitmentCostPeriod, tier: 2 | 3, slotIndex: number): number {
-  if (tier === 3) return tier3SlotRate(period);
-  return slotIndex === PULLS_PER_BATCH - 1 ? 1 - tier3SlotRate(period) : 0.185;
+function tierSlotRate(activeTarget: RecruitmentCostTarget, tier: 2 | 3, slotIndex: number): number {
+  if (tier === 3) return tier3SlotRate(activeTarget);
+  return slotIndex === PULLS_PER_BATCH - 1 ? 1 - tier3SlotRate(activeTarget) : 0.185;
 }
 
 function poolCount(period: RecruitmentCostPeriod, tier: 2 | 3): number {
@@ -133,7 +165,7 @@ function normalSlotOutcomes(
     const availablePoolCount = Math.max(1, poolCount(period, otherTier) - (otherTier === activeTier ? 1 : 0));
     const offRate = Math.max(
       0,
-      tierSlotRate(period, otherTier, slotIndex) - (otherTier === activeTier ? activeProbability : 0),
+      tierSlotRate(activeTarget, otherTier, slotIndex) - (otherTier === activeTier ? activeProbability : 0),
     );
     mergeSlotOutcome(outcomes, {
       acquiredBit: 1 << index,
@@ -262,17 +294,6 @@ function addDistributionProbability(distribution: PullCostDistribution, pulls: n
   distribution[pulls] = (distribution[pulls] ?? 0) + probability;
 }
 
-function applyFreePulls(distribution: PullCostDistribution, freePulls: number): PullCostDistribution {
-  if (freePulls <= 0) return distribution;
-  const paidDistribution: PullCostDistribution = [];
-  for (let pulls = 0; pulls < distribution.length; pulls += 1) {
-    const probability = distribution[pulls] ?? 0;
-    if (probability <= MIN_PROBABILITY) continue;
-    addDistributionProbability(paidDistribution, Math.max(0, pulls - freePulls), probability);
-  }
-  return paidDistribution;
-}
-
 function validatePeriod(period: RecruitmentCostPeriod) {
   if (period.targets.length > MAX_TARGETS_PER_PERIOD) {
     throw new Error(`too many recruitment targets in one period: ${period.targets.length}`);
@@ -344,8 +365,7 @@ export function simulateRecruitmentCost(
   ruleSet: RecruitmentRuleSet,
 ): PullCostDistribution {
   validatePeriod(period);
-  const distribution = ruleSet === "call_charge_v1" ? simulateCallChargePeriod(period) : simulateLegacyPeriod(period);
-  return applyFreePulls(distribution, period.freePulls ?? 0);
+  return ruleSet === "call_charge_v1" ? simulateCallChargePeriod(period) : simulateLegacyPeriod(period);
 }
 
 export function convolvePullCostDistributions(

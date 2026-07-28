@@ -417,6 +417,70 @@ describe("buildTimeline pyroxene balance band", () => {
     expect(callChargeCost).toBeLessThan(legacyCost);
   });
 
+  it("treats manual input as total recruitment count before recruitment perks", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 200 }]]),
+      scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "call_charge_v1" })],
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(-19_200);
+    expect(eventEntry?.accumulatedResources.pyroxene).toBe(80_800);
+  });
+
+  it("counts free recruitment toward perks for manual total recruitment input", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 120 }]]),
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          recruitmentRuleSet: "call_charge_v1",
+          tags: ["recruit_free_100"],
+        }),
+      ],
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(-1_200);
+  });
+
+  it("applies recruitment perks to the call-charge ceiling scenario", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "call_charge_v1" })],
+      options: {
+        ...defaultOptions,
+        event: { pickupChance: "ceil" },
+      },
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(-19_200);
+  });
+
+  it("does not apply call-charge perks to archive recruitment", () => {
+    const archiveRecruitment = {
+      ...pickupRecruitment(),
+      recruitmentType: RecruitmentTypeEnum.Archive,
+    };
+    const timeline = buildTestTimeline({
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          recruitmentRuleSet: "call_charge_v1",
+          recruitments: [archiveRecruitment],
+          tags: ["recruit_free_100"],
+        }),
+      ],
+      options: {
+        ...defaultOptions,
+        event: { pickupChance: "ceil" },
+      },
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(-24_000);
+  });
+
   it("uses the average-mode linear central path while keeping ticket spending order unchanged", () => {
     const timeline = buildTestTimeline({
       initialResources: {

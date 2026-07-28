@@ -5,17 +5,17 @@ const pickupChanceOptions = [
   {
     label: "평균 (천장 미반영)",
     value: "average",
-    description: "픽업 확률을 바탕으로 한 기댓값(약 140회)을 단순 합산해요.",
+    description: "픽업 확률만 반영한 기댓값으로 계산해요.",
   },
   {
     label: "평균 (천장 반영)",
     value: "average_pity",
-    description: "200회 모집 시 모집 포인트로 교환하는 조건의 기댓값(약 109회)으로 계산해요.",
+    description: "해당 모집의 천장 규칙까지 반영한 기댓값으로 계산해요.",
   },
   {
     label: "천장",
     value: "ceil",
-    description: "모든 픽업 학생을 모집 포인트로 교환하는 최악의 상황으로 계산해요.",
+    description: "모든 픽업 학생을 해당 모집의 천장까지 진행하는 최악의 상황으로 계산해요.",
   },
 ] satisfies { label: string; value: PyroxenePickupChance; description: string }[];
 

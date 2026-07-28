@@ -3,7 +3,10 @@ import type { PyroxeneCalculationOptions, TimelineSourceType } from "~/domain/py
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { calculateDailyApChargePyroxene, collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
 import {
+  applyRecruitmentFunding,
   convolvePullCostDistributions,
+  getFundedRecruitmentPulls,
+  getRecruitmentChargeScope,
   type PullCostDistribution,
   type RecruitmentCostPeriod,
   simulateRecruitmentCost,
@@ -564,6 +567,43 @@ function getPickupTrialCostDistribution(
     return cached;
   }
 
+  if (event.recruitmentRuleSet === "call_charge_v1") {
+    const eligibleRecruitments = pickupRecruitments.filter(
+      (recruitment) => getRecruitmentChargeScope(recruitment.recruitmentType) !== null,
+    );
+    const excludedRecruitments = pickupRecruitments.filter(
+      (recruitment) => getRecruitmentChargeScope(recruitment.recruitmentType) === null,
+    );
+    if (eligibleRecruitments.length > 0 && excludedRecruitments.length > 0) {
+      const eligibleDistribution = getPickupTrialCostDistribution(event, eligibleRecruitments, mode);
+      const excludedDistribution = getPickupTrialCostDistribution(
+        {
+          ...event,
+          recruitmentRuleSet: "legacy_points",
+          tags: event.tags.filter((tag) => tag !== "recruit_free_100"),
+        },
+        excludedRecruitments,
+        mode,
+      );
+      const distribution = convolvePullCostDistributions(eligibleDistribution, excludedDistribution);
+      cachePickupTrialCostDistribution(cacheKey, distribution);
+      return distribution;
+    }
+    if (eligibleRecruitments.length === 0) {
+      const distribution = getPickupTrialCostDistribution(
+        {
+          ...event,
+          recruitmentRuleSet: "legacy_points",
+          tags: event.tags.filter((tag) => tag !== "recruit_free_100"),
+        },
+        excludedRecruitments,
+        mode,
+      );
+      cachePickupTrialCostDistribution(cacheKey, distribution);
+      return distribution;
+    }
+  }
+
   if (mode === "with_pity" && event.recruitmentRuleSet === "call_charge_v1") {
     const tier2TargetCount = pickupRecruitments.filter(
       (recruitment) => getRecruitmentStudentTier(recruitment) === 2,
@@ -579,13 +619,16 @@ function getPickupTrialCostDistribution(
       })),
       tier2PoolCount: Math.max(event.recruitmentPool?.tier2Count ?? 1, tier2TargetCount),
       tier3PoolCount: Math.max(event.recruitmentPool?.tier3Count ?? 1, tier3TargetCount),
-      freePulls: isFreeRecruitment100Event(event) ? PYROXENE.FREE_RECRUITMENT_TRIAL : 0,
     };
-    const distribution = splitRecruitmentCostPeriodByChargeScope(recruitmentPeriod).reduce(
+    const totalPullDistribution = splitRecruitmentCostPeriodByChargeScope(recruitmentPeriod).reduce(
       (combined, scopedPeriod) =>
         convolvePullCostDistributions(combined, simulateRecruitmentCost(scopedPeriod, "call_charge_v1")),
       [1] as PullCostDistribution,
     );
+    const distribution = applyRecruitmentFunding(totalPullDistribution, {
+      freePulls: isFreeRecruitment100Event(event) ? PYROXENE.FREE_RECRUITMENT_TRIAL : 0,
+      recruitmentPerks: true,
+    });
     cachePickupTrialCostDistribution(cacheKey, distribution);
     return distribution;
   }
@@ -628,6 +671,15 @@ function getPickupTrialCostDistribution(
     }
 
     activeStates = nextStates;
+  }
+
+  if (event.recruitmentRuleSet === "call_charge_v1") {
+    const fundedDistribution = applyRecruitmentFunding(distribution, {
+      freePulls: isFreeRecruitment100Event(event) ? PYROXENE.FREE_RECRUITMENT_TRIAL : 0,
+      recruitmentPerks: true,
+    });
+    cachePickupTrialCostDistribution(cacheKey, fundedDistribution);
+    return fundedDistribution;
   }
 
   if (isFreeRecruitment100Event(event)) {
@@ -922,10 +974,21 @@ export function buildTimeline(
       }
 
       const manualExpectedTrials = eventData?.expectedTrials ?? null;
+      const callChargePickupCount = pickupRecruitments.filter(
+        (recruitment) => getRecruitmentChargeScope(recruitment.recruitmentType) !== null,
+      ).length;
+      const hasCallChargeRecruitments = event.recruitmentRuleSet === "call_charge_v1" && callChargePickupCount > 0;
+      const allRecruitmentsUseCallCharge = hasCallChargeRecruitments && callChargePickupCount === pickupCount;
+      const recruitmentFundingOptions = {
+        freePulls: isFreeRecruitment100Event(event) ? PYROXENE.FREE_RECRUITMENT_TRIAL : 0,
+        recruitmentPerks: true,
+      };
       let pickupTrial: number;
       let pickupTrialCostDistribution: TrialDistribution | undefined;
       if (manualExpectedTrials !== null) {
-        pickupTrial = manualExpectedTrials;
+        pickupTrial = allRecruitmentsUseCallCharge
+          ? getFundedRecruitmentPulls(manualExpectedTrials, recruitmentFundingOptions)
+          : manualExpectedTrials;
       } else {
         // 이벤트별 직접 입력이 없으면 관심 등록된 픽업 학생 수와 전역 모집 목표로 계산합니다.
         if (options.event.pickupChance !== "ceil") {
@@ -935,16 +998,25 @@ export function buildTimeline(
             options.event.pickupChance === "average" ? "without_pity" : "with_pity",
           );
         }
-        if (options.event.pickupChance === "average_pity") {
+        if (
+          options.event.pickupChance === "average_pity" ||
+          (hasCallChargeRecruitments && options.event.pickupChance === "average")
+        ) {
           pickupTrial = Math.round(calculateExpectedTrial(pickupTrialCostDistribution ?? [1]));
         } else {
           pickupTrial =
             pickupCount *
             (options.event.pickupChance === "ceil" ? PYROXENE.PICKUP_TRIAL.ceil : PYROXENE.PICKUP_TRIAL.average);
         }
+        if (hasCallChargeRecruitments && options.event.pickupChance === "ceil") {
+          const callChargeTotalPulls = callChargePickupCount * PYROXENE.PICKUP_TRIAL.ceil;
+          const excludedTotalPulls = (pickupCount - callChargePickupCount) * PYROXENE.PICKUP_TRIAL.ceil;
+          pickupTrial = getFundedRecruitmentPulls(callChargeTotalPulls, recruitmentFundingOptions) + excludedTotalPulls;
+        }
       }
 
       if (
+        event.recruitmentRuleSet !== "call_charge_v1" &&
         isFreeRecruitment100Event(event) &&
         (manualExpectedTrials !== null ||
           options.event.pickupChance === "average" ||
