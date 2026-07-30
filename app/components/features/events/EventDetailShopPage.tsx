@@ -104,6 +104,8 @@ export default function EventDetailShopPage({
   const { appliedBonusRatios } = useBonusCalculation({
     eventRewardBonus,
     selectedStudentUids: state.selectedBonusStudentUids,
+    selectedStudentUidsByItem:
+      state.bonusStudentSelectionMode === "perItem" ? state.selectedBonusStudentUidsByItem : undefined,
   });
 
   // Auto-save

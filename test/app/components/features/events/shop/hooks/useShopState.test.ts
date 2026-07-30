@@ -35,6 +35,8 @@ function createSavedShopState(overrides: Partial<EventShopState> = {}): EventSho
     itemQuantities: {},
     itemPurchaseDays: {},
     selectedBonusStudentUids: [],
+    bonusStudentSelectionMode: "shared",
+    selectedBonusStudentUidsByItem: {},
     enabledStages: {},
     includeRecruitedStudents: true,
     existingPaymentItemQuantities: {},

@@ -17,6 +17,8 @@ type StudentCardsProps = {
     level?: number | null;
     label?: ReactNode;
     grayscale?: boolean;
+    checked?: boolean;
+    indeterminate?: boolean;
     hideName?: boolean;
 
     state?: {

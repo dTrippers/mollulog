@@ -1,5 +1,5 @@
 import { Transition } from "@headlessui/react";
-import { CheckIcon, HeartIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
+import { CheckIcon, HeartIcon, MinusIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
@@ -38,6 +38,7 @@ type StudentCardProps = {
   completed?: boolean;
   grayscale?: boolean;
   checked?: boolean;
+  indeterminate?: boolean;
   hideName?: boolean;
   circular?: boolean;
   flush?: boolean;
@@ -132,6 +133,7 @@ export default function StudentCard({
   completed,
   grayscale,
   checked,
+  indeterminate,
   hideName,
   circular,
   flush = false,
@@ -302,6 +304,12 @@ export default function StudentCard({
               {checked && (
                 <div className="absolute top-0.5 right-0.5 w-3/10 aspect-square text-white border rounded-full flex items-center justify-center bg-blue-500/90">
                   <CheckIcon className="w-full p-0.5" />
+                </div>
+              )}
+
+              {!checked && indeterminate && (
+                <div className="absolute top-0.5 right-0.5 flex aspect-square w-3/10 items-center justify-center rounded-full border bg-blue-500/90 text-white">
+                  <MinusIcon className="w-full p-0.5" />
                 </div>
               )}
 

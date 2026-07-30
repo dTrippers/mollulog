@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
-import type { MinigamePaymentQuantityMode } from "~/domain/event-shop";
+import type { BonusStudentSelectionMode, MinigamePaymentQuantityMode } from "~/domain/event-shop";
 
 export const eventShopStatesTable = sqliteTable("event_shop_states", {
   id: int().primaryKey({ autoIncrement: true }),
@@ -12,6 +12,8 @@ export const eventShopStatesTable = sqliteTable("event_shop_states", {
   itemQuantities: text().notNull().default("{}"),
   itemPurchaseDays: text().notNull().default("{}"),
   selectedBonusStudentUids: text().notNull().default("[]"),
+  bonusStudentSelectionMode: text().notNull().default("shared"),
+  selectedBonusStudentUidsByItem: text().notNull().default("{}"),
   enabledStages: text().notNull().default("{}"),
   includeRecruitedStudents: int().notNull().default(0),
   existingPaymentItemQuantities: text().notNull().default("{}"),
@@ -28,6 +30,8 @@ export type EventShopState = {
   itemQuantities: Record<string, number>;
   itemPurchaseDays: Record<string, number>;
   selectedBonusStudentUids: string[];
+  bonusStudentSelectionMode: BonusStudentSelectionMode;
+  selectedBonusStudentUidsByItem: Record<string, string[]>;
   enabledStages: Record<string, boolean>;
   includeRecruitedStudents: boolean;
   existingPaymentItemQuantities: Record<string, number>;
@@ -45,11 +49,17 @@ function parseMinigamePaymentQuantityMode(mode: string | null): MinigamePaymentQ
   return "expected";
 }
 
+function parseBonusStudentSelectionMode(mode: string | null): BonusStudentSelectionMode {
+  return mode === "perItem" ? "perItem" : "shared";
+}
+
 function toModel(state: typeof eventShopStatesTable.$inferSelect): EventShopState {
   return {
     itemQuantities: JSON.parse(state.itemQuantities),
     itemPurchaseDays: JSON.parse(state.itemPurchaseDays || "{}"),
     selectedBonusStudentUids: JSON.parse(state.selectedBonusStudentUids),
+    bonusStudentSelectionMode: parseBonusStudentSelectionMode(state.bonusStudentSelectionMode),
+    selectedBonusStudentUidsByItem: JSON.parse(state.selectedBonusStudentUidsByItem || "{}"),
     enabledStages: JSON.parse(state.enabledStages),
     includeRecruitedStudents: state.includeRecruitedStudents === 1,
     existingPaymentItemQuantities: JSON.parse(state.existingPaymentItemQuantities || "{}"),
@@ -83,6 +93,7 @@ export async function upsertEventShopState(
   const itemQuantitiesJson = JSON.stringify(state.itemQuantities);
   const itemPurchaseDaysJson = JSON.stringify(state.itemPurchaseDays || {});
   const selectedBonusStudentUidsJson = JSON.stringify(state.selectedBonusStudentUids);
+  const selectedBonusStudentUidsByItemJson = JSON.stringify(state.selectedBonusStudentUidsByItem || {});
   const enabledStagesJson = JSON.stringify(state.enabledStages);
   const existingPaymentItemQuantitiesJson = JSON.stringify(state.existingPaymentItemQuantities || {});
   const extraStageRunsJson = JSON.stringify(state.extraStageRuns || {});
@@ -97,6 +108,8 @@ export async function upsertEventShopState(
       itemQuantities: itemQuantitiesJson,
       itemPurchaseDays: itemPurchaseDaysJson,
       selectedBonusStudentUids: selectedBonusStudentUidsJson,
+      bonusStudentSelectionMode: state.bonusStudentSelectionMode ?? "shared",
+      selectedBonusStudentUidsByItem: selectedBonusStudentUidsByItemJson,
       enabledStages: enabledStagesJson,
       includeRecruitedStudents: state.includeRecruitedStudents ? 1 : 0,
       existingPaymentItemQuantities: existingPaymentItemQuantitiesJson,
@@ -112,6 +125,8 @@ export async function upsertEventShopState(
         itemQuantities: itemQuantitiesJson,
         itemPurchaseDays: itemPurchaseDaysJson,
         selectedBonusStudentUids: selectedBonusStudentUidsJson,
+        bonusStudentSelectionMode: state.bonusStudentSelectionMode ?? "shared",
+        selectedBonusStudentUidsByItem: selectedBonusStudentUidsByItemJson,
         enabledStages: enabledStagesJson,
         includeRecruitedStudents: state.includeRecruitedStudents ? 1 : 0,
         existingPaymentItemQuantities: existingPaymentItemQuantitiesJson,

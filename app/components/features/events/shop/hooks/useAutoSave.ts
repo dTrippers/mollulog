@@ -62,6 +62,8 @@ export function useAutoSave({ state, signedIn, shopStateUid, savedShopState, isI
         itemQuantities: state.itemQuantities,
         itemPurchaseDays: state.itemPurchaseDays,
         selectedBonusStudentUids: state.selectedBonusStudentUids,
+        bonusStudentSelectionMode: state.bonusStudentSelectionMode,
+        selectedBonusStudentUidsByItem: state.selectedBonusStudentUidsByItem,
         enabledStages: state.enabledStages,
         includeRecruitedStudents: state.includeRecruitedStudents,
         existingPaymentItemQuantities: state.existingPaymentItemQuantities,

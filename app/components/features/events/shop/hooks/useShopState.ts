@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import type { MinigamePaymentQuantityMode } from "~/domain/event-shop";
-import type { ShopResource, Stage } from "~/domain/event-shop";
+import type { BonusStudentSelectionMode, MinigamePaymentQuantityMode, ShopResource, Stage } from "~/domain/event-shop";
 import type { EventShopState } from "~/models/event-shop-state";
 import { isDailyResetShopResource } from "../calculations/shop-costs";
 
@@ -8,6 +7,8 @@ export type ShopState = {
   itemQuantities: Record<string, number>;
   itemPurchaseDays: Record<string, number>;
   selectedBonusStudentUids: string[];
+  bonusStudentSelectionMode: BonusStudentSelectionMode;
+  selectedBonusStudentUidsByItem: Record<string, string[]>;
   includeRecruitedStudents: boolean;
   enabledStages: Record<string, boolean>;
   existingPaymentItemQuantities: Record<string, number>;
@@ -25,6 +26,10 @@ export type ShopActions = {
   updateItemPurchaseDays: (updater: (prev: Record<string, number>) => Record<string, number>) => void;
   toggleBonusStudent: (uid: string) => void;
   setBonusStudents: (uids: string[]) => void;
+  setBonusStudentSelectionMode: (mode: BonusStudentSelectionMode, itemUids: string[]) => void;
+  toggleBonusStudentForItem: (itemUid: string, studentUid: string) => void;
+  setBonusStudentForItems: (itemUids: string[], studentUid: string, selected: boolean) => void;
+  setBonusStudentsForItems: (itemUids: string[], studentUids: string[]) => void;
   setIncludeRecruitedStudents: (value: boolean) => void;
   toggleStage: (uid: string, enabled: boolean) => void;
   updateExtraRuns: (uid: string, value: number) => void;
@@ -85,6 +90,12 @@ export function useShopState({ savedShopState, recruitedStudentUids, shopResourc
   const [selectedBonusStudentUids, setSelectedBonusStudentUids] = useState<string[]>(
     savedShopState?.selectedBonusStudentUids ?? recruitedStudentUids,
   );
+  const [bonusStudentSelectionMode, setBonusStudentSelectionMode] = useState<BonusStudentSelectionMode>(
+    savedShopState?.bonusStudentSelectionMode ?? "shared",
+  );
+  const [selectedBonusStudentUidsByItem, setSelectedBonusStudentUidsByItem] = useState<Record<string, string[]>>(
+    savedShopState?.selectedBonusStudentUidsByItem ?? {},
+  );
   const [includeRecruitedStudents, setIncludeRecruitedStudents] = useState<boolean>(
     savedShopState?.includeRecruitedStudents ?? true,
   );
@@ -140,6 +151,54 @@ export function useShopState({ savedShopState, recruitedStudentUids, shopResourc
         setSelectedBonusStudentUids(uids);
       },
 
+      setBonusStudentSelectionMode: (mode: BonusStudentSelectionMode, itemUids: string[]) => {
+        if (mode === "perItem") {
+          setSelectedBonusStudentUidsByItem((prev) => {
+            const next = { ...prev };
+            for (const itemUid of itemUids) {
+              if (next[itemUid] === undefined) {
+                next[itemUid] = [...selectedBonusStudentUids];
+              }
+            }
+            return next;
+          });
+        }
+        setBonusStudentSelectionMode(mode);
+      },
+
+      toggleBonusStudentForItem: (itemUid: string, studentUid: string) => {
+        setSelectedBonusStudentUidsByItem((prev) => {
+          const selectedStudentUids = prev[itemUid] ?? selectedBonusStudentUids;
+          const nextStudentUids = selectedStudentUids.includes(studentUid)
+            ? selectedStudentUids.filter((uid) => uid !== studentUid)
+            : [...selectedStudentUids, studentUid];
+          return { ...prev, [itemUid]: nextStudentUids };
+        });
+      },
+
+      setBonusStudentForItems: (itemUids: string[], studentUid: string, selected: boolean) => {
+        setSelectedBonusStudentUidsByItem((prev) => {
+          const next = { ...prev };
+          for (const itemUid of itemUids) {
+            const selectedStudentUids = next[itemUid] ?? selectedBonusStudentUids;
+            next[itemUid] = selected
+              ? [...new Set([...selectedStudentUids, studentUid])]
+              : selectedStudentUids.filter((uid) => uid !== studentUid);
+          }
+          return next;
+        });
+      },
+
+      setBonusStudentsForItems: (itemUids: string[], studentUids: string[]) => {
+        setSelectedBonusStudentUidsByItem((prev) => {
+          const next = { ...prev };
+          for (const itemUid of itemUids) {
+            next[itemUid] = [...studentUids];
+          }
+          return next;
+        });
+      },
+
       setIncludeRecruitedStudents: (value: boolean) => {
         setIncludeRecruitedStudents(value);
       },
@@ -180,13 +239,15 @@ export function useShopState({ savedShopState, recruitedStudentUids, shopResourc
         });
       },
     }),
-    [],
+    [selectedBonusStudentUids],
   );
 
   const state: ShopState = {
     itemQuantities,
     itemPurchaseDays,
     selectedBonusStudentUids,
+    bonusStudentSelectionMode,
+    selectedBonusStudentUidsByItem,
     includeRecruitedStudents,
     enabledStages,
     existingPaymentItemQuantities,
