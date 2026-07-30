@@ -1,5 +1,5 @@
 import { Transition } from "@headlessui/react";
-import { CheckIcon, HeartIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
+import { CheckIcon, HeartIcon, MinusIcon, StarIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router";
@@ -24,10 +24,12 @@ type StudentCardProps = {
   name?: string | null;
   nameSize?: "small" | "normal";
   namePlacement?: "below" | "overlay";
+  hideNameOnMobile?: boolean;
 
   tier?: number | null;
   level?: number | null;
   label?: ReactNode;
+  labelPlacement?: "default" | "top-right";
   isAssist?: boolean;
   attackType?: Attack;
   defenseType?: Defense;
@@ -38,6 +40,8 @@ type StudentCardProps = {
   completed?: boolean;
   grayscale?: boolean;
   checked?: boolean;
+  indeterminate?: boolean;
+  selectionStyle?: "check" | "ring";
   hideName?: boolean;
   circular?: boolean;
   flush?: boolean;
@@ -120,9 +124,11 @@ export default function StudentCard({
   name,
   nameSize,
   namePlacement = "below",
+  hideNameOnMobile = false,
   tier,
   level,
   label,
+  labelPlacement = "default",
   isAssist,
   attackType,
   defenseType,
@@ -132,6 +138,8 @@ export default function StudentCard({
   completed,
   grayscale,
   checked,
+  indeterminate,
+  selectionStyle = "check",
   hideName,
   circular,
   flush = false,
@@ -209,6 +217,15 @@ export default function StudentCard({
   const visibleNames = parseVisibleNames(name ?? "");
   const showName = Boolean(name && !hideName);
   const showsOverlayName = showName && namePlacement === "overlay";
+  const showsTopRightLabel = Boolean(label && (showsOverlayName || labelPlacement === "top-right"));
+  const selectionRingClass =
+    selectionStyle === "ring"
+      ? checked
+        ? "ring-2 ring-inset ring-primary"
+        : indeterminate
+          ? "ring-2 ring-inset ring-primary/50"
+          : ""
+      : "";
   const showTier = typeof tier === "number" && tier > 0;
   const overlaySubName = visibleNames.length === 2 ? visibleNames[1] : "";
   const overlayMainName = visibleNames[0] ?? name;
@@ -255,7 +272,7 @@ export default function StudentCard({
         <div className={flush ? "" : "my-1"}>
           <div className="relative">
             <div
-              className={`relative ${circular ? "rounded-full" : "rounded-lg"} overflow-hidden ${cardAspectClassName}`}
+              className={`relative ${circular ? "rounded-full" : "rounded-lg"} overflow-hidden ${cardAspectClassName} ${selectionRingClass}`}
             >
               <img
                 className={`w-full h-full object-cover ${grayscale ? "grayscale opacity-75" : ""} transition`}
@@ -263,9 +280,9 @@ export default function StudentCard({
                 alt={name ?? undefined}
                 loading="lazy"
               />
-              <div className="absolute top-0.5 right-0.5 flex flex-col items-end gap-0.5 text-xs scale-80 origin-top-right font-bold">
+              <div className="absolute top-0.5 right-0.5 flex origin-top-right scale-80 flex-col items-end gap-0.5 text-xs font-bold">
                 {level && <span className="px-1.5 bg-neutral-900/90 rounded-lg text-neutral-100">Lv. {level}</span>}
-                {showsOverlayName && label && (
+                {showsTopRightLabel && (
                   <span className="px-1.5 py-0.5 rounded-md bg-black/70 text-white backdrop-blur-sm leading-tight">
                     {label}
                   </span>
@@ -299,14 +316,25 @@ export default function StudentCard({
                 </div>
               )}
 
-              {checked && (
+              {selectionStyle === "check" && checked && (
                 <div className="absolute top-0.5 right-0.5 w-3/10 aspect-square text-white border rounded-full flex items-center justify-center bg-blue-500/90">
                   <CheckIcon className="w-full p-0.5" />
                 </div>
               )}
 
+              {selectionStyle === "check" && !checked && indeterminate && (
+                <div className="absolute top-0.5 right-0.5 flex aspect-square w-3/10 items-center justify-center rounded-full border bg-blue-500/90 text-white">
+                  <MinusIcon className="w-full p-0.5" />
+                </div>
+              )}
+
               {showsOverlayName ? (
-                <div className="absolute inset-0 bg-linear-15 from-black/60 from-10% via-transparent via-50% to-transparent px-1 pb-0.5 md:px-1.5 md:pb-1 text-left flex flex-col justify-end dark:from-black/80">
+                <div
+                  className={cn(
+                    "absolute inset-0 flex flex-col justify-end bg-linear-15 from-black/60 from-10% via-transparent via-50% to-transparent px-1 pb-0.5 text-left md:px-1.5 md:pb-1 dark:from-black/80",
+                    hideNameOnMobile && "hidden sm:flex",
+                  )}
+                >
                   <p
                     className={`whitespace-nowrap font-bold scale-75 origin-left leading-none tracking-tighter text-white ${nameSize === "small" ? "text-[10px]" : "text-xs"}`}
                   >
@@ -318,14 +346,14 @@ export default function StudentCard({
                     {overlayMainName}
                   </p>
                 </div>
-              ) : (
+              ) : isAssist || (label && labelPlacement === "default") || (!label && showTier) ? (
                 <div className="absolute bottom-0 w-full flex justify-center text-xs font-bold bg-black/90">
                   {isAssist && (
                     <div className="px-1 md:px-1.5 text-xs font-bold bg-linear-to-br from-cyan-300 to-sky-500 dark:from-cyan-400 dark:to-sky-600 text-white text-center">
                       A
                     </div>
                   )}
-                  {label}
+                  {labelPlacement === "default" && label}
                   {!label && showTier && (
                     <div
                       className={`flex-grow flex justify-center items-center ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}
@@ -343,10 +371,12 @@ export default function StudentCard({
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
             </div>
             {showName && namePlacement === "below" && (
-              <div className="mt-1 text-center leading-tight tracking-tighter">
+              <div
+                className={cn("mt-1 text-center leading-tight tracking-tighter", hideNameOnMobile && "hidden sm:block")}
+              >
                 <p className={nameSize === "small" ? "text-xs" : "text-sm"}>{visibleNames[0]}</p>
                 {visibleNames.length === 2 && <p className="text-xs">{visibleNames[1]}</p>}
               </div>

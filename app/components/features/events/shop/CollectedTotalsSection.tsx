@@ -1,6 +1,6 @@
 import { Transition } from "@headlessui/react";
 import { memo, useMemo, useState } from "react";
-import { NumberInput, ResourceCard } from "~/components/primitives";
+import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { CollectableResource, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import BugReportModal from "./BugReportModal";
@@ -57,31 +57,13 @@ function EditPopup({ show, title, value, onValueChange, onCancel, onSave, onRese
         </div>
         <div className="flex justify-between items-center gap-2">
           {showReset && onReset ? (
-            <button
-              type="button"
-              className="px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md transition whitespace-nowrap"
-              onClick={onReset}
-            >
-              초기화
-            </button>
+            <Button text="초기화" variant="danger-subtle" size="xs" onClick={onReset} />
           ) : (
             <div />
           )}
           <div className="flex gap-2">
-            <button
-              type="button"
-              className="whitespace-nowrap rounded-md bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
-              onClick={onCancel}
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              className="whitespace-nowrap rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/15"
-              onClick={onSave}
-            >
-              저장
-            </button>
+            <Button text="취소" variant="secondary" size="xs" onClick={onCancel} />
+            <Button text="저장" variant="primary" size="xs" onClick={onSave} />
           </div>
         </div>
       </div>
@@ -211,14 +193,10 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
 
   return (
     <>
-      <div className="pb-4 mb-4">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-foreground">최종 결과</h2>
-          <p className="mt-1 text-sm text-muted-foreground">필요한 AP와 아이템 수량을 확인할 수 있어요</p>
-        </div>
+      <Section title="최종 결과" description="필요한 AP와 아이템 수량을 확인할 수 있어요">
         <div>
           {totalApWithExtras > 0 && (
-            <div className="my-4 p-4 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-950 dark:to-teal-950 border border-green-200 dark:border-green-800 rounded-lg">
+            <div className="my-4 rounded-md border border-green-200 bg-gradient-to-r from-green-50 to-blue-50 p-4 dark:border-green-800 dark:from-green-950 dark:to-teal-950">
               <div className="flex justify-between items-center mb-3 pb-1.5 border-b border-green-200 dark:border-green-800">
                 <h3 className="text-base font-semibold text-green-800 dark:text-green-200">필요한 AP</h3>
                 <span className="text-xl font-bold text-green-700 dark:text-green-300">
@@ -237,7 +215,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
           )}
 
           {Object.keys(unobtainableTargets).length > 0 && (
-            <div className="my-4 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+            <div className="my-4 rounded-md border border-red-200 bg-red-50 p-4 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
               <p className="text-sm font-semibold">선택한 스테이지에서 획득할 수 없는 이벤트 재화가 있어요</p>
               <ul className="mt-2 space-y-1 text-sm">
                 {Object.entries(unobtainableTargets).map(([uid, quantity]) => (
@@ -347,17 +325,15 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                     {/* 편집 버튼 */}
                     <div className="flex justify-end gap-2">
                       <div>
-                        <button
-                          type="button"
+                        <Button
+                          text="보유 수량 입력"
+                          size="xs"
                           onClick={() => {
                             setEditValue(existingCount);
                             setEditingItemUid(itemUid);
                             setEditingRequiredItemUid(null);
                           }}
-                          className="cursor-pointer whitespace-nowrap rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-                        >
-                          보유 수량 입력
-                        </button>
+                        />
                         <EditPopup
                           show={editingItemUid === itemUid}
                           title="보유 수량을 입력해주세요"
@@ -376,18 +352,16 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                         />
                       </div>
                       <div>
-                        <button
-                          type="button"
+                        <Button
+                          text="목표 수량 입력"
+                          size="xs"
                           onClick={() => {
                             const currentOverride = state.overriddenRequiredQuantities[itemUid];
                             setEditRequiredValue(currentOverride !== undefined ? currentOverride : requiredSubtotal);
                             setEditingRequiredItemUid(itemUid);
                             setEditingItemUid(null);
                           }}
-                          className="cursor-pointer whitespace-nowrap rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-                        >
-                          목표 수량 입력
-                        </button>
+                        />
                         <EditPopup
                           show={editingRequiredItemUid === itemUid}
                           title="목표 수량을 입력해주세요"
@@ -432,17 +406,11 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
 
           {signedIn && (
             <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowBugReportModal(true)}
-                className="px-2.5 py-1 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md transition whitespace-nowrap cursor-pointer"
-              >
-                오류 제보
-              </button>
+              <Button text="오류 제보" variant="danger-subtle" size="xs" onClick={() => setShowBugReportModal(true)} />
             </div>
           )}
         </div>
-      </div>
+      </Section>
 
       {signedIn && (
         <BugReportModal

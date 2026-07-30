@@ -34,7 +34,7 @@ export const StageCard = memo(function StageCard({
   );
 
   return (
-    <div className="relative rounded-lg bg-card px-4 py-3">
+    <div className="relative rounded-md bg-card p-3">
       <div className="flex items-center gap-2">
         <div className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-sm">{index}</div>
         <div className="grow">

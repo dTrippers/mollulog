@@ -104,6 +104,8 @@ export default function EventDetailShopPage({
   const { appliedBonusRatios } = useBonusCalculation({
     eventRewardBonus,
     selectedStudentUids: state.selectedBonusStudentUids,
+    selectedStudentUidsByItem:
+      state.bonusStudentSelectionMode === "perItem" ? state.selectedBonusStudentUidsByItem : undefined,
   });
 
   // Auto-save
@@ -160,7 +162,7 @@ export default function EventDetailShopPage({
           )}
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-8">
           <StudentBonusSelector
             eventRewardBonus={eventRewardBonus}
             recruitedStudentUids={recruitedStudentUids}

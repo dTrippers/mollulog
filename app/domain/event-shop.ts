@@ -6,6 +6,10 @@ export const MINIGAME_PAYMENT_QUANTITY_MODES = ["expected", "min", "max"] as con
 
 export type MinigamePaymentQuantityMode = (typeof MINIGAME_PAYMENT_QUANTITY_MODES)[number];
 
+export const BONUS_STUDENT_SELECTION_MODES = ["shared", "perItem"] as const;
+
+export type BonusStudentSelectionMode = (typeof BONUS_STUDENT_SELECTION_MODES)[number];
+
 export type RewardItem = {
   resourceType: ResourceTypeEnum;
   resourceUid: string;
