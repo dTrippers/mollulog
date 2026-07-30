@@ -16,6 +16,7 @@ type StudentCardsProps = {
     tier?: number | null;
     level?: number | null;
     label?: ReactNode;
+    footer?: ReactNode;
     labelPlacement?: "default" | "top-right";
     grayscale?: boolean;
     checked?: boolean;
@@ -127,6 +128,7 @@ export default function StudentCards({
               completed={student.state?.completed}
               onSelect={selectionKey && onSelect ? () => onSelect(selectionKey) : undefined}
             />
+            {student.footer}
           </div>
         );
       })}

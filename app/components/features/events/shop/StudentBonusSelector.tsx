@@ -156,7 +156,7 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
         <>
           {state.bonusStudentSelectionMode === "perItem" && (
             <p className="my-3 rounded-md bg-muted p-3 text-sm text-muted-foreground">
-              아이템별 선택을 사용 중이에요. 여기서 학생을 선택하면 모든 아이템에 함께 반영돼요.
+              아이템마다 서로 다른 보너스 학생을 선택했어요. "아이템별" 탭에서 확인해주세요.
             </p>
           )}
           <StudentCards
@@ -192,12 +192,12 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
               className="my-0"
               buttonProps={[
                 {
-                  text: "아이템 공통 선택",
+                  text: "모든 아이템 동일",
                   active: state.bonusStudentSelectionMode === "shared",
                   onToggle: (active) => active && handleSelectionModeChange("shared"),
                 },
                 {
-                  text: "아이템마다 개별 선택",
+                  text: "아이템마다 다르게",
                   active: state.bonusStudentSelectionMode === "perItem",
                   onToggle: (active) => active && handleSelectionModeChange("perItem"),
                 },
@@ -221,6 +221,7 @@ export const StudentBonusSelector = memo(function StudentBonusSelector({
                     appliedRatio={appliedRatio}
                     maxRatio={maxRatio}
                     rewardBonuses={rewardBonuses}
+                    recruitedStudentUids={recruitedStudentUids}
                     selectedBonusStudentUids={selectedStudentUidsByItem?.[uid] ?? state.selectedBonusStudentUids}
                     setSelectedBonusStudentUid={
                       state.bonusStudentSelectionMode === "perItem"

@@ -16,6 +16,7 @@ type EventItemBonusProps = {
     };
   }[];
 
+  recruitedStudentUids: string[];
   selectedBonusStudentUids: string[];
   setSelectedBonusStudentUid?: (studentUid: string) => void;
   signedIn: boolean;
@@ -27,6 +28,7 @@ export default function EventItemBonus({
   appliedRatio,
   maxRatio,
   rewardBonuses,
+  recruitedStudentUids,
   selectedBonusStudentUids,
   setSelectedBonusStudentUid,
   signedIn,
@@ -40,8 +42,14 @@ export default function EventItemBonus({
         uid: student.uid,
         grayscale: signedIn ? !selectedBonusStudentUids.includes(student.uid) : false,
         checked: setSelectedBonusStudentUid ? selectedBonusStudentUids.includes(student.uid) : false,
-        label: <span className="font-normal text-white">{new Decimal(ratio).mul(100).toFixed(0)}%</span>,
-        labelPlacement: "top-right" as const,
+        label: recruitedStudentUids.includes(student.uid) ? (
+          <span className="font-normal text-white">모집</span>
+        ) : undefined,
+        footer: (
+          <p className="mt-0.5 text-center text-[10px] font-semibold leading-none text-foreground sm:text-xs">
+            {new Decimal(ratio).mul(100).toFixed(0)}%
+          </p>
+        ),
         selectionStyle: "ring" as const,
       }));
 
