@@ -46,15 +46,13 @@ export function MiniGameSection({ config, state, actions }: MiniGameSectionProps
       defaultExpanded={true}
     >
       <div className="flex items-center gap-2">
-        <p className="text-sm text-neutral-700 dark:text-neutral-200 font-medium">
-          {isDiceType ? "주사위 횟수" : "플레이 회차"}
-        </p>
+        <p className="text-sm font-medium text-foreground">{isDiceType ? "주사위 횟수" : "플레이 회차"}</p>
         <NumberInput value={state.minigamePlayCount} onChange={actions.setMinigamePlayCount} />
       </div>
 
       {showPaymentQuantityMode && (
         <div className="mt-3">
-          <p className="text-sm text-neutral-700 dark:text-neutral-200 font-medium">소모 재화 기준</p>
+          <p className="text-sm font-medium text-foreground">소모 재화 기준</p>
           <FilterButtons
             exclusive
             atLeastOne
@@ -87,8 +85,8 @@ export function MiniGameSection({ config, state, actions }: MiniGameSectionProps
       )}
 
       {state.minigamePlayCount > 0 && paymentCosts.length > 0 && (
-        <div className="mt-4 border border-neutral-200 dark:border-neutral-700 rounded-lg p-4">
-          <p className="text-sm text-neutral-700 dark:text-neutral-200 font-semibold">필요 재화</p>
+        <div className="mt-4 rounded-md bg-card p-3">
+          <p className="text-sm font-semibold text-foreground">필요 재화</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {paymentCosts.map(({ resourceType, resourceUid, resourceName, quantity }) => (
               <ResourceCard
@@ -103,10 +101,10 @@ export function MiniGameSection({ config, state, actions }: MiniGameSectionProps
         </div>
       )}
 
-      <div className="my-4 border border-neutral-200 dark:border-neutral-700 rounded-lg p-4">
-        <p className="text-sm text-neutral-700 dark:text-neutral-200 font-semibold">획득 보상</p>
+      <div className="my-4 rounded-md bg-card p-3">
+        <p className="text-sm font-semibold text-foreground">획득 보상</p>
         {isDiceType && diceStats && state.minigamePlayCount > 0 && (
-          <p className="text-sm text-neutral-600 dark:text-neutral-300 my-2">
+          <p className="my-2 text-sm text-muted-foreground">
             예상 완주 횟수 : <span className="font-medium">{diceStats.estimatedLaps.toFixed(2)}</span>바퀴
           </p>
         )}
@@ -127,7 +125,7 @@ export function MiniGameSection({ config, state, actions }: MiniGameSectionProps
           </div>
         ) : (
           <div>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            <p className="text-sm text-muted-foreground">
               {isDiceType ? "주사위 던지기 횟수를 입력해주세요" : "플레이 횟수를 입력해주세요"}
             </p>
           </div>

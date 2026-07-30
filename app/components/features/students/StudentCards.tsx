@@ -16,9 +16,11 @@ type StudentCardsProps = {
     tier?: number | null;
     level?: number | null;
     label?: ReactNode;
+    labelPlacement?: "default" | "top-right";
     grayscale?: boolean;
     checked?: boolean;
     indeterminate?: boolean;
+    selectionStyle?: "check" | "ring";
     hideName?: boolean;
 
     state?: {
@@ -33,6 +35,7 @@ type StudentCardsProps = {
   cardSize?: "xs" | "sm" | "md" | "lg";
   gap?: "normal" | "tight";
   namePlacement?: "below" | "overlay";
+  hideNameOnMobile?: boolean;
   onSelect?: (uid: string) => void;
   onRef?: (uid: string, ref: HTMLDivElement | null) => void;
 };
@@ -45,6 +48,7 @@ export default function StudentCards({
   cardSize = "md",
   gap = "normal",
   namePlacement = "below",
+  hideNameOnMobile = false,
   onSelect,
   onRef,
 }: StudentCardsProps) {
@@ -116,6 +120,7 @@ export default function StudentCards({
             <StudentCard
               {...student}
               namePlacement={namePlacement}
+              hideNameOnMobile={hideNameOnMobile}
               nameSize={cardSize === "xs" && namePlacement === "overlay" ? "small" : undefined}
               favorited={student.state?.favorited}
               favoritedCount={student.state?.favoritedCount}

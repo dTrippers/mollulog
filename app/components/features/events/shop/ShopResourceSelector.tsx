@@ -3,13 +3,13 @@ import { Button, NumberInput, ResourceCard, Section } from "~/components/primiti
 import type { CollectableResource, ShopResource } from "~/domain/event-shop";
 import { formatResourceAmount } from "~/locales/ko";
 import { resourceImageUrl } from "~/models/assets";
-import { Tabs } from "./Tabs";
 import {
   calculateEffectiveShopPurchaseCount,
   getShopResourcePurchaseDaysLimit,
   isDailyResetShopResource,
 } from "./calculations";
 import type { ShopActions, ShopState } from "./hooks";
+import { Tabs } from "./Tabs";
 
 type ShopResourceSelectorProps = {
   shopResources: ShopResource[];
@@ -122,7 +122,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
           const formattedResourceAmount = formatResourceAmount(resourceAmount);
           const unitPriceLabel = formatUnitPriceLabel(purchaseTiers);
           return (
-            <div key={uid} className="flex flex-col gap-2 rounded-md border border-border/60 bg-card p-2">
+            <div key={uid} className="flex flex-col gap-2 rounded-md bg-card p-3">
               <div className="flex items-center justify-center gap-x-1">
                 <ResourceCard
                   itemUid={resource.uid}
@@ -139,11 +139,9 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                       className="-m-1 size-6 md:size-8 object-contain"
                       loading="lazy"
                     />
-                    <span className="mr-2 text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                      {unitPriceLabel}
-                    </span>
+                    <span className="mr-2 text-sm font-medium text-foreground">{unitPriceLabel}</span>
                   </div>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center">
+                  <p className="text-center text-xs text-muted-foreground">
                     {shopAmount ? `${dailyReset ? "매일 " : ""}${shopAmount}회 구매 가능` : "구매 제한 없음"}
                   </p>
                 </div>
@@ -173,7 +171,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                       />
                     </div>
                   </div>
-                  <p className="text-center text-xs text-neutral-500 dark:text-neutral-400">
+                  <p className="text-center text-xs text-muted-foreground">
                     총 {totalPurchaseCount.toLocaleString()}회 구매
                   </p>
                 </div>
