@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import {
   createCommunityComment,
   deleteCommunityComment,
@@ -33,7 +34,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     throw new Response("Post UID is required", { status: 400 });
   }
 
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
@@ -45,16 +46,28 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
       throw new Response("Body is required", { status: 400 });
     }
 
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "community-post-comment.create" })) {
+      return communityWriteMaintenanceResponse();
+    }
+
     await createCommunityComment(env, currentUser.id, postUid, actionData.body, actionData.visibility ?? "public");
   } else if (actionData.action === "createSubcomment") {
     if (!actionData.body || !actionData.parentCommentUid) {
       throw new Response("Body and parentCommentUid are required", { status: 400 });
     }
 
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "community-post-comment.create-subcomment" })) {
+      return communityWriteMaintenanceResponse();
+    }
+
     await createCommunityComment(env, currentUser.id, postUid, actionData.body, "public", actionData.parentCommentUid);
   } else if (actionData.action === "update") {
     if (!actionData.commentUid || !actionData.body) {
       throw new Response("CommentUid and body are required", { status: 400 });
+    }
+
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "community-post-comment.update" })) {
+      return communityWriteMaintenanceResponse();
     }
 
     await updateCommunityComment(
@@ -67,6 +80,10 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   } else if (actionData.action === "delete") {
     if (!actionData.commentUid) {
       throw new Response("CommentUid is required", { status: 400 });
+    }
+
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "community-post-comment.delete" })) {
+      return communityWriteMaintenanceResponse();
     }
 
     await deleteCommunityComment(env, currentUser.id, actionData.commentUid);

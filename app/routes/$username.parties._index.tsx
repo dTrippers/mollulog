@@ -1,8 +1,11 @@
 import { QueueListIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { redirect, useLoaderData } from "react-router";
+import { redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import { Callout } from "~/components/primitives";
+import { isCommunityWriteMaintenanceActionResult } from "~/domain/community-write-freeze";
+import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { getUserParties, removePartyByUid } from "~/models/party";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
@@ -43,22 +46,34 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
   }
 
   const formData = await request.formData();
+  if (
+    await isCommunityWriteFrozen(env, {
+      ctx,
+      operation: "legacy-party.delete",
+    })
+  ) {
+    return communityWriteMaintenanceResponse();
+  }
   await removePartyByUid(env, sensei.id, formData.get("uid") as string);
   return null;
 };
 
 export default function UserPartyPage() {
   const { me, parties, students, raids } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
 
   return (
     <div className="my-8">
+      {isCommunityWriteMaintenanceActionResult(actionData) ? (
+        <CommunityWriteMaintenanceToast trigger={actionData} />
+      ) : null}
       <Callout
         Icon={QueueListIcon}
         title="공략 타임라인 작성 기능이 추가됐어요"

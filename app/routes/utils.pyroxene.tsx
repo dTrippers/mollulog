@@ -9,6 +9,7 @@ import {
   useLoaderData,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import {
   PyroxenePlannerOptionsPanel,
   PyroxenePlannerSourcePanel,
@@ -19,6 +20,7 @@ import {
 import Page from "~/components/features/layout/Page";
 import { Button, Callout } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { isCommunityWriteMaintenanceActionResult } from "~/domain/community-write-freeze";
 import {
   createGuestRecord,
   type GuestPyroxeneRecord,
@@ -37,6 +39,7 @@ import {
   type PyroxeneMonthlyPackageType,
 } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
+import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { withD1Session } from "~/lib/d1-session";
 import { canonicalLink } from "~/lib/seo";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
@@ -213,6 +216,15 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 
   const { createData, deleteData, eventData, calcOptions, collectedSource } = await request.json<ActionData>();
+  const touchesRecruitmentResult = Boolean(
+    createData?.ownedResources?.eventUid || deleteData?.recruitmentGroupUid || deleteData?.eventUid,
+  );
+  if (
+    touchesRecruitmentResult &&
+    (await isCommunityWriteFrozen(env, { ctx, operation: "pyroxene.recruitment-result" }))
+  ) {
+    return communityWriteMaintenanceResponse();
+  }
   if (request.method === "POST") {
     if (createData) {
       if (createData.ownedResources !== undefined) {
@@ -370,9 +382,17 @@ export default function PyroxenePlanner() {
     loaderData.collectedSourceKeys ?? [],
   );
   const [localFavoritedStudents, setLocalFavoritedStudents] = useState(loaderData.favoritedStudents ?? []);
-  const fetcher = useFetcher<typeof action>();
+  const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
   const favoriteFetcher = useFetcher();
   const timelineSaveInFlight = useRef(false);
+  const previousRecruitmentResultCompletionsRef = useRef<{ eventUid: string; recruitmentGroupUid: string }[] | null>(
+    null,
+  );
+  const previousResourcesRef = useRef<{
+    date: Date | null;
+    resources: PickupResources;
+  } | null>(null);
+  const previousCollectedSourceKeysRef = useRef<string[] | null>(null);
 
   // Sync from loader data after server revalidation
   useEffect(() => {
@@ -430,6 +450,31 @@ export default function PyroxenePlanner() {
     }
   }, [fetcher.state]);
 
+  useEffect(() => {
+    if (isCommunityWriteMaintenanceActionResult(fetcher.data)) {
+      if (previousRecruitmentResultCompletionsRef.current) {
+        setLocalRecruitmentResultCompletions(previousRecruitmentResultCompletionsRef.current);
+      }
+      if (previousResourcesRef.current) {
+        setInitialDate(previousResourcesRef.current.date);
+        setInitialResources(previousResourcesRef.current.resources);
+      }
+      if (previousCollectedSourceKeysRef.current) {
+        setLocalCollectedSourceKeys(previousCollectedSourceKeysRef.current);
+      }
+      previousRecruitmentResultCompletionsRef.current = null;
+      previousResourcesRef.current = null;
+      previousCollectedSourceKeysRef.current = null;
+      return;
+    }
+
+    if (fetcher.state === "idle" && fetcher.data && "success" in fetcher.data && fetcher.data.success) {
+      previousRecruitmentResultCompletionsRef.current = null;
+      previousResourcesRef.current = null;
+      previousCollectedSourceKeysRef.current = null;
+    }
+  }, [fetcher.data, fetcher.state]);
+
   const handleSaveOwnedResources = (
     eventUid: string | null,
     resources: PickupResources,
@@ -442,6 +487,9 @@ export default function PyroxenePlanner() {
       setLocalCollectedSourceKeys((prev) => [...new Set([...prev, ...collectedSourceKeys])]);
     }
     if (eventUid && signedIn) {
+      previousRecruitmentResultCompletionsRef.current ??= localRecruitmentResultCompletions;
+      previousResourcesRef.current ??= { date: initialDate, resources: initialResources };
+      previousCollectedSourceKeysRef.current ??= localCollectedSourceKeys;
       const content = contents.find((content) => content.kind === "event" && content.uid === eventUid);
       if (content?.kind === "event" && content.recruitmentGroupUid) {
         const recruitmentGroupUid = content.recruitmentGroupUid;
@@ -526,6 +574,7 @@ export default function PyroxenePlanner() {
     const recruitmentResultCompletion = localRecruitmentResultCompletions.find(
       (completion) => completion.eventUid === eventUid,
     );
+    previousRecruitmentResultCompletionsRef.current ??= localRecruitmentResultCompletions;
     setLocalRecruitmentResultCompletions((prev) => prev.filter((completion) => completion.eventUid !== eventUid));
     fetcher.submit(
       { deleteData: { eventUid, recruitmentGroupUid: recruitmentResultCompletion?.recruitmentGroupUid ?? null } },
@@ -784,6 +833,9 @@ export default function PyroxenePlanner() {
 
   return (
     <>
+      {isCommunityWriteMaintenanceActionResult(fetcher.data) ? (
+        <CommunityWriteMaintenanceToast trigger={fetcher.data} />
+      ) : null}
       {/* Saving indicator */}
       {isSaving && (
         <div className="fixed bottom-[var(--mobile-bottom-offset)] right-4 z-layer-toast flex items-center gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900 md:right-8 lg:bottom-4">

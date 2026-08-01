@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
+import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import ContentCommentEditor from "~/components/features/contents/ContentCommentEditor";
 import { SubTitle } from "~/components/primitives";
+import {
+  type CommunityWriteMaintenanceActionResult,
+  isCommunityWriteMaintenanceActionResult,
+} from "~/domain/community-write-freeze";
 import type { NestedComment } from "~/models/content";
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 
@@ -22,7 +27,7 @@ export default function EventComment({
   const [hasPendingUpdate, setHasPendingUpdate] = useState(false);
   const justUpdatedRef = useRef(false);
 
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<NestedComment[] | CommunityWriteMaintenanceActionResult>();
   const submit = (data: CommentActionData) => {
     setHasPendingUpdate(true);
     justUpdatedRef.current = false;
@@ -39,6 +44,8 @@ export default function EventComment({
       setAllComments(fetcher.data);
       justUpdatedRef.current = true;
       setHasPendingUpdate(false);
+    } else if (isCommunityWriteMaintenanceActionResult(fetcher.data)) {
+      setHasPendingUpdate(false);
     }
   }, [fetcher.state, fetcher.data, hasPendingUpdate]);
 
@@ -52,6 +59,9 @@ export default function EventComment({
   return (
     <>
       <SubTitle text={title} />
+      {isCommunityWriteMaintenanceActionResult(fetcher.data) && (
+        <CommunityWriteMaintenanceToast trigger={fetcher.data} />
+      )}
       <ContentCommentEditor
         comments={allComments}
         onCreateComment={(body, visibility) => submit({ action: "create", body, visibility })}

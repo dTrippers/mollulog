@@ -64,6 +64,9 @@ const mockedGetRecruitmentPoolStudents = getRecruitmentPoolStudents as unknown a
 >;
 
 const env = {
+  KV_CACHE: {
+    get: jest.fn(async () => null),
+  },
   DB: {
     withSession: jest.fn(() => ({})),
   },

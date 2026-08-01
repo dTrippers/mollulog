@@ -2,15 +2,17 @@ import { ChatBubbleLeftEllipsisIcon, LockClosedIcon, PlayCircleIcon, UserGroupIc
 import { PlayIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
+import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import ContentCommentEditor from "~/components/features/contents/ContentCommentEditor";
 import LikeButton from "~/components/features/engagement/LikeButton";
 import { AttributeBadge, MarkdownText, ProfileImage, TagIcon } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { isCommunityWriteMaintenanceActionResult } from "~/domain/community-write-freeze";
 import { compareInstantDesc } from "~/lib/date-time";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
-import type { CommunityPostCommentsChangedActionResult } from "~/models/community-engagement";
+import type { CommunityEngagementActionResult } from "~/models/community-engagement";
 import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
 import type { EnrichedCommunityFeedPost } from "~/views/community";
 import { StudentCards } from "../students";
@@ -123,7 +125,7 @@ function CommunityPostCard({
   const displayTimeZone = useDisplayTimeZone();
   const [comments, setComments] = useState(post.comments);
   const [commentEditing, setCommentEditing] = useState(false);
-  const commentFetcher = useFetcher<CommunityPostCommentsChangedActionResult>();
+  const commentFetcher = useFetcher<CommunityEngagementActionResult>();
   const timestamp = getCommunityPostTimestampMeta(post, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment =
@@ -248,6 +250,10 @@ function CommunityPostCard({
               )}
             </div>
           )}
+
+          {isCommunityWriteMaintenanceActionResult(commentFetcher.data) ? (
+            <CommunityWriteMaintenanceToast trigger={commentFetcher.data} />
+          ) : null}
 
           {!preview && canComment && !commentEditing && recentComments.length > 0 && (
             <div className="mt-2 space-y-1 text-sm text-muted-foreground">

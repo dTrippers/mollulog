@@ -2,7 +2,12 @@ import { HeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
 import { useEffect, useState } from "react";
 import { useFetcher } from "react-router";
+import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import { useSignIn } from "~/contexts/SignInProvider";
+import {
+  type CommunityWriteMaintenanceActionResult,
+  isCommunityWriteMaintenanceActionResult,
+} from "~/domain/community-write-freeze";
 import type { LikeChangedActionResult } from "~/domain/like";
 
 export default function LikeButton({
@@ -19,7 +24,7 @@ export default function LikeButton({
   signedIn: boolean;
 }) {
   const { showSignIn } = useSignIn();
-  const fetcher = useFetcher<LikeChangedActionResult>();
+  const fetcher = useFetcher<LikeChangedActionResult | CommunityWriteMaintenanceActionResult>();
   const [liked, setLiked] = useState(initialLiked);
   const [likeCount, setLikeCount] = useState(initialLikeCount);
 
@@ -32,8 +37,11 @@ export default function LikeButton({
     if (fetcher.data?.kind === "likeChanged" && fetcher.data.targetUid === targetUid) {
       setLiked(fetcher.data.liked);
       setLikeCount(fetcher.data.likeCount);
+    } else if (isCommunityWriteMaintenanceActionResult(fetcher.data)) {
+      setLiked(initialLiked);
+      setLikeCount(initialLikeCount);
     }
-  }, [fetcher.data, targetUid]);
+  }, [fetcher.data, initialLikeCount, initialLiked, targetUid]);
 
   const toggleLike = () => {
     if (!signedIn) {
@@ -61,16 +69,21 @@ export default function LikeButton({
     : "bg-card text-muted-foreground shadow-xs shadow-black/5 hover:bg-muted hover:text-foreground dark:bg-muted dark:shadow-none";
 
   return (
-    <button
-      type="button"
-      className={`${baseClassName} ${stateClassName}`}
-      onClick={toggleLike}
-      aria-label={`좋아요 ${likeCount}개`}
-      aria-pressed={liked}
-      disabled={fetcher.state === "submitting"}
-    >
-      {liked ? <SolidHeartIcon className="size-4" /> : <HeartIcon className="size-4" />}
-      <span>{likeCount}</span>
-    </button>
+    <>
+      <button
+        type="button"
+        className={`${baseClassName} ${stateClassName}`}
+        onClick={toggleLike}
+        aria-label={`좋아요 ${likeCount}개`}
+        aria-pressed={liked}
+        disabled={fetcher.state === "submitting"}
+      >
+        {liked ? <SolidHeartIcon className="size-4" /> : <HeartIcon className="size-4" />}
+        <span>{likeCount}</span>
+      </button>
+      {isCommunityWriteMaintenanceActionResult(fetcher.data) ? (
+        <CommunityWriteMaintenanceToast trigger={fetcher.data} />
+      ) : null}
+    </>
   );
 }

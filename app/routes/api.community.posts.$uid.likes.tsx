@@ -1,6 +1,7 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { LikeChangedActionResult } from "~/domain/like";
+import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { getCommunityLikeCountsByPostUids, getLikedCommunityPostUids, setCommunityPostLike } from "~/models/community";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
@@ -32,13 +33,16 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     throw new Response("Post UID is required", { status: 400 });
   }
 
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
 
   const actionData = await request.json<ActionData>();
+  if (await isCommunityWriteFrozen(env, { ctx, operation: "community-post-like.set" })) {
+    return communityWriteMaintenanceResponse();
+  }
   await setCommunityPostLike(env, currentUser.id, postUid, actionData.liked);
 
   const [counts, likedPostUids] = await Promise.all([

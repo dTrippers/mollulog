@@ -2,12 +2,17 @@ import { Bars3BottomLeftIcon, FunnelIcon, QueueListIcon, TableCellsIcon } from "
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import type { ContentTimelineProps } from "~/components/features/contents";
 import { ContentTimeline, ContentTimelineCompact } from "~/components/features/contents";
 import { ContentFilterPanel } from "~/components/features/futures";
 import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
 import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
+import {
+  type CommunityWriteMaintenanceActionResult,
+  isCommunityWriteMaintenanceActionResult,
+} from "~/domain/community-write-freeze";
 import { raidTypeToParam } from "~/domain/raid";
 import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { applyRecruitmentResultStudentCompletion } from "~/domain/recruitment-result";
@@ -156,7 +161,6 @@ const futuresContentFilterKey = "futures::content-filter";
 const futuresContentViewKey = "futures::content-view";
 
 type FutureContentView = "timeline" | "table" | "compact";
-type CommentVisibility = "private" | "public";
 type FavoritedStudentState = { contentUid: string; studentUid: string };
 type FavoritedCountState = FavoritedStudentState & { count: number };
 type FutureContentForView = Pick<
@@ -343,12 +347,16 @@ export default function FutureContents() {
     started: boolean;
   } | null>(null);
   const [recruitmentResults, setRecruitmentResults] = useState<RecruitmentResultState[]>(loaderData.recruitmentResults);
+  const [communityWriteMaintenanceTrigger, setCommunityWriteMaintenanceTrigger] = useState<
+    CommunityWriteMaintenanceActionResult | undefined
+  >();
+  const previousRecruitmentResultsRef = useRef<RecruitmentResultState[] | null>(null);
 
   const favoriteFetcher = useFetcher();
   const submitFavorite = (data: ContentsActionData) =>
     favoriteFetcher.submit(data, { action: "/api/contents", method: "post", encType: "application/json" });
 
-  const commentFetcher = useFetcher();
+  const commentFetcher = useFetcher<NestedComment[] | CommunityWriteMaintenanceActionResult>();
   const submitComment = (contentUid: string, data: CommentActionData) =>
     commentFetcher.submit(data, {
       action: `/api/contents/${contentUid}/comments`,
@@ -370,7 +378,9 @@ export default function FutureContents() {
 
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
 
-  const recruitmentResultFetcher = useFetcher();
+  const recruitmentResultFetcher = useFetcher<
+    { success?: boolean; result?: RecruitmentResultState | null } | CommunityWriteMaintenanceActionResult
+  >();
   const submitRecruitmentResult = (data: RecruitmentResultActionData) =>
     recruitmentResultFetcher.submit(data, {
       action: "/api/recruitment-results",
@@ -379,10 +389,22 @@ export default function FutureContents() {
     });
 
   useEffect(() => {
-    const response = recruitmentResultFetcher.data as
-      | { success?: boolean; result?: RecruitmentResultState | null }
-      | undefined;
-    if (recruitmentResultFetcher.state !== "idle" || !response?.success || !response.result) {
+    const response = recruitmentResultFetcher.data;
+    if (isCommunityWriteMaintenanceActionResult(response)) {
+      if (previousRecruitmentResultsRef.current) {
+        setRecruitmentResults(previousRecruitmentResultsRef.current);
+      }
+      previousRecruitmentResultsRef.current = null;
+      setCommunityWriteMaintenanceTrigger(response);
+      return;
+    }
+    if (
+      recruitmentResultFetcher.state !== "idle" ||
+      !response ||
+      !("success" in response) ||
+      !response.success ||
+      !response.result
+    ) {
       return;
     }
 
@@ -396,6 +418,7 @@ export default function FutureContents() {
       }
       return [...prev, nextResult];
     });
+    previousRecruitmentResultsRef.current = null;
   }, [recruitmentResultFetcher.state, recruitmentResultFetcher.data]);
 
   useEffect(() => {
@@ -416,6 +439,9 @@ export default function FutureContents() {
         previousCommentThreadDataRef.current = commentThreadFetcher.data;
         setCommentLoadRequest(null);
       }
+      setPendingContentUid(null);
+    } else if (isCommunityWriteMaintenanceActionResult(commentFetcher.data)) {
+      setCommunityWriteMaintenanceTrigger(commentFetcher.data);
       setPendingContentUid(null);
     }
   }, [
@@ -474,6 +500,7 @@ export default function FutureContents() {
       return;
     }
 
+    previousRecruitmentResultsRef.current ??= recruitmentResults;
     if (completed) {
       submitRecruitmentResult({
         action: "completeStudent",
@@ -686,6 +713,7 @@ export default function FutureContents() {
         },
       ]}
     >
+      <CommunityWriteMaintenanceToast trigger={communityWriteMaintenanceTrigger} />
       {(view === "timeline" || view === "table") && (
         <div className={view === "table" ? "lg:hidden" : ""}>
           <ContentTimeline

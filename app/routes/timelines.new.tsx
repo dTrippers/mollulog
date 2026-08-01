@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import {
   WalkthroughTimelineEditor,
@@ -13,11 +14,13 @@ import {
   WalkthroughTimelinePartyPanel,
 } from "~/components/features/walkthrough-timeline";
 import { createPostgresWalkthroughTimeline } from "~/db/postgres/walkthrough-timelines";
+import { isCommunityWriteMaintenanceActionResult } from "~/domain/community-write-freeze";
 import {
   isWalkthroughTimelineVisibility,
   parseWalkthroughTimelineDocument,
   type WalkthroughParty,
 } from "~/domain/walkthrough-timeline";
+import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { getLogger } from "~/lib/observability.server";
 import { syncWalkthroughTimelineCommunityPost } from "~/models/community";
 import { loadTimelineEditorOptions } from "./timelines._components/timeline-route-data.server";
@@ -57,6 +60,14 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     const document = parseWalkthroughTimelineDocument(JSON.parse(String(formData.get("document") ?? "null")));
     const visibility = String(formData.get("visibility") ?? "private");
     if (!isWalkthroughTimelineVisibility(visibility)) throw new Error("공개 범위를 확인해주세요.");
+    if (
+      await isCommunityWriteFrozen(env, {
+        ctx,
+        operation: "walkthrough-timeline.create",
+      })
+    ) {
+      return communityWriteMaintenanceResponse();
+    }
     const timeline = await createPostgresWalkthroughTimeline(
       env,
       currentUser.id,
@@ -94,6 +105,8 @@ export default function NewWalkthroughTimelinePage() {
   const { students, bosses, recruitedSnapshots, preselectedBossIndex, preselectedTerrain } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const communityWriteMaintenanceVisible = isCommunityWriteMaintenanceActionResult(actionData);
+  const actionError = actionData && "error" in actionData ? actionData.error : undefined;
   const editorRef = useRef<WalkthroughTimelineEditorHandle>(null);
   const [activePartyIndex, setActivePartyIndex] = useState(0);
   const [parties, setParties] = useState<WalkthroughParty[]>([]);
@@ -135,6 +148,7 @@ export default function NewWalkthroughTimelinePage() {
       ]}
       belowPanels={<WalkthroughTimelineFeedbackButton signedIn />}
     >
+      {communityWriteMaintenanceVisible ? <CommunityWriteMaintenanceToast trigger={actionData} /> : null}
       <div className="py-4">
         <WalkthroughTimelineEditor
           ref={editorRef}
@@ -161,7 +175,7 @@ export default function NewWalkthroughTimelinePage() {
           onPartiesChange={setParties}
           onActionStateChange={setActionState}
           draftStorageKey="walkthrough-timeline:draft:new"
-          error={actionData?.error}
+          error={actionError}
         />
       </div>
     </Page>

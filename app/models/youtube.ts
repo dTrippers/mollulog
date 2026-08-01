@@ -1,12 +1,10 @@
 import { XMLParser } from "fast-xml-parser";
+import { getCommunityWriteFreezeDecision } from "~/lib/community-write-freeze.server";
 import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
+import { getLogger } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
-import {
-  getCommunityFeedPage,
-  type CommunityFeedPost,
-  upsertYoutubeVideoCommunityPost,
-} from "~/models/community";
+import { type CommunityFeedPost, getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community";
 
 const YOUTUBE_CHANNELS = [
   {
@@ -113,7 +111,22 @@ export async function fetchYoutubeFeedVideos(): Promise<YoutubeFeedVideo[]> {
   return videos;
 }
 
-export async function syncYoutubeCommunityPosts(env: Env): Promise<{ synced: number }> {
+export async function syncYoutubeCommunityPosts(
+  env: Env,
+  ctx?: ExecutionContext,
+): Promise<{ synced: number; skipped?: boolean }> {
+  const freezeDecision = await getCommunityWriteFreezeDecision(env, {
+    ctx,
+    operation: "youtube-community-sync",
+  });
+  if (freezeDecision.frozen) {
+    getLogger(env, ctx, { job: "youtube-community-sync" }).info(
+      "YouTube community sync skipped during community write maintenance",
+      { reason: freezeDecision.readFailed ? "freeze_read_failed" : "freeze_key_present" },
+    );
+    return { synced: 0, skipped: true };
+  }
+
   const videos = await fetchYoutubeFeedVideos();
   await mapWithConcurrencyLimit(videos, YOUTUBE_SYNC_CONCURRENCY, (video) =>
     upsertYoutubeVideoCommunityPost(env, video),

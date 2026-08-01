@@ -112,6 +112,9 @@ const mockedGetRecruitmentGroupByUid = getRecruitmentGroupByUid as unknown as je
 >;
 
 const env = {
+  KV_CACHE: {
+    get: jest.fn(async () => null),
+  },
   DB: {
     withSession: jest.fn(() => ({})),
   },

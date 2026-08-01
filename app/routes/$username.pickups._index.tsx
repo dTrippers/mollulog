@@ -1,9 +1,12 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, redirect, useLoaderData } from "react-router";
+import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import { AddContentButton } from "~/components/features/editor";
 import { SubTitle } from "~/components/primitives";
+import { isCommunityWriteMaintenanceActionResult } from "~/domain/community-write-freeze";
 import { getRecruitmentResultCountStats, resolveRecruitmentResultStudents } from "~/domain/recruitment-result";
+import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { withD1Session } from "~/lib/d1-session";
 import { compareInstantAsc, compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
@@ -46,6 +49,10 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const uid = formData.get("uid");
   if (typeof uid !== "string" || uid.length === 0) {
     throw routeError(400, "pickup_history.uid_missing", "삭제할 모집 이력을 확인할 수 없어요");
+  }
+
+  if (await isCommunityWriteFrozen(env, { operation: "recruitment-result.pickup-history.delete" })) {
+    return communityWriteMaintenanceResponse();
   }
 
   await deleteRecruitmentResult(env, sensei.id, uid);
@@ -180,9 +187,13 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
 export default function UserPickups() {
   const { recruitmentHistories, recruitmentStats, me } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
 
   return (
     <div className="my-8">
+      {isCommunityWriteMaintenanceActionResult(actionData) ? (
+        <CommunityWriteMaintenanceToast trigger={actionData} />
+      ) : null}
       <SubTitle text="모집 통계" />
       <div className="grid grid-cols-3 rounded-lg bg-card px-2 py-4 shadow-md shadow-black/5 dark:shadow-sm dark:shadow-black/20 md:px-4 md:py-6">
         <div className="text-center">

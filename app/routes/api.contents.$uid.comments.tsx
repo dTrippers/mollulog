@@ -1,5 +1,6 @@
-import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
+import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { withD1Session } from "~/lib/d1-session";
 import {
   createComment,
@@ -39,7 +40,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     throw new Response("Content UID is required", { status: 400 });
   }
 
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
@@ -50,10 +51,16 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     if (!actionData.body) {
       throw new Response("Body is required", { status: 400 });
     }
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "content-comment.create" })) {
+      return communityWriteMaintenanceResponse();
+    }
     await createComment(env, currentUser.id, contentUid, actionData.body, actionData.visibility ?? "private");
   } else if (actionData.action === "createSubcomment") {
     if (!actionData.body || !actionData.parentCommentUid) {
       throw new Response("Body and parentCommentUid are required", { status: 400 });
+    }
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "content-comment.create-subcomment" })) {
+      return communityWriteMaintenanceResponse();
     }
     await createSubcomment(
       env,
@@ -67,6 +74,9 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     if (!actionData.commentUid || !actionData.body) {
       throw new Response("CommentUid and body are required", { status: 400 });
     }
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "content-comment.update" })) {
+      return communityWriteMaintenanceResponse();
+    }
     await updateComment(
       env,
       currentUser.id,
@@ -78,13 +88,22 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     if (!actionData.commentUid) {
       throw new Response("CommentUid is required", { status: 400 });
     }
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "content-comment.delete" })) {
+      return communityWriteMaintenanceResponse();
+    }
     await deleteComment(env, currentUser.id, actionData.commentUid);
   } else if (actionData.action === "pin") {
     if (!actionData.commentUid) {
       throw new Response("CommentUid is required", { status: 400 });
     }
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "content-comment.pin" })) {
+      return communityWriteMaintenanceResponse();
+    }
     await pinComment(env, currentUser.id, contentUid, actionData.commentUid);
   } else if (actionData.action === "unpin") {
+    if (await isCommunityWriteFrozen(env, { ctx, operation: "content-comment.unpin" })) {
+      return communityWriteMaintenanceResponse();
+    }
     await unpinComment(env, currentUser.id, contentUid);
   } else {
     throw new Response("Invalid action", { status: 400 });

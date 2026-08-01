@@ -1,3 +1,7 @@
+import {
+  type CommunityWriteMaintenanceActionResult,
+  isCommunityWriteMaintenanceActionResult,
+} from "~/domain/community-write-freeze";
 import type { LikeChangedActionResult } from "~/domain/like";
 import type { NestedCommunityComment } from "./community";
 
@@ -7,11 +11,18 @@ export type CommunityPostCommentsChangedActionResult = {
   comments: NestedCommunityComment[];
 };
 
-export type CommunityEngagementActionResult = CommunityPostCommentsChangedActionResult | LikeChangedActionResult;
+export type CommunityEngagementActionResult =
+  | CommunityPostCommentsChangedActionResult
+  | LikeChangedActionResult
+  | CommunityWriteMaintenanceActionResult;
 
 export function isCommunityEngagementActionResult(value: unknown): value is CommunityEngagementActionResult {
   if (!value || typeof value !== "object" || !("kind" in value)) {
     return false;
+  }
+
+  if (isCommunityWriteMaintenanceActionResult(value)) {
+    return true;
   }
 
   if (value.kind === "communityPostCommentsChanged") {
