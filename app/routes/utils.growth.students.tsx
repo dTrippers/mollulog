@@ -3,8 +3,8 @@ import { data, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
 import {
-  type RecruitedStudentCurrentStateInput,
   getRecruitedStudents,
+  type RecruitedStudentCurrentStateInput,
   updateRecruitedStudentCurrentState,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
@@ -16,13 +16,13 @@ import {
 } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import {
-  type StudentGrowthInput,
   removeStudentGrowth,
+  type StudentGrowthInput,
   upsertStudentGrowth,
   validateStudentGrowthTargetStateForTier,
 } from "~/models/student-growth";
-import { loadStudentRow } from "./utils.growth._components/growth-data.server";
 import GrowthTable from "./utils.growth._components/GrowthTable";
+import { loadStudentRow } from "./utils.growth._components/growth-data.server";
 import type { GrowthActionResult, GrowthLayoutContext } from "./utils.growth._components/types";
 
 const currentStateFieldKeys = [
@@ -62,7 +62,8 @@ type GrowthActionData = {
   _intent?: "growth";
   studentUid: string;
   _submissionId?: string;
-} & RecruitedStudentCurrentStateInput & StudentGrowthInput;
+} & RecruitedStudentCurrentStateInput &
+  StudentGrowthInput;
 
 type TierActionData = {
   _intent: "tier";
@@ -94,6 +95,12 @@ type RelationshipActionData = {
   studentUid: string;
   currentLevel: number | null;
   targetLevel: number | null;
+  _submissionId?: string;
+};
+
+type ResourceRequirementsActionData = {
+  _intent: "resourceRequirements";
+  studentUid: string;
   _submissionId?: string;
 };
 
@@ -156,6 +163,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
           | RemoveActionData
           | EnrollActionData
           | RelationshipActionData
+          | ResourceRequirementsActionData
         >
       >();
     if (!payload.studentUid) {
@@ -167,7 +175,9 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       return data<GrowthActionResult>({ error: "존재하지 않는 학생이에요" }, { status: 400 });
     }
 
-    if (payload._intent === "enroll") {
+    if (payload._intent === "resourceRequirements") {
+      // The primary save response updates the inputs first. Resource requirements are refreshed by a separate request.
+    } else if (payload._intent === "enroll") {
       const student = allStudentsMap[payload.studentUid];
       if (!student?.released) {
         return data<GrowthActionResult>({ error: "출시되지 않은 학생이에요" }, { status: 400 });
@@ -182,13 +192,10 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     } else if (payload._intent === "relationship") {
       const relationshipPayload = payload as Partial<RelationshipActionData>;
       const existingRelationshipLevel = await getRelationshipLevel(env, currentUser.id, payload.studentUid);
-      const resolvedRelationshipLevel = resolveRelationshipLevelInput(
-        existingRelationshipLevel,
-        {
-          currentLevel: parseNullableInteger(relationshipPayload.currentLevel),
-          targetLevel: parseNullableInteger(relationshipPayload.targetLevel),
-        },
-      );
+      const resolvedRelationshipLevel = resolveRelationshipLevelInput(existingRelationshipLevel, {
+        currentLevel: parseNullableInteger(relationshipPayload.currentLevel),
+        targetLevel: parseNullableInteger(relationshipPayload.targetLevel),
+      });
 
       if (resolvedRelationshipLevel == null) {
         await removeRelationshipLevel(env, currentUser.id, payload.studentUid);
@@ -219,7 +226,8 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       const growthPayload = payload as Partial<GrowthActionData>;
       const currentInput = toCurrentStateInput(growthPayload);
       const growthInput = toGrowthInput(growthPayload);
-      const effectiveTargetTier = growthInput.targetTier ?? recruitedStudent?.tier ?? allStudentsMap[payload.studentUid]?.initialTier ?? null;
+      const effectiveTargetTier =
+        growthInput.targetTier ?? recruitedStudent?.tier ?? allStudentsMap[payload.studentUid]?.initialTier ?? null;
       validateStudentGrowthTargetStateForTier(growthInput, effectiveTargetTier);
       if (recruitedStudent) {
         await updateRecruitedStudentCurrentState(env, currentUser.id, payload.studentUid, currentInput);
@@ -227,7 +235,10 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       await upsertStudentGrowth(env, currentUser.id, payload.studentUid, growthInput);
     }
 
-    const row = await loadStudentRow(env, currentUser.id, payload.studentUid, { logger });
+    const row = await loadStudentRow(env, currentUser.id, payload.studentUid, {
+      logger,
+      includeResourceRequirements: payload._intent === "resourceRequirements",
+    });
     if (!row) {
       return data<GrowthActionResult>({ error: "학생 정보를 다시 불러오지 못했어요" }, { status: 500 });
     }

@@ -158,6 +158,32 @@ describe("utils.growth.students action", () => {
     expect(mockUpsertRelationshipLevel).toHaveBeenCalledWith({}, 1, "studentA", 1, null, 15, {});
   });
 
+  it("refreshes resource requirements without writing student state", async () => {
+    await action({
+      context: { cloudflare: { env: {} } },
+      request: new Request("http://localhost/utils/growth/students", {
+        method: "POST",
+        body: JSON.stringify({
+          _intent: "resourceRequirements",
+          studentUid: "studentA",
+          _submissionId: "studentA:resource:1",
+        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    } as never);
+
+    expect(mockUpdateRecruitedStudentCurrentState).not.toHaveBeenCalled();
+    expect(mockUpsertStudentGrowth).not.toHaveBeenCalled();
+    expect(mockLoadStudentRow).toHaveBeenCalledWith(
+      {},
+      1,
+      "studentA",
+      expect.objectContaining({ includeResourceRequirements: true }),
+    );
+  });
+
   it("writes current growth state only when the student is recruited", async () => {
     mockGetRecruitedStudents.mockResolvedValue([{ studentUid: "studentA" }] as never);
 

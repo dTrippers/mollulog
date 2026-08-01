@@ -45,7 +45,7 @@ export type GrowthStudent = {
   targetEquip3: number | null;
   targetEquipSpecial: number | null;
   targetTier: number | null;
-  resourceRequirements: StudentGrowthResourceRequirements;
+  resourceRequirements: StudentGrowthResourceRequirements | null;
 };
 
 export type GrowthAvailableStudent = {
@@ -56,6 +56,12 @@ export type GrowthAvailableStudent = {
 export type GrowthLayoutLoaderData = {
   managedStudents: GrowthStudent[];
   availableStudents: GrowthAvailableStudent[];
+};
+
+export type GrowthResourceRequirementsByStudent = Record<string, StudentGrowthResourceRequirements>;
+
+export type DeferredGrowthLayoutLoaderData = GrowthLayoutLoaderData & {
+  resourceRequirements: Promise<GrowthResourceRequirementsByStudent>;
 };
 
 export type GrowthLayoutContext = GrowthLayoutLoaderData & {

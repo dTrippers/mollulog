@@ -8,12 +8,24 @@ import {
   getStudentGrowthWithMetadata,
   type StudentGrowthWithMetadata,
 } from "~/models/student-growth";
-import type { GrowthLayoutLoaderData, GrowthStudent } from "./types";
+import type {
+  DeferredGrowthLayoutLoaderData,
+  GrowthLayoutLoaderData,
+  GrowthResourceRequirementsByStudent,
+  GrowthStudent,
+} from "./types";
 
 type GrowthDataLoadOptions = {
   logger?: {
     error(message: string, error?: unknown, context?: Record<string, unknown>): void;
   };
+};
+
+type GrowthPlannerCoreData = {
+  managedStudents: Array<Omit<GrowthStudent, "resourceRequirements">>;
+  availableStudents: GrowthLayoutLoaderData["availableStudents"];
+  allStudentsMap: Awaited<ReturnType<typeof getAllStudentsMap>>;
+  studentGearDataMap: Map<string, StudentGearData | null>;
 };
 
 type BuildStudentRowDataParams = {
@@ -75,7 +87,7 @@ export async function loadStudentRow(
   env: Env,
   userId: number,
   studentUid: string,
-  options: GrowthDataLoadOptions = {},
+  options: GrowthDataLoadOptions & { includeResourceRequirements?: boolean } = {},
 ): Promise<GrowthStudent | null> {
   const [growth, relationship, recruitedStudents, allStudentsMap, gearDataMap] = await Promise.all([
     getStudentGrowthWithMetadata(env, userId, studentUid),
@@ -104,26 +116,21 @@ export async function loadStudentRow(
     gearData,
   });
 
-  const requirementsMap = await getStudentGrowthResourceRequirements(env, [base], allStudentsMap, gearDataMap, {
-    logger: options.logger,
-  });
+  const resourceRequirements = options.includeResourceRequirements
+    ? ((
+        await getStudentGrowthResourceRequirements(env, [base], allStudentsMap, gearDataMap, {
+          logger: options.logger,
+        })
+      )[studentUid] ?? null)
+    : null;
 
   return {
     ...base,
-    resourceRequirements: requirementsMap[studentUid] ?? {
-      items: [],
-      characterExp: 0,
-      credit: 0,
-      skillUnavailable: false,
-    },
+    resourceRequirements,
   };
 }
 
-export async function loadGrowthPlannerData(
-  env: Env,
-  userId: number,
-  options: GrowthDataLoadOptions = {},
-): Promise<GrowthLayoutLoaderData> {
+async function loadGrowthPlannerCoreData(env: Env, userId: number): Promise<GrowthPlannerCoreData> {
   const [recruitedStudents, growths, relationshipLevels, allStudentsMap] = await Promise.all([
     getRecruitedStudents(env, userId),
     getStudentGrowthsWithMetadata(env, userId),
@@ -186,27 +193,65 @@ export async function loadGrowthPlannerData(
     });
   });
 
-  const growthResourceRequirements = await getStudentGrowthResourceRequirements(
-    env,
-    managedStudentsData,
+  return {
+    managedStudents: managedStudentsData,
+    availableStudents: Object.values(allStudentsMap)
+      .filter((student) => !managedUids.has(student.uid))
+      .map((student) => ({ uid: student.uid, name: student.name }))
+      .sort((a, b) => (allStudentsMap[b.uid]?.order ?? -1) - (allStudentsMap[a.uid]?.order ?? -1)),
     allStudentsMap,
     studentGearDataMap,
+  };
+}
+
+async function loadGrowthResourceRequirements(
+  env: Env,
+  coreData: GrowthPlannerCoreData,
+  options: GrowthDataLoadOptions,
+): Promise<GrowthResourceRequirementsByStudent> {
+  return getStudentGrowthResourceRequirements(
+    env,
+    coreData.managedStudents,
+    coreData.allStudentsMap,
+    coreData.studentGearDataMap,
     { logger: options.logger },
   );
-  const managedStudents = managedStudentsData.map((student) => ({
+}
+
+function withResourceRequirements(
+  students: GrowthPlannerCoreData["managedStudents"],
+  resourceRequirements: GrowthResourceRequirementsByStudent | null,
+): GrowthStudent[] {
+  return students.map((student) => ({
     ...student,
-    resourceRequirements: growthResourceRequirements[student.uid] ?? {
-      items: [],
-      characterExp: 0,
-      credit: 0,
-      skillUnavailable: false,
-    },
+    resourceRequirements: resourceRequirements?.[student.uid] ?? null,
   }));
+}
 
-  const availableStudents = Object.values(allStudentsMap)
-    .filter((student) => !managedUids.has(student.uid))
-    .map((student) => ({ uid: student.uid, name: student.name }))
-    .sort((a, b) => (allStudentsMap[b.uid]?.order ?? -1) - (allStudentsMap[a.uid]?.order ?? -1));
+export async function loadGrowthPlannerData(
+  env: Env,
+  userId: number,
+  options: GrowthDataLoadOptions = {},
+): Promise<GrowthLayoutLoaderData> {
+  const coreData = await loadGrowthPlannerCoreData(env, userId);
+  const resourceRequirements = await loadGrowthResourceRequirements(env, coreData, options);
 
-  return { managedStudents, availableStudents };
+  return {
+    managedStudents: withResourceRequirements(coreData.managedStudents, resourceRequirements),
+    availableStudents: coreData.availableStudents,
+  };
+}
+
+export async function loadDeferredGrowthPlannerData(
+  env: Env,
+  userId: number,
+  options: GrowthDataLoadOptions = {},
+): Promise<DeferredGrowthLayoutLoaderData> {
+  const coreData = await loadGrowthPlannerCoreData(env, userId);
+
+  return {
+    managedStudents: withResourceRequirements(coreData.managedStudents, null),
+    availableStudents: coreData.availableStudents,
+    resourceRequirements: loadGrowthResourceRequirements(env, coreData, options),
+  };
 }

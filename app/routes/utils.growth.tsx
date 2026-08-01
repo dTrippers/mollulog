@@ -1,11 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
-import { Outlet, redirect, useLoaderData } from "react-router";
+import { Await, Outlet, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
 import { getLogger } from "~/lib/observability.server";
-import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
-import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
+import { loadDeferredGrowthPlannerData } from "./utils.growth._components/growth-data.server";
+import type {
+  GrowthLayoutContext,
+  GrowthResourceRequirementsByStudent,
+  GrowthStudent,
+} from "./utils.growth._components/types";
 
 export const meta: MetaFunction = () => {
   return [
@@ -47,8 +51,22 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     return redirect("/unauthorized");
   }
 
-  return loadGrowthPlannerData(env, currentUser.id, { logger });
+  return loadDeferredGrowthPlannerData(env, currentUser.id, { logger });
 };
+
+function GrowthResourceRequirementsSync({
+  resourceRequirements,
+  onResolve,
+}: {
+  resourceRequirements: GrowthResourceRequirementsByStudent;
+  onResolve: (resourceRequirements: GrowthResourceRequirementsByStudent) => void;
+}) {
+  useEffect(() => {
+    onResolve(resourceRequirements);
+  }, [onResolve, resourceRequirements]);
+
+  return null;
+}
 
 export default function GrowthLayout() {
   const loaderData = useLoaderData<typeof loader>();
@@ -56,12 +74,18 @@ export default function GrowthLayout() {
   const [managedStudents, setManagedStudents] = useState(loaderData.managedStudents);
   const managedStudentListKey = loaderData.managedStudents.map((student) => student.uid).join(":");
   const syncedManagedStudentListKeyRef = useRef(managedStudentListKey);
+  const latestResourceRequirementsRef = useRef<GrowthResourceRequirementsByStudent>({});
 
   useEffect(() => {
     if (syncedManagedStudentListKeyRef.current === managedStudentListKey) return;
     syncedManagedStudentListKeyRef.current = managedStudentListKey;
-    // Preserve per-row optimistic updates and only replace the list on real list revalidation.
-    setManagedStudents(loaderData.managedStudents);
+    // Preserve per-row optimistic updates and resource results that may have resolved before this list sync.
+    setManagedStudents(
+      loaderData.managedStudents.map((student) => ({
+        ...student,
+        resourceRequirements: latestResourceRequirementsRef.current[student.uid] ?? student.resourceRequirements,
+      })),
+    );
   }, [loaderData.managedStudents, managedStudentListKey]);
 
   const updateStudent = useCallback((next: GrowthStudent) => {
@@ -69,9 +93,22 @@ export default function GrowthLayout() {
       const idx = prev.findIndex((s) => s.uid === next.uid);
       if (idx === -1) return prev;
       const copy = prev.slice();
-      copy[idx] = next;
+      copy[idx] = {
+        ...next,
+        resourceRequirements: next.resourceRequirements ?? prev[idx].resourceRequirements,
+      };
       return copy;
     });
+  }, []);
+
+  const updateResourceRequirements = useCallback((resourceRequirements: GrowthResourceRequirementsByStudent) => {
+    latestResourceRequirementsRef.current = resourceRequirements;
+    setManagedStudents((prev) =>
+      prev.map((student) => ({
+        ...student,
+        resourceRequirements: resourceRequirements[student.uid] ?? student.resourceRequirements,
+      })),
+    );
   }, []);
 
   const contextValue: GrowthLayoutContext = {
@@ -88,6 +125,16 @@ export default function GrowthLayout() {
       maxWidth="full"
       layout="vertical"
     >
+      <Suspense fallback={null}>
+        <Await resolve={loaderData.resourceRequirements}>
+          {(resourceRequirements) => (
+            <GrowthResourceRequirementsSync
+              resourceRequirements={resourceRequirements}
+              onResolve={updateResourceRequirements}
+            />
+          )}
+        </Await>
+      </Suspense>
       <Outlet context={contextValue satisfies GrowthLayoutContext} />
     </Page>
   );

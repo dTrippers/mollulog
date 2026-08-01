@@ -34,7 +34,7 @@ export default function ResourceFarmingPage() {
     prioritizeHighTier: false,
   };
   const aggregatedRequirements = aggregateGrowthResourceRequirements(
-    managedStudents.map((student) => student.resourceRequirements),
+    managedStudents.flatMap((student) => (student.resourceRequirements ? [student.resourceRequirements] : [])),
   );
   const farmingNeeded = buildEquipmentFarmingNeeded(aggregatedRequirements, ownedQuantities);
   const farmingRequirements = buildEquipmentFarmingRequirements(aggregatedRequirements, ownedQuantities);

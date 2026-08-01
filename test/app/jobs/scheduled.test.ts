@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { syncEventContentsList } from "~/models/event-content";
-import { getStudentGearData } from "~/models/growth-resource";
+import { getStudentGearData, getStudentSkillCosts } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
@@ -58,6 +58,7 @@ jest.mock("~/models/stage", () => ({
 
 jest.mock("~/models/growth-resource", () => ({
   getStudentGearData: jest.fn(),
+  getStudentSkillCosts: jest.fn(),
 }));
 
 jest.mock("~/models/recruitment", () => ({
@@ -104,6 +105,7 @@ const mockedWarmActiveUpcomingEventContent = warmActiveUpcomingEventContent as j
 const mockedGetItemCatalogResources = getItemCatalogResources as jest.MockedFunction<typeof getItemCatalogResources>;
 const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
 const mockedGetStudentGearData = getStudentGearData as jest.MockedFunction<typeof getStudentGearData>;
+const mockedGetStudentSkillCosts = getStudentSkillCosts as jest.MockedFunction<typeof getStudentSkillCosts>;
 const mockedWarmRecruitmentCache = warmRecruitmentCache as jest.MockedFunction<typeof warmRecruitmentCache>;
 const mockedWarmRaidCache = warmRaidCache as jest.MockedFunction<typeof warmRaidCache>;
 
@@ -130,6 +132,7 @@ beforeEach(() => {
   >);
   mockedGetStudentSkillItemsBatch.mockResolvedValue(new Map());
   mockedGetStudentGearData.mockResolvedValue(new Map());
+  mockedGetStudentSkillCosts.mockResolvedValue(new Map());
   mockedWarmRecruitmentCache.mockResolvedValue([]);
   mockedWarmRaidCache.mockResolvedValue([]);
   mockedGetMainStories.mockResolvedValue([]);
@@ -181,6 +184,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedGetStudentGearData).toHaveBeenCalledWith(env, ["10000", "10001"], false);
+    expect(mockedGetStudentSkillCosts).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false, expect.anything());
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(env, true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(env, true);
@@ -210,6 +214,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetAllStudents).not.toHaveBeenCalled();
     expect(mockedGetStudentSkillItemsBatch).not.toHaveBeenCalled();
     expect(mockedGetStudentGearData).not.toHaveBeenCalled();
+    expect(mockedGetStudentSkillCosts).not.toHaveBeenCalled();
     expect(mockedWarmActiveUpcomingEventContent).not.toHaveBeenCalled();
     expect(mockedSyncRawStudents).toHaveBeenCalledWith(env, true);
     expect(mockedSyncEventContentsList).toHaveBeenCalledWith(env, true);
@@ -235,6 +240,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetCampaignFarmingStages).not.toHaveBeenCalled();
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
+    expect(mockedGetStudentSkillCosts).toHaveBeenCalledWith(env, ["10000", "10001"], false);
   });
 
   it("runs per-uid source warming and updates the cron marker when the marker is stale", async () => {
@@ -254,6 +260,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedGetStudentGearData).toHaveBeenCalledWith(env, ["10000", "10001"], false);
+    expect(mockedGetStudentSkillCosts).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false, expect.anything());
   });
 

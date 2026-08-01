@@ -93,7 +93,7 @@ export default function ResourceInventoryPage() {
   const actionData = useActionData<typeof action>();
   const { managedStudents } = useOutletContext<GrowthLayoutContext>();
   const requiredResources = aggregateGrowthResourceRequirements([
-    ...managedStudents.map((student) => student.resourceRequirements),
+    ...managedStudents.flatMap((student) => (student.resourceRequirements ? [student.resourceRequirements] : [])),
     relationshipGiftRequirements,
   ]);
 

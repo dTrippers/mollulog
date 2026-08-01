@@ -5,7 +5,7 @@ import { getLogger } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
 import { syncEventContentsList } from "~/models/event-content";
-import { getStudentGearData } from "~/models/growth-resource";
+import { getStudentGearData, getStudentSkillCosts } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
@@ -64,6 +64,7 @@ async function warmStudentSourceCaches(env: Env, forceRefresh = false): Promise<
     [
       () => getStudentSkillItemsBatch(env, studentUids, forceRefresh),
       () => getStudentGearData(env, studentUids, forceRefresh),
+      () => getStudentSkillCosts(env, studentUids, forceRefresh),
     ],
     "One or more student source cache warm tasks failed",
   );

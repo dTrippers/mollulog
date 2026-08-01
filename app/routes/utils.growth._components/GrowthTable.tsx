@@ -1,5 +1,5 @@
 import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { StudentSelectForm } from "~/components/features/forms";
 import { TierSelector } from "~/components/features/students";
@@ -426,6 +426,8 @@ function GrowthRow({
   const removeFetcher = useFetcher<GrowthActionResult>();
   const enrollFetcher = useFetcher<GrowthActionResult>();
   const enrollSubmittedRef = useRef<{ id: string } | null>(null);
+  const resourceRequirementsFetcher = useFetcher<GrowthActionResult>();
+  const resourceRequirementsSubmittedRef = useRef<{ id: string } | null>(null);
   const submissionSequenceRef = useRef(0);
   const growthDraftRevisionRef = useRef(0);
   const [rowState, dispatchRow] = useReducer(
@@ -444,6 +446,7 @@ function GrowthRow({
     enrollError,
     isPendingSave,
   } = rowState;
+  const resourceRequirements = student.resourceRequirements;
 
   const [isResourceRequirementsOpen, setIsResourceRequirementsOpen] = useState(false);
   const resourceRequirementsContentRef = useRef<HTMLDivElement>(null);
@@ -466,6 +469,15 @@ function GrowthRow({
     growthDraftRevisionRef.current += 1;
     return growthDraftRevisionRef.current;
   };
+  const requestResourceRequirements = useCallback(() => {
+    submissionSequenceRef.current += 1;
+    const submissionId = `${student.uid}:${submissionSequenceRef.current}`;
+    resourceRequirementsSubmittedRef.current = { id: submissionId };
+    resourceRequirementsFetcher.submit(
+      { _intent: "resourceRequirements", _submissionId: submissionId, studentUid: student.uid },
+      { method: "post", encType: "application/json" },
+    );
+  }, [resourceRequirementsFetcher, student.uid]);
 
   useEffect(() => {
     // Always sync tier display
@@ -490,6 +502,7 @@ function GrowthRow({
       setResourceRequirementsHeight(0);
       return;
     }
+    if (!resourceRequirements) return;
 
     const content = resourceRequirementsContentRef.current;
     if (!content) return;
@@ -504,7 +517,7 @@ function GrowthRow({
     const observer = new ResizeObserver(updateHeight);
     observer.observe(content);
     return () => observer.disconnect();
-  }, [isResourceRequirementsOpen]);
+  }, [isResourceRequirementsOpen, resourceRequirements]);
 
   useEffect(() => {
     const shouldKeepSubmittedValues =
@@ -529,14 +542,17 @@ function GrowthRow({
     if (isActionSuccess(fetcher.data)) {
       dispatchRow({ type: "growthSuccess", submitted });
       const next = extractStudentUpdate(fetcher.data);
-      if (next) onStudentUpdate(next);
+      if (next) {
+        onStudentUpdate(next);
+        requestResourceRequirements();
+      }
     } else {
       const err = getActionError(fetcher.data);
       if (err) {
         dispatchRow({ type: "growthFailure", error: err, submitted });
       }
     }
-  }, [fetcher.state, fetcher.data, onStudentUpdate]);
+  }, [fetcher.state, fetcher.data, onStudentUpdate, requestResourceRequirements]);
 
   useEffect(() => {
     if (relationshipFetcher.state !== "idle" || !relationshipSubmittedRef.current) return;
@@ -547,14 +563,17 @@ function GrowthRow({
     if (isActionSuccess(relationshipFetcher.data)) {
       dispatchRow({ type: "relationshipSuccess", submitted });
       const next = extractStudentUpdate(relationshipFetcher.data);
-      if (next) onStudentUpdate(next);
+      if (next) {
+        onStudentUpdate(next);
+        requestResourceRequirements();
+      }
     } else {
       const err = getActionError(relationshipFetcher.data);
       if (err) {
         dispatchRow({ type: "relationshipFailure", error: err });
       }
     }
-  }, [relationshipFetcher.state, relationshipFetcher.data, onStudentUpdate]);
+  }, [relationshipFetcher.state, relationshipFetcher.data, onStudentUpdate, requestResourceRequirements]);
 
   useEffect(() => {
     if (tierFetcher.state !== "idle") return;
@@ -566,11 +585,21 @@ function GrowthRow({
     tierSubmittedRef.current = null;
     if (isActionSuccess(tierFetcher.data)) {
       const next = extractStudentUpdate(tierFetcher.data);
-      if (next) onStudentUpdate(next);
+      if (next) {
+        onStudentUpdate(next);
+        requestResourceRequirements();
+      }
     } else {
       dispatchRow({ type: "tierFailure", tier: student.tier ?? student.initialTier });
     }
-  }, [tierFetcher.state, tierFetcher.data, student.tier, student.initialTier, onStudentUpdate]);
+  }, [
+    tierFetcher.state,
+    tierFetcher.data,
+    student.tier,
+    student.initialTier,
+    onStudentUpdate,
+    requestResourceRequirements,
+  ]);
 
   useEffect(() => {
     if (enrollFetcher.state !== "idle") return;
@@ -584,7 +613,10 @@ function GrowthRow({
     if (isActionSuccess(enrollFetcher.data)) {
       dispatchRow({ type: "enrollSuccess" });
       const next = extractStudentUpdate(enrollFetcher.data);
-      if (next) onStudentUpdate(next);
+      if (next) {
+        onStudentUpdate(next);
+        requestResourceRequirements();
+      }
       return;
     }
 
@@ -592,7 +624,20 @@ function GrowthRow({
     if (err) {
       dispatchRow({ type: "enrollFailure", error: err });
     }
-  }, [enrollFetcher.state, enrollFetcher.data, onStudentUpdate]);
+  }, [enrollFetcher.state, enrollFetcher.data, onStudentUpdate, requestResourceRequirements]);
+
+  useEffect(() => {
+    if (resourceRequirementsFetcher.state !== "idle" || !resourceRequirementsSubmittedRef.current) return;
+    const submitted = resourceRequirementsSubmittedRef.current;
+    const responseSubmissionId = getActionSubmissionId(resourceRequirementsFetcher.data);
+    if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
+    resourceRequirementsSubmittedRef.current = null;
+
+    if (isActionSuccess(resourceRequirementsFetcher.data)) {
+      const next = extractStudentUpdate(resourceRequirementsFetcher.data);
+      if (next) onStudentUpdate(next);
+    }
+  }, [resourceRequirementsFetcher.state, resourceRequirementsFetcher.data, onStudentUpdate]);
 
   const scheduleAutoSave = (values: GrowthValues, targetTier: number | null, draftRevision: number) => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -726,11 +771,17 @@ function GrowthRow({
   };
 
   const displayedError = enrollError ?? growthError ?? relationshipError;
-  const isCalculatingResources = isPendingSave || fetcher.state !== "idle" || tierFetcher.state !== "idle";
+  const isResourceRequirementsReady = resourceRequirements != null;
+  const isCalculatingResources =
+    !isResourceRequirementsReady ||
+    isPendingSave ||
+    fetcher.state !== "idle" ||
+    tierFetcher.state !== "idle" ||
+    resourceRequirementsFetcher.state !== "idle";
   const hasResourceRequirements =
-    student.resourceRequirements.items.length > 0 ||
-    student.resourceRequirements.characterExp > 0 ||
-    student.resourceRequirements.credit > 0;
+    (resourceRequirements?.items.length ?? 0) > 0 ||
+    (resourceRequirements?.characterExp ?? 0) > 0 ||
+    (resourceRequirements?.credit ?? 0) > 0;
   const currentNavigationRowIndex = rowIndexBase;
   const targetNavigationRowIndex = rowIndexBase + 1;
   const numberInputShortcutProps = {
@@ -1121,35 +1172,37 @@ function GrowthRow({
             <div
               className="overflow-hidden transition-all duration-200 ease-out"
               style={{
-                maxHeight: isResourceRequirementsOpen ? resourceRequirementsHeight : 0,
+                maxHeight: isResourceRequirementsOpen && isResourceRequirementsReady ? resourceRequirementsHeight : 0,
                 opacity: isResourceRequirementsOpen ? 1 : 0,
               }}
               aria-hidden={!isResourceRequirementsOpen}
             >
-              <div ref={resourceRequirementsContentRef} className="pt-2">
-                {hasResourceRequirements ? (
-                  <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
-                    {student.resourceRequirements.characterExp > 0 ? (
-                      <CharacterExpRequirementCard characterExp={student.resourceRequirements.characterExp} />
-                    ) : null}
-                    {student.resourceRequirements.credit > 0 ? (
-                      <CreditRequirementCard credit={student.resourceRequirements.credit} />
-                    ) : null}
-                    {student.resourceRequirements.items.map((item) => (
-                      <ResourceCard
-                        key={`${student.uid}-${item.uid}`}
-                        itemUid={item.uid}
-                        resourceType={item.type}
-                        rarity={item.rarity}
-                        label={item.amount.toLocaleString()}
-                        name={item.name}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-center text-xs font-medium text-muted-foreground">필요한 재화가 없어요</p>
-                )}
-              </div>
+              {isResourceRequirementsOpen && isResourceRequirementsReady ? (
+                <div ref={resourceRequirementsContentRef} className="pt-2">
+                  {hasResourceRequirements ? (
+                    <div className="flex min-w-0 max-w-full flex-wrap items-start gap-2">
+                      {resourceRequirements.characterExp > 0 ? (
+                        <CharacterExpRequirementCard characterExp={resourceRequirements.characterExp} />
+                      ) : null}
+                      {resourceRequirements.credit > 0 ? (
+                        <CreditRequirementCard credit={resourceRequirements.credit} />
+                      ) : null}
+                      {resourceRequirements.items.map((item) => (
+                        <ResourceCard
+                          key={`${student.uid}-${item.uid}`}
+                          itemUid={item.uid}
+                          resourceType={item.type}
+                          rarity={item.rarity}
+                          label={item.amount.toLocaleString()}
+                          name={item.name}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center text-xs font-medium text-muted-foreground">필요한 재화가 없어요</p>
+                  )}
+                </div>
+              ) : null}
             </div>
           </div>
           {isCalculatingResources && (
