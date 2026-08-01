@@ -4,11 +4,17 @@ import {
   getPostgresLatestPostTime,
   getPostgresNewsPosts,
   getPostgresPostByTimelineContentUid,
+  getPostgresPostByUid,
   getPostgresPosts,
 } from "~/db/postgres/posts";
 
-function postRow(uid = "post-1", createdAt = "2026-07-14T00:00:00.000Z", timelineContentUid: string | null = null) {
-  return [1, uid, "제목", "본문", "news", timelineContentUid, new Date(createdAt), new Date(createdAt)];
+function postRow(
+  uid = "post-1",
+  createdAt = "2026-07-14T00:00:00.000Z",
+  timelineContentUid: string | null = null,
+  board = "news",
+) {
+  return [1, uid, "제목", "본문", board, timelineContentUid, new Date(createdAt), new Date(createdAt)];
 }
 
 describe("PostgreSQL posts read", () => {
@@ -67,6 +73,32 @@ describe("PostgreSQL posts read", () => {
     expect(text).toContain('where "posts"."timeline_content_uid" = $1');
     expect(text).toContain('order by "posts"."created_at" desc, "posts"."uid" desc');
     expect(values).toEqual(["live-stream-1", 1]);
+  });
+
+  it("loads a post directly by uid without filtering by board", async () => {
+    const client = {
+      connect: jest.fn(async () => undefined),
+      end: jest.fn(async () => undefined),
+      query: jest.fn(async () => ({
+        rows: [postRow("notice-1", "2026-07-26T00:00:00.000Z", null, "notice")],
+        rowCount: 1,
+      })),
+    } as unknown as Client;
+
+    await expect(
+      getPostgresPostByUid({ HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive }, "notice-1", {
+        createClient: () => client,
+      }),
+    ).resolves.toMatchObject({
+      uid: "notice-1",
+      board: "notice",
+    });
+
+    const [{ text }, values] = (client.query as jest.Mock).mock.calls[0] as [{ text: string }, unknown[]];
+    expect(text).toContain('where "posts"."uid" = $1');
+    expect(text).toContain("limit $2");
+    expect(values).toEqual(["notice-1", 1]);
+    expect(client.end).toHaveBeenCalledTimes(1);
   });
 
   it("preserves page clamping and uses one Hyperdrive connection for count and rows", async () => {

@@ -89,6 +89,22 @@ export async function getPostgresPosts(
   );
 }
 
+export async function getPostgresPostByUid(
+  env: Pick<Env, "HYPERDRIVE">,
+  uid: string,
+  options: PostgresPostsOptions = {},
+): Promise<Post | null> {
+  return withPostsDatabase(
+    env,
+    "get_by_uid",
+    async (db) => {
+      const [row] = await db.select().from(pgPostsTable).where(eq(pgPostsTable.uid, uid)).limit(1);
+      return row ? toPost(row) : null;
+    },
+    options,
+  );
+}
+
 export async function getPostgresNewsPosts(
   env: Pick<Env, "HYPERDRIVE">,
   page = 1,
