@@ -48,6 +48,7 @@ type IconComponent = ComponentType<ComponentProps<"svg">>;
 export type NavigationItem = {
   to: string;
   name: string;
+  favoriteId?: string;
   description?: string;
   OutlineIcon: IconComponent;
   SolidIcon: IconComponent;
@@ -144,6 +145,7 @@ export function getNavigationSections({
         {
           to: "/futures",
           name: "미래시",
+          favoriteId: "futures",
           description: "이벤트와 모집 일정을 확인해보세요",
           OutlineIcon: CalendarIconOutline,
           SolidIcon: CalendarIconSolid,
@@ -152,6 +154,7 @@ export function getNavigationSections({
         {
           to: "/events",
           name: "이벤트",
+          favoriteId: "events",
           description: "이벤트 개최, 복각, 상설 일정을 확인해보세요",
           OutlineIcon: ListBulletIconOutline,
           SolidIcon: ListBulletIconSolid,
@@ -160,6 +163,7 @@ export function getNavigationSections({
         {
           to: "/raids",
           name: "총력전 / 대결전",
+          favoriteId: "raids",
           description: "시즌 요약, 상위권 편성, 공략 영상을 확인해보세요",
           badgeLabel: hasOngoingRaid ? "진행중" : undefined,
           OutlineIcon: FireIconOutline,
@@ -169,6 +173,7 @@ export function getNavigationSections({
         {
           to: "/students",
           name: "학생부",
+          favoriteId: "students",
           description: "학생 프로필과 평가를 확인해보세요",
           showRedDot: true,
           OutlineIcon: IdentificationIconOutline,
@@ -178,6 +183,7 @@ export function getNavigationSections({
         {
           to: "/mainstory",
           name: "메인 스토리",
+          favoriteId: "main-story",
           description: "메인 스토리 공개 일정을 확인해보세요",
           OutlineIcon: BookOpenIconOutline,
           SolidIcon: BookOpenIconSolid,
@@ -195,6 +201,7 @@ export function getNavigationSections({
         {
           to: "/utils/pyroxene",
           name: "청휘석 플래너",
+          favoriteId: "pyroxene-planner",
           description: "모집 시점의 청휘석을 계산해보세요",
           badgeLabel: isSignedIn ? undefined : "로그인 없이 사용",
           OutlineIcon: CreditCardIconOutline,
@@ -204,6 +211,7 @@ export function getNavigationSections({
         {
           to: "/utils/growth/students",
           name: "학생 성장 플래너",
+          favoriteId: "student-growth-planner",
           description: "성장에 필요한 재화를 정리해보세요",
           OutlineIcon: TableCellsIconOutline,
           SolidIcon: TableCellsIconSolid,
@@ -212,6 +220,7 @@ export function getNavigationSections({
         {
           to: "/utils/resources/inventory",
           name: "재화 관리/파밍 계산기",
+          favoriteId: "resource-planner",
           description: "보유 재화와 장비 파밍 계획을 확인해보세요",
           OutlineIcon: ArchiveBoxIconOutline,
           SolidIcon: ArchiveBoxIconSolid,
@@ -221,6 +230,7 @@ export function getNavigationSections({
           ? {
               to: `/events/${upcomingEvent.uid}/shop`,
               name: "이벤트 소탕 계산기",
+              favoriteId: "event-shop-calculator",
               description: "이벤트 효율과 상점을 확인해보세요",
               OutlineIcon: BoltIconOutline,
               SolidIcon: BoltIconSolid,
@@ -233,6 +243,7 @@ export function getNavigationSections({
           : {
               to: "/futures",
               name: "이벤트 소탕 계산기",
+              favoriteId: "event-shop-calculator",
               description: "진행중인 이벤트 상점을 확인해보세요",
               OutlineIcon: BoltIconOutline,
               SolidIcon: BoltIconSolid,
@@ -241,6 +252,7 @@ export function getNavigationSections({
         {
           to: "/utils/relationship",
           name: "인연 랭크 계산기",
+          favoriteId: "relationship-calculator",
           description: "학생별 인연 랭크를 계산해보세요",
           OutlineIcon: HeartIconOutline,
           SolidIcon: HeartIconSolid,
@@ -249,6 +261,7 @@ export function getNavigationSections({
         {
           to: "/timelines",
           name: "공략 타임라인",
+          favoriteId: "strategy-timeline",
           description: "공략을 찾아보고 실전에서 순서대로 확인해보세요",
           OutlineIcon: QueueListIconOutline,
           SolidIcon: QueueListIconSolid,
@@ -259,6 +272,7 @@ export function getNavigationSections({
         {
           to: "/utils/raidscore",
           name: "총력전 점수 계산기",
+          favoriteId: "raid-score-calculator",
           description: "클리어 시간 기준 점수를 계산해보세요",
           OutlineIcon: ClockIconOutline,
           SolidIcon: ClockIconSolid,
@@ -276,6 +290,7 @@ export function getNavigationSections({
         {
           to: "/coupons",
           name: "쿠폰",
+          favoriteId: "coupons",
           description: "사용 가능한 쿠폰을 확인하고 등록해보세요",
           OutlineIcon: TicketIconOutline,
           SolidIcon: TicketIconSolid,

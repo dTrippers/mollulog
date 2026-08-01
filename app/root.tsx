@@ -71,6 +71,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       currentProfileStudentId: sensei?.profileStudentId ?? null,
       darkMode: preference.darkMode ?? true,
       displayTimeZone: normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE),
+      favoriteNavigationIds: preference.favoriteNavigationIds ?? [],
       navigationBarContents,
       publicEnv: {
         STAGE: env.STAGE ?? "local",
@@ -155,7 +156,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const loaderData = useLoaderData<typeof loader>();
-  const { currentUsername, currentProfileStudentId, navigationBarContents } = loaderData;
+  const { currentUsername, currentProfileStudentId, favoriteNavigationIds, navigationBarContents } = loaderData;
 
   const [darkMode, setDarkMode] = useState(loaderData.darkMode);
   const [displayTimeZone, setDisplayTimeZone] = useState(loaderData.displayTimeZone);
@@ -240,6 +241,7 @@ export default function App() {
           <NavigationBar
             currentUsername={currentUsername}
             currentProfileStudentId={currentProfileStudentId}
+            favoriteNavigationIds={favoriteNavigationIds}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
             upcomingEvent={navigationBarContents.upcomingEvent}

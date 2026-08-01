@@ -23,4 +23,33 @@ describe("getNavigationSections", () => {
       getMenuItems({ isSignedIn: true }).find((item) => item.to === "/utils/pyroxene")?.badgeLabel,
     ).toBeUndefined();
   });
+
+  it("keeps stable favorite IDs across dynamic event-shop availability", () => {
+    const unavailable = getNavigationSections({
+      pathname: "/",
+      upcomingEvent: null,
+      hasOngoingRaid: false,
+      hasUnconsumedCoupons: false,
+      isSignedIn: false,
+    })
+      .flatMap((section) => section.items)
+      .find((item) => item.name === "이벤트 소탕 계산기");
+    const available = getNavigationSections({
+      pathname: "/",
+      upcomingEvent: { uid: "event-uid", since: "2026-01-01T00:00:00.000Z", until: "2026-01-02T00:00:00.000Z" },
+      hasOngoingRaid: false,
+      hasUnconsumedCoupons: false,
+      isSignedIn: false,
+      now: "2026-01-01T12:00:00.000Z",
+    })
+      .flatMap((section) => section.items)
+      .find((item) => item.name === "이벤트 소탕 계산기");
+
+    expect(unavailable).toMatchObject({ favoriteId: "event-shop-calculator", disabled: true });
+    expect(available).toMatchObject({
+      favoriteId: "event-shop-calculator",
+      to: "/events/event-uid/shop",
+    });
+    expect(available?.disabled).toBeUndefined();
+  });
 });

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import { MAX_NAVIGATION_FAVORITE_IDS } from "~/domain/navigation-favorites";
 import { getPreference, serializePreference } from "../../../app/auth/preference.server";
 import { action } from "../../../app/routes/api.preference";
 
@@ -52,6 +53,46 @@ describe("api.preference", () => {
 
     expect(preference.darkMode).toBe(true);
     expect(preference.timeZone).toBe("America/New_York");
+  });
+
+  it("merges favorite-only updates without dropping existing preferences", async () => {
+    const cookie = await serializePreference(env, {
+      darkMode: false,
+      timeZone: "Asia/Seoul",
+      favoriteNavigationIds: ["profile"],
+    });
+    const response = await callAction(
+      { favoriteNavigationIds: [" contact ", "profile", "contact", "missing"] },
+      cookie,
+    );
+    const setCookie = response.headers.get("Set-Cookie");
+
+    const preference = await getPreference(
+      env,
+      new Request("https://mollulog.net", {
+        headers: setCookie ? { Cookie: setCookie } : {},
+      }),
+    );
+
+    expect(preference.darkMode).toBe(false);
+    expect(preference.timeZone).toBe("Asia/Seoul");
+    expect(preference.favoriteNavigationIds).toEqual(["contact", "profile", "missing"]);
+  });
+
+  it("uses a 400-day max age for every serialized preference cookie", async () => {
+    const cookie = await serializePreference(env, { darkMode: false });
+
+    expect(cookie).toContain("Max-Age=34560000");
+  });
+
+  it("keeps a maximum normalized favorites preference below the cookie size limit", async () => {
+    const favoriteNavigationIds = Array.from(
+      { length: MAX_NAVIGATION_FAVORITE_IDS },
+      (_, index) => `id-${String(index).padStart(2, "0")}-${"x".repeat(56)}`,
+    );
+    const cookie = await serializePreference(env, { favoriteNavigationIds });
+
+    expect(cookie.length).toBeLessThan(4096);
   });
 
   it("falls back to UTC for invalid timezone submissions", async () => {

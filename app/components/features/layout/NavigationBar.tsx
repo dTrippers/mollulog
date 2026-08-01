@@ -11,19 +11,28 @@ import {
   MagnifyingGlassIcon,
   MegaphoneIcon,
   RectangleGroupIcon as RectangleGroupIconOutline,
+  StarIcon as StarIconOutline,
   UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   ArrowsRightLeftIcon as ArrowsRightLeftIconSolid,
   CameraIcon as CameraIconSolid,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
+  EnvelopeIcon as EnvelopeIconSolid,
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
+  MegaphoneIcon as MegaphoneIconSolid,
+  StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import {
+  getAvailableNavigationFavorites,
+  normalizeNavigationFavoriteIds,
+  toggleNavigationFavoriteId,
+} from "~/domain/navigation-favorites";
 import { parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { timelineContentTypeLocale } from "~/locales/ko";
@@ -41,6 +50,7 @@ import {
 type NavigationBarProps = {
   currentUsername: string | null;
   currentProfileStudentId: string | null;
+  favoriteNavigationIds: string[];
   darkMode: boolean;
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   upcomingEvent: { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
@@ -246,9 +256,49 @@ function getSearchResultLabel(result: SearchResult): string {
   return `${timelineContentTypeLocale[result.contentType]} · ${parseUtcTimestamp(result.startAt).format("YYYY-MM-DD")}`;
 }
 
+function useNavigationFavorites(initialFavoriteIds: string[]) {
+  const [favoriteIds, setFavoriteIds] = useState(() => normalizeNavigationFavoriteIds(initialFavoriteIds));
+  const favoriteIdsRef = useRef(favoriteIds);
+  const pendingFavoriteIdsRef = useRef<string[] | null>(null);
+  const isPersistingRef = useRef(false);
+
+  const flushPendingFavoriteIds = () => {
+    if (isPersistingRef.current || pendingFavoriteIdsRef.current === null) {
+      return;
+    }
+
+    const favoriteNavigationIds = pendingFavoriteIdsRef.current;
+    pendingFavoriteIdsRef.current = null;
+    isPersistingRef.current = true;
+
+    void fetch("/api/preference", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ favoriteNavigationIds }),
+    })
+      .catch(() => undefined)
+      .finally(() => {
+        isPersistingRef.current = false;
+        flushPendingFavoriteIds();
+      });
+  };
+
+  const toggleFavorite = (favoriteId: string) => {
+    const nextFavoriteIds = toggleNavigationFavoriteId(favoriteIdsRef.current, favoriteId);
+    favoriteIdsRef.current = nextFavoriteIds;
+    pendingFavoriteIdsRef.current = nextFavoriteIds;
+    setFavoriteIds(nextFavoriteIds);
+    flushPendingFavoriteIds();
+  };
+
+  return [favoriteIds, toggleFavorite] as const;
+}
+
 export default function NavigationBar({
   currentUsername,
   currentProfileStudentId,
+  favoriteNavigationIds,
   darkMode,
   setDarkMode,
   upcomingEvent,
@@ -263,6 +313,7 @@ export default function NavigationBar({
   const searchResetKey = `${location.pathname}\n${location.search}`;
   const { showSignIn } = useSignIn();
   const sectionStates = getNavigationSectionStates(pathname, upcomingEvent);
+  const [localFavoriteNavigationIds, onFavoriteToggle] = useNavigationFavorites(favoriteNavigationIds);
 
   return (
     <>
@@ -271,7 +322,11 @@ export default function NavigationBar({
           hidden bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex lg:h-screen lg:w-72 lg:flex-col xl:w-84
         "
       >
-        <div className="flex h-16 items-center px-5">
+        <Link
+          to="/"
+          className="flex h-16 items-center px-5 transition-opacity duration-150 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 motion-reduce:transition-none"
+          aria-label="몰루로그 홈으로 이동"
+        >
           <img
             src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
             alt="몰루로그 로고"
@@ -280,7 +335,7 @@ export default function NavigationBar({
           <h1 className="font-ingame text-xl text-foreground xl:text-2xl">
             <span className="font-semibold">몰루</span>로그
           </h1>
-        </div>
+        </Link>
 
         <div className="px-3 pt-3 pb-2">
           <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
@@ -290,6 +345,8 @@ export default function NavigationBar({
           <DesktopMenuContent
             currentUsername={currentUsername}
             pathname={pathname}
+            favoriteNavigationIds={localFavoriteNavigationIds}
+            onFavoriteToggle={onFavoriteToggle}
             hasRecentNews={hasRecentNews}
             upcomingEvent={upcomingEvent}
             hasOngoingRaid={hasOngoingRaid}
@@ -591,8 +648,13 @@ function MobileBottomNavigation({
   );
 }
 
-interface MenuItemProps extends NavigationItem {
-  onItemClick?: () => void;
+type DesktopMenuItem = NavigationItem & {
+  redDotAnimate?: boolean;
+};
+
+interface MenuItemProps extends DesktopMenuItem {
+  isFavorite?: boolean;
+  onFavoriteToggle?: (favoriteId: string) => void;
 }
 
 function DesktopMenuGroupLabel({ children }: { children: React.ReactNode }) {
@@ -601,15 +663,24 @@ function DesktopMenuGroupLabel({ children }: { children: React.ReactNode }) {
 
 function DesktopMenuSectionList({
   section,
+  favoriteIds,
+  onFavoriteToggle,
 }: {
   section: NonNullable<ReturnType<typeof getNavigationSections>[number]>;
+  favoriteIds: Set<string>;
+  onFavoriteToggle: (favoriteId: string) => void;
 }) {
   return (
     <>
       <DesktopMenuGroupLabel>{section.name}</DesktopMenuGroupLabel>
       <div className="space-y-0.5">
         {section.items.map((item) => (
-          <SubMenuItem key={item.name} {...item} />
+          <SubMenuItem
+            key={item.name}
+            {...item}
+            isFavorite={item.favoriteId ? favoriteIds.has(item.favoriteId) : false}
+            onFavoriteToggle={onFavoriteToggle}
+          />
         ))}
       </div>
     </>
@@ -619,6 +690,8 @@ function DesktopMenuSectionList({
 interface DesktopMenuContentProps {
   currentUsername: string | null;
   pathname: string;
+  favoriteNavigationIds: string[];
+  onFavoriteToggle: (favoriteId: string) => void;
   hasRecentNews: boolean;
   upcomingEvent: NavigationBarProps["upcomingEvent"];
   hasOngoingRaid: boolean;
@@ -630,6 +703,8 @@ interface DesktopMenuContentProps {
 function DesktopMenuContent({
   currentUsername,
   pathname,
+  favoriteNavigationIds,
+  onFavoriteToggle,
   hasRecentNews,
   upcomingEvent,
   hasOngoingRaid,
@@ -648,6 +723,60 @@ function DesktopMenuContent({
   const contentSection = menuSections.find((section) => section.name === "컨텐츠");
   const utilSection = menuSections.find((section) => section.name === "플래너 & 계산기");
   const externalSection = menuSections.find((section) => section.name === "게임 외 정보");
+  const profileItems: DesktopMenuItem[] = currentUsername
+    ? [
+        {
+          to: `/@${currentUsername}`,
+          name: "내 프로필",
+          favoriteId: "profile",
+          OutlineIcon: IdentificationIconOutline,
+          SolidIcon: IdentificationIconSolid,
+          isActive: pathname.startsWith("/@"),
+        },
+        {
+          to: "/scanner/resource",
+          name: "스크린샷/영상 인식기",
+          favoriteId: "scanner-resource",
+          badgeLabel: "베타",
+          showRedDot: true,
+          OutlineIcon: CameraIconOutline,
+          SolidIcon: CameraIconSolid,
+          isActive: pathname.startsWith("/scanner"),
+        },
+        {
+          to: "/connect/import",
+          name: "외부 데이터 연동",
+          favoriteId: "connect-import",
+          badgeLabel: "베타",
+          OutlineIcon: ArrowsRightLeftIconOutline,
+          SolidIcon: ArrowsRightLeftIconSolid,
+          isActive: pathname.startsWith("/connect"),
+        },
+      ]
+    : [];
+  const serviceItems: DesktopMenuItem[] = [
+    {
+      to: "/news",
+      name: "업데이트 소식",
+      favoriteId: "news",
+      OutlineIcon: MegaphoneIcon,
+      SolidIcon: MegaphoneIconSolid,
+      showRedDot: hasRecentNews,
+      redDotAnimate: false,
+    },
+    {
+      to: "/contact",
+      name: "제안/문의",
+      favoriteId: "contact",
+      OutlineIcon: EnvelopeIcon,
+      SolidIcon: EnvelopeIconSolid,
+      showRedDot: hasUnreadFeedbackReplies,
+      redDotAnimate: false,
+    },
+  ];
+  const desktopItems = [...menuSections.flatMap((section) => section.items), ...profileItems, ...serviceItems];
+  const favoriteItems = getAvailableNavigationFavorites(favoriteNavigationIds, desktopItems);
+  const favoriteIdSet = new Set(favoriteNavigationIds);
 
   return (
     <nav aria-label="데스크톱 주요 메뉴">
@@ -669,54 +798,71 @@ function DesktopMenuContent({
         />
       </div>
 
-      {contentSection && <DesktopMenuSectionList section={contentSection} />}
+      {favoriteItems.length > 0 && (
+        <div className="mt-2 space-y-0.5">
+          {favoriteItems.map((item) => (
+            <SubMenuItem key={`favorite:${item.favoriteId}`} {...item} isFavorite onFavoriteToggle={onFavoriteToggle} />
+          ))}
+        </div>
+      )}
 
-      {utilSection && <DesktopMenuSectionList section={utilSection} />}
+      {contentSection && (
+        <DesktopMenuSectionList
+          section={contentSection}
+          favoriteIds={favoriteIdSet}
+          onFavoriteToggle={onFavoriteToggle}
+        />
+      )}
 
-      {externalSection && <DesktopMenuSectionList section={externalSection} />}
+      {utilSection && (
+        <DesktopMenuSectionList section={utilSection} favoriteIds={favoriteIdSet} onFavoriteToggle={onFavoriteToggle} />
+      )}
+
+      {externalSection && (
+        <DesktopMenuSectionList
+          section={externalSection}
+          favoriteIds={favoriteIdSet}
+          onFavoriteToggle={onFavoriteToggle}
+        />
+      )}
 
       {menuSections
         .filter((section) => section !== contentSection && section !== utilSection && section !== externalSection)
         .map((section) => (
-          <DesktopMenuSectionList key={section.name} section={section} />
+          <DesktopMenuSectionList
+            key={section.name}
+            section={section}
+            favoriteIds={favoriteIdSet}
+            onFavoriteToggle={onFavoriteToggle}
+          />
         ))}
 
       {currentUsername && (
         <>
           <DesktopMenuGroupLabel>내 정보</DesktopMenuGroupLabel>
           <div className="space-y-0.5">
-            <SubMenuItem
-              to={`/@${currentUsername}`}
-              name="내 프로필"
-              OutlineIcon={IdentificationIconOutline}
-              SolidIcon={IdentificationIconSolid}
-              isActive={pathname.startsWith("/@")}
-            />
-            <SubMenuItem
-              to="/scanner/resource"
-              name="스크린샷/영상 인식기"
-              badgeLabel="베타"
-              showRedDot
-              OutlineIcon={CameraIconOutline}
-              SolidIcon={CameraIconSolid}
-              isActive={pathname.startsWith("/scanner")}
-            />
-            <SubMenuItem
-              to="/connect/import"
-              name="외부 데이터 연동"
-              badgeLabel="베타"
-              OutlineIcon={ArrowsRightLeftIconOutline}
-              SolidIcon={ArrowsRightLeftIconSolid}
-              isActive={pathname.startsWith("/connect")}
-            />
+            {profileItems.map((item) => (
+              <SubMenuItem
+                key={item.name}
+                {...item}
+                isFavorite={item.favoriteId ? favoriteIdSet.has(item.favoriteId) : false}
+                onFavoriteToggle={onFavoriteToggle}
+              />
+            ))}
           </div>
         </>
       )}
 
       <DesktopMenuGroupLabel>서비스</DesktopMenuGroupLabel>
       <div className="space-y-0.5">
-        <DesktopMenuLink to="/news" label="업데이트 소식" Icon={MegaphoneIcon} showRedDot={hasRecentNews} />
-        <DesktopMenuLink to="/contact" label="제안/문의" Icon={EnvelopeIcon} showRedDot={hasUnreadFeedbackReplies} />
+        {serviceItems.map((item) => (
+          <SubMenuItem
+            key={item.name}
+            {...item}
+            isFavorite={item.favoriteId ? favoriteIdSet.has(item.favoriteId) : false}
+            onFavoriteToggle={onFavoriteToggle}
+          />
+        ))}
       </div>
     </nav>
   );
@@ -785,9 +931,22 @@ function DesktopUtilityFooter({
   );
 }
 
-function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, showRedDot, badgeLabel, disabled }: MenuItemProps) {
+function SubMenuItem({
+  to,
+  name,
+  favoriteId,
+  OutlineIcon,
+  SolidIcon,
+  isActive,
+  isFavorite = false,
+  onFavoriteToggle,
+  redDotAnimate = true,
+  showRedDot,
+  badgeLabel,
+  disabled,
+}: MenuItemProps) {
   const className = cn(
-    `relative my-0.5 grid grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-sm transition-colors hover:bg-background hover:text-foreground ${
+    `group relative my-0.5 flex min-w-0 items-center rounded-md px-2 py-1 text-sm transition-colors hover:bg-background hover:text-foreground ${
       isActive ? "bg-background font-medium text-foreground" : "font-normal text-foreground/75"
     } ${disabled ? "opacity-40" : ""}`,
   );
@@ -808,52 +967,65 @@ function SubMenuItem({ to, name, OutlineIcon, SolidIcon, isActive, showRedDot, b
               {badgeLabel}
             </span>
           )}
-          {showRedDot && <div className="absolute top-0 -right-3 size-1.5 bg-red-500 rounded-full animate-pulse" />}
-        </span>
-      </span>
-    </>
-  );
-
-  if (disabled) {
-    return <div className={className}>{content}</div>;
-  }
-
-  return (
-    <Link to={to} className={className}>
-      {content}
-    </Link>
-  );
-}
-
-type DesktopMenuLinkProps = {
-  label: string;
-  Icon: React.ComponentType<React.ComponentProps<"svg">>;
-  showRedDot?: boolean;
-  to: string;
-};
-
-function DesktopMenuLink({ to, label, Icon, showRedDot = false }: DesktopMenuLinkProps) {
-  const className =
-    "relative my-0.5 grid w-full grid-cols-[1.25rem_1fr] items-center gap-3 rounded-md px-2 py-1 text-left text-sm font-normal text-foreground/75 transition-colors hover:bg-background hover:text-foreground";
-  const content = (
-    <>
-      <span className="flex size-5 items-center justify-center">
-        <Icon className="size-4" />
-      </span>
-      <span className="min-w-0">
-        <span className="relative inline-block">
-          {label}
           {showRedDot && (
-            <span className="absolute top-0 -right-3 size-1.5 rounded-full bg-red-500" aria-hidden="true" />
+            <div
+              className={cn(
+                "absolute top-0 -right-3 size-1.5 rounded-full bg-red-500",
+                redDotAnimate && "animate-pulse",
+              )}
+              aria-hidden="true"
+            />
           )}
         </span>
       </span>
     </>
   );
 
+  if (disabled) {
+    return (
+      <div className={className}>
+        <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_1fr] items-center gap-3">{content}</div>
+      </div>
+    );
+  }
+
   return (
-    <Link to={to} className={className}>
-      {content}
-    </Link>
+    <div className={className}>
+      <Link
+        to={to}
+        className="absolute inset-0 z-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        aria-label={badgeLabel ? `${name} ${badgeLabel}` : name}
+      />
+      <div
+        className={cn(
+          "pointer-events-none relative z-[1] grid min-w-0 flex-1 grid-cols-[1.25rem_1fr] items-center gap-3",
+          favoriteId && onFavoriteToggle && "pr-7",
+        )}
+        aria-hidden="true"
+      >
+        {content}
+      </div>
+      {favoriteId && onFavoriteToggle && (
+        <button
+          type="button"
+          className={cn(
+            "absolute right-2 top-1/2 z-10 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-md opacity-0 transition-colors hover:bg-muted focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/30 group-has-[:focus-visible]:opacity-100 group-hover:opacity-100",
+            isFavorite
+              ? "text-yellow-600 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-400"
+              : "text-foreground/55 hover:text-foreground",
+          )}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onFavoriteToggle(favoriteId);
+          }}
+          aria-label={isFavorite ? `${name} 즐겨찾기에서 제거` : `${name} 즐겨찾기에 추가`}
+          aria-pressed={isFavorite}
+          title={isFavorite ? "즐겨찾기에서 제거" : "즐겨찾기에 추가"}
+        >
+          {isFavorite ? <StarIconSolid className="size-4" /> : <StarIconOutline className="size-4" />}
+        </button>
+      )}
+    </div>
   );
 }
