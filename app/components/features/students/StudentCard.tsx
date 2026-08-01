@@ -280,39 +280,39 @@ export default function StudentCard({
                 alt={name ?? undefined}
                 loading="lazy"
               />
-              <div className="absolute top-0.5 right-0.5 flex origin-top-right scale-80 flex-col items-end gap-0.5 text-xs font-bold">
-                {level && <span className="px-1.5 bg-neutral-900/90 rounded-lg text-neutral-100">Lv. {level}</span>}
-                {showsTopRightLabel && (
-                  <span className="px-1.5 py-0.5 rounded-md bg-black/70 text-white backdrop-blur-sm leading-tight">
-                    {label}
-                  </span>
-                )}
-                {showsOverlayName && !label && showTier && (
-                  <span
-                    className={`inline-flex items-center gap-0.5 px-1.5 rounded-md bg-black/70 backdrop-blur-sm leading-tight ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}
-                  >
-                    {tier <= 5 ? (
-                      <StarIcon className="size-3 shrink-0" />
-                    ) : (
-                      <img className="size-3.5 shrink-0" src="/icons/exclusive_weapon.png" alt="고유 장비" />
-                    )}
-                    <span>{visibileTier(tier)[0]}</span>
-                  </span>
+              <div className="absolute top-0.5 right-0.5 flex items-start gap-0.5">
+                <div className="flex shrink-0 origin-top-right scale-80 flex-col items-end gap-0.5 text-xs font-bold">
+                  {level && <span className="px-1.5 bg-neutral-900/90 rounded-lg text-neutral-100">Lv. {level}</span>}
+                  {showsTopRightLabel && (
+                    <span className="whitespace-nowrap rounded-md bg-black/70 px-1.5 py-0.5 leading-tight text-white backdrop-blur-sm">
+                      {label}
+                    </span>
+                  )}
+                  {showsOverlayName && !label && showTier && (
+                    <span
+                      className={`inline-flex items-center gap-0.5 px-1.5 rounded-md bg-black/70 backdrop-blur-sm leading-tight ${visibileTier(tier)[1] ? "text-teal-300" : "text-yellow-300"}`}
+                    >
+                      {tier <= 5 ? (
+                        <StarIcon className="size-3 shrink-0" />
+                      ) : (
+                        <img className="size-3.5 shrink-0" src="/icons/exclusive_weapon.png" alt="고유 장비" />
+                      )}
+                      <span>{visibileTier(tier)[0]}</span>
+                    </span>
+                  )}
+                </div>
+
+                {(favoritedCount || favorited || completed) && (
+                  <div className={`flex shrink-0 items-center rounded-lg px-1 transition ${statusBadgeColorClass}`}>
+                    {completed ? <CheckIcon className="size-3.5" /> : <HeartIcon className="size-3.5" />}
+                    {favoritedCount && <span className="text-xs font-bold">{favoritedCount}</span>}
+                  </div>
                 )}
               </div>
 
               {showsOverlayName && isAssist && (
                 <div className="absolute top-0.5 left-0.5 px-1 md:px-1.5 rounded-md text-xs font-bold bg-linear-to-br from-cyan-300 to-sky-500 dark:from-cyan-400 dark:to-sky-600 text-white text-center">
                   A
-                </div>
-              )}
-
-              {(favoritedCount || favorited || completed) && (
-                <div
-                  className={`px-1 absolute top-0.5 right-0.5 rounded-lg flex items-center transition ${statusBadgeColorClass}`}
-                >
-                  {completed ? <CheckIcon className="size-3.5" /> : <HeartIcon className="size-3.5" />}
-                  {favoritedCount && <span className="text-xs font-bold">{favoritedCount}</span>}
                 </div>
               )}
 
