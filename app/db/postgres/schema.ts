@@ -14,6 +14,7 @@ import {
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
 import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
+import type { SiteBannerPreset, SiteBannerScreen } from "~/domain/site-banner";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 import type {
@@ -125,6 +126,25 @@ export const pgCouponsTable = pgTable(
     uniqueIndex("coupons_uid_uidx").on(table.uid),
     uniqueIndex("coupons_code_uidx").on(table.code),
     index("coupons_expires_at_idx").on(table.expiresAt),
+  ],
+);
+
+export const pgSiteBannersTable = pgTable(
+  "site_banners",
+  {
+    uid: text().primaryKey(),
+    message: text().notNull(),
+    colorPreset: text("color_preset").$type<SiteBannerPreset>().notNull(),
+    link: text().notNull(),
+    screens: jsonb().$type<SiteBannerScreen[]>().notNull().default([]),
+    startsAt: timestamptz("starts_at").notNull(),
+    endsAt: timestamptz("ends_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("site_banners_active_ends_at_uid_idx").on(table.endsAt, table.uid),
+    index("site_banners_starts_at_idx").on(table.startsAt),
   ],
 );
 

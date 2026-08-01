@@ -33,6 +33,7 @@ import {
   normalizeNavigationFavoriteIds,
   toggleNavigationFavoriteId,
 } from "~/domain/navigation-favorites";
+import type { SiteBanner as SiteBannerData } from "~/domain/site-banner";
 import { parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { timelineContentTypeLocale } from "~/locales/ko";
@@ -46,6 +47,7 @@ import {
   type NavigationItem,
   type NavigationSectionStates,
 } from "./navigation-menu";
+import { SiteBanner, shouldRenderGlobalSiteBanner } from "./SiteBanner";
 
 type NavigationBarProps = {
   currentUsername: string | null;
@@ -58,6 +60,7 @@ type NavigationBarProps = {
   hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
   hasUnreadFeedbackReplies: boolean;
+  siteBanner: SiteBannerData | null;
 };
 
 type NavigationSearchVariant = "desktop" | "mobile";
@@ -306,6 +309,7 @@ export default function NavigationBar({
   hasOngoingRaid,
   hasUnconsumedCoupons,
   hasUnreadFeedbackReplies,
+  siteBanner,
 }: NavigationBarProps) {
   const matches = useMatches();
   const location = useLocation();
@@ -341,6 +345,12 @@ export default function NavigationBar({
           <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
         </div>
 
+        {siteBanner && shouldRenderGlobalSiteBanner(siteBanner, "desktop_navigation", pathname) ? (
+          <div className="px-3 pb-2">
+            <SiteBanner banner={siteBanner} slot="desktop_navigation" />
+          </div>
+        ) : null}
+
         <div className="no-scrollbar flex-1 overflow-y-auto px-3 py-2">
           <DesktopMenuContent
             currentUsername={currentUsername}
@@ -371,6 +381,8 @@ export default function NavigationBar({
         hasRecentNews={hasRecentNews}
         hasUnreadFeedbackReplies={hasUnreadFeedbackReplies}
         searchResetKey={searchResetKey}
+        pathname={pathname}
+        siteBanner={siteBanner}
       />
 
       <MobileBottomNavigation
@@ -389,16 +401,44 @@ function MobileBrandHeader({
   hasRecentNews,
   hasUnreadFeedbackReplies,
   searchResetKey,
+  pathname,
+  siteBanner,
 }: {
   darkMode: boolean;
   setDarkMode: NavigationBarProps["setDarkMode"];
   hasRecentNews: boolean;
   hasUnreadFeedbackReplies: boolean;
   searchResetKey: string;
+  pathname: string;
+  siteBanner: SiteBannerData | null;
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const submit = useSubmit();
+  const bannerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const shouldRenderBanner = siteBanner ? shouldRenderGlobalSiteBanner(siteBanner, "mobile_header", pathname) : false;
+    const updateHeight = () => {
+      const height = shouldRenderBanner ? (bannerRef.current?.getBoundingClientRect().height ?? 0) : 0;
+      root.style.setProperty("--mobile-site-banner-height", `${Math.ceil(height)}px`);
+    };
+
+    updateHeight();
+    const banner = bannerRef.current;
+    const observer = typeof ResizeObserver === "undefined" || !banner ? null : new ResizeObserver(updateHeight);
+    if (observer && banner) {
+      observer.observe(banner);
+    }
+    window.addEventListener("resize", updateHeight);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", updateHeight);
+      root.style.setProperty("--mobile-site-banner-height", "0px");
+    };
+  }, [pathname, siteBanner]);
 
   useEffect(() => {
     void searchResetKey;
@@ -436,7 +476,7 @@ function MobileBrandHeader({
         border-border border-b bg-background
       "
     >
-      <div className="flex h-[var(--mobile-header-height)] w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
+      <div className="flex h-[var(--mobile-header-row-height)] w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
         <Link
           to="/"
           className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
@@ -493,6 +533,12 @@ function MobileBrandHeader({
           <NavigationSearch key={`mobile:${searchResetKey}`} variant="mobile" />
         </div>
       )}
+
+      {siteBanner && shouldRenderGlobalSiteBanner(siteBanner, "mobile_header", pathname) ? (
+        <div ref={bannerRef}>
+          <SiteBanner banner={siteBanner} slot="mobile_header" />
+        </div>
+      ) : null}
 
       {isMenuOpen && (
         <>

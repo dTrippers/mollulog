@@ -26,6 +26,7 @@ This project has been deployed to Cloudflare Workers.
 
 ## Development Guides
 - Please follow the conventions of the project. Search for the existing code and follow the same style.
+- Before creating or changing database models, schemas, or migrations, read `docs/data/database.md` and follow its modeling and validation rules.
 - For UI layout, use modern and simple design.
 - Before creating or changing UI components, read `docs/frontend/design.md` and follow its component structure, naming, reuse, layout, and performance rules.
 - Before adding, moving, or refactoring components, read `docs/frontend/components.md` and follow its final structure rules for `primitives`, `features`, and route-local components.

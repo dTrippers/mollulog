@@ -26,7 +26,9 @@
   --shadow-t-3xl: 0 -35px 60px -15px rgba(0, 0, 0, 0.3);
 
   --pb-safe-or-6: max(env(safe-area-inset-bottom), 1.5rem);
-  --mobile-header-height: calc(2.875rem + env(safe-area-inset-top));
+  --mobile-header-row-height: calc(2.875rem + env(safe-area-inset-top));
+  --mobile-site-banner-height: 0px;
+  --mobile-header-height: calc(var(--mobile-header-row-height) + var(--mobile-site-banner-height));
   --mobile-nav-height: calc(3.25rem + max(env(safe-area-inset-bottom), 0.375rem));
   --mobile-bottom-offset: calc(var(--mobile-nav-height) + 1rem);
   --mobile-page-bottom-padding: calc(var(--mobile-nav-height) + 2rem);
