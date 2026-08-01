@@ -85,6 +85,7 @@ export default function GrowthLayout() {
       title="학생 성장 플래너"
       description="학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요."
       contentWidth="full"
+      maxWidth="full"
       layout="vertical"
     >
       <Outlet context={contextValue satisfies GrowthLayoutContext} />

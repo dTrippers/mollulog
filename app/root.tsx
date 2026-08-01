@@ -249,7 +249,7 @@ export default function App() {
             hasUnreadFeedbackReplies={navigationBarContents.hasUnreadFeedbackReplies}
           />
           <div className="mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0">
-            <div className="mx-auto w-full max-w-7xl px-4 pt-2 pb-6 transition-all duration-300 ease-out has-[[data-page-max-width=wide]]:max-w-screen-2xl motion-reduce:transition-none md:px-8 lg:min-h-screen lg:py-6">
+            <div className="mx-auto w-full max-w-7xl px-4 pt-2 pb-6 transition-all duration-300 ease-out has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none motion-reduce:transition-none md:px-8 lg:min-h-screen lg:py-6">
               <TimeZoneProvider timeZone={displayTimeZone}>
                 <StudentCardPopupProvider key={pathname}>
                   <Outlet context={{ darkMode, setDarkMode } satisfies RootOutletContext} />

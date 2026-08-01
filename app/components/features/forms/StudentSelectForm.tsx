@@ -31,7 +31,7 @@ type SearchInputProps = {
 
 function SearchInput({ searchQuery, setSearchQuery, searchPlaceholder, inputRef }: SearchInputProps) {
   return (
-    <div className="sticky top-0 z-10 bg-popover/95 p-1.5 shadow-sm backdrop-blur-sm">
+    <div className="border-b border-border bg-popover p-1.5">
       <input
         ref={inputRef}
         type="text"
@@ -64,6 +64,7 @@ export type StudentSelectFormProps = {
   onSelect?: (value: string | string[]) => void;
   className?: string;
   containerClassName?: string;
+  popoverClassName?: string;
 };
 
 export default function StudentSelectForm({
@@ -82,6 +83,7 @@ export default function StudentSelectForm({
   onSelect,
   className,
   containerClassName,
+  popoverClassName,
 }: StudentSelectFormProps) {
   const { submitFormGroup } = useFormGroup();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -272,7 +274,10 @@ export default function StudentSelectForm({
                 <div
                   id={listboxId}
                   aria-labelledby={buttonId}
-                  className="no-scrollbar absolute top-full left-0 z-20 mt-2 max-h-72 w-full overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-lg shadow-foreground/10"
+                  className={cn(
+                    "absolute top-full left-0 z-20 mt-2 w-full overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-lg shadow-foreground/10",
+                    popoverClassName,
+                  )}
                 >
                   <SearchInput
                     searchQuery={searchQuery}
@@ -281,7 +286,7 @@ export default function StudentSelectForm({
                     inputRef={searchInputRef}
                   />
                   {filteredStudents.length > 0 ? (
-                    <ul className="py-0.5">
+                    <ul className="no-scrollbar max-h-60 overflow-y-auto py-0.5">
                       {filteredStudents.slice(0, 10).map((student) => (
                         <li key={student.uid}>
                           <button

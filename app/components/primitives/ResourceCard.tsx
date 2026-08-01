@@ -52,17 +52,19 @@ function ResourceCard({
   }
 
   return (
-    <HoverTooltip as="div" className="relative group" content={name} disabled={!name}>
-      <div
-        className={`shrink-0 ${sizeClass} flex items-center justify-center overflow-hidden rounded-lg ${rarityBgClass(rarity)}`}
-      >
-        <img
-          alt="아이템 이미지"
-          src={imageUrl}
-          className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} scale-110 object-contain`}
-          loading="lazy"
-        />
-        {label && (
+    <HoverTooltip as="div" className="group shrink-0 pr-1.5 pb-1.5" content={name} disabled={!name}>
+      <div className="relative">
+        <div
+          className={`shrink-0 ${sizeClass} flex items-center justify-center overflow-hidden rounded-lg ${rarityBgClass(rarity)}`}
+        >
+          <img
+            alt="아이템 이미지"
+            src={imageUrl}
+            className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} scale-110 object-contain`}
+            loading="lazy"
+          />
+        </div>
+        {label != null && (
           <div
             className={cn(`
               flex items-center justify-center px-1 absolute -bottom-1 -right-1 ${labelBadgeBgClass(labelBgColor)} rounded
@@ -72,15 +74,15 @@ function ResourceCard({
             {label}
           </div>
         )}
+        {favoriteLevel && (
+          <img
+            src={favoriteLevelImageUrl(favoriteLevel)}
+            alt={`호감 레벨 ${favoriteLevel}`}
+            className="absolute -bottom-1 -right-1 w-6 h-6 object-contain"
+            loading="lazy"
+          />
+        )}
       </div>
-      {favoriteLevel && (
-        <img
-          src={favoriteLevelImageUrl(favoriteLevel)}
-          alt={`호감 레벨 ${favoriteLevel}`}
-          className="absolute -bottom-1 -right-1 w-6 h-6 object-contain"
-          loading="lazy"
-        />
-      )}
     </HoverTooltip>
   );
 }

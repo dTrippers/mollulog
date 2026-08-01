@@ -20,7 +20,7 @@ type PageProps = {
   belowPanels?: React.ReactNode;
   links?: PageLinkProps[];
   contentWidth?: "narrow" | "full";
-  maxWidth?: "default" | "wide";
+  maxWidth?: "default" | "wide" | "full";
   layout?: "horizontal" | "vertical";
 
   backward?: {

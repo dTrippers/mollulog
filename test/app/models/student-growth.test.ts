@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { getStudentGrowth, upsertStudentGrowth } from "~/models/student-growth";
+import { getStudentGrowth, getStudentGrowthWithMetadata, upsertStudentGrowth } from "~/models/student-growth";
 
 type StudentGrowthRow = {
   id: number;
@@ -252,6 +252,17 @@ describe("student-growth target state", () => {
       targetAbilityHp: null,
       targetAbilityAtk: null,
       targetAbilityHeal: null,
+    });
+  });
+
+  it("returns the registration timestamp only through the metadata API", async () => {
+    const { db, env } = createEnv();
+    db.rows.push(rowFactory({ createdAt: "2026-07-01 12:34:56" }));
+
+    await expect(getStudentGrowthWithMetadata(env, 1, "student-a")).resolves.toMatchObject({
+      uid: "growth-a",
+      studentUid: "student-a",
+      createdAt: "2026-07-01 12:34:56",
     });
   });
 

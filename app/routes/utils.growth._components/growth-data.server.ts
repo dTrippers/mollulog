@@ -1,9 +1,13 @@
 import type { StudentGearData } from "~/domain/growth-resource";
 import { getStudentGearData, getStudentGrowthResourceRequirements } from "~/models/growth-resource";
-import { type RecruitedStudent, getRecruitedStudents } from "~/models/recruited-student";
+import { getRecruitedStudents, type RecruitedStudent } from "~/models/recruited-student";
 import { getRelationshipLevel, getRelationshipLevels } from "~/models/relationship-level";
-import { type Student, getAllStudentsMap } from "~/models/student";
-import { type StudentGrowth, getStudentGrowth, getStudentGrowths } from "~/models/student-growth";
+import { getAllStudentsMap, type Student } from "~/models/student";
+import {
+  getStudentGrowthsWithMetadata,
+  getStudentGrowthWithMetadata,
+  type StudentGrowthWithMetadata,
+} from "~/models/student-growth";
 import type { GrowthLayoutLoaderData, GrowthStudent } from "./types";
 
 type GrowthDataLoadOptions = {
@@ -15,7 +19,7 @@ type GrowthDataLoadOptions = {
 type BuildStudentRowDataParams = {
   studentUid: string;
   student: Student | undefined;
-  growth: StudentGrowth | undefined;
+  growth: StudentGrowthWithMetadata | undefined;
   recruitedStudent: RecruitedStudent | undefined;
   relationship: { currentLevel: number | null; targetLevel: number | null } | undefined;
   gearData: StudentGearData | null;
@@ -28,6 +32,7 @@ function buildStudentRowData(params: BuildStudentRowDataParams): Omit<GrowthStud
     uid: studentUid,
     name: student?.name ?? studentUid,
     order: student?.order ?? -1,
+    plannerCreatedAt: growth?.createdAt ?? null,
     isRecruited,
     released: student?.released ?? false,
     hasGear: gearData != null,
@@ -73,7 +78,7 @@ export async function loadStudentRow(
   options: GrowthDataLoadOptions = {},
 ): Promise<GrowthStudent | null> {
   const [growth, relationship, recruitedStudents, allStudentsMap, gearDataMap] = await Promise.all([
-    getStudentGrowth(env, userId, studentUid),
+    getStudentGrowthWithMetadata(env, userId, studentUid),
     getRelationshipLevel(env, userId, studentUid),
     getRecruitedStudents(env, userId),
     getAllStudentsMap(env, true),
@@ -121,7 +126,7 @@ export async function loadGrowthPlannerData(
 ): Promise<GrowthLayoutLoaderData> {
   const [recruitedStudents, growths, relationshipLevels, allStudentsMap] = await Promise.all([
     getRecruitedStudents(env, userId),
-    getStudentGrowths(env, userId),
+    getStudentGrowthsWithMetadata(env, userId),
     getRelationshipLevels(env, userId),
     getAllStudentsMap(env, true),
   ]);

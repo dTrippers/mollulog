@@ -1,6 +1,6 @@
 import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { Link, useFetcher } from "react-router";
+import { useFetcher } from "react-router";
 import { StudentSelectForm } from "~/components/features/forms";
 import { TierSelector } from "~/components/features/students";
 import { Button, NumberInput, ProfileImage, ResourceCard, useNumberInputGridNavigation } from "~/components/primitives";
@@ -11,6 +11,9 @@ import {
   WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
 import { getRelationshipLevelValidationError } from "~/models/relationship-level";
+import GrowthViewSettingsPopover from "./GrowthViewSettingsPopover";
+import { type GrowthSortOrder, sortGrowthStudents } from "./growth-sort";
+import { useGrowthViewSettings } from "./growth-view-settings";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
 
 function extractStudentUpdate(actionData: GrowthActionResult | undefined): GrowthStudent | null {
@@ -38,20 +41,87 @@ function getActionError(actionData: GrowthActionResult | undefined): string | nu
 }
 
 const fieldDefinitions = [
-  { key: "level", targetKey: "targetLevel", label: "학생 Lv", min: 1, max: 90 },
-  { key: "weaponLevel", targetKey: "targetWeaponLevel", label: "고유무기 Lv", min: 0, max: WEAPON_LEVEL_MAX_LEVEL },
-  { key: "skillEx", targetKey: "targetSkillEx", label: "EX 스킬", min: 1, max: 5 },
-  { key: "skillNormal", targetKey: "targetSkillNormal", label: "기본 스킬", min: 1, max: 10 },
-  { key: "skillEnhanced", targetKey: "targetSkillEnhanced", label: "강화 스킬", min: 1, max: 10 },
-  { key: "skillSub", targetKey: "targetSkillSub", label: "서브 스킬", min: 1, max: 10 },
-  { key: "equip1", targetKey: "targetEquip1", label: "장비1", min: 1, max: 10 },
-  { key: "equip2", targetKey: "targetEquip2", label: "장비2", min: 1, max: 10 },
-  { key: "equip3", targetKey: "targetEquip3", label: "장비3", min: 1, max: 10 },
-  { key: "equipSpecial", targetKey: "targetEquipSpecial", label: "애용품", min: 1, max: 2 },
-  { key: "abilityHp", targetKey: "targetAbilityHp", label: "HP 해방", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
-  { key: "abilityAtk", targetKey: "targetAbilityAtk", label: "공격력 해방", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
-  { key: "abilityHeal", targetKey: "targetAbilityHeal", label: "치유력 해방", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  { key: "level", targetKey: "targetLevel", label: "학생 Lv", min: 1, max: 90, group: null },
+  {
+    key: "weaponLevel",
+    targetKey: "targetWeaponLevel",
+    label: "고유무기 Lv",
+    min: 0,
+    max: WEAPON_LEVEL_MAX_LEVEL,
+    group: null,
+  },
+  { key: "skillEx", targetKey: "targetSkillEx", label: "EX 스킬", min: 1, max: 5, group: "skills" },
+  {
+    key: "skillNormal",
+    targetKey: "targetSkillNormal",
+    label: "기본 스킬",
+    min: 1,
+    max: 10,
+    group: "skills",
+  },
+  {
+    key: "skillEnhanced",
+    targetKey: "targetSkillEnhanced",
+    label: "강화 스킬",
+    min: 1,
+    max: 10,
+    group: "skills",
+  },
+  {
+    key: "skillSub",
+    targetKey: "targetSkillSub",
+    label: "서브 스킬",
+    min: 1,
+    max: 10,
+    group: "skills",
+  },
+  { key: "equip1", targetKey: "targetEquip1", label: "장비1", min: 1, max: 10, group: "equipment" },
+  { key: "equip2", targetKey: "targetEquip2", label: "장비2", min: 1, max: 10, group: "equipment" },
+  { key: "equip3", targetKey: "targetEquip3", label: "장비3", min: 1, max: 10, group: "equipment" },
+  {
+    key: "equipSpecial",
+    targetKey: "targetEquipSpecial",
+    label: "애용품",
+    min: 1,
+    max: 2,
+    group: "equipment",
+  },
+  {
+    key: "abilityHp",
+    targetKey: "targetAbilityHp",
+    label: "HP 해방",
+    min: 0,
+    max: ABILITY_RELEASE_MAX_LEVEL,
+    group: "ability",
+  },
+  {
+    key: "abilityAtk",
+    targetKey: "targetAbilityAtk",
+    label: "공격력 해방",
+    min: 0,
+    max: ABILITY_RELEASE_MAX_LEVEL,
+    group: "ability",
+  },
+  {
+    key: "abilityHeal",
+    targetKey: "targetAbilityHeal",
+    label: "치유력 해방",
+    min: 0,
+    max: ABILITY_RELEASE_MAX_LEVEL,
+    group: "ability",
+  },
 ] as const;
+
+const inputFieldGroups = [{ key: "skills" }, { key: "equipment" }, { key: "ability" }] as const;
+
+const standaloneFieldDefinitions = fieldDefinitions.filter(({ group }) => group == null);
+const tableColumnKeys = ["rowLabel", "tier", "relationship", "bulk", ...fieldDefinitions.map(({ key }) => key)];
+
+type InputFieldGroupKey = (typeof inputFieldGroups)[number]["key"];
+
+function getInputFieldGroupDefinitions(group: InputFieldGroupKey) {
+  return fieldDefinitions.filter((field) => field.group === group);
+}
 
 type CurrentFieldKey = (typeof fieldDefinitions)[number]["key"];
 type TargetFieldKey = (typeof fieldDefinitions)[number]["targetKey"];
@@ -122,12 +192,13 @@ function getClientValidationError(values: GrowthValues, currentTier: number, tar
 }
 
 const cellBase = "border-b border-border";
-const dataCellClass = `${cellBase} w-25 px-1 py-2`;
-const targetCellClass = `${cellBase} w-25 px-1 py-1.5 bg-blue-50/40 dark:bg-blue-950/10`;
-const bulkActionCellClass = `${cellBase} border-l border-border px-2 py-2`;
+const dataCellClass = `${cellBase} px-1 py-2`;
+const targetCellClass = `${cellBase} px-1 py-1.5`;
+const bulkActionCellClass = `${cellBase} border-l border-border px-2 py-2 align-top`;
+const targetBulkActionCellClass = `${cellBase} border-l border-border px-2 py-1.5 align-top`;
 const stickyRowLabelClass = "sticky left-0 z-20 border-r border-border";
-const studentHeaderContentClass =
-  "sticky left-3 z-10 flex w-max max-w-[calc(100vw-2rem)] items-center gap-2 bg-muted pr-3";
+const headerSurfaceClass = "bg-[color-mix(in_oklab,var(--color-muted)_60%,var(--color-card))]";
+const studentHeaderContentClass = `sticky left-3 z-10 flex w-max max-w-[calc(100vw-2rem)] items-center gap-2 pr-3 ${headerSurfaceClass}`;
 
 function isGearField(key: CurrentFieldKey | TargetFieldKey): boolean {
   return key === "equipSpecial" || key === "targetEquipSpecial";
@@ -330,11 +401,13 @@ function GrowthRow({
   student,
   rowIndexBase,
   numberInputGridNavigation,
+  showNumberInputShortcuts,
   onStudentUpdate,
 }: {
   student: GrowthStudent;
   rowIndexBase: number;
   numberInputGridNavigation: NumberInputGridNavigation;
+  showNumberInputShortcuts: boolean;
   onStudentUpdate: (s: GrowthStudent) => void;
 }) {
   const fetcher = useFetcher<GrowthActionResult>();
@@ -660,10 +733,89 @@ function GrowthRow({
     student.resourceRequirements.credit > 0;
   const currentNavigationRowIndex = rowIndexBase;
   const targetNavigationRowIndex = rowIndexBase + 1;
+  const numberInputShortcutProps = {
+    showDecrease: showNumberInputShortcuts,
+    showIncrease: showNumberInputShortcuts,
+    showMax: showNumberInputShortcuts,
+  };
+  const groupedNumberInputClass =
+    "max-w-none rounded-none border-0 bg-transparent focus-within:relative focus-within:z-10 focus-within:bg-background focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/40";
+  const compactNumberInputClass = "mx-auto w-12 max-w-none";
+
+  const renderCurrentFieldInput = (field: (typeof fieldDefinitions)[number], fieldIndex: number, grouped = false) => {
+    const disabled = isAbilityReleaseDisabled(field.key, tierDraft);
+    if (!student.hasGear && isGearField(field.key)) return null;
+
+    return (
+      <div className={grouped ? "min-w-0" : "flex flex-col items-center gap-0.5"} title={equipLabels[field.key]}>
+        <NumberInput
+          nullable
+          size="sm"
+          {...numberInputShortcutProps}
+          minValue={field.min}
+          maxValue={getFieldMax(field.key, field.max, tierDraft)}
+          value={draftValues[field.key]}
+          disabled={disabled}
+          controlClassName={
+            grouped ? groupedNumberInputClass : !showNumberInputShortcuts ? compactNumberInputClass : undefined
+          }
+          inputProps={{
+            ...numberInputGridNavigation.getInputProps({
+              rowIndex: currentNavigationRowIndex,
+              columnIndex: fieldIndex + 1,
+              disabled,
+            }),
+            "aria-label": `${student.name} 현재 ${field.label}`,
+          }}
+          onChange={(value) => handleFieldChange(field.key, value)}
+        />
+        {!grouped && equipLabels[field.key] && (
+          <span className="block truncate text-xs font-medium text-muted-foreground">{equipLabels[field.key]}</span>
+        )}
+      </div>
+    );
+  };
+
+  const renderTargetFieldInput = (field: (typeof fieldDefinitions)[number], fieldIndex: number, grouped = false) => {
+    const effectiveTargetTier = targetTierDraft ?? tierDraft;
+    const disabled = isAbilityReleaseDisabled(field.targetKey, effectiveTargetTier);
+    if (!student.hasGear && isGearField(field.targetKey)) return null;
+
+    return (
+      <div className={grouped ? "min-w-0" : "flex flex-col items-center gap-0.5"} title={equipLabels[field.targetKey]}>
+        <NumberInput
+          nullable
+          size="sm"
+          {...numberInputShortcutProps}
+          minValue={field.min}
+          maxValue={getFieldMax(field.targetKey, field.max, effectiveTargetTier)}
+          value={draftValues[field.targetKey]}
+          disabled={disabled}
+          controlClassName={
+            grouped ? groupedNumberInputClass : !showNumberInputShortcuts ? compactNumberInputClass : undefined
+          }
+          inputProps={{
+            ...numberInputGridNavigation.getInputProps({
+              rowIndex: targetNavigationRowIndex,
+              columnIndex: fieldIndex + 1,
+              disabled,
+            }),
+            "aria-label": `${student.name} 목표 ${field.label}`,
+          }}
+          onChange={(value) => handleFieldChange(field.targetKey, value)}
+        />
+        {!grouped && equipLabels[field.targetKey] && (
+          <span className="block truncate text-xs font-medium text-muted-foreground">
+            {equipLabels[field.targetKey]}
+          </span>
+        )}
+      </div>
+    );
+  };
 
   return (
     <>
-      <tr className="bg-muted">
+      <tr className={`border-t-2 border-border first:border-t-0 ${headerSurfaceClass}`}>
         <td colSpan={TOTAL_COLS} className={`${cellBase} px-3 py-2`}>
           <div className={studentHeaderContentClass}>
             <div className="flex min-w-0 grow items-center gap-2">
@@ -671,10 +823,17 @@ function GrowthRow({
               <span className="truncate text-sm font-semibold text-foreground">{student.name}</span>
               {displayedError && <p className="text-xs text-red-500 dark:text-red-400">{displayedError}</p>}
             </div>
+            <Button size="xs" className="bg-transparent" to={`/students/${encodeURIComponent(student.uid)}`}>
+              학생부
+            </Button>
             {(student.relationshipCurrentLevel != null || student.relationshipTargetLevel != null) && (
-              <Link to={`/utils/relationship?studentUid=${encodeURIComponent(student.uid)}`}>
-                <Button size="xs">인연 랭크 계산기</Button>
-              </Link>
+              <Button
+                size="xs"
+                className="bg-transparent"
+                to={`/utils/relationship?studentUid=${encodeURIComponent(student.uid)}`}
+              >
+                인연 랭크 계산기
+              </Button>
             )}
             <Button
               size="xs"
@@ -693,7 +852,7 @@ function GrowthRow({
         </td>
       </tr>
 
-      <tr className="relative align-top">
+      <tr className="bg-card align-top">
         <td
           className={`${cellBase} ${stickyRowLabelClass} w-10 bg-card px-1 py-2 text-center text-xs font-medium text-muted-foreground`}
         >
@@ -706,18 +865,20 @@ function GrowthRow({
               <TierSelector
                 initialTier={student.initialTier}
                 currentTier={tierDraft}
+                iconSize="sm"
                 onTierChange={handleCurrentTierChange}
               />
             </td>
 
-            <td className={`${cellBase} w-25 px-1 py-2`}>
+            <td className={`${cellBase} px-1 py-2`}>
               <NumberInput
                 nullable
                 size="sm"
-                showMax
+                {...numberInputShortcutProps}
                 minValue={1}
                 maxValue={100}
                 value={draftRelationshipValues.relationshipCurrentLevel}
+                controlClassName={!showNumberInputShortcuts ? compactNumberInputClass : undefined}
                 inputProps={numberInputGridNavigation.getInputProps({
                   rowIndex: currentNavigationRowIndex,
                   columnIndex: 0,
@@ -732,35 +893,49 @@ function GrowthRow({
               </Button>
             </td>
 
-            {fieldDefinitions.map(({ key, min, max }, fieldIndex) => {
-              const disabled = isAbilityReleaseDisabled(key, tierDraft);
-              return (
-                <td key={key} className={dataCellClass}>
-                  {student.hasGear || !isGearField(key) ? (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <NumberInput
-                        nullable
-                        size="sm"
-                        showMax
-                        minValue={min}
-                        maxValue={getFieldMax(key, max, tierDraft)}
-                        value={draftValues[key]}
-                        disabled={disabled}
-                        inputProps={numberInputGridNavigation.getInputProps({
-                          rowIndex: currentNavigationRowIndex,
-                          columnIndex: fieldIndex + 1,
-                          disabled,
-                        })}
-                        onChange={(v) => handleFieldChange(key, v)}
-                      />
-                      {equipLabels[key] && (
-                        <span className="text-xs font-medium text-muted-foreground">{equipLabels[key]}</span>
-                      )}
-                    </div>
-                  ) : null}
+            {showNumberInputShortcuts ? (
+              fieldDefinitions.map((field, fieldIndex) => (
+                <td key={field.key} className={dataCellClass}>
+                  {renderCurrentFieldInput(field, fieldIndex)}
                 </td>
-              );
-            })}
+              ))
+            ) : (
+              <>
+                {standaloneFieldDefinitions.map((field) => (
+                  <td key={field.key} className={dataCellClass}>
+                    {renderCurrentFieldInput(field, fieldDefinitions.indexOf(field))}
+                  </td>
+                ))}
+                {inputFieldGroups.map(({ key }) => {
+                  const fields = getInputFieldGroupDefinitions(key);
+                  return (
+                    <td key={key} colSpan={fields.length} className={`${cellBase} px-1 py-2`}>
+                      <div className="mx-auto w-fit">
+                        <div className="flex overflow-hidden rounded-md border border-input bg-background">
+                          {fields.map((field, index) => (
+                            <div
+                              key={field.key}
+                              className={`w-12 shrink-0 ${index === 0 ? "" : "border-l border-input"}`}
+                            >
+                              {renderCurrentFieldInput(field, fieldDefinitions.indexOf(field), true)}
+                            </div>
+                          ))}
+                        </div>
+                        {key === "equipment" && (
+                          <div className="mt-0.5 flex text-center text-xs font-medium text-muted-foreground">
+                            {fields.map((field) => (
+                              <span key={field.key} className="w-12 shrink-0 truncate" title={equipLabels[field.key]}>
+                                {equipLabels[field.key]}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  );
+                })}
+              </>
+            )}
           </>
         ) : (
           <>
@@ -768,14 +943,15 @@ function GrowthRow({
               <span className="text-xs font-medium text-muted-foreground">미모집</span>
             </td>
 
-            <td className={`${cellBase} w-25 px-1 py-2`}>
+            <td className={`${cellBase} px-1 py-2`}>
               <NumberInput
                 nullable
                 size="sm"
-                showMax
+                {...numberInputShortcutProps}
                 minValue={1}
                 maxValue={100}
                 value={draftRelationshipValues.relationshipCurrentLevel}
+                controlClassName={!showNumberInputShortcuts ? compactNumberInputClass : undefined}
                 inputProps={numberInputGridNavigation.getInputProps({
                   rowIndex: currentNavigationRowIndex,
                   columnIndex: 0,
@@ -817,17 +993,18 @@ function GrowthRow({
         )}
       </tr>
 
-      <tr className="align-top">
+      <tr className="bg-card align-top">
         <td
-          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-blue-50 px-1 py-1.5 text-center text-xs font-medium text-blue-500 dark:bg-card dark:text-blue-400`}
+          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-card px-1 py-1.5 text-center text-xs font-medium text-foreground/70`}
         >
           목표
         </td>
 
-        <td className={`${cellBase} min-w-28 px-2 py-1.5 bg-blue-50/40 dark:bg-blue-950/10`}>
+        <td className={`${cellBase} min-w-28 px-2 py-1.5`}>
           <TierSelector
             initialTier={student.initialTier}
             currentTier={targetTierDraft ?? tierDraft}
+            iconSize="sm"
             onTierChange={handleTargetTierChange}
           />
         </td>
@@ -836,10 +1013,11 @@ function GrowthRow({
           <NumberInput
             nullable
             size="sm"
-            showMax
+            {...numberInputShortcutProps}
             minValue={1}
             maxValue={100}
             value={draftRelationshipValues.relationshipTargetLevel}
+            controlClassName={!showNumberInputShortcuts ? compactNumberInputClass : undefined}
             inputProps={numberInputGridNavigation.getInputProps({
               rowIndex: targetNavigationRowIndex,
               columnIndex: 0,
@@ -848,47 +1026,64 @@ function GrowthRow({
           />
         </td>
 
-        <td className={`${bulkActionCellClass} bg-blue-50/40 dark:bg-blue-950/10`}>
+        <td className={targetBulkActionCellClass}>
           <Button size="xs" onClick={handleSetAllMaxTargets}>
             모두 최대
           </Button>
         </td>
 
-        {fieldDefinitions.map(({ targetKey, min, max }, fieldIndex) => {
-          const effectiveTargetTier = targetTierDraft ?? tierDraft;
-          const disabled = isAbilityReleaseDisabled(targetKey, effectiveTargetTier);
-          return (
-            <td key={targetKey} className={targetCellClass}>
-              {student.hasGear || !isGearField(targetKey) ? (
-                <div className="flex flex-col items-center gap-0.5">
-                  <NumberInput
-                    nullable
-                    size="sm"
-                    showMax
-                    minValue={min}
-                    maxValue={getFieldMax(targetKey, max, effectiveTargetTier)}
-                    value={draftValues[targetKey]}
-                    disabled={disabled}
-                    inputProps={numberInputGridNavigation.getInputProps({
-                      rowIndex: targetNavigationRowIndex,
-                      columnIndex: fieldIndex + 1,
-                      disabled,
-                    })}
-                    onChange={(v) => handleFieldChange(targetKey, v)}
-                  />
-                  {equipLabels[targetKey] && (
-                    <span className="text-xs font-medium text-muted-foreground">{equipLabels[targetKey]}</span>
-                  )}
-                </div>
-              ) : null}
+        {showNumberInputShortcuts ? (
+          fieldDefinitions.map((field, fieldIndex) => (
+            <td key={field.targetKey} className={targetCellClass}>
+              {renderTargetFieldInput(field, fieldIndex)}
             </td>
-          );
-        })}
+          ))
+        ) : (
+          <>
+            {standaloneFieldDefinitions.map((field) => (
+              <td key={field.targetKey} className={targetCellClass}>
+                {renderTargetFieldInput(field, fieldDefinitions.indexOf(field))}
+              </td>
+            ))}
+            {inputFieldGroups.map(({ key }) => {
+              const fields = getInputFieldGroupDefinitions(key);
+              return (
+                <td key={key} colSpan={fields.length} className={`${cellBase} px-1 py-1.5`}>
+                  <div className="mx-auto w-fit">
+                    <div className="flex overflow-hidden rounded-md border border-input bg-background">
+                      {fields.map((field, index) => (
+                        <div
+                          key={field.targetKey}
+                          className={`w-12 shrink-0 ${index === 0 ? "" : "border-l border-input"}`}
+                        >
+                          {renderTargetFieldInput(field, fieldDefinitions.indexOf(field), true)}
+                        </div>
+                      ))}
+                    </div>
+                    {key === "equipment" && (
+                      <div className="mt-0.5 flex text-center text-xs font-medium text-muted-foreground">
+                        {fields.map((field) => (
+                          <span
+                            key={field.targetKey}
+                            className="w-12 shrink-0 truncate"
+                            title={equipLabels[field.targetKey]}
+                          >
+                            {equipLabels[field.targetKey]}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </td>
+              );
+            })}
+          </>
+        )}
       </tr>
 
-      <tr className="align-top">
+      <tr className="bg-card align-top">
         <td
-          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-emerald-50 px-1 py-2 text-center text-xs font-medium text-emerald-600 dark:bg-card dark:text-emerald-400`}
+          className={`${cellBase} ${stickyRowLabelClass} w-10 bg-card px-1 py-2 text-center text-xs font-medium text-muted-foreground`}
         >
           <button
             type="button"
@@ -899,10 +1094,7 @@ function GrowthRow({
             <span className="whitespace-nowrap">재화</span>
           </button>
         </td>
-        <td
-          colSpan={fieldDefinitions.length + 3}
-          className={`relative ${cellBase} w-0 max-w-0 px-3 py-2 bg-emerald-50/20 dark:bg-emerald-950/5`}
-        >
+        <td colSpan={fieldDefinitions.length + 3} className={`relative ${cellBase} w-0 max-w-0 bg-card px-3 py-2`}>
           <div
             className={`${isCalculatingResources ? "opacity-40 pointer-events-none" : ""} transition-opacity duration-200`}
           >
@@ -972,15 +1164,21 @@ function GrowthRow({
   );
 }
 
-function GrowthFieldHeaderRow() {
+function GrowthFieldHeaderRow({ compactInputs }: { compactInputs: boolean }) {
+  const fieldHeaderCellClass = compactInputs ? "px-0.5 py-2 text-[10px] leading-tight" : "w-16 px-1 py-3";
+
   return (
-    <tr className="bg-muted/60 text-left text-xs font-semibold tracking-wide text-muted-foreground">
-      <th className={`${cellBase} ${stickyRowLabelClass} z-30 bg-muted/60 px-1 py-3`} />
-      <th className={`${cellBase} px-2 py-3 text-center`}>성급</th>
-      <th className={`${cellBase} min-w-20 px-2 py-3 text-center`}>인연 랭크</th>
-      <th className={`${cellBase} px-2 py-3 text-center`}>일괄 적용</th>
+    <tr className="text-left text-xs font-semibold tracking-wide text-muted-foreground">
+      <th className={`${cellBase} ${stickyRowLabelClass} ${headerSurfaceClass} z-30 px-1 py-3`} />
+      <th className={`${cellBase} ${headerSurfaceClass} px-2 py-3 text-center`}>성급</th>
+      <th
+        className={`${cellBase} ${headerSurfaceClass} ${compactInputs ? "px-0.5 py-2 text-[10px] leading-tight" : "min-w-20 px-2 py-3"} text-center`}
+      >
+        인연 랭크
+      </th>
+      <th className={`${cellBase} ${headerSurfaceClass} px-2 py-3 text-center`}>일괄 적용</th>
       {fieldDefinitions.map(({ key, label }) => (
-        <th key={key} className={`${cellBase} w-16 px-1 py-3 text-center`}>
+        <th key={key} className={`${cellBase} ${headerSurfaceClass} ${fieldHeaderCellClass} text-center`}>
           {label}
         </th>
       ))}
@@ -988,15 +1186,27 @@ function GrowthFieldHeaderRow() {
   );
 }
 
-function GrowthTableColumnGroup() {
+type GrowthTableLayout = {
+  columnWidths: number[];
+  width: number;
+};
+
+function createGrowthTableLayout(compactInputs: boolean): GrowthTableLayout {
+  const inputColumnWidth = compactInputs ? 48 : 100;
+  const compactColumnWidth = compactInputs ? 56 : inputColumnWidth;
+  const columnWidths = [40, 160, compactColumnWidth, 80, ...fieldDefinitions.map(() => compactColumnWidth)];
+
+  return {
+    columnWidths,
+    width: columnWidths.reduce((total, columnWidth) => total + columnWidth, 0),
+  };
+}
+
+function GrowthTableColumnGroup({ layout }: { layout: GrowthTableLayout }) {
   return (
     <colgroup>
-      <col style={{ width: 40 }} />
-      <col style={{ width: 200 }} />
-      <col style={{ width: 100 }} />
-      <col style={{ width: 80 }} />
-      {fieldDefinitions.map(({ key }) => (
-        <col key={key} style={{ width: 100 }} />
+      {layout.columnWidths.map((width, index) => (
+        <col key={tableColumnKeys[index]} style={{ width }} />
       ))}
     </colgroup>
   );
@@ -1006,38 +1216,47 @@ const TOTAL_COLS = 4 + fieldDefinitions.length;
 
 function AddStudentControl({
   availableStudents,
-  isEmpty,
+  studentCount,
+  sortOrder,
+  showNumberInputShortcuts,
+  onSortOrderChange,
+  onShowNumberInputShortcutsChange,
 }: {
   availableStudents: GrowthAvailableStudent[];
-  isEmpty: boolean;
+  studentCount: number;
+  sortOrder: GrowthSortOrder;
+  showNumberInputShortcuts: boolean;
+  onSortOrderChange: (sortOrder: GrowthSortOrder) => void;
+  onShowNumberInputShortcutsChange: (show: boolean) => void;
 }) {
   const fetcher = useFetcher();
   const [selectKey, setSelectKey] = useState(0);
 
   return (
-    <div className="relative z-40 flex items-start gap-3">
-      <div className="w-full max-w-md">
-        <StudentSelectForm
-          key={selectKey}
-          placeholder="성장 목표 학생 추가"
-          searchPlaceholder="학생 이름으로 검색"
-          students={availableStudents}
-          className="max-w-none"
-          containerClassName="mt-0 mb-0"
-          onSelect={(value) => {
-            const studentUid = Array.isArray(value) ? value[0] : value;
-            if (!studentUid) return;
+    <div className="relative z-50 flex flex-wrap items-center gap-x-3 gap-y-2">
+      <StudentSelectForm
+        key={selectKey}
+        placeholder="+ 학생 추가"
+        searchPlaceholder="학생 이름으로 검색"
+        students={availableStudents}
+        className="min-h-9 w-auto border-primary bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground shadow-xs hover:bg-primary/90 [&_p]:text-primary-foreground [&>svg]:text-primary-foreground/70"
+        containerClassName="w-fit"
+        popoverClassName="w-[min(28rem,calc(100vw-2rem))]"
+        onSelect={(value) => {
+          const studentUid = Array.isArray(value) ? value[0] : value;
+          if (!studentUid) return;
 
-            fetcher.submit({ _intent: "add", studentUid }, { method: "post", encType: "application/json" });
-            setSelectKey((key) => key + 1);
-          }}
-        />
-      </div>
-      {isEmpty ? (
-        <p className="pt-8 text-sm text-muted-foreground">
-          학생 이름을 검색하여 성장 목표를 관리할 학생을 등록해주세요.
-        </p>
-      ) : null}
+          fetcher.submit({ _intent: "add", studentUid }, { method: "post", encType: "application/json" });
+          setSelectKey((key) => key + 1);
+        }}
+      />
+      <GrowthViewSettingsPopover
+        studentCount={studentCount}
+        sortOrder={sortOrder}
+        showNumberInputShortcuts={showNumberInputShortcuts}
+        onSortOrderChange={onSortOrderChange}
+        onShowNumberInputShortcutsChange={onShowNumberInputShortcutsChange}
+      />
     </div>
   );
 }
@@ -1060,8 +1279,8 @@ function CharacterExpRequirementCard({ characterExp }: { characterExp: number })
 
 function CreditRequirementCard({ credit }: { credit: number }) {
   return (
-    <div className="flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 dark:border-amber-500/30 dark:bg-amber-500/10">
-      <div className="flex size-8 items-center justify-center rounded-md bg-amber-200 text-xs font-bold text-amber-800 dark:bg-amber-400/20 dark:text-amber-200">
+    <div className="flex items-center gap-2 pr-1">
+      <div className="flex size-8 items-center justify-center rounded-md bg-muted text-xs font-bold text-foreground/80">
         Cr
       </div>
       <div className="min-w-0">
@@ -1081,25 +1300,52 @@ export default function GrowthTable({
   availableStudents: GrowthAvailableStudent[];
   onStudentUpdate: (student: GrowthStudent) => void;
 }) {
-  const numberInputGridNavigation = useNumberInputGridNavigation();
+  const numberInputGridNavigation = useNumberInputGridNavigation({ tabNavigation: true });
   const headerScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const [viewSettings, setViewSettings] = useGrowthViewSettings();
+  const compactInputs = !viewSettings.showNumberInputShortcuts;
+  const tableLayout = useMemo(() => createGrowthTableLayout(compactInputs), [compactInputs]);
+  const sortedStudents = useMemo(
+    () => sortGrowthStudents(students, viewSettings.sortOrder),
+    [students, viewSettings.sortOrder],
+  );
 
   return (
-    <div className="space-y-2">
-      <AddStudentControl availableStudents={availableStudents} isEmpty={students.length === 0} />
-      <div>
+    <div className="w-fit max-w-full">
+      <div className="sticky top-[calc(var(--mobile-header-height)+0.5rem)] z-40 space-y-2 bg-background before:absolute before:-top-2 before:left-0 before:h-2 before:w-full before:bg-background before:content-[''] lg:top-2">
+        <AddStudentControl
+          availableStudents={availableStudents}
+          studentCount={students.length}
+          sortOrder={viewSettings.sortOrder}
+          showNumberInputShortcuts={viewSettings.showNumberInputShortcuts}
+          onSortOrderChange={(sortOrder) => setViewSettings((current) => ({ ...current, sortOrder }))}
+          onShowNumberInputShortcutsChange={(showNumberInputShortcuts) =>
+            setViewSettings((current) => ({ ...current, showNumberInputShortcuts }))
+          }
+        />
         <div
           ref={headerScrollRef}
-          className="sticky top-[var(--mobile-header-height)] z-30 max-w-full overflow-hidden rounded-t-lg border-x border-t border-border bg-card lg:top-0"
+          className="no-scrollbar max-w-full overflow-x-auto"
+          onScroll={(event) => {
+            if (bodyScrollRef.current) {
+              bodyScrollRef.current.scrollLeft = event.currentTarget.scrollLeft;
+            }
+          }}
         >
-          <table className="w-[1720px] table-fixed border-collapse">
-            <GrowthTableColumnGroup />
-            <thead>
-              <GrowthFieldHeaderRow />
-            </thead>
-          </table>
+          <div className="inline-block overflow-clip rounded-t-lg border-x border-t border-border bg-card align-top">
+            <table style={{ width: tableLayout.width }} className="table-fixed border-collapse">
+              <GrowthTableColumnGroup layout={tableLayout} />
+              <thead>
+                <GrowthFieldHeaderRow compactInputs={compactInputs} />
+              </thead>
+            </table>
+          </div>
         </div>
+      </div>
+      <div>
         <div
+          ref={bodyScrollRef}
           className="max-w-full overflow-x-auto"
           onScroll={(event) => {
             if (headerScrollRef.current) {
@@ -1108,8 +1354,8 @@ export default function GrowthTable({
           }}
         >
           <div className="inline-block overflow-clip rounded-b-lg border-x border-b border-border align-top">
-            <table className="w-[1720px] table-fixed border-collapse">
-              <GrowthTableColumnGroup />
+            <table style={{ width: tableLayout.width }} className="table-fixed border-collapse">
+              <GrowthTableColumnGroup layout={tableLayout} />
               <thead>
                 <tr className="sr-only">
                   <th>구분</th>
@@ -1122,15 +1368,24 @@ export default function GrowthTable({
                 </tr>
               </thead>
               <tbody>
-                {students.map((student, studentIndex) => (
-                  <GrowthRow
-                    key={student.uid}
-                    student={student}
-                    rowIndexBase={studentIndex * 2}
-                    numberInputGridNavigation={numberInputGridNavigation}
-                    onStudentUpdate={onStudentUpdate}
-                  />
-                ))}
+                {sortedStudents.length === 0 ? (
+                  <tr>
+                    <td colSpan={TOTAL_COLS} className="px-4 py-12 text-center text-sm text-muted-foreground">
+                      상단의 학생 추가 버튼으로 성장 목표를 관리할 학생을 등록해주세요.
+                    </td>
+                  </tr>
+                ) : (
+                  sortedStudents.map((student, studentIndex) => (
+                    <GrowthRow
+                      key={student.uid}
+                      student={student}
+                      rowIndexBase={studentIndex * 2}
+                      numberInputGridNavigation={numberInputGridNavigation}
+                      showNumberInputShortcuts={viewSettings.showNumberInputShortcuts}
+                      onStudentUpdate={onStudentUpdate}
+                    />
+                  ))
+                )}
               </tbody>
             </table>
           </div>

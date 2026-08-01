@@ -4,9 +4,9 @@ import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid/non-secure";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
-  WEAPON_LEVEL_MAX_LEVEL,
   assertAbilityReleaseAvailable,
   assertWeaponLevelRange,
+  WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
 
 export const studentGrowthTable = sqliteTable("student_growth", {
@@ -60,6 +60,10 @@ export type StudentGrowth = {
   targetAbilityHeal: number | null;
 };
 
+export type StudentGrowthWithMetadata = StudentGrowth & {
+  createdAt: string;
+};
+
 export type StudentGrowthInput = Omit<StudentGrowth, "uid" | "studentUid">;
 
 const growthRanges = {
@@ -100,8 +104,18 @@ function toModel(studentGrowth: typeof studentGrowthTable.$inferSelect): Student
   };
 }
 
+function toModelWithMetadata(studentGrowth: typeof studentGrowthTable.$inferSelect): StudentGrowthWithMetadata {
+  return {
+    ...toModel(studentGrowth),
+    createdAt: studentGrowth.createdAt,
+  };
+}
+
 export function validateStudentGrowthInput(input: StudentGrowthInput) {
-  for (const [field, range] of Object.entries(growthRanges) as [keyof StudentGrowthInput, { label: string; min: number; max: number }][]) {
+  for (const [field, range] of Object.entries(growthRanges) as [
+    keyof StudentGrowthInput,
+    { label: string; min: number; max: number },
+  ][]) {
     const value = input[field];
     if (value == null) {
       continue;
@@ -139,13 +153,36 @@ export async function getStudentGrowths(env: Env, senseiId: number): Promise<Stu
   return studentGrowths.map(toModel);
 }
 
+export async function getStudentGrowthsWithMetadata(env: Env, senseiId: number): Promise<StudentGrowthWithMetadata[]> {
+  const db = drizzle(env.DB);
+  const studentGrowths = await db.select().from(studentGrowthTable).where(eq(studentGrowthTable.userId, senseiId));
+  return studentGrowths.map(toModelWithMetadata);
+}
+
 export async function getStudentGrowth(env: Env, senseiId: number, studentUid: string): Promise<StudentGrowth | null> {
   const db = drizzle(env.DB);
-  const result = await db.select().from(studentGrowthTable)
+  const result = await db
+    .select()
+    .from(studentGrowthTable)
     .where(and(eq(studentGrowthTable.userId, senseiId), eq(studentGrowthTable.studentUid, studentUid)))
     .limit(1);
 
   return result.length > 0 ? toModel(result[0]) : null;
+}
+
+export async function getStudentGrowthWithMetadata(
+  env: Env,
+  senseiId: number,
+  studentUid: string,
+): Promise<StudentGrowthWithMetadata | null> {
+  const db = drizzle(env.DB);
+  const result = await db
+    .select()
+    .from(studentGrowthTable)
+    .where(and(eq(studentGrowthTable.userId, senseiId), eq(studentGrowthTable.studentUid, studentUid)))
+    .limit(1);
+
+  return result.length > 0 ? toModelWithMetadata(result[0]) : null;
 }
 
 export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid: string, input: StudentGrowthInput) {
@@ -214,6 +251,7 @@ export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid
 
 export async function removeStudentGrowth(env: Env, senseiId: number, studentUid: string) {
   const db = drizzle(env.DB);
-  await db.delete(studentGrowthTable)
+  await db
+    .delete(studentGrowthTable)
     .where(and(eq(studentGrowthTable.userId, senseiId), eq(studentGrowthTable.studentUid, studentUid)));
 }

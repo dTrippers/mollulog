@@ -9,6 +9,7 @@ export type GrowthStudent = {
   uid: string;
   name: string;
   order: number;
+  plannerCreatedAt: string | null;
   isRecruited: boolean;
   released: boolean;
   hasGear: boolean;

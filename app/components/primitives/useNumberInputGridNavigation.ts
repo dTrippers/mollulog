@@ -1,5 +1,5 @@
-import { useCallback, useId } from "react";
 import type { ComponentPropsWithoutRef, KeyboardEvent } from "react";
+import { useCallback, useId } from "react";
 
 type NumberInputGridDirection = "left" | "right" | "up" | "down";
 
@@ -26,7 +26,15 @@ type GridInput = {
   columnIndex: number;
 };
 
-export function useNumberInputGridNavigation({ selectOnFocus = true }: { selectOnFocus?: boolean } = {}) {
+type NumberInputGridPosition = Pick<GridInput, "rowIndex" | "columnIndex">;
+
+export function useNumberInputGridNavigation({
+  selectOnFocus = true,
+  tabNavigation = false,
+}: {
+  selectOnFocus?: boolean;
+  tabNavigation?: boolean;
+} = {}) {
   const gridId = useId();
 
   const selectInputValue = useCallback(
@@ -63,9 +71,23 @@ export function useNumberInputGridNavigation({ selectOnFocus = true }: { selectO
       },
       onKeyDown: (event) => {
         onKeyDown?.(event);
-        if (event.defaultPrevented || disabled || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        if (event.defaultPrevented || disabled || event.metaKey || event.ctrlKey || event.altKey) {
           return;
         }
+
+        if (event.key === "Tab" && tabNavigation) {
+          const targetInput = findTabTarget(event, gridId, event.shiftKey ? "backward" : "forward");
+          if (!targetInput) {
+            return;
+          }
+
+          event.preventDefault();
+          targetInput.focus();
+          selectInputValue(targetInput);
+          return;
+        }
+
+        if (event.shiftKey) return;
 
         const direction = getDirection(event.key);
         if (!direction) {
@@ -82,10 +104,24 @@ export function useNumberInputGridNavigation({ selectOnFocus = true }: { selectO
         selectInputValue(targetInput);
       },
     }),
-    [gridId, selectInputValue],
+    [gridId, selectInputValue, tabNavigation],
   );
 
   return { getInputProps };
+}
+
+function findTabTarget(
+  event: KeyboardEvent<HTMLInputElement>,
+  gridId: string,
+  direction: "forward" | "backward",
+): HTMLInputElement | null {
+  const inputs = getGridInputs(event.currentTarget, gridId).sort(
+    (a, b) => a.rowIndex - b.rowIndex || a.columnIndex - b.columnIndex,
+  );
+  const currentIndex = inputs.findIndex(({ input }) => input === event.currentTarget);
+  if (currentIndex === -1) return null;
+
+  return inputs[currentIndex + (direction === "forward" ? 1 : -1)]?.input ?? null;
 }
 
 function getDirection(key: string): NumberInputGridDirection | null {
@@ -115,9 +151,17 @@ function findNavigationTarget(
     return null;
   }
 
-  const inputs = Array.from(
-    currentInput.ownerDocument.querySelectorAll<HTMLInputElement>("input[data-number-input-grid]"),
-  )
+  const inputs = getGridInputs(currentInput, gridId);
+
+  if (direction === "left" || direction === "right") {
+    return findHorizontalTarget(inputs, currentRowIndex, currentColumnIndex, direction);
+  }
+
+  return findVerticalTarget(inputs, currentRowIndex, currentColumnIndex, direction);
+}
+
+function getGridInputs(currentInput: HTMLInputElement, gridId: string): GridInput[] {
+  return Array.from(currentInput.ownerDocument.querySelectorAll<HTMLInputElement>("input[data-number-input-grid]"))
     .filter((input) => input.dataset.numberInputGrid === gridId && !input.disabled)
     .map((input): GridInput | null => {
       const rowIndex = Number(input.dataset.numberInputGridRow);
@@ -129,12 +173,6 @@ function findNavigationTarget(
       return { input, rowIndex, columnIndex };
     })
     .filter((input): input is GridInput => input != null);
-
-  if (direction === "left" || direction === "right") {
-    return findHorizontalTarget(inputs, currentRowIndex, currentColumnIndex, direction);
-  }
-
-  return findVerticalTarget(inputs, currentRowIndex, currentColumnIndex, direction);
 }
 
 function findHorizontalTarget(
@@ -160,6 +198,15 @@ function findVerticalTarget(
   currentColumnIndex: number,
   direction: Extract<NumberInputGridDirection, "up" | "down">,
 ): HTMLInputElement | null {
+  return findNumberInputGridVerticalTarget(inputs, currentRowIndex, currentColumnIndex, direction)?.input ?? null;
+}
+
+export function findNumberInputGridVerticalTarget<T extends NumberInputGridPosition>(
+  inputs: T[],
+  currentRowIndex: number,
+  currentColumnIndex: number,
+  direction: Extract<NumberInputGridDirection, "up" | "down">,
+): T | null {
   const targetRows = Array.from(
     new Set(
       inputs
@@ -169,16 +216,12 @@ function findVerticalTarget(
   ).sort((a, b) => (direction === "up" ? b - a : a - b));
 
   for (const rowIndex of targetRows) {
-    const nearestInput = inputs
-      .filter((input) => input.rowIndex === rowIndex)
-      .sort(
-        (a, b) =>
-          Math.abs(a.columnIndex - currentColumnIndex) - Math.abs(b.columnIndex - currentColumnIndex) ||
-          a.columnIndex - b.columnIndex,
-      )[0];
+    const inputInSameColumn = inputs.find(
+      (input) => input.rowIndex === rowIndex && input.columnIndex === currentColumnIndex,
+    );
 
-    if (nearestInput) {
-      return nearestInput.input;
+    if (inputInSameColumn) {
+      return inputInSameColumn;
     }
   }
 
