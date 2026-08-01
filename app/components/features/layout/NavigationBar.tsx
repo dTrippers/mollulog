@@ -422,7 +422,11 @@ function MobileBrandHeader({
     const shouldRenderBanner = siteBanner ? shouldRenderGlobalSiteBanner(siteBanner, "mobile_header", pathname) : false;
     const updateHeight = () => {
       const height = shouldRenderBanner ? (bannerRef.current?.getBoundingClientRect().height ?? 0) : 0;
-      root.style.setProperty("--mobile-site-banner-height", `${Math.ceil(height)}px`);
+      if (height > 0) {
+        root.style.setProperty("--mobile-site-banner-measured-height", `${Math.ceil(height)}px`);
+      } else {
+        root.style.removeProperty("--mobile-site-banner-measured-height");
+      }
     };
 
     updateHeight();
@@ -436,7 +440,7 @@ function MobileBrandHeader({
     return () => {
       observer?.disconnect();
       window.removeEventListener("resize", updateHeight);
-      root.style.setProperty("--mobile-site-banner-height", "0px");
+      root.style.removeProperty("--mobile-site-banner-measured-height");
     };
   }, [pathname, siteBanner]);
 

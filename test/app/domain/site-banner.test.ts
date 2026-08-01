@@ -1,9 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   getSiteBannerPageScreen,
+  isSiteBannerActive,
   isValidSiteBannerLink,
   type SiteBanner,
-  selectActiveSiteBanner,
   shouldRenderGlobalSiteBanner,
 } from "~/domain/site-banner";
 
@@ -25,18 +25,9 @@ describe("site banner domain", () => {
   it("uses a half-open active period", () => {
     const item = banner("banner", "2026-08-01T00:00:00.000Z", "2026-08-01T01:00:00.000Z");
 
-    expect(selectActiveSiteBanner([item], "2026-08-01T00:00:00.000Z")?.uid).toBe("banner");
-    expect(selectActiveSiteBanner([item], "2026-08-01T00:59:59.999Z")?.uid).toBe("banner");
-    expect(selectActiveSiteBanner([item], "2026-08-01T01:00:00.000Z")).toBeNull();
-  });
-
-  it("orders accidental overlaps by earliest end and then UID", () => {
-    const sameEndA = banner("a", "2026-08-01T00:00:00.000Z", "2026-08-01T02:00:00.000Z");
-    const sameEndB = banner("b", "2026-08-01T00:00:00.000Z", "2026-08-01T02:00:00.000Z");
-    const earlierEnd = banner("z", "2026-08-01T00:00:00.000Z", "2026-08-01T01:00:00.000Z");
-
-    expect(selectActiveSiteBanner([sameEndB, earlierEnd, sameEndA], "2026-08-01T00:30:00.000Z")?.uid).toBe("z");
-    expect(selectActiveSiteBanner([sameEndB, sameEndA], "2026-08-01T00:30:00.000Z")?.uid).toBe("a");
+    expect(isSiteBannerActive(item, "2026-08-01T00:00:00.000Z")).toBe(true);
+    expect(isSiteBannerActive(item, "2026-08-01T00:59:59.999Z")).toBe(true);
+    expect(isSiteBannerActive(item, "2026-08-01T01:00:00.000Z")).toBe(false);
   });
 
   it("recognizes only allowed link forms", () => {

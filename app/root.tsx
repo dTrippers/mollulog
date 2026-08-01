@@ -27,7 +27,6 @@ import {
 import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
-import { getPostgresActiveSiteBanner } from "./db/postgres/site-banners";
 import { withD1Session } from "./lib/d1-session";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "./lib/google-analytics.client";
@@ -37,6 +36,7 @@ import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
 import { isGoogleSearchCrawler, isSenseiProfilePath } from "./lib/seo-crawler";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
+import { getSiteBanner } from "./views/site-banner";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
 const themeConfig = {
@@ -68,7 +68,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     const publicReadEnv = withD1Session(env, "first-unconstrained");
     const [navigationBarContents, siteBanner] = await Promise.all([
       ctx.tracing.enterSpan("root_nav", () => getNavigationBarContents(env, false, sensei?.id, ctx, publicReadEnv)),
-      ctx.tracing.enterSpan("root_site_banner", () => getPostgresActiveSiteBanner(publicReadEnv, new Date(), { ctx })),
+      ctx.tracing.enterSpan("root_site_banner", () => getSiteBanner(publicReadEnv, new Date(), ctx)),
     ]);
 
     span.setAttribute("signedIn", sensei !== null);
@@ -136,7 +136,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     <html
       lang="ko"
       className={darkMode ? "dark" : undefined}
-      style={{ "--mobile-site-banner-height": reserveMobileSiteBanner ? "4rem" : "0px" } as React.CSSProperties}
+      style={
+        {
+          "--mobile-site-banner-estimated-height": reserveMobileSiteBanner ? "4rem" : "0px",
+        } as React.CSSProperties
+      }
     >
       <head>
         <meta charSet="utf-8" />

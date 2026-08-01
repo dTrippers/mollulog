@@ -69,13 +69,9 @@ export function shouldRenderGlobalSiteBanner(
   return pageScreen === null || !banner.screens.includes(pageScreen);
 }
 
-export function selectActiveSiteBanner(banners: SiteBanner[], now: string | Date): SiteBanner | null {
+export function isSiteBannerActive(banner: Pick<SiteBanner, "startsAt" | "endsAt">, now: string | Date): boolean {
   const nowMs = toTimestamp(now);
-  return (
-    [...banners]
-      .filter((banner) => toTimestamp(banner.startsAt) <= nowMs && nowMs < toTimestamp(banner.endsAt))
-      .sort((a, b) => toTimestamp(a.endsAt) - toTimestamp(b.endsAt) || a.uid.localeCompare(b.uid))[0] ?? null
-  );
+  return toTimestamp(banner.startsAt) <= nowMs && nowMs < toTimestamp(banner.endsAt);
 }
 
 function toTimestamp(value: string | Date): number {
