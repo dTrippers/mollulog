@@ -32,6 +32,12 @@ type PyroxeneChartProps = {
   timeline: ChartEntry[];
 };
 
+type ChartMarker = {
+  ts: number;
+  type: TimelineSourceType;
+  students: string[];
+};
+
 const MARKER_TYPES: TimelineSourceType[] = ["event"];
 const Y_AXIS_WIDTH = 40;
 const LINE_HEIGHT = 11; // ~9px font + 2px gap
@@ -46,6 +52,34 @@ function formatYTick(v: number): string {
   if (Math.abs(v) >= 10000) return `${Math.round(v / 1000)}k`;
   if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
   return String(v);
+}
+
+export function buildPyroxeneChartMarkers(timeline: ChartEntry[]): ChartMarker[] {
+  const markersByDate = new Map<string, ChartMarker>();
+
+  for (const entry of timeline) {
+    if (!MARKER_TYPES.includes(entry.source.type)) continue;
+
+    const dateKey = entry.date.format("YYYY-MM-DD");
+    const students =
+      entry.source.event?.recruitments
+        ?.filter((recruitment) => recruitment.pickup && recruitment.favorited && recruitment.student)
+        .map((recruitment) => recruitment.student?.name ?? "") ?? [];
+    const marker = markersByDate.get(dateKey);
+
+    if (marker) {
+      marker.students = [...new Set([...marker.students, ...students])];
+      continue;
+    }
+
+    markersByDate.set(dateKey, {
+      ts: entry.date.startOf("day").valueOf(),
+      type: entry.source.type,
+      students: [...new Set(students)],
+    });
+  }
+
+  return [...markersByDate.values()];
 }
 
 export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
@@ -103,20 +137,7 @@ export default function PyroxeneChart({ timeline }: PyroxeneChartProps) {
     }
     const chartData = Array.from(dayMap.values()).sort((a, b) => a.ts - b.ts);
 
-    // Build raw markers, deduplicated by date
-    const seenDates = new Set<string>();
-    const rawMarkers: { ts: number; type: TimelineSourceType; students: string[] }[] = [];
-    for (const entry of timeline) {
-      if (!MARKER_TYPES.includes(entry.source.type)) continue;
-      const dateKey = entry.date.format("YYYY-MM-DD");
-      if (seenDates.has(dateKey)) continue;
-      seenDates.add(dateKey);
-      const students =
-        entry.source.event?.recruitments
-          ?.filter((r) => r.pickup && r.favorited && r.student)
-          .map((r) => r.student?.name ?? "") ?? [];
-      rawMarkers.push({ ts: entry.date.startOf("day").valueOf(), type: entry.source.type, students });
-    }
+    const rawMarkers = buildPyroxeneChartMarkers(timeline);
 
     // Calculate yOffset for each marker to prevent label overlap
     const plotWidth = Math.max(containerWidth - Y_AXIS_WIDTH, 1);
