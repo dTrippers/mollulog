@@ -2,11 +2,8 @@ import { XMLParser } from "fast-xml-parser";
 import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
-import {
-  getCommunityFeedPage,
-  type CommunityFeedPost,
-  upsertYoutubeVideoCommunityPost,
-} from "~/models/community";
+import type { CommunityFeedPost } from "~/models/community";
+import { getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community.server";
 
 const YOUTUBE_CHANNELS = [
   {
@@ -33,8 +30,8 @@ const xmlParser = new XMLParser({
 
 const YOUTUBE_FEED_FETCH_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.youtubeFeedFetch;
 const YOUTUBE_FEED_BODY_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.youtubeFeedBody;
-// Each upsert starts with a D1 existence check. Both staging and production cron
-// target the same database, so an unbounded fan-out can overload the primary.
+// Each upsert touches the shared PostgreSQL database. Both staging and production
+// cron target the same database, so an unbounded fan-out can overload the primary.
 const YOUTUBE_SYNC_CONCURRENCY = 4;
 
 export type HomeYoutubeVideo = {
@@ -61,10 +58,7 @@ export type HomeYoutubeChannelSection = {
   videos: HomeYoutubeVideo[];
 };
 
-export async function getHomeYoutubeSections(
-  env: Env,
-  ctx?: ExecutionContext,
-): Promise<HomeYoutubeChannelSection[]> {
+export async function getHomeYoutubeSections(env: Env, ctx?: ExecutionContext): Promise<HomeYoutubeChannelSection[]> {
   const page = await getCommunityFeedPage(env, {
     postTypes: ["youtube_video"],
     pageSize: 8,
@@ -113,7 +107,7 @@ export async function fetchYoutubeFeedVideos(): Promise<YoutubeFeedVideo[]> {
   return videos;
 }
 
-export async function syncYoutubeCommunityPosts(env: Env): Promise<{ synced: number }> {
+export async function syncYoutubeCommunityPosts(env: Env, _ctx?: ExecutionContext): Promise<{ synced: number }> {
   const videos = await fetchYoutubeFeedVideos();
   await mapWithConcurrencyLimit(videos, YOUTUBE_SYNC_CONCURRENCY, (video) =>
     upsertYoutubeVideoCommunityPost(env, video),
@@ -130,18 +124,13 @@ async function getChannelVideos(channelId: string): Promise<HomeYoutubeVideo[]> 
     throw new Error(`failed to fetch youtube feed: ${channelId} (${response.status} ${response.statusText})`);
   }
 
-  const xml = await readBodyWithTimeout(
-    () => response.text(),
-    YOUTUBE_FEED_BODY_TIMEOUT_MS,
-    "youtube.feed.body",
-    { channelId },
-  );
+  const xml = await readBodyWithTimeout(() => response.text(), YOUTUBE_FEED_BODY_TIMEOUT_MS, "youtube.feed.body", {
+    channelId,
+  });
   const parsed = parseYoutubeFeed(xml, channelId);
   const entries = normalizeEntries(parsed.feed?.entry);
 
-  return entries
-    .map((entry) => parseEntry(entry))
-    .filter((entry): entry is HomeYoutubeVideo => entry !== null);
+  return entries.map((entry) => parseEntry(entry)).filter((entry): entry is HomeYoutubeVideo => entry !== null);
 }
 
 function toHomeYoutubeVideo(post: CommunityFeedPost): (HomeYoutubeVideo & { channelKey: YoutubeChannelKey }) | null {
@@ -150,11 +139,7 @@ function toHomeYoutubeVideo(post: CommunityFeedPost): (HomeYoutubeVideo & { chan
   const thumbnailUrl = post.sourceMetadata.thumbnailUrl;
   const isShorts = post.sourceMetadata.isShorts;
 
-  if (
-    !youtubeBlock ||
-    (channelKey !== "jp" && channelKey !== "kr") ||
-    typeof thumbnailUrl !== "string"
-  ) {
+  if (!youtubeBlock || (channelKey !== "jp" && channelKey !== "kr") || typeof thumbnailUrl !== "string") {
     return null;
   }
 

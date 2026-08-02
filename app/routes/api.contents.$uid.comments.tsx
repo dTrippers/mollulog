@@ -1,17 +1,16 @@
-import { redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "react-router";
+import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { withD1Session } from "~/lib/d1-session";
+import { nestComments } from "~/models/content";
 import {
   createComment,
   createSubcomment,
   deleteComment,
   getContentComments,
   getNestedContentComments,
-  nestComments,
   pinComment,
   unpinComment,
   updateComment,
-} from "~/models/content";
+} from "~/models/content.server";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const contentUid = params.uid;
@@ -21,8 +20,7 @@ export const loader = async ({ request, params, context }: LoaderFunctionArgs) =
 
   const env = context.cloudflare.env;
   const currentUser = await getActiveSensei(env, request);
-  const sessionEnv = withD1Session(env, currentUser ? "first-primary" : "first-unconstrained");
-  return nestComments(await getContentComments(sessionEnv, contentUid, currentUser?.id), currentUser);
+  return nestComments(await getContentComments(env, contentUid, currentUser?.id), currentUser);
 };
 
 export type ActionData = {
@@ -39,7 +37,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     throw new Response("Content UID is required", { status: 400 });
   }
 
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");

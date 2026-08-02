@@ -8,7 +8,7 @@ import {
   getRecruitmentResult,
   getRecruitmentResultComment,
   upsertRecruitmentResult,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import {
@@ -26,7 +26,7 @@ jest.mock("~/models/pickup-history", () => ({
   getPickupHistory: jest.fn(),
 }));
 
-jest.mock("~/models/recruitment-result", () => ({
+jest.mock("~/models/recruitment-result.server", () => ({
   getRecruitmentResult: jest.fn(),
   getRecruitmentResultComment: jest.fn(),
   upsertRecruitmentResult: jest.fn(),
@@ -112,6 +112,9 @@ const mockedGetRecruitmentGroupByUid = getRecruitmentGroupByUid as unknown as je
 >;
 
 const env = {
+  KV_CACHE: {
+    get: jest.fn(async () => null),
+  },
   DB: {
     withSession: jest.fn(() => ({})),
   },

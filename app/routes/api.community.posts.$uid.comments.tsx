@@ -5,7 +5,7 @@ import {
   deleteCommunityComment,
   getNestedCommunityComments,
   updateCommunityComment,
-} from "~/models/community";
+} from "~/models/community.server";
 import type { CommunityPostCommentsChangedActionResult } from "~/models/community-engagement";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
@@ -33,7 +33,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     throw new Response("Post UID is required", { status: 400 });
   }
 
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");

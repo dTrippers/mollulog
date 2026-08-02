@@ -8,7 +8,7 @@ import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { withD1Session } from "~/lib/d1-session";
 import { cn } from "~/lib/utils";
-import { getCommunityFeedPage } from "~/models/community";
+import { getCommunityFeedPage } from "~/models/community.server";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
 import { getFollowershipSummary } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";

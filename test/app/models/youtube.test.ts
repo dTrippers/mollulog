@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
-import { getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community";
+import { getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community.server";
 import { fetchYoutubeFeedVideos, getHomeYoutubeSections, syncYoutubeCommunityPosts } from "~/models/youtube";
 
-jest.mock("~/models/community", () => ({
+jest.mock("~/models/community.server", () => ({
   getCommunityFeedPage: jest.fn(),
   upsertYoutubeVideoCommunityPost: jest.fn(),
 }));
@@ -14,6 +14,10 @@ const mockedGetCommunityFeedPage = getCommunityFeedPage as jest.MockedFunction<t
 
 function flushPromises() {
   return new Promise<void>((resolve) => setImmediate(resolve));
+}
+
+function createEnv() {
+  return {} as Env;
 }
 
 function createFeedXml(videoId: string, title: string) {
@@ -113,7 +117,7 @@ describe("syncYoutubeCommunityPosts", () => {
     );
     mockedUpsertYoutubeVideoCommunityPost.mockResolvedValue(undefined);
 
-    await expect(syncYoutubeCommunityPosts({} as Env)).resolves.toEqual({ synced: 2 });
+    await expect(syncYoutubeCommunityPosts(createEnv())).resolves.toEqual({ synced: 2 });
 
     expect(mockedUpsertYoutubeVideoCommunityPost).toHaveBeenCalledTimes(2);
     expect(mockedUpsertYoutubeVideoCommunityPost).toHaveBeenCalledWith(
@@ -157,7 +161,7 @@ describe("syncYoutubeCommunityPosts", () => {
         }),
     );
 
-    const result = syncYoutubeCommunityPosts({} as Env);
+    const result = syncYoutubeCommunityPosts(createEnv());
     await flushPromises();
 
     expect(maxActiveUpserts).toBe(4);

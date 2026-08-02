@@ -5,7 +5,7 @@ import {
   deleteRecruitmentResult,
   getRecruitmentResultComments,
   getRecruitmentResults,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { getSenseiByUsername } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
@@ -21,7 +21,7 @@ jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
 }));
 
-jest.mock("~/models/recruitment-result", () => ({
+jest.mock("~/models/recruitment-result.server", () => ({
   getRecruitmentResults: jest.fn(),
   getRecruitmentResultComments: jest.fn(),
   deleteRecruitmentResult: jest.fn(),
@@ -64,6 +64,9 @@ const mockedGetRecruitmentPoolStudents = getRecruitmentPoolStudents as unknown a
 >;
 
 const env = {
+  KV_CACHE: {
+    get: jest.fn(async () => null),
+  },
   DB: {
     withSession: jest.fn(() => ({})),
   },

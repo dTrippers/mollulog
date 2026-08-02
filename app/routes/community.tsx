@@ -16,7 +16,7 @@ import { Page } from "~/components/features/layout";
 import { withD1Session } from "~/lib/d1-session";
 import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
-import { getCommunityFeedPage } from "~/models/community";
+import { getCommunityFeedPage } from "~/models/community.server";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
 import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES } from "~/views/community";
 import { enrichCommunityFeedPosts } from "~/views/community.server";

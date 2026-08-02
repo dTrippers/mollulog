@@ -37,7 +37,6 @@ import {
   type PyroxeneMonthlyPackageType,
 } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
-import { withD1Session } from "~/lib/d1-session";
 import { canonicalLink } from "~/lib/seo";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { PyroxeneEventData, PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
@@ -64,16 +63,15 @@ import {
   deleteRecruitmentResult,
   getRecruitmentResultsByRecruitmentGroupUids,
   setRecruitmentResultCompletion,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
 
   // contents와 인증은 서로 무관하므로 병렬 실행
   const [contents, currentUser] = await Promise.all([
-    getPyroxenePlannerContents(publicReadEnv, false, ctx),
+    getPyroxenePlannerContents(env, false, ctx),
     getActiveSensei(env, request),
   ]);
 
@@ -206,7 +204,6 @@ export type ActionData = {
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return { success: false };
@@ -219,7 +216,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
         const { eventUid, pyroxene, oneTimeTicket, tenTimeTicket } = createData.ownedResources;
         await createPyroxeneOwnedResource(env, currentUser.id, { pyroxene, oneTimeTicket, tenTimeTicket });
         if (eventUid) {
-          const content = (await getPyroxenePlannerContents(publicReadEnv, false, ctx)).find(
+          const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
             (content) => content.kind === "event" && content.uid === eventUid,
           );
           if (content?.kind !== "event" || !content.recruitmentGroupUid) {
@@ -313,7 +310,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     }
     let recruitmentGroupUid = deleteData.recruitmentGroupUid ?? null;
     if (!recruitmentGroupUid && deleteData.eventUid) {
-      for (const content of await getPyroxenePlannerContents(publicReadEnv, false, ctx)) {
+      for (const content of await getPyroxenePlannerContents(env, false, ctx)) {
         if (content.kind === "event" && content.uid === deleteData.eventUid) {
           recruitmentGroupUid = content.recruitmentGroupUid;
           break;
@@ -370,7 +367,7 @@ export default function PyroxenePlanner() {
     loaderData.collectedSourceKeys ?? [],
   );
   const [localFavoritedStudents, setLocalFavoritedStudents] = useState(loaderData.favoritedStudents ?? []);
-  const fetcher = useFetcher<typeof action>();
+  const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
   const favoriteFetcher = useFetcher();
   const timelineSaveInFlight = useRef(false);
 

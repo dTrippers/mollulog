@@ -8,7 +8,7 @@ import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/do
 import { withD1Session } from "~/lib/d1-session";
 import { toUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
-import { getNestedContentComments } from "~/models/content";
+import { getNestedContentComments } from "~/models/content.server";
 import {
   favoriteStudent,
   getFavoritedCounts,

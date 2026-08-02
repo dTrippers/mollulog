@@ -12,7 +12,7 @@ import {
   deleteRecruitmentResult,
   getRecruitmentResultComments,
   getRecruitmentResults,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { getAllStudentsMap } from "~/models/student";
 import {
   getTimelineContentsByRecruitmentGroupUids,

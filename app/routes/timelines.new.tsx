@@ -19,7 +19,7 @@ import {
   type WalkthroughParty,
 } from "~/domain/walkthrough-timeline";
 import { getLogger } from "~/lib/observability.server";
-import { syncWalkthroughTimelineCommunityPost } from "~/models/community";
+import { syncWalkthroughTimelineCommunityPost } from "~/models/community.server";
 import { loadTimelineEditorOptions } from "./timelines._components/timeline-route-data.server";
 
 type ActionData = { error: string };
@@ -94,6 +94,7 @@ export default function NewWalkthroughTimelinePage() {
   const { students, bosses, recruitedSnapshots, preselectedBossIndex, preselectedTerrain } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const actionError = actionData && "error" in actionData ? actionData.error : undefined;
   const editorRef = useRef<WalkthroughTimelineEditorHandle>(null);
   const [activePartyIndex, setActivePartyIndex] = useState(0);
   const [parties, setParties] = useState<WalkthroughParty[]>([]);
@@ -161,7 +162,7 @@ export default function NewWalkthroughTimelinePage() {
           onPartiesChange={setParties}
           onActionStateChange={setActionState}
           draftStorageKey="walkthrough-timeline:draft:new"
-          error={actionData?.error}
+          error={actionError}
         />
       </div>
     </Page>

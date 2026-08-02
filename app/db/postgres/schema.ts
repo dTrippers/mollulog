@@ -24,6 +24,14 @@ import type {
   WalkthroughTimelineTerrain,
   WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
+import type {
+  CommunityCommentVisibility,
+  CommunityPostBlock,
+  CommunityPostOrigin,
+  CommunityPostType,
+  CommunityVisibility,
+} from "~/models/community";
+import type { RecruitmentResultStudent } from "~/models/recruitment-result";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
 
@@ -247,6 +255,140 @@ export const pgWalkthroughTimelineLikesTable = pgTable(
   (table) => [
     uniqueIndex("raid_walkthrough_likes_walkthrough_user_uidx").on(table.walkthroughUid, table.userId),
     index("raid_walkthrough_likes_user_walkthrough_idx").on(table.userId, table.walkthroughUid),
+  ],
+);
+
+export const pgCommunityPostsTable = pgTable(
+  "community_posts",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    postType: text("post_type").$type<CommunityPostType>().notNull(),
+    origin: text().$type<CommunityPostOrigin>().notNull().default("user"),
+    title: text(),
+    visibility: text().$type<CommunityVisibility>().notNull().default("public"),
+    pinned: boolean().notNull().default(false),
+    subjectStudentUid: text("subject_student_uid"),
+    subjectContentUid: text("subject_content_uid"),
+    subjectRaidType: text("subject_raid_type"),
+    subjectSeasonIndex: integer("subject_season_index"),
+    blocks: jsonb().$type<CommunityPostBlock[]>().notNull().default([]),
+    sourceType: text("source_type"),
+    sourceUid: text("source_uid"),
+    sourceId: integer("source_id"),
+    sourceName: text("source_name"),
+    sourceUrl: text("source_url"),
+    sourceMetadata: jsonb("source_metadata").$type<Record<string, unknown>>().notNull().default({}),
+    migratedAt: timestamptz("migrated_at"),
+    displayAt: timestamptz("display_at"),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("community_posts_uid_uidx").on(table.uid),
+    uniqueIndex("community_posts_source_uidx").on(table.sourceType, table.sourceUid),
+    index("community_posts_post_type_idx").on(table.postType),
+    index("community_posts_user_id_idx").on(table.userId),
+    index("community_posts_subject_student_uid_idx").on(table.subjectStudentUid),
+    index("community_posts_subject_content_uid_idx").on(table.subjectContentUid),
+    index("community_posts_subject_raid_idx").on(table.subjectRaidType, table.subjectSeasonIndex),
+    index("community_posts_feed_order_idx").on(sql`coalesce(${table.displayAt}, ${table.createdAt})`, table.id.desc()),
+    index("community_posts_updated_at_idx").on(table.updatedAt.desc(), table.createdAt.desc()),
+    uniqueIndex("community_posts_student_review_per_user_uidx")
+      .on(table.userId, table.subjectStudentUid)
+      .where(sql`${table.postType} = 'student_review'`),
+    check("community_posts_blocks_array", sql`jsonb_typeof(${table.blocks}) = 'array'`),
+    check("community_posts_source_metadata_object", sql`jsonb_typeof(${table.sourceMetadata}) = 'object'`),
+  ],
+);
+
+export const pgCommunityCommentsTable = pgTable(
+  "community_comments",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    postUid: text("post_uid").notNull(),
+    userId: integer("user_id").notNull(),
+    parentUid: text("parent_uid").notNull(),
+    body: text().notNull(),
+    visibility: text().$type<CommunityCommentVisibility>().notNull().default("public"),
+    sourceType: text("source_type"),
+    sourceUid: text("source_uid"),
+    sourceId: integer("source_id"),
+    migratedAt: timestamptz("migrated_at"),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("community_comments_uid_uidx").on(table.uid),
+    uniqueIndex("community_comments_source_uidx").on(table.sourceType, table.sourceUid),
+    index("community_comments_post_uid_idx").on(table.postUid),
+    index("community_comments_parent_uid_idx").on(table.parentUid),
+    index("community_comments_created_at_idx").on(table.postUid, table.createdAt, table.id),
+  ],
+);
+
+export const pgCommunityPostLikesTable = pgTable(
+  "community_post_likes",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    postUid: text("post_uid").notNull(),
+    userId: integer("user_id").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("community_post_likes_uid_uidx").on(table.uid),
+    uniqueIndex("community_post_likes_post_uid_user_id_uidx").on(table.postUid, table.userId),
+    index("community_post_likes_post_uid_idx").on(table.postUid),
+  ],
+);
+
+export const pgCommunityPostTagsTable = pgTable(
+  "community_post_tags",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    postUid: text("post_uid").notNull(),
+    studentUid: text("student_uid").notNull(),
+    tagValue: text("tag_value").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("community_post_tags_uid_uidx").on(table.uid),
+    index("community_post_tags_post_uid_idx").on(table.postUid),
+    index("community_post_tags_student_uid_idx").on(table.studentUid),
+    index("community_post_tags_tag_value_idx").on(table.tagValue),
+  ],
+);
+
+export const pgRecruitmentResultsTable = pgTable(
+  "recruitment_results",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    recruitmentGroupUid: text("recruitment_group_uid").notNull(),
+    contentUid: text("content_uid"),
+    completedAt: timestamptz("completed_at"),
+    recruitedStudents: jsonb("recruited_students").$type<RecruitmentResultStudent[]>().notNull().default([]),
+    exchangedStudents: jsonb("exchanged_students").$type<RecruitmentResultStudent[]>().notNull().default([]),
+    tier3Count: integer("tier3_count"),
+    trial: integer(),
+    rawResult: text("raw_result"),
+    commentPostUid: text("comment_post_uid"),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("recruitment_results_uid_uidx").on(table.uid),
+    uniqueIndex("recruitment_results_user_group_uidx").on(table.userId, table.recruitmentGroupUid),
+    index("recruitment_results_user_id_idx").on(table.userId),
+    index("recruitment_results_content_uid_idx").on(table.contentUid),
+    index("recruitment_results_comment_post_uid_idx").on(table.commentPostUid),
+    check("recruitment_results_recruited_students_array", sql`jsonb_typeof(${table.recruitedStudents}) = 'array'`),
+    check("recruitment_results_exchanged_students_array", sql`jsonb_typeof(${table.exchangedStudents}) = 'array'`),
   ],
 );
 

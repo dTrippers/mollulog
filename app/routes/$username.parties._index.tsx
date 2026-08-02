@@ -3,7 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Callout } from "~/components/primitives";
-import { getUserParties, removePartyByUid } from "~/models/party";
+import { getUserParties, removePartyByUid } from "~/models/party.server";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
@@ -43,7 +43,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");

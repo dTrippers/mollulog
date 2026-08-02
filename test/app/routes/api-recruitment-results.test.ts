@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { getActiveSensei } from "../../../app/auth/authenticator.server";
 import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
 import { getUserFavoritedStudents } from "../../../app/models/favorite-students";
-import { addRecruitedStudentToResult } from "../../../app/models/recruitment-result";
+import { addRecruitedStudentToResult } from "../../../app/models/recruitment-result.server";
 import { action } from "../../../app/routes/api.recruitment-results";
 import { getFutureContents } from "../../../app/views/futures";
 
@@ -18,7 +18,7 @@ jest.mock("~/models/favorite-students", () => ({
   getUserFavoritedStudents: jest.fn(),
 }));
 
-jest.mock("~/models/recruitment-result", () => ({
+jest.mock("~/models/recruitment-result.server", () => ({
   addRecruitedStudentToResult: jest.fn(),
   deleteRecruitmentResult: jest.fn(),
   removeRecruitedStudentFromResult: jest.fn(),
@@ -26,11 +26,7 @@ jest.mock("~/models/recruitment-result", () => ({
   upsertRecruitmentResult: jest.fn(),
 }));
 
-const env = {
-  DB: {
-    withSession: jest.fn(() => ({})),
-  },
-} as unknown as Env;
+const env = {} as Env;
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetFutureContents = getFutureContents as jest.MockedFunction<typeof getFutureContents>;
 const mockedGetUserFavoritedStudents = getUserFavoritedStudents as jest.MockedFunction<typeof getUserFavoritedStudents>;

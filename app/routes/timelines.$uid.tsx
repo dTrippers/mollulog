@@ -39,7 +39,7 @@ import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
-import { deleteCommunityPostByUid } from "~/models/community";
+import { deleteCommunityPostByUid } from "~/models/community.server";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getSenseiById, isSenseiProfileVisibleTo } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
@@ -233,32 +233,34 @@ export default function WalkthroughTimelineDetailPage() {
               ) : null}
 
               {owner ? (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    to={`/timelines/${timeline.uid}/edit`}
-                    icon={PencilSquareIcon}
-                    text="수정"
-                    size="sm"
-                    fullWidth
-                  />
-                  <Form
-                    method="post"
-                    onSubmit={(event) => {
-                      if (!window.confirm("이 타임라인을 삭제할까요?")) event.preventDefault();
-                    }}
-                  >
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
-                      type="submit"
-                      name="intent"
-                      value="delete"
-                      icon={TrashIcon}
-                      text="삭제"
+                      to={`/timelines/${timeline.uid}/edit`}
+                      icon={PencilSquareIcon}
+                      text="수정"
                       size="sm"
-                      variant="danger-subtle"
                       fullWidth
-                      disabled={navigation.state !== "idle"}
                     />
-                  </Form>
+                    <Form
+                      method="post"
+                      onSubmit={(event) => {
+                        if (!window.confirm("이 타임라인을 삭제할까요?")) event.preventDefault();
+                      }}
+                    >
+                      <Button
+                        type="submit"
+                        name="intent"
+                        value="delete"
+                        icon={TrashIcon}
+                        text="삭제"
+                        size="sm"
+                        variant="danger-subtle"
+                        fullWidth
+                        disabled={navigation.state !== "idle"}
+                      />
+                    </Form>
+                  </div>
                 </div>
               ) : null}
             </PanelBody>

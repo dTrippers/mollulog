@@ -11,19 +11,18 @@ import { useSignIn } from "~/contexts/SignInProvider";
 import { raidTypeToParam } from "~/domain/raid";
 import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { applyRecruitmentResultStudentCompletion } from "~/domain/recruitment-result";
-import { createConcurrencyGate } from "~/lib/concurrency";
-import { withD1Session } from "~/lib/d1-session";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
-import { type ContentCommentSummary, getContentsCommentSummaries, type NestedComment } from "~/models/content";
+import type { ContentCommentSummary, NestedComment } from "~/models/content";
 import type { EventType, RaidType } from "~/models/content.d";
+import { getContentsCommentSummaries } from "~/models/content.server";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import {
   getRecruitmentResultsByRecruitmentGroupUids,
   type RecruitmentCompletionMeta,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { type FutureContent, getFutureContents } from "~/views/futures";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
@@ -51,7 +50,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const logger = getLogger(env, ctx, { route: "futures.loader" });
 
   return ctx.tracing.enterSpan("futures.loader", async (span) => {
-    const publicReadEnv = withD1Session(env, "first-unconstrained");
     const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () => getFutureContents(env, false, ctx));
     const currentUserPromise = ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
     const [rawContents, currentUser] = await Promise.all([rawContentsPromise, currentUserPromise]);
@@ -81,17 +79,15 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
     const currentUserId = currentUser?.id;
     const signedIn = currentUser !== null;
-    const runD1Query = createConcurrencyGate(4);
     const recruitmentGroupUids = contents
       .map((content) => content.recruitmentGroupUid)
       .filter((uid): uid is string => uid !== null);
     const commentSummariesPromise: Promise<CommentSummariesState> = ctx.tracing
       .enterSpan("comment_summaries", () =>
         getContentsCommentSummaries(
-          currentUserId ? env : publicReadEnv,
+          env,
           contents.map((content: FutureContentsLoaderContent) => content.uid),
           currentUserId,
-          runD1Query,
         ),
       )
       .then<CommentSummariesState>((summaries) => ({ status: "available", summaries }))
@@ -117,7 +113,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       ctx.tracing.enterSpan("favorited_counts", () => getFavoritedCounts(env, allStudentUids, { ctx })),
       currentUserId
         ? ctx.tracing.enterSpan("recruitment_results", () =>
-            getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids, runD1Query),
+            getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids),
           )
         : [],
     ]);
@@ -156,7 +152,6 @@ const futuresContentFilterKey = "futures::content-filter";
 const futuresContentViewKey = "futures::content-view";
 
 type FutureContentView = "timeline" | "table" | "compact";
-type CommentVisibility = "private" | "public";
 type FavoritedStudentState = { contentUid: string; studentUid: string };
 type FavoritedCountState = FavoritedStudentState & { count: number };
 type FutureContentForView = Pick<
@@ -348,7 +343,7 @@ export default function FutureContents() {
   const submitFavorite = (data: ContentsActionData) =>
     favoriteFetcher.submit(data, { action: "/api/contents", method: "post", encType: "application/json" });
 
-  const commentFetcher = useFetcher();
+  const commentFetcher = useFetcher<NestedComment[]>();
   const submitComment = (contentUid: string, data: CommentActionData) =>
     commentFetcher.submit(data, {
       action: `/api/contents/${contentUid}/comments`,
@@ -370,7 +365,7 @@ export default function FutureContents() {
 
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
 
-  const recruitmentResultFetcher = useFetcher();
+  const recruitmentResultFetcher = useFetcher<{ success?: boolean; result?: RecruitmentResultState | null }>();
   const submitRecruitmentResult = (data: RecruitmentResultActionData) =>
     recruitmentResultFetcher.submit(data, {
       action: "/api/recruitment-results",
@@ -379,10 +374,14 @@ export default function FutureContents() {
     });
 
   useEffect(() => {
-    const response = recruitmentResultFetcher.data as
-      | { success?: boolean; result?: RecruitmentResultState | null }
-      | undefined;
-    if (recruitmentResultFetcher.state !== "idle" || !response?.success || !response.result) {
+    const response = recruitmentResultFetcher.data;
+    if (
+      recruitmentResultFetcher.state !== "idle" ||
+      !response ||
+      !("success" in response) ||
+      !response.success ||
+      !response.result
+    ) {
       return;
     }
 

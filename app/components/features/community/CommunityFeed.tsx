@@ -10,7 +10,7 @@ import { compareInstantDesc } from "~/lib/date-time";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
-import type { CommunityPostCommentsChangedActionResult } from "~/models/community-engagement";
+import type { CommunityEngagementActionResult } from "~/models/community-engagement";
 import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
 import type { EnrichedCommunityFeedPost } from "~/views/community";
 import { StudentCards } from "../students";
@@ -123,7 +123,7 @@ function CommunityPostCard({
   const displayTimeZone = useDisplayTimeZone();
   const [comments, setComments] = useState(post.comments);
   const [commentEditing, setCommentEditing] = useState(false);
-  const commentFetcher = useFetcher<CommunityPostCommentsChangedActionResult>();
+  const commentFetcher = useFetcher<CommunityEngagementActionResult>();
   const timestamp = getCommunityPostTimestampMeta(post, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment =

@@ -138,7 +138,7 @@ export async function runScheduledJobs(
           },
         ]
       : [
-          { name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env) },
+          { name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env, ctx) },
           { name: "refreshSourceCaches", run: () => refreshSourceCaches(env, ctx) },
         ];
 

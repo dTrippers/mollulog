@@ -1,7 +1,11 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { LikeChangedActionResult } from "~/domain/like";
-import { getCommunityLikeCountsByPostUids, getLikedCommunityPostUids, setCommunityPostLike } from "~/models/community";
+import {
+  getCommunityLikeCountsByPostUids,
+  getLikedCommunityPostUids,
+  setCommunityPostLike,
+} from "~/models/community.server";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const postUid = params.uid;
@@ -32,7 +36,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     throw new Response("Post UID is required", { status: 400 });
   }
 
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");

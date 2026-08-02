@@ -22,7 +22,7 @@ export default function EventComment({
   const [hasPendingUpdate, setHasPendingUpdate] = useState(false);
   const justUpdatedRef = useRef(false);
 
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<NestedComment[]>();
   const submit = (data: CommentActionData) => {
     setHasPendingUpdate(true);
     justUpdatedRef.current = false;

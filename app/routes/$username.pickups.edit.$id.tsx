@@ -20,6 +20,7 @@ import {
   mergeEditableRecruitmentResultStudents,
   resolveRecruitmentResultStudents,
 } from "~/domain/recruitment-result";
+import { withD1Session } from "~/lib/d1-session";
 import {
   compareInstantAsc,
   compareInstantDesc,
@@ -28,7 +29,6 @@ import {
   nowUtcIso,
   toUtcIso,
 } from "~/lib/date-time";
-import { withD1Session } from "~/lib/d1-session";
 import { routeError } from "~/lib/http-errors";
 import { getPickupHistory, type PickupHistory } from "~/models/pickup-history";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
@@ -36,7 +36,7 @@ import {
   getRecruitmentResult,
   getRecruitmentResultComment,
   upsertRecruitmentResult,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { getAllStudents } from "~/models/student";
 import {
   getTimelineContentsByRecruitmentGroupUids,
@@ -285,9 +285,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   // this policy isn't user-facing yet.
   const groupTimelineContents = (
     await getTimelineContentsByRecruitmentGroupUids(publicReadEnv, [data.eventUid], { ctx })
-  ).sort(
-    (a, b) => compareInstantAsc(a.startAt, b.startAt),
-  );
+  ).sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
   const timelineContent = groupTimelineContents[0];
   const exchangeableStudentMap = new Map(
     recruitmentGroup.recruitments.flatMap((recruitment) => {

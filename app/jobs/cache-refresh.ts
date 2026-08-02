@@ -21,7 +21,7 @@ const SAFE_TASK_ERROR = "작업을 완료하지 못했어요. 로그에서 job I
 async function executeCacheRefreshTask(env: Env, ctx: ExecutionContext, name: CacheRefreshTaskName): Promise<void> {
   switch (name) {
     case "syncYoutubeCommunityPosts":
-      await syncYoutubeCommunityPosts(env);
+      await syncYoutubeCommunityPosts(env, ctx);
       return;
     case "syncRawStudents":
       await syncRawStudents(env);
@@ -76,6 +76,8 @@ async function executeCacheRefreshTask(env: Env, ctx: ExecutionContext, name: Ca
       await getNavigationBarContentsRaw(env, true, ctx);
       return;
   }
+
+  return;
 }
 
 export async function runCacheRefreshTask(

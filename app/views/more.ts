@@ -14,7 +14,7 @@ import {
   type PyroxeneEventData,
 } from "~/models/pyroxene-planner";
 import { getRecruitedStudents } from "~/models/recruited-student";
-import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
+import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import type { Sensei } from "~/models/sensei";
 import { getNavigationBarContents } from "~/views/navigation";

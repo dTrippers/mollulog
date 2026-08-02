@@ -2,7 +2,6 @@ import type { ActionFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
-import { withD1Session } from "~/lib/d1-session";
 import { nowUtcIso } from "~/lib/date-time";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import {
@@ -12,7 +11,7 @@ import {
   removeRecruitedStudentFromResult,
   setRecruitmentResultCompletion,
   upsertRecruitmentResult,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { getFutureContents } from "~/views/futures";
 
 export type ActionData =
@@ -89,9 +88,8 @@ async function canCompleteRecruitmentAction(
   actionData: CompleteStudentActionData,
   ctx?: ExecutionContext,
 ) {
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
   const [contents, favoritedStudents] = await Promise.all([
-    getFutureContents(publicReadEnv, false, ctx),
+    getFutureContents(env, false, ctx),
     getUserFavoritedStudents(env, userId, undefined, { ctx }),
   ]);
 

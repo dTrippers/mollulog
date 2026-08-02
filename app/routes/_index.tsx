@@ -10,7 +10,7 @@ import { raidTypeToParam } from "~/domain/raid";
 import { withD1Session } from "~/lib/d1-session";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
-import { getCommunityFeedPage } from "~/models/community";
+import { getCommunityFeedPage } from "~/models/community.server";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
