@@ -18,71 +18,66 @@ import { getNavigationBarContentsRaw } from "~/views/navigation";
 
 const SAFE_TASK_ERROR = "작업을 완료하지 못했어요. 로그에서 job ID를 확인해주세요.";
 
-async function executeCacheRefreshTask(
-  env: Env,
-  ctx: ExecutionContext,
-  name: CacheRefreshTaskName,
-): Promise<{ skipped?: boolean }> {
+async function executeCacheRefreshTask(env: Env, ctx: ExecutionContext, name: CacheRefreshTaskName): Promise<void> {
   switch (name) {
-    case "syncYoutubeCommunityPosts": {
-      const result = await syncYoutubeCommunityPosts(env, ctx);
-      return result.skipped ? { skipped: true } : {};
-    }
+    case "syncYoutubeCommunityPosts":
+      await syncYoutubeCommunityPosts(env, ctx);
+      return;
     case "syncRawStudents":
       await syncRawStudents(env);
-      return {};
+      return;
     case "warmRecruitmentCache":
       await warmRecruitmentCache(env);
-      return {};
+      return;
     case "warmRaidCache":
       await warmRaidCache(env);
-      return {};
+      return;
     case "getMainStories":
       await getMainStories(env, true);
-      return {};
+      return;
     case "getAllStudentsFavoriteItems":
       await getAllStudentsFavoriteItems(env, true);
-      return {};
+      return;
     case "syncAllTimelineContentsMeta":
       await syncAllTimelineContentsMeta(env, true, { ctx });
-      return {};
+      return;
     case "syncEventContentsList":
       await syncEventContentsList(env);
-      return {};
+      return;
     case "warmStudentSkillItems": {
       const studentUids = (await getAllStudents(env, true)).map((student) => student.uid);
       await getStudentSkillItemsBatch(env, studentUids, true);
-      return {};
+      return;
     }
     case "warmStudentGearData": {
       const studentUids = (await getAllStudents(env, true)).map((student) => student.uid);
       await getStudentGearData(env, studentUids, true);
-      return {};
+      return;
     }
     case "warmActiveUpcomingEventContent":
       await warmActiveUpcomingEventContent(env, true, ctx);
-      return {};
+      return;
     case "getItemCatalogResources":
       await getItemCatalogResources(env, true);
-      return {};
+      return;
     case "getCampaignFarmingStages":
       await getCampaignFarmingStages(env, true);
-      return {};
+      return;
     case "getEventList":
       await getEventList(env, undefined, true, ctx);
-      return {};
+      return;
     case "getIndexContents":
       await getIndexContents(env, true, ctx);
-      return {};
+      return;
     case "getFutureContents":
       await getFutureContents(env, true, ctx);
-      return {};
+      return;
     case "getNavigationBarContentsRaw":
       await getNavigationBarContentsRaw(env, true, ctx);
-      return {};
+      return;
   }
 
-  return {};
+  return;
 }
 
 export async function runCacheRefreshTask(
@@ -95,12 +90,8 @@ export async function runCacheRefreshTask(
   const logger = getLogger(env, ctx, { job: "cache-refresh", jobUid, taskName: name });
 
   try {
-    const taskOutcome = await executeCacheRefreshTask(env, ctx, name);
+    await executeCacheRefreshTask(env, ctx, name);
     const durationMs = Date.now() - startedAt;
-    if (taskOutcome.skipped) {
-      logger.info("Cache refresh task skipped during community write maintenance", { durationMs });
-      return { status: "skipped", durationMs, error: null };
-    }
     logger.info("Cache refresh task completed", { durationMs });
     return { status: "succeeded", durationMs, error: null };
   } catch (error) {

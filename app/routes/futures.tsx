@@ -2,22 +2,15 @@ import { Bars3BottomLeftIcon, FunnelIcon, QueueListIcon, TableCellsIcon } from "
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import type { ContentTimelineProps } from "~/components/features/contents";
 import { ContentTimeline, ContentTimelineCompact } from "~/components/features/contents";
 import { ContentFilterPanel } from "~/components/features/futures";
 import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
 import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
-import {
-  type CommunityWriteMaintenanceActionResult,
-  isCommunityWriteMaintenanceActionResult,
-} from "~/domain/community-write-freeze";
 import { raidTypeToParam } from "~/domain/raid";
 import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { applyRecruitmentResultStudentCompletion } from "~/domain/recruitment-result";
-import { createConcurrencyGate } from "~/lib/concurrency";
-import { withD1Session } from "~/lib/d1-session";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import { captureServerError, getLogger } from "~/lib/observability.server";
@@ -57,7 +50,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const logger = getLogger(env, ctx, { route: "futures.loader" });
 
   return ctx.tracing.enterSpan("futures.loader", async (span) => {
-    const publicReadEnv = withD1Session(env, "first-unconstrained");
     const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () => getFutureContents(env, false, ctx));
     const currentUserPromise = ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
     const [rawContents, currentUser] = await Promise.all([rawContentsPromise, currentUserPromise]);
@@ -87,17 +79,15 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
     const currentUserId = currentUser?.id;
     const signedIn = currentUser !== null;
-    const runD1Query = createConcurrencyGate(4);
     const recruitmentGroupUids = contents
       .map((content) => content.recruitmentGroupUid)
       .filter((uid): uid is string => uid !== null);
     const commentSummariesPromise: Promise<CommentSummariesState> = ctx.tracing
       .enterSpan("comment_summaries", () =>
         getContentsCommentSummaries(
-          currentUserId ? env : publicReadEnv,
+          env,
           contents.map((content: FutureContentsLoaderContent) => content.uid),
           currentUserId,
-          runD1Query,
         ),
       )
       .then<CommentSummariesState>((summaries) => ({ status: "available", summaries }))
@@ -123,7 +113,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       ctx.tracing.enterSpan("favorited_counts", () => getFavoritedCounts(env, allStudentUids, { ctx })),
       currentUserId
         ? ctx.tracing.enterSpan("recruitment_results", () =>
-            getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids, runD1Query),
+            getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, recruitmentGroupUids),
           )
         : [],
     ]);
@@ -348,16 +338,12 @@ export default function FutureContents() {
     started: boolean;
   } | null>(null);
   const [recruitmentResults, setRecruitmentResults] = useState<RecruitmentResultState[]>(loaderData.recruitmentResults);
-  const [communityWriteMaintenanceTrigger, setCommunityWriteMaintenanceTrigger] = useState<
-    CommunityWriteMaintenanceActionResult | undefined
-  >();
-  const previousRecruitmentResultsRef = useRef<RecruitmentResultState[] | null>(null);
 
   const favoriteFetcher = useFetcher();
   const submitFavorite = (data: ContentsActionData) =>
     favoriteFetcher.submit(data, { action: "/api/contents", method: "post", encType: "application/json" });
 
-  const commentFetcher = useFetcher<NestedComment[] | CommunityWriteMaintenanceActionResult>();
+  const commentFetcher = useFetcher<NestedComment[]>();
   const submitComment = (contentUid: string, data: CommentActionData) =>
     commentFetcher.submit(data, {
       action: `/api/contents/${contentUid}/comments`,
@@ -379,9 +365,7 @@ export default function FutureContents() {
 
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
 
-  const recruitmentResultFetcher = useFetcher<
-    { success?: boolean; result?: RecruitmentResultState | null } | CommunityWriteMaintenanceActionResult
-  >();
+  const recruitmentResultFetcher = useFetcher<{ success?: boolean; result?: RecruitmentResultState | null }>();
   const submitRecruitmentResult = (data: RecruitmentResultActionData) =>
     recruitmentResultFetcher.submit(data, {
       action: "/api/recruitment-results",
@@ -391,14 +375,6 @@ export default function FutureContents() {
 
   useEffect(() => {
     const response = recruitmentResultFetcher.data;
-    if (isCommunityWriteMaintenanceActionResult(response)) {
-      if (previousRecruitmentResultsRef.current) {
-        setRecruitmentResults(previousRecruitmentResultsRef.current);
-      }
-      previousRecruitmentResultsRef.current = null;
-      setCommunityWriteMaintenanceTrigger(response);
-      return;
-    }
     if (
       recruitmentResultFetcher.state !== "idle" ||
       !response ||
@@ -419,7 +395,6 @@ export default function FutureContents() {
       }
       return [...prev, nextResult];
     });
-    previousRecruitmentResultsRef.current = null;
   }, [recruitmentResultFetcher.state, recruitmentResultFetcher.data]);
 
   useEffect(() => {
@@ -440,9 +415,6 @@ export default function FutureContents() {
         previousCommentThreadDataRef.current = commentThreadFetcher.data;
         setCommentLoadRequest(null);
       }
-      setPendingContentUid(null);
-    } else if (isCommunityWriteMaintenanceActionResult(commentFetcher.data)) {
-      setCommunityWriteMaintenanceTrigger(commentFetcher.data);
       setPendingContentUid(null);
     }
   }, [
@@ -501,7 +473,6 @@ export default function FutureContents() {
       return;
     }
 
-    previousRecruitmentResultsRef.current ??= recruitmentResults;
     if (completed) {
       submitRecruitmentResult({
         action: "completeStudent",
@@ -714,7 +685,6 @@ export default function FutureContents() {
         },
       ]}
     >
-      <CommunityWriteMaintenanceToast trigger={communityWriteMaintenanceTrigger} />
       {(view === "timeline" || view === "table") && (
         <div className={view === "table" ? "lg:hidden" : ""}>
           <ContentTimeline

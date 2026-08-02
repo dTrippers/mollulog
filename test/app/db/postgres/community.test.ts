@@ -12,12 +12,19 @@ jest.mock("~/lib/postgres.server", () => {
 
 import {
   createPostgresCommunityComment,
+  createPostgresContentComment,
+  createPostgresContentSubcomment,
+  deletePostgresCommunityComment,
   getPostgresCommunityFeedPage,
+  getPostgresContentCommentIdByUid,
   getPostgresContentCommentSummaries,
   getPostgresNestedCommunityComments,
   getPostgresRecentStudentGradingsPage,
   getPostgresUserParties,
+  pinPostgresContentComment,
   setPostgresCommunityPostLike,
+  unpinPostgresContentComment,
+  updatePostgresCommunityComment,
 } from "~/db/postgres/community";
 import { getCommunityAuthorIdByUsername, getCommunityAuthorsByIds } from "~/db/postgres/community-authors";
 import { createPostgresClient } from "~/lib/postgres.server";
@@ -226,6 +233,139 @@ describe("PostgreSQL community repository", () => {
         createClient: () => nestedParent.client,
       }),
     ).rejects.toThrow("Cannot reply to a subcomment");
+  });
+
+  it("auto-pins only the first content comment created by a user", async () => {
+    const first = createClient((text) => (text.includes('from "community_posts"') ? [] : []));
+    await expect(
+      createPostgresContentComment(env, 10, "content-1", "first", "private", {
+        createClient: () => first.client,
+      }),
+    ).resolves.toBeTruthy();
+
+    const firstInsert = first.query.mock.calls.find(([config]) =>
+      config.text.includes('insert into "community_posts"'),
+    );
+    expect(firstInsert?.[1]).toEqual(expect.arrayContaining([10, "event_opinion", "private", true, "content-1"]));
+
+    const later = createClient((text) => (text.includes('from "community_posts"') ? [["existing"]] : []));
+    await expect(
+      createPostgresContentComment(env, 10, "content-1", "later", "public", {
+        createClient: () => later.client,
+      }),
+    ).resolves.toBeTruthy();
+
+    const laterInsert = later.query.mock.calls.find(([config]) =>
+      config.text.includes('insert into "community_posts"'),
+    );
+    expect(laterInsert?.[1]).toEqual(expect.arrayContaining([10, "event_opinion", "public", false, "content-1"]));
+  });
+
+  it("creates content subcomments only for a parent in the requested content", async () => {
+    getAuthors.mockResolvedValue(authors([1, "public"]));
+    const valid = createClient((text) => {
+      if (text.includes('from "community_posts"') && text.includes('"subject_content_uid"')) {
+        return [["parent-1", "content-1"]];
+      }
+      if (text.includes('from "community_posts"')) return [postVisibilityRow({ userId: 1 })];
+      return [];
+    });
+
+    await expect(
+      createPostgresContentSubcomment(env, 2, "content-1", "parent-1", "reply", "public", {
+        createClient: () => valid.client,
+      }),
+    ).resolves.toBeTruthy();
+    const insert = valid.query.mock.calls.find(([config]) => config.text.includes('insert into "community_comments"'));
+    expect(insert?.[1]).toEqual(expect.arrayContaining(["parent-1", 2, "reply", "public"]));
+
+    const wrongContent = createClient((text) =>
+      text.includes('from "community_posts"') ? [["parent-1", "content-2"]] : [],
+    );
+    await expect(
+      createPostgresContentSubcomment(env, 2, "content-1", "parent-1", "reply", "public", {
+        createClient: () => wrongContent.client,
+      }),
+    ).rejects.toThrow("Parent comment not found");
+    expect(
+      wrongContent.query.mock.calls.some(([config]) => config.text.includes('insert into "community_comments"')),
+    ).toBe(false);
+  });
+
+  it("resolves content comment IDs from posts before falling back to subcomments", async () => {
+    const post = createClient((text) => {
+      if (text.includes('from "community_posts"')) return [[11]];
+      if (text.includes('from "community_comments"')) return [[27]];
+      return [];
+    });
+    await expect(
+      getPostgresContentCommentIdByUid(env, "comment-1", 10, { createClient: () => post.client }),
+    ).resolves.toBe(11);
+
+    const subcomment = createClient((text) => {
+      if (text.includes('from "community_comments"')) return [[27]];
+      return [];
+    });
+    await expect(
+      getPostgresContentCommentIdByUid(env, "comment-1", 10, { createClient: () => subcomment.client }),
+    ).resolves.toBe(27);
+
+    const missing = createClient(() => []);
+    await expect(
+      getPostgresContentCommentIdByUid(env, "missing", undefined, { createClient: () => missing.client }),
+    ).resolves.toBeNull();
+  });
+
+  it("pins only an owned content comment and supports unpinning the content", async () => {
+    const valid = createClient((text) => (text.includes('from "community_posts"') ? [["post-2", "content-1"]] : []));
+    await expect(
+      pinPostgresContentComment(env, 10, "content-1", "post-2", { createClient: () => valid.client }),
+    ).resolves.toBeUndefined();
+    const validUpdates = valid.query.mock.calls.filter(([config]) => config.text.includes('update "community_posts"'));
+    expect(validUpdates).toHaveLength(2);
+    expect(validUpdates[0]?.[1]).toEqual(expect.arrayContaining([false, 10, "event_opinion", "content-1", true]));
+    expect(validUpdates[1]?.[1]).toEqual(expect.arrayContaining([true, "post-2"]));
+
+    const invalid = createClient(() => []);
+    await expect(
+      pinPostgresContentComment(env, 10, "content-1", "someone-elses-post", {
+        createClient: () => invalid.client,
+      }),
+    ).rejects.toThrow("Comment not found or does not belong to user");
+    expect(
+      invalid.query.mock.calls.filter(([config]) => config.text.includes('update "community_posts"')),
+    ).toHaveLength(1);
+
+    const unpin = createClient(() => []);
+    await expect(
+      unpinPostgresContentComment(env, 10, "content-1", { createClient: () => unpin.client }),
+    ).resolves.toBeUndefined();
+    expect(unpin.query.mock.calls[0]?.[1]).toEqual(
+      expect.arrayContaining([false, 10, "event_opinion", "content-1", true]),
+    );
+  });
+
+  it("scopes content subcomment updates and root deletes to the owning user", async () => {
+    const update = createClient(() => []);
+    await expect(
+      updatePostgresCommunityComment(env, 10, "comment-1", "updated", "private", {
+        createClient: () => update.client,
+      }),
+    ).resolves.toBeUndefined();
+    expect(update.query.mock.calls[0]?.[0].text).toContain('update "community_comments"');
+    expect(update.query.mock.calls[0]?.[1]).toEqual(expect.arrayContaining(["updated", "private", "comment-1", 10]));
+
+    const rootDelete = createClient((text) =>
+      text.includes('from "community_comments"') ? [commentRow({ uid: "comment-1", userId: 10 })] : [],
+    );
+    await expect(
+      deletePostgresCommunityComment(env, 10, "comment-1", { createClient: () => rootDelete.client }),
+    ).resolves.toBeUndefined();
+    const deleteCall = rootDelete.query.mock.calls.find(([config]) =>
+      config.text.includes('delete from "community_comments"'),
+    );
+    expect(deleteCall?.[1]).toEqual(expect.arrayContaining(["comment-1"]));
+    expect(deleteCall?.[0].text).toContain('"parent_uid"');
   });
 
   it("uses PostgreSQL aggregation for summaries and keeps pinned preview separate", async () => {

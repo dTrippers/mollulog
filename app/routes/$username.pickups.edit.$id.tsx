@@ -5,17 +5,14 @@ import {
   type LoaderFunctionArgs,
   type MetaFunction,
   redirect,
-  useActionData,
   useLoaderData,
   useSearchParams,
   useSubmit,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import { EventSelector } from "~/components/features/events";
 import { Button, SectionCard, Textarea, Title } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { isCommunityWriteMaintenanceActionResult } from "~/domain/community-write-freeze";
 import {
   createRecruitmentResultStudentsFromPickupHistory,
   getRecruitmentResultTier3CountFromPickupHistory,
@@ -23,7 +20,6 @@ import {
   mergeEditableRecruitmentResultStudents,
   resolveRecruitmentResultStudents,
 } from "~/domain/recruitment-result";
-import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { withD1Session } from "~/lib/d1-session";
 import {
   compareInstantAsc,
@@ -356,10 +352,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       );
   const tier3Count = getRecruitmentResultTier3CountFromPickupHistory({ result: data.result });
 
-  if (await isCommunityWriteFrozen(env, { ctx, operation: "recruitment-result.pickup-editor.upsert" })) {
-    return communityWriteMaintenanceResponse();
-  }
-
   await upsertRecruitmentResult(env, sensei.id, {
     uid: params.id && params.id !== "new" ? params.id : undefined,
     recruitmentGroupUid: data.eventUid,
@@ -377,7 +369,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 export default function EditPickup() {
   const { events, tier3Students, currentPickupHistory } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
   const [searchParams] = useSearchParams();
   const displayTimeZone = useDisplayTimeZone();
   const isEditing = currentPickupHistory !== null;
@@ -544,7 +535,6 @@ export default function EditPickup() {
       </SectionCard>
 
       <div className="flex flex-col items-start gap-2">
-        {isCommunityWriteMaintenanceActionResult(actionData) && <CommunityWriteMaintenanceToast trigger={actionData} />}
         <Button
           text="모집 결과 저장"
           variant="primary"

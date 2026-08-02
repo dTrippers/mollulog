@@ -11,9 +11,8 @@ import {
 import dayjs from "dayjs";
 import { QRCodeSVG } from "qrcode.react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import { Form, Link, redirect, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import LikeButton from "~/components/features/engagement/LikeButton";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import {
@@ -30,13 +29,11 @@ import {
   deletePostgresWalkthroughTimeline,
   getPostgresWalkthroughTimeline,
 } from "~/db/postgres/walkthrough-timelines";
-import { isCommunityWriteMaintenanceActionResult } from "~/domain/community-write-freeze";
 import {
   DEMO_WALKTHROUGH_BOSS_NAME,
   DEMO_WALKTHROUGH_TIMELINE,
   isDemoWalkthroughTimelineUid,
 } from "~/domain/walkthrough-timeline-demo";
-import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
@@ -137,14 +134,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     return redirect(`/timelines/${cloned.uid}/edit`);
   }
   if (intent === "delete") {
-    if (
-      await isCommunityWriteFrozen(env, {
-        ctx,
-        operation: "walkthrough-timeline.delete",
-      })
-    ) {
-      return communityWriteMaintenanceResponse();
-    }
     const deleted = await deletePostgresWalkthroughTimeline(env, params.uid, currentUser.id, { ctx });
     if (!deleted) throw routeError(403, "timeline.forbidden", "이 타임라인을 삭제할 수 없어요.");
     try {
@@ -174,8 +163,6 @@ export default function WalkthroughTimelineDetailPage() {
     detailUrl,
     viewerUrl,
   } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-  const communityWriteMaintenanceVisible = isCommunityWriteMaintenanceActionResult(actionData);
   const navigation = useNavigation();
   const items = flattenTimelineParties(timeline.document.parties);
   return (
@@ -247,7 +234,6 @@ export default function WalkthroughTimelineDetailPage() {
 
               {owner ? (
                 <div className="space-y-2">
-                  {communityWriteMaintenanceVisible ? <CommunityWriteMaintenanceToast trigger={actionData} /> : null}
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       to={`/timelines/${timeline.uid}/edit`}

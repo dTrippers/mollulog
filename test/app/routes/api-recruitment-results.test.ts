@@ -26,15 +26,7 @@ jest.mock("~/models/recruitment-result.server", () => ({
   upsertRecruitmentResult: jest.fn(),
 }));
 
-const kvGet = jest.fn(async (): Promise<string | null> => null);
-const env = {
-  KV_CACHE: {
-    get: kvGet,
-  },
-  DB: {
-    withSession: jest.fn(() => ({})),
-  },
-} as unknown as Env;
+const env = {} as Env;
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetFutureContents = getFutureContents as jest.MockedFunction<typeof getFutureContents>;
 const mockedGetUserFavoritedStudents = getUserFavoritedStudents as jest.MockedFunction<typeof getUserFavoritedStudents>;
@@ -141,27 +133,6 @@ describe("api.recruitment-results", () => {
       tier: 3,
       pickup: true,
     });
-  });
-
-  it("returns maintenance without mutating while the community write freeze is active", async () => {
-    kvGet.mockResolvedValueOnce("enabled");
-
-    const response = expectDataResult<{ kind: string; expected: boolean }>(
-      await action(
-        createActionArgs({
-          action: "completeStudent",
-          recruitmentGroupUid: "group-a",
-          contentUid: "content-a",
-          studentUid: "hina",
-          tier: 3,
-          pickup: true,
-        }),
-      ),
-    );
-
-    expect(response.init?.status).toBe(503);
-    expect(response.data).toEqual({ kind: "communityWriteMaintenance", expected: true });
-    expect(mockedAddRecruitedStudentToResult).not.toHaveBeenCalled();
   });
 
   it("rejects completeStudent before recruitment start", async () => {

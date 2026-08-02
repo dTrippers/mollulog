@@ -33,11 +33,7 @@ jest.mock("~/views/futures", () => ({
   getFutureContents: jest.fn(),
 }));
 
-const sessionDb = {} as D1DatabaseSession;
-const primaryDb = {
-  withSession: jest.fn(() => sessionDb),
-} as unknown as D1Database;
-const env = { DB: primaryDb } as Env;
+const env = {} as Env;
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedCaptureServerError = captureServerError as jest.MockedFunction<typeof captureServerError>;
@@ -87,7 +83,7 @@ describe("futures loader data source routing", () => {
     mockedGetRecruitmentResults.mockResolvedValue([]);
   });
 
-  it("routes anonymous public aggregates through a first-unconstrained session", async () => {
+  it("routes anonymous public aggregates through the PostgreSQL environment", async () => {
     mockedGetActiveSensei.mockResolvedValue(null);
 
     const result = await loader(createLoaderArgs());
@@ -99,15 +95,8 @@ describe("futures loader data source routing", () => {
       recruitmentResults: [],
       commentSummaries: { status: "available", summaries: {} },
     });
-    expect(primaryDb.withSession).toHaveBeenCalledWith("first-unconstrained");
     expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
-    expect(mockedGetContentsCommentSummaries.mock.calls[0][0].DB).toBe(sessionDb);
-    expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(
-      expect.anything(),
-      [],
-      undefined,
-      expect.any(Function),
-    );
+    expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], undefined);
     expect(mockedGetFavoritedCounts).toHaveBeenCalledWith(env, [], { ctx });
     expect(mockedGetUserFavoritedStudents).not.toHaveBeenCalled();
     expect(mockedGetRecruitmentResults).not.toHaveBeenCalled();
@@ -124,16 +113,15 @@ describe("futures loader data source routing", () => {
       favoritedCounts: [],
       recruitmentResults: [],
     });
-    expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], 42, expect.any(Function));
+    expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], 42);
     expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
     expect(mockedGetFavoritedCounts).toHaveBeenCalledWith(env, [], { ctx });
     expect(mockedGetUserFavoritedStudents).toHaveBeenCalledWith(env, 42, undefined, { ctx });
-    expect(mockedGetRecruitmentResults).toHaveBeenCalledWith(env, 42, [], expect.any(Function));
-    expect(mockedGetContentsCommentSummaries.mock.calls[0][3]).toBe(mockedGetRecruitmentResults.mock.calls[0][3]);
+    expect(mockedGetRecruitmentResults).toHaveBeenCalledWith(env, 42, []);
   });
 
   it("keeps the futures loader available when comment summaries fail", async () => {
-    const error = new Error("D1 timeout");
+    const error = new Error("PostgreSQL timeout");
     mockedGetActiveSensei.mockResolvedValue(null);
     mockedGetContentsCommentSummaries.mockRejectedValue(error);
 

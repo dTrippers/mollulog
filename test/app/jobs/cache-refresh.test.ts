@@ -20,18 +20,17 @@ const mockedSyncYoutubeCommunityPosts = syncYoutubeCommunityPosts as jest.Mocked
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockedSyncYoutubeCommunityPosts.mockResolvedValue({ synced: 0, skipped: true });
+  mockedSyncYoutubeCommunityPosts.mockResolvedValue({ synced: 0 });
 });
 
 describe("runCacheRefreshTask", () => {
-  it("records a frozen YouTube sync as skipped instead of failed", async () => {
+  it("records a successful YouTube sync", async () => {
     const env = {} as Env;
     const ctx = {} as ExecutionContext;
 
     const result = await runCacheRefreshTask(env, ctx, "job-uid", "syncYoutubeCommunityPosts");
 
-    expect(result).toEqual({ status: "skipped", durationMs: expect.any(Number), error: null });
-    expect(result.status).not.toBe("failed");
+    expect(result).toEqual({ status: "succeeded", durationMs: expect.any(Number), error: null });
     expect(mockedSyncYoutubeCommunityPosts).toHaveBeenCalledWith(env, ctx);
   });
 });

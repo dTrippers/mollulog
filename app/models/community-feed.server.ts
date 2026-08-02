@@ -1,13 +1,11 @@
 import { getPostgresRecruitmentStatsRows } from "~/db/postgres/community";
 import { getRecruitmentResultCountStats, sanitizeRecruitmentResultStudents } from "~/domain/recruitment-result";
 import type { CommunityFeedPost } from "./community";
-import { resolveCommunitySourceMode } from "./community.server";
-import {
-  type CommunityFeedStatsRecruitmentGroup,
-  type CommunityFeedStatsStudentMap,
-  type CommunityFeedStatsTimelineContent,
-  getRecruitmentFeedStatsByPostUid as getD1RecruitmentFeedStatsByPostUid,
-  type RecruitmentFeedStats,
+import type {
+  CommunityFeedStatsRecruitmentGroup,
+  CommunityFeedStatsStudentMap,
+  CommunityFeedStatsTimelineContent,
+  RecruitmentFeedStats,
 } from "./community-feed";
 import type { RecruitmentResultStudent } from "./recruitment-result";
 
@@ -17,10 +15,6 @@ export type {
   CommunityFeedStatsTimelineContent,
   RecruitmentFeedStats,
 } from "./community-feed";
-
-function isPostgresCommunityMode(env: Pick<Env, "COMMUNITY_SOURCE_MODE">): boolean {
-  return resolveCommunitySourceMode(env.COMMUNITY_SOURCE_MODE) === "hyperdrive";
-}
 
 function parseRecruitmentResultStudents(value: unknown): RecruitmentResultStudent[] {
   if (Array.isArray(value)) {
@@ -43,10 +37,6 @@ export async function getRecruitmentFeedStatsByPostUid(
     timelineContentMap: Map<string, CommunityFeedStatsTimelineContent>;
   },
 ): Promise<Map<string, RecruitmentFeedStats>> {
-  if (!isPostgresCommunityMode(env)) {
-    return getD1RecruitmentFeedStatsByPostUid(env, posts, options);
-  }
-
   const postByUid = new Map(
     posts.flatMap((post) => (post.postType === "recruitment_result" && post.author ? [[post.uid, post] as const] : [])),
   );

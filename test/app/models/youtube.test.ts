@@ -16,12 +16,8 @@ function flushPromises() {
   return new Promise<void>((resolve) => setImmediate(resolve));
 }
 
-function createEnv(freezeValue: string | null = null) {
-  return {
-    KV_CACHE: {
-      get: jest.fn(async () => freezeValue),
-    },
-  } as unknown as Env;
+function createEnv() {
+  return {} as Env;
 }
 
 function createFeedXml(videoId: string, title: string) {
@@ -177,15 +173,6 @@ describe("syncYoutubeCommunityPosts", () => {
     }
 
     await expect(result).resolves.toEqual({ synced: 10 });
-  });
-
-  it("skips community upserts while the operational freeze key is present", async () => {
-    const fetchSpy = jest.spyOn(global, "fetch");
-
-    await expect(syncYoutubeCommunityPosts(createEnv("enabled"))).resolves.toEqual({ synced: 0, skipped: true });
-
-    expect(fetchSpy).not.toHaveBeenCalled();
-    expect(mockedUpsertYoutubeVideoCommunityPost).not.toHaveBeenCalled();
   });
 });
 

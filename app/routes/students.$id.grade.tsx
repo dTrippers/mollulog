@@ -2,12 +2,9 @@ import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, redirect, useActionData, useLoaderData, useNavigation, useSubmit } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import CommunityWriteMaintenanceToast from "~/components/features/community/CommunityWriteMaintenanceToast";
 import { createPageErrorBoundary } from "~/components/features/layout";
 import { Button, Field, SectionCard, TagIcon, Textarea } from "~/components/primitives";
-import { isCommunityWriteMaintenanceActionResult } from "~/domain/community-write-freeze";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
-import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { formatStudentFullName, getStudentGradeDetail } from "~/models/student";
@@ -74,9 +71,6 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
   }
 
   if (intent === "delete") {
-    if (await isCommunityWriteFrozen(env, { ctx, operation: "student-grading.delete" })) {
-      return communityWriteMaintenanceResponse();
-    }
     try {
       await deleteStudentGrading(env, currentUser.id, studentUid);
       return redirect(`/students/${studentUid}`);
@@ -94,9 +88,6 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
   }
 
   const selectedTags = formData.getAll("tags") as StudentGradingTagValue[];
-  if (await isCommunityWriteFrozen(env, { ctx, operation: "student-grading.upsert" })) {
-    return communityWriteMaintenanceResponse();
-  }
   try {
     await upsertStudentGrading(env, currentUser.id, studentUid, comment || null, selectedTags);
     return redirect(`/students/${studentUid}`);
@@ -215,9 +206,6 @@ export default function StudentGrade() {
             />
           )}
         </div>
-        {isCommunityWriteMaintenanceActionResult(actionData) ? (
-          <CommunityWriteMaintenanceToast trigger={actionData} />
-        ) : null}
         {actionData && "error" in actionData && actionData.error ? (
           <p className="text-sm font-medium text-destructive">{actionData.error}</p>
         ) : null}

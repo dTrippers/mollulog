@@ -8,6 +8,9 @@
   "placement": {
     "region": "aws:ap-northeast-1"
   },
+  "triggers": {
+    "crons": []
+  },
 
   "assets": {
     "directory": "./build/client",
@@ -71,7 +74,6 @@
     ]
   },
   "vars": {
-    "COMMUNITY_SOURCE_MODE": "d1",
     "CONNECT_API_URL": "http://localhost:8787",
     "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-dev"
   },
@@ -91,6 +93,9 @@
   // - FRONT_BETTER_STACK_SENTRY_DSN
   "env": {
     "staging": {
+      "triggers": {
+        "crons": []
+      },
       "routes": [
         {
           "pattern": "staging.mollulog.net",
@@ -98,7 +103,6 @@
         }
       ],
       "vars": {
-        "COMMUNITY_SOURCE_MODE": "d1",
         "HOST": "https://staging.mollulog.net",
         "CONNECT_API_URL": "https://connect-staging.mollulog.net",
         "STAGE": "staging",
@@ -137,6 +141,9 @@
       }
     },
     "production": {
+      "triggers": {
+        "crons": []
+      },
       "routes": [
         {
           "pattern": "origin.mollulog.net",
@@ -148,7 +155,6 @@
         }
       ],
       "vars": {
-        "COMMUNITY_SOURCE_MODE": "d1",
         "HOST": "https://mollulog.net",
         "CONNECT_API_URL": "https://connect.mollulog.net",
         "STAGE": "prod",

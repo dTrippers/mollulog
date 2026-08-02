@@ -1,8 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
-import { getCommunityWriteFreezeDecision } from "~/lib/community-write-freeze.server";
 import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
-import { getLogger } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import type { CommunityFeedPost } from "~/models/community";
 import { getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community.server";
@@ -32,8 +30,8 @@ const xmlParser = new XMLParser({
 
 const YOUTUBE_FEED_FETCH_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.youtubeFeedFetch;
 const YOUTUBE_FEED_BODY_TIMEOUT_MS = RUNTIME_TIMEOUTS.external.youtubeFeedBody;
-// Each upsert starts with a D1 existence check. Both staging and production cron
-// target the same database, so an unbounded fan-out can overload the primary.
+// Each upsert touches the shared PostgreSQL database. Both staging and production
+// cron target the same database, so an unbounded fan-out can overload the primary.
 const YOUTUBE_SYNC_CONCURRENCY = 4;
 
 export type HomeYoutubeVideo = {
@@ -109,22 +107,7 @@ export async function fetchYoutubeFeedVideos(): Promise<YoutubeFeedVideo[]> {
   return videos;
 }
 
-export async function syncYoutubeCommunityPosts(
-  env: Env,
-  ctx?: ExecutionContext,
-): Promise<{ synced: number; skipped?: boolean }> {
-  const freezeDecision = await getCommunityWriteFreezeDecision(env, {
-    ctx,
-    operation: "youtube-community-sync",
-  });
-  if (freezeDecision.frozen) {
-    getLogger(env, ctx, { job: "youtube-community-sync" }).info(
-      "YouTube community sync skipped during community write maintenance",
-      { reason: freezeDecision.readFailed ? "freeze_read_failed" : "freeze_key_present" },
-    );
-    return { synced: 0, skipped: true };
-  }
-
+export async function syncYoutubeCommunityPosts(env: Env, _ctx?: ExecutionContext): Promise<{ synced: number }> {
   const videos = await fetchYoutubeFeedVideos();
   await mapWithConcurrencyLimit(videos, YOUTUBE_SYNC_CONCURRENCY, (video) =>
     upsertYoutubeVideoCommunityPost(env, video),
