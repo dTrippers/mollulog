@@ -49,6 +49,26 @@ describe("item-catalog", () => {
     expect(mockedRunQuery).not.toHaveBeenCalled();
   });
 
+  it("keeps item and equipment descriptions distinct when their source UIDs collide", async () => {
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        items: [{ uid: "23", description: "엘리그마 설명" }],
+        equipments: [{ uid: "23", description: "티타늄 해머 설명" }],
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    });
+
+    await expect(getItemCatalogResourceDescriptionMap(["23", "equipment:23"])).resolves.toEqual({
+      "23": "엘리그마 설명",
+      "equipment:23": "티타늄 해머 설명",
+    });
+    expect(mockedRunQuery).toHaveBeenCalledWith(expect.any(Object), { uids: ["23"] });
+  });
+
   it("includes equipment blueprint choice boxes in the growth planner catalog", () => {
     const choiceBox: ItemCatalogResource = {
       uid: "150041",

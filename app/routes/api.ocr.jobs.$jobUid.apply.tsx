@@ -3,8 +3,18 @@ import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { OcrPublicError, toPublicOcrError } from "~/domain/ocr";
 import { type CandidateEvidence, type CandidateSelection, findCandidateEvidence } from "~/domain/ocr-candidate";
+import {
+  buildOcrInventoryReview,
+  evaluateOcrInventoryReview,
+  getOcrReviewCell,
+  type OcrCellPatch,
+  type OcrInventoryReviewEvaluation,
+  parseOcrCellPatches,
+} from "~/domain/ocr-inventory-review";
+import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
 import { buildStudentVideoSyncDraftEntries } from "~/domain/student-video-apply";
 import { getLogger } from "~/lib/observability.server";
+import { getItemCatalogResources } from "~/models/item-catalog";
 import { getOcrJob } from "~/models/ocr-job";
 import { getAllStudentsMap } from "~/models/student";
 import { createAndApplySyncDraft, getSyncDraftBySourceRef } from "~/models/sync-draft";
@@ -59,9 +69,21 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       );
     }
 
+    const requestBody = await request.json().catch(() => null);
+    if (hasOwn(requestBody, "cells") && hasOwn(requestBody, "items")) {
+      throw new OcrPublicError("cells와 items는 함께 반영할 수 없어요");
+    }
+    if (hasOwn(requestBody, "cells")) {
+      return await applyCellReview(env, sensei.id, job, requestBody);
+    }
+
+    if (!hasOwn(requestBody, "items")) {
+      throw new OcrPublicError("반영할 아이템을 선택해주세요");
+    }
+
     const resultItems = getResultItems(job.result);
     const resultItemsByUid = new Map(resultItems.map((item) => [item.resource_uid, item]));
-    const submittedItems = parseApplyItems(await request.json());
+    const submittedItems = parseApplyItems(requestBody);
     const candidateEvidenceByUid = new Map<string, CandidateEvidence>();
     for (const item of submittedItems) {
       if (item.candidateSelection) {
@@ -151,12 +173,122 @@ function parseApplyItems(value: unknown): ApplyItem[] {
   return items;
 }
 
+async function applyCellReview(
+  env: Env,
+  userId: number,
+  job: NonNullable<Awaited<ReturnType<typeof getOcrJob>>>,
+  requestBody: unknown,
+) {
+  const body = asRecord(requestBody);
+  if (!body) throw new OcrPublicError("반영할 셀을 확인해주세요");
+  if (!Number.isSafeInteger(body.resultGeneration) || (body.resultGeneration as number) !== job.generation) {
+    throw new OcrPublicError("인식 결과가 최신 상태가 아니에요. 결과를 새로고침해 주세요", 409);
+  }
+  const review = buildOcrInventoryReview(job.result, job.images);
+  if (review.reviewMode !== "cells") {
+    throw new OcrPublicError("이 인식 결과는 이전 검토 화면에서 반영해야 해요");
+  }
+  let patches: OcrCellPatch[];
+  try {
+    patches = parseOcrCellPatches(body.cells);
+  } catch {
+    throw new OcrPublicError("반영할 셀 정보를 확인해주세요");
+  }
+  for (const patch of patches) {
+    if (!getOcrReviewCell(review, patch)) throw new OcrPublicError("존재하지 않는 셀은 반영할 수 없어요");
+  }
+
+  const resources = await getItemCatalogResources(env);
+  const catalogUids = new Set(buildOcrInventoryCatalogResources(resources).map((resource) => resource.inventoryUid));
+  for (const patch of patches) {
+    if (patch.itemUid && !catalogUids.has(patch.itemUid)) {
+      throw new OcrPublicError("현재 아이템 카탈로그에 없는 아이템은 반영할 수 없어요");
+    }
+  }
+
+  const itemUids = [
+    ...new Set([
+      ...review.cells.flatMap(({ itemUid }) => (itemUid ? [itemUid] : [])),
+      ...patches.flatMap(({ itemUid }) => (itemUid ? [itemUid] : [])),
+    ]),
+  ].filter((itemUid) => catalogUids.has(itemUid));
+  const currentQuantities = await getUserResourceInventoryMapByItemUids(env, userId, itemUids);
+  const evaluation = evaluateOcrInventoryReview(review, patches, catalogUids, currentQuantities);
+  if (evaluation.changedEntries.length === 0) {
+    if (evaluation.safeEntries.length === 0) {
+      throw new OcrPublicError("안전하게 반영할 수 있는 인식 항목이 없어요");
+    }
+    throw new OcrPublicError("변경된 수량이 없어요");
+  }
+
+  const applied = await createAndApplySyncDraft(env, userId, {
+    source: "first_party_ocr",
+    sourceRef: job.uid,
+    type: "item_inventory",
+    toolName: "아이템 스크린샷 인식",
+    toolVersion: job.versions?.model,
+    catalogVersion: job.versions?.catalog,
+    entries: evaluation.changedEntries.map((entry) => ({
+      entryKey: entry.itemUid,
+      value: entry.quantity,
+      meta: {
+        reviewReasons: entry.reviewReasons,
+        quantityExact: entry.quantityExact,
+        observedQuantities: entry.observedQuantities,
+        sourceImages: entry.sourceImages,
+        imageUids: entry.imageUids,
+        cells: entry.cells,
+        candidateScore: entry.candidateScore,
+        selectionSource: entry.selectionSource,
+        resourceSelectedManually: entry.selectionSource === "catalog_search",
+        resource_selected_manually: entry.selectionSource === "catalog_search",
+        modelVersion: job.versions?.model,
+        catalogVersion: job.versions?.catalog,
+      },
+    })),
+  });
+
+  const summary = toReviewSummary(evaluation);
+  return data(
+    {
+      application: toApplication(applied.draft),
+      alreadyApplied: applied.alreadyApplied,
+      summary,
+      reviewSummary: summary,
+    },
+    { status: applied.alreadyApplied ? 200 : 201 },
+  );
+}
+
+function toReviewSummary(evaluation: OcrInventoryReviewEvaluation) {
+  return {
+    applicableChanged: evaluation.changedEntries.length,
+    changed: evaluation.changedEntries.length,
+    unchangedSafe: evaluation.unchangedEntries.length,
+    unchanged: evaluation.unchangedEntries.length,
+    omitted: evaluation.omittedCells.length,
+    omittedCells: evaluation.omittedCells,
+    duplicateUids: evaluation.duplicateUids,
+    appliedItemUids: evaluation.changedEntries.map((entry) => entry.itemUid),
+    unchangedItemUids: evaluation.unchangedEntries.map((entry) => entry.itemUid),
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+function hasOwn(value: unknown, key: string): boolean {
+  const record = asRecord(value);
+  return record ? Object.hasOwn(record, key) : false;
+}
+
 function parseApplyItem(value: unknown): ApplyItem {
   if (!value || typeof value !== "object") throw new OcrPublicError("반영할 아이템을 확인해주세요");
   const item = value as Record<string, unknown>;
   const itemUid = typeof item.itemUid === "string" ? item.itemUid.trim() : "";
   if (!itemUid) throw new OcrPublicError("반영할 아이템을 확인해주세요");
-  if (!Number.isInteger(item.quantity) || (item.quantity as number) < 0) {
+  if (!Number.isSafeInteger(item.quantity) || (item.quantity as number) < 0) {
     throw new OcrPublicError("수량은 0 이상의 정수여야 해요");
   }
   return {
