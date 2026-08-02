@@ -14,9 +14,10 @@ import {
   parseCommunityPostBlocks,
   serializeCommunityPostBlocks,
 } from "./community";
+import { type NestedComment, nestComments } from "./content";
 import { senseiProfileVisibilityFilter, senseisTable } from "./sensei";
 
-type ContentCommentVisibility = "private" | "public";
+export type ContentCommentVisibility = "private" | "public";
 const IN_QUERY_BATCH_SIZE = 90;
 const COMMENT_SUMMARY_QUERY_CONCURRENCY = 4;
 
@@ -31,7 +32,7 @@ type ContentComment = {
   createdAt: UtcIsoString;
 };
 
-type ContentCommentWithSensei = ContentComment & {
+export type ContentCommentWithSensei = ContentComment & {
   sensei: {
     username: string;
     profileStudentId: string | null;
@@ -592,20 +593,6 @@ export async function unpinComment(env: Env, userId: number, contentId: string):
     );
 }
 
-export type NestedComment = {
-  uid: string;
-  body: string;
-  visibility: "private" | "public";
-  pinned: boolean;
-  createdAt: string;
-  sensei: {
-    me: boolean;
-    username: string;
-    profileStudentId: string | null;
-  };
-  subcomments?: NestedComment[];
-};
-
 export async function getNestedContentComments(
   env: Env,
   contentUid: string,
@@ -613,40 +600,4 @@ export async function getNestedContentComments(
 ): Promise<NestedComment[]> {
   const comments = await getContentComments(env, contentUid, currentUser?.id);
   return nestComments(comments, currentUser);
-}
-
-export function nestComments(
-  flatComments: ContentCommentWithSensei[],
-  currentUser: { id: number; username: string } | null,
-): NestedComment[] {
-  const topLevelComments = flatComments.filter((comment) => !comment.parentCommentId);
-  const subcomments = flatComments.filter((comment) => comment.parentCommentId);
-
-  return topLevelComments.map((comment) => {
-    const commentSubcomments = subcomments.filter((subComment) => subComment.parentCommentId === comment.id);
-    return {
-      uid: comment.uid,
-      body: comment.body,
-      visibility: comment.visibility,
-      pinned: comment.pinned && comment.sensei.username === currentUser?.username,
-      createdAt: normalizeCommunityTimestamp(comment.createdAt),
-      sensei: {
-        me: currentUser?.username === comment.sensei.username,
-        username: comment.sensei.username,
-        profileStudentId: comment.sensei.profileStudentId,
-      },
-      subcomments: commentSubcomments.map((subComment) => ({
-        uid: subComment.uid,
-        body: subComment.body,
-        visibility: subComment.visibility,
-        pinned: false,
-        createdAt: normalizeCommunityTimestamp(subComment.createdAt),
-        sensei: {
-          me: currentUser?.username === subComment.sensei.username,
-          username: subComment.sensei.username,
-          profileStudentId: subComment.sensei.profileStudentId,
-        },
-      })),
-    };
-  });
 }

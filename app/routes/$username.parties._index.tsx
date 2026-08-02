@@ -6,7 +6,7 @@ import CommunityWriteMaintenanceToast from "~/components/features/community/Comm
 import { Callout } from "~/components/primitives";
 import { isCommunityWriteMaintenanceActionResult } from "~/domain/community-write-freeze";
 import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
-import { getUserParties, removePartyByUid } from "~/models/party";
+import { getUserParties, removePartyByUid } from "~/models/party.server";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";

@@ -2,17 +2,17 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "reac
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { withD1Session } from "~/lib/d1-session";
+import { nestComments } from "~/models/content";
 import {
   createComment,
   createSubcomment,
   deleteComment,
   getContentComments,
   getNestedContentComments,
-  nestComments,
   pinComment,
   unpinComment,
   updateComment,
-} from "~/models/content";
+} from "~/models/content.server";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const contentUid = params.uid;

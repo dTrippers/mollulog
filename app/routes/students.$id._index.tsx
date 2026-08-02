@@ -19,8 +19,8 @@ import {
 } from "~/models/recruited-student";
 import { getRelationshipLevels, upsertRelationshipLevel } from "~/models/relationship-level";
 import { getStudentDetailData, getStudentVariantIdentity } from "~/models/student";
-import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
-import { getTagCountsByStudent } from "~/models/student-grading-tag";
+import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading.server";
+import { getTagCountsByStudent } from "~/models/student-grading-tag.server";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import { getStudentRelevantTimelineContents } from "./students.$id";
 import StudentBasicInfo from "./students.$id._components/StudentBasicInfo";

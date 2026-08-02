@@ -22,7 +22,7 @@ import {
 } from "~/domain/walkthrough-timeline";
 import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
 import { getLogger } from "~/lib/observability.server";
-import { syncWalkthroughTimelineCommunityPost } from "~/models/community";
+import { syncWalkthroughTimelineCommunityPost } from "~/models/community.server";
 import { loadTimelineEditorOptions } from "./timelines._components/timeline-route-data.server";
 
 type ActionData = { error: string };

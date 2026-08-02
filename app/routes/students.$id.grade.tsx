@@ -11,7 +11,7 @@ import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { formatStudentFullName, getStudentGradeDetail } from "~/models/student";
-import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading";
+import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading.server";
 import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
 
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {

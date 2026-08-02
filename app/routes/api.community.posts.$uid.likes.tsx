@@ -2,7 +2,11 @@ import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "reac
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { LikeChangedActionResult } from "~/domain/like";
 import { communityWriteMaintenanceResponse, isCommunityWriteFrozen } from "~/lib/community-write-freeze.server";
-import { getCommunityLikeCountsByPostUids, getLikedCommunityPostUids, setCommunityPostLike } from "~/models/community";
+import {
+  getCommunityLikeCountsByPostUids,
+  getLikedCommunityPostUids,
+  setCommunityPostLike,
+} from "~/models/community.server";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const postUid = params.uid;

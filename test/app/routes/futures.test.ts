@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { captureServerError, getLogger } from "~/lib/observability.server";
-import { getContentsCommentSummaries } from "~/models/content";
+import { getContentsCommentSummaries } from "~/models/content.server";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
-import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result";
+import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
 import { loader } from "~/routes/futures";
 import { getFutureContents } from "~/views/futures";
 
@@ -11,7 +11,7 @@ jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
 }));
 
-jest.mock("~/models/content", () => ({
+jest.mock("~/models/content.server", () => ({
   getContentsCommentSummaries: jest.fn(),
 }));
 
@@ -25,7 +25,7 @@ jest.mock("~/models/favorite-students", () => ({
   getUserFavoritedStudents: jest.fn(),
 }));
 
-jest.mock("~/models/recruitment-result", () => ({
+jest.mock("~/models/recruitment-result.server", () => ({
   getRecruitmentResultsByRecruitmentGroupUids: jest.fn(),
 }));
 

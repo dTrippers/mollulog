@@ -40,7 +40,7 @@ import {
   getRecruitmentResult,
   getRecruitmentResultComment,
   upsertRecruitmentResult,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { getAllStudents } from "~/models/student";
 import {
   getTimelineContentsByRecruitmentGroupUids,

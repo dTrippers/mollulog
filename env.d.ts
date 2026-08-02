@@ -3,6 +3,7 @@ interface Env {
   KV_SESSION: KVNamespace;
   DB: D1Database;
   HYPERDRIVE: Hyperdrive;
+  COMMUNITY_SOURCE_MODE?: "d1" | "hyperdrive";
   CACHE_REFRESH_WORKFLOW: Workflow<{ requestedBy: number }>;
   EVENTS?: Queue;
   OCR_TASKS?: Queue<OcrTaskMessage>;

@@ -3,8 +3,8 @@ import { useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { StudentGradingTimeline } from "~/components/features/students";
 import { routeError } from "~/lib/http-errors";
-import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading";
-import { getTagCountsByStudent } from "~/models/student-grading-tag";
+import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading.server";
+import { getTagCountsByStudent } from "~/models/student-grading-tag.server";
 import type { StudentDetailPageContext } from "./students.$id";
 import StudentGradingChart from "./students.$id._components/StudentGradingChart";
 

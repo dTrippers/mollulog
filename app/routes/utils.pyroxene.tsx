@@ -67,7 +67,7 @@ import {
   deleteRecruitmentResult,
   getRecruitmentResultsByRecruitmentGroupUids,
   setRecruitmentResultCompletion,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {

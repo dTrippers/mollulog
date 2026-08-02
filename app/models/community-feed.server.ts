@@ -1,35 +1,26 @@
-import { inArray } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
+import { getPostgresRecruitmentStatsRows } from "~/db/postgres/community";
 import { getRecruitmentResultCountStats, sanitizeRecruitmentResultStudents } from "~/domain/recruitment-result";
-import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import type { CommunityFeedPost } from "./community";
-import { type RecruitmentResultStudent, recruitmentResultsTable } from "./recruitment-result";
+import { resolveCommunitySourceMode } from "./community.server";
+import {
+  type CommunityFeedStatsRecruitmentGroup,
+  type CommunityFeedStatsStudentMap,
+  type CommunityFeedStatsTimelineContent,
+  getRecruitmentFeedStatsByPostUid as getD1RecruitmentFeedStatsByPostUid,
+  type RecruitmentFeedStats,
+} from "./community-feed";
+import type { RecruitmentResultStudent } from "./recruitment-result";
 
-export type RecruitmentFeedStats = {
-  totalTrial: number | null;
-  tier3Count: number;
-  pickupCount: number;
-};
+export type {
+  CommunityFeedStatsRecruitmentGroup,
+  CommunityFeedStatsStudentMap,
+  CommunityFeedStatsTimelineContent,
+  RecruitmentFeedStats,
+} from "./community-feed";
 
-export type CommunityFeedStatsStudentMap = Record<string, { uid: string; name: string; initialTier: number }>;
-
-export type CommunityFeedStatsRecruitmentGroup = {
-  uid: string;
-  recruitmentType: RecruitmentTypeEnum;
-  recruitments: {
-    pickup: boolean;
-    recruitmentType: RecruitmentTypeEnum;
-    studentName: string;
-    student: { uid: string; name: string; initialTier: number } | null;
-  }[];
-};
-
-export type CommunityFeedStatsTimelineContent = {
-  uid: string;
-  name: string;
-  recruitmentGroupUid: string | null;
-  recruitmentStudentUids: string[] | null;
-};
+function isPostgresCommunityMode(env: Pick<Env, "COMMUNITY_SOURCE_MODE">): boolean {
+  return resolveCommunitySourceMode(env.COMMUNITY_SOURCE_MODE) === "hyperdrive";
+}
 
 function parseRecruitmentResultStudents(value: unknown): RecruitmentResultStudent[] {
   if (Array.isArray(value)) {
@@ -37,11 +28,7 @@ function parseRecruitmentResultStudents(value: unknown): RecruitmentResultStuden
   }
   try {
     const parsed = JSON.parse(String(value));
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return sanitizeRecruitmentResultStudents(parsed as RecruitmentResultStudent[]);
+    return Array.isArray(parsed) ? sanitizeRecruitmentResultStudents(parsed as RecruitmentResultStudent[]) : [];
   } catch {
     return [];
   }
@@ -56,32 +43,20 @@ export async function getRecruitmentFeedStatsByPostUid(
     timelineContentMap: Map<string, CommunityFeedStatsTimelineContent>;
   },
 ): Promise<Map<string, RecruitmentFeedStats>> {
+  if (!isPostgresCommunityMode(env)) {
+    return getD1RecruitmentFeedStatsByPostUid(env, posts, options);
+  }
+
   const postByUid = new Map(
     posts.flatMap((post) => (post.postType === "recruitment_result" && post.author ? [[post.uid, post] as const] : [])),
   );
-  if (postByUid.size === 0) {
-    return new Map();
-  }
+  if (postByUid.size === 0) return new Map();
 
-  const rows = await drizzle(env.DB)
-    .select({
-      userId: recruitmentResultsTable.userId,
-      recruitedStudents: recruitmentResultsTable.recruitedStudents,
-      tier3Count: recruitmentResultsTable.tier3Count,
-      trial: recruitmentResultsTable.trial,
-      commentPostUid: recruitmentResultsTable.commentPostUid,
-    })
-    .from(recruitmentResultsTable)
-    .where(inArray(recruitmentResultsTable.commentPostUid, [...postByUid.keys()]))
-    .all();
-
+  const rows = await getPostgresRecruitmentStatsRows(env, [...postByUid.keys()]);
   return new Map(
     rows.flatMap((row) => {
-      const commentPostUid = row.commentPostUid;
-      const post = commentPostUid ? postByUid.get(commentPostUid) : null;
-      if (!post?.author || post.author.id !== row.userId) {
-        return [];
-      }
+      const post = row.commentPostUid ? postByUid.get(row.commentPostUid) : null;
+      if (!post?.author || post.author.id !== row.userId) return [];
 
       const recruitedStudents = parseRecruitmentResultStudents(row.recruitedStudents);
       const subjectContentUid = post.subjectContentUid;
@@ -99,7 +74,6 @@ export async function getRecruitmentFeedStatsByPostUid(
           group,
         },
       );
-
       return [
         [
           post.uid,

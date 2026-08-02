@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { nanoid } from "nanoid/non-secure";
 import { nowUtcIso } from "~/lib/date-time";
@@ -52,10 +52,7 @@ function toModel(tag: typeof studentGradingTagsTable.$inferSelect): StudentGradi
 
 export async function getGradingTags(env: Env, gradingUid: string): Promise<StudentGradingTag[]> {
   const db = drizzle(env.DB);
-  const tags = await db
-    .select()
-    .from(studentGradingTagsTable)
-    .where(eq(studentGradingTagsTable.postUid, gradingUid));
+  const tags = await db.select().from(studentGradingTagsTable).where(eq(studentGradingTagsTable.postUid, gradingUid));
   return tags.map(toModel);
 }
 
@@ -117,6 +114,11 @@ export async function updateGradingTags(
   studentUid: string,
   tagValues: StudentGradingTagValue[],
 ): Promise<void> {
+  const invalidTags = tagValues.filter((tag) => !ALL_STUDENT_GRADING_TAG_VALUES.includes(tag));
+  if (invalidTags.length > 0) {
+    throw new Error(`Invalid tags: ${invalidTags.join(", ")}`);
+  }
+
   const db = drizzle(env.DB);
   await db.delete(studentGradingTagsTable).where(eq(studentGradingTagsTable.postUid, gradingUid));
   await createGradingTags(env, gradingUid, studentUid, tagValues);

@@ -42,7 +42,7 @@ import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
-import { deleteCommunityPostByUid } from "~/models/community";
+import { deleteCommunityPostByUid } from "~/models/community.server";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getSenseiById, isSenseiProfileVisibleTo } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";

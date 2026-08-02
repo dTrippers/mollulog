@@ -48,6 +48,7 @@
     ]
   },
   "vars": {
+    "COMMUNITY_SOURCE_MODE": "d1",
     "STAGE": "local"
   },
 
@@ -62,6 +63,7 @@
         "crons": []
       },
       "vars": {
+        "COMMUNITY_SOURCE_MODE": "d1",
         "STAGE": "staging"
       },
       "kv_namespaces": [
@@ -89,6 +91,7 @@
     },
     "production": {
       "vars": {
+        "COMMUNITY_SOURCE_MODE": "d1",
         "STAGE": "prod"
       },
       "kv_namespaces": [

@@ -71,6 +71,7 @@
     ]
   },
   "vars": {
+    "COMMUNITY_SOURCE_MODE": "d1",
     "CONNECT_API_URL": "http://localhost:8787",
     "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-dev"
   },
@@ -97,6 +98,7 @@
         }
       ],
       "vars": {
+        "COMMUNITY_SOURCE_MODE": "d1",
         "HOST": "https://staging.mollulog.net",
         "CONNECT_API_URL": "https://connect-staging.mollulog.net",
         "STAGE": "staging",
@@ -146,6 +148,7 @@
         }
       ],
       "vars": {
+        "COMMUNITY_SOURCE_MODE": "d1",
         "HOST": "https://mollulog.net",
         "CONNECT_API_URL": "https://connect.mollulog.net",
         "STAGE": "prod",

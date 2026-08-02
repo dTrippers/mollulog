@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import type { CommunityFeedPost } from "~/models/community";
 import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
-import { getGradingTagsByGradingUids } from "~/models/student-grading-tag";
+import { getGradingTagsByGradingUids } from "~/models/student-grading-tag.server";
 import { getTimelineContentsByUids } from "~/models/timeline-content.server";
 import { enrichCommunityFeedPosts } from "~/views/community.server";
 
@@ -10,7 +10,7 @@ jest.mock("~/models/student", () => ({
   getAllStudentsMap: jest.fn(),
 }));
 
-jest.mock("~/models/student-grading-tag", () => ({
+jest.mock("~/models/student-grading-tag.server", () => ({
   getGradingTagsByGradingUids: jest.fn(),
 }));
 
@@ -111,7 +111,7 @@ const mockedGetRecruitmentGroupsByUids = getRecruitmentGroupsByUids as unknown a
 >;
 
 function createEnv(db: FakeCommunityFeedD1Database): Env {
-  return { DB: db } as unknown as Env;
+  return { COMMUNITY_SOURCE_MODE: "d1", DB: db } as unknown as Env;
 }
 
 function createRecruitmentResultPost(): CommunityFeedPost {

@@ -13,7 +13,7 @@ import {
   removeRecruitedStudentFromResult,
   setRecruitmentResultCompletion,
   upsertRecruitmentResult,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { getFutureContents } from "~/views/futures";
 
 export type ActionData =

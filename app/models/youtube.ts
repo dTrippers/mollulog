@@ -4,7 +4,8 @@ import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
 import { getLogger } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
-import { type CommunityFeedPost, getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community";
+import type { CommunityFeedPost } from "~/models/community";
+import { getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community.server";
 
 const YOUTUBE_CHANNELS = [
   {
@@ -59,10 +60,7 @@ export type HomeYoutubeChannelSection = {
   videos: HomeYoutubeVideo[];
 };
 
-export async function getHomeYoutubeSections(
-  env: Env,
-  ctx?: ExecutionContext,
-): Promise<HomeYoutubeChannelSection[]> {
+export async function getHomeYoutubeSections(env: Env, ctx?: ExecutionContext): Promise<HomeYoutubeChannelSection[]> {
   const page = await getCommunityFeedPage(env, {
     postTypes: ["youtube_video"],
     pageSize: 8,
@@ -143,18 +141,13 @@ async function getChannelVideos(channelId: string): Promise<HomeYoutubeVideo[]> 
     throw new Error(`failed to fetch youtube feed: ${channelId} (${response.status} ${response.statusText})`);
   }
 
-  const xml = await readBodyWithTimeout(
-    () => response.text(),
-    YOUTUBE_FEED_BODY_TIMEOUT_MS,
-    "youtube.feed.body",
-    { channelId },
-  );
+  const xml = await readBodyWithTimeout(() => response.text(), YOUTUBE_FEED_BODY_TIMEOUT_MS, "youtube.feed.body", {
+    channelId,
+  });
   const parsed = parseYoutubeFeed(xml, channelId);
   const entries = normalizeEntries(parsed.feed?.entry);
 
-  return entries
-    .map((entry) => parseEntry(entry))
-    .filter((entry): entry is HomeYoutubeVideo => entry !== null);
+  return entries.map((entry) => parseEntry(entry)).filter((entry): entry is HomeYoutubeVideo => entry !== null);
 }
 
 function toHomeYoutubeVideo(post: CommunityFeedPost): (HomeYoutubeVideo & { channelKey: YoutubeChannelKey }) | null {
@@ -163,11 +156,7 @@ function toHomeYoutubeVideo(post: CommunityFeedPost): (HomeYoutubeVideo & { chan
   const thumbnailUrl = post.sourceMetadata.thumbnailUrl;
   const isShorts = post.sourceMetadata.isShorts;
 
-  if (
-    !youtubeBlock ||
-    (channelKey !== "jp" && channelKey !== "kr") ||
-    typeof thumbnailUrl !== "string"
-  ) {
+  if (!youtubeBlock || (channelKey !== "jp" && channelKey !== "kr") || typeof thumbnailUrl !== "string") {
     return null;
   }
 

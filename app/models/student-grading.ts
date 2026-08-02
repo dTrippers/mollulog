@@ -13,12 +13,7 @@ import {
 } from "./community";
 import { senseiProfileVisibilityFilter, senseisTable } from "./sensei";
 import type { StudentGradingTagValue } from "./student-grading-tag";
-import {
-  getGradingTags,
-  getGradingTagsByGradingUids,
-  studentGradingTagsTable,
-  updateGradingTags,
-} from "./student-grading-tag";
+import { getGradingTags, getGradingTagsByGradingUids, updateGradingTags } from "./student-grading-tag";
 
 export const studentGradingsTable = communityPostsTable;
 

@@ -22,13 +22,14 @@ import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
-import { type ContentCommentSummary, getContentsCommentSummaries, type NestedComment } from "~/models/content";
+import type { ContentCommentSummary, NestedComment } from "~/models/content";
 import type { EventType, RaidType } from "~/models/content.d";
+import { getContentsCommentSummaries } from "~/models/content.server";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import {
   getRecruitmentResultsByRecruitmentGroupUids,
   type RecruitmentCompletionMeta,
-} from "~/models/recruitment-result";
+} from "~/models/recruitment-result.server";
 import { type FutureContent, getFutureContents } from "~/views/futures";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";

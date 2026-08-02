@@ -202,7 +202,7 @@ class FakeContentCommentD1Database {
 function createEnv(db = new FakeContentCommentD1Database()): { db: FakeContentCommentD1Database; env: Env } {
   return {
     db,
-    env: { DB: db } as unknown as Env,
+    env: { DB: db, COMMUNITY_SOURCE_MODE: "d1" } as unknown as Env,
   };
 }
 

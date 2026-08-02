@@ -440,7 +440,7 @@ function createKvCache() {
 }
 
 function createEnv(db: FakeCommunityD1Database): Env {
-  return { DB: db, KV_CACHE: createKvCache() } as unknown as Env;
+  return { DB: db, KV_CACHE: createKvCache(), COMMUNITY_SOURCE_MODE: "d1" } as unknown as Env;
 }
 
 describe("community model feed queries", () => {

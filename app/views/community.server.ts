@@ -5,10 +5,10 @@ import {
   type CommunityFeedStatsRecruitmentGroup,
   type CommunityFeedStatsTimelineContent,
   getRecruitmentFeedStatsByPostUid,
-} from "~/models/community-feed";
+} from "~/models/community-feed.server";
 import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
-import { getGradingTagsByGradingUids } from "~/models/student-grading-tag";
+import { getGradingTagsByGradingUids } from "~/models/student-grading-tag.server";
 import { getTimelineContentsByUids } from "~/models/timeline-content.server";
 import type { EnrichedCommunityFeedPost } from "~/views/community";
 

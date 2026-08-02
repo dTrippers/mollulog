@@ -6,7 +6,7 @@ import {
   deleteCommunityComment,
   getNestedCommunityComments,
   updateCommunityComment,
-} from "~/models/community";
+} from "~/models/community.server";
 import type { CommunityPostCommentsChangedActionResult } from "~/models/community-engagement";
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {

@@ -170,30 +170,6 @@ export const communityPostTagsTable = sqliteTable("community_post_tags", {
   createdAt: text().notNull().default(sql`current_timestamp`),
 });
 
-type CommunityPostRow = {
-  id: number;
-  uid: string;
-  userId: number;
-  postType: CommunityPostType;
-  origin: CommunityPostOrigin;
-  title: string | null;
-  visibility: CommunityVisibility;
-  pinned: number;
-  subjectStudentUid: string | null;
-  subjectContentUid: string | null;
-  subjectRaidType: string | null;
-  subjectSeasonIndex: number | null;
-  blocks: string;
-  sourceName: string | null;
-  sourceUrl: string | null;
-  sourceMetadata: string;
-  displayAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  username: string | null;
-  profileStudentId: string | null;
-};
-
 type CommunityCommentRow = {
   id: number;
   uid: string;
@@ -468,6 +444,19 @@ export async function getCommunityFeedPage(
   env: Env,
   options: CommunityFeedPageOptions = {},
 ): Promise<CommunityFeedPageResult> {
+  return getCommunityFeedPageWithCache(env, options, loadCommunityFeedPage);
+}
+
+/**
+ * Applies the shared anonymous first-page KV cache to any community feed
+ * source. The loader is injected so D1 and PostgreSQL keep the same cache
+ * eligibility, key, freshness, stale-while-revalidate, and TTL behavior.
+ */
+export async function getCommunityFeedPageWithCache(
+  env: Env,
+  options: CommunityFeedPageOptions = {},
+  loader: (env: Env, options: CommunityFeedPageOptions) => Promise<CommunityFeedPageResult> = loadCommunityFeedPage,
+): Promise<CommunityFeedPageResult> {
   const page = Math.max(1, options.page ?? 1);
 
   // Cache only anonymous, first-page results. Anonymous keeps the query
@@ -476,7 +465,7 @@ export async function getCommunityFeedPage(
   // deeper pages stay uncached, so adjacent pages never come from snapshots taken
   // up to a full TTL apart. Page 1 carries nearly all feed traffic anyway.
   if (options.currentUserId || page > 1) {
-    return loadCommunityFeedPage(env, options);
+    return loader(env, options);
   }
 
   const sessionEnv = withD1Session(env, "first-unconstrained");
@@ -495,19 +484,12 @@ export async function getCommunityFeedPage(
     }),
   );
 
-  return fetchCached(
-    env,
-    feedCacheKey,
-    () => loadCommunityFeedPage(sessionEnv, options),
-    COMMUNITY_FEED_CACHE_FRESH_TTL,
-    false,
-    {
-      ctx: options.ctx,
-      maxStaleTtl: COMMUNITY_FEED_CACHE_MAX_STALE_TTL,
-      mode: "route",
-      swr: true,
-    },
-  );
+  return fetchCached(env, feedCacheKey, () => loader(sessionEnv, options), COMMUNITY_FEED_CACHE_FRESH_TTL, false, {
+    ctx: options.ctx,
+    maxStaleTtl: COMMUNITY_FEED_CACHE_MAX_STALE_TTL,
+    mode: "route",
+    swr: true,
+  });
 }
 
 async function loadCommunityFeedPage(

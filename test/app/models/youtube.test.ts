@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
-import { getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community";
+import { getCommunityFeedPage, upsertYoutubeVideoCommunityPost } from "~/models/community.server";
 import { fetchYoutubeFeedVideos, getHomeYoutubeSections, syncYoutubeCommunityPosts } from "~/models/youtube";
 
-jest.mock("~/models/community", () => ({
+jest.mock("~/models/community.server", () => ({
   getCommunityFeedPage: jest.fn(),
   upsertYoutubeVideoCommunityPost: jest.fn(),
 }));
