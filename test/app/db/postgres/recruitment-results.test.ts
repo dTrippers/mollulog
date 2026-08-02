@@ -6,7 +6,11 @@ jest.mock("~/models/recruited-student", () => ({
   upsertRecruitedStudentFromRecruitmentResult: projection,
 }));
 
-import { upsertPostgresRecruitmentResult } from "~/db/postgres/recruitment-results";
+import {
+  addPostgresRecruitedStudentToResult,
+  removePostgresRecruitedStudentFromResult,
+  upsertPostgresRecruitmentResult,
+} from "~/db/postgres/recruitment-results";
 
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as unknown as Env;
 
@@ -122,4 +126,82 @@ it("surfaces projection failure after commit and retries the same linked result 
     commentPostUid: "post-1",
   });
   expect(events.filter((event) => event.includes('insert into "community_posts"'))).toHaveLength(0);
+});
+
+it("projects only the added student while preserving the committed result", async () => {
+  const existingResultRow = [
+    1,
+    "result-1",
+    10,
+    "group-1",
+    "content-1",
+    new Date("2026-08-01T00:00:00.000Z"),
+    [{ studentUid: "student-1", tier: 3, pickup: true }],
+    [{ studentUid: "exchange-1", tier: 2, pickup: false }],
+    null,
+    null,
+    null,
+    null,
+    new Date("2026-08-01T00:00:00.000Z"),
+    new Date("2026-08-01T00:00:00.000Z"),
+  ];
+  const query = jest.fn(async (config: { text: string } | string) => {
+    const text = typeof config === "string" ? config : config.text;
+    if (text.includes('from "recruitment_results"')) return { rows: [existingResultRow], rowCount: 1 };
+    return { rows: [], rowCount: 0 };
+  });
+  const client = {
+    connect: jest.fn(async () => undefined),
+    end: jest.fn(async () => undefined),
+    query,
+  } as unknown as Client;
+  projection.mockClear();
+  projection.mockResolvedValue(undefined);
+
+  await addPostgresRecruitedStudentToResult(
+    env,
+    10,
+    { recruitmentGroupUid: "group-1", studentUid: "student-2", tier: 4 },
+    { createClient: () => client },
+  );
+
+  expect(projection).toHaveBeenCalledTimes(1);
+  expect(projection).toHaveBeenCalledWith(env, 10, "student-2", 4);
+});
+
+it("does not project when removing a student", async () => {
+  const existingResultRow = [
+    1,
+    "result-1",
+    10,
+    "group-1",
+    "content-1",
+    new Date("2026-08-01T00:00:00.000Z"),
+    [{ studentUid: "student-1", tier: 3, pickup: true }],
+    [{ studentUid: "exchange-1", tier: 2, pickup: false }],
+    null,
+    null,
+    null,
+    null,
+    new Date("2026-08-01T00:00:00.000Z"),
+    new Date("2026-08-01T00:00:00.000Z"),
+  ];
+  const query = jest.fn(async (config: { text: string } | string) => {
+    const text = typeof config === "string" ? config : config.text;
+    if (text.includes('from "recruitment_results"')) return { rows: [existingResultRow], rowCount: 1 };
+    return { rows: [], rowCount: 0 };
+  });
+  const client = {
+    connect: jest.fn(async () => undefined),
+    end: jest.fn(async () => undefined),
+    query,
+  } as unknown as Client;
+  projection.mockClear();
+  projection.mockResolvedValue(undefined);
+
+  await expect(
+    removePostgresRecruitedStudentFromResult(env, 10, "group-1", "student-1", { createClient: () => client }),
+  ).resolves.toBeTruthy();
+
+  expect(projection).not.toHaveBeenCalled();
 });

@@ -3,17 +3,30 @@ import type { Client } from "pg";
 
 jest.mock("~/db/postgres/community-authors", () => ({
   getCommunityAuthorsByIds: jest.fn(),
+  getCommunityAuthorIdByUsername: jest.fn(),
 }));
+jest.mock("~/lib/postgres.server", () => {
+  const actual = jest.requireActual<typeof import("~/lib/postgres.server")>("~/lib/postgres.server");
+  return { ...actual, createPostgresClient: jest.fn() };
+});
 
 import {
   createPostgresCommunityComment,
+  getPostgresCommunityFeedPage,
   getPostgresContentCommentSummaries,
   getPostgresNestedCommunityComments,
+  getPostgresRecentStudentGradingsPage,
+  getPostgresUserParties,
   setPostgresCommunityPostLike,
 } from "~/db/postgres/community";
-import { getCommunityAuthorsByIds } from "~/db/postgres/community-authors";
+import { getCommunityAuthorIdByUsername, getCommunityAuthorsByIds } from "~/db/postgres/community-authors";
+import { createPostgresClient } from "~/lib/postgres.server";
 
 const getAuthors = getCommunityAuthorsByIds as jest.MockedFunction<typeof getCommunityAuthorsByIds>;
+const getAuthorIdByUsername = getCommunityAuthorIdByUsername as jest.MockedFunction<
+  typeof getCommunityAuthorIdByUsername
+>;
+const createPgClient = createPostgresClient as jest.MockedFunction<typeof createPostgresClient>;
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as unknown as Env;
 
 function createClient(rowsFor: (text: string, values: unknown[]) => unknown[][] | { rows: unknown[] }) {
@@ -66,6 +79,51 @@ function parentCommentRow({
   visibility?: string;
 }): unknown[] {
   return [uid, postUid, parentUid, userId, visibility];
+}
+
+function communityPostRow({
+  id = 1,
+  uid = `post-${id}`,
+  userId = 1,
+  postType = "student_review",
+  origin = "user",
+  visibility = "public",
+  blocks = [{ type: "plaintext", text: "comment" }],
+}: {
+  id?: number;
+  uid?: string;
+  userId?: number;
+  postType?: string;
+  origin?: string;
+  visibility?: string;
+  blocks?: unknown[];
+} = {}): unknown[] {
+  const now = new Date("2026-08-01T00:00:00.000Z");
+  return [
+    id,
+    uid,
+    userId,
+    postType,
+    origin,
+    null,
+    visibility,
+    false,
+    "student-1",
+    null,
+    null,
+    null,
+    blocks,
+    null,
+    null,
+    null,
+    null,
+    null,
+    {},
+    null,
+    now,
+    now,
+    now,
+  ];
 }
 
 function authors(...values: Array<[number, "public" | "private"]>) {
@@ -188,5 +246,106 @@ describe("PostgreSQL community repository", () => {
     expect(query.mock.calls[0][0].text).toContain("GROUP BY content_uid");
     expect(query.mock.calls[1][0].text).toContain("p.pinned = TRUE");
     expect(query.mock.calls[1][0].text).not.toContain("WITH visible_posts");
+  });
+
+  it("resolves feed authors before PostgreSQL count/page queries and preserves curated rows", async () => {
+    getAuthors.mockReset();
+    getAuthors.mockResolvedValue(authors([1, "public"], [2, "private"]));
+    const { client, query } = createClient((text) => {
+      if (text.includes("select distinct")) return [[1], [2], [3]];
+      if (text.includes("count(*)")) return [[2]];
+      if (text.includes('from "community_posts"')) {
+        return [communityPostRow({ id: 3, uid: "curated-3", userId: 3, origin: "curated" })];
+      }
+      return [];
+    });
+    createPgClient.mockReturnValue(client);
+
+    await expect(
+      getPostgresCommunityFeedPage(env, { page: 99, pageSize: 1, includeEngagement: false }),
+    ).resolves.toMatchObject({
+      page: 2,
+      pageSize: 1,
+      totalCount: 2,
+      totalPages: 2,
+      items: [{ uid: "curated-3" }],
+    });
+
+    const calls = query.mock.calls.map(([config, values]) => ({ text: config.text, values }));
+    const candidateIndex = calls.findIndex(({ text }) => text.includes("select distinct"));
+    const countIndex = calls.findIndex(({ text }) => text.includes("count(*)"));
+    const rowsIndex = calls.findIndex(
+      ({ text }) => text.includes('from "community_posts"') && text.toLowerCase().includes("limit"),
+    );
+    expect(candidateIndex).toBeGreaterThanOrEqual(0);
+    expect(countIndex).toBeGreaterThan(candidateIndex);
+    expect(rowsIndex).toBeGreaterThan(countIndex);
+    expect(calls[candidateIndex].text).toContain('"user_id"');
+    expect(calls[candidateIndex].text).not.toContain('"blocks"');
+    expect(calls[countIndex].text).toContain('"origin"');
+    expect(calls[countIndex].values).toContain(1);
+    expect(calls[countIndex].values).not.toContain(2);
+    expect(calls[countIndex].values).not.toContain(3);
+    expect(calls[rowsIndex].text.toLowerCase()).toContain("limit");
+    expect(calls[rowsIndex].text.toLowerCase()).toContain("offset");
+    expect(getAuthors).toHaveBeenCalledWith(env, [1, 2, 3]);
+  });
+
+  it("loads recent grading tags only after the PostgreSQL page query", async () => {
+    getAuthors.mockResolvedValue(authors([1, "public"], [2, "public"], [3, "public"]));
+    const { client, query } = createClient((text) => {
+      if (text.includes("select distinct")) return [[1], [2], [3]];
+      if (text.includes("count(*)")) return [[3]];
+      if (text.includes('from "community_post_tags"')) {
+        return [[1, "tag-1", "grading-2", "student-1", "helpful", new Date("2026-08-01T00:00:00.000Z")]];
+      }
+      if (text.includes('from "community_posts"')) {
+        return [communityPostRow({ id: 2, uid: "grading-2", userId: 2 })];
+      }
+      return [];
+    });
+
+    await expect(
+      getPostgresRecentStudentGradingsPage(env, 2, 1, true, undefined, { createClient: () => client }),
+    ).resolves.toMatchObject({
+      totalCount: 3,
+      totalPages: 3,
+      page: 2,
+      items: [{ uid: "grading-2", tags: ["helpful"] }],
+    });
+
+    const calls = query.mock.calls.map(([config]) => config.text);
+    const rowsIndex = calls.findIndex(
+      (text) => text.includes('from "community_posts"') && text.toLowerCase().includes("limit"),
+    );
+    const tagsIndex = calls.findIndex((text) => text.includes('from "community_post_tags"'));
+    expect(rowsIndex).toBeGreaterThanOrEqual(0);
+    expect(tagsIndex).toBeGreaterThan(rowsIndex);
+    expect(calls.filter((text) => text.includes('from "community_post_tags"'))).toHaveLength(1);
+  });
+
+  it("resolves a party username before querying PostgreSQL guides", async () => {
+    getAuthors.mockClear();
+    getAuthorIdByUsername.mockResolvedValue(42);
+    const { client, query } = createClient((text) => {
+      if (text.includes('from "community_posts"')) {
+        return [
+          communityPostRow({
+            id: 1,
+            uid: "party-1",
+            userId: 42,
+            postType: "guide",
+            blocks: [{ type: "party_info", units: [["student-1"]], title: "party" }],
+          }),
+        ];
+      }
+      return [];
+    });
+
+    await expect(getPostgresUserParties(env, "sensei", false, { createClient: () => client })).resolves.toHaveLength(1);
+    expect(getAuthorIdByUsername).toHaveBeenCalledWith(env, "sensei");
+    const postQuery = query.mock.calls.find(([config]) => config.text.includes('from "community_posts"'))?.[0];
+    expect(postQuery?.text).toContain('"user_id"');
+    expect(getAuthors).not.toHaveBeenCalled();
   });
 });

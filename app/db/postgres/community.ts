@@ -1,7 +1,11 @@
 import { and, asc, count, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { type CommunityAuthor, getCommunityAuthorsByIds } from "~/db/postgres/community-authors";
+import {
+  type CommunityAuthor,
+  getCommunityAuthorIdByUsername,
+  getCommunityAuthorsByIds,
+} from "~/db/postgres/community-authors";
 import {
   pgCommunityCommentsTable,
   pgCommunityPostLikesTable,
@@ -157,6 +161,43 @@ async function loadAuthors(env: Env, rows: readonly { userId: number }[]): Promi
   );
 }
 
+async function loadAllowedAuthorIds(
+  env: Env,
+  filters: SQL[],
+  viewerUserId: number | null | undefined,
+  queryName: string,
+  options: PostgresCommunityOptions,
+): Promise<{ authors: Map<number, CommunityAuthor>; allowedAuthorIds: number[] }> {
+  const candidateRows = await withCommunityDatabase(
+    env,
+    queryName,
+    (db) =>
+      db
+        .selectDistinct({ userId: pgCommunityPostsTable.userId })
+        .from(pgCommunityPostsTable)
+        .where(and(...filters)),
+    options,
+  );
+  const authors = await getCommunityAuthorsByIds(
+    env,
+    candidateRows.map((row) => row.userId),
+  );
+  return {
+    authors,
+    allowedAuthorIds: [...authors.values()]
+      .filter((author) => authorVisible(author, viewerUserId))
+      .map((author) => author.id),
+  };
+}
+
+function allowedAuthorFilter(allowedAuthorIds: readonly number[], includeCurated: boolean): SQL {
+  const allowedAuthorCondition = allowedAuthorIds.length
+    ? inArray(pgCommunityPostsTable.userId, [...new Set(allowedAuthorIds)])
+    : sql`FALSE`;
+  if (!includeCurated) return allowedAuthorCondition;
+  return or(eq(pgCommunityPostsTable.origin, "curated"), allowedAuthorCondition) ?? allowedAuthorCondition;
+}
+
 async function loadEngagement(
   env: Env,
   postUids: string[],
@@ -197,25 +238,44 @@ export async function getPostgresCommunityFeedPage(
     );
   }
 
-  const rows = await withCommunityDatabase(env, "feed_rows", (db) =>
-    db
-      .select()
-      .from(pgCommunityPostsTable)
-      .where(and(...filters))
-      .orderBy(
-        desc(sql`coalesce(${pgCommunityPostsTable.displayAt}, ${pgCommunityPostsTable.createdAt})`),
-        desc(pgCommunityPostsTable.id),
-      ),
+  const { authors, allowedAuthorIds } = await loadAllowedAuthorIds(
+    env,
+    filters,
+    options.currentUserId,
+    "feed_author_ids",
+    options,
   );
-  const authors = await loadAuthors(env, rows);
-  const visibleRows = rows.filter(
-    (row) => row.origin === "curated" || authorVisible(authors.get(row.userId), options.currentUserId),
+  const visibleFilters = [...filters, allowedAuthorFilter(allowedAuthorIds, true)];
+  const [{ totalCount: rawTotalCount }] = await withCommunityDatabase(
+    env,
+    "feed_count",
+    (db) =>
+      db
+        .select({ totalCount: count() })
+        .from(pgCommunityPostsTable)
+        .where(and(...visibleFilters)),
+    options,
   );
-  const totalCount = visibleRows.length;
+  const totalCount = Number(rawTotalCount);
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, totalPages);
   const offset = (currentPage - 1) * pageSize;
-  const pageRows = visibleRows.slice(offset, offset + pageSize);
+  const pageRows = await withCommunityDatabase(
+    env,
+    "feed_rows",
+    (db) =>
+      db
+        .select()
+        .from(pgCommunityPostsTable)
+        .where(and(...visibleFilters))
+        .orderBy(
+          desc(sql`coalesce(${pgCommunityPostsTable.displayAt}, ${pgCommunityPostsTable.createdAt})`),
+          desc(pgCommunityPostsTable.id),
+        )
+        .limit(pageSize)
+        .offset(offset),
+    options,
+  );
   const engagement =
     options.includeEngagement === false
       ? { comments: {}, likes: {}, liked: new Set<string>() }
@@ -1110,6 +1170,9 @@ export async function getPostgresUserParties(
   includePrivate = false,
   options: PostgresCommunityOptions = {},
 ): Promise<Party[]> {
+  const userId = await getCommunityAuthorIdByUsername(env, username);
+  if (userId === null) return [];
+
   const rows = await withCommunityDatabase(
     env,
     "user_parties",
@@ -1120,6 +1183,7 @@ export async function getPostgresUserParties(
         .where(
           and(
             eq(pgCommunityPostsTable.postType, "guide"),
+            eq(pgCommunityPostsTable.userId, userId),
             includePrivate
               ? undefined
               : inArray(pgCommunityPostsTable.visibility, ["public", "unlisted"] as CommunityVisibility[]),
@@ -1127,8 +1191,7 @@ export async function getPostgresUserParties(
         ),
     options,
   );
-  const authors = await loadAuthors(env, rows);
-  return rows.filter((row) => authors.get(row.userId)?.username === username).map((row) => toParty(row));
+  return rows.map((row) => toParty(row));
 }
 
 function toParty(row: CommunityPostRow, author?: CommunityAuthor): Party {
@@ -1302,6 +1365,30 @@ export async function getPostgresRecentStudentGradingsPage(
   viewerUserId?: number,
   options: PostgresCommunityOptions = {},
 ): Promise<StudentGradingPageWithUser> {
+  const safePage = Math.max(1, page);
+  const safePageSize = Math.max(1, pageSize);
+  const filters = [eq(pgCommunityPostsTable.postType, "student_review")] satisfies SQL[];
+  const { authors, allowedAuthorIds } = await loadAllowedAuthorIds(
+    env,
+    filters,
+    viewerUserId,
+    "recent_grading_author_ids",
+    options,
+  );
+  const visibleFilters = [...filters, allowedAuthorFilter(allowedAuthorIds, false)];
+  const [{ totalCount: rawTotalCount }] = await withCommunityDatabase(
+    env,
+    "recent_gradings_count",
+    (db) =>
+      db
+        .select({ totalCount: count() })
+        .from(pgCommunityPostsTable)
+        .where(and(...visibleFilters)),
+    options,
+  );
+  const totalCount = Number(rawTotalCount);
+  const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
+  const currentPage = Math.min(safePage, totalPages);
   const rows = await withCommunityDatabase(
     env,
     "recent_gradings",
@@ -1309,46 +1396,39 @@ export async function getPostgresRecentStudentGradingsPage(
       db
         .select()
         .from(pgCommunityPostsTable)
-        .where(eq(pgCommunityPostsTable.postType, "student_review"))
+        .where(and(...visibleFilters))
         .orderBy(
           desc(pgCommunityPostsTable.updatedAt),
           desc(pgCommunityPostsTable.createdAt),
           desc(pgCommunityPostsTable.id),
-        ),
+        )
+        .limit(safePageSize)
+        .offset((currentPage - 1) * safePageSize),
     options,
   );
-  const authors = await loadAuthors(env, rows);
-  const visible = rows.filter((row) => authorVisible(authors.get(row.userId), viewerUserId));
-  const totalCount = visible.length;
-  const safePage = Math.max(1, page);
-  const safePageSize = Math.max(1, pageSize);
-  const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
-  const currentPage = Math.min(safePage, totalPages);
   const tags = includeTags
     ? await getPostgresGradingTagsByUids(
         env,
-        visible.map((row) => row.uid),
+        rows.map((row) => row.uid),
         options,
       )
     : {};
-  const items: StudentGradingWithUser[] = visible
-    .slice((currentPage - 1) * safePageSize, currentPage * safePageSize)
-    .flatMap((row) => {
-      const author = authors.get(row.userId);
-      if (!author) return [];
-      return [
-        {
-          uid: row.uid,
-          studentUid: row.subjectStudentUid ?? "",
-          comment:
-            toBlocks(row.blocks).find((block) => block.type === "plaintext" || block.type === "markdown")?.text ?? null,
-          createdAt: requireUtc(row.createdAt, "community_posts.created_at"),
-          updatedAt: requireUtc(row.updatedAt, "community_posts.updated_at"),
-          user: { username: author.username, profileStudentId: author.profileStudentId },
-          ...(includeTags ? { tags: (tags[row.uid] ?? []).map((tag) => tag.tagValue) } : {}),
-        },
-      ];
-    });
+  const items: StudentGradingWithUser[] = rows.flatMap((row) => {
+    const author = authors.get(row.userId);
+    if (!author) return [];
+    return [
+      {
+        uid: row.uid,
+        studentUid: row.subjectStudentUid ?? "",
+        comment:
+          toBlocks(row.blocks).find((block) => block.type === "plaintext" || block.type === "markdown")?.text ?? null,
+        createdAt: requireUtc(row.createdAt, "community_posts.created_at"),
+        updatedAt: requireUtc(row.updatedAt, "community_posts.updated_at"),
+        user: { username: author.username, profileStudentId: author.profileStudentId },
+        ...(includeTags ? { tags: (tags[row.uid] ?? []).map((tag) => tag.tagValue) } : {}),
+      },
+    ];
+  });
   return { items, page: currentPage, pageSize: safePageSize, totalCount, totalPages };
 }
 

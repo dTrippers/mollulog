@@ -92,6 +92,11 @@ async function withRecruitmentDatabase<T>(
   );
 }
 
+/**
+ * Temporary migration bridge: PostgreSQL recruitment results still project
+ * additive student identities into D1 recruited_students. Remove this bridge
+ * when recruited_students moves to PostgreSQL.
+ */
 async function syncRecruitedStudents(env: Env, userId: number, students: RecruitmentResultStudent[]) {
   await Promise.all(
     students.map((student) =>
@@ -282,6 +287,7 @@ async function upsertResultAndComment(
   userId: number,
   input: UpsertRecruitmentResultInput,
   options: PostgresRecruitmentResultOptions,
+  projectionOverride?: RecruitmentResultStudent[],
 ): Promise<{ result: RecruitmentResult; projection: RecruitmentResultStudent[] }> {
   const now = nowUtcIso();
   return withPostgresClient(
@@ -311,7 +317,9 @@ async function upsertResultAndComment(
         const existingRow = byUid ?? byGroup;
         const existing = existingRow ? toModel(existingRow) : null;
         const state = chooseState(existing, input, now);
-        projection = normalizeRecruitmentResultStudents([...state.recruitedStudents, ...state.exchangedStudents]);
+        projection =
+          projectionOverride ??
+          normalizeRecruitmentResultStudents([...state.recruitedStudents, ...state.exchangedStudents]);
         await tx
           .insert(pgRecruitmentResultsTable)
           .values({
@@ -457,21 +465,24 @@ export async function addPostgresRecruitedStudentToResult(
     { studentUid: input.studentUid, tier: input.tier ?? 3, pickup: input.pickup ?? true },
   ])[0];
   if (!student) throw new Error("studentUid is required");
-  const result = await upsertPostgresRecruitmentResult(
-    env,
-    userId,
-    {
-      uid: existing?.uid,
-      recruitmentGroupUid: input.recruitmentGroupUid,
-      contentUid: input.contentUid !== undefined ? input.contentUid : existing?.contentUid,
-      recruitedStudents: appendRecruitmentResultStudent(existing?.recruitedStudents, student),
-      exchangedStudents: existing?.exchangedStudents ?? [],
-      tier3Count: existing?.tier3Count,
-      trial: existing?.trial,
-      rawResult: existing?.rawResult,
-    },
-    options,
-  );
+  const result = (
+    await upsertResultAndComment(
+      env,
+      userId,
+      {
+        uid: existing?.uid,
+        recruitmentGroupUid: input.recruitmentGroupUid,
+        contentUid: input.contentUid !== undefined ? input.contentUid : existing?.contentUid,
+        recruitedStudents: appendRecruitmentResultStudent(existing?.recruitedStudents, student),
+        exchangedStudents: existing?.exchangedStudents ?? [],
+        tier3Count: existing?.tier3Count,
+        trial: existing?.trial,
+        rawResult: existing?.rawResult,
+      },
+      options,
+      [student],
+    )
+  ).result;
   return result;
 }
 
@@ -487,22 +498,25 @@ export async function removePostgresRecruitedStudentFromResult(
   if (!existing) return null;
   const recruitedStudents = removeRecruitmentResultStudent(existing.recruitedStudents, studentUid);
   const completedAt = recruitedStudents.length || existing.exchangedStudents.length ? existing.completedAt : null;
-  return upsertPostgresRecruitmentResult(
-    env,
-    userId,
-    {
-      uid: existing.uid,
-      recruitmentGroupUid,
-      contentUid: existing.contentUid,
-      completedAt,
-      recruitedStudents,
-      exchangedStudents: existing.exchangedStudents,
-      tier3Count: existing.tier3Count,
-      trial: existing.trial,
-      rawResult: existing.rawResult,
-    },
-    options,
-  );
+  return (
+    await upsertResultAndComment(
+      env,
+      userId,
+      {
+        uid: existing.uid,
+        recruitmentGroupUid,
+        contentUid: existing.contentUid,
+        completedAt,
+        recruitedStudents,
+        exchangedStudents: existing.exchangedStudents,
+        tier3Count: existing.tier3Count,
+        trial: existing.trial,
+        rawResult: existing.rawResult,
+      },
+      options,
+      [],
+    )
+  ).result;
 }
 
 export async function deletePostgresRecruitmentResult(

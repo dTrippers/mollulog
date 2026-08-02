@@ -1,6 +1,8 @@
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/d1";
 import { senseisTable } from "~/models/sensei";
+
+const COMMUNITY_AUTHOR_ID_BATCH_SIZE = 90;
 
 export type CommunityAuthor = {
   id: number;
@@ -10,9 +12,9 @@ export type CommunityAuthor = {
 };
 
 /**
- * Community tables are PostgreSQL-owned, while identity/profile data remains
- * in D1 for this migration slice. Keep this lookup batched so a feed page does
- * not issue one D1 query per PostgreSQL row.
+ * Temporary migration bridge: community tables are PostgreSQL-owned while
+ * identity/profile data remains in D1. Remove this bridge when senseis moves to
+ * PostgreSQL. Keep each D1 IN expression below the platform parameter limit.
  */
 export async function getCommunityAuthorsByIds(
   env: Pick<Env, "DB">,
@@ -21,15 +23,26 @@ export async function getCommunityAuthorsByIds(
   const uniqueIds = [...new Set(ids)].filter((id) => Number.isInteger(id));
   if (uniqueIds.length === 0) return new Map();
 
-  const rows = await drizzle(env.DB)
-    .select({
-      id: senseisTable.id,
-      username: senseisTable.username,
-      profileStudentId: senseisTable.profileStudentId,
-      profileVisibility: senseisTable.profileVisibility,
-    })
-    .from(senseisTable)
-    .where(inArray(senseisTable.id, uniqueIds));
+  const db = drizzle(env.DB);
+  const rows = (
+    await Promise.all(
+      Array.from({ length: Math.ceil(uniqueIds.length / COMMUNITY_AUTHOR_ID_BATCH_SIZE) }, (_, index) => {
+        const batch = uniqueIds.slice(
+          index * COMMUNITY_AUTHOR_ID_BATCH_SIZE,
+          (index + 1) * COMMUNITY_AUTHOR_ID_BATCH_SIZE,
+        );
+        return db
+          .select({
+            id: senseisTable.id,
+            username: senseisTable.username,
+            profileStudentId: senseisTable.profileStudentId,
+            profileVisibility: senseisTable.profileVisibility,
+          })
+          .from(senseisTable)
+          .where(inArray(senseisTable.id, batch));
+      }),
+    )
+  ).flat();
 
   return new Map(
     rows.map((row) => [
@@ -42,4 +55,18 @@ export async function getCommunityAuthorsByIds(
       },
     ]),
   );
+}
+
+/**
+ * Resolve a username in the temporary D1 senseis bridge before querying
+ * PostgreSQL-owned community rows. Remove this lookup when senseis moves to
+ * PostgreSQL.
+ */
+export async function getCommunityAuthorIdByUsername(env: Pick<Env, "DB">, username: string): Promise<number | null> {
+  const [row] = await drizzle(env.DB)
+    .select({ id: senseisTable.id })
+    .from(senseisTable)
+    .where(eq(senseisTable.username, username))
+    .limit(1);
+  return row?.id ?? null;
 }
