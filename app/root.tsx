@@ -15,7 +15,15 @@ import LoadingBar, { type LoadingBarRef } from "react-top-loading-bar";
 import type { Route } from "./+types/root";
 import { getActiveSensei } from "./auth/authenticator.server";
 import { getPreference } from "./auth/preference.server";
-import { ErrorPage, Footer, NavigationBar, ServerErrorPage } from "./components/features/layout";
+import {
+  ErrorPage,
+  Footer,
+  getPageSiteBannerSlot,
+  NavigationBar,
+  ServerErrorPage,
+  SiteBanner,
+  shouldRenderGlobalSiteBanner,
+} from "./components/features/layout";
 import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
@@ -28,6 +36,7 @@ import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
 import { isGoogleSearchCrawler, isSenseiProfilePath } from "./lib/seo-crawler";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
+import { getSiteBanner } from "./views/site-banner";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
 const themeConfig = {
@@ -57,9 +66,10 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     const sensei = await ctx.tracing.enterSpan("root_auth", () => getActiveSensei(env, request));
     const preference = await ctx.tracing.enterSpan("root_preference", () => getPreference(env, request));
     const publicReadEnv = withD1Session(env, "first-unconstrained");
-    const navigationBarContents = await ctx.tracing.enterSpan("root_nav", () =>
-      getNavigationBarContents(env, false, sensei?.id, ctx, publicReadEnv),
-    );
+    const [navigationBarContents, siteBanner] = await Promise.all([
+      ctx.tracing.enterSpan("root_nav", () => getNavigationBarContents(env, false, sensei?.id, ctx, publicReadEnv)),
+      ctx.tracing.enterSpan("root_site_banner", () => getSiteBanner(publicReadEnv, new Date(), ctx)),
+    ]);
 
     span.setAttribute("signedIn", sensei !== null);
     if (colo) {
@@ -73,6 +83,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       displayTimeZone: normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE),
       favoriteNavigationIds: preference.favoriteNavigationIds ?? [],
       navigationBarContents,
+      siteBanner,
       publicEnv: {
         STAGE: env.STAGE ?? "local",
         FRONT_BETTER_STACK_SENTRY_DSN: env.FRONT_BETTER_STACK_SENTRY_DSN ?? "",
@@ -118,8 +129,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const darkMode = loaderData?.darkMode ?? true;
   const theme = darkMode ? themeConfig.dark : themeConfig.light;
+  const reserveMobileSiteBanner = Boolean(
+    loaderData?.siteBanner && shouldRenderGlobalSiteBanner(loaderData.siteBanner, "mobile_header", location.pathname),
+  );
   return (
-    <html lang="ko" className={darkMode ? "dark" : undefined}>
+    <html
+      lang="ko"
+      className={darkMode ? "dark" : undefined}
+      style={
+        {
+          "--mobile-site-banner-estimated-height": reserveMobileSiteBanner ? "4rem" : "0px",
+        } as React.CSSProperties
+      }
+    >
       <head>
         <meta charSet="utf-8" />
         <meta
@@ -156,7 +178,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const loaderData = useLoaderData<typeof loader>();
-  const { currentUsername, currentProfileStudentId, favoriteNavigationIds, navigationBarContents } = loaderData;
+  const { currentUsername, currentProfileStudentId, favoriteNavigationIds, navigationBarContents, siteBanner } =
+    loaderData;
 
   const [darkMode, setDarkMode] = useState(loaderData.darkMode);
   const [displayTimeZone, setDisplayTimeZone] = useState(loaderData.displayTimeZone);
@@ -207,6 +230,7 @@ export default function App() {
 
   const location = useLocation();
   const pathname = location.pathname;
+  const pageBannerSlot = getPageSiteBannerSlot(pathname, siteBanner);
   const pagePath = `${location.pathname}${location.search}`;
   const analyticsEnabled = loaderData.publicEnv.STAGE === "prod";
   const routeKey = location.key;
@@ -249,11 +273,13 @@ export default function App() {
             hasOngoingRaid={navigationBarContents.hasOngoingRaid}
             hasUnconsumedCoupons={navigationBarContents.hasUnconsumedCoupons}
             hasUnreadFeedbackReplies={navigationBarContents.hasUnreadFeedbackReplies}
+            siteBanner={siteBanner}
           />
           <div className="mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0">
             <div className="mx-auto w-full max-w-7xl px-4 pt-2 pb-6 transition-all duration-300 ease-out has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none motion-reduce:transition-none md:px-8 lg:min-h-screen lg:py-6">
               <TimeZoneProvider timeZone={displayTimeZone}>
                 <StudentCardPopupProvider key={pathname}>
+                  {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
                   <Outlet context={{ darkMode, setDarkMode } satisfies RootOutletContext} />
                 </StudentCardPopupProvider>
               </TimeZoneProvider>

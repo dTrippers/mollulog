@@ -35,6 +35,12 @@ SQL that is not a schema change but a one-off correction, validation, or re-aggr
 - Models handle data access only (CRUD, BAQL reads, source cache, normalization). Pure logic such as scoring or simulation belongs in `app/domain`, and screen composition belongs in `app/views`.
 - Do not extend legacy tables in an area where a new canonical store is already defined.
 
+## Validation boundary
+
+- Do not add database `CHECK` constraints for domain or application validation in D1 or PostgreSQL migrations and Drizzle schemas.
+- Validate allowed values, required combinations, ranges, and other domain rules in the application layer and cover them with tests.
+- Structural declarations such as primary keys, `NOT NULL`, and indexes are not part of this restriction.
+
 ## Drizzle usage
 
 ```ts

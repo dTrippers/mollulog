@@ -2,6 +2,7 @@ import {
   getPostgresLatestPostTime,
   getPostgresNewsPosts,
   getPostgresPostByTimelineContentUid,
+  getPostgresPostByUid,
   getPostgresPosts,
   type PostgresPostsOptions,
 } from "~/db/postgres/posts";
@@ -14,6 +15,10 @@ export function getAllPosts(env: Env, board?: string, options: PostgresPostsOpti
 
 export function getNewsPosts(env: Env, page = 1, pageSize = 5, options: PostgresPostsOptions = {}) {
   return getPostgresNewsPosts(env, page, pageSize, options);
+}
+
+export function getPostByUid(env: Env, uid: string, options: PostgresPostsOptions = {}) {
+  return getPostgresPostByUid(env, uid, options);
 }
 
 export function getPostByTimelineContentUid(env: Env, timelineContentUid: string, options: PostgresPostsOptions = {}) {
