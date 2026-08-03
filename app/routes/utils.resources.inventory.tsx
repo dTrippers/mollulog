@@ -6,6 +6,7 @@ import {
   buildRelationshipGiftResourceRequirements,
   getEquipmentTypeKey,
 } from "~/domain/growth-resource";
+import { buildOcrInventoryCatalogResources, parseOcrInventoryResourceUid } from "~/domain/ocr-resource-identity";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/models/item-catalog";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import {
@@ -40,9 +41,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     getUserResourceInventoryMap(env, currentUser.id),
     getRelationshipLevels(env, currentUser.id),
   ]);
+  const inventoryCatalogResources = buildOcrInventoryCatalogResources(catalogResources);
 
   return {
-    resources: getGrowthPlannerCatalogResources(catalogResources),
+    resources: getGrowthPlannerCatalogResources(inventoryCatalogResources),
     ownedQuantities,
     relationshipGiftRequirements: buildRelationshipGiftResourceRequirements(relationshipLevels, catalogResources),
   };
@@ -65,7 +67,9 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       return data<ActionData>({ error: "저장할 재화가 필요해요" }, { status: 400 });
     }
 
-    const resourceUidSet = new Set((await getItemCatalogResources(env)).map((resource) => resource.uid));
+    const resourceUidSet = new Set(
+      buildOcrInventoryCatalogResources(await getItemCatalogResources(env)).map((resource) => resource.inventoryUid),
+    );
     const ownedQuantities = await getUserResourceInventoryMap(env, currentUser.id);
     const parsedItems = payload.items.map((item) => parseDraftItem(item));
 
@@ -124,5 +128,10 @@ function parseDraftItem(item: unknown): { itemUid: string; quantity: number } {
 }
 
 function isKnownResourceUid(resourceUidSet: Set<string>, itemUid: string): boolean {
-  return resourceUidSet.has(itemUid) || getEquipmentTypeKey(itemUid) !== null;
+  if (resourceUidSet.has(itemUid)) {
+    return true;
+  }
+
+  const { resourceType, sourceUid } = parseOcrInventoryResourceUid(itemUid);
+  return (resourceType === null || resourceType === "equipment") && getEquipmentTypeKey(sourceUid) !== null;
 }

@@ -611,7 +611,7 @@ function CellCandidatePopoverContent({
             className="mb-1 min-w-0 w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           />
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
-          {showingLoading ? <p className="px-2 py-2 text-xs text-muted-foreground">불러오는 중...</p> : null}
+          {showingLoading ? <CandidateChoiceSkeleton /> : null}
           {!showingLoading && !query.trim() && current?.unavailable ? (
             <p className="px-2 py-2 text-xs text-destructive">아이템 정보를 찾을 수 없어요.</p>
           ) : null}
@@ -669,6 +669,23 @@ function CellCandidatePopoverContent({
         </div>
       </PopoverPanel>
     </>
+  );
+}
+
+function CandidateChoiceSkeleton() {
+  return (
+    <div
+      role="status"
+      aria-label="아이템 후보를 불러오는 중"
+      className="flex animate-pulse items-start gap-2.5 rounded-md p-2"
+    >
+      <span className="size-10 shrink-0 rounded-md bg-muted" aria-hidden="true" />
+      <span className="min-w-0 flex-1 space-y-2 py-1" aria-hidden="true">
+        <span className="block h-4 w-2/5 rounded-sm bg-muted" />
+        <span className="block h-3 w-full rounded-sm bg-muted/70" />
+        <span className="block h-3 w-3/4 rounded-sm bg-muted/70" />
+      </span>
+    </div>
   );
 }
 
@@ -752,7 +769,7 @@ export function CellReviewSummaryPreview({
 
 export function CellApplySummaryPanel({ summary }: { summary: CellApplySummary }) {
   return (
-    <section className="space-y-2 rounded-lg border border-border bg-card p-4">
+    <section className="space-y-2 rounded-lg bg-muted/40 p-4">
       <p className="text-sm font-semibold text-foreground">서버 반영 결과</p>
       <p className="text-sm text-muted-foreground">
         변경 반영 {summary.applicableChanged}개 · 변경 없음 {summary.unchangedSafe}개 · 제외 {summary.omitted}개

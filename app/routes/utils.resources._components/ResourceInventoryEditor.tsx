@@ -39,11 +39,14 @@ import {
   getSkillMaterialChoiceBoxRarity,
   getSkillMaterialResourceChoiceBoxUid,
 } from "~/domain/growth-resource";
+import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
 import { cn } from "~/lib/utils";
 import { getGrowthPlannerCatalogResourceKindOrder, type ItemCatalogResource } from "~/models/item-catalog";
 
+type InventoryCatalogResource = ItemCatalogResource & { inventoryUid?: string };
+
 type ResourceInventoryEditorProps = {
-  resources: ItemCatalogResource[];
+  resources: InventoryCatalogResource[];
   requiredResources: AggregatedGrowthResourceRequirements;
   ownedQuantities: Record<string, number>;
   error?: string;
@@ -63,6 +66,7 @@ type ResourceFilter = {
 type NumberInputFlowNavigation = ReturnType<typeof useNumberInputFlowNavigation>;
 
 type InventoryResource = ItemCatalogResource & {
+  inventoryUid?: string;
   requiredAmount: number;
   kindOrder: number;
 };
@@ -121,9 +125,9 @@ export default function ResourceInventoryEditor({
     () =>
       inventoryResources
         .map((resource) => ({
-          itemUid: resource.uid,
-          quantity: draftQuantities[resource.uid] ?? 0,
-          currentQuantity: baseQuantities[resource.uid] ?? 0,
+          itemUid: getInventoryUid(resource),
+          quantity: draftQuantities[getInventoryUid(resource)] ?? 0,
+          currentQuantity: baseQuantities[getInventoryUid(resource)] ?? 0,
         }))
         .filter((item) => item.quantity !== item.currentQuantity),
     [baseQuantities, draftQuantities, inventoryResources],
@@ -426,13 +430,13 @@ function ResourceGroup({
         <div className="flex flex-wrap gap-x-1 gap-y-0 px-3 py-2">
           {resources.map((resource) => (
             <ResourceTile
-              key={resource.uid}
+              key={getInventoryUid(resource)}
               resource={resource}
-              currentQuantity={ownedQuantities[resource.uid] ?? 0}
-              draftQuantity={draftQuantities[resource.uid] ?? 0}
+              currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
+              draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
               showRequiredMetrics={!isCharacterExpGroup}
               inputProps={numberInputFlowNavigation.getInputProps()}
-              onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
+              onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
             />
           ))}
         </div>
@@ -504,14 +508,14 @@ function SkillMaterialSubGroups({
           <div className="flex flex-wrap">
             {choiceBoxResources.map((resource) => (
               <ResourceTile
-                key={resource.uid}
+                key={getInventoryUid(resource)}
                 resource={resource}
-                currentQuantity={ownedQuantities[resource.uid] ?? 0}
-                draftQuantity={draftQuantities[resource.uid] ?? 0}
+                currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
+                draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
                 showRequiredMetrics={false}
-                metrics={choiceBoxAllocation.choiceBoxMetricsByUid.get(resource.uid)}
+                metrics={choiceBoxAllocation.choiceBoxMetricsByUid.get(getInventoryUid(resource))}
                 inputProps={numberInputFlowNavigation.getInputProps()}
-                onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
+                onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
               />
             ))}
           </div>
@@ -524,15 +528,15 @@ function SkillMaterialSubGroups({
               const choiceBoxUid = getSkillMaterialResourceChoiceBoxUid(resource);
               return (
                 <ResourceTile
-                  key={resource.uid}
+                  key={getInventoryUid(resource)}
                   resource={resource}
-                  currentQuantity={ownedQuantities[resource.uid] ?? 0}
-                  draftQuantity={draftQuantities[resource.uid] ?? 0}
+                  currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
+                  draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
                   showRequiredMetrics
                   showRequiredBalance={choiceBoxUid === null}
-                  metrics={choiceBoxAllocation.itemMetricsByUid.get(resource.uid)}
+                  metrics={choiceBoxAllocation.itemMetricsByUid.get(getInventoryUid(resource))}
                   inputProps={numberInputFlowNavigation.getInputProps()}
-                  onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
+                  onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
                 />
               );
             })}
@@ -604,14 +608,14 @@ function EquipmentSubGroups({
           <div className="flex flex-wrap">
             {choiceBoxResources.map((resource) => (
               <ResourceTile
-                key={resource.uid}
+                key={getInventoryUid(resource)}
                 resource={resource}
-                currentQuantity={ownedQuantities[resource.uid] ?? 0}
-                draftQuantity={draftQuantities[resource.uid] ?? 0}
+                currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
+                draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
                 showRequiredMetrics={false}
-                metrics={choiceBoxAllocation.choiceBoxMetricsByUid.get(resource.uid)}
+                metrics={choiceBoxAllocation.choiceBoxMetricsByUid.get(getInventoryUid(resource))}
                 inputProps={numberInputFlowNavigation.getInputProps()}
-                onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
+                onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
               />
             ))}
           </div>
@@ -623,15 +627,15 @@ function EquipmentSubGroups({
           <div className="flex flex-wrap">
             {typeResources.map((resource) => (
               <ResourceTile
-                key={resource.uid}
+                key={getInventoryUid(resource)}
                 resource={resource}
-                currentQuantity={ownedQuantities[resource.uid] ?? 0}
-                draftQuantity={draftQuantities[resource.uid] ?? 0}
+                currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
+                draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
                 showRequiredMetrics
                 showRequiredBalance={false}
-                metrics={choiceBoxAllocation.itemMetricsByUid.get(resource.uid)}
+                metrics={choiceBoxAllocation.itemMetricsByUid.get(getInventoryUid(resource))}
                 inputProps={numberInputFlowNavigation.getInputProps()}
-                onQuantityChange={(quantity) => onQuantityChange(resource.uid, quantity)}
+                onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
               />
             ))}
           </div>
@@ -656,13 +660,16 @@ function allocateSkillMaterialChoiceBoxes(
   const itemMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
 
   for (const choiceBox of choiceBoxResources) {
-    remainingChoiceBoxesByUid.set(choiceBox.uid, Math.max(0, quantities[choiceBox.uid] ?? 0));
+    const choiceBoxUid = getInventoryUid(choiceBox);
+    remainingChoiceBoxesByUid.set(choiceBoxUid, Math.max(0, quantities[choiceBoxUid] ?? 0));
   }
 
   const allocationTargets = skillMaterialResources
     .map((resource) => {
-      const choiceBoxUid = getSkillMaterialResourceChoiceBoxUid(resource);
-      const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
+      const sourceChoiceBoxUid = getSkillMaterialResourceChoiceBoxUid(resource);
+      const choiceBoxUid =
+        sourceChoiceBoxUid === null ? null : findInventoryUidBySourceUid(choiceBoxResources, sourceChoiceBoxUid);
+      const directDeficit = Math.max(0, resource.requiredAmount - (quantities[getInventoryUid(resource)] ?? 0));
       return { resource, choiceBoxUid, directDeficit };
     })
     .filter(
@@ -701,14 +708,15 @@ function allocateSkillMaterialChoiceBoxes(
     }
 
     if (metrics.length > 0) {
-      itemMetricsByUid.set(resource.uid, metrics);
+      itemMetricsByUid.set(getInventoryUid(resource), metrics);
     }
   }
 
   const choiceBoxMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
   for (const choiceBox of choiceBoxResources) {
-    const balance = Math.max(0, quantities[choiceBox.uid] ?? 0) - (totalDeficitByChoiceBoxUid.get(choiceBox.uid) ?? 0);
-    choiceBoxMetricsByUid.set(choiceBox.uid, [
+    const choiceBoxUid = getInventoryUid(choiceBox);
+    const balance = Math.max(0, quantities[choiceBoxUid] ?? 0) - (totalDeficitByChoiceBoxUid.get(choiceBoxUid) ?? 0);
+    choiceBoxMetricsByUid.set(choiceBoxUid, [
       {
         label: balance >= 0 ? "여유" : "부족",
         value: Math.abs(balance).toLocaleString(),
@@ -740,15 +748,17 @@ function allocateEquipmentChoiceBoxes(
   for (const choiceBox of choiceBoxResources) {
     const tier = getEquipmentBlueprintChoiceBoxTier(choiceBox.uid);
     if (tier !== null) {
-      remainingChoiceBoxesByTier.set(tier, Math.max(0, quantities[choiceBox.uid] ?? 0));
+      remainingChoiceBoxesByTier.set(tier, Math.max(0, quantities[getInventoryUid(choiceBox)] ?? 0));
     }
   }
 
   const allocationTargets = equipmentResources
     .map((resource) => {
       const tier = getEquipmentTier(resource.uid);
-      const choiceBoxUid = getEquipmentBlueprintChoiceBoxUid(tier);
-      const directDeficit = Math.max(0, resource.requiredAmount - (quantities[resource.uid] ?? 0));
+      const sourceChoiceBoxUid = getEquipmentBlueprintChoiceBoxUid(tier);
+      const choiceBoxUid =
+        sourceChoiceBoxUid === null ? null : findInventoryUidBySourceUid(choiceBoxResources, sourceChoiceBoxUid);
+      const directDeficit = Math.max(0, resource.requiredAmount - (quantities[getInventoryUid(resource)] ?? 0));
       return { resource, tier, choiceBoxUid, directDeficit };
     })
     .filter(
@@ -787,7 +797,7 @@ function allocateEquipmentChoiceBoxes(
     }
 
     if (metrics.length > 0) {
-      itemMetricsByUid.set(resource.uid, metrics);
+      itemMetricsByUid.set(getInventoryUid(resource), metrics);
     }
   }
 
@@ -798,8 +808,9 @@ function allocateEquipmentChoiceBoxes(
       continue;
     }
 
-    const balance = Math.max(0, quantities[choiceBox.uid] ?? 0) - (totalDeficitByTier.get(tier) ?? 0);
-    choiceBoxMetricsByUid.set(choiceBox.uid, [
+    const choiceBoxUid = getInventoryUid(choiceBox);
+    const balance = Math.max(0, quantities[choiceBoxUid] ?? 0) - (totalDeficitByTier.get(tier) ?? 0);
+    choiceBoxMetricsByUid.set(choiceBoxUid, [
       {
         label: balance >= 0 ? "여유" : "부족",
         value: Math.abs(balance).toLocaleString(),
@@ -982,6 +993,22 @@ function resolveCategoryMode(
   return policy.defaultMode;
 }
 
+function getInventoryUid(resource: { uid: string; inventoryUid?: string }): string {
+  return resource.inventoryUid ?? resource.uid;
+}
+
+function sourceResourceKey(resource: { uid: string; type: string }): string {
+  return `${resource.type}:${resource.uid}`;
+}
+
+function findInventoryUidBySourceUid(
+  resources: Array<{ uid: string; inventoryUid?: string }>,
+  sourceUid: string,
+): string {
+  const resource = resources.find((candidate) => candidate.uid === sourceUid);
+  return resource ? getInventoryUid(resource) : sourceUid;
+}
+
 function buildResourceGroups(
   resources: InventoryResource[],
   categoryModes: Record<number, ResourceMode>,
@@ -1010,8 +1037,10 @@ function buildResourceGroups(
         (resource) =>
           mode === "all" ||
           resource.requiredAmount > 0 ||
-          (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null && (quantities[resource.uid] ?? 0) > 0) ||
-          (getSkillMaterialChoiceBoxRarity(resource.uid) !== null && (quantities[resource.uid] ?? 0) > 0) ||
+          (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null &&
+            (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
+          (getSkillMaterialChoiceBoxRarity(resource.uid) !== null &&
+            (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
           (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
       );
       const filteredResources = search
@@ -1028,20 +1057,27 @@ function buildResourceGroups(
     .filter((group) => group.resources.length > 0 || !search);
 }
 
-function buildInventoryResources(
-  catalogResources: ItemCatalogResource[],
+export function buildInventoryResources(
+  catalogResources: InventoryCatalogResource[],
   requiredItems: AggregatedGrowthResourceRequirements["items"],
 ): InventoryResource[] {
-  const catalogResourceMap = new Map(catalogResources.map((resource) => [resource.uid, resource]));
-  const requiredItemMap = new Map(requiredItems.map((item) => [item.uid, item]));
+  const identityBySourceKey = new Map(
+    buildOcrInventoryCatalogResources([...catalogResources, ...requiredItems]).map((resource) => [
+      sourceResourceKey(resource),
+      resource.inventoryUid,
+    ]),
+  );
+  const catalogResourceMap = new Map(catalogResources.map((resource) => [sourceResourceKey(resource), resource]));
+  const requiredItemMap = new Map(requiredItems.map((item) => [sourceResourceKey(item), item]));
   const equipmentCoverageByChoiceBoxUid = new Map(
     calculateEquipmentTierCoverage(requiredItems, {}).map((coverage) => [coverage.choiceBoxUid, coverage]),
   );
   const skillMaterialChoiceBoxRequiredAmountByUid = getSkillMaterialChoiceBoxRequiredAmounts(requiredItems);
   const inventoryResources = catalogResources.map((resource) => ({
     ...resource,
+    inventoryUid: resource.inventoryUid ?? identityBySourceKey.get(sourceResourceKey(resource)) ?? resource.uid,
     requiredAmount:
-      requiredItemMap.get(resource.uid)?.amount ??
+      requiredItemMap.get(sourceResourceKey(resource))?.amount ??
       equipmentCoverageByChoiceBoxUid.get(resource.uid)?.requiredAmount ??
       skillMaterialChoiceBoxRequiredAmountByUid.get(resource.uid) ??
       0,
@@ -1049,12 +1085,13 @@ function buildInventoryResources(
   }));
 
   for (const item of requiredItems) {
-    if (catalogResourceMap.has(item.uid)) {
+    if (catalogResourceMap.has(sourceResourceKey(item))) {
       continue;
     }
 
     inventoryResources.push({
       uid: item.uid,
+      inventoryUid: identityBySourceKey.get(sourceResourceKey(item)) ?? item.uid,
       name: item.name ?? "알 수 없는 재화",
       rarity: item.rarity,
       type: item.type,

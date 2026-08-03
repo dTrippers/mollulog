@@ -8,7 +8,11 @@ import {
   getSkillMaterialChoiceBoxRarity,
   shouldSortGrowthResourceKindByUid,
 } from "~/domain/growth-resource";
-import { buildOcrInventoryCatalogResources, parseOcrInventoryResourceUid } from "~/domain/ocr-resource-identity";
+import {
+  buildOcrInventoryCatalogResources,
+  type OcrInventoryCatalogResource,
+  parseOcrInventoryResourceUid,
+} from "~/domain/ocr-resource-identity";
 import { graphql } from "~/graphql";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
@@ -48,6 +52,8 @@ export type ItemCatalogResource = {
   subCategory: string | null;
 };
 
+export type ItemCatalogInventoryResource = OcrInventoryCatalogResource<ItemCatalogResource>;
+
 export async function getItemCatalogResources(env: Env, forceRefresh = false): Promise<ItemCatalogResource[]> {
   return fetchSourceCached(
     env,
@@ -83,10 +89,10 @@ export async function getItemCatalogResources(env: Env, forceRefresh = false): P
   );
 }
 
-export async function getItemCatalogResourceMap(env: Env): Promise<Record<string, ItemCatalogResource>> {
+export async function getItemCatalogResourceMap(env: Env): Promise<Record<string, ItemCatalogInventoryResource>> {
   const resources = await getItemCatalogResources(env);
   return Object.fromEntries(
-    buildOcrInventoryCatalogResources(resources).map(({ inventoryUid, ...resource }) => [inventoryUid, resource]),
+    buildOcrInventoryCatalogResources(resources).map((resource) => [resource.inventoryUid, resource]),
   );
 }
 
@@ -124,7 +130,7 @@ function buildDescriptionMap(resources: Array<{ uid: string; description: string
   );
 }
 
-export function getGrowthPlannerCatalogResources(resources: ItemCatalogResource[]): ItemCatalogResource[] {
+export function getGrowthPlannerCatalogResources<T extends ItemCatalogResource>(resources: T[]): T[] {
   return resources
     .filter((resource) => getGrowthPlannerCatalogResourceKindOrder(resource) !== null)
     .sort(compareGrowthPlannerCatalogResources);

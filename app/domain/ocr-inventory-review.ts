@@ -240,10 +240,6 @@ export function buildOcrInventoryReview(result: unknown, imageRows: OcrReviewIma
   return { reviewMode: "cells", cells, reason: null };
 }
 
-/** Compatibility aliases make the pure parser convenient for route and focused tests. */
-export const buildInventoryReview = buildOcrInventoryReview;
-export const buildOcrReviewCells = buildOcrInventoryReview;
-
 export function getOcrReviewCell(review: OcrInventoryReview, address: OcrCellAddress): OcrInventoryReviewCell | null {
   if (review.reviewMode !== "cells") return null;
   return (
@@ -440,21 +436,4 @@ export function evaluateOcrInventoryReview(
   const changedEntries = safeEntries.filter((entry) => entry.changed);
   const unchangedEntries = safeEntries.filter((entry) => !entry.changed);
   return { safeEntries, changedEntries, unchangedEntries, omittedCells, duplicateUids };
-}
-
-export const evaluateInventoryReview = evaluateOcrInventoryReview;
-
-export function getOcrCellEvidence(review: OcrInventoryReview, address: OcrCellAddress) {
-  const cell = getOcrReviewCell(review, address);
-  if (!cell) return null;
-  return {
-    imageIndex: cell.imageIndex,
-    position: cell.position,
-    imageUid: cell.imageUid,
-    filename: cell.filename,
-    itemUid: cell.itemUid,
-    quantity: cell.quantity,
-    quantityExact: cell.quantityExact,
-    candidates: cell.candidates,
-  };
 }

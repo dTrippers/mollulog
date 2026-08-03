@@ -286,8 +286,14 @@ function applyResourceMetadata(
   items: Map<string, GrowthResourceItem>,
   metadataMap: Awaited<ReturnType<typeof getItemCatalogResourceMap>>,
 ) {
+  const metadataBySourceKey = new Map(
+    Object.values(metadataMap).map((resource) => [`${resource.type}:${resource.uid}`, resource]),
+  );
   for (const item of items.values()) {
-    const metadata = metadataMap[item.uid];
+    const directMetadata = metadataMap[item.uid];
+    const metadata =
+      (directMetadata && directMetadata.type === item.type ? directMetadata : undefined) ??
+      metadataBySourceKey.get(`${item.type}:${item.uid}`);
     if (!metadata) {
       continue;
     }
