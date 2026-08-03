@@ -8,6 +8,11 @@ import {
   getSkillMaterialChoiceBoxRarity,
   shouldSortGrowthResourceKindByUid,
 } from "~/domain/growth-resource";
+import {
+  buildOcrInventoryCatalogResources,
+  type OcrInventoryCatalogResource,
+  parseOcrInventoryResourceUid,
+} from "~/domain/ocr-resource-identity";
 import { graphql } from "~/graphql";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
@@ -47,6 +52,8 @@ export type ItemCatalogResource = {
   subCategory: string | null;
 };
 
+export type ItemCatalogInventoryResource = OcrInventoryCatalogResource<ItemCatalogResource>;
+
 export async function getItemCatalogResources(env: Env, forceRefresh = false): Promise<ItemCatalogResource[]> {
   return fetchSourceCached(
     env,
@@ -82,9 +89,11 @@ export async function getItemCatalogResources(env: Env, forceRefresh = false): P
   );
 }
 
-export async function getItemCatalogResourceMap(env: Env): Promise<Record<string, ItemCatalogResource>> {
+export async function getItemCatalogResourceMap(env: Env): Promise<Record<string, ItemCatalogInventoryResource>> {
   const resources = await getItemCatalogResources(env);
-  return Object.fromEntries(resources.map((resource) => [resource.uid, resource]));
+  return Object.fromEntries(
+    buildOcrInventoryCatalogResources(resources).map((resource) => [resource.inventoryUid, resource]),
+  );
 }
 
 export async function getItemCatalogResourceDescriptionMap(itemUids: string[]): Promise<Record<string, string>> {
@@ -92,20 +101,36 @@ export async function getItemCatalogResourceDescriptionMap(itemUids: string[]): 
     return {};
   }
 
-  const { data, error } = await runQuery(itemCatalogResourceDescriptionsQuery, { uids: itemUids });
+  const requestedResources = itemUids.map(parseOcrInventoryResourceUid);
+  const sourceUids = [...new Set(requestedResources.map(({ sourceUid }) => sourceUid))];
+  const { data, error } = await runQuery(itemCatalogResourceDescriptionsQuery, { uids: sourceUids });
   if (error) {
     throw error;
   }
 
+  const itemDescriptions = buildDescriptionMap(data?.items ?? []);
+  const equipmentDescriptions = buildDescriptionMap(data?.equipments ?? []);
   return Object.fromEntries(
-    [...(data?.items ?? []), ...(data?.equipments ?? [])].flatMap((resource) => {
+    requestedResources.flatMap(({ inventoryUid, sourceUid, resourceType }) => {
+      const description =
+        resourceType === "equipment"
+          ? equipmentDescriptions[sourceUid]
+          : (itemDescriptions[sourceUid] ?? equipmentDescriptions[sourceUid]);
+      return description ? [[inventoryUid, description]] : [];
+    }),
+  );
+}
+
+function buildDescriptionMap(resources: Array<{ uid: string; description: string | null }>): Record<string, string> {
+  return Object.fromEntries(
+    resources.flatMap((resource) => {
       const description = resource.description?.replaceAll(/\s+/g, " ").trim();
       return description ? [[resource.uid, description]] : [];
     }),
   );
 }
 
-export function getGrowthPlannerCatalogResources(resources: ItemCatalogResource[]): ItemCatalogResource[] {
+export function getGrowthPlannerCatalogResources<T extends ItemCatalogResource>(resources: T[]): T[] {
   return resources
     .filter((resource) => getGrowthPlannerCatalogResourceKindOrder(resource) !== null)
     .sort(compareGrowthPlannerCatalogResources);

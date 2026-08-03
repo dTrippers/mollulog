@@ -868,7 +868,8 @@ function addItems(requirement: MutableRequirements, items: GrowthResourceItem[])
 }
 
 export function addGrowthResourceItemToMap(items: Map<string, GrowthResourceItem>, item: GrowthResourceItem) {
-  const existing = items.get(item.uid);
+  const resourceKey = `${item.type}:${item.uid}`;
+  const existing = items.get(resourceKey);
   if (existing) {
     existing.amount += item.amount;
     if (existing.name == null && item.name != null) {
@@ -882,7 +883,7 @@ export function addGrowthResourceItemToMap(items: Map<string, GrowthResourceItem
     }
     return;
   }
-  items.set(item.uid, { ...item });
+  items.set(resourceKey, { ...item });
 }
 
 function getAbilityReleaseArtifactItemsByRarity(skillCost: SkillCostStudent): Map<number, AbilityReleaseArtifactItem> {
@@ -1137,7 +1138,8 @@ export function aggregateGrowthResourceRequirements(
     characterExp += requirement.characterExp;
     credit += requirement.credit;
     for (const item of requirement.items) {
-      const existing = aggregatedItems.get(item.uid);
+      const resourceKey = `${item.type}:${item.uid}`;
+      const existing = aggregatedItems.get(resourceKey);
       if (existing) {
         existing.amount += item.amount;
         existing.name ??= item.name;
@@ -1146,7 +1148,7 @@ export function aggregateGrowthResourceRequirements(
         continue;
       }
 
-      aggregatedItems.set(item.uid, { ...item });
+      aggregatedItems.set(resourceKey, { ...item });
     }
   }
 

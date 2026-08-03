@@ -18,8 +18,8 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 
 ## Surfaces and layout
 
-- Do not add unnecessary nested cards, heavy borders, or decorative wrappers.
-- Prefer spacing, background contrast, and typography over borders. Use a border only when a control boundary or dense data boundary would otherwise be unclear.
+- Do not add unnecessary nested cards, borders, or decorative wrappers.
+- Do not use borders merely to separate sections, cards, list items, popovers, or other content areas. Use spacing, background contrast, and typography instead. A border is reserved for a functionally necessary control boundary or dense data boundary.
 - Cards and section surfaces do not use borders by default. Form controls and data tables may use `border-input` or `border-border` when the boundary is functionally necessary.
 - Large cards and navigation surfaces use a wide, subdued shadow in light mode (`shadow-lg shadow-black/5`) and a tighter shadow in dark mode (`dark:shadow-md dark:shadow-black/20`) when background contrast alone does not create enough separation. Do not apply shadows to every nested row or small card.
 - Within a section, keep radius, border, shadow, and spacing uniform.
@@ -69,7 +69,8 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - Card or subsection title: `text-base font-semibold`.
 - Supporting descriptions: `text-sm text-muted-foreground`.
 - `text-xs` is reserved for metadata, captions, and compact badges.
-- Add description text only when it genuinely helps the user decide.
+- Description text is opt-in, not a default part of a title or control. Add it only when the user needs information that is not already clear from the title, label, value, or surrounding context to make a decision.
+- Do not restate the title, label, current state, interaction source, or obvious behavior in a description. Remove redundant descriptions instead of filling empty space with explanatory copy.
 - Do not add decorative English phrases or meaningless filler text.
 - Prefer natural, short sentences written for Korean users.
 

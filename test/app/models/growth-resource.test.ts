@@ -7,6 +7,7 @@ jest.mock("~/lib/baql", () => ({
 }));
 
 import {
+  addGrowthResourceItemToMap,
   aggregateGrowthResourceRequirements,
   breakdownCharacterExpToBooks,
   calculateAbilityReleaseRequirements,
@@ -1041,6 +1042,78 @@ describe("growth-resource", () => {
     expect(aggregated.items.map((item) => [item.uid, item.amount])).toEqual([
       ["150", 80],
       ["10000", 200],
+    ]);
+  });
+
+  it("keeps colliding resource uids distinct by resource type", () => {
+    const aggregated = aggregateGrowthResourceRequirements([
+      {
+        characterExp: 0,
+        credit: 0,
+        skillUnavailable: false,
+        items: [
+          {
+            uid: "23",
+            type: ResourceTypeEnum.Item,
+            rarity: 1,
+            amount: 5,
+            source: "relationship",
+          },
+          {
+            uid: "23",
+            type: ResourceTypeEnum.Equipment,
+            rarity: 4,
+            amount: 6,
+            source: "equipment",
+          },
+        ],
+      },
+      {
+        characterExp: 0,
+        credit: 0,
+        skillUnavailable: false,
+        items: [
+          {
+            uid: "23",
+            type: ResourceTypeEnum.Item,
+            rarity: 1,
+            amount: 2,
+            source: "relationship",
+          },
+        ],
+      },
+    ]);
+
+    expect(aggregated.items.map(({ uid, type, amount }) => ({ uid, type, amount }))).toEqual(
+      expect.arrayContaining([
+        { uid: "23", type: ResourceTypeEnum.Item, amount: 7 },
+        { uid: "23", type: ResourceTypeEnum.Equipment, amount: 6 },
+      ]),
+    );
+    expect(aggregated.items).toHaveLength(2);
+  });
+
+  it("keeps colliding resource uids distinct while building one requirement", () => {
+    const items = new Map();
+
+    addGrowthResourceItemToMap(items, {
+      uid: "23",
+      type: ResourceTypeEnum.Item,
+      rarity: 1,
+      amount: 5,
+      source: "relationship",
+    });
+    addGrowthResourceItemToMap(items, {
+      uid: "23",
+      type: ResourceTypeEnum.Equipment,
+      rarity: 4,
+      amount: 6,
+      source: "equipment",
+    });
+
+    expect(Array.from(items.values()).map(({ uid, type, amount }) => ({ uid, type, amount }))).toEqual([
+      { uid: "23", type: ResourceTypeEnum.Item, amount: 5 },
+      { uid: "23", type: ResourceTypeEnum.Equipment, amount: 6 },
     ]);
   });
 });

@@ -33,14 +33,33 @@ import {
 import { sha256FileNative } from "../scanner._components/sha256-client";
 import type { ScannerUploadQuota } from "../scanner._components/UploadQuotaMeter";
 import { useScannerQuota } from "../scanner._components/useScannerQuota";
+import {
+  buildCellApplyPayload,
+  buildCellReviewAttentionCounts,
+  buildCellReviewPreviewSummary,
+  type CandidateDetails,
+  type CellApplySummary,
+  CellApplySummaryPanel,
+  type CellEdit,
+  CellReviewPanel,
+  CellReviewSummaryPreview,
+  cellAddressKey,
+  hasCellReviewCells,
+  mergeCellCandidateQuantities,
+  type ReviewCell,
+} from "./resource-cell-review";
 import { buildImageReviewSlots, type ReviewLayoutComponent } from "./resource-review-layout";
 
 type JobStatus = {
   uid: string;
+  generation: number;
   status: string;
   progress: { completed: number; failed: number; total: number };
   images: Array<{ uid: string; filename: string; status: string }>;
   result: { items?: BatchItem[]; components?: ReviewLayoutComponent[]; images?: BatchImageResult[] } | null;
+  reviewMode?: "cells" | "legacy";
+  reviewModeReason?: string | null;
+  cells?: ReviewCell[];
   versions: { model: string; catalog: string; schema: string } | null;
   currentQuantities: Record<string, number>;
   resourceRarities: Record<string, number>;
@@ -122,24 +141,35 @@ export default function ResourceScanner() {
   const [uploadQuota, setUploadQuota] = useScannerQuota("item_inventory_images_v1", setError);
   const [job, setJob] = useState<JobStatus | null>(null);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
+  const [selectedImageUid, setSelectedImageUid] = useState<string | null>(null);
   const [highlightedSources, setHighlightedSources] = useState<string[]>([]);
   const [highlightedReviewPosition, setHighlightedReviewPosition] = useState<number | null>(null);
   const [items, setItems] = useState<EditableItem[]>([]);
+  const [cellEdits, setCellEdits] = useState<Record<string, CellEdit>>({});
+  const [cellCandidateDetails, setCellCandidateDetails] = useState<Record<string, CandidateDetails>>({});
+  const [cellApplySummary, setCellApplySummary] = useState<CellApplySummary | null>(null);
   const [candidateOverrides, setCandidateOverrides] = useState<Record<string, CandidateOverride>>({});
   const [isImageExpanded, setIsImageExpanded] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const selectedJobUid = searchParams.get("job");
 
   const showJob = useCallback((next: JobStatus) => {
+    const firstReviewImage = next.images.find((image) => image.status === "succeeded") ?? next.images[0];
     setJob(next);
-    setSelectedSource(next.images[0]?.filename ?? null);
+    setSelectedSource(firstReviewImage?.filename ?? null);
+    setSelectedImageUid(firstReviewImage?.uid ?? null);
     setHighlightedSources([]);
     setHighlightedReviewPosition(null);
     setIsImageExpanded(false);
     setCandidateOverrides({});
+    setCellEdits({});
+    setCellCandidateDetails({});
+    setCellApplySummary(null);
     if (next.status === "review_ready") {
       const isApplied = next.application?.status === "applied";
       setItems(isApplied ? [] : toEditableItems(next));
+      setCellEdits({});
+      setCellApplySummary(null);
       setPhase(isApplied ? "applied" : "review");
       setError(null);
     } else if (["queued", "processing", "finalizing"].includes(next.status)) {
@@ -162,9 +192,13 @@ export default function ResourceScanner() {
       setJob(null);
       setItems([]);
       setSelectedSource(null);
+      setSelectedImageUid(null);
       setHighlightedSources([]);
       setHighlightedReviewPosition(null);
       setCandidateOverrides({});
+      setCellEdits({});
+      setCellCandidateDetails({});
+      setCellApplySummary(null);
       setPhase("idle");
       return;
     }
@@ -196,16 +230,18 @@ export default function ResourceScanner() {
 
   const unknownCount = useMemo(
     () =>
-      job?.result?.components?.reduce(
-        (count, component) =>
-          count + (component.positions ?? []).filter((position) => position.status !== "recognized").length,
-        0,
-      ) ?? 0,
+      job?.reviewMode === "cells"
+        ? (job.cells ?? []).filter((cell) => cell.status !== "recognized").length
+        : (job?.result?.components?.reduce(
+            (count, component) =>
+              count + (component.positions ?? []).filter((position) => position.status !== "recognized").length,
+            0,
+          ) ?? 0),
     [job],
   );
 
   const reviewSlots = useMemo(
-    () => buildImageReviewSlots(job?.result?.components, items, selectedSource),
+    () => (job?.reviewMode === "cells" ? [] : buildImageReviewSlots(job?.result?.components, items, selectedSource)),
     [items, job, selectedSource],
   );
 
@@ -215,19 +251,23 @@ export default function ResourceScanner() {
   );
 
   const selectedImage = useMemo(
-    () => job?.images.find((image) => image.filename === selectedSource) ?? job?.images[0] ?? null,
-    [job, selectedSource],
+    () => job?.images.find((image) => image.uid === selectedImageUid) ?? job?.images[0] ?? null,
+    [job, selectedImageUid],
   );
 
   const selectedResultImage = useMemo(
-    () => job?.result?.images?.find((image) => image.filename === selectedSource) ?? null,
-    [job, selectedSource],
+    () => getSelectedResultImage(job, selectedImageUid, selectedSource),
+    [job, selectedImageUid, selectedSource],
   );
 
   const highlightedObservation =
     highlightedReviewPosition === null
       ? null
-      : (selectedResultImage?.observations?.[highlightedReviewPosition] ?? null);
+      : job?.reviewMode === "cells"
+        ? (job.cells?.find(
+            (cell) => cell.imageUid === selectedImageUid && cell.position === highlightedReviewPosition,
+          ) ?? null)
+        : (selectedResultImage?.observations?.[highlightedReviewPosition] ?? null);
 
   const selectionRequiredCountByFilename = useMemo(
     () =>
@@ -243,13 +283,27 @@ export default function ResourceScanner() {
     [job, candidateOverrides],
   );
 
+  const selectionRequiredCountByImageUid = useMemo(
+    () => (job?.reviewMode === "cells" ? buildCellReviewAttentionCounts(job.cells, cellEdits) : {}),
+    [cellEdits, job],
+  );
+
+  const cellReviewPreview = useMemo(
+    () =>
+      job?.reviewMode === "cells"
+        ? buildCellReviewPreviewSummary(job.cells ?? [], cellEdits, job.currentQuantities)
+        : null,
+    [cellEdits, job],
+  );
+
   const hasChanges = useMemo(
     () =>
+      (cellReviewPreview ? cellReviewPreview.applicableChanged > 0 : false) ||
       items.some((item) => isChangedQuantity(item, job?.currentQuantities[item.resource_uid] ?? 0)) ||
       Object.values(candidateOverrides).some((override) =>
         isValidChangedQuantity(override.editedQuantity, job?.currentQuantities[override.itemUid] ?? 0),
       ),
-    [items, candidateOverrides, job],
+    [cellReviewPreview, items, candidateOverrides, job],
   );
 
   const isUploadLocked = phase === "uploading" || phase === "applying";
@@ -292,10 +346,14 @@ export default function ResourceScanner() {
     setJob(null);
     setItems([]);
     setSelectedSource(null);
+    setSelectedImageUid(null);
     setHighlightedSources([]);
     setHighlightedReviewPosition(null);
     setIsImageExpanded(false);
     setCandidateOverrides({});
+    setCellEdits({});
+    setCellCandidateDetails({});
+    setCellApplySummary(null);
     setIsCancelling(false);
     setError(null);
     setPhase("idle");
@@ -426,6 +484,28 @@ export default function ResourceScanner() {
     setError(null);
     setPhase("applying");
     try {
+      if (job.reviewMode === "cells") {
+        const cells = buildCellApplyPayload(job.cells ?? [], cellEdits);
+        const response = await requestScannerJson<{
+          application: NonNullable<JobApplication>;
+          summary: CellApplySummary;
+        }>(`/api/ocr/jobs/${job.uid}/apply`, {
+          method: "POST",
+          body: JSON.stringify({ resultGeneration: job.generation, cells }),
+        });
+        setJob({ ...job, application: response.application });
+        setCellApplySummary(response.summary);
+        setCellEdits({});
+        setCellCandidateDetails({});
+        setSelectedSource(null);
+        setSelectedImageUid(null);
+        setHighlightedSources([]);
+        setHighlightedReviewPosition(null);
+        setIsImageExpanded(false);
+        setPhase("applied");
+        notifyScannerJobsChanged();
+        return;
+      }
       const recognized = items
         .filter((item) => item.included)
         .map((item) => {
@@ -462,10 +542,14 @@ export default function ResourceScanner() {
       setJob({ ...job, application: response.application });
       setItems([]);
       setSelectedSource(null);
+      setSelectedImageUid(null);
       setHighlightedSources([]);
       setHighlightedReviewPosition(null);
       setIsImageExpanded(false);
       setCandidateOverrides({});
+      setCellEdits({});
+      setCellCandidateDetails({});
+      setCellApplySummary(null);
       setPhase("applied");
       notifyScannerJobsChanged();
     } catch (applyError) {
@@ -545,11 +629,22 @@ export default function ResourceScanner() {
                 description="후보가 있는 항목은 해당 셀에서 직접 아이템을 선택할 수 있어요"
               />
             ) : null}
-            {items.length === 0 && reviewSlots.length === 0 ? (
+            {(
+              job?.reviewMode === "cells"
+                ? !hasCellReviewCells(job.cells)
+                : items.length === 0 && reviewSlots.length === 0
+            ) ? (
               <Callout
                 tone="warning"
                 title="인식된 아이템이 없어요"
                 description={'스크린샷에 "아이템" 화면이 선명하게 보이는지 확인한 뒤 다시 시도해 주세요.'}
+              />
+            ) : null}
+            {job?.reviewMode === "cells" && !selectedImage ? (
+              <Callout
+                tone="warning"
+                title="스크린샷을 표시할 수 없어요"
+                description="원본 스크린샷 정보를 확인할 수 없어 셀 위치를 표시하지 못하고 있어요."
               />
             ) : null}
             <div
@@ -584,11 +679,12 @@ export default function ResourceScanner() {
                     className="group relative block w-full cursor-pointer overflow-hidden rounded-lg border border-border bg-black/90 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
                   >
                     <ReviewSourceImage
+                      key={selectedImage.uid}
                       src={`/api/ocr/jobs/${encodeURIComponent(job.uid)}/images/${encodeURIComponent(selectedImage.uid)}`}
                       alt={`${selectedImage.filename} 원본`}
                       imageWidth={selectedResultImage?.width}
                       imageHeight={selectedResultImage?.height}
-                      highlightedBox={highlightedObservation?.bbox}
+                      highlightedBox={highlightedObservation?.bbox ?? undefined}
                     />
                     <span className="absolute bottom-3 right-3 flex size-9 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
                       <ArrowsPointingOutIcon className="size-5" aria-hidden="true" />
@@ -611,11 +707,16 @@ export default function ResourceScanner() {
                         number={index + 1}
                         selected={selectedImage.uid === image.uid}
                         highlighted={highlightedSources.includes(image.filename)}
-                        selectionRequiredCount={selectionRequiredCountByFilename[image.filename] ?? 0}
+                        selectionRequiredCount={
+                          job?.reviewMode === "cells"
+                            ? (selectionRequiredCountByImageUid[image.uid] ?? 0)
+                            : (selectionRequiredCountByFilename[image.filename] ?? 0)
+                        }
                         onSelect={() => {
                           setHighlightedSources([]);
                           setHighlightedReviewPosition(null);
                           setSelectedSource(image.filename);
+                          setSelectedImageUid(image.uid);
                         }}
                       />
                     ))}
@@ -624,126 +725,169 @@ export default function ResourceScanner() {
               ) : null}
 
               <div className="min-w-0 space-y-3">
-                {reviewSlots.length > 0 ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-foreground">인식 결과</p>
-                    <p className="text-xs text-muted-foreground">
-                      재화 식별{" "}
-                      <span className="tabular-nums">
-                        {recognizedSlotCount} / {reviewSlots.length}
-                      </span>
-                    </p>
-                  </div>
-                ) : null}
-                {reviewSlots.length > 0 ? (
-                  <div className="grid grid-cols-5 gap-x-2 gap-y-2.5">
-                    {reviewSlots.map((slot) => {
-                      if (slot.itemIndex === null) {
-                        const observation = selectedResultImage?.observations?.[slot.position];
-                        const pickerState =
-                          observation && selectedResultImage
-                            ? {
-                                imageFilename: selectedResultImage.filename,
-                                position: slot.position,
-                                observation,
-                              }
-                            : null;
-                        const overrideKey = pickerState
-                          ? candidateOverrideKey(pickerState.imageFilename, pickerState.observation.observation_id)
-                          : null;
-                        const override = overrideKey ? candidateOverrides[overrideKey] : undefined;
-                        if (override && pickerState && overrideKey) {
-                          const selectedOverrideKey = overrideKey;
+                {job?.reviewMode === "cells" ? (
+                  <CellReviewPanel
+                    jobUid={job.uid}
+                    selectedSource={selectedSource}
+                    selectedImageUid={selectedImage?.uid ?? null}
+                    cells={job.cells ?? []}
+                    edits={cellEdits}
+                    candidateDetails={cellCandidateDetails}
+                    disabled={phase === "applying"}
+                    onHighlightChange={setReviewPositionHighlight}
+                    onLoadCandidates={(cell, details) => {
+                      setCellCandidateDetails((current) => ({ ...current, [cellAddressKey(cell)]: details }));
+                      setJob((current) =>
+                        current
+                          ? {
+                              ...current,
+                              currentQuantities: mergeCellCandidateQuantities(current.currentQuantities, details),
+                            }
+                          : current,
+                      );
+                    }}
+                    onEdit={(cell, edit) =>
+                      setCellEdits((current) => ({
+                        ...current,
+                        [cellAddressKey(cell)]: { ...current[cellAddressKey(cell)], ...edit },
+                      }))
+                    }
+                  />
+                ) : (
+                  <>
+                    {reviewSlots.length > 0 ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-foreground">인식 결과</p>
+                        <p className="text-xs text-muted-foreground">
+                          재화 식별{" "}
+                          <span className="tabular-nums">
+                            {recognizedSlotCount} / {reviewSlots.length}
+                          </span>
+                        </p>
+                      </div>
+                    ) : null}
+                    {reviewSlots.length > 0 ? (
+                      <div className="grid grid-cols-5 gap-x-2 gap-y-2.5">
+                        {reviewSlots.map((slot) => {
+                          if (slot.itemIndex === null) {
+                            const observation = selectedResultImage?.observations?.[slot.position];
+                            const pickerState =
+                              observation && selectedResultImage
+                                ? {
+                                    imageFilename: selectedResultImage.filename,
+                                    position: slot.position,
+                                    observation,
+                                  }
+                                : null;
+                            const overrideKey = pickerState
+                              ? candidateOverrideKey(pickerState.imageFilename, pickerState.observation.observation_id)
+                              : null;
+                            const override = overrideKey ? candidateOverrides[overrideKey] : undefined;
+                            if (override && pickerState && overrideKey) {
+                              const selectedOverrideKey = overrideKey;
+                              return (
+                                <ManuallySelectedResourceTile
+                                  key={`manual-${selectedOverrideKey}`}
+                                  override={override}
+                                  pickerState={pickerState}
+                                  currentQuantity={job?.currentQuantities[override.itemUid] ?? 0}
+                                  rarity={job?.resourceRarities[override.itemUid]}
+                                  resourceRarities={job?.resourceRarities ?? {}}
+                                  resourceDescriptions={job?.resourceDescriptions ?? {}}
+                                  disabled={phase === "applying"}
+                                  onHighlightChange={(highlighted) =>
+                                    setReviewPositionHighlight(slot.position, highlighted)
+                                  }
+                                  onSelectCandidate={(candidate) => selectCandidate(pickerState, candidate)}
+                                  onClearCandidate={() => clearCandidateSelection(pickerState)}
+                                  onQuantityChange={(quantity) => {
+                                    setCandidateOverrides((current) => ({
+                                      ...current,
+                                      [selectedOverrideKey]: {
+                                        ...current[selectedOverrideKey],
+                                        editedQuantity: quantity == null ? "" : String(quantity),
+                                      },
+                                    }));
+                                  }}
+                                />
+                              );
+                            }
+                            const candidates = observation?.candidates?.slice(0, OCR_CANDIDATE_SELECTION_LIMIT) ?? [];
+                            const hasDuplicateVisualIdentity =
+                              observation?.reasons?.includes("resource_visual_identity_ambiguous") ?? false;
+                            return (
+                              <UnrecognizedResourceTile
+                                key={`empty-${slot.position}`}
+                                position={slot.position}
+                                pickerState={pickerState}
+                                resourceRarities={job?.resourceRarities ?? {}}
+                                resourceDescriptions={job?.resourceDescriptions ?? {}}
+                                hasCandidates={candidates.length > 0}
+                                hasDuplicateVisualIdentity={hasDuplicateVisualIdentity}
+                                disabled={phase === "applying"}
+                                onHighlightChange={(highlighted) =>
+                                  setReviewPositionHighlight(slot.position, highlighted)
+                                }
+                                onSelectCandidate={(candidate) => {
+                                  if (pickerState) selectCandidate(pickerState, candidate);
+                                }}
+                              />
+                            );
+                          }
+
+                          const item = items[slot.itemIndex];
                           return (
-                            <ManuallySelectedResourceTile
-                              key={`manual-${selectedOverrideKey}`}
-                              override={override}
-                              pickerState={pickerState}
-                              currentQuantity={job?.currentQuantities[override.itemUid] ?? 0}
-                              rarity={job?.resourceRarities[override.itemUid]}
-                              resourceRarities={job?.resourceRarities ?? {}}
-                              resourceDescriptions={job?.resourceDescriptions ?? {}}
+                            <RecognizedResourceTile
+                              key={`${slot.position}-${item.resource_uid}`}
+                              item={item}
+                              currentQuantity={job?.currentQuantities[item.resource_uid] ?? 0}
+                              rarity={job?.resourceRarities[item.resource_uid]}
                               disabled={phase === "applying"}
+                              applied={false}
                               onHighlightChange={(highlighted) =>
                                 setReviewPositionHighlight(slot.position, highlighted)
                               }
-                              onSelectCandidate={(candidate) => selectCandidate(pickerState, candidate)}
-                              onClearCandidate={() => clearCandidateSelection(pickerState)}
-                              onQuantityChange={(quantity) => {
-                                setCandidateOverrides((current) => ({
-                                  ...current,
-                                  [selectedOverrideKey]: {
-                                    ...current[selectedOverrideKey],
-                                    editedQuantity: quantity == null ? "" : String(quantity),
-                                  },
-                                }));
+                              onToggle={() => {
+                                setHighlightedSources(item.source_images);
+                                setItems((current) =>
+                                  current.map((entry, index) =>
+                                    index === slot.itemIndex ? { ...entry, included: !entry.included } : entry,
+                                  ),
+                                );
                               }}
+                              onQuantityChange={(quantity) =>
+                                setItems((current) =>
+                                  current.map((entry, index) =>
+                                    index === slot.itemIndex
+                                      ? {
+                                          ...entry,
+                                          editedQuantity: quantity == null ? "" : String(quantity),
+                                          included: quantity !== null,
+                                        }
+                                      : entry,
+                                  ),
+                                )
+                              }
                             />
                           );
-                        }
-                        const candidates = observation?.candidates?.slice(0, OCR_CANDIDATE_SELECTION_LIMIT) ?? [];
-                        const hasDuplicateVisualIdentity =
-                          observation?.reasons?.includes("resource_visual_identity_ambiguous") ?? false;
-                        return (
-                          <UnrecognizedResourceTile
-                            key={`empty-${slot.position}`}
-                            position={slot.position}
-                            pickerState={pickerState}
-                            resourceRarities={job?.resourceRarities ?? {}}
-                            resourceDescriptions={job?.resourceDescriptions ?? {}}
-                            hasCandidates={candidates.length > 0}
-                            hasDuplicateVisualIdentity={hasDuplicateVisualIdentity}
-                            disabled={phase === "applying"}
-                            onHighlightChange={(highlighted) => setReviewPositionHighlight(slot.position, highlighted)}
-                            onSelectCandidate={(candidate) => {
-                              if (pickerState) selectCandidate(pickerState, candidate);
-                            }}
-                          />
-                        );
-                      }
-
-                      const item = items[slot.itemIndex];
-                      return (
-                        <RecognizedResourceTile
-                          key={`${slot.position}-${item.resource_uid}`}
-                          item={item}
-                          currentQuantity={job?.currentQuantities[item.resource_uid] ?? 0}
-                          rarity={job?.resourceRarities[item.resource_uid]}
-                          disabled={phase === "applying"}
-                          applied={false}
-                          onHighlightChange={(highlighted) => setReviewPositionHighlight(slot.position, highlighted)}
-                          onToggle={() => {
-                            setHighlightedSources(item.source_images);
-                            setItems((current) =>
-                              current.map((entry, index) =>
-                                index === slot.itemIndex ? { ...entry, included: !entry.included } : entry,
-                              ),
-                            );
-                          }}
-                          onQuantityChange={(quantity) =>
-                            setItems((current) =>
-                              current.map((entry, index) =>
-                                index === slot.itemIndex
-                                  ? {
-                                      ...entry,
-                                      editedQuantity: quantity == null ? "" : String(quantity),
-                                      included: quantity !== null,
-                                    }
-                                  : entry,
-                              ),
-                            )
-                          }
-                        />
-                      );
-                    })}
-                  </div>
-                ) : items.length > 0 ? (
-                  <p className="rounded-md bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
-                    이 스크린샷에서 확정된 아이템이 없어요.
-                  </p>
-                ) : null}
+                        })}
+                      </div>
+                    ) : items.length > 0 ? (
+                      <p className="rounded-md bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
+                        이 스크린샷에서 확정된 아이템이 없어요.
+                      </p>
+                    ) : null}
+                  </>
+                )}
               </div>
             </div>
+            {job?.reviewMode === "cells" ? (
+              <CellReviewSummaryPreview
+                cells={job.cells ?? []}
+                edits={cellEdits}
+                currentQuantities={job.currentQuantities}
+              />
+            ) : null}
             <div className="flex flex-wrap justify-between gap-2">
               <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
                 {isCancelling ? "취소 중..." : "인식 결과 삭제"}
@@ -761,12 +905,15 @@ export default function ResourceScanner() {
       ) : null}
 
       {job?.status === "review_ready" && job.application?.status === "applied" ? (
-        <ScannerCompletionState
-          title="아이템 수량 반영이 완료됐어요"
-          description="새로운 스크린샷을 업로드하려면 아래 버튼을 눌러주세요."
-          actionLabel="새 스크린샷 업로드"
-          onStartNew={() => clearSelectedJob()}
-        />
+        <>
+          {cellApplySummary ? <CellApplySummaryPanel summary={cellApplySummary} /> : null}
+          <ScannerCompletionState
+            title="아이템 수량 반영이 완료됐어요"
+            description="새로운 스크린샷을 업로드하려면 아래 버튼을 눌러주세요."
+            actionLabel="새 스크린샷 업로드"
+            onStartNew={() => clearSelectedJob()}
+          />
+        </>
       ) : null}
 
       {job && TERMINAL_JOB_STATUSES.has(job.status) ? (
@@ -789,6 +936,26 @@ export default function ResourceScanner() {
       ) : null}
     </div>
   );
+}
+
+function getSelectedResultImage(
+  job: JobStatus | null,
+  selectedImageUid: string | null,
+  _selectedSource: string | null,
+): BatchImageResult | null {
+  if (job?.reviewMode === "cells") {
+    const selectedCells = (job.cells ?? []).filter((cell) => !selectedImageUid || cell.imageUid === selectedImageUid);
+    const firstCell = selectedCells[0];
+    return firstCell
+      ? { filename: firstCell.filename, width: firstCell.width ?? undefined, height: firstCell.height ?? undefined }
+      : null;
+  }
+  if (!job?.result?.images?.length) return null;
+  const selectedImage = job.images.find((image) => image.uid === selectedImageUid) ?? job.images[0];
+  if (!selectedImage) return null;
+  const succeededImages = job.images.filter((image) => image.status === "succeeded");
+  const resultIndex = succeededImages.findIndex((image) => image.uid === selectedImage.uid);
+  return resultIndex >= 0 ? (job.result.images[resultIndex] ?? null) : null;
 }
 
 function RecognitionProgressCard({ job }: { job: JobStatus }) {
@@ -909,6 +1076,7 @@ function ReviewSourceImage({
   highlightedBox?: ImageBoundingBox;
 }) {
   const containerRef = useRef<HTMLSpanElement>(null);
+  const [imageError, setImageError] = useState(false);
   const [renderedImage, setRenderedImage] = useState<{
     left: number;
     top: number;
@@ -956,7 +1124,11 @@ function ReviewSourceImage({
       ref={containerRef}
       className="relative flex aspect-video max-h-[calc(100vh-10rem)] items-center justify-center"
     >
-      <img src={src} alt={alt} className="size-full object-contain" />
+      {imageError ? (
+        <span className="px-4 text-center text-sm text-white/80">스크린샷을 표시할 수 없어요.</span>
+      ) : (
+        <img src={src} alt={alt} className="size-full object-contain" onError={() => setImageError(true)} />
+      )}
       {highlightStyle ? (
         <span
           aria-hidden="true"
