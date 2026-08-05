@@ -16,7 +16,7 @@ export const loader = async ({ request, params, context }: LoaderFunctionArgs) =
   const env = context.cloudflare.env;
   const currentUser = await getActiveSensei(env, request);
   const [counts, likedPostUids] = await Promise.all([
-    getCommunityLikeCountsByPostUids(env, [postUid]),
+    getCommunityLikeCountsByPostUids(env, [postUid], currentUser?.id),
     currentUser ? getLikedCommunityPostUids(env, currentUser.id, [postUid]) : new Set<string>(),
   ]);
 
@@ -46,7 +46,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   await setCommunityPostLike(env, currentUser.id, postUid, actionData.liked);
 
   const [counts, likedPostUids] = await Promise.all([
-    getCommunityLikeCountsByPostUids(env, [postUid]),
+    getCommunityLikeCountsByPostUids(env, [postUid], currentUser.id),
     getLikedCommunityPostUids(env, currentUser.id, [postUid]),
   ]);
 

@@ -1156,7 +1156,7 @@ export async function commitOcrTaskResult(
           }
           await tx
             .update(pgOcrAttemptsTable)
-            .set({ status: existing[0] ? "succeeded" : "failed", finishedAt: new Date() })
+            .set({ status: existing[0] ? "succeeded" : "failed", finishedAt: new Date(), updatedAt: new Date() })
             .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
           return { accepted: true, duplicate: true } as const;
         }
@@ -1262,6 +1262,7 @@ export async function commitOcrTaskResult(
             errorCode: parsedEnvelope.error?.code ?? null,
             errorMessage: parsedEnvelope.error?.message ?? null,
             finishedAt,
+            updatedAt: finishedAt,
           })
           .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
         await tx
@@ -1304,7 +1305,7 @@ export async function commitOcrTaskResult(
         if (existing[0] || image.status === "failed") {
           await tx
             .update(pgOcrAttemptsTable)
-            .set({ status: existing[0] ? "succeeded" : "failed", finishedAt: new Date() })
+            .set({ status: existing[0] ? "succeeded" : "failed", finishedAt: new Date(), updatedAt: new Date() })
             .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
           return { accepted: true, duplicate: true } as const;
         }
@@ -1352,6 +1353,7 @@ export async function commitOcrTaskResult(
             errorCode: envelope.error?.code ?? null,
             errorMessage: envelope.error?.message ?? null,
             finishedAt,
+            updatedAt: finishedAt,
           })
           .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
         await updateJobCounts(tx, image.jobUid);
@@ -1367,7 +1369,7 @@ export async function commitOcrTaskResult(
       if (existing[0]) {
         await tx
           .update(pgOcrAttemptsTable)
-          .set({ status: "succeeded", finishedAt: new Date() })
+          .set({ status: "succeeded", finishedAt: new Date(), updatedAt: new Date() })
           .where(and(eq(pgOcrAttemptsTable.uid, envelope.attemptUid), eq(pgOcrAttemptsTable.status, "processing")));
         return { accepted: true, duplicate: true } as const;
       }
@@ -1380,6 +1382,7 @@ export async function commitOcrTaskResult(
             errorCode: envelope.error?.code ?? "finalize_failed",
             errorMessage: envelope.error?.message ?? "Finalize failed",
             finishedAt,
+            updatedAt: finishedAt,
           })
           .where(eq(pgOcrAttemptsTable.uid, envelope.attemptUid));
         await tx
@@ -1405,7 +1408,7 @@ export async function commitOcrTaskResult(
       const finishedAt = new Date();
       await tx
         .update(pgOcrAttemptsTable)
-        .set({ status: "succeeded", finishedAt })
+        .set({ status: "succeeded", finishedAt, updatedAt: finishedAt })
         .where(eq(pgOcrAttemptsTable.uid, envelope.attemptUid));
       await tx
         .update(pgOcrJobsTable)

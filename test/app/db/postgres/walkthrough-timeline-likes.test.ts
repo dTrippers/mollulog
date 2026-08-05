@@ -1,6 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
 import {
+  canPostgresWalkthroughTimelineReceiveLike,
   getPostgresWalkthroughTimelineLikeSummaries,
   setPostgresWalkthroughTimelineLike,
 } from "~/db/postgres/walkthrough-timeline-likes";
@@ -36,13 +37,34 @@ describe("PostgreSQL walkthrough timeline likes", () => {
       "timeline-2": { liked: false, likeCount: 0 },
     });
 
-    const sqlTexts = query.mock.calls.map(([config]) => (config as { text: string }).text);
+    const calls = query.mock.calls.map(([config, values]) => ({
+      text: (config as { text: string }).text,
+      values,
+    }));
+    const sqlTexts = calls.map(({ text }) => text);
     expect(sqlTexts).toHaveLength(2);
     expect(sqlTexts[0]).toContain('from "raid_walkthrough_likes"');
     expect(sqlTexts[0]).toContain('inner join "raid_walkthroughs"');
     expect(sqlTexts[0]).toContain('"raid_walkthroughs"."visibility"');
+    expect(sqlTexts[0]).not.toContain("community_author_mutes");
     expect(sqlTexts[0]).toContain("count(*)");
     expect(sqlTexts[1]).toContain('"user_id" = $1');
+    expect(sqlTexts[1]).not.toContain("community_author_mutes");
+    expect(calls[1].values).toContain(10);
+  });
+
+  it("checks whether the viewer may add a like without hiding existing engagement", async () => {
+    const { client, query } = createClient(() => [["timeline-1"]]);
+
+    await expect(
+      canPostgresWalkthroughTimelineReceiveLike(env, "timeline-1", 10, { createClient: () => client }),
+    ).resolves.toBe(true);
+
+    const sql = (query.mock.calls[0]?.[0] as { text: string }).text;
+    expect(sql).toContain('from "raid_walkthroughs"');
+    expect(sql).toContain("community_author_mutes");
+    expect(sql).toContain("NOT EXISTS");
+    expect(query.mock.calls[0]?.[1]).toContain(10);
   });
 
   it("keeps like and unlike operations idempotent for public walkthroughs", async () => {
@@ -53,6 +75,14 @@ describe("PostgreSQL walkthrough timeline likes", () => {
     await expect(setPostgresWalkthroughTimelineLike(env, "timeline-1", 10, false, options)).resolves.toBe(true);
 
     const sqlTexts = query.mock.calls.map(([config]) => (config as { text: string }).text);
+    const targetQueries = query.mock.calls.filter(([config]) =>
+      (config as { text: string }).text.includes('from "raid_walkthroughs"'),
+    );
+    expect(targetQueries).toHaveLength(2);
+    expect(targetQueries[0]?.[0].text).toContain("community_author_mutes");
+    expect(targetQueries[0]?.[0].text).toContain("NOT EXISTS");
+    expect(targetQueries[0]?.[1]).toContain(10);
+    expect(targetQueries[1]?.[0].text).not.toContain("community_author_mutes");
     expect(sqlTexts.find((sql) => sql.startsWith('insert into "raid_walkthrough_likes"'))).toContain("do nothing");
     expect(sqlTexts.find((sql) => sql.startsWith('delete from "raid_walkthrough_likes"'))).toContain(
       '"walkthrough_uid" = $1',
@@ -70,5 +100,7 @@ describe("PostgreSQL walkthrough timeline likes", () => {
     const sql = (query.mock.calls[0]?.[0] as { text: string }).text;
     expect(sql).toContain('from "raid_walkthroughs"');
     expect(sql).toContain('"visibility" = $2');
+    expect(sql).toContain("community_author_mutes");
+    expect(sql).toContain("NOT EXISTS");
   });
 });

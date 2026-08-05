@@ -23,7 +23,10 @@ import {
 } from "~/components/features/walkthrough-timeline";
 import { AttributeBadge, Button, Callout } from "~/components/primitives";
 import { PanelBody, PanelBodyRow } from "~/components/primitives/PanelBody";
-import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
+import {
+  canPostgresWalkthroughTimelineReceiveLike,
+  getPostgresWalkthroughTimelineLikeSummaries,
+} from "~/db/postgres/walkthrough-timeline-likes";
 import {
   clonePostgresWalkthroughTimeline,
   deletePostgresWalkthroughTimeline,
@@ -67,12 +70,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   if (storedTimeline && (!author || !isSenseiProfileVisibleTo(author, currentUser?.id))) {
     throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
   }
-  const [students, raids, engagementByUid] = await Promise.all([
+  const [students, raids, engagementByUid, canLike] = await Promise.all([
     getAllStudentsMap(env, true),
     getAllRaidSchedules(env),
     storedTimeline
       ? getPostgresWalkthroughTimelineLikeSummaries(env, [storedTimeline.uid], currentUser?.id, { ctx })
       : Promise.resolve<Record<string, { liked: boolean; likeCount: number }>>({}),
+    storedTimeline
+      ? canPostgresWalkthroughTimelineReceiveLike(env, storedTimeline.uid, currentUser?.id, { ctx })
+      : Promise.resolve(false),
   ]);
   const bossSchedules = raids
     .filter((raid) => raid.raidBoss.uid === timeline.bossUid)
@@ -89,6 +95,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   return {
     timeline,
     engagement: engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 },
+    canLike,
     owner,
     demo,
     signedIn: currentUser !== null,
@@ -153,6 +160,7 @@ export default function WalkthroughTimelineDetailPage() {
   const {
     timeline,
     engagement,
+    canLike,
     owner,
     demo,
     signedIn,
@@ -336,6 +344,7 @@ export default function WalkthroughTimelineDetailPage() {
               liked={engagement.liked}
               likeCount={engagement.likeCount}
               signedIn={signedIn}
+              canLike={canLike}
             />
           ) : null}
           {!demo && signedIn && !owner && (

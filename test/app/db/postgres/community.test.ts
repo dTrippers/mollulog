@@ -16,8 +16,10 @@ import {
   createPostgresContentSubcomment,
   deletePostgresCommunityComment,
   getPostgresCommunityFeedPage,
+  getPostgresCommunityLikeCountsByPostUids,
   getPostgresContentCommentIdByUid,
   getPostgresContentCommentSummaries,
+  getPostgresLikedCommunityPostUids,
   getPostgresNestedCommunityComments,
   getPostgresRecentStudentGradingsPage,
   getPostgresUserParties,
@@ -145,7 +147,7 @@ function authors(...values: Array<[number, "public" | "private"]>) {
 describe("PostgreSQL community repository", () => {
   it("returns every visible direct subcomment in stable query order", async () => {
     getAuthors.mockResolvedValue(authors([2, "public"], [3, "public"], [4, "public"]));
-    const { client } = createClient((text) => {
+    const { client, query } = createClient((text) => {
       if (text.includes('from "community_comments"')) {
         return [
           commentRow({ uid: "top", userId: 2 }),
@@ -164,6 +166,33 @@ describe("PostgreSQL community repository", () => {
         subcomments: [expect.objectContaining({ uid: "child-1" }), expect.objectContaining({ uid: "child-2" })],
       }),
     ]);
+    const commentQuery = query.mock.calls.find(([config]) => config.text.includes('from "community_comments"'));
+    expect(commentQuery?.[0].text.match(/community_author_mutes/g)).toHaveLength(2);
+    expect(commentQuery?.[0].text.match(/NOT EXISTS/g)).toHaveLength(2);
+    expect(commentQuery?.[0].text).toContain("visible_post.uid");
+    expect(commentQuery?.[0].text).toContain('"community_comments"."post_uid"');
+  });
+
+  it("does not expose engagement for a post hidden from the viewer", async () => {
+    const { client, query } = createClient((text) => {
+      if (text.includes("count(*)")) return [["post-1", 2]];
+      return [["post-1"]];
+    });
+    const options = { createClient: () => client };
+
+    await expect(getPostgresCommunityLikeCountsByPostUids(env, ["post-1"], 10, options)).resolves.toEqual({
+      "post-1": 2,
+    });
+    await expect(getPostgresLikedCommunityPostUids(env, 10, ["post-1"], options)).resolves.toEqual(new Set(["post-1"]));
+
+    expect(query).toHaveBeenCalledTimes(2);
+    for (const [config, values] of query.mock.calls) {
+      expect(config.text).toContain("EXISTS");
+      expect(config.text).toContain("visible_post.uid");
+      expect(config.text).toContain("community_author_mutes");
+      expect(config.text).toContain("NOT EXISTS");
+      expect(values).toContain(10);
+    }
   });
 
   it("applies post and author visibility to comments and likes while allowing the owner", async () => {
@@ -176,6 +205,11 @@ describe("PostgreSQL community repository", () => {
         createClient: () => blocked.client,
       }),
     ).rejects.toThrow("Post not found");
+    const blockedCommentQuery = blocked.query.mock.calls.find(([config]) =>
+      config.text.includes('from "community_posts"'),
+    );
+    expect(blockedCommentQuery?.[0].text).toContain("community_author_mutes");
+    expect(blockedCommentQuery?.[0].text).toContain("NOT EXISTS");
     expect(blocked.query.mock.calls.some(([config]) => config.text.includes('insert into "community_comments"'))).toBe(
       false,
     );
@@ -202,6 +236,10 @@ describe("PostgreSQL community repository", () => {
       text.includes('from "community_posts"') ? [postVisibilityRow({ userId: 1 })] : [],
     );
     await setPostgresCommunityPostLike(env, 1, "post-1", true, { createClient: () => ownLike.client });
+    const ownLikeQuery = ownLike.query.mock.calls.find(([config]) => config.text.includes('from "community_posts"'));
+    expect(ownLikeQuery?.[0].text).toContain("community_author_mutes");
+    expect(ownLikeQuery?.[0].text).toContain("NOT EXISTS");
+    expect(ownLikeQuery?.[1]).toContain(1);
     expect(
       ownLike.query.mock.calls.some(([config]) => config.text.includes('insert into "community_post_likes"')),
     ).toBe(true);
@@ -384,6 +422,10 @@ describe("PostgreSQL community repository", () => {
     expect(query.mock.calls[0][0].text).toContain("WITH visible_posts");
     expect(query.mock.calls[0][0].text).toContain("UNION ALL");
     expect(query.mock.calls[0][0].text).toContain("GROUP BY content_uid");
+    expect(query.mock.calls[0][0].text.match(/community_author_mutes/g)).toHaveLength(2);
+    expect(query.mock.calls[0][0].text.match(/NOT EXISTS/g)).toHaveLength(2);
+    expect(query.mock.calls[0][0].text).toContain("cam.user_id = p.user_id");
+    expect(query.mock.calls[0][0].text).toContain("cam.user_id = c.user_id");
     expect(query.mock.calls[1][0].text).toContain("p.pinned = TRUE");
     expect(query.mock.calls[1][0].text).not.toContain("WITH visible_posts");
   });
@@ -422,6 +464,8 @@ describe("PostgreSQL community repository", () => {
     expect(rowsIndex).toBeGreaterThan(countIndex);
     expect(calls[candidateIndex].text).toContain('"user_id"');
     expect(calls[candidateIndex].text).not.toContain('"blocks"');
+    expect(calls[candidateIndex].text).toContain("community_author_mutes");
+    expect(calls[candidateIndex].text).toContain("NOT EXISTS");
     expect(calls[countIndex].text).toContain('"origin"');
     expect(calls[countIndex].values).toContain(1);
     expect(calls[countIndex].values).not.toContain(2);

@@ -35,6 +35,16 @@ SQL that is not a schema change but a one-off correction, validation, or re-aggr
 - Models handle data access only (CRUD, BAQL reads, source cache, normalization). Pure logic such as scoring or simulation belongs in `app/domain`, and screen composition belongs in `app/views`.
 - Do not extend legacy tables in an area where a new canonical store is already defined.
 
+## Common columns
+
+Every D1 and PostgreSQL table must define the complete common column set below. Do not create a table with only some of these columns.
+
+- `id`: generated, non-null row identity. New tables normally use it as the primary key. When an existing natural-key primary key must remain for compatibility, keep `id` generated and uniquely indexed.
+- `created_at`: non-null creation timestamp, populated when the row is inserted.
+- `updated_at`: non-null last-modified timestamp, populated on insert and advanced by every application update.
+
+Domain timestamps such as `muted_at`, `started_at`, or `completed_at` do not replace `created_at` or `updated_at`.
+
 ## Validation boundary
 
 - Do not add database `CHECK` constraints for domain or application validation in D1 or PostgreSQL migrations and Drizzle schemas.

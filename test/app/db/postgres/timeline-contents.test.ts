@@ -16,6 +16,7 @@ import {
 
 function postgresRow(uid = "future-event"): unknown[] {
   return [
+    1,
     uid,
     new Date("2099-08-25T02:00:00.000Z"),
     new Date("2099-09-15T02:00:00.000Z"),
@@ -177,7 +178,7 @@ describe("PostgreSQL timeline contents read", () => {
 
   it("rejects a row without a localized name", async () => {
     const unnamedRow = postgresRow();
-    unnamedRow[17] = {};
+    unnamedRow[18] = {};
     const client = {
       connect: jest.fn(async () => undefined),
       end: jest.fn(async () => undefined),
