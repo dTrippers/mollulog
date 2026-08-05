@@ -57,8 +57,12 @@ export {
   serializeCommunityPostBlocks,
 } from "./community";
 
-export async function getCommunityLikeCountsByPostUids(env: Env, postUids: string[]): Promise<Record<string, number>> {
-  return getPostgresCommunityLikeCountsByPostUids(env, postUids);
+export async function getCommunityLikeCountsByPostUids(
+  env: Env,
+  postUids: string[],
+  currentUserId?: number | null,
+): Promise<Record<string, number>> {
+  return getPostgresCommunityLikeCountsByPostUids(env, postUids, currentUserId);
 }
 
 export async function getLikedCommunityPostUids(env: Env, userId: number, postUids: string[]): Promise<Set<string>> {

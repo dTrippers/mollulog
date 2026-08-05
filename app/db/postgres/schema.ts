@@ -38,6 +38,7 @@ const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode
 export const pgTimelineContentsTable = pgTable(
   "timeline_contents",
   {
+    id: integer().notNull().generatedByDefaultAsIdentity(),
     uid: text().primaryKey(),
     startAt: timestamptz("start_at").notNull(),
     endAt: timestamptz("end_at"),
@@ -61,6 +62,7 @@ export const pgTimelineContentsTable = pgTable(
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (table) => [
+    uniqueIndex("timeline_contents_id_uidx").on(table.id),
     index("timeline_contents_start_at_uid_idx").on(table.startAt, table.uid),
     index("timeline_contents_end_at_idx").on(table.endAt),
     index("timeline_contents_recruitment_group_uid_idx")
@@ -140,6 +142,7 @@ export const pgCouponsTable = pgTable(
 export const pgSiteBannersTable = pgTable(
   "site_banners",
   {
+    id: integer().notNull().generatedByDefaultAsIdentity(),
     uid: text().primaryKey(),
     message: text().notNull(),
     colorPreset: text("color_preset").$type<SiteBannerPreset>().notNull(),
@@ -151,6 +154,7 @@ export const pgSiteBannersTable = pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    uniqueIndex("site_banners_id_uidx").on(table.id),
     index("site_banners_active_ends_at_uid_idx").on(table.endsAt, table.uid),
     index("site_banners_starts_at_idx").on(table.startsAt),
   ],
@@ -207,6 +211,7 @@ export const pgFeedbackRepliesTable = pgTable(
     isAdmin: boolean("is_admin").notNull().default(false),
     content: text().notNull(),
     createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("feedback_replies_uid_uidx").on(table.uid),
@@ -218,6 +223,7 @@ export const pgFeedbackRepliesTable = pgTable(
 export const pgWalkthroughTimelinesTable = pgTable(
   "raid_walkthroughs",
   {
+    id: integer().notNull().generatedByDefaultAsIdentity(),
     uid: text().primaryKey(),
     userId: integer("user_id").notNull(),
     title: text().notNull(),
@@ -232,6 +238,7 @@ export const pgWalkthroughTimelinesTable = pgTable(
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (table) => [
+    uniqueIndex("raid_walkthroughs_id_uidx").on(table.id),
     index("raid_walkthroughs_user_updated_at_idx").on(table.userId, table.updatedAt.desc()),
     index("raid_walkthroughs_boss_visibility_updated_at_idx").on(
       table.bossUid,
@@ -251,10 +258,26 @@ export const pgWalkthroughTimelineLikesTable = pgTable(
       .references(() => pgWalkthroughTimelinesTable.uid, { onDelete: "cascade" }),
     userId: integer("user_id").notNull(),
     createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("raid_walkthrough_likes_walkthrough_user_uidx").on(table.walkthroughUid, table.userId),
     index("raid_walkthrough_likes_user_walkthrough_idx").on(table.userId, table.walkthroughUid),
+  ],
+);
+
+export const pgCommunityAuthorMutesTable = pgTable(
+  "community_author_mutes",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    mutedAt: timestamptz("muted_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("community_author_mutes_user_id_uidx").on(table.userId),
+    index("community_author_mutes_muted_at_idx").on(table.mutedAt),
   ],
 );
 
@@ -337,6 +360,7 @@ export const pgCommunityPostLikesTable = pgTable(
     postUid: text("post_uid").notNull(),
     userId: integer("user_id").notNull(),
     createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("community_post_likes_uid_uidx").on(table.uid),
@@ -354,6 +378,7 @@ export const pgCommunityPostTagsTable = pgTable(
     studentUid: text("student_uid").notNull(),
     tagValue: text("tag_value").notNull(),
     createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("community_post_tags_uid_uidx").on(table.uid),
@@ -491,6 +516,8 @@ export const pgOcrAttemptsTable = pgTable(
     errorMessage: text("error_message"),
     startedAt: timestamptz("started_at").notNull().defaultNow(),
     finishedAt: timestamptz("finished_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [index("ocr_attempts_task_idx").on(table.taskType, table.taskUid, table.generation)],
 );
@@ -512,6 +539,7 @@ export const pgOcrImageResultsTable = pgTable(
     catalogVersion: text("catalog_version").notNull(),
     schemaVersion: text("schema_version").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [uniqueIndex("ocr_image_results_image_generation_uidx").on(table.imageUid, table.generation)],
 );
@@ -533,6 +561,7 @@ export const pgOcrJobResultsTable = pgTable(
     catalogVersion: text("catalog_version").notNull(),
     schemaVersion: text("schema_version").notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [uniqueIndex("ocr_job_results_job_generation_uidx").on(table.jobUid, table.generation)],
 );

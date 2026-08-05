@@ -7,6 +7,7 @@ import {
   listPostgresPublicWalkthroughTimelines,
   listPostgresPublicWalkthroughTimelinesByBoss,
   listPostgresVisibleWalkthroughTimelines,
+  listPostgresWalkthroughTimelinesByUser,
   updatePostgresWalkthroughTimeline,
 } from "~/db/postgres/walkthrough-timelines";
 import type { WalkthroughTimelineDocument } from "~/domain/walkthrough-timeline";
@@ -21,6 +22,7 @@ const document: WalkthroughTimelineDocument = {
 
 function postgresRow(uid = "timeline-1"): unknown[] {
   return [
+    1,
     uid,
     10,
     "공략",
@@ -112,6 +114,32 @@ describe("PostgreSQL walkthrough timelines", () => {
     expect(visibleListSql).toContain(" or ");
   });
 
+  it("applies mute policy to public and profile walkthrough lists", async () => {
+    const { client, query } = createClient(() => [postgresRow()]);
+    const options = { createClient: () => client };
+
+    await expect(listPostgresWalkthroughTimelinesByUser(env, 10, false, options)).resolves.toHaveLength(1);
+    const profileListCall = query.mock.calls.at(-1);
+    const profileListSql = (profileListCall?.[0] as { text: string }).text;
+    expect(profileListSql).toContain("community_author_mutes");
+    expect(profileListSql).toContain("NOT EXISTS");
+
+    await expect(listPostgresPublicWalkthroughTimelines(env, { bossUid: "boss-1" }, options)).resolves.toHaveLength(1);
+    const publicListCall = query.mock.calls.at(-1);
+    const publicListSql = (publicListCall?.[0] as { text: string }).text;
+    expect(publicListSql).toContain("community_author_mutes");
+    expect(publicListSql).toContain("NOT EXISTS");
+
+    await expect(listPostgresVisibleWalkthroughTimelines(env, { viewerUserId: 10 }, options)).resolves.toHaveLength(1);
+    const visibleListCall = query.mock.calls.at(-1);
+    const visibleListSql = (visibleListCall?.[0] as { text: string }).text;
+    expect(visibleListSql).toContain("community_author_mutes");
+    expect(visibleListSql).toContain("NOT EXISTS");
+    expect(visibleListSql).toContain('"raid_walkthroughs"."user_id" = $2');
+    expect(visibleListSql).toContain(" or ");
+    expect(visibleListCall?.[1]).toContain(10);
+  });
+
   it("scopes updates and deletes to the owner", async () => {
     const { client, query } = createClient((sql) => (sql.includes("returning") ? [postgresRow()] : []));
     const options = { createClient: () => client };
@@ -128,7 +156,7 @@ describe("PostgreSQL walkthrough timelines", () => {
 
   it("rejects a malformed JSONB document instead of rendering fallback data", async () => {
     const malformed = postgresRow();
-    malformed[9] = { type: "walkthrough_timeline", schemaVersion: 999 };
+    malformed[10] = { type: "walkthrough_timeline", schemaVersion: 999 };
     const { client } = createClient(() => [malformed]);
     await expect(getPostgresWalkthroughTimeline(env, "timeline-1", { createClient: () => client })).rejects.toThrow(
       "schemaVersion",

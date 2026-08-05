@@ -1,5 +1,6 @@
 import { and, count, eq, inArray } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { communityAuthorVisiblePredicate } from "~/db/postgres/community-moderation";
 import { pgWalkthroughTimelineLikesTable, pgWalkthroughTimelinesTable } from "~/db/postgres/schema";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 
@@ -93,6 +94,33 @@ export async function getPostgresWalkthroughTimelineLikeSummaries(
   );
 }
 
+export async function canPostgresWalkthroughTimelineReceiveLike(
+  env: Pick<Env, "HYPERDRIVE">,
+  walkthroughUid: string,
+  viewerUserId?: number | null,
+  options: PostgresWalkthroughTimelineLikeOptions = {},
+): Promise<boolean> {
+  return withWalkthroughTimelineLikeDatabase(
+    env,
+    "can_receive_like",
+    async (db) => {
+      const rows = await db
+        .select({ uid: pgWalkthroughTimelinesTable.uid })
+        .from(pgWalkthroughTimelinesTable)
+        .where(
+          and(
+            eq(pgWalkthroughTimelinesTable.uid, walkthroughUid),
+            eq(pgWalkthroughTimelinesTable.visibility, "public"),
+            communityAuthorVisiblePredicate(pgWalkthroughTimelinesTable.userId, viewerUserId),
+          ),
+        )
+        .limit(1);
+      return rows.length > 0;
+    },
+    options,
+  );
+}
+
 export async function setPostgresWalkthroughTimelineLike(
   env: Pick<Env, "HYPERDRIVE">,
   walkthroughUid: string,
@@ -111,6 +139,7 @@ export async function setPostgresWalkthroughTimelineLike(
           and(
             eq(pgWalkthroughTimelinesTable.uid, walkthroughUid),
             eq(pgWalkthroughTimelinesTable.visibility, "public"),
+            liked ? communityAuthorVisiblePredicate(pgWalkthroughTimelinesTable.userId, userId) : undefined,
           ),
         )
         .limit(1);

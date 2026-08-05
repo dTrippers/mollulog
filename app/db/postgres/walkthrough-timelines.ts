@@ -1,6 +1,7 @@
 import { and, desc, eq, exists, inArray, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
+import { communityAuthorVisiblePredicate } from "~/db/postgres/community-moderation";
 import { pgWalkthroughTimelineLikesTable, pgWalkthroughTimelinesTable } from "~/db/postgres/schema";
 import {
   parseWalkthroughTimelineDocument,
@@ -147,6 +148,7 @@ export async function listPostgresWalkthroughTimelinesByUser(
     async (db) => {
       const conditions = [eq(pgWalkthroughTimelinesTable.userId, userId)];
       if (!includePrivate) conditions.push(eq(pgWalkthroughTimelinesTable.visibility, "public"));
+      if (!includePrivate) conditions.push(communityAuthorVisiblePredicate(pgWalkthroughTimelinesTable.userId));
       const rows = await db
         .select()
         .from(pgWalkthroughTimelinesTable)
@@ -211,6 +213,7 @@ export async function listPostgresVisibleWalkthroughTimelines(
             )
           : eq(pgWalkthroughTimelinesTable.visibility, "public"),
       );
+      conditions.push(communityAuthorVisiblePredicate(pgWalkthroughTimelinesTable.userId, filters.viewerUserId));
       if (filters.terrain) conditions.push(eq(pgWalkthroughTimelinesTable.terrain, filters.terrain));
       if (filters.defenseType) conditions.push(eq(pgWalkthroughTimelinesTable.defenseType, filters.defenseType));
       if (filters.maxDifficulty) {

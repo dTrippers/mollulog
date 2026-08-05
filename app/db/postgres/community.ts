@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import {
@@ -6,6 +6,7 @@ import {
   getCommunityAuthorIdByUsername,
   getCommunityAuthorsByIds,
 } from "~/db/postgres/community-authors";
+import { communityAuthorVisiblePredicate } from "~/db/postgres/community-moderation";
 import {
   pgCommunityCommentsTable,
   pgCommunityPostLikesTable,
@@ -198,6 +199,21 @@ function allowedAuthorFilter(allowedAuthorIds: readonly number[], includeCurated
   return or(eq(pgCommunityPostsTable.origin, "curated"), allowedAuthorCondition) ?? allowedAuthorCondition;
 }
 
+function communityPostEngagementVisiblePredicate(postUid: SQLWrapper, viewerUserId?: number | null): SQL {
+  const authorVisibility = communityAuthorVisiblePredicate(sql.raw("visible_post.user_id"), viewerUserId);
+  const postVisibility =
+    viewerUserId == null
+      ? sql`visible_post.visibility = 'public'`
+      : sql`(visible_post.visibility = 'public' OR visible_post.user_id = ${viewerUserId})`;
+  return sql`EXISTS (
+    SELECT 1
+    FROM community_posts AS visible_post
+    WHERE visible_post.uid = ${postUid}
+      AND ${postVisibility}
+      AND ${authorVisibility}
+  )`;
+}
+
 async function loadEngagement(
   env: Env,
   postUids: string[],
@@ -206,7 +222,7 @@ async function loadEngagement(
 ): Promise<{ comments: Record<string, NestedCommunityComment[]>; likes: Record<string, number>; liked: Set<string> }> {
   const [comments, likes, liked] = await Promise.all([
     getPostgresNestedCommunityCommentsByPostUids(env, postUids, currentUserId, options),
-    getPostgresCommunityLikeCountsByPostUids(env, postUids, options),
+    getPostgresCommunityLikeCountsByPostUids(env, postUids, currentUserId, options),
     currentUserId ? getPostgresLikedCommunityPostUids(env, currentUserId, postUids, options) : new Set<string>(),
   ]);
   return { comments, likes, liked };
@@ -223,6 +239,7 @@ export async function getPostgresCommunityFeedPage(
     ? or(eq(pgCommunityPostsTable.visibility, "public"), eq(pgCommunityPostsTable.userId, options.currentUserId))
     : eq(pgCommunityPostsTable.visibility, "public");
   filters.push(visible ?? eq(pgCommunityPostsTable.visibility, "public"));
+  filters.push(communityAuthorVisiblePredicate(pgCommunityPostsTable.userId, options.currentUserId));
   filters.push(
     sql`(${pgCommunityPostsTable.postType} <> 'walkthrough_timeline' OR ${pgCommunityPostsTable.visibility} = 'public')`,
   );
@@ -309,7 +326,17 @@ export async function getPostgresCommunityPostByUid(
   const [row] = await withCommunityDatabase(
     env,
     "post_by_uid",
-    (db) => db.select().from(pgCommunityPostsTable).where(eq(pgCommunityPostsTable.uid, postUid)).limit(1),
+    (db) =>
+      db
+        .select()
+        .from(pgCommunityPostsTable)
+        .where(
+          and(
+            eq(pgCommunityPostsTable.uid, postUid),
+            communityAuthorVisiblePredicate(pgCommunityPostsTable.userId, currentUserId),
+          ),
+        )
+        .limit(1),
     options,
   );
   if (!row) return null;
@@ -327,6 +354,7 @@ export async function getPostgresCommunityPostByUid(
 export async function getPostgresCommunityLikeCountsByPostUids(
   env: Env,
   postUids: string[],
+  currentUserId?: number | null,
   options: PostgresCommunityOptions = {},
 ): Promise<Record<string, number>> {
   if (!postUids.length) return {};
@@ -337,7 +365,12 @@ export async function getPostgresCommunityLikeCountsByPostUids(
       db
         .select({ postUid: pgCommunityPostLikesTable.postUid, count: count() })
         .from(pgCommunityPostLikesTable)
-        .where(inArray(pgCommunityPostLikesTable.postUid, [...new Set(postUids)]))
+        .where(
+          and(
+            inArray(pgCommunityPostLikesTable.postUid, [...new Set(postUids)]),
+            communityPostEngagementVisiblePredicate(pgCommunityPostLikesTable.postUid, currentUserId),
+          ),
+        )
         .groupBy(pgCommunityPostLikesTable.postUid),
     options,
   );
@@ -362,6 +395,7 @@ export async function getPostgresLikedCommunityPostUids(
           and(
             eq(pgCommunityPostLikesTable.userId, userId),
             inArray(pgCommunityPostLikesTable.postUid, [...new Set(postUids)]),
+            communityPostEngagementVisiblePredicate(pgCommunityPostLikesTable.postUid, userId),
           ),
         ),
     options,
@@ -387,6 +421,8 @@ export async function getPostgresNestedCommunityCommentsByPostUids(
         .where(
           and(
             inArray(pgCommunityCommentsTable.postUid, [...new Set(postUids)]),
+            communityPostEngagementVisiblePredicate(pgCommunityCommentsTable.postUid, currentUserId),
+            communityAuthorVisiblePredicate(pgCommunityCommentsTable.userId, currentUserId),
             currentUserId
               ? or(
                   eq(pgCommunityCommentsTable.visibility, "public"),
@@ -450,7 +486,12 @@ export async function setPostgresCommunityPostLike(
           visibility: pgCommunityPostsTable.visibility,
         })
         .from(pgCommunityPostsTable)
-        .where(eq(pgCommunityPostsTable.uid, postUid))
+        .where(
+          and(
+            eq(pgCommunityPostsTable.uid, postUid),
+            communityAuthorVisiblePredicate(pgCommunityPostsTable.userId, userId),
+          ),
+        )
         .limit(1);
       if (!post || post.postType === "walkthrough_timeline") return;
       const authors = await getCommunityAuthorsByIds(env, [post.userId]);
@@ -497,7 +538,12 @@ export async function createPostgresCommunityComment(
           visibility: pgCommunityPostsTable.visibility,
         })
         .from(pgCommunityPostsTable)
-        .where(eq(pgCommunityPostsTable.uid, postUid))
+        .where(
+          and(
+            eq(pgCommunityPostsTable.uid, postUid),
+            communityAuthorVisiblePredicate(pgCommunityPostsTable.userId, userId),
+          ),
+        )
         .limit(1);
       let parent: Pick<CommunityCommentRow, "uid" | "postUid" | "parentUid" | "userId" | "visibility"> | undefined;
       const targetParent = parentUid ?? postUid;
@@ -511,7 +557,12 @@ export async function createPostgresCommunityComment(
             visibility: pgCommunityCommentsTable.visibility,
           })
           .from(pgCommunityCommentsTable)
-          .where(eq(pgCommunityCommentsTable.uid, targetParent))
+          .where(
+            and(
+              eq(pgCommunityCommentsTable.uid, targetParent),
+              communityAuthorVisiblePredicate(pgCommunityCommentsTable.userId, userId),
+            ),
+          )
           .limit(1);
       }
       const authors = await getCommunityAuthorsByIds(env, [post?.userId ?? -1, ...(parent ? [parent.userId] : [])]);
@@ -801,6 +852,7 @@ export async function getPostgresContentComments(
           and(
             eq(pgCommunityPostsTable.postType, "event_opinion"),
             inArray(pgCommunityPostsTable.subjectContentUid, unique),
+            communityAuthorVisiblePredicate(pgCommunityPostsTable.userId, userId),
             userId
               ? or(eq(pgCommunityPostsTable.visibility, "public"), eq(pgCommunityPostsTable.userId, userId))
               : eq(pgCommunityPostsTable.visibility, "public"),
@@ -825,6 +877,7 @@ export async function getPostgresContentComments(
                   pgCommunityCommentsTable.postUid,
                   visiblePosts.map((post) => post.uid),
                 ),
+                communityAuthorVisiblePredicate(pgCommunityCommentsTable.userId, userId),
                 userId
                   ? or(eq(pgCommunityCommentsTable.visibility, "public"), eq(pgCommunityCommentsTable.userId, userId))
                   : eq(pgCommunityCommentsTable.visibility, "public"),
@@ -959,6 +1012,7 @@ export async function getPostgresContentCommentIdByUid(
           and(
             eq(pgCommunityPostsTable.uid, commentUid),
             eq(pgCommunityPostsTable.postType, "event_opinion"),
+            communityAuthorVisiblePredicate(pgCommunityPostsTable.userId, userId),
             userId
               ? or(eq(pgCommunityPostsTable.visibility, "public"), eq(pgCommunityPostsTable.userId, userId))
               : eq(pgCommunityPostsTable.visibility, "public"),
@@ -971,6 +1025,7 @@ export async function getPostgresContentCommentIdByUid(
         .where(
           and(
             eq(pgCommunityCommentsTable.uid, commentUid),
+            communityAuthorVisiblePredicate(pgCommunityCommentsTable.userId, userId),
             userId
               ? or(eq(pgCommunityCommentsTable.visibility, "public"), eq(pgCommunityCommentsTable.userId, userId))
               : eq(pgCommunityCommentsTable.visibility, "public"),
@@ -1078,6 +1133,8 @@ export async function getPostgresContentCommentSummaries(
         userId === undefined ? sql`p.visibility = 'public'` : sql`(p.visibility = 'public' OR p.user_id = ${userId})`;
       const commentVisibility =
         userId === undefined ? sql`c.visibility = 'public'` : sql`(c.visibility = 'public' OR c.user_id = ${userId})`;
+      const postAuthorVisibility = communityAuthorVisiblePredicate(sql.raw("p.user_id"), userId);
+      const commentAuthorVisibility = communityAuthorVisiblePredicate(sql.raw("c.user_id"), userId);
       const summaryQuery = await db.execute(sql`
         WITH visible_posts AS (
           SELECT p.uid, p.subject_content_uid AS content_uid, p.created_at
@@ -1085,6 +1142,7 @@ export async function getPostgresContentCommentSummaries(
           WHERE p.post_type = 'event_opinion'
             AND p.subject_content_uid IN (${contentValues})
             AND ${postVisibility}
+            AND ${postAuthorVisibility}
         ), visible_items AS (
           SELECT content_uid, created_at
           FROM visible_posts
@@ -1093,6 +1151,7 @@ export async function getPostgresContentCommentSummaries(
           FROM visible_posts p
           INNER JOIN community_comments c ON c.post_uid = p.uid
           WHERE ${commentVisibility}
+            AND ${commentAuthorVisibility}
         )
         SELECT content_uid, COUNT(*)::integer AS count,
           BOOL_OR(created_at >= ${recent}) AS has_recent_comment
@@ -1152,6 +1211,7 @@ export async function getPostgresPartiesByRaidReference(
           and(
             eq(pgCommunityPostsTable.postType, "guide"),
             eq(pgCommunityPostsTable.visibility, "public"),
+            communityAuthorVisiblePredicate(pgCommunityPostsTable.userId),
             eq(pgCommunityPostsTable.subjectRaidType, raidType),
             eq(pgCommunityPostsTable.subjectSeasonIndex, seasonIndex),
           ),
@@ -1184,6 +1244,7 @@ export async function getPostgresUserParties(
           and(
             eq(pgCommunityPostsTable.postType, "guide"),
             eq(pgCommunityPostsTable.userId, userId),
+            includePrivate ? undefined : communityAuthorVisiblePredicate(pgCommunityPostsTable.userId),
             includePrivate
               ? undefined
               : inArray(pgCommunityPostsTable.visibility, ["public", "unlisted"] as CommunityVisibility[]),
@@ -1299,7 +1360,13 @@ export async function getPostgresTagCountsByStudent(
       db
         .select({ tag: pgCommunityPostTagsTable.tagValue, count: count() })
         .from(pgCommunityPostTagsTable)
-        .where(eq(pgCommunityPostTagsTable.studentUid, studentUid))
+        .innerJoin(pgCommunityPostsTable, eq(pgCommunityPostTagsTable.postUid, pgCommunityPostsTable.uid))
+        .where(
+          and(
+            eq(pgCommunityPostTagsTable.studentUid, studentUid),
+            communityAuthorVisiblePredicate(pgCommunityPostsTable.userId),
+          ),
+        )
         .groupBy(pgCommunityPostTagsTable.tagValue),
     options,
   );
@@ -1325,6 +1392,7 @@ export async function getPostgresStudentGradingsByStudent(
           and(
             eq(pgCommunityPostsTable.postType, "student_review"),
             eq(pgCommunityPostsTable.subjectStudentUid, studentUid),
+            communityAuthorVisiblePredicate(pgCommunityPostsTable.userId, viewerUserId),
           ),
         ),
     options,
@@ -1367,7 +1435,10 @@ export async function getPostgresRecentStudentGradingsPage(
 ): Promise<StudentGradingPageWithUser> {
   const safePage = Math.max(1, page);
   const safePageSize = Math.max(1, pageSize);
-  const filters = [eq(pgCommunityPostsTable.postType, "student_review")] satisfies SQL[];
+  const filters = [
+    eq(pgCommunityPostsTable.postType, "student_review"),
+    communityAuthorVisiblePredicate(pgCommunityPostsTable.userId, viewerUserId),
+  ] satisfies SQL[];
   const { authors, allowedAuthorIds } = await loadAllowedAuthorIds(
     env,
     filters,

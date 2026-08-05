@@ -11,12 +11,14 @@ export default function LikeButton({
   liked: initialLiked,
   likeCount: initialLikeCount,
   signedIn,
+  canLike = true,
 }: {
   targetUid: string;
   action: string;
   liked: boolean;
   likeCount: number;
   signedIn: boolean;
+  canLike?: boolean;
 }) {
   const { showSignIn } = useSignIn();
   const fetcher = useFetcher<LikeChangedActionResult>();
@@ -36,6 +38,7 @@ export default function LikeButton({
   }, [fetcher.data, targetUid]);
 
   const toggleLike = () => {
+    if (!liked && !canLike) return;
     if (!signedIn) {
       showSignIn();
       return;
@@ -67,7 +70,7 @@ export default function LikeButton({
       onClick={toggleLike}
       aria-label={`좋아요 ${likeCount}개`}
       aria-pressed={liked}
-      disabled={fetcher.state === "submitting"}
+      disabled={fetcher.state === "submitting" || (!liked && !canLike)}
     >
       {liked ? <SolidHeartIcon className="size-4" /> : <HeartIcon className="size-4" />}
       <span>{likeCount}</span>
