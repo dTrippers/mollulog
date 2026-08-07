@@ -1,12 +1,4 @@
-import { sql } from "drizzle-orm";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { pgGrowthResourceInventoryTable } from "~/db/postgres/schema";
 
-export const growthResourceInventoryTable = sqliteTable("growth_resource_inventory", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  itemUid: text().notNull(),
-  quantity: int().notNull().default(0),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-});
+/** PostgreSQL is the canonical store; retain this export for model compatibility. */
+export const growthResourceInventoryTable = pgGrowthResourceInventoryTable;

@@ -14,6 +14,7 @@ import {
 import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
 import { buildStudentVideoSyncDraftEntries } from "~/domain/student-video-apply";
 import { getLogger } from "~/lib/observability.server";
+import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getOcrJob } from "~/models/ocr-job";
 import { getAllStudentsMap } from "~/models/student";
@@ -36,6 +37,8 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const sensei = await getActiveSensei(env, request);
   if (!sensei) return data({ error: "로그인이 필요해요" }, { status: 401 });
   if (!params.jobUid) return data({ error: "OCR 작업 UID가 필요해요" }, { status: 400 });
+  const maintenance = await studentStateMaintenanceActionResult(env, { ctx, operation: "api.ocr.jobs.apply.action" });
+  if (maintenance) return maintenance;
 
   try {
     const job = await getOcrJob(env, sensei.id, params.jobUid, { ctx });

@@ -53,6 +53,8 @@ jest.mock("../../../app/routes/utils.growth._components/growth-data.server", () 
 
 import { action } from "../../../app/routes/utils.growth.students";
 
+const env = { KV_CACHE: { get: jest.fn(async () => null) } } as unknown as Env;
+
 describe("utils.growth.students action", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -80,7 +82,7 @@ describe("utils.growth.students action", () => {
     mockLoadStudentRow.mockResolvedValue(enrolledRow as never);
 
     const response = await action({
-      context: { cloudflare: { env: {} } },
+      context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
         method: "POST",
         body: JSON.stringify({
@@ -93,7 +95,7 @@ describe("utils.growth.students action", () => {
       }),
     } as never);
 
-    expect(mockUpsertRecruitedStudent).toHaveBeenCalledWith({}, 1, "studentA", 3);
+    expect(mockUpsertRecruitedStudent).toHaveBeenCalledWith(env, 1, "studentA", 3);
     expect(response).toMatchObject({ data: { kind: "studentUpdate", student: enrolledRow } });
   });
 
@@ -113,7 +115,7 @@ describe("utils.growth.students action", () => {
     });
 
     await action({
-      context: { cloudflare: { env: {} } },
+      context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
         method: "POST",
         body: JSON.stringify({
@@ -128,7 +130,7 @@ describe("utils.growth.students action", () => {
       }),
     } as never);
 
-    expect(mockUpsertRelationshipLevel).toHaveBeenCalledWith({}, 1, "studentA", 10, 123, 30, { gift1: 5, gift2: 2 });
+    expect(mockUpsertRelationshipLevel).toHaveBeenCalledWith(env, 1, "studentA", 10, 123, 30, { gift1: 5, gift2: 2 });
   });
 
   it("initializes relationship items to an empty object when no saved row exists", async () => {
@@ -140,7 +142,7 @@ describe("utils.growth.students action", () => {
     });
 
     await action({
-      context: { cloudflare: { env: {} } },
+      context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
         method: "POST",
         body: JSON.stringify({
@@ -155,12 +157,12 @@ describe("utils.growth.students action", () => {
       }),
     } as never);
 
-    expect(mockUpsertRelationshipLevel).toHaveBeenCalledWith({}, 1, "studentA", 1, null, 15, {});
+    expect(mockUpsertRelationshipLevel).toHaveBeenCalledWith(env, 1, "studentA", 1, null, 15, {});
   });
 
   it("refreshes resource requirements without writing student state", async () => {
     await action({
-      context: { cloudflare: { env: {} } },
+      context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
         method: "POST",
         body: JSON.stringify({
@@ -177,7 +179,7 @@ describe("utils.growth.students action", () => {
     expect(mockUpdateRecruitedStudentCurrentState).not.toHaveBeenCalled();
     expect(mockUpsertStudentGrowth).not.toHaveBeenCalled();
     expect(mockLoadStudentRow).toHaveBeenCalledWith(
-      {},
+      env,
       1,
       "studentA",
       expect.objectContaining({ includeResourceRequirements: true }),
@@ -188,7 +190,7 @@ describe("utils.growth.students action", () => {
     mockGetRecruitedStudents.mockResolvedValue([{ studentUid: "studentA" }] as never);
 
     await action({
-      context: { cloudflare: { env: {} } },
+      context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
         method: "POST",
         body: JSON.stringify({
@@ -219,7 +221,7 @@ describe("utils.growth.students action", () => {
       }),
     } as never);
 
-    expect(mockUpdateRecruitedStudentCurrentState).toHaveBeenCalledWith({}, 1, "studentA", {
+    expect(mockUpdateRecruitedStudentCurrentState).toHaveBeenCalledWith(env, 1, "studentA", {
       level: 80,
       weaponLevel: null,
       abilityHp: null,
@@ -234,7 +236,7 @@ describe("utils.growth.students action", () => {
       equip3: 8,
       equipSpecial: 2,
     });
-    expect(mockUpsertStudentGrowth).toHaveBeenCalledWith({}, 1, "studentA", {
+    expect(mockUpsertStudentGrowth).toHaveBeenCalledWith(env, 1, "studentA", {
       targetLevel: 90,
       targetWeaponLevel: null,
       targetAbilityHp: null,
@@ -254,7 +256,7 @@ describe("utils.growth.students action", () => {
 
   it("does not write current growth state for a non-recruited student", async () => {
     await action({
-      context: { cloudflare: { env: {} } },
+      context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
         method: "POST",
         body: JSON.stringify({
@@ -276,7 +278,7 @@ describe("utils.growth.students action", () => {
       }),
       3,
     );
-    expect(mockUpsertStudentGrowth).toHaveBeenCalledWith({}, 1, "studentA", {
+    expect(mockUpsertStudentGrowth).toHaveBeenCalledWith(env, 1, "studentA", {
       targetLevel: 90,
       targetWeaponLevel: null,
       targetAbilityHp: null,
@@ -300,7 +302,7 @@ describe("utils.growth.students action", () => {
     });
 
     const response = await action({
-      context: { cloudflare: { env: {} } },
+      context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
         method: "POST",
         body: JSON.stringify({

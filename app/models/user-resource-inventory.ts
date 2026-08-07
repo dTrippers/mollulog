@@ -1,11 +1,13 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
-import type { BatchItem } from "drizzle-orm/batch";
-import { type DrizzleD1Database, drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
+import { pgUserResourceInventoryDraftItemsTable, pgUserResourceInventoryDraftsTable } from "~/db/postgres/schema";
+import { withPostgresClient } from "~/lib/postgres.server";
 import { growthResourceInventoryTable } from "./growth-resource-inventory";
 
-const D1_IN_QUERY_CHUNK_SIZE = 90;
+const PG_WRITE_CHUNK_SIZE = 500;
+const PG_IN_QUERY_CHUNK_SIZE = 500;
+type InventoryDb = Pick<NodePgDatabase, "insert" | "delete">;
 
 export type UserResourceInventory = {
   uid: string;
@@ -42,24 +44,13 @@ export type UserResourceInventoryInput = {
   quantity: number;
 };
 
-export const userResourceInventoryDraftsTable = sqliteTable("user_resource_inventory_drafts", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  status: text().notNull().default("pending"),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-  appliedAt: text(),
-});
+export const userResourceInventoryDraftsTable = pgUserResourceInventoryDraftsTable;
+export const userResourceInventoryDraftItemsTable = pgUserResourceInventoryDraftItemsTable;
 
-export const userResourceInventoryDraftItemsTable = sqliteTable("user_resource_inventory_draft_items", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  draftUid: text().notNull(),
-  itemUid: text().notNull(),
-  quantity: int().notNull(),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-});
+function toIso(value: Date | string | null): string | null {
+  if (value == null) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
 
 function toInventoryModel(resourceInventory: typeof growthResourceInventoryTable.$inferSelect): UserResourceInventory {
   return {
@@ -70,10 +61,7 @@ function toInventoryModel(resourceInventory: typeof growthResourceInventoryTable
 }
 
 function toDraftStatus(status: string): UserResourceInventoryDraftStatus {
-  if (status === "pending" || status === "applied" || status === "discarded") {
-    return status;
-  }
-
+  if (status === "pending" || status === "applied" || status === "discarded") return status;
   return "pending";
 }
 
@@ -93,15 +81,13 @@ export function parseUserResourceInventoryQuantity(value: unknown): number {
     validateUserResourceInventoryQuantity(value);
     return value;
   }
-
   if (typeof value === "string") {
     const trimmed = value.trim();
-    if (!/^\d+$/.test(trimmed)) {
-      throw new Error("보유 수량은 0 이상의 정수만 입력할 수 있어요");
-    }
-    return Number(trimmed);
+    if (!/^\d+$/.test(trimmed)) throw new Error("보유 수량은 0 이상의 정수만 입력할 수 있어요");
+    const parsed = Number(trimmed);
+    validateUserResourceInventoryQuantity(parsed);
+    return parsed;
   }
-
   throw new Error("보유 수량은 0 이상의 정수만 입력할 수 있어요");
 }
 
@@ -112,13 +98,14 @@ export function validateUserResourceInventoryQuantity(quantity: number) {
 }
 
 export async function getUserResourceInventories(env: Env, userId: number): Promise<UserResourceInventory[]> {
-  const db = drizzle(env.DB);
-  const inventories = await db
-    .select()
-    .from(growthResourceInventoryTable)
-    .where(eq(growthResourceInventoryTable.userId, userId));
-
-  return inventories.map(toInventoryModel);
+  return withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const inventories = await db
+      .select()
+      .from(growthResourceInventoryTable)
+      .where(eq(growthResourceInventoryTable.userId, userId));
+    return inventories.map(toInventoryModel);
+  });
 }
 
 export async function getUserResourceInventoryMap(env: Env, userId: number): Promise<Record<string, number>> {
@@ -138,55 +125,49 @@ export async function getUserResourceInventoryMapByItemUids(
   itemUids: string[],
 ): Promise<Record<string, number>> {
   const uniqueItemUids = [...new Set(itemUids)];
-  if (uniqueItemUids.length === 0) {
-    return {};
-  }
+  if (uniqueItemUids.length === 0) return {};
 
-  const db = drizzle(env.DB);
-  const inventories: (typeof growthResourceInventoryTable.$inferSelect)[] = [];
-
-  for (let offset = 0; offset < uniqueItemUids.length; offset += D1_IN_QUERY_CHUNK_SIZE) {
-    const itemUidChunk = uniqueItemUids.slice(offset, offset + D1_IN_QUERY_CHUNK_SIZE);
-    const chunkInventories = await db
-      .select()
-      .from(growthResourceInventoryTable)
-      .where(
-        and(
-          eq(growthResourceInventoryTable.userId, userId),
-          inArray(growthResourceInventoryTable.itemUid, itemUidChunk),
-        ),
+  return withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const inventories: (typeof growthResourceInventoryTable.$inferSelect)[] = [];
+    for (let offset = 0; offset < uniqueItemUids.length; offset += PG_IN_QUERY_CHUNK_SIZE) {
+      const chunk = uniqueItemUids.slice(offset, offset + PG_IN_QUERY_CHUNK_SIZE);
+      inventories.push(
+        ...(await db
+          .select()
+          .from(growthResourceInventoryTable)
+          .where(
+            and(eq(growthResourceInventoryTable.userId, userId), inArray(growthResourceInventoryTable.itemUid, chunk)),
+          )),
       );
-
-    inventories.push(...chunkInventories);
-  }
-
-  return inventories.reduce(
-    (acc, inventory) => {
-      acc[inventory.itemUid] = inventory.quantity;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
+    }
+    return inventories.reduce(
+      (acc, inventory) => {
+        acc[inventory.itemUid] = inventory.quantity;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+  });
 }
 
 export async function upsertUserResourceInventory(env: Env, userId: number, itemUid: string, quantity: number) {
   validateUserResourceInventoryQuantity(quantity);
-
-  const db = drizzle(env.DB);
-  await runInventoryBatch(db, [createUserResourceInventoryStatement(db, userId, itemUid, quantity)]);
+  await withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    await writeInventoryItems(db, userId, [{ itemUid, quantity }]);
+  });
 }
 
 export async function upsertUserResourceInventories(env: Env, userId: number, items: UserResourceInventoryInput[]) {
   const normalizedItems = normalizeInventoryItems(items);
-  if (normalizedItems.length === 0) {
-    return;
-  }
-
-  const db = drizzle(env.DB);
-  await runInventoryBatch(
-    db,
-    normalizedItems.map((item) => createUserResourceInventoryStatement(db, userId, item.itemUid, item.quantity)),
-  );
+  if (normalizedItems.length === 0) return;
+  await withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    await db.transaction(async (tx) => {
+      await writeInventoryItems(tx, userId, normalizedItems);
+    });
+  });
 }
 
 export async function createUserResourceInventoryDraft(
@@ -195,29 +176,22 @@ export async function createUserResourceInventoryDraft(
   items: UserResourceInventoryDraftInput[],
 ): Promise<string> {
   const normalizedItems = normalizeDraftItems(items);
-  if (normalizedItems.length === 0) {
-    throw new Error("변경된 보유 재화가 없어요");
-  }
+  if (normalizedItems.length === 0) throw new Error("변경된 보유 재화가 없어요");
 
-  const db = drizzle(env.DB);
-  const draftUid = nanoid(12);
-  await runInventoryBatch(db, [
-    db.insert(userResourceInventoryDraftsTable).values({
-      uid: draftUid,
-      userId,
-      status: "pending",
-    }),
-    db.insert(userResourceInventoryDraftItemsTable).values(
-      normalizedItems.map((item) => ({
-        uid: nanoid(8),
-        draftUid,
-        itemUid: item.itemUid,
-        quantity: item.quantity,
-      })),
-    ),
-  ]);
-
-  return draftUid;
+  return withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const draftUid = nanoid(12);
+    await db.transaction(async (tx) => {
+      await tx.insert(userResourceInventoryDraftsTable).values({ uid: draftUid, userId, status: "pending" });
+      for (let offset = 0; offset < normalizedItems.length; offset += PG_WRITE_CHUNK_SIZE) {
+        const chunk = normalizedItems.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+        await tx
+          .insert(userResourceInventoryDraftItemsTable)
+          .values(chunk.map((item) => ({ uid: nanoid(8), draftUid, itemUid: item.itemUid, quantity: item.quantity })));
+      }
+    });
+    return draftUid;
+  });
 }
 
 export async function getUserResourceInventoryDraft(
@@ -225,161 +199,132 @@ export async function getUserResourceInventoryDraft(
   userId: number,
   draftUid: string,
 ): Promise<UserResourceInventoryDraft | null> {
-  const db = drizzle(env.DB);
-  const [draft] = await db
-    .select()
-    .from(userResourceInventoryDraftsTable)
-    .where(
-      and(eq(userResourceInventoryDraftsTable.uid, draftUid), eq(userResourceInventoryDraftsTable.userId, userId)),
-    );
-
-  if (!draft) {
-    return null;
-  }
-
-  const items = await db
-    .select()
-    .from(userResourceInventoryDraftItemsTable)
-    .where(eq(userResourceInventoryDraftItemsTable.draftUid, draftUid));
-
-  return {
-    uid: draft.uid,
-    userId: draft.userId,
-    status: toDraftStatus(draft.status),
-    createdAt: draft.createdAt,
-    updatedAt: draft.updatedAt,
-    appliedAt: draft.appliedAt,
-    items: items.map(toDraftItemModel),
-  };
+  return withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const [draft] = await db
+      .select()
+      .from(userResourceInventoryDraftsTable)
+      .where(
+        and(eq(userResourceInventoryDraftsTable.uid, draftUid), eq(userResourceInventoryDraftsTable.userId, userId)),
+      );
+    if (!draft) return null;
+    const items = await db
+      .select()
+      .from(userResourceInventoryDraftItemsTable)
+      .where(eq(userResourceInventoryDraftItemsTable.draftUid, draftUid))
+      .orderBy(asc(userResourceInventoryDraftItemsTable.id));
+    return {
+      uid: draft.uid,
+      userId: draft.userId,
+      status: toDraftStatus(draft.status),
+      createdAt: toIso(draft.createdAt) ?? "",
+      updatedAt: toIso(draft.updatedAt) ?? "",
+      appliedAt: toIso(draft.appliedAt),
+      items: items.map(toDraftItemModel),
+    };
+  });
 }
 
 export async function applyUserResourceInventoryDraft(env: Env, userId: number, draftUid: string) {
-  const draft = await getUserResourceInventoryDraft(env, userId, draftUid);
-  if (!draft) {
-    throw new Error("Draft를 찾을 수 없어요");
-  }
-  if (draft.status !== "pending") {
-    throw new Error("이미 처리된 Draft예요");
-  }
-
-  await env.DB.batch([
-    ...draft.items.map((item) =>
-      createConditionalDraftInventoryStatement(env, userId, draftUid, item.itemUid, item.quantity),
-    ),
-    env.DB.prepare(`
-      update user_resource_inventory_drafts
-      set status = 'applied',
-          updatedAt = current_timestamp,
-          appliedAt = current_timestamp
-      where uid = ?1
-        and userId = ?2
-        and status = 'pending'
-    `).bind(draftUid, userId),
-  ]);
-
-  const appliedDraft = await getUserResourceInventoryDraft(env, userId, draftUid);
-  if (appliedDraft?.status !== "applied") {
-    throw new Error("이미 처리된 Draft예요");
-  }
+  await withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    await db.transaction(async (tx) => {
+      const [draft] = await tx
+        .select()
+        .from(userResourceInventoryDraftsTable)
+        .where(
+          and(eq(userResourceInventoryDraftsTable.uid, draftUid), eq(userResourceInventoryDraftsTable.userId, userId)),
+        )
+        .for("update");
+      if (!draft) throw new Error("Draft를 찾을 수 없어요");
+      if (draft.status !== "pending") throw new Error("이미 처리된 Draft예요");
+      const items = await tx
+        .select()
+        .from(userResourceInventoryDraftItemsTable)
+        .where(eq(userResourceInventoryDraftItemsTable.draftUid, draftUid))
+        .orderBy(asc(userResourceInventoryDraftItemsTable.id));
+      await writeInventoryItems(
+        tx,
+        userId,
+        items.map((item) => ({ itemUid: item.itemUid, quantity: item.quantity })),
+      );
+      const now = new Date();
+      await tx
+        .update(userResourceInventoryDraftsTable)
+        .set({ status: "applied", updatedAt: now, appliedAt: now })
+        .where(
+          and(
+            eq(userResourceInventoryDraftsTable.uid, draftUid),
+            eq(userResourceInventoryDraftsTable.userId, userId),
+            eq(userResourceInventoryDraftsTable.status, "pending"),
+          ),
+        );
+    });
+  });
 }
 
 export async function discardUserResourceInventoryDraft(env: Env, userId: number, draftUid: string) {
-  const db = drizzle(env.DB);
-  await db
-    .update(userResourceInventoryDraftsTable)
-    .set({ status: "discarded", updatedAt: sql`current_timestamp` })
-    .where(
-      and(
-        eq(userResourceInventoryDraftsTable.uid, draftUid),
-        eq(userResourceInventoryDraftsTable.userId, userId),
-        eq(userResourceInventoryDraftsTable.status, "pending"),
-      ),
-    );
+  await withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const result = await db
+      .update(userResourceInventoryDraftsTable)
+      .set({ status: "discarded", updatedAt: new Date() })
+      .where(
+        and(
+          eq(userResourceInventoryDraftsTable.uid, draftUid),
+          eq(userResourceInventoryDraftsTable.userId, userId),
+          eq(userResourceInventoryDraftsTable.status, "pending"),
+        ),
+      )
+      .returning({ uid: userResourceInventoryDraftsTable.uid });
+    if (result.length === 0) {
+      const [draft] = await db
+        .select({ status: userResourceInventoryDraftsTable.status })
+        .from(userResourceInventoryDraftsTable)
+        .where(
+          and(eq(userResourceInventoryDraftsTable.uid, draftUid), eq(userResourceInventoryDraftsTable.userId, userId)),
+        );
+      if (!draft) throw new Error("Draft를 찾을 수 없어요");
+      throw new Error("이미 처리된 Draft예요");
+    }
+  });
 }
 
 function normalizeDraftItems(items: UserResourceInventoryDraftInput[]): UserResourceInventoryDraftInput[] {
   return normalizeInventoryItems(items);
 }
 
-function createConditionalDraftInventoryStatement(
-  env: Env,
-  userId: number,
-  draftUid: string,
-  itemUid: string,
-  quantity: number,
-): D1PreparedStatement {
-  validateUserResourceInventoryQuantity(quantity);
-
-  if (quantity <= 0) {
-    return env.DB.prepare(`
-      delete from growth_resource_inventory
-      where userId = ?1
-        and itemUid = ?2
-        and exists (
-          select 1
-          from user_resource_inventory_drafts
-          where uid = ?3
-            and userId = ?1
-            and status = 'pending'
-        )
-    `).bind(userId, itemUid, draftUid);
-  }
-
-  return env.DB.prepare(`
-    insert into growth_resource_inventory (uid, userId, itemUid, quantity)
-    select ?1, ?2, ?3, ?4
-    where exists (
-      select 1
-      from user_resource_inventory_drafts
-      where uid = ?5
-        and userId = ?2
-        and status = 'pending'
-    )
-    on conflict(userId, itemUid) do update set
-      quantity = excluded.quantity,
-      updatedAt = current_timestamp
-  `).bind(nanoid(8), userId, itemUid, quantity, draftUid);
-}
-
 function normalizeInventoryItems(items: UserResourceInventoryInput[]): UserResourceInventoryInput[] {
   const itemMap = new Map<string, number>();
   for (const item of items) {
     const itemUid = item.itemUid.trim();
-    if (!itemUid) {
-      continue;
-    }
+    if (!itemUid) continue;
     validateUserResourceInventoryQuantity(item.quantity);
     itemMap.set(itemUid, item.quantity);
   }
-
   return [...itemMap.entries()].map(([itemUid, quantity]) => ({ itemUid, quantity }));
 }
 
-function createUserResourceInventoryStatement(
-  db: DrizzleD1Database,
-  userId: number,
-  itemUid: string,
-  quantity: number,
-): BatchItem<"sqlite"> {
-  if (quantity === 0) {
-    return db
+async function writeInventoryItems(db: InventoryDb, userId: number, items: UserResourceInventoryInput[]) {
+  const deletes = items.filter((item) => item.quantity <= 0).map((item) => item.itemUid);
+  for (let offset = 0; offset < deletes.length; offset += PG_WRITE_CHUNK_SIZE) {
+    const chunk = deletes.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+    await db
       .delete(growthResourceInventoryTable)
-      .where(and(eq(growthResourceInventoryTable.userId, userId), eq(growthResourceInventoryTable.itemUid, itemUid)));
+      .where(
+        and(eq(growthResourceInventoryTable.userId, userId), inArray(growthResourceInventoryTable.itemUid, chunk)),
+      );
   }
 
-  return db
-    .insert(growthResourceInventoryTable)
-    .values({ uid: nanoid(8), userId, itemUid, quantity })
-    .onConflictDoUpdate({
-      target: [growthResourceInventoryTable.userId, growthResourceInventoryTable.itemUid],
-      set: { quantity, updatedAt: sql`current_timestamp` },
-    });
-}
-
-async function runInventoryBatch(db: DrizzleD1Database, statements: BatchItem<"sqlite">[]) {
-  if (statements.length === 0) {
-    return;
+  const inserts = items.filter((item) => item.quantity > 0);
+  for (let offset = 0; offset < inserts.length; offset += PG_WRITE_CHUNK_SIZE) {
+    const chunk = inserts.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+    await db
+      .insert(growthResourceInventoryTable)
+      .values(chunk.map((item) => ({ uid: nanoid(8), userId, itemUid: item.itemUid, quantity: item.quantity })))
+      .onConflictDoUpdate({
+        target: [growthResourceInventoryTable.userId, growthResourceInventoryTable.itemUid],
+        set: { quantity: sql`excluded.quantity`, updatedAt: new Date() },
+      });
   }
-
-  await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
 }

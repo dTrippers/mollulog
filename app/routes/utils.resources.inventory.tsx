@@ -1,12 +1,14 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { isStudentStateMaintenanceResult } from "~/components/features/student-state/StudentStateMaintenanceToast";
 import {
   aggregateGrowthResourceRequirements,
   buildRelationshipGiftResourceRequirements,
   getEquipmentTypeKey,
 } from "~/domain/growth-resource";
 import { buildOcrInventoryCatalogResources, parseOcrInventoryResourceUid } from "~/domain/ocr-resource-identity";
+import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/models/item-catalog";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import {
@@ -51,7 +53,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
@@ -60,6 +62,12 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
     return data<ActionData>({ error: "지원하지 않는 요청 방식이에요" }, { status: 405 });
   }
+
+  const maintenance = await studentStateMaintenanceActionResult(env, {
+    ctx,
+    operation: "utils.resources.inventory.action",
+  });
+  if (maintenance) return maintenance;
 
   try {
     const payload = await request.json<ResourceInventorySavePayload>();
@@ -95,6 +103,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 export default function ResourceInventoryPage() {
   const { resources, ownedQuantities, relationshipGiftRequirements } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const formActionData = isStudentStateMaintenanceResult(actionData) ? undefined : actionData;
   const { managedStudents } = useOutletContext<GrowthLayoutContext>();
   const requiredResources = aggregateGrowthResourceRequirements([
     ...managedStudents.flatMap((student) => (student.resourceRequirements ? [student.resourceRequirements] : [])),
@@ -106,7 +115,7 @@ export default function ResourceInventoryPage() {
       resources={resources}
       requiredResources={requiredResources}
       ownedQuantities={ownedQuantities}
-      error={actionData?.error}
+      error={formActionData?.error}
     />
   );
 }

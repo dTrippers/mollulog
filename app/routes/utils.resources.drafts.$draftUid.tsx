@@ -1,14 +1,19 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import {
+  isStudentStateMaintenanceResult,
+  StudentStateMaintenanceToast,
+} from "~/components/features/student-state/StudentStateMaintenanceToast";
 import { routeError } from "~/lib/http-errors";
+import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
+import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import {
   applyUserResourceInventoryDraft,
   discardUserResourceInventoryDraft,
   getUserResourceInventoryDraft,
   getUserResourceInventoryMapByItemUids,
 } from "~/models/user-resource-inventory";
-import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import ResourceInventoryDraftReview from "./utils.resources._components/ResourceInventoryDraftReview";
 
 type ActionData = {
@@ -48,11 +53,17 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
   }
+
+  const maintenance = await studentStateMaintenanceActionResult(env, {
+    ctx,
+    operation: "utils.resources.drafts.action",
+  });
+  if (maintenance) return maintenance;
 
   const draftUid = params.draftUid;
   if (!draftUid) {
@@ -84,13 +95,17 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 export default function ResourceDraftPage() {
   const { draft, resourcesByUid, currentQuantities } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const reviewActionData = isStudentStateMaintenanceResult(actionData) ? undefined : actionData;
 
   return (
-    <ResourceInventoryDraftReview
-      draft={draft}
-      resourcesByUid={resourcesByUid}
-      currentQuantities={currentQuantities}
-      error={actionData?.error}
-    />
+    <>
+      <StudentStateMaintenanceToast trigger={actionData} />
+      <ResourceInventoryDraftReview
+        draft={draft}
+        resourcesByUid={resourcesByUid}
+        currentQuantities={currentQuantities}
+        error={reviewActionData?.error}
+      />
+    </>
   );
 }

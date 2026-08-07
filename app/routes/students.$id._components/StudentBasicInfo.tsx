@@ -8,6 +8,10 @@ import {
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
+import {
+  isStudentStateMaintenanceResult,
+  StudentStateMaintenanceToast,
+} from "~/components/features/student-state/StudentStateMaintenanceToast";
 import { TierSelector } from "~/components/features/students";
 import { Button, Callout, EmptyView, HoverTooltip, NumberInput, SectionCard, SubTitle } from "~/components/primitives";
 import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
@@ -26,10 +30,11 @@ import {
   serializeStudentGrowthDraft,
 } from "~/domain/student-growth-draft";
 import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
+import type { StudentStateMaintenanceResult } from "~/domain/student-state-cutover";
 import {
-  StudentSkillSelectionCondition,
   type Attack,
   type StudentCatalogStat,
+  StudentSkillSelectionCondition,
   type StudentSkillTypeEnum,
 } from "~/graphql/graphql";
 import { equipmentImageUrl } from "~/models/assets";
@@ -48,6 +53,7 @@ type StudentBasicInfoProps = {
 };
 
 type SaveResult = { ok: true } | { ok: false; error: string };
+type SaveFetcherData = SaveResult | StudentStateMaintenanceResult;
 
 const skillSlotLabels: Record<StudentSkillTypeEnum, string> = {
   ex: "EX 스킬",
@@ -95,7 +101,7 @@ export default function StudentBasicInfo({
   relatedRelationshipLevels,
   gradingSummary,
 }: StudentBasicInfoProps) {
-  const fetcher = useFetcher<SaveResult>();
+  const fetcher = useFetcher<SaveFetcherData>();
   const stateStudentUid = student.studentVariant.primaryStudent.uid;
   const [state, setState] = useState<StudentCalculatorState>(savedState);
   const [saved, setSaved] = useState(false);
@@ -129,6 +135,10 @@ export default function StudentBasicInfo({
 
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data) return;
+    if (isStudentStateMaintenanceResult(fetcher.data)) {
+      setSaved(false);
+      return;
+    }
     setSaved(fetcher.data.ok);
     if (fetcher.data.ok && draftStorageKey) {
       try {
@@ -219,6 +229,7 @@ export default function StudentBasicInfo({
 
   return (
     <div className="space-y-6 md:space-y-8">
+      <StudentStateMaintenanceToast trigger={fetcher.data} />
       <section>
         <h2 className="text-lg font-semibold">학생 기본 정보</h2>
         <SectionCard className="mt-3 space-y-0 p-2.5 md:mt-4 md:p-4">
@@ -316,7 +327,7 @@ export default function StudentBasicInfo({
             </div>
           ) : null}
         </SectionCard>
-        {fetcher.data && !fetcher.data.ok ? (
+        {fetcher.data && !isStudentStateMaintenanceResult(fetcher.data) && !fetcher.data.ok ? (
           <div className="mt-3">
             <Callout tone="destructive" title={fetcher.data.error} />
           </div>

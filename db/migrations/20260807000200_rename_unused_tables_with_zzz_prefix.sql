@@ -1,0 +1,13 @@
+ALTER TABLE timeline_contents RENAME TO zzz_timeline_contents;
+ALTER TABLE posts RENAME TO zzz_posts;
+ALTER TABLE content_favorite_students RENAME TO zzz_content_favorite_students;
+ALTER TABLE content_favorite_counts RENAME TO zzz_content_favorite_counts;
+ALTER TABLE coupons RENAME TO zzz_coupons;
+ALTER TABLE coupon_registrations RENAME TO zzz_coupon_registrations;
+ALTER TABLE feedback_tickets RENAME TO zzz_feedback_tickets;
+ALTER TABLE feedback_replies RENAME TO zzz_feedback_replies;
+ALTER TABLE community_posts RENAME TO zzz_community_posts;
+ALTER TABLE community_comments RENAME TO zzz_community_comments;
+ALTER TABLE community_post_likes RENAME TO zzz_community_post_likes;
+ALTER TABLE community_post_tags RENAME TO zzz_community_post_tags;
+ALTER TABLE recruitment_results RENAME TO zzz_recruitment_results;

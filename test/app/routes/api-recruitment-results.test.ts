@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { getActiveSensei } from "../../../app/auth/authenticator.server";
 import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
 import { getUserFavoritedStudents } from "../../../app/models/favorite-students";
-import { addRecruitedStudentToResult } from "../../../app/models/recruitment-result.server";
+import { addRecruitedStudentToResult, deleteRecruitmentResult } from "../../../app/models/recruitment-result.server";
 import { action } from "../../../app/routes/api.recruitment-results";
 import { getFutureContents } from "../../../app/views/futures";
 
@@ -26,13 +26,17 @@ jest.mock("~/models/recruitment-result.server", () => ({
   upsertRecruitmentResult: jest.fn(),
 }));
 
-const env = {} as Env;
+const env = {
+  KV_CACHE: { get: jest.fn(async () => null) },
+} as unknown as Env;
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetFutureContents = getFutureContents as jest.MockedFunction<typeof getFutureContents>;
 const mockedGetUserFavoritedStudents = getUserFavoritedStudents as jest.MockedFunction<typeof getUserFavoritedStudents>;
 const mockedAddRecruitedStudentToResult = addRecruitedStudentToResult as jest.MockedFunction<
   typeof addRecruitedStudentToResult
 >;
+const mockedDeleteRecruitmentResult = deleteRecruitmentResult as jest.MockedFunction<typeof deleteRecruitmentResult>;
+const mockedKvGet = env.KV_CACHE.get as unknown as jest.MockedFunction<(key: string) => Promise<string | null>>;
 
 type DataResult<T> = {
   type: "DataWithResponseInit";
@@ -89,6 +93,7 @@ describe("api.recruitment-results", () => {
       uid: "sensei-1",
       username: "sensei",
     } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedKvGet.mockResolvedValue(null);
     mockedAddRecruitedStudentToResult.mockResolvedValue({
       uid: "result-a",
       recruitmentGroupUid: "group-a",
@@ -179,5 +184,22 @@ describe("api.recruitment-results", () => {
     expect(response.init?.status).toBe(400);
     expect(response.data.error).toBe("Recruitment completion is not allowed");
     expect(mockedAddRecruitedStudentToResult).not.toHaveBeenCalled();
+  });
+
+  it("freezes non-delete actions before payload validation but leaves delete outside the boundary", async () => {
+    mockedKvGet.mockResolvedValue("enabled");
+
+    const frozen = expectDataResult<{ kind: string; code: string }>(
+      await action(createActionArgs({ action: "complete" })),
+    );
+    expect(frozen.init?.status).toBe(503);
+    expect(frozen.init?.headers).toMatchObject({ "Retry-After": "30" });
+    expect(frozen.data).toMatchObject({ kind: "studentStateMaintenance", code: "STUDENT_STATE_MAINTENANCE" });
+
+    const deleted = expectDataResult<{ success: boolean }>(
+      await action(createActionArgs({ action: "delete", uid: "__nonexistent-maintenance-probe__" })),
+    );
+    expect(deleted.data.success).toBe(true);
+    expect(mockedDeleteRecruitmentResult).toHaveBeenCalledWith(env, 1, "__nonexistent-maintenance-probe__");
   });
 });

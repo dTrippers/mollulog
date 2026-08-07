@@ -417,6 +417,200 @@ export const pgRecruitmentResultsTable = pgTable(
   ],
 );
 
+/** Canonical PostgreSQL tables for authenticated student state and imports. */
+export const pgRecruitedStudentsTable = pgTable(
+  "recruited_students",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    studentUid: text("student_uid").notNull(),
+    tier: integer().notNull(),
+    level: integer(),
+    skillEx: integer("skill_ex"),
+    skillNormal: integer("skill_normal"),
+    skillEnhanced: integer("skill_enhanced"),
+    skillSub: integer("skill_sub"),
+    equip1: integer(),
+    equip2: integer(),
+    equip3: integer(),
+    equipSpecial: integer("equip_special"),
+    weaponLevel: integer("weapon_level"),
+    abilityHp: integer("ability_hp"),
+    abilityAtk: integer("ability_atk"),
+    abilityHeal: integer("ability_heal"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("recruited_students_uid_uidx").on(table.uid),
+    uniqueIndex("recruited_students_user_student_uidx").on(table.userId, table.studentUid),
+    index("recruited_students_user_id_idx").on(table.userId),
+    index("recruited_students_student_uid_idx").on(table.studentUid),
+  ],
+);
+
+export const pgStudentGrowthTable = pgTable(
+  "student_growth",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    studentUid: text("student_uid").notNull(),
+    level: integer(),
+    skillEx: integer("skill_ex"),
+    skillNormal: integer("skill_normal"),
+    skillEnhanced: integer("skill_enhanced"),
+    skillSub: integer("skill_sub"),
+    equip1: integer(),
+    equip2: integer(),
+    equip3: integer(),
+    equipSpecial: integer("equip_special"),
+    targetLevel: integer("target_level"),
+    targetSkillEx: integer("target_skill_ex"),
+    targetSkillNormal: integer("target_skill_normal"),
+    targetSkillEnhanced: integer("target_skill_enhanced"),
+    targetSkillSub: integer("target_skill_sub"),
+    targetEquip1: integer("target_equip1"),
+    targetEquip2: integer("target_equip2"),
+    targetEquip3: integer("target_equip3"),
+    targetEquipSpecial: integer("target_equip_special"),
+    targetTier: integer("target_tier"),
+    targetWeaponLevel: integer("target_weapon_level"),
+    targetAbilityHp: integer("target_ability_hp"),
+    targetAbilityAtk: integer("target_ability_atk"),
+    targetAbilityHeal: integer("target_ability_heal"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("student_growth_uid_uidx").on(table.uid),
+    uniqueIndex("student_growth_user_student_uidx").on(table.userId, table.studentUid),
+    index("student_growth_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgRelationshipLevelsTable = pgTable(
+  "user_relationship_levels",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    studentId: text("student_id").notNull(),
+    currentLevel: integer("current_level").notNull(),
+    currentExp: integer("current_exp"),
+    targetLevel: integer("target_level").notNull(),
+    items: jsonb().$type<Record<string, number>>().notNull().default({}),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    check("user_relationship_levels_items_object", sql`jsonb_typeof(${table.items}) = 'object'`),
+    uniqueIndex("user_relationship_levels_uid_uidx").on(table.uid),
+    uniqueIndex("user_relationship_levels_user_student_uidx").on(table.userId, table.studentId),
+    index("user_relationship_levels_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgGrowthResourceInventoryTable = pgTable(
+  "growth_resource_inventory",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    itemUid: text("item_uid").notNull(),
+    quantity: integer().notNull().default(0),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("growth_resource_inventory_uid_uidx").on(table.uid),
+    uniqueIndex("growth_resource_inventory_user_item_uidx").on(table.userId, table.itemUid),
+    index("growth_resource_inventory_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgSyncDraftsTable = pgTable(
+  "sync_drafts",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    apiKeyUid: text("api_key_uid"),
+    source: text().notNull().default("connect"),
+    sourceRef: text("source_ref"),
+    type: text().notNull(),
+    status: text().notNull().default("pending"),
+    toolName: text("tool_name"),
+    toolVersion: text("tool_version"),
+    catalogVersion: text("catalog_version"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    appliedAt: timestamptz("applied_at"),
+    expiresAt: timestamptz("expires_at"),
+  },
+  (table) => [
+    uniqueIndex("sync_drafts_uid_uidx").on(table.uid),
+    uniqueIndex("sync_drafts_user_source_ref_uidx")
+      .on(table.userId, table.source, table.sourceRef)
+      .where(sql`${table.sourceRef} is not null`),
+    index("sync_drafts_user_status_idx").on(table.userId, table.status),
+  ],
+);
+
+export const pgSyncDraftEntriesTable = pgTable(
+  "sync_draft_entries",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    draftUid: text("draft_uid").notNull(),
+    entryKey: text("entry_key").notNull(),
+    value: integer().notNull(),
+    valueJson: text("value_json"),
+    meta: text(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("sync_draft_entries_uid_uidx").on(table.uid),
+    uniqueIndex("sync_draft_entries_draft_entry_uidx").on(table.draftUid, table.entryKey),
+    index("sync_draft_entries_draft_uid_idx").on(table.draftUid, table.id),
+  ],
+);
+
+export const pgUserResourceInventoryDraftsTable = pgTable(
+  "user_resource_inventory_drafts",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    status: text().notNull().default("pending"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    appliedAt: timestamptz("applied_at"),
+  },
+  (table) => [
+    uniqueIndex("user_resource_inventory_drafts_uid_uidx").on(table.uid),
+    index("user_resource_inventory_drafts_user_status_idx").on(table.userId, table.status),
+  ],
+);
+
+export const pgUserResourceInventoryDraftItemsTable = pgTable(
+  "user_resource_inventory_draft_items",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    draftUid: text("draft_uid").notNull(),
+    itemUid: text("item_uid").notNull(),
+    quantity: integer().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("user_resource_inventory_draft_items_uid_uidx").on(table.uid),
+    uniqueIndex("user_resource_inventory_draft_items_draft_item_uidx").on(table.draftUid, table.itemUid),
+    index("user_resource_inventory_draft_items_draft_uid_idx").on(table.draftUid),
+  ],
+);
+
 export const pgOcrJobsTable = pgTable(
   "ocr_jobs",
   {

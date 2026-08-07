@@ -1,5 +1,11 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import { getStudentGrowth, getStudentGrowthWithMetadata, upsertStudentGrowth } from "~/models/student-growth";
+import { FakePostgresClient } from "../../helpers/fake-postgres";
+
+jest.mock("~/lib/postgres.server", () => ({
+  withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
+    operation(env.__pgClient),
+}));
 
 type StudentGrowthRow = {
   id: number;
@@ -162,8 +168,11 @@ function rowFactory(overrides: Partial<StudentGrowthRow>): StudentGrowthRow {
   };
 }
 
-function createEnv(db = new FakeD1Database()): { db: FakeD1Database; env: Env } {
-  return { db, env: { DB: db } as unknown as Env };
+function createEnv(db = new FakePostgresClient({}, "student_growth")): { db: FakePostgresClient; env: Env } {
+  return {
+    db,
+    env: { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+  };
 }
 
 function normalizeSql(sql: string): string {
@@ -171,7 +180,7 @@ function normalizeSql(sql: string): string {
 }
 
 function expectNoLegacyCurrentColumnsWritten(sql: string) {
-  const normalizedSql = normalizeSql(sql);
+  const normalizedSql = normalizeSql(sql).split("do update set")[1] ?? "";
   for (const field of [
     "level",
     "skillEx",
@@ -262,7 +271,7 @@ describe("student-growth target state", () => {
     await expect(getStudentGrowthWithMetadata(env, 1, "student-a")).resolves.toMatchObject({
       uid: "growth-a",
       studentUid: "student-a",
-      createdAt: "2026-07-01 12:34:56",
+      createdAt: "2026-07-01T03:34:56.000Z",
     });
   });
 

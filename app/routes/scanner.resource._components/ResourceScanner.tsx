@@ -10,6 +10,7 @@ import {
 import { ArrowPathIcon, ArrowsPointingOutIcon, PhotoIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { StudentStateMaintenanceToast } from "~/components/features/student-state/StudentStateMaintenanceToast";
 import { Button, Callout, HorizontalScroll, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
 import {
   OCR_ALLOWED_CONTENT_TYPES,
@@ -18,6 +19,7 @@ import {
   OCR_MAX_IMAGES,
   OCR_MAX_JOB_BYTES,
 } from "~/domain/ocr";
+import { studentStateMaintenanceResult } from "~/domain/student-state-cutover";
 import { cn } from "~/lib/utils";
 import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
 import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
@@ -138,6 +140,7 @@ export default function ResourceScanner() {
   const [phase, setPhase] = useState<ScannerPhase>("idle");
   const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [maintenanceTrigger, setMaintenanceTrigger] = useState<unknown>(null);
   const [uploadQuota, setUploadQuota] = useScannerQuota("item_inventory_images_v1", setError);
   const [job, setJob] = useState<JobStatus | null>(null);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
@@ -553,6 +556,9 @@ export default function ResourceScanner() {
       setPhase("applied");
       notifyScannerJobsChanged();
     } catch (applyError) {
+      if (applyError instanceof ScannerApiRequestError && applyError.maintenance) {
+        setMaintenanceTrigger({ ...studentStateMaintenanceResult });
+      }
       setError(toScannerErrorMessage(applyError));
       setPhase("review");
     }
@@ -560,6 +566,7 @@ export default function ResourceScanner() {
 
   return (
     <div className="space-y-8 pb-12 pt-6 lg:pt-2">
+      <StudentStateMaintenanceToast trigger={maintenanceTrigger} />
       {!selectedJobUid ? (
         <ScannerUploadSection
           title="아이템 스크린샷 업로드"

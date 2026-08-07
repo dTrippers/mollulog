@@ -1,5 +1,15 @@
-import { describe, expect, it } from "@jest/globals";
-import { getRelationshipLevels, resolveRelationshipLevelInput } from "../../../app/models/relationship-level";
+import { describe, expect, it, jest } from "@jest/globals";
+import {
+  getRelationshipLevels,
+  resolveRelationshipLevelInput,
+  upsertRelationshipLevel,
+} from "../../../app/models/relationship-level";
+import { FakePostgresClient } from "../../helpers/fake-postgres";
+
+jest.mock("~/lib/postgres.server", () => ({
+  withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
+    operation(env.__pgClient),
+}));
 
 type RelationshipLevelRow = {
   id: number;
@@ -106,8 +116,8 @@ describe("relationship-level", () => {
     );
   });
 
-  it("loads a large student ID filter within the D1 bind parameter limit", async () => {
-    const db = new FakeD1Database();
+  it("loads a large student ID filter with PostgreSQL chunking", async () => {
+    const db = new FakePostgresClient({}, "user_relationship_levels");
     const studentIds = Array.from({ length: 181 }, (_, index) => `student-${index}`);
     db.rows.push(
       ...studentIds.map((studentId, index) => ({
@@ -125,8 +135,48 @@ describe("relationship-level", () => {
     );
 
     await expect(
-      getRelationshipLevels({ DB: db } as unknown as Env, 1, [...studentIds, studentIds[0]]),
+      getRelationshipLevels(
+        { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+        1,
+        [...studentIds, studentIds[0]],
+      ),
     ).resolves.toHaveLength(181);
-    expect(db.selectParameterCounts).toEqual([91, 91, 2]);
+    expect(db.selectParameterCounts).toEqual([182]);
+  });
+
+  it("updates the conflict timestamp when relationship state changes", async () => {
+    const previousUpdatedAt = new Date("2026-07-25T00:00:00.000Z");
+    const db = new FakePostgresClient(
+      {
+        user_relationship_levels: [
+          {
+            id: 1,
+            uid: "relationship-1",
+            userId: 1,
+            studentId: "student-1",
+            currentLevel: 1,
+            currentExp: null,
+            targetLevel: 10,
+            items: {},
+            createdAt: previousUpdatedAt,
+            updatedAt: previousUpdatedAt,
+          },
+        ],
+      },
+      "user_relationship_levels",
+    );
+
+    await upsertRelationshipLevel(
+      { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+      1,
+      "student-1",
+      2,
+      10,
+      20,
+      { gift: 3 },
+    );
+
+    const updatedAt = new Date(String(db.relationshipLevels[0]?.updatedAt));
+    expect(updatedAt.getTime()).toBeGreaterThan(previousUpdatedAt.getTime());
   });
 });

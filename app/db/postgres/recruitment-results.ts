@@ -17,7 +17,7 @@ import {
 import { normalizeInstant, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 import type { CommunityPostBlock } from "~/models/community";
-import { upsertRecruitedStudentFromRecruitmentResult } from "~/models/recruited-student";
+import { upsertRecruitedStudentFromRecruitmentResultInTransaction } from "~/models/recruited-student";
 import type {
   AddRecruitedStudentToResultInput,
   RecruitmentResult,
@@ -89,19 +89,6 @@ async function withRecruitmentDatabase<T>(
     },
     createClient,
     ctx,
-  );
-}
-
-/**
- * Temporary migration bridge: PostgreSQL recruitment results still project
- * additive student identities into D1 recruited_students. Remove this bridge
- * when recruited_students moves to PostgreSQL.
- */
-async function syncRecruitedStudents(env: Env, userId: number, students: RecruitmentResultStudent[]) {
-  await Promise.all(
-    students.map((student) =>
-      upsertRecruitedStudentFromRecruitmentResult(env, userId, student.studentUid, student.tier),
-    ),
   );
 }
 
@@ -432,15 +419,18 @@ async function upsertResultAndComment(
           .limit(1);
         if (!saved) throw new Error("Failed to upsert recruitment result");
         result = toModel(saved);
+        // Keep the recruited-student projection in the same PostgreSQL
+        // transaction. The additive-max tier semantics make retries and
+        // concurrent recruitment result writes idempotent.
+        for (const student of projection) {
+          await upsertRecruitedStudentFromRecruitmentResultInTransaction(tx, userId, student.studentUid, student.tier);
+        }
       });
       return { result, projection };
     },
     options.createClient ?? createPostgresClient,
     options.ctx,
-  ).then(async ({ result, projection }) => {
-    await syncRecruitedStudents(env, userId, projection);
-    return { result, projection };
-  });
+  );
 }
 
 export async function upsertPostgresRecruitmentResult(

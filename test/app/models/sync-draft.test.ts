@@ -1,5 +1,16 @@
-import { describe, expect, it } from "@jest/globals";
-import { applySyncDraft, normalizeSyncDraftEntryValue } from "~/models/sync-draft";
+import { describe, expect, it, jest } from "@jest/globals";
+import {
+  applySyncDraft,
+  createAndApplySyncDraft,
+  normalizeSyncDraftEntryValue,
+  updateSyncDraftEntries,
+} from "~/models/sync-draft";
+import { FakePostgresClient } from "../../helpers/fake-postgres";
+
+jest.mock("~/lib/postgres.server", () => ({
+  withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
+    operation(env.__pgClient),
+}));
 
 type SyncDraftRow = {
   id: number;
@@ -443,8 +454,11 @@ function createStudentGrowthRow(overrides: Partial<StudentGrowthRow> = {}): Stud
   };
 }
 
-function createEnv(db = new FakeD1Database()): { db: FakeD1Database; env: Env } {
-  return { db, env: { DB: db } as unknown as Env };
+function createEnv(db = new FakePostgresClient()): { db: FakePostgresClient; env: Env } {
+  return {
+    db,
+    env: { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+  };
 }
 
 function toNullableNumber(value: unknown): number | null {
@@ -670,5 +684,71 @@ describe("sync-draft", () => {
         items: '{"5996":2}',
       }),
     ]);
+  });
+
+  it("updates more than 500 draft entries with bounded VALUES statements", async () => {
+    const { db, env } = createEnv();
+    db.drafts.push(createDraftRow({ type: "item_inventory" }));
+    const entries = Array.from({ length: 1001 }, (_, index) => {
+      const entryKey = `item-${index}`;
+      db.entries.push(
+        createEntryRow({
+          id: index + 1,
+          entryKey,
+          value: index + 1,
+          valueJson: null,
+        }),
+      );
+      return { entryKey, value: index + 2 };
+    });
+
+    await updateSyncDraftEntries(env, 1, "draft-a", entries);
+
+    const valuesUpdates = db.statements.filter(
+      (statement) =>
+        statement.toLowerCase().includes('update "sync_draft_entries"') &&
+        statement.toLowerCase().includes("from (values"),
+    );
+    expect(valuesUpdates).toHaveLength(3);
+    expect(
+      valuesUpdates.every((statement) => !statement.toLowerCase().includes('update "sync_draft_entries" set')),
+    ).toBe(true);
+  });
+
+  it("applies more than 500 student-state entries with bounded bulk statements", async () => {
+    const { db, env } = createEnv();
+    const input = {
+      source: "connect" as const,
+      sourceRef: "bulk-student-state",
+      type: "student_state" as const,
+      entries: Array.from({ length: 1001 }, (_, index) => ({
+        entryKey: `student-${index}`,
+        value: 7,
+        valueJson: JSON.stringify({
+          current: { tier: 7, bond: (index % 100) + 1 },
+          target: { targetTier: 8, targetBond: (index % 100) + 1 },
+        }),
+      })),
+    };
+
+    await createAndApplySyncDraft(env, 1, input);
+
+    const recruitedStatements = db.statements.filter((statement) =>
+      statement.toLowerCase().includes('insert into "recruited_students"'),
+    );
+    const growthStatements = db.statements.filter((statement) =>
+      statement.toLowerCase().includes('insert into "student_growth"'),
+    );
+    const relationshipStatements = db.statements.filter((statement) =>
+      statement.toLowerCase().includes('insert into "user_relationship_levels"'),
+    );
+    const relationshipReads = db.statements.filter(
+      (statement) =>
+        statement.toLowerCase().includes("select") && statement.toLowerCase().includes('"user_relationship_levels"'),
+    );
+    expect(recruitedStatements).toHaveLength(3);
+    expect(growthStatements).toHaveLength(3);
+    expect(relationshipStatements).toHaveLength(6);
+    expect(relationshipReads).toHaveLength(3);
   });
 });

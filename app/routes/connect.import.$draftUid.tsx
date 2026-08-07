@@ -2,38 +2,44 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
+import {
+  isStudentStateMaintenanceResult,
+  StudentStateMaintenanceToast,
+} from "~/components/features/student-state/StudentStateMaintenanceToast";
+import {
+  mergeStudentStateDraftValueForUpdate,
+  parseStudentStateDraftValue,
+  type StudentStateDraftCurrentValue,
+  type StudentStateDraftTargetValue,
+  studentStateCurrentFields,
+  studentStateTargetFields,
+} from "~/domain/student-state";
 import { routeError } from "~/lib/http-errors";
+import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
+import { getStudentGearData } from "~/models/growth-resource";
+import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentGrowths } from "~/models/student-growth";
-import { mergeStudentStateDraftValueForUpdate } from "~/domain/student-state";
 import {
-  type StudentStateDraftCurrentValue,
-  type StudentStateDraftTargetValue,
-  parseStudentStateDraftValue,
-} from "~/domain/student-state";
-import { studentStateCurrentFields, studentStateTargetFields } from "~/domain/student-state";
-import {
-  type SyncDraft,
-  type SyncDraftEntry,
-  type SyncDraftEntryUpdateInput,
-  type SyncDraftType,
   applySyncDraft,
   discardSyncDraft,
   getSyncDraft,
   normalizeSyncDraftEntryValue,
+  type SyncDraft,
+  type SyncDraftEntry,
+  type SyncDraftEntryUpdateInput,
+  type SyncDraftType,
   updateSyncDraftEntries,
 } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
-import { getStudentGearData } from "~/models/growth-resource";
-import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import type { SyncDraftDisplayMetadata, SyncDraftReviewActionData } from "./connect.import._components/DraftReviewView";
-import SyncDraftReview from "./connect.import._components/SyncDraftReview";
 import StudentStateDraftReview, {
   type StudentStateCurrentValues,
   type StudentStateProposedValues,
 } from "./connect.import._components/StudentStateDraftReview";
+import SyncDraftReview from "./connect.import._components/SyncDraftReview";
 
 type ActionData = SyncDraftReviewActionData;
 
@@ -68,11 +74,14 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
   }
+
+  const maintenance = await studentStateMaintenanceActionResult(env, { ctx, operation: "connect.import.draft.action" });
+  if (maintenance) return maintenance;
 
   const draftUid = params.draftUid;
   if (!draftUid) {
@@ -131,6 +140,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 export default function ConnectDraftDetailPage() {
   const { draft, metadataByKey, currentValues, proposedStudentStateValues } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const reviewActionData = isStudentStateMaintenanceResult(actionData) ? undefined : actionData;
 
   const review =
     draft.type === "student_state" ? (
@@ -139,14 +149,14 @@ export default function ConnectDraftDetailPage() {
         metadataByKey={metadataByKey}
         currentValues={currentValues as StudentStateCurrentValues}
         proposedValues={proposedStudentStateValues as StudentStateProposedValues}
-        actionData={actionData}
+        actionData={reviewActionData}
       />
     ) : (
       <SyncDraftReview
         draft={draft}
         metadataByKey={metadataByKey}
         currentValues={currentValues as Record<string, number>}
-        actionData={actionData}
+        actionData={reviewActionData}
       />
     );
 
@@ -158,6 +168,7 @@ export default function ConnectDraftDetailPage() {
       contentWidth="full"
       layout="vertical"
     >
+      <StudentStateMaintenanceToast trigger={actionData} />
       {review}
     </Page>
   );

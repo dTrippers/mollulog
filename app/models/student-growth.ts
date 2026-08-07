@@ -1,45 +1,17 @@
-import { and, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { and, eq } from "drizzle-orm";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
+import { pgStudentGrowthTable } from "~/db/postgres/schema";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
   assertAbilityReleaseAvailable,
   assertWeaponLevelRange,
   WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
+import { withPostgresClient } from "~/lib/postgres.server";
 
-export const studentGrowthTable = sqliteTable("student_growth", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  studentUid: text().notNull(),
-  level: int(),
-  skillEx: int(),
-  skillNormal: int(),
-  skillEnhanced: int(),
-  skillSub: int(),
-  equip1: int(),
-  equip2: int(),
-  equip3: int(),
-  equipSpecial: int(),
-  targetLevel: int(),
-  targetSkillEx: int(),
-  targetSkillNormal: int(),
-  targetSkillEnhanced: int(),
-  targetSkillSub: int(),
-  targetEquip1: int(),
-  targetEquip2: int(),
-  targetEquip3: int(),
-  targetEquipSpecial: int(),
-  targetTier: int(),
-  targetWeaponLevel: int(),
-  targetAbilityHp: int(),
-  targetAbilityAtk: int(),
-  targetAbilityHeal: int(),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-});
+type StudentGrowthDb = NodePgDatabase;
+export const studentGrowthTable = pgStudentGrowthTable;
 
 export type StudentGrowth = {
   uid: string;
@@ -60,10 +32,7 @@ export type StudentGrowth = {
   targetAbilityHeal: number | null;
 };
 
-export type StudentGrowthWithMetadata = StudentGrowth & {
-  createdAt: string;
-};
-
+export type StudentGrowthWithMetadata = StudentGrowth & { createdAt: string };
 export type StudentGrowthInput = Omit<StudentGrowth, "uid" | "studentUid">;
 
 const growthRanges = {
@@ -83,32 +52,29 @@ const growthRanges = {
   targetAbilityHeal: { label: "목표 능력 개방 치유력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
 } satisfies Record<keyof StudentGrowthInput, { label: string; min: number; max: number }>;
 
-function toModel(studentGrowth: typeof studentGrowthTable.$inferSelect): StudentGrowth {
+function toModel(row: typeof pgStudentGrowthTable.$inferSelect): StudentGrowth {
   return {
-    uid: studentGrowth.uid,
-    studentUid: studentGrowth.studentUid,
-    targetLevel: studentGrowth.targetLevel,
-    targetSkillEx: studentGrowth.targetSkillEx,
-    targetSkillNormal: studentGrowth.targetSkillNormal,
-    targetSkillEnhanced: studentGrowth.targetSkillEnhanced,
-    targetSkillSub: studentGrowth.targetSkillSub,
-    targetEquip1: studentGrowth.targetEquip1,
-    targetEquip2: studentGrowth.targetEquip2,
-    targetEquip3: studentGrowth.targetEquip3,
-    targetEquipSpecial: studentGrowth.targetEquipSpecial,
-    targetTier: studentGrowth.targetTier,
-    targetWeaponLevel: studentGrowth.targetWeaponLevel,
-    targetAbilityHp: studentGrowth.targetAbilityHp,
-    targetAbilityAtk: studentGrowth.targetAbilityAtk,
-    targetAbilityHeal: studentGrowth.targetAbilityHeal,
+    uid: row.uid,
+    studentUid: row.studentUid,
+    targetLevel: row.targetLevel,
+    targetSkillEx: row.targetSkillEx,
+    targetSkillNormal: row.targetSkillNormal,
+    targetSkillEnhanced: row.targetSkillEnhanced,
+    targetSkillSub: row.targetSkillSub,
+    targetEquip1: row.targetEquip1,
+    targetEquip2: row.targetEquip2,
+    targetEquip3: row.targetEquip3,
+    targetEquipSpecial: row.targetEquipSpecial,
+    targetTier: row.targetTier,
+    targetWeaponLevel: row.targetWeaponLevel,
+    targetAbilityHp: row.targetAbilityHp,
+    targetAbilityAtk: row.targetAbilityAtk,
+    targetAbilityHeal: row.targetAbilityHeal,
   };
 }
 
-function toModelWithMetadata(studentGrowth: typeof studentGrowthTable.$inferSelect): StudentGrowthWithMetadata {
-  return {
-    ...toModel(studentGrowth),
-    createdAt: studentGrowth.createdAt,
-  };
+function toModelWithMetadata(row: typeof pgStudentGrowthTable.$inferSelect): StudentGrowthWithMetadata {
+  return { ...toModel(row), createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt };
 }
 
 export function validateStudentGrowthInput(input: StudentGrowthInput) {
@@ -117,22 +83,13 @@ export function validateStudentGrowthInput(input: StudentGrowthInput) {
     { label: string; min: number; max: number },
   ][]) {
     const value = input[field];
-    if (value == null) {
-      continue;
-    }
-
-    if (!Number.isInteger(value)) {
-      throw new Error(`${range.label}은(는) 숫자만 입력할 수 있어요`);
-    }
-
+    if (value == null) continue;
+    if (!Number.isInteger(value)) throw new Error(`${range.label}은(는) 숫자만 입력할 수 있어요`);
     if (value < range.min || value > range.max) {
       throw new Error(`${range.label}은(는) ${range.min}부터 ${range.max} 사이만 입력할 수 있어요`);
     }
   }
-
-  if (input.targetTier != null) {
-    validateStudentGrowthTargetStateForTier(input, input.targetTier);
-  }
+  if (input.targetTier != null) validateStudentGrowthTargetStateForTier(input, input.targetTier);
 }
 
 export function validateStudentGrowthTargetStateForTier(
@@ -147,27 +104,33 @@ export function validateStudentGrowthTargetStateForTier(
   );
 }
 
+function withDb<T>(env: Env, operation: (db: StudentGrowthDb) => Promise<T>): Promise<T> {
+  return withPostgresClient(env, (client) => operation(drizzle(client)));
+}
+
 export async function getStudentGrowths(env: Env, senseiId: number): Promise<StudentGrowth[]> {
-  const db = drizzle(env.DB);
-  const studentGrowths = await db.select().from(studentGrowthTable).where(eq(studentGrowthTable.userId, senseiId));
-  return studentGrowths.map(toModel);
+  return withDb(env, async (db) => {
+    const rows = await db.select().from(pgStudentGrowthTable).where(eq(pgStudentGrowthTable.userId, senseiId));
+    return rows.map(toModel);
+  });
 }
 
 export async function getStudentGrowthsWithMetadata(env: Env, senseiId: number): Promise<StudentGrowthWithMetadata[]> {
-  const db = drizzle(env.DB);
-  const studentGrowths = await db.select().from(studentGrowthTable).where(eq(studentGrowthTable.userId, senseiId));
-  return studentGrowths.map(toModelWithMetadata);
+  return withDb(env, async (db) => {
+    const rows = await db.select().from(pgStudentGrowthTable).where(eq(pgStudentGrowthTable.userId, senseiId));
+    return rows.map(toModelWithMetadata);
+  });
 }
 
 export async function getStudentGrowth(env: Env, senseiId: number, studentUid: string): Promise<StudentGrowth | null> {
-  const db = drizzle(env.DB);
-  const result = await db
-    .select()
-    .from(studentGrowthTable)
-    .where(and(eq(studentGrowthTable.userId, senseiId), eq(studentGrowthTable.studentUid, studentUid)))
-    .limit(1);
-
-  return result.length > 0 ? toModel(result[0]) : null;
+  return withDb(env, async (db) => {
+    const [row] = await db
+      .select()
+      .from(pgStudentGrowthTable)
+      .where(and(eq(pgStudentGrowthTable.userId, senseiId), eq(pgStudentGrowthTable.studentUid, studentUid)))
+      .limit(1);
+    return row ? toModel(row) : null;
+  });
 }
 
 export async function getStudentGrowthWithMetadata(
@@ -175,83 +138,33 @@ export async function getStudentGrowthWithMetadata(
   senseiId: number,
   studentUid: string,
 ): Promise<StudentGrowthWithMetadata | null> {
-  const db = drizzle(env.DB);
-  const result = await db
-    .select()
-    .from(studentGrowthTable)
-    .where(and(eq(studentGrowthTable.userId, senseiId), eq(studentGrowthTable.studentUid, studentUid)))
-    .limit(1);
-
-  return result.length > 0 ? toModelWithMetadata(result[0]) : null;
+  return withDb(env, async (db) => {
+    const [row] = await db
+      .select()
+      .from(pgStudentGrowthTable)
+      .where(and(eq(pgStudentGrowthTable.userId, senseiId), eq(pgStudentGrowthTable.studentUid, studentUid)))
+      .limit(1);
+    return row ? toModelWithMetadata(row) : null;
+  });
 }
 
 export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid: string, input: StudentGrowthInput) {
   validateStudentGrowthInput(input);
-
-  const uid = nanoid(8);
-  await env.DB.prepare(`
-    insert into student_growth (
-      uid,
-      userId,
-      studentUid,
-      targetLevel,
-      targetSkillEx,
-      targetSkillNormal,
-      targetSkillEnhanced,
-      targetSkillSub,
-      targetEquip1,
-      targetEquip2,
-      targetEquip3,
-      targetEquipSpecial,
-      targetTier,
-      targetWeaponLevel,
-      targetAbilityHp,
-      targetAbilityAtk,
-      targetAbilityHeal
-    )
-    values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
-    on conflict(userId, studentUid) do update set
-      targetLevel = excluded.targetLevel,
-      targetSkillEx = excluded.targetSkillEx,
-      targetSkillNormal = excluded.targetSkillNormal,
-      targetSkillEnhanced = excluded.targetSkillEnhanced,
-      targetSkillSub = excluded.targetSkillSub,
-      targetEquip1 = excluded.targetEquip1,
-      targetEquip2 = excluded.targetEquip2,
-      targetEquip3 = excluded.targetEquip3,
-      targetEquipSpecial = excluded.targetEquipSpecial,
-      targetTier = excluded.targetTier,
-      targetWeaponLevel = excluded.targetWeaponLevel,
-      targetAbilityHp = excluded.targetAbilityHp,
-      targetAbilityAtk = excluded.targetAbilityAtk,
-      targetAbilityHeal = excluded.targetAbilityHeal,
-      updatedAt = current_timestamp
-  `)
-    .bind(
-      uid,
-      senseiId,
-      studentUid,
-      input.targetLevel,
-      input.targetSkillEx,
-      input.targetSkillNormal,
-      input.targetSkillEnhanced,
-      input.targetSkillSub,
-      input.targetEquip1,
-      input.targetEquip2,
-      input.targetEquip3,
-      input.targetEquipSpecial,
-      input.targetTier,
-      input.targetWeaponLevel,
-      input.targetAbilityHp,
-      input.targetAbilityAtk,
-      input.targetAbilityHeal,
-    )
-    .run();
+  await withDb(env, async (db) => {
+    await db
+      .insert(pgStudentGrowthTable)
+      .values({ uid: nanoid(8), userId: senseiId, studentUid, ...input })
+      .onConflictDoUpdate({
+        target: [pgStudentGrowthTable.userId, pgStudentGrowthTable.studentUid],
+        set: { ...input, updatedAt: new Date() },
+      });
+  });
 }
 
 export async function removeStudentGrowth(env: Env, senseiId: number, studentUid: string) {
-  const db = drizzle(env.DB);
-  await db
-    .delete(studentGrowthTable)
-    .where(and(eq(studentGrowthTable.userId, senseiId), eq(studentGrowthTable.studentUid, studentUid)));
+  await withDb(env, (db) =>
+    db
+      .delete(pgStudentGrowthTable)
+      .where(and(eq(pgStudentGrowthTable.userId, senseiId), eq(pgStudentGrowthTable.studentUid, studentUid))),
+  );
 }

@@ -1,8 +1,8 @@
 import { HeartIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useState } from "react";
 import { NumberInput, SectionCard, Toggle } from "~/components/primitives";
+import { getAccumulatedRelationshipExpForLevel } from "~/domain/relationship-level";
 import { RELATIONSHIP_EXP_TABLE } from "~/models/constants";
-import { getAccumulatedRelationshipExpForLevel } from "~/models/relationship-level";
 
 type StudentRelationshipLevelProps = {
   currentExp: number | null;

@@ -7,10 +7,15 @@ import { ContentTimeline, ContentTimelineCompact } from "~/components/features/c
 import { ContentFilterPanel } from "~/components/features/futures";
 import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
 import { Page } from "~/components/features/layout";
+import {
+  isStudentStateMaintenanceResult,
+  StudentStateMaintenanceToast,
+} from "~/components/features/student-state/StudentStateMaintenanceToast";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { raidTypeToParam } from "~/domain/raid";
 import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { applyRecruitmentResultStudentCompletion } from "~/domain/recruitment-result";
+import type { StudentStateMaintenanceResult } from "~/domain/student-state-cutover";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import { captureServerError, getLogger } from "~/lib/observability.server";
@@ -196,6 +201,9 @@ type AllCommentsState = Record<string, NestedComment[]>;
 type FutureRecruitment = FutureContent["recruitments"][number];
 type CompletedRecruitmentStudentState = { recruitmentGroupUid: string; studentUid: string };
 type RecruitmentResultEditLinkState = { recruitmentGroupUid: string; link: string };
+type RecruitmentResultFetcherData =
+  | { success?: boolean; result?: RecruitmentResultState | null }
+  | StudentStateMaintenanceResult;
 
 function getContentLink(content: {
   contentType: EventType | RaidType;
@@ -365,7 +373,7 @@ export default function FutureContents() {
 
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
 
-  const recruitmentResultFetcher = useFetcher<{ success?: boolean; result?: RecruitmentResultState | null }>();
+  const recruitmentResultFetcher = useFetcher<RecruitmentResultFetcherData>();
   const submitRecruitmentResult = (data: RecruitmentResultActionData) =>
     recruitmentResultFetcher.submit(data, {
       action: "/api/recruitment-results",
@@ -373,15 +381,22 @@ export default function FutureContents() {
       encType: "application/json",
     });
 
+  const previousRecruitmentResultsRef = useRef<RecruitmentResultState[] | null>(null);
+
   useEffect(() => {
     const response = recruitmentResultFetcher.data;
-    if (
-      recruitmentResultFetcher.state !== "idle" ||
-      !response ||
-      !("success" in response) ||
-      !response.success ||
-      !response.result
-    ) {
+    if (recruitmentResultFetcher.state !== "idle" || !response) return;
+
+    if (isStudentStateMaintenanceResult(response)) {
+      if (previousRecruitmentResultsRef.current) {
+        setRecruitmentResults(previousRecruitmentResultsRef.current);
+      }
+      previousRecruitmentResultsRef.current = null;
+      return;
+    }
+
+    if (!response.success || !response.result) {
+      previousRecruitmentResultsRef.current = null;
       return;
     }
 
@@ -395,6 +410,7 @@ export default function FutureContents() {
       }
       return [...prev, nextResult];
     });
+    previousRecruitmentResultsRef.current = null;
   }, [recruitmentResultFetcher.state, recruitmentResultFetcher.data]);
 
   useEffect(() => {
@@ -472,6 +488,8 @@ export default function FutureContents() {
       showSignIn();
       return;
     }
+
+    previousRecruitmentResultsRef.current ??= recruitmentResults;
 
     if (completed) {
       submitRecruitmentResult({
@@ -685,6 +703,7 @@ export default function FutureContents() {
         },
       ]}
     >
+      <StudentStateMaintenanceToast trigger={recruitmentResultFetcher.data} />
       {(view === "timeline" || view === "table") && (
         <div className={view === "table" ? "lg:hidden" : ""}>
           <ContentTimeline

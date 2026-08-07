@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { data, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
+import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import {
   getRecruitedStudents,
   type RecruitedStudentCurrentStateInput,
@@ -142,8 +143,8 @@ function toCurrentStateInput(payload: Partial<GrowthActionData>): RecruitedStude
 }
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const logger = getLogger(env, context.cloudflare.ctx, { route: "utils.growth.students.action" });
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "utils.growth.students.action" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<GrowthActionResult>({ error: "로그인이 필요해요" }, { status: 401 });
@@ -152,6 +153,12 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
     return data<GrowthActionResult>({ error: "지원하지 않는 요청 방식이에요" }, { status: 405 });
   }
+
+  const maintenance = await studentStateMaintenanceActionResult(env, {
+    ctx,
+    operation: "utils.growth.students.action",
+  });
+  if (maintenance) return maintenance;
 
   try {
     const payload =

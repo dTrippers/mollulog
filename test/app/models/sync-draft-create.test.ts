@@ -1,5 +1,11 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import { createAndApplySyncDraft, createSyncDraft, type SyncDraftCreateInput } from "~/models/sync-draft";
+import { FakePostgresClient } from "../../helpers/fake-postgres";
+
+jest.mock("~/lib/postgres.server", () => ({
+  withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
+    operation(env.__pgClient),
+}));
 
 class CaptureStatement {
   params: unknown[] = [];
@@ -12,33 +18,37 @@ class CaptureStatement {
 
 describe("first-party OCR sync draft creation", () => {
   it("creates a reviewable item inventory draft with provenance metadata", async () => {
-    const statements: CaptureStatement[] = [];
-    const db = {
-      prepare(sql: string) {
-        const statement = new CaptureStatement(sql);
-        statements.push(statement);
-        return statement;
+    const db = new FakePostgresClient();
+
+    await createSyncDraft(
+      { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+      7,
+      {
+        source: "first_party_ocr",
+        sourceRef: "job-1",
+        type: "item_inventory",
+        toolName: "아이템 스크린샷 인식",
+        entries: [{ entryKey: "item-1", value: 12, meta: { confidence: 0.9 } }],
       },
-      batch: async () => [],
-    } as unknown as D1Database;
+    );
 
-    await createSyncDraft({ DB: db } as Env, 7, {
-      source: "first_party_ocr",
-      sourceRef: "job-1",
-      type: "item_inventory",
-      toolName: "아이템 스크린샷 인식",
-      entries: [{ entryKey: "item-1", value: 12, meta: { confidence: 0.9 } }],
-    });
-
-    expect(statements).toHaveLength(2);
-    expect(statements[0].sql).toContain("insert into sync_drafts");
-    expect(statements[0].params).toEqual(expect.arrayContaining([7, "first_party_ocr", "job-1", "item_inventory"]));
-    expect(statements[1].sql).toContain("insert into sync_draft_entries");
-    expect(statements[1].params).toEqual(expect.arrayContaining(["item-1", 12, JSON.stringify({ confidence: 0.9 })]));
+    expect(db.statements.some((sql) => sql.includes('insert into "sync_drafts"'))).toBe(true);
+    expect(db.statements.some((sql) => sql.includes('insert into "sync_draft_entries"'))).toBe(true);
+    expect(db.parameters.flat()).toEqual(
+      expect.arrayContaining([
+        7,
+        "first_party_ocr",
+        "job-1",
+        "item_inventory",
+        "item-1",
+        12,
+        JSON.stringify({ confidence: 0.9 }),
+      ]),
+    );
   });
 
   it("applies an OCR inventory result once and returns the existing application on retry", async () => {
-    const db = new ApplyingD1Database();
+    const db = new FakePostgresClient();
     const input: SyncDraftCreateInput & { sourceRef: string } = {
       source: "first_party_ocr" as const,
       sourceRef: "job-1",
@@ -47,17 +57,17 @@ describe("first-party OCR sync draft creation", () => {
       entries: [{ entryKey: "item-1", value: 12, meta: { confidence: 0.9 } }],
     };
 
-    const first = await createAndApplySyncDraft({ DB: db as unknown as D1Database } as Env, 7, input);
-    const retried = await createAndApplySyncDraft({ DB: db as unknown as D1Database } as Env, 7, input);
+    const env = { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env;
+    const first = await createAndApplySyncDraft(env, 7, input);
+    const retried = await createAndApplySyncDraft(env, 7, input);
 
     expect(first).toMatchObject({ alreadyApplied: false, draft: { status: "applied", sourceRef: "job-1" } });
     expect(retried).toMatchObject({ alreadyApplied: true, draft: { uid: first.draft.uid } });
-    expect(db.batchCalls).toBe(1);
-    expect(db.statements.some((statement) => statement.sql.includes("growth_resource_inventory"))).toBe(true);
+    expect(db.statements.some((statement) => statement.includes('"growth_resource_inventory"'))).toBe(true);
   });
 
   it("keeps unconfirmed student state columns when applying a partial OCR draft", async () => {
-    const db = new ApplyingD1Database();
+    const db = new FakePostgresClient();
     const input: SyncDraftCreateInput & { sourceRef: string } = {
       source: "first_party_ocr",
       sourceRef: "student-video-job",
@@ -90,18 +100,19 @@ describe("first-party OCR sync draft creation", () => {
         },
       ],
     };
-    const first = await createAndApplySyncDraft({ DB: db as unknown as D1Database } as Env, 7, input);
-    const retried = await createAndApplySyncDraft({ DB: db as unknown as D1Database } as Env, 7, input);
+    const env = { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env;
+    const first = await createAndApplySyncDraft(env, 7, input);
+    const retried = await createAndApplySyncDraft(env, 7, input);
 
-    const statement = db.statements.find((candidate) => candidate.sql.includes("insert into recruited_students"));
-    expect(statement?.sql).toContain("level = coalesce(excluded.level, recruited_students.level)");
-    expect(statement?.sql).toContain("weaponLevel = coalesce(excluded.weaponLevel, recruited_students.weaponLevel)");
+    const statement = db.statements.find((candidate) => candidate.includes('insert into "recruited_students"'));
+    expect(statement).toContain('"level" = coalesce(excluded.level, recruited_students.level)');
+    expect(statement).toContain('"weapon_level" = coalesce(excluded.weapon_level, recruited_students.weapon_level)');
     expect(first.alreadyApplied).toBe(false);
     expect(retried.alreadyApplied).toBe(true);
   });
 
   it("keeps overwrite semantics for non-OCR student state drafts", async () => {
-    const db = new ApplyingD1Database();
+    const db = new FakePostgresClient();
     const input: SyncDraftCreateInput & { sourceRef: string } = {
       source: "connect",
       sourceRef: "connect-import",
@@ -134,11 +145,15 @@ describe("first-party OCR sync draft creation", () => {
       ],
     };
 
-    await createAndApplySyncDraft({ DB: db as unknown as D1Database } as Env, 7, input);
+    await createAndApplySyncDraft(
+      { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+      7,
+      input,
+    );
 
-    const statement = db.statements.find((candidate) => candidate.sql.includes("insert into recruited_students"));
-    expect(statement?.sql).toContain("level = excluded.level");
-    expect(statement?.sql).not.toContain("level = coalesce");
+    const statement = db.statements.find((candidate) => candidate.includes('insert into "recruited_students"'));
+    expect(statement).toContain('"level" = excluded.level');
+    expect(statement).not.toContain('"level" = coalesce');
   });
 });
 

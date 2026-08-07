@@ -1,10 +1,16 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import {
   getRecruitedStudents,
   updateRecruitedStudentCurrentState,
   upsertRecruitedStudent,
   upsertRecruitedStudentState,
 } from "~/models/recruited-student";
+import { FakePostgresClient } from "../../helpers/fake-postgres";
+
+jest.mock("~/lib/postgres.server", () => ({
+  withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
+    operation(env.__pgClient),
+}));
 
 type RecruitedStudentRow = {
   id: number;
@@ -187,8 +193,11 @@ function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow>): Rec
   };
 }
 
-function createEnv(db = new FakeD1Database()): { db: FakeD1Database; env: Env } {
-  return { db, env: { DB: db } as unknown as Env };
+function createEnv(db = new FakePostgresClient()): { db: FakePostgresClient; env: Env } {
+  return {
+    db,
+    env: { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+  };
 }
 
 function normalizeSql(sql: string): string {
@@ -374,7 +383,7 @@ describe("recruited-student current state", () => {
     ]);
   });
 
-  it("loads a large student UID filter within the D1 bind parameter limit", async () => {
+  it("loads a large student UID filter with PostgreSQL chunking", async () => {
     const { db, env } = createEnv();
     const studentUids = Array.from({ length: 181 }, (_, index) => `student-${index}`);
     db.rows.push(
@@ -384,6 +393,6 @@ describe("recruited-student current state", () => {
     );
 
     await expect(getRecruitedStudents(env, 1, [...studentUids, studentUids[0]])).resolves.toHaveLength(181);
-    expect(db.selectParameterCounts).toEqual([91, 91, 2]);
+    expect(db.selectParameterCounts).toEqual([182]);
   });
 });

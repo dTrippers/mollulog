@@ -21,12 +21,17 @@ import {
   RequiredGifts,
   StudentRelationshipLevel,
 } from "~/components/features/relationship";
+import {
+  isStudentStateMaintenanceResult,
+  StudentStateMaintenanceToast,
+} from "~/components/features/student-state/StudentStateMaintenanceToast";
 import { Button, ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
 import { canonicalLink } from "~/lib/seo";
+import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import {
   getRelationshipLevels,
-  getRelationshipLevelValidationError,
   type RelationshipLevel,
   removeRelationshipLevel,
   upsertRelationshipLevel,
@@ -128,11 +133,14 @@ export type ActionData = {
 };
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
+
+  const maintenance = await studentStateMaintenanceActionResult(env, { ctx, operation: "utils.relationship.action" });
+  if (maintenance) return maintenance;
 
   if (request.method === "DELETE") {
     const actionData = await request.json<{ studentId: string }>();
@@ -338,6 +346,17 @@ export default function RelationshipUtil() {
 
   useEffect(() => {
     if (saveFetcher.state !== "idle") return;
+    if (isStudentStateMaintenanceResult(saveFetcher.data)) {
+      const submitted = submittedRelationshipRef.current;
+      if (submitted && submitted.studentUid === selectedStudentUid) {
+        setCurrentRelationship(savedRelationship);
+      }
+      submittedRelationshipRef.current = null;
+      setSavePending(false);
+      setSaveError(saveFetcher.data.message);
+      setSaveSuccess(false);
+      return;
+    }
     if (!saveFetcher.data?.success) return;
     if (processedActionDataRef.current === saveFetcher.data) return;
     processedActionDataRef.current = saveFetcher.data;
@@ -393,7 +412,7 @@ export default function RelationshipUtil() {
         ),
       );
     }
-  }, [saveFetcher.state, saveFetcher.data, selectedStudentUid]);
+  }, [saveFetcher.state, saveFetcher.data, selectedStudentUid, savedRelationship]);
 
   const submitRelationshipRef = useRef(submitRelationship);
   submitRelationshipRef.current = submitRelationship;
@@ -542,6 +561,7 @@ export default function RelationshipUtil() {
         },
       ]}
     >
+      <StudentStateMaintenanceToast trigger={saveFetcher.data} />
       {isItemScreen ? (
         <FavoritedItemSelector
           items={allStudentsFavoriteItems}
