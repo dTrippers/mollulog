@@ -6,7 +6,7 @@ import { getMaxLevelAt, type RaidPartyStudentMap } from "~/components/features/r
 import { AttributeBadge, Button, EmptyView, HorizontalScroll, SubTitle } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { raidTypeToParam } from "~/domain/raid";
-import { formatInstant } from "~/lib/date-time";
+import { compareInstantAsc, formatInstant } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl, studentImageUrl } from "~/models/assets";
@@ -26,6 +26,21 @@ function getRaidKey(raid: Pick<RaidScheduleListItem, "raidType" | "seasonIndex">
   return `${raid.raidType}:${raid.seasonIndex}`;
 }
 
+export function getNearestUpcomingRaid(upcomingRaids: RaidPortalUpcomingRaid[]) {
+  return upcomingRaids.reduce<RaidPortalUpcomingRaid | null>((nearest, candidate) => {
+    if (!nearest) {
+      return candidate;
+    }
+    if (!candidate.raid.startAt) {
+      return nearest;
+    }
+    if (!nearest.raid.startAt || compareInstantAsc(candidate.raid.startAt, nearest.raid.startAt) < 0) {
+      return candidate;
+    }
+    return nearest;
+  }, null);
+}
+
 function getDefenseTypes(raid: RaidScheduleListItem) {
   return [...new Set(raid.defenseTypeSets.flatMap(({ defenseTypes }) => defenseTypes))];
 }
@@ -40,12 +55,29 @@ function getRaidTimelinePath(raid: RaidScheduleListItem) {
   return `/timelines?${searchParams.toString()}`;
 }
 
+function formatRaidDateRange(raid: RaidScheduleListItem, timeZone: string) {
+  const startDate = raid.startAt ? formatInstant(raid.startAt, { timeZone, format: "YYYY.MM.DD" }) : "미정";
+  if (!raid.endAt) {
+    return `${startDate} ~ 미정`;
+  }
+
+  const startYear = raid.startAt ? formatInstant(raid.startAt, { timeZone, format: "YYYY" }) : null;
+  const endYear = formatInstant(raid.endAt, { timeZone, format: "YYYY" });
+  const endFormat = startYear === endYear ? "MM.DD" : "YYYY.MM.DD";
+  return `${startDate} ~ ${formatInstant(raid.endAt, { timeZone, format: endFormat })}`;
+}
+
 export default function RaidPortalScreen({
   currentRaids,
   upcomingRaids,
   recurringStudents,
   recurringStudentsStatus,
 }: RaidPortalScreenProps) {
+  const featuredUpcomingRaid = currentRaids.length === 0 ? getNearestUpcomingRaid(upcomingRaids) : null;
+  const lowerUpcomingRaids = featuredUpcomingRaid
+    ? upcomingRaids.filter(({ raid }) => raid.uid !== featuredUpcomingRaid.raid.uid)
+    : upcomingRaids;
+
   return (
     <div className="space-y-6 py-4 md:space-y-10 md:py-6">
       {currentRaids.length > 0 ? (
@@ -58,16 +90,95 @@ export default function RaidPortalScreen({
             partyStudents={partyStudents}
           />
         ))
+      ) : featuredUpcomingRaid ? (
+        <FeaturedUpcomingRaid raid={featuredUpcomingRaid.raid} />
       ) : (
-        <section>
-          <SubTitle text="현재 진행 중" />
-          <EmptyView text="현재 진행 중인 총력전/대결전이 없어요" />
-        </section>
+        <EmptyView text="현재 진행 중이거나 예정된 총력전/대결전이 없어요" />
       )}
 
-      <UpcomingRaids upcomingRaids={upcomingRaids} />
+      <UpcomingRaids upcomingRaids={lowerUpcomingRaids} />
 
-      <RecurringStudents students={recurringStudents} status={recurringStudentsStatus} upcomingRaids={upcomingRaids} />
+      {upcomingRaids.length > 0 ? (
+        <RecurringStudents
+          students={recurringStudents}
+          status={recurringStudentsStatus}
+          upcomingRaids={upcomingRaids}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function FeaturedUpcomingRaid({ raid }: { raid: RaidScheduleListItem }) {
+  return (
+    <section>
+      <SubTitle text="다음 시즌" />
+      <RaidHeroCard raid={raid} status="upcoming" />
+    </section>
+  );
+}
+
+function RaidHeroCard({ raid, status }: { raid: RaidScheduleListItem; status: "current" | "upcoming" }) {
+  const displayTimeZone = useDisplayTimeZone();
+  const raidPath = getRaidPath(raid);
+  const timelinePath = getRaidTimelinePath(raid);
+  const isCurrent = status === "current";
+
+  return (
+    <div className="overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
+      <div className="relative overflow-hidden p-5 md:p-6">
+        <img
+          src={bossImageUrl(raid.raidBoss.uid)}
+          alt=""
+          className="absolute top-0 right-0 h-full w-2/3 object-cover opacity-35 sm:w-1/2"
+        />
+        <div className="absolute inset-0 bg-linear-to-r from-card via-card/95 to-card/45" />
+        <span className="absolute top-4 right-4 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm md:top-5 md:right-5">
+          <span
+            className={isCurrent ? "size-2 rounded-full bg-red-500 animate-pulse" : "size-2 rounded-full bg-sky-400"}
+            aria-hidden="true"
+          />
+          {isCurrent ? "진행 중" : "예정"}
+        </span>
+
+        <div className="relative max-w-3xl">
+          <h2 className="pr-24 text-2xl font-bold text-foreground">{raid.raidBoss.name}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex} ·{" "}
+            {terrainLocale[raid.terrain]}
+            {isCurrent && raid.startAt && raid.endAt
+              ? ` · ${formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M.D" })}–${formatInstant(raid.endAt, { timeZone: displayTimeZone, format: "M.D" })}`
+              : ""}
+          </p>
+          {!isCurrent ? (
+            <p className="mt-1 text-sm tabular-nums text-muted-foreground">
+              {formatRaidDateRange(raid, displayTimeZone)}
+            </p>
+          ) : null}
+          <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2">
+            {raid.defenseTypeSets.map(({ difficulty, defenseTypes }) => (
+              <div key={`${difficulty ?? "none"}-${defenseTypes.join("-")}`} className="flex items-center gap-1.5">
+                {difficulty ? (
+                  <span className="text-xs text-muted-foreground">{difficultyLocale[difficulty]}</span>
+                ) : null}
+                {defenseTypes.map((defenseType) => (
+                  <AttributeBadge
+                    key={defenseType}
+                    text={defenseTypeLocale[defenseType]}
+                    color={defenseTypeColor[defenseType]}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <Button text="통계" to={raidPath} icon={ChartBarIcon} size="sm" />
+            <Button text="편성" to={`${raidPath}/ranks`} icon={UserGroupIcon} size="sm" />
+            <Button text="영상" to={`${raidPath}/videos`} icon={PlayIcon} size="sm" />
+            <Button text="공략" to={timelinePath} icon={QueueListIcon} size="sm" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -83,59 +194,11 @@ function CurrentRaidSection({
   videoStatus: RaidPortalData["currentRaids"][number]["videoStatus"];
   partyStudents: RaidPartyStudentMap;
 }) {
-  const displayTimeZone = useDisplayTimeZone();
   const raidPath = getRaidPath(raid);
-  const timelinePath = getRaidTimelinePath(raid);
 
   return (
     <section>
-      <div className="overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
-        <div className="relative overflow-hidden p-5 md:p-6">
-          <img
-            src={bossImageUrl(raid.raidBoss.uid)}
-            alt=""
-            className="absolute top-0 right-0 h-full w-2/3 object-cover opacity-35 sm:w-1/2"
-          />
-          <div className="absolute inset-0 bg-linear-to-r from-card via-card/95 to-card/45" />
-          <span className="absolute top-4 right-4 flex items-center gap-1.5 rounded-full bg-black/45 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm md:top-5 md:right-5">
-            <span className="size-2 rounded-full bg-red-500 animate-pulse" aria-hidden="true" />
-            진행 중
-          </span>
-
-          <div className="relative max-w-3xl">
-            <h2 className="pr-24 text-2xl font-bold text-foreground">{raid.raidBoss.name}</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex} ·{" "}
-              {terrainLocale[raid.terrain]}
-              {raid.startAt && raid.endAt
-                ? ` · ${formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M.D" })}–${formatInstant(raid.endAt, { timeZone: displayTimeZone, format: "M.D" })}`
-                : ""}
-            </p>
-            <div className="mt-4 flex flex-wrap gap-x-3 gap-y-2">
-              {raid.defenseTypeSets.map(({ difficulty, defenseTypes }) => (
-                <div key={`${difficulty ?? "none"}-${defenseTypes.join("-")}`} className="flex items-center gap-1.5">
-                  {difficulty ? (
-                    <span className="text-xs text-muted-foreground">{difficultyLocale[difficulty]}</span>
-                  ) : null}
-                  {defenseTypes.map((defenseType) => (
-                    <AttributeBadge
-                      key={defenseType}
-                      text={defenseTypeLocale[defenseType]}
-                      color={defenseTypeColor[defenseType]}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button text="통계" to={raidPath} icon={ChartBarIcon} size="sm" />
-              <Button text="편성" to={`${raidPath}/ranks`} icon={UserGroupIcon} size="sm" />
-              <Button text="영상" to={`${raidPath}/videos`} icon={PlayIcon} size="sm" />
-              <Button text="공략" to={timelinePath} icon={QueueListIcon} size="sm" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <RaidHeroCard raid={raid} status="current" />
 
       <div className="mt-6 flex items-end justify-between gap-4 md:mt-8">
         <SubTitle text="공략 영상" description="YouTube에 올라온 공략 영상과 편성 정보" />
@@ -208,35 +271,81 @@ function getVideoEmptyText(status: RaidPortalData["currentRaids"][number]["video
 function UpcomingRaids({ upcomingRaids }: { upcomingRaids: RaidPortalUpcomingRaid[] }) {
   const displayTimeZone = useDisplayTimeZone();
 
+  if (upcomingRaids.length === 0) {
+    return null;
+  }
+
   return (
     <section>
       <SubTitle text="다가오는 시즌" />
-      {upcomingRaids.length > 0 ? (
-        <>
-          <div className="divide-y divide-border overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:hidden">
+      <div className="divide-y divide-border overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:hidden">
+        {upcomingRaids.map(({ raid }) => {
+          const raidPath = getRaidPath(raid);
+          const timelinePath = getRaidTimelinePath(raid);
+          return (
+            <article key={raid.uid} className="px-3 py-3">
+              <div className="flex min-w-0 items-baseline gap-2">
+                <p className="shrink-0 text-xs font-medium text-muted-foreground">
+                  {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex}
+                </p>
+                <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{raid.raidBoss.name}</h3>
+                <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                  {raid.startAt ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M.D" }) : "미정"}
+                </p>
+              </div>
+              <div className="mt-2 flex items-end justify-between gap-2">
+                <div className="flex min-w-0 flex-wrap items-center gap-1">
+                  <span className="shrink-0 rounded-md bg-muted px-1.5 py-1 text-xs">
+                    {terrainLocale[raid.terrain]}
+                  </span>
+                  {getDefenseTypes(raid).map((defenseType) => (
+                    <AttributeBadge
+                      key={defenseType}
+                      text={defenseTypeLocale[defenseType]}
+                      color={defenseTypeColor[defenseType]}
+                    />
+                  ))}
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <Button text="통계" to={raidPath} size="xs" />
+                  <Button text="편성" to={`${raidPath}/ranks`} size="xs" />
+                  <Button text="영상" to={`${raidPath}/videos`} size="xs" />
+                  <Button text="공략" to={timelinePath} size="xs" />
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="hidden overflow-x-auto rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:block">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-border text-left text-xs text-muted-foreground">
+              <th className="px-3 py-2 font-medium">예상 일정</th>
+              <th className="px-3 py-2 font-medium">시즌</th>
+              <th className="px-3 py-2 font-medium">보스</th>
+              <th className="px-3 py-2 font-medium">지형</th>
+              <th className="px-3 py-2 font-medium">방어 타입</th>
+              <th className="px-3 py-2 font-medium">자세히 보기</th>
+            </tr>
+          </thead>
+          <tbody>
             {upcomingRaids.map(({ raid }) => {
               const raidPath = getRaidPath(raid);
               const timelinePath = getRaidTimelinePath(raid);
               return (
-                <article key={raid.uid} className="px-3 py-3">
-                  <div className="flex min-w-0 items-baseline gap-2">
-                    <p className="shrink-0 text-xs font-medium text-muted-foreground">
-                      {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex}
-                    </p>
-                    <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
-                      {raid.raidBoss.name}
-                    </h3>
-                    <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                      {raid.startAt
-                        ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M.D" })
-                        : "미정"}
-                    </p>
-                  </div>
-                  <div className="mt-2 flex items-end justify-between gap-2">
-                    <div className="flex min-w-0 flex-wrap items-center gap-1">
-                      <span className="shrink-0 rounded-md bg-muted px-1.5 py-1 text-xs">
-                        {terrainLocale[raid.terrain]}
-                      </span>
+                <tr key={raid.uid} className="border-b border-border/70 last:border-0">
+                  <td className="whitespace-nowrap px-3 py-3 tabular-nums">
+                    {raid.startAt ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M.D" }) : "미정"}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
+                    {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex}
+                  </td>
+                  <td className="px-3 py-3 font-semibold">{raid.raidBoss.name}</td>
+                  <td className="whitespace-nowrap px-3 py-3">{terrainLocale[raid.terrain]}</td>
+                  <td className="px-3 py-3">
+                    <div className="flex flex-wrap gap-1">
                       {getDefenseTypes(raid).map((defenseType) => (
                         <AttributeBadge
                           key={defenseType}
@@ -245,75 +354,21 @@ function UpcomingRaids({ upcomingRaids }: { upcomingRaids: RaidPortalUpcomingRai
                         />
                       ))}
                     </div>
-                    <div className="flex shrink-0 gap-1">
+                  </td>
+                  <td className="px-3 py-3">
+                    <div className="flex gap-1.5">
                       <Button text="통계" to={raidPath} size="xs" />
                       <Button text="편성" to={`${raidPath}/ranks`} size="xs" />
                       <Button text="영상" to={`${raidPath}/videos`} size="xs" />
                       <Button text="공략" to={timelinePath} size="xs" />
                     </div>
-                  </div>
-                </article>
+                  </td>
+                </tr>
               );
             })}
-          </div>
-
-          <div className="hidden lg:block">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                  <th className="px-3 py-2 font-medium">예상 일정</th>
-                  <th className="px-3 py-2 font-medium">시즌</th>
-                  <th className="px-3 py-2 font-medium">보스</th>
-                  <th className="px-3 py-2 font-medium">지형</th>
-                  <th className="px-3 py-2 font-medium">방어 타입</th>
-                  <th className="px-3 py-2 font-medium">자세히 보기</th>
-                </tr>
-              </thead>
-              <tbody>
-                {upcomingRaids.map(({ raid }) => {
-                  const raidPath = getRaidPath(raid);
-                  const timelinePath = getRaidTimelinePath(raid);
-                  return (
-                    <tr key={raid.uid} className="border-b border-border/70">
-                      <td className="whitespace-nowrap px-3 py-3 tabular-nums">
-                        {raid.startAt
-                          ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M.D" })
-                          : "미정"}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
-                        {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex}
-                      </td>
-                      <td className="px-3 py-3 font-semibold">{raid.raidBoss.name}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{terrainLocale[raid.terrain]}</td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {getDefenseTypes(raid).map((defenseType) => (
-                            <AttributeBadge
-                              key={defenseType}
-                              text={defenseTypeLocale[defenseType]}
-                              color={defenseTypeColor[defenseType]}
-                            />
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex gap-1.5">
-                          <Button text="통계" to={raidPath} size="xs" />
-                          <Button text="편성" to={`${raidPath}/ranks`} size="xs" />
-                          <Button text="영상" to={`${raidPath}/videos`} size="xs" />
-                          <Button text="공략" to={timelinePath} size="xs" />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : (
-        <EmptyView text="다가오는 총력전/대결전 일정이 없어요" />
-      )}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

@@ -23,7 +23,12 @@ export default function RaidsPortalPage() {
   const data = useLoaderData<typeof loader>();
 
   return (
-    <Page title="총력전/대결전" contentWidth="full" layout="vertical">
+    <Page
+      title="총력전/대결전"
+      description="총력전·대결전 일정과 시즌 통계, 상위권 편성, 공략 영상을 한곳에서 확인해보세요."
+      contentWidth="full"
+      layout="vertical"
+    >
       <RaidPortalScreen {...data} />
     </Page>
   );
