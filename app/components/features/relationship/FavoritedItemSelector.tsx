@@ -4,10 +4,6 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Await, useFetcher, useRevalidator } from "react-router";
 import { ResourceInventoryTile } from "~/components/features/growth";
 import {
-  isStudentStateMaintenanceResult,
-  StudentStateMaintenanceToast,
-} from "~/components/features/student-state/StudentStateMaintenanceToast";
-import {
   BottomSheet,
   Button,
   ClickableSurface,
@@ -398,11 +394,7 @@ function useSaveStudentItems({
   const isSaving = saveFetcher.state !== "idle";
 
   useEffect(() => {
-    if (
-      saveFetcher.state === "idle" &&
-      !isStudentStateMaintenanceResult(saveFetcher.data) &&
-      saveFetcher.data?.success
-    ) {
+    if (saveFetcher.state === "idle" && saveFetcher.data?.success) {
       const savedStudentUids = new Set(changedStudents);
       const diff = Array.from(savedStudentUids).filter((uid) => !lastSuccessRef.current.has(uid));
       if (diff.length > 0) {
@@ -464,7 +456,6 @@ function useSaveStudentItems({
   return {
     saveError,
     saveSuccess,
-    maintenanceResult: isStudentStateMaintenanceResult(saveFetcher.data) ? saveFetcher.data : undefined,
     isSaving,
     hasChanges,
     changedStudents,
@@ -718,16 +709,15 @@ function FavoriteLevelCard({
 }: FavoriteLevelCardProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const isSheetSurface = surface === "sheet";
-  const { saveError, saveSuccess, maintenanceResult, isSaving, hasChanges, changedStudents, handleSave } =
-    useSaveStudentItems({
-      studentItemsMap,
-      initialStudentItems,
-      levelStudents,
-      students,
-      activeItem,
-      isAuthenticated,
-      onSave,
-    });
+  const { saveError, saveSuccess, isSaving, hasChanges, changedStudents, handleSave } = useSaveStudentItems({
+    studentItemsMap,
+    initialStudentItems,
+    levelStudents,
+    students,
+    activeItem,
+    isAuthenticated,
+    onSave,
+  });
 
   const totalCount = levelStudents
     .map((student) => studentItemsMap.get(student.uid)?.items[activeItem.itemUid] ?? 0)
@@ -752,7 +742,6 @@ function FavoriteLevelCard({
         surface === "card" ? "rounded-lg border border-border bg-card p-4" : "bg-transparent",
       )}
     >
-      <StudentStateMaintenanceToast trigger={maintenanceResult} />
       <div className={cn("mb-4 flex items-center gap-3 pb-3", !isSheetSurface && "border-b border-border")}>
         <ResourceCard
           rarity={activeItem.itemRarity}

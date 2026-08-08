@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, useFetcher, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { StudentStateMaintenanceToast } from "~/components/features/student-state/StudentStateMaintenanceToast";
 import {
   createStudentFilterState,
   getFilteredStudentUids,
@@ -12,7 +11,6 @@ import {
   TierSelector,
 } from "~/components/features/students";
 import { Button, SubTitle, Toggle } from "~/components/primitives";
-import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import { getRecruitedStudents, removeRecruitedStudent, upsertRecruitedStudent } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
 import { getRouteSensei } from "./$username";
@@ -60,14 +58,11 @@ export const meta: MetaFunction = ({ params }) => {
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const { env, ctx } = context.cloudflare;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const maintenance = await studentStateMaintenanceActionResult(env, { ctx, operation: "$username.students.action" });
-  if (maintenance) return maintenance;
 
   const sensei = await getRouteSensei(env, params, currentUser.id);
   if (currentUser.username !== sensei.username) {
@@ -155,7 +150,6 @@ export default function UserPage() {
 
   return (
     <>
-      <StudentStateMaintenanceToast trigger={fetcher.data} />
       <div className="my-8">
         <SubTitle
           text="모집한 학생"

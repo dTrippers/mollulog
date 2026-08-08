@@ -12,64 +12,6 @@ jest.mock("~/lib/postgres.server", () => ({
     operation(env.__pgClient),
 }));
 
-type RelationshipLevelRow = {
-  id: number;
-  uid: string;
-  userId: number;
-  studentId: string;
-  currentLevel: number;
-  currentExp: number | null;
-  targetLevel: number;
-  items: string;
-  createdAt: string;
-  updatedAt: string;
-};
-
-class FakeD1Statement {
-  private params: unknown[] = [];
-
-  constructor(
-    private readonly db: FakeD1Database,
-    private readonly sql: string,
-  ) {}
-
-  bind(...params: unknown[]): FakeD1Statement {
-    this.params = params;
-    return this;
-  }
-
-  async all(): Promise<{ results: RelationshipLevelRow[] }> {
-    return { results: this.db.selectRows(this.sql, this.params) };
-  }
-
-  async raw(): Promise<unknown[][]> {
-    return this.db.selectRows(this.sql, this.params).map((row) => Object.values(row));
-  }
-}
-
-class FakeD1Database {
-  readonly rows: RelationshipLevelRow[] = [];
-  readonly selectParameterCounts: number[] = [];
-
-  prepare(sql: string): FakeD1Statement {
-    return new FakeD1Statement(this, sql);
-  }
-
-  selectRows(sql: string, params: unknown[]): RelationshipLevelRow[] {
-    const normalizedSql = sql.replaceAll('"', "").replace(/\s+/g, " ").trim().toLowerCase();
-    if (!normalizedSql.includes("from user_relationship_levels")) {
-      throw new Error(`Unexpected SQL: ${sql}`);
-    }
-
-    this.selectParameterCounts.push(params.length);
-    const userId = Number(params[0]);
-    const requestedStudentIds = normalizedSql.includes("studentid in") ? new Set(params.slice(1).map(String)) : null;
-    return this.rows.filter(
-      (row) => row.userId === userId && (!requestedStudentIds || requestedStudentIds.has(row.studentId)),
-    );
-  }
-}
-
 describe("relationship-level", () => {
   it("returns null when both current and target levels are empty", () => {
     expect(resolveRelationshipLevelInput(null, { currentLevel: null, targetLevel: null })).toBeNull();

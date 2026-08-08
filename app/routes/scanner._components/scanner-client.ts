@@ -1,4 +1,3 @@
-import { isStudentStateMaintenanceResult } from "~/domain/student-state-cutover";
 import type { ScannerUploadQuota } from "./UploadQuotaMeter";
 
 export type ScannerPhase = "idle" | "uploading" | "waiting" | "review" | "applying" | "applied";
@@ -10,9 +9,6 @@ export async function requestScannerJson<T>(input: string, init?: RequestInit): 
   });
   const body = (await response.json().catch(() => null)) as ({ error?: string; quota?: ScannerUploadQuota } & T) | null;
   if (!response.ok) {
-    if (isStudentStateMaintenanceResult(body)) {
-      throw new ScannerApiRequestError(body.message, body.quota, true);
-    }
     throw new ScannerApiRequestError(body?.error ?? "요청을 처리하지 못했어요", body?.quota);
   }
   return body as T;
@@ -46,7 +42,6 @@ export class ScannerApiRequestError extends Error {
   constructor(
     message: string,
     readonly quota?: ScannerUploadQuota,
-    readonly maintenance = false,
   ) {
     super(message);
     this.name = "ScannerApiRequestError";

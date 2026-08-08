@@ -10,7 +10,6 @@ import {
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
-import { StudentStateMaintenanceToast } from "~/components/features/student-state/StudentStateMaintenanceToast";
 import { StudentCard, TierSelector } from "~/components/features/students";
 import {
   Button,
@@ -24,7 +23,6 @@ import {
   useNumberInputFlowNavigation,
 } from "~/components/primitives";
 import { OCR_MAX_VIDEO_BYTES, type OcrVideoUploadInput } from "~/domain/ocr";
-import { studentStateMaintenanceResult } from "~/domain/student-state-cutover";
 import type {
   StudentDetailVideoResult,
   StudentVideoFieldName,
@@ -228,7 +226,6 @@ export default function StudentScanner() {
   const [file, setFile] = useState<File | null>(null);
   const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [maintenanceTrigger, setMaintenanceTrigger] = useState<unknown>(null);
   const [uploadQuota, setUploadQuota] = useScannerQuota("student_detail_video_v1", setError);
   const [job, setJob] = useState<StudentVideoJob | null>(null);
   const [review, setReview] = useState<ReviewState>({});
@@ -373,9 +370,6 @@ export default function StudentScanner() {
       setPhase("applied");
       notifyScannerJobsChanged();
     } catch (applyError) {
-      if (applyError instanceof ScannerApiRequestError && applyError.maintenance) {
-        setMaintenanceTrigger({ ...studentStateMaintenanceResult });
-      }
       setPhase("review");
       setError(toScannerErrorMessage(applyError));
     }
@@ -439,7 +433,6 @@ export default function StudentScanner() {
 
   return (
     <div className="space-y-8 pb-12 pt-6 lg:pt-2">
-      <StudentStateMaintenanceToast trigger={maintenanceTrigger} />
       {error ? <Callout tone="destructive">{error}</Callout> : null}
 
       {!selectedJobUid ? (

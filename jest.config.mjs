@@ -7,7 +7,6 @@ const config = {
   moduleNameMapper: {
     "^~/(.*)$": "<rootDir>/app/$1",
   },
-  testPathIgnorePatterns: ["<rootDir>/db/postgres/scripts/.*\\.test\\.mjs$"],
 };
 
 export default config;

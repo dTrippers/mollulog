@@ -112,14 +112,10 @@ const mockedGetRecruitmentGroupByUid = getRecruitmentGroupByUid as unknown as je
 >;
 
 const env = {
-  KV_CACHE: {
-    get: jest.fn(async () => null),
-  },
   DB: {
     withSession: jest.fn(() => ({})),
   },
 } as unknown as Env;
-const mockedKvGet = env.KV_CACHE.get as unknown as jest.MockedFunction<(key: string) => Promise<string | null>>;
 
 function createGroup(uid: string, startAt: string) {
   return {
@@ -156,7 +152,6 @@ function createGroup(uid: string, startAt: string) {
 afterEach(() => {
   jest.useRealTimers();
   jest.clearAllMocks();
-  mockedKvGet.mockResolvedValue(null);
 });
 
 describe("pickup history editor state helpers", () => {
@@ -558,30 +553,6 @@ describe("pickup history editor loader", () => {
         recruitedStudents: [],
       }),
     );
-  });
-
-  it("returns typed maintenance without mutating recruitment history", async () => {
-    mockedKvGet.mockResolvedValue("enabled");
-    mockedGetActiveSensei.mockResolvedValue({
-      id: 1,
-      uid: "sensei-1",
-      username: "sensei",
-    } as Awaited<ReturnType<typeof getActiveSensei>>);
-
-    const result = await action({
-      context: { cloudflare: { env } },
-      request: new Request("https://mollulog.net/@sensei/pickups/edit/new", {
-        method: "POST",
-        body: JSON.stringify({ eventUid: "event", result: [], exchangedStudentIds: [] }),
-      }),
-      params: { username: "@sensei", id: "new" },
-    } as never);
-
-    const typedResult = result as { data: unknown; init?: ResponseInit | null };
-    expect(typedResult.data).toMatchObject({ kind: "studentStateMaintenance", code: "STUDENT_STATE_MAINTENANCE" });
-    expect(typedResult.init?.status).toBe(503);
-    expect(typedResult.init?.headers).toMatchObject({ "Retry-After": "30" });
-    expect(mockedUpsertRecruitmentResult).not.toHaveBeenCalled();
   });
 
   it("preserves existing non-tier3 recruited students when editing an existing result", async () => {

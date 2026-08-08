@@ -11,7 +11,6 @@ import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/lib/ranks/stats";
-import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import { getAllRaidSchedules } from "~/models/raid";
 import {
   getRecruitedStudents,
@@ -185,17 +184,11 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     return data<StudentBasicInfoActionData>({ ok: false, error: "학생 정보가 필요해요" }, { status: 400 });
   }
 
-  const { env, ctx } = context.cloudflare;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<StudentBasicInfoActionData>({ ok: false, error: "로그인이 필요해요" }, { status: 401 });
   }
-
-  const maintenance = await studentStateMaintenanceActionResult(env, {
-    ctx,
-    operation: "students.$id.index.action",
-  });
-  if (maintenance) return maintenance;
 
   try {
     const payload = await request.json<Record<string, unknown>>();

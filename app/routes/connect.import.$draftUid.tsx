@@ -3,10 +3,6 @@ import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
 import {
-  isStudentStateMaintenanceResult,
-  StudentStateMaintenanceToast,
-} from "~/components/features/student-state/StudentStateMaintenanceToast";
-import {
   mergeStudentStateDraftValueForUpdate,
   parseStudentStateDraftValue,
   type StudentStateDraftCurrentValue,
@@ -15,7 +11,6 @@ import {
   studentStateTargetFields,
 } from "~/domain/student-state";
 import { routeError } from "~/lib/http-errors";
-import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
@@ -74,14 +69,11 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const { env, ctx } = context.cloudflare;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
   }
-
-  const maintenance = await studentStateMaintenanceActionResult(env, { ctx, operation: "connect.import.draft.action" });
-  if (maintenance) return maintenance;
 
   const draftUid = params.draftUid;
   if (!draftUid) {
@@ -140,7 +132,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 export default function ConnectDraftDetailPage() {
   const { draft, metadataByKey, currentValues, proposedStudentStateValues } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const reviewActionData = isStudentStateMaintenanceResult(actionData) ? undefined : actionData;
 
   const review =
     draft.type === "student_state" ? (
@@ -149,14 +140,14 @@ export default function ConnectDraftDetailPage() {
         metadataByKey={metadataByKey}
         currentValues={currentValues as StudentStateCurrentValues}
         proposedValues={proposedStudentStateValues as StudentStateProposedValues}
-        actionData={reviewActionData}
+        actionData={actionData}
       />
     ) : (
       <SyncDraftReview
         draft={draft}
         metadataByKey={metadataByKey}
         currentValues={currentValues as Record<string, number>}
-        actionData={reviewActionData}
+        actionData={actionData}
       />
     );
 
@@ -168,7 +159,6 @@ export default function ConnectDraftDetailPage() {
       contentWidth="full"
       layout="vertical"
     >
-      <StudentStateMaintenanceToast trigger={actionData} />
       {review}
     </Page>
   );

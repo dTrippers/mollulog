@@ -5,14 +5,12 @@ import {
   type LoaderFunctionArgs,
   type MetaFunction,
   redirect,
-  useActionData,
   useLoaderData,
   useSearchParams,
   useSubmit,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventSelector } from "~/components/features/events";
-import { StudentStateMaintenanceToast } from "~/components/features/student-state/StudentStateMaintenanceToast";
 import { Button, SectionCard, Textarea, Title } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import {
@@ -32,7 +30,6 @@ import {
   toUtcIso,
 } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import { getPickupHistory, type PickupHistory } from "~/models/pickup-history";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import {
@@ -276,12 +273,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     return redirectToCanonicalEditor(params);
   }
 
-  const maintenance = await studentStateMaintenanceActionResult(env, {
-    ctx,
-    operation: "$username.pickups.edit.action",
-  });
-  if (maintenance) return maintenance;
-
   const data = await request.json<ActionData>();
   const recruitmentGroup = await getRecruitmentGroupByUid(env, data.eventUid);
   if (!recruitmentGroup) {
@@ -378,7 +369,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 export default function EditPickup() {
   const { events, tier3Students, currentPickupHistory } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
   const [searchParams] = useSearchParams();
   const displayTimeZone = useDisplayTimeZone();
   const isEditing = currentPickupHistory !== null;
@@ -464,7 +454,6 @@ export default function EditPickup() {
 
   return (
     <div className="space-y-8">
-      <StudentStateMaintenanceToast trigger={actionData} />
       <Title text="모집 이력 관리" />
 
       <SectionCard title="모집 이벤트">

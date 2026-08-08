@@ -3,7 +3,6 @@ import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import { nowUtcIso } from "~/lib/date-time";
-import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import {
   addRecruitedStudentToResult,
@@ -134,14 +133,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   }
 
   const actionData = await request.json<ActionData>();
-  if (actionData.action !== "delete") {
-    const maintenance = await studentStateMaintenanceActionResult(env, {
-      ctx,
-      operation: "api.recruitment-results.action",
-    });
-    if (maintenance) return maintenance;
-  }
-
   if (actionData.action === "delete") {
     await deleteRecruitmentResult(env, currentUser.id, actionData.uid);
     return data({ success: true });

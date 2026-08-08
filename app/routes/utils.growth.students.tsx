@@ -2,7 +2,6 @@ import type { ActionFunctionArgs } from "react-router";
 import { data, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
-import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import {
   getRecruitedStudents,
   type RecruitedStudentCurrentStateInput,
@@ -148,12 +147,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
     return data<GrowthActionResult>({ error: "지원하지 않는 요청 방식이에요" }, { status: 405 });
   }
-
-  const maintenance = await studentStateMaintenanceActionResult(env, {
-    ctx,
-    operation: "utils.growth.students.action",
-  });
-  if (maintenance) return maintenance;
 
   try {
     const payload =

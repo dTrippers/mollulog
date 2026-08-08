@@ -13,10 +13,6 @@ import {
 import { useBlocker, useFetcher, useSearchParams } from "react-router";
 import { ResourceInventoryTile, type ResourceInventoryTileMetric } from "~/components/features/growth";
 import {
-  isStudentStateMaintenanceResult,
-  StudentStateMaintenanceToast,
-} from "~/components/features/student-state/StudentStateMaintenanceToast";
-import {
   Button,
   EmptyView,
   FilterButtons,
@@ -169,11 +165,6 @@ export default function ResourceInventoryEditor({
     setBaseQuantities,
   });
 
-  useEffect(() => {
-    if (!isStudentStateMaintenanceResult(fetcher.data)) return;
-    submittedQuantitiesRef.current = null;
-  }, [fetcher.data]);
-
   const saveChanges = () => {
     submittedQuantitiesRef.current = { ...draftQuantities };
     fetcher.submit(
@@ -192,7 +183,6 @@ export default function ResourceInventoryEditor({
 
   return (
     <>
-      <StudentStateMaintenanceToast trigger={fetcher.data} />
       {submitError ? (
         <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{submitError}</p>
       ) : null}

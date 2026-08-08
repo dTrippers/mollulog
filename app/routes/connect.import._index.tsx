@@ -2,13 +2,8 @@ import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import {
-  isStudentStateMaintenanceResult,
-  StudentStateMaintenanceToast,
-} from "~/components/features/student-state/StudentStateMaintenanceToast";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { parseStudentStateImport } from "~/domain/student-state-serialization";
-import { studentStateMaintenanceActionResult } from "~/lib/student-state-cutover.server";
 import { getSyncDraftEntryCounts, listPendingSyncDrafts } from "~/models/sync-draft";
 import ConnectDataPage from "./connect._components/ConnectDataPage";
 import PendingSyncDraftList from "./connect._components/PendingSyncDraftList";
@@ -49,14 +44,11 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const { env, ctx } = context.cloudflare;
+  const { env } = context.cloudflare;
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
   }
-
-  const maintenance = await studentStateMaintenanceActionResult(env, { ctx, operation: "connect.import.index.action" });
-  if (maintenance) return maintenance;
 
   const formData = await request.formData();
   const input = String(formData.get("payload") ?? "");
@@ -115,13 +107,11 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 export default function ConnectImportIndexPage() {
   const { drafts } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const formActionData = isStudentStateMaintenanceResult(actionData) ? undefined : actionData;
   const navigation = useNavigation();
   const isImporting = navigation.state === "submitting";
 
   return (
     <ConnectDataPage currentScreen="import" pendingDraftCount={drafts.length}>
-      <StudentStateMaintenanceToast trigger={actionData} />
       <div className="space-y-8 pb-12">
         <section>
           <SubTitle text="데이터 가져오기" description="현재 SchaleDB와 Justin163 플래너를 지원해요" />
@@ -129,9 +119,9 @@ export default function ConnectImportIndexPage() {
             <Textarea
               name="payload"
               rows={14}
-              defaultValue={formActionData?.input}
+              defaultValue={actionData?.input}
               placeholder="SchaleDB 또는 Justin163 플래너에서 내보낸 데이터를 이곳에 입력해주세요"
-              error={formActionData?.error}
+              error={actionData?.error}
             />
 
             <div className="flex justify-end">

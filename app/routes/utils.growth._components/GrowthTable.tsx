@@ -2,10 +2,6 @@ import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { StudentSelectForm } from "~/components/features/forms";
-import {
-  isStudentStateMaintenanceResult,
-  StudentStateMaintenanceToast,
-} from "~/components/features/student-state/StudentStateMaintenanceToast";
 import { TierSelector } from "~/components/features/students";
 import { Button, NumberInput, ProfileImage, ResourceCard, useNumberInputGridNavigation } from "~/components/primitives";
 import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
@@ -543,10 +539,6 @@ function GrowthRow({
     const responseSubmissionId = getActionSubmissionId(fetcher.data);
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     submittedRef.current = null;
-    if (isStudentStateMaintenanceResult(fetcher.data)) {
-      dispatchRow({ type: "growthFailure", error: fetcher.data.message, submitted });
-      return;
-    }
     if (isActionSuccess(fetcher.data)) {
       dispatchRow({ type: "growthSuccess", submitted });
       const next = extractStudentUpdate(fetcher.data);
@@ -568,10 +560,6 @@ function GrowthRow({
     const responseSubmissionId = getActionSubmissionId(relationshipFetcher.data);
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     relationshipSubmittedRef.current = null;
-    if (isStudentStateMaintenanceResult(relationshipFetcher.data)) {
-      dispatchRow({ type: "relationshipFailure", error: relationshipFetcher.data.message });
-      return;
-    }
     if (isActionSuccess(relationshipFetcher.data)) {
       dispatchRow({ type: "relationshipSuccess", submitted });
       const next = extractStudentUpdate(relationshipFetcher.data);
@@ -595,10 +583,6 @@ function GrowthRow({
     const responseSubmissionId = getActionSubmissionId(tierFetcher.data);
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     tierSubmittedRef.current = null;
-    if (isStudentStateMaintenanceResult(tierFetcher.data)) {
-      dispatchRow({ type: "tierFailure", tier: student.tier ?? student.initialTier });
-      return;
-    }
     if (isActionSuccess(tierFetcher.data)) {
       const next = extractStudentUpdate(tierFetcher.data);
       if (next) {
@@ -625,11 +609,6 @@ function GrowthRow({
     const responseSubmissionId = getActionSubmissionId(enrollFetcher.data);
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     enrollSubmittedRef.current = null;
-
-    if (isStudentStateMaintenanceResult(enrollFetcher.data)) {
-      dispatchRow({ type: "enrollFailure", error: enrollFetcher.data.message });
-      return;
-    }
 
     if (isActionSuccess(enrollFetcher.data)) {
       dispatchRow({ type: "enrollSuccess" });
@@ -887,11 +866,6 @@ function GrowthRow({
 
   return (
     <>
-      <StudentStateMaintenanceToast trigger={fetcher.data} />
-      <StudentStateMaintenanceToast trigger={relationshipFetcher.data} />
-      <StudentStateMaintenanceToast trigger={tierFetcher.data} />
-      <StudentStateMaintenanceToast trigger={removeFetcher.data} />
-      <StudentStateMaintenanceToast trigger={enrollFetcher.data} />
       <tr className={`border-t-2 border-border first:border-t-0 ${headerSurfaceClass}`}>
         <td colSpan={TOTAL_COLS} className={`${cellBase} px-3 py-2`}>
           <div className={studentHeaderContentClass}>
