@@ -27,9 +27,9 @@ import {
 } from "~/domain/student-growth-draft";
 import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
 import {
-  StudentSkillSelectionCondition,
   type Attack,
   type StudentCatalogStat,
+  StudentSkillSelectionCondition,
   type StudentSkillTypeEnum,
 } from "~/graphql/graphql";
 import { equipmentImageUrl } from "~/models/assets";

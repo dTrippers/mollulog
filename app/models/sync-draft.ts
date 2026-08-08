@@ -1,42 +1,23 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import {
-  parseStudentStateDraftValue,
-  type StudentStateDraftCurrentValue,
-  type StudentStateDraftTargetValue,
-  type StudentStateDraftValue,
-} from "~/domain/student-state";
+  pgGrowthResourceInventoryTable,
+  pgRecruitedStudentsTable,
+  pgRelationshipLevelsTable,
+  pgStudentGrowthTable,
+  pgSyncDraftEntriesTable,
+  pgSyncDraftsTable,
+} from "~/db/postgres/schema";
+import { parseStudentStateDraftValue, type StudentStateDraftValue } from "~/domain/student-state";
+import { withPostgresClient } from "~/lib/postgres.server";
 
-export const syncDraftsTable = sqliteTable("sync_drafts", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  apiKeyUid: text(),
-  source: text().notNull().default("connect"),
-  sourceRef: text(),
-  type: text().notNull(),
-  status: text().notNull().default("pending"),
-  toolName: text(),
-  toolVersion: text(),
-  catalogVersion: text(),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-  appliedAt: text(),
-  expiresAt: text(),
-});
+const PG_WRITE_CHUNK_SIZE = 500;
+const PG_IN_QUERY_CHUNK_SIZE = 500;
+type SyncDraftDb = Pick<NodePgDatabase, "select" | "insert" | "update" | "delete" | "execute">;
 
-export const syncDraftEntriesTable = sqliteTable("sync_draft_entries", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  draftUid: text().notNull(),
-  entryKey: text().notNull(),
-  value: int().notNull(),
-  valueJson: text(),
-  meta: text(),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-});
+export const syncDraftsTable = pgSyncDraftsTable;
+export const syncDraftEntriesTable = pgSyncDraftEntriesTable;
 
 export type SyncDraftSource = "connect" | "web" | "first_party_ocr";
 export type SyncDraftType = "item_inventory" | "student_tier" | "student_state";
@@ -69,9 +50,7 @@ export type SyncDraftSummary = {
   expiresAt: string | null;
 };
 
-export type SyncDraft = SyncDraftSummary & {
-  entries: SyncDraftEntry[];
-};
+export type SyncDraft = SyncDraftSummary & { entries: SyncDraftEntry[] };
 
 export type SyncDraftEntryUpdateInput = {
   entryKey: string;
@@ -89,27 +68,23 @@ export type SyncDraftCreateInput = {
   entries: Array<SyncDraftEntryUpdateInput & { meta?: unknown }>;
 };
 
-export function toSyncDraftSource(source: string): SyncDraftSource {
-  if (source === "connect" || source === "web" || source === "first_party_ocr") {
-    return source;
-  }
+function toIso(value: Date | string | null): string | null {
+  if (value == null) return null;
+  return value instanceof Date ? value.toISOString() : value;
+}
 
+export function toSyncDraftSource(source: string): SyncDraftSource {
+  if (source === "connect" || source === "web" || source === "first_party_ocr") return source;
   return "connect";
 }
 
 export function toSyncDraftType(type: string): SyncDraftType {
-  if (type === "item_inventory" || type === "student_tier" || type === "student_state") {
-    return type;
-  }
-
+  if (type === "item_inventory" || type === "student_tier" || type === "student_state") return type;
   return "item_inventory";
 }
 
 export function toSyncDraftStatus(status: string): SyncDraftStatus {
-  if (status === "pending" || status === "applied" || status === "discarded" || status === "expired") {
-    return status;
-  }
-
+  if (status === "pending" || status === "applied" || status === "discarded" || status === "expired") return status;
   return "pending";
 }
 
@@ -121,7 +96,7 @@ export function toSyncDraftEntryModel(entry: typeof syncDraftEntriesTable.$infer
     value: entry.value,
     valueJson: entry.valueJson,
     meta: entry.meta,
-    createdAt: entry.createdAt,
+    createdAt: toIso(entry.createdAt) ?? "",
   };
 }
 
@@ -137,10 +112,10 @@ export function toSyncDraftSummaryModel(draft: typeof syncDraftsTable.$inferSele
     toolName: draft.toolName,
     toolVersion: draft.toolVersion,
     catalogVersion: draft.catalogVersion,
-    createdAt: draft.createdAt,
-    updatedAt: draft.updatedAt,
-    appliedAt: draft.appliedAt,
-    expiresAt: draft.expiresAt,
+    createdAt: toIso(draft.createdAt) ?? "",
+    updatedAt: toIso(draft.updatedAt) ?? "",
+    appliedAt: toIso(draft.appliedAt),
+    expiresAt: toIso(draft.expiresAt),
   };
 }
 
@@ -148,38 +123,30 @@ export function toSyncDraftModel(
   draft: typeof syncDraftsTable.$inferSelect,
   entries: (typeof syncDraftEntriesTable.$inferSelect)[],
 ): SyncDraft {
-  return {
-    ...toSyncDraftSummaryModel(draft),
-    entries: entries.map(toSyncDraftEntryModel),
-  };
+  return { ...toSyncDraftSummaryModel(draft), entries: entries.map(toSyncDraftEntryModel) };
 }
 
 export function normalizeSyncDraftEntryValue(type: SyncDraftType, value: unknown): number {
-  if (type === "student_tier" || type === "student_state") {
-    return normalizeStudentTierValue(value);
-  }
-
-  return normalizeItemInventoryValue(value);
+  return type === "student_tier" || type === "student_state"
+    ? normalizeStudentTierValue(value)
+    : normalizeItemInventoryValue(value);
 }
 
 export async function getSyncDraft(env: Env, userId: number, uid: string): Promise<SyncDraft | null> {
-  const db = drizzle(env.DB);
-  const [draft] = await db
-    .select()
-    .from(syncDraftsTable)
-    .where(and(eq(syncDraftsTable.uid, uid), eq(syncDraftsTable.userId, userId)));
-
-  if (!draft) {
-    return null;
-  }
-
-  const entries = await db
-    .select()
-    .from(syncDraftEntriesTable)
-    .where(eq(syncDraftEntriesTable.draftUid, uid))
-    .orderBy(asc(syncDraftEntriesTable.id));
-
-  return toSyncDraftModel(draft, entries);
+  return withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const [draft] = await db
+      .select()
+      .from(syncDraftsTable)
+      .where(and(eq(syncDraftsTable.uid, uid), eq(syncDraftsTable.userId, userId)));
+    if (!draft) return null;
+    const entries = await db
+      .select()
+      .from(syncDraftEntriesTable)
+      .where(eq(syncDraftEntriesTable.draftUid, uid))
+      .orderBy(asc(syncDraftEntriesTable.id));
+    return toSyncDraftModel(draft, entries);
+  });
 }
 
 export async function getSyncDraftBySourceRef(
@@ -188,18 +155,20 @@ export async function getSyncDraftBySourceRef(
   source: SyncDraftSource,
   sourceRef: string,
 ): Promise<SyncDraftSummary | null> {
-  const db = drizzle(env.DB);
-  const [draft] = await db
-    .select()
-    .from(syncDraftsTable)
-    .where(
-      and(
-        eq(syncDraftsTable.userId, userId),
-        eq(syncDraftsTable.source, source),
-        eq(syncDraftsTable.sourceRef, sourceRef),
-      ),
-    );
-  return draft ? toSyncDraftSummaryModel(draft) : null;
+  return withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const [draft] = await db
+      .select()
+      .from(syncDraftsTable)
+      .where(
+        and(
+          eq(syncDraftsTable.userId, userId),
+          eq(syncDraftsTable.source, source),
+          eq(syncDraftsTable.sourceRef, sourceRef),
+        ),
+      );
+    return draft ? toSyncDraftSummaryModel(draft) : null;
+  });
 }
 
 export async function listSyncDraftsBySourceRefs(
@@ -211,72 +180,78 @@ export async function listSyncDraftsBySourceRefs(
   const uniqueSourceRefs = [...new Set(sourceRefs)];
   if (uniqueSourceRefs.length === 0) return {};
 
-  const db = drizzle(env.DB);
-  const drafts = await db
-    .select()
-    .from(syncDraftsTable)
-    .where(
-      and(
-        eq(syncDraftsTable.userId, userId),
-        eq(syncDraftsTable.source, source),
-        inArray(syncDraftsTable.sourceRef, uniqueSourceRefs),
-      ),
+  return withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const drafts: (typeof syncDraftsTable.$inferSelect)[] = [];
+    for (let offset = 0; offset < uniqueSourceRefs.length; offset += PG_IN_QUERY_CHUNK_SIZE) {
+      drafts.push(
+        ...(await db
+          .select()
+          .from(syncDraftsTable)
+          .where(
+            and(
+              eq(syncDraftsTable.userId, userId),
+              eq(syncDraftsTable.source, source),
+              inArray(syncDraftsTable.sourceRef, uniqueSourceRefs.slice(offset, offset + PG_IN_QUERY_CHUNK_SIZE)),
+            ),
+          )),
+      );
+    }
+    return Object.fromEntries(
+      drafts.flatMap((draft) => (draft.sourceRef ? [[draft.sourceRef, toSyncDraftSummaryModel(draft)]] : [])),
     );
-  return Object.fromEntries(
-    drafts.flatMap((draft) => (draft.sourceRef ? [[draft.sourceRef, toSyncDraftSummaryModel(draft)]] : [])),
-  );
+  });
 }
 
 export async function listPendingSyncDrafts(env: Env, userId: number): Promise<SyncDraftSummary[]> {
-  const db = drizzle(env.DB);
-  const drafts = await db
-    .select()
-    .from(syncDraftsTable)
-    .where(and(eq(syncDraftsTable.userId, userId), eq(syncDraftsTable.status, "pending")))
-    .orderBy(desc(syncDraftsTable.createdAt));
-
-  return drafts.map(toSyncDraftSummaryModel);
+  return withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const drafts = await db
+      .select()
+      .from(syncDraftsTable)
+      .where(and(eq(syncDraftsTable.userId, userId), eq(syncDraftsTable.status, "pending")))
+      .orderBy(desc(syncDraftsTable.createdAt));
+    return drafts.map(toSyncDraftSummaryModel);
+  });
 }
 
 export async function createSyncDraft(env: Env, userId: number, input: SyncDraftCreateInput): Promise<string> {
   const entries = normalizeSyncDraftEntryUpdates(input.type, input.entries);
-  if (entries.length === 0) {
-    throw new Error("변경된 항목이 없어요");
-  }
-
+  if (entries.length === 0) throw new Error("변경된 항목이 없어요");
   const metaByEntryKey = new Map(
     input.entries.map((entry) => [entry.entryKey.trim(), entry.meta == null ? null : JSON.stringify(entry.meta)]),
   );
   const draftUid = nanoid(12);
-  await env.DB.batch([
-    env.DB.prepare(`
-      insert into sync_drafts (
-        uid, userId, source, sourceRef, type, status, toolName, toolVersion, catalogVersion
-      ) values (?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?8)
-    `).bind(
-      draftUid,
-      userId,
-      input.source,
-      input.sourceRef ?? null,
-      input.type,
-      input.toolName ?? null,
-      input.toolVersion ?? null,
-      input.catalogVersion ?? null,
-    ),
-    ...entries.map((entry) =>
-      env.DB.prepare(`
-        insert into sync_draft_entries (uid, draftUid, entryKey, value, valueJson, meta)
-        values (?1, ?2, ?3, ?4, ?5, ?6)
-      `).bind(
-        nanoid(8),
-        draftUid,
-        entry.entryKey,
-        entry.value,
-        entry.valueJson,
-        metaByEntryKey.get(entry.entryKey) ?? null,
-      ),
-    ),
-  ]);
+
+  await withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    await db.transaction(async (tx) => {
+      await tx.insert(syncDraftsTable).values({
+        uid: draftUid,
+        userId,
+        source: input.source,
+        sourceRef: input.sourceRef ?? null,
+        type: input.type,
+        status: "pending",
+        toolName: input.toolName ?? null,
+        toolVersion: input.toolVersion ?? null,
+        catalogVersion: input.catalogVersion ?? null,
+      });
+      for (let offset = 0; offset < entries.length; offset += PG_WRITE_CHUNK_SIZE) {
+        const chunk = entries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+        await tx.insert(syncDraftEntriesTable).values(
+          chunk.map((entry) => ({
+            uid: nanoid(8),
+            draftUid,
+            entryKey: entry.entryKey,
+            value: entry.value,
+            valueJson: entry.valueJson,
+            meta: metaByEntryKey.get(entry.entryKey) ?? null,
+          })),
+        );
+      }
+    });
+  });
   return draftUid;
 }
 
@@ -285,97 +260,95 @@ export async function createAndApplySyncDraft(
   userId: number,
   input: SyncDraftCreateInput & { sourceRef: string },
 ): Promise<{ draft: SyncDraftSummary; alreadyApplied: boolean }> {
-  const existing = await getSyncDraftBySourceRef(env, userId, input.source, input.sourceRef);
-  if (existing) {
-    if (existing.status === "applied") return { draft: existing, alreadyApplied: true };
-    throw new Error("이미 처리 중인 인식 결과예요");
-  }
-
   const entries = normalizeSyncDraftEntryUpdates(input.type, input.entries);
   if (entries.length === 0) throw new Error("변경된 항목이 없어요");
-  const applyEntries =
-    input.type === "student_state"
-      ? entries.map((entry) => ({
-          entryKey: entry.entryKey,
-          value: parseStudentStateDraftValue(entry),
-        }))
-      : entries;
   const metaByEntryKey = new Map(
     input.entries.map((entry) => [entry.entryKey.trim(), entry.meta == null ? null : JSON.stringify(entry.meta)]),
   );
   const draftUid = nanoid(12);
+
   try {
-    await env.DB.batch([
-      env.DB.prepare(`
-        insert into sync_drafts (
-          uid, userId, source, sourceRef, type, status, toolName, toolVersion, catalogVersion
-        ) values (?1, ?2, ?3, ?4, ?5, 'pending', ?6, ?7, ?8)
-      `).bind(
-        draftUid,
-        userId,
-        input.source,
-        input.sourceRef,
-        input.type,
-        input.toolName ?? null,
-        input.toolVersion ?? null,
-        input.catalogVersion ?? null,
-      ),
-      ...entries.map((entry) =>
-        env.DB.prepare(`
-          insert into sync_draft_entries (uid, draftUid, entryKey, value, valueJson, meta)
-          values (?1, ?2, ?3, ?4, ?5, ?6)
-        `).bind(
-          nanoid(8),
-          draftUid,
-          entry.entryKey,
-          entry.value,
-          entry.valueJson,
-          metaByEntryKey.get(entry.entryKey) ?? null,
-        ),
-      ),
-      ...applyEntries.flatMap((entry) =>
-        createConditionalApplyStatements(env, userId, draftUid, input.type, entry, {
+    const result = await withPostgresClient(env, async (client) => {
+      const db = drizzle(client);
+      return db.transaction(async (tx) => {
+        const existing = await tx
+          .select()
+          .from(syncDraftsTable)
+          .where(
+            and(
+              eq(syncDraftsTable.userId, userId),
+              eq(syncDraftsTable.source, input.source),
+              eq(syncDraftsTable.sourceRef, input.sourceRef),
+            ),
+          )
+          .for("update");
+        if (existing[0]) {
+          const summary = toSyncDraftSummaryModel(existing[0]);
+          if (summary.status === "applied") return { draft: summary, alreadyApplied: true };
+          throw new Error("이미 처리 중인 인식 결과예요");
+        }
+
+        await tx.insert(syncDraftsTable).values({
+          uid: draftUid,
+          userId,
+          source: input.source,
+          sourceRef: input.sourceRef,
+          type: input.type,
+          status: "pending",
+          toolName: input.toolName ?? null,
+          toolVersion: input.toolVersion ?? null,
+          catalogVersion: input.catalogVersion ?? null,
+        });
+        for (let offset = 0; offset < entries.length; offset += PG_WRITE_CHUNK_SIZE) {
+          const chunk = entries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+          await tx.insert(syncDraftEntriesTable).values(
+            chunk.map((entry) => ({
+              uid: nanoid(8),
+              draftUid,
+              entryKey: entry.entryKey,
+              value: entry.value,
+              valueJson: entry.valueJson,
+              meta: metaByEntryKey.get(entry.entryKey) ?? null,
+            })),
+          );
+        }
+        const appliedEntries =
+          input.type === "student_state"
+            ? entries.map((entry) => ({ entryKey: entry.entryKey, value: parseStudentStateDraftValue(entry) }))
+            : entries;
+        await applyEntries(tx, userId, input.type, appliedEntries, {
           preserveNullStudentStateFields: input.source === "first_party_ocr",
-        }),
-      ),
-      env.DB.prepare(`
-        update sync_drafts
-        set status = 'applied',
-            updatedAt = current_timestamp,
-            appliedAt = current_timestamp
-        where uid = ?1
-          and userId = ?2
-          and status = 'pending'
-      `).bind(draftUid, userId),
-    ]);
+        });
+        const now = new Date();
+        await tx
+          .update(syncDraftsTable)
+          .set({ status: "applied", updatedAt: now, appliedAt: now })
+          .where(and(eq(syncDraftsTable.uid, draftUid), eq(syncDraftsTable.userId, userId)));
+        const [saved] = await tx.select().from(syncDraftsTable).where(eq(syncDraftsTable.uid, draftUid));
+        if (!saved) throw new Error("인식 결과를 반영하지 못했어요");
+        return { draft: toSyncDraftSummaryModel(saved), alreadyApplied: false };
+      });
+    });
+    return result;
   } catch (error) {
     const concurrent = await getSyncDraftBySourceRef(env, userId, input.source, input.sourceRef);
     if (concurrent?.status === "applied") return { draft: concurrent, alreadyApplied: true };
     throw error;
   }
-
-  const applied = await getSyncDraftBySourceRef(env, userId, input.source, input.sourceRef);
-  if (applied?.status !== "applied") throw new Error("인식 결과를 반영하지 못했어요");
-  return { draft: applied, alreadyApplied: false };
 }
 
 export async function getSyncDraftEntryCounts(env: Env, draftUids: string[]): Promise<Record<string, number>> {
   const uniqueDraftUids = [...new Set(draftUids)];
-  if (uniqueDraftUids.length === 0) {
-    return {};
-  }
-
-  const db = drizzle(env.DB);
-  const rows = await db
-    .select({
-      draftUid: syncDraftEntriesTable.draftUid,
-      entryCount: sql<number>`count(*)`,
-    })
-    .from(syncDraftEntriesTable)
-    .where(inArray(syncDraftEntriesTable.draftUid, uniqueDraftUids))
-    .groupBy(syncDraftEntriesTable.draftUid);
-
-  return Object.fromEntries(rows.map((row) => [row.draftUid, row.entryCount]));
+  if (uniqueDraftUids.length === 0) return {};
+  return withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    const rows = await db
+      .select({ draftUid: syncDraftEntriesTable.draftUid, entryCount: sql<number>`count(*)` })
+      .from(syncDraftEntriesTable)
+      .where(inArray(syncDraftEntriesTable.draftUid, uniqueDraftUids))
+      .groupBy(syncDraftEntriesTable.draftUid);
+    return Object.fromEntries(rows.map((row) => [row.draftUid, Number(row.entryCount)]));
+  });
 }
 
 export async function updateSyncDraftEntries(
@@ -384,102 +357,96 @@ export async function updateSyncDraftEntries(
   draftUid: string,
   entries: SyncDraftEntryUpdateInput[],
 ) {
-  const draft = await getPendingOwnedSyncDraft(env, userId, draftUid);
-  const normalizedEntries = normalizeSyncDraftEntryUpdates(draft.type, entries);
-  assertEntryKeysMatchDraft(draft.entries, normalizedEntries);
-
-  await env.DB.batch([
-    ...normalizedEntries.map(({ entryKey, value, valueJson }) =>
-      env.DB.prepare(`
-        update sync_draft_entries
-        set value = ?1,
-            valueJson = ?5
-        where draftUid = ?2
-          and entryKey = ?3
-          and exists (
-            select 1
-            from sync_drafts
-            where uid = ?2
-              and userId = ?4
-              and status = 'pending'
-          )
-      `).bind(value, draftUid, entryKey, userId, valueJson ?? null),
-    ),
-    env.DB.prepare(`
-      update sync_drafts
-      set updatedAt = current_timestamp
-      where uid = ?1
-        and userId = ?2
-        and status = 'pending'
-    `).bind(draftUid, userId),
-  ]);
-
-  const updatedDraft = await getSyncDraft(env, userId, draftUid);
-  if (updatedDraft?.status !== "pending") {
-    throw new Error("이미 처리된 Draft예요");
-  }
+  await withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    await db.transaction(async (tx) => {
+      const draft = await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, true);
+      const normalizedEntries = normalizeSyncDraftEntryUpdates(draft.type, entries);
+      assertEntryKeysMatchDraft(draft.entries, normalizedEntries);
+      const now = new Date();
+      for (let offset = 0; offset < normalizedEntries.length; offset += PG_WRITE_CHUNK_SIZE) {
+        const chunk = normalizedEntries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+        const values = sql.join(
+          chunk.map((entry) => sql`(${entry.entryKey}, ${entry.value}, ${entry.valueJson})`),
+          sql`, `,
+        );
+        await tx.execute(sql`
+          UPDATE ${syncDraftEntriesTable} AS entries
+          SET "value" = incoming."value",
+              "value_json" = incoming."value_json",
+              "updated_at" = ${now}
+          FROM (VALUES ${values}) AS incoming("entry_key", "value", "value_json")
+          WHERE entries."draft_uid" = ${draftUid}
+            AND entries."entry_key" = incoming."entry_key"
+        `);
+      }
+      await tx.update(syncDraftsTable).set({ updatedAt: now }).where(eq(syncDraftsTable.uid, draftUid));
+    });
+  });
 }
 
 export async function applySyncDraft(env: Env, userId: number, draftUid: string) {
-  const draft = await getPendingOwnedSyncDraft(env, userId, draftUid);
-  const normalizedEntries =
-    draft.type === "student_state"
-      ? parseStudentStateDraftEntries(draft.entries)
-      : normalizeSyncDraftEntryUpdates(draft.type, draft.entries);
-
-  await env.DB.batch([
-    ...normalizedEntries.flatMap((entry) =>
-      createConditionalApplyStatements(env, userId, draftUid, draft.type, entry, {
+  await withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    await db.transaction(async (tx) => {
+      const draft = await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, true);
+      const normalizedEntries =
+        draft.type === "student_state"
+          ? parseStudentStateDraftEntries(draft.entries)
+          : normalizeSyncDraftEntryUpdates(draft.type, draft.entries);
+      await applyEntries(tx, userId, draft.type, normalizedEntries, {
         preserveNullStudentStateFields: draft.source === "first_party_ocr",
-      }),
-    ),
-    env.DB.prepare(`
-      update sync_drafts
-      set status = 'applied',
-          updatedAt = current_timestamp,
-          appliedAt = current_timestamp
-      where uid = ?1
-        and userId = ?2
-        and status = 'pending'
-    `).bind(draftUid, userId),
-  ]);
-
-  const appliedDraft = await getSyncDraft(env, userId, draftUid);
-  if (appliedDraft?.status !== "applied") {
-    throw new Error("이미 처리된 Draft예요");
-  }
+      });
+      const now = new Date();
+      await tx
+        .update(syncDraftsTable)
+        .set({ status: "applied", updatedAt: now, appliedAt: now })
+        .where(and(eq(syncDraftsTable.uid, draftUid), eq(syncDraftsTable.userId, userId)));
+    });
+  });
 }
 
 export async function discardSyncDraft(env: Env, userId: number, draftUid: string) {
-  await getPendingOwnedSyncDraft(env, userId, draftUid);
-
-  await env.DB.batch([
-    env.DB.prepare(`
-      update sync_drafts
-      set status = 'discarded',
-          updatedAt = current_timestamp
-      where uid = ?1
-        and userId = ?2
-        and status = 'pending'
-    `).bind(draftUid, userId),
-  ]);
-
-  const discardedDraft = await getSyncDraft(env, userId, draftUid);
-  if (discardedDraft?.status !== "discarded") {
-    throw new Error("이미 처리된 Draft예요");
-  }
+  await withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    await db.transaction(async (tx) => {
+      await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, true);
+      const result = await tx
+        .update(syncDraftsTable)
+        .set({ status: "discarded", updatedAt: new Date() })
+        .where(
+          and(
+            eq(syncDraftsTable.uid, draftUid),
+            eq(syncDraftsTable.userId, userId),
+            eq(syncDraftsTable.status, "pending"),
+          ),
+        )
+        .returning({ uid: syncDraftsTable.uid });
+      if (result.length === 0) throw new Error("이미 처리된 Draft예요");
+    });
+  });
 }
 
-async function getPendingOwnedSyncDraft(env: Env, userId: number, draftUid: string): Promise<SyncDraft> {
-  const draft = await getSyncDraft(env, userId, draftUid);
-  if (!draft) {
-    throw new Error("Draft를 찾을 수 없어요");
-  }
-  if (draft.status !== "pending") {
-    throw new Error("이미 처리된 Draft예요");
-  }
-
-  return draft;
+async function getPendingOwnedSyncDraftFromDb(
+  db: SyncDraftDb,
+  userId: number,
+  draftUid: string,
+  lock: boolean,
+): Promise<SyncDraft> {
+  const query = db
+    .select()
+    .from(syncDraftsTable)
+    .where(and(eq(syncDraftsTable.uid, draftUid), eq(syncDraftsTable.userId, userId)));
+  const rows = lock ? await query.for("update") : await query;
+  const draft = rows[0];
+  if (!draft) throw new Error("Draft를 찾을 수 없어요");
+  if (draft.status !== "pending") throw new Error("이미 처리된 Draft예요");
+  const entries = await db
+    .select()
+    .from(syncDraftEntriesTable)
+    .where(eq(syncDraftEntriesTable.draftUid, draftUid))
+    .orderBy(asc(syncDraftEntriesTable.id));
+  return toSyncDraftModel(draft, entries);
 }
 
 function normalizeSyncDraftEntryUpdates(
@@ -487,30 +454,19 @@ function normalizeSyncDraftEntryUpdates(
   entries: SyncDraftEntryUpdateInput[],
 ): { entryKey: string; value: number; valueJson: string | null }[] {
   const entryMap = new Map<string, { value: number; valueJson: string | null }>();
-
   for (const entry of entries) {
     const entryKey = entry.entryKey.trim();
-    if (!entryKey) {
-      throw new Error("변경안 항목을 찾을 수 없어요");
-    }
-    if (entryMap.has(entryKey)) {
-      throw new Error("중복된 변경안 항목이 있어요");
-    }
-
+    if (!entryKey) throw new Error("변경안 항목을 찾을 수 없어요");
+    if (entryMap.has(entryKey)) throw new Error("중복된 변경안 항목이 있어요");
     const value = normalizeSyncDraftEntryValue(type, entry.value);
     const valueJson = type === "student_state" ? normalizeStudentStateDraftEntryJson(value, entry.valueJson) : null;
-
     entryMap.set(entryKey, { value, valueJson });
   }
-
   return [...entryMap.entries()].map(([entryKey, entry]) => ({ entryKey, ...entry }));
 }
 
 function normalizeStudentStateDraftEntryJson(value: number, valueJson: string | null | undefined): string {
-  if (!valueJson) {
-    throw new Error("학생 상태 변경안 데이터를 찾을 수 없어요");
-  }
-
+  if (!valueJson) throw new Error("학생 상태 변경안 데이터를 찾을 수 없어요");
   parseStudentStateDraftValue({ value, valueJson });
   return valueJson;
 }
@@ -518,414 +474,328 @@ function normalizeStudentStateDraftEntryJson(value: number, valueJson: string | 
 function assertEntryKeysMatchDraft(draftEntries: SyncDraftEntry[], normalizedEntries: { entryKey: string }[]) {
   const draftKeys = draftEntries.map((entry) => entry.entryKey).sort();
   const updateKeys = normalizedEntries.map((entry) => entry.entryKey).sort();
-
-  if (draftKeys.length !== updateKeys.length) {
+  if (draftKeys.length !== updateKeys.length || draftKeys.some((key, index) => key !== updateKeys[index])) {
     throw new Error("저장할 항목이 변경안과 일치하지 않아요");
   }
-
-  for (const [index, draftKey] of draftKeys.entries()) {
-    if (draftKey !== updateKeys[index]) {
-      throw new Error("저장할 항목이 변경안과 일치하지 않아요");
-    }
-  }
 }
 
-function createConditionalApplyStatements(
-  env: Env,
+async function applyEntries(
+  db: SyncDraftDb,
   userId: number,
-  draftUid: string,
   type: SyncDraftType,
-  entry: { entryKey: string; value: number } | { entryKey: string; value: StudentStateDraftValue },
+  entries: Array<{ entryKey: string; value: number } | { entryKey: string; value: StudentStateDraftValue }>,
   options: { preserveNullStudentStateFields: boolean },
-): D1PreparedStatement[] {
+) {
   if (type === "student_state") {
-    const studentState = entry.value as StudentStateDraftValue;
-    const statements: D1PreparedStatement[] = [];
-    if (studentState.current != null) {
-      statements.push(
-        createConditionalStudentStateStatement(
-          env,
-          userId,
-          draftUid,
-          entry.entryKey,
-          studentState.current,
-          options.preserveNullStudentStateFields,
-        ),
-      );
-      if (studentState.current.bond != null) {
-        statements.push(
-          createConditionalStudentStateBondStatement(env, userId, draftUid, entry.entryKey, studentState.current.bond),
-        );
+    await applyStudentStateEntries(
+      db,
+      userId,
+      entries.map((entry) => ({ entryKey: entry.entryKey, state: entry.value as StudentStateDraftValue })),
+      options,
+    );
+    return;
+  }
+  for (let offset = 0; offset < entries.length; offset += PG_WRITE_CHUNK_SIZE) {
+    const chunk = entries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+    if (type === "item_inventory") {
+      const deletes = chunk.filter((entry) => Number(entry.value) <= 0).map((entry) => entry.entryKey);
+      if (deletes.length > 0) {
+        await db
+          .delete(pgGrowthResourceInventoryTable)
+          .where(
+            and(
+              eq(pgGrowthResourceInventoryTable.userId, userId),
+              inArray(pgGrowthResourceInventoryTable.itemUid, deletes),
+            ),
+          );
       }
-    }
-    if (studentState.target != null) {
-      statements.push(
-        createConditionalStudentStateGrowthStatement(env, userId, draftUid, entry.entryKey, studentState.target),
-      );
-      if (studentState.target.targetBond != null) {
-        statements.push(
-          createConditionalStudentStateBondTargetStatement(
-            env,
+      const inserts = chunk.filter((entry) => Number(entry.value) > 0);
+      if (inserts.length > 0) {
+        await db
+          .insert(pgGrowthResourceInventoryTable)
+          .values(
+            inserts.map((entry) => ({
+              uid: nanoid(8),
+              userId,
+              itemUid: entry.entryKey,
+              quantity: Number(entry.value),
+            })),
+          )
+          .onConflictDoUpdate({
+            target: [pgGrowthResourceInventoryTable.userId, pgGrowthResourceInventoryTable.itemUid],
+            set: { quantity: sql`excluded.quantity`, updatedAt: new Date() },
+          });
+      }
+    } else {
+      await db
+        .insert(pgRecruitedStudentsTable)
+        .values(
+          chunk.map((entry) => ({
+            uid: nanoid(8),
             userId,
-            draftUid,
-            entry.entryKey,
-            studentState.target.targetBond,
-          ),
-        );
-      }
-    }
-    return statements;
-  }
-
-  if (type === "student_tier") {
-    return [createConditionalStudentTierStatement(env, userId, draftUid, entry.entryKey, entry.value as number)];
-  }
-
-  return [createConditionalItemInventoryStatement(env, userId, draftUid, entry.entryKey, entry.value as number)];
-}
-
-function createConditionalItemInventoryStatement(
-  env: Env,
-  userId: number,
-  draftUid: string,
-  itemUid: string,
-  quantity: number,
-): D1PreparedStatement {
-  normalizeSyncDraftEntryValue("item_inventory", quantity);
-
-  if (quantity <= 0) {
-    return env.DB.prepare(`
-      delete from growth_resource_inventory
-      where userId = ?1
-        and itemUid = ?2
-        and exists (
-          select 1
-          from sync_drafts
-          where uid = ?3
-            and userId = ?1
-            and status = 'pending'
-            and type = 'item_inventory'
+            studentUid: entry.entryKey,
+            tier: Number(entry.value),
+          })),
         )
-    `).bind(userId, itemUid, draftUid);
+        .onConflictDoUpdate({
+          target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
+          set: { tier: sql`excluded.tier`, updatedAt: new Date() },
+        });
+    }
   }
-
-  return env.DB.prepare(`
-    insert into growth_resource_inventory (uid, userId, itemUid, quantity)
-    select ?1, ?2, ?3, ?4
-    where exists (
-      select 1
-      from sync_drafts
-      where uid = ?5
-        and userId = ?2
-        and status = 'pending'
-        and type = 'item_inventory'
-    )
-    on conflict(userId, itemUid) do update set
-      quantity = excluded.quantity,
-      updatedAt = current_timestamp
-  `).bind(nanoid(8), userId, itemUid, quantity, draftUid);
 }
 
-function createConditionalStudentTierStatement(
-  env: Env,
+type StudentStateApplyEntry = {
+  entryKey: string;
+  state: StudentStateDraftValue;
+};
+
+async function applyStudentStateEntries(
+  db: SyncDraftDb,
   userId: number,
-  draftUid: string,
-  studentUid: string,
-  tier: number,
-): D1PreparedStatement {
-  normalizeSyncDraftEntryValue("student_tier", tier);
-
-  return env.DB.prepare(`
-    insert into recruited_students (uid, userId, studentUid, tier)
-    select ?1, ?2, ?3, ?4
-    where exists (
-      select 1
-      from sync_drafts
-      where uid = ?5
-        and userId = ?2
-        and status = 'pending'
-        and type = 'student_tier'
-    )
-    on conflict(userId, studentUid) do update set
-      tier = excluded.tier,
-      updatedAt = current_timestamp
-  `).bind(nanoid(8), userId, studentUid, tier, draftUid);
-}
-
-function createConditionalStudentStateStatement(
-  env: Env,
-  userId: number,
-  draftUid: string,
-  studentUid: string,
-  state: StudentStateDraftCurrentValue,
-  preserveNullFields: boolean,
-): D1PreparedStatement {
-  const updateFields = preserveNullFields
-    ? `
-      level = coalesce(excluded.level, recruited_students.level),
-      skillEx = coalesce(excluded.skillEx, recruited_students.skillEx),
-      skillNormal = coalesce(excluded.skillNormal, recruited_students.skillNormal),
-      skillEnhanced = coalesce(excluded.skillEnhanced, recruited_students.skillEnhanced),
-      skillSub = coalesce(excluded.skillSub, recruited_students.skillSub),
-      equip1 = coalesce(excluded.equip1, recruited_students.equip1),
-      equip2 = coalesce(excluded.equip2, recruited_students.equip2),
-      equip3 = coalesce(excluded.equip3, recruited_students.equip3),
-      equipSpecial = coalesce(excluded.equipSpecial, recruited_students.equipSpecial),
-      weaponLevel = coalesce(excluded.weaponLevel, recruited_students.weaponLevel),
-      abilityHp = coalesce(excluded.abilityHp, recruited_students.abilityHp),
-      abilityAtk = coalesce(excluded.abilityAtk, recruited_students.abilityAtk),
-      abilityHeal = coalesce(excluded.abilityHeal, recruited_students.abilityHeal),`
-    : `
-      level = excluded.level,
-      skillEx = excluded.skillEx,
-      skillNormal = excluded.skillNormal,
-      skillEnhanced = excluded.skillEnhanced,
-      skillSub = excluded.skillSub,
-      equip1 = excluded.equip1,
-      equip2 = excluded.equip2,
-      equip3 = excluded.equip3,
-      equipSpecial = excluded.equipSpecial,
-      weaponLevel = excluded.weaponLevel,
-      abilityHp = excluded.abilityHp,
-      abilityAtk = excluded.abilityAtk,
-      abilityHeal = excluded.abilityHeal,`;
-
-  return env.DB.prepare(`
-    insert into recruited_students (
-      uid,
-      userId,
-      studentUid,
-      tier,
-      level,
-      skillEx,
-      skillNormal,
-      skillEnhanced,
-      skillSub,
-      equip1,
-      equip2,
-      equip3,
-      equipSpecial,
-      weaponLevel,
-      abilityHp,
-      abilityAtk,
-      abilityHeal
-    )
-    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
-    where exists (
-      select 1
-      from sync_drafts
-      where uid = ?18
-        and userId = ?2
-        and status = 'pending'
-        and type = 'student_state'
-    )
-    on conflict(userId, studentUid) do update set
-      tier = excluded.tier,
-      ${updateFields}
-      updatedAt = current_timestamp
-  `).bind(
-    nanoid(8),
-    userId,
-    studentUid,
-    state.tier,
-    state.level,
-    state.skillEx,
-    state.skillNormal,
-    state.skillEnhanced,
-    state.skillSub,
-    state.equip1,
-    state.equip2,
-    state.equip3,
-    state.equipSpecial,
-    state.weaponLevel,
-    state.abilityHp,
-    state.abilityAtk,
-    state.abilityHeal,
-    draftUid,
+  entries: StudentStateApplyEntry[],
+  options: { preserveNullStudentStateFields: boolean },
+) {
+  const currentStates = entries.flatMap((entry) =>
+    entry.state.current ? [{ studentUid: entry.entryKey, state: entry.state.current }] : [],
   );
-}
-
-function createConditionalStudentStateGrowthStatement(
-  env: Env,
-  userId: number,
-  draftUid: string,
-  studentUid: string,
-  target: StudentStateDraftTargetValue,
-): D1PreparedStatement {
-  return env.DB.prepare(`
-    insert into student_growth (
-      uid,
-      userId,
-      studentUid,
-      targetLevel,
-      targetSkillEx,
-      targetSkillNormal,
-      targetSkillEnhanced,
-      targetSkillSub,
-      targetEquip1,
-      targetEquip2,
-      targetEquip3,
-      targetEquipSpecial,
-      targetTier,
-      targetWeaponLevel,
-      targetAbilityHp,
-      targetAbilityAtk,
-      targetAbilityHeal
-    )
-    select ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17
-    where exists (
-      select 1
-      from sync_drafts
-      where uid = ?18
-        and userId = ?2
-        and status = 'pending'
-        and type = 'student_state'
-    )
-    on conflict(userId, studentUid) do update set
-      targetLevel = excluded.targetLevel,
-      targetSkillEx = excluded.targetSkillEx,
-      targetSkillNormal = excluded.targetSkillNormal,
-      targetSkillEnhanced = excluded.targetSkillEnhanced,
-      targetSkillSub = excluded.targetSkillSub,
-      targetEquip1 = excluded.targetEquip1,
-      targetEquip2 = excluded.targetEquip2,
-      targetEquip3 = excluded.targetEquip3,
-      targetEquipSpecial = excluded.targetEquipSpecial,
-      targetTier = excluded.targetTier,
-      targetWeaponLevel = excluded.targetWeaponLevel,
-      targetAbilityHp = excluded.targetAbilityHp,
-      targetAbilityAtk = excluded.targetAbilityAtk,
-      targetAbilityHeal = excluded.targetAbilityHeal,
-      updatedAt = current_timestamp
-  `).bind(
-    nanoid(8),
-    userId,
-    studentUid,
-    target.targetLevel,
-    target.targetSkillEx,
-    target.targetSkillNormal,
-    target.targetSkillEnhanced,
-    target.targetSkillSub,
-    target.targetEquip1,
-    target.targetEquip2,
-    target.targetEquip3,
-    target.targetEquipSpecial,
-    target.targetTier,
-    target.targetWeaponLevel,
-    target.targetAbilityHp,
-    target.targetAbilityAtk,
-    target.targetAbilityHeal,
-    draftUid,
+  const targetGrowths = entries.flatMap((entry) =>
+    entry.state.target ? [{ studentUid: entry.entryKey, target: entry.state.target }] : [],
   );
-}
+  const currentBonds = currentStates.flatMap((entry) =>
+    entry.state.bond == null ? [] : [{ studentId: entry.studentUid, currentLevel: entry.state.bond }],
+  );
+  const targetBonds = targetGrowths.flatMap((entry) =>
+    entry.target.targetBond == null ? [] : [{ studentId: entry.studentUid, targetLevel: entry.target.targetBond }],
+  );
 
-function createConditionalStudentStateBondStatement(
-  env: Env,
-  userId: number,
-  draftUid: string,
-  studentUid: string,
-  bond: number,
-): D1PreparedStatement {
-  return env.DB.prepare(`
-    insert into user_relationship_levels (
-      uid,
+  await forEachChunk(currentStates, PG_WRITE_CHUNK_SIZE, async (chunk) => {
+    await db
+      .insert(pgRecruitedStudentsTable)
+      .values(
+        chunk.map(({ studentUid, state }) => ({
+          uid: nanoid(8),
+          userId,
+          studentUid,
+          tier: state.tier,
+          level: state.level,
+          skillEx: state.skillEx,
+          skillNormal: state.skillNormal,
+          skillEnhanced: state.skillEnhanced,
+          skillSub: state.skillSub,
+          equip1: state.equip1,
+          equip2: state.equip2,
+          equip3: state.equip3,
+          equipSpecial: state.equipSpecial,
+          weaponLevel: state.weaponLevel,
+          abilityHp: state.abilityHp,
+          abilityAtk: state.abilityAtk,
+          abilityHeal: state.abilityHeal,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
+        set: recruitedStudentConflictSet(options.preserveNullStudentStateFields),
+      });
+  });
+
+  const relationshipLevels = await readRelationshipLevels(db, userId, [
+    ...currentBonds.map((entry) => entry.studentId),
+    ...targetBonds.map((entry) => entry.studentId),
+  ]);
+
+  const currentBondValues = currentBonds.map(({ studentId, currentLevel }) => {
+    const existing = relationshipLevels.get(studentId);
+    const targetLevel = existing?.targetLevel ?? currentLevel;
+    relationshipLevels.set(studentId, { currentLevel, targetLevel });
+    return {
+      uid: nanoid(8),
       userId,
       studentId,
       currentLevel,
-      currentExp,
+      currentExp: null,
       targetLevel,
-      items
-    )
-    select ?1, ?2, ?3, ?4, null, ?4, '{}'
-    where exists (
-      select 1
-      from sync_drafts
-      where uid = ?5
-        and userId = ?2
-        and status = 'pending'
-        and type = 'student_state'
-    )
-    on conflict(userId, studentId) do update set
-      currentLevel = excluded.currentLevel,
-      currentExp = null,
-      updatedAt = current_timestamp
-  `).bind(nanoid(8), userId, studentUid, bond, draftUid);
-}
+      items: {},
+    };
+  });
+  await forEachChunk(currentBondValues, PG_WRITE_CHUNK_SIZE, async (chunk) => {
+    await db
+      .insert(pgRelationshipLevelsTable)
+      .values(chunk)
+      .onConflictDoUpdate({
+        target: [pgRelationshipLevelsTable.userId, pgRelationshipLevelsTable.studentId],
+        set: {
+          currentLevel: sql`excluded.current_level`,
+          currentExp: sql`excluded.current_exp`,
+          updatedAt: new Date(),
+        },
+      });
+  });
 
-function createConditionalStudentStateBondTargetStatement(
-  env: Env,
-  userId: number,
-  draftUid: string,
-  studentUid: string,
-  targetBond: number,
-): D1PreparedStatement {
-  return env.DB.prepare(`
-    insert into user_relationship_levels (
-      uid,
+  await forEachChunk(targetGrowths, PG_WRITE_CHUNK_SIZE, async (chunk) => {
+    await db
+      .insert(pgStudentGrowthTable)
+      .values(
+        chunk.map(({ studentUid, target }) => ({
+          uid: nanoid(8),
+          userId,
+          studentUid,
+          targetLevel: target.targetLevel,
+          targetSkillEx: target.targetSkillEx,
+          targetSkillNormal: target.targetSkillNormal,
+          targetSkillEnhanced: target.targetSkillEnhanced,
+          targetSkillSub: target.targetSkillSub,
+          targetEquip1: target.targetEquip1,
+          targetEquip2: target.targetEquip2,
+          targetEquip3: target.targetEquip3,
+          targetEquipSpecial: target.targetEquipSpecial,
+          targetTier: target.targetTier,
+          targetWeaponLevel: target.targetWeaponLevel,
+          targetAbilityHp: target.targetAbilityHp,
+          targetAbilityAtk: target.targetAbilityAtk,
+          targetAbilityHeal: target.targetAbilityHeal,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [pgStudentGrowthTable.userId, pgStudentGrowthTable.studentUid],
+        set: {
+          targetLevel: sql`excluded.target_level`,
+          targetSkillEx: sql`excluded.target_skill_ex`,
+          targetSkillNormal: sql`excluded.target_skill_normal`,
+          targetSkillEnhanced: sql`excluded.target_skill_enhanced`,
+          targetSkillSub: sql`excluded.target_skill_sub`,
+          targetEquip1: sql`excluded.target_equip1`,
+          targetEquip2: sql`excluded.target_equip2`,
+          targetEquip3: sql`excluded.target_equip3`,
+          targetEquipSpecial: sql`excluded.target_equip_special`,
+          targetTier: sql`excluded.target_tier`,
+          targetWeaponLevel: sql`excluded.target_weapon_level`,
+          targetAbilityHp: sql`excluded.target_ability_hp`,
+          targetAbilityAtk: sql`excluded.target_ability_atk`,
+          targetAbilityHeal: sql`excluded.target_ability_heal`,
+          updatedAt: new Date(),
+        },
+      });
+  });
+
+  const targetBondValues = targetBonds.map(({ studentId, targetLevel }) => {
+    const existing = relationshipLevels.get(studentId);
+    const currentLevel = existing?.currentLevel ?? 1;
+    relationshipLevels.set(studentId, { currentLevel, targetLevel });
+    return {
+      uid: nanoid(8),
       userId,
       studentId,
       currentLevel,
-      currentExp,
+      currentExp: null,
       targetLevel,
-      items
-    )
-    select ?1, ?2, ?3, 1, null, ?4, '{}'
-    where exists (
-      select 1
-      from sync_drafts
-      where uid = ?5
-        and userId = ?2
-        and status = 'pending'
-        and type = 'student_state'
-    )
-    on conflict(userId, studentId) do update set
-      targetLevel = excluded.targetLevel,
-      updatedAt = current_timestamp
-  `).bind(nanoid(8), userId, studentUid, targetBond, draftUid);
+      items: {},
+    };
+  });
+  await forEachChunk(targetBondValues, PG_WRITE_CHUNK_SIZE, async (chunk) => {
+    await db
+      .insert(pgRelationshipLevelsTable)
+      .values(chunk)
+      .onConflictDoUpdate({
+        target: [pgRelationshipLevelsTable.userId, pgRelationshipLevelsTable.studentId],
+        set: {
+          targetLevel: sql`excluded.target_level`,
+          updatedAt: new Date(),
+        },
+      });
+  });
+}
+
+function recruitedStudentConflictSet(preserveNullFields: boolean) {
+  const input = {
+    tier: sql`excluded.tier`,
+    level: sql`excluded.level`,
+    skillEx: sql`excluded.skill_ex`,
+    skillNormal: sql`excluded.skill_normal`,
+    skillEnhanced: sql`excluded.skill_enhanced`,
+    skillSub: sql`excluded.skill_sub`,
+    equip1: sql`excluded.equip1`,
+    equip2: sql`excluded.equip2`,
+    equip3: sql`excluded.equip3`,
+    equipSpecial: sql`excluded.equip_special`,
+    weaponLevel: sql`excluded.weapon_level`,
+    abilityHp: sql`excluded.ability_hp`,
+    abilityAtk: sql`excluded.ability_atk`,
+    abilityHeal: sql`excluded.ability_heal`,
+    updatedAt: new Date(),
+  };
+  if (!preserveNullFields) return input;
+  return {
+    tier: input.tier,
+    level: sql`coalesce(excluded.level, recruited_students.level)`,
+    skillEx: sql`coalesce(excluded.skill_ex, recruited_students.skill_ex)`,
+    skillNormal: sql`coalesce(excluded.skill_normal, recruited_students.skill_normal)`,
+    skillEnhanced: sql`coalesce(excluded.skill_enhanced, recruited_students.skill_enhanced)`,
+    skillSub: sql`coalesce(excluded.skill_sub, recruited_students.skill_sub)`,
+    equip1: sql`coalesce(excluded.equip1, recruited_students.equip1)`,
+    equip2: sql`coalesce(excluded.equip2, recruited_students.equip2)`,
+    equip3: sql`coalesce(excluded.equip3, recruited_students.equip3)`,
+    equipSpecial: sql`coalesce(excluded.equip_special, recruited_students.equip_special)`,
+    weaponLevel: sql`coalesce(excluded.weapon_level, recruited_students.weapon_level)`,
+    abilityHp: sql`coalesce(excluded.ability_hp, recruited_students.ability_hp)`,
+    abilityAtk: sql`coalesce(excluded.ability_atk, recruited_students.ability_atk)`,
+    abilityHeal: sql`coalesce(excluded.ability_heal, recruited_students.ability_heal)`,
+    updatedAt: input.updatedAt,
+  };
+}
+
+async function readRelationshipLevels(db: SyncDraftDb, userId: number, studentIds: string[]) {
+  const relationshipLevels = new Map<string, { currentLevel: number; targetLevel: number }>();
+  const uniqueStudentIds = [...new Set(studentIds)];
+  await forEachChunk(uniqueStudentIds, PG_IN_QUERY_CHUNK_SIZE, async (chunk) => {
+    const rows = await db
+      .select({
+        studentId: pgRelationshipLevelsTable.studentId,
+        currentLevel: pgRelationshipLevelsTable.currentLevel,
+        targetLevel: pgRelationshipLevelsTable.targetLevel,
+      })
+      .from(pgRelationshipLevelsTable)
+      .where(and(eq(pgRelationshipLevelsTable.userId, userId), inArray(pgRelationshipLevelsTable.studentId, chunk)));
+    for (const row of rows) {
+      relationshipLevels.set(row.studentId, { currentLevel: row.currentLevel, targetLevel: row.targetLevel });
+    }
+  });
+  return relationshipLevels;
+}
+
+async function forEachChunk<T>(rows: T[], size: number, callback: (chunk: T[]) => Promise<void>) {
+  for (let offset = 0; offset < rows.length; offset += size) {
+    await callback(rows.slice(offset, offset + size));
+  }
 }
 
 function parseStudentStateDraftEntries(
   entries: SyncDraftEntry[],
 ): { entryKey: string; value: StudentStateDraftValue }[] {
-  return entries.map((entry) => ({
-    entryKey: entry.entryKey,
-    value: parseStudentStateDraftValue(entry),
-  }));
+  return entries.map((entry) => ({ entryKey: entry.entryKey, value: parseStudentStateDraftValue(entry) }));
 }
 
 function normalizeItemInventoryValue(value: unknown): number {
   const normalizedValue = normalizeIntegerValue(value, "아이템 수량은 0 이상의 정수만 입력해주세요");
-  if (normalizedValue < 0) {
-    throw new Error("아이템 수량은 0 이상의 정수만 입력해주세요");
-  }
-
+  if (normalizedValue < 0) throw new Error("아이템 수량은 0 이상의 정수만 입력해주세요");
   return normalizedValue;
 }
 
 function normalizeStudentTierValue(value: unknown): number {
   const normalizedValue = normalizeIntegerValue(value, "학생 등급은 1부터 9까지의 정수만 입력해주세요");
-  if (normalizedValue < 1 || normalizedValue > 9) {
-    throw new Error("학생 등급은 1부터 9까지의 정수만 입력해주세요");
-  }
-
+  if (normalizedValue < 1 || normalizedValue > 9) throw new Error("학생 등급은 1부터 9까지의 정수만 입력해주세요");
   return normalizedValue;
 }
 
 function normalizeIntegerValue(value: unknown, errorMessage: string): number {
   if (typeof value === "number") {
-    if (!Number.isInteger(value)) {
-      throw new Error(errorMessage);
-    }
+    if (!Number.isInteger(value)) throw new Error(errorMessage);
     return value;
   }
-
   if (typeof value === "string") {
     const trimmed = value.trim();
-    if (!/^-?\d+$/.test(trimmed)) {
-      throw new Error(errorMessage);
-    }
+    if (!/^-?\d+$/.test(trimmed)) throw new Error(errorMessage);
     return Number(trimmed);
   }
-
   throw new Error(errorMessage);
 }

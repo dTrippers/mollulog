@@ -1,6 +1,6 @@
 import { ArrowPathIcon } from "@heroicons/react/20/solid";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import { data, Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { parseStudentStateImport } from "~/domain/student-state-serialization";
@@ -44,7 +44,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
@@ -114,10 +114,7 @@ export default function ConnectImportIndexPage() {
     <ConnectDataPage currentScreen="import" pendingDraftCount={drafts.length}>
       <div className="space-y-8 pb-12">
         <section>
-          <SubTitle
-            text="데이터 가져오기"
-            description="현재 SchaleDB와 Justin163 플래너를 지원해요"
-          />
+          <SubTitle text="데이터 가져오기" description="현재 SchaleDB와 Justin163 플래너를 지원해요" />
           <Form method="post" className="space-y-4">
             <Textarea
               name="payload"

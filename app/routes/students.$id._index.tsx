@@ -184,7 +184,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     return data<StudentBasicInfoActionData>({ ok: false, error: "학생 정보가 필요해요" }, { status: 400 });
   }
 
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<StudentBasicInfoActionData>({ ok: false, error: "로그인이 필요해요" }, { status: 401 });

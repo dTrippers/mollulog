@@ -1,7 +1,7 @@
 import { ResourceInventoryTile } from "~/components/features/growth";
 import { SectionCard } from "~/components/primitives";
+import { getAccumulatedRelationshipExpForLevel } from "~/domain/relationship-level";
 import { RELATIONSHIP_ITEMS } from "~/models/constants";
-import { getAccumulatedRelationshipExpForLevel } from "~/models/relationship-level";
 
 type RequiredGiftsProps = {
   currentExp: number | null;

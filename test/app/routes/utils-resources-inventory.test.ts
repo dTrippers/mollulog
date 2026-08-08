@@ -32,7 +32,7 @@ const mockedUpsertInventory = upsertUserResourceInventories as jest.MockedFuncti
   typeof upsertUserResourceInventories
 >;
 
-const env = {} as Env;
+const env = { KV_CACHE: { get: jest.fn(async () => null) } } as unknown as Env;
 const catalogResources = [
   {
     uid: "23",

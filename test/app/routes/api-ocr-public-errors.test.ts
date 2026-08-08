@@ -61,7 +61,7 @@ const logger = {
   error: jest.fn(),
 };
 const ctx = { waitUntil: jest.fn() };
-const env = {} as Env;
+const env = { KV_CACHE: { get: jest.fn(async () => null) } } as unknown as Env;
 
 function expectDataResult<T>(result: unknown): DataResult<T> {
   expect(result).toMatchObject({ type: "DataWithResponseInit" });
@@ -184,7 +184,7 @@ describe("public OCR API errors", () => {
     expect(response.init).toBeNull();
     expect(response.data).toEqual({ uid: "job-1", status: "cancelled" });
     expect(mockedGetSyncDraftBySourceRef).toHaveBeenCalledWith(env, 7, "first_party_ocr", "job-1");
-    expect(mockedCancelOcrJob).toHaveBeenCalledWith(env, 7, "job-1", { ctx });
+    expect(mockedCancelOcrJob).toHaveBeenCalledWith(env, 7, "job-1", { ctx } as never);
     expect(logger.error).not.toHaveBeenCalled();
   });
 

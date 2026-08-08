@@ -196,6 +196,7 @@ type AllCommentsState = Record<string, NestedComment[]>;
 type FutureRecruitment = FutureContent["recruitments"][number];
 type CompletedRecruitmentStudentState = { recruitmentGroupUid: string; studentUid: string };
 type RecruitmentResultEditLinkState = { recruitmentGroupUid: string; link: string };
+type RecruitmentResultFetcherData = { success?: boolean; result?: RecruitmentResultState | null };
 
 function getContentLink(content: {
   contentType: EventType | RaidType;
@@ -365,7 +366,7 @@ export default function FutureContents() {
 
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
 
-  const recruitmentResultFetcher = useFetcher<{ success?: boolean; result?: RecruitmentResultState | null }>();
+  const recruitmentResultFetcher = useFetcher<RecruitmentResultFetcherData>();
   const submitRecruitmentResult = (data: RecruitmentResultActionData) =>
     recruitmentResultFetcher.submit(data, {
       action: "/api/recruitment-results",
@@ -375,13 +376,9 @@ export default function FutureContents() {
 
   useEffect(() => {
     const response = recruitmentResultFetcher.data;
-    if (
-      recruitmentResultFetcher.state !== "idle" ||
-      !response ||
-      !("success" in response) ||
-      !response.success ||
-      !response.result
-    ) {
+    if (recruitmentResultFetcher.state !== "idle" || !response) return;
+
+    if (!response.success || !response.result) {
       return;
     }
 

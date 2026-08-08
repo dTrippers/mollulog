@@ -3,7 +3,7 @@ import type { Client } from "pg";
 
 const projection = jest.fn(async (..._args: unknown[]) => undefined);
 jest.mock("~/models/recruited-student", () => ({
-  upsertRecruitedStudentFromRecruitmentResult: projection,
+  upsertRecruitedStudentFromRecruitmentResultInTransaction: projection,
 }));
 
 import {
@@ -14,7 +14,7 @@ import {
 
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as unknown as Env;
 
-it("commits the result and linked post before awaiting the D1 projection", async () => {
+it("projects recruited students inside the PostgreSQL transaction", async () => {
   const events: string[] = [];
   let resultSelectCount = 0;
   const savedResultRow = [
@@ -69,16 +69,15 @@ it("commits the result and linked post before awaiting the D1 projection", async
   ).resolves.toMatchObject({ uid: "result-1", commentPostUid: "post-1" });
 
   const commitIndex = events.findIndex((event) => event.toLowerCase() === "commit");
-  const endIndex = events.indexOf("client.end");
   const projectionIndex = events.indexOf("projection");
   expect(commitIndex).toBeGreaterThanOrEqual(0);
-  expect(endIndex).toBeGreaterThan(commitIndex);
-  expect(projectionIndex).toBeGreaterThan(endIndex);
-  expect(projection).toHaveBeenCalledWith(env, 10, "student-1", 3);
+  expect(projectionIndex).toBeGreaterThanOrEqual(0);
+  expect(projectionIndex).toBeLessThan(commitIndex);
+  expect(projection).toHaveBeenCalledWith(expect.anything(), 10, "student-1", 3);
   expect(events.some((event) => event.includes('insert into "community_posts"'))).toBe(true);
 });
 
-it("surfaces projection failure after commit and retries the same linked result without a new post", async () => {
+it("rolls back the result when the in-transaction projection fails", async () => {
   const events: string[] = [];
   const existingResultRow = [
     1,
@@ -118,8 +117,11 @@ it("surfaces projection failure after commit and retries the same linked result 
     "projection failed",
   );
   const firstCommit = events.findIndex((event) => event.toLowerCase() === "commit");
+  const firstRollback = events.findIndex((event) => event.toLowerCase() === "rollback");
   const firstFailure = events.indexOf("projection-failure");
-  expect(firstFailure).toBeGreaterThan(firstCommit);
+  expect(firstFailure).toBeGreaterThanOrEqual(0);
+  expect(firstRollback).toBeGreaterThan(firstFailure);
+  expect(firstCommit).toBe(-1);
 
   await expect(upsertPostgresRecruitmentResult(env, 10, input, { createClient: () => client })).resolves.toMatchObject({
     uid: "result-1",
@@ -166,7 +168,7 @@ it("projects only the added student while preserving the committed result", asyn
   );
 
   expect(projection).toHaveBeenCalledTimes(1);
-  expect(projection).toHaveBeenCalledWith(env, 10, "student-2", 4);
+  expect(projection).toHaveBeenCalledWith(expect.anything(), 10, "student-2", 4);
 });
 
 it("does not project when removing a student", async () => {

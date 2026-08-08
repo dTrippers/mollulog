@@ -1,10 +1,16 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import {
   getRecruitedStudents,
   updateRecruitedStudentCurrentState,
   upsertRecruitedStudent,
   upsertRecruitedStudentState,
 } from "~/models/recruited-student";
+import { FakePostgresClient } from "../../helpers/fake-postgres";
+
+jest.mock("~/lib/postgres.server", () => ({
+  withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
+    operation(env.__pgClient),
+}));
 
 type RecruitedStudentRow = {
   id: number;
@@ -28,138 +34,6 @@ type RecruitedStudentRow = {
   createdAt: string;
   updatedAt: string;
 };
-
-const currentStateFields = [
-  "level",
-  "skillEx",
-  "skillNormal",
-  "skillEnhanced",
-  "skillSub",
-  "equip1",
-  "equip2",
-  "equip3",
-  "equipSpecial",
-  "weaponLevel",
-  "abilityHp",
-  "abilityAtk",
-  "abilityHeal",
-] as const;
-
-class FakeD1Statement {
-  private params: unknown[] = [];
-
-  constructor(
-    private readonly db: FakeD1Database,
-    private readonly sql: string,
-  ) {}
-
-  bind(...params: unknown[]): FakeD1Statement {
-    this.params = params;
-    return this;
-  }
-
-  async all(): Promise<{ results: RecruitedStudentRow[] }> {
-    return { results: this.db.selectRows(this.sql, this.params) };
-  }
-
-  async raw(): Promise<unknown[][]> {
-    return this.db.selectRows(this.sql, this.params).map((row) => Object.values(row));
-  }
-
-  async run(): Promise<{ success: true; meta: { changes: number } }> {
-    return { success: true, meta: { changes: this.db.execute(this.sql, this.params) } };
-  }
-}
-
-class FakeD1Database {
-  readonly rows: RecruitedStudentRow[] = [];
-  readonly selectParameterCounts: number[] = [];
-
-  prepare(sql: string): FakeD1Statement {
-    return new FakeD1Statement(this, sql);
-  }
-
-  selectRows(sql: string, params: unknown[]): RecruitedStudentRow[] {
-    const normalizedSql = normalizeSql(sql);
-    if (normalizedSql.includes("from recruited_students")) {
-      this.selectParameterCounts.push(params.length);
-      const userId = Number(params[0]);
-      const requestedStudentUids = normalizedSql.includes("studentuid in")
-        ? new Set(params.slice(1).map(String))
-        : null;
-      const rows = this.rows.filter(
-        (row) => row.userId === userId && (!requestedStudentUids || requestedStudentUids.has(row.studentUid)),
-      );
-      if (normalizedSql.includes("select tier")) {
-        return rows.map((row) => ({ tier: row.tier }) as RecruitedStudentRow);
-      }
-      if (normalizedSql.includes("select weaponlevel")) {
-        return rows.map(
-          (row) =>
-            ({
-              weaponLevel: row.weaponLevel,
-              abilityHp: row.abilityHp,
-              abilityAtk: row.abilityAtk,
-              abilityHeal: row.abilityHeal,
-            }) as RecruitedStudentRow,
-        );
-      }
-      return rows;
-    }
-
-    throw new Error(`Unexpected SQL: ${sql}`);
-  }
-
-  execute(sql: string, params: unknown[]): number {
-    const normalizedSql = normalizeSql(sql);
-    if (normalizedSql.startsWith("update recruited_students set")) {
-      const userId = Number(params.at(-2));
-      const studentUid = String(params.at(-1));
-      const row = this.rows.find((candidate) => candidate.userId === userId && candidate.studentUid === studentUid);
-      if (!row) return 0;
-
-      currentStateFields.forEach((field, index) => {
-        row[field] = params[index] == null ? null : Number(params[index]);
-      });
-      row.updatedAt = "current_timestamp";
-      return 1;
-    }
-
-    if (normalizedSql.startsWith("insert into recruited_students")) {
-      const userId = Number(params[1]);
-      const studentUid = String(params[2]);
-      const writesCurrentState = params.length > 5;
-      const tier = Number(writesCurrentState ? params[4 + currentStateFields.length] : params.at(-1));
-      const recruitedRow = this.rows.find(
-        (candidate) => candidate.userId === userId && candidate.studentUid === studentUid,
-      );
-      if (recruitedRow) {
-        recruitedRow.tier = tier;
-        if (writesCurrentState) {
-          currentStateFields.forEach((field, index) => {
-            const value = params[5 + currentStateFields.length + index];
-            recruitedRow[field] = value == null ? null : Number(value);
-          });
-        }
-        recruitedRow.updatedAt = "current_timestamp";
-        return 1;
-      }
-
-      const currentState = writesCurrentState
-        ? Object.fromEntries(
-            currentStateFields.map((field, index) => [
-              field,
-              params[4 + index] == null ? null : Number(params[4 + index]),
-            ]),
-          )
-        : {};
-      this.rows.push(createRecruitedStudentRow({ uid: String(params[0]), userId, studentUid, tier, ...currentState }));
-      return 1;
-    }
-
-    throw new Error(`Unexpected SQL: ${sql}`);
-  }
-}
 
 function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow>): RecruitedStudentRow {
   return {
@@ -187,12 +61,11 @@ function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow>): Rec
   };
 }
 
-function createEnv(db = new FakeD1Database()): { db: FakeD1Database; env: Env } {
-  return { db, env: { DB: db } as unknown as Env };
-}
-
-function normalizeSql(sql: string): string {
-  return sql.replaceAll('"', "").replace(/\s+/g, " ").trim().toLowerCase();
+function createEnv(db = new FakePostgresClient()): { db: FakePostgresClient; env: Env } {
+  return {
+    db,
+    env: { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+  };
 }
 
 describe("recruited-student current state", () => {
@@ -233,6 +106,15 @@ describe("recruited-student current state", () => {
       equip3: 8,
       equipSpecial: 2,
     });
+    expect(db.statements[0]?.toLowerCase()).toBe("begin");
+    expect(db.statements.at(-1)?.toLowerCase()).toBe("commit");
+    const lockIndex = db.statements.findIndex(
+      (statement) =>
+        statement.toLowerCase().includes("for update") && statement.toLowerCase().includes("recruited_students"),
+    );
+    const writeIndex = db.statements.findIndex((statement) => statement.toLowerCase().startsWith("update"));
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(lockIndex).toBeLessThan(writeIndex);
   });
 
   it("does not create a recruited row when updating current state for a non-recruited student", async () => {
@@ -255,6 +137,21 @@ describe("recruited-student current state", () => {
     });
 
     expect(db.rows).toHaveLength(0);
+  });
+
+  it("inserts an absent recruited student under the same locked transaction", async () => {
+    const { db, env } = createEnv();
+
+    await upsertRecruitedStudent(env, 1, "student-a", 5);
+
+    expect(db.rows).toHaveLength(1);
+    expect(db.rows[0]).toMatchObject({ userId: 1, studentUid: "student-a", tier: 5 });
+    expect(db.statements[0]?.toLowerCase()).toBe("begin");
+    expect(db.statements.at(-1)?.toLowerCase()).toBe("commit");
+    const lockIndex = db.statements.findIndex((statement) => statement.toLowerCase().includes("for update"));
+    const writeIndex = db.statements.findIndex((statement) => statement.toLowerCase().startsWith("insert"));
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(lockIndex).toBeLessThan(writeIndex);
   });
 
   it("creates a recruited student with its nullable current state", async () => {
@@ -303,6 +200,15 @@ describe("recruited-student current state", () => {
       skillEx: 4,
       equip1: 7,
     });
+    expect(db.statements[0]?.toLowerCase()).toBe("begin");
+    expect(db.statements.at(-1)?.toLowerCase()).toBe("commit");
+    const lockIndex = db.statements.findIndex(
+      (statement) =>
+        statement.toLowerCase().includes("for update") && statement.toLowerCase().includes("recruited_students"),
+    );
+    const writeIndex = db.statements.findIndex((statement) => statement.toLowerCase().startsWith("insert"));
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(lockIndex).toBeLessThan(writeIndex);
   });
 
   it("rejects tier updates that would leave ability release levels without a unique weapon", async () => {
@@ -312,6 +218,11 @@ describe("recruited-student current state", () => {
     await expect(upsertRecruitedStudent(env, 1, "student-a", 5)).rejects.toThrow(
       "능력 해방은(는) 고유무기 장착 후 입력할 수 있어요",
     );
+    expect(db.statements.map((statement) => statement.toLowerCase())).toEqual(
+      expect.arrayContaining(["begin", "rollback"]),
+    );
+    expect(db.rows[0]).toMatchObject({ tier: 6, abilityHp: 1 });
+    expect(db.statements.some((statement) => statement.toLowerCase().startsWith("insert"))).toBe(false);
   });
 
   it("rejects out-of-range current values", async () => {
@@ -357,6 +268,11 @@ describe("recruited-student current state", () => {
         equipSpecial: null,
       }),
     ).rejects.toThrow("능력 해방은(는) 고유무기 장착 후 입력할 수 있어요");
+    expect(db.statements.map((statement) => statement.toLowerCase())).toEqual(
+      expect.arrayContaining(["begin", "rollback"]),
+    );
+    expect(db.rows[0]).toMatchObject({ tier: 5, abilityHp: null, abilityAtk: null, abilityHeal: null });
+    expect(db.statements.some((statement) => statement.toLowerCase().startsWith("update"))).toBe(false);
   });
 
   it("loads recruited current fields with the tier", async () => {
@@ -374,7 +290,7 @@ describe("recruited-student current state", () => {
     ]);
   });
 
-  it("loads a large student UID filter within the D1 bind parameter limit", async () => {
+  it("loads a large student UID filter with PostgreSQL chunking", async () => {
     const { db, env } = createEnv();
     const studentUids = Array.from({ length: 181 }, (_, index) => `student-${index}`);
     db.rows.push(
@@ -384,6 +300,6 @@ describe("recruited-student current state", () => {
     );
 
     await expect(getRecruitedStudents(env, 1, [...studentUids, studentUids[0]])).resolves.toHaveLength(181);
-    expect(db.selectParameterCounts).toEqual([91, 91, 2]);
+    expect(db.selectParameterCounts).toEqual([182]);
   });
 });

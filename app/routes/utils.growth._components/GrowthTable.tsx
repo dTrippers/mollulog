@@ -5,12 +5,12 @@ import { StudentSelectForm } from "~/components/features/forms";
 import { TierSelector } from "~/components/features/students";
 import { Button, NumberInput, ProfileImage, ResourceCard, useNumberInputGridNavigation } from "~/components/primitives";
 import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
+import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
   getWeaponLevelMaxByTier,
   WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
-import { getRelationshipLevelValidationError } from "~/models/relationship-level";
 import GrowthViewSettingsPopover from "./GrowthViewSettingsPopover";
 import { type GrowthSortOrder, sortGrowthStudents } from "./growth-sort";
 import { useGrowthViewSettings } from "./growth-view-settings";

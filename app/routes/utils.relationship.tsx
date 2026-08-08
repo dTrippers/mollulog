@@ -23,10 +23,10 @@ import {
 } from "~/components/features/relationship";
 import { Button, ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
 import { canonicalLink } from "~/lib/seo";
 import {
   getRelationshipLevels,
-  getRelationshipLevelValidationError,
   type RelationshipLevel,
   removeRelationshipLevel,
   upsertRelationshipLevel,
@@ -128,7 +128,7 @@ export type ActionData = {
 };
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");

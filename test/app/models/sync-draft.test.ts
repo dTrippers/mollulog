@@ -1,5 +1,16 @@
-import { describe, expect, it } from "@jest/globals";
-import { applySyncDraft, normalizeSyncDraftEntryValue } from "~/models/sync-draft";
+import { describe, expect, it, jest } from "@jest/globals";
+import {
+  applySyncDraft,
+  createAndApplySyncDraft,
+  normalizeSyncDraftEntryValue,
+  updateSyncDraftEntries,
+} from "~/models/sync-draft";
+import { FakePostgresClient } from "../../helpers/fake-postgres";
+
+jest.mock("~/lib/postgres.server", () => ({
+  withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
+    operation(env.__pgClient),
+}));
 
 type SyncDraftRow = {
   id: number;
@@ -28,26 +39,6 @@ type SyncDraftEntryRow = {
   valueJson: string | null;
   meta: string | null;
   createdAt: string;
-};
-
-type RecruitedStudentRow = {
-  uid: string;
-  userId: number;
-  studentUid: string;
-  tier: number;
-  level: number | null;
-  skillEx: number | null;
-  skillNormal: number | null;
-  skillEnhanced: number | null;
-  skillSub: number | null;
-  equip1: number | null;
-  equip2: number | null;
-  equip3: number | null;
-  equipSpecial: number | null;
-  weaponLevel: number | null;
-  abilityHp: number | null;
-  abilityAtk: number | null;
-  abilityHeal: number | null;
   updatedAt: string;
 };
 
@@ -91,232 +82,6 @@ type StudentGrowthRow = {
   targetAbilityHeal: number | null;
   updatedAt: string;
 };
-
-class FakeD1Statement {
-  private params: unknown[] = [];
-
-  constructor(
-    private readonly db: FakeD1Database,
-    private readonly sql: string,
-  ) {}
-
-  bind(...params: unknown[]): FakeD1Statement {
-    this.params = params;
-    return this;
-  }
-
-  async all(): Promise<{ results: unknown[] }> {
-    return { results: this.db.selectRows(this.sql, this.params) };
-  }
-
-  async raw(): Promise<unknown[][]> {
-    return this.db.selectRows(this.sql, this.params).map((row) => Object.values(row as Record<string, unknown>));
-  }
-
-  async run(): Promise<{ success: true; meta: { changes: number } }> {
-    return { success: true, meta: { changes: this.db.execute(this.sql, this.params) } };
-  }
-}
-
-class FakeD1Database {
-  readonly drafts: SyncDraftRow[] = [];
-  readonly entries: SyncDraftEntryRow[] = [];
-  readonly recruitedStudents: RecruitedStudentRow[] = [];
-  readonly relationshipLevels: RelationshipLevelRow[] = [];
-  readonly studentGrowths: StudentGrowthRow[] = [];
-
-  prepare(sql: string): FakeD1Statement {
-    return new FakeD1Statement(this, sql);
-  }
-
-  async batch(statements: FakeD1Statement[]) {
-    const results = [];
-    for (const statement of statements) {
-      results.push(await statement.run());
-    }
-    return results;
-  }
-
-  selectRows(sql: string, params: unknown[]): unknown[] {
-    const normalizedSql = normalizeSql(sql);
-    if (normalizedSql.includes("from sync_drafts")) {
-      const [draftUid, userId] = params;
-      return this.drafts.filter((draft) => draft.uid === draftUid && draft.userId === Number(userId));
-    }
-    if (normalizedSql.includes("from sync_draft_entries")) {
-      const [draftUid] = params;
-      return this.entries.filter((entry) => entry.draftUid === draftUid).sort((a, b) => a.id - b.id);
-    }
-
-    throw new Error(`Unexpected select SQL: ${sql}`);
-  }
-
-  execute(sql: string, params: unknown[]): number {
-    const normalizedSql = normalizeSql(sql);
-    if (normalizedSql.startsWith("insert into recruited_students")) {
-      return this.upsertRecruitedStudent(params);
-    }
-    if (normalizedSql.startsWith("insert into user_relationship_levels")) {
-      if (normalizedSql.includes("targetlevel = excluded.targetlevel")) {
-        return this.upsertRelationshipTargetLevel(params);
-      }
-      return this.upsertRelationshipLevel(params);
-    }
-    if (normalizedSql.startsWith("insert into student_growth")) {
-      return this.upsertStudentGrowth(params);
-    }
-    if (normalizedSql.startsWith("update sync_drafts")) {
-      const [draftUid, userId] = params;
-      const draft = this.drafts.find(
-        (candidate) =>
-          candidate.uid === draftUid && candidate.userId === Number(userId) && candidate.status === "pending",
-      );
-      if (!draft) return 0;
-      draft.status = "applied";
-      draft.updatedAt = "current_timestamp";
-      draft.appliedAt = "current_timestamp";
-      return 1;
-    }
-
-    throw new Error(`Unexpected execute SQL: ${sql}`);
-  }
-
-  private hasPendingStudentStateDraft(userId: number, draftUid: string): boolean {
-    return this.drafts.some(
-      (draft) =>
-        draft.uid === draftUid &&
-        draft.userId === userId &&
-        draft.status === "pending" &&
-        draft.type === "student_state",
-    );
-  }
-
-  private upsertRecruitedStudent(params: unknown[]): number {
-    const userId = Number(params[1]);
-    const studentUid = String(params[2]);
-    const draftUid = String(params[17]);
-    if (!this.hasPendingStudentStateDraft(userId, draftUid)) {
-      return 0;
-    }
-
-    const row =
-      this.recruitedStudents.find((candidate) => candidate.userId === userId && candidate.studentUid === studentUid) ??
-      createRecruitedStudentRow({ uid: String(params[0]), userId, studentUid });
-
-    row.tier = Number(params[3]);
-    row.level = toNullableNumber(params[4]);
-    row.skillEx = toNullableNumber(params[5]);
-    row.skillNormal = toNullableNumber(params[6]);
-    row.skillEnhanced = toNullableNumber(params[7]);
-    row.skillSub = toNullableNumber(params[8]);
-    row.equip1 = toNullableNumber(params[9]);
-    row.equip2 = toNullableNumber(params[10]);
-    row.equip3 = toNullableNumber(params[11]);
-    row.equipSpecial = toNullableNumber(params[12]);
-    row.weaponLevel = toNullableNumber(params[13]);
-    row.abilityHp = toNullableNumber(params[14]);
-    row.abilityAtk = toNullableNumber(params[15]);
-    row.abilityHeal = toNullableNumber(params[16]);
-    row.updatedAt = "current_timestamp";
-
-    if (!this.recruitedStudents.includes(row)) {
-      this.recruitedStudents.push(row);
-    }
-    return 1;
-  }
-
-  private upsertRelationshipLevel(params: unknown[]): number {
-    const userId = Number(params[1]);
-    const studentId = String(params[2]);
-    const currentLevel = Number(params[3]);
-    const draftUid = String(params[4]);
-    if (!this.hasPendingStudentStateDraft(userId, draftUid)) {
-      return 0;
-    }
-
-    const row =
-      this.relationshipLevels.find((candidate) => candidate.userId === userId && candidate.studentId === studentId) ??
-      createRelationshipLevelRow({
-        uid: String(params[0]),
-        userId,
-        studentId,
-        targetLevel: currentLevel,
-        items: "{}",
-      });
-
-    row.currentLevel = currentLevel;
-    row.currentExp = null;
-    row.updatedAt = "current_timestamp";
-
-    if (!this.relationshipLevels.includes(row)) {
-      this.relationshipLevels.push(row);
-    }
-    return 1;
-  }
-
-  private upsertRelationshipTargetLevel(params: unknown[]): number {
-    const userId = Number(params[1]);
-    const studentId = String(params[2]);
-    const targetLevel = Number(params[3]);
-    const draftUid = String(params[4]);
-    if (!this.hasPendingStudentStateDraft(userId, draftUid)) {
-      return 0;
-    }
-
-    const row =
-      this.relationshipLevels.find((candidate) => candidate.userId === userId && candidate.studentId === studentId) ??
-      createRelationshipLevelRow({
-        uid: String(params[0]),
-        userId,
-        studentId,
-        currentLevel: 1,
-        currentExp: null,
-        items: "{}",
-      });
-
-    row.targetLevel = targetLevel;
-    row.updatedAt = "current_timestamp";
-
-    if (!this.relationshipLevels.includes(row)) {
-      this.relationshipLevels.push(row);
-    }
-    return 1;
-  }
-
-  private upsertStudentGrowth(params: unknown[]): number {
-    const userId = Number(params[1]);
-    const studentUid = String(params[2]);
-    const draftUid = String(params[17]);
-    if (!this.hasPendingStudentStateDraft(userId, draftUid)) {
-      return 0;
-    }
-
-    const row =
-      this.studentGrowths.find((candidate) => candidate.userId === userId && candidate.studentUid === studentUid) ??
-      createStudentGrowthRow({ uid: String(params[0]), userId, studentUid });
-
-    row.targetLevel = toNullableNumber(params[3]);
-    row.targetSkillEx = toNullableNumber(params[4]);
-    row.targetSkillNormal = toNullableNumber(params[5]);
-    row.targetSkillEnhanced = toNullableNumber(params[6]);
-    row.targetSkillSub = toNullableNumber(params[7]);
-    row.targetEquip1 = toNullableNumber(params[8]);
-    row.targetEquip2 = toNullableNumber(params[9]);
-    row.targetEquip3 = toNullableNumber(params[10]);
-    row.targetEquipSpecial = toNullableNumber(params[11]);
-    row.targetTier = toNullableNumber(params[12]);
-    row.targetWeaponLevel = toNullableNumber(params[13]);
-    row.targetAbilityHp = toNullableNumber(params[14]);
-    row.targetAbilityAtk = toNullableNumber(params[15]);
-    row.targetAbilityHeal = toNullableNumber(params[16]);
-    row.updatedAt = "current_timestamp";
-
-    if (!this.studentGrowths.includes(row)) {
-      this.studentGrowths.push(row);
-    }
-    return 1;
-  }
-}
 
 function createDraftRow(overrides: Partial<SyncDraftRow> = {}): SyncDraftRow {
   return {
@@ -368,29 +133,6 @@ function createEntryRow(overrides: Partial<SyncDraftEntryRow>): SyncDraftEntryRo
     }),
     meta: null,
     createdAt: "2026-06-13T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
-function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow> = {}): RecruitedStudentRow {
-  return {
-    uid: "recruited-a",
-    userId: 1,
-    studentUid: "20048",
-    tier: 3,
-    level: null,
-    skillEx: null,
-    skillNormal: null,
-    skillEnhanced: null,
-    skillSub: null,
-    equip1: null,
-    equip2: null,
-    equip3: null,
-    equipSpecial: null,
-    weaponLevel: null,
-    abilityHp: null,
-    abilityAtk: null,
-    abilityHeal: null,
     updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
   };
@@ -443,16 +185,11 @@ function createStudentGrowthRow(overrides: Partial<StudentGrowthRow> = {}): Stud
   };
 }
 
-function createEnv(db = new FakeD1Database()): { db: FakeD1Database; env: Env } {
-  return { db, env: { DB: db } as unknown as Env };
-}
-
-function toNullableNumber(value: unknown): number | null {
-  return value == null ? null : Number(value);
-}
-
-function normalizeSql(sql: string): string {
-  return sql.replaceAll('"', "").replace(/\s+/g, " ").trim().toLowerCase();
+function createEnv(db = new FakePostgresClient()): { db: FakePostgresClient; env: Env } {
+  return {
+    db,
+    env: { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+  };
 }
 
 describe("sync-draft", () => {
@@ -670,5 +407,72 @@ describe("sync-draft", () => {
         items: '{"5996":2}',
       }),
     ]);
+  });
+
+  it("updates more than 500 draft entries with bounded VALUES statements", async () => {
+    const { db, env } = createEnv();
+    db.drafts.push(createDraftRow({ type: "item_inventory" }));
+    const entries = Array.from({ length: 1001 }, (_, index) => {
+      const entryKey = `item-${index}`;
+      db.entries.push(
+        createEntryRow({
+          id: index + 1,
+          entryKey,
+          value: index + 1,
+          valueJson: null,
+        }),
+      );
+      return { entryKey, value: index + 2 };
+    });
+
+    await updateSyncDraftEntries(env, 1, "draft-a", entries);
+
+    const valuesUpdates = db.statements.filter(
+      (statement) =>
+        statement.toLowerCase().includes('update "sync_draft_entries"') &&
+        statement.toLowerCase().includes("from (values"),
+    );
+    expect(valuesUpdates).toHaveLength(3);
+    expect(valuesUpdates.every((statement) => statement.toLowerCase().includes('"updated_at"'))).toBe(true);
+    expect(
+      valuesUpdates.every((statement) => !statement.toLowerCase().includes('update "sync_draft_entries" set')),
+    ).toBe(true);
+  });
+
+  it("applies more than 500 student-state entries with bounded bulk statements", async () => {
+    const { db, env } = createEnv();
+    const input = {
+      source: "connect" as const,
+      sourceRef: "bulk-student-state",
+      type: "student_state" as const,
+      entries: Array.from({ length: 1001 }, (_, index) => ({
+        entryKey: `student-${index}`,
+        value: 7,
+        valueJson: JSON.stringify({
+          current: { tier: 7, bond: (index % 100) + 1 },
+          target: { targetTier: 8, targetBond: (index % 100) + 1 },
+        }),
+      })),
+    };
+
+    await createAndApplySyncDraft(env, 1, input);
+
+    const recruitedStatements = db.statements.filter((statement) =>
+      statement.toLowerCase().includes('insert into "recruited_students"'),
+    );
+    const growthStatements = db.statements.filter((statement) =>
+      statement.toLowerCase().includes('insert into "student_growth"'),
+    );
+    const relationshipStatements = db.statements.filter((statement) =>
+      statement.toLowerCase().includes('insert into "user_relationship_levels"'),
+    );
+    const relationshipReads = db.statements.filter(
+      (statement) =>
+        statement.toLowerCase().includes("select") && statement.toLowerCase().includes('"user_relationship_levels"'),
+    );
+    expect(recruitedStatements).toHaveLength(3);
+    expect(growthStatements).toHaveLength(3);
+    expect(relationshipStatements).toHaveLength(6);
+    expect(relationshipReads).toHaveLength(3);
   });
 });

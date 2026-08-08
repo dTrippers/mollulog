@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
+import { pgRecruitedStudentsTable } from "~/db/postgres/schema";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
   assertAbilityReleaseAvailable,
@@ -9,31 +9,13 @@ import {
   getWeaponLevelMaxByTier,
   WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
+import { withPostgresClient } from "~/lib/postgres.server";
 
-const D1_IN_QUERY_CHUNK_SIZE = 90;
+const PG_IN_QUERY_CHUNK_SIZE = 500;
+type RecruitedStudentsDb = NodePgDatabase;
+export type RecruitedStudentsTransaction = Pick<RecruitedStudentsDb, "insert">;
 
-export const recruitedStudentsTable = sqliteTable("recruited_students", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  studentUid: text().notNull(),
-  tier: int().notNull(),
-  level: int(),
-  skillEx: int(),
-  skillNormal: int(),
-  skillEnhanced: int(),
-  skillSub: int(),
-  equip1: int(),
-  equip2: int(),
-  equip3: int(),
-  equipSpecial: int(),
-  weaponLevel: int(),
-  abilityHp: int(),
-  abilityAtk: int(),
-  abilityHeal: int(),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-});
+export const recruitedStudentsTable = pgRecruitedStudentsTable;
 
 export type RecruitedStudentCurrentState = {
   level: number | null;
@@ -75,7 +57,9 @@ const currentStateRanges = {
   abilityHeal: { label: "능력 개방 치유력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
 } satisfies Record<keyof RecruitedStudentCurrentStateInput, { label: string; min: number; max?: number }>;
 
-function toModel(recruitedStudent: typeof recruitedStudentsTable.$inferSelect): RecruitedStudent {
+type RecruitedStudentRow = typeof pgRecruitedStudentsTable.$inferSelect;
+
+function toModel(recruitedStudent: RecruitedStudentRow): RecruitedStudent {
   return {
     uid: recruitedStudent.uid,
     studentUid: recruitedStudent.studentUid,
@@ -94,6 +78,10 @@ function toModel(recruitedStudent: typeof recruitedStudentsTable.$inferSelect): 
     abilityAtk: recruitedStudent.abilityAtk,
     abilityHeal: recruitedStudent.abilityHeal,
   };
+}
+
+function withDb<T>(env: Env, operation: (db: RecruitedStudentsDb) => Promise<T>): Promise<T> {
+  return withPostgresClient(env, (client) => operation(drizzle(client)));
 }
 
 export function validateRecruitedStudentCurrentStateInput(input: RecruitedStudentCurrentStateInput) {
@@ -125,28 +113,29 @@ export async function getRecruitedStudents(
   studentUids?: readonly string[],
 ): Promise<RecruitedStudent[]> {
   if (studentUids?.length === 0) return [];
-  const db = drizzle(env.DB);
-  if (!studentUids) {
-    const recruitedStudents = await db
-      .select()
-      .from(recruitedStudentsTable)
-      .where(eq(recruitedStudentsTable.userId, senseiId));
-    return recruitedStudents.map(toModel);
-  }
-
-  const uniqueStudentUids = [...new Set(studentUids)];
-  const recruitedStudents: (typeof recruitedStudentsTable.$inferSelect)[] = [];
-  for (let offset = 0; offset < uniqueStudentUids.length; offset += D1_IN_QUERY_CHUNK_SIZE) {
-    const studentUidChunk = uniqueStudentUids.slice(offset, offset + D1_IN_QUERY_CHUNK_SIZE);
-    const chunkStudents = await db
-      .select()
-      .from(recruitedStudentsTable)
-      .where(
-        and(eq(recruitedStudentsTable.userId, senseiId), inArray(recruitedStudentsTable.studentUid, studentUidChunk)),
+  return withDb(env, async (db) => {
+    if (!studentUids) {
+      const rows = await db
+        .select()
+        .from(pgRecruitedStudentsTable)
+        .where(eq(pgRecruitedStudentsTable.userId, senseiId));
+      return rows.map(toModel);
+    }
+    const uniqueStudentUids = [...new Set(studentUids)];
+    const rows: RecruitedStudentRow[] = [];
+    for (let offset = 0; offset < uniqueStudentUids.length; offset += PG_IN_QUERY_CHUNK_SIZE) {
+      const chunk = uniqueStudentUids.slice(offset, offset + PG_IN_QUERY_CHUNK_SIZE);
+      rows.push(
+        ...(await db
+          .select()
+          .from(pgRecruitedStudentsTable)
+          .where(
+            and(eq(pgRecruitedStudentsTable.userId, senseiId), inArray(pgRecruitedStudentsTable.studentUid, chunk)),
+          )),
       );
-    recruitedStudents.push(...chunkStudents);
-  }
-  return recruitedStudents.map(toModel);
+    }
+    return rows.map(toModel);
+  });
 }
 
 export async function getRecruitedStudentTiers(env: Env, senseiId: number): Promise<Record<string, number>> {
@@ -164,31 +153,38 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
   if (tier < 1 || tier > 9) {
     throw new Error(`Invalid tier: ${tier}`);
   }
-
-  const db = drizzle(env.DB);
-  const [existing] = await db
-    .select({
-      weaponLevel: recruitedStudentsTable.weaponLevel,
-      abilityHp: recruitedStudentsTable.abilityHp,
-      abilityAtk: recruitedStudentsTable.abilityAtk,
-      abilityHeal: recruitedStudentsTable.abilityHeal,
-    })
-    .from(recruitedStudentsTable)
-    .where(and(eq(recruitedStudentsTable.userId, senseiId), eq(recruitedStudentsTable.studentUid, studentUid)))
-    .limit(1);
-  if (existing?.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
-    throw new Error("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
-  }
-  assertAbilityReleaseAvailable([existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal], tier, "능력 해방");
-
-  const uid = nanoid(8);
-  await db
-    .insert(recruitedStudentsTable)
-    .values({ uid, userId: senseiId, studentUid, tier })
-    .onConflictDoUpdate({
-      target: [recruitedStudentsTable.userId, recruitedStudentsTable.studentUid],
-      set: { tier },
+  await withDb(env, async (db) => {
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({
+          weaponLevel: pgRecruitedStudentsTable.weaponLevel,
+          abilityHp: pgRecruitedStudentsTable.abilityHp,
+          abilityAtk: pgRecruitedStudentsTable.abilityAtk,
+          abilityHeal: pgRecruitedStudentsTable.abilityHeal,
+        })
+        .from(pgRecruitedStudentsTable)
+        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
+        .limit(1)
+        .for("update");
+      // A missing business-key row cannot be row-locked; the unique index and
+      // conflict target serialize a concurrent insert at the write boundary.
+      if (existing?.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
+        throw new Error("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
+      }
+      assertAbilityReleaseAvailable(
+        [existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal],
+        tier,
+        "능력 해방",
+      );
+      await tx
+        .insert(pgRecruitedStudentsTable)
+        .values({ uid: nanoid(8), userId: senseiId, studentUid, tier })
+        .onConflictDoUpdate({
+          target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
+          set: { tier, updatedAt: new Date() },
+        });
     });
+  });
 }
 
 export async function upsertRecruitedStudentFromRecruitmentResult(
@@ -197,20 +193,26 @@ export async function upsertRecruitedStudentFromRecruitmentResult(
   studentUid: string,
   tier: number,
 ) {
+  return withDb(env, (db) => upsertRecruitedStudentFromRecruitmentResultInTransaction(db, senseiId, studentUid, tier));
+}
+
+export async function upsertRecruitedStudentFromRecruitmentResultInTransaction(
+  db: RecruitedStudentsTransaction,
+  senseiId: number,
+  studentUid: string,
+  tier: number,
+) {
   if (tier < 1 || tier > 9) {
     throw new Error(`Invalid tier: ${tier}`);
   }
-
-  const db = drizzle(env.DB);
-  const uid = nanoid(8);
   await db
-    .insert(recruitedStudentsTable)
-    .values({ uid, userId: senseiId, studentUid, tier })
+    .insert(pgRecruitedStudentsTable)
+    .values({ uid: nanoid(8), userId: senseiId, studentUid, tier })
     .onConflictDoUpdate({
-      target: [recruitedStudentsTable.userId, recruitedStudentsTable.studentUid],
+      target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
       set: {
-        tier: sql`max(${recruitedStudentsTable.tier}, ${tier})`,
-        updatedAt: sql`current_timestamp`,
+        tier: sql`greatest(${pgRecruitedStudentsTable.tier}, ${tier})`,
+        updatedAt: new Date(),
       },
     });
 }
@@ -222,24 +224,26 @@ export async function updateRecruitedStudentCurrentState(
   input: RecruitedStudentCurrentStateInput,
 ) {
   validateRecruitedStudentCurrentStateInput(input);
-
-  const db = drizzle(env.DB);
-  const existing = await db
-    .select({ tier: recruitedStudentsTable.tier })
-    .from(recruitedStudentsTable)
-    .where(and(eq(recruitedStudentsTable.userId, senseiId), eq(recruitedStudentsTable.studentUid, studentUid)))
-    .limit(1);
-  assertWeaponLevelRange(input.weaponLevel, existing[0]?.tier ?? null, "고유무기 레벨");
-  assertAbilityReleaseAvailable(
-    [input.abilityHp, input.abilityAtk, input.abilityHeal],
-    existing[0]?.tier ?? null,
-    "능력 해방",
-  );
-
-  await db
-    .update(recruitedStudentsTable)
-    .set({ ...input, updatedAt: sql`current_timestamp` })
-    .where(and(eq(recruitedStudentsTable.userId, senseiId), eq(recruitedStudentsTable.studentUid, studentUid)));
+  await withDb(env, async (db) => {
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ tier: pgRecruitedStudentsTable.tier })
+        .from(pgRecruitedStudentsTable)
+        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
+        .limit(1)
+        .for("update");
+      assertWeaponLevelRange(input.weaponLevel, existing?.tier ?? null, "고유무기 레벨");
+      assertAbilityReleaseAvailable(
+        [input.abilityHp, input.abilityAtk, input.abilityHeal],
+        existing?.tier ?? null,
+        "능력 해방",
+      );
+      await tx
+        .update(pgRecruitedStudentsTable)
+        .set({ ...input, updatedAt: new Date() })
+        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)));
+    });
+  });
 }
 
 export async function upsertRecruitedStudentState(
@@ -256,20 +260,21 @@ export async function upsertRecruitedStudentState(
   assertWeaponLevelRange(input.weaponLevel, tier, "고유무기 레벨");
   assertAbilityReleaseAvailable([input.abilityHp, input.abilityAtk, input.abilityHeal], tier, "능력 해방");
 
-  const db = drizzle(env.DB);
-  const uid = nanoid(8);
-  await db
-    .insert(recruitedStudentsTable)
-    .values({ uid, userId: senseiId, studentUid, tier, ...input })
-    .onConflictDoUpdate({
-      target: [recruitedStudentsTable.userId, recruitedStudentsTable.studentUid],
-      set: { tier, ...input, updatedAt: sql`current_timestamp` },
-    });
+  await withDb(env, async (db) => {
+    await db
+      .insert(pgRecruitedStudentsTable)
+      .values({ uid: nanoid(8), userId: senseiId, studentUid, tier, ...input })
+      .onConflictDoUpdate({
+        target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
+        set: { tier, ...input, updatedAt: new Date() },
+      });
+  });
 }
 
 export async function removeRecruitedStudent(env: Env, senseiId: number, studentUid: string) {
-  const db = drizzle(env.DB);
-  await db
-    .delete(recruitedStudentsTable)
-    .where(and(eq(recruitedStudentsTable.userId, senseiId), eq(recruitedStudentsTable.studentUid, studentUid)));
+  await withDb(env, (db) =>
+    db
+      .delete(pgRecruitedStudentsTable)
+      .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid))),
+  );
 }

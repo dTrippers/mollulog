@@ -58,7 +58,7 @@ export const meta: MetaFunction = ({ params }) => {
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data({ error: "Unauthorized" }, { status: 401 });
@@ -71,7 +71,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
   const formData = await request.formData();
   const studentUid = formData.get("studentUid") as string;
-  const tier = Number.parseInt(formData.get("tier") as string);
+  const tier = Number.parseInt(formData.get("tier") as string, 10);
 
   if (!studentUid) {
     return data({ error: "Student UID is required" }, { status: 400 });
@@ -134,7 +134,7 @@ export default function UserPage() {
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);
 
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
   const handleAddStudent = (studentUid: string, tier: number) => {
     const formData = new FormData();
     formData.append("studentUid", studentUid);

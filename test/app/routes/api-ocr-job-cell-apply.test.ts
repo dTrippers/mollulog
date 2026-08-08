@@ -25,7 +25,7 @@ const mockedGetDraft = getSyncDraftBySourceRef as jest.MockedFunction<typeof get
 const mockedGetInventory = getUserResourceInventoryMapByItemUids as jest.MockedFunction<
   typeof getUserResourceInventoryMapByItemUids
 >;
-const env = {} as Env;
+const env = { KV_CACHE: { get: jest.fn(async () => null) } } as unknown as Env;
 const ctx = { waitUntil: jest.fn() };
 const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
 const job = {

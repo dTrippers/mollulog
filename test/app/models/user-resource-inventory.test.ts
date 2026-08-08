@@ -1,52 +1,16 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import {
   getUserResourceInventoryMapByItemUids,
   parseUserResourceInventoryQuantity,
+  upsertUserResourceInventories,
   validateUserResourceInventoryQuantity,
 } from "../../../app/models/user-resource-inventory";
+import { FakePostgresClient } from "../../helpers/fake-postgres";
 
-type InventoryRow = {
-  id: number;
-  uid: string;
-  userId: number;
-  itemUid: string;
-  quantity: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-class InventoryStatement {
-  params: unknown[] = [];
-
-  constructor(
-    readonly sql: string,
-    private readonly rows: InventoryRow[],
-  ) {}
-
-  bind(...params: unknown[]) {
-    this.params = params;
-    return this;
-  }
-
-  async raw() {
-    const [userId, ...itemUids] = this.params;
-    return this.rows
-      .filter((row) => row.userId === userId && itemUids.includes(row.itemUid))
-      .map((row) => [row.id, row.uid, row.userId, row.itemUid, row.quantity, row.createdAt, row.updatedAt]);
-  }
-}
-
-class InventoryD1Database {
-  readonly statements: InventoryStatement[] = [];
-
-  constructor(private readonly rows: InventoryRow[]) {}
-
-  prepare(sql: string) {
-    const statement = new InventoryStatement(sql, this.rows);
-    this.statements.push(statement);
-    return statement;
-  }
-}
+jest.mock("~/lib/postgres.server", () => ({
+  withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
+    operation(env.__pgClient),
+}));
 
 describe("user-resource-inventory", () => {
   it("parses non-negative integer quantities", () => {
@@ -64,7 +28,7 @@ describe("user-resource-inventory", () => {
     );
   });
 
-  it("splits large item UID lookups to stay within D1's SQL variable limit", async () => {
+  it("loads large item UID lookups through PostgreSQL", async () => {
     const itemUids = Array.from({ length: 257 }, (_, index) => `item-${index}`);
     const rows = [0, 89, 90, 179, 180, 256].map((index) => ({
       id: index + 1,
@@ -75,12 +39,13 @@ describe("user-resource-inventory", () => {
       createdAt: "2026-07-21 00:00:00",
       updatedAt: "2026-07-21 00:00:00",
     }));
-    const db = new InventoryD1Database(rows);
+    const db = new FakePostgresClient({ growth_resource_inventory: rows }, "growth_resource_inventory");
 
-    const inventoryMap = await getUserResourceInventoryMapByItemUids({ DB: db as unknown as D1Database } as Env, 7, [
-      ...itemUids,
-      "item-0",
-    ]);
+    const inventoryMap = await getUserResourceInventoryMapByItemUids(
+      { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+      7,
+      [...itemUids, "item-0"],
+    );
 
     expect(inventoryMap).toEqual({
       "item-0": 0,
@@ -90,8 +55,21 @@ describe("user-resource-inventory", () => {
       "item-180": 1800,
       "item-256": 2560,
     });
-    expect(db.statements).toHaveLength(3);
-    expect(db.statements.every((statement) => statement.params.length <= 91)).toBe(true);
-    expect(db.statements.flatMap((statement) => statement.params.slice(1))).toEqual(itemUids);
+    expect(db.selectParameterCounts).toEqual([258]);
+  });
+
+  it("applies direct bulk inventory writes in one PostgreSQL transaction", async () => {
+    const db = new FakePostgresClient({}, "growth_resource_inventory");
+    await upsertUserResourceInventories(
+      { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+      7,
+      [
+        { itemUid: "item-a", quantity: 10 },
+        { itemUid: "item-b", quantity: 0 },
+      ],
+    );
+
+    expect(db.statements[0]?.toLowerCase()).toBe("begin");
+    expect(db.statements.at(-1)?.toLowerCase()).toBe("commit");
   });
 });

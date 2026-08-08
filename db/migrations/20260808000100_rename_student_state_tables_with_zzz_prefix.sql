@@ -1,0 +1,8 @@
+ALTER TABLE recruited_students RENAME TO zzz_recruited_students;
+ALTER TABLE student_growth RENAME TO zzz_student_growth;
+ALTER TABLE user_relationship_levels RENAME TO zzz_user_relationship_levels;
+ALTER TABLE growth_resource_inventory RENAME TO zzz_growth_resource_inventory;
+ALTER TABLE sync_drafts RENAME TO zzz_sync_drafts;
+ALTER TABLE sync_draft_entries RENAME TO zzz_sync_draft_entries;
+ALTER TABLE user_resource_inventory_drafts RENAME TO zzz_user_resource_inventory_drafts;
+ALTER TABLE user_resource_inventory_draft_items RENAME TO zzz_user_resource_inventory_draft_items;

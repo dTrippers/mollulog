@@ -2,13 +2,13 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { routeError } from "~/lib/http-errors";
+import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import {
   applyUserResourceInventoryDraft,
   discardUserResourceInventoryDraft,
   getUserResourceInventoryDraft,
   getUserResourceInventoryMapByItemUids,
 } from "~/models/user-resource-inventory";
-import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import ResourceInventoryDraftReview from "./utils.resources._components/ResourceInventoryDraftReview";
 
 type ActionData = {
@@ -48,7 +48,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });

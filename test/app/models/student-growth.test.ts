@@ -1,5 +1,11 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import { getStudentGrowth, getStudentGrowthWithMetadata, upsertStudentGrowth } from "~/models/student-growth";
+import { FakePostgresClient } from "../../helpers/fake-postgres";
+
+jest.mock("~/lib/postgres.server", () => ({
+  withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
+    operation(env.__pgClient),
+}));
 
 type StudentGrowthRow = {
   id: number;
@@ -32,100 +38,6 @@ type StudentGrowthRow = {
   createdAt: string;
   updatedAt: string;
 };
-
-const targetFields = [
-  "targetLevel",
-  "targetSkillEx",
-  "targetSkillNormal",
-  "targetSkillEnhanced",
-  "targetSkillSub",
-  "targetEquip1",
-  "targetEquip2",
-  "targetEquip3",
-  "targetEquipSpecial",
-  "targetTier",
-  "targetWeaponLevel",
-  "targetAbilityHp",
-  "targetAbilityAtk",
-  "targetAbilityHeal",
-] as const;
-
-class FakeD1Statement {
-  private params: unknown[] = [];
-
-  constructor(
-    private readonly db: FakeD1Database,
-    private readonly sql: string,
-  ) {}
-
-  bind(...params: unknown[]): FakeD1Statement {
-    this.params = params;
-    return this;
-  }
-
-  async all(): Promise<{ results: StudentGrowthRow[] }> {
-    return { results: this.db.selectRows(this.sql, this.params) };
-  }
-
-  async raw(): Promise<unknown[][]> {
-    return this.db.selectRows(this.sql, this.params).map((row) => Object.values(row));
-  }
-
-  async run(): Promise<{ success: true; meta: { changes: number } }> {
-    return { success: true, meta: { changes: this.db.execute(this.sql, this.params) } };
-  }
-}
-
-class FakeD1Database {
-  readonly rows: StudentGrowthRow[] = [];
-  readonly statements: string[] = [];
-
-  prepare(sql: string): FakeD1Statement {
-    this.statements.push(sql);
-    return new FakeD1Statement(this, sql);
-  }
-
-  selectRows(sql: string, params: unknown[]): StudentGrowthRow[] {
-    const normalizedSql = normalizeSql(sql);
-    if (normalizedSql.includes("from student_growth")) {
-      const userId = Number(params[0]);
-      const studentUid = params[1] == null ? null : String(params[1]);
-      return this.rows.filter((row) => row.userId === userId && (studentUid == null || row.studentUid === studentUid));
-    }
-
-    throw new Error(`Unexpected SQL: ${sql}`);
-  }
-
-  execute(sql: string, params: unknown[]): number {
-    const normalizedSql = normalizeSql(sql);
-    if (!normalizedSql.startsWith("insert into student_growth")) {
-      throw new Error(`Unexpected SQL: ${sql}`);
-    }
-
-    const userId = Number(params[1]);
-    const studentUid = String(params[2]);
-    const row = this.rows.find((candidate) => candidate.userId === userId && candidate.studentUid === studentUid);
-    if (row) {
-      targetFields.forEach((field, index) => {
-        row[field] = params[index + 3] == null ? null : Number(params[index + 3]);
-      });
-      row.updatedAt = "current_timestamp";
-      return 1;
-    }
-
-    this.rows.push(
-      rowFactory({
-        uid: String(params[0]),
-        userId,
-        studentUid,
-        ...Object.fromEntries(
-          targetFields.map((field, index) => [field, params[index + 3] == null ? null : Number(params[index + 3])]),
-        ),
-      }),
-    );
-    return 1;
-  }
-}
 
 function rowFactory(overrides: Partial<StudentGrowthRow>): StudentGrowthRow {
   return {
@@ -162,8 +74,11 @@ function rowFactory(overrides: Partial<StudentGrowthRow>): StudentGrowthRow {
   };
 }
 
-function createEnv(db = new FakeD1Database()): { db: FakeD1Database; env: Env } {
-  return { db, env: { DB: db } as unknown as Env };
+function createEnv(db = new FakePostgresClient({}, "student_growth")): { db: FakePostgresClient; env: Env } {
+  return {
+    db,
+    env: { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+  };
 }
 
 function normalizeSql(sql: string): string {
@@ -171,7 +86,7 @@ function normalizeSql(sql: string): string {
 }
 
 function expectNoLegacyCurrentColumnsWritten(sql: string) {
-  const normalizedSql = normalizeSql(sql);
+  const normalizedSql = normalizeSql(sql).split("do update set")[1] ?? "";
   for (const field of [
     "level",
     "skillEx",
@@ -262,7 +177,7 @@ describe("student-growth target state", () => {
     await expect(getStudentGrowthWithMetadata(env, 1, "student-a")).resolves.toMatchObject({
       uid: "growth-a",
       studentUid: "student-a",
-      createdAt: "2026-07-01 12:34:56",
+      createdAt: "2026-07-01T03:34:56.000Z",
     });
   });
 

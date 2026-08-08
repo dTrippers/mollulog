@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { getActiveSensei } from "../../../app/auth/authenticator.server";
 import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
 import { getUserFavoritedStudents } from "../../../app/models/favorite-students";
-import { addRecruitedStudentToResult } from "../../../app/models/recruitment-result.server";
+import { addRecruitedStudentToResult, deleteRecruitmentResult } from "../../../app/models/recruitment-result.server";
 import { action } from "../../../app/routes/api.recruitment-results";
 import { getFutureContents } from "../../../app/views/futures";
 
@@ -33,6 +33,7 @@ const mockedGetUserFavoritedStudents = getUserFavoritedStudents as jest.MockedFu
 const mockedAddRecruitedStudentToResult = addRecruitedStudentToResult as jest.MockedFunction<
   typeof addRecruitedStudentToResult
 >;
+const mockedDeleteRecruitmentResult = deleteRecruitmentResult as jest.MockedFunction<typeof deleteRecruitmentResult>;
 
 type DataResult<T> = {
   type: "DataWithResponseInit";
@@ -179,5 +180,13 @@ describe("api.recruitment-results", () => {
     expect(response.init?.status).toBe(400);
     expect(response.data.error).toBe("Recruitment completion is not allowed");
     expect(mockedAddRecruitedStudentToResult).not.toHaveBeenCalled();
+  });
+
+  it("deletes recruitment history", async () => {
+    const deleted = expectDataResult<{ success: boolean }>(
+      await action(createActionArgs({ action: "delete", uid: "__nonexistent-delete-probe__" })),
+    );
+    expect(deleted.data.success).toBe(true);
+    expect(mockedDeleteRecruitmentResult).toHaveBeenCalledWith(env, 1, "__nonexistent-delete-probe__");
   });
 });

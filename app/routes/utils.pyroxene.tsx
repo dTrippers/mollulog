@@ -210,6 +210,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 
   const { createData, deleteData, eventData, calcOptions, collectedSource } = await request.json<ActionData>();
+
   if (request.method === "POST") {
     if (createData) {
       if (createData.ownedResources !== undefined) {
