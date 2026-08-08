@@ -5,12 +5,8 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, Callout, FilterButtons, SubTitle, Textarea } from "~/components/primitives";
-import { getRecruitedStudents } from "~/models/recruited-student";
-import { getRelationshipLevels } from "~/models/relationship-level";
-import { getAllStudents } from "~/models/student";
-import { getStudentGrowths } from "~/models/student-growth";
 import { type StudentStateExportFormat, serializeStudentStateExport } from "~/domain/student-state-serialization";
-import { listPendingSyncDrafts } from "~/models/sync-draft";
+import { getConnectExportData } from "~/views/connect-export.server";
 import ConnectDataPage from "./connect._components/ConnectDataPage";
 
 export const meta: MetaFunction = () => [{ title: "데이터 내보내기 | 몰루로그" }];
@@ -22,25 +18,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     return redirect("/unauthorized");
   }
 
-  const [pendingDrafts, recruitedStudents, studentGrowths, relationshipLevels, allStudents] = await Promise.all([
-    listPendingSyncDrafts(env, sensei.id),
-    getRecruitedStudents(env, sensei.id),
-    getStudentGrowths(env, sensei.id),
-    getRelationshipLevels(env, sensei.id),
-    getAllStudents(env, true),
-  ]);
-
-  const studentCatalog = Object.fromEntries(
-    allStudents.map((student) => [student.uid, { name: student.name, order: student.order }]),
-  );
-
-  return {
-    pendingDraftCount: pendingDrafts.length,
-    recruitedStudents,
-    studentGrowths,
-    relationshipLevels,
-    studentCatalog,
-  };
+  return getConnectExportData(env, sensei.id);
 };
 
 export default function ConnectExportIndexPage() {

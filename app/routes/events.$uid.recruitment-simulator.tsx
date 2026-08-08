@@ -511,9 +511,15 @@ function RecruitmentPullRow({ row }: { row: PullRow }) {
         {row.startCount.toLocaleString()}회 ~ {(row.startCount + row.results.length - 1).toLocaleString()}회
       </p>
       <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-10">
-        {row.results.map((result, index) => (
-          <RecruitmentResultCard key={`${row.id}-${index}`} result={result} />
-        ))}
+        {(() => {
+          const resultKeyCounts = new Map<string, number>();
+          return row.results.map((result) => {
+            const baseKey = `${result.student.uid}-${result.rarity}-${result.pickup}`;
+            const occurrence = resultKeyCounts.get(baseKey) ?? 0;
+            resultKeyCounts.set(baseKey, occurrence + 1);
+            return <RecruitmentResultCard key={`${row.id}-${baseKey}-${occurrence}`} result={result} />;
+          });
+        })()}
       </div>
     </div>
   );

@@ -545,6 +545,7 @@ function HistogramChart({
         onHighlightDifficulty={setHighlightDifficulty}
       />
 
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: Pointer drag supplements the keyboard-accessible difficulty controls. */}
       <div
         className={`h-64 w-full select-none rounded-md border border-neutral-200 bg-white/40 p-3 [--raid-boundary-stroke:rgb(163,163,163)] [--raid-score-marker-stroke:rgb(37,99,235)] [--raid-selection-fill:rgb(14,165,233)] dark:border-neutral-700 dark:bg-neutral-900/30 dark:[--raid-boundary-stroke:rgb(115,115,115)] dark:[--raid-score-marker-stroke:rgb(96,165,250)] dark:[--raid-selection-fill:rgb(56,189,248)] ${
           draggable ? "cursor-crosshair" : "cursor-default"

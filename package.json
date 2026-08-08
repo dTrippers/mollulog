@@ -2,6 +2,7 @@
   "private": true,
   "sideEffects": false,
   "type": "module",
+  "packageManager": "pnpm@11.1.1",
   "scripts": {
     "codegen": "graphql-codegen",
     "dev": "react-router dev --host",
@@ -21,7 +22,8 @@
     "prod:db:pull": "mkdir -p tmp && wrangler d1 export mollulog --remote --env production --output=tmp/prod-remote-dump.sql && rm -rf ${WRANGLER_PERSIST_TO:-.wrangler/state}/v3/d1/miniflare-D1DatabaseObject && wrangler d1 execute DB --local --persist-to ${WRANGLER_PERSIST_TO:-.wrangler/state} --file=tmp/prod-remote-dump.sql --yes",
     "test": "jest",
     "typecheck": "react-router typegen && tsc",
-    "lint": "biome lint --write app test && biome check --write test"
+    "lint": "biome lint app test && biome check test",
+    "lint:fix": "biome lint --write app test && biome check --write test"
   },
   "dependencies": {
     "@cloudflare/kv-asset-handler": "^0.5.0",

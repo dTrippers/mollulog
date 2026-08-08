@@ -3,6 +3,7 @@ import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type ActionFunctionArgs,
+  data,
   type LoaderFunctionArgs,
   type MetaFunction,
   useFetcher,
@@ -65,6 +66,7 @@ import {
   setRecruitmentResultCompletion,
 } from "~/models/recruitment-result.server";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
+import { type ActionData, decodePyroxeneActionPayload } from "./utils.pyroxene._components/action-data";
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -150,58 +152,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   };
 };
 
-export type ActionData = {
-  createData: {
-    ownedResources?: {
-      eventUid?: string | null;
-      pyroxene: number;
-      oneTimeTicket: number;
-      tenTimeTicket: number;
-    };
-    buy?: {
-      quantity: number;
-      date: string;
-      repeatType?: PyroxeneTimelineRepeatType;
-      monthlyCount?: number;
-    };
-    monthlyPackage?: {
-      startDate: string;
-      packageType: PyroxeneMonthlyPackageType;
-      autoRepurchase?: boolean;
-    };
-    apPackage?: {
-      startDate: string;
-      autoRepurchase?: boolean;
-    };
-    attendance?: {
-      startDate: string;
-    };
-    other?: {
-      resources: PickupResources;
-      description: string;
-      date: string;
-    };
-  };
-
-  deleteData: {
-    eventUid?: string | null;
-    recruitmentGroupUid?: string | null;
-    itemUid?: string;
-  };
-
-  eventData?: {
-    eventUid: string;
-    expectedTrials?: number | null;
-  };
-
-  calcOptions?: PyroxenePlannerOptions;
-
-  collectedSource?: {
-    sourceKey?: string;
-    sourceKeys?: string[];
-  };
-};
-
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request);
@@ -209,127 +159,141 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     return { success: false };
   }
 
-  const { createData, deleteData, eventData, calcOptions, collectedSource } = await request.json<ActionData>();
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return data({ success: false, error: "요청 payload를 읽을 수 없어요" }, { status: 400 });
+  }
 
-  if (request.method === "POST") {
-    if (createData) {
-      if (createData.ownedResources !== undefined) {
-        const { eventUid, pyroxene, oneTimeTicket, tenTimeTicket } = createData.ownedResources;
-        await createPyroxeneOwnedResource(env, currentUser.id, { pyroxene, oneTimeTicket, tenTimeTicket });
-        if (eventUid) {
-          const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
-            (content) => content.kind === "event" && content.uid === eventUid,
-          );
-          if (content?.kind !== "event" || !content.recruitmentGroupUid) {
-            throw new Error(`Cannot resolve recruitment group for pyroxene completion: eventUid=${eventUid}`);
-          }
+  let actionData: ActionData;
+  try {
+    actionData = decodePyroxeneActionPayload(body, request.method);
+  } catch (error) {
+    return data(
+      { success: false, error: error instanceof Error ? error.message : "요청 payload가 올바르지 않아요" },
+      { status: 400 },
+    );
+  }
 
-          const recruitedStudents = content.recruitments.flatMap((recruitment) => {
-            if (!recruitment.pickup || !recruitment.student) {
-              return [];
-            }
-
-            return [
-              {
-                studentUid: recruitment.student.uid,
-                tier: recruitment.student.initialTier || 3,
-                pickup: true,
-              },
-            ];
-          });
-          if (recruitedStudents.length === 0) {
-            throw new Error(`Cannot resolve pickup students for pyroxene completion: eventUid=${eventUid}`);
-          }
-
-          await setRecruitmentResultCompletion(env, currentUser.id, content.recruitmentGroupUid, true, {
-            contentUid: eventUid,
-            recruitedStudents,
-          });
+  switch (actionData.intent) {
+    case "save-owned-resources": {
+      const { resources, eventUid, collectedSourceKeys } = actionData.payload;
+      await createPyroxeneOwnedResource(env, currentUser.id, resources);
+      if (eventUid) {
+        const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
+          (content) => content.kind === "event" && content.uid === eventUid,
+        );
+        if (content?.kind !== "event" || !content.recruitmentGroupUid) {
+          throw new Error(`Cannot resolve recruitment group for pyroxene completion: eventUid=${eventUid}`);
         }
-      }
-      if (createData.buy?.quantity !== undefined) {
-        await createBuyPyroxene(env, currentUser.id, createData.buy.date, createData.buy.quantity, {
-          repeatType: createData.buy.repeatType,
-          monthlyCount: createData.buy.monthlyCount,
+
+        const recruitedStudents = content.recruitments.flatMap((recruitment) => {
+          if (!recruitment.pickup || !recruitment.student) return [];
+          return [
+            {
+              studentUid: recruitment.student.uid,
+              tier: recruitment.student.initialTier || 3,
+              pickup: true,
+            },
+          ];
+        });
+        if (recruitedStudents.length === 0) {
+          throw new Error(`Cannot resolve pickup students for pyroxene completion: eventUid=${eventUid}`);
+        }
+
+        await setRecruitmentResultCompletion(env, currentUser.id, content.recruitmentGroupUid, true, {
+          contentUid: eventUid,
+          recruitedStudents,
         });
       }
-      if (createData.monthlyPackage?.startDate !== undefined) {
-        await createPyroxeneMonthlyPackage(
-          env,
-          currentUser.id,
-          createData.monthlyPackage.startDate,
-          createData.monthlyPackage.packageType,
-          createData.monthlyPackage.autoRepurchase ?? false,
-        );
+      if (collectedSourceKeys) {
+        await upsertCollectedSources(env, currentUser.id, collectedSourceKeys);
       }
-      if (createData.apPackage?.startDate !== undefined) {
-        await createPyroxeneApPackage(
-          env,
-          currentUser.id,
-          createData.apPackage.startDate,
-          createData.apPackage.autoRepurchase ?? false,
-        );
-      }
-      if (createData.attendance?.startDate !== undefined) {
-        await createAttendance(env, currentUser.id, createData.attendance.startDate);
-      }
-      if (createData.other?.resources !== undefined) {
-        const { pyroxene, oneTimeTicket, tenTimeTicket } = createData.other.resources;
-        await createOtherPyroxeneGain(
-          env,
-          currentUser.id,
-          createData.other.date,
-          pyroxene,
-          oneTimeTicket,
-          tenTimeTicket,
-          createData.other.description,
-        );
-      }
+      break;
     }
-
-    if (eventData) {
-      await upsertPyroxeneEventData(env, currentUser.id, eventData.eventUid, {
-        expectedTrials: eventData.expectedTrials,
+    case "save-buy":
+      await createBuyPyroxene(env, currentUser.id, actionData.payload.date, actionData.payload.quantity, {
+        repeatType: actionData.payload.repeatType,
+        monthlyCount: actionData.payload.monthlyCount,
       });
-    }
-    if (calcOptions) {
-      await upsertPyroxenePlannerOptions(env, currentUser.id, calcOptions);
-    }
-    if (collectedSource) {
-      const sourceKeys = [
-        ...(collectedSource.sourceKey ? [collectedSource.sourceKey] : []),
-        ...(collectedSource.sourceKeys ?? []),
-      ];
-      await upsertCollectedSources(env, currentUser.id, sourceKeys);
-    }
-  } else if (request.method === "DELETE") {
-    if (collectedSource?.sourceKey) {
-      await deleteCollectedSource(env, currentUser.id, collectedSource.sourceKey);
-    }
-    if (!deleteData) {
-      return { success: true };
-    }
-    let recruitmentGroupUid = deleteData.recruitmentGroupUid ?? null;
-    if (!recruitmentGroupUid && deleteData.eventUid) {
-      for (const content of await getPyroxenePlannerContents(env, false, ctx)) {
-        if (content.kind === "event" && content.uid === deleteData.eventUid) {
-          recruitmentGroupUid = content.recruitmentGroupUid;
-          break;
+      break;
+    case "save-monthly-package":
+      await createPyroxeneMonthlyPackage(
+        env,
+        currentUser.id,
+        actionData.payload.startDate,
+        actionData.payload.packageType,
+        actionData.payload.autoRepurchase,
+      );
+      if (actionData.payload.options) {
+        await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
+      }
+      break;
+    case "save-ap-package":
+      await createPyroxeneApPackage(
+        env,
+        currentUser.id,
+        actionData.payload.startDate,
+        actionData.payload.autoRepurchase,
+      );
+      if (actionData.payload.options) {
+        await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
+      }
+      break;
+    case "save-attendance":
+      await createAttendance(env, currentUser.id, actionData.payload.startDate);
+      break;
+    case "save-other":
+      await createOtherPyroxeneGain(
+        env,
+        currentUser.id,
+        actionData.payload.date,
+        actionData.payload.resources.pyroxene,
+        actionData.payload.resources.oneTimeTicket,
+        actionData.payload.resources.tenTimeTicket,
+        actionData.payload.description,
+      );
+      break;
+    case "update-event-data":
+      await upsertPyroxeneEventData(env, currentUser.id, actionData.payload.eventUid, {
+        expectedTrials: actionData.payload.expectedTrials,
+      });
+      break;
+    case "save-options":
+      await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
+      break;
+    case "collect-source":
+      await upsertCollectedSources(env, currentUser.id, [actionData.payload.sourceKey]);
+      break;
+    case "uncollect-source":
+      await deleteCollectedSource(env, currentUser.id, actionData.payload.sourceKey);
+      break;
+    case "delete-pickup-completion": {
+      let recruitmentGroupUid = actionData.payload.recruitmentGroupUid ?? null;
+      if (!recruitmentGroupUid) {
+        for (const content of await getPyroxenePlannerContents(env, false, ctx)) {
+          if (content.kind === "event" && content.uid === actionData.payload.eventUid) {
+            recruitmentGroupUid = content.recruitmentGroupUid;
+            break;
+          }
         }
       }
-    }
-    if (recruitmentGroupUid) {
-      const [recruitmentResult] = await getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, [
-        recruitmentGroupUid,
-      ]);
-      if (recruitmentResult) {
-        await deleteRecruitmentResult(env, currentUser.id, recruitmentResult.uid);
+      if (recruitmentGroupUid) {
+        const [recruitmentResult] = await getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, [
+          recruitmentGroupUid,
+        ]);
+        if (recruitmentResult) {
+          await deleteRecruitmentResult(env, currentUser.id, recruitmentResult.uid);
+        }
       }
+      break;
     }
-    if (deleteData.itemUid) {
-      await deletePyroxeneTimelineItem(env, currentUser.id, deleteData.itemUid);
-    }
+    case "delete-timeline-item":
+      await deletePyroxeneTimelineItem(env, currentUser.id, actionData.payload.itemUid);
+      break;
   }
+
   return { success: true };
 };
 
@@ -461,8 +425,8 @@ export default function PyroxenePlanner() {
     }
     fetcher.submit(
       {
-        createData: { ownedResources: { eventUid, ...resources } },
-        collectedSource: { sourceKeys: collectedSourceKeys },
+        intent: "save-owned-resources",
+        payload: { resources, eventUid, collectedSourceKeys },
       },
       { method: "POST", encType: "application/json" },
     );
@@ -485,7 +449,7 @@ export default function PyroxenePlanner() {
       return;
     }
     fetcher.submit(
-      { collectedSource: { sourceKey } },
+      { intent: collected ? "collect-source" : "uncollect-source", payload: { sourceKey } },
       { method: collected ? "POST" : "DELETE", encType: "application/json" },
     );
   };
@@ -516,7 +480,10 @@ export default function PyroxenePlanner() {
       });
       return;
     }
-    fetcher.submit({ eventData: { eventUid, ...data } }, { method: "POST", encType: "application/json" });
+    fetcher.submit(
+      { intent: "update-event-data", payload: { eventUid, ...data } },
+      { method: "POST", encType: "application/json" },
+    );
   };
 
   const handleDeletePickupComplete = (eventUid: string) => {
@@ -526,7 +493,10 @@ export default function PyroxenePlanner() {
     );
     setLocalRecruitmentResultCompletions((prev) => prev.filter((completion) => completion.eventUid !== eventUid));
     fetcher.submit(
-      { deleteData: { eventUid, recruitmentGroupUid: recruitmentResultCompletion?.recruitmentGroupUid ?? null } },
+      {
+        intent: "delete-pickup-completion",
+        payload: { eventUid, recruitmentGroupUid: recruitmentResultCompletion?.recruitmentGroupUid ?? null },
+      },
       { method: "DELETE", encType: "application/json" },
     );
   };
@@ -541,7 +511,10 @@ export default function PyroxenePlanner() {
       }));
       return;
     }
-    fetcher.submit({ deleteData: { itemUid } }, { method: "DELETE", encType: "application/json" });
+    fetcher.submit(
+      { intent: "delete-timeline-item", payload: { itemUid } },
+      { method: "DELETE", encType: "application/json" },
+    );
   };
 
   const handleFavoriteChange = (contentUid: string, studentUid: string, favorited: boolean) => {
@@ -601,7 +574,7 @@ export default function PyroxenePlanner() {
     }
     setLocalTimelineItems((prev) => [...prev, ...createOptimisticBuyTimelineItems(quantity, date, options)]);
     fetcher.submit(
-      { createData: { buy: { quantity, date: date.toISOString(), ...options } } },
+      { intent: "save-buy", payload: { quantity, date: date.toISOString(), ...options } },
       { method: "POST", encType: "application/json" },
     );
   };
@@ -635,8 +608,8 @@ export default function PyroxenePlanner() {
     const nextOptions = ensureTimelineSourcesVisible(["package_onetime"]);
     fetcher.submit(
       {
-        createData: { monthlyPackage: { startDate: startDate.toISOString(), packageType, autoRepurchase } },
-        calcOptions: nextOptions,
+        intent: "save-monthly-package",
+        payload: { startDate: startDate.toISOString(), packageType, autoRepurchase, options: nextOptions },
       },
       { method: "POST", encType: "application/json" },
     );
@@ -662,7 +635,10 @@ export default function PyroxenePlanner() {
     setLocalTimelineItems((prev) => [...prev, ...createOptimisticApPackageTimelineItems(startDate, autoRepurchase)]);
     const nextOptions = ensureTimelineSourcesVisible(["package_ap"]);
     fetcher.submit(
-      { createData: { apPackage: { startDate: startDate.toISOString(), autoRepurchase } }, calcOptions: nextOptions },
+      {
+        intent: "save-ap-package",
+        payload: { startDate: startDate.toISOString(), autoRepurchase, options: nextOptions },
+      },
       { method: "POST", encType: "application/json" },
     );
   };
@@ -685,7 +661,7 @@ export default function PyroxenePlanner() {
       return [...withoutAttendance, ...createOptimisticAttendanceTimelineItems(startDate)];
     });
     fetcher.submit(
-      { createData: { attendance: { startDate: startDate.toISOString() } } },
+      { intent: "save-attendance", payload: { startDate: startDate.toISOString() } },
       { method: "POST", encType: "application/json" },
     );
   };
@@ -704,7 +680,7 @@ export default function PyroxenePlanner() {
     }
     setLocalTimelineItems((prev) => [...prev, ...createOptimisticOtherTimelineItems(resources, description, date)]);
     fetcher.submit(
-      { createData: { other: { resources, description, date: date.toISOString() } } },
+      { intent: "save-other", payload: { resources, description, date: date.toISOString() } },
       { method: "POST", encType: "application/json" },
     );
   };
@@ -752,7 +728,10 @@ export default function PyroxenePlanner() {
         void guestPlanner.update((data) => ({ ...data, options: newOptions, optionsChanged: true }));
         return;
       }
-      fetcher.submit({ calcOptions: newOptions }, { method: "POST", encType: "application/json" });
+      fetcher.submit(
+        { intent: "save-options", payload: { options: newOptions } },
+        { method: "POST", encType: "application/json" },
+      );
     }, 500);
   };
 

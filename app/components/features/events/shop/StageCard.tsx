@@ -32,6 +32,16 @@ export const StageCard = memo(function StageCard({
   const nonCoinRewards = rewards.filter(
     ({ item, rewardRequirement }) => item?.category !== "coin" && rewardRequirement === null,
   );
+  const coinRewardKeyCounts = new Map<string, number>();
+  const bonusRewardKeyCounts = new Map<string, number>();
+  const nonCoinRewardKeyCounts = new Map<string, number>();
+
+  const getRewardKey = (keyCounts: Map<string, number>, itemUid: string, amount: number, suffix = "") => {
+    const baseKey = `${itemUid}-${amount}${suffix}`;
+    const occurrence = keyCounts.get(baseKey) ?? 0;
+    keyCounts.set(baseKey, occurrence + 1);
+    return `${baseKey}-${occurrence}`;
+  };
 
   return (
     <div className="relative rounded-md bg-card p-3">
@@ -58,13 +68,13 @@ export const StageCard = memo(function StageCard({
       {coinRewards.length > 0 && (
         <div className="mt-4 space-y-2">
           <div className="flex flex-wrap gap-1">
-            {coinRewards.map(({ amount, item }, idx) => {
+            {coinRewards.map(({ amount, item }) => {
               if (!item || amount === 0) {
                 return null;
               }
               return (
                 <ResourceCard
-                  key={`${item.uid}-${idx}`}
+                  key={getRewardKey(coinRewardKeyCounts, item.uid, amount, "-coin")}
                   itemUid={item.uid}
                   resourceType={ResourceTypeEnum.Item}
                   label={amount}
@@ -72,7 +82,7 @@ export const StageCard = memo(function StageCard({
                 />
               );
             })}
-            {coinRewards.map(({ amount, item }, idx) => {
+            {coinRewards.map(({ amount, item }) => {
               if (!item || amount === 0 || appliedBonusRatio[item.uid]?.eq(0)) {
                 return null;
               }
@@ -80,7 +90,7 @@ export const StageCard = memo(function StageCard({
               const amountLabel = bonusRatio.mul(amount).ceil().toString();
               return (
                 <ResourceCard
-                  key={`${item.uid}-${idx}-bonus`}
+                  key={getRewardKey(bonusRewardKeyCounts, item.uid, amount, "-bonus")}
                   itemUid={item.uid}
                   resourceType={ResourceTypeEnum.Item}
                   label={amountLabel}
@@ -89,13 +99,13 @@ export const StageCard = memo(function StageCard({
                 />
               );
             })}
-            {nonCoinRewards.map(({ amount, item }, idx) => {
+            {nonCoinRewards.map(({ amount, item }) => {
               if (!item || amount === 0) {
                 return null;
               }
               return (
                 <ResourceCard
-                  key={`${item.uid}-${idx}`}
+                  key={getRewardKey(nonCoinRewardKeyCounts, item.uid, amount, "-non-coin")}
                   itemUid={item.uid}
                   resourceType={ResourceTypeEnum.Item}
                   label={amount}

@@ -25,13 +25,13 @@ type EventListProps = {
 export default function EventList({ events, showArrow = true, className = "" }: EventListProps) {
   const displayTimeZone = useDisplayTimeZone();
 
-  if (events.length === 0) {
-    return null;
-  }
-
   const sortedEvents = useMemo(() => {
     return [...events].sort((a, b) => CONTENT_ORDER.indexOf(a.type) - CONTENT_ORDER.indexOf(b.type));
   }, [events]);
+
+  if (sortedEvents.length === 0) {
+    return null;
+  }
 
   const shouldShowArrow = (event: EventListItem) => {
     if (typeof showArrow === "function") {

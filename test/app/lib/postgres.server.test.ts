@@ -22,7 +22,7 @@ function createClient() {
   };
 }
 
-describe("request-scoped PostgreSQL client", () => {
+describe("operation-scoped PostgreSQL client", () => {
   it("uses the Hyperdrive connection string and configured connect timeout", () => {
     const client = createPostgresClient(createEnv());
 

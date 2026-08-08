@@ -75,17 +75,17 @@ function toIso(value: Date | string | null): string | null {
 
 export function toSyncDraftSource(source: string): SyncDraftSource {
   if (source === "connect" || source === "web" || source === "first_party_ocr") return source;
-  return "connect";
+  throw new Error(`알 수 없는 변경안 source예요: ${source}`);
 }
 
 export function toSyncDraftType(type: string): SyncDraftType {
   if (type === "item_inventory" || type === "student_tier" || type === "student_state") return type;
-  return "item_inventory";
+  throw new Error(`알 수 없는 변경안 type이에요: ${type}`);
 }
 
 export function toSyncDraftStatus(status: string): SyncDraftStatus {
   if (status === "pending" || status === "applied" || status === "discarded" || status === "expired") return status;
-  return "pending";
+  throw new Error(`알 수 없는 변경안 status예요: ${status}`);
 }
 
 export function toSyncDraftEntryModel(entry: typeof syncDraftEntriesTable.$inferSelect): SyncDraftEntry {

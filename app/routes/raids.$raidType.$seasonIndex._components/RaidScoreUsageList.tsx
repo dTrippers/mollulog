@@ -242,7 +242,7 @@ function TierUsageRows({ tierCounts, recruitedTier }: { tierCounts: TierCount[];
   const maxCount = Math.max(...bucketCounts.map(({ count }) => count), 1);
 
   return (
-    <div className="mt-1.5 space-y-0.5" aria-label="성장도별 출전 횟수">
+    <div role="img" className="mt-1.5 space-y-0.5" aria-label="성장도별 출전 횟수">
       {bucketCounts.map(({ bucket, count }) => {
         const ratio = count / maxCount;
         const isRecruitedTier = recruitedTier != null && bucket.tiers.includes(recruitedTier);

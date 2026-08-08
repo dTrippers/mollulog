@@ -3,6 +3,9 @@ import {
   applySyncDraft,
   createAndApplySyncDraft,
   normalizeSyncDraftEntryValue,
+  toSyncDraftSource,
+  toSyncDraftStatus,
+  toSyncDraftType,
   updateSyncDraftEntries,
 } from "~/models/sync-draft";
 import { FakePostgresClient } from "../../helpers/fake-postgres";
@@ -193,6 +196,14 @@ function createEnv(db = new FakePostgresClient()): { db: FakePostgresClient; env
 }
 
 describe("sync-draft", () => {
+  it.each([
+    ["source", () => toSyncDraftSource("unknown")],
+    ["type", () => toSyncDraftType("unknown")],
+    ["status", () => toSyncDraftStatus("unknown")],
+  ])("rejects unknown draft %s values", (_field, decode) => {
+    expect(decode).toThrow("알 수 없는 변경안");
+  });
+
   it("normalizes item inventory quantities", () => {
     expect(normalizeSyncDraftEntryValue("item_inventory", "0")).toBe(0);
     expect(normalizeSyncDraftEntryValue("item_inventory", " 1200 ")).toBe(1200);

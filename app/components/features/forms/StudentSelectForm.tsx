@@ -207,31 +207,38 @@ export default function StudentSelectForm({
     }
 
     if (multiple) {
+      const selectedStudentKeyCounts = new Map<string, number>();
+
       return (
         <div className="flex flex-wrap gap-2">
-          {selectedStudents.map((student, index) => (
-            <div
-              key={`${student.uid}-${index}`}
-              className="flex cursor-pointer items-center gap-x-2 rounded-full bg-primary/10 transition-colors hover:bg-primary/15"
-            >
-              <StudentImage student={student} size="size-8" />
-              <span className="text-sm text-primary">{student.name}</span>
-              <button
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  if (allowDuplicateSelection) {
-                    handleRemoveAt(index);
-                  } else {
-                    handleRemove(student.uid);
-                  }
-                }}
-                className="text-primary/70 hover:text-primary"
+          {selectedStudents.map((student, index) => {
+            const occurrence = selectedStudentKeyCounts.get(student.uid) ?? 0;
+            selectedStudentKeyCounts.set(student.uid, occurrence + 1);
+
+            return (
+              <div
+                key={`${student.uid}-${occurrence}`}
+                className="flex cursor-pointer items-center gap-x-2 rounded-full bg-primary/10 transition-colors hover:bg-primary/15"
               >
-                <XMarkIcon className="mr-2 size-4" />
-              </button>
-            </div>
-          ))}
+                <StudentImage student={student} size="size-8" />
+                <span className="text-sm text-primary">{student.name}</span>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (allowDuplicateSelection) {
+                      handleRemoveAt(index);
+                    } else {
+                      handleRemove(student.uid);
+                    }
+                  }}
+                  className="text-primary/70 hover:text-primary"
+                >
+                  <XMarkIcon className="mr-2 size-4" />
+                </button>
+              </div>
+            );
+          })}
         </div>
       );
     }
@@ -273,6 +280,7 @@ export default function StudentSelectForm({
               {isOpen && (
                 <div
                   id={listboxId}
+                  role="dialog"
                   aria-labelledby={buttonId}
                   className={cn(
                     "absolute top-full left-0 z-20 mt-2 w-full overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-lg shadow-foreground/10",

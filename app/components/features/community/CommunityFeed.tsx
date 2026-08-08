@@ -457,10 +457,18 @@ function PostBlocks({
   post: CommunityFeedPostItem;
   studentsByUid: Record<string, { name: string }>;
 }) {
+  const blockKeyCounts = new Map<string, number>();
+  const blocks = post.blocks.map((block) => {
+    const baseKey = `${block.type}-${JSON.stringify(block)}`;
+    const occurrence = blockKeyCounts.get(baseKey) ?? 0;
+    blockKeyCounts.set(baseKey, occurrence + 1);
+    return { block, key: `${post.uid}-${baseKey}-${occurrence}` };
+  });
+
   return (
     <div className="space-y-3">
-      {post.blocks.map((block, index) => (
-        <BlockView key={`${post.uid}-${block.type}-${index}`} block={block} post={post} studentsByUid={studentsByUid} />
+      {blocks.map(({ block, key }) => (
+        <BlockView key={key} block={block} post={post} studentsByUid={studentsByUid} />
       ))}
     </div>
   );
@@ -557,23 +565,31 @@ function BlockView({
         </div>
       </div>
       <div className="space-y-3">
-        {block.units.map((unit, index) => (
-          <div key={`${block.title ?? "unit"}-${index}`}>
-            <p className="mb-2 text-xs font-medium text-muted-foreground">{index + 1}번째 파티</p>
-            <StudentCards
-              students={unit.map((uid) =>
-                uid
-                  ? {
-                      uid,
-                      name: studentsByUid[uid]?.name,
-                    }
-                  : { uid: null },
-              )}
-              mobileGrid={6}
-              pcGrid={10}
-            />
-          </div>
-        ))}
+        {(() => {
+          const unitKeyCounts = new Map<string, number>();
+          return block.units.map((unit, unitIndex) => {
+            const baseKey = unit.join(",");
+            const occurrence = unitKeyCounts.get(baseKey) ?? 0;
+            unitKeyCounts.set(baseKey, occurrence + 1);
+            return (
+              <div key={`${block.title ?? "unit"}-${baseKey}-${occurrence}`}>
+                <p className="mb-2 text-xs font-medium text-muted-foreground">{unitIndex + 1}번째 파티</p>
+                <StudentCards
+                  students={unit.map((uid) =>
+                    uid
+                      ? {
+                          uid,
+                          name: studentsByUid[uid]?.name,
+                        }
+                      : { uid: null },
+                  )}
+                  mobileGrid={6}
+                  pcGrid={10}
+                />
+              </div>
+            );
+          });
+        })()}
       </div>
     </div>
   );

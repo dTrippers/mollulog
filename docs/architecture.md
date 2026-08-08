@@ -35,12 +35,12 @@ Routes  (loader / action · thin)
           → lib/cache · lib/baql · lib/postgres.server · db
 ```
 
-- `app/routes` — Route files with `loader` / `action`, meta, parameter parsing, access control, and top-level screen assembly. Data composition and direct cache / BAQL / database calls do not belong here; they are delegated to views.
-- `app/views` — The composition layer for route presentation. It combines model and domain results into the shape a screen needs and applies the route cache (SWR).
+- `app/routes` — Route files with `loader` / `action`, meta, parameter parsing, access control, and top-level screen assembly. A simple single-source read or mutation may call one model directly when no route-cache or composition policy is needed; direct cache / BAQL / database infrastructure calls do not belong here.
+- `app/views` — The composition layer for route presentation. A view is required when a route needs multi-source screen composition or route-cache/SWR policy; it combines model and domain results into the shape a screen needs and owns that cache policy.
 - `app/domain` — Pure calculation and transformation only. With no I/O or env dependency, it is easy to unit test. Logic such as raid scoring or the recruitment simulator lives here.
 - `app/models` — The data access layer. It owns PostgreSQL/D1 CRUD, BAQL reads, source caching, and normalization of upstream data into domain types.
 - `app/db/postgres` — PostgreSQL schemas and repositories implemented with Drizzle `pg-core` and `drizzle-orm/node-postgres`.
-- `app/lib/postgres.server.ts` — Hyperdrive connection lifecycle. It creates and releases a PostgreSQL client for each request or scheduled job.
+- `app/lib/postgres.server.ts` — Hyperdrive connection lifecycle. It creates and releases a PostgreSQL client for each model operation.
 - `app/lib/cache`, `app/lib/baql`, and D1 helpers — Cache primitives, GraphQL execution, and infrastructure for domains that remain on D1.
 - `app/components/primitives` — Low-level shared UI built on semantic tokens, plus thin app-wide presentation.
 - `app/components/features/<domain>` — Domain UI reused across multiple screens.
@@ -50,10 +50,11 @@ Routes  (loader / action · thin)
 ## Boundary rules
 
 - Lower layers never import upper layers. Data flows one way.
-- Routes stay thin: `loader` / `action`, params, auth, meta, and screen assembly. Routes do not call cache, BAQL, or a database directly — they delegate to a view function.
-- Views own composition and the route cache (SWR). They call models and domain.
+- Routes stay thin: `loader` / `action`, params, auth, meta, and screen assembly. A route may call one model for a simple single-source read or mutation without route cache or composition, but it never calls cache, BAQL, or database infrastructure helpers directly.
+- Views are required for multi-source composition or route-cache/SWR policy. They call models and domain and own the composed screen shape and cache policy.
 - Models are data access only. They must not import from views.
 - Domain is pure: no I/O and no env. Type-only imports from models are allowed; avoid runtime imports from models.
+- A route may authenticate and pass the authenticated identity and parsed parameters to a view. If a loader needs multiple sources or route-cache/SWR policy, that work belongs in the view; a simple one-model operation can remain in the route.
 
 Detailed UI structure rules live in the frontend documents:
 
@@ -84,8 +85,8 @@ Cron runs on a single schedule:
 ### Read
 
 1. The browser requests a route.
-2. The route `loader` runs and calls a single view function.
-3. The view calls the models and domain it needs, composes the screen shape, and applies a route cache when appropriate.
+2. The route `loader` runs and either calls one model for a simple single-source read or delegates to a view when composition or route-cache/SWR policy is needed.
+3. A view calls the models and domain it needs, composes the screen shape, and applies a route cache when appropriate.
 4. Models check the source cache when applicable and query BAQL, PostgreSQL through Hyperdrive, or D1 according to domain ownership.
 5. The screen renders from `useLoaderData()`.
 
@@ -100,11 +101,17 @@ Cron runs on a single schedule:
 ## PostgreSQL and Hyperdrive
 
 - Hyperdrive is a connection-pooling data path, not an application cache. Query caching is disabled; explicit cache policy remains in the existing KV cache layer.
-- PostgreSQL clients are request- or job-scoped. Create them through `app/lib/postgres.server.ts`, and never keep a client in module scope or share it across requests.
+- PostgreSQL clients are operation-scoped. Create and release them through `app/lib/postgres.server.ts` inside each model operation; never keep a client in module or request-global state, and never share one client across independent operations. A transaction may span the statements of one operation only.
 - `withPostgresClient` connects once, runs the repository operation, and releases the client in `finally`. Repositories may attach query spans through the current `ExecutionContext`.
 - PostgreSQL schemas use Drizzle `pg-core` and live in `app/db/postgres/schema.ts`. SQL migrations live separately under `db/postgres/migrations` so they are not mixed with D1 migrations under `db/migrations`.
 - PostgreSQL uses native types such as `timestamptz`, `boolean`, arrays, JSONB, and identity columns. Domain types normalize database values at the repository boundary.
 - A PostgreSQL-owned domain must not silently fall back to D1. Database failures surface through the normal route error or explicit degraded-state handling instead of returning stale D1 data as if it were current.
+
+### Server-only modules
+
+- Files that must stay out of the browser bundle because they import Node-only runtimes, secrets, the PostgreSQL client, or another server-only dependency use the `.server.ts` suffix (for example, `app/lib/postgres.server.ts`). A function being called only from a loader/action is not, by itself, a reason to add the suffix.
+- `.server.ts` modules are server-only implementation details. Do not import them from client components, shared client utilities, or other modules that are reachable from the browser bundle.
+- A route can call server-side model/view functions from its loader or action; the route still owns only request validation and response assembly, while the server-only implementation remains below the route boundary.
 
 ## Caching
 

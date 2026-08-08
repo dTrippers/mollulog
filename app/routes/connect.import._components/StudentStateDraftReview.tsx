@@ -887,7 +887,7 @@ function formatPlainValue(value: number | null): ReactNode {
 
 function TierStars({ tier, muted }: { tier: number; muted: boolean }) {
   return (
-    <span className={cn("inline-flex items-center", muted && "opacity-80")} aria-label={`${tier}성`}>
+    <span role="img" className={cn("inline-flex items-center", muted && "opacity-80")} aria-label={`${tier}성`}>
       {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((eachTier) => {
         const Icon = eachTier <= tier ? StarIconSolid : StarIconOutline;
         return (

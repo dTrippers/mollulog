@@ -13,7 +13,7 @@ async function enterPostgresSpan<T>(
 }
 
 /**
- * Creates one PostgreSQL connection for one request or scheduled job.
+ * Creates one PostgreSQL connection for one model operation.
  * Hyperdrive owns the reusable origin pool, so this client must not be cached
  * in module scope or shared between requests.
  */
@@ -25,7 +25,7 @@ export function createPostgresClient(env: HyperdriveEnv): Client {
   });
 }
 
-/** Connects and always releases the request-scoped client. */
+/** Connects and always releases the operation-scoped client. */
 export async function withPostgresClient<T>(
   env: HyperdriveEnv,
   operation: (client: Client) => Promise<T>,

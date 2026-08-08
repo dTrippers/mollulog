@@ -36,7 +36,13 @@ The following do not belong in a route file for long:
 - reusable domain UI
 - composition of multiple data sources and cache policy (→ `app/views`)
 
-Data composition belongs to `app/views` functions, not the route. Keep the loader thin — ideally it just calls one view function.
+Data composition belongs to `app/views` functions when a screen needs multiple sources, and route-cache/SWR policy always belongs there. A simple single-source read or mutation may call one model directly from the route when no composition or route cache is needed. The route authenticates, parses parameters, assembles the response, and never calls cache, BAQL, or database infrastructure helpers directly.
+
+### Database and server boundaries
+
+- PostgreSQL clients are created and released per model operation through `withPostgresClient`; do not retain a client in module or request-global state or share it across operations.
+- Use the `.server.ts` suffix only when a module must stay out of the browser bundle because it uses Node runtimes, secrets, PostgreSQL clients, or another server-only dependency. A loader/action-only call path does not require the suffix; client components and shared browser-reachable modules must not import `.server.ts` modules.
+- A view may call multiple models and domain functions to compose a screen, and is required for that composition or route-cache/SWR policy. A route may call one model for a simple single-source operation or call a view after authentication and parameter validation, but direct cache, BAQL, and database infrastructure access remains below the route boundary.
 
 ## Route-local composition
 
