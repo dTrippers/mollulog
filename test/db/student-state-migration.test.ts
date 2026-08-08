@@ -52,4 +52,34 @@ describe("student-state zzz migration", () => {
     for (const table of legacyTables) expect(names.has(table)).toBe(false);
     database.close();
   });
+
+  test("defines student-state timestamp gaps and leaves relationship JSON validation to the application", () => {
+    const migration = readFileSync("db/postgres/migrations/20260807000100_create_student_state.sql", "utf8");
+    const schema = readFileSync("app/db/postgres/schema.ts", "utf8");
+    const extractCreateTableBody = (tableName: string) => {
+      const match = migration.match(new RegExp(`CREATE TABLE ${tableName} \\(([\\s\\S]*?)\\);`));
+      expect(match).not.toBeNull();
+      return match?.[1] ?? "";
+    };
+    expect(extractCreateTableBody("sync_draft_entries")).toMatch(
+      /updated_at timestamptz NOT NULL DEFAULT now\(\)/,
+    );
+    expect(extractCreateTableBody("user_resource_inventory_draft_items")).toMatch(
+      /updated_at timestamptz NOT NULL DEFAULT now\(\)/,
+    );
+    expect(migration).not.toContain("user_relationship_levels_items_object");
+    expect(migration).not.toContain("jsonb_typeof(items) = 'object'");
+    const extractPgTableDefinition = (exportName: string) => {
+      const match = schema.match(new RegExp(`export const ${exportName} = pgTable\\(([\\s\\S]*?\\n\\);)`));
+      expect(match).not.toBeNull();
+      return match?.[1] ?? "";
+    };
+    expect(extractPgTableDefinition("pgSyncDraftEntriesTable")).toMatch(
+      /updatedAt: timestamptz\("updated_at"\)/,
+    );
+    expect(extractPgTableDefinition("pgUserResourceInventoryDraftItemsTable")).toMatch(
+      /updatedAt: timestamptz\("updated_at"\)/,
+    );
+    expect(schema).not.toContain("user_relationship_levels_items_object");
+  });
 });

@@ -70,8 +70,7 @@ CREATE TABLE user_relationship_levels (
   target_level integer NOT NULL,
   items jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT user_relationship_levels_items_object CHECK (jsonb_typeof(items) = 'object')
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX user_relationship_levels_uid_uidx ON user_relationship_levels (uid);
 CREATE UNIQUE INDEX user_relationship_levels_user_student_uidx ON user_relationship_levels (user_id, student_id);
@@ -119,7 +118,8 @@ CREATE TABLE sync_draft_entries (
   value integer NOT NULL,
   value_json text,
   meta text,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX sync_draft_entries_uid_uidx ON sync_draft_entries (uid);
 CREATE UNIQUE INDEX sync_draft_entries_draft_entry_uidx ON sync_draft_entries (draft_uid, entry_key);
@@ -143,7 +143,8 @@ CREATE TABLE user_resource_inventory_draft_items (
   draft_uid text NOT NULL,
   item_uid text NOT NULL,
   quantity integer NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX user_resource_inventory_draft_items_uid_uidx ON user_resource_inventory_draft_items (uid);
 CREATE UNIQUE INDEX user_resource_inventory_draft_items_draft_item_uidx ON user_resource_inventory_draft_items (draft_uid, item_uid);

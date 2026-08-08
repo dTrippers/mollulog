@@ -39,6 +39,7 @@ type SyncDraftEntryRow = {
   valueJson: string | null;
   meta: string | null;
   createdAt: string;
+  updatedAt: string;
 };
 
 type RecruitedStudentRow = {
@@ -379,6 +380,7 @@ function createEntryRow(overrides: Partial<SyncDraftEntryRow>): SyncDraftEntryRo
     }),
     meta: null,
     createdAt: "2026-06-13T00:00:00.000Z",
+    updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
   };
 }
@@ -710,6 +712,7 @@ describe("sync-draft", () => {
         statement.toLowerCase().includes("from (values"),
     );
     expect(valuesUpdates).toHaveLength(3);
+    expect(valuesUpdates.every((statement) => statement.toLowerCase().includes('"updated_at"'))).toBe(true);
     expect(
       valuesUpdates.every((statement) => !statement.toLowerCase().includes('update "sync_draft_entries" set')),
     ).toBe(true);

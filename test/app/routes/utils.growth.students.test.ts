@@ -3,9 +3,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 const mockIsAuthenticated = jest.fn();
 const mockGetActiveSensei = jest.fn();
 const mockGetAllStudentsMap = jest.fn();
-const mockGetRelationshipLevel = jest.fn();
-const mockResolveRelationshipLevelInput = jest.fn();
-const mockUpsertRelationshipLevel = jest.fn();
+const mockUpdateRelationshipLevel = jest.fn();
 const mockLoadStudentRow = jest.fn();
 const mockGetRecruitedStudents = jest.fn();
 const mockUpdateRecruitedStudentCurrentState = jest.fn();
@@ -41,10 +39,7 @@ jest.mock("~/models/student-growth", () => ({
 }));
 
 jest.mock("~/models/relationship-level", () => ({
-  getRelationshipLevel: mockGetRelationshipLevel,
-  removeRelationshipLevel: jest.fn(),
-  resolveRelationshipLevelInput: mockResolveRelationshipLevelInput,
-  upsertRelationshipLevel: mockUpsertRelationshipLevel,
+  updateRelationshipLevel: mockUpdateRelationshipLevel,
 }));
 
 jest.mock("../../../app/routes/utils.growth._components/growth-data.server", () => ({
@@ -100,20 +95,6 @@ describe("utils.growth.students action", () => {
   });
 
   it("preserves saved relationship items when updating ranks from growth planner", async () => {
-    mockGetRelationshipLevel.mockResolvedValue({
-      uid: "relationship-1",
-      studentId: "studentA",
-      currentLevel: 10,
-      currentExp: 123,
-      targetLevel: 20,
-      items: { gift1: 5, gift2: 2 },
-    } as never);
-    mockResolveRelationshipLevelInput.mockReturnValue({
-      currentLevel: 10,
-      currentExp: 123,
-      targetLevel: 30,
-    });
-
     await action({
       context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
@@ -130,17 +111,13 @@ describe("utils.growth.students action", () => {
       }),
     } as never);
 
-    expect(mockUpsertRelationshipLevel).toHaveBeenCalledWith(env, 1, "studentA", 10, 123, 30, { gift1: 5, gift2: 2 });
+    expect(mockUpdateRelationshipLevel).toHaveBeenCalledWith(env, 1, "studentA", {
+      currentLevel: 10,
+      targetLevel: 30,
+    });
   });
 
-  it("initializes relationship items to an empty object when no saved row exists", async () => {
-    mockGetRelationshipLevel.mockResolvedValue(null as never);
-    mockResolveRelationshipLevelInput.mockReturnValue({
-      currentLevel: 1,
-      currentExp: null,
-      targetLevel: 15,
-    });
-
+  it("passes empty relationship ranks to the atomic model operation for deletion", async () => {
     await action({
       context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
@@ -148,8 +125,8 @@ describe("utils.growth.students action", () => {
         body: JSON.stringify({
           _intent: "relationship",
           studentUid: "studentA",
-          currentLevel: 1,
-          targetLevel: 15,
+          currentLevel: "",
+          targetLevel: "",
         }),
         headers: {
           "Content-Type": "application/json",
@@ -157,7 +134,10 @@ describe("utils.growth.students action", () => {
       }),
     } as never);
 
-    expect(mockUpsertRelationshipLevel).toHaveBeenCalledWith(env, 1, "studentA", 1, null, 15, {});
+    expect(mockUpdateRelationshipLevel).toHaveBeenCalledWith(env, 1, "studentA", {
+      currentLevel: null,
+      targetLevel: null,
+    });
   });
 
   it("refreshes resource requirements without writing student state", async () => {

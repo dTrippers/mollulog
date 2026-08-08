@@ -154,31 +154,36 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
     throw new Error(`Invalid tier: ${tier}`);
   }
   await withDb(env, async (db) => {
-    const [existing] = await db
-      .select({
-        weaponLevel: pgRecruitedStudentsTable.weaponLevel,
-        abilityHp: pgRecruitedStudentsTable.abilityHp,
-        abilityAtk: pgRecruitedStudentsTable.abilityAtk,
-        abilityHeal: pgRecruitedStudentsTable.abilityHeal,
-      })
-      .from(pgRecruitedStudentsTable)
-      .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
-      .limit(1);
-    if (existing?.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
-      throw new Error("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
-    }
-    assertAbilityReleaseAvailable(
-      [existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal],
-      tier,
-      "능력 해방",
-    );
-    await db
-      .insert(pgRecruitedStudentsTable)
-      .values({ uid: nanoid(8), userId: senseiId, studentUid, tier })
-      .onConflictDoUpdate({
-        target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
-        set: { tier, updatedAt: new Date() },
-      });
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({
+          weaponLevel: pgRecruitedStudentsTable.weaponLevel,
+          abilityHp: pgRecruitedStudentsTable.abilityHp,
+          abilityAtk: pgRecruitedStudentsTable.abilityAtk,
+          abilityHeal: pgRecruitedStudentsTable.abilityHeal,
+        })
+        .from(pgRecruitedStudentsTable)
+        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
+        .limit(1)
+        .for("update");
+      // A missing business-key row cannot be row-locked; the unique index and
+      // conflict target serialize a concurrent insert at the write boundary.
+      if (existing?.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
+        throw new Error("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
+      }
+      assertAbilityReleaseAvailable(
+        [existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal],
+        tier,
+        "능력 해방",
+      );
+      await tx
+        .insert(pgRecruitedStudentsTable)
+        .values({ uid: nanoid(8), userId: senseiId, studentUid, tier })
+        .onConflictDoUpdate({
+          target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
+          set: { tier, updatedAt: new Date() },
+        });
+    });
   });
 }
 
@@ -220,21 +225,24 @@ export async function updateRecruitedStudentCurrentState(
 ) {
   validateRecruitedStudentCurrentStateInput(input);
   await withDb(env, async (db) => {
-    const existing = await db
-      .select({ tier: pgRecruitedStudentsTable.tier })
-      .from(pgRecruitedStudentsTable)
-      .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
-      .limit(1);
-    assertWeaponLevelRange(input.weaponLevel, existing[0]?.tier ?? null, "고유무기 레벨");
-    assertAbilityReleaseAvailable(
-      [input.abilityHp, input.abilityAtk, input.abilityHeal],
-      existing[0]?.tier ?? null,
-      "능력 해방",
-    );
-    await db
-      .update(pgRecruitedStudentsTable)
-      .set({ ...input, updatedAt: new Date() })
-      .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)));
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ tier: pgRecruitedStudentsTable.tier })
+        .from(pgRecruitedStudentsTable)
+        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
+        .limit(1)
+        .for("update");
+      assertWeaponLevelRange(input.weaponLevel, existing?.tier ?? null, "고유무기 레벨");
+      assertAbilityReleaseAvailable(
+        [input.abilityHp, input.abilityAtk, input.abilityHeal],
+        existing?.tier ?? null,
+        "능력 해방",
+      );
+      await tx
+        .update(pgRecruitedStudentsTable)
+        .set({ ...input, updatedAt: new Date() })
+        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)));
+    });
   });
 }
 

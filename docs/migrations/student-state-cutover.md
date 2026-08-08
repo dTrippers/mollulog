@@ -18,9 +18,12 @@ unique index for non-null values. A count, UID/key, or canonical-content parity
 mismatch is a hard stop; do not clear maintenance or continue deployment.
 
 Never use `wrangler d1 export`. The collector uses read-only keyset SELECTs and
-the importer only executes an explicit allowlist inside one PostgreSQL
-transaction. Import writes use chunks of at most 500 rows, delete stale target
-rows, repair identity sequences, and roll back on any failure or parity stop.
+the importer only executes the explicit allowlist. Data replacement and parity
+run as one PostgreSQL transaction using chunks of at most 500 rows, deleting
+stale target rows and rolling back on any import or parity failure. Identity
+sequences are repaired only after `COMMIT` because PostgreSQL sequence changes
+are non-transactional. A sequence-repair failure is a hard stop with data
+already committed; rerun the convergent importer before enabling writes.
 
 ## Local preparation
 

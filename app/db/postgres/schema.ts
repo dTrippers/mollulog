@@ -505,7 +505,6 @@ export const pgRelationshipLevelsTable = pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
-    check("user_relationship_levels_items_object", sql`jsonb_typeof(${table.items}) = 'object'`),
     uniqueIndex("user_relationship_levels_uid_uidx").on(table.uid),
     uniqueIndex("user_relationship_levels_user_student_uidx").on(table.userId, table.studentId),
     index("user_relationship_levels_user_id_idx").on(table.userId),
@@ -569,6 +568,7 @@ export const pgSyncDraftEntriesTable = pgTable(
     valueJson: text("value_json"),
     meta: text(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("sync_draft_entries_uid_uidx").on(table.uid),
@@ -603,6 +603,7 @@ export const pgUserResourceInventoryDraftItemsTable = pgTable(
     itemUid: text("item_uid").notNull(),
     quantity: integer().notNull(),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
     uniqueIndex("user_resource_inventory_draft_items_uid_uidx").on(table.uid),

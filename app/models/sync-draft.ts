@@ -363,6 +363,7 @@ export async function updateSyncDraftEntries(
       const draft = await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, true);
       const normalizedEntries = normalizeSyncDraftEntryUpdates(draft.type, entries);
       assertEntryKeysMatchDraft(draft.entries, normalizedEntries);
+      const now = new Date();
       for (let offset = 0; offset < normalizedEntries.length; offset += PG_WRITE_CHUNK_SIZE) {
         const chunk = normalizedEntries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
         const values = sql.join(
@@ -372,13 +373,14 @@ export async function updateSyncDraftEntries(
         await tx.execute(sql`
           UPDATE ${syncDraftEntriesTable} AS entries
           SET "value" = incoming."value",
-              "value_json" = incoming."value_json"
+              "value_json" = incoming."value_json",
+              "updated_at" = ${now}
           FROM (VALUES ${values}) AS incoming("entry_key", "value", "value_json")
           WHERE entries."draft_uid" = ${draftUid}
             AND entries."entry_key" = incoming."entry_key"
         `);
       }
-      await tx.update(syncDraftsTable).set({ updatedAt: new Date() }).where(eq(syncDraftsTable.uid, draftUid));
+      await tx.update(syncDraftsTable).set({ updatedAt: now }).where(eq(syncDraftsTable.uid, draftUid));
     });
   });
 }

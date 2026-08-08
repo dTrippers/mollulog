@@ -13,6 +13,7 @@ export const STUDENT_STATE_TABLES = [
   "user_resource_inventory_draft_items",
 ];
 export const INSERT_CHUNK_SIZE = 500;
+const LEGACY_UPDATED_AT_TABLES = new Set(["sync_draft_entries", "user_resource_inventory_draft_items"]);
 
 function assertTable(table) {
   if (!STUDENT_STATE_TABLES.includes(table)) throw new Error(`Table is not allowlisted: ${table}`);
@@ -47,10 +48,20 @@ function normalizeTableValue(table, column, value) {
   return normalized;
 }
 
+function normalizeImportRow(table, row) {
+  if (!LEGACY_UPDATED_AT_TABLES.has(table) || row.updatedAt != null) return row;
+  if (row.createdAt == null) {
+    throw new Error(`Snapshot row in ${table} is missing createdAt required for updatedAt normalization`);
+  }
+  return { ...row, updatedAt: row.createdAt };
+}
+
 function normalizeValue(value, key = "") {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "string" && (key.endsWith("At") || key.endsWith("_at"))) {
-    const candidate = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+    const normalized = value.replace(" ", "T");
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+    const candidate = hasTimezone ? normalized : `${normalized}Z`;
     const date = new Date(candidate);
     if (!Number.isNaN(date.valueOf())) return date.toISOString();
   }
@@ -67,9 +78,10 @@ function normalizeValue(value, key = "") {
 }
 
 export function canonicalRow(row, table) {
+  const normalizedRow = normalizeImportRow(table, row);
   return JSON.stringify(
     Object.fromEntries(
-      Object.entries(row)
+      Object.entries(normalizedRow)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([key, value]) => [key, normalizeValue(normalizeTableValue(table, key, value), key)]),
     ),
@@ -85,7 +97,7 @@ function parseSnapshotTable(snapshot, table) {
   assertTable(table);
   const value = snapshot?.tables?.[table];
   if (!value || !Array.isArray(value.rows)) throw new Error(`Snapshot is missing ${table}`);
-  const rows = value.rows;
+  const rows = value.rows.map((row) => normalizeImportRow(table, row));
   const identities = new Set();
   for (const row of rows) {
     const identity = canonicalIdentity(row);
@@ -104,12 +116,12 @@ function tableColumns(rows) {
 }
 
 function toPgRow(table, row, columns) {
-  return columns.map((column) => normalizeTableValue(table, column, row[column]) ?? null);
+  return columns.map((column) => normalizeValue(normalizeTableValue(table, column, row[column]), column) ?? null);
 }
 
 export function buildInsertStatement(table, rows, start = 0, end = rows.length) {
   assertTable(table);
-  const chunk = rows.slice(start, end);
+  const chunk = rows.slice(start, end).map((row) => normalizeImportRow(table, row));
   if (chunk.length === 0) return null;
   const sourceColumns = tableColumns(chunk);
   const columns = sourceColumns.map(camelToSnake);
@@ -148,6 +160,13 @@ async function setImportTimeout(client, statementTimeoutMs) {
   await client.query("SELECT set_config('statement_timeout', $1, true)", [`${statementTimeoutMs}ms`]);
 }
 
+async function repairIdentitySequence(client, table) {
+  await client.query(
+    `SELECT setval(pg_get_serial_sequence($1, 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM ${quoteIdentifier(table)}`,
+    [table],
+  );
+}
+
 export async function transferStudentStateSnapshot(
   snapshot,
   { client, clientFactory, targetUrl, statementTimeoutMs = 10 * 60 * 1000, closeClient = true } = {},
@@ -160,38 +179,56 @@ export async function transferStudentStateSnapshot(
   if (!pgClient) throw new Error("A PostgreSQL client or TARGET_PG_URL is required");
   if (!client && typeof pgClient.connect === "function") await pgClient.connect();
   try {
-    await pgClient.query("BEGIN");
-    await setImportTimeout(pgClient, statementTimeoutMs);
-    for (const table of STUDENT_STATE_TABLES) {
-      const rows = parseSnapshotTable(snapshot, table);
-      await pgClient.query(`DELETE FROM ${quoteIdentifier(table)}`);
-      for (let offset = 0; offset < rows.length; offset += INSERT_CHUNK_SIZE) {
-        const statement = buildInsertStatement(table, rows, offset, offset + INSERT_CHUNK_SIZE);
-        if (statement) await pgClient.query(statement.text, statement.values);
+    let dataCommitted = false;
+    try {
+      await pgClient.query("BEGIN");
+      await setImportTimeout(pgClient, statementTimeoutMs);
+      for (const table of STUDENT_STATE_TABLES) {
+        const rows = parseSnapshotTable(snapshot, table);
+        await pgClient.query(`DELETE FROM ${quoteIdentifier(table)}`);
+        for (let offset = 0; offset < rows.length; offset += INSERT_CHUNK_SIZE) {
+          const statement = buildInsertStatement(table, rows, offset, offset + INSERT_CHUNK_SIZE);
+          if (statement) await pgClient.query(statement.text, statement.values);
+        }
       }
-      await pgClient.query(
-        `SELECT setval(pg_get_serial_sequence($1, 'id'), COALESCE(MAX(id), 1), MAX(id) IS NOT NULL) FROM ${quoteIdentifier(table)}`,
-        [table],
-      );
+
+      for (const table of STUDENT_STATE_TABLES) {
+        const sourceRows = parseSnapshotTable(snapshot, table);
+        const result = await pgClient.query(`SELECT * FROM ${quoteIdentifier(table)} ORDER BY id`);
+        compareTableParity(table, sourceRows, result.rows.map(rowFromPg));
+      }
+      await pgClient.query("COMMIT");
+      dataCommitted = true;
+    } catch (error) {
+      if (!dataCommitted) {
+        try {
+          await pgClient.query("ROLLBACK");
+        } catch {
+          // Preserve the original parity/import error.
+        }
+      }
+      throw error;
     }
 
-    for (const table of STUDENT_STATE_TABLES) {
-      const sourceRows = parseSnapshotTable(snapshot, table);
-      const result = await pgClient.query(`SELECT * FROM ${quoteIdentifier(table)} ORDER BY id`);
-      compareTableParity(table, sourceRows, result.rows.map(rowFromPg));
-    }
-    await pgClient.query("COMMIT");
-    return { tables: STUDENT_STATE_TABLES.map((table) => ({ table, rows: parseSnapshotTable(snapshot, table).length })) };
-  } catch (error) {
+    let sequenceRepairTable;
     try {
-      await pgClient.query("ROLLBACK");
-    } catch {
-      // Preserve the original parity/import error.
+      for (const table of STUDENT_STATE_TABLES) {
+        sequenceRepairTable = table;
+        await repairIdentitySequence(pgClient, table);
+      }
+    } catch (error) {
+      const sequenceError = new Error(
+        `Student-state data replacement committed, but identity sequence repair failed for ${sequenceRepairTable}; rerun the convergent import before enabling writes`,
+        { cause: error },
+      );
+      sequenceError.dataCommitted = true;
+      throw sequenceError;
     }
-    throw error;
   } finally {
     if (closeClient && typeof pgClient.end === "function") await pgClient.end();
   }
+
+  return { tables: STUDENT_STATE_TABLES.map((table) => ({ table, rows: parseSnapshotTable(snapshot, table).length })) };
 }
 
 async function main() {

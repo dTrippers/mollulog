@@ -242,6 +242,15 @@ describe("recruited-student current state", () => {
       equip3: 8,
       equipSpecial: 2,
     });
+    expect(db.statements[0]?.toLowerCase()).toBe("begin");
+    expect(db.statements.at(-1)?.toLowerCase()).toBe("commit");
+    const lockIndex = db.statements.findIndex(
+      (statement) =>
+        statement.toLowerCase().includes("for update") && statement.toLowerCase().includes("recruited_students"),
+    );
+    const writeIndex = db.statements.findIndex((statement) => statement.toLowerCase().startsWith("update"));
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(lockIndex).toBeLessThan(writeIndex);
   });
 
   it("does not create a recruited row when updating current state for a non-recruited student", async () => {
@@ -264,6 +273,21 @@ describe("recruited-student current state", () => {
     });
 
     expect(db.rows).toHaveLength(0);
+  });
+
+  it("inserts an absent recruited student under the same locked transaction", async () => {
+    const { db, env } = createEnv();
+
+    await upsertRecruitedStudent(env, 1, "student-a", 5);
+
+    expect(db.rows).toHaveLength(1);
+    expect(db.rows[0]).toMatchObject({ userId: 1, studentUid: "student-a", tier: 5 });
+    expect(db.statements[0]?.toLowerCase()).toBe("begin");
+    expect(db.statements.at(-1)?.toLowerCase()).toBe("commit");
+    const lockIndex = db.statements.findIndex((statement) => statement.toLowerCase().includes("for update"));
+    const writeIndex = db.statements.findIndex((statement) => statement.toLowerCase().startsWith("insert"));
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(lockIndex).toBeLessThan(writeIndex);
   });
 
   it("creates a recruited student with its nullable current state", async () => {
@@ -312,6 +336,15 @@ describe("recruited-student current state", () => {
       skillEx: 4,
       equip1: 7,
     });
+    expect(db.statements[0]?.toLowerCase()).toBe("begin");
+    expect(db.statements.at(-1)?.toLowerCase()).toBe("commit");
+    const lockIndex = db.statements.findIndex(
+      (statement) =>
+        statement.toLowerCase().includes("for update") && statement.toLowerCase().includes("recruited_students"),
+    );
+    const writeIndex = db.statements.findIndex((statement) => statement.toLowerCase().startsWith("insert"));
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(lockIndex).toBeLessThan(writeIndex);
   });
 
   it("rejects tier updates that would leave ability release levels without a unique weapon", async () => {
@@ -321,6 +354,11 @@ describe("recruited-student current state", () => {
     await expect(upsertRecruitedStudent(env, 1, "student-a", 5)).rejects.toThrow(
       "능력 해방은(는) 고유무기 장착 후 입력할 수 있어요",
     );
+    expect(db.statements.map((statement) => statement.toLowerCase())).toEqual(
+      expect.arrayContaining(["begin", "rollback"]),
+    );
+    expect(db.rows[0]).toMatchObject({ tier: 6, abilityHp: 1 });
+    expect(db.statements.some((statement) => statement.toLowerCase().startsWith("insert"))).toBe(false);
   });
 
   it("rejects out-of-range current values", async () => {
@@ -366,6 +404,11 @@ describe("recruited-student current state", () => {
         equipSpecial: null,
       }),
     ).rejects.toThrow("능력 해방은(는) 고유무기 장착 후 입력할 수 있어요");
+    expect(db.statements.map((statement) => statement.toLowerCase())).toEqual(
+      expect.arrayContaining(["begin", "rollback"]),
+    );
+    expect(db.rows[0]).toMatchObject({ tier: 5, abilityHp: null, abilityAtk: null, abilityHeal: null });
+    expect(db.statements.some((statement) => statement.toLowerCase().startsWith("update"))).toBe(false);
   });
 
   it("loads recruited current fields with the tier", async () => {

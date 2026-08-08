@@ -9,12 +9,7 @@ import {
   updateRecruitedStudentCurrentState,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
-import {
-  getRelationshipLevel,
-  removeRelationshipLevel,
-  resolveRelationshipLevelInput,
-  upsertRelationshipLevel,
-} from "~/models/relationship-level";
+import { updateRelationshipLevel } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import {
   removeStudentGrowth,
@@ -198,25 +193,10 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       return data<GrowthActionResult>({ kind: "listChange", requiresRevalidation: true });
     } else if (payload._intent === "relationship") {
       const relationshipPayload = payload as Partial<RelationshipActionData>;
-      const existingRelationshipLevel = await getRelationshipLevel(env, currentUser.id, payload.studentUid);
-      const resolvedRelationshipLevel = resolveRelationshipLevelInput(existingRelationshipLevel, {
+      await updateRelationshipLevel(env, currentUser.id, payload.studentUid, {
         currentLevel: parseNullableInteger(relationshipPayload.currentLevel),
         targetLevel: parseNullableInteger(relationshipPayload.targetLevel),
       });
-
-      if (resolvedRelationshipLevel == null) {
-        await removeRelationshipLevel(env, currentUser.id, payload.studentUid);
-      } else {
-        await upsertRelationshipLevel(
-          env,
-          currentUser.id,
-          payload.studentUid,
-          resolvedRelationshipLevel.currentLevel,
-          resolvedRelationshipLevel.currentExp,
-          resolvedRelationshipLevel.targetLevel,
-          existingRelationshipLevel?.items ?? {},
-        );
-      }
     } else if (payload._intent === "tier") {
       const recruitedStudents = await getRecruitedStudents(env, currentUser.id);
       if (!recruitedStudents.some(({ studentUid }) => studentUid === payload.studentUid)) {

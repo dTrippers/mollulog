@@ -2,6 +2,7 @@ import { describe, expect, it, jest } from "@jest/globals";
 import {
   getRelationshipLevels,
   resolveRelationshipLevelInput,
+  updateRelationshipLevel,
   upsertRelationshipLevel,
 } from "../../../app/models/relationship-level";
 import { FakePostgresClient } from "../../helpers/fake-postgres";
@@ -178,5 +179,134 @@ describe("relationship-level", () => {
 
     const updatedAt = new Date(String(db.relationshipLevels[0]?.updatedAt));
     expect(updatedAt.getTime()).toBeGreaterThan(previousUpdatedAt.getTime());
+  });
+
+  it("reads, resolves, and writes relationship state under one row-locked transaction", async () => {
+    const db = new FakePostgresClient(
+      {
+        user_relationship_levels: [
+          {
+            id: 1,
+            uid: "relationship-1",
+            userId: 1,
+            studentId: "student-1",
+            currentLevel: 10,
+            currentExp: 123,
+            targetLevel: 20,
+            items: { gift: 4 },
+            createdAt: new Date("2026-07-25T00:00:00.000Z"),
+            updatedAt: new Date("2026-07-25T00:00:00.000Z"),
+          },
+        ],
+      },
+      "user_relationship_levels",
+    );
+
+    await updateRelationshipLevel(
+      { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+      1,
+      "student-1",
+      { currentLevel: 10, targetLevel: 30 },
+    );
+
+    expect(db.relationshipLevels[0]).toMatchObject({ currentLevel: 10, currentExp: 123, targetLevel: 30 });
+    const items = db.relationshipLevels[0]?.items;
+    expect(typeof items === "string" ? JSON.parse(items) : items).toEqual({ gift: 4 });
+    expect(db.statements[0]?.toLowerCase()).toBe("begin");
+    expect(db.statements.at(-1)?.toLowerCase()).toBe("commit");
+    const lockIndex = db.statements.findIndex(
+      (statement) =>
+        statement.toLowerCase().includes("for update") && statement.toLowerCase().includes("user_relationship_levels"),
+    );
+    const writeIndex = db.statements.findIndex((statement) => statement.toLowerCase().startsWith("insert"));
+    expect(lockIndex).toBeGreaterThanOrEqual(0);
+    expect(lockIndex).toBeLessThan(writeIndex);
+  });
+
+  it("rolls back relationship state validation failures without writing", async () => {
+    const db = new FakePostgresClient(
+      {
+        user_relationship_levels: [
+          {
+            id: 1,
+            uid: "relationship-1",
+            userId: 1,
+            studentId: "student-1",
+            currentLevel: 10,
+            currentExp: 123,
+            targetLevel: 20,
+            items: { gift: 4 },
+            createdAt: new Date("2026-07-25T00:00:00.000Z"),
+            updatedAt: new Date("2026-07-25T00:00:00.000Z"),
+          },
+        ],
+      },
+      "user_relationship_levels",
+    );
+
+    await expect(
+      updateRelationshipLevel(
+        { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+        1,
+        "student-1",
+        { currentLevel: 30, targetLevel: 20 },
+      ),
+    ).rejects.toThrow("목표 인연 랭크는 현재 인연 랭크보다 낮을 수 없어요");
+
+    expect(db.relationshipLevels[0]).toMatchObject({ currentLevel: 10, currentExp: 123, targetLevel: 20 });
+    expect(db.relationshipLevels[0]?.items).toEqual({ gift: 4 });
+    expect(db.statements.map((statement) => statement.toLowerCase())).toEqual(
+      expect.arrayContaining(["begin", "rollback"]),
+    );
+    expect(db.statements.some((statement) => statement.toLowerCase().startsWith("insert"))).toBe(false);
+  });
+
+  it("creates missing relationship state with empty items in the atomic operation", async () => {
+    const db = new FakePostgresClient({}, "user_relationship_levels");
+
+    await updateRelationshipLevel(
+      { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+      1,
+      "student-1",
+      { currentLevel: 1, targetLevel: 15 },
+    );
+
+    expect(db.relationshipLevels).toHaveLength(1);
+    expect(db.relationshipLevels[0]).toMatchObject({ currentLevel: 1, currentExp: null, targetLevel: 15 });
+    expect(JSON.parse(String(db.relationshipLevels[0]?.items))).toEqual({});
+  });
+
+  it("deletes relationship state when both levels are cleared", async () => {
+    const db = new FakePostgresClient(
+      {
+        user_relationship_levels: [
+          {
+            id: 1,
+            uid: "relationship-1",
+            userId: 1,
+            studentId: "student-1",
+            currentLevel: 10,
+            currentExp: 123,
+            targetLevel: 20,
+            items: { gift: 4 },
+            createdAt: new Date("2026-07-25T00:00:00.000Z"),
+            updatedAt: new Date("2026-07-25T00:00:00.000Z"),
+          },
+        ],
+      },
+      "user_relationship_levels",
+    );
+
+    await updateRelationshipLevel(
+      { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+      1,
+      "student-1",
+      { currentLevel: null, targetLevel: null },
+    );
+
+    expect(db.relationshipLevels).toHaveLength(0);
+    expect(db.statements.map((statement) => statement.toLowerCase())).toEqual(
+      expect.arrayContaining(["begin", "commit"]),
+    );
   });
 });

@@ -134,6 +134,54 @@ export async function getRelationshipLevel(
   });
 }
 
+export async function updateRelationshipLevel(
+  env: Env,
+  senseiId: number,
+  studentId: string,
+  input: RelationshipLevelInput,
+) {
+  await withPostgresClient(env, async (client) => {
+    const db = drizzle(client);
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(relationshipLevelsTable)
+        .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)))
+        .limit(1)
+        .for("update");
+      const resolved = resolveRelationshipLevelInput(existing ?? null, input);
+
+      if (resolved == null) {
+        await tx
+          .delete(relationshipLevelsTable)
+          .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)));
+        return;
+      }
+
+      await tx
+        .insert(relationshipLevelsTable)
+        .values({
+          uid: nanoid(8),
+          userId: senseiId,
+          studentId,
+          currentLevel: resolved.currentLevel,
+          currentExp: resolved.currentExp,
+          targetLevel: resolved.targetLevel,
+          items: existing ? toItems(existing.items) : {},
+        })
+        .onConflictDoUpdate({
+          target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],
+          set: {
+            currentLevel: resolved.currentLevel,
+            currentExp: resolved.currentExp,
+            targetLevel: resolved.targetLevel,
+            updatedAt: new Date(),
+          },
+        });
+    });
+  });
+}
+
 export async function upsertRelationshipLevel(
   env: Env,
   senseiId: number,
