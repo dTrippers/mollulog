@@ -339,8 +339,9 @@ export default function PyroxeneSchedule({
                 </div>
               );
             }
-            if (source.description) {
-              const itemUid = source.uid && deletableTimelineSourceTypes.has(source.type) ? source.uid : undefined;
+            const itemUid = source.uid && deletableTimelineSourceTypes.has(source.type) ? source.uid : undefined;
+            if (source.description || itemUid) {
+              const displayDescription = source.description || (source.type === "other" ? "청휘석 구매" : "");
               const collectedSourceKey =
                 source.collectedSourceKey && !source.uid?.endsWith("::ten-time-ticket-expiry")
                   ? source.collectedSourceKey
@@ -358,7 +359,7 @@ export default function PyroxeneSchedule({
                   {showYearDivider ? <TimelineYearDivider year={year} /> : null}
                   <PyroxeneTimelineResources
                     date={date}
-                    description={source.description}
+                    description={displayDescription}
                     resources={displayResources}
                     itemUid={itemUid}
                     onDeleteItem={onDeleteItem}
