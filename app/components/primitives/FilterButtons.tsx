@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
-import { semanticColorStripeClass } from "./AttributeBadge";
+import { type AttributeBadgeColor, semanticColorStripeClass } from "./AttributeBadge";
 
 // === FilterButtons
 export type FilterButtonsProps = {
@@ -70,7 +70,7 @@ export default function FilterButtons({
 export type FilterButtonProps = {
   text: string;
   subText?: string;
-  color?: "red" | "yellow" | "green" | "blue" | "purple" | "grey";
+  color?: AttributeBadgeColor;
   active?: boolean;
   onToggle: (activated: boolean) => void;
 };

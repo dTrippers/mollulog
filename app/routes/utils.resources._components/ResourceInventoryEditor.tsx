@@ -42,6 +42,11 @@ import {
 import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
 import { cn } from "~/lib/utils";
 import { getGrowthPlannerCatalogResourceKindOrder, type ItemCatalogResource } from "~/models/item-catalog";
+import {
+  filterResourceInventoryResources,
+  isResourceInventoryFilterActive,
+  type ResourceInventoryFilterState,
+} from "./ResourceInventoryFilterPanel";
 
 type InventoryCatalogResource = ItemCatalogResource & { inventoryUid?: string };
 
@@ -49,6 +54,7 @@ type ResourceInventoryEditorProps = {
   resources: InventoryCatalogResource[];
   requiredResources: AggregatedGrowthResourceRequirements;
   ownedQuantities: Record<string, number>;
+  filter: ResourceInventoryFilterState;
   error?: string;
 };
 
@@ -60,9 +66,6 @@ type ResourceInventoryEditorActionData = {
 
 type ResourceMode = "needed" | "all";
 
-type ResourceFilter = {
-  search: string;
-};
 type NumberInputFlowNavigation = ReturnType<typeof useNumberInputFlowNavigation>;
 
 type InventoryResource = ItemCatalogResource & {
@@ -105,6 +108,7 @@ export default function ResourceInventoryEditor({
   resources,
   requiredResources,
   ownedQuantities,
+  filter,
   error,
 }: ResourceInventoryEditorProps) {
   const fetcher = useFetcher<ResourceInventoryEditorActionData>();
@@ -112,7 +116,6 @@ export default function ResourceInventoryEditor({
   const submittedQuantitiesRef = useRef<Record<string, number> | null>(null);
   const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>(ownedQuantities);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>(ownedQuantities);
-  const [filter] = useState<ResourceFilter>({ search: "" });
   const [categoryModes, setCategoryModes] = useState<Record<number, ResourceMode>>({});
   const numberInputFlowNavigation = useNumberInputFlowNavigation();
 
@@ -135,18 +138,13 @@ export default function ResourceInventoryEditor({
 
   const resourceGroups = useMemo(
     () =>
-      buildResourceGroups(
-        inventoryResources,
-        categoryModes,
-        filter.search,
-        requiredResources.characterExp,
-        draftQuantities,
-      ),
-    [categoryModes, draftQuantities, filter.search, inventoryResources, requiredResources.characterExp],
+      buildResourceGroups(inventoryResources, categoryModes, filter, requiredResources.characterExp, draftQuantities),
+    [categoryModes, draftQuantities, filter, inventoryResources, requiredResources.characterExp],
   );
   const submitError = fetcher.data?.error ?? error;
   const isSubmitting = fetcher.state !== "idle";
   const hasChanges = changedItems.length > 0;
+  const hasActiveFilter = isResourceInventoryFilterActive(filter);
   const requestedCategory = searchParams.get("category");
   const favorCategoryVisible = resourceGroups.some((group) => group.kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor);
   const hasCreditRequirement = requiredResources.credit > 0;
@@ -190,7 +188,7 @@ export default function ResourceInventoryEditor({
       <div className="space-y-3">
         {hasCreditRequirement ? <CreditRequirementSummary credit={requiredResources.credit} /> : null}
 
-        {resourceGroups.length === 0 && !hasCreditRequirement ? (
+        {resourceGroups.length === 0 && (!hasCreditRequirement || hasActiveFilter) ? (
           <SectionCard className="p-8 md:p-8">
             <EmptyView Icon={ArchiveBoxIcon} text="조건에 맞는 재화가 없어요" />
           </SectionCard>
@@ -1009,10 +1007,10 @@ function findInventoryUidBySourceUid(
   return resource ? getInventoryUid(resource) : sourceUid;
 }
 
-function buildResourceGroups(
+export function buildResourceGroups(
   resources: InventoryResource[],
   categoryModes: Record<number, ResourceMode>,
-  searchValue: string,
+  filter: ResourceInventoryFilterState,
   requiredCharacterExp: number,
   quantities: Record<string, number>,
 ): ResourceGroupView[] {
@@ -1026,7 +1024,7 @@ function buildResourceGroups(
     }
   }
 
-  const search = searchValue.trim().toLowerCase();
+  const hasActiveFilter = isResourceInventoryFilterActive(filter);
   return Array.from(grouped.entries())
     .sort(([a], [b]) => compareGrowthResourceKindOrder(a, b))
     .map(([kindOrder, groupResources]) => {
@@ -1043,9 +1041,7 @@ function buildResourceGroups(
             (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
           (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
       );
-      const filteredResources = search
-        ? modeResources.filter((resource) => resource.name.toLowerCase().includes(search))
-        : modeResources;
+      const filteredResources = filterResourceInventoryResources(modeResources, filter);
 
       return {
         kindOrder,
@@ -1054,7 +1050,7 @@ function buildResourceGroups(
         hasNeededResources,
       };
     })
-    .filter((group) => group.resources.length > 0 || !search);
+    .filter((group) => group.resources.length > 0 || !hasActiveFilter);
 }
 
 export function buildInventoryResources(

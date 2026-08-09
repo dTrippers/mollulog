@@ -1,10 +1,19 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { GROWTH_RESOURCE_KIND_ORDER } from "~/domain/growth-resource";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import { getUserResourceInventoryMap, upsertUserResourceInventories } from "~/models/user-resource-inventory";
-import { buildInventoryResources } from "~/routes/utils.resources._components/ResourceInventoryEditor";
+import {
+  buildInventoryResources,
+  buildResourceGroups,
+} from "~/routes/utils.resources._components/ResourceInventoryEditor";
+import {
+  filterResourceInventoryResources,
+  RESOURCE_INVENTORY_RARITY_OPTIONS,
+  type ResourceInventoryFilterState,
+} from "~/routes/utils.resources._components/ResourceInventoryFilterPanel";
 import { action, loader } from "~/routes/utils.resources.inventory";
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
@@ -174,5 +183,75 @@ describe("resource inventory canonical identity", () => {
 
     expect((result as { data: unknown }).data).toEqual({ saved: true, savedAt: expect.any(Number) });
     expect(mockedUpsertInventory).toHaveBeenCalledWith(env, 7, [{ itemUid: "101001", quantity: 3 }]);
+  });
+});
+
+describe("resource inventory filter", () => {
+  const resources = [
+    { uid: "1", name: "Basic Hammer", rarity: 1 },
+    { uid: "2", name: "Titanium Hammer", rarity: 4 },
+    { uid: "3", name: "Mystic Lens", rarity: 2 },
+  ];
+
+  it("uses the canonical item rarity labels", () => {
+    expect(RESOURCE_INVENTORY_RARITY_OPTIONS.map(({ value, label, color }) => [value, label, color])).toEqual([
+      [1, "N", "grey"],
+      [2, "R", "blue"],
+      [3, "SR", "orange"],
+      [4, "SSR", "purple"],
+    ]);
+  });
+
+  it("matches case-insensitive name substrings", () => {
+    expect(filterResourceInventoryResources(resources, { search: "HAMMER", rarities: [] })).toEqual([
+      resources[0],
+      resources[1],
+    ]);
+  });
+
+  it("uses OR semantics for multiple selected rarities", () => {
+    expect(filterResourceInventoryResources(resources, { search: "", rarities: [1, 4] })).toEqual([
+      resources[0],
+      resources[1],
+    ]);
+  });
+
+  it("combines name and rarity filters with AND semantics", () => {
+    expect(filterResourceInventoryResources(resources, { search: "hammer", rarities: [4] })).toEqual([resources[1]]);
+  });
+
+  it("treats an empty rarity selection as all rarities", () => {
+    const filter: ResourceInventoryFilterState = { search: "", rarities: [] };
+    expect(filterResourceInventoryResources(resources, filter)).toEqual(resources);
+  });
+
+  it("applies the resource filter after category mode filtering", () => {
+    const inventoryResources = resources.map((resource) => ({
+      ...resource,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      requiredAmount: resource.uid === "1" ? 3 : 0,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    }));
+    const groups = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.favor]: "needed" },
+      { search: "", rarities: [] },
+      0,
+      {},
+    );
+
+    expect(groups[0]?.resources.map((resource) => resource.uid)).toEqual(["1"]);
+
+    const filteredGroups = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.favor]: "needed" },
+      { search: "zzz", rarities: [] },
+      0,
+      {},
+    );
+
+    expect(filteredGroups).toEqual([]);
   });
 });
