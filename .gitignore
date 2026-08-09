@@ -1,5 +1,4 @@
 node_modules
-pnpm-workspace.yaml
 
 /.cache
 /.wrangler

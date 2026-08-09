@@ -58,6 +58,7 @@ function createEvent(): WorkflowEvent<{ requestedBy: number }> {
     payload: { requestedBy: 1 },
     timestamp: new Date("2026-07-23T00:00:00Z"),
     instanceId: "job-uid",
+    workflowName: "mollulog-cache-refresh-local",
   };
 }
 
