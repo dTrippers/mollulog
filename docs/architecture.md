@@ -76,6 +76,24 @@ Detailed UI structure rules live in the frontend documents:
   - `KV_SESSION`: session and auth-related transient data
   - `EVENTS`: queue binding
 
+### Production deploy safety
+
+Run production deployments only through `pnpm prod:deploy`. The command blocks the deploy unless all of the following
+conditions are satisfied:
+
+- the current branch is `main`;
+- the working tree, including untracked files, is clean before and after the build;
+- no production D1 migrations are pending;
+- `HEAD` remains on the same commit throughout the build.
+
+The app Worker and Cron Worker versions record the full Git commit SHA in their deployment message. To run the checks
+without building or deploying, use `pnpm prod:deploy:preflight`.
+
+If the preflight reports pending D1 migrations, review every pending file before running `pnpm prod:db:migrate`. The
+deploy command intentionally does not apply migrations automatically because a migration may require a separate
+maintenance or cutover decision. For additive schema changes, apply and verify the migration before deploying code that
+uses the new schema.
+
 Cron runs on a single schedule:
 
 - `*/10 * * * *` — Runs `app/jobs/scheduled.ts`, which synchronizes external source data and refreshes or warms source and KV caches.
