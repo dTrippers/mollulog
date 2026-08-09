@@ -3,6 +3,7 @@ import {
   ArchiveBoxIcon,
   CameraIcon,
   ChartBarIcon,
+  FunnelIcon,
   MagnifyingGlassIcon,
   TableCellsIcon,
 } from "@heroicons/react/24/outline";
@@ -15,6 +16,10 @@ import { PanelActionRow, PanelBody, PanelOptionChip } from "~/components/primiti
 import { getLogger } from "~/lib/observability.server";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
+import ResourceInventoryFilterPanel, {
+  createResourceInventoryFilterState,
+  type ResourceInventoryFilterState,
+} from "./utils.resources._components/ResourceInventoryFilterPanel";
 
 const FARMING_SETTINGS_STORAGE_KEY = "mollulog::resources::farming-settings";
 
@@ -28,6 +33,10 @@ const DEFAULT_FARMING_SETTINGS: FarmingPlannerSettings = {
   showNormal: true,
   showHard: false,
   prioritizeHighTier: false,
+};
+
+type ResourcePlannerOutletContext = GrowthLayoutContext & {
+  resourceInventoryFilter: ResourceInventoryFilterState;
 };
 
 export const meta: MetaFunction = () => {
@@ -62,6 +71,7 @@ export default function ResourcePlannerLayout() {
 
   const [managedStudents, setManagedStudents] = useState(loaderData.managedStudents);
   const [farmingSettings, setFarmingSettings] = useState(DEFAULT_FARMING_SETTINGS);
+  const [resourceInventoryFilter, setResourceInventoryFilter] = useState(createResourceInventoryFilterState);
   const [farmingSettingsHydrated, setFarmingSettingsHydrated] = useState(false);
   const managedStudentListKey = loaderData.managedStudents.map((student) => student.uid).join(":");
   const syncedManagedStudentListKeyRef = useRef(managedStudentListKey);
@@ -96,10 +106,11 @@ export default function ResourcePlannerLayout() {
     });
   }, []);
 
-  const contextValue: GrowthLayoutContext = {
+  const contextValue: ResourcePlannerOutletContext = {
     managedStudents,
     availableStudents: loaderData.availableStudents,
     updateStudent,
+    resourceInventoryFilter,
     farmingStageFilter: {
       showNormal: farmingSettings.showNormal,
       showHard: farmingSettings.showHard,
@@ -113,26 +124,36 @@ export default function ResourcePlannerLayout() {
       description="보유 재화와 필요한 장비 파밍 계획을 확인해보세요."
       contentWidth="full"
       panels={
-        pathname === "/utils/resources/farming"
+        pathname === "/utils/resources/inventory"
           ? [
               {
-                title: "계산 설정",
-                Icon: ChartBarIcon,
+                title: "검색 및 필터",
+                Icon: FunnelIcon,
                 children: (
-                  <FarmingPlannerSettingsPanel
-                    showNormal={farmingSettings.showNormal}
-                    showHard={farmingSettings.showHard}
-                    prioritizeHighTier={farmingSettings.prioritizeHighTier}
-                    onShowNormalChange={(showNormal) => setFarmingSettings((prev) => ({ ...prev, showNormal }))}
-                    onShowHardChange={(showHard) => setFarmingSettings((prev) => ({ ...prev, showHard }))}
-                    onPrioritizeHighTierChange={(prioritizeHighTier) =>
-                      setFarmingSettings((prev) => ({ ...prev, prioritizeHighTier }))
-                    }
-                  />
+                  <ResourceInventoryFilterPanel value={resourceInventoryFilter} onChange={setResourceInventoryFilter} />
                 ),
               },
             ]
-          : undefined
+          : pathname === "/utils/resources/farming"
+            ? [
+                {
+                  title: "계산 설정",
+                  Icon: ChartBarIcon,
+                  children: (
+                    <FarmingPlannerSettingsPanel
+                      showNormal={farmingSettings.showNormal}
+                      showHard={farmingSettings.showHard}
+                      prioritizeHighTier={farmingSettings.prioritizeHighTier}
+                      onShowNormalChange={(showNormal) => setFarmingSettings((prev) => ({ ...prev, showNormal }))}
+                      onShowHardChange={(showHard) => setFarmingSettings((prev) => ({ ...prev, showHard }))}
+                      onPrioritizeHighTierChange={(prioritizeHighTier) =>
+                        setFarmingSettings((prev) => ({ ...prev, prioritizeHighTier }))
+                      }
+                    />
+                  ),
+                },
+              ]
+            : undefined
       }
       screens={[
         {
@@ -165,7 +186,7 @@ export default function ResourcePlannerLayout() {
         },
       ]}
     >
-      <Outlet context={contextValue satisfies GrowthLayoutContext} />
+      <Outlet context={contextValue} />
     </Page>
   );
 }

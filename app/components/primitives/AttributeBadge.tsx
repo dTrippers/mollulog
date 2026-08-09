@@ -2,6 +2,7 @@ import { cn } from "~/lib/utils";
 
 export const semanticColorStripeClass = {
   red: "before:bg-red-500",
+  orange: "before:bg-orange-400/70",
   yellow: "before:bg-yellow-500",
   green: "before:bg-green-600",
   blue: "before:bg-blue-500",

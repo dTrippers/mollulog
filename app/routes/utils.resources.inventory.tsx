@@ -16,6 +16,11 @@ import {
 } from "~/models/user-resource-inventory";
 import type { GrowthLayoutContext } from "./utils.growth._components/types";
 import ResourceInventoryEditor from "./utils.resources._components/ResourceInventoryEditor";
+import type { ResourceInventoryFilterState } from "./utils.resources._components/ResourceInventoryFilterPanel";
+
+type ResourceInventoryOutletContext = GrowthLayoutContext & {
+  resourceInventoryFilter: ResourceInventoryFilterState;
+};
 
 type ResourceInventorySavePayload = {
   items?: unknown;
@@ -95,7 +100,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 export default function ResourceInventoryPage() {
   const { resources, ownedQuantities, relationshipGiftRequirements } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const { managedStudents } = useOutletContext<GrowthLayoutContext>();
+  const { managedStudents, resourceInventoryFilter } = useOutletContext<ResourceInventoryOutletContext>();
   const requiredResources = aggregateGrowthResourceRequirements([
     ...managedStudents.flatMap((student) => (student.resourceRequirements ? [student.resourceRequirements] : [])),
     relationshipGiftRequirements,
@@ -106,6 +111,7 @@ export default function ResourceInventoryPage() {
       resources={resources}
       requiredResources={requiredResources}
       ownedQuantities={ownedQuantities}
+      filter={resourceInventoryFilter}
       error={actionData?.error}
     />
   );

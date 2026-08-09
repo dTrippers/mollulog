@@ -161,6 +161,15 @@ export default function StudentFilter({
 
   return (
     <PanelBody className="space-y-2">
+      {useSearch && (
+        <PanelSearchField
+          label="이름으로 찾기"
+          value={localSearch}
+          placeholder="학생 이름"
+          className="pt-1"
+          onChange={setLocalSearch}
+        />
+      )}
       {useFilter && (
         <>
           <PanelFilterButtonRow
@@ -228,15 +237,6 @@ export default function StudentFilter({
           exclusive
           atLeastOne
           size="sm"
-        />
-      )}
-      {useSearch && (
-        <PanelSearchField
-          label="이름으로 찾기"
-          value={localSearch}
-          placeholder="학생 이름"
-          className="pt-1"
-          onChange={setLocalSearch}
         />
       )}
     </PanelBody>
