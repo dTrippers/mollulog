@@ -36,6 +36,37 @@ function createShopResources(): ShopResource[] {
   ];
 }
 
+function createClueExchangeResources(): ShopResource[] {
+  const clue = { type: ResourceTypeEnum.Item, uid: "legacy-clue", name: "단서" };
+  const points = { type: ResourceTypeEnum.Item, uid: "event-points", name: "이벤트 포인트" };
+  return [
+    {
+      uid: "shop-target",
+      resource: { type: ResourceTypeEnum.Item, uid: "target-reward", name: "목표 상품", rarity: 1 },
+      resourceAmount: 1,
+      paymentResource: points,
+      purchaseTiers: [{ tierIndex: 0, startQuantity: 1, quantity: 1, unitPrice: 400, paymentResource: points }],
+      shopAmount: 1,
+    },
+    {
+      uid: "legacy-clue-for-points",
+      resource: { ...clue, rarity: 1 },
+      resourceAmount: 1,
+      paymentResource: points,
+      purchaseTiers: [{ tierIndex: 0, startQuantity: 1, quantity: null, unitPrice: 200, paymentResource: points }],
+      shopAmount: null,
+    },
+    {
+      uid: "legacy-points-for-clue",
+      resource: { ...points, rarity: 1 },
+      resourceAmount: 200,
+      paymentResource: clue,
+      purchaseTiers: [{ tierIndex: 0, startQuantity: 1, quantity: null, unitPrice: 1, paymentResource: clue }],
+      shopAmount: null,
+    },
+  ];
+}
+
 describe("calculateResourceLedger", () => {
   it("uses selected shop purchases as both resource costs and acquisitions", () => {
     const ledger = calculateResourceLedger({
@@ -129,5 +160,28 @@ describe("calculateResourceLedger", () => {
     expect(withoutFirstClear.remainingToFarm).toEqual({ gamepad: 100 });
     expect(withFirstClear.fromFirstRun).toEqual({ gamepad: 50 });
     expect(withFirstClear.remainingToFarm).toEqual({ gamepad: 50 });
+  });
+
+  it("excludes hidden reciprocal exchange rows while keeping converted point targets", () => {
+    const ledger = calculateResourceLedger({
+      shopResources: createClueExchangeResources(),
+      itemQuantities: {
+        "shop-target": 1,
+        "legacy-clue-for-points": 10,
+        "legacy-points-for-clue": 10,
+      },
+      itemPurchaseDays: {},
+      existingPaymentItemQuantities: {},
+      stages: [],
+      includeFirstClear: false,
+      minigamePlayCount: 1,
+      minigamePaymentCosts: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "event-points", quantity: 400 }],
+      excludedShopResourceUids: ["legacy-clue-for-points", "legacy-points-for-clue"],
+    });
+
+    expect(ledger.requiredForShopItems).toEqual({ "event-points": 400 });
+    expect(ledger.requiredForMinigame).toEqual({ "event-points": 400 });
+    expect(ledger.requiredTotals).toEqual({ "event-points": 800 });
+    expect(ledger.fromShop).toEqual({ "target-reward": 1 });
   });
 });

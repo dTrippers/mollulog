@@ -61,8 +61,10 @@ export type RequiredQuantitiesInput = {
   existingPaymentItemQuantities: Record<string, number>;
   stages: Stage[];
   includeFirstClear: boolean;
+  minigameStartRound?: number;
   minigamePlayCount: number;
   minigameConfig?: MinigameConfig | null;
   minigamePaymentCosts?: MinigamePayment[];
+  excludedShopResourceUids?: readonly string[];
   overriddenRequiredQuantities?: Record<string, number>;
 };

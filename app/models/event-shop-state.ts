@@ -19,6 +19,7 @@ export const eventShopStatesTable = sqliteTable("event_shop_states", {
   existingPaymentItemQuantities: text().notNull().default("{}"),
   includeFirstClear: int().notNull().default(0),
   extraStageRuns: text().notNull().default("{}"),
+  minigameStartRound: int().notNull().default(1),
   minigamePlayCount: int().notNull().default(0),
   minigamePaymentQuantityMode: text().notNull().default("expected"),
   overriddenRequiredQuantities: text().notNull().default("{}"),
@@ -37,6 +38,7 @@ export type EventShopState = {
   existingPaymentItemQuantities: Record<string, number>;
   includeFirstClear: boolean;
   extraStageRuns: Record<string, number>;
+  minigameStartRound: number;
   minigamePlayCount: number;
   minigamePaymentQuantityMode: MinigamePaymentQuantityMode;
   overriddenRequiredQuantities: Record<string, number>;
@@ -65,6 +67,7 @@ function toModel(state: typeof eventShopStatesTable.$inferSelect): EventShopStat
     existingPaymentItemQuantities: JSON.parse(state.existingPaymentItemQuantities || "{}"),
     includeFirstClear: state.includeFirstClear === 1,
     extraStageRuns: JSON.parse(state.extraStageRuns || "{}"),
+    minigameStartRound: Math.max(1, state.minigameStartRound ?? 1),
     minigamePlayCount: state.minigamePlayCount ?? 0,
     minigamePaymentQuantityMode: parseMinigamePaymentQuantityMode(state.minigamePaymentQuantityMode),
     overriddenRequiredQuantities: JSON.parse(state.overriddenRequiredQuantities || "{}"),
@@ -115,6 +118,7 @@ export async function upsertEventShopState(
       existingPaymentItemQuantities: existingPaymentItemQuantitiesJson,
       includeFirstClear: state.includeFirstClear ? 1 : 0,
       extraStageRuns: extraStageRunsJson,
+      minigameStartRound: Math.max(1, state.minigameStartRound ?? 1),
       minigamePlayCount: state.minigamePlayCount ?? 0,
       minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
       overriddenRequiredQuantities: overriddenRequiredQuantitiesJson,
@@ -132,6 +136,7 @@ export async function upsertEventShopState(
         existingPaymentItemQuantities: existingPaymentItemQuantitiesJson,
         includeFirstClear: state.includeFirstClear ? 1 : 0,
         extraStageRuns: extraStageRunsJson,
+        minigameStartRound: Math.max(1, state.minigameStartRound ?? 1),
         minigamePlayCount: state.minigamePlayCount ?? 0,
         minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
         overriddenRequiredQuantities: overriddenRequiredQuantitiesJson,

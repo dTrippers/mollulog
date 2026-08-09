@@ -41,7 +41,7 @@ function getEffectiveMinigameCount(config: MinigameConfig, playCount: number): n
   return playCount;
 }
 
-function getSpecifiedRounds(rewardGroups: RewardGroup[]): Set<number> {
+export function getSpecifiedRounds(rewardGroups: RewardGroup[]): Set<number> {
   const allSpecifiedRounds = new Set<number>();
   for (const group of rewardGroups) {
     if (Array.isArray(group.rounds)) {
@@ -53,7 +53,7 @@ function getSpecifiedRounds(rewardGroups: RewardGroup[]): Set<number> {
   return allSpecifiedRounds;
 }
 
-function getAppliedRoundCount(group: RewardGroup, effectiveCount: number, allSpecifiedRounds: Set<number>): number {
+export function getAppliedRoundCount(group: RewardGroup, effectiveCount: number, allSpecifiedRounds: Set<number>): number {
   if (group.rounds === "subsequent") {
     return effectiveCount - Array.from(allSpecifiedRounds).filter((round) => round <= effectiveCount).length;
   }
@@ -90,6 +90,7 @@ export function calculateMinigamePaymentCosts(
   config: MinigameConfig,
   playCount: number,
   quantityMode: MinigamePaymentQuantityMode = "expected",
+  startRound = 1,
 ): MinigamePayment[] {
   if (playCount <= 0) {
     return [];
@@ -111,6 +112,37 @@ export function calculateMinigamePaymentCosts(
       });
     }
   };
+
+  if (config.minigameType === "clue_search") {
+    const firstRound = Math.max(1, Math.floor(startRound));
+    const lastRound = Math.floor(playCount);
+    if (lastRound < firstRound) {
+      return [];
+    }
+
+    const specifiedRounds = getSpecifiedRounds(config.rewardGroups);
+    const roundsBeforeStart = firstRound - 1;
+    for (const group of config.rewardGroups) {
+      const appliedCount =
+        getAppliedRoundCount(group, lastRound, specifiedRounds) -
+        getAppliedRoundCount(group, roundsBeforeStart, specifiedRounds);
+      if (appliedCount <= 0) {
+        continue;
+      }
+
+      for (const payment of group.payments) {
+        const quantity =
+          quantityMode === "min"
+            ? payment.quantityMin
+            : quantityMode === "max"
+              ? payment.quantityMax
+              : payment.quantityExpected;
+        addCost({ ...payment, quantity }, appliedCount);
+      }
+    }
+
+    return Array.from(costMap.values());
+  }
 
   const effectiveCount = getEffectiveMinigameCount(config, playCount);
   const specifiedRounds = getSpecifiedRounds(config.rewardGroups);
@@ -169,9 +201,41 @@ export function calculateMinigamePaymentCosts(
   return Array.from(costMap.values());
 }
 
-export function calculateMinigameRewards(config: MinigameConfig, playCount: number): RewardItem[] {
+export function calculateMinigameRewards(config: MinigameConfig, playCount: number, startRound = 1): RewardItem[] {
   if (playCount <= 0) {
     return [];
+  }
+
+  if (config.minigameType === "clue_search") {
+    const firstRound = Math.max(1, Math.floor(startRound));
+    const lastRound = Math.floor(playCount);
+    if (lastRound < firstRound) {
+      return [];
+    }
+
+    const rewardMap = new Map<string, RewardItem>();
+    const specifiedRounds = getSpecifiedRounds(config.rewardGroups);
+    const roundsBeforeStart = firstRound - 1;
+    for (const group of config.rewardGroups) {
+      const appliedCount =
+        getAppliedRoundCount(group, lastRound, specifiedRounds) -
+        getAppliedRoundCount(group, roundsBeforeStart, specifiedRounds);
+      if (appliedCount <= 0) {
+        continue;
+      }
+
+      for (const reward of group.rewards) {
+        const key = `${reward.resourceType}:${reward.resourceUid}:${reward.rarity ?? ""}`;
+        const existing = rewardMap.get(key);
+        if (existing) {
+          existing.quantity += reward.quantity * appliedCount;
+        } else {
+          rewardMap.set(key, { ...reward, quantity: reward.quantity * appliedCount });
+        }
+      }
+    }
+
+    return Array.from(rewardMap.values());
   }
 
   // box_gacha: playCount = 총 플레이 횟수. 1~playCount 회차의 보상을 누적 합산.

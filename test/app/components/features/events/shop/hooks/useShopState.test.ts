@@ -1,5 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
-import { getInitialItemPurchaseDays } from "../../../../../../../app/components/features/events/shop/hooks/useShopState";
+import {
+  getInitialItemPurchaseDays,
+  getInitialMinigameStartRound,
+} from "../../../../../../../app/components/features/events/shop/hooks/useShopState";
 import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 import type { EventShopState } from "../../../../../../../app/models/event-shop-state";
@@ -42,6 +45,7 @@ function createSavedShopState(overrides: Partial<EventShopState> = {}): EventSho
     existingPaymentItemQuantities: {},
     includeFirstClear: false,
     extraStageRuns: {},
+    minigameStartRound: 1,
     minigamePlayCount: 0,
     minigamePaymentQuantityMode: "expected",
     overriddenRequiredQuantities: {},
@@ -89,5 +93,16 @@ describe("getInitialItemPurchaseDays", () => {
         ],
       ),
     ).toEqual({});
+  });
+});
+
+describe("getInitialMinigameStartRound", () => {
+  it("defaults missing or invalid saved values to round one", () => {
+    expect(getInitialMinigameStartRound(null)).toBe(1);
+    expect(getInitialMinigameStartRound(createSavedShopState({ minigameStartRound: 0 }))).toBe(1);
+  });
+
+  it("restores a saved start round", () => {
+    expect(getInitialMinigameStartRound(createSavedShopState({ minigameStartRound: 4 }))).toBe(4);
   });
 });

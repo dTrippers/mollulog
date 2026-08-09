@@ -69,6 +69,7 @@ export function useAutoSave({ state, signedIn, shopStateUid, savedShopState, isI
         existingPaymentItemQuantities: state.existingPaymentItemQuantities,
         includeFirstClear: state.includeFirstClear,
         extraStageRuns: state.extraStageRuns,
+        minigameStartRound: state.minigameStartRound,
         minigamePlayCount: state.minigamePlayCount,
         minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
         overriddenRequiredQuantities: state.overriddenRequiredQuantities,

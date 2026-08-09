@@ -12,6 +12,11 @@ import {
   StageSelector,
   StudentBonusSelector,
 } from "./shop";
+import {
+  convertClueSearchCostsToPoints,
+  filterClueSearchShopResources,
+  resolveClueSearchExchange,
+} from "./shop/clue-search";
 import { useAutoSave, useBonusCalculation, useShopCalculations, useShopState } from "./shop/hooks";
 import { calculateMinigamePaymentCosts } from "./shop/utils";
 
@@ -40,9 +45,18 @@ export default function EventDetailShopPage({
   signedIn,
   minigameConfig = null,
 }: EventDetailShopPageProps) {
+  const clueSearchExchange = useMemo(
+    () => resolveClueSearchExchange(minigameConfig, shopResources),
+    [minigameConfig, shopResources],
+  );
+  const visibleShopResources = useMemo(
+    () => filterClueSearchShopResources(shopResources, clueSearchExchange),
+    [clueSearchExchange, shopResources],
+  );
+
   const collectableResources = useMemo<CollectableResource[]>(() => {
     const items: CollectableResource[] = [];
-    for (const { paymentResource, purchaseTiers } of shopResources) {
+    for (const { paymentResource, purchaseTiers } of visibleShopResources) {
       const paymentResources = [paymentResource, ...purchaseTiers.map((tier) => tier.paymentResource)];
       for (const paymentResource of paymentResources) {
         if (items.some(({ uid }) => uid === paymentResource.uid)) {
@@ -73,19 +87,35 @@ export default function EventDetailShopPage({
         ...minigameConfig.rewardGroups.flatMap((group) => group.payments),
       ];
       for (const { resourceType, resourceUid, resourceName } of minigamePaymentResources) {
+        if (clueSearchExchange?.supported && clueSearchExchange.clueUids.includes(resourceUid)) {
+          continue;
+        }
+
         if (!items.some(({ uid }) => uid === resourceUid)) {
-          items.push({ type: resourceType, uid: resourceUid, name: resourceName ?? resourceUid, forPayment: false });
+          items.push({ type: resourceType, uid: resourceUid, name: resourceName ?? "재화", forPayment: false });
+        }
+      }
+
+      if (clueSearchExchange?.supported && clueSearchExchange.pointResource) {
+        const { type, uid, name } = clueSearchExchange.pointResource;
+        if (!items.some((item) => item.uid === uid)) {
+          items.push({ type, uid, name, forPayment: false });
         }
       }
     }
 
     return items;
-  }, [stages, shopResources, minigameConfig]);
+  }, [clueSearchExchange, minigameConfig, stages, visibleShopResources]);
 
   const { showSignIn } = useSignIn();
 
   // Unified state management
-  const { state, actions } = useShopState({ savedShopState, recruitedStudentUids, shopResources, stages });
+  const { state, actions } = useShopState({
+    savedShopState,
+    recruitedStudentUids,
+    shopResources: visibleShopResources,
+    stages,
+  });
 
   // Track initial load for auto-save
   const [isInitialLoad, setIsInitialLoad] = useState(() => !savedShopState);
@@ -113,16 +143,25 @@ export default function EventDetailShopPage({
 
   const minigamePaymentCosts = useMemo(() => {
     if (!minigameConfig) return undefined;
-    return calculateMinigamePaymentCosts(minigameConfig, state.minigamePlayCount, state.minigamePaymentQuantityMode);
-  }, [minigameConfig, state.minigamePaymentQuantityMode, state.minigamePlayCount]);
+    const clueCosts = calculateMinigamePaymentCosts(
+      minigameConfig,
+      state.minigamePlayCount,
+      state.minigamePaymentQuantityMode,
+      state.minigameStartRound,
+    );
+    return minigameConfig.minigameType === "clue_search"
+      ? convertClueSearchCostsToPoints(clueCosts, clueSearchExchange)
+      : clueCosts;
+  }, [clueSearchExchange, minigameConfig, state.minigamePaymentQuantityMode, state.minigamePlayCount, state.minigameStartRound]);
 
   // Shop calculations
   const stageCalculations = useShopCalculations({
     state,
     stages,
-    shopResources,
+    shopResources: visibleShopResources,
     appliedBonusRatio: appliedBonusRatios,
     minigamePaymentCosts,
+    excludedShopResourceUids: clueSearchExchange?.hiddenShopResourceUids,
     minigameConfig,
   });
 
@@ -173,7 +212,7 @@ export default function EventDetailShopPage({
 
           {collectableResources && (
             <ShopResourceSelector
-              shopResources={shopResources}
+              shopResources={visibleShopResources}
               collectableResources={collectableResources}
               eventUid={shopStateUid}
               state={state}
@@ -182,7 +221,9 @@ export default function EventDetailShopPage({
             />
           )}
 
-          {minigameConfig && <MiniGameSection config={minigameConfig} state={state} actions={actions} />}
+          {minigameConfig && (
+            <MiniGameSection config={minigameConfig} state={state} actions={actions} exchange={clueSearchExchange} />
+          )}
           <StageSelector
             stages={stages}
             appliedBonusRatio={appliedBonusRatios}
@@ -194,7 +235,7 @@ export default function EventDetailShopPage({
           <CollectedTotalsSection
             stages={stages}
             collectableResources={collectableResources}
-            shopResources={shopResources}
+            shopResources={visibleShopResources}
             eventUid={eventUid}
             minigameConfig={minigameConfig}
             state={state}

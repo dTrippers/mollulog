@@ -44,13 +44,17 @@ export function calculateResourceLedger({
   existingPaymentItemQuantities,
   stages,
   includeFirstClear,
+  minigameStartRound,
   minigamePlayCount,
   minigameConfig,
   minigamePaymentCosts,
+  excludedShopResourceUids,
   overriddenRequiredQuantities,
 }: RequiredQuantitiesInput): ResourceLedger {
+  const excludedShopResourceUidSet = new Set(excludedShopResourceUids ?? []);
+  const visibleShopResources = shopResources.filter(({ uid }) => !excludedShopResourceUidSet.has(uid));
   const requiredForShopItems: DecimalMap = {};
-  for (const shopResource of shopResources) {
+  for (const shopResource of visibleShopResources) {
     const costs = calculateShopResourcePaymentCosts(
       shopResource,
       itemQuantities[shopResource.uid] ?? 0,
@@ -94,7 +98,7 @@ export function calculateResourceLedger({
 
   const fromShop: DecimalMap = {};
   for (const { resource, totalQuantity } of calculateBoughtResourceQuantities(
-    shopResources,
+    visibleShopResources,
     itemQuantities,
     itemPurchaseDays,
   )) {
@@ -103,7 +107,11 @@ export function calculateResourceLedger({
 
   const fromMinigame: DecimalMap = {};
   if (minigameConfig && minigamePlayCount > 0) {
-    for (const { resourceUid, quantity } of calculateMinigameRewards(minigameConfig, minigamePlayCount)) {
+    for (const { resourceUid, quantity } of calculateMinigameRewards(
+      minigameConfig,
+      minigamePlayCount,
+      minigameStartRound ?? 1,
+    )) {
       addQuantity(fromMinigame, resourceUid, quantity);
     }
   }

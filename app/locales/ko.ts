@@ -247,6 +247,8 @@ export function minigameDescription(minigameType: string): string | null {
     return "예상 보상은 평균값으로 계산하며 각종 보정치는 적용되지 않아요";
   } else if (minigameType === "box_gacha") {
     return "회차별 모든 보상을 획득했을 때를 기준으로 계산해요";
+  } else if (minigameType === "clue_search") {
+    return "선택한 회차의 단서와 획득 보상을 함께 계산해요";
   }
   return null;
 }

@@ -16,6 +16,7 @@ type UseShopCalculationsParams = {
   shopResources: ShopResource[];
   appliedBonusRatio: Record<string, Decimal>;
   minigamePaymentCosts?: MinigamePayment[];
+  excludedShopResourceUids?: readonly string[];
   minigameConfig?: MinigameConfig | null;
 };
 
@@ -55,6 +56,7 @@ export function useShopCalculations({
   shopResources,
   appliedBonusRatio,
   minigamePaymentCosts,
+  excludedShopResourceUids,
   minigameConfig,
 }: UseShopCalculationsParams) {
   const [result, setResult] = useState<CalculationResult>(EMPTY_RESULT);
@@ -78,9 +80,11 @@ export function useShopCalculations({
         existingPaymentItemQuantities: state.existingPaymentItemQuantities,
         stages,
         includeFirstClear: state.includeFirstClear,
+        minigameStartRound: state.minigameStartRound,
         minigamePlayCount: state.minigamePlayCount,
         minigameConfig,
         minigamePaymentCosts,
+        excludedShopResourceUids,
         overriddenRequiredQuantities: state.overriddenRequiredQuantities,
       });
 
@@ -116,6 +120,7 @@ export function useShopCalculations({
     state.itemPurchaseDays,
     state.existingPaymentItemQuantities,
     state.includeFirstClear,
+    state.minigameStartRound,
     state.minigamePlayCount,
     state.enabledStages,
     state.extraStageRuns,
@@ -124,6 +129,7 @@ export function useShopCalculations({
     shopResources,
     appliedBonusRatio,
     minigamePaymentCosts,
+    excludedShopResourceUids,
     minigameConfig,
   ]);
 

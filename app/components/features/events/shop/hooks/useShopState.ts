@@ -14,6 +14,7 @@ export type ShopState = {
   existingPaymentItemQuantities: Record<string, number>;
   includeFirstClear: boolean;
   extraStageRuns: Record<string, number>;
+  minigameStartRound: number;
   minigamePlayCount: number;
   minigamePaymentQuantityMode: MinigamePaymentQuantityMode;
   overriddenRequiredQuantities: Record<string, number>;
@@ -34,6 +35,7 @@ export type ShopActions = {
   toggleStage: (uid: string, enabled: boolean) => void;
   updateExtraRuns: (uid: string, value: number) => void;
   setIncludeFirstClear: (value: boolean) => void;
+  setMinigameStartRound: (round: number) => void;
   setMinigamePlayCount: (count: number) => void;
   setMinigamePaymentQuantityMode: (mode: MinigamePaymentQuantityMode) => void;
   updateExistingQuantity: (uid: string, value: number) => void;
@@ -79,6 +81,10 @@ export function getInitialItemPurchaseDays(
   return itemPurchaseDays;
 }
 
+export function getInitialMinigameStartRound(savedShopState: EventShopState | null): number {
+  return Math.max(1, savedShopState?.minigameStartRound ?? 1);
+}
+
 /**
  * Unified state management hook for event shop page.
  */
@@ -110,6 +116,9 @@ export function useShopState({ savedShopState, recruitedStudentUids, shopResourc
 
   const [includeFirstClear, setIncludeFirstClear] = useState<boolean>(savedShopState?.includeFirstClear ?? false);
   const [extraStageRuns, setExtraStageRuns] = useState<Record<string, number>>(savedShopState?.extraStageRuns ?? {});
+  const [minigameStartRound, setMinigameStartRound] = useState<number>(
+    getInitialMinigameStartRound(savedShopState),
+  );
   const [minigamePlayCount, setMinigamePlayCount] = useState<number>(savedShopState?.minigamePlayCount ?? 0);
   const [minigamePaymentQuantityMode, setMinigamePaymentQuantityMode] = useState<MinigamePaymentQuantityMode>(
     savedShopState?.minigamePaymentQuantityMode ?? "expected",
@@ -215,6 +224,10 @@ export function useShopState({ savedShopState, recruitedStudentUids, shopResourc
         setIncludeFirstClear(value);
       },
 
+      setMinigameStartRound: (round: number) => {
+        setMinigameStartRound(Math.max(1, Math.floor(round)));
+      },
+
       setMinigamePlayCount: (count: number) => {
         setMinigamePlayCount(count);
       },
@@ -253,6 +266,7 @@ export function useShopState({ savedShopState, recruitedStudentUids, shopResourc
     existingPaymentItemQuantities,
     includeFirstClear,
     extraStageRuns,
+    minigameStartRound,
     minigamePlayCount,
     minigamePaymentQuantityMode,
     overriddenRequiredQuantities,
