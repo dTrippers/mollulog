@@ -1208,6 +1208,8 @@ export const GROWTH_RESOURCE_KIND_ORDER = {
   ability: 6,
   equipment: 7,
   other: 8,
+  equipmentExp: 9,
+  uniqueWeaponGrowth: 10,
 } as const;
 
 export type GrowthResourceKindOrder = (typeof GROWTH_RESOURCE_KIND_ORDER)[keyof typeof GROWTH_RESOURCE_KIND_ORDER];
@@ -1222,6 +1224,8 @@ export const GROWTH_RESOURCE_KIND_LABELS: Record<number, string> = {
   [GROWTH_RESOURCE_KIND_ORDER.ability]: "교양 WB",
   [GROWTH_RESOURCE_KIND_ORDER.equipment]: "장비 설계도",
   [GROWTH_RESOURCE_KIND_ORDER.other]: "기타",
+  [GROWTH_RESOURCE_KIND_ORDER.equipmentExp]: "강화석",
+  [GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth]: "고유무기 성장 재료",
 } satisfies Record<GrowthResourceKindOrder, string>;
 
 const GROWTH_RESOURCE_KIND_DISPLAY_ORDER = [
@@ -1232,6 +1236,8 @@ const GROWTH_RESOURCE_KIND_DISPLAY_ORDER = [
   GROWTH_RESOURCE_KIND_ORDER.techNote,
   GROWTH_RESOURCE_KIND_ORDER.favor,
   GROWTH_RESOURCE_KIND_ORDER.eleph,
+  GROWTH_RESOURCE_KIND_ORDER.equipmentExp,
+  GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth,
   GROWTH_RESOURCE_KIND_ORDER.equipment,
   GROWTH_RESOURCE_KIND_ORDER.other,
 ] as const;
@@ -1266,6 +1272,21 @@ export function classifyGrowthResourceKind(resource: GrowthResourceKindInput): n
     return skillMaterialChoiceBoxKindOrder;
   }
 
+  const isEquipmentResource = resource.source === "equipment" || resource.type === ResourceTypeEnum.Equipment;
+  if (isEquipmentResource) {
+    if (resource.category === "exp") {
+      return GROWTH_RESOURCE_KIND_ORDER.equipmentExp;
+    }
+
+    if (resource.category?.startsWith("weapon_exp_growth_")) {
+      return GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth;
+    }
+
+    // Only direct blueprint UIDs are included here. Regular equipment and
+    // universal blueprints are intentionally excluded for now.
+    return getEquipmentTypeKey(resource.uid) === null ? null : GROWTH_RESOURCE_KIND_ORDER.equipment;
+  }
+
   if (resource.category === "character_exp_growth" || isUidInRange(itemUid, 10, 13)) {
     return GROWTH_RESOURCE_KIND_ORDER.characterExp;
   }
@@ -1293,10 +1314,6 @@ export function classifyGrowthResourceKind(resource: GrowthResourceKindInput): n
 
   if (resource.source === "ability" || ABILITY_RELEASE_WB_UID_SET.has(resource.uid)) {
     return GROWTH_RESOURCE_KIND_ORDER.ability;
-  }
-
-  if (resource.source === "equipment" || resource.type === ResourceTypeEnum.Equipment) {
-    return GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 
   if (resource.source === "gear") {

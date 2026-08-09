@@ -1081,7 +1081,7 @@ export function buildInventoryResources(
       equipmentCoverageByChoiceBoxUid.get(resource.uid)?.requiredAmount ??
       skillMaterialChoiceBoxRequiredAmountByUid.get(resource.uid) ??
       0,
-    kindOrder: getGrowthPlannerCatalogResourceKindOrder(resource) ?? 7,
+    kindOrder: getGrowthPlannerCatalogResourceKindOrder(resource) ?? GROWTH_RESOURCE_KIND_ORDER.other,
   }));
 
   for (const item of requiredItems) {

@@ -141,6 +141,120 @@ describe("item-catalog", () => {
     expect(getGrowthPlannerCatalogResources([wbItem])).toEqual([wbItem]);
   });
 
+  it("classifies equipment growth materials separately and excludes regular equipment", () => {
+    const equipmentResources: ItemCatalogResource[] = [
+      {
+        uid: "1",
+        name: "하급 강화석",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "exp",
+        subCategory: null,
+      },
+      {
+        uid: "10",
+        name: "녹슨 스프링",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "weapon_exp_growth_a",
+        subCategory: null,
+      },
+      {
+        uid: "20",
+        name: "녹슨 해머",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "weapon_exp_growth_b",
+        subCategory: null,
+      },
+      {
+        uid: "30",
+        name: "녹슨 총열",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "weapon_exp_growth_c",
+        subCategory: null,
+      },
+      {
+        uid: "40",
+        name: "녹슨 공이",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "weapon_exp_growth_z",
+        subCategory: null,
+      },
+      {
+        uid: "2000",
+        name: "스포츠용 장갑",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "gloves",
+        subCategory: null,
+      },
+      {
+        uid: "3000",
+        name: "핑크 스니커즈",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "shoes",
+        subCategory: null,
+      },
+      {
+        uid: "4000",
+        name: "방수 스포츠백",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "bag",
+        subCategory: null,
+      },
+    ];
+
+    expect(equipmentResources.map(getGrowthPlannerCatalogResourceKindOrder)).toEqual([
+      GROWTH_RESOURCE_KIND_ORDER.equipmentExp,
+      GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth,
+      GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth,
+      GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth,
+      GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth,
+      null,
+      null,
+      null,
+    ]);
+    expect(getGrowthPlannerCatalogResources(equipmentResources).map((resource) => resource.uid)).toEqual([
+      "1",
+      "10",
+      "20",
+      "30",
+      "40",
+    ]);
+  });
+
+  it("includes direct equipment blueprints but excludes universal blueprints", () => {
+    const blueprints: ItemCatalogResource[] = [
+      {
+        uid: "101001",
+        name: "니트 털모자 설계도면",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "hat",
+        subCategory: null,
+      },
+      {
+        uid: "501000",
+        name: "모자 만능 설계도",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "hat",
+        subCategory: null,
+      },
+    ];
+
+    expect(blueprints.map(getGrowthPlannerCatalogResourceKindOrder)).toEqual([
+      GROWTH_RESOURCE_KIND_ORDER.equipment,
+      null,
+    ]);
+    expect(getGrowthPlannerCatalogResources(blueprints).map((resource) => resource.uid)).toEqual(["101001"]);
+  });
+
   it("sorts equipment blueprint choice boxes before direct equipment blueprints by tier ascending", () => {
     const resources: ItemCatalogResource[] = [
       {
