@@ -153,7 +153,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
       rarity: number,
       name: string,
     ) => {
-      const resourceKey = `${resourceType}:${resourceUid}`;
+      const resourceKey = `${resourceType}:${resourceUid}:${rarity}`;
       const existingResource = resourceMap.get(resourceKey);
       if (existingResource) {
         existingResource.totalQuantity += quantity;
@@ -172,14 +172,14 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
 
     // Add minigame rewards
     if (minigameConfig && state.minigamePlayCount > 0) {
-      const rewards = calculateMinigameRewards(minigameConfig, state.minigamePlayCount);
-      for (const { resourceType, resourceUid, quantity, rarity } of rewards) {
-        addResource(resourceType, resourceUid, quantity, rarity ?? 1, resourceUid);
+      const rewards = calculateMinigameRewards(minigameConfig, state.minigamePlayCount, state.minigameStartRound);
+      for (const { resourceType, resourceUid, resourceName, quantity, rarity } of rewards) {
+        addResource(resourceType, resourceUid, quantity, rarity ?? 1, resourceName ?? "재화");
       }
     }
 
     return Array.from(resourceMap.values());
-  }, [boughtShopResources, minigameConfig, state.minigamePlayCount]);
+  }, [boughtShopResources, minigameConfig, state.minigamePlayCount, state.minigameStartRound]);
 
   const apBreakdown = useMemo(
     () =>
@@ -389,7 +389,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
           {mergedBoughtResources.length > 0 && (
             <div className="my-4 rounded-md bg-card p-3">
               <p className="text-sm font-medium text-foreground">획득 보상</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-1">
                 {mergedBoughtResources.map(({ resource, totalQuantity }) => (
                   <ResourceCard
                     key={`${resource.type}:${resource.uid}`}

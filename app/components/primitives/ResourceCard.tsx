@@ -52,7 +52,7 @@ function ResourceCard({
   }
 
   return (
-    <HoverTooltip as="div" className="group shrink-0 pr-1.5 pb-1.5" content={name} disabled={!name}>
+    <HoverTooltip as="div" className="group shrink-0 pr-1 pb-1" content={name} disabled={!name}>
       <div className="relative">
         <div
           className={`shrink-0 ${sizeClass} flex items-center justify-center overflow-hidden rounded-lg ${rarityBgClass(rarity)}`}

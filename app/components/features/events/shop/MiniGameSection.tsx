@@ -2,6 +2,8 @@ import { useMemo } from "react";
 import { FilterButtons, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { MinigameConfig } from "~/domain/event-shop";
 import { minigameDescription } from "~/locales/ko";
+import { ClueSearchSection } from "./ClueSearchSection";
+import type { ClueSearchExchange } from "./clue-search";
 import type { ShopActions, ShopState } from "./hooks";
 import {
   calculateDiceMinigameStats,
@@ -15,9 +17,10 @@ type MiniGameSectionProps = {
   config: MinigameConfig;
   state: ShopState;
   actions: ShopActions;
+  exchange?: ClueSearchExchange | null;
 };
 
-export function MiniGameSection({ config, state, actions }: MiniGameSectionProps) {
+export function MiniGameSection({ config, state, actions, exchange = null }: MiniGameSectionProps) {
   const rewards = useMemo(
     () => calculateMinigameRewards(config, state.minigamePlayCount),
     [config, state.minigamePlayCount],
@@ -36,6 +39,10 @@ export function MiniGameSection({ config, state, actions }: MiniGameSectionProps
   }, [config, state.minigamePlayCount]);
 
   const isDiceType = config.minigameType === "dice";
+
+  if (config.minigameType === "clue_search") {
+    return <ClueSearchSection config={config} state={state} actions={actions} exchange={exchange} />;
+  }
 
   return (
     <Section
@@ -87,7 +94,7 @@ export function MiniGameSection({ config, state, actions }: MiniGameSectionProps
       {state.minigamePlayCount > 0 && paymentCosts.length > 0 && (
         <div className="mt-4 rounded-md bg-card p-3">
           <p className="text-sm font-semibold text-foreground">필요 재화</p>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-1">
             {paymentCosts.map(({ resourceType, resourceUid, resourceName, quantity }) => (
               <ResourceCard
                 key={`${resourceType}:${resourceUid}`}
@@ -109,7 +116,7 @@ export function MiniGameSection({ config, state, actions }: MiniGameSectionProps
           </p>
         )}
         {state.minigamePlayCount > 0 ? (
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-1">
             {rewards.map(({ resourceType, resourceUid, resourceName, quantity, rarity }) => {
               return (
                 <ResourceCard

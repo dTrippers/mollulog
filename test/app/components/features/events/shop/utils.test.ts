@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   calculateMinigamePaymentCosts,
+  calculateMinigameRewards,
   hasVariableMinigamePayment,
 } from "../../../../../../app/components/features/events/shop/utils";
 import type { MinigameConfig } from "../../../../../../app/domain/event-shop";
@@ -138,5 +139,67 @@ describe("minigame payment calculations", () => {
   it("detects variable payment ranges", () => {
     expect(hasVariableMinigamePayment(createMinigameConfig())).toBe(true);
     expect(hasVariableMinigamePayment(createMinigameConfig({ rewardGroups: [] }))).toBe(false);
+  });
+
+  it("calculates clue search costs and rewards for an inclusive selected range", () => {
+    const config = createMinigameConfig({
+      minigameType: "clue_search",
+      rewardGroups: [
+        {
+          rounds: [1],
+          payments: [
+            {
+              resourceType: ResourceTypeEnum.Item,
+              resourceUid: "clue",
+              resourceName: "단서",
+              quantityMin: 2,
+              quantityExpected: 2,
+              quantityMax: 2,
+              quantityVariable: false,
+            },
+          ],
+          rewards: [
+            {
+              resourceType: ResourceTypeEnum.Currency,
+              resourceUid: "credits",
+              resourceName: "크레딧",
+              quantity: 10,
+            },
+          ],
+        },
+        {
+          rounds: { gte: 2 },
+          payments: [
+            {
+              resourceType: ResourceTypeEnum.Item,
+              resourceUid: "clue",
+              resourceName: "단서",
+              quantityMin: 3,
+              quantityExpected: 3,
+              quantityMax: 3,
+              quantityVariable: false,
+            },
+          ],
+          rewards: [
+            {
+              resourceType: ResourceTypeEnum.Currency,
+              resourceUid: "credits",
+              resourceName: "크레딧",
+              quantity: 4,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(calculateMinigamePaymentCosts(config, 3, "expected", 2)[0].quantity).toBe(6);
+    expect(calculateMinigameRewards(config, 3, 2)).toEqual([
+      {
+        resourceType: ResourceTypeEnum.Currency,
+        resourceUid: "credits",
+        resourceName: "크레딧",
+        quantity: 8,
+      },
+    ]);
   });
 });
