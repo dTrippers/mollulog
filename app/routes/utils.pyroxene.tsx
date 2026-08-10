@@ -1,6 +1,6 @@
 import { CalendarIcon, ChartBarIcon, PlusIcon } from "@heroicons/react/24/outline";
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ActionFunctionArgs,
   data,
@@ -38,6 +38,7 @@ import {
   type PyroxeneMonthlyPackageType,
 } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
+import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { PyroxeneEventData, PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
@@ -154,6 +155,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "utils.pyroxene.action" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return { success: false };
@@ -179,38 +181,47 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   switch (actionData.intent) {
     case "save-owned-resources": {
       const { resources, eventUid, collectedSourceKeys } = actionData.payload;
-      await createPyroxeneOwnedResource(env, currentUser.id, resources);
-      if (eventUid) {
-        const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
-          (content) => content.kind === "event" && content.uid === eventUid,
-        );
-        if (content?.kind !== "event" || !content.recruitmentGroupUid) {
-          throw new Error(`Cannot resolve recruitment group for pyroxene completion: eventUid=${eventUid}`);
-        }
+      const savedAt = new Date().toISOString();
+      try {
+        await createPyroxeneOwnedResource(env, currentUser.id, resources, { inputAt: savedAt });
+        if (eventUid) {
+          const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
+            (content) => content.kind === "event" && content.uid === eventUid,
+          );
+          if (content?.kind !== "event" || !content.recruitmentGroupUid) {
+            throw new Error(`Cannot resolve recruitment group for pyroxene completion: eventUid=${eventUid}`);
+          }
 
-        const recruitedStudents = content.recruitments.flatMap((recruitment) => {
-          if (!recruitment.pickup || !recruitment.student) return [];
-          return [
-            {
-              studentUid: recruitment.student.uid,
-              tier: recruitment.student.initialTier || 3,
-              pickup: true,
-            },
-          ];
-        });
-        if (recruitedStudents.length === 0) {
-          throw new Error(`Cannot resolve pickup students for pyroxene completion: eventUid=${eventUid}`);
-        }
+          const recruitedStudents = content.recruitments.flatMap((recruitment) => {
+            if (!recruitment.pickup || !recruitment.student) return [];
+            return [
+              {
+                studentUid: recruitment.student.uid,
+                tier: recruitment.student.initialTier || 3,
+                pickup: true,
+              },
+            ];
+          });
+          if (recruitedStudents.length === 0) {
+            throw new Error(`Cannot resolve pickup students for pyroxene completion: eventUid=${eventUid}`);
+          }
 
-        await setRecruitmentResultCompletion(env, currentUser.id, content.recruitmentGroupUid, true, {
-          contentUid: eventUid,
-          recruitedStudents,
+          await setRecruitmentResultCompletion(env, currentUser.id, content.recruitmentGroupUid, true, {
+            contentUid: eventUid,
+            recruitedStudents,
+          });
+        }
+        if (collectedSourceKeys) {
+          await upsertCollectedSources(env, currentUser.id, collectedSourceKeys);
+        }
+      } catch (error) {
+        logger.error("Failed to save pyroxene owned resources", error, {
+          operation: "save-owned-resources",
+          userId: currentUser.id,
         });
+        return data({ success: false, error: "보유 재화를 저장하지 못했어요" }, { status: 500 });
       }
-      if (collectedSourceKeys) {
-        await upsertCollectedSources(env, currentUser.id, collectedSourceKeys);
-      }
-      break;
+      return { success: true, savedAt };
     }
     case "save-buy":
       await createBuyPyroxene(env, currentUser.id, actionData.payload.date, actionData.payload.quantity, {
@@ -311,16 +322,41 @@ export const meta: MetaFunction = ({ location }) => {
   ];
 };
 
+type OwnedResourcesActionResult = {
+  success: boolean;
+  error?: string;
+  savedAt?: string | null;
+};
+
+type PendingOwnedResourceSave = {
+  eventUid: string | null;
+  resources: PickupResources;
+  collectedSourceKeys: string[];
+};
+
+function toPickupResources(resources: PickupResources): PickupResources {
+  return {
+    pyroxene: resources.pyroxene,
+    oneTimeTicket: resources.oneTimeTicket,
+    tenTimeTicket: resources.tenTimeTicket,
+  };
+}
+
+function zeroPickupResources(): PickupResources {
+  return { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 };
+}
+
 export default function PyroxenePlanner() {
   const loaderData = useLoaderData<typeof loader>();
   const { signedIn, contents } = loaderData;
   const { showSignIn } = useSignIn();
   const guestPlanner = useGuestPyroxenePlanner();
+  const loaderResources = toPickupResources(loaderData.latestResources);
 
   const [initialDate, setInitialDate] = useState<Date | null>(
     loaderData.latestResources.inputAt ? new Date(loaderData.latestResources.inputAt) : null,
   );
-  const [initialResources, setInitialResources] = useState<PickupResources>(loaderData.latestResources);
+  const [initialResources, setInitialResources] = useState<PickupResources>(loaderResources);
 
   // Local optimistic state for timeline items and event data
   const [localTimelineItems, setLocalTimelineItems] = useState<PyroxeneTimelineItem[]>(loaderData.timelineItems ?? []);
@@ -333,13 +369,39 @@ export default function PyroxenePlanner() {
   );
   const [localFavoritedStudents, setLocalFavoritedStudents] = useState(loaderData.favoritedStudents ?? []);
   const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
+  const ownedResourcesFetcher = useFetcher<OwnedResourcesActionResult>();
   const favoriteFetcher = useFetcher();
   const timelineSaveInFlight = useRef(false);
+  const pendingOwnedResourceSave = useRef<PendingOwnedResourceSave | null>(null);
+  const [ownedResourceSaveError, setOwnedResourceSaveError] = useState<string | null>(null);
+
+  const confirmOwnedResourceSave = useCallback(
+    (pendingSave: PendingOwnedResourceSave, savedAt?: string | null) => {
+      setInitialResources(pendingSave.resources);
+      setInitialDate(savedAt ? new Date(savedAt) : new Date());
+      if (pendingSave.collectedSourceKeys.length > 0) {
+        setLocalCollectedSourceKeys((prev) => [...new Set([...prev, ...pendingSave.collectedSourceKeys])]);
+      }
+      if (pendingSave.eventUid && signedIn) {
+        const content = contents.find((content) => content.kind === "event" && content.uid === pendingSave.eventUid);
+        if (content?.kind === "event" && content.recruitmentGroupUid) {
+          const recruitmentGroupUid = content.recruitmentGroupUid;
+          setLocalRecruitmentResultCompletions((prev) => {
+            if (prev.some((completion) => completion.eventUid === pendingSave.eventUid)) {
+              return prev;
+            }
+            return [...prev, { eventUid: pendingSave.eventUid as string, recruitmentGroupUid }];
+          });
+        }
+      }
+    },
+    [contents, signedIn],
+  );
 
   // Sync from loader data after server revalidation
   useEffect(() => {
     setInitialDate(loaderData.latestResources.inputAt ? new Date(loaderData.latestResources.inputAt) : null);
-    setInitialResources(loaderData.latestResources);
+    setInitialResources(toPickupResources(loaderData.latestResources));
   }, [loaderData.latestResources]);
 
   useEffect(() => {
@@ -366,7 +428,7 @@ export default function PyroxenePlanner() {
     if (signedIn || !guestPlanner.snapshot || guestPlanner.snapshot.status === "corrupt") return;
     const data = guestPlanner.snapshot.envelope.data;
     setInitialDate(data.resources ? new Date(data.resources.inputAt) : null);
-    setInitialResources(data.resources ?? { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 });
+    setInitialResources(data.resources ? toPickupResources(data.resources) : zeroPickupResources());
     setLocalTimelineItems(guestPyroxeneTimelineItems(data));
     setLocalEventData(
       Object.entries(data.eventTrials).map(([eventUid, expectedTrials]) => ({
@@ -392,41 +454,45 @@ export default function PyroxenePlanner() {
     }
   }, [fetcher.state]);
 
+  useEffect(() => {
+    if (ownedResourcesFetcher.state !== "idle") return;
+
+    const pendingSave = pendingOwnedResourceSave.current;
+    if (!pendingSave) return;
+
+    pendingOwnedResourceSave.current = null;
+    if (!ownedResourcesFetcher.data?.success) {
+      setOwnedResourceSaveError("보유 재화를 저장하지 못했어요");
+      return;
+    }
+
+    setOwnedResourceSaveError(null);
+    confirmOwnedResourceSave(pendingSave, ownedResourcesFetcher.data.savedAt);
+  }, [confirmOwnedResourceSave, ownedResourcesFetcher.data, ownedResourcesFetcher.state]);
+
   const handleSaveOwnedResources = (
     eventUid: string | null,
     resources: PickupResources,
     collectedSourceKeys: string[] = [],
   ) => {
-    setInitialResources(resources);
+    const ownedResources = toPickupResources(resources);
     const inputAt = new Date();
-    setInitialDate(inputAt);
-    if (collectedSourceKeys.length > 0) {
-      setLocalCollectedSourceKeys((prev) => [...new Set([...prev, ...collectedSourceKeys])]);
-    }
-    if (eventUid && signedIn) {
-      const content = contents.find((content) => content.kind === "event" && content.uid === eventUid);
-      if (content?.kind === "event" && content.recruitmentGroupUid) {
-        const recruitmentGroupUid = content.recruitmentGroupUid;
-        setLocalRecruitmentResultCompletions((prev) => {
-          if (prev.some((completion) => completion.eventUid === eventUid)) {
-            return prev;
-          }
-          return [...prev, { eventUid, recruitmentGroupUid }];
-        });
-      }
-    }
     if (!signedIn) {
+      confirmOwnedResourceSave({ eventUid, resources: ownedResources, collectedSourceKeys }, inputAt.toISOString());
       void guestPlanner.update((data) => ({
         ...data,
-        resources: { ...resources, inputAt: inputAt.toISOString() },
+        resources: { ...ownedResources, inputAt: inputAt.toISOString() },
         collectedSourceKeys: [...new Set([...data.collectedSourceKeys, ...collectedSourceKeys])],
       }));
       return;
     }
-    fetcher.submit(
+
+    setOwnedResourceSaveError(null);
+    pendingOwnedResourceSave.current = { eventUid, resources: ownedResources, collectedSourceKeys };
+    ownedResourcesFetcher.submit(
       {
         intent: "save-owned-resources",
-        payload: { resources, eventUid, collectedSourceKeys },
+        payload: { resources: ownedResources, eventUid, collectedSourceKeys },
       },
       { method: "POST", encType: "application/json" },
     );
@@ -755,7 +821,13 @@ export default function PyroxenePlanner() {
 
   const scheduleItems = usePyroxeneScheduleItems(contents, localFavoritedStudents, localTimelineItems);
 
-  const isSaving = Boolean(signedIn) && (fetcher.state === "submitting" || fetcher.state === "loading");
+  const isTimelineSaving = Boolean(signedIn) && (fetcher.state === "submitting" || fetcher.state === "loading");
+  const isSaving =
+    Boolean(signedIn) &&
+    (fetcher.state === "submitting" ||
+      fetcher.state === "loading" ||
+      ownedResourcesFetcher.state === "submitting" ||
+      ownedResourcesFetcher.state === "loading");
   const guestDataStatus = guestPlanner.snapshot?.status;
   const hasGuestData = guestPlanner.snapshot ? hasGuestPyroxenePlannerData(guestPlanner.snapshot.envelope.data) : false;
 
@@ -796,7 +868,7 @@ export default function PyroxenePlanner() {
                 onSaveApPackage={(startDate, autoRepurchase) => handleSaveApPackage(startDate, autoRepurchase)}
                 onSaveAttendance={(startDate) => handleSaveAttendance(startDate)}
                 onSaveOther={(resources, description, date) => handleSaveOther(resources, description, date)}
-                savingTimelineItem={isSaving}
+                savingTimelineItem={isTimelineSaving}
               />
             ),
           },
@@ -811,6 +883,7 @@ export default function PyroxenePlanner() {
       >
         <div className="space-y-4">
           <div className="space-y-3">
+            {ownedResourceSaveError ? <Callout tone="destructive" title={ownedResourceSaveError} /> : null}
             {signedIn && hasGuestData ? (
               <Callout
                 tone="info"

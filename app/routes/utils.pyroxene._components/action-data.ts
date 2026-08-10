@@ -91,11 +91,9 @@ function asRecord(value: unknown, label: string): JsonRecord {
   return value as JsonRecord;
 }
 
-function assertKeys(record: JsonRecord, required: readonly string[], optional: readonly string[] = []) {
-  const allowed = new Set([...required, ...optional]);
+function assertRequiredKeys(record: JsonRecord, required: readonly string[]) {
   const missing = required.find((key) => !(key in record));
-  const unexpected = Object.keys(record).find((key) => !allowed.has(key));
-  if (missing || unexpected) {
+  if (missing) {
     throw new Error("요청 payload가 올바르지 않아요");
   }
 }
@@ -185,11 +183,11 @@ function readDate(record: JsonRecord, key: string): string {
 
 function readResources(value: unknown): PickupResources {
   const record = asRecord(value, "resources");
-  assertKeys(record, ["pyroxene", "oneTimeTicket", "tenTimeTicket"]);
+  assertRequiredKeys(record, ["pyroxene", "oneTimeTicket", "tenTimeTicket"]);
   return {
-    pyroxene: readNumber(record, "pyroxene"),
-    oneTimeTicket: readNumber(record, "oneTimeTicket"),
-    tenTimeTicket: readNumber(record, "tenTimeTicket"),
+    pyroxene: readNumber(record, "pyroxene", 0),
+    oneTimeTicket: readNumber(record, "oneTimeTicket", 0),
+    tenTimeTicket: readNumber(record, "tenTimeTicket", 0),
   };
 }
 
@@ -204,17 +202,17 @@ function readSourceKeys(record: JsonRecord, key: string): string[] | undefined {
 
 function readPlannerOptions(value: unknown): PyroxenePlannerOptions {
   const record = asRecord(value, "options");
-  assertKeys(record, ["event", "raid", "tactical", "consumption", "timeline"]);
+  assertRequiredKeys(record, ["event", "raid", "tactical", "consumption", "timeline"]);
   const event = asRecord(record.event, "event");
   const raid = asRecord(record.raid, "raid");
   const tactical = asRecord(record.tactical, "tactical");
   const consumption = asRecord(record.consumption, "consumption");
   const timeline = asRecord(record.timeline, "timeline");
-  assertKeys(event, ["pickupChance"]);
-  assertKeys(raid, ["tier"]);
-  assertKeys(tactical, ["level"]);
-  assertKeys(consumption, ["apChargeCount"]);
-  assertKeys(timeline, ["display"]);
+  assertRequiredKeys(event, ["pickupChance"]);
+  assertRequiredKeys(raid, ["tier"]);
+  assertRequiredKeys(tactical, ["level"]);
+  assertRequiredKeys(consumption, ["apChargeCount"]);
+  assertRequiredKeys(timeline, ["display"]);
 
   const pickupChance = readString(event, "pickupChance");
   if (!PYROXENE_PICKUP_CHANCES.includes(pickupChance as (typeof PYROXENE_PICKUP_CHANCES)[number])) {
@@ -258,14 +256,14 @@ function assertMethod(method: string, expected: "POST" | "DELETE") {
 
 export function decodePyroxeneActionPayload(value: unknown, method: string): ActionData {
   const record = asRecord(value, "payload");
-  assertKeys(record, ["intent", "payload"]);
+  assertRequiredKeys(record, ["intent", "payload"]);
   const intent = readString(record, "intent");
   const payload = asRecord(record.payload, "payload");
 
   switch (intent) {
     case "save-owned-resources": {
       assertMethod(method, "POST");
-      assertKeys(payload, ["resources"], ["eventUid", "collectedSourceKeys"]);
+      assertRequiredKeys(payload, ["resources"]);
       const eventUid = readOptionalString(payload, "eventUid", true);
       return {
         intent,
@@ -278,7 +276,7 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
     }
     case "save-buy": {
       assertMethod(method, "POST");
-      assertKeys(payload, ["quantity", "date"], ["repeatType", "monthlyCount"]);
+      assertRequiredKeys(payload, ["quantity", "date"]);
       const repeatType = payload.repeatType;
       if (repeatType !== undefined && repeatType !== "fixed_days" && repeatType !== "monthly_first") {
         throw new Error("요청 필드 repeatType이 올바르지 않아요");
@@ -299,7 +297,7 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
     }
     case "save-monthly-package": {
       assertMethod(method, "POST");
-      assertKeys(payload, ["startDate", "packageType", "autoRepurchase"], ["options"]);
+      assertRequiredKeys(payload, ["startDate", "packageType", "autoRepurchase"]);
       const packageType = readString(payload, "packageType");
       if (packageType !== "half" && packageType !== "full") throw new Error("요청 필드 packageType이 올바르지 않아요");
       return {
@@ -314,7 +312,7 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
     }
     case "save-ap-package": {
       assertMethod(method, "POST");
-      assertKeys(payload, ["startDate", "autoRepurchase"], ["options"]);
+      assertRequiredKeys(payload, ["startDate", "autoRepurchase"]);
       return {
         intent,
         payload: {
@@ -326,11 +324,11 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
     }
     case "save-attendance":
       assertMethod(method, "POST");
-      assertKeys(payload, ["startDate"]);
+      assertRequiredKeys(payload, ["startDate"]);
       return { intent, payload: { startDate: readDate(payload, "startDate") } };
     case "save-other":
       assertMethod(method, "POST");
-      assertKeys(payload, ["resources", "description", "date"]);
+      assertRequiredKeys(payload, ["resources", "description", "date"]);
       return {
         intent,
         payload: {
@@ -341,7 +339,7 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
       };
     case "update-event-data":
       assertMethod(method, "POST");
-      assertKeys(payload, ["eventUid"], ["expectedTrials"]);
+      assertRequiredKeys(payload, ["eventUid"]);
       return {
         intent,
         payload: {
@@ -351,19 +349,19 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
       };
     case "save-options":
       assertMethod(method, "POST");
-      assertKeys(payload, ["options"]);
+      assertRequiredKeys(payload, ["options"]);
       return { intent, payload: { options: readPlannerOptions(payload.options) } };
     case "collect-source":
       assertMethod(method, "POST");
-      assertKeys(payload, ["sourceKey"]);
+      assertRequiredKeys(payload, ["sourceKey"]);
       return { intent, payload: { sourceKey: readString(payload, "sourceKey") } };
     case "uncollect-source":
       assertMethod(method, "DELETE");
-      assertKeys(payload, ["sourceKey"]);
+      assertRequiredKeys(payload, ["sourceKey"]);
       return { intent, payload: { sourceKey: readString(payload, "sourceKey") } };
     case "delete-pickup-completion":
       assertMethod(method, "DELETE");
-      assertKeys(payload, ["eventUid"], ["recruitmentGroupUid"]);
+      assertRequiredKeys(payload, ["eventUid"]);
       return {
         intent,
         payload: {
@@ -373,7 +371,7 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
       };
     case "delete-timeline-item":
       assertMethod(method, "DELETE");
-      assertKeys(payload, ["itemUid"]);
+      assertRequiredKeys(payload, ["itemUid"]);
       return { intent, payload: { itemUid: readString(payload, "itemUid") } };
     default:
       throw new Error("지원하지 않는 intent예요");
