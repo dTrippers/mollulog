@@ -36,7 +36,11 @@ export default function ThreadView({ ticket, replies }: ThreadViewProps) {
           <Callout
             Icon={ChatBubbleLeftRightIcon}
             title="아직 등록된 답글이 없어요."
-            description="열심히 검토하고 있으니 조금만 기다려주세요."
+            description={
+              ticket.status === "in_progress"
+                ? "문의를 확인 후 처리중이에요. 조금만 기다려주세요."
+                : "열심히 검토하고 있으니 조금만 기다려주세요."
+            }
             tone="info"
           />
         ) : (
