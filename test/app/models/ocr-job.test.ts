@@ -371,9 +371,9 @@ describe("PostgreSQL OCR control plane", () => {
     );
 
     await expect(getOcrUploadQuota(createEnv(), 7, { createClient: () => client })).resolves.toEqual({
-      limit: 30,
+      limit: 50,
       used: 23,
-      remaining: 7,
+      remaining: 27,
       nextAvailableAt: "2026-07-25T00:00:00.000Z",
     });
     expect(query.mock.calls[0][1]).toEqual([7, "item_inventory_images_v1", "2026-07-14T00:00:00.000Z"]);
@@ -395,9 +395,9 @@ describe("PostgreSQL OCR control plane", () => {
         jobKind: "student_detail_video_v1",
       }),
     ).resolves.toEqual({
-      limit: 5,
+      limit: 10,
       used: 4,
-      remaining: 1,
+      remaining: 6,
       nextAvailableAt: "2026-07-25T00:00:00.000Z",
     });
     jest.useRealTimers();
@@ -406,7 +406,7 @@ describe("PostgreSQL OCR control plane", () => {
   it("rejects a job that would exceed the rolling image quota before issuing upload URLs", async () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
     const { client, query } = createClient((sql) =>
-      sql.includes('select "total_images", "submitted_at"') ? [[29, new Date("2026-07-18T00:00:00Z")]] : [],
+      sql.includes('select "total_images", "submitted_at"') ? [[49, new Date("2026-07-18T00:00:00Z")]] : [],
     );
 
     await expect(
@@ -449,7 +449,7 @@ describe("PostgreSQL OCR control plane", () => {
         },
         { createClient: () => client },
       ),
-    ).resolves.toMatchObject({ quota: { used: 1, remaining: 29 } });
+    ).resolves.toMatchObject({ quota: { used: 1, remaining: 49 } });
 
     const sql = query.mock.calls.map(([queryConfig]) => queryText(queryConfig)).join("\n");
     expect(
@@ -504,12 +504,12 @@ describe("PostgreSQL OCR control plane", () => {
     expect(query.mock.calls.some(([, values]) => values?.includes("2026-07-23-v1"))).toBe(true);
   });
 
-  it("rejects a sixth student video within the rolling seven-day window", async () => {
+  it("rejects an eleventh student video within the rolling seven-day window", async () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
     const createdAt = new Date("2026-07-18T00:00:00Z");
     const { client, query } = createClient((sql, values) =>
       sql.includes('select "created_at"') && values?.includes("student_detail_video_v1")
-        ? Array.from({ length: 5 }, () => [createdAt])
+        ? Array.from({ length: 10 }, () => [createdAt])
         : [],
     );
 
@@ -531,7 +531,7 @@ describe("PostgreSQL OCR control plane", () => {
       ),
     ).rejects.toMatchObject({
       message: "최근 7일 동안 업로드할 수 있는 영상을 모두 사용했어요",
-      quota: { limit: 5, used: 5, remaining: 0, nextAvailableAt: "2026-07-25T00:00:00.000Z" },
+      quota: { limit: 10, used: 10, remaining: 0, nextAvailableAt: "2026-07-25T00:00:00.000Z" },
     });
     expect(query.mock.calls.some(([queryConfig]) => queryText(queryConfig).includes('insert into "ocr_jobs"'))).toBe(
       false,
