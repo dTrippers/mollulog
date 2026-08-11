@@ -3,7 +3,7 @@ import { CameraIcon, PlusIcon, UserCircleIcon } from "@heroicons/react/24/outlin
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getMobileNavigationItems, getNavigationSections } from "~/components/features/layout/navigation-menu";
+import { getMoreNavigationItems } from "~/components/features/layout/navigation-menu";
 import { ProfileImage, SubTitle, Title } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { canonicalLink } from "~/lib/seo";
@@ -47,38 +47,22 @@ export default function MoreIndexPage() {
   const { currentUser, upcomingEvent, hasOngoingRaid, hasUnconsumedCoupons } = useLoaderData<typeof loader>();
   const { showSignIn } = useSignIn();
 
-  const bottomNavigationPaths = new Set(
-    getMobileNavigationItems({ pathname: "/more", upcomingEvent }).map((item) => item.to),
-  );
-  const pathsAlreadyOnThisScreen = new Set([
-    "/utils/pyroxene",
-    "/utils/relationship",
-    "/coupons",
-    ...(currentUser ? [`/@${currentUser.username}`] : []),
-  ]);
-  const menuItems = getNavigationSections({
+  const menuItems = getMoreNavigationItems({
     pathname: "/more",
     upcomingEvent,
     hasOngoingRaid,
     hasUnconsumedCoupons,
     isSignedIn: currentUser !== null,
-  }).flatMap((section) =>
-    section.items
-      .filter(
-        (item) =>
-          item.disabled === true || (!bottomNavigationPaths.has(item.to) && !pathsAlreadyOnThisScreen.has(item.to)),
-      )
-      .map((item) => ({
-        key: item.to,
-        to: item.to,
-        name: item.name,
-        description: item.description,
-        Icon: item.OutlineIcon,
-        badgeLabel: item.badgeLabel,
-        showRedDot: item.showRedDot,
-        disabled: item.disabled,
-      })),
-  );
+  }).map((item) => ({
+    key: item.to,
+    to: item.to,
+    name: item.name,
+    description: item.description,
+    Icon: item.OutlineIcon,
+    badgeLabel: item.badgeLabel,
+    showRedDot: item.showRedDot,
+    disabled: item.disabled,
+  }));
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-3 pb-6 lg:pt-2">

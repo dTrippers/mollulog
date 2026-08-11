@@ -1,29 +1,13 @@
 import { MoonIcon, SunIcon } from "@heroicons/react/16/solid";
 import {
-  ArrowsRightLeftIcon as ArrowsRightLeftIconOutline,
   CalendarIcon as CalendarIconOutline,
-  CameraIcon as CameraIconOutline,
-  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
   Cog6ToothIcon,
-  EnvelopeIcon,
-  HomeIcon as HomeIconOutline,
-  IdentificationIcon as IdentificationIconOutline,
   MagnifyingGlassIcon,
-  MegaphoneIcon,
   RectangleGroupIcon as RectangleGroupIconOutline,
   StarIcon as StarIconOutline,
   UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
-import {
-  ArrowsRightLeftIcon as ArrowsRightLeftIconSolid,
-  CameraIcon as CameraIconSolid,
-  ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
-  EnvelopeIcon as EnvelopeIconSolid,
-  HomeIcon as HomeIconSolid,
-  IdentificationIcon as IdentificationIconSolid,
-  MegaphoneIcon as MegaphoneIconSolid,
-  StarIcon as StarIconSolid,
-} from "@heroicons/react/24/solid";
+import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
 import { ProfileImage } from "~/components/primitives";
@@ -41,10 +25,12 @@ import { studentImageUrl } from "~/models/assets";
 import { submitPreference } from "~/routes/api.preference";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import {
+  getDesktopNavigation,
   getMobileNavigationItems,
   getNavigationSectionStates,
-  getNavigationSections,
+  getServiceNavigationItems,
   type NavigationItem,
+  type NavigationSection,
   type NavigationSectionStates,
 } from "./navigation-menu";
 import { SiteBanner, shouldRenderGlobalSiteBanner } from "./SiteBanner";
@@ -472,6 +458,9 @@ function MobileBrandHeader({
     setIsMenuOpen(false);
   };
   const ModeIcon = darkMode ? SunIcon : MoonIcon;
+  const serviceItems = getServiceNavigationItems({ pathname, hasRecentNews, hasUnreadFeedbackReplies });
+  const newsItem = serviceItems.find((item) => item.to === "/news");
+  const contactItem = serviceItems.find((item) => item.to === "/contact");
 
   return (
     <header
@@ -564,22 +553,26 @@ function MobileBrandHeader({
               tone="theme"
               onClick={toggleDarkMode}
             />
-            <MobileHeaderMenuButton
-              as="link"
-              to="/contact"
-              Icon={EnvelopeIcon}
-              label="제안/문의"
-              showRedDot={hasUnreadFeedbackReplies}
-              onClick={() => setIsMenuOpen(false)}
-            />
-            <MobileHeaderMenuButton
-              as="link"
-              to="/news"
-              Icon={MegaphoneIcon}
-              label="업데이트 소식"
-              showRedDot={hasRecentNews}
-              onClick={() => setIsMenuOpen(false)}
-            />
+            {contactItem && (
+              <MobileHeaderMenuButton
+                as="link"
+                to={contactItem.to}
+                Icon={contactItem.OutlineIcon}
+                label={contactItem.name}
+                showRedDot={contactItem.showRedDot}
+                onClick={() => setIsMenuOpen(false)}
+              />
+            )}
+            {newsItem && (
+              <MobileHeaderMenuButton
+                as="link"
+                to={newsItem.to}
+                Icon={newsItem.OutlineIcon}
+                label={newsItem.name}
+                showRedDot={newsItem.showRedDot}
+                onClick={() => setIsMenuOpen(false)}
+              />
+            )}
           </div>
         </>
       )}
@@ -716,7 +709,7 @@ function DesktopMenuSectionList({
   favoriteIds,
   onFavoriteToggle,
 }: {
-  section: NonNullable<ReturnType<typeof getNavigationSections>[number]>;
+  section: NavigationSection;
   favoriteIds: Set<string>;
   onFavoriteToggle: (favoriteId: string) => void;
 }) {
@@ -762,90 +755,37 @@ function DesktopMenuContent({
   hasUnreadFeedbackReplies,
   sectionStates,
 }: DesktopMenuContentProps) {
-  const menuSections = getNavigationSections({
+  const {
+    primaryItems,
+    sections: menuSections,
+    profileItems,
+    serviceItems,
+  } = getDesktopNavigation({
     pathname,
     upcomingEvent,
     hasOngoingRaid,
     hasUnconsumedCoupons,
     isSignedIn: currentUsername !== null,
+    currentUsername,
+    hasRecentNews,
+    hasUnreadFeedbackReplies,
     sectionStates,
   });
-  const contentSection = menuSections.find((section) => section.name === "컨텐츠");
-  const utilSection = menuSections.find((section) => section.name === "플래너 & 계산기");
-  const externalSection = menuSections.find((section) => section.name === "게임 외 정보");
-  const profileItems: DesktopMenuItem[] = currentUsername
-    ? [
-        {
-          to: `/@${currentUsername}`,
-          name: "내 프로필",
-          favoriteId: "profile",
-          OutlineIcon: IdentificationIconOutline,
-          SolidIcon: IdentificationIconSolid,
-          isActive: pathname.startsWith("/@"),
-        },
-        {
-          to: "/scanner/resource",
-          name: "스크린샷/영상 인식기",
-          favoriteId: "scanner-resource",
-          badgeLabel: "베타",
-          showRedDot: true,
-          OutlineIcon: CameraIconOutline,
-          SolidIcon: CameraIconSolid,
-          isActive: pathname.startsWith("/scanner"),
-        },
-        {
-          to: "/connect/import",
-          name: "외부 데이터 연동",
-          favoriteId: "connect-import",
-          badgeLabel: "베타",
-          OutlineIcon: ArrowsRightLeftIconOutline,
-          SolidIcon: ArrowsRightLeftIconSolid,
-          isActive: pathname.startsWith("/connect"),
-        },
-      ]
-    : [];
-  const serviceItems: DesktopMenuItem[] = [
-    {
-      to: "/news",
-      name: "업데이트 소식",
-      favoriteId: "news",
-      OutlineIcon: MegaphoneIcon,
-      SolidIcon: MegaphoneIconSolid,
-      showRedDot: hasRecentNews,
-      redDotAnimate: false,
-    },
-    {
-      to: "/contact",
-      name: "제안/문의",
-      favoriteId: "contact",
-      OutlineIcon: EnvelopeIcon,
-      SolidIcon: EnvelopeIconSolid,
-      showRedDot: hasUnreadFeedbackReplies,
-      redDotAnimate: false,
-    },
+  const desktopItems = [
+    ...primaryItems,
+    ...menuSections.flatMap((section) => section.items),
+    ...profileItems,
+    ...serviceItems,
   ];
-  const desktopItems = [...menuSections.flatMap((section) => section.items), ...profileItems, ...serviceItems];
   const favoriteItems = getAvailableNavigationFavorites(favoriteNavigationIds, desktopItems);
   const favoriteIdSet = new Set(favoriteNavigationIds);
 
   return (
     <nav aria-label="데스크톱 주요 메뉴">
       <div className="space-y-0.5">
-        <SubMenuItem
-          to="/"
-          name="홈"
-          OutlineIcon={HomeIconOutline}
-          SolidIcon={HomeIconSolid}
-          isActive={pathname === "/"}
-        />
-
-        <SubMenuItem
-          to="/community"
-          name="피드"
-          OutlineIcon={ChatBubbleLeftRightIconOutline}
-          SolidIcon={ChatBubbleLeftRightIconSolid}
-          isActive={sectionStates.isCommunityActive}
-        />
+        {primaryItems.map((item) => (
+          <SubMenuItem key={item.to} {...item} />
+        ))}
       </div>
 
       {favoriteItems.length > 0 && (
@@ -856,38 +796,16 @@ function DesktopMenuContent({
         </div>
       )}
 
-      {contentSection && (
+      {menuSections.map((section) => (
         <DesktopMenuSectionList
-          section={contentSection}
+          key={section.name}
+          section={section}
           favoriteIds={favoriteIdSet}
           onFavoriteToggle={onFavoriteToggle}
         />
-      )}
+      ))}
 
-      {utilSection && (
-        <DesktopMenuSectionList section={utilSection} favoriteIds={favoriteIdSet} onFavoriteToggle={onFavoriteToggle} />
-      )}
-
-      {externalSection && (
-        <DesktopMenuSectionList
-          section={externalSection}
-          favoriteIds={favoriteIdSet}
-          onFavoriteToggle={onFavoriteToggle}
-        />
-      )}
-
-      {menuSections
-        .filter((section) => section !== contentSection && section !== utilSection && section !== externalSection)
-        .map((section) => (
-          <DesktopMenuSectionList
-            key={section.name}
-            section={section}
-            favoriteIds={favoriteIdSet}
-            onFavoriteToggle={onFavoriteToggle}
-          />
-        ))}
-
-      {currentUsername && (
+      {profileItems.length > 0 && (
         <>
           <DesktopMenuGroupLabel>내 정보</DesktopMenuGroupLabel>
           <div className="space-y-0.5">

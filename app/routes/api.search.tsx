@@ -1,5 +1,6 @@
 import hangul from "hangul-js";
 import type { LoaderFunctionArgs } from "react-router";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { getSearchableMenuItems } from "~/components/features/layout/navigation-menu";
 import { formatStudentFullName, getAllStudents } from "~/models/student";
 import type { TimelineContent } from "~/models/timeline-content";
@@ -169,6 +170,18 @@ function searchIndex(index: SearchIndexEntry[], query: string): SearchResult[] {
   return results;
 }
 
+function getCurrentUserProfileSearchEntry(username: string): SearchIndexEntry | null {
+  const profileItem = getSearchableMenuItems({ currentUsername: username }).find((item) => item.id === "profile");
+  if (!profileItem) {
+    return null;
+  }
+
+  return {
+    candidate: profileItem.name,
+    result: { type: "menu", name: profileItem.name, to: profileItem.to },
+  };
+}
+
 export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<SearchResponse> => {
   const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   if (!q) {
@@ -176,6 +189,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
   }
 
   const { env, ctx } = context.cloudflare;
-  const index = await getSearchIndex(env, ctx);
-  return { results: searchIndex(index, q) };
+  const [index, sensei] = await Promise.all([getSearchIndex(env, ctx), getActiveSensei(env, request)]);
+  const profileEntry = sensei ? getCurrentUserProfileSearchEntry(sensei.username) : null;
+  return { results: searchIndex(profileEntry ? [...index, profileEntry] : index, q) };
 };

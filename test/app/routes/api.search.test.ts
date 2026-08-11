@@ -1,9 +1,15 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { loader } from "../../../app/routes/api.search";
 
+jest.mock("~/auth/authenticator.server", () => ({
+  getActiveSensei: jest.fn(() => Promise.resolve(null)),
+}));
+
 jest.mock("~/components/features/layout/navigation-menu", () => ({
-  getSearchableMenuItems: () => [],
+  getSearchableMenuItems: ({ currentUsername }: { currentUsername?: string | null } = {}) =>
+    currentUsername ? [{ id: "profile", name: "내 프로필", to: `/@${currentUsername}` }] : [],
 }));
 
 jest.mock("~/models/student", () => ({
@@ -35,6 +41,7 @@ const env = { KV_CACHE: {} } as Env;
 const mockedGetAllTimelineContentsMeta = getAllTimelineContentsMeta as jest.MockedFunction<
   typeof getAllTimelineContentsMeta
 >;
+const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 
 async function callLoader(q: string) {
   return loader({
@@ -55,5 +62,13 @@ describe("api.search", () => {
       to: "/students/10002",
     });
     expect(mockedGetAllTimelineContentsMeta).toHaveBeenCalledWith(env, { ctx: undefined });
+  });
+
+  it("adds the signed-in user's profile to the cached search index", async () => {
+    mockedGetActiveSensei.mockResolvedValue({ username: "sensei" } as never);
+
+    const response = await callLoader("내 프로필");
+
+    expect(response.results).toContainEqual({ type: "menu", name: "내 프로필", to: "/@sensei" });
   });
 });
