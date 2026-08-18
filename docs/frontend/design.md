@@ -18,14 +18,15 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 
 ## Surfaces and layout
 
-- Do not add unnecessary nested cards, borders, or decorative wrappers.
-- Do not use borders merely to separate sections, cards, list items, popovers, or other content areas. Use spacing, background contrast, and typography instead. A border is reserved for a functionally necessary control boundary or dense data boundary.
+- Borders and dividers are opt-in, never a default decoration. Every border or divider must mark a functionally necessary control boundary or dense data boundary; if removing it does not reduce task comprehension or control affordance, remove it.
+- Do not use borders or dividers merely to separate sections, cards, list items, popovers, or other content areas. Use spacing, background contrast, and typography instead.
+- Do not add unnecessary nested cards or decorative wrappers.
 - Cards and section surfaces do not use borders by default. Form controls and data tables may use `border-input` or `border-border` when the boundary is functionally necessary.
 - Large cards and navigation surfaces use a wide, subdued shadow in light mode (`shadow-lg shadow-black/5`) and a tighter shadow in dark mode (`dark:shadow-md dark:shadow-black/20`) when background contrast alone does not create enough separation. Do not apply shadows to every nested row or small card.
 - Within a section, keep radius, border, shadow, and spacing uniform.
 - Base surface radius stays between `rounded-md` and `rounded-lg`. Do not use `rounded-xl` or larger.
 - Card-like surfaces stacking several rows use roughly `p-5 md:p-6` padding by default; only simple single-line items or small auxiliary panels drop to `p-3`–`p-4`.
-- For spacing between major blocks inside a card, use `gap-4`–`gap-6`, and keep at least `pt-4` after a divider so it does not feel cramped.
+- For spacing between major blocks inside a card, use `gap-4`–`gap-6`. If a functionally necessary divider is unavoidable, keep at least `pt-4` after it so the content does not feel cramped.
 - `rounded-full` is mostly for small elements like pills, chips, and avatars.
 - Do not force every control to full width; size to content and context.
 
@@ -38,7 +39,6 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - Supporting areas and hover states use `bg-muted` or a translucent muted value.
 - `bg-muted` is not the default surface for a stand-alone inactive control on the light page canvas. Use a white `bg-card` control with a small subdued shadow in light mode, and switch back to `bg-muted` in dark mode.
 - `FilterButtons` defaults to the nested Panel/Container treatment (`surface="panel"`): inactive buttons use `bg-muted` without a shadow. Only direct page placement opts into `surface="page"`, which uses a white control and a small light-mode shadow.
-- Independent lists use one card surface with internal `divide-border` separators and a medium subdued shadow. Do not give every row its own border or shadow when the rows form one list.
 - In light mode, white cards sit subtly above the neutral-50 canvas. In dark mode, cards are moderately darker than the neutral-800 page without reaching neutral-900.
 - New shared primitives and structural surfaces use semantic tokens. Existing feature-specific `neutral-*` colors are migrated file by file in the separate token-migration track; image overlays, fixed inverse surfaces, status colors, and data visualizations may keep explicit colors.
 
@@ -110,5 +110,5 @@ Before building new UI:
 4. Is the information hierarchy visible without unnecessary decoration?
 5. Does the result of save / submit appear immediately?
 6. Are you creating a second visual language different from existing screens?
-7. Can spacing or background contrast replace this border?
+7. Does every border or divider mark a functionally necessary boundary? If spacing, alignment, typography, or background contrast can replace it, remove it.
 8. Is every radius `rounded-lg` or smaller, except intentional pills and avatars?

@@ -13,6 +13,25 @@ import {
 } from "~/models/timeline-content.server";
 import { getUpcomingRaidContents, type RaidScheduleMeta } from "./raid-content";
 
+function isOngoingContent(content: TimelineContent, now: UtcIsoString): boolean {
+  return !isInstantAfter(content.startAt, now) && content.endAt !== null && isInstantAfter(content.endAt, now);
+}
+
+export function selectHomeMainEvent(contents: TimelineContent[], now: UtcIsoString): TimelineContent | null {
+  const ongoingEvents = contents.filter((content) => content.contentType === "event" && isOngoingContent(content, now));
+  const ongoingMainStories = contents.filter(
+    (content) => content.contentType === "main_story" && isOngoingContent(content, now),
+  );
+
+  return (
+    ongoingEvents[0] ??
+    ongoingMainStories.find((content) => content.recruitmentGroupUid !== null) ??
+    ongoingMainStories[0] ??
+    contents.find((content) => content.contentType === "event" && isInstantAfter(content.startAt, now)) ??
+    null
+  );
+}
+
 export type IndexRecruitment = {
   student: { uid: string; name: string; attackType: Attack; defenseType: Defense; role: Role } | null;
   favoriteKey: string;
@@ -54,17 +73,7 @@ export async function getIndexContents(env: Env, forceRefresh = false, ctx?: Exe
         getAllRecruitmentGroups(env, forceRefresh),
       ]);
 
-      const ongoingEvents = allEvents.filter(
-        (event) =>
-          event.contentType === "event" &&
-          !isInstantAfter(event.startAt, now) &&
-          event.endAt &&
-          isInstantAfter(event.endAt, now),
-      );
-      const mainEvent: TimelineContent | null =
-        ongoingEvents[0] ??
-        allEvents.find((event) => event.contentType === "event" && isInstantAfter(event.startAt, now)) ??
-        null;
+      const mainEvent = selectHomeMainEvent(allEvents, now);
 
       const recruitmentGroups = allRecruitmentGroups.filter((group) => {
         const startAt = new Date(group.startAt).getTime();
