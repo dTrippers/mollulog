@@ -10,18 +10,21 @@ export const RESOURCE_INVENTORY_RARITY_OPTIONS = [
 export type ResourceInventoryFilterState = {
   search: string;
   rarities: number[];
+  shortageOnly?: boolean;
 };
 
 export function createResourceInventoryFilterState(): ResourceInventoryFilterState {
   return {
     search: "",
     rarities: [],
+    shortageOnly: false,
   };
 }
 
 export type ResourceInventoryFilterable = {
   name: string;
   rarity: number;
+  shortage?: boolean;
 };
 
 export function matchesResourceInventoryFilter(
@@ -35,6 +38,9 @@ export function matchesResourceInventoryFilter(
   if (filter.rarities.length > 0 && !filter.rarities.includes(resource.rarity)) {
     return false;
   }
+  if (filter.shortageOnly && resource.shortage !== true) {
+    return false;
+  }
   return true;
 }
 
@@ -46,7 +52,7 @@ export function filterResourceInventoryResources<T extends ResourceInventoryFilt
 }
 
 export function isResourceInventoryFilterActive(filter: ResourceInventoryFilterState): boolean {
-  return filter.search.trim().length > 0 || filter.rarities.length > 0;
+  return filter.search.trim().length > 0 || filter.rarities.length > 0 || filter.shortageOnly === true;
 }
 
 type ResourceInventoryFilterPanelProps = {
@@ -77,6 +83,17 @@ export default function ResourceInventoryFilterPanel({ value, onChange }: Resour
             onChange({ ...value, rarities });
           },
         }))}
+        size="sm"
+      />
+      <PanelFilterButtonsSection
+        title="보유 상태"
+        buttonProps={[
+          {
+            text: "부족 재화만",
+            active: value.shortageOnly,
+            onToggle: (shortageOnly: boolean) => onChange({ ...value, shortageOnly }),
+          },
+        ]}
         size="sm"
       />
     </PanelBody>

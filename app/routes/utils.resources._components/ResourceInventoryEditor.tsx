@@ -24,6 +24,7 @@ import {
 import {
   type AggregatedGrowthResourceRequirements,
   CHARACTER_EXP_REPORTS,
+  calculateCharacterExpDifference,
   calculateEquipmentTierCoverage,
   compareGrowthResourceKindOrder,
   EQUIPMENT_TYPE_LABELS,
@@ -77,6 +78,7 @@ type InventoryResource = ItemCatalogResource & {
 type ResourceGroupView = {
   kindOrder: number;
   resources: InventoryResource[];
+  allocationResources: InventoryResource[];
   policy: CategoryDisplayPolicy;
   hasNeededResources: boolean;
 };
@@ -190,7 +192,10 @@ export default function ResourceInventoryEditor({
 
         {resourceGroups.length === 0 && (!hasCreditRequirement || hasActiveFilter) ? (
           <SectionCard className="p-8 md:p-8">
-            <EmptyView Icon={ArchiveBoxIcon} text="조건에 맞는 재화가 없어요" />
+            <EmptyView
+              Icon={ArchiveBoxIcon}
+              text={filter.shortageOnly ? "부족한 재화가 없어요" : "조건에 맞는 재화가 없어요"}
+            />
           </SectionCard>
         ) : (
           resourceGroups.map((group) => (
@@ -383,7 +388,7 @@ function ResourceGroup({
   onModeChange: (kindOrder: number, mode: ResourceMode) => void;
   onQuantityChange: (resourceUid: string, quantity: number) => void;
 }) {
-  const { kindOrder, resources, policy } = group;
+  const { kindOrder, resources, allocationResources, policy } = group;
   const isCharacterExpGroup = kindOrder === CHARACTER_EXP_KIND_ORDER;
   const isFavorGroup = kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor;
   return (
@@ -411,6 +416,7 @@ function ResourceGroup({
       ) : kindOrder === GROWTH_RESOURCE_KIND_ORDER.equipment ? (
         <EquipmentSubGroups
           resources={resources}
+          allocationResources={allocationResources}
           ownedQuantities={ownedQuantities}
           draftQuantities={draftQuantities}
           numberInputFlowNavigation={numberInputFlowNavigation}
@@ -419,6 +425,7 @@ function ResourceGroup({
       ) : kindOrder === GROWTH_RESOURCE_KIND_ORDER.bd || kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote ? (
         <SkillMaterialSubGroups
           resources={resources}
+          allocationResources={allocationResources}
           ownedQuantities={ownedQuantities}
           draftQuantities={draftQuantities}
           numberInputFlowNavigation={numberInputFlowNavigation}
@@ -467,12 +474,14 @@ function CategoryModeSwitch({
 
 function SkillMaterialSubGroups({
   resources,
+  allocationResources,
   ownedQuantities,
   draftQuantities,
   numberInputFlowNavigation,
   onQuantityChange,
 }: {
   resources: InventoryResource[];
+  allocationResources: InventoryResource[];
   ownedQuantities: Record<string, number>;
   draftQuantities: Record<string, number>;
   numberInputFlowNavigation: NumberInputFlowNavigation;
@@ -489,13 +498,29 @@ function SkillMaterialSubGroups({
         ),
     [resources],
   );
+  const allocationChoiceBoxResources = useMemo(
+    () =>
+      allocationResources
+        .filter((resource) => getSkillMaterialChoiceBoxRarity(resource.uid) !== null)
+        .sort(
+          (a, b) =>
+            (getSkillMaterialChoiceBoxRarity(a.uid) ?? Number.MAX_SAFE_INTEGER) -
+            (getSkillMaterialChoiceBoxRarity(b.uid) ?? Number.MAX_SAFE_INTEGER),
+        ),
+    [allocationResources],
+  );
   const skillMaterialResources = useMemo(
     () => resources.filter((resource) => getSkillMaterialChoiceBoxRarity(resource.uid) === null),
     [resources],
   );
+  const allocationSkillMaterialResources = useMemo(
+    () => allocationResources.filter((resource) => getSkillMaterialChoiceBoxRarity(resource.uid) === null),
+    [allocationResources],
+  );
   const choiceBoxAllocation = useMemo(
-    () => allocateSkillMaterialChoiceBoxes(skillMaterialResources, choiceBoxResources, draftQuantities),
-    [choiceBoxResources, draftQuantities, skillMaterialResources],
+    () =>
+      allocateSkillMaterialChoiceBoxes(allocationSkillMaterialResources, allocationChoiceBoxResources, draftQuantities),
+    [allocationChoiceBoxResources, allocationSkillMaterialResources, draftQuantities],
   );
 
   return (
@@ -547,12 +572,14 @@ function SkillMaterialSubGroups({
 
 function EquipmentSubGroups({
   resources,
+  allocationResources,
   ownedQuantities,
   draftQuantities,
   numberInputFlowNavigation,
   onQuantityChange,
 }: {
   resources: InventoryResource[];
+  allocationResources: InventoryResource[];
   ownedQuantities: Record<string, number>;
   draftQuantities: Record<string, number>;
   numberInputFlowNavigation: NumberInputFlowNavigation;
@@ -569,9 +596,24 @@ function EquipmentSubGroups({
         ),
     [resources],
   );
+  const allocationChoiceBoxResources = useMemo(
+    () =>
+      allocationResources
+        .filter((resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null)
+        .sort(
+          (a, b) =>
+            (getEquipmentBlueprintChoiceBoxTier(a.uid) ?? Number.MAX_SAFE_INTEGER) -
+            (getEquipmentBlueprintChoiceBoxTier(b.uid) ?? Number.MAX_SAFE_INTEGER),
+        ),
+    [allocationResources],
+  );
   const equipmentResources = useMemo(
     () => resources.filter((resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) === null),
     [resources],
+  );
+  const allocationEquipmentResources = useMemo(
+    () => allocationResources.filter((resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) === null),
+    [allocationResources],
   );
   const subGroups = useMemo(() => {
     const grouped = new Map<string, InventoryResource[]>();
@@ -589,13 +631,8 @@ function EquipmentSubGroups({
     );
   }, [equipmentResources]);
   const choiceBoxAllocation = useMemo(
-    () =>
-      allocateEquipmentChoiceBoxes(
-        subGroups.flatMap(([, typeResources]) => typeResources),
-        choiceBoxResources,
-        draftQuantities,
-      ),
-    [choiceBoxResources, draftQuantities, subGroups],
+    () => allocateEquipmentChoiceBoxes(allocationEquipmentResources, allocationChoiceBoxResources, draftQuantities),
+    [allocationChoiceBoxResources, allocationEquipmentResources, draftQuantities],
   );
 
   return (
@@ -646,6 +683,7 @@ function EquipmentSubGroups({
 type SkillMaterialChoiceBoxAllocation = {
   choiceBoxMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
   itemMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
+  shortageByUid: Map<string, boolean>;
 };
 
 function allocateSkillMaterialChoiceBoxes(
@@ -656,6 +694,12 @@ function allocateSkillMaterialChoiceBoxes(
   const remainingChoiceBoxesByUid = new Map<string, number>();
   const totalDeficitByChoiceBoxUid = new Map<string, number>();
   const itemMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
+  const shortageByUid = new Map(
+    skillMaterialResources.map((resource) => [
+      getInventoryUid(resource),
+      resource.requiredAmount > (quantities[getInventoryUid(resource)] ?? 0),
+    ]),
+  );
 
   for (const choiceBox of choiceBoxResources) {
     const choiceBoxUid = getInventoryUid(choiceBox);
@@ -697,6 +741,7 @@ function allocateSkillMaterialChoiceBoxes(
     }
 
     const remainingDeficit = directDeficit - choiceBoxAmount;
+    shortageByUid.set(getInventoryUid(resource), remainingDeficit > 0);
     if (remainingDeficit > 0) {
       metrics.push({
         label: "부족",
@@ -714,6 +759,7 @@ function allocateSkillMaterialChoiceBoxes(
   for (const choiceBox of choiceBoxResources) {
     const choiceBoxUid = getInventoryUid(choiceBox);
     const balance = Math.max(0, quantities[choiceBoxUid] ?? 0) - (totalDeficitByChoiceBoxUid.get(choiceBoxUid) ?? 0);
+    shortageByUid.set(choiceBoxUid, balance < 0);
     choiceBoxMetricsByUid.set(choiceBoxUid, [
       {
         label: balance >= 0 ? "여유" : "부족",
@@ -726,12 +772,13 @@ function allocateSkillMaterialChoiceBoxes(
     ]);
   }
 
-  return { choiceBoxMetricsByUid, itemMetricsByUid };
+  return { choiceBoxMetricsByUid, itemMetricsByUid, shortageByUid };
 }
 
 type EquipmentChoiceBoxAllocation = {
   choiceBoxMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
   itemMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
+  shortageByUid: Map<string, boolean>;
 };
 
 function allocateEquipmentChoiceBoxes(
@@ -742,6 +789,12 @@ function allocateEquipmentChoiceBoxes(
   const remainingChoiceBoxesByTier = new Map<number, number>();
   const totalDeficitByTier = new Map<number, number>();
   const itemMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
+  const shortageByUid = new Map(
+    equipmentResources.map((resource) => [
+      getInventoryUid(resource),
+      resource.requiredAmount > (quantities[getInventoryUid(resource)] ?? 0),
+    ]),
+  );
 
   for (const choiceBox of choiceBoxResources) {
     const tier = getEquipmentBlueprintChoiceBoxTier(choiceBox.uid);
@@ -786,6 +839,7 @@ function allocateEquipmentChoiceBoxes(
     }
 
     const remainingDeficit = directDeficit - choiceBoxAmount;
+    shortageByUid.set(getInventoryUid(resource), remainingDeficit > 0);
     if (remainingDeficit > 0) {
       metrics.push({
         label: "부족",
@@ -808,6 +862,7 @@ function allocateEquipmentChoiceBoxes(
 
     const choiceBoxUid = getInventoryUid(choiceBox);
     const balance = Math.max(0, quantities[choiceBoxUid] ?? 0) - (totalDeficitByTier.get(tier) ?? 0);
+    shortageByUid.set(choiceBoxUid, balance < 0);
     choiceBoxMetricsByUid.set(choiceBoxUid, [
       {
         label: balance >= 0 ? "여유" : "부족",
@@ -820,7 +875,7 @@ function allocateEquipmentChoiceBoxes(
     ]);
   }
 
-  return { choiceBoxMetricsByUid, itemMetricsByUid };
+  return { choiceBoxMetricsByUid, itemMetricsByUid, shortageByUid };
 }
 
 function compareChoiceBoxAllocationTargets(
@@ -908,11 +963,20 @@ function CharacterExpSummary({
   return (
     <div className="border-b border-border px-3 py-3">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <CharacterExpSummaryItem label="필요 경험치" value={requiredCharacterExp.toLocaleString()} />
-        <CharacterExpSummaryItem label="보유 경험치" value={ownedCharacterExp.toLocaleString()} />
+        <CharacterExpSummaryItem
+          label="필요 경험치"
+          value={requiredCharacterExp.toLocaleString()}
+          equivalent={requiredCharacterExp}
+        />
+        <CharacterExpSummaryItem
+          label="보유 경험치"
+          value={ownedCharacterExp.toLocaleString()}
+          equivalent={ownedCharacterExp}
+        />
         <CharacterExpSummaryItem
           label={balance >= 0 ? "여유 경험치" : "부족 경험치"}
           value={Math.abs(balance).toLocaleString()}
+          equivalent={Math.abs(balance)}
           valueClassName={cn(
             balance >= 0 && "text-emerald-600 dark:text-emerald-400",
             balance < 0 && "text-red-600 dark:text-red-300",
@@ -926,16 +990,19 @@ function CharacterExpSummary({
 function CharacterExpSummaryItem({
   label,
   value,
+  equivalent,
   valueClassName,
 }: {
   label: string;
   value: string;
+  equivalent: number;
   valueClassName?: string;
 }) {
   return (
     <div className="px-1 py-1">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className={cn("mt-1 text-sm font-semibold tabular-nums text-foreground", valueClassName)}>{value}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">Lv. 1→90 기준 {formatCharacterExpEquivalent(equivalent)}</p>
     </div>
   );
 }
@@ -1007,6 +1074,56 @@ function findInventoryUidBySourceUid(
   return resource ? getInventoryUid(resource) : sourceUid;
 }
 
+function buildResourceShortageByUid(
+  resources: InventoryResource[],
+  kindOrder: number,
+  requiredCharacterExp: number,
+  quantities: Record<string, number>,
+): Map<string, boolean> {
+  const shortageByUid = new Map(
+    resources.map((resource) => [
+      getInventoryUid(resource),
+      resource.requiredAmount > (quantities[getInventoryUid(resource)] ?? 0),
+    ]),
+  );
+
+  if (kindOrder === CHARACTER_EXP_KIND_ORDER) {
+    const characterExpShortage =
+      requiredCharacterExp > 0 && calculateOwnedCharacterExp(quantities) < requiredCharacterExp;
+    for (const resource of resources) {
+      shortageByUid.set(getInventoryUid(resource), characterExpShortage);
+    }
+    return shortageByUid;
+  }
+
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.bd || kindOrder === GROWTH_RESOURCE_KIND_ORDER.techNote) {
+    const choiceBoxResources = resources.filter((resource) => getSkillMaterialChoiceBoxRarity(resource.uid) !== null);
+    const skillMaterialResources = resources.filter(
+      (resource) => getSkillMaterialChoiceBoxRarity(resource.uid) === null,
+    );
+    const allocation = allocateSkillMaterialChoiceBoxes(skillMaterialResources, choiceBoxResources, quantities);
+    for (const [resourceUid, isShortage] of allocation.shortageByUid) {
+      shortageByUid.set(resourceUid, isShortage);
+    }
+    return shortageByUid;
+  }
+
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.equipment) {
+    const choiceBoxResources = resources.filter(
+      (resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null,
+    );
+    const equipmentResources = resources.filter(
+      (resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) === null,
+    );
+    const allocation = allocateEquipmentChoiceBoxes(equipmentResources, choiceBoxResources, quantities);
+    for (const [resourceUid, isShortage] of allocation.shortageByUid) {
+      shortageByUid.set(resourceUid, isShortage);
+    }
+  }
+
+  return shortageByUid;
+}
+
 export function buildResourceGroups(
   resources: InventoryResource[],
   categoryModes: Record<number, ResourceMode>,
@@ -1031,6 +1148,7 @@ export function buildResourceGroups(
       const hasNeededResources = groupResources.some((resource) => resource.requiredAmount > 0);
       const mode = resolveCategoryMode(kindOrder, categoryModes, hasNeededResources);
       const policy = getCategoryDisplayPolicy(kindOrder);
+      const shortageByUid = buildResourceShortageByUid(groupResources, kindOrder, requiredCharacterExp, quantities);
       const modeResources = groupResources.filter(
         (resource) =>
           mode === "all" ||
@@ -1041,11 +1159,18 @@ export function buildResourceGroups(
             (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
           (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
       );
-      const filteredResources = filterResourceInventoryResources(modeResources, filter);
+      const filteredResources = filterResourceInventoryResources(
+        modeResources.map((resource) => ({
+          ...resource,
+          shortage: shortageByUid.get(getInventoryUid(resource)) ?? false,
+        })),
+        filter,
+      );
 
       return {
         kindOrder,
         resources: filteredResources,
+        allocationResources: groupResources,
         policy,
         hasNeededResources,
       };
@@ -1101,8 +1226,15 @@ export function buildInventoryResources(
   return inventoryResources;
 }
 
-function calculateOwnedCharacterExp(quantities: Record<string, number>): number {
+export const CHARACTER_EXP_PER_STUDENT = calculateCharacterExpDifference(1, 90);
+
+export function calculateOwnedCharacterExp(quantities: Record<string, number>): number {
   return CHARACTER_EXP_REPORTS.reduce((sum, report) => sum + (quantities[report.uid] ?? 0) * report.exp, 0);
+}
+
+export function formatCharacterExpEquivalent(exp: number): string {
+  const equivalent = Math.max(0, exp) / CHARACTER_EXP_PER_STUDENT;
+  return equivalent <= 0.1 ? "0명분" : `${equivalent.toFixed(1)}명분`;
 }
 
 function getSkillMaterialChoiceBoxRequiredAmounts(
