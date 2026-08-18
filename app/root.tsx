@@ -27,6 +27,7 @@ import {
 import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
+import { type MobileNavigationPair, normalizeMobileNavigationIds } from "./domain/mobile-navigation";
 import { withD1Session } from "./lib/d1-session";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "./lib/google-analytics.client";
@@ -52,6 +53,8 @@ const reportedServerRouteErrorKeys = new Set<string>();
 export type RootOutletContext = {
   darkMode: boolean;
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
+  mobileNavigationIds: MobileNavigationPair;
+  setMobileNavigationIds: (ids: MobileNavigationPair) => void;
 };
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
@@ -82,6 +85,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       darkMode: preference.darkMode ?? true,
       displayTimeZone: normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE),
       favoriteNavigationIds: preference.favoriteNavigationIds ?? [],
+      mobileNavigationIds: preference.mobileNavigationIds ?? normalizeMobileNavigationIds(undefined),
       navigationBarContents,
       siteBanner,
       publicEnv: {
@@ -178,11 +182,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const loaderData = useLoaderData<typeof loader>();
-  const { currentUsername, currentProfileStudentId, favoriteNavigationIds, navigationBarContents, siteBanner } =
-    loaderData;
+  const {
+    currentUsername,
+    currentProfileStudentId,
+    favoriteNavigationIds,
+    mobileNavigationIds: initialMobileNavigationIds,
+    navigationBarContents,
+    siteBanner,
+  } = loaderData;
 
   const [darkMode, setDarkMode] = useState(loaderData.darkMode);
   const [displayTimeZone, setDisplayTimeZone] = useState(loaderData.displayTimeZone);
+  const [mobileNavigationIds, setMobileNavigationIds] = useState<MobileNavigationPair>(() =>
+    normalizeMobileNavigationIds(initialMobileNavigationIds),
+  );
   const loadingBarRef = useRef<LoadingBarRef>(null);
   const submittedTimeZoneRef = useRef<string | null>(null);
   const preferenceFetcher = useFetcher();
@@ -266,6 +279,7 @@ export default function App() {
             currentUsername={currentUsername}
             currentProfileStudentId={currentProfileStudentId}
             favoriteNavigationIds={favoriteNavigationIds}
+            mobileNavigationIds={mobileNavigationIds}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
             upcomingEvent={navigationBarContents.upcomingEvent}
@@ -280,7 +294,16 @@ export default function App() {
               <TimeZoneProvider timeZone={displayTimeZone}>
                 <StudentCardPopupProvider key={pathname}>
                   {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
-                  <Outlet context={{ darkMode, setDarkMode } satisfies RootOutletContext} />
+                  <Outlet
+                    context={
+                      {
+                        darkMode,
+                        setDarkMode,
+                        mobileNavigationIds,
+                        setMobileNavigationIds,
+                      } satisfies RootOutletContext
+                    }
+                  />
                 </StudentCardPopupProvider>
               </TimeZoneProvider>
               <Footer />

@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import type { MobileNavigationPair } from "~/domain/mobile-navigation";
 import {
   getAvailableNavigationFavorites,
   normalizeNavigationFavoriteIds,
@@ -39,6 +40,7 @@ type NavigationBarProps = {
   currentUsername: string | null;
   currentProfileStudentId: string | null;
   favoriteNavigationIds: string[];
+  mobileNavigationIds: MobileNavigationPair;
   darkMode: boolean;
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   upcomingEvent: { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
@@ -288,6 +290,7 @@ export default function NavigationBar({
   currentUsername,
   currentProfileStudentId,
   favoriteNavigationIds,
+  mobileNavigationIds,
   darkMode,
   setDarkMode,
   upcomingEvent,
@@ -376,6 +379,7 @@ export default function NavigationBar({
         currentProfileStudentId={currentProfileStudentId}
         pathname={pathname}
         upcomingEvent={upcomingEvent}
+        mobileNavigationIds={mobileNavigationIds}
       />
     </>
   );
@@ -643,13 +647,15 @@ function MobileBottomNavigation({
   currentProfileStudentId,
   pathname,
   upcomingEvent,
+  mobileNavigationIds,
 }: {
   currentUsername: string | null;
   currentProfileStudentId: string | null;
   pathname: string;
   upcomingEvent: NavigationBarProps["upcomingEvent"];
+  mobileNavigationIds: MobileNavigationPair;
 }) {
-  const items = getMobileNavigationItems({ pathname, upcomingEvent });
+  const items = getMobileNavigationItems({ pathname, upcomingEvent, mobileNavigationIds });
 
   return (
     <nav

@@ -1,26 +1,31 @@
-import { ChevronRightIcon, HeartIcon } from "@heroicons/react/16/solid";
-import { CameraIcon, PlusIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { CheckIcon, ChevronRightIcon, HeartIcon } from "@heroicons/react/16/solid";
+import { CameraIcon, Cog6ToothIcon, PlusIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getMoreNavigationItems } from "~/components/features/layout/navigation-menu";
-import { ProfileImage, SubTitle, Title } from "~/components/primitives";
+import {
+  getMobileNavigationOptions,
+  getMoreNavigationSections,
+  type NavigationItem,
+} from "~/components/features/layout/navigation-menu";
+import { BottomSheet, Button, ProfileImage, SubTitle, Title } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import {
+  type MobileNavigationId,
+  type MobileNavigationPair,
+  normalizeMobileNavigationIds,
+} from "~/domain/mobile-navigation";
 import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
+import type { RootOutletContext } from "~/root";
 import { getMoreViewData, type MoreCurrentUser } from "~/views/more";
 
 type MoreActionItem = {
   key: string;
   name: string;
-  description?: string;
-  Icon: React.ComponentType<React.ComponentProps<"svg">>;
   to?: string;
-  badgeLabel?: string;
-  showRedDot?: boolean;
   disabled?: boolean;
-  onClick?: () => void;
-  actionLabel?: string;
 };
 
 export const meta: MetaFunction = ({ location }) => {
@@ -45,24 +50,21 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
 export default function MoreIndexPage() {
   const { currentUser, upcomingEvent, hasOngoingRaid, hasUnconsumedCoupons } = useLoaderData<typeof loader>();
+  const { mobileNavigationIds, setMobileNavigationIds } = useOutletContext<RootOutletContext>();
   const { showSignIn } = useSignIn();
 
-  const menuItems = getMoreNavigationItems({
+  const navigationOptions = {
     pathname: "/more",
     upcomingEvent,
     hasOngoingRaid,
     hasUnconsumedCoupons,
     isSignedIn: currentUser !== null,
-  }).map((item) => ({
-    key: item.to,
-    to: item.to,
-    name: item.name,
-    description: item.description,
-    Icon: item.OutlineIcon,
-    badgeLabel: item.badgeLabel,
-    showRedDot: item.showRedDot,
-    disabled: item.disabled,
+  };
+  const menuSections = getMoreNavigationSections(navigationOptions).map((section) => ({
+    name: section.name,
+    items: section.items.map(toMoreActionItem),
   }));
+  const mobileOptions = getMobileNavigationOptions(navigationOptions);
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-3 pb-6 lg:pt-2">
@@ -75,10 +77,24 @@ export default function MoreIndexPage() {
         hasUnconsumedCoupons={hasUnconsumedCoupons}
       />
       <MorePersonalPlannerSection currentUser={currentUser} />
+      <MoreMobileNavigationSettings
+        options={mobileOptions}
+        mobileNavigationIds={mobileNavigationIds}
+        onApply={setMobileNavigationIds}
+      />
 
-      {menuItems.length > 0 && <MoreMenuGrid title="전체 메뉴" items={menuItems} />}
+      {menuSections.length > 0 && <MoreMenuSections sections={menuSections} />}
     </div>
   );
+}
+
+function toMoreActionItem(item: NavigationItem): MoreActionItem {
+  return {
+    key: item.to,
+    to: item.to,
+    name: item.name,
+    disabled: item.disabled,
+  };
 }
 
 function MoreProfileBlock({
@@ -135,7 +151,7 @@ function MoreProfileBlock({
         </div>
       </div>
 
-      <div className="border-neutral-200 border-t dark:border-neutral-800">
+      <div className="space-y-0.5 px-2 pb-2">
         <ProfileSummaryLink
           to={`/@${currentUser.username}/students`}
           label="모집한 학생"
@@ -161,13 +177,9 @@ function MorePersonalPlannerSection({ currentUser }: { currentUser: MoreCurrentU
   return (
     <section className="pt-3">
       <SubTitle text="나의 데이터" />
-      <div className="overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-900/45">
+      <div className="space-y-1 overflow-hidden rounded-lg bg-neutral-100 dark:bg-neutral-900/45">
         {currentUser ? <PyroxenePlannerRow pyroxene={currentUser.pyroxene} /> : null}
-        <RelationshipPlannerRow
-          relationship={currentUser?.relationship ?? null}
-          isSignedIn={currentUser !== null}
-          showTopBorder={currentUser !== null}
-        />
+        <RelationshipPlannerRow relationship={currentUser?.relationship ?? null} isSignedIn={currentUser !== null} />
         {currentUser ? <ResourceScannerRow /> : null}
       </div>
     </section>
@@ -179,9 +191,9 @@ function ResourceScannerRow() {
     <Link
       to="/scanner/resource"
       className={cn(`
-        group flex items-center gap-3 border-neutral-200 border-t py-3 pl-4 pr-2 transition-colors
+        group flex items-center gap-3 py-3 pl-4 pr-2 transition-colors
         hover:bg-neutral-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset
-        dark:border-neutral-800 dark:hover:bg-neutral-800/40
+        dark:hover:bg-neutral-800/40
       `)}
     >
       <CameraIcon className="size-5 shrink-0 text-neutral-500 dark:text-neutral-400" aria-hidden="true" />
@@ -217,7 +229,7 @@ function PyroxenePlannerRow({ pyroxene }: { pyroxene: MoreCurrentUser["pyroxene"
         <div className="flex min-w-0 items-center gap-2">
           <p className="truncate text-base font-semibold text-neutral-900 dark:text-neutral-100">다가오는 모집</p>
           {status.scheduleLabel && (
-            <span className="shrink-0 rounded-full border border-neutral-200 bg-white px-2 py-0.5 text-xs font-medium leading-none text-neutral-600 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-300">
+            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-medium leading-none text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
               {status.scheduleLabel}
             </span>
           )}
@@ -291,11 +303,9 @@ function ProfileSummaryLink({
 function RelationshipPlannerRow({
   relationship,
   isSignedIn,
-  showTopBorder,
 }: {
   relationship: MoreCurrentUser["relationship"] | null;
   isSignedIn: boolean;
-  showTopBorder: boolean;
 }) {
   const targetStudents = relationship?.targetStudents ?? [];
 
@@ -305,7 +315,6 @@ function RelationshipPlannerRow({
         group relative flex items-center gap-2 py-3 pl-4 pr-2 transition-colors hover:bg-neutral-200
         focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset
         dark:hover:bg-neutral-800/40
-        ${showTopBorder ? "border-neutral-200 border-t dark:border-neutral-800" : ""}
       `)}
     >
       <Link
@@ -339,7 +348,7 @@ function RelationshipPlannerRow({
           </>
         ) : isSignedIn ? (
           <div className="mt-2 flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
-            <span className="flex size-6 items-center justify-center rounded-full border border-neutral-200 dark:border-neutral-700">
+            <span className="flex size-6 items-center justify-center rounded-full bg-neutral-200 dark:bg-neutral-700">
               <PlusIcon className="size-4" strokeWidth={2} />
             </span>
             <span className="text-xs font-medium">
@@ -358,62 +367,209 @@ function RelationshipPlannerRow({
   );
 }
 
-function MoreMenuGrid({ title, items }: { title: string; items: MoreActionItem[] }) {
+function MoreMobileNavigationSettings({
+  options,
+  mobileNavigationIds,
+  onApply,
+}: {
+  options: NavigationItem[];
+  mobileNavigationIds: MobileNavigationPair;
+  onApply: (ids: MobileNavigationPair) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [draftIds, setDraftIds] = useState<MobileNavigationPair>(() =>
+    normalizeMobileNavigationIds(mobileNavigationIds),
+  );
+  const [activeSlot, setActiveSlot] = useState<0 | 1>(0);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const getOptionName = (id: MobileNavigationId) =>
+    options.find((option) => option.mobileNavigationId === id)?.name ?? "사용할 수 없는 메뉴";
+
+  const openSettings = () => {
+    setDraftIds(normalizeMobileNavigationIds(mobileNavigationIds));
+    setActiveSlot(0);
+    setSaveError(null);
+    setIsOpen(true);
+  };
+
+  const selectOption = (id: MobileNavigationId) => {
+    const otherSlot = activeSlot === 0 ? 1 : 0;
+    if (draftIds[otherSlot] === id) {
+      return;
+    }
+
+    setDraftIds((current) => {
+      const next: MobileNavigationPair = [...current];
+      next[activeSlot] = id;
+      return next;
+    });
+  };
+
+  const applySettings = async () => {
+    const normalizedIds = normalizeMobileNavigationIds(draftIds);
+    setIsSaving(true);
+    setSaveError(null);
+
+    try {
+      const response = await fetch("/api/preference", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mobileNavigationIds: normalizedIds }),
+      });
+      if (!response.ok) {
+        throw new Error(`preference status=${response.status}`);
+      }
+
+      onApply(normalizedIds);
+      setIsOpen(false);
+    } catch {
+      setSaveError("저장하지 못했어요. 잠시 후 다시 시도해주세요.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <section className="pt-3">
+        <SubTitle text="탭 개인화 설정" description="3, 4번째 탭을 자주 사용하는 메뉴로 변경할 수 있어요" />
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 rounded-lg bg-neutral-100 px-4 py-3 text-left transition-colors hover:bg-neutral-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-neutral-900/45 dark:hover:bg-neutral-800/60"
+          onClick={openSettings}
+          aria-haspopup="dialog"
+        >
+          <span className="min-w-0">
+            <span className="block text-base font-semibold text-neutral-900 dark:text-neutral-100">현재 탭</span>
+            <span className="mt-1 block truncate text-sm text-neutral-500 dark:text-neutral-400">
+              {getOptionName(mobileNavigationIds[0])} · {getOptionName(mobileNavigationIds[1])}
+            </span>
+          </span>
+          <ChevronRightIcon className="size-4 shrink-0 text-neutral-400" aria-hidden="true" />
+        </button>
+      </section>
+
+      {isOpen ? (
+        <BottomSheet
+          Icon={Cog6ToothIcon}
+          title="탭 개인화 설정"
+          description="3, 4번째 탭을 자주 사용하는 메뉴로 변경할 수 있어요"
+          onClose={() => {
+            if (!isSaving) {
+              setIsOpen(false);
+            }
+          }}
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-4">
+            <div className="grid grid-cols-2 gap-2">
+              {([0, 1] as const).map((slot) => (
+                <button
+                  type="button"
+                  key={slot}
+                  className={cn(
+                    "rounded-lg px-3 py-3 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+                    activeSlot === slot
+                      ? "bg-primary/15 text-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/70",
+                  )}
+                  onClick={() => setActiveSlot(slot)}
+                  aria-pressed={activeSlot === slot}
+                >
+                  <span className="block text-xs font-medium">{slot === 0 ? "3번째 탭" : "4번째 탭"}</span>
+                  <span className="mt-1 block truncate text-sm font-semibold text-foreground">
+                    {getOptionName(draftIds[slot])}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-2">
+                {options.map((option) => {
+                  const id = option.mobileNavigationId;
+                  if (!id) {
+                    return null;
+                  }
+
+                  const isSelected = draftIds[activeSlot] === id;
+                  const isSelectedByOtherSlot = draftIds[activeSlot === 0 ? 1 : 0] === id;
+                  return (
+                    <button
+                      type="button"
+                      key={id}
+                      className={cn(
+                        "flex min-h-10 items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+                        isSelected ? "bg-primary/15 text-foreground" : "bg-muted text-foreground/80 hover:bg-muted/70",
+                        isSelectedByOtherSlot && "cursor-not-allowed opacity-40",
+                      )}
+                      onClick={() => selectOption(id)}
+                      disabled={isSelectedByOtherSlot}
+                      aria-pressed={isSelected}
+                    >
+                      <span className="truncate">{option.name}</span>
+                      {isSelected ? <CheckIcon className="size-4 shrink-0 text-primary" aria-hidden="true" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {saveError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {saveError}
+              </p>
+            ) : null}
+            <Button type="button" variant="primary" fullWidth disabled={isSaving} onClick={applySettings}>
+              {isSaving ? "저장 중..." : "적용"}
+            </Button>
+          </div>
+        </BottomSheet>
+      ) : null}
+    </>
+  );
+}
+
+function MoreMenuSections({ sections }: { sections: { name: string; items: MoreActionItem[] }[] }) {
   return (
     <section className="pt-3">
-      <SubTitle text={title} />
-      <div className="grid grid-cols-4 gap-x-2 gap-y-3 rounded-lg bg-neutral-100 px-2 py-3 dark:bg-neutral-900/45">
-        {items.map((item) => (
-          <MoreGridItem key={item.key} item={item} />
+      <SubTitle text="모든 메뉴" />
+      <div className="space-y-4">
+        {sections.map((section) => (
+          <div key={section.name} className="space-y-1">
+            <h3 className="px-1 text-sm font-semibold text-neutral-500 dark:text-neutral-400">{section.name}</h3>
+            <div className="space-y-1">
+              {section.items.map((item) => (
+                <MoreMenuItem key={item.key} item={item} />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </section>
   );
 }
 
-function MoreGridItem({ item }: { item: MoreActionItem }) {
-  const content = (
-    <>
-      <span className="relative flex size-8 items-center justify-center text-neutral-700 dark:text-neutral-200">
-        <item.Icon className="size-6" strokeWidth={1.75} />
-        {item.showRedDot && <span className="absolute right-0.5 top-0.5 size-1.5 rounded-full bg-red-500" />}
-      </span>
-      <span className="mt-1.5 max-w-full break-keep text-xs font-medium leading-snug text-neutral-700 dark:text-neutral-200">
-        {item.name}
-      </span>
-      {item.badgeLabel && (
-        <span className="mt-0.5 text-xs leading-none text-neutral-400 dark:text-neutral-500">{item.badgeLabel}</span>
-      )}
-    </>
+function MoreMenuItem({ item }: { item: MoreActionItem }) {
+  const className = cn(
+    "block w-full rounded-lg bg-neutral-100 px-4 py-3 text-sm font-medium text-neutral-800 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:bg-neutral-900/45 dark:text-neutral-100",
+    item.disabled ? "cursor-default opacity-50" : "hover:bg-neutral-200 dark:hover:bg-neutral-800/60",
   );
 
-  const className = cn(`
-    flex min-w-0 flex-col items-center rounded-md px-1 py-1.5 text-center transition-colors
-    focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
-    dark:focus-visible:ring-offset-neutral-900
-    ${item.disabled ? "cursor-default opacity-40" : "hover:bg-white dark:hover:bg-neutral-800/70"}
-  `);
-
-  if (item.disabled) {
+  if (item.disabled || !item.to) {
     return (
-      <div className={className} title={item.description ?? item.name} aria-disabled="true">
-        {content}
+      <div className={className} aria-disabled="true">
+        {item.name}
       </div>
     );
   }
 
-  if (item.to) {
-    return (
-      <Link to={item.to} className={className} title={item.description ?? item.name}>
-        {content}
-      </Link>
-    );
-  }
-
   return (
-    <button type="button" className={className} onClick={item.onClick} title={item.description ?? item.name}>
-      {content}
-    </button>
+    <Link to={item.to} className={className}>
+      {item.name}
+    </Link>
   );
 }
 
