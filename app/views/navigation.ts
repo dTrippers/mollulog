@@ -33,6 +33,8 @@ export type NavigationBarContentsRaw = {
     startAt: UtcIsoString;
     endAt: UtcIsoString | null;
     runType: TimelineContent["runType"];
+    contentType: TimelineContent["contentType"];
+    shopContentUid: string | null;
   }[];
   latestNewsTime: UtcIsoString | null;
   raidActivePeriods: { startAt: UtcIsoString | null; endAt: UtcIsoString | null }[];
@@ -47,12 +49,12 @@ export async function getNavigationBarContentsRaw(
   return fetchRouteCached(
     env,
     ctx,
-    cacheKey("route", "navigation-bar", 4, "raw"),
+    cacheKey("route", "navigation-bar", 5, "raw"),
     async () => {
       const now = nowUtcIso();
       const [contents, latestNewsTime, raidSchedules, coupons] = await Promise.all([
-        // Limit results to active and future events (endAt >= now).
-        getTimelineContentsByContentTypes(env, ["event"], now, { ctx }),
+        // Main stories can own an event shop, so include those as calculator candidates too.
+        getTimelineContentsByContentTypes(env, ["event", "main_story"], now, { ctx }),
         getLatestPostTime(env, "news", { ctx }),
         getAllRaidSchedules(env, forceRefresh),
         getAllCoupons(env, { ctx }),
@@ -60,12 +62,18 @@ export async function getNavigationBarContentsRaw(
 
       return {
         eventCandidates: contents
-          .filter((content) => content.runType !== "permanent")
+          .filter(
+            (content) =>
+              (content.contentType === "event" && content.runType !== "permanent") ||
+              (content.contentType === "main_story" && content.shopContentUid !== null),
+          )
           .map((content) => ({
             uid: content.uid,
             startAt: content.startAt,
             endAt: content.endAt,
             runType: content.runType,
+            contentType: content.contentType,
+            shopContentUid: content.shopContentUid,
           })),
         latestNewsTime: latestNewsTime ? toUtcIso(latestNewsTime) : null,
         raidActivePeriods: raidSchedules
@@ -97,9 +105,20 @@ export async function getNavigationBarContents(
       ? getPersonalNavigationState(env, userId, { ctx })
       : Promise.resolve({ hasUnconsumedCoupons: false, hasUnreadFeedbackReplies: false }),
   ]);
-  const upcomingEventContent = raw.eventCandidates
-    .filter((content) => content.endAt && isInstantAfter(content.endAt, now))
+  const shopCandidates = raw.eventCandidates.filter(
+    (content) =>
+      content.endAt &&
+      isInstantAfter(content.endAt, now) &&
+      (content.contentType === "event" || content.shopContentUid !== null),
+  );
+  const ongoingEvent = shopCandidates
+    .filter((content) => content.contentType === "event" && !isInstantAfter(content.startAt, now))
     .sort((a, b) => compareInstantAsc(a.startAt, b.startAt))[0];
+  const ongoingMainStory = shopCandidates
+    .filter((content) => content.contentType === "main_story" && !isInstantAfter(content.startAt, now))
+    .sort((a, b) => compareInstantAsc(a.startAt, b.startAt))[0];
+  const upcomingEventContent =
+    ongoingEvent ?? ongoingMainStory ?? shopCandidates.sort((a, b) => compareInstantAsc(a.startAt, b.startAt))[0];
   const upcomingEvent = upcomingEventContent
     ? {
         uid: upcomingEventContent.uid,

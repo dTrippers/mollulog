@@ -216,8 +216,55 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
       jest.setSystemTime(new Date("2026-05-11T00:00:00.000Z").getTime());
       await getNavigationBarContents(env);
       // Regression guard: this must not be called without the endAfter parameter.
-      expect(mockedGetTimelineContentsByContentTypes).toHaveBeenCalledWith(env, ["event"], expect.any(String), {
-        ctx: undefined,
+      expect(mockedGetTimelineContentsByContentTypes).toHaveBeenCalledWith(
+        env,
+        ["event", "main_story"],
+        expect.any(String),
+        {
+          ctx: undefined,
+        },
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("selects an ongoing shop-linked main story before an upcoming event", async () => {
+    mockedGetTimelineContentsByContentTypes.mockResolvedValue([
+      {
+        ...event("lore-tracking", "2026-05-11T10:00:00.000Z", "2026-05-25T11:00:00.000Z", "permanent"),
+        contentType: "main_story",
+        shopContentUid: "lore-tracking-shop",
+      },
+      event("pray-ball", "2026-05-12T10:00:00.000Z", "2026-05-26T11:00:00.000Z"),
+    ]);
+
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date("2026-05-11T12:00:00.000Z").getTime());
+      await expect(getNavigationBarContents(env)).resolves.toMatchObject({
+        upcomingEvent: { uid: "lore-tracking" },
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("keeps an ongoing event ahead of an ongoing shop-linked main story", async () => {
+    mockedGetTimelineContentsByContentTypes.mockResolvedValue([
+      event("ongoing-event", "2026-05-11T09:00:00.000Z", "2026-05-25T11:00:00.000Z"),
+      {
+        ...event("lore-tracking", "2026-05-11T10:00:00.000Z", "2026-05-25T11:00:00.000Z"),
+        contentType: "main_story",
+        shopContentUid: "lore-tracking-shop",
+      },
+    ]);
+
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date("2026-05-11T12:00:00.000Z").getTime());
+      await expect(getNavigationBarContents(env)).resolves.toMatchObject({
+        upcomingEvent: { uid: "ongoing-event" },
       });
     } finally {
       jest.useRealTimers();
