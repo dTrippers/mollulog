@@ -313,7 +313,7 @@ export default function NavigationBar({
     <>
       <aside
         className="
-          hidden bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex lg:h-screen lg:w-72 lg:flex-col xl:w-84
+          hidden bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex lg:h-screen lg:w-68 lg:shrink-0 lg:flex-col
         "
       >
         <Link
@@ -1040,26 +1040,23 @@ function SubMenuItem({
   );
   const content = (
     <>
-      <span className="relative flex size-5 items-center justify-center">
+      <span className="flex size-5 items-center justify-center">
         {isActive ? (
           <SolidIcon className="size-4 text-foreground" />
         ) : (
           <OutlineIcon className="size-4 text-foreground/70" />
         )}
-        {showRedDot && (
-          <span
-            className="absolute -top-1 -right-1 size-1.5 animate-pulse rounded-full bg-red-500"
-            aria-hidden="true"
-          />
-        )}
       </span>
       <span className="min-w-0">
-        <span className="relative inline-block">
-          {name}
+        <span className="inline-flex min-w-0 items-start gap-1 whitespace-nowrap">
+          <span>{name}</span>
           {badgeLabel && (
-            <span className="absolute top-0 left-full ml-1 origin-left scale-90 whitespace-nowrap text-xs font-normal leading-none text-muted-foreground/70">
+            <span className="mt-0.5 shrink-0 origin-left scale-90 whitespace-nowrap text-xs font-normal leading-none text-muted-foreground/70">
               {badgeLabel}
             </span>
+          )}
+          {showRedDot && (
+            <span className="mt-1 size-1.5 shrink-0 animate-pulse rounded-full bg-red-500" aria-hidden="true" />
           )}
         </span>
       </span>
@@ -1082,10 +1079,7 @@ function SubMenuItem({
         aria-label={badgeLabel ? `${name} ${badgeLabel}` : name}
       />
       <div
-        className={cn(
-          "pointer-events-none relative z-[1] grid min-w-0 flex-1 grid-cols-[1.25rem_1fr] items-center gap-3",
-          favoriteId && onFavoriteToggle && "pr-7",
-        )}
+        className="pointer-events-none relative z-[1] grid min-w-0 flex-1 grid-cols-[1.25rem_1fr] items-center gap-3 pr-7"
         aria-hidden="true"
       >
         {content}
