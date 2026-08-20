@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { GROWTH_RESOURCE_KIND_ORDER } from "~/domain/growth-resource";
 import { ResourceTypeEnum } from "~/graphql/graphql";
@@ -8,6 +10,11 @@ import { getUserResourceInventoryMap, upsertUserResourceInventories } from "~/mo
 import {
   buildInventoryResources,
   buildResourceGroups,
+  CHARACTER_EXP_PER_STUDENT,
+  CharacterExpSummary,
+  calculateOwnedCharacterExp,
+  formatCharacterExpEquivalent,
+  getResourceInventoryEmptyText,
 } from "~/routes/utils.resources._components/ResourceInventoryEditor";
 import {
   filterResourceInventoryResources,
@@ -220,6 +227,40 @@ describe("resource inventory filter", () => {
     expect(filterResourceInventoryResources(resources, { search: "hammer", rarities: [4] })).toEqual([resources[1]]);
   });
 
+  it("combines shortage, name, and rarity filters with AND semantics", () => {
+    const resourcesWithShortage = resources.map((resource) => ({
+      ...resource,
+      shortage: resource.uid === "2",
+    }));
+
+    expect(
+      filterResourceInventoryResources(resourcesWithShortage, {
+        search: "hammer",
+        rarities: [4],
+        shortageOnly: true,
+      }),
+    ).toEqual([resourcesWithShortage[1]]);
+    expect(
+      filterResourceInventoryResources(resourcesWithShortage, {
+        search: "hammer",
+        rarities: [],
+        shortageOnly: true,
+      }),
+    ).toEqual([resourcesWithShortage[1]]);
+  });
+
+  it("uses shortage-aware empty copy without hiding active name or rarity filters", () => {
+    expect(getResourceInventoryEmptyText({ search: "", rarities: [], shortageOnly: true })).toBe(
+      "부족한 재화가 없어요",
+    );
+    expect(getResourceInventoryEmptyText({ search: "보고서", rarities: [], shortageOnly: true })).toBe(
+      "조건에 맞는 부족 재화가 없어요",
+    );
+    expect(getResourceInventoryEmptyText({ search: "", rarities: [4], shortageOnly: true })).toBe(
+      "조건에 맞는 부족 재화가 없어요",
+    );
+  });
+
   it("treats an empty rarity selection as all rarities", () => {
     const filter: ResourceInventoryFilterState = { search: "", rarities: [] };
     expect(filterResourceInventoryResources(resources, filter)).toEqual(resources);
@@ -253,5 +294,186 @@ describe("resource inventory filter", () => {
     );
 
     expect(filteredGroups).toEqual([]);
+  });
+
+  it("does not classify a resource as short when its choice boxes cover the final deficit", () => {
+    const inventoryResources = [
+      {
+        uid: "101001",
+        name: "모자 설계도 2티어",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "hat",
+        subCategory: null,
+        requiredAmount: 5,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+      {
+        uid: "150028",
+        name: "2티어 장비 설계도 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: null,
+        subCategory: null,
+        requiredAmount: 5,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+    ];
+
+    const groups = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.equipment]: "needed" },
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      { "101001": 0, "150028": 5 },
+    );
+
+    expect(groups).toEqual([]);
+  });
+
+  it("keeps shared equipment choice-box allocation stable when shortage filtering narrows tiles", () => {
+    const inventoryResources = [
+      {
+        uid: "101001",
+        name: "A 설계도",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "hat",
+        subCategory: null,
+        requiredAmount: 4,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+      {
+        uid: "102001",
+        name: "B 설계도",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "gloves",
+        subCategory: null,
+        requiredAmount: 4,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+      {
+        uid: "150028",
+        name: "2티어 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: null,
+        subCategory: null,
+        requiredAmount: 8,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+    ];
+
+    const groups = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.equipment]: "needed" },
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      { "101001": 0, "102001": 0, "150028": 6 },
+    );
+
+    expect(groups[0]?.resources.map((resource) => resource.uid)).toEqual(["102001", "150028"]);
+    expect(groups[0]?.allocationResources.map((resource) => resource.uid)).toEqual(["101001", "102001", "150028"]);
+  });
+
+  it("keeps shared skill-material choice-box allocation stable when shortage filtering narrows tiles", () => {
+    const inventoryResources = [
+      {
+        uid: "3001",
+        name: "A BD",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: null,
+        subCategory: "cd_item",
+        requiredAmount: 4,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.bd,
+      },
+      {
+        uid: "3002",
+        name: "B BD",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: null,
+        subCategory: "cd_item",
+        requiredAmount: 4,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.bd,
+      },
+      {
+        uid: "150004",
+        name: "1등급 BD 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: null,
+        subCategory: null,
+        requiredAmount: 8,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.bd,
+      },
+    ];
+
+    const groups = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.bd]: "needed" },
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      { "3001": 0, "3002": 0, "150004": 6 },
+    );
+
+    expect(groups[0]?.resources.map((resource) => resource.uid)).toEqual(["3002", "150004"]);
+    expect(groups[0]?.allocationResources.map((resource) => resource.uid)).toEqual(["3001", "3002", "150004"]);
+  });
+
+  it("uses combined activity-report EXP for shortage filtering", () => {
+    const reports = ["13", "12", "11", "10"].map((uid) => ({
+      uid,
+      name: `보고서 ${uid}`,
+      rarity: Number(uid) - 9,
+      type: ResourceTypeEnum.Item,
+      category: "character_exp_growth",
+      subCategory: null,
+      requiredAmount: 0,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.characterExp,
+    }));
+
+    const shortageGroups = buildResourceGroups(
+      reports,
+      { [GROWTH_RESOURCE_KIND_ORDER.characterExp]: "all" },
+      { search: "", rarities: [], shortageOnly: true },
+      10_001,
+      { "13": 1 },
+    );
+    expect(shortageGroups[0]?.resources.map((resource) => resource.uid)).toEqual(reports.map(({ uid }) => uid));
+
+    const coveredGroups = buildResourceGroups(
+      reports,
+      { [GROWTH_RESOURCE_KIND_ORDER.characterExp]: "all" },
+      { search: "", rarities: [], shortageOnly: true },
+      10_000,
+      { "13": 1 },
+    );
+    expect(coveredGroups).toEqual([]);
+  });
+
+  it("formats activity-report equivalents as floored natural-number counts", () => {
+    expect(calculateOwnedCharacterExp({ "13": 1 })).toBe(10_000);
+    expect(formatCharacterExpEquivalent(0)).toBe("1명분 미만");
+    expect(formatCharacterExpEquivalent(CHARACTER_EXP_PER_STUDENT - 1)).toBe("1명분 미만");
+    expect(formatCharacterExpEquivalent(CHARACTER_EXP_PER_STUDENT)).toBe("1명분");
+    expect(formatCharacterExpEquivalent(CHARACTER_EXP_PER_STUDENT * 2.9)).toBe("2명분");
+  });
+
+  it("shows owned activity-report EXP even when no growth target is set", () => {
+    const markup = renderToStaticMarkup(
+      createElement(CharacterExpSummary, {
+        requiredCharacterExp: 0,
+        draftQuantities: { "13": 1 },
+      }),
+    );
+
+    expect(markup).toContain("보유 경험치");
+    expect(markup).toContain("10,000");
+    expect(markup).toContain("레벨 1 → 90 기준 1명분 미만");
+    expect(markup).not.toContain("필요 경험치");
+    expect(markup).not.toContain("여유 경험치");
   });
 });

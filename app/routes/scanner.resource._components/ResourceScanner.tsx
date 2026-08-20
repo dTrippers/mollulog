@@ -50,12 +50,30 @@ import {
 } from "./resource-cell-review";
 import { buildImageReviewSlots, type ReviewLayoutComponent } from "./resource-review-layout";
 
+type ScannerImageStatus = {
+  uid: string;
+  filename: string;
+  status: string;
+};
+
+type ScannerImageRecognitionReviewCell = Pick<ReviewCell, "imageUid" | "status">;
+
+type ScannerImageRecognitionReviewInput = {
+  images: ScannerImageStatus[];
+  reviewMode?: "cells" | "legacy";
+  cells?: ScannerImageRecognitionReviewCell[];
+  result: {
+    items?: Array<Pick<BatchItem, "status" | "source_images">>;
+    components?: ReviewLayoutComponent[];
+  } | null;
+};
+
 type JobStatus = {
   uid: string;
   generation: number;
   status: string;
   progress: { completed: number; failed: number; total: number };
-  images: Array<{ uid: string; filename: string; status: string }>;
+  images: ScannerImageStatus[];
   result: { items?: BatchItem[]; components?: ReviewLayoutComponent[]; images?: BatchImageResult[] } | null;
   reviewMode?: "cells" | "legacy";
   reviewModeReason?: string | null;
@@ -120,6 +138,86 @@ type CandidatePickerState = {
 
 const TERMINAL_JOB_STATUSES = new Set(["failed", "cancelled", "expired"]);
 
+export function groupScannerImagesByStatus<T extends { uid: string; status: string }>(
+  images: T[],
+  partialRecognitionReviewImageUids: ReadonlySet<string> = new Set(),
+) {
+  const needsReview = (image: T) => image.status !== "succeeded" || partialRecognitionReviewImageUids.has(image.uid);
+  return {
+    succeeded: images.filter((image) => !needsReview(image)),
+    reviewRequired: images.filter(needsReview),
+  };
+}
+
+export function getPartialRecognitionReviewImageUids(job: ScannerImageRecognitionReviewInput): Set<string> {
+  const reviewRequiredImageUids = new Set<string>();
+  const succeededImages = job.images.filter((image) => image.status === "succeeded");
+  const conflictFilenames = new Set(
+    (job.result?.items ?? []).filter((item) => item.status !== "recognized").flatMap((item) => item.source_images),
+  );
+
+  if (job.reviewMode === "cells") {
+    const cellsByImageUid = new Map<string, ScannerImageRecognitionReviewCell[]>();
+    for (const cell of job.cells ?? []) {
+      const imageCells = cellsByImageUid.get(cell.imageUid);
+      if (imageCells) {
+        imageCells.push(cell);
+      } else {
+        cellsByImageUid.set(cell.imageUid, [cell]);
+      }
+    }
+    for (const image of succeededImages) {
+      const imageCells = cellsByImageUid.get(image.uid) ?? [];
+      if (
+        conflictFilenames.has(image.filename) ||
+        imageCells.length === 0 ||
+        imageCells.some((cell) => cell.status !== "recognized")
+      ) {
+        reviewRequiredImageUids.add(image.uid);
+      }
+    }
+    return reviewRequiredImageUids;
+  }
+
+  for (const image of succeededImages) {
+    if (
+      conflictFilenames.has(image.filename) ||
+      legacyImageHasPartialRecognition(image.filename, job.result?.components)
+    ) {
+      reviewRequiredImageUids.add(image.uid);
+    }
+  }
+  return reviewRequiredImageUids;
+}
+
+function legacyImageHasPartialRecognition(filename: string, components: ReviewLayoutComponent[] | undefined): boolean {
+  let foundPlacement = false;
+  for (const component of components ?? []) {
+    const positionsByIndex = new Map(component.positions?.map((position) => [position.position, position]) ?? []);
+    for (const placement of component.placements ?? []) {
+      if (placement.filename !== filename) continue;
+      foundPlacement = true;
+      for (let offset = 0; offset < placement.cell_count; offset += 1) {
+        if (positionsByIndex.get(placement.start + offset)?.status !== "recognized") {
+          return true;
+        }
+      }
+    }
+  }
+  return !foundPlacement;
+}
+
+export function shouldConfirmUnappliedScannerResult(jobStatus: string | undefined): boolean {
+  return jobStatus === "review_ready";
+}
+
+export function shouldShowScannerResultActions(
+  jobStatus: string | undefined,
+  selectedImageStatus: string | undefined,
+): boolean {
+  return jobStatus === "review_ready" && selectedImageStatus === "succeeded";
+}
+
 function getTerminalJobTitle(status: string): string {
   if (status === "cancelled") return "스크린샷 인식 작업이 취소됐어요";
   if (status === "expired") return "스크린샷 인식 작업이 만료됐어요";
@@ -154,7 +252,11 @@ export default function ResourceScanner() {
   const selectedJobUid = searchParams.get("job");
 
   const showJob = useCallback((next: JobStatus) => {
-    const firstReviewImage = next.images.find((image) => image.status === "succeeded") ?? next.images[0];
+    const partialRecognitionReviewImageUids = getPartialRecognitionReviewImageUids(next);
+    const firstReviewImage =
+      next.images.find((image) => image.status === "succeeded" && !partialRecognitionReviewImageUids.has(image.uid)) ??
+      next.images.find((image) => image.status === "succeeded") ??
+      next.images[0];
     setJob(next);
     setSelectedSource(firstReviewImage?.filename ?? null);
     setSelectedImageUid(firstReviewImage?.uid ?? null);
@@ -175,6 +277,10 @@ export default function ResourceScanner() {
     } else if (["queued", "processing", "finalizing"].includes(next.status)) {
       setItems([]);
       setPhase("waiting");
+      setError(null);
+    } else if (next.status === "failed" && next.images.some((image) => image.status === "failed")) {
+      setItems([]);
+      setPhase("review");
       setError(null);
     } else if (TERMINAL_JOB_STATUSES.has(next.status)) {
       setItems([]);
@@ -240,9 +346,19 @@ export default function ResourceScanner() {
     [job],
   );
 
+  const selectedImage = useMemo(
+    () => job?.images.find((image) => image.uid === selectedImageUid) ?? job?.images[0] ?? null,
+    [job, selectedImageUid],
+  );
+
+  const selectedImageHasNoResult = selectedImage !== null && selectedImage.status !== "succeeded";
+
   const reviewSlots = useMemo(
-    () => (job?.reviewMode === "cells" ? [] : buildImageReviewSlots(job?.result?.components, items, selectedSource)),
-    [items, job, selectedSource],
+    () =>
+      selectedImageHasNoResult || job?.reviewMode === "cells"
+        ? []
+        : buildImageReviewSlots(job?.result?.components, items, selectedSource),
+    [items, job, selectedImageHasNoResult, selectedSource],
   );
 
   const recognizedSlotCount = useMemo(
@@ -250,10 +366,16 @@ export default function ResourceScanner() {
     [reviewSlots],
   );
 
-  const selectedImage = useMemo(
-    () => job?.images.find((image) => image.uid === selectedImageUid) ?? job?.images[0] ?? null,
-    [job, selectedImageUid],
+  const partialRecognitionReviewImageUids = useMemo(
+    () => (job ? getPartialRecognitionReviewImageUids(job) : new Set<string>()),
+    [job],
   );
+  const imageGroups = useMemo(
+    () => groupScannerImagesByStatus(job?.images ?? [], partialRecognitionReviewImageUids),
+    [job?.images, partialRecognitionReviewImageUids],
+  );
+  const selectedImageRequiresRecognitionReview =
+    selectedImageHasNoResult || (selectedImage !== null && partialRecognitionReviewImageUids.has(selectedImage.uid));
 
   const selectedResultImage = useMemo(
     () => getSelectedResultImage(job, selectedImageUid, selectedSource),
@@ -616,24 +738,30 @@ export default function ResourceScanner() {
       {phase === "review" || phase === "applying" ? (
         <section className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <SubTitle text="결과 검토" description="인식 결과를 검토 후 반영 여부를 선택해주세요" />
-            <Button size="sm" onClick={() => clearSelectedJob(true)}>
+            <SubTitle
+              text={job?.status === "failed" ? "스크린샷 확인" : "결과 검토"}
+              description={
+                job?.status === "failed"
+                  ? "인식하지 못한 스크린샷을 확인한 뒤 다시 시도해 주세요"
+                  : "인식 결과를 검토 후 반영 여부를 선택해주세요"
+              }
+            />
+            <Button size="sm" onClick={() => clearSelectedJob(shouldConfirmUnappliedScannerResult(job?.status))}>
               새 스크린샷 업로드
             </Button>
           </div>
           <div className="space-y-4 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5">
-            {unknownCount > 0 ? (
+            {unknownCount > 0 && !selectedImageHasNoResult ? (
               <Callout
                 tone="warning"
                 title={`자동으로 인식하지 못한 항목이 ${unknownCount}개 있어요`}
                 description="후보가 있는 항목은 해당 셀에서 직접 아이템을 선택할 수 있어요"
               />
             ) : null}
-            {(
-              job?.reviewMode === "cells"
-                ? !hasCellReviewCells(job.cells)
-                : items.length === 0 && reviewSlots.length === 0
-            ) ? (
+            {!selectedImageHasNoResult &&
+            (job?.reviewMode === "cells"
+              ? !hasCellReviewCells(job.cells)
+              : items.length === 0 && reviewSlots.length === 0) ? (
               <Callout
                 tone="warning"
                 title="인식된 아이템이 없어요"
@@ -657,7 +785,9 @@ export default function ResourceScanner() {
                 <div className="min-w-0 space-y-3 xl:sticky xl:top-16">
                   <div className="flex min-w-0 items-end justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">인식한 스크린샷</p>
+                      <p className="text-sm font-medium text-foreground">
+                        {selectedImageRequiresRecognitionReview ? "검토 필요한 스크린샷" : "인식한 스크린샷"}
+                      </p>
                       <p className="truncate text-xs text-muted-foreground" title={selectedImage.filename}>
                         {job.images.findIndex((image) => image.uid === selectedImage.uid) + 1} / {job.images.length} ·{" "}
                         {selectedImage.filename}
@@ -690,42 +820,57 @@ export default function ResourceScanner() {
                       <ArrowsPointingOutIcon className="size-5" aria-hidden="true" />
                     </span>
                   </button>
-                  <HorizontalScroll
-                    itemWidth={{ mobile: "w-24", desktop: "w-24" }}
-                    gap="gap-2"
-                    showArrowsOnMobile
-                    fadeEdges
-                    className="pb-1"
-                    previousButtonLabel="이전 스크린샷 보기"
-                    nextButtonLabel="다음 스크린샷 보기"
-                  >
-                    {job.images.map((image, index) => (
-                      <SourceImagePreview
-                        key={image.uid}
+                  <div className="space-y-3">
+                    {imageGroups.reviewRequired.length > 0 ? (
+                      <ScannerImageGroup
                         jobUid={job.uid}
-                        image={image}
-                        number={index + 1}
-                        selected={selectedImage.uid === image.uid}
-                        highlighted={highlightedSources.includes(image.filename)}
-                        selectionRequiredCount={
-                          job?.reviewMode === "cells"
-                            ? (selectionRequiredCountByImageUid[image.uid] ?? 0)
-                            : (selectionRequiredCountByFilename[image.filename] ?? 0)
-                        }
-                        onSelect={() => {
+                        images={imageGroups.reviewRequired}
+                        label={`검토 필요 ${imageGroups.reviewRequired.length}장`}
+                        selectedImageUid={selectedImage.uid}
+                        highlightedSources={highlightedSources}
+                        selectionRequiredCountByImageUid={selectionRequiredCountByImageUid}
+                        selectionRequiredCountByFilename={selectionRequiredCountByFilename}
+                        reviewMode={job.reviewMode}
+                        allImages={job.images}
+                        onSelect={(image) => {
                           setHighlightedSources([]);
                           setHighlightedReviewPosition(null);
                           setSelectedSource(image.filename);
                           setSelectedImageUid(image.uid);
                         }}
                       />
-                    ))}
-                  </HorizontalScroll>
+                    ) : null}
+                    {imageGroups.succeeded.length > 0 ? (
+                      <ScannerImageGroup
+                        jobUid={job.uid}
+                        images={imageGroups.succeeded}
+                        label={`인식 성공 ${imageGroups.succeeded.length}장`}
+                        selectedImageUid={selectedImage.uid}
+                        highlightedSources={highlightedSources}
+                        selectionRequiredCountByImageUid={selectionRequiredCountByImageUid}
+                        selectionRequiredCountByFilename={selectionRequiredCountByFilename}
+                        reviewMode={job.reviewMode}
+                        allImages={job.images}
+                        onSelect={(image) => {
+                          setHighlightedSources([]);
+                          setHighlightedReviewPosition(null);
+                          setSelectedSource(image.filename);
+                          setSelectedImageUid(image.uid);
+                        }}
+                      />
+                    ) : null}
+                  </div>
                 </div>
               ) : null}
 
               <div className="min-w-0 space-y-3">
-                {job?.reviewMode === "cells" ? (
+                {selectedImageHasNoResult ? (
+                  <Callout
+                    tone="warning"
+                    title="이 스크린샷은 검토가 필요해요"
+                    description="이 스크린샷에서는 인식 결과를 만들지 못했어요. 원본을 확인한 뒤 새 스크린샷으로 다시 시도해 주세요."
+                  />
+                ) : job?.reviewMode === "cells" ? (
                   <CellReviewPanel
                     jobUid={job.uid}
                     selectedSource={selectedSource}
@@ -881,25 +1026,27 @@ export default function ResourceScanner() {
                 )}
               </div>
             </div>
-            {job?.reviewMode === "cells" ? (
+            {job?.reviewMode === "cells" && !selectedImageHasNoResult ? (
               <CellReviewSummaryPreview
                 cells={job.cells ?? []}
                 edits={cellEdits}
                 currentQuantities={job.currentQuantities}
               />
             ) : null}
-            <div className="flex flex-wrap justify-between gap-2">
-              <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
-                {isCancelling ? "취소 중..." : "인식 결과 삭제"}
-              </Button>
-              <Button
-                variant="primary"
-                disabled={phase === "applying" || isCancelling || !hasChanges}
-                onClick={applyResult}
-              >
-                {phase === "applying" ? "반영 중..." : "수량 반영"}
-              </Button>
-            </div>
+            {shouldShowScannerResultActions(job?.status, selectedImage?.status) ? (
+              <div className="flex flex-wrap justify-between gap-2">
+                <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
+                  {isCancelling ? "취소 중..." : "인식 결과 삭제"}
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={phase === "applying" || isCancelling || !hasChanges}
+                  onClick={applyResult}
+                >
+                  {phase === "applying" ? "반영 중..." : "수량 반영"}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -916,7 +1063,7 @@ export default function ResourceScanner() {
         </>
       ) : null}
 
-      {job && TERMINAL_JOB_STATUSES.has(job.status) ? (
+      {job && TERMINAL_JOB_STATUSES.has(job.status) && phase !== "review" ? (
         <ScannerCompletionState
           tone="destructive"
           title={getTerminalJobTitle(job.status)}
@@ -1138,6 +1285,62 @@ function ReviewSourceImage({
         />
       ) : null}
     </span>
+  );
+}
+
+function ScannerImageGroup({
+  jobUid,
+  images,
+  label,
+  selectedImageUid,
+  highlightedSources,
+  selectionRequiredCountByImageUid,
+  selectionRequiredCountByFilename,
+  reviewMode,
+  allImages,
+  onSelect,
+}: {
+  jobUid: string;
+  images: JobStatus["images"];
+  label: string;
+  selectedImageUid: string | null;
+  highlightedSources: string[];
+  selectionRequiredCountByImageUid: Record<string, number>;
+  selectionRequiredCountByFilename: Record<string, number>;
+  reviewMode?: "cells" | "legacy";
+  allImages: JobStatus["images"];
+  onSelect: (image: JobStatus["images"][number]) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <HorizontalScroll
+        itemWidth={{ mobile: "w-24", desktop: "w-24" }}
+        gap="gap-2"
+        showArrowsOnMobile
+        fadeEdges
+        className="pb-1"
+        previousButtonLabel={`${label} 이전 스크린샷 보기`}
+        nextButtonLabel={`${label} 다음 스크린샷 보기`}
+      >
+        {images.map((image) => (
+          <SourceImagePreview
+            key={image.uid}
+            jobUid={jobUid}
+            image={image}
+            number={allImages.findIndex((candidate) => candidate.uid === image.uid) + 1}
+            selected={selectedImageUid === image.uid}
+            highlighted={highlightedSources.includes(image.filename)}
+            selectionRequiredCount={
+              reviewMode === "cells"
+                ? (selectionRequiredCountByImageUid[image.uid] ?? 0)
+                : (selectionRequiredCountByFilename[image.filename] ?? 0)
+            }
+            onSelect={() => onSelect(image)}
+          />
+        ))}
+      </HorizontalScroll>
+    </div>
   );
 }
 
