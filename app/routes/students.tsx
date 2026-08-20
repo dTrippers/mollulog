@@ -2,12 +2,10 @@ import { ChatBubbleLeftRightIcon, FunnelIcon, IdentificationIcon, VideoCameraIco
 import { useMemo, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
-import { MobileMoreTabNoticeBanner, Page } from "~/components/features/layout";
-import { StudentFilter, createStudentFilterState, getFilteredStudentUids } from "~/components/features/students";
+import { Page } from "~/components/features/layout";
+import { createStudentFilterState, getFilteredStudentUids, StudentFilter } from "~/components/features/students";
 import { canonicalLink } from "~/lib/seo";
 import { getAllStudents } from "~/models/student";
-
-const studentUtilityMenuBannerDismissalStorageKey = "students::dismissed-utility-menu-banner";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -29,8 +27,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "학생부 | 몰루로그";
-  const description =
-    "블루 아카이브 학생들의 프로필, 스킬, 스탯, 성장도별 능력치와 총력전·대결전 통계를 확인해보세요.";
+  const description = "블루 아카이브 학생들의 프로필, 스킬, 스탯, 성장도별 능력치와 총력전·대결전 통계를 확인해보세요.";
   return [
     { title },
     { name: "description", content: description },
@@ -65,14 +62,6 @@ export default function StudentsLayout() {
     <Page
       title="학생부"
       description="학생들의 프로필과 총력전/대결전 통계, 평가 정보를 확인해보세요"
-      belowTitle={
-        isStudentsIndex ? (
-          <MobileMoreTabNoticeBanner
-            dismissStorageKey={studentUtilityMenuBannerDismissalStorageKey}
-            message={'유틸리티 메뉴는 "더보기" 탭에서 확인할 수 있어요'}
-          />
-        ) : undefined
-      }
       panels={
         isStudentsIndex
           ? [

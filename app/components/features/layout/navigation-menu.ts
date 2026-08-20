@@ -71,13 +71,11 @@ export type NavigationItem = {
   SolidIcon: IconComponent;
   isActive?: boolean;
   showRedDot?: boolean;
-  redDotAnimate?: boolean;
   badgeLabel?: string;
   disabled?: boolean;
   requiresSignIn?: boolean;
   mobileNavigationId?: MobileNavigationId;
   mobileLabel?: string;
-  moreLabel?: string;
   group?: NavigationGroup;
   surfaces?: readonly NavigationSurface[];
 };
@@ -248,7 +246,6 @@ export function getNavigationCatalog({
       name: "총력전 / 대결전",
       mobileNavigationId: "raids",
       mobileLabel: "총력전",
-      moreLabel: "총력전",
       favoriteId: "raids",
       description: "시즌 요약, 상위권 편성, 공략 영상을 확인해보세요",
       badgeLabel: hasOngoingRaid ? "진행중" : undefined,
@@ -286,7 +283,7 @@ export function getNavigationCatalog({
       to: "/utils/pyroxene",
       name: "청휘석 플래너",
       mobileNavigationId: "pyroxene-planner",
-      mobileLabel: "청휘석 계획",
+      mobileLabel: "청휘석 플래너",
       favoriteId: "pyroxene-planner",
       description: "모집 시점의 청휘석을 계산해보세요",
       badgeLabel: isSignedIn ? undefined : "로그인 없이 사용",
@@ -300,7 +297,7 @@ export function getNavigationCatalog({
       to: "/utils/growth/students",
       name: "학생 성장 플래너",
       mobileNavigationId: "student-growth-planner",
-      mobileLabel: "성장 계획",
+      mobileLabel: "성장 플래너",
       favoriteId: "student-growth-planner",
       description: "성장에 필요한 재화를 정리해보세요",
       OutlineIcon: TableCellsIconOutline,
@@ -314,7 +311,6 @@ export function getNavigationCatalog({
       name: "재화 관리/파밍 계산기",
       mobileNavigationId: "resource-planner",
       mobileLabel: "재화 관리",
-      moreLabel: "재화 관리",
       favoriteId: "resource-planner",
       description: "보유 재화와 장비 파밍 계획을 확인해보세요",
       OutlineIcon: ArchiveBoxIconOutline,
@@ -344,8 +340,7 @@ export function getNavigationCatalog({
       to: "/utils/relationship",
       name: "인연 랭크 계산기",
       mobileNavigationId: "relationship-calculator",
-      mobileLabel: "인연 랭크",
-      moreLabel: "인연 랭크",
+      mobileLabel: "인연 계산기",
       favoriteId: "relationship-calculator",
       description: "학생별 인연 랭크를 계산해보세요",
       OutlineIcon: HeartIconOutline,
@@ -359,7 +354,6 @@ export function getNavigationCatalog({
       name: "공략 타임라인",
       mobileNavigationId: "strategy-timeline",
       mobileLabel: "공략",
-      moreLabel: "공략",
       favoriteId: "strategy-timeline",
       description: "공략을 찾아보고 실전에서 순서대로 확인해보세요",
       OutlineIcon: QueueListIconOutline,
@@ -374,7 +368,6 @@ export function getNavigationCatalog({
       name: "총력전 점수 계산기",
       mobileNavigationId: "raid-score-calculator",
       mobileLabel: "점수 계산기",
-      moreLabel: "점수 계산기",
       favoriteId: "raid-score-calculator",
       description: "클리어 시간 기준 점수를 계산해보세요",
       OutlineIcon: ClockIconOutline,
@@ -409,7 +402,7 @@ export function getNavigationCatalog({
       : []),
     {
       group: "profile",
-      surfaces: ["desktop", "search"],
+      surfaces: ["desktop", "more", "search"],
       to: "/scanner/resource",
       name: "스크린샷/영상 인식기",
       favoriteId: "scanner-resource",
@@ -422,7 +415,7 @@ export function getNavigationCatalog({
     },
     {
       group: "profile",
-      surfaces: ["desktop", "search"],
+      surfaces: ["desktop", "more", "search"],
       to: "/connect/import",
       name: "외부 데이터 연동",
       favoriteId: "connect-import",
@@ -441,7 +434,6 @@ export function getNavigationCatalog({
       OutlineIcon: MegaphoneIconOutline,
       SolidIcon: MegaphoneIconSolid,
       showRedDot: hasRecentNews,
-      redDotAnimate: false,
     },
     {
       group: "service",
@@ -452,7 +444,6 @@ export function getNavigationCatalog({
       OutlineIcon: EnvelopeIconOutline,
       SolidIcon: EnvelopeIconSolid,
       showRedDot: hasUnreadFeedbackReplies,
-      redDotAnimate: false,
     },
     {
       group: "mobile",
@@ -461,6 +452,7 @@ export function getNavigationCatalog({
       name: "더보기",
       OutlineIcon: EllipsisHorizontalCircleIconOutline,
       SolidIcon: EllipsisHorizontalCircleIconSolid,
+      isActive: pathname === "/more" || pathname.startsWith("/more/"),
     },
   ];
 
@@ -534,17 +526,12 @@ export function getMobileNavigationItems({
   const futuresItem = catalog.find((item) => item.to === "/futures");
   const moreItem = catalog.find((item) => item.to === "/more");
   const fixedItems = [homeItem, futuresItem];
-  const hasFixedOrSelectedActive = [...fixedItems, ...selectedItems].some((item) => item?.isActive);
 
-  return [...fixedItems, ...selectedItems, moreItem && { ...moreItem, isActive: !hasFixedOrSelectedActive }].filter(
-    (item): item is NavigationCatalogItem => Boolean(item),
-  );
+  return [...fixedItems, ...selectedItems, moreItem].filter((item): item is NavigationCatalogItem => Boolean(item));
 }
 
 export function getMoreNavigationItems(options: NavigationCatalogOptions): NavigationItem[] {
-  return getNavigationCatalog(options)
-    .filter((item) => item.surfaces.includes("more"))
-    .map((item) => (item.moreLabel ? { ...item, name: item.moreLabel } : item));
+  return getNavigationCatalog(options).filter((item) => item.surfaces.includes("more"));
 }
 
 export function getMobileNavigationOptions(options: NavigationCatalogOptions): NavigationItem[] {
@@ -577,6 +564,10 @@ export function getMoreNavigationSections(options: NavigationCatalogOptions): Mo
     {
       name: "플래너 & 계산기",
       items: items.filter((item) => item.group === "planner"),
+    },
+    {
+      name: "내 정보",
+      items: items.filter((item) => item.group === "profile"),
     },
   ].filter((section) => section.items.length > 0);
 }

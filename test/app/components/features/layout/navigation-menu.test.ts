@@ -63,25 +63,22 @@ describe("getNavigationSections", () => {
 
 describe("navigation surface projections", () => {
   it("derives the mobile bottom navigation from the catalog", () => {
-    expect(getMobileNavigationItems({ pathname: "/more", upcomingEvent: null }).map((item) => item.to)).toEqual([
-      "/",
-      "/futures",
-      "/community",
-      "/students",
-      "/more",
-    ]);
+    const items = getMobileNavigationItems({ pathname: "/more", upcomingEvent: null });
+
+    expect(items.map((item) => item.to)).toEqual(["/", "/futures", "/community", "/students", "/more"]);
+    expect(items.filter((item) => item.isActive).map((item) => item.name)).toEqual(["더보기"]);
   });
 
   it.each([
     { pathname: "/community", mobileNavigationIds: ["events", "raids"] as const },
     { pathname: "/students", mobileNavigationIds: ["events", "raids"] as const },
-  ])("uses More as the sole active item when the route is not selected", ({ pathname, mobileNavigationIds }) => {
+  ])("leaves every item inactive when the route is not selected", ({ pathname, mobileNavigationIds }) => {
     const items = getMobileNavigationItems({ pathname, upcomingEvent: null, mobileNavigationIds });
 
-    expect(items.filter((item) => item.isActive).map((item) => item.name)).toEqual(["더보기"]);
+    expect(items.filter((item) => item.isActive).map((item) => item.name)).toEqual([]);
   });
 
-  it("exposes exactly the approved mobile candidates in order and within six characters", () => {
+  it("exposes exactly the approved mobile candidates and labels in order", () => {
     const options = getMobileNavigationOptions(navigationOptions);
 
     expect(options).toHaveLength(12);
@@ -105,15 +102,15 @@ describe("navigation surface projections", () => {
       "이벤트",
       "총력전",
       "메인 스토리",
-      "청휘석 계획",
-      "성장 계획",
+      "청휘석 플래너",
+      "성장 플래너",
       "재화 관리",
       "상점 계산기",
-      "인연 랭크",
+      "인연 계산기",
       "공략",
       "점수 계산기",
     ]);
-    expect(options.every((item) => item.name.length <= 6)).toBe(true);
+    expect(options.every((item) => item.name.replace(/[\s/]/g, "").length <= 6)).toBe(true);
   });
 
   it("keeps signed-in desktop-only items out of the guest desktop menu", () => {
@@ -138,22 +135,32 @@ describe("navigation surface projections", () => {
       "/utils/relationship",
       "/timelines",
       "/utils/raidscore",
+      "/scanner/resource",
+      "/connect/import",
     ]);
 
     expect(getMoreNavigationItems(navigationOptions).map((item) => item.name)).toEqual([
       "피드",
       "이벤트",
-      "총력전",
+      "총력전 / 대결전",
       "학생부",
       "메인 스토리",
       "청휘석 플래너",
       "학생 성장 플래너",
-      "재화 관리",
+      "재화 관리/파밍 계산기",
       "이벤트 상점 계산기",
-      "인연 랭크",
-      "공략",
-      "점수 계산기",
+      "인연 랭크 계산기",
+      "공략 타임라인",
+      "총력전 점수 계산기",
+      "스크린샷/영상 인식기",
+      "외부 데이터 연동",
     ]);
+  });
+
+  it("always exposes the relationship calculator in the guest More menu", () => {
+    expect(getMoreNavigationItems(navigationOptions)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "인연 랭크 계산기", to: "/utils/relationship" })]),
+    );
   });
 
   it("exposes auth-gated links and the unavailable event-shop entry to search", () => {
@@ -172,7 +179,7 @@ describe("navigation surface projections", () => {
     );
   });
 
-  it("keeps static red dots only on the resource scanner and uses the v1.2 badge", () => {
+  it("keeps red dots only on the resource scanner and uses the v1.2 badge", () => {
     const catalog = getNavigationCatalog({ ...navigationOptions, isSignedIn: true, currentUsername: "sensei" });
 
     expect(catalog.filter((item) => item.showRedDot === true).map((item) => item.name)).toEqual([

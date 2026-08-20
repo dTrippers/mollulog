@@ -3,7 +3,6 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Await, Link, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, RecruitmentCard } from "~/components/features/events";
-import { MobileMoreTabNoticeBanner } from "~/components/features/layout";
 import { RaidCard } from "~/components/features/raids";
 import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
 import { raidTypeToParam } from "~/domain/raid";
@@ -17,8 +16,6 @@ import { getHomeYoutubeSections } from "~/models/youtube";
 import { enrichCommunityFeedPosts } from "~/views/community.server";
 import { getIndexContents, type IndexRecruitment } from "~/views/home";
 import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
-
-const homeMoreMenuBannerDismissalStorageKey = "home::dismissed-more-menu-banner";
 
 export const meta: MetaFunction = ({ location }) => {
   return [
@@ -138,12 +135,6 @@ export default function Index() {
       <div className="mt-4 flex flex-col gap-8 lg:mt-6 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
         <div className="min-w-0 lg:flex-1">
           <MainEvent event={mainEvent} />
-
-          <MobileMoreTabNoticeBanner
-            className="mt-2"
-            dismissStorageKey={homeMoreMenuBannerDismissalStorageKey}
-            message={'전체 메뉴는 "더보기" 탭에서 확인할 수 있어요'}
-          />
 
           {currentRecruitments.length > 0 && (
             <CurrentRecruitments
