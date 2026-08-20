@@ -192,10 +192,7 @@ export default function ResourceInventoryEditor({
 
         {resourceGroups.length === 0 && (!hasCreditRequirement || hasActiveFilter) ? (
           <SectionCard className="p-8 md:p-8">
-            <EmptyView
-              Icon={ArchiveBoxIcon}
-              text={filter.shortageOnly ? "부족한 재화가 없어요" : "조건에 맞는 재화가 없어요"}
-            />
+            <EmptyView Icon={ArchiveBoxIcon} text={getResourceInventoryEmptyText(filter)} />
           </SectionCard>
         ) : (
           resourceGroups.map((group) => (
@@ -401,7 +398,7 @@ function ResourceGroup({
           ) : null}
         </div>
       </div>
-      {isCharacterExpGroup && requiredCharacterExp > 0 ? (
+      {isCharacterExpGroup ? (
         <CharacterExpSummary requiredCharacterExp={requiredCharacterExp} draftQuantities={draftQuantities} />
       ) : null}
       {policy.modes.length > 1 ? (
@@ -951,7 +948,7 @@ function ResourceTile({
   );
 }
 
-function CharacterExpSummary({
+export function CharacterExpSummary({
   requiredCharacterExp,
   draftQuantities,
 }: {
@@ -960,28 +957,33 @@ function CharacterExpSummary({
 }) {
   const ownedCharacterExp = calculateOwnedCharacterExp(draftQuantities);
   const balance = ownedCharacterExp - requiredCharacterExp;
+  const hasTarget = requiredCharacterExp > 0;
   return (
     <div className="border-b border-border px-3 py-3">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <CharacterExpSummaryItem
-          label="필요 경험치"
-          value={requiredCharacterExp.toLocaleString()}
-          equivalent={requiredCharacterExp}
-        />
+      <div className={cn("grid grid-cols-1 gap-2", hasTarget && "sm:grid-cols-3")}>
+        {hasTarget ? (
+          <CharacterExpSummaryItem
+            label="필요 경험치"
+            value={requiredCharacterExp.toLocaleString()}
+            equivalent={requiredCharacterExp}
+          />
+        ) : null}
         <CharacterExpSummaryItem
           label="보유 경험치"
           value={ownedCharacterExp.toLocaleString()}
           equivalent={ownedCharacterExp}
         />
-        <CharacterExpSummaryItem
-          label={balance >= 0 ? "여유 경험치" : "부족 경험치"}
-          value={Math.abs(balance).toLocaleString()}
-          equivalent={Math.abs(balance)}
-          valueClassName={cn(
-            balance >= 0 && "text-emerald-600 dark:text-emerald-400",
-            balance < 0 && "text-red-600 dark:text-red-300",
-          )}
-        />
+        {hasTarget ? (
+          <CharacterExpSummaryItem
+            label={balance >= 0 ? "여유 경험치" : "부족 경험치"}
+            value={Math.abs(balance).toLocaleString()}
+            equivalent={Math.abs(balance)}
+            valueClassName={cn(
+              balance >= 0 && "text-emerald-600 dark:text-emerald-400",
+              balance < 0 && "text-red-600 dark:text-red-300",
+            )}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -1002,7 +1004,9 @@ function CharacterExpSummaryItem({
     <div className="px-1 py-1">
       <p className="text-xs font-medium text-muted-foreground">{label}</p>
       <p className={cn("mt-1 text-sm font-semibold tabular-nums text-foreground", valueClassName)}>{value}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">Lv. 1→90 기준 {formatCharacterExpEquivalent(equivalent)}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">
+        레벨 1 → 90 기준 {formatCharacterExpEquivalent(equivalent)}
+      </p>
     </div>
   );
 }
@@ -1233,8 +1237,17 @@ export function calculateOwnedCharacterExp(quantities: Record<string, number>): 
 }
 
 export function formatCharacterExpEquivalent(exp: number): string {
-  const equivalent = Math.max(0, exp) / CHARACTER_EXP_PER_STUDENT;
-  return equivalent <= 0.1 ? "0명분" : `${equivalent.toFixed(1)}명분`;
+  const equivalent = Math.floor(Math.max(0, exp) / CHARACTER_EXP_PER_STUDENT);
+  return equivalent === 0 ? "1명분 미만" : `${equivalent}명분`;
+}
+
+export function getResourceInventoryEmptyText(filter: ResourceInventoryFilterState): string {
+  if (!filter.shortageOnly) {
+    return "조건에 맞는 재화가 없어요";
+  }
+
+  const hasNameOrRarityFilter = filter.search.trim().length > 0 || filter.rarities.length > 0;
+  return hasNameOrRarityFilter ? "조건에 맞는 부족 재화가 없어요" : "부족한 재화가 없어요";
 }
 
 function getSkillMaterialChoiceBoxRequiredAmounts(

@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { GROWTH_RESOURCE_KIND_ORDER } from "~/domain/growth-resource";
 import { ResourceTypeEnum } from "~/graphql/graphql";
@@ -9,8 +11,10 @@ import {
   buildInventoryResources,
   buildResourceGroups,
   CHARACTER_EXP_PER_STUDENT,
+  CharacterExpSummary,
   calculateOwnedCharacterExp,
   formatCharacterExpEquivalent,
+  getResourceInventoryEmptyText,
 } from "~/routes/utils.resources._components/ResourceInventoryEditor";
 import {
   filterResourceInventoryResources,
@@ -245,6 +249,18 @@ describe("resource inventory filter", () => {
     ).toEqual([resourcesWithShortage[1]]);
   });
 
+  it("uses shortage-aware empty copy without hiding active name or rarity filters", () => {
+    expect(getResourceInventoryEmptyText({ search: "", rarities: [], shortageOnly: true })).toBe(
+      "부족한 재화가 없어요",
+    );
+    expect(getResourceInventoryEmptyText({ search: "보고서", rarities: [], shortageOnly: true })).toBe(
+      "조건에 맞는 부족 재화가 없어요",
+    );
+    expect(getResourceInventoryEmptyText({ search: "", rarities: [4], shortageOnly: true })).toBe(
+      "조건에 맞는 부족 재화가 없어요",
+    );
+  });
+
   it("treats an empty rarity selection as all rarities", () => {
     const filter: ResourceInventoryFilterState = { search: "", rarities: [] };
     expect(filterResourceInventoryResources(resources, filter)).toEqual(resources);
@@ -438,11 +454,26 @@ describe("resource inventory filter", () => {
     expect(coveredGroups).toEqual([]);
   });
 
-  it("formats activity-report equivalents at the approved boundary", () => {
+  it("formats activity-report equivalents as floored natural-number counts", () => {
     expect(calculateOwnedCharacterExp({ "13": 1 })).toBe(10_000);
-    expect(formatCharacterExpEquivalent(0)).toBe("0명분");
-    expect(formatCharacterExpEquivalent(CHARACTER_EXP_PER_STUDENT / 10)).toBe("0명분");
-    expect(formatCharacterExpEquivalent(CHARACTER_EXP_PER_STUDENT / 10 + 1)).toBe("0.1명분");
-    expect(formatCharacterExpEquivalent(CHARACTER_EXP_PER_STUDENT)).toBe("1.0명분");
+    expect(formatCharacterExpEquivalent(0)).toBe("1명분 미만");
+    expect(formatCharacterExpEquivalent(CHARACTER_EXP_PER_STUDENT - 1)).toBe("1명분 미만");
+    expect(formatCharacterExpEquivalent(CHARACTER_EXP_PER_STUDENT)).toBe("1명분");
+    expect(formatCharacterExpEquivalent(CHARACTER_EXP_PER_STUDENT * 2.9)).toBe("2명분");
+  });
+
+  it("shows owned activity-report EXP even when no growth target is set", () => {
+    const markup = renderToStaticMarkup(
+      createElement(CharacterExpSummary, {
+        requiredCharacterExp: 0,
+        draftQuantities: { "13": 1 },
+      }),
+    );
+
+    expect(markup).toContain("보유 경험치");
+    expect(markup).toContain("10,000");
+    expect(markup).toContain("레벨 1 → 90 기준 1명분 미만");
+    expect(markup).not.toContain("필요 경험치");
+    expect(markup).not.toContain("여유 경험치");
   });
 });
