@@ -382,15 +382,20 @@ export default function NavigationBar({
         upcomingEvent={upcomingEvent}
         mobileNavigationIds={mobileNavigationIds}
       />
-      <MobileNavigationPersonalizationTutorial mobileNavigationIds={mobileNavigationIds} />
+      <MobileNavigationPersonalizationTutorial
+        mobileNavigationIds={mobileNavigationIds}
+        isSignedIn={currentUsername !== null}
+      />
     </>
   );
 }
 
 function MobileNavigationPersonalizationTutorial({
   mobileNavigationIds,
+  isSignedIn,
 }: {
   mobileNavigationIds: MobileNavigationPair;
+  isSignedIn: boolean;
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const usesDefaultTabs = mobileNavigationIds.every((id, index) => id === DEFAULT_MOBILE_NAVIGATION_IDS[index]);
@@ -399,7 +404,7 @@ function MobileNavigationPersonalizationTutorial({
     const mobileMedia = window.matchMedia("(max-width: 1023px)");
 
     const showOnceOnMobile = () => {
-      if (!mobileMedia.matches) {
+      if (!isSignedIn || !mobileMedia.matches) {
         setIsVisible(false);
         return;
       }
@@ -429,7 +434,7 @@ function MobileNavigationPersonalizationTutorial({
       mobileMedia.removeEventListener("change", showOnceOnMobile);
       window.removeEventListener("storage", hideWhenSeenInAnotherTab);
     };
-  }, [usesDefaultTabs]);
+  }, [isSignedIn, usesDefaultTabs]);
 
   useEffect(() => {
     if (!isVisible) {
@@ -457,10 +462,10 @@ function MobileNavigationPersonalizationTutorial({
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--mobile-nav-height)+0.5rem)] z-layer-navigation-menu px-3 lg:hidden">
-      <div className="pointer-events-auto mx-auto flex max-w-sm items-center gap-2 rounded-lg bg-foreground px-3 py-2.5 text-background shadow-xl">
+      <div className="pointer-events-auto mx-auto flex max-w-sm items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-card-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
         <button
           type="button"
-          className="-ml-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-background/75 transition-colors hover:bg-background/15 hover:text-background focus:outline-none focus-visible:ring-2 focus-visible:ring-background/60"
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           onClick={close}
           aria-label="탭 설정 안내 닫기"
         >
@@ -471,7 +476,7 @@ function MobileNavigationPersonalizationTutorial({
         </p>
         <Link
           to="/more#mobile-navigation-settings"
-          className="shrink-0 rounded-md bg-background/15 px-2.5 py-1.5 text-sm font-semibold transition-colors hover:bg-background/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-background/60"
+          className="shrink-0 rounded-md bg-primary px-2.5 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           onClick={close}
         >
           바꾸기

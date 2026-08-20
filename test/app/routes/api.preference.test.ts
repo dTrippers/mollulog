@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { MAX_NAVIGATION_FAVORITE_IDS } from "~/domain/navigation-favorites";
 import { getPreference, serializePreference } from "../../../app/auth/preference.server";
-import { action } from "../../../app/routes/api.preference";
+import { action, submitPreference } from "../../../app/routes/api.preference";
 
 const env = { SESSION_SECRET: "test-secret" } as Env;
 
@@ -21,6 +21,20 @@ async function callAction(body: Record<string, unknown>, cookie?: string) {
 }
 
 describe("api.preference", () => {
+  it("submits preference updates without navigating to the JSON endpoint", async () => {
+    const calls: unknown[][] = [];
+    const submit = (...args: unknown[]) => calls.push(args);
+
+    await submitPreference(submit as never, { darkMode: false });
+
+    expect(calls).toEqual([
+      [
+        { darkMode: false },
+        { method: "post", action: "/api/preference", encType: "application/json", navigate: false },
+      ],
+    ]);
+  });
+
   it("uses dark mode by default when no preference cookie exists", async () => {
     const preference = await getPreference(env, new Request("https://mollulog.net"));
 

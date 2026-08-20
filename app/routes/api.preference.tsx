@@ -5,7 +5,7 @@ import { normalizeNavigationFavoriteIds } from "~/domain/navigation-favorites";
 import { normalizeTimeZone } from "~/lib/date-time";
 
 export async function submitPreference(fn: SubmitFunction, preference: Preference) {
-  fn(preference, { method: "post", action: "/api/preference", encType: "application/json" });
+  fn(preference, { method: "post", action: "/api/preference", encType: "application/json", navigate: false });
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
