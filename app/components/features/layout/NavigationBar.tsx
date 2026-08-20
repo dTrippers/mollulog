@@ -398,38 +398,16 @@ function MobileNavigationPersonalizationTutorial({
   useEffect(() => {
     const mobileMedia = window.matchMedia("(max-width: 1023px)");
 
-    const hasSeenTutorial = () => {
-      try {
-        return localStorage.getItem(mobileNavigationTutorialStorageKey) === "true";
-      } catch {
-        return true;
-      }
-    };
-
-    const markTutorialAsSeen = () => {
-      try {
-        localStorage.setItem(mobileNavigationTutorialStorageKey, "true");
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
     const showOnceOnMobile = () => {
       if (!mobileMedia.matches) {
         setIsVisible(false);
         return;
       }
 
-      if (!usesDefaultTabs || hasSeenTutorial()) {
+      if (!usesDefaultTabs || hasSeenMobileNavigationTutorial()) {
         if (!usesDefaultTabs) {
-          markTutorialAsSeen();
+          markMobileNavigationTutorialAsSeen();
         }
-        setIsVisible(false);
-        return;
-      }
-
-      if (!markTutorialAsSeen()) {
         setIsVisible(false);
         return;
       }
@@ -457,6 +435,8 @@ function MobileNavigationPersonalizationTutorial({
     if (!isVisible) {
       return;
     }
+
+    markMobileNavigationTutorialAsSeen();
 
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -499,6 +479,22 @@ function MobileNavigationPersonalizationTutorial({
       </div>
     </div>
   );
+}
+
+function hasSeenMobileNavigationTutorial() {
+  try {
+    return localStorage.getItem(mobileNavigationTutorialStorageKey) === "true";
+  } catch {
+    return true;
+  }
+}
+
+function markMobileNavigationTutorialAsSeen() {
+  try {
+    localStorage.setItem(mobileNavigationTutorialStorageKey, "true");
+  } catch {
+    // Storage access is unavailable, so the notice cannot safely be persisted.
+  }
 }
 
 function MobileBrandHeader({
@@ -777,7 +773,7 @@ function MobileBottomNavigation({
     <nav
       className="
         lg:hidden fixed inset-x-0 bottom-0 z-layer-navigation h-[var(--mobile-nav-height)]
-        bg-card/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
+        bg-card/95 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
       "
       aria-label="주요 메뉴"
     >
@@ -785,7 +781,7 @@ function MobileBottomNavigation({
         {items.map((item) => {
           const Icon = item.isActive ? item.SolidIcon : item.OutlineIcon;
           const className = cn(`
-            relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-xs font-medium transition-colors
+            relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0 text-xs font-medium transition-colors
             focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
             ${item.isActive ? "font-bold text-foreground" : "text-foreground/70 hover:text-foreground"}
           `);
@@ -798,7 +794,9 @@ function MobileBottomNavigation({
                   <Icon className="size-5 shrink-0" strokeWidth={2} />
                 )}
               </span>
-              <span className="block h-4 whitespace-nowrap leading-4">{item.name}</span>
+              <span className="block h-4 whitespace-nowrap text-[11px] leading-4 tracking-tighter sm:text-xs">
+                {item.name}
+              </span>
             </>
           );
 

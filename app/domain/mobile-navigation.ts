@@ -36,11 +36,3 @@ export function normalizeMobileNavigationIds(value: unknown): MobileNavigationPa
 
   return [first, second];
 }
-
-export function isMobileNavigationPair(value: unknown): value is MobileNavigationPair {
-  return (
-    Array.isArray(value) &&
-    value.length === 2 &&
-    normalizeMobileNavigationIds(value).every((id, index) => value[index] === id)
-  );
-}

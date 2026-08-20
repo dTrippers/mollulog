@@ -122,7 +122,10 @@ describe("navigation surface projections", () => {
   });
 
   it("uses explicit surface membership for the more screen", () => {
-    expect(getMoreNavigationItems(navigationOptions).map((item) => item.to)).toEqual([
+    const guestItems = getMoreNavigationItems(navigationOptions);
+    const signedInItems = getMoreNavigationItems({ ...navigationOptions, isSignedIn: true });
+
+    expect(guestItems.map((item) => item.to)).toEqual([
       "/community",
       "/events",
       "/raids",
@@ -135,11 +138,9 @@ describe("navigation surface projections", () => {
       "/utils/relationship",
       "/timelines",
       "/utils/raidscore",
-      "/scanner/resource",
-      "/connect/import",
     ]);
 
-    expect(getMoreNavigationItems(navigationOptions).map((item) => item.name)).toEqual([
+    expect(guestItems.map((item) => item.name)).toEqual([
       "피드",
       "이벤트",
       "총력전 / 대결전",
@@ -152,6 +153,10 @@ describe("navigation surface projections", () => {
       "인연 랭크 계산기",
       "공략 타임라인",
       "총력전 점수 계산기",
+    ]);
+
+    expect(signedInItems.map((item) => item.name)).toEqual([
+      ...guestItems.map((item) => item.name),
       "스크린샷/영상 인식기",
       "외부 데이터 연동",
     ]);

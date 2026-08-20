@@ -394,6 +394,10 @@ function MoreMenuSections({
       if (!response.ok) {
         throw new Error(`preference status=${response.status}`);
       }
+      const result: unknown = await response.json();
+      if (!result || typeof result !== "object" || (result as { ok?: unknown }).ok !== true) {
+        throw new Error("preference response was not successful");
+      }
 
       onApply(nextIds);
       setPendingItem(null);

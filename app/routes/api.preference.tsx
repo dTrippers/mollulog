@@ -1,5 +1,4 @@
 import type { ActionFunctionArgs, SubmitFunction } from "react-router";
-import { redirect } from "react-router";
 import { getPreference, type Preference, serializePreference } from "~/auth/preference.server";
 import { normalizeMobileNavigationIds } from "~/domain/mobile-navigation";
 import { normalizeNavigationFavoriteIds } from "~/domain/navigation-favorites";
@@ -46,8 +45,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
   };
 
   try {
-    return redirect(request.headers.get("Referer") ?? "/", {
+    return new Response(JSON.stringify({ ok: true }), {
       headers: {
+        "Content-Type": "application/json; charset=utf-8",
         "Set-Cookie": await serializePreference(env, newPreference),
       },
     });

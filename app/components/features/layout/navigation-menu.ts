@@ -55,7 +55,7 @@ import {
   type MobileNavigationId,
   normalizeMobileNavigationIds,
 } from "~/domain/mobile-navigation";
-import { isInstantAfter, isInstantBefore, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import type { UtcIsoString } from "~/lib/date-time";
 
 type IconComponent = ComponentType<ComponentProps<"svg">>;
 
@@ -113,7 +113,6 @@ export type SearchableMenuItem = {
 export type NavigationCatalogOptions = {
   pathname: string;
   upcomingEvent: UpcomingNavigationEvent;
-  now?: UtcIsoString;
   hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
   isSignedIn: boolean;
@@ -187,7 +186,6 @@ export function isEventShopNavigationPath(pathname: string): boolean {
 export function getNavigationCatalog({
   pathname,
   upcomingEvent,
-  now = nowUtcIso(),
   hasOngoingRaid,
   hasUnconsumedCoupons,
   isSignedIn,
@@ -328,10 +326,6 @@ export function getNavigationCatalog({
       description: "이벤트 효율과 상점을 확인해보세요",
       OutlineIcon: BoltIconOutline,
       SolidIcon: BoltIconSolid,
-      badgeLabel:
-        upcomingEvent && isInstantBefore(upcomingEvent.since, now) && isInstantAfter(upcomingEvent.until, now)
-          ? "개최중"
-          : undefined,
       isActive: isEventShopNavigationPath(pathname),
     },
     {
@@ -531,7 +525,9 @@ export function getMobileNavigationItems({
 }
 
 export function getMoreNavigationItems(options: NavigationCatalogOptions): NavigationItem[] {
-  return getNavigationCatalog(options).filter((item) => item.surfaces.includes("more"));
+  return getNavigationCatalog(options).filter(
+    (item) => item.surfaces.includes("more") && (!item.requiresSignIn || options.isSignedIn),
+  );
 }
 
 export function getMobileNavigationOptions(options: NavigationCatalogOptions): NavigationItem[] {

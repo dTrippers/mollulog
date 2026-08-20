@@ -106,6 +106,14 @@ describe("api.preference", () => {
     expect(preference.mobileNavigationIds).toEqual(["events", "raids"]);
   });
 
+  it("returns a JSON success response without redirecting", async () => {
+    const response = await callAction({ mobileNavigationIds: ["events", "raids"] });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Location")).toBeNull();
+    await expect(response.json()).resolves.toEqual({ ok: true });
+  });
+
   it("restores the default mobile pair for invalid submissions", async () => {
     for (const mobileNavigationIds of [["events", "events"], "events", ["events"]]) {
       const response = await callAction({ mobileNavigationIds });

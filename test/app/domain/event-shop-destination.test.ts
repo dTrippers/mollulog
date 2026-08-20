@@ -30,8 +30,20 @@ describe("event shop destination", () => {
     ).toBe("nearest");
   });
 
-  it("treats an open-ended event as ongoing and returns null without candidates", () => {
-    expect(selectEventShopDestination([candidate("open", "2026-08-01T00:00:00.000Z", null)], now)?.uid).toBe("open");
+  it("prefers the most recently started ongoing shop event", () => {
+    expect(
+      selectEventShopDestination(
+        [
+          candidate("open", "2026-08-01T00:00:00.000Z", null),
+          candidate("current", "2026-08-17T00:00:00.000Z", "2026-08-19T00:00:00.000Z"),
+        ],
+        now,
+      )?.uid,
+    ).toBe("current");
+  });
+
+  it("ignores open-ended events and returns null without candidates", () => {
+    expect(selectEventShopDestination([candidate("open", "2026-08-01T00:00:00.000Z", null)], now)).toBeNull();
     expect(selectEventShopDestination([], now)).toBeNull();
   });
 
