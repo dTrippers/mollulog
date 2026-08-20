@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, SubmitFunction } from "react-router";
-import { redirect } from "react-router";
 import { getPreference, type Preference, serializePreference } from "~/auth/preference.server";
+import { normalizeMobileNavigationIds } from "~/domain/mobile-navigation";
 import { normalizeNavigationFavoriteIds } from "~/domain/navigation-favorites";
 import { normalizeTimeZone } from "~/lib/date-time";
 
@@ -24,6 +24,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   const submittedFavoriteIds = submittedPreference.favoriteNavigationIds;
+  const submittedMobileNavigationIds = submittedPreference.mobileNavigationIds;
   const newPreference: Preference = {
     ...currentPreference,
     darkMode:
@@ -31,6 +32,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     favoriteNavigationIds: Array.isArray(submittedFavoriteIds)
       ? normalizeNavigationFavoriteIds(submittedFavoriteIds)
       : currentPreference.favoriteNavigationIds,
+    mobileNavigationIds:
+      submittedMobileNavigationIds === undefined
+        ? currentPreference.mobileNavigationIds
+        : normalizeMobileNavigationIds(submittedMobileNavigationIds),
     timeZone:
       submittedPreference.timeZone === undefined
         ? currentPreference.timeZone
@@ -40,8 +45,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
   };
 
   try {
-    return redirect(request.headers.get("Referer") ?? "/", {
+    return new Response(JSON.stringify({ ok: true }), {
       headers: {
+        "Content-Type": "application/json; charset=utf-8",
         "Set-Cookie": await serializePreference(env, newPreference),
       },
     });

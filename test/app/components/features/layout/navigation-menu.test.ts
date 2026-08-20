@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   getDesktopNavigation,
   getMobileNavigationItems,
+  getMobileNavigationOptions,
   getMoreNavigationItems,
   getNavigationCatalog,
   getNavigationSections,
@@ -39,8 +40,8 @@ describe("getNavigationSections", () => {
     ).toBeUndefined();
   });
 
-  it("keeps stable favorite IDs across dynamic event-shop availability", () => {
-    const unavailable = getNavigationSections({
+  it("keeps the event-shop favorite ID with the fixed utility path", () => {
+    const eventShop = getNavigationSections({
       pathname: "/",
       upcomingEvent: null,
       hasOngoingRaid: false,
@@ -48,36 +49,68 @@ describe("getNavigationSections", () => {
       isSignedIn: false,
     })
       .flatMap((section) => section.items)
-      .find((item) => item.name === "이벤트 소탕 계산기");
-    const available = getNavigationSections({
-      pathname: "/",
-      upcomingEvent: { uid: "event-uid", since: "2026-01-01T00:00:00.000Z", until: "2026-01-02T00:00:00.000Z" },
-      hasOngoingRaid: false,
-      hasUnconsumedCoupons: false,
-      isSignedIn: false,
-      now: "2026-01-01T12:00:00.000Z",
-    })
-      .flatMap((section) => section.items)
-      .find((item) => item.name === "이벤트 소탕 계산기");
+      .find((item) => item.name === "이벤트 상점 계산기");
 
-    expect(unavailable).toMatchObject({ favoriteId: "event-shop-calculator", disabled: true });
-    expect(available).toMatchObject({
+    expect(eventShop).toMatchObject({
       favoriteId: "event-shop-calculator",
-      to: "/events/event-uid/shop",
+      to: "/utils/event-shop",
+      name: "이벤트 상점 계산기",
+      mobileLabel: "상점 계산기",
     });
-    expect(available?.disabled).toBeUndefined();
+    expect(eventShop?.disabled).toBeUndefined();
   });
 });
 
 describe("navigation surface projections", () => {
   it("derives the mobile bottom navigation from the catalog", () => {
-    expect(getMobileNavigationItems({ pathname: "/more", upcomingEvent: null }).map((item) => item.to)).toEqual([
-      "/",
-      "/futures",
-      "/community",
-      "/students",
-      "/more",
+    const items = getMobileNavigationItems({ pathname: "/more", upcomingEvent: null });
+
+    expect(items.map((item) => item.to)).toEqual(["/", "/futures", "/community", "/students", "/more"]);
+    expect(items.filter((item) => item.isActive).map((item) => item.name)).toEqual(["더보기"]);
+  });
+
+  it.each([
+    { pathname: "/community", mobileNavigationIds: ["events", "raids"] as const },
+    { pathname: "/students", mobileNavigationIds: ["events", "raids"] as const },
+  ])("leaves every item inactive when the route is not selected", ({ pathname, mobileNavigationIds }) => {
+    const items = getMobileNavigationItems({ pathname, upcomingEvent: null, mobileNavigationIds });
+
+    expect(items.filter((item) => item.isActive).map((item) => item.name)).toEqual([]);
+  });
+
+  it("exposes exactly the approved mobile candidates and labels in order", () => {
+    const options = getMobileNavigationOptions(navigationOptions);
+
+    expect(options).toHaveLength(12);
+    expect(options.map((item) => item.mobileNavigationId)).toEqual([
+      "feed",
+      "students",
+      "events",
+      "raids",
+      "main-story",
+      "pyroxene-planner",
+      "student-growth-planner",
+      "resource-planner",
+      "event-shop-calculator",
+      "relationship-calculator",
+      "strategy-timeline",
+      "raid-score-calculator",
     ]);
+    expect(options.map((item) => item.name)).toEqual([
+      "피드",
+      "학생부",
+      "이벤트",
+      "총력전",
+      "메인 스토리",
+      "청휘석 플래너",
+      "성장 플래너",
+      "재화 관리",
+      "상점 계산기",
+      "인연 계산기",
+      "공략",
+      "점수 계산기",
+    ]);
+    expect(options.every((item) => item.name.replace(/[\s/]/g, "").length <= 6)).toBe(true);
   });
 
   it("keeps signed-in desktop-only items out of the guest desktop menu", () => {
@@ -89,16 +122,50 @@ describe("navigation surface projections", () => {
   });
 
   it("uses explicit surface membership for the more screen", () => {
-    expect(getMoreNavigationItems(navigationOptions).map((item) => item.to)).toEqual([
+    const guestItems = getMoreNavigationItems(navigationOptions);
+    const signedInItems = getMoreNavigationItems({ ...navigationOptions, isSignedIn: true });
+
+    expect(guestItems.map((item) => item.to)).toEqual([
+      "/community",
       "/events",
       "/raids",
+      "/students",
       "/mainstory",
+      "/utils/pyroxene",
       "/utils/growth/students",
       "/utils/resources/inventory",
-      "/futures",
+      "/utils/event-shop",
+      "/utils/relationship",
       "/timelines",
       "/utils/raidscore",
     ]);
+
+    expect(guestItems.map((item) => item.name)).toEqual([
+      "피드",
+      "이벤트",
+      "총력전 / 대결전",
+      "학생부",
+      "메인 스토리",
+      "청휘석 플래너",
+      "학생 성장 플래너",
+      "재화 관리/파밍 계산기",
+      "이벤트 상점 계산기",
+      "인연 랭크 계산기",
+      "공략 타임라인",
+      "총력전 점수 계산기",
+    ]);
+
+    expect(signedInItems.map((item) => item.name)).toEqual([
+      ...guestItems.map((item) => item.name),
+      "스크린샷/영상 인식기",
+      "외부 데이터 연동",
+    ]);
+  });
+
+  it("always exposes the relationship calculator in the guest More menu", () => {
+    expect(getMoreNavigationItems(navigationOptions)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: "인연 랭크 계산기", to: "/utils/relationship" })]),
+    );
   });
 
   it("exposes auth-gated links and the unavailable event-shop entry to search", () => {
@@ -109,7 +176,7 @@ describe("navigation surface projections", () => {
       expect.arrayContaining([
         expect.objectContaining({ name: "스크린샷/영상 인식기", to: "/scanner/resource" }),
         expect.objectContaining({ name: "외부 데이터 연동", to: "/connect/import" }),
-        expect.objectContaining({ name: "이벤트 소탕 계산기", to: "/futures" }),
+        expect.objectContaining({ name: "이벤트 상점 계산기", to: "/utils/event-shop" }),
       ]),
     );
     expect(signedInSearchItems).toEqual(
@@ -117,7 +184,7 @@ describe("navigation surface projections", () => {
     );
   });
 
-  it("keeps static red dots only on the resource scanner and uses the v1.2 badge", () => {
+  it("keeps red dots only on the resource scanner and uses the v1.2 badge", () => {
     const catalog = getNavigationCatalog({ ...navigationOptions, isSignedIn: true, currentUsername: "sensei" });
 
     expect(catalog.filter((item) => item.showRedDot === true).map((item) => item.name)).toEqual([
@@ -129,6 +196,22 @@ describe("navigation surface projections", () => {
     expect(catalog.filter((item) => item.badgeLabel === "베타").map((item) => item.name)).toEqual([
       "공략 타임라인",
       "외부 데이터 연동",
+    ]);
+  });
+
+  it("keeps the selected event-shop tab active on the resolved shop screen only", () => {
+    const items = getMobileNavigationItems({
+      pathname: "/events/event-uid/shop",
+      upcomingEvent: null,
+      mobileNavigationIds: ["events", "event-shop-calculator"],
+    });
+
+    expect(items.map((item) => [item.name, item.isActive])).toEqual([
+      ["홈", false],
+      ["미래시", false],
+      ["이벤트", false],
+      ["상점 계산기", true],
+      ["더보기", false],
     ]);
   });
 });

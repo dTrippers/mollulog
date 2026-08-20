@@ -39,6 +39,12 @@ describe("api.preference", () => {
     expect(preference.darkMode).toBe(false);
   });
 
+  it("uses feed and students as the default mobile navigation pair", async () => {
+    const preference = await getPreference(env, new Request("https://mollulog.net"));
+
+    expect(preference.mobileNavigationIds).toEqual(["feed", "students"]);
+  });
+
   it("merges timezone updates without dropping dark mode", async () => {
     const cookie = await serializePreference(env, { darkMode: true });
     const response = await callAction({ timeZone: "America/New_York" }, cookie);
@@ -77,6 +83,51 @@ describe("api.preference", () => {
     expect(preference.darkMode).toBe(false);
     expect(preference.timeZone).toBe("Asia/Seoul");
     expect(preference.favoriteNavigationIds).toEqual(["contact", "profile", "missing"]);
+  });
+
+  it("merges mobile navigation updates without dropping desktop favorites", async () => {
+    const cookie = await serializePreference(env, {
+      darkMode: false,
+      favoriteNavigationIds: ["events"],
+      mobileNavigationIds: ["feed", "students"],
+    });
+    const response = await callAction({ mobileNavigationIds: ["events", "raids"] }, cookie);
+    const setCookie = response.headers.get("Set-Cookie");
+
+    const preference = await getPreference(
+      env,
+      new Request("https://mollulog.net", {
+        headers: setCookie ? { Cookie: setCookie } : {},
+      }),
+    );
+
+    expect(preference.darkMode).toBe(false);
+    expect(preference.favoriteNavigationIds).toEqual(["events"]);
+    expect(preference.mobileNavigationIds).toEqual(["events", "raids"]);
+  });
+
+  it("returns a JSON success response without redirecting", async () => {
+    const response = await callAction({ mobileNavigationIds: ["events", "raids"] });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Location")).toBeNull();
+    await expect(response.json()).resolves.toEqual({ ok: true });
+  });
+
+  it("restores the default mobile pair for invalid submissions", async () => {
+    for (const mobileNavigationIds of [["events", "events"], "events", ["events"]]) {
+      const response = await callAction({ mobileNavigationIds });
+      const setCookie = response.headers.get("Set-Cookie");
+
+      const preference = await getPreference(
+        env,
+        new Request("https://mollulog.net", {
+          headers: setCookie ? { Cookie: setCookie } : {},
+        }),
+      );
+
+      expect(preference.mobileNavigationIds).toEqual(["feed", "students"]);
+    }
   });
 
   it("uses a 400-day max age for every serialized preference cookie", async () => {

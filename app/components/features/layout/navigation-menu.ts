@@ -49,7 +49,13 @@ import {
   TicketIcon as TicketIconSolid,
 } from "@heroicons/react/24/solid";
 import type { ComponentProps, ComponentType } from "react";
-import { isInstantAfter, isInstantBefore, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
+import {
+  DEFAULT_MOBILE_NAVIGATION_IDS,
+  MOBILE_NAVIGATION_IDS,
+  type MobileNavigationId,
+  normalizeMobileNavigationIds,
+} from "~/domain/mobile-navigation";
+import type { UtcIsoString } from "~/lib/date-time";
 
 type IconComponent = ComponentType<ComponentProps<"svg">>;
 
@@ -65,11 +71,11 @@ export type NavigationItem = {
   SolidIcon: IconComponent;
   isActive?: boolean;
   showRedDot?: boolean;
-  redDotAnimate?: boolean;
   badgeLabel?: string;
   disabled?: boolean;
   requiresSignIn?: boolean;
-  mobileOrder?: number;
+  mobileNavigationId?: MobileNavigationId;
+  mobileLabel?: string;
   group?: NavigationGroup;
   surfaces?: readonly NavigationSurface[];
 };
@@ -94,7 +100,6 @@ export type NavigationSectionStates = {
   isUtilActive: boolean;
   isExternalActive: boolean;
   isProfileActive: boolean;
-  isMoreActive: boolean;
 };
 
 export type UpcomingNavigationEvent = { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
@@ -108,7 +113,6 @@ export type SearchableMenuItem = {
 export type NavigationCatalogOptions = {
   pathname: string;
   upcomingEvent: UpcomingNavigationEvent;
-  now?: UtcIsoString;
   hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
   isSignedIn: boolean;
@@ -149,12 +153,9 @@ export function getNavigationSectionStates(
   pathname: string,
   upcomingEvent: UpcomingNavigationEvent,
 ): NavigationSectionStates {
-  const isHomeActive = pathname === "/";
   const isFuturesActive = pathname.startsWith("/futures");
   const isCommunityActive = pathname.startsWith("/community");
   const isStudentActive = pathname.startsWith("/students");
-  const isMoreActive =
-    pathname.startsWith("/more") || !(isHomeActive || isFuturesActive || isCommunityActive || isStudentActive);
 
   return {
     isCommunityActive,
@@ -175,14 +176,16 @@ export function getNavigationSectionStates(
       pathname.startsWith("/my") ||
       pathname.startsWith("/connect") ||
       pathname.startsWith("/scanner"),
-    isMoreActive,
   };
+}
+
+export function isEventShopNavigationPath(pathname: string): boolean {
+  return pathname === "/utils/event-shop" || /^\/events\/[^/]+\/shop(?:\/|$)/.test(pathname);
 }
 
 export function getNavigationCatalog({
   pathname,
   upcomingEvent,
-  now = nowUtcIso(),
   hasOngoingRaid,
   hasUnconsumedCoupons,
   isSignedIn,
@@ -200,17 +203,16 @@ export function getNavigationCatalog({
       OutlineIcon: HomeIconOutline,
       SolidIcon: HomeIconSolid,
       isActive: pathname === "/",
-      mobileOrder: 0,
     },
     {
       group: "primary",
-      surfaces: ["desktop", "mobileBottom", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/community",
       name: "피드",
+      mobileNavigationId: "feed",
       OutlineIcon: ChatBubbleLeftRightIconOutline,
       SolidIcon: ChatBubbleLeftRightIconSolid,
       isActive: sectionStates.isCommunityActive,
-      mobileOrder: 2,
     },
     {
       group: "content",
@@ -222,24 +224,26 @@ export function getNavigationCatalog({
       OutlineIcon: CalendarIconOutline,
       SolidIcon: CalendarIconSolid,
       isActive: pathname.startsWith("/futures"),
-      mobileOrder: 1,
     },
     {
       group: "content",
-      surfaces: ["desktop", "more", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/events",
       name: "이벤트",
+      mobileNavigationId: "events",
       favoriteId: "events",
       description: "이벤트 개최, 복각, 상설 일정을 확인해보세요",
       OutlineIcon: ListBulletIconOutline,
       SolidIcon: ListBulletIconSolid,
-      isActive: pathname.startsWith("/events"),
+      isActive: pathname.startsWith("/events") && !isEventShopNavigationPath(pathname),
     },
     {
       group: "content",
-      surfaces: ["desktop", "more", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/raids",
       name: "총력전 / 대결전",
+      mobileNavigationId: "raids",
+      mobileLabel: "총력전",
       favoriteId: "raids",
       description: "시즌 요약, 상위권 편성, 공략 영상을 확인해보세요",
       badgeLabel: hasOngoingRaid ? "진행중" : undefined,
@@ -249,21 +253,22 @@ export function getNavigationCatalog({
     },
     {
       group: "content",
-      surfaces: ["desktop", "mobileBottom", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/students",
       name: "학생부",
+      mobileNavigationId: "students",
       favoriteId: "students",
       description: "학생 프로필과 평가를 확인해보세요",
       OutlineIcon: IdentificationIconOutline,
       SolidIcon: IdentificationIconSolid,
       isActive: pathname.startsWith("/students"),
-      mobileOrder: 3,
     },
     {
       group: "content",
-      surfaces: ["desktop", "more", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/mainstory",
       name: "메인 스토리",
+      mobileNavigationId: "main-story",
       favoriteId: "main-story",
       description: "메인 스토리 공개 일정을 확인해보세요",
       OutlineIcon: BookOpenIconOutline,
@@ -272,9 +277,11 @@ export function getNavigationCatalog({
     },
     {
       group: "planner",
-      surfaces: ["desktop", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/pyroxene",
       name: "청휘석 플래너",
+      mobileNavigationId: "pyroxene-planner",
+      mobileLabel: "청휘석 플래너",
       favoriteId: "pyroxene-planner",
       description: "모집 시점의 청휘석을 계산해보세요",
       badgeLabel: isSignedIn ? undefined : "로그인 없이 사용",
@@ -284,9 +291,11 @@ export function getNavigationCatalog({
     },
     {
       group: "planner",
-      surfaces: ["desktop", "more", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/growth/students",
       name: "학생 성장 플래너",
+      mobileNavigationId: "student-growth-planner",
+      mobileLabel: "성장 플래너",
       favoriteId: "student-growth-planner",
       description: "성장에 필요한 재화를 정리해보세요",
       OutlineIcon: TableCellsIconOutline,
@@ -295,47 +304,37 @@ export function getNavigationCatalog({
     },
     {
       group: "planner",
-      surfaces: ["desktop", "more", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/resources/inventory",
       name: "재화 관리/파밍 계산기",
+      mobileNavigationId: "resource-planner",
+      mobileLabel: "재화 관리",
       favoriteId: "resource-planner",
       description: "보유 재화와 장비 파밍 계획을 확인해보세요",
       OutlineIcon: ArchiveBoxIconOutline,
       SolidIcon: ArchiveBoxIconSolid,
       isActive: pathname.startsWith("/utils/resources"),
     },
-    upcomingEvent
-      ? {
-          group: "planner",
-          surfaces: ["desktop", "more", "search"],
-          to: `/events/${upcomingEvent.uid}/shop`,
-          name: "이벤트 소탕 계산기",
-          favoriteId: "event-shop-calculator",
-          description: "이벤트 효율과 상점을 확인해보세요",
-          OutlineIcon: BoltIconOutline,
-          SolidIcon: BoltIconSolid,
-          badgeLabel:
-            isInstantBefore(upcomingEvent.since, now) && isInstantAfter(upcomingEvent.until, now)
-              ? "개최중"
-              : undefined,
-          isActive: pathname.startsWith(`/events/${upcomingEvent.uid}`),
-        }
-      : {
-          group: "planner",
-          surfaces: ["desktop", "more", "search"],
-          to: "/futures",
-          name: "이벤트 소탕 계산기",
-          favoriteId: "event-shop-calculator",
-          description: "진행중인 이벤트 상점을 확인해보세요",
-          OutlineIcon: BoltIconOutline,
-          SolidIcon: BoltIconSolid,
-          disabled: true,
-        },
     {
       group: "planner",
-      surfaces: ["desktop", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
+      to: "/utils/event-shop",
+      name: "이벤트 상점 계산기",
+      mobileNavigationId: "event-shop-calculator",
+      mobileLabel: "상점 계산기",
+      favoriteId: "event-shop-calculator",
+      description: "이벤트 효율과 상점을 확인해보세요",
+      OutlineIcon: BoltIconOutline,
+      SolidIcon: BoltIconSolid,
+      isActive: isEventShopNavigationPath(pathname),
+    },
+    {
+      group: "planner",
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/relationship",
       name: "인연 랭크 계산기",
+      mobileNavigationId: "relationship-calculator",
+      mobileLabel: "인연 계산기",
       favoriteId: "relationship-calculator",
       description: "학생별 인연 랭크를 계산해보세요",
       OutlineIcon: HeartIconOutline,
@@ -344,9 +343,11 @@ export function getNavigationCatalog({
     },
     {
       group: "planner",
-      surfaces: ["desktop", "more", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/timelines",
       name: "공략 타임라인",
+      mobileNavigationId: "strategy-timeline",
+      mobileLabel: "공략",
       favoriteId: "strategy-timeline",
       description: "공략을 찾아보고 실전에서 순서대로 확인해보세요",
       OutlineIcon: QueueListIconOutline,
@@ -356,9 +357,11 @@ export function getNavigationCatalog({
     },
     {
       group: "planner",
-      surfaces: ["desktop", "more", "search"],
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/raidscore",
       name: "총력전 점수 계산기",
+      mobileNavigationId: "raid-score-calculator",
+      mobileLabel: "점수 계산기",
       favoriteId: "raid-score-calculator",
       description: "클리어 시간 기준 점수를 계산해보세요",
       OutlineIcon: ClockIconOutline,
@@ -393,7 +396,7 @@ export function getNavigationCatalog({
       : []),
     {
       group: "profile",
-      surfaces: ["desktop", "search"],
+      surfaces: ["desktop", "more", "search"],
       to: "/scanner/resource",
       name: "스크린샷/영상 인식기",
       favoriteId: "scanner-resource",
@@ -406,7 +409,7 @@ export function getNavigationCatalog({
     },
     {
       group: "profile",
-      surfaces: ["desktop", "search"],
+      surfaces: ["desktop", "more", "search"],
       to: "/connect/import",
       name: "외부 데이터 연동",
       favoriteId: "connect-import",
@@ -425,7 +428,6 @@ export function getNavigationCatalog({
       OutlineIcon: MegaphoneIconOutline,
       SolidIcon: MegaphoneIconSolid,
       showRedDot: hasRecentNews,
-      redDotAnimate: false,
     },
     {
       group: "service",
@@ -436,7 +438,6 @@ export function getNavigationCatalog({
       OutlineIcon: EnvelopeIconOutline,
       SolidIcon: EnvelopeIconSolid,
       showRedDot: hasUnreadFeedbackReplies,
-      redDotAnimate: false,
     },
     {
       group: "mobile",
@@ -445,8 +446,7 @@ export function getNavigationCatalog({
       name: "더보기",
       OutlineIcon: EllipsisHorizontalCircleIconOutline,
       SolidIcon: EllipsisHorizontalCircleIconSolid,
-      isActive: sectionStates.isMoreActive,
-      mobileOrder: 4,
+      isActive: pathname === "/more" || pathname.startsWith("/more/"),
     },
   ];
 
@@ -491,23 +491,81 @@ export function getDesktopNavigation(options: NavigationCatalogOptions): Desktop
 export function getMobileNavigationItems({
   pathname,
   upcomingEvent,
+  mobileNavigationIds = DEFAULT_MOBILE_NAVIGATION_IDS,
 }: {
   pathname: string;
   upcomingEvent: UpcomingNavigationEvent;
+  mobileNavigationIds?: unknown;
 }): NavigationItem[] {
-  return getNavigationCatalog({
+  const catalog = getNavigationCatalog({
     pathname,
     upcomingEvent,
     hasOngoingRaid: false,
     hasUnconsumedCoupons: false,
     isSignedIn: false,
-  })
-    .filter((item) => item.surfaces.includes("mobileBottom"))
-    .sort((a, b) => (a.mobileOrder ?? Number.POSITIVE_INFINITY) - (b.mobileOrder ?? Number.POSITIVE_INFINITY));
+  });
+  const normalizedIds = normalizeMobileNavigationIds(mobileNavigationIds);
+  const candidatesById = new Map(
+    catalog
+      .filter((item): item is NavigationCatalogItem & { mobileNavigationId: MobileNavigationId } =>
+        Boolean(item.mobileNavigationId),
+      )
+      .map((item) => [item.mobileNavigationId, item]),
+  );
+  const selectedItems = normalizedIds.flatMap((id) => {
+    const item = candidatesById.get(id);
+    return item ? [{ ...item, name: item.mobileLabel ?? item.name }] : [];
+  });
+  const homeItem = catalog.find((item) => item.to === "/");
+  const futuresItem = catalog.find((item) => item.to === "/futures");
+  const moreItem = catalog.find((item) => item.to === "/more");
+  const fixedItems = [homeItem, futuresItem];
+
+  return [...fixedItems, ...selectedItems, moreItem].filter((item): item is NavigationCatalogItem => Boolean(item));
 }
 
 export function getMoreNavigationItems(options: NavigationCatalogOptions): NavigationItem[] {
-  return getNavigationCatalog(options).filter((item) => item.surfaces.includes("more"));
+  return getNavigationCatalog(options).filter(
+    (item) => item.surfaces.includes("more") && (!item.requiresSignIn || options.isSignedIn),
+  );
+}
+
+export function getMobileNavigationOptions(options: NavigationCatalogOptions): NavigationItem[] {
+  const catalog = getNavigationCatalog(options);
+  const order = new Map<MobileNavigationId, number>(MOBILE_NAVIGATION_IDS.map((id, index) => [id, index]));
+  return catalog
+    .filter((item): item is NavigationCatalogItem & { mobileNavigationId: MobileNavigationId } =>
+      Boolean(item.mobileNavigationId),
+    )
+    .sort(
+      (a, b) =>
+        (order.get(a.mobileNavigationId) ?? Number.POSITIVE_INFINITY) -
+        (order.get(b.mobileNavigationId) ?? Number.POSITIVE_INFINITY),
+    )
+    .map((item) => ({ ...item, name: item.mobileLabel ?? item.name }));
+}
+
+export type MoreNavigationSection = {
+  name: string;
+  items: NavigationItem[];
+};
+
+export function getMoreNavigationSections(options: NavigationCatalogOptions): MoreNavigationSection[] {
+  const items = getMoreNavigationItems(options);
+  return [
+    {
+      name: "컨텐츠",
+      items: items.filter((item) => item.group === "primary" || item.group === "content"),
+    },
+    {
+      name: "플래너 & 계산기",
+      items: items.filter((item) => item.group === "planner"),
+    },
+    {
+      name: "내 정보",
+      items: items.filter((item) => item.group === "profile"),
+    },
+  ].filter((section) => section.items.length > 0);
 }
 
 export function getServiceNavigationItems({

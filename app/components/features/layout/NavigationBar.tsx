@@ -1,4 +1,4 @@
-import { MoonIcon, SunIcon } from "@heroicons/react/16/solid";
+import { MoonIcon, SunIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import {
   CalendarIcon as CalendarIconOutline,
   Cog6ToothIcon,
@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { DEFAULT_MOBILE_NAVIGATION_IDS, type MobileNavigationPair } from "~/domain/mobile-navigation";
 import {
   getAvailableNavigationFavorites,
   normalizeNavigationFavoriteIds,
@@ -24,6 +25,7 @@ import { timelineContentTypeLocale } from "~/locales/ko";
 import { studentImageUrl } from "~/models/assets";
 import { submitPreference } from "~/routes/api.preference";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
+import { mobileNavigationTutorialStorageKey } from "./mobile-navigation-tutorial";
 import {
   getDesktopNavigation,
   getMobileNavigationItems,
@@ -39,6 +41,7 @@ type NavigationBarProps = {
   currentUsername: string | null;
   currentProfileStudentId: string | null;
   favoriteNavigationIds: string[];
+  mobileNavigationIds: MobileNavigationPair;
   darkMode: boolean;
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   upcomingEvent: { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
@@ -288,6 +291,7 @@ export default function NavigationBar({
   currentUsername,
   currentProfileStudentId,
   favoriteNavigationIds,
+  mobileNavigationIds,
   darkMode,
   setDarkMode,
   upcomingEvent,
@@ -376,9 +380,121 @@ export default function NavigationBar({
         currentProfileStudentId={currentProfileStudentId}
         pathname={pathname}
         upcomingEvent={upcomingEvent}
+        mobileNavigationIds={mobileNavigationIds}
       />
+      <MobileNavigationPersonalizationTutorial mobileNavigationIds={mobileNavigationIds} />
     </>
   );
+}
+
+function MobileNavigationPersonalizationTutorial({
+  mobileNavigationIds,
+}: {
+  mobileNavigationIds: MobileNavigationPair;
+}) {
+  const [isVisible, setIsVisible] = useState(false);
+  const usesDefaultTabs = mobileNavigationIds.every((id, index) => id === DEFAULT_MOBILE_NAVIGATION_IDS[index]);
+
+  useEffect(() => {
+    const mobileMedia = window.matchMedia("(max-width: 1023px)");
+
+    const showOnceOnMobile = () => {
+      if (!mobileMedia.matches) {
+        setIsVisible(false);
+        return;
+      }
+
+      if (!usesDefaultTabs || hasSeenMobileNavigationTutorial()) {
+        if (!usesDefaultTabs) {
+          markMobileNavigationTutorialAsSeen();
+        }
+        setIsVisible(false);
+        return;
+      }
+
+      setIsVisible(true);
+    };
+
+    const hideWhenSeenInAnotherTab = (event: StorageEvent) => {
+      if (event.key === mobileNavigationTutorialStorageKey && event.newValue === "true") {
+        setIsVisible(false);
+      }
+    };
+
+    showOnceOnMobile();
+    mobileMedia.addEventListener("change", showOnceOnMobile);
+    window.addEventListener("storage", hideWhenSeenInAnotherTab);
+
+    return () => {
+      mobileMedia.removeEventListener("change", showOnceOnMobile);
+      window.removeEventListener("storage", hideWhenSeenInAnotherTab);
+    };
+  }, [usesDefaultTabs]);
+
+  useEffect(() => {
+    if (!isVisible) {
+      return;
+    }
+
+    markMobileNavigationTutorialAsSeen();
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsVisible(false);
+      }
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [isVisible]);
+
+  const close = () => {
+    setIsVisible(false);
+  };
+
+  if (!isVisible) {
+    return null;
+  }
+
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--mobile-nav-height)+0.5rem)] z-layer-navigation-menu px-3 lg:hidden">
+      <div className="pointer-events-auto mx-auto flex max-w-sm items-center gap-2 rounded-lg bg-foreground px-3 py-2.5 text-background shadow-xl">
+        <button
+          type="button"
+          className="-ml-1 inline-flex size-8 shrink-0 items-center justify-center rounded-md text-background/75 transition-colors hover:bg-background/15 hover:text-background focus:outline-none focus-visible:ring-2 focus-visible:ring-background/60"
+          onClick={close}
+          aria-label="탭 설정 안내 닫기"
+        >
+          <XMarkIcon className="size-4" aria-hidden="true" />
+        </button>
+        <p className="min-w-0 flex-1 text-sm font-medium leading-snug" role="status" aria-live="polite">
+          하단 탭을 자주 쓰는 메뉴로 변경할 수 있어요
+        </p>
+        <Link
+          to="/more#mobile-navigation-settings"
+          className="shrink-0 rounded-md bg-background/15 px-2.5 py-1.5 text-sm font-semibold transition-colors hover:bg-background/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-background/60"
+          onClick={close}
+        >
+          바꾸기
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function hasSeenMobileNavigationTutorial() {
+  try {
+    return localStorage.getItem(mobileNavigationTutorialStorageKey) === "true";
+  } catch {
+    return true;
+  }
+}
+
+function markMobileNavigationTutorialAsSeen() {
+  try {
+    localStorage.setItem(mobileNavigationTutorialStorageKey, "true");
+  } catch {
+    // Storage access is unavailable, so the notice cannot safely be persisted.
+  }
 }
 
 function MobileBrandHeader({
@@ -643,19 +759,21 @@ function MobileBottomNavigation({
   currentProfileStudentId,
   pathname,
   upcomingEvent,
+  mobileNavigationIds,
 }: {
   currentUsername: string | null;
   currentProfileStudentId: string | null;
   pathname: string;
   upcomingEvent: NavigationBarProps["upcomingEvent"];
+  mobileNavigationIds: MobileNavigationPair;
 }) {
-  const items = getMobileNavigationItems({ pathname, upcomingEvent });
+  const items = getMobileNavigationItems({ pathname, upcomingEvent, mobileNavigationIds });
 
   return (
     <nav
       className="
         lg:hidden fixed inset-x-0 bottom-0 z-layer-navigation h-[var(--mobile-nav-height)]
-        bg-card/95 px-2 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
+        bg-card/95 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
       "
       aria-label="주요 메뉴"
     >
@@ -663,7 +781,7 @@ function MobileBottomNavigation({
         {items.map((item) => {
           const Icon = item.isActive ? item.SolidIcon : item.OutlineIcon;
           const className = cn(`
-            relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-1 text-xs font-medium transition-colors
+            relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0 text-xs font-medium transition-colors
             focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
             ${item.isActive ? "font-bold text-foreground" : "text-foreground/70 hover:text-foreground"}
           `);
@@ -676,7 +794,9 @@ function MobileBottomNavigation({
                   <Icon className="size-5 shrink-0" strokeWidth={2} />
                 )}
               </span>
-              <span className="block h-4 max-w-full truncate leading-4">{item.name}</span>
+              <span className="block h-4 whitespace-nowrap text-[11px] leading-4 tracking-tighter sm:text-xs">
+                {item.name}
+              </span>
             </>
           );
 
@@ -691,11 +811,7 @@ function MobileBottomNavigation({
   );
 }
 
-type DesktopMenuItem = NavigationItem & {
-  redDotAnimate?: boolean;
-};
-
-interface MenuItemProps extends DesktopMenuItem {
+interface MenuItemProps extends NavigationItem {
   isFavorite?: boolean;
   onFavoriteToggle?: (favoriteId: string) => void;
 }
@@ -908,7 +1024,6 @@ function SubMenuItem({
   isActive,
   isFavorite = false,
   onFavoriteToggle,
-  redDotAnimate = true,
   showRedDot,
   badgeLabel,
   disabled,
@@ -920,29 +1035,26 @@ function SubMenuItem({
   );
   const content = (
     <>
-      <span className="flex size-5 items-center justify-center">
+      <span className="relative flex size-5 items-center justify-center">
         {isActive ? (
           <SolidIcon className="size-4 text-foreground" />
         ) : (
           <OutlineIcon className="size-4 text-foreground/70" />
+        )}
+        {showRedDot && (
+          <span
+            className="absolute -top-1 -right-1 size-1.5 animate-pulse rounded-full bg-red-500"
+            aria-hidden="true"
+          />
         )}
       </span>
       <span className="min-w-0">
         <span className="relative inline-block">
           {name}
           {badgeLabel && (
-            <span className="ml-1 inline-block origin-left scale-90 align-super text-xs font-normal leading-none text-muted-foreground/70">
+            <span className="absolute top-0 left-full ml-1 origin-left scale-90 whitespace-nowrap text-xs font-normal leading-none text-muted-foreground/70">
               {badgeLabel}
             </span>
-          )}
-          {showRedDot && (
-            <div
-              className={cn(
-                "absolute top-0 -right-3 size-1.5 rounded-full bg-red-500",
-                redDotAnimate && "animate-pulse",
-              )}
-              aria-hidden="true"
-            />
           )}
         </span>
       </span>
