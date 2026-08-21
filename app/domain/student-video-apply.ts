@@ -9,6 +9,10 @@ import {
   type StudentDetailVideoStudent,
   type StudentVideoFieldName,
 } from "~/domain/student-video-ocr";
+import {
+  parseStudentDetailImagesResult,
+  type StudentDetailImageStudent,
+} from "~/domain/student-image-ocr";
 import type { SyncDraftCreateInput } from "~/models/sync-draft";
 
 export const studentVideoApplyFieldNames = [
@@ -36,6 +40,8 @@ type ParsedStudentApply = {
   current: StudentStateDraftCurrentValue;
   confirmedFields: StudentVideoApplyFieldName[];
 };
+
+type StudentGrowthStudent = StudentDetailVideoStudent | StudentDetailImageStudent;
 
 export function buildStudentVideoSyncDraftEntries(
   rawResult: unknown,
@@ -75,9 +81,47 @@ export function buildStudentVideoSyncDraftEntries(
   });
 }
 
+export function buildStudentImageSyncDraftEntries(
+  rawResult: unknown,
+  request: unknown,
+  validStudentUids: ReadonlySet<string>,
+): SyncDraftCreateInput["entries"] {
+  const result = parseStudentDetailImagesResult(rawResult);
+  const resultByUid = new Map(result.students.map((student) => [student.studentUid, student]));
+  const students = parseApplyRequest(request, resultByUid, validStudentUids);
+
+  return students.map(({ studentUid, current, confirmedFields }) => {
+    const resultStudent = resultByUid.get(studentUid) as StudentDetailImageStudent;
+    return {
+      entryKey: studentUid,
+      value: current.tier,
+      valueJson: JSON.stringify({ current, target: null }),
+      meta: {
+        confirmedFields,
+        fields: Object.fromEntries(
+          confirmedFields.map((field) => {
+            const resultField = toResultField(field);
+            const detail = resultStudent.fieldDetails[resultField];
+            const submittedValue = current[field];
+            return [
+              field,
+              {
+                ocrValue: detail.value,
+                submittedValue,
+                confidence: detail.confidence,
+                corrected: submittedValue !== detail.value,
+              },
+            ];
+          }),
+        ),
+      },
+    };
+  });
+}
+
 function parseApplyRequest(
   value: unknown,
-  resultByUid: ReadonlyMap<string, StudentDetailVideoStudent>,
+  resultByUid: ReadonlyMap<string, StudentGrowthStudent>,
   validStudentUids: ReadonlySet<string>,
 ): ParsedStudentApply[] {
   if (!value || typeof value !== "object" || !Array.isArray((value as { students?: unknown }).students)) {
@@ -95,7 +139,7 @@ function parseApplyRequest(
 
 function parseApplyStudent(
   value: unknown,
-  resultByUid: ReadonlyMap<string, StudentDetailVideoStudent>,
+  resultByUid: ReadonlyMap<string, StudentGrowthStudent>,
   validStudentUids: ReadonlySet<string>,
 ): ParsedStudentApply {
   if (!value || typeof value !== "object") throw new OcrPublicError("반영할 학생 정보를 확인해주세요");
@@ -117,7 +161,7 @@ function parseApplyStudent(
   }
 
   const submitted = asRecord(input.current, "학생 현재 성장도");
-  const resultStudent = resultByUid.get(studentUid) as StudentDetailVideoStudent;
+  const resultStudent = resultByUid.get(studentUid) as StudentGrowthStudent;
   const current = createEmptyCurrent(parseSubmittedInteger(submitted.tier, "성급"));
   for (const field of confirmedFields) {
     const resultField = toResultField(field);

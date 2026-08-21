@@ -8,7 +8,7 @@ const ACTIVE_JOB_STATUSES = new Set(["queued", "processing", "finalizing"]);
 
 type ScannerJobSummary = {
   uid: string;
-  jobKind: "item_inventory_images_v1" | "student_detail_video_v1";
+  jobKind: "item_inventory_images_v1" | "student_detail_images_v1" | "student_detail_video_v1";
   status: string;
   progress: { completed: number; failed: number; total: number };
   application: { status: string; appliedAt: string | null } | null;
@@ -192,7 +192,9 @@ function jobKindLabel(jobKind: ScannerJobSummary["jobKind"]) {
 }
 
 function jobInputLabel(job: ScannerJobSummary) {
-  return job.jobKind === "item_inventory_images_v1" ? `스크린샷 ${job.progress.total}장` : "동영상";
+  if (job.jobKind === "item_inventory_images_v1") return `스크린샷 ${job.progress.total}장`;
+  if (job.jobKind === "student_detail_images_v1") return `학생 이미지 ${job.progress.total}장`;
+  return "동영상";
 }
 
 function formatRelativePastTime(value: string) {

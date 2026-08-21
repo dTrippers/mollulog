@@ -1,4 +1,5 @@
 export const OCR_CONTRACT_VERSION = "1";
+export const OCR_STUDENT_IMAGE_CONTRACT_VERSION = "1";
 export const OCR_STUDENT_VIDEO_CONTRACT_VERSION = "2";
 export const OCR_MAX_IMAGES = 30;
 export const OCR_MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -21,8 +22,12 @@ export const OCR_ALLOWED_CONTENT_TYPES = ["image/png", "image/jpeg", "image/webp
 export const OCR_ALLOWED_VIDEO_CONTENT_TYPES = ["video/mp4", "video/quicktime"] as const;
 export const OCR_ALLOWED_VIDEO_CONTAINERS = ["mp4", "mov"] as const;
 
-export type OcrJobKind = "item_inventory_images_v1" | "student_detail_video_v1";
-export type OcrTaskType = "ocr.image.recognize.v1" | "ocr.job.finalize.v1" | "ocr.student_detail_video.recognize.v1";
+export type OcrJobKind = "item_inventory_images_v1" | "student_detail_images_v1" | "student_detail_video_v1";
+export type OcrTaskType =
+  | "ocr.image.recognize.v1"
+  | "ocr.job.finalize.v1"
+  | "ocr.student_detail_image.recognize.v1"
+  | "ocr.student_detail_video.recognize.v1";
 
 export type OcrTaskMessage = {
   type: OcrTaskType;
@@ -38,7 +43,7 @@ export type OcrUploadInput = {
 };
 
 export type OcrImageUploadRequest = {
-  jobKind: "item_inventory_images_v1";
+  jobKind: "item_inventory_images_v1" | "student_detail_images_v1";
   images: OcrUploadInput[];
   trainingConsent: boolean;
 };
@@ -145,17 +150,36 @@ export function parseOcrUploadInputs(value: unknown): OcrUploadInput[] {
 
 export function parseOcrUploadRequest(value: unknown): OcrUploadRequest {
   if (value && typeof value === "object") {
-    const jobKind = (value as { jobKind?: unknown }).jobKind;
+    const request = value as { jobKind?: unknown; images?: unknown; video?: unknown };
+    const jobKind = request.jobKind;
     if (jobKind === "student_detail_video_v1") {
+      if (request.images !== undefined) {
+        throw new OcrPublicError("이미지와 영상은 한 작업에 함께 제출할 수 없어요");
+      }
       return {
         jobKind,
-        video: parseOcrVideoUploadInput((value as { video?: unknown }).video),
+        video: parseOcrVideoUploadInput(request.video),
         trainingConsent: (value as { trainingConsent?: unknown }).trainingConsent === true,
       };
     }
-    if (jobKind !== undefined && jobKind !== "item_inventory_images_v1") {
+    if (
+      jobKind !== undefined &&
+      jobKind !== "item_inventory_images_v1" &&
+      jobKind !== "student_detail_images_v1"
+    ) {
       throw new OcrPublicError("요청한 인식 방식은 현재 사용할 수 없어요");
     }
+    if (request.video !== undefined) {
+      throw new OcrPublicError("이미지와 영상은 한 작업에 함께 제출할 수 없어요");
+    }
+    const images = parseOcrUploadInputs(value);
+    return {
+      jobKind: jobKind === "student_detail_images_v1" ? jobKind : "item_inventory_images_v1",
+      images,
+      trainingConsent: Boolean(
+        (value as { trainingConsent?: unknown }).trainingConsent === true,
+      ),
+    };
   }
   return {
     jobKind: "item_inventory_images_v1",
@@ -238,6 +262,7 @@ export function parseOcrTaskMessage(value: unknown): OcrTaskMessage {
   if (
     message.type !== "ocr.image.recognize.v1" &&
     message.type !== "ocr.job.finalize.v1" &&
+    message.type !== "ocr.student_detail_image.recognize.v1" &&
     message.type !== "ocr.student_detail_video.recognize.v1"
   ) {
     throw new Error("지원하지 않는 OCR 작업이에요");

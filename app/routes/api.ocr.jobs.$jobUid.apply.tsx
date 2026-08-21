@@ -12,7 +12,10 @@ import {
   parseOcrCellPatches,
 } from "~/domain/ocr-inventory-review";
 import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
-import { buildStudentVideoSyncDraftEntries } from "~/domain/student-video-apply";
+import {
+  buildStudentImageSyncDraftEntries,
+  buildStudentVideoSyncDraftEntries,
+} from "~/domain/student-video-apply";
 import { getLogger } from "~/lib/observability.server";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getOcrJob } from "~/models/ocr-job";
@@ -47,18 +50,25 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     }
     if (existing) throw new OcrPublicError("이미 처리 중인 인식 결과예요");
 
-    if (job.jobKind === "student_detail_video_v1") {
+    if (job.jobKind === "student_detail_video_v1" || job.jobKind === "student_detail_images_v1") {
       const studentsMap = await getAllStudentsMap(env, true);
-      const entries = buildStudentVideoSyncDraftEntries(
-        job.result,
-        await request.json(),
-        new Set(Object.keys(studentsMap)),
-      );
+      const entries =
+        job.jobKind === "student_detail_video_v1"
+          ? buildStudentVideoSyncDraftEntries(
+              job.result,
+              await request.json(),
+              new Set(Object.keys(studentsMap)),
+            )
+          : buildStudentImageSyncDraftEntries(
+              job.result,
+              await request.json(),
+              new Set(Object.keys(studentsMap)),
+            );
       const applied = await createAndApplySyncDraft(env, sensei.id, {
         source: "first_party_ocr",
         sourceRef: job.uid,
         type: "student_state",
-        toolName: "학생 성장도 영상 인식",
+        toolName: job.jobKind === "student_detail_video_v1" ? "학생 성장도 영상 인식" : "학생 성장도 이미지 인식",
         toolVersion: job.versions?.model,
         catalogVersion: job.versions?.catalog,
         entries,

@@ -9,7 +9,7 @@ import {
 } from "@headlessui/react";
 import { ArrowPathIcon, ArrowsPointingOutIcon, PhotoIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useOutletContext, useSearchParams } from "react-router";
 import { Button, Callout, HorizontalScroll, NumberInput, ResourceCard, SubTitle } from "~/components/primitives";
 import {
   OCR_ALLOWED_CONTENT_TYPES,
@@ -19,6 +19,7 @@ import {
   OCR_MAX_JOB_BYTES,
 } from "~/domain/ocr";
 import { cn } from "~/lib/utils";
+import type { ScannerOutletContext } from "../scanner";
 import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
 import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
 import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
@@ -32,7 +33,6 @@ import {
 } from "../scanner._components/scanner-client";
 import { sha256FileNative } from "../scanner._components/sha256-client";
 import type { ScannerUploadQuota } from "../scanner._components/UploadQuotaMeter";
-import { useScannerQuota } from "../scanner._components/useScannerQuota";
 import {
   buildCellApplyPayload,
   buildCellReviewAttentionCounts,
@@ -232,11 +232,12 @@ function getTerminalJobDescription(status: string): string {
 
 export default function ResourceScanner() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { imageUploadQuota: uploadQuota, setImageUploadQuota: setUploadQuota } =
+    useOutletContext<ScannerOutletContext>();
   const [files, setFiles] = useState<File[]>([]);
   const [phase, setPhase] = useState<ScannerPhase>("idle");
   const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [uploadQuota, setUploadQuota] = useScannerQuota("item_inventory_images_v1", setError);
   const [job, setJob] = useState<JobStatus | null>(null);
   const [selectedSource, setSelectedSource] = useState<string | null>(null);
   const [selectedImageUid, setSelectedImageUid] = useState<string | null>(null);
@@ -686,21 +687,19 @@ export default function ResourceScanner() {
         <ScannerUploadSection
           title="아이템 스크린샷 업로드"
           description="게임 내 [메뉴] > [아이템] 페이지의 스크린샷을 첨부해주세요"
-          quota={uploadQuota}
-          quotaUnit="장"
-          quotaSubject="스크린샷"
+          quota={null}
+          quotaUnit=""
+          quotaSubject=""
           inputId="resource-scanner-files"
           accept={OCR_ALLOWED_CONTENT_TYPES.join(",")}
           multiple
           selectionDisabled={isFileSelectionDisabled}
           onFiles={addFiles}
           icon={<PhotoIcon className="size-6" aria-hidden="true" />}
-          dropLabel={files.length > 0 ? "스크린샷 더 추가하기" : "스크린샷을 선택하거나 이곳에 끌어다 놓아주세요"}
-          helpText="PNG, JPEG, WebP · 장당 10MB · 전체 120MB · 최대 30장"
+          helpText="1회당 이미지 최대 30장"
           consentChecked={allowsTrainingDataUse}
           consentDisabled={isUploadLocked}
           onConsentChange={setAllowsTrainingDataUse}
-          consentDataLabel="스크린샷 데이터"
           actionDisabled={files.length === 0 || isUploadLocked || !uploadQuota || files.length > uploadQuota.remaining}
           actionLabel={phase === "uploading" ? "업로드 중..." : "인식 시작"}
           onAction={startRecognition}
@@ -755,7 +754,7 @@ export default function ResourceScanner() {
               <Callout
                 tone="warning"
                 title={`자동으로 인식하지 못한 항목이 ${unknownCount}개 있어요`}
-                description="후보가 있는 항목은 해당 셀에서 직접 아이템을 선택할 수 있어요"
+                description="결과 화면에서 아이템을 직접 선택해주세요."
               />
             ) : null}
             {!selectedImageHasNoResult &&

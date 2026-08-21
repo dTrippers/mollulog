@@ -1,6 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
 import { OcrTaskResultRejectedError } from "~/domain/ocr";
+import type { StudentDetailImageTaskResult } from "~/domain/student-image-ocr";
 import {
   cancelOcrJob,
   claimOcrTask,
@@ -11,11 +12,13 @@ import {
   getOcrUploadQuota,
   getOwnedOcrArtifactObjectKey,
   listRecentOcrJobs,
+  markOcrTaskDeadLetter,
   prepareOcrResultArtifacts,
   publishPendingOcrOutbox,
   reconcileOcrJobs,
   submitOcrJob,
 } from "~/models/ocr-job";
+import studentImagesResult from "../../fixtures/student-detail-images-result.v1.json";
 import studentVideoResult from "../../fixtures/student-detail-video-result.v1.json";
 
 const jobRow = {
@@ -43,8 +46,8 @@ const imageRow = {
   inputSha256: "a".repeat(64),
   status: "queued",
   generation: 1,
-  lastErrorCode: null,
-  lastErrorMessage: null,
+  lastErrorCode: null as string | null,
+  lastErrorMessage: null as string | null,
 };
 
 const videoRow = {
@@ -180,6 +183,23 @@ function artifactDatabaseRow(overrides: Partial<typeof artifactRow> = {}): unkno
     new Date("2026-07-20T00:00:00Z"),
     new Date("2026-07-20T00:00:00Z"),
   ];
+}
+
+function studentImageTaskResult(imageUid = imageRow.uid): StudentDetailImageTaskResult {
+  const {
+    sourceFrames: _sourceFrames,
+    sourceTimestampsSeconds: _sourceTimestampsSeconds,
+    ...student
+  } = studentVideoResult.students[0];
+  return {
+    schemaVersion: 1,
+    jobType: "student_detail_image_v1",
+    executionProvider: "cpu",
+    image: { imageUid, filename: `${imageUid}.png`, width: 1040, height: 480 },
+    students: [{ ...student, sourceImageUids: [imageUid] }],
+    unresolvedCount: 2,
+    elapsedMs: 1,
+  } as StudentDetailImageTaskResult;
 }
 
 type QueryConfig = { text: string; rowMode?: string };
@@ -347,6 +367,61 @@ describe("PostgreSQL OCR control plane", () => {
     expect(JSON.stringify(job)).not.toContain("/private/internal/path");
   });
 
+  it("maps only the oversized student image error to safe resolution guidance", async () => {
+    const { client } = createClient((sql) => {
+      if (sql.includes('from "ocr_jobs"')) {
+        return [jobDatabaseRow({ jobKind: "student_detail_images_v1", status: "failed" })];
+      }
+      if (sql.includes('from "ocr_images"')) {
+        return [
+          imageDatabaseRow({
+            originalFilename: "large.png",
+            status: "failed",
+            lastErrorCode: "image_dimensions_exceeded",
+            lastErrorMessage: null,
+          }),
+        ];
+      }
+      return [];
+    });
+
+    const job = await getOcrJob(createEnv(), 7, "job-1", { createClient: () => client });
+
+    expect(job?.images[0]?.error).toEqual({
+      code: "image_dimensions_exceeded",
+      message: "이미지 해상도가 너무 커요. 4K급 이미지를 사용해 주세요.",
+    });
+    expect(JSON.stringify(job)).not.toContain("allowed resource budget");
+  });
+
+  it("continues masking unknown student image worker errors", async () => {
+    const { client } = createClient((sql) => {
+      if (sql.includes('from "ocr_jobs"')) {
+        return [jobDatabaseRow({ jobKind: "student_detail_images_v1", status: "failed" })];
+      }
+      if (sql.includes('from "ocr_images"')) {
+        return [
+          imageDatabaseRow({
+            originalFilename: "broken.png",
+            status: "failed",
+            lastErrorCode: "worker_internal_failure",
+            lastErrorMessage: "internal path /private/worker/secret",
+          }),
+        ];
+      }
+      return [];
+    });
+
+    const job = await getOcrJob(createEnv(), 7, "job-1", { createClient: () => client });
+
+    expect(job?.images[0]?.error).toEqual({
+      code: "recognition_failed",
+      message: "이미지를 인식하지 못했어요",
+    });
+    expect(JSON.stringify(job)).not.toContain("worker_internal_failure");
+    expect(JSON.stringify(job)).not.toContain("/private/worker/secret");
+  });
+
   it("lists only unexpired submitted jobs for the signed-in user", async () => {
     const { client, query } = createClient((sql) =>
       sql.includes('from "ocr_jobs"') ? [jobDatabaseRow({ status: "review_ready" })] : [],
@@ -377,6 +452,22 @@ describe("PostgreSQL OCR control plane", () => {
       nextAvailableAt: "2026-07-25T00:00:00.000Z",
     });
     expect(query.mock.calls[0][1]).toEqual([7, "item_inventory_images_v1", "2026-07-14T00:00:00.000Z"]);
+    jest.useRealTimers();
+  });
+
+  it("uses the shared rolling image quota for student image jobs", async () => {
+    jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
+    const { client, query } = createClient((sql) =>
+      sql.includes('select "total_images", "submitted_at"') ? [[3, new Date("2026-07-18T00:00:00Z")]] : [],
+    );
+
+    await expect(
+      getOcrUploadQuota(createEnv(), 7, {
+        createClient: () => client,
+        jobKind: "student_detail_images_v1",
+      }),
+    ).resolves.toMatchObject({ limit: 50, used: 3, remaining: 47 });
+    expect(queryText(query.mock.calls[0][0])).toContain("student_detail_images_v1");
     jest.useRealTimers();
   });
 
@@ -996,6 +1087,9 @@ describe("PostgreSQL OCR control plane", () => {
       if (sql.includes('from "ocr_images"') && sql.includes('"ocr_images"."uid" = $1')) {
         return [imageDatabaseRow()];
       }
+      if (sql.includes('from "ocr_jobs"') && sql.includes("for update")) {
+        return sql.includes('"job_kind"') ? [["item_inventory_images_v1"]] : [["processing"]];
+      }
       if (sql.includes('from "ocr_image_results"')) return [];
       if (sql.includes('select "status" from "ocr_images"')) return [["succeeded"]];
       return [];
@@ -1022,6 +1116,197 @@ describe("PostgreSQL OCR control plane", () => {
     expect(sql).toContain('insert into "ocr_image_results"');
     expect(sql).toContain('update "ocr_jobs" set "completed_images" = $1, "failed_images" = $2, "updated_at" = $3');
     expect(query.mock.calls.some(([, values]) => values?.includes("ocr.job.finalize.v1"))).toBe(true);
+  });
+
+  it("requires the student image task kind and validates its source image result", async () => {
+    const { client } = createClient((sql) => {
+      if (sql.includes('select "uid" from "ocr_attempts"')) return [["attempt-student-image"]];
+      if (sql.includes('from "ocr_images"') && sql.includes('"ocr_images"."uid" = $1')) {
+        return [imageDatabaseRow({ status: "processing" })];
+      }
+      if (sql.includes('from "ocr_jobs"') && sql.includes("for update") && sql.includes('"job_kind"')) {
+        return [["item_inventory_images_v1"]];
+      }
+      return [];
+    });
+
+    await expect(
+      commitOcrTaskResult(
+        createEnv(),
+        { type: "ocr.student_detail_image.recognize.v1", taskUid: "image-1", generation: 1 },
+        {
+          attemptUid: "attempt-student-image",
+          status: "succeeded",
+          inputSha256: imageRow.inputSha256,
+          modelVersion: "model-1",
+          catalogVersion: "catalog-1",
+          schemaVersion: "student-detail-image-result.v1",
+          result: studentImageTaskResult(),
+        },
+        { createClient: () => client },
+      ),
+    ).rejects.toThrow("OCR 이미지 작업 종류가 일치하지 않아요");
+  });
+
+  it("enqueues finalization when one student image succeeds and another fails", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('select "uid" from "ocr_attempts"')) return [["attempt-student-image"]];
+      if (sql.includes('from "ocr_images"') && sql.includes('"ocr_images"."uid" = $1')) {
+        return [imageDatabaseRow({ status: "processing" })];
+      }
+      if (sql.includes('from "ocr_jobs"') && sql.includes("for update") && sql.includes('"job_kind"')) {
+        return [["student_detail_images_v1"]];
+      }
+      if (sql.includes('from "ocr_image_results"')) return [];
+      if (sql.includes('select "status" from "ocr_images"')) return [["succeeded"], ["failed"]];
+      if (sql.includes('from "ocr_jobs"') && sql.includes("for update") && sql.includes('"status"')) {
+        return [["processing"]];
+      }
+      return [];
+    });
+
+    await expect(
+      commitOcrTaskResult(
+        createEnv(),
+        { type: "ocr.student_detail_image.recognize.v1", taskUid: "image-1", generation: 1 },
+        {
+          attemptUid: "attempt-student-image",
+          status: "succeeded",
+          inputSha256: imageRow.inputSha256,
+          modelVersion: "model-1",
+          catalogVersion: "catalog-1",
+          schemaVersion: "student-detail-image-result.v1",
+          result: studentImageTaskResult(),
+        },
+        { createClient: () => client },
+      ),
+    ).resolves.toEqual({ accepted: true, duplicate: false });
+
+    expect(query.mock.calls.some(([, values]) => values?.includes("ocr.job.finalize.v1"))).toBe(true);
+    expect(query.mock.calls.some(([, values]) => values?.includes("finalizing"))).toBe(true);
+  });
+
+  it("commits a validated student image finalizer result to review", async () => {
+    const finalResult = studentImagesResult;
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('select "uid" from "ocr_attempts"')) return [["attempt-finalizer"]];
+      if (sql.includes('from "ocr_job_results"')) return [];
+      if (sql.includes('select "job_kind" from "ocr_jobs"')) return [["student_detail_images_v1"]];
+      return [];
+    });
+
+    await expect(
+      commitOcrTaskResult(
+        createEnv(),
+        { type: "ocr.job.finalize.v1", taskUid: "job-1", generation: 1 },
+        {
+          attemptUid: "attempt-finalizer",
+          status: "succeeded",
+          inputSha256: "a".repeat(64),
+          modelVersion: "model-1",
+          catalogVersion: "catalog-1",
+          schemaVersion: "student-detail-images-result.v1",
+          result: finalResult,
+        },
+        { createClient: () => client },
+      ),
+    ).resolves.toEqual({ accepted: true, duplicate: false });
+
+    expect(
+      query.mock.calls.some(
+        ([queryConfig, values]) =>
+          queryText(queryConfig).includes('update "ocr_jobs"') && (values as unknown[])?.includes("review_ready"),
+      ),
+    ).toBe(true);
+  });
+
+  it("fails a student image batch when every image fails", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('select "uid" from "ocr_attempts"')) return [["attempt-student-image-failed"]];
+      if (sql.includes('from "ocr_images"') && sql.includes('"ocr_images"."uid" = $1')) {
+        return [imageDatabaseRow({ status: "processing" })];
+      }
+      if (sql.includes('from "ocr_jobs"') && sql.includes("for update") && sql.includes('"job_kind"')) {
+        return [["student_detail_images_v1"]];
+      }
+      if (sql.includes('select "status" from "ocr_images"')) return [["failed"]];
+      if (sql.includes('from "ocr_jobs"') && sql.includes("for update") && sql.includes('"status"')) {
+        return [["processing"]];
+      }
+      return [];
+    });
+
+    await expect(
+      commitOcrTaskResult(
+        createEnv(),
+        { type: "ocr.student_detail_image.recognize.v1", taskUid: "image-1", generation: 1 },
+        {
+          attemptUid: "attempt-student-image-failed",
+          status: "failed",
+          error: { code: "recognition_failed", message: "인식에 실패했어요" },
+        },
+        { createClient: () => client },
+      ),
+    ).resolves.toEqual({ accepted: true, duplicate: false });
+
+    const jobUpdates = query.mock.calls.filter(([queryConfig, values]) => {
+      return queryText(queryConfig).includes('update "ocr_jobs"') && (values as unknown[])?.includes("failed");
+    });
+    expect(jobUpdates.length).toBeGreaterThan(0);
+    expect(query.mock.calls.some(([, values]) => values?.includes("ocr.job.finalize.v1"))).toBe(false);
+  });
+
+  it("repairs an all-failed student image batch during finalizer reconciliation", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('from "ocr_jobs"') && sql.includes("for update")) {
+        return [jobDatabaseRow({ jobKind: "student_detail_images_v1", status: "finalizing" })];
+      }
+      if (sql.includes('inner join "ocr_image_results"')) return [];
+      if (sql.includes('select "status" from "ocr_images"')) return [["failed"]];
+      return [];
+    });
+
+    await expect(
+      claimOcrTask(
+        createEnv(),
+        { type: "ocr.job.finalize.v1", taskUid: "job-1", generation: 1 },
+        "finalizer-worker",
+        1,
+        { createClient: () => client },
+      ),
+    ).resolves.toEqual({ disposition: "cancelled" });
+    expect(
+      query.mock.calls.some(
+        ([queryConfig, values]) =>
+          queryText(queryConfig).includes('update "ocr_jobs"') && (values as unknown[])?.includes("failed"),
+      ),
+    ).toBe(true);
+  });
+
+  it("locks the parent job before aggregating a dead-lettered image failure", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('update "ocr_images"') && sql.includes('returning "job_uid"')) return [["job-1"]];
+      if (sql.includes('select "uid" from "ocr_jobs"') && sql.includes("for update")) return [["job-1"]];
+      if (sql.includes('select "status" from "ocr_images"')) return [["failed"]];
+      if (sql.includes('select "status" from "ocr_jobs"') && sql.includes("for update")) return [["processing"]];
+      return [];
+    });
+
+    await expect(
+      markOcrTaskDeadLetter(
+        createEnv(),
+        { type: "ocr.student_detail_image.recognize.v1", taskUid: "image-1", generation: 1 },
+        { createClient: () => client },
+      ),
+    ).resolves.toBeUndefined();
+
+    const statements = query.mock.calls.map(([queryConfig]) => queryText(queryConfig));
+    const parentLockIndex = statements.findIndex(
+      (statement) => statement.includes('select "uid" from "ocr_jobs"') && statement.includes("for update"),
+    );
+    const aggregateIndex = statements.findIndex((statement) => statement.includes('select "status" from "ocr_images"'));
+    expect(parentLockIndex).toBeGreaterThanOrEqual(0);
+    expect(aggregateIndex).toBeGreaterThan(parentLockIndex);
   });
 
   it("rejects a result for an unknown attempt with a contract error", async () => {

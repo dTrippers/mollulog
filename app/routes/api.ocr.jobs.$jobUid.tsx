@@ -4,6 +4,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { OCR_CANDIDATE_SELECTION_LIMIT } from "~/domain/ocr";
 import { buildOcrInventoryReview } from "~/domain/ocr-inventory-review";
 import { parseStudentDetailVideoResult } from "~/domain/student-video-ocr";
+import { parseStudentDetailImagesResult } from "~/domain/student-image-ocr";
 import { getLogger } from "~/lib/observability.server";
 import { getItemCatalogResourceDescriptionMap, getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getOcrJob } from "~/models/ocr-job";
@@ -22,11 +23,14 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const job = await getOcrJob(env, sensei.id, params.jobUid, { ctx });
   if (!job) return data({ error: "OCR 작업을 찾을 수 없어요" }, { status: 404 });
 
-  if (job.jobKind === "student_detail_video_v1") {
+  if (job.jobKind === "student_detail_video_v1" || job.jobKind === "student_detail_images_v1") {
     let result = null;
     if (job.result) {
       try {
-        result = parseStudentDetailVideoResult(job.result);
+        result =
+          job.jobKind === "student_detail_video_v1"
+            ? parseStudentDetailVideoResult(job.result)
+            : parseStudentDetailImagesResult(job.result);
       } catch (error) {
         logger.error("Stored student video OCR result is invalid", error);
         return data({ error: "인식 결과를 불러오지 못했어요. 잠시 후 다시 시도해 주세요." }, { status: 500 });
