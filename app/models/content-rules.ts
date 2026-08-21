@@ -41,4 +41,7 @@ export const SHOW_LINK_RAID_TYPES: readonly string[] = ["total_assault", "elimin
 export const TIMELINE_ONLY_CONTENT_TYPES: readonly (EventType | RaidType)[] = ["live"];
 
 /** 모집 학생이 없어도 의견을 남길 수 있는 컨텐츠 타입 */
-export const COMMENT_ENABLED_WITHOUT_RECRUITMENT_CONTENT_TYPES: readonly (EventType | RaidType)[] = ["live"];
+export const COMMENT_ENABLED_WITHOUT_RECRUITMENT_CONTENT_TYPES: readonly (EventType | RaidType)[] = [
+  "live",
+  "event",
+];
