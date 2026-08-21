@@ -1633,7 +1633,7 @@ export async function reconcileOcrJobs(
     const jobs = await db
       .select({ uid: pgOcrJobsTable.uid })
       .from(pgOcrJobsTable)
-      .where(lt(pgOcrJobsTable.purgeAfter, new Date()))
+      .where(and(lt(pgOcrJobsTable.purgeAfter, new Date()), isNull(pgOcrJobsTable.storagePurgedAt)))
       .orderBy(asc(pgOcrJobsTable.purgeAfter))
       .limit(25);
     const jobUids = jobs.map(({ uid }) => uid);
@@ -1665,8 +1665,6 @@ export async function reconcileOcrJobs(
   if (expired.jobUids.length === 0) return;
 
   const jobUids = expired.jobUids;
-  const imageUids = expired.images.map(({ uid }) => uid);
-  const videoUids = expired.videos.map(({ uid }) => uid);
   const objectKeys = [
     ...expired.images.map(({ objectKey }) => objectKey),
     ...expired.videos.flatMap(({ objectKey, deletedAt }) => (deletedAt ? [] : [objectKey])),
@@ -1676,14 +1674,25 @@ export async function reconcileOcrJobs(
 
   await withOcrDatabase(env, options, (db) =>
     db.transaction(async (tx) => {
-      const taskUids = [...jobUids, ...imageUids, ...videoUids];
-      await tx.delete(pgOcrOutboxTable).where(inArray(pgOcrOutboxTable.aggregateUid, taskUids));
-      await tx.delete(pgOcrResultArtifactsTable).where(inArray(pgOcrResultArtifactsTable.jobUid, jobUids));
-      await tx.delete(pgOcrVideoInputsTable).where(inArray(pgOcrVideoInputsTable.jobUid, jobUids));
+      const storagePurgedAt = new Date();
       await tx
-        .delete(pgOcrJobsTable)
-        .where(and(inArray(pgOcrJobsTable.uid, jobUids), lt(pgOcrJobsTable.purgeAfter, new Date())));
-      await tx.delete(pgOcrAttemptsTable).where(inArray(pgOcrAttemptsTable.taskUid, taskUids));
+        .update(pgOcrVideoInputsTable)
+        .set({ rawInputDeletedAt: storagePurgedAt, updatedAt: storagePurgedAt })
+        .where(and(inArray(pgOcrVideoInputsTable.jobUid, jobUids), isNull(pgOcrVideoInputsTable.rawInputDeletedAt)));
+      await tx
+        .update(pgOcrResultArtifactsTable)
+        .set({ deletedAt: storagePurgedAt, updatedAt: storagePurgedAt })
+        .where(and(inArray(pgOcrResultArtifactsTable.jobUid, jobUids), isNull(pgOcrResultArtifactsTable.deletedAt)));
+      await tx
+        .update(pgOcrJobsTable)
+        .set({ storagePurgedAt, updatedAt: storagePurgedAt })
+        .where(
+          and(
+            inArray(pgOcrJobsTable.uid, jobUids),
+            lt(pgOcrJobsTable.purgeAfter, storagePurgedAt),
+            isNull(pgOcrJobsTable.storagePurgedAt),
+          ),
+        );
     }),
   );
 }

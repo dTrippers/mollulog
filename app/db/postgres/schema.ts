@@ -630,6 +630,7 @@ export const pgOcrJobsTable = pgTable(
     completedAt: timestamptz("completed_at"),
     expiresAt: timestamptz("expires_at").notNull(),
     purgeAfter: timestamptz("purge_after").notNull(),
+    storagePurgedAt: timestamptz("storage_purged_at"),
     trainingConsentAt: timestamptz("training_consent_at"),
     trainingConsentVersion: text("training_consent_version"),
   },
@@ -638,6 +639,7 @@ export const pgOcrJobsTable = pgTable(
     index("ocr_jobs_user_kind_created_idx").on(table.userId, table.jobKind, table.createdAt.desc()),
     index("ocr_jobs_status_updated_idx").on(table.status, table.updatedAt),
     index("ocr_jobs_purge_after_idx").on(table.purgeAfter),
+    index("ocr_jobs_pending_storage_purge_idx").on(table.purgeAfter).where(sql`${table.storagePurgedAt} is null`),
   ],
 );
 

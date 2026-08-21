@@ -31,6 +31,7 @@ const jobRow = {
   updatedAt: new Date("2026-07-20T00:00:00Z"),
   expiresAt: new Date("2026-07-21T00:00:00Z"),
   purgeAfter: new Date("2026-07-24T00:00:00Z"),
+  storagePurgedAt: null as Date | null,
 };
 
 const imageRow = {
@@ -100,6 +101,7 @@ function jobDatabaseRow(overrides: Partial<typeof jobRow> = {}): unknown[] {
     null,
     row.expiresAt,
     row.purgeAfter,
+    row.storagePurgedAt,
     null,
     null,
   ];
@@ -1128,7 +1130,7 @@ describe("PostgreSQL OCR control plane", () => {
     expect(send).toHaveBeenCalledWith(task, { contentType: "json" });
   });
 
-  it("deletes expired source images and their control-plane records", async () => {
+  it("deletes expired source images while preserving their control-plane records", async () => {
     const { client, query } = createClient((sql) => {
       if (sql.includes('select "uid" from "ocr_jobs"') && sql.includes('"purge_after" <')) return [["job-1"]];
       if (sql.includes('select "uid", "object_key" from "ocr_images"')) {
@@ -1144,13 +1146,17 @@ describe("PostgreSQL OCR control plane", () => {
 
     expect(removeObjects).toHaveBeenCalledWith([imageRow.objectKey]);
     const sql = query.mock.calls.map(([queryConfig]) => queryText(queryConfig)).join("\n");
-    expect(sql).toContain('delete from "ocr_result_artifacts"');
-    expect(sql).toContain('delete from "ocr_video_inputs"');
-    expect(sql).toContain('delete from "ocr_jobs"');
-    expect(sql).toContain('delete from "ocr_attempts"');
+    expect(sql).toContain('update "ocr_jobs" set');
+    expect(sql).toContain('"storage_purged_at" =');
+    expect(sql).toContain('update "ocr_video_inputs" set "raw_input_deleted_at"');
+    expect(sql).toContain('update "ocr_result_artifacts" set "deleted_at"');
     expect(sql).toContain('"ocr_jobs"."purge_after" <');
-    expect(sql.indexOf('delete from "ocr_result_artifacts"')).toBeLessThan(sql.indexOf('delete from "ocr_jobs"'));
-    expect(sql.indexOf('delete from "ocr_video_inputs"')).toBeLessThan(sql.indexOf('delete from "ocr_jobs"'));
+    expect(sql).toContain('"ocr_jobs"."storage_purged_at" is null');
+    expect(sql).not.toContain('delete from "ocr_jobs"');
+    expect(sql).not.toContain('delete from "ocr_attempts"');
+    expect(sql).not.toContain('delete from "ocr_outbox"');
+    expect(sql).not.toContain('delete from "ocr_image_results"');
+    expect(sql).not.toContain('delete from "ocr_job_results"');
   });
 
   it("purges completed video input independently from the seven-day result", async () => {
@@ -1198,7 +1204,7 @@ describe("PostgreSQL OCR control plane", () => {
     ).toBe(true);
   });
 
-  it("deletes committed representative frames when the owning job expires", async () => {
+  it("deletes committed representative frames while preserving the owning job", async () => {
     const { client, query } = createClient((sql) => {
       if (sql.includes('select "uid" from "ocr_jobs"') && sql.includes('"purge_after" <')) {
         return [["job-1"]];
@@ -1216,8 +1222,20 @@ describe("PostgreSQL OCR control plane", () => {
 
     expect(removeObjects).toHaveBeenCalledWith([artifactRow.objectKey]);
     expect(query.mock.calls.some(([queryConfig]) => queryText(queryConfig).includes('delete from "ocr_jobs"'))).toBe(
-      true,
+      false,
     );
+    expect(
+      query.mock.calls.some(
+        ([queryConfig]) =>
+          queryText(queryConfig).includes('update "ocr_jobs" set') &&
+          queryText(queryConfig).includes('"storage_purged_at" ='),
+      ),
+    ).toBe(true);
+    expect(
+      query.mock.calls.some(([queryConfig]) =>
+        queryText(queryConfig).includes('update "ocr_result_artifacts" set "deleted_at"'),
+      ),
+    ).toBe(true);
   });
 
   it("deletes more than one thousand expired R2 objects in bounded batches", async () => {
