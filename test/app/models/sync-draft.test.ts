@@ -444,10 +444,49 @@ describe("sync-draft", () => {
         statement.toLowerCase().includes("from (values"),
     );
     expect(valuesUpdates).toHaveLength(3);
+    const castedValuesRowCounts = valuesUpdates.map(
+      (statement) => statement.match(/\(\$\d+::text, \$\d+::integer, \$\d+::text\)/g)?.length ?? 0,
+    );
+    expect(castedValuesRowCounts).toEqual([500, 500, 1]);
     expect(valuesUpdates.every((statement) => statement.toLowerCase().includes('"updated_at"'))).toBe(true);
     expect(
       valuesUpdates.every((statement) => !statement.toLowerCase().includes('update "sync_draft_entries" set')),
     ).toBe(true);
+  });
+
+  it("casts nullable and JSON values in VALUES rows", async () => {
+    const { db, env } = createEnv();
+    const jsonValue = JSON.stringify({ current: null, target: null });
+    db.drafts.push(createDraftRow({ type: "item_inventory" }));
+    db.entries.push(createEntryRow({ entryKey: "item-null", valueJson: null }));
+    db.drafts.push(createDraftRow({ uid: "draft-json", type: "student_state" }));
+    db.entries.push(
+      createEntryRow({
+        uid: "entry-json",
+        draftUid: "draft-json",
+        entryKey: "20049",
+        value: 1,
+        valueJson: jsonValue,
+      }),
+    );
+
+    await updateSyncDraftEntries(env, 1, "draft-a", [{ entryKey: "item-null", value: 10 }]);
+    await updateSyncDraftEntries(env, 1, "draft-json", [{ entryKey: "20049", value: 1, valueJson: jsonValue }]);
+
+    const valueStatementIndexes = db.statements.flatMap((statement, index) =>
+      statement.toLowerCase().includes('update "sync_draft_entries"') &&
+      statement.toLowerCase().includes("from (values")
+        ? [index]
+        : [],
+    );
+    expect(valueStatementIndexes).toHaveLength(2);
+    expect(
+      valueStatementIndexes.every(
+        (index) => (db.statements[index].match(/\(\$\d+::text, \$\d+::integer, \$\d+::text\)/g) ?? []).length === 1,
+      ),
+    ).toBe(true);
+    const valueParameters = valueStatementIndexes.flatMap((index) => db.parameters[index]);
+    expect(valueParameters).toEqual(expect.arrayContaining([null, jsonValue]));
   });
 
   it("applies more than 500 student-state entries with bounded bulk statements", async () => {

@@ -367,7 +367,7 @@ export async function updateSyncDraftEntries(
       for (let offset = 0; offset < normalizedEntries.length; offset += PG_WRITE_CHUNK_SIZE) {
         const chunk = normalizedEntries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
         const values = sql.join(
-          chunk.map((entry) => sql`(${entry.entryKey}, ${entry.value}, ${entry.valueJson})`),
+          chunk.map((entry) => sql`(${entry.entryKey}::text, ${entry.value}::integer, ${entry.valueJson}::text)`),
           sql`, `,
         );
         await tx.execute(sql`
