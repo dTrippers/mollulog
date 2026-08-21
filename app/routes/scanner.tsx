@@ -7,7 +7,7 @@ import FeatureFeedbackButton from "~/components/features/feedback/FeatureFeedbac
 import Page from "~/components/features/layout/Page";
 import ScannerJobsPanel from "./scanner._components/ScannerJobsPanel";
 import { type ScannerUploadQuota, UploadQuotaMeter } from "./scanner._components/UploadQuotaMeter";
-import { useScannerQuota } from "./scanner._components/useScannerQuota";
+import { getScannerQuotaError, isScannerQuotaEnabled, useScannerQuota } from "./scanner._components/useScannerQuota";
 
 export type ScannerOutletContext = {
   imageUploadQuota: ScannerUploadQuota | null;
@@ -24,9 +24,24 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export default function ScannerLayout() {
   const { pathname } = useLocation();
-  const [quotaError, setQuotaError] = useState<string | null>(null);
-  const [imageUploadQuota, setImageUploadQuota] = useScannerQuota("item_inventory_images_v1", setQuotaError);
-  const [videoUploadQuota, setVideoUploadQuota] = useScannerQuota("student_detail_video_v1", setQuotaError);
+  const [imageQuotaError, setImageQuotaError] = useState<string | null>(null);
+  const [videoQuotaError, setVideoQuotaError] = useState<string | null>(null);
+  const showVideoQuota = isScannerQuotaEnabled(pathname, "video");
+  const [imageUploadQuota, setImageUploadQuota] = useScannerQuota(
+    "item_inventory_images_v1",
+    setImageQuotaError,
+    isScannerQuotaEnabled(pathname, "image"),
+  );
+  const [videoUploadQuota, setVideoUploadQuota] = useScannerQuota(
+    "student_detail_video_v1",
+    setVideoQuotaError,
+    showVideoQuota,
+  );
+  const quotaError = getScannerQuotaError({
+    imageError: imageQuotaError,
+    videoError: videoQuotaError,
+    showVideoQuota,
+  });
   const quotaContext: ScannerOutletContext = {
     imageUploadQuota,
     setImageUploadQuota,
@@ -42,6 +57,7 @@ export default function ScannerLayout() {
         <ScannerQuotaSummary
           imageUploadQuota={imageUploadQuota}
           videoUploadQuota={videoUploadQuota}
+          showVideoQuota={showVideoQuota}
           error={quotaError}
         />
       }
@@ -82,18 +98,22 @@ export default function ScannerLayout() {
 function ScannerQuotaSummary({
   imageUploadQuota,
   videoUploadQuota,
+  showVideoQuota,
   error,
 }: {
   imageUploadQuota: ScannerUploadQuota | null;
   videoUploadQuota: ScannerUploadQuota | null;
+  showVideoQuota: boolean;
   error: string | null;
 }) {
   return (
-    <div className="space-y-2" aria-busy={!imageUploadQuota || !videoUploadQuota}>
+    <div className="space-y-2" aria-busy={!imageUploadQuota || (showVideoQuota && !videoUploadQuota)}>
       <p className="py-2 text-xs font-medium text-muted-foreground">7일간 업로드 가능 횟수</p>
       <div className="flex flex-wrap gap-4">
         {imageUploadQuota ? <UploadQuotaMeter quota={imageUploadQuota} unit="장" subject="이미지" /> : null}
-        {videoUploadQuota ? <UploadQuotaMeter quota={videoUploadQuota} unit="개" subject="영상" /> : null}
+        {showVideoQuota && videoUploadQuota ? (
+          <UploadQuotaMeter quota={videoUploadQuota} unit="개" subject="영상" />
+        ) : null}
       </div>
       {error ? (
         <p className="text-xs text-destructive" role="alert">

@@ -2,7 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   getPartialRecognitionReviewImageUids,
   groupScannerImagesByStatus,
-  shouldConfirmUnappliedScannerResult,
+  shouldShowScannerCancelAction,
   shouldShowScannerResultActions,
 } from "~/routes/scanner.resource._components/ResourceScanner";
 
@@ -47,81 +47,76 @@ describe("resource scanner image status groups", () => {
     ];
     const partialRecognitionReviewImageUids = getPartialRecognitionReviewImageUids({
       images,
-      reviewMode: "cells",
       cells: [
         { imageUid: "complete", status: "recognized" },
         { imageUid: "partial", status: "recognized" },
         { imageUid: "partial", status: "quantity_failure" },
       ],
-      result: null,
     });
 
     const groups = groupScannerImagesByStatus(images, partialRecognitionReviewImageUids);
     expect(groups.succeeded.map(({ uid }) => uid)).toEqual(["complete"]);
     expect(groups.reviewRequired.map(({ uid }) => uid)).toEqual(["partial"]);
+  });
+
+  it("keeps an unrecognized cell in the review-required image group", () => {
+    const images = [
+      { uid: "recognized", filename: "recognized.png", status: "succeeded" },
+      { uid: "unrecognized", filename: "unrecognized.png", status: "succeeded" },
+    ];
+    const partialRecognitionReviewImageUids = getPartialRecognitionReviewImageUids({
+      images,
+      cells: [
+        { imageUid: "recognized", status: "recognized" },
+        { imageUid: "unrecognized", status: "unrecognized" },
+      ],
+    });
+
+    const groups = groupScannerImagesByStatus(images, partialRecognitionReviewImageUids);
+    expect(groups.succeeded.map(({ uid }) => uid)).toEqual(["recognized"]);
+    expect(groups.reviewRequired.map(({ uid }) => uid)).toEqual(["unrecognized"]);
   });
 
   it("requires review when a processed image has no recognized cells", () => {
     const images = [{ uid: "empty", filename: "empty.png", status: "succeeded" }];
     const partialRecognitionReviewImageUids = getPartialRecognitionReviewImageUids({
       images,
-      reviewMode: "cells",
       cells: [],
-      result: null,
     });
 
     expect(groupScannerImagesByStatus(images, partialRecognitionReviewImageUids).reviewRequired).toEqual(images);
   });
 
-  it("requires review when recognized cells contribute to a conflicting item result", () => {
+  it("keeps a fully recognized conflict source image in the success group", () => {
     const images = [{ uid: "conflict", filename: "conflict.png", status: "succeeded" }];
     const partialRecognitionReviewImageUids = getPartialRecognitionReviewImageUids({
       images,
-      reviewMode: "cells",
       cells: [{ imageUid: "conflict", status: "recognized" }],
-      result: {
-        items: [{ status: "conflict", source_images: ["conflict.png"] }],
-      },
+      conflictImageUids: ["conflict"],
     });
 
-    expect(groupScannerImagesByStatus(images, partialRecognitionReviewImageUids).reviewRequired).toEqual(images);
+    const groups = groupScannerImagesByStatus(images, partialRecognitionReviewImageUids);
+    expect(groups.succeeded).toEqual(images);
+    expect(groups.reviewRequired).toEqual([]);
   });
 
-  it("uses legacy placement status to classify partial recognition", () => {
+  it("classifies images by their own cell results instead of aggregate conflict sources", () => {
     const images = [
       { uid: "complete", filename: "complete.png", status: "succeeded" },
       { uid: "partial", filename: "partial.png", status: "succeeded" },
     ];
     const partialRecognitionReviewImageUids = getPartialRecognitionReviewImageUids({
       images,
-      reviewMode: "legacy",
-      cells: [],
-      result: {
-        items: [],
-        components: [
-          {
-            placements: [
-              { filename: "complete.png", start: 0, cell_count: 1 },
-              { filename: "partial.png", start: 1, cell_count: 2 },
-            ],
-            positions: [
-              { position: 0, status: "recognized" },
-              { position: 1, status: "recognized" },
-              { position: 2, status: "unrecognized" },
-            ],
-          },
-        ],
-      },
+      cells: [
+        { imageUid: "complete", status: "recognized" },
+        { imageUid: "partial", status: "recognized" },
+      ],
+      conflictImageUids: ["partial"],
     });
 
     const groups = groupScannerImagesByStatus(images, partialRecognitionReviewImageUids);
-    expect(groups.succeeded.map(({ uid }) => uid)).toEqual(["complete"]);
-    expect(groups.reviewRequired.map(({ uid }) => uid)).toEqual(["partial"]);
-  });
-
-  it("only confirms before replacing an unapplied review-ready result", () => {
-    expect(shouldConfirmUnappliedScannerResult("review_ready")).toBe(true);
-    expect(shouldConfirmUnappliedScannerResult("failed")).toBe(false);
+    expect(groups.succeeded.map(({ uid }) => uid)).toEqual(["complete", "partial"]);
+    expect(groups.reviewRequired).toEqual([]);
   });
 
   it("only shows result actions while a succeeded image is selected", () => {
@@ -129,5 +124,10 @@ describe("resource scanner image status groups", () => {
     expect(shouldShowScannerResultActions("review_ready", "failed")).toBe(false);
     expect(shouldShowScannerResultActions("review_ready", "cancelled")).toBe(false);
     expect(shouldShowScannerResultActions("failed", "failed")).toBe(false);
+  });
+
+  it("keeps the cancel action available for an unmappable review job", () => {
+    expect(shouldShowScannerCancelAction("review_ready")).toBe(true);
+    expect(shouldShowScannerCancelAction("failed")).toBe(false);
   });
 });

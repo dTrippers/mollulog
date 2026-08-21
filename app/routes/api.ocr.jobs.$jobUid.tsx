@@ -1,12 +1,11 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { OCR_CANDIDATE_SELECTION_LIMIT } from "~/domain/ocr";
 import { buildOcrInventoryReview } from "~/domain/ocr-inventory-review";
-import { parseStudentDetailVideoResult } from "~/domain/student-video-ocr";
 import { parseStudentDetailImagesResult } from "~/domain/student-image-ocr";
+import { parseStudentDetailVideoResult } from "~/domain/student-video-ocr";
 import { getLogger } from "~/lib/observability.server";
-import { getItemCatalogResourceDescriptionMap, getItemCatalogResourceMap } from "~/models/item-catalog";
+import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getOcrJob } from "~/models/ocr-job";
 import { getRecruitedStudents, type RecruitedStudent } from "~/models/recruited-student";
 import { getRelationshipLevels } from "~/models/relationship-level";
@@ -87,8 +86,19 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     });
   }
 
+  if (job.status !== "review_ready") {
+    return data({
+      ...job,
+      result: null,
+      cells: [],
+      currentQuantities: {},
+      application: null,
+    });
+  }
+
   const review = buildOcrInventoryReview(job.result, job.images);
   if (review.reviewMode === "cells") {
+    const conflictImageUids = getConflictImageUids(job.result, review.cells);
     const currentItemUids = [...new Set(review.cells.flatMap(({ itemUid }) => (itemUid ? [itemUid] : [])))];
     const [currentQuantities, draft, catalogResourceMap] = await Promise.all([
       getUserResourceInventoryMapByItemUids(env, sensei.id, currentItemUids),
@@ -119,68 +129,34 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         };
       }),
       currentQuantities,
-      resourceRarities: {},
-      resourceDescriptions: {},
+      conflictImageUids,
       application: draft ? { status: draft.status, appliedAt: draft.appliedAt } : null,
     });
   }
 
-  const candidateUids = [...new Set(getResultCandidateUids(job.result))];
-  const itemUids = [...new Set([...getResultItemUids(job.result), ...candidateUids])];
-  const [currentQuantities, draft, catalogResourceMap, resourceDescriptions] = await Promise.all([
-    getUserResourceInventoryMapByItemUids(env, sensei.id, itemUids),
-    getSyncDraftBySourceRef(env, sensei.id, "first_party_ocr", job.uid),
-    getItemCatalogResourceMap(env),
-    getItemCatalogResourceDescriptionMap(candidateUids),
-  ]);
+  const draft = await getSyncDraftBySourceRef(env, sensei.id, "first_party_ocr", job.uid);
   return data({
     ...job,
-    reviewMode: "legacy" as const,
+    result: null,
     cells: [],
-    reviewModeReason: review.reason,
-    currentQuantities,
-    resourceRarities: Object.fromEntries(
-      itemUids.flatMap((itemUid) => {
-        const resource = catalogResourceMap[itemUid];
-        return resource ? [[itemUid, resource.rarity]] : [];
-      }),
-    ),
-    resourceDescriptions,
+    reviewError: true as const,
+    currentQuantities: {},
     application: draft ? { status: draft.status, appliedAt: draft.appliedAt } : null,
   });
 };
 
-function getResultItemUids(result: unknown): string[] {
+function getConflictImageUids(result: unknown, cells: Array<{ imageUid: string; filename: string }>): string[] {
   if (!result || typeof result !== "object") return [];
   const items = (result as { items?: unknown }).items;
   if (!Array.isArray(items)) return [];
-  return items.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const itemUid = (item as { resource_uid?: unknown }).resource_uid;
-    return typeof itemUid === "string" && itemUid ? [itemUid] : [];
-  });
-}
-
-function getResultCandidateUids(result: unknown): string[] {
-  if (!result || typeof result !== "object") return [];
-  const images = (result as { images?: unknown }).images;
-  if (!Array.isArray(images)) return [];
-
-  return images.flatMap((image) => {
-    if (!image || typeof image !== "object") return [];
-    const observations = (image as { observations?: unknown }).observations;
-    if (!Array.isArray(observations)) return [];
-    return observations.flatMap((observation) => {
-      if (!observation || typeof observation !== "object") return [];
-      const observationRecord = observation as { candidates?: unknown; resource_uid?: unknown };
-      if (typeof observationRecord.resource_uid === "string" && observationRecord.resource_uid) return [];
-      const candidates = observationRecord.candidates;
-      if (!Array.isArray(candidates)) return [];
-      return candidates.slice(0, OCR_CANDIDATE_SELECTION_LIMIT).flatMap((candidate) => {
-        if (!candidate || typeof candidate !== "object") return [];
-        const uid = (candidate as { uid?: unknown }).uid;
-        return typeof uid === "string" && uid ? [uid] : [];
-      });
-    });
-  });
+  const conflictFilenames = new Set(
+    items.flatMap((item) => {
+      if (!item || typeof item !== "object" || (item as { status?: unknown }).status === "recognized") return [];
+      const sourceImages = (item as { source_images?: unknown }).source_images;
+      return Array.isArray(sourceImages)
+        ? sourceImages.filter((filename): filename is string => typeof filename === "string")
+        : [];
+    }),
+  );
+  return [...new Set(cells.filter((cell) => conflictFilenames.has(cell.filename)).map((cell) => cell.imageUid))];
 }

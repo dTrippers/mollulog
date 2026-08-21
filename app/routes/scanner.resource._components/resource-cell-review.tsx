@@ -209,7 +209,6 @@ export function buildCellReviewAttentionCounts(
 
 export function CellReviewPanel({
   jobUid,
-  selectedSource,
   selectedImageUid,
   cells,
   edits,
@@ -220,7 +219,6 @@ export function CellReviewPanel({
   onEdit,
 }: {
   jobUid: string;
-  selectedSource: string | null;
   selectedImageUid: string | null;
   cells: ReviewCell[];
   edits: Record<string, CellEdit>;
@@ -230,11 +228,7 @@ export function CellReviewPanel({
   onLoadCandidates: (cell: ReviewCell, details: CandidateDetails) => void;
   onEdit: (cell: ReviewCell, edit: CellEdit) => void;
 }) {
-  const visibleCells = selectedImageUid
-    ? cells.filter((cell) => cell.imageUid === selectedImageUid)
-    : selectedSource
-      ? cells.filter((cell) => cell.filename === selectedSource)
-      : cells;
+  const visibleCells = selectedImageUid ? cells.filter((cell) => cell.imageUid === selectedImageUid) : cells;
   const recognizedCount = visibleCells.filter((cell) => {
     const edit = edits[cellAddressKey(cell)];
     return (edit?.itemUid ?? cell.itemUid) !== undefined && (edit?.itemUid ?? cell.itemUid) !== null;
@@ -743,28 +737,6 @@ function mergeCandidateDetails(
   const merged = new Map(defaults.map((candidate) => [candidate.uid, candidate]));
   for (const candidate of searchResults) merged.set(candidate.uid, candidate);
   return [...merged.values()];
-}
-
-export function CellReviewSummaryPreview({
-  cells,
-  edits,
-  currentQuantities,
-}: {
-  cells: ReviewCell[];
-  edits: Record<string, CellEdit>;
-  currentQuantities: Record<string, number>;
-}) {
-  const summary = buildCellReviewPreviewSummary(cells, edits, currentQuantities);
-  const reasonText = Object.entries(summary.omittedReasons)
-    .map(([reason, count]) => `${reason} ${count}개`)
-    .join(" · ");
-  return (
-    <Callout
-      tone="info"
-      title="반영 전 요약"
-      description={`적용 가능한 변경 ${summary.applicableChanged}개 · 변경 없는 안전 항목 ${summary.unchangedSafe}개 · 반영 제외 ${summary.omitted}개${reasonText ? ` (${reasonText})` : ""}`}
-    />
-  );
 }
 
 export function CellApplySummaryPanel({ summary }: { summary: CellApplySummary }) {

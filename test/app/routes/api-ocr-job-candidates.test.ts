@@ -164,4 +164,23 @@ describe("OCR candidate lookup", () => {
       }),
     ]);
   });
+
+  it("returns a public retry message when the stored result cannot map to cells", async () => {
+    mockedGetOcrJob.mockResolvedValue({
+      ...job,
+      result: { images: [{ filename: "wrong.png", observations: [] }] },
+    } as never);
+
+    const response = expectDataResult<{ error: string }>(
+      await loader({
+        request: new Request("https://mollulog.net/api/ocr/jobs/job-1/candidates?imageIndex=0&position=0"),
+        context: { cloudflare: { env, ctx } },
+        params: { jobUid: "job-1" },
+      } as never),
+    );
+
+    expect(response.init?.status).toBe(400);
+    expect(response.data.error).toBe("인식 결과를 확인하지 못했어요. 새로 업로드해 주세요.");
+    expect(response.data.error).not.toContain("result_image_mapping_unusable");
+  });
 });

@@ -1,21 +1,17 @@
 import { type DragEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Button, Checkbox, SubTitle } from "~/components/primitives";
 import { cn } from "~/lib/utils";
-import { type ScannerUploadQuota, UploadQuotaMeter } from "./UploadQuotaMeter";
 
 type ScannerUploadSectionProps = {
   title: string;
   description: string;
-  quota: ScannerUploadQuota | null;
-  quotaUnit: string;
-  quotaSubject: string;
   inputId: string;
   accept: string;
   multiple?: boolean;
   selectionDisabled: boolean;
   onFiles: (files: File[]) => void;
   icon: ReactNode;
-  helpText: ReactNode;
+  helpText: string;
   dropDetail?: ReactNode;
   children?: ReactNode;
   consentChecked: boolean;
@@ -29,9 +25,6 @@ type ScannerUploadSectionProps = {
 export default function ScannerUploadSection({
   title,
   description,
-  quota,
-  quotaUnit,
-  quotaSubject,
   inputId,
   accept,
   multiple = false,
@@ -79,11 +72,6 @@ export default function ScannerUploadSection({
     <section>
       <div className="flex items-end justify-between gap-4">
         <SubTitle text={title} description={description} />
-        {quota ? (
-          <div className="shrink-0 pb-3">
-            <UploadQuotaMeter quota={quota} unit={quotaUnit} subject={quotaSubject} />
-          </div>
-        ) : null}
       </div>
       <div className="space-y-5 rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
         <div className="focus-within:rounded-lg focus-within:ring-2 focus-within:ring-ring/30">
@@ -117,9 +105,7 @@ export default function ScannerUploadSection({
             <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
               {icon}
             </span>
-            <span className="mt-3 font-medium text-foreground">
-              파일을 선택하거나 이 곳에 끌어다 놓아주세요
-            </span>
+            <span className="mt-3 font-medium text-foreground">파일을 선택하거나 이 곳에 끌어다 놓아주세요</span>
             <span id={helpId} className="mt-1 text-sm text-muted-foreground">
               {helpText}
             </span>

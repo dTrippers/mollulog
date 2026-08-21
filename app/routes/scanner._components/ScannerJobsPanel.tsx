@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { PanelActionRow, PanelBody } from "~/components/primitives";
 import { cn } from "~/lib/utils";
+import { formatScannerRelativeTime } from "./scanner-messages";
 
 const SCANNER_JOBS_UPDATED_EVENT = "scanner-jobs-updated";
 const ACTIVE_JOB_STATUSES = new Set(["queued", "processing", "finalizing"]);
@@ -106,7 +107,7 @@ export default function ScannerJobsPanel() {
           >
             <PanelActionRow
               title={jobKindLabel(job.jobKind)}
-              description={`${jobInputLabel(job)} · ${formatRelativePastTime(job.createdAt)}`}
+              description={`${jobInputLabel(job)} · ${formatScannerRelativeTime(job.createdAt)}`}
               actions={<JobStatusBadge job={job} />}
             />
           </Link>
@@ -195,17 +196,6 @@ function jobInputLabel(job: ScannerJobSummary) {
   if (job.jobKind === "item_inventory_images_v1") return `스크린샷 ${job.progress.total}장`;
   if (job.jobKind === "student_detail_images_v1") return `학생 이미지 ${job.progress.total}장`;
   return "동영상";
-}
-
-function formatRelativePastTime(value: string) {
-  const createdAt = new Date(value).getTime();
-  if (!Number.isFinite(createdAt)) return "-";
-  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - createdAt) / 60000));
-  if (elapsedMinutes < 1) return "방금";
-  if (elapsedMinutes < 60) return `${elapsedMinutes}분 전`;
-  const elapsedHours = Math.floor(elapsedMinutes / 60);
-  if (elapsedHours < 24) return `${elapsedHours}시간 전`;
-  return `${Math.floor(elapsedHours / 24)}일 전`;
 }
 
 function ScannerJobsSkeleton() {

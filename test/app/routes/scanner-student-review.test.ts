@@ -1,12 +1,13 @@
 import { describe, expect, it } from "@jest/globals";
 import { parseStudentDetailImagesResult } from "~/domain/student-image-ocr";
 import { parseStudentDetailVideoResult } from "~/domain/student-video-ocr";
+import { getScannerTerminalJobDescription } from "~/routes/scanner._components/scanner-messages";
 import {
   buildStudentVideoApplyRequest,
   createReviewState,
   getFieldComparison,
   getStudentFailedImagesDescription,
-  getStudentTerminalJobDescription,
+  getStudentJobTransition,
 } from "~/routes/scanner.student._components/StudentScanner";
 import fixture from "../../fixtures/student-detail-video-result.v1.json";
 
@@ -126,13 +127,19 @@ describe("student scanner review", () => {
     expect(getStudentFailedImagesDescription([oversizedImage])).toContain(
       "large.png · 이미지 해상도가 너무 커요. 4K급 이미지를 사용해 주세요.",
     );
-    expect(getStudentTerminalJobDescription("failed", "student_detail_images_v1", [oversizedImage])).toBe(
+    expect(getScannerTerminalJobDescription("failed", "student_detail_images_v1", [oversizedImage])).toBe(
       "이미지 해상도가 너무 커요. 4K급 이미지를 사용해 주세요.",
     );
     expect(
-      getStudentTerminalJobDescription("failed", "student_detail_images_v1", [
+      getScannerTerminalJobDescription("failed", "student_detail_images_v1", [
         { ...oversizedImage, error: { code: "recognition_failed", message: "이미지를 인식하지 못했어요" } },
       ]),
     ).toBe("학생 상세 화면이 보이는 이미지나 영상을 선택해 다시 시도해 주세요.");
+  });
+
+  it("leaves the unavailable-result message to the completion state", () => {
+    expect(getStudentJobTransition({ status: "review_ready", result: null, application: null })).toEqual({
+      phase: "idle",
+    });
   });
 });

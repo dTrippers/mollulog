@@ -49,13 +49,13 @@ describe("OCR inventory cell review", () => {
     ]);
   });
 
-  it("selects legacy mode when a result filename does not match its succeeded row", () => {
+  it("returns an unavailable review when a result filename does not match its succeeded row", () => {
     const review = buildOcrInventoryReview(
       { ...result, images: [{ ...result.images[0], filename: "wrong.png" }, result.images[1]] },
       imageRows,
     );
 
-    expect(review).toEqual({ reviewMode: "legacy", cells: [], reason: "result_image_mapping_unusable" });
+    expect(review).toEqual({ reviewMode: "unavailable", cells: [], reason: "result_image_mapping_unusable" });
   });
 
   it("omits every member of a duplicate effective UID group without auto-deduping", () => {

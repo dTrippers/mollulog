@@ -7,6 +7,7 @@ import {
   getStudentUploadPartialFailureMessage,
   getStudentUploadQuotaError,
   type StudentUploadSubmissionOptions,
+  selectLatestStudentJob,
   submitStudentUploadSelection,
 } from "~/routes/scanner.student._components/StudentScanner";
 
@@ -214,5 +215,15 @@ describe("student scanner upload selection", () => {
     ).toEqual(expect.arrayContaining(["student_detail_images_v1", "student_detail_video_v1"]));
     expect(result.failures).toEqual([]);
     expect(result.successfulJobs.map(({ uid }) => uid)).toEqual(["image-job", "video-job"]);
+  });
+
+  it("opens the newest successful job and prefers the video job when timestamps tie", () => {
+    const imageJob = { createdAt: "2026-08-22T00:00:00.000Z", jobKind: "student_detail_images_v1" as const };
+    const videoJob = { createdAt: "2026-08-22T00:00:00.000Z", jobKind: "student_detail_video_v1" as const };
+    const olderJob = { createdAt: "2026-08-21T00:00:00.000Z", jobKind: "student_detail_images_v1" as const };
+
+    expect(selectLatestStudentJob([olderJob, imageJob])).toBe(imageJob);
+    expect(selectLatestStudentJob([imageJob, videoJob])).toBe(videoJob);
+    expect(selectLatestStudentJob([videoJob, imageJob])).toBe(videoJob);
   });
 });

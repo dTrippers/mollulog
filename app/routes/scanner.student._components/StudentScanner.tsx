@@ -1,14 +1,6 @@
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
-import {
-  ArrowPathIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  FunnelIcon,
-  PhotoIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useOutletContext, useSearchParams } from "react-router";
+import { CheckCircleIcon, ExclamationTriangleIcon, FunnelIcon, PhotoIcon } from "@heroicons/react/24/outline";
+import { useCallback, useState } from "react";
+import { useOutletContext } from "react-router";
 import { StudentCard, TierSelector } from "~/components/features/students";
 import {
   Button,
@@ -17,19 +9,10 @@ import {
   HoverTooltip,
   NumberInput,
   type NumberInputFlowNavigationInputProps,
-  SectionCard,
   SubTitle,
   useNumberInputFlowNavigation,
 } from "~/components/primitives";
-import {
-  OCR_ALLOWED_CONTENT_TYPES,
-  OCR_MAX_IMAGE_BYTES,
-  OCR_MAX_IMAGES,
-  OCR_MAX_JOB_BYTES,
-  OCR_MAX_VIDEO_BYTES,
-  type OcrUploadInput,
-  type OcrVideoUploadInput,
-} from "~/domain/ocr";
+import type { OcrUploadInput, OcrVideoUploadInput } from "~/domain/ocr";
 import {
   STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE,
   STUDENT_IMAGE_DIMENSIONS_EXCEEDED_MESSAGE,
@@ -44,8 +27,12 @@ import type {
 import { cn } from "~/lib/utils";
 import type { ScannerOutletContext } from "../scanner";
 import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
+import ScannerFileList from "../scanner._components/ScannerFileList";
+import ScannerImageDialog from "../scanner._components/ScannerImageDialog";
+import ScannerJobShell from "../scanner._components/ScannerJobShell";
 import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
 import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
+import ScannerProgressCard from "../scanner._components/ScannerProgressCard";
 import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
 import {
   formatScannerBytes,
@@ -55,8 +42,24 @@ import {
   toScannerErrorMessage,
   uploadScannerFile,
 } from "../scanner._components/scanner-client";
+import {
+  getScannerTerminalJobDescription,
+  getScannerTerminalJobTitle,
+  getScannerUnavailableResultMessage,
+  scannerMessages,
+} from "../scanner._components/scanner-messages";
+import {
+  getScannerImageContentType,
+  getScannerVideoContentType,
+  mergeScannerFiles,
+  type ScannerUploadSelection,
+  type ScannerUploadValidation,
+  STUDENT_SCANNER_ACCEPT_SPEC,
+  validateScannerFiles,
+} from "../scanner._components/scanner-upload";
 import { sha256FileInWorker } from "../scanner._components/sha256-client";
 import type { ScannerUploadQuota } from "../scanner._components/UploadQuotaMeter";
+import { useScannerJob } from "../scanner._components/useScannerJob";
 
 type ApplyFieldName =
   | "tier"
@@ -214,15 +217,6 @@ type StudentVideoJob = {
 
 type StudentImageFailure = StudentVideoJob["images"][number];
 
-export type StudentUploadSelection = {
-  images: File[];
-  video: File | null;
-};
-
-type StudentUploadValidation = StudentUploadSelection & {
-  error: string | null;
-};
-
 type StudentUploadFailure = {
   kind: "images" | "video";
   error?: unknown;
@@ -241,108 +235,19 @@ type ReviewStudent = {
 export type ReviewState = Record<string, ReviewStudent>;
 type FieldComparison = "same" | "decreased" | null;
 
-const IMAGE_FILE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp"]);
-const VIDEO_FILE_EXTENSIONS = new Set(["mp4", "mov"]);
 const STUDENT_UPLOAD_CONFLICT_ERROR = "파일의 MIME 타입과 확장자가 일치하지 않아요. 파일을 확인해 주세요.";
 const STUDENT_UPLOAD_HASH_ERROR = "파일 정보를 계산하지 못했어요";
 const STUDENT_UPLOAD_UPLOAD_ERROR = "파일 업로드에 실패했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.";
 const STUDENT_UPLOAD_GENERIC_FAILURE_REASON = "파일 제출을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.";
 
-type StudentUploadMediaKind = "image" | "video";
-
-function getFileExtension(file: File): string | null {
-  return file.name.toLowerCase().match(/\.([^.]+)$/)?.[1] ?? null;
-}
-
-function getMimeMediaKind(file: File): StudentUploadMediaKind | null {
-  const mimeType = file.type.toLowerCase();
-  if (mimeType.startsWith("image/")) return "image";
-  if (mimeType.startsWith("video/")) return "video";
-  return null;
-}
-
-function getExtensionMediaKind(file: File): StudentUploadMediaKind | null {
-  const extension = getFileExtension(file);
-  if (extension && IMAGE_FILE_EXTENSIONS.has(extension)) return "image";
-  if (extension && VIDEO_FILE_EXTENSIONS.has(extension)) return "video";
-  return null;
-}
-
-function hasContradictoryMediaEvidence(file: File): boolean {
-  const mimeKind = getMimeMediaKind(file);
-  const extensionKind = getExtensionMediaKind(file);
-  return mimeKind !== null && extensionKind !== null && mimeKind !== extensionKind;
-}
-
-function getVideoContentType(file: File): OcrVideoUploadInput["contentType"] | null {
-  const mimeType = file.type.toLowerCase();
-  if (mimeType === "video/mp4" || mimeType === "video/quicktime") {
-    return mimeType as OcrVideoUploadInput["contentType"];
-  }
-  if (getMimeMediaKind(file) !== null) return null;
-  const extension = getFileExtension(file);
-  if (extension === "mp4") return "video/mp4";
-  if (extension === "mov") return "video/quicktime";
-  return null;
-}
-
-function getImageContentType(file: File): OcrUploadInput["contentType"] | null {
-  const mimeType = file.type.toLowerCase();
-  if (OCR_ALLOWED_CONTENT_TYPES.includes(mimeType as OcrUploadInput["contentType"])) {
-    return mimeType as OcrUploadInput["contentType"];
-  }
-  if (getMimeMediaKind(file) !== null) return null;
-  const extension = getFileExtension(file);
-  if (extension === "png") return "image/png";
-  if (extension === "jpg" || extension === "jpeg") return "image/jpeg";
-  if (extension === "webp") return "image/webp";
-  return null;
-}
+export type StudentUploadSelection = ScannerUploadSelection;
+type StudentUploadValidation = ScannerUploadValidation;
 
 export function classifyStudentUploadFiles(files: ReadonlyArray<File>): StudentUploadValidation {
-  const images: File[] = [];
-  let video: File | null = null;
-
-  for (const file of files) {
-    if (hasContradictoryMediaEvidence(file)) {
-      return { images: [], video: null, error: STUDENT_UPLOAD_CONFLICT_ERROR };
-    }
-    if (getImageContentType(file)) {
-      images.push(file);
-      continue;
-    }
-    if (getVideoContentType(file)) {
-      if (video) {
-        return { images: [], video: null, error: "영상은 한 번에 한 개만 선택할 수 있어요." };
-      }
-      video = file;
-      continue;
-    }
-    return {
-      images: [],
-      video: null,
-      error: "지원하는 파일은 PNG, JPEG, WebP 이미지와 MP4, MOV 영상이에요.",
-    };
-  }
-
-  if (images.length > OCR_MAX_IMAGES) {
-    return { images: [], video: null, error: `이미지는 1장부터 ${OCR_MAX_IMAGES}장까지 선택할 수 있어요.` };
-  }
-
-  const totalImageBytes = images.reduce((sum, image) => sum + image.size, 0);
-  if (totalImageBytes > OCR_MAX_JOB_BYTES) {
-    return { images: [], video: null, error: "한 작업의 이미지 전체 용량은 120MB를 넘을 수 없어요." };
-  }
-
-  if (images.some((image) => image.size <= 0 || image.size > OCR_MAX_IMAGE_BYTES)) {
-    return { images: [], video: null, error: "이미지 한 장은 10MB를 넘을 수 없어요." };
-  }
-
-  if (video && (video.size <= 0 || video.size > OCR_MAX_VIDEO_BYTES)) {
-    return { images: [], video: null, error: "영상은 250MB를 넘을 수 없어요." };
-  }
-
-  return { images, video, error: null };
+  const validation = validateScannerFiles(files, STUDENT_SCANNER_ACCEPT_SPEC);
+  return validation.error === STUDENT_UPLOAD_CONFLICT_ERROR
+    ? { ...validation, error: STUDENT_UPLOAD_CONFLICT_ERROR }
+    : validation;
 }
 
 export function getStudentUploadQuotaError(
@@ -444,7 +349,7 @@ export async function submitStudentUploadSelection(
         sha256: string;
       }> = [];
       for (const [index, file] of files.entries()) {
-        const contentType = kind === "image" ? getImageContentType(file) : getVideoContentType(file);
+        const contentType = kind === "image" ? getScannerImageContentType(file) : getScannerVideoContentType(file);
         if (!contentType) throw new Error("지원하는 파일은 PNG, JPEG, WebP 이미지와 MP4, MOV 영상이에요.");
         const key = `${kind}:${index}`;
         try {
@@ -552,30 +457,6 @@ export async function submitStudentUploadSelection(
   return { successfulJobs, failures };
 }
 
-function getStudentTerminalJobTitle(status: string, jobKind: StudentVideoJob["jobKind"]): string {
-  if (status === "cancelled") return "학생 성장도 인식 작업이 취소됐어요";
-  if (status === "expired") return "학생 성장도 인식 작업이 만료됐어요";
-  return jobKind === "student_detail_images_v1" ? "학생 이미지를 인식하지 못했어요" : "학생 영상을 인식하지 못했어요";
-}
-
-export function getStudentTerminalJobDescription(
-  status: string,
-  jobKind: StudentVideoJob["jobKind"],
-  images: ReadonlyArray<StudentImageFailure> = [],
-): string {
-  if (status === "cancelled") return "새 이미지나 영상을 선택해 다시 인식을 시작해 주세요.";
-  if (status === "expired") return "보관 기간이 지난 작업이에요. 새 파일을 선택해 다시 시도해 주세요.";
-  if (
-    jobKind === "student_detail_images_v1" &&
-    images.some((image) => image.status === "failed" && image.error?.code === STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE)
-  ) {
-    return STUDENT_IMAGE_DIMENSIONS_EXCEEDED_MESSAGE;
-  }
-  return jobKind === "student_detail_images_v1"
-    ? "학생 상세 화면이 보이는 이미지나 영상을 선택해 다시 시도해 주세요."
-    : "학생 기본 정보 화면을 확인할 수 있는 이미지나 영상을 선택해 다시 시도해 주세요.";
-}
-
 export function getStudentFailedImagesDescription(images: ReadonlyArray<StudentImageFailure>): string {
   const failedImages = images.filter((image) => image.status === "failed");
   const oversizedImages = failedImages.filter((image) => image.error?.code === STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE);
@@ -595,8 +476,40 @@ export function getStudentFailedImagesDescription(images: ReadonlyArray<StudentI
   return `${descriptions.join(" ")} 성공한 이미지의 결과만 검토할 수 있어요.`;
 }
 
+export function getStudentJobTransition(job: Pick<StudentVideoJob, "status" | "result" | "application">): {
+  phase: ScannerPhase;
+  error?: string | null;
+} {
+  if (job.status === "review_ready") {
+    if (!job.result) return { phase: "idle" };
+    return { phase: job.application?.status === "applied" ? "applied" : "review" };
+  }
+  if (["queued", "processing", "finalizing"].includes(job.status)) return { phase: "waiting" };
+  if (TERMINAL_JOB_STATUSES.has(job.status)) return { phase: "idle" };
+  return { phase: "idle", error: getScannerUnavailableResultMessage() };
+}
+
+export function selectLatestStudentJob<T extends Pick<StudentVideoJob, "createdAt" | "jobKind">>(
+  jobs: ReadonlyArray<T>,
+): T | null {
+  return jobs.reduce<T | null>((latest, candidate) => {
+    if (!latest) return candidate;
+    const latestCreatedAt = new Date(latest.createdAt).getTime();
+    const candidateCreatedAt = new Date(candidate.createdAt).getTime();
+    if (candidateCreatedAt > latestCreatedAt) return candidate;
+    if (candidateCreatedAt < latestCreatedAt) return latest;
+    return candidate.jobKind === "student_detail_video_v1" ? candidate : latest;
+  }, null);
+}
+
+function getStudentJobInputSummary(job: Pick<StudentVideoJob, "images" | "video">): string {
+  const inputs = [];
+  if (job.images.length > 0) inputs.push(`이미지 ${job.images.length}장`);
+  if (job.video) inputs.push("영상 1개");
+  return inputs.join(" · ") || "입력 파일 없음";
+}
+
 export default function StudentScanner() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const {
     videoUploadQuota: uploadQuota,
     setVideoUploadQuota: setUploadQuota,
@@ -605,75 +518,46 @@ export default function StudentScanner() {
   } = useOutletContext<ScannerOutletContext>();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [partialFailure, setPartialFailure] = useState<StudentUploadPartialFailure | null>(null);
-  const [job, setJob] = useState<StudentVideoJob | null>(null);
   const [review, setReview] = useState<ReviewState>({});
-  const [phase, setPhase] = useState<ScannerPhase>("idle");
   const [hashProgress, setHashProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isCancelling, setIsCancelling] = useState(false);
-  const pollAttemptRef = useRef(0);
-  const selectedJobUid = searchParams.get("job");
-
-  const showJob = useCallback((next: StudentVideoJob) => {
-    setJob(next);
+  const handleJob = useCallback((next: StudentVideoJob) => {
     if (next.status === "review_ready" && next.result) {
-      const isApplied = next.application?.status === "applied";
-      setReview(isApplied ? {} : createReviewState(next.result));
-      setPhase(isApplied ? "applied" : "review");
-      setError(null);
-    } else if (["queued", "processing", "finalizing"].includes(next.status)) {
-      setPhase("waiting");
-      setError(null);
-    } else if (TERMINAL_JOB_STATUSES.has(next.status)) {
-      setPhase("idle");
-      setError(null);
-    } else {
-      setPhase("idle");
-      setError(
-        next.jobKind === "student_detail_images_v1"
-          ? "인식 작업 상태를 확인하지 못했어요. 새 이미지로 다시 시도해 주세요."
-          : "인식 작업 상태를 확인하지 못했어요. 새 영상으로 다시 시도해 주세요.",
-      );
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!selectedJobUid) {
-      setJob(null);
-      setReview({});
-      setPhase("idle");
-      pollAttemptRef.current = 0;
+      setReview(next.application?.status === "applied" ? {} : createReviewState(next.result));
       return;
     }
-    pollAttemptRef.current = 0;
-    requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${selectedJobUid}`)
-      .then(showJob)
-      .catch((loadError) => {
-        setSearchParams({}, { replace: true });
-        setError(toScannerErrorMessage(loadError));
-      });
-  }, [selectedJobUid, setSearchParams, showJob]);
+    setReview({});
+  }, []);
 
-  useEffect(() => {
-    if (phase !== "waiting" || !job) return;
-    const delay = Math.min(10_000, Math.round(2000 * 1.5 ** pollAttemptRef.current));
-    const timeout = window.setTimeout(() => {
-      requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${job.uid}`)
-        .then((next) => {
-          pollAttemptRef.current += 1;
-          showJob(next);
-          if (!["queued", "processing", "finalizing"].includes(next.status)) notifyScannerJobsChanged();
-        })
-        .catch((pollError) => {
-          pollAttemptRef.current += 1;
-          setError(toScannerErrorMessage(pollError));
-          setJob((current) => (current ? { ...current } : current));
-        });
-    }, delay);
-    return () => window.clearTimeout(timeout);
-  }, [job, phase, showJob]);
+  const handleReset = useCallback(() => {
+    setSelectedFiles([]);
+    setReview({});
+    setHashProgress(0);
+    setUploadProgress(0);
+    setAllowsTrainingDataUse(false);
+    setPartialFailure(null);
+  }, []);
+
+  const lifecycle = useScannerJob<StudentVideoJob>({
+    getTransition: getStudentJobTransition,
+    onJob: handleJob,
+    onReset: handleReset,
+  });
+  const {
+    job,
+    phase,
+    setPhase,
+    error,
+    setError,
+    isCancelling,
+    selectedJobUid,
+    setSearchParams,
+    acceptJob,
+    updateJob,
+    resetForNewUpload,
+    cancelResult,
+  } = lifecycle;
 
   async function startRecognition() {
     const selection = classifyStudentUploadFiles(selectedFiles);
@@ -721,13 +605,18 @@ export default function StudentScanner() {
         return;
       }
 
-      pollAttemptRef.current = 0;
-      showJob(successfulJobs[0]);
-      setSearchParams({ job: successfulJobs[0].uid }, { replace: true });
+      const selectedJob = selectLatestStudentJob(successfulJobs);
+      if (!selectedJob) {
+        setPhase("idle");
+        setError("인식 작업을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      acceptJob(selectedJob);
+      setSearchParams({ job: selectedJob.uid }, { replace: true });
       setAllowsTrainingDataUse(false);
       setPartialFailure(
         failures.length > 0
-          ? { jobUid: successfulJobs[0].uid, message: getStudentUploadPartialFailureMessage(failures) }
+          ? { jobUid: selectedJob.uid, message: getStudentUploadPartialFailureMessage(failures) }
           : null,
       );
       notifyScannerJobsChanged();
@@ -760,7 +649,7 @@ export default function StudentScanner() {
         `/api/ocr/jobs/${job.uid}/apply`,
         { method: "POST", body: JSON.stringify({ students }) },
       );
-      setJob({ ...job, application: response.application });
+      updateJob({ ...job, application: response.application });
       setPhase("applied");
       notifyScannerJobsChanged();
     } catch (applyError) {
@@ -771,8 +660,8 @@ export default function StudentScanner() {
 
   function selectFiles(candidates: File[]) {
     if (candidates.length === 0) return;
-    const nextFiles = [...selectedFiles, ...candidates];
-    const validation = classifyStudentUploadFiles(nextFiles);
+    const nextFiles = mergeScannerFiles(selectedFiles, candidates);
+    const validation = validateScannerFiles(nextFiles, STUDENT_SCANNER_ACCEPT_SPEC);
     if (validation.error) {
       setError(validation.error);
       return;
@@ -793,53 +682,8 @@ export default function StudentScanner() {
     setPartialFailure(null);
   }
 
-  function clearSelectedJob(confirmUnappliedResult = false) {
-    if (confirmUnappliedResult && !window.confirm("현재 인식 결과를 반영하지 않고 새 파일을 업로드할까요?")) {
-      return;
-    }
-    setSearchParams({}, { replace: true });
-    setSelectedFiles([]);
-    setJob(null);
-    setReview({});
-    setHashProgress(0);
-    setUploadProgress(0);
-    setIsCancelling(false);
-    pollAttemptRef.current = 0;
-    setError(null);
-    setPartialFailure(null);
-    setPhase("idle");
-  }
-
-  async function cancelResult() {
-    if (job?.status !== "review_ready" || isCancelling) return;
-    if (!window.confirm("이 인식 결과를 취소할까요? 결과는 반영되지 않고 최근 작업에서 사라집니다.")) {
-      return;
-    }
-
-    setIsCancelling(true);
-    setError(null);
-    try {
-      await requestScannerJson<{ uid: string; status: "cancelled" }>(`/api/ocr/jobs/${job.uid}/cancel`, {
-        method: "POST",
-      });
-      clearSelectedJob();
-      notifyScannerJobsChanged();
-    } catch (cancelError) {
-      setError(toScannerErrorMessage(cancelError));
-    } finally {
-      setIsCancelling(false);
-    }
-  }
-
   const selectedUpload = classifyStudentUploadFiles(selectedFiles);
-  const selectedFileNames = selectedFiles.map((file) => file.name).join(", ");
   const selectedImageBytes = selectedUpload.images.reduce((sum, image) => sum + image.size, 0);
-  const selectedSummary = [
-    selectedUpload.images.length > 0 ? `이미지 ${selectedUpload.images.length}장` : null,
-    selectedUpload.video ? "영상 1개" : null,
-  ]
-    .filter((value): value is string => value !== null)
-    .join(" · ");
   const selectedQuotaError =
     !selectedJobUid && selectedFiles.length > 0
       ? getStudentUploadQuotaError(selectedUpload, imageUploadQuota, uploadQuota)
@@ -853,127 +697,155 @@ export default function StudentScanner() {
     (selectedUpload.video !== null && (!uploadQuota || uploadQuota.remaining === 0));
   const selectedPartialFailure = getStudentUploadPartialFailureForJob(partialFailure, selectedJobUid);
 
-  return (
-    <div className="space-y-8 pb-12 pt-6 lg:pt-2">
-      {error ? <Callout tone="destructive">{error}</Callout> : null}
-      {selectedPartialFailure ? (
-        <Callout tone="warning" title="일부 파일만 제출됐어요">
-          {selectedPartialFailure}
-        </Callout>
+  const uploadContent = !selectedJobUid ? (
+    <ScannerUploadSection
+      title="학생 성장도 파일 업로드"
+      description="게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄우고, 스크린샷을 찍거나 좌/우 화살표로 이동하는 화면을 녹화해주세요."
+      inputId="student-scanner-files"
+      accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,.png,.jpg,.jpeg,.webp,.mp4,.mov"
+      multiple
+      selectionDisabled={phase !== "idle" || (imageUploadQuota?.remaining === 0 && uploadQuota?.remaining === 0)}
+      onFiles={selectFiles}
+      icon={<PhotoIcon className="size-6" aria-hidden="true" />}
+      helpText="1회당 최대 이미지 30장 또는 영상 1개"
+      dropDetail={
+        selectedFiles.length > 0 ? (
+          <span className="mt-2 flex max-w-full flex-col items-center gap-1.5 text-xs text-muted-foreground">
+            <span>
+              {selectedUpload.images.length > 0
+                ? `이미지 ${selectedUpload.images.length}장 · ${formatScannerBytes(selectedImageBytes)}`
+                : ""}
+              {selectedUpload.video ? ` · 영상 ${formatScannerBytes(selectedUpload.video.size)}` : ""}
+              {phase === "uploading"
+                ? hashProgress < 1
+                  ? ` · 파일 확인 ${Math.round(hashProgress * 100)}%`
+                  : ` · 업로드 ${Math.round(uploadProgress * 100)}%`
+                : ""}
+            </span>
+            {phase === "uploading" ? (
+              <progress
+                aria-label={hashProgress < 1 ? "학생 이미지·영상 파일 확인 진행률" : "학생 이미지·영상 업로드 진행률"}
+                className="h-1.5 w-40 accent-primary"
+                max={1}
+                value={hashProgress < 1 ? hashProgress : uploadProgress}
+              />
+            ) : null}
+          </span>
+        ) : null
+      }
+      consentChecked={allowsTrainingDataUse}
+      consentDisabled={phase !== "idle"}
+      onConsentChange={setAllowsTrainingDataUse}
+      actionDisabled={uploadActionDisabled}
+      actionLabel={
+        phase === "uploading"
+          ? hashProgress < 1
+            ? "파일 확인 중..."
+            : `업로드 ${Math.round(uploadProgress * 100)}%`
+          : "인식 시작"
+      }
+      onAction={startRecognition}
+    >
+      <ScannerFileList
+        files={selectedFiles}
+        disabled={phase !== "idle"}
+        onRemove={(index) => {
+          if (phase !== "idle") return;
+          setSelectedFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+          setError(null);
+        }}
+      />
+      {selectedFiles.length > 0 ? (
+        <div className="flex justify-end">
+          <Button size="sm" disabled={phase !== "idle"} onClick={clearSelectedFiles}>
+            선택 초기화
+          </Button>
+        </div>
       ) : null}
-      {selectedQuotaError ? <Callout tone="warning">{selectedQuotaError}</Callout> : null}
+    </ScannerUploadSection>
+  ) : null;
 
-      {!selectedJobUid ? (
-        <ScannerUploadSection
-          title="학생 성장도 파일 업로드"
-          description="게임 내 [학생] 메뉴에서 학생을 선택하여 [기본 정보] 화면을 띄운 후, 스크린샷을 찍거나 좌/우 화살표로 이동하는 화면을 녹화해주세요."
-          quota={null}
-          quotaUnit=""
-          quotaSubject=""
-          inputId="student-scanner-files"
-          accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,.png,.jpg,.jpeg,.webp,.mp4,.mov"
-          multiple
-          selectionDisabled={phase !== "idle" || (imageUploadQuota?.remaining === 0 && uploadQuota?.remaining === 0)}
-          onFiles={selectFiles}
-          icon={<PhotoIcon className="size-6" aria-hidden="true" />}
-          helpText="1회당 이미지 최대 30장 · 영상 최대 1개"
-          dropDetail={
-            selectedFiles.length > 0 ? (
-              <span className="mt-2 flex max-w-full flex-col items-center gap-1.5 text-xs text-muted-foreground">
-                <span className="max-w-full truncate">{selectedFileNames}</span>
-                <span>
-                  {selectedUpload.images.length > 0
-                    ? `이미지 ${selectedUpload.images.length}장 · ${formatScannerBytes(selectedImageBytes)}`
-                    : ""}
-                  {selectedUpload.video ? ` · 영상 ${formatScannerBytes(selectedUpload.video.size)}` : ""}
-                  {phase === "uploading"
-                    ? hashProgress < 1
-                      ? ` · 파일 확인 ${Math.round(hashProgress * 100)}%`
-                      : ` · 업로드 ${Math.round(uploadProgress * 100)}%`
-                    : ""}
-                </span>
-                {phase === "uploading" ? (
-                  <progress
-                    aria-label={
-                      hashProgress < 1 ? "학생 이미지·영상 파일 확인 진행률" : "학생 이미지·영상 업로드 진행률"
-                    }
-                    className="h-1.5 w-40 accent-primary"
-                    max={1}
-                    value={hashProgress < 1 ? hashProgress : uploadProgress}
-                  />
-                ) : null}
-              </span>
-            ) : null
-          }
-          consentChecked={allowsTrainingDataUse}
-          consentDisabled={phase !== "idle"}
-          onConsentChange={setAllowsTrainingDataUse}
-          actionDisabled={uploadActionDisabled}
-          actionLabel={
-            phase === "uploading"
-              ? hashProgress < 1
-                ? "파일 확인 중..."
-                : `업로드 ${Math.round(uploadProgress * 100)}%`
-              : "인식 시작"
-          }
-          onAction={startRecognition}
-        >
-          {selectedFiles.length > 0 ? (
-            <div className="flex justify-end">
-              <Button size="sm" disabled={phase !== "idle"} onClick={clearSelectedFiles}>
-                선택 초기화
-              </Button>
-            </div>
-          ) : null}
-        </ScannerUploadSection>
-      ) : null}
+  const progressContent =
+    phase === "waiting" && job ? (
+      <ScannerProgressCard
+        title="학생 성장도를 인식하고 있어요"
+        description="이미지 또는 영상에서 학생 정보를 읽고 있어요. 화면을 벗어나도 인식은 계속 진행돼요."
+        progress={job.progress}
+        segmentStatuses={[...job.images.map((image) => image.status), ...(job.video ? [job.video.status] : [])]}
+        segmentLabel="파일 처리"
+        remainingLabel="{remaining}개 남았어요"
+        etaLabel="파일 종류와 수에 따라 시간이 달라질 수 있어요."
+      />
+    ) : null;
 
-      {selectedJobUid && !job ? <ScannerJobSkeleton variant="student" /> : null}
+  const reviewContent =
+    job?.status === "review_ready" && job.result ? (
+      <ReviewPanel
+        key={job.uid}
+        job={{ ...job, result: job.result }}
+        review={review}
+        phase={phase}
+        onReviewChange={setReview}
+        onApply={applyReview}
+        onCancel={cancelResult}
+        onStartNew={() => resetForNewUpload()}
+        isCancelling={isCancelling}
+        error={error}
+        partialFailure={selectedPartialFailure}
+      />
+    ) : null;
 
-      {phase === "waiting" && job ? (
-        <SectionCard
-          title="학생 성장도를 인식하고 있어요"
-          description="이미지 또는 영상에서 학생 정보를 읽고 있어요. 화면을 벗어나도 인식은 계속 진행돼요."
-        >
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <ArrowPathIcon className="size-5 animate-spin" aria-hidden="true" />
-            <span>{job.status === "queued" ? "처리 순서를 기다리는 중" : "파일을 분석하고 학생 정보를 읽는 중"}</span>
-          </div>
-        </SectionCard>
-      ) : null}
-
-      {job?.status === "review_ready" && job.result && phase !== "applied" ? (
-        <ReviewPanel
-          key={job.uid}
-          job={{ ...job, result: job.result }}
-          review={review}
-          phase={phase}
-          onReviewChange={setReview}
-          onApply={applyReview}
-          onCancel={cancelResult}
-          onStartNew={() => clearSelectedJob(true)}
-          isCancelling={isCancelling}
+  const completionContent = (
+    <>
+      {job?.status === "review_ready" && !job.result ? (
+        <ScannerCompletionState
+          tone="destructive"
+          title="학생 인식 결과를 확인하지 못했어요"
+          description={getScannerUnavailableResultMessage()}
+          actionLabel={scannerMessages.student.uploadAction}
+          onStartNew={() => resetForNewUpload()}
         />
       ) : null}
 
       {job?.status === "review_ready" && job.application?.status === "applied" ? (
         <ScannerCompletionState
           title="학생 성장도 반영이 완료됐어요"
-          description="새 파일을 업로드하려면 아래 버튼을 눌러주세요."
-          actionLabel="새 파일 업로드"
-          onStartNew={() => clearSelectedJob()}
+          description="새로운 인식을 시작하려면 아래 버튼을 눌러주세요."
+          actionLabel={scannerMessages.student.uploadAction}
+          onStartNew={() => resetForNewUpload()}
         />
       ) : null}
 
       {job && TERMINAL_JOB_STATUSES.has(job.status) ? (
         <ScannerCompletionState
           tone="destructive"
-          title={getStudentTerminalJobTitle(job.status, job.jobKind)}
-          description={getStudentTerminalJobDescription(job.status, job.jobKind, job.images)}
-          actionLabel="새 파일 업로드"
-          onStartNew={() => clearSelectedJob()}
+          title={getScannerTerminalJobTitle(job.status, job.jobKind)}
+          description={getScannerTerminalJobDescription(job.status, job.jobKind, job.images)}
+          actionLabel={scannerMessages.student.uploadAction}
+          onStartNew={() => resetForNewUpload()}
         />
       ) : null}
+    </>
+  );
+
+  return (
+    <div className="space-y-8 pb-12 pt-6 lg:pt-2">
+      {error && phase !== "review" && phase !== "applying" ? (
+        <Callout tone="destructive">{error}</Callout>
+      ) : selectedPartialFailure && phase !== "review" && phase !== "applying" ? (
+        <Callout tone="warning" title="일부 파일만 제출됐어요">
+          {selectedPartialFailure}
+        </Callout>
+      ) : null}
+      {selectedQuotaError && !error ? <Callout tone="warning">{selectedQuotaError}</Callout> : null}
+      {selectedJobUid && !job ? <ScannerJobSkeleton variant="student" /> : null}
+      <ScannerJobShell
+        phase={phase}
+        upload={uploadContent}
+        progress={progressContent}
+        review={reviewContent}
+        completion={completionContent}
+      />
     </div>
   );
 }
@@ -987,6 +859,8 @@ function ReviewPanel({
   onCancel,
   onStartNew,
   isCancelling,
+  error,
+  partialFailure,
 }: {
   job: StudentVideoJob & { result: StudentGrowthResult };
   review: ReviewState;
@@ -996,6 +870,8 @@ function ReviewPanel({
   onCancel: () => void;
   onStartNew: () => void;
   isCancelling: boolean;
+  error: string | null;
+  partialFailure: string | null;
 }) {
   const [reviewFilterStudentUids, setReviewFilterStudentUids] = useState<string[] | null>(null);
   const [selectedPreview, setSelectedPreview] = useState<{
@@ -1032,7 +908,7 @@ function ReviewPanel({
         />
         <div className="flex flex-wrap justify-end gap-2">
           <Button size="sm" onClick={onStartNew}>
-            새 파일 업로드
+            {scannerMessages.student.uploadAction}
           </Button>
           <Button
             size="sm"
@@ -1051,19 +927,25 @@ function ReviewPanel({
         </div>
       </div>
 
-      {unresolvedStudents.length > 0 ? (
+      {error ? (
+        <Callout tone="destructive" title="처리 중 오류가 발생했어요">
+          {error}
+        </Callout>
+      ) : partialFailure ? (
+        <Callout tone="destructive" title="일부 파일만 제출됐어요">
+          {partialFailure}
+        </Callout>
+      ) : failedImages.length > 0 ? (
+        <Callout
+          tone="destructive"
+          title="일부 이미지를 인식하지 못했어요"
+          description={getStudentFailedImagesDescription(failedImages)}
+        />
+      ) : unresolvedStudents.length > 0 ? (
         <Callout
           tone="warning"
           title="학생 식별 필요"
           description={`${unresolvedStudents.length}개 결과는 현재 학생 카탈로그와 확인되지 않아 임의 학생에게 연결하지 않았어요.`}
-        />
-      ) : null}
-
-      {failedImages.length > 0 ? (
-        <Callout
-          tone="warning"
-          title="일부 이미지를 인식하지 못했어요"
-          description={getStudentFailedImagesDescription(failedImages)}
         />
       ) : null}
 
@@ -1179,7 +1061,7 @@ function ReviewPanel({
                       student={student}
                       state={state}
                       currentState={job.currentStudentStates?.[student.studentUid]}
-                      disabled={phase === "applied" || !catalogStudent}
+                      disabled={!catalogStudent}
                       getInputProps={numberInputNavigation.getInputProps}
                       onValueChange={updateValue}
                     />
@@ -1190,7 +1072,7 @@ function ReviewPanel({
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
                     fields={skillFields}
-                    disabled={phase === "applied" || !catalogStudent}
+                    disabled={!catalogStudent}
                     getInputProps={numberInputNavigation.getInputProps}
                     onValueChange={updateValue}
                   />
@@ -1200,7 +1082,7 @@ function ReviewPanel({
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
                     fields={equipmentFields}
-                    disabled={phase === "applied" || !catalogStudent}
+                    disabled={!catalogStudent}
                     getInputProps={numberInputNavigation.getInputProps}
                     onValueChange={updateValue}
                   />
@@ -1210,7 +1092,7 @@ function ReviewPanel({
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
                     fields={abilityFields}
-                    disabled={phase === "applied" || !catalogStudent}
+                    disabled={!catalogStudent}
                     getInputProps={numberInputNavigation.getInputProps}
                     onValueChange={updateValue}
                   />
@@ -1241,72 +1123,35 @@ function ReviewPanel({
             </p>
           )}
           <div className="flex shrink-0 items-center gap-2">
-            <Button
-              variant="danger-subtle"
-              disabled={phase === "applying" || phase === "applied" || isCancelling}
-              onClick={onCancel}
-            >
+            <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
               {isCancelling ? "취소 중..." : "인식 결과 삭제"}
             </Button>
             <Button
               variant="primary"
-              disabled={phase === "applying" || phase === "applied" || isCancelling}
+              disabled={phase === "applying" || isCancelling}
               onClick={() => onApply(remainingReviewStudents.length)}
             >
-              {phase === "applying" ? "반영 중..." : phase === "applied" ? "반영 완료" : "성장도 저장"}
+              {phase === "applying" ? "반영 중..." : "성장도 저장"}
             </Button>
           </div>
         </FloatingActionBar>
       </div>
-      <RepresentativeFrameDialog jobUid={job.uid} selected={selectedPreview} onClose={() => setSelectedPreview(null)} />
+      <ScannerImageDialog
+        open={selectedPreview !== null}
+        src={
+          selectedPreview
+            ? `/api/ocr/jobs/${encodeURIComponent(job.uid)}/artifacts/${encodeURIComponent(selectedPreview.artifact.uid)}`
+            : ""
+        }
+        title={
+          selectedPreview
+            ? `${selectedPreview.studentName} 인식 화면 · ${selectedPreview.artifact.timestampSeconds.toFixed(1)}초`
+            : "인식 화면"
+        }
+        alt={selectedPreview ? `${selectedPreview.studentName} 인식 화면` : "인식 화면"}
+        onClose={() => setSelectedPreview(null)}
+      />
     </section>
-  );
-}
-
-function RepresentativeFrameDialog({
-  jobUid,
-  selected,
-  onClose,
-}: {
-  jobUid: string;
-  selected: { artifact: StudentVideoJob["artifacts"][number]; studentName: string } | null;
-  onClose: () => void;
-}) {
-  const source = selected
-    ? `/api/ocr/jobs/${encodeURIComponent(jobUid)}/artifacts/${encodeURIComponent(selected.artifact.uid)}`
-    : "";
-  return (
-    <Dialog open={selected !== null} onClose={onClose} className="relative z-layer-modal">
-      <DialogBackdrop className="fixed inset-0 bg-black/85 backdrop-blur-sm" />
-      <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-6">
-        <DialogPanel className="relative flex max-h-full w-full max-w-[min(80rem,96vw)] flex-col overflow-hidden rounded-lg border border-white/15 bg-black shadow-2xl">
-          <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 text-white">
-            <DialogTitle className="truncate text-sm font-medium">
-              {selected
-                ? `${selected.studentName} 인식 화면 · ${selected.artifact.timestampSeconds.toFixed(1)}초`
-                : "인식 화면"}
-            </DialogTitle>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="인식 화면 닫기"
-              className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-white/80 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/70"
-            >
-              <XMarkIcon className="size-5" aria-hidden="true" />
-            </button>
-          </div>
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-2 sm:p-4">
-            {selected ? (
-              <img
-                src={source}
-                alt={`${selected.studentName} 인식 화면`}
-                className="max-h-[calc(100vh-7rem)] max-w-full object-contain"
-              />
-            ) : null}
-          </div>
-        </DialogPanel>
-      </div>
-    </Dialog>
   );
 }
 

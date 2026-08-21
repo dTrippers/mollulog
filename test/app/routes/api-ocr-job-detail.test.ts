@@ -117,13 +117,40 @@ describe("OCR job detail cell review", () => {
     expect(mockedGetInventory).toHaveBeenCalledWith(env, 7, ["100"]);
   });
 
-  it("selects legacy mode when filename validation fails", async () => {
+  it("returns an explicit unavailable review state when filename validation fails", async () => {
     mockedGetOcrJob.mockResolvedValue({
       ...job,
       result: { ...job.result, images: [{ ...job.result.images[0], filename: "wrong.png" }, job.result.images[1]] },
     } as never);
-    const response = expectDataResult<{ reviewMode: string; reviewModeReason: string }>(await loader(args()));
-    expect(response.data.reviewMode).toBe("legacy");
-    expect(response.data.reviewModeReason).toBe("result_image_mapping_unusable");
+    const response = expectDataResult<{ reviewError: boolean; reviewMode?: string }>(await loader(args()));
+    expect(response.data.reviewError).toBe(true);
+    expect(response.data).not.toHaveProperty("reviewMode");
+    expect(response.data).not.toHaveProperty("reviewModeReason");
+  });
+
+  it("does not classify an in-progress job as an unavailable review", async () => {
+    mockedGetOcrJob.mockResolvedValue({ ...job, status: "processing", result: null } as never);
+
+    const response = expectDataResult<{ status: string; reviewError?: boolean; cells: unknown[] }>(
+      await loader(args()),
+    );
+
+    expect(response.data.status).toBe("processing");
+    expect(response.data.reviewError).toBeUndefined();
+    expect(response.data.cells).toEqual([]);
+  });
+
+  it("maps conflicting source images to their server image UIDs", async () => {
+    mockedGetOcrJob.mockResolvedValue({
+      ...job,
+      result: {
+        ...job.result,
+        items: [{ status: "conflict", source_images: ["other.png"] }],
+      },
+    } as never);
+
+    const response = expectDataResult<{ conflictImageUids: string[] }>(await loader(args()));
+
+    expect(response.data.conflictImageUids).toEqual(["succeeded-b"]);
   });
 });
