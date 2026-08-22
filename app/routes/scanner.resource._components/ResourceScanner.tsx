@@ -89,6 +89,12 @@ type OcrUploadQuota = ScannerUploadQuota;
 
 type ImageBoundingBox = { x: number; y: number; width: number; height: number };
 
+const REVIEW_IMAGE_BUFFER_RATIO = 0.06;
+const REVIEW_IMAGE_MIN_BUFFER_RATIO = 0.02;
+const REVIEW_IMAGE_HOVER_CONTEXT_RATIO = 2.25;
+const REVIEW_IMAGE_HOVER_MAX_SCALE = 3;
+const REVIEW_IMAGE_HOVER_MAX_ITEM_SIZE = 176;
+
 const TERMINAL_JOB_STATUSES = new Set(["failed", "cancelled", "expired"]);
 export const RESOURCE_FILE_CONCURRENCY = 4;
 
@@ -543,6 +549,7 @@ export default function ResourceScanner() {
                       alt={`${selectedImage.filename} 원본`}
                       imageWidth={selectedResultImage?.width}
                       imageHeight={selectedResultImage?.height}
+                      contentBoxes={selectedResultImage?.boxes}
                       highlightedBox={highlightedObservation?.bbox ?? undefined}
                     />
                     <span className="absolute bottom-3 right-3 flex size-9 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
@@ -718,10 +725,16 @@ export default function ResourceScanner() {
 function getSelectedResultImage(
   job: JobStatus | null,
   selectedImageUid: string | null,
-): { width?: number; height?: number } | null {
+): { width?: number; height?: number; boxes: ImageBoundingBox[] } | null {
   const selectedCells = (job?.cells ?? []).filter((cell) => !selectedImageUid || cell.imageUid === selectedImageUid);
   const firstCell = selectedCells[0];
-  return firstCell ? { width: firstCell.width ?? undefined, height: firstCell.height ?? undefined } : null;
+  return firstCell
+    ? {
+        width: firstCell.width ?? undefined,
+        height: firstCell.height ?? undefined,
+        boxes: selectedCells.flatMap((cell) => (cell.bbox && cell.bbox.width > 0 && cell.bbox.height > 0 ? [cell.bbox] : [])),
+      }
+    : null;
 }
 
 function ReviewSourceImage({
@@ -729,16 +742,19 @@ function ReviewSourceImage({
   alt,
   imageWidth,
   imageHeight,
+  contentBoxes = [],
   highlightedBox,
 }: {
   src: string;
   alt: string;
   imageWidth?: number;
   imageHeight?: number;
+  contentBoxes?: ImageBoundingBox[];
   highlightedBox?: ImageBoundingBox;
 }) {
   const containerRef = useRef<HTMLSpanElement>(null);
   const [imageError, setImageError] = useState(false);
+  const [naturalSize, setNaturalSize] = useState<{ width: number; height: number } | null>(null);
   const [renderedImage, setRenderedImage] = useState<{
     left: number;
     top: number;
@@ -746,20 +762,35 @@ function ReviewSourceImage({
     height: number;
   } | null>(null);
 
+  const sourceWidth = imageWidth ?? naturalSize?.width;
+  const sourceHeight = imageHeight ?? naturalSize?.height;
+
   useEffect(() => {
     const container = containerRef.current;
-    if (!container || !imageWidth || !imageHeight) {
+    if (!container || !sourceWidth || !sourceHeight) {
       setRenderedImage(null);
       return;
     }
 
     const updateRenderedImage = () => {
-      const scale = Math.min(container.clientWidth / imageWidth, container.clientHeight / imageHeight);
-      const width = imageWidth * scale;
-      const height = imageHeight * scale;
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      const contentBounds = getReviewImageContentBounds(contentBoxes, sourceWidth, sourceHeight);
+      const baseScale = Math.min(containerWidth / contentBounds.width, containerHeight / contentBounds.height);
+      const scale = highlightedBox
+        ? getReviewImageHoverScale({
+            baseScale,
+            box: highlightedBox,
+            containerWidth,
+            containerHeight,
+          })
+        : baseScale;
+      const focusBox = highlightedBox ?? contentBounds;
+      const width = sourceWidth * scale;
+      const height = sourceHeight * scale;
       setRenderedImage({
-        left: (container.clientWidth - width) / 2,
-        top: (container.clientHeight - height) / 2,
+        left: clampReviewImageOffset(containerWidth / 2 - (focusBox.x + focusBox.width / 2) * scale, width, containerWidth),
+        top: clampReviewImageOffset(containerHeight / 2 - (focusBox.y + focusBox.height / 2) * scale, height, containerHeight),
         width,
         height,
       });
@@ -769,38 +800,112 @@ function ReviewSourceImage({
     const observer = new ResizeObserver(updateRenderedImage);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [imageWidth, imageHeight]);
+  }, [contentBoxes, highlightedBox, sourceHeight, sourceWidth]);
 
   const highlightStyle =
-    renderedImage && highlightedBox && imageWidth && imageHeight
+    renderedImage && highlightedBox && sourceWidth && sourceHeight
       ? {
-          left: renderedImage.left + (highlightedBox.x / imageWidth) * renderedImage.width,
-          top: renderedImage.top + (highlightedBox.y / imageHeight) * renderedImage.height,
-          width: (highlightedBox.width / imageWidth) * renderedImage.width,
-          height: (highlightedBox.height / imageHeight) * renderedImage.height,
+          left: renderedImage.left + (highlightedBox.x / sourceWidth) * renderedImage.width,
+          top: renderedImage.top + (highlightedBox.y / sourceHeight) * renderedImage.height,
+          width: (highlightedBox.width / sourceWidth) * renderedImage.width,
+          height: (highlightedBox.height / sourceHeight) * renderedImage.height,
         }
       : null;
 
   return (
     <span
       ref={containerRef}
-      className="relative flex aspect-video max-h-[calc(100vh-10rem)] items-center justify-center"
+      className="relative flex aspect-video max-h-[calc(100vh-10rem)] items-center justify-center overflow-hidden"
     >
       {imageError ? (
         <span className="px-4 text-center text-sm text-white/80">스크린샷을 표시할 수 없어요.</span>
       ) : (
-        <img src={src} alt={alt} className="size-full object-contain" onError={() => setImageError(true)} />
+        <img
+          src={src}
+          alt={alt}
+          className={cn(
+            renderedImage
+              ? "pointer-events-none absolute max-w-none transition-[left,top,width,height] duration-200 ease-out"
+              : "size-full object-contain",
+          )}
+          style={renderedImage ?? undefined}
+          onLoad={(event) => {
+            const image = event.currentTarget;
+            setNaturalSize({ width: image.naturalWidth, height: image.naturalHeight });
+          }}
+          onError={() => setImageError(true)}
+        />
       )}
       {highlightStyle ? (
         <span
           aria-hidden="true"
           data-review-highlight=""
-          className="pointer-events-none absolute rounded-md border-2 border-rose-400 bg-rose-400/20 shadow-[0_0_0_2px_rgba(76,5,25,0.9),0_0_0_4px_rgba(251,113,133,0.95),0_0_16px_rgba(244,63,94,0.65)] transition-[left,top,width,height] duration-150"
+          className="pointer-events-none absolute rounded-md border-2 border-rose-400 bg-rose-400/20 shadow-[0_0_0_2px_rgba(76,5,25,0.9),0_0_0_4px_rgba(251,113,133,0.95),0_0_16px_rgba(244,63,94,0.65)] transition-[left,top,width,height] duration-200 ease-out"
           style={highlightStyle}
         />
       ) : null}
     </span>
   );
+}
+
+function getReviewImageContentBounds(
+  boxes: ImageBoundingBox[],
+  imageWidth: number,
+  imageHeight: number,
+): ImageBoundingBox {
+  const validBoxes = boxes.flatMap((box) => {
+    const left = Math.max(0, Math.min(imageWidth, box.x));
+    const top = Math.max(0, Math.min(imageHeight, box.y));
+    const right = Math.max(left, Math.min(imageWidth, box.x + box.width));
+    const bottom = Math.max(top, Math.min(imageHeight, box.y + box.height));
+    return right > left && bottom > top ? [{ x: left, y: top, width: right - left, height: bottom - top }] : [];
+  });
+  if (validBoxes.length === 0) return { x: 0, y: 0, width: imageWidth, height: imageHeight };
+
+  const left = Math.min(...validBoxes.map((box) => box.x));
+  const top = Math.min(...validBoxes.map((box) => box.y));
+  const right = Math.max(...validBoxes.map((box) => box.x + box.width));
+  const bottom = Math.max(...validBoxes.map((box) => box.y + box.height));
+  const width = right - left;
+  const height = bottom - top;
+  const horizontalBuffer = Math.max(width * REVIEW_IMAGE_BUFFER_RATIO, imageWidth * REVIEW_IMAGE_MIN_BUFFER_RATIO);
+  const verticalBuffer = Math.max(height * REVIEW_IMAGE_BUFFER_RATIO, imageHeight * REVIEW_IMAGE_MIN_BUFFER_RATIO);
+  const bufferedLeft = Math.max(0, left - horizontalBuffer);
+  const bufferedTop = Math.max(0, top - verticalBuffer);
+  const bufferedRight = Math.min(imageWidth, right + horizontalBuffer);
+  const bufferedBottom = Math.min(imageHeight, bottom + verticalBuffer);
+
+  return {
+    x: bufferedLeft,
+    y: bufferedTop,
+    width: bufferedRight - bufferedLeft,
+    height: bufferedBottom - bufferedTop,
+  };
+}
+
+function getReviewImageHoverScale({
+  baseScale,
+  box,
+  containerWidth,
+  containerHeight,
+}: {
+  baseScale: number;
+  box: ImageBoundingBox;
+  containerWidth: number;
+  containerHeight: number;
+}): number {
+  if (box.width <= 0 || box.height <= 0) return baseScale;
+  const contextScale = Math.min(
+    containerWidth / (box.width * REVIEW_IMAGE_HOVER_CONTEXT_RATIO),
+    containerHeight / (box.height * REVIEW_IMAGE_HOVER_CONTEXT_RATIO),
+  );
+  const itemSizeScale = REVIEW_IMAGE_HOVER_MAX_ITEM_SIZE / Math.max(box.width, box.height);
+  return Math.max(baseScale, Math.min(contextScale, itemSizeScale, baseScale * REVIEW_IMAGE_HOVER_MAX_SCALE));
+}
+
+function clampReviewImageOffset(offset: number, renderedSize: number, containerSize: number): number {
+  if (renderedSize <= containerSize) return (containerSize - renderedSize) / 2;
+  return Math.min(0, Math.max(containerSize - renderedSize, offset));
 }
 
 function ScannerImageGroup({

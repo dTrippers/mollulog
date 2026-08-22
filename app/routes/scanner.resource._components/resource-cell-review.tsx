@@ -637,9 +637,6 @@ function CellCandidatePopoverContent({
         disabled={disabled}
         aria-label={sameAppearanceSelectionRequired ? "같은 모양의 아이템 선택" : "아이템 후보 열기"}
         onMouseEnter={() => onHighlightChange(true)}
-        onMouseLeave={() => {
-          if (!open) onHighlightChange(false);
-        }}
         className="block cursor-pointer rounded-lg leading-none outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default"
       >
         {children}
