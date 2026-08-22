@@ -1,25 +1,15 @@
-import { type AnyColumn, and, eq, inArray, or, type SQLWrapper } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { and, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import { nanoid } from "nanoid/non-secure";
-import { isUniqueConstraintError } from "~/lib/db";
+import { withIdentityDatabase } from "~/db/postgres/identity";
+import { pgSenseisTable } from "~/db/postgres/schema";
+import { postgresUniqueConstraintName } from "~/lib/db";
 
-type SenseiRole = "guest" | "admin";
+export type SenseiRole = "guest" | "admin";
 export type ProfileVisibility = "public" | "private";
 
-export const senseisTable = sqliteTable("senseis", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  username: text().notNull().unique(),
-  profileStudentId: text(),
-  bio: text(),
-  friendCode: text(),
-  googleId: text(),
-  githubId: text(),
-  role: text().notNull().$type<SenseiRole>(),
-  active: int().notNull().default(0),
-  profileVisibility: text().notNull().default("public").$type<ProfileVisibility>(),
-});
+// Kept as the model-facing table export for callers and test fixtures. The
+// canonical table is PostgreSQL after the identity cutover.
+export const senseisTable = pgSenseisTable;
 
 export type Sensei = {
   id: number;
@@ -36,7 +26,7 @@ export type Sensei = {
   };
 };
 
-type SenseiCreateFields = {
+export type SenseiCreateFields = {
   username: string;
   friendCode: string | null;
   profileStudentId: string | null;
@@ -45,43 +35,41 @@ type SenseiCreateFields = {
   githubId?: string | null;
 };
 
-// Get a sensei by a single field
+type SenseiRow = typeof pgSenseisTable.$inferSelect;
+
 export async function getSenseiById(env: Env, id: number): Promise<Sensei | null> {
-  const db = drizzle(env.DB);
-  const result = await db.select().from(senseisTable).where(eq(senseisTable.id, id)).limit(1);
-  return result.length > 0 ? toSenseiModel(result[0]) : null;
+  return withIdentityDatabase(env, "sensei_by_id", async (db) => {
+    const [row] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, id)).limit(1);
+    return row ? toSenseiModel(row) : null;
+  });
 }
 
 export async function getSenseiByUsername(env: Env, username: string): Promise<Sensei | null> {
-  const db = drizzle(env.DB);
-  const result = await db.select().from(senseisTable).where(eq(senseisTable.username, username)).limit(1);
-  return result.length > 0 ? toSenseiModel(result[0]) : null;
+  return withIdentityDatabase(env, "sensei_by_username", async (db) => {
+    const [row] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.username, username)).limit(1);
+    return row ? toSenseiModel(row) : null;
+  });
 }
 
 export async function getSenseisById(env: Env, ids: number[]): Promise<Sensei[]> {
   const uniqueIds = [...new Set(ids)];
-  if (uniqueIds.length === 0) {
-    return [];
-  }
-  const db = drizzle(env.DB);
-  const senseis = await db.select().from(senseisTable).where(inArray(senseisTable.id, uniqueIds));
-
-  return senseis.map((row) => toSenseiModel(row));
+  if (uniqueIds.length === 0) return [];
+  return withIdentityDatabase(env, "senseis_by_id", async (db) => {
+    const rows = await db.select().from(pgSenseisTable).where(inArray(pgSenseisTable.id, uniqueIds));
+    return rows.map(toSenseiModel);
+  });
 }
 
 export async function getVisibleSenseisById(env: Env, ids: number[], viewerUserId?: number): Promise<Sensei[]> {
   const uniqueIds = [...new Set(ids)];
-  if (uniqueIds.length === 0) {
-    return [];
-  }
-
-  const db = drizzle(env.DB);
-  const senseis = await db
-    .select()
-    .from(senseisTable)
-    .where(and(inArray(senseisTable.id, uniqueIds), senseiProfileVisibilityFilter(viewerUserId)));
-
-  return senseis.map((row) => toSenseiModel(row));
+  if (uniqueIds.length === 0) return [];
+  return withIdentityDatabase(env, "visible_senseis_by_id", async (db) => {
+    const rows = await db
+      .select()
+      .from(pgSenseisTable)
+      .where(and(inArray(pgSenseisTable.id, uniqueIds), senseiProfileVisibilityFilter(viewerUserId)));
+    return rows.map(toSenseiModel);
+  });
 }
 
 export function isSenseiProfileVisibleTo(sensei: Sensei, viewerUserId?: number): boolean {
@@ -90,63 +78,56 @@ export function isSenseiProfileVisibleTo(sensei: Sensei, viewerUserId?: number):
 
 export function senseiProfileVisibilityFilter(
   viewerUserId?: number | null,
-  ownerUserIdColumn: AnyColumn = senseisTable.id,
-): SQLWrapper {
-  const publicCondition = eq(senseisTable.profileVisibility, "public");
-  if (!viewerUserId) {
-    return publicCondition;
-  }
-
-  return or(publicCondition, eq(ownerUserIdColumn, viewerUserId)) ?? publicCondition;
+  ownerUserIdColumn: SQLWrapper = pgSenseisTable.id,
+): SQL {
+  const publicCondition = eq(pgSenseisTable.profileVisibility, "public");
+  if (!viewerUserId) return publicCondition;
+  return or(publicCondition, sql`${ownerUserIdColumn} = ${viewerUserId}`) ?? publicCondition;
 }
 
 export async function createSensei(
   env: Env,
   fields: SenseiCreateFields,
 ): Promise<{ sensei?: Sensei; error?: { form?: string; username?: string } }> {
-  const db = drizzle(env.DB);
   const uid = nanoid(8);
 
   try {
-    await db.insert(senseisTable).values({
-      uid,
-      username: fields.username,
-      friendCode: fields.friendCode,
-      profileStudentId: fields.profileStudentId,
-      bio: fields.bio,
-      googleId: fields.googleId,
-      githubId: fields.githubId,
-      role: "guest",
-      active: 1,
+    return await withIdentityDatabase(env, "create_sensei", async (db) => {
+      const [row] = await db
+        .insert(pgSenseisTable)
+        .values({
+          uid,
+          username: fields.username,
+          friendCode: fields.friendCode,
+          profileStudentId: fields.profileStudentId,
+          bio: fields.bio,
+          googleId: fields.googleId,
+          githubId: fields.githubId,
+          role: "guest",
+          active: true,
+        })
+        .returning();
+      return row ? { sensei: toSenseiModel(row) } : {};
     });
-  } catch (e) {
-    const err = e as Error;
-    const uniqueError = isUniqueConstraintError(err);
-    if (uniqueError && uniqueError.column === "username") {
+  } catch (error) {
+    const constraint = postgresUniqueConstraintName(error);
+    if (constraint === "senseis_username_uidx") {
       return { error: { username: "이미 사용중인 닉네임입니다." } };
     }
-    if (uniqueError && (uniqueError.column === "googleId" || uniqueError.column === "githubId")) {
+    if (constraint === "senseis_google_id_uidx" || constraint === "senseis_github_id_uidx") {
       return { error: { form: "이미 다른 계정에 연결된 로그인 계정이에요." } };
     }
-
-    console.error(e);
-    throw e;
+    console.error(error);
+    throw error;
   }
-
-  const sensei = await getSenseiByUsername(env, fields.username);
-  return sensei ? { sensei } : {};
 }
 
-// Update a sensei
 type SenseiUpdateFields = Partial<
   Pick<Sensei, "username" | "friendCode" | "profileStudentId" | "active" | "bio" | "profileVisibility">
 >;
 
 function nullableFieldToUpdate<T>(value: T | null | undefined, existingValue: T | null): T | null {
-  if (value === undefined) {
-    return existingValue;
-  }
-  return value;
+  return value === undefined ? existingValue : value;
 }
 
 export async function updateSensei(
@@ -154,39 +135,37 @@ export async function updateSensei(
   id: number,
   fields: SenseiUpdateFields,
 ): Promise<{ error?: { username?: string } }> {
-  const existingSensei = await getSenseiById(env, id);
-  if (!existingSensei) {
-    return {};
-  }
-
-  const db = drizzle(env.DB);
   try {
-    await db
-      .update(senseisTable)
-      .set({
-        username: fields.username ?? existingSensei.username,
-        friendCode: nullableFieldToUpdate(fields.friendCode, existingSensei.friendCode),
-        profileStudentId: nullableFieldToUpdate(fields.profileStudentId, existingSensei.profileStudentId),
-        bio: nullableFieldToUpdate(fields.bio, existingSensei.bio),
-        active: (fields.active ?? existingSensei.active) ? 1 : 0,
-        profileVisibility: fields.profileVisibility ?? existingSensei.profileVisibility,
-      })
-      .where(eq(senseisTable.id, id));
-  } catch (e) {
-    const err = e as Error;
-    const uniqueError = isUniqueConstraintError(err);
-    if (uniqueError && uniqueError.column === "username") {
+    return await withIdentityDatabase(env, "update_sensei", async (db) => {
+      const [existingRow] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, id)).limit(1);
+      if (!existingRow) return {};
+      const existingSensei = toSenseiModel(existingRow);
+
+      await db
+        .update(pgSenseisTable)
+        .set({
+          username: fields.username ?? existingSensei.username,
+          friendCode: nullableFieldToUpdate(fields.friendCode, existingSensei.friendCode),
+          profileStudentId: nullableFieldToUpdate(fields.profileStudentId, existingSensei.profileStudentId),
+          bio: nullableFieldToUpdate(fields.bio, existingSensei.bio),
+          active: fields.active ?? existingSensei.active,
+          profileVisibility: fields.profileVisibility ?? existingSensei.profileVisibility,
+          updatedAt: new Date(),
+        })
+        .where(eq(pgSenseisTable.id, id));
+      return {};
+    });
+  } catch (error) {
+    const constraint = postgresUniqueConstraintName(error);
+    if (constraint === "senseis_username_uidx") {
       return { error: { username: "이미 사용중인 닉네임입니다." } };
     }
-
-    console.error(e);
-    throw e;
+    console.error(error);
+    throw error;
   }
-
-  return {};
 }
 
-export function toSenseiModel(row: typeof senseisTable.$inferSelect): Sensei {
+export function toSenseiModel(row: SenseiRow): Sensei {
   return {
     id: row.id,
     uid: row.uid,
@@ -194,8 +173,8 @@ export function toSenseiModel(row: typeof senseisTable.$inferSelect): Sensei {
     friendCode: row.friendCode,
     profileStudentId: row.profileStudentId,
     bio: row.bio,
-    active: row.active === 1,
-    role: row.role,
+    active: typeof row.active === "boolean" ? row.active : Number(row.active) === 1,
+    role: row.role as SenseiRole,
     profileVisibility: row.profileVisibility ?? "public",
   };
 }

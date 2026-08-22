@@ -10,6 +10,8 @@ import {
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, Input } from "~/components/primitives";
+import { identityMaintenanceMessage } from "~/domain/identity-cutover";
+import { identityMaintenanceActionResult } from "~/lib/identity-cutover.server";
 import { deletePasskey, getPasskeysBySensei, updatePasskeyMemo } from "~/models/passkey";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
@@ -29,6 +31,8 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
   const { env } = context.cloudflare;
+  const maintenance = await identityMaintenanceActionResult(env, { operation: "edit.passkey.action" });
+  if (maintenance) return maintenance;
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return redirect("/unauthorized");
@@ -58,6 +62,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 export default function EditPasskey() {
   const { passkey } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const maintenanceMessage = identityMaintenanceMessage(actionData);
   const navigation = useNavigation();
   const submit = useSubmit();
   const isSubmitting = navigation.state === "submitting";
@@ -80,7 +85,10 @@ export default function EditPasskey() {
 
       <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-200 pt-4 dark:border-neutral-700">
         <div className="text-sm">
-          {actionData?.success && <p className="text-green-600 dark:text-green-400">Passkey 이름을 저장했어요.</p>}
+          {maintenanceMessage ? <p className="text-red-700 dark:text-red-300">{maintenanceMessage}</p> : null}
+          {actionData && "success" in actionData && actionData.success ? (
+            <p className="text-green-600 dark:text-green-400">Passkey 이름을 저장했어요.</p>
+          ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button

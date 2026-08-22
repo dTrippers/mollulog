@@ -24,6 +24,7 @@ import type {
   WalkthroughTimelineTerrain,
   WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
+import type { AuthProvider } from "~/models/auth-identity";
 import type {
   CommunityCommentVisibility,
   CommunityPostBlock,
@@ -32,8 +33,116 @@ import type {
   CommunityVisibility,
 } from "~/models/community";
 import type { RecruitmentResultStudent } from "~/models/recruitment-result";
+import type { ProfileVisibility, SenseiRole } from "~/models/sensei";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+
+/** Canonical PostgreSQL tables for the authenticated identity domain. */
+export const pgSenseisTable = pgTable(
+  "senseis",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    username: text().notNull(),
+    friendCode: text("friend_code"),
+    profileStudentId: text("profile_student_id"),
+    googleId: text("google_id"),
+    githubId: text("github_id"),
+    active: boolean().notNull().default(false),
+    bio: text(),
+    role: text().$type<SenseiRole>().notNull().default("guest"),
+    profileVisibility: text("profile_visibility").$type<ProfileVisibility>().notNull().default("public"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("senseis_uid_uidx").on(table.uid),
+    uniqueIndex("senseis_username_uidx").on(table.username),
+    uniqueIndex("senseis_google_id_uidx").on(table.googleId),
+    uniqueIndex("senseis_github_id_uidx").on(table.githubId),
+  ],
+);
+
+export const pgAuthIdentitiesTable = pgTable(
+  "auth_identities",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    senseiId: integer("sensei_id").notNull(),
+    provider: text().$type<AuthProvider>().notNull(),
+    providerUserId: text("provider_user_id").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("auth_identities_provider_user_uidx").on(table.provider, table.providerUserId),
+    index("auth_identities_sensei_id_idx").on(table.senseiId),
+  ],
+);
+
+export const pgPasskeysTable = pgTable(
+  "passkeys",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    memo: text().notNull(),
+    keyId: text("key_id").notNull(),
+    publicKey: text("public_key").notNull(),
+    rawRequest: text("raw_request").notNull(),
+    counter: integer().notNull().default(0),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("passkeys_uid_uidx").on(table.uid),
+    uniqueIndex("passkeys_key_id_uidx").on(table.keyId),
+    index("passkeys_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgPendingSenseiRegistrationsTable = pgTable(
+  "pending_sensei_registrations",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    provider: text().$type<AuthProvider>().notNull(),
+    providerUserId: text("provider_user_id").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pending_sensei_registrations_uid_uidx").on(table.uid),
+    uniqueIndex("pending_sensei_registrations_provider_user_uidx").on(table.provider, table.providerUserId),
+  ],
+);
+
+export const pgSenseiPrivaciesTable = pgTable(
+  "sensei_privacies",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    memberCode: text("member_code"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("sensei_privacies_user_id_uidx").on(table.userId)],
+);
+
+export const pgFollowershipsTable = pgTable(
+  "followerships",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    followerId: integer("follower_id").notNull(),
+    followeeId: integer("followee_id").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("followerships_follower_followee_uidx").on(table.followerId, table.followeeId),
+    index("followerships_follower_id_idx").on(table.followerId),
+    index("followerships_followee_id_idx").on(table.followeeId),
+  ],
+);
 
 export const pgTimelineContentsTable = pgTable(
   "timeline_contents",

@@ -3,11 +3,13 @@ import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
 import { ArrowRightStartOnRectangleIcon, KeyIcon, LinkIcon } from "@heroicons/react/24/outline";
 import { type ElementType, useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
+import { data, Form, Link, redirect, useActionData, useFetcher, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
 import { Button, Input, SectionCard, Title, Toggle } from "~/components/primitives";
+import { identityMaintenanceMessage } from "~/domain/identity-cutover";
 import { nowUtcIso } from "~/lib/date-time";
+import { identityMaintenanceActionResult } from "~/lib/identity-cutover.server";
 import { cn } from "~/lib/utils";
 import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
 import { getPasskeysBySensei } from "~/models/passkey";
@@ -69,6 +71,7 @@ function authMessageFromSearchParams(params: URLSearchParams): { tone: "success"
 }
 
 type ActionData = {
+  message?: string;
   intent?: "profile" | "account";
   success?: boolean;
   savedAt?: string;
@@ -83,6 +86,8 @@ type ActionData = {
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const env = context.cloudflare.env;
+  const maintenance = await identityMaintenanceActionResult(env, { operation: "edit.identity.action" });
+  if (maintenance) return maintenance;
   const authenticator = getAuthenticator(env);
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
@@ -246,6 +251,9 @@ function SettingsLink({
 }
 
 function AuthIdentityLinkForm({ provider, label, linked }: { provider: AuthProvider; label: string; linked: boolean }) {
+  const fetcher = useFetcher<{ message?: string }>();
+  const maintenanceMessage = identityMaintenanceMessage(fetcher.data);
+
   return (
     <div className="flex items-center gap-3 rounded-md bg-background px-4 py-3">
       <LinkIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -258,11 +266,14 @@ function AuthIdentityLinkForm({ provider, label, linked }: { provider: AuthProvi
           연동됨
         </span>
       ) : (
-        <Form method="post" action={`/auth/${provider}/link`}>
-          <Button type="submit" size="sm" variant="primary">
+        <fetcher.Form method="post" action={`/auth/${provider}/link`}>
+          <Button type="submit" size="sm" variant="primary" disabled={fetcher.state !== "idle"}>
             연동하기
           </Button>
-        </Form>
+          {maintenanceMessage ? (
+            <p className="mt-2 text-right text-xs text-red-700 dark:text-red-300">{maintenanceMessage}</p>
+          ) : null}
+        </fetcher.Form>
       )}
     </div>
   );
@@ -271,6 +282,7 @@ function AuthIdentityLinkForm({ provider, label, linked }: { provider: AuthProvi
 export default function EditProfile() {
   const { sensei, allStudents, passkeyCount, authIdentities, authMessage } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
+  const maintenanceMessage = identityMaintenanceMessage(actionData);
   const navigation = useNavigation();
   const submittingIntent = navigation.formData?.get("intent");
   const isProfileSubmitting = navigation.state === "submitting" && submittingIntent === "profile";
@@ -307,6 +319,11 @@ export default function EditProfile() {
   return (
     <div className="space-y-8">
       <Title text="프로필 관리" />
+      {maintenanceMessage ? (
+        <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+          {maintenanceMessage}
+        </p>
+      ) : null}
 
       <SectionCard title="프로필 정보" description="프로필 정보와 공개 범위를 관리할 수 있어요">
         <Form

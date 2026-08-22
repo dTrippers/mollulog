@@ -1,10 +1,12 @@
+import { startRegistration } from "@simplewebauthn/browser";
+import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/server";
 import dayjs from "dayjs";
 import { useState } from "react";
 import { type LoaderFunctionArgs, redirect, useLoaderData, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getPasskeysBySensei } from "~/models/passkey";
 import { ButtonForm, FormGroup, LinkForm } from "~/components/features/forms";
-import { startRegistration } from "@simplewebauthn/browser";
+import { identityMaintenanceMessage } from "~/domain/identity-cutover";
+import { getPasskeysBySensei } from "~/models/passkey";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
@@ -22,21 +24,34 @@ export default function EditPasskeyIndex() {
   const [error, setError] = useState<string | null>(null);
 
   const addPasskey = async () => {
-    const creationOptions = await fetch("/auth/passkey/register");
-    const creationResponse = await startRegistration({ optionsJSON: await creationOptions.json() });
+    setError(null);
+    try {
+      const creationOptions = await fetch("/auth/passkey/register");
+      const creationOptionsBody = await creationOptions.json<unknown>();
+      if (!creationOptions.ok) {
+        setError(identityMaintenanceMessage(creationOptionsBody) ?? "Passkey를 추가하는 중 오류가 발생했어요.");
+        return;
+      }
+      const creationResponse = await startRegistration({
+        optionsJSON: creationOptionsBody as PublicKeyCredentialCreationOptionsJSON,
+      });
 
-    const creationResult = await fetch("/auth/passkey/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(creationResponse),
-    });
+      const creationResult = await fetch("/auth/passkey/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(creationResponse),
+      });
 
-    if (!creationResult.ok) {
+      if (!creationResult.ok) {
+        const resultBody = await creationResult.json<unknown>().catch(() => null);
+        setError(identityMaintenanceMessage(resultBody) ?? "Passkey를 추가하는 중 오류가 발생했어요.");
+        return;
+      }
+
+      revalidator.revalidate();
+    } catch {
       setError("Passkey를 추가하는 중 오류가 발생했어요.");
-      return;
     }
-
-    revalidator.revalidate();
   };
 
   return (

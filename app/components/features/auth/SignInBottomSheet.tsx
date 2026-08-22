@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { useFetcher, useLocation, useRouteLoaderData } from "react-router";
 import { Button } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { identityMaintenanceMessage } from "~/domain/identity-cutover";
 
 type RootLoaderData = { currentUsername: string | null };
 
 export default function SignInBottomSheet() {
   const location = useLocation();
-  const fetcher = useFetcher<{ error?: string }>();
+  const fetcher = useFetcher<{ error?: string; message?: string }>();
   const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
   const currentUsername = rootData?.currentUsername ?? null;
 
@@ -30,7 +31,7 @@ export default function SignInBottomSheet() {
 
   const isSubmitting = fetcher.state !== "idle";
   const buttonDisabled = isSubmitting;
-  const serverError = fetcher.data?.error ?? null;
+  const serverError = identityMaintenanceMessage(fetcher.data) ?? fetcher.data?.error ?? null;
   const displayError = clientError ?? serverError;
 
   const redirectToCookie = `redirectTo=${encodeURIComponent(location.pathname + location.search)}; path=/; max-age=300;`;
@@ -57,8 +58,14 @@ export default function SignInBottomSheet() {
     let authenticationResponse: Awaited<ReturnType<typeof startAuthentication>>;
     try {
       const res = await fetch("/auth/passkey/signin");
-      if (!res.ok) throw new Error(`status=${res.status}`);
-      const authenticationOptions = await res.json<PublicKeyCredentialRequestOptionsJSON>();
+      const responseBody = await res.json<unknown>();
+      if (!res.ok) {
+        setClientError(
+          identityMaintenanceMessage(responseBody) ?? "Passkey 조회에 실패했어요. 다른 방법으로 로그인해주세요.",
+        );
+        return;
+      }
+      const authenticationOptions = responseBody as PublicKeyCredentialRequestOptionsJSON;
       authenticationResponse = await startAuthentication({ optionsJSON: authenticationOptions });
     } catch {
       setClientError("Passkey 조회에 실패했어요. 다른 방법으로 로그인해주세요.");

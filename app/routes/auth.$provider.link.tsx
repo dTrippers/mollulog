@@ -1,5 +1,6 @@
-import { redirect, type ActionFunctionArgs } from "react-router";
+import { type ActionFunctionArgs, redirect } from "react-router";
 import { getLinkAuthenticator } from "~/auth/authenticator.server";
+import { identityMaintenanceActionResult } from "~/lib/identity-cutover.server";
 
 function strategyName(provider: string | undefined) {
   if (provider === "google" || provider === "github") {
@@ -9,5 +10,7 @@ function strategyName(provider: string | undefined) {
 }
 
 export const action = async ({ context, params, request }: ActionFunctionArgs) => {
+  const maintenance = await identityMaintenanceActionResult(context.cloudflare.env, { operation: "auth.link.signin" });
+  if (maintenance) return maintenance;
   return getLinkAuthenticator(context.cloudflare.env).authenticate(strategyName(params.provider), request);
 };
