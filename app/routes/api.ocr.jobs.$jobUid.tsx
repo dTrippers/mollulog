@@ -98,7 +98,6 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const review = buildOcrInventoryReview(job.result, job.images);
   if (review.reviewMode === "cells") {
-    const conflictImageUids = getConflictImageUids(job.result, review.cells);
     const currentItemUids = [...new Set(review.cells.flatMap(({ itemUid }) => (itemUid ? [itemUid] : [])))];
     const [currentQuantities, draft, catalogResourceMap] = await Promise.all([
       getUserResourceInventoryMapByItemUids(env, sensei.id, currentItemUids),
@@ -111,9 +110,21 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       reviewMode: "cells" as const,
       cells: review.cells.map(({ observationId: _observationId, candidates: _candidates, itemUid, ...cell }) => {
         const resource = itemUid ? catalogResourceMap[itemUid] : undefined;
+        const sameAppearanceCandidateCount = getSameAppearanceCandidateCount(cell.reasons, _candidates);
+        const sameAppearanceCandidate =
+          sameAppearanceCandidateCount && _candidates[0] ? catalogResourceMap[_candidates[0].uid] : undefined;
         return {
           ...cell,
           itemUid,
+          sameAppearanceCandidateCount,
+          sameAppearanceResource: sameAppearanceCandidate
+            ? {
+                uid: _candidates[0].uid,
+                assetUid: sameAppearanceCandidate.uid,
+                resourceType: sameAppearanceCandidate.type,
+                rarity: sameAppearanceCandidate.rarity,
+              }
+            : null,
           resource: itemUid
             ? resource
               ? {
@@ -129,7 +140,6 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         };
       }),
       currentQuantities,
-      conflictImageUids,
       application: draft ? { status: draft.status, appliedAt: draft.appliedAt } : null,
     });
   }
@@ -145,18 +155,13 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   });
 };
 
-function getConflictImageUids(result: unknown, cells: Array<{ imageUid: string; filename: string }>): string[] {
-  if (!result || typeof result !== "object") return [];
-  const items = (result as { items?: unknown }).items;
-  if (!Array.isArray(items)) return [];
-  const conflictFilenames = new Set(
-    items.flatMap((item) => {
-      if (!item || typeof item !== "object" || (item as { status?: unknown }).status === "recognized") return [];
-      const sourceImages = (item as { source_images?: unknown }).source_images;
-      return Array.isArray(sourceImages)
-        ? sourceImages.filter((filename): filename is string => typeof filename === "string")
-        : [];
-    }),
-  );
-  return [...new Set(cells.filter((cell) => conflictFilenames.has(cell.filename)).map((cell) => cell.imageUid))];
+function getSameAppearanceCandidateCount(
+  reasons: string[],
+  candidates: Array<{ score: number | null }>,
+): number | null {
+  if (!reasons.includes("resource_visual_identity_ambiguous") || candidates.length < 2) return null;
+  const topScore = candidates[0]?.score ?? null;
+  if (topScore === null) return candidates.length;
+  const tiedTopCount = candidates.filter(({ score }) => score === topScore).length;
+  return tiedTopCount > 1 ? tiedTopCount : candidates.length;
 }

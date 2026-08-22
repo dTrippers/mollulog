@@ -53,4 +53,26 @@ describe("shared scanner upload validation", () => {
     );
     expect(selection.error).toBe("영상은 한 번에 한 개만 선택할 수 있어요.");
   });
+
+  it("keeps an empty selection valid for the disabled upload action", () => {
+    expect(validateScannerFiles([], ITEM_SCANNER_ACCEPT_SPEC)).toEqual({ images: [], video: null, error: null });
+  });
+
+  it("derives size messages from the active accept specification", () => {
+    expect(
+      validateScannerFiles([file("screen.png", "image/png", 3 * 1024)], {
+        images: { max: 3, maxBytes: 2 * 1024, totalMaxBytes: 4 * 1024 },
+      }).error,
+    ).toBe("이미지 한 장은 2KB를 넘을 수 없어요.");
+    expect(
+      validateScannerFiles([file("screen.png", "image/png", 5 * 1024)], {
+        images: { max: 3, maxBytes: 10 * 1024, totalMaxBytes: 4 * 1024 },
+      }).error,
+    ).toBe("한 작업의 이미지 전체 용량은 4KB를 넘을 수 없어요.");
+    expect(
+      validateScannerFiles([file("capture.mp4", "video/mp4", 3 * 1024 * 1024)], {
+        video: { max: 1, maxBytes: 2 * 1024 * 1024 },
+      }).error,
+    ).toBe("영상은 2MB를 넘을 수 없어요.");
+  });
 });

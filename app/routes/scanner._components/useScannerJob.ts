@@ -7,42 +7,23 @@ import { getScannerCancelConfirmation, getScannerNewUploadConfirmation } from ".
 export type ScannerJobLike = {
   uid: string;
   status: string;
+  updatedAt: string;
   application?: { status?: string } | null;
 };
 
 export type ScannerJobTransition = { phase: ScannerPhase; error?: string | null };
 
-export type ScannerJobUpdateMode = "remote" | "local";
-
 export type ScannerJobUpdate<T extends ScannerJobLike> = T | ((current: T | null) => T | null);
-
-export function createScannerJobStateUpdate<T extends ScannerJobLike>(
-  mode: "remote",
-  job: T,
-  transition: ScannerJobTransition,
-): { job: T; transition: ScannerJobTransition };
-export function createScannerJobStateUpdate<T extends ScannerJobLike>(
-  mode: "local",
-  job: T,
-): { job: T; transition: null };
-export function createScannerJobStateUpdate<T extends ScannerJobLike>(
-  mode: ScannerJobUpdateMode,
-  job: T,
-  transition?: ScannerJobTransition,
-): { job: T; transition: ScannerJobTransition | null } {
-  return { job, transition: mode === "remote" ? (transition ?? null) : null };
-}
 
 export function getScannerPollDelay(attempt: number): number {
   const safeAttempt = Number.isFinite(attempt) ? Math.max(0, Math.floor(attempt)) : 0;
   return Math.min(10_000, Math.round(2000 * 1.5 ** safeAttempt));
 }
 
-export function resolveScannerJobUpdate<T extends ScannerJobLike>(
-  current: T | null,
-  update: ScannerJobUpdate<T>,
-): T | null {
-  return typeof update === "function" ? update(current) : update;
+export function removeScannerJobParam(searchParams: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(searchParams);
+  next.delete("job");
+  return next;
 }
 
 export function shouldConfirmScannerReset(job: Pick<ScannerJobLike, "status" | "application"> | null): boolean {
@@ -67,29 +48,24 @@ export function useScannerJob<T extends ScannerJobLike>({
   const [pollTick, setPollTick] = useState(0);
   const pollAttemptRef = useRef(0);
   const pendingLoadErrorRef = useRef<string | null>(null);
+  const getTransitionRef = useRef(getTransition);
   const onJobRef = useRef(onJob);
   const onResetRef = useRef(onReset);
+  getTransitionRef.current = getTransition;
   onJobRef.current = onJob;
   onResetRef.current = onReset;
 
-  const acceptJob = useCallback(
-    (next: T) => {
-      const transition = getTransition(next);
-      const stateUpdate = createScannerJobStateUpdate("remote", next, transition);
-      setJob(stateUpdate.job);
-      setPhase(stateUpdate.transition.phase);
-      setError(stateUpdate.transition.error ?? null);
-      onJobRef.current?.(stateUpdate.job);
-    },
-    [getTransition],
-  );
+  const acceptJob = useCallback((next: T) => {
+    const transition = getTransitionRef.current(next);
+    setJob(next);
+    setPhase(transition.phase);
+    setError(transition.error ?? null);
+    onJobRef.current?.(next);
+    notifyScannerJobsChanged({ uid: next.uid, status: next.status, updatedAt: next.updatedAt });
+  }, []);
 
   const updateJob = useCallback((next: ScannerJobUpdate<T>) => {
-    setJob((current) => {
-      const resolved = resolveScannerJobUpdate(current, next);
-      if (!resolved) return null;
-      return createScannerJobStateUpdate("local", resolved).job;
-    });
+    setJob((current) => (typeof next === "function" ? next(current) : next));
   }, []);
 
   useEffect(() => {
@@ -106,6 +82,10 @@ export function useScannerJob<T extends ScannerJobLike>({
       };
     }
 
+    if (job?.uid === selectedJobUid) {
+      return;
+    }
+
     pollAttemptRef.current = 0;
     void requestScannerJson<T>(`/api/ocr/jobs/${encodeURIComponent(selectedJobUid)}`)
       .then((next) => {
@@ -115,13 +95,13 @@ export function useScannerJob<T extends ScannerJobLike>({
         if (cancelled) return;
         const message = toScannerErrorMessage(loadError);
         pendingLoadErrorRef.current = message;
-        setSearchParams({}, { replace: true });
+        setSearchParams(removeScannerJobParam, { replace: true });
         setError(message);
       });
     return () => {
       cancelled = true;
     };
-  }, [acceptJob, selectedJobUid, setSearchParams]);
+  }, [acceptJob, job, selectedJobUid, setSearchParams]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pollTick restarts the backoff timer after a transient poll failure.
   useEffect(() => {
@@ -134,7 +114,6 @@ export function useScannerJob<T extends ScannerJobLike>({
           if (cancelled) return;
           pollAttemptRef.current += 1;
           acceptJob(next);
-          if (getTransition(next).phase !== "waiting") notifyScannerJobsChanged();
         })
         .catch((pollError) => {
           if (cancelled) return;
@@ -147,14 +126,14 @@ export function useScannerJob<T extends ScannerJobLike>({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [acceptJob, getTransition, job, phase, pollTick]);
+  }, [acceptJob, job, phase, pollTick]);
 
   const resetForNewUpload = useCallback(
     (confirmUnapplied = true) => {
       if (confirmUnapplied && shouldConfirmScannerReset(job)) {
         if (!window.confirm(getScannerNewUploadConfirmation())) return false;
       }
-      setSearchParams({}, { replace: true });
+      setSearchParams(removeScannerJobParam, { replace: true });
       setJob(null);
       setPhase("idle");
       setError(null);

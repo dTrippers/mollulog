@@ -43,6 +43,7 @@ import {
   uploadScannerFile,
 } from "../scanner._components/scanner-client";
 import {
+  formatScannerRelativeTime,
   getScannerTerminalJobDescription,
   getScannerTerminalJobTitle,
   getScannerUnavailableResultMessage,
@@ -53,8 +54,8 @@ import {
   getScannerVideoContentType,
   mergeScannerFiles,
   type ScannerUploadSelection,
-  type ScannerUploadValidation,
   STUDENT_SCANNER_ACCEPT_SPEC,
+  scannerFileKey,
   validateScannerFiles,
 } from "../scanner._components/scanner-upload";
 import { sha256FileInWorker } from "../scanner._components/sha256-client";
@@ -235,20 +236,11 @@ type ReviewStudent = {
 export type ReviewState = Record<string, ReviewStudent>;
 type FieldComparison = "same" | "decreased" | null;
 
-const STUDENT_UPLOAD_CONFLICT_ERROR = "파일의 MIME 타입과 확장자가 일치하지 않아요. 파일을 확인해 주세요.";
 const STUDENT_UPLOAD_HASH_ERROR = "파일 정보를 계산하지 못했어요";
 const STUDENT_UPLOAD_UPLOAD_ERROR = "파일 업로드에 실패했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.";
 const STUDENT_UPLOAD_GENERIC_FAILURE_REASON = "파일 제출을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.";
 
 export type StudentUploadSelection = ScannerUploadSelection;
-type StudentUploadValidation = ScannerUploadValidation;
-
-export function classifyStudentUploadFiles(files: ReadonlyArray<File>): StudentUploadValidation {
-  const validation = validateScannerFiles(files, STUDENT_SCANNER_ACCEPT_SPEC);
-  return validation.error === STUDENT_UPLOAD_CONFLICT_ERROR
-    ? { ...validation, error: STUDENT_UPLOAD_CONFLICT_ERROR }
-    : validation;
-}
 
 export function getStudentUploadQuotaError(
   selection: StudentUploadSelection,
@@ -348,10 +340,10 @@ export async function submitStudentUploadSelection(
         contentType: OcrUploadInput["contentType"] | OcrVideoUploadInput["contentType"];
         sha256: string;
       }> = [];
-      for (const [index, file] of files.entries()) {
+      for (const file of files) {
         const contentType = kind === "image" ? getScannerImageContentType(file) : getScannerVideoContentType(file);
         if (!contentType) throw new Error("지원하는 파일은 PNG, JPEG, WebP 이미지와 MP4, MOV 영상이에요.");
-        const key = `${kind}:${index}`;
+        const key = `${kind}:${scannerFileKey(file)}`;
         try {
           const sha256 = await hashFile(file, (processed) => reportHashProgress(key, file, processed));
           reportHashProgress(key, file, file.size);
@@ -481,7 +473,7 @@ export function getStudentJobTransition(job: Pick<StudentVideoJob, "status" | "r
   error?: string | null;
 } {
   if (job.status === "review_ready") {
-    if (!job.result) return { phase: "idle" };
+    if (!job.result) return { phase: "idle", error: getScannerUnavailableResultMessage() };
     return { phase: job.application?.status === "applied" ? "applied" : "review" };
   }
   if (["queued", "processing", "finalizing"].includes(job.status)) return { phase: "waiting" };
@@ -560,7 +552,7 @@ export default function StudentScanner() {
   } = lifecycle;
 
   async function startRecognition() {
-    const selection = classifyStudentUploadFiles(selectedFiles);
+    const selection = validateScannerFiles(selectedFiles, STUDENT_SCANNER_ACCEPT_SPEC);
     if (selection.error) {
       setError(selection.error);
       return;
@@ -649,7 +641,7 @@ export default function StudentScanner() {
         `/api/ocr/jobs/${job.uid}/apply`,
         { method: "POST", body: JSON.stringify({ students }) },
       );
-      updateJob({ ...job, application: response.application });
+      updateJob((currentJob) => (currentJob ? { ...currentJob, application: response.application } : null));
       setPhase("applied");
       notifyScannerJobsChanged();
     } catch (applyError) {
@@ -682,7 +674,7 @@ export default function StudentScanner() {
     setPartialFailure(null);
   }
 
-  const selectedUpload = classifyStudentUploadFiles(selectedFiles);
+  const selectedUpload = validateScannerFiles(selectedFiles, STUDENT_SCANNER_ACCEPT_SPEC);
   const selectedImageBytes = selectedUpload.images.reduce((sum, image) => sum + image.size, 0);
   const selectedQuotaError =
     !selectedJobUid && selectedFiles.length > 0
@@ -700,7 +692,11 @@ export default function StudentScanner() {
   const uploadContent = !selectedJobUid ? (
     <ScannerUploadSection
       title="학생 성장도 파일 업로드"
-      description="게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄우고, 스크린샷을 찍거나 좌/우 화살표로 이동하는 화면을 녹화해주세요."
+      description="학생 성장도 정보를 확인할 수 있는 이미지 또는 영상을 업로드해주세요."
+      descriptionLines={[
+        "이미지: 게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄운 뒤 스크린샷을 찍어주세요.",
+        "영상: 같은 화면에서 좌/우 화살표로 이동하는 과정을 녹화해주세요.",
+      ]}
       inputId="student-scanner-files"
       accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,.png,.jpg,.jpeg,.webp,.mp4,.mov"
       multiple
@@ -771,7 +767,10 @@ export default function StudentScanner() {
         title="학생 성장도를 인식하고 있어요"
         description="이미지 또는 영상에서 학생 정보를 읽고 있어요. 화면을 벗어나도 인식은 계속 진행돼요."
         progress={job.progress}
-        segmentStatuses={[...job.images.map((image) => image.status), ...(job.video ? [job.video.status] : [])]}
+        segmentStatuses={[
+          ...job.images.map((image) => ({ key: image.uid, status: image.status })),
+          ...(job.video ? [{ key: `video:${job.video.inputUid}`, status: job.video.status }] : []),
+        ]}
         segmentLabel="파일 처리"
         remainingLabel="{remaining}개 남았어요"
         etaLabel="파일 종류와 수에 따라 시간이 달라질 수 있어요."
@@ -807,6 +806,21 @@ export default function StudentScanner() {
         />
       ) : null}
 
+      {job &&
+      selectedJobUid &&
+      phase === "idle" &&
+      error &&
+      !TERMINAL_JOB_STATUSES.has(job.status) &&
+      !(job.status === "review_ready" && !job.result) ? (
+        <ScannerCompletionState
+          tone="destructive"
+          title="인식 작업 상태를 확인하지 못했어요"
+          description={error}
+          actionLabel={scannerMessages.student.uploadAction}
+          onStartNew={() => resetForNewUpload(false)}
+        />
+      ) : null}
+
       {job?.status === "review_ready" && job.application?.status === "applied" ? (
         <ScannerCompletionState
           title="학생 성장도 반영이 완료됐어요"
@@ -830,7 +844,7 @@ export default function StudentScanner() {
 
   return (
     <div className="space-y-8 pb-12 pt-6 lg:pt-2">
-      {error && phase !== "review" && phase !== "applying" ? (
+      {error && phase !== "review" && phase !== "applying" && !(selectedJobUid && job && phase === "idle") ? (
         <Callout tone="destructive">{error}</Callout>
       ) : selectedPartialFailure && phase !== "review" && phase !== "applying" ? (
         <Callout tone="warning" title="일부 파일만 제출됐어요">
@@ -902,10 +916,18 @@ function ReviewPanel({
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <SubTitle
-          text="인식 결과 검토"
-          description={`${job.result.students.length}명 인식 · 미해결 필드 ${job.result.unresolvedCount}개`}
-        />
+        <div className="min-w-0">
+          <SubTitle
+            text="인식 결과 검토"
+            description={`${job.result.students.length}명 인식 · 미해결 필드 ${job.result.unresolvedCount}개`}
+          />
+          <p className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">현재 작업</span>
+            <span className="truncate">
+              학생 · {getStudentJobInputSummary(job)} · {formatScannerRelativeTime(job.createdAt)}
+            </span>
+          </p>
+        </div>
         <div className="flex flex-wrap justify-end gap-2">
           <Button size="sm" onClick={onStartNew}>
             {scannerMessages.student.uploadAction}

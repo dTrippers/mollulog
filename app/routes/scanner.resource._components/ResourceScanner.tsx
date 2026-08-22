@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
 import { Button, Callout, FloatingActionBar, HorizontalScroll, SubTitle } from "~/components/primitives";
 import { OCR_ALLOWED_CONTENT_TYPES } from "~/domain/ocr";
+import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { cn } from "~/lib/utils";
 import type { ScannerOutletContext } from "../scanner";
 import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
@@ -22,6 +23,7 @@ import {
   uploadScannerFile,
 } from "../scanner._components/scanner-client";
 import {
+  formatScannerRelativeTime,
   getScannerTerminalJobDescription,
   getScannerTerminalJobTitle,
   getScannerUnavailableResultMessage,
@@ -31,6 +33,7 @@ import {
   getScannerImageContentType,
   ITEM_SCANNER_ACCEPT_SPEC,
   mergeScannerFiles,
+  scannerFileKey,
   validateScannerFiles,
 } from "../scanner._components/scanner-upload";
 import { sha256FileInWorker } from "../scanner._components/sha256-client";
@@ -62,7 +65,6 @@ type ScannerImageRecognitionReviewCell = Pick<ReviewCell, "imageUid" | "status">
 type ScannerImageRecognitionReviewInput = {
   images: ScannerImageStatus[];
   cells?: ScannerImageRecognitionReviewCell[];
-  conflictImageUids?: string[];
 };
 
 type JobStatus = {
@@ -75,7 +77,6 @@ type JobStatus = {
   reviewError?: boolean;
   cells?: ReviewCell[];
   currentQuantities: Record<string, number>;
-  conflictImageUids?: string[];
   application: JobApplication;
   createdAt: string;
   updatedAt: string;
@@ -89,6 +90,7 @@ type OcrUploadQuota = ScannerUploadQuota;
 type ImageBoundingBox = { x: number; y: number; width: number; height: number };
 
 const TERMINAL_JOB_STATUSES = new Set(["failed", "cancelled", "expired"]);
+export const RESOURCE_FILE_CONCURRENCY = 4;
 
 export function groupScannerImagesByStatus<T extends { uid: string; status: string }>(
   images: T[],
@@ -124,16 +126,17 @@ export function getPartialRecognitionReviewImageUids(job: ScannerImageRecognitio
 
 export function shouldShowScannerResultActions(
   jobStatus: string | undefined,
-  selectedImageStatus: string | undefined,
+  reviewMode: JobStatus["reviewMode"] | undefined,
+  reviewError = false,
 ): boolean {
-  return jobStatus === "review_ready" && selectedImageStatus === "succeeded";
+  return jobStatus === "review_ready" && reviewMode === "cells" && !reviewError;
 }
 
 export function shouldShowScannerCancelAction(jobStatus: string | undefined): boolean {
   return jobStatus === "review_ready";
 }
 
-function getResourceJobTransition(job: JobStatus): { phase: ScannerPhase; error?: string | null } {
+export function getResourceJobTransition(job: JobStatus): { phase: ScannerPhase; error?: string | null } {
   if (job.reviewError) return { phase: "review" };
   if (job.status === "review_ready") {
     return { phase: job.application?.status === "applied" ? "applied" : "review" };
@@ -279,23 +282,21 @@ export default function ResourceScanner() {
     try {
       const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
       const hashedBytesByFile = new Map<string, number>();
-      const descriptors = await Promise.all(
-        files.map(async (file) => {
-          const contentType = getScannerImageContentType(file);
-          if (!contentType) throw new Error("PNG, JPEG, WebP 이미지만 첨부할 수 있어요.");
-          const key = `${file.name}\0${file.size}\0${file.lastModified}`;
-          const sha256 = await sha256FileInWorker(file, (processedBytes) => {
-            const previous = hashedBytesByFile.get(key) ?? 0;
-            hashedBytesByFile.set(key, Math.min(file.size, Math.max(previous, processedBytes)));
-            const hashedBytes = Array.from(hashedBytesByFile.values()).reduce((sum, value) => sum + value, 0);
-            setHashProgress(totalBytes === 0 ? 1 : Math.min(1, hashedBytes / totalBytes));
-          });
-          hashedBytesByFile.set(key, file.size);
+      const descriptors = await mapWithConcurrencyLimit(files, RESOURCE_FILE_CONCURRENCY, async (file) => {
+        const contentType = getScannerImageContentType(file);
+        if (!contentType) throw new Error("PNG, JPEG, WebP 이미지만 첨부할 수 있어요.");
+        const key = scannerFileKey(file);
+        const sha256 = await sha256FileInWorker(file, (processedBytes) => {
+          const previous = hashedBytesByFile.get(key) ?? 0;
+          hashedBytesByFile.set(key, Math.min(file.size, Math.max(previous, processedBytes)));
           const hashedBytes = Array.from(hashedBytesByFile.values()).reduce((sum, value) => sum + value, 0);
           setHashProgress(totalBytes === 0 ? 1 : Math.min(1, hashedBytes / totalBytes));
-          return { filename: file.name, contentType, byteSize: file.size, sha256 };
-        }),
-      );
+        });
+        hashedBytesByFile.set(key, file.size);
+        const hashedBytes = Array.from(hashedBytesByFile.values()).reduce((sum, value) => sum + value, 0);
+        setHashProgress(totalBytes === 0 ? 1 : Math.min(1, hashedBytes / totalBytes));
+        return { filename: file.name, contentType, byteSize: file.size, sha256 };
+      });
       const created = await requestScannerJson<{
         jobUid: string;
         quota: OcrUploadQuota;
@@ -306,7 +307,7 @@ export default function ResourceScanner() {
       });
       setUploadQuota(created.quota);
       let uploadedBytes = 0;
-      for (const [index, upload] of created.images.entries()) {
+      await mapWithConcurrencyLimit(created.images, RESOURCE_FILE_CONCURRENCY, async (upload, index) => {
         let previousUploadedBytes = 0;
         await uploadScannerFile({
           url: upload.uploadUrl,
@@ -319,7 +320,7 @@ export default function ResourceScanner() {
             setUploadProgress(totalBytes === 0 ? 1 : Math.min(1, uploadedBytes / totalBytes));
           },
         });
-      }
+      });
       const submitted = await requestScannerJson<JobStatus & { quota: OcrUploadQuota }>(
         `/api/ocr/jobs/${created.jobUid}/submit`,
         { method: "POST" },
@@ -329,7 +330,6 @@ export default function ResourceScanner() {
       acceptJob({
         ...submitted,
         currentQuantities: {},
-        conflictImageUids: [],
         application: null,
       });
       setFiles([]);
@@ -360,7 +360,7 @@ export default function ResourceScanner() {
         method: "POST",
         body: JSON.stringify({ resultGeneration: job.generation, cells }),
       });
-      acceptJob({ ...job, application: response.application });
+      updateJob((currentJob) => (currentJob ? { ...currentJob, application: response.application } : null));
       setCellApplySummary(response.summary);
       setCellEdits({});
       setCellCandidateDetails({});
@@ -434,7 +434,7 @@ export default function ResourceScanner() {
         title="스크린샷을 인식하고 있어요"
         description="페이지를 닫아도 작업은 계속돼요."
         progress={job.progress}
-        segmentStatuses={job.images.map((image) => image.status)}
+        segmentStatuses={job.images.map((image) => ({ key: image.uid, status: image.status }))}
         segmentLabel="이미지 처리"
         remainingLabel="{remaining}장 남았어요"
         etaLabel="이미지 수에 따라 최대 1분 정도 소요될 수 있어요."
@@ -446,14 +446,24 @@ export default function ResourceScanner() {
       <>
         <section className="space-y-4">
           <div className="flex flex-wrap items-end justify-between gap-3">
-            <SubTitle
-              text={job?.status === "failed" ? "스크린샷 확인" : "결과 검토"}
-              description={
-                job?.status === "failed"
-                  ? "인식하지 못한 스크린샷을 확인한 뒤 다시 시도해 주세요"
-                  : "인식 결과를 검토 후 반영 여부를 선택해주세요"
-              }
-            />
+            <div className="min-w-0">
+              <SubTitle
+                text={job?.status === "failed" ? "스크린샷 확인" : "결과 검토"}
+                description={
+                  job?.status === "failed"
+                    ? "인식하지 못한 스크린샷을 확인한 뒤 다시 시도해 주세요"
+                    : "인식 결과를 검토 후 반영 여부를 선택해주세요"
+                }
+              />
+              {job ? (
+                <p className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">현재 작업</span>
+                  <span className="truncate">
+                    아이템 · 스크린샷 {job.images.length}장 · {formatScannerRelativeTime(job.createdAt)}
+                  </span>
+                </p>
+              ) : null}
+            </div>
             <div className="flex flex-wrap justify-end gap-2">
               <Button size="sm" onClick={() => resetForNewUpload()}>
                 {scannerMessages.item.uploadAction}
@@ -625,7 +635,7 @@ export default function ResourceScanner() {
                     >
                       {isCancelling ? "취소 중..." : "인식 결과 삭제"}
                     </Button>
-                    {!job?.reviewError && shouldShowScannerResultActions(job?.status, selectedImage?.status) ? (
+                    {shouldShowScannerResultActions(job?.status, job?.reviewMode, job?.reviewError) ? (
                       <Button
                         variant="primary"
                         disabled={phase === "applying" || isCancelling || !hasChanges}
@@ -666,6 +676,16 @@ export default function ResourceScanner() {
         </>
       ) : null}
 
+      {job && selectedJobUid && phase === "idle" && error && !TERMINAL_JOB_STATUSES.has(job.status) ? (
+        <ScannerCompletionState
+          tone="destructive"
+          title="인식 작업 상태를 확인하지 못했어요"
+          description={error}
+          actionLabel={scannerMessages.item.uploadAction}
+          onStartNew={() => resetForNewUpload(false)}
+        />
+      ) : null}
+
       {job && TERMINAL_JOB_STATUSES.has(job.status) && phase !== "review" ? (
         <ScannerCompletionState
           tone="destructive"
@@ -680,7 +700,7 @@ export default function ResourceScanner() {
 
   return (
     <div className="space-y-8 pb-12 pt-6 lg:pt-2">
-      {error && phase !== "review" && phase !== "applying" ? (
+      {error && phase !== "review" && phase !== "applying" && !(selectedJobUid && job && phase === "idle") ? (
         <Callout tone="destructive" title="처리 중 오류가 발생했어요" description={error} />
       ) : null}
       {selectedJobUid && !job ? <ScannerJobSkeleton variant="resource" /> : null}

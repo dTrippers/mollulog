@@ -89,16 +89,28 @@ export function validateScannerFiles(files: ReadonlyArray<File>, spec: ScannerAc
     }
     const maxBytes = spec.images.maxBytes ?? OCR_MAX_IMAGE_BYTES;
     if (images.some((image) => image.size <= 0 || image.size > maxBytes)) {
-      return { images: [], video: null, error: "이미지 한 장은 10MB를 넘을 수 없어요." };
+      return {
+        images: [],
+        video: null,
+        error: `이미지 한 장은 ${formatScannerSize(maxBytes)}를 넘을 수 없어요.`,
+      };
     }
     const totalMaxBytes = spec.images.totalMaxBytes;
     if (totalMaxBytes !== undefined && images.reduce((sum, image) => sum + image.size, 0) > totalMaxBytes) {
-      return { images: [], video: null, error: "한 작업의 이미지 전체 용량은 120MB를 넘을 수 없어요." };
+      return {
+        images: [],
+        video: null,
+        error: `한 작업의 이미지 전체 용량은 ${formatScannerSize(totalMaxBytes)}를 넘을 수 없어요.`,
+      };
     }
   }
 
   if (spec.video && video && (video.size <= 0 || video.size > (spec.video.maxBytes ?? OCR_MAX_VIDEO_BYTES))) {
-    return { images: [], video: null, error: "영상은 250MB를 넘을 수 없어요." };
+    return {
+      images: [],
+      video: null,
+      error: `영상은 ${formatScannerSize(spec.video.maxBytes ?? OCR_MAX_VIDEO_BYTES)}를 넘을 수 없어요.`,
+    };
   }
 
   return { images, video, error: null };
@@ -138,6 +150,14 @@ function unsupportedFileMessage(spec: ScannerAcceptSpec): string {
 
 function getExtension(file: File): string | null {
   return file.name.toLowerCase().match(/\.([^.]+)$/)?.[1] ?? null;
+}
+
+function formatScannerSize(bytes: number): string {
+  const megabytes = bytes / (1024 * 1024);
+  if (Number.isInteger(megabytes)) return `${megabytes}MB`;
+  const kilobytes = bytes / 1024;
+  if (Number.isInteger(kilobytes)) return `${kilobytes}KB`;
+  return `${bytes}B`;
 }
 
 function getMimeKind(file: File): "image" | "video" | null {

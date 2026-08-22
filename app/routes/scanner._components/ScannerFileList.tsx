@@ -2,6 +2,7 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
 import { formatScannerBytes } from "./scanner-client";
+import { scannerFileKey } from "./scanner-upload";
 
 export default function ScannerFileList({
   files,
@@ -26,7 +27,7 @@ export default function ScannerFileList({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {files.map((file, index) => (
           <ScannerFilePreview
-            key={`${file.name}-${file.size}-${file.lastModified}`}
+            key={scannerFileKey(file)}
             file={file}
             disabled={disabled}
             onRemove={() => onRemove(index)}

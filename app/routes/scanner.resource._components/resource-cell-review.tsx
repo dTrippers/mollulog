@@ -1,7 +1,7 @@
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
-import { CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { CheckIcon, Square3Stack3DIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { Callout, NumberInput, ResourceCard } from "~/components/primitives";
+import { NumberInput, ResourceCard } from "~/components/primitives";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 import { requestScannerJson, toScannerErrorMessage } from "../scanner._components/scanner-client";
@@ -33,6 +33,8 @@ export type ReviewCell = {
   quantityKnown: boolean;
   candidates?: Array<{ uid: string; score: number | null }>;
   reasons: string[];
+  sameAppearanceCandidateCount?: number | null;
+  sameAppearanceResource?: CellResourceSummary | null;
 };
 
 export type CellEdit = {
@@ -252,7 +254,7 @@ export function CellReviewPanel({
           </span>
         </p>
       </div>
-      <div className="grid grid-cols-5 gap-x-2 gap-y-2.5">
+      <div className="grid grid-cols-5 gap-x-2 gap-y-1">
         {visibleCells.map((cell) => (
           <CellReviewTile
             key={cellAddressKey(cell)}
@@ -304,11 +306,31 @@ function CellReviewTile({
       : (selectedCandidate?.currentQuantity ??
         (selectedUid && selectedUid === cell.itemUid ? (cell.currentQuantity ?? 0) : null));
   const unavailable = currentResource && "unavailable" in currentResource && currentResource.unavailable === true;
+  const sameAppearanceCandidateCount = cell.sameAppearanceCandidateCount ?? 0;
+  const requiresSameAppearanceSelection =
+    !selectedUid &&
+    sameAppearanceCandidateCount > 1 &&
+    cell.reasons.includes("resource_visual_identity_ambiguous");
+  const warning = excluded
+    ? { label: "제외됨", title: "적용에서 제외된 아이템이에요", tone: "muted" as const }
+    : requiresSameAppearanceSelection
+      ? {
+          label: "같은 모양",
+          title: "같은 모양의 아이템 중 하나를 선택해 주세요",
+          tone: "attention" as const,
+        }
+      : !selectedUid || unavailable
+        ? { label: "확인 필요", title: "아이템을 확인해 주세요", tone: "destructive" as const }
+        : quantity === ""
+          ? { label: "수량 확인", title: "수량을 확인해 주세요", tone: "destructive" as const }
+          : !cell.quantityExact && !edit.quantityTouched
+            ? { label: "근사 수량", title: "근사 수량으로 인식됐어요", tone: "attention" as const }
+            : null;
 
   return (
     <div
       className={cn(
-        "flex w-12 justify-self-center flex-col items-center gap-0.5 rounded-md py-1 md:w-14",
+        "flex w-12 justify-self-center flex-col items-center rounded-md md:w-14",
         excluded && "opacity-50",
       )}
     >
@@ -323,85 +345,109 @@ function CellReviewTile({
         onSelect={(itemUid) => onEdit({ itemUid, itemTouched: true, excluded: false, exclusionTouched: true })}
         onExclude={() => onEdit({ excluded: true, exclusionTouched: true })}
       >
-        {currentResource?.name ? (
-          <ResourceCard
-            itemUid={currentResource.assetUid ?? selectedUid ?? ""}
-            resourceType={currentResource.resourceType}
-            rarity={currentResource.rarity}
-            name={currentResource.name}
-            size="lg"
-          />
-        ) : (
-          <span
-            title={unavailable ? "카탈로그에서 아이템 정보를 찾을 수 없어요" : undefined}
-            className={cn(
-              "flex size-12 items-center justify-center rounded-lg bg-muted/50 text-lg font-medium md:size-14",
-              unavailable ? "text-destructive" : "text-muted-foreground",
-            )}
-          >
-            {unavailable ? "!" : "?"}
-          </span>
-        )}
+        <span className="relative block">
+          {currentResource?.name ? (
+            <ResourceCard
+              itemUid={currentResource.assetUid ?? selectedUid ?? ""}
+              resourceType={currentResource.resourceType}
+              rarity={currentResource.rarity}
+              name={currentResource.name}
+              size="lg"
+            />
+          ) : requiresSameAppearanceSelection && cell.sameAppearanceResource?.assetUid ? (
+            <span className="relative block">
+              <ResourceCard
+                itemUid={cell.sameAppearanceResource.assetUid}
+                resourceType={cell.sameAppearanceResource.resourceType}
+                rarity={cell.sameAppearanceResource.rarity}
+                size="lg"
+              />
+              <span
+                className="pointer-events-none absolute left-0 top-0 size-12 rounded-lg ring-1 ring-inset ring-amber-500/60 md:size-14"
+                aria-hidden="true"
+              />
+            </span>
+          ) : (
+            <span
+              title={
+                requiresSameAppearanceSelection
+                  ? "같은 모양의 아이템 중 하나를 선택해 주세요"
+                  : unavailable
+                    ? "카탈로그에서 아이템 정보를 찾을 수 없어요"
+                    : undefined
+              }
+              className={cn(
+                "mb-1 flex size-12 items-center justify-center rounded-lg bg-muted/50 text-lg font-medium md:size-14",
+                requiresSameAppearanceSelection
+                  ? "bg-amber-500/10 text-amber-700 ring-1 ring-amber-500/30 dark:text-amber-300"
+                  : unavailable
+                    ? "text-destructive"
+                    : "text-muted-foreground",
+              )}
+            >
+              {requiresSameAppearanceSelection ? (
+                <Square3Stack3DIcon className="size-5" aria-hidden="true" />
+              ) : unavailable ? (
+                "!"
+              ) : (
+                "?"
+              )}
+            </span>
+          )}
+          {warning ? (
+            <span
+              title={warning.title}
+              className={cn(
+                "pointer-events-none absolute top-0.5 z-10 inline-flex origin-top-right scale-80 items-center whitespace-nowrap rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-medium leading-tight backdrop-blur-sm",
+                currentResource?.name ||
+                  (requiresSameAppearanceSelection && cell.sameAppearanceResource?.assetUid)
+                  ? "right-1.5"
+                  : "right-0.5",
+                warning.tone === "destructive" && "text-red-300 dark:text-red-200",
+                warning.tone === "attention" && "text-amber-300",
+                warning.tone === "muted" && "text-neutral-300",
+              )}
+            >
+              {warning.label}
+            </span>
+          ) : null}
+        </span>
       </CellCandidatePopover>
       <span className="sr-only">
         {currentResource?.name ??
-          (unavailable
+          (requiresSameAppearanceSelection
+            ? "같은 모양의 아이템 중 선택 필요"
+            : unavailable
             ? "카탈로그에서 아이템 정보를 찾을 수 없음"
             : cell.status === "unrecognized"
               ? "인식하지 못한 아이템"
               : "아이템 정보 없음")}
       </span>
-      <div className="flex h-4 w-full items-center justify-center text-[10px] leading-none">
-        {currentQuantity == null ? (
-          <span className="invisible">보유 0</span>
-        ) : (
-          <span className="max-w-full truncate text-muted-foreground">
-            보유 <strong className="font-bold tabular-nums text-foreground">{currentQuantity.toLocaleString()}</strong>
-          </span>
-        )}
+      <div className="mt-1 w-full">
+        <NumberInput
+          nullable
+          minValue={0}
+          showDecrease={false}
+          showIncrease={false}
+          size="sm"
+          disabled={disabled}
+          value={quantity === "" ? null : Number(quantity)}
+          inputProps={{ "aria-label": `${currentResource?.name ?? "아이템"} 인식 수량` }}
+          onChange={(nextQuantity) =>
+            onEdit({
+              quantity: nextQuantity == null ? "" : String(nextQuantity),
+              quantityTouched: true,
+            })
+          }
+        />
       </div>
-      <NumberInput
-        nullable
-        minValue={0}
-        showDecrease={false}
-        showIncrease={false}
-        size="sm"
-        disabled={disabled}
-        value={quantity === "" ? null : Number(quantity)}
-        inputProps={{ "aria-label": `${currentResource?.name ?? "아이템"} 인식 수량` }}
-        onChange={(nextQuantity) =>
-          onEdit({
-            quantity: nextQuantity == null ? "" : String(nextQuantity),
-            quantityTouched: true,
-          })
-        }
-      />
-      {excluded ? (
-        <p className="h-3 w-max whitespace-nowrap text-center text-[9px] leading-tight text-muted-foreground">제외됨</p>
-      ) : !selectedUid || unavailable ? (
-        <p
-          className="h-3 w-max whitespace-nowrap text-center text-[9px] leading-tight text-destructive"
-          title="아이템을 확인해 주세요"
-        >
-          아이템 확인
-        </p>
-      ) : quantity === "" ? (
-        <p
-          className="h-3 w-max whitespace-nowrap text-center text-[9px] leading-tight text-destructive"
-          title="수량을 확인해 주세요"
-        >
-          수량 확인
-        </p>
-      ) : !cell.quantityExact && !edit.quantityTouched ? (
-        <p
-          className="h-3 w-max whitespace-nowrap text-center text-[9px] leading-tight text-amber-700 dark:text-amber-300"
-          title="근사 수량으로 인식됐어요"
-        >
-          근사 수량
-        </p>
-      ) : (
-        <span className="h-3" aria-hidden="true" />
-      )}
+      {currentQuantity != null ? (
+        <div className="mt-1 flex flex-col items-center">
+          <p className="w-max whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground">
+            보유 <strong className="font-bold tabular-nums text-foreground">{currentQuantity.toLocaleString()}</strong>
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -508,9 +554,15 @@ function CellCandidatePopoverContent({
   }, [cell.imageIndex, cell.position, jobUid]);
 
   const current = defaultDetails?.current ?? null;
-  const candidates = query.trim()
-    ? searchResults
-    : getCellReviewCandidateList(current, defaultDetails?.candidates ?? []);
+  const sameAppearanceCandidateCount = cell.sameAppearanceCandidateCount ?? 0;
+  const sameAppearanceSelectionRequired =
+    !selectedUid &&
+    sameAppearanceCandidateCount > 1 &&
+    cell.reasons.includes("resource_visual_identity_ambiguous");
+  const defaultCandidates = sameAppearanceSelectionRequired
+    ? (defaultDetails?.candidates ?? []).slice(0, sameAppearanceCandidateCount)
+    : (defaultDetails?.candidates ?? []);
+  const candidates = query.trim() ? searchResults : getCellReviewCandidateList(current, defaultCandidates);
   const showingLoading = loading || (open && !defaultDetails && !error);
 
   useEffect(() => {
@@ -583,12 +635,12 @@ function CellCandidatePopoverContent({
     <>
       <PopoverButton
         disabled={disabled}
-        aria-label="아이템 후보 열기"
+        aria-label={sameAppearanceSelectionRequired ? "같은 모양의 아이템 선택" : "아이템 후보 열기"}
         onMouseEnter={() => onHighlightChange(true)}
         onMouseLeave={() => {
           if (!open) onHighlightChange(false);
         }}
-        className="cursor-pointer rounded-lg outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default"
+        className="block cursor-pointer rounded-lg leading-none outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default"
       >
         {children}
       </PopoverButton>
@@ -604,6 +656,11 @@ function CellCandidatePopoverContent({
             aria-label="아이템 검색"
             className="mb-1 min-w-0 w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           />
+          {!query.trim() && sameAppearanceSelectionRequired ? (
+            <p className="rounded-md bg-amber-500/10 px-2.5 py-2 text-xs text-amber-800 dark:text-amber-200">
+              같은 모양의 아이템이 있어요. 맞는 아이템을 선택해 주세요.
+            </p>
+          ) : null}
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
           {showingLoading ? <CandidateChoiceSkeleton /> : null}
           {!showingLoading && !query.trim() && current?.unavailable ? (

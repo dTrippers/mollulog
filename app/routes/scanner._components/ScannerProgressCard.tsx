@@ -1,6 +1,8 @@
 import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { cn } from "~/lib/utils";
 
+export type ScannerProgressSegment = { key: string; status: string };
+
 export default function ScannerProgressCard({
   title,
   description,
@@ -13,7 +15,7 @@ export default function ScannerProgressCard({
   title: string;
   description: string;
   progress: { completed: number; failed: number; total: number };
-  segmentStatuses?: ReadonlyArray<string>;
+  segmentStatuses?: ReadonlyArray<ScannerProgressSegment>;
   segmentLabel: string;
   remainingLabel: string;
   etaLabel: string;
@@ -21,7 +23,6 @@ export default function ScannerProgressCard({
   const processed = progress.completed + progress.failed;
   const remaining = Math.max(0, progress.total - processed);
   const percentage = progress.total > 0 ? (processed / progress.total) * 100 : 0;
-  const segmentItems = segmentStatuses?.map((status, index) => ({ status, key: `${status}-${index}` }));
 
   return (
     <section
@@ -58,9 +59,9 @@ export default function ScannerProgressCard({
               style={{ width: `${percentage}%` }}
             />
           </div>
-          {segmentItems ? (
+          {segmentStatuses ? (
             <div className="mt-2 flex gap-1" aria-hidden="true">
-              {segmentItems.map(({ status, key }) => (
+              {segmentStatuses.map(({ status, key }) => (
                 <span
                   key={key}
                   className={cn(

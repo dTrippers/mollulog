@@ -5,6 +5,7 @@ import { cn } from "~/lib/utils";
 type ScannerUploadSectionProps = {
   title: string;
   description: string;
+  descriptionLines?: ReadonlyArray<string>;
   inputId: string;
   accept: string;
   multiple?: boolean;
@@ -25,6 +26,7 @@ type ScannerUploadSectionProps = {
 export default function ScannerUploadSection({
   title,
   description,
+  descriptionLines,
   inputId,
   accept,
   multiple = false,
@@ -73,6 +75,13 @@ export default function ScannerUploadSection({
       <div className="flex items-end justify-between gap-4">
         <SubTitle text={title} description={description} />
       </div>
+      {descriptionLines ? (
+        <div className="-mt-2 mb-4 space-y-1 text-sm text-muted-foreground">
+          {descriptionLines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      ) : null}
       <div className="space-y-5 rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
         <div className="focus-within:rounded-lg focus-within:ring-2 focus-within:ring-ring/30">
           <input

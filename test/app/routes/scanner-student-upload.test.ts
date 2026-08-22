@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { ScannerApiRequestError } from "~/routes/scanner._components/scanner-client";
+import { STUDENT_SCANNER_ACCEPT_SPEC, validateScannerFiles } from "~/routes/scanner._components/scanner-upload";
 import {
-  classifyStudentUploadFiles,
   getStudentUploadFailureReason,
   getStudentUploadPartialFailureForJob,
   getStudentUploadPartialFailureMessage,
@@ -18,26 +18,28 @@ function file(name: string, type: string, size = 1): File {
 const imageQuota = { limit: 50, used: 0, remaining: 50, nextAvailableAt: null };
 const videoQuota = { limit: 10, used: 0, remaining: 10, nextAvailableAt: null };
 
+const validateStudentFiles = (files: ReadonlyArray<File>) => validateScannerFiles(files, STUDENT_SCANNER_ACCEPT_SPEC);
+
 describe("student scanner upload selection", () => {
   it("classifies image-only, video-only, and mixed input", () => {
     const image = file("student.png", "image/png");
     const secondImage = file("student-2.jpg", "image/jpeg");
     const video = file("students.mp4", "video/mp4");
 
-    expect(classifyStudentUploadFiles([image, secondImage])).toEqual({
+    expect(validateStudentFiles([image, secondImage])).toEqual({
       images: [image, secondImage],
       video: null,
       error: null,
     });
-    expect(classifyStudentUploadFiles([video])).toEqual({ images: [], video, error: null });
-    expect(classifyStudentUploadFiles([image, video])).toEqual({ images: [image], video, error: null });
+    expect(validateStudentFiles([video])).toEqual({ images: [], video, error: null });
+    expect(validateStudentFiles([image, video])).toEqual({ images: [image], video, error: null });
   });
 
   it("rejects contradictory MIME and extension evidence while preserving fallback classification", () => {
-    expect(classifyStudentUploadFiles([file("students.mp4", "image/png")])).toEqual(
+    expect(validateStudentFiles([file("students.mp4", "image/png")])).toEqual(
       expect.objectContaining({ error: "파일의 MIME 타입과 확장자가 일치하지 않아요. 파일을 확인해 주세요." }),
     );
-    expect(classifyStudentUploadFiles([file("student.png", "video/mp4")])).toEqual(
+    expect(validateStudentFiles([file("student.png", "video/mp4")])).toEqual(
       expect.objectContaining({ error: "파일의 MIME 타입과 확장자가 일치하지 않아요. 파일을 확인해 주세요." }),
     );
 
@@ -45,13 +47,13 @@ describe("student scanner upload selection", () => {
     const videoByMime = file("capture.bin", "video/mp4");
     const imageByExtension = file("capture.png", "");
     const videoByExtension = file("capture.mp4", "");
-    expect(classifyStudentUploadFiles([imageByMime, imageByExtension])).toEqual({
+    expect(validateStudentFiles([imageByMime, imageByExtension])).toEqual({
       images: [imageByMime, imageByExtension],
       video: null,
       error: null,
     });
-    expect(classifyStudentUploadFiles([videoByMime])).toEqual({ images: [], video: videoByMime, error: null });
-    expect(classifyStudentUploadFiles([videoByExtension])).toEqual({
+    expect(validateStudentFiles([videoByMime])).toEqual({ images: [], video: videoByMime, error: null });
+    expect(validateStudentFiles([videoByExtension])).toEqual({
       images: [],
       video: videoByExtension,
       error: null,
@@ -59,22 +61,22 @@ describe("student scanner upload selection", () => {
   });
 
   it("rejects a second video and unsupported files before submission", () => {
-    expect(
-      classifyStudentUploadFiles([file("students.mp4", "video/mp4"), file("students.mov", "video/quicktime")]),
-    ).toEqual(expect.objectContaining({ error: "영상은 한 번에 한 개만 선택할 수 있어요." }));
-    expect(classifyStudentUploadFiles([file("students.gif", "image/gif")])).toEqual(
+    expect(validateStudentFiles([file("students.mp4", "video/mp4"), file("students.mov", "video/quicktime")])).toEqual(
+      expect.objectContaining({ error: "영상은 한 번에 한 개만 선택할 수 있어요." }),
+    );
+    expect(validateStudentFiles([file("students.gif", "image/gif")])).toEqual(
       expect.objectContaining({ error: "지원하는 파일은 PNG, JPEG, WebP 이미지와 MP4, MOV 영상이에요." }),
     );
   });
 
   it("keeps image and video size/count limits in the shared selection validator", () => {
     expect(
-      classifyStudentUploadFiles(Array.from({ length: 31 }, (_, index) => file(`student-${index}.png`, "image/png"))),
+      validateStudentFiles(Array.from({ length: 31 }, (_, index) => file(`student-${index}.png`, "image/png"))),
     ).toEqual(expect.objectContaining({ error: "이미지는 1장부터 30장까지 선택할 수 있어요." }));
-    expect(classifyStudentUploadFiles([file("large.png", "image/png", 10 * 1024 * 1024 + 1)])).toEqual(
+    expect(validateStudentFiles([file("large.png", "image/png", 10 * 1024 * 1024 + 1)])).toEqual(
       expect.objectContaining({ error: "이미지 한 장은 10MB를 넘을 수 없어요." }),
     );
-    expect(classifyStudentUploadFiles([file("large.mp4", "video/mp4", 250 * 1024 * 1024 + 1)])).toEqual(
+    expect(validateStudentFiles([file("large.mp4", "video/mp4", 250 * 1024 * 1024 + 1)])).toEqual(
       expect.objectContaining({ error: "영상은 250MB를 넘을 수 없어요." }),
     );
   });

@@ -140,6 +140,14 @@ describe("student scanner review", () => {
   it("leaves the unavailable-result message to the completion state", () => {
     expect(getStudentJobTransition({ status: "review_ready", result: null, application: null })).toEqual({
       phase: "idle",
+      error: "인식 결과를 안전하게 확인하지 못했어요. 새로 업로드해 주세요.",
+    });
+  });
+
+  it("marks unsupported job states as an explicit unavailable result", () => {
+    expect(getStudentJobTransition({ status: "unexpected", result: null, application: null })).toEqual({
+      phase: "idle",
+      error: "인식 결과를 안전하게 확인하지 못했어요. 새로 업로드해 주세요.",
     });
   });
 });
