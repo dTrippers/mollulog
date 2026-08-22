@@ -16,7 +16,9 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       ? undefined
       : requestedJobKind === "student_detail_video_v1"
         ? "student_detail_video_v1"
-        : "item_inventory_images_v1";
+        : requestedJobKind === "student_detail_images_v1"
+          ? "student_detail_images_v1"
+          : "item_inventory_images_v1";
   const [jobs, quota] = await Promise.all([
     listRecentOcrJobs(env, sensei.id, { ctx, jobKind }),
     getOcrUploadQuota(env, sensei.id, { ctx, jobKind }),

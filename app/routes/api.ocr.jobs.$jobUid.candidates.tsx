@@ -38,7 +38,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     if (job.status !== "review_ready") throw new OcrPublicError("검토할 수 있는 인식 결과가 없어요");
 
     const review = buildOcrInventoryReview(job.result, job.images);
-    if (review.reviewMode !== "cells") throw new OcrPublicError("이 인식 결과는 이전 검토 화면에서 확인해야 해요");
+    if (review.reviewMode !== "cells") {
+      throw new OcrPublicError("인식 결과를 확인하지 못했어요. 새로 업로드해 주세요.");
+    }
     const cell = getOcrReviewCell(review, { imageIndex, position });
     if (!cell) throw new OcrPublicError("검토할 셀을 찾을 수 없어요", 404);
 

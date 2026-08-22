@@ -114,16 +114,70 @@ describe("OCR job detail cell review", () => {
       expect.objectContaining({ imageIndex: 1, position: 0, imageUid: "succeeded-b", itemUid: null }),
     ]);
     expect(response.data.cells[0]).not.toHaveProperty("candidates");
+    expect(response.data).not.toHaveProperty("conflictImageUids");
     expect(mockedGetInventory).toHaveBeenCalledWith(env, 7, ["100"]);
   });
 
-  it("selects legacy mode when filename validation fails", async () => {
+  it("returns an explicit unavailable review state when filename validation fails", async () => {
     mockedGetOcrJob.mockResolvedValue({
       ...job,
       result: { ...job.result, images: [{ ...job.result.images[0], filename: "wrong.png" }, job.result.images[1]] },
     } as never);
-    const response = expectDataResult<{ reviewMode: string; reviewModeReason: string }>(await loader(args()));
-    expect(response.data.reviewMode).toBe("legacy");
-    expect(response.data.reviewModeReason).toBe("result_image_mapping_unusable");
+    const response = expectDataResult<{ reviewError: boolean; reviewMode?: string }>(await loader(args()));
+    expect(response.data.reviewError).toBe(true);
+    expect(response.data).not.toHaveProperty("reviewMode");
+    expect(response.data).not.toHaveProperty("reviewModeReason");
+  });
+
+  it("reports only visually identical top-ranked choices without exposing candidate details", async () => {
+    mockedGetOcrJob.mockResolvedValue({
+      ...job,
+      result: {
+        ...job.result,
+        images: [
+          {
+            ...job.result.images[0],
+            observations: [
+              {
+                resource_uid: null,
+                quantity: 575,
+                quantity_exact: true,
+                reasons: ["resource_visual_identity_ambiguous"],
+                candidates: [
+                  { uid: "100", score: 0.99 },
+                  { uid: "101", score: 0.99 },
+                  { uid: "102", score: 0.99 },
+                  { uid: "other", score: 0.85 },
+                ],
+              },
+            ],
+          },
+          job.result.images[1],
+        ],
+      },
+    } as never);
+
+    const response = expectDataResult<{ cells: Array<Record<string, unknown>> }>(await loader(args()));
+
+    expect(response.data.cells[0]).toEqual(
+      expect.objectContaining({
+        itemUid: null,
+        sameAppearanceCandidateCount: 3,
+        sameAppearanceResource: expect.objectContaining({ uid: "100", assetUid: "100" }),
+      }),
+    );
+    expect(response.data.cells[0]).not.toHaveProperty("candidates");
+  });
+
+  it("does not classify an in-progress job as an unavailable review", async () => {
+    mockedGetOcrJob.mockResolvedValue({ ...job, status: "processing", result: null } as never);
+
+    const response = expectDataResult<{ status: string; reviewError?: boolean; cells: unknown[] }>(
+      await loader(args()),
+    );
+
+    expect(response.data.status).toBe("processing");
+    expect(response.data.reviewError).toBeUndefined();
+    expect(response.data.cells).toEqual([]);
   });
 });

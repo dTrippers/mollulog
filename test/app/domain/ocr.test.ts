@@ -74,6 +74,44 @@ describe("OCR contract validation", () => {
     expect(() => parseOcrUploadRequest({ jobKind: "future" })).toThrow("현재 사용할 수 없어요");
   });
 
+  it("parses student image batches and rejects mixed media", () => {
+    expect(
+      parseOcrUploadRequest({
+        jobKind: "student_detail_images_v1",
+        images: [validImage],
+        trainingConsent: false,
+      }),
+    ).toEqual({
+      jobKind: "student_detail_images_v1",
+      images: [validImage],
+      trainingConsent: false,
+    });
+    expect(() =>
+      parseOcrUploadRequest({
+        jobKind: "student_detail_images_v1",
+        images: [validImage],
+        video: {
+          filename: "student.mp4",
+          contentType: "video/mp4",
+          byteSize: 1024,
+          sha256: "a".repeat(64),
+        },
+      }),
+    ).toThrow("함께 제출할 수 없어요");
+    expect(() =>
+      parseOcrUploadRequest({
+        jobKind: "student_detail_video_v1",
+        images: [validImage],
+        video: {
+          filename: "student.mp4",
+          contentType: "video/mp4",
+          byteSize: 1024,
+          sha256: "a".repeat(64),
+        },
+      }),
+    ).toThrow("함께 제출할 수 없어요");
+  });
+
   it("accepts MOV student videos with the QuickTime content type", () => {
     const video = {
       filename: "students.MOV",

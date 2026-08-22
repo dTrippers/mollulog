@@ -1,63 +1,60 @@
-import { describe, expect, it } from "@jest/globals";
-import { findCandidateEvidence } from "../../../app/domain/ocr-candidate";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { getActiveSensei } from "~/auth/authenticator.server";
+import { getLogger } from "~/lib/observability.server";
+import { getOcrJob } from "~/models/ocr-job";
+import { getSyncDraftBySourceRef } from "~/models/sync-draft";
+import { action } from "~/routes/api.ocr.jobs.$jobUid.apply";
 
-const result = {
-  images: [
-    {
-      filename: "items-1.png",
-      observations: [
-        {
-          observation_id: "observation-1",
-          quantity: 123,
-          quantity_exact: true,
-          candidates: Array.from({ length: 6 }, (_, index) => ({
-            uid: `item-${index + 1}`,
-            name: `아이템 ${index + 1}`,
-            score: 0.9 - index * 0.1,
-          })),
-        },
-      ],
-    },
-  ],
-};
+jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
+jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn() }));
+jest.mock("~/models/ocr-job", () => ({ getOcrJob: jest.fn() }));
+jest.mock("~/models/sync-draft", () => ({ getSyncDraftBySourceRef: jest.fn() }));
 
-describe("OCR candidate evidence", () => {
-  it("accepts a candidate from the selected image and observation", () => {
-    expect(
-      findCandidateEvidence(result, "item-1", {
-        imageFilename: "items-1.png",
-        observationId: "observation-1",
-      }),
-    ).toEqual({
-      imageFilename: "items-1.png",
-      observationId: "observation-1",
-      quantity: 123,
-      quantityExact: true,
-      candidateScore: 0.9,
-    });
+type DataResult<T> = { type: "DataWithResponseInit"; data: T; init: ResponseInit | null };
+const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
+const mockedGetLogger = getLogger as jest.MockedFunction<typeof getLogger>;
+const mockedGetOcrJob = getOcrJob as jest.MockedFunction<typeof getOcrJob>;
+const mockedGetDraft = getSyncDraftBySourceRef as jest.MockedFunction<typeof getSyncDraftBySourceRef>;
+const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+const env = {} as Env;
+const ctx = { waitUntil: jest.fn() };
+
+function expectDataResult<T>(result: unknown): DataResult<T> {
+  expect(result).toMatchObject({ type: "DataWithResponseInit" });
+  return result as DataResult<T>;
+}
+
+describe("OCR item apply contract", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedGetActiveSensei.mockResolvedValue({ id: 7 } as never);
+    mockedGetLogger.mockReturnValue(logger);
+    mockedGetDraft.mockResolvedValue(null);
+    mockedGetOcrJob.mockResolvedValue({
+      uid: "job-1",
+      jobKind: "item_inventory_images_v1",
+      status: "review_ready",
+      generation: 1,
+      images: [],
+      result: null,
+    } as never);
   });
 
-  it("rejects candidates outside the top five", () => {
-    expect(
-      findCandidateEvidence(result, "item-6", {
-        imageFilename: "items-1.png",
-        observationId: "observation-1",
-      }),
-    ).toBeNull();
-  });
+  it("rejects an unsupported item payload without exposing internal details", async () => {
+    const response = expectDataResult<{ error: string }>(
+      await action({
+        request: new Request("https://mollulog.net/api/ocr/jobs/job-1/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: [{ itemUid: "internal-item", quantity: 4 }] }),
+        }),
+        context: { cloudflare: { env, ctx } },
+        params: { jobUid: "job-1" },
+      } as never),
+    );
 
-  it("rejects a candidate attributed to a different image or observation", () => {
-    expect(
-      findCandidateEvidence(result, "item-1", {
-        imageFilename: "items-2.png",
-        observationId: "observation-1",
-      }),
-    ).toBeNull();
-    expect(
-      findCandidateEvidence(result, "item-1", {
-        imageFilename: "items-1.png",
-        observationId: "observation-2",
-      }),
-    ).toBeNull();
+    expect(response.init?.status).toBe(400);
+    expect(response.data.error).toBe("이 인식 결과는 현재 검토 화면에서 반영할 수 없어요");
+    expect(response.data.error).not.toContain("internal-item");
   });
 });

@@ -1,0 +1,59 @@
+{
+  "schemaVersion": 1,
+  "jobType": "student_detail_images_v1",
+  "executionProvider": "cpu",
+  "images": [
+    {
+      "imageUid": "image-1",
+      "filename": "student.png",
+      "width": 1040,
+      "height": 480,
+      "studentUids": ["10000"]
+    }
+  ],
+  "students": [
+    {
+      "studentUid": "10000",
+      "studentName": "테스트 학생",
+      "fields": {
+        "tier": 7,
+        "level": 90,
+        "weaponLevel": 0,
+        "abilityHp": 0,
+        "abilityAtk": 0,
+        "abilityHeal": 0,
+        "skillEx": 5,
+        "skillNormal": 10,
+        "skillEnhanced": null,
+        "skillSub": null,
+        "equip1": 10,
+        "equip2": 9,
+        "equip3": null,
+        "equipSpecial": null,
+        "relationshipRank": 32
+      },
+      "fieldDetails": {
+        "tier": { "state": "recognized", "value": 7, "confidence": 0.99, "evidence": ["base-stars=5"] },
+        "level": { "state": "recognized", "value": 90, "confidence": 0.98, "evidence": ["Lv.90"] },
+        "weaponLevel": { "state": "recognized", "value": 0, "confidence": 0.99, "evidence": ["weapon-locked"] },
+        "abilityHp": { "state": "recognized", "value": 0, "confidence": 0.99, "evidence": ["badge-absent"] },
+        "abilityAtk": { "state": "recognized", "value": 0, "confidence": 0.99, "evidence": ["badge-absent"] },
+        "abilityHeal": { "state": "recognized", "value": 0, "confidence": 0.99, "evidence": ["badge-absent"] },
+        "skillEx": { "state": "recognized", "value": 5, "confidence": 0.97, "evidence": ["MAX"] },
+        "skillNormal": { "state": "recognized", "value": 10, "confidence": 0.97, "evidence": ["Lv.10"] },
+        "skillEnhanced": { "state": "not_applicable", "value": null, "confidence": 0.9, "evidence": ["locked"] },
+        "skillSub": { "state": "unknown", "value": null, "confidence": 0, "evidence": [] },
+        "equip1": { "state": "recognized", "value": 10, "confidence": 0.95, "evidence": ["T10"] },
+        "equip2": { "state": "recognized", "value": 9, "confidence": 0.95, "evidence": ["T9"] },
+        "equip3": { "state": "conflict", "value": null, "confidence": 0, "evidence": ["T8", "T9"] },
+        "equipSpecial": { "state": "not_applicable", "value": null, "confidence": 0.9, "evidence": ["not-equipped"] },
+        "relationshipRank": { "state": "recognized", "value": 32, "confidence": 0.94, "evidence": ["32"] }
+      },
+      "sourceImageUids": ["image-1"],
+      "nameConfidence": 0.98,
+      "reasons": []
+    }
+  ],
+  "unresolvedCount": 2,
+  "elapsedMs": 1
+}

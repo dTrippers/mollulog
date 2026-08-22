@@ -1,15 +1,6 @@
-import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
-import {
-  ArrowPathIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  FilmIcon,
-  FunnelIcon,
-  PhotoIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { CheckCircleIcon, ExclamationTriangleIcon, FunnelIcon, PhotoIcon } from "@heroicons/react/24/outline";
+import { useCallback, useState } from "react";
+import { useOutletContext } from "react-router";
 import { StudentCard, TierSelector } from "~/components/features/students";
 import {
   Button,
@@ -18,20 +9,30 @@ import {
   HoverTooltip,
   NumberInput,
   type NumberInputFlowNavigationInputProps,
-  SectionCard,
   SubTitle,
   useNumberInputFlowNavigation,
 } from "~/components/primitives";
-import { OCR_MAX_VIDEO_BYTES, type OcrVideoUploadInput } from "~/domain/ocr";
+import type { OcrUploadInput, OcrVideoUploadInput } from "~/domain/ocr";
+import {
+  STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE,
+  STUDENT_IMAGE_DIMENSIONS_EXCEEDED_MESSAGE,
+  type StudentDetailImageStudent,
+  type StudentDetailImagesResult,
+} from "~/domain/student-image-ocr";
 import type {
   StudentDetailVideoResult,
   StudentVideoFieldName,
   StudentVideoFieldState,
 } from "~/domain/student-video-ocr";
 import { cn } from "~/lib/utils";
+import type { ScannerOutletContext } from "../scanner";
 import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
+import ScannerFileList from "../scanner._components/ScannerFileList";
+import ScannerImageDialog from "../scanner._components/ScannerImageDialog";
+import ScannerJobShell from "../scanner._components/ScannerJobShell";
 import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
 import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
+import ScannerProgressCard from "../scanner._components/ScannerProgressCard";
 import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
 import {
   formatScannerBytes,
@@ -41,9 +42,25 @@ import {
   toScannerErrorMessage,
   uploadScannerFile,
 } from "../scanner._components/scanner-client";
+import {
+  formatScannerRelativeTime,
+  getScannerTerminalJobDescription,
+  getScannerTerminalJobTitle,
+  getScannerUnavailableResultMessage,
+  scannerMessages,
+} from "../scanner._components/scanner-messages";
+import {
+  getScannerImageContentType,
+  getScannerVideoContentType,
+  mergeScannerFiles,
+  type ScannerUploadSelection,
+  STUDENT_SCANNER_ACCEPT_SPEC,
+  scannerFileKey,
+  validateScannerFiles,
+} from "../scanner._components/scanner-upload";
 import { sha256FileInWorker } from "../scanner._components/sha256-client";
 import type { ScannerUploadQuota } from "../scanner._components/UploadQuotaMeter";
-import { useScannerQuota } from "../scanner._components/useScannerQuota";
+import { useScannerJob } from "../scanner._components/useScannerJob";
 
 type ApplyFieldName =
   | "tier"
@@ -167,11 +184,16 @@ type CurrentStudentState = Partial<Record<ApplyFieldName, number | null>> & {
 
 type JobApplication = { status: string; appliedAt: string | null } | null;
 
+type StudentGrowthResult = StudentDetailVideoResult | StudentDetailImagesResult;
+type StudentGrowthStudent = StudentDetailVideoResult["students"][number] | StudentDetailImageStudent;
+type StudentFieldDetail = StudentGrowthStudent["fieldDetails"][StudentVideoFieldName];
+
 type StudentVideoJob = {
   uid: string;
-  jobKind: "student_detail_video_v1";
+  jobKind: "student_detail_video_v1" | "student_detail_images_v1";
   status: string;
   progress: { completed: number; failed: number; total: number };
+  images: Array<{ uid: string; filename: string; status: string; error: { code: string; message: string } | null }>;
   video: {
     inputUid: string;
     filename: string;
@@ -179,7 +201,7 @@ type StudentVideoJob = {
     status: string;
     evidenceAvailableUntil: string | null;
   } | null;
-  result: StudentDetailVideoResult | null;
+  result: StudentGrowthResult | null;
   artifacts: Array<{
     uid: string;
     studentUid: string;
@@ -194,6 +216,18 @@ type StudentVideoJob = {
   expiresAt: string;
 };
 
+type StudentImageFailure = StudentVideoJob["images"][number];
+
+type StudentUploadFailure = {
+  kind: "images" | "video";
+  error?: unknown;
+};
+
+export type StudentUploadPartialFailure = {
+  jobUid: string;
+  message: string;
+};
+
 type ReviewStudent = {
   confirmed: Record<ApplyFieldName, boolean>;
   values: Record<ApplyFieldName, string>;
@@ -202,143 +236,384 @@ type ReviewStudent = {
 export type ReviewState = Record<string, ReviewStudent>;
 type FieldComparison = "same" | "decreased" | null;
 
-function getVideoContentType(file: File): OcrVideoUploadInput["contentType"] | null {
-  const extension = file.name.toLowerCase().match(/\.([^.]+)$/)?.[1];
-  if (extension === "mp4") return "video/mp4";
-  if (extension === "mov") return "video/quicktime";
-  return null;
+const STUDENT_UPLOAD_HASH_ERROR = "파일 정보를 계산하지 못했어요";
+const STUDENT_UPLOAD_UPLOAD_ERROR = "파일 업로드에 실패했어요. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.";
+const STUDENT_UPLOAD_GENERIC_FAILURE_REASON = "파일 제출을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.";
+
+export type StudentUploadSelection = ScannerUploadSelection;
+
+export function getStudentUploadQuotaError(
+  selection: StudentUploadSelection,
+  imageQuota: ScannerUploadQuota | null,
+  videoQuota: ScannerUploadQuota | null,
+): string | null {
+  const errors: string[] = [];
+  if (selection.images.length > 0) {
+    if (!imageQuota) {
+      errors.push("이미지 업로드 가능 수를 확인하는 중이에요.");
+    } else if (selection.images.length > imageQuota.remaining) {
+      errors.push(`이미지 업로드 가능 수가 부족해요. 최근 7일 동안 ${imageQuota.remaining}장만 더 업로드할 수 있어요.`);
+    }
+  }
+  if (selection.video) {
+    if (!videoQuota) {
+      errors.push("영상 업로드 가능 수를 확인하는 중이에요.");
+    } else if (videoQuota.remaining < 1) {
+      errors.push("최근 7일 동안 업로드할 수 있는 영상 수를 모두 사용했어요.");
+    }
+  }
+  return errors.length > 0 ? `${errors.join(" ")} 잠시 후 다시 시도해 주세요.` : null;
 }
 
-function getTerminalJobTitle(status: string): string {
-  if (status === "cancelled") return "영상 인식 작업이 취소됐어요";
-  if (status === "expired") return "영상 인식 작업이 만료됐어요";
-  return "영상을 인식하지 못했어요";
+export function getStudentUploadPartialFailureMessage(failures: ReadonlyArray<StudentUploadFailure>): string {
+  const failedKinds = failures.map(({ kind, error }) => {
+    const label = kind === "images" ? "이미지" : "영상";
+    return error === undefined ? label : `${label}(${getStudentUploadFailureReason(error)})`;
+  });
+  return `${failedKinds.join(" 및 ")} 제출에 실패했어요. 성공한 인식 작업은 계속 진행되고 최근 작업에서 확인할 수 있어요.`;
 }
 
-function getTerminalJobDescription(status: string): string {
-  if (status === "cancelled") return "새 영상을 선택해 다시 인식을 시작해 주세요.";
-  if (status === "expired") return "보관 기간이 지난 작업이에요. 새 영상을 선택해 다시 시도해 주세요.";
-  return "녹화 안내를 확인한 뒤 새 영상으로 다시 시도해 주세요.";
+export function getStudentUploadFailureReason(error: unknown): string {
+  if (error instanceof ScannerApiRequestError && error.message) return error.message;
+  if (error instanceof Error && [STUDENT_UPLOAD_HASH_ERROR, STUDENT_UPLOAD_UPLOAD_ERROR].includes(error.message)) {
+    return error.message;
+  }
+  return STUDENT_UPLOAD_GENERIC_FAILURE_REASON;
+}
+
+export function getStudentUploadPartialFailureForJob(
+  partialFailure: StudentUploadPartialFailure | null,
+  selectedJobUid: string | null,
+): string | null {
+  return partialFailure?.jobUid === selectedJobUid ? partialFailure.message : null;
+}
+
+type StudentUploadBranchFailure = StudentUploadFailure & { error: unknown };
+
+export type StudentUploadSubmissionOptions = {
+  hashFile?: typeof sha256FileInWorker;
+  requestJson?: typeof requestScannerJson;
+  uploadFile?: typeof uploadScannerFile;
+  onHashProgress?: (progress: number) => void;
+  onUploadProgress?: (progress: number) => void;
+  onImageQuota?: (quota: ScannerUploadQuota) => void;
+  onVideoQuota?: (quota: ScannerUploadQuota) => void;
+};
+
+export type StudentUploadSubmissionResult = {
+  successfulJobs: StudentVideoJob[];
+  failures: StudentUploadBranchFailure[];
+};
+
+export async function submitStudentUploadSelection(
+  selection: StudentUploadSelection,
+  allowsTrainingDataUse: boolean,
+  options: StudentUploadSubmissionOptions = {},
+): Promise<StudentUploadSubmissionResult> {
+  const hashFile = options.hashFile ?? sha256FileInWorker;
+  const requestJson = options.requestJson ?? requestScannerJson;
+  const uploadFile = options.uploadFile ?? uploadScannerFile;
+  const selectedFiles = [...selection.images, ...(selection.video ? [selection.video] : [])];
+  const totalBytes = selectedFiles.reduce((sum, file) => sum + file.size, 0);
+  let uploadedBytes = 0;
+  const hashedBytesByFile = new Map<string, number>();
+  const hashBranchCount = Number(selection.images.length > 0) + Number(selection.video !== null);
+  let completedHashBranches = 0;
+
+  const reportHashProgress = (key: string, file: File, processedBytes: number) => {
+    const previous = hashedBytesByFile.get(key) ?? 0;
+    const next = Math.min(file.size, Math.max(previous, processedBytes));
+    hashedBytesByFile.set(key, next);
+    const hashedBytes = Array.from(hashedBytesByFile.values()).reduce((sum, value) => sum + value, 0);
+    options.onHashProgress?.(totalBytes === 0 ? 1 : Math.min(1, hashedBytes / totalBytes));
+  };
+
+  const markHashBranchComplete = () => {
+    completedHashBranches += 1;
+    if (completedHashBranches === hashBranchCount) options.onHashProgress?.(1);
+  };
+
+  const prepareFiles = async (kind: "image" | "video", files: File[]) => {
+    try {
+      const preparedFiles: Array<{
+        file: File;
+        contentType: OcrUploadInput["contentType"] | OcrVideoUploadInput["contentType"];
+        sha256: string;
+      }> = [];
+      for (const file of files) {
+        const contentType = kind === "image" ? getScannerImageContentType(file) : getScannerVideoContentType(file);
+        if (!contentType) throw new Error("지원하는 파일은 PNG, JPEG, WebP 이미지와 MP4, MOV 영상이에요.");
+        const key = `${kind}:${scannerFileKey(file)}`;
+        try {
+          const sha256 = await hashFile(file, (processed) => reportHashProgress(key, file, processed));
+          reportHashProgress(key, file, file.size);
+          preparedFiles.push({ file, contentType, sha256 });
+        } catch (error) {
+          reportHashProgress(key, file, file.size);
+          throw error;
+        }
+      }
+      return preparedFiles;
+    } finally {
+      markHashBranchComplete();
+    }
+  };
+
+  const uploadFileWithProgress = async (url: string, file: File, contentType: string) => {
+    let previousUploadedBytes = 0;
+    await uploadFile({
+      url,
+      file,
+      contentType,
+      onProgress: (uploaded) => {
+        const delta = Math.max(0, uploaded - previousUploadedBytes);
+        previousUploadedBytes = Math.max(previousUploadedBytes, uploaded);
+        uploadedBytes += delta;
+        options.onUploadProgress?.(Math.min(1, uploadedBytes / Math.max(1, totalBytes)));
+      },
+    });
+  };
+
+  const submissions: Array<{ kind: StudentUploadFailure["kind"]; promise: Promise<StudentVideoJob> }> = [];
+
+  if (selection.images.length > 0) {
+    submissions.push({
+      kind: "images",
+      promise: (async () => {
+        const imageFiles = await prepareFiles("image", selection.images);
+        const inputs: OcrUploadInput[] = imageFiles.map(({ file, contentType, sha256 }) => ({
+          filename: file.name,
+          contentType: contentType as OcrUploadInput["contentType"],
+          byteSize: file.size,
+          sha256,
+        }));
+        const created = await requestJson<{
+          jobUid: string;
+          quota: ScannerUploadQuota;
+          images: Array<{ imageUid: string; filename: string; uploadUrl: string }>;
+        }>("/api/ocr/jobs", {
+          method: "POST",
+          body: JSON.stringify({
+            jobKind: "student_detail_images_v1",
+            images: inputs,
+            trainingConsent: allowsTrainingDataUse,
+          }),
+        });
+        options.onImageQuota?.(created.quota);
+        for (const [index, { file, contentType }] of imageFiles.entries()) {
+          await uploadFileWithProgress(created.images[index].uploadUrl, file, contentType);
+        }
+        return requestJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
+          method: "POST",
+        });
+      })(),
+    });
+  }
+
+  if (selection.video) {
+    submissions.push({
+      kind: "video",
+      promise: (async () => {
+        const [videoFile] = await prepareFiles("video", [selection.video as File]);
+        const created = await requestJson<{
+          jobUid: string;
+          quota: ScannerUploadQuota;
+          video: { uploadUrl: string };
+        }>("/api/ocr/jobs", {
+          method: "POST",
+          body: JSON.stringify({
+            jobKind: "student_detail_video_v1",
+            video: {
+              filename: videoFile.file.name,
+              contentType: videoFile.contentType as OcrVideoUploadInput["contentType"],
+              byteSize: videoFile.file.size,
+              sha256: videoFile.sha256,
+            },
+            trainingConsent: allowsTrainingDataUse,
+          }),
+        });
+        options.onVideoQuota?.(created.quota);
+        await uploadFileWithProgress(created.video.uploadUrl, videoFile.file, videoFile.contentType);
+        return requestJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
+          method: "POST",
+        });
+      })(),
+    });
+  }
+
+  const settled = await Promise.allSettled(submissions.map(({ promise }) => promise));
+  const successfulJobs = settled.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+  const failures = settled.flatMap((result, index) =>
+    result.status === "rejected" ? [{ kind: submissions[index].kind, error: result.reason }] : [],
+  );
+  return { successfulJobs, failures };
+}
+
+export function getStudentFailedImagesDescription(images: ReadonlyArray<StudentImageFailure>): string {
+  const failedImages = images.filter((image) => image.status === "failed");
+  const oversizedImages = failedImages.filter((image) => image.error?.code === STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE);
+  if (oversizedImages.length === 0) {
+    return `${failedImages.map((image) => image.filename).join(", ")} · 성공한 이미지의 결과만 검토할 수 있어요.`;
+  }
+
+  const descriptions = [
+    `${oversizedImages.map((image) => image.filename).join(", ")} · ${STUDENT_IMAGE_DIMENSIONS_EXCEEDED_MESSAGE}`,
+  ];
+  const otherFailedImages = failedImages.filter(
+    (image) => image.error?.code !== STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE,
+  );
+  if (otherFailedImages.length > 0) {
+    descriptions.push(`${otherFailedImages.map((image) => image.filename).join(", ")} · 이미지를 인식하지 못했어요`);
+  }
+  return `${descriptions.join(" ")} 성공한 이미지의 결과만 검토할 수 있어요.`;
+}
+
+export function getStudentJobTransition(job: Pick<StudentVideoJob, "status" | "result" | "application">): {
+  phase: ScannerPhase;
+  error?: string | null;
+} {
+  if (job.status === "review_ready") {
+    if (!job.result) return { phase: "idle", error: getScannerUnavailableResultMessage() };
+    return { phase: job.application?.status === "applied" ? "applied" : "review" };
+  }
+  if (["queued", "processing", "finalizing"].includes(job.status)) return { phase: "waiting" };
+  if (TERMINAL_JOB_STATUSES.has(job.status)) return { phase: "idle" };
+  return { phase: "idle", error: getScannerUnavailableResultMessage() };
+}
+
+export function selectLatestStudentJob<T extends Pick<StudentVideoJob, "createdAt" | "jobKind">>(
+  jobs: ReadonlyArray<T>,
+): T | null {
+  return jobs.reduce<T | null>((latest, candidate) => {
+    if (!latest) return candidate;
+    const latestCreatedAt = new Date(latest.createdAt).getTime();
+    const candidateCreatedAt = new Date(candidate.createdAt).getTime();
+    if (candidateCreatedAt > latestCreatedAt) return candidate;
+    if (candidateCreatedAt < latestCreatedAt) return latest;
+    return candidate.jobKind === "student_detail_video_v1" ? candidate : latest;
+  }, null);
+}
+
+function getStudentJobInputSummary(job: Pick<StudentVideoJob, "images" | "video">): string {
+  const inputs = [];
+  if (job.images.length > 0) inputs.push(`이미지 ${job.images.length}장`);
+  if (job.video) inputs.push("영상 1개");
+  return inputs.join(" · ") || "입력 파일 없음";
 }
 
 export default function StudentScanner() {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [file, setFile] = useState<File | null>(null);
+  const {
+    videoUploadQuota: uploadQuota,
+    setVideoUploadQuota: setUploadQuota,
+    imageUploadQuota,
+    setImageUploadQuota,
+  } = useOutletContext<ScannerOutletContext>();
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [uploadQuota, setUploadQuota] = useScannerQuota("student_detail_video_v1", setError);
-  const [job, setJob] = useState<StudentVideoJob | null>(null);
+  const [partialFailure, setPartialFailure] = useState<StudentUploadPartialFailure | null>(null);
   const [review, setReview] = useState<ReviewState>({});
-  const [phase, setPhase] = useState<ScannerPhase>("idle");
   const [hashProgress, setHashProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [isCancelling, setIsCancelling] = useState(false);
-  const pollAttemptRef = useRef(0);
-  const selectedJobUid = searchParams.get("job");
-
-  const showJob = useCallback((next: StudentVideoJob) => {
-    setJob(next);
+  const handleJob = useCallback((next: StudentVideoJob) => {
     if (next.status === "review_ready" && next.result) {
-      const isApplied = next.application?.status === "applied";
-      setReview(isApplied ? {} : createReviewState(next.result));
-      setPhase(isApplied ? "applied" : "review");
-      setError(null);
-    } else if (["queued", "processing", "finalizing"].includes(next.status)) {
-      setPhase("waiting");
-      setError(null);
-    } else if (TERMINAL_JOB_STATUSES.has(next.status)) {
-      setPhase("idle");
-      setError(null);
-    } else {
-      setPhase("idle");
-      setError("인식 작업 상태를 확인하지 못했어요. 새 영상으로 다시 시도해 주세요.");
+      setReview(next.application?.status === "applied" ? {} : createReviewState(next.result));
+      return;
     }
+    setReview({});
   }, []);
 
-  useEffect(() => {
-    if (!selectedJobUid) {
-      setJob(null);
-      setReview({});
-      setPhase("idle");
-      pollAttemptRef.current = 0;
-      return;
-    }
-    pollAttemptRef.current = 0;
-    requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${selectedJobUid}`)
-      .then(showJob)
-      .catch((loadError) => {
-        setSearchParams({}, { replace: true });
-        setError(toScannerErrorMessage(loadError));
-      });
-  }, [selectedJobUid, setSearchParams, showJob]);
+  const handleReset = useCallback(() => {
+    setSelectedFiles([]);
+    setReview({});
+    setHashProgress(0);
+    setUploadProgress(0);
+    setAllowsTrainingDataUse(false);
+    setPartialFailure(null);
+  }, []);
 
-  useEffect(() => {
-    if (phase !== "waiting" || !job) return;
-    const delay = Math.min(10_000, Math.round(2000 * 1.5 ** pollAttemptRef.current));
-    const timeout = window.setTimeout(() => {
-      requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${job.uid}`)
-        .then((next) => {
-          pollAttemptRef.current += 1;
-          showJob(next);
-          if (!["queued", "processing", "finalizing"].includes(next.status)) notifyScannerJobsChanged();
-        })
-        .catch((pollError) => {
-          pollAttemptRef.current += 1;
-          setError(toScannerErrorMessage(pollError));
-          setJob((current) => (current ? { ...current } : current));
-        });
-    }, delay);
-    return () => window.clearTimeout(timeout);
-  }, [job, phase, showJob]);
+  const lifecycle = useScannerJob<StudentVideoJob>({
+    getTransition: getStudentJobTransition,
+    onJob: handleJob,
+    onReset: handleReset,
+  });
+  const {
+    job,
+    phase,
+    setPhase,
+    error,
+    setError,
+    isCancelling,
+    selectedJobUid,
+    setSearchParams,
+    acceptJob,
+    updateJob,
+    resetForNewUpload,
+    cancelResult,
+  } = lifecycle;
 
   async function startRecognition() {
-    if (!file) return;
-    const contentType = getVideoContentType(file);
-    if (!contentType) {
-      setError("MP4 또는 MOV 영상 한 개만 선택할 수 있어요.");
+    const selection = validateScannerFiles(selectedFiles, STUDENT_SCANNER_ACCEPT_SPEC);
+    if (selection.error) {
+      setError(selection.error);
       return;
     }
+    if (selectedFiles.length === 0) return;
+
+    const quotaError = getStudentUploadQuotaError(selection, imageUploadQuota, uploadQuota);
+    if (quotaError) {
+      setError(quotaError);
+      return;
+    }
+
     setError(null);
+    setPartialFailure(null);
     setPhase("uploading");
     setHashProgress(0);
     setUploadProgress(0);
+
     try {
-      const sha256 = await sha256FileInWorker(file, (processed) => setHashProgress(processed / file.size));
-      const created = await requestScannerJson<{
-        jobUid: string;
-        quota: ScannerUploadQuota;
-        video: { uploadUrl: string };
-      }>("/api/ocr/jobs", {
-        method: "POST",
-        body: JSON.stringify({
-          jobKind: "student_detail_video_v1",
-          video: {
-            filename: file.name,
-            contentType,
-            byteSize: file.size,
-            sha256,
-          },
-          trainingConsent: allowsTrainingDataUse,
-        }),
+      const { successfulJobs, failures } = await submitStudentUploadSelection(selection, allowsTrainingDataUse, {
+        onHashProgress: setHashProgress,
+        onUploadProgress: setUploadProgress,
+        onImageQuota: setImageUploadQuota,
+        onVideoQuota: setUploadQuota,
       });
-      setUploadQuota(created.quota);
-      await uploadScannerFile({
-        url: created.video.uploadUrl,
-        file,
-        contentType,
-        onProgress: (uploadedBytes) => setUploadProgress(uploadedBytes / file.size),
-      });
-      const submitted = await requestScannerJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
-        method: "POST",
-      });
-      pollAttemptRef.current = 0;
-      showJob(submitted);
-      setSearchParams({ job: submitted.uid }, { replace: true });
+
+      for (const failure of failures) {
+        if (!(failure.error instanceof ScannerApiRequestError) || !failure.error.quota) continue;
+        if (failure.kind === "images") setImageUploadQuota(failure.error.quota);
+        else setUploadQuota(failure.error.quota);
+      }
+
+      if (successfulJobs.length === 0) {
+        setPhase("idle");
+        setError(
+          failures
+            .map(
+              ({ kind, error }) => `${kind === "images" ? "이미지" : "영상"}: ${getStudentUploadFailureReason(error)}`,
+            )
+            .join(" "),
+        );
+        return;
+      }
+
+      const selectedJob = selectLatestStudentJob(successfulJobs);
+      if (!selectedJob) {
+        setPhase("idle");
+        setError("인식 작업을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      acceptJob(selectedJob);
+      setSearchParams({ job: selectedJob.uid }, { replace: true });
       setAllowsTrainingDataUse(false);
+      setPartialFailure(
+        failures.length > 0
+          ? { jobUid: selectedJob.uid, message: getStudentUploadPartialFailureMessage(failures) }
+          : null,
+      );
       notifyScannerJobsChanged();
     } catch (uploadError) {
       setPhase("idle");
-      if (uploadError instanceof ScannerApiRequestError && uploadError.quota) setUploadQuota(uploadError.quota);
       setError(toScannerErrorMessage(uploadError));
     }
   }
@@ -366,7 +641,7 @@ export default function StudentScanner() {
         `/api/ocr/jobs/${job.uid}/apply`,
         { method: "POST", body: JSON.stringify({ students }) },
       );
-      setJob({ ...job, application: response.application });
+      updateJob((currentJob) => (currentJob ? { ...currentJob, application: response.application } : null));
       setPhase("applied");
       notifyScannerJobsChanged();
     } catch (applyError) {
@@ -376,163 +651,215 @@ export default function StudentScanner() {
   }
 
   function selectFiles(candidates: File[]) {
-    if (candidates.length !== 1) {
-      setError("MP4 또는 MOV 영상 한 개만 선택할 수 있어요.");
+    if (candidates.length === 0) return;
+    const nextFiles = mergeScannerFiles(selectedFiles, candidates);
+    const validation = validateScannerFiles(nextFiles, STUDENT_SCANNER_ACCEPT_SPEC);
+    if (validation.error) {
+      setError(validation.error);
       return;
     }
-    const [next] = candidates;
-    if (!getVideoContentType(next)) {
-      setError("MP4 또는 MOV 영상 한 개만 선택할 수 있어요.");
-      return;
-    }
-    if (next.size <= 0 || next.size > OCR_MAX_VIDEO_BYTES) {
-      setError("영상은 250MB를 넘을 수 없어요.");
-      return;
-    }
-    setFile(next);
+    setSelectedFiles(nextFiles);
     setHashProgress(0);
+    setPartialFailure(null);
     setError(null);
   }
 
-  function clearSelectedJob(confirmUnappliedResult = false) {
-    if (confirmUnappliedResult && !window.confirm("현재 인식 결과를 반영하지 않고 새 영상을 업로드할까요?")) {
-      return;
-    }
-    setSearchParams({}, { replace: true });
-    setFile(null);
-    setJob(null);
-    setReview({});
+  function clearSelectedFiles() {
+    if (phase !== "idle") return;
+    setSelectedFiles([]);
+    setAllowsTrainingDataUse(false);
     setHashProgress(0);
     setUploadProgress(0);
-    setIsCancelling(false);
-    pollAttemptRef.current = 0;
     setError(null);
-    setPhase("idle");
+    setPartialFailure(null);
   }
 
-  async function cancelResult() {
-    if (job?.status !== "review_ready" || isCancelling) return;
-    if (!window.confirm("이 인식 결과를 취소할까요? 결과는 반영되지 않고 최근 작업에서 사라집니다.")) {
-      return;
-    }
+  const selectedUpload = validateScannerFiles(selectedFiles, STUDENT_SCANNER_ACCEPT_SPEC);
+  const selectedImageBytes = selectedUpload.images.reduce((sum, image) => sum + image.size, 0);
+  const selectedQuotaError =
+    !selectedJobUid && selectedFiles.length > 0
+      ? getStudentUploadQuotaError(selectedUpload, imageUploadQuota, uploadQuota)
+      : null;
+  const uploadActionDisabled =
+    selectedFiles.length === 0 ||
+    selectedUpload.error !== null ||
+    selectedQuotaError !== null ||
+    phase !== "idle" ||
+    (selectedUpload.images.length > 0 && (!imageUploadQuota || imageUploadQuota.remaining === 0)) ||
+    (selectedUpload.video !== null && (!uploadQuota || uploadQuota.remaining === 0));
+  const selectedPartialFailure = getStudentUploadPartialFailureForJob(partialFailure, selectedJobUid);
 
-    setIsCancelling(true);
-    setError(null);
-    try {
-      await requestScannerJson<{ uid: string; status: "cancelled" }>(`/api/ocr/jobs/${job.uid}/cancel`, {
-        method: "POST",
-      });
-      clearSelectedJob();
-      notifyScannerJobsChanged();
-    } catch (cancelError) {
-      setError(toScannerErrorMessage(cancelError));
-    } finally {
-      setIsCancelling(false);
-    }
-  }
+  const uploadContent = !selectedJobUid ? (
+    <ScannerUploadSection
+      title="학생 성장도 파일 업로드"
+      description="학생 성장도 정보를 확인할 수 있는 이미지 또는 영상을 업로드해주세요."
+      descriptionLines={[
+        "이미지: 게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄운 뒤 스크린샷을 찍어주세요.",
+        "영상: 같은 화면에서 좌/우 화살표로 이동하는 과정을 녹화해주세요.",
+      ]}
+      inputId="student-scanner-files"
+      accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,.png,.jpg,.jpeg,.webp,.mp4,.mov"
+      multiple
+      selectionDisabled={phase !== "idle" || (imageUploadQuota?.remaining === 0 && uploadQuota?.remaining === 0)}
+      onFiles={selectFiles}
+      icon={<PhotoIcon className="size-6" aria-hidden="true" />}
+      helpText="1회당 최대 이미지 30장 또는 영상 1개"
+      dropDetail={
+        selectedFiles.length > 0 ? (
+          <span className="mt-2 flex max-w-full flex-col items-center gap-1.5 text-xs text-muted-foreground">
+            <span>
+              {selectedUpload.images.length > 0
+                ? `이미지 ${selectedUpload.images.length}장 · ${formatScannerBytes(selectedImageBytes)}`
+                : ""}
+              {selectedUpload.video ? ` · 영상 ${formatScannerBytes(selectedUpload.video.size)}` : ""}
+              {phase === "uploading"
+                ? hashProgress < 1
+                  ? ` · 파일 확인 ${Math.round(hashProgress * 100)}%`
+                  : ` · 업로드 ${Math.round(uploadProgress * 100)}%`
+                : ""}
+            </span>
+            {phase === "uploading" ? (
+              <progress
+                aria-label={hashProgress < 1 ? "학생 이미지·영상 파일 확인 진행률" : "학생 이미지·영상 업로드 진행률"}
+                className="h-1.5 w-40 accent-primary"
+                max={1}
+                value={hashProgress < 1 ? hashProgress : uploadProgress}
+              />
+            ) : null}
+          </span>
+        ) : null
+      }
+      consentChecked={allowsTrainingDataUse}
+      consentDisabled={phase !== "idle"}
+      onConsentChange={setAllowsTrainingDataUse}
+      actionDisabled={uploadActionDisabled}
+      actionLabel={
+        phase === "uploading"
+          ? hashProgress < 1
+            ? "파일 확인 중..."
+            : `업로드 ${Math.round(uploadProgress * 100)}%`
+          : "인식 시작"
+      }
+      onAction={startRecognition}
+    >
+      <ScannerFileList
+        files={selectedFiles}
+        disabled={phase !== "idle"}
+        onRemove={(index) => {
+          if (phase !== "idle") return;
+          setSelectedFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+          setError(null);
+        }}
+      />
+      {selectedFiles.length > 0 ? (
+        <div className="flex justify-end">
+          <Button size="sm" disabled={phase !== "idle"} onClick={clearSelectedFiles}>
+            선택 초기화
+          </Button>
+        </div>
+      ) : null}
+    </ScannerUploadSection>
+  ) : null;
 
-  return (
-    <div className="space-y-8 pb-12 pt-6 lg:pt-2">
-      {error ? <Callout tone="destructive">{error}</Callout> : null}
+  const progressContent =
+    phase === "waiting" && job ? (
+      <ScannerProgressCard
+        title="학생 성장도를 인식하고 있어요"
+        description="이미지 또는 영상에서 학생 정보를 읽고 있어요. 화면을 벗어나도 인식은 계속 진행돼요."
+        progress={job.progress}
+        segmentStatuses={[
+          ...job.images.map((image) => ({ key: image.uid, status: image.status })),
+          ...(job.video ? [{ key: `video:${job.video.inputUid}`, status: job.video.status }] : []),
+        ]}
+        segmentLabel="파일 처리"
+        remainingLabel="{remaining}개 남았어요"
+        etaLabel="파일 종류와 수에 따라 시간이 달라질 수 있어요."
+      />
+    ) : null;
 
-      {!selectedJobUid ? (
-        <ScannerUploadSection
-          title="학생 성장도 녹화 영상 업로드"
-          description="게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄운 후, 좌/우 화살표로 이동하는 화면을 녹화해주세요."
-          quota={uploadQuota}
-          quotaUnit="개"
-          quotaSubject="영상"
-          inputId="student-scanner-video"
-          accept="video/mp4,video/quicktime,.mp4,.mov"
-          selectionDisabled={phase !== "idle" || uploadQuota?.remaining === 0}
-          onFiles={selectFiles}
-          icon={<FilmIcon className="size-6" aria-hidden="true" />}
-          dropLabel={file ? file.name : "영상을 선택하거나 이곳에 끌어다 놓아주세요"}
-          helpText="MP4, MOV 파일 · 최대 250MB"
-          dropDetail={
-            file ? (
-              <span className="mt-2 flex flex-col items-center gap-1.5 text-xs text-muted-foreground">
-                <span>
-                  {formatScannerBytes(file.size)}
-                  {phase === "uploading"
-                    ? hashProgress < 1
-                      ? ` · 파일 확인 ${Math.round(hashProgress * 100)}%`
-                      : ` · 업로드 ${Math.round(uploadProgress * 100)}%`
-                    : ""}
-                </span>
-                {phase === "uploading" ? (
-                  <progress
-                    aria-label={hashProgress < 1 ? "영상 파일 확인 진행률" : "영상 업로드 진행률"}
-                    className="h-1.5 w-40 accent-primary"
-                    max={1}
-                    value={hashProgress < 1 ? hashProgress : uploadProgress}
-                  />
-                ) : null}
-              </span>
-            ) : null
-          }
-          consentChecked={allowsTrainingDataUse}
-          consentDisabled={phase !== "idle"}
-          onConsentChange={setAllowsTrainingDataUse}
-          consentDataLabel="녹화 영상 데이터"
-          actionDisabled={!file || phase !== "idle" || !uploadQuota || uploadQuota.remaining === 0}
-          actionLabel={
-            phase === "uploading"
-              ? hashProgress < 1
-                ? "파일 확인 중..."
-                : `업로드 ${Math.round(uploadProgress * 100)}%`
-              : "인식 시작"
-          }
-          onAction={startRecognition}
+  const reviewContent =
+    job?.status === "review_ready" && job.result ? (
+      <ReviewPanel
+        key={job.uid}
+        job={{ ...job, result: job.result }}
+        review={review}
+        phase={phase}
+        onReviewChange={setReview}
+        onApply={applyReview}
+        onCancel={cancelResult}
+        onStartNew={() => resetForNewUpload()}
+        isCancelling={isCancelling}
+        error={error}
+        partialFailure={selectedPartialFailure}
+      />
+    ) : null;
+
+  const completionContent = (
+    <>
+      {job?.status === "review_ready" && !job.result ? (
+        <ScannerCompletionState
+          tone="destructive"
+          title="학생 인식 결과를 확인하지 못했어요"
+          description={getScannerUnavailableResultMessage()}
+          actionLabel={scannerMessages.student.uploadAction}
+          onStartNew={() => resetForNewUpload()}
         />
       ) : null}
 
-      {selectedJobUid && !job ? <ScannerJobSkeleton variant="student" /> : null}
-
-      {phase === "waiting" && job ? (
-        <SectionCard
-          title="영상을 인식하고 있어요"
-          description="영상 길이에 따라 시간이 소요될 수 있어요. 화면을 벗어나도 인식은 계속 진행돼요."
-        >
-          <div className="flex items-center gap-3 text-sm text-muted-foreground">
-            <ArrowPathIcon className="size-5 animate-spin" aria-hidden="true" />
-            <span>{job.status === "queued" ? "처리 순서를 기다리는 중" : "영상을 분석하고 학생 정보를 읽는 중"}</span>
-          </div>
-        </SectionCard>
-      ) : null}
-
-      {job?.status === "review_ready" && job.result && phase !== "applied" ? (
-        <ReviewPanel
-          key={job.uid}
-          job={{ ...job, result: job.result }}
-          review={review}
-          phase={phase}
-          onReviewChange={setReview}
-          onApply={applyReview}
-          onCancel={cancelResult}
-          onStartNew={() => clearSelectedJob(true)}
-          isCancelling={isCancelling}
+      {job &&
+      selectedJobUid &&
+      phase === "idle" &&
+      error &&
+      !TERMINAL_JOB_STATUSES.has(job.status) &&
+      !(job.status === "review_ready" && !job.result) ? (
+        <ScannerCompletionState
+          tone="destructive"
+          title="인식 작업 상태를 확인하지 못했어요"
+          description={error}
+          actionLabel={scannerMessages.student.uploadAction}
+          onStartNew={() => resetForNewUpload(false)}
         />
       ) : null}
 
       {job?.status === "review_ready" && job.application?.status === "applied" ? (
         <ScannerCompletionState
           title="학생 성장도 반영이 완료됐어요"
-          description="새로운 영상을 업로드하려면 아래 버튼을 눌러주세요."
-          actionLabel="새 영상 업로드"
-          onStartNew={() => clearSelectedJob()}
+          description="새로운 인식을 시작하려면 아래 버튼을 눌러주세요."
+          actionLabel={scannerMessages.student.uploadAction}
+          onStartNew={() => resetForNewUpload()}
         />
       ) : null}
 
       {job && TERMINAL_JOB_STATUSES.has(job.status) ? (
         <ScannerCompletionState
           tone="destructive"
-          title={getTerminalJobTitle(job.status)}
-          description={getTerminalJobDescription(job.status)}
-          actionLabel="새 영상 업로드"
-          onStartNew={() => clearSelectedJob()}
+          title={getScannerTerminalJobTitle(job.status, job.jobKind)}
+          description={getScannerTerminalJobDescription(job.status, job.jobKind, job.images)}
+          actionLabel={scannerMessages.student.uploadAction}
+          onStartNew={() => resetForNewUpload()}
         />
       ) : null}
+    </>
+  );
+
+  return (
+    <div className="space-y-8 pb-12 pt-6 lg:pt-2">
+      {error && phase !== "review" && phase !== "applying" && !(selectedJobUid && job && phase === "idle") ? (
+        <Callout tone="destructive">{error}</Callout>
+      ) : selectedPartialFailure && phase !== "review" && phase !== "applying" ? (
+        <Callout tone="warning" title="일부 파일만 제출됐어요">
+          {selectedPartialFailure}
+        </Callout>
+      ) : null}
+      {selectedQuotaError && !error ? <Callout tone="warning">{selectedQuotaError}</Callout> : null}
+      {selectedJobUid && !job ? <ScannerJobSkeleton variant="student" /> : null}
+      <ScannerJobShell
+        phase={phase}
+        upload={uploadContent}
+        progress={progressContent}
+        review={reviewContent}
+        completion={completionContent}
+      />
     </div>
   );
 }
@@ -546,8 +873,10 @@ function ReviewPanel({
   onCancel,
   onStartNew,
   isCancelling,
+  error,
+  partialFailure,
 }: {
-  job: StudentVideoJob & { result: StudentDetailVideoResult };
+  job: StudentVideoJob & { result: StudentGrowthResult };
   review: ReviewState;
   phase: ScannerPhase;
   onReviewChange: React.Dispatch<React.SetStateAction<ReviewState>>;
@@ -555,6 +884,8 @@ function ReviewPanel({
   onCancel: () => void;
   onStartNew: () => void;
   isCancelling: boolean;
+  error: string | null;
+  partialFailure: string | null;
 }) {
   const [reviewFilterStudentUids, setReviewFilterStudentUids] = useState<string[] | null>(null);
   const [selectedPreview, setSelectedPreview] = useState<{
@@ -562,6 +893,7 @@ function ReviewPanel({
     studentName: string;
   } | null>(null);
   const unresolvedStudents = job.result.students.filter(({ studentUid }) => !job.studentCatalog?.[studentUid]);
+  const failedImages = job.images.filter((image) => image.status === "failed");
   const artifactsByStudentUid = new Map(job.artifacts.map((artifact) => [artifact.studentUid, artifact]));
   const numberInputNavigation = useNumberInputFlowNavigation();
   const remainingReviewStudents = job.result.students.filter((student) => {
@@ -584,13 +916,21 @@ function ReviewPanel({
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <SubTitle
-          text="인식 결과 검토"
-          description={`${job.result.students.length}명 인식 · 미해결 필드 ${job.result.unresolvedCount}개`}
-        />
+        <div className="min-w-0">
+          <SubTitle
+            text="인식 결과 검토"
+            description={`${job.result.students.length}명 인식 · 미해결 필드 ${job.result.unresolvedCount}개`}
+          />
+          <p className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">현재 작업</span>
+            <span className="truncate">
+              학생 · {getStudentJobInputSummary(job)} · {formatScannerRelativeTime(job.createdAt)}
+            </span>
+          </p>
+        </div>
         <div className="flex flex-wrap justify-end gap-2">
           <Button size="sm" onClick={onStartNew}>
-            새 영상 업로드
+            {scannerMessages.student.uploadAction}
           </Button>
           <Button
             size="sm"
@@ -609,7 +949,21 @@ function ReviewPanel({
         </div>
       </div>
 
-      {unresolvedStudents.length > 0 ? (
+      {error ? (
+        <Callout tone="destructive" title="처리 중 오류가 발생했어요">
+          {error}
+        </Callout>
+      ) : partialFailure ? (
+        <Callout tone="destructive" title="일부 파일만 제출됐어요">
+          {partialFailure}
+        </Callout>
+      ) : failedImages.length > 0 ? (
+        <Callout
+          tone="destructive"
+          title="일부 이미지를 인식하지 못했어요"
+          description={getStudentFailedImagesDescription(failedImages)}
+        />
+      ) : unresolvedStudents.length > 0 ? (
         <Callout
           tone="warning"
           title="학생 식별 필요"
@@ -729,7 +1083,7 @@ function ReviewPanel({
                       student={student}
                       state={state}
                       currentState={job.currentStudentStates?.[student.studentUid]}
-                      disabled={phase === "applied" || !catalogStudent}
+                      disabled={!catalogStudent}
                       getInputProps={numberInputNavigation.getInputProps}
                       onValueChange={updateValue}
                     />
@@ -740,7 +1094,7 @@ function ReviewPanel({
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
                     fields={skillFields}
-                    disabled={phase === "applied" || !catalogStudent}
+                    disabled={!catalogStudent}
                     getInputProps={numberInputNavigation.getInputProps}
                     onValueChange={updateValue}
                   />
@@ -750,7 +1104,7 @@ function ReviewPanel({
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
                     fields={equipmentFields}
-                    disabled={phase === "applied" || !catalogStudent}
+                    disabled={!catalogStudent}
                     getInputProps={numberInputNavigation.getInputProps}
                     onValueChange={updateValue}
                   />
@@ -760,7 +1114,7 @@ function ReviewPanel({
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
                     fields={abilityFields}
-                    disabled={phase === "applied" || !catalogStudent}
+                    disabled={!catalogStudent}
                     getInputProps={numberInputNavigation.getInputProps}
                     onValueChange={updateValue}
                   />
@@ -791,72 +1145,35 @@ function ReviewPanel({
             </p>
           )}
           <div className="flex shrink-0 items-center gap-2">
-            <Button
-              variant="danger-subtle"
-              disabled={phase === "applying" || phase === "applied" || isCancelling}
-              onClick={onCancel}
-            >
+            <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
               {isCancelling ? "취소 중..." : "인식 결과 삭제"}
             </Button>
             <Button
               variant="primary"
-              disabled={phase === "applying" || phase === "applied" || isCancelling}
+              disabled={phase === "applying" || isCancelling}
               onClick={() => onApply(remainingReviewStudents.length)}
             >
-              {phase === "applying" ? "반영 중..." : phase === "applied" ? "반영 완료" : "성장도 저장"}
+              {phase === "applying" ? "반영 중..." : "성장도 저장"}
             </Button>
           </div>
         </FloatingActionBar>
       </div>
-      <RepresentativeFrameDialog jobUid={job.uid} selected={selectedPreview} onClose={() => setSelectedPreview(null)} />
+      <ScannerImageDialog
+        open={selectedPreview !== null}
+        src={
+          selectedPreview
+            ? `/api/ocr/jobs/${encodeURIComponent(job.uid)}/artifacts/${encodeURIComponent(selectedPreview.artifact.uid)}`
+            : ""
+        }
+        title={
+          selectedPreview
+            ? `${selectedPreview.studentName} 인식 화면 · ${selectedPreview.artifact.timestampSeconds.toFixed(1)}초`
+            : "인식 화면"
+        }
+        alt={selectedPreview ? `${selectedPreview.studentName} 인식 화면` : "인식 화면"}
+        onClose={() => setSelectedPreview(null)}
+      />
     </section>
-  );
-}
-
-function RepresentativeFrameDialog({
-  jobUid,
-  selected,
-  onClose,
-}: {
-  jobUid: string;
-  selected: { artifact: StudentVideoJob["artifacts"][number]; studentName: string } | null;
-  onClose: () => void;
-}) {
-  const source = selected
-    ? `/api/ocr/jobs/${encodeURIComponent(jobUid)}/artifacts/${encodeURIComponent(selected.artifact.uid)}`
-    : "";
-  return (
-    <Dialog open={selected !== null} onClose={onClose} className="relative z-layer-modal">
-      <DialogBackdrop className="fixed inset-0 bg-black/85 backdrop-blur-sm" />
-      <div className="fixed inset-0 flex items-center justify-center p-3 sm:p-6">
-        <DialogPanel className="relative flex max-h-full w-full max-w-[min(80rem,96vw)] flex-col overflow-hidden rounded-lg border border-white/15 bg-black shadow-2xl">
-          <div className="flex items-center justify-between gap-4 border-b border-white/10 px-4 py-3 text-white">
-            <DialogTitle className="truncate text-sm font-medium">
-              {selected
-                ? `${selected.studentName} 인식 화면 · ${selected.artifact.timestampSeconds.toFixed(1)}초`
-                : "인식 화면"}
-            </DialogTitle>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="인식 화면 닫기"
-              className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-white/80 outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/70"
-            >
-              <XMarkIcon className="size-5" aria-hidden="true" />
-            </button>
-          </div>
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-2 sm:p-4">
-            {selected ? (
-              <img
-                src={source}
-                alt={`${selected.studentName} 인식 화면`}
-                className="max-h-[calc(100vh-7rem)] max-w-full object-contain"
-              />
-            ) : null}
-          </div>
-        </DialogPanel>
-      </div>
-    </Dialog>
   );
 }
 
@@ -986,7 +1303,7 @@ function ReviewBasicGroup({
 
 type ReviewGroupProps = {
   studentName: string;
-  student: StudentDetailVideoResult["students"][number];
+  student: StudentGrowthStudent;
   state: ReviewStudent;
   currentState?: CurrentStudentState;
   disabled: boolean;
@@ -1055,7 +1372,7 @@ function ReviewNumberInput({
 }: {
   studentName: string;
   field: FieldDefinition;
-  detail: StudentDetailVideoResult["students"][number]["fieldDetails"][StudentVideoFieldName];
+  detail: StudentFieldDetail;
   value: string;
   currentValue?: number | null;
   disabled: boolean;
@@ -1145,7 +1462,7 @@ function ReviewFieldMeta({
   confirmed,
   tier = false,
 }: {
-  detail: StudentDetailVideoResult["students"][number]["fieldDetails"][StudentVideoFieldName];
+  detail: StudentFieldDetail;
   proposedValue: string;
   currentValue: number | null;
   confirmed: boolean;
@@ -1214,7 +1531,7 @@ function isRecognitionFailure(state: StudentVideoFieldState): state is "unknown"
 }
 
 export function getFieldComparison(
-  detail: StudentDetailVideoResult["students"][number]["fieldDetails"][StudentVideoFieldName],
+  detail: StudentFieldDetail,
   proposedValue: string,
   currentValue?: number | null,
   confirmed = detail.state === "recognized",
@@ -1229,7 +1546,7 @@ export function getFieldComparison(
 }
 
 function fieldNeedsReview(
-  detail: StudentDetailVideoResult["students"][number]["fieldDetails"][StudentVideoFieldName],
+  detail: StudentFieldDetail,
   proposedValue: string,
   confirmed: boolean,
   currentValue?: number | null,
@@ -1239,7 +1556,7 @@ function fieldNeedsReview(
 }
 
 function studentNeedsReview(
-  student: StudentDetailVideoResult["students"][number],
+  student: StudentGrowthStudent,
   state: ReviewStudent,
   currentState?: CurrentStudentState,
 ): boolean {
@@ -1254,10 +1571,10 @@ function studentNeedsReview(
 }
 
 function fieldFailureReason(state: StudentVideoFieldState): string {
-  return state === "conflict" ? "영상에서 서로 다른 값이 인식됨" : "인식값을 확인하지 못함";
+  return state === "conflict" ? "서로 다른 화면에서 값이 다르게 인식됨" : "인식값을 확인하지 못함";
 }
 
-export function createReviewState(result: StudentDetailVideoResult): ReviewState {
+export function createReviewState(result: StudentGrowthResult): ReviewState {
   return Object.fromEntries(
     result.students.map((student) => [
       student.studentUid,
@@ -1277,7 +1594,7 @@ export function createReviewState(result: StudentDetailVideoResult): ReviewState
 }
 
 export function buildStudentVideoApplyRequest(
-  result: StudentDetailVideoResult,
+  result: StudentGrowthResult,
   review: ReviewState,
   validStudentUids?: ReadonlySet<string>,
 ): {

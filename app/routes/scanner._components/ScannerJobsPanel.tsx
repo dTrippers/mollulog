@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { PanelActionRow, PanelBody } from "~/components/primitives";
 import { cn } from "~/lib/utils";
+import { formatScannerRelativeTime } from "./scanner-messages";
 
 const SCANNER_JOBS_UPDATED_EVENT = "scanner-jobs-updated";
 const ACTIVE_JOB_STATUSES = new Set(["queued", "processing", "finalizing"]);
 
-type ScannerJobSummary = {
+export type ScannerJobSummary = {
   uid: string;
-  jobKind: "item_inventory_images_v1" | "student_detail_video_v1";
+  jobKind: "item_inventory_images_v1" | "student_detail_images_v1" | "student_detail_video_v1";
   status: string;
   progress: { completed: number; failed: number; total: number };
   application: { status: string; appliedAt: string | null } | null;
@@ -21,8 +22,58 @@ type ScannerJobsResponse = {
   jobs: ScannerJobSummary[];
 };
 
-export function notifyScannerJobsChanged() {
-  window.dispatchEvent(new Event(SCANNER_JOBS_UPDATED_EVENT));
+export type ScannerJobStatusUpdate = Pick<ScannerJobSummary, "uid" | "status" | "updatedAt">;
+
+function isScannerJobStateNewer(
+  candidate: Pick<ScannerJobSummary, "updatedAt">,
+  current: Pick<ScannerJobSummary, "updatedAt">,
+): boolean {
+  const candidateTime = Date.parse(candidate.updatedAt);
+  const currentTime = Date.parse(current.updatedAt);
+  if (Number.isFinite(candidateTime) && Number.isFinite(currentTime)) return candidateTime > currentTime;
+  return candidate.updatedAt > current.updatedAt;
+}
+
+export function applyScannerJobStatusUpdate(
+  jobs: ReadonlyArray<ScannerJobSummary>,
+  update: ScannerJobStatusUpdate,
+): ScannerJobSummary[] {
+  return jobs.map((job) =>
+    job.uid === update.uid && isScannerJobStateNewer(update, job)
+      ? { ...job, status: update.status, updatedAt: update.updatedAt }
+      : job,
+  );
+}
+
+export function mergeScannerJobsWithStatusUpdates(
+  jobs: ReadonlyArray<ScannerJobSummary>,
+  updates: ReadonlyMap<string, ScannerJobStatusUpdate>,
+): ScannerJobSummary[] {
+  return jobs.map((job) => {
+    const update = updates.get(job.uid);
+    return update && isScannerJobStateNewer(update, job)
+      ? { ...job, status: update.status, updatedAt: update.updatedAt }
+      : job;
+  });
+}
+
+export function mergeScannerJobsPreservingSelected(
+  current: ReadonlyArray<ScannerJobSummary>,
+  next: ReadonlyArray<ScannerJobSummary>,
+  selectedJobUid: string | null,
+): ScannerJobSummary[] {
+  if (!selectedJobUid) return [...next];
+  const currentByUid = new Map(current.map((job) => [job.uid, job]));
+  return next.map((job) => {
+    const currentJob = currentByUid.get(job.uid);
+    return currentJob && isScannerJobStateNewer(currentJob, job) ? currentJob : job;
+  });
+}
+
+export function notifyScannerJobsChanged(update?: ScannerJobStatusUpdate) {
+  window.dispatchEvent(
+    new CustomEvent<ScannerJobStatusUpdate | undefined>(SCANNER_JOBS_UPDATED_EVENT, { detail: update }),
+  );
 }
 
 export default function ScannerJobsPanel() {
@@ -30,36 +81,69 @@ export default function ScannerJobsPanel() {
   const [jobs, setJobs] = useState<ScannerJobSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const latestStatusUpdatesRef = useRef(new Map<string, ScannerJobStatusUpdate>());
   const selectedJobUid = new URLSearchParams(location.search).get("job");
   const hasBackgroundActiveJobs = useMemo(
     () => jobs.some((job) => job.uid !== selectedJobUid && ACTIVE_JOB_STATUSES.has(job.status)),
     [jobs, selectedJobUid],
   );
 
-  const loadJobs = useCallback(async () => {
-    try {
-      const response = await fetch("/api/ocr/jobs?jobKind=all");
-      const body = (await response.json().catch(() => null)) as (ScannerJobsResponse & { error?: string }) | null;
-      if (!response.ok) throw new Error(body?.error ?? "진행 상황을 불러오지 못했어요");
-      setJobs(body?.jobs ?? []);
-      setHasError(false);
-    } catch {
-      setHasError(true);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  const loadJobs = useCallback(
+    async (preserveSelected = false) => {
+      try {
+        const response = await fetch("/api/ocr/jobs?jobKind=all");
+        const body = (await response.json().catch(() => null)) as (ScannerJobsResponse & { error?: string }) | null;
+        if (!response.ok) throw new Error(body?.error ?? "진행 상황을 불러오지 못했어요");
+        const nextJobs = body?.jobs ?? [];
+        for (const job of nextJobs) {
+          const nextUpdate: ScannerJobStatusUpdate = {
+            uid: job.uid,
+            status: job.status,
+            updatedAt: job.updatedAt,
+          };
+          const previousUpdate = latestStatusUpdatesRef.current.get(job.uid);
+          if (!previousUpdate || isScannerJobStateNewer(nextUpdate, previousUpdate)) {
+            latestStatusUpdatesRef.current.set(job.uid, nextUpdate);
+          }
+        }
+        const recencyMergedJobs = mergeScannerJobsWithStatusUpdates(nextJobs, latestStatusUpdatesRef.current);
+        setJobs((current) =>
+          preserveSelected
+            ? mergeScannerJobsPreservingSelected(current, recencyMergedJobs, selectedJobUid)
+            : recencyMergedJobs,
+        );
+        setHasError(false);
+      } catch {
+        setHasError(true);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [selectedJobUid],
+  );
 
   useEffect(() => {
     void loadJobs();
-    const handleJobsChanged = () => void loadJobs();
+    const handleJobsChanged = (event: Event) => {
+      const update = (event as CustomEvent<ScannerJobStatusUpdate | undefined>).detail;
+      if (!update) {
+        void loadJobs();
+        return;
+      }
+      const previousUpdate = latestStatusUpdatesRef.current.get(update.uid);
+      if (!previousUpdate || isScannerJobStateNewer(update, previousUpdate)) {
+        latestStatusUpdatesRef.current.set(update.uid, update);
+      }
+      setJobs((current) => applyScannerJobStatusUpdate(current, update));
+      setHasError(false);
+    };
     window.addEventListener(SCANNER_JOBS_UPDATED_EVENT, handleJobsChanged);
     return () => window.removeEventListener(SCANNER_JOBS_UPDATED_EVENT, handleJobsChanged);
   }, [loadJobs]);
 
   useEffect(() => {
     if (!hasBackgroundActiveJobs) return;
-    const interval = window.setInterval(() => void loadJobs(), 3000);
+    const interval = window.setInterval(() => void loadJobs(true), 3000);
     return () => window.clearInterval(interval);
   }, [hasBackgroundActiveJobs, loadJobs]);
 
@@ -106,7 +190,7 @@ export default function ScannerJobsPanel() {
           >
             <PanelActionRow
               title={jobKindLabel(job.jobKind)}
-              description={`${jobInputLabel(job)} · ${formatRelativePastTime(job.createdAt)}`}
+              description={`${jobInputLabel(job)} · ${formatScannerRelativeTime(job.createdAt)}`}
               actions={<JobStatusBadge job={job} />}
             />
           </Link>
@@ -192,18 +276,10 @@ function jobKindLabel(jobKind: ScannerJobSummary["jobKind"]) {
 }
 
 function jobInputLabel(job: ScannerJobSummary) {
-  return job.jobKind === "item_inventory_images_v1" ? `스크린샷 ${job.progress.total}장` : "동영상";
-}
-
-function formatRelativePastTime(value: string) {
-  const createdAt = new Date(value).getTime();
-  if (!Number.isFinite(createdAt)) return "-";
-  const elapsedMinutes = Math.max(0, Math.floor((Date.now() - createdAt) / 60000));
-  if (elapsedMinutes < 1) return "방금";
-  if (elapsedMinutes < 60) return `${elapsedMinutes}분 전`;
-  const elapsedHours = Math.floor(elapsedMinutes / 60);
-  if (elapsedHours < 24) return `${elapsedHours}시간 전`;
-  return `${Math.floor(elapsedHours / 24)}일 전`;
+  if (job.jobKind === "item_inventory_images_v1" || job.jobKind === "student_detail_images_v1") {
+    return `스크린샷 ${job.progress.total}장`;
+  }
+  return "동영상";
 }
 
 function ScannerJobsSkeleton() {

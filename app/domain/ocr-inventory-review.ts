@@ -48,7 +48,7 @@ export type OcrInventoryReview =
       reason: null;
     }
   | {
-      reviewMode: "legacy";
+      reviewMode: "unavailable";
       cells: [];
       reason: string;
     };
@@ -216,7 +216,7 @@ export function buildOcrInventoryReview(result: unknown, imageRows: OcrReviewIma
   const resultImages = resultRecord?.images;
   const succeededRows = imageRows.filter((image) => image.status === "succeeded");
   if (!Array.isArray(resultImages) || resultImages.length === 0 || resultImages.length !== succeededRows.length) {
-    return { reviewMode: "legacy", cells: [], reason: "result_image_mapping_unusable" };
+    return { reviewMode: "unavailable", cells: [], reason: "result_image_mapping_unusable" };
   }
 
   const cells: OcrInventoryReviewCell[] = [];
@@ -225,14 +225,14 @@ export function buildOcrInventoryReview(result: unknown, imageRows: OcrReviewIma
     const imageRow = succeededRows[imageIndex];
     const filename = asNonEmptyString(image?.filename);
     if (!image || !imageRow || filename === null || filename !== imageRow.filename) {
-      return { reviewMode: "legacy", cells: [], reason: "result_image_mapping_unusable" };
+      return { reviewMode: "unavailable", cells: [], reason: "result_image_mapping_unusable" };
     }
     if (!Array.isArray(image.observations)) {
-      return { reviewMode: "legacy", cells: [], reason: "raw_observations_unusable" };
+      return { reviewMode: "unavailable", cells: [], reason: "raw_observations_unusable" };
     }
     for (const [position] of image.observations.entries()) {
       const cell = parseCell(image, imageIndex, position, imageRow);
-      if (!cell) return { reviewMode: "legacy", cells: [], reason: "raw_observations_unusable" };
+      if (!cell) return { reviewMode: "unavailable", cells: [], reason: "raw_observations_unusable" };
       cells.push(cell);
     }
   }

@@ -5,11 +5,6 @@ type Sha256WorkerResponse =
   | { type: "complete"; digest: string }
   | { type: "error" };
 
-export async function sha256FileNative(file: File): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
-  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
-}
-
 export async function sha256FileInWorker(file: File, onProgress?: (processedBytes: number) => void): Promise<string> {
   if (typeof Worker === "undefined") return sha256File(file, onProgress);
 
