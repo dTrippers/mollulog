@@ -6,7 +6,6 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { identityMaintenanceMessage } from "~/domain/identity-cutover";
 import { withD1Session } from "~/lib/d1-session";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community.server";
@@ -116,7 +115,6 @@ export default function UserIndex() {
   }
 
   const fetcher = useFetcher<ActionData>();
-  const maintenanceMessage = identityMaintenanceMessage(fetcher.data);
   const { showSignIn } = useSignIn();
   const [searchParams] = useSearchParams();
   const getPageUrl = useCallback(
@@ -152,9 +150,9 @@ export default function UserIndex() {
             : showSignIn()
         }
       />
-      {maintenanceMessage || fetcher.data?.error?.message ? (
+      {fetcher.data?.error?.message ? (
         <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-          {maintenanceMessage ?? fetcher.data?.error?.message}
+          {fetcher.data.error.message}
         </p>
       ) : null}
       <CommunityInfiniteFeed

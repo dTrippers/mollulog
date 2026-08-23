@@ -5,7 +5,6 @@ import { useState } from "react";
 import { type LoaderFunctionArgs, redirect, useLoaderData, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { ButtonForm, FormGroup, LinkForm } from "~/components/features/forms";
-import { identityMaintenanceMessage } from "~/domain/identity-cutover";
 import { getPasskeysBySensei } from "~/models/passkey";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
@@ -29,7 +28,7 @@ export default function EditPasskeyIndex() {
       const creationOptions = await fetch("/auth/passkey/register");
       const creationOptionsBody = await creationOptions.json<unknown>();
       if (!creationOptions.ok) {
-        setError(identityMaintenanceMessage(creationOptionsBody) ?? "Passkey를 추가하는 중 오류가 발생했어요.");
+        setError("Passkey를 추가하는 중 오류가 발생했어요.");
         return;
       }
       const creationResponse = await startRegistration({
@@ -43,8 +42,7 @@ export default function EditPasskeyIndex() {
       });
 
       if (!creationResult.ok) {
-        const resultBody = await creationResult.json<unknown>().catch(() => null);
-        setError(identityMaintenanceMessage(resultBody) ?? "Passkey를 추가하는 중 오류가 발생했어요.");
+        setError("Passkey를 추가하는 중 오류가 발생했어요.");
         return;
       }
 

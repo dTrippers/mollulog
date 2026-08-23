@@ -1,15 +1,12 @@
 import type { ActionFunction } from "react-router";
 import { redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { identityMaintenanceActionResult } from "~/lib/identity-cutover.server";
 import { getLogger } from "~/lib/observability.server";
 import { follow, unfollow } from "~/models/followership";
 import { getSenseiByUsername, isSenseiProfileVisibleTo } from "~/models/sensei";
 
 export const action: ActionFunction = async ({ request, context }) => {
   const { env, ctx } = context.cloudflare;
-  const maintenance = await identityMaintenanceActionResult(env, { ctx, operation: "followerships.action" });
-  if (maintenance) return maintenance;
   const logger = getLogger(env, ctx, {
     route: "api.followerships",
     method: request.method,
@@ -50,7 +47,6 @@ export const action: ActionFunction = async ({ request, context }) => {
 };
 
 export type ActionData = {
-  message?: string;
   followed?: boolean;
   error?: { message: string };
 };

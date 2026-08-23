@@ -41,7 +41,7 @@ describe("profile route privacy guard", () => {
     expect(unguardedModels).toEqual([]);
   });
 
-  it("guards public Postgres timeline routes with D1 profile visibility", () => {
+  it("guards public Postgres timeline routes with shared profile visibility", () => {
     const unguardedRoutes = readdirSync(ROUTES_DIRECTORY)
       .filter((file) => file.endsWith(".tsx") && !file.includes(".edit."))
       .filter((file) => {

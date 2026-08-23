@@ -11,8 +11,6 @@ import {
 } from "~/auth/authenticator.server";
 import { ProfileEditor } from "~/components/features/profile";
 import { Button, Title } from "~/components/primitives";
-import { identityMaintenanceMessage } from "~/domain/identity-cutover";
-import { identityMaintenanceActionResult } from "~/lib/identity-cutover.server";
 import { createSenseiWithAuthIdentity, getSenseiByAuthIdentity } from "~/models/auth-identity";
 import { deletePendingSenseiRegistration, getPendingSenseiRegistration } from "~/models/pending-sensei-registration";
 import { getSenseiById, getSenseiByUsername } from "~/models/sensei";
@@ -21,7 +19,6 @@ import { getAllStudents } from "~/models/student";
 export const meta: MetaFunction = () => [{ title: "선생님 등록 | 몰루로그" }];
 
 type ActionData = {
-  message?: string;
   error?: {
     form?: string;
     username?: string;
@@ -62,8 +59,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const maintenance = await identityMaintenanceActionResult(env, { ctx, operation: "register.action" });
-  if (maintenance) return maintenance;
   const authenticator = getAuthenticator(env, ctx);
   const sensei = await getActiveSensei(env, request, ctx);
   if (sensei) {
@@ -160,7 +155,6 @@ export default function Register() {
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
-  const maintenanceMessage = identityMaintenanceMessage(actionData);
 
   return (
     <div className="max-w-3xl">
@@ -172,9 +166,9 @@ export default function Register() {
         </div>
 
         <Form method="post">
-          {(maintenanceMessage ?? actionData?.error?.form) ? (
+          {actionData?.error?.form ? (
             <p className="mb-4 rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-              {maintenanceMessage ?? actionData?.error?.form}
+              {actionData.error.form}
             </p>
           ) : null}
           <ProfileEditor students={allStudents} initialData={actionData?.values} error={actionData?.error} />
