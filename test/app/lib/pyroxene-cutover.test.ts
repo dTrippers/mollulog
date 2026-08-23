@@ -11,12 +11,12 @@ jest.mock("~/lib/with-timeout", () => ({
 }));
 
 import {
-  PYROXENE_CUTOVER_MAINTENANCE_KEY,
-  PYROXENE_MAINTENANCE_RETRY_AFTER_SECONDS,
-  pyroxeneMaintenanceMessage,
-  pyroxeneMaintenanceResult,
+  D1_CUTOVER_MAINTENANCE_KEY,
+  D1_MAINTENANCE_RETRY_AFTER_SECONDS,
+  d1MaintenanceMessage,
+  d1MaintenanceResult,
 } from "~/domain/pyroxene-cutover";
-import { isPyroxeneMaintenanceResult, pyroxeneMaintenanceActionResult } from "~/lib/pyroxene-cutover.server";
+import { d1MaintenanceActionResult, isD1MaintenanceResult } from "~/lib/pyroxene-cutover.server";
 
 const mockedGetLogger = getLogger as jest.MockedFunction<typeof getLogger>;
 const mockedWithTimeout = withTimeout as jest.MockedFunction<typeof withTimeout>;
@@ -30,20 +30,20 @@ beforeEach(() => {
   mockedWithTimeout.mockImplementation((promise) => promise);
 });
 
-describe("Pyroxene maintenance guard", () => {
+describe("D1 maintenance guard", () => {
   it("maps only the typed maintenance payload to the shared user notice", () => {
-    expect(pyroxeneMaintenanceMessage(pyroxeneMaintenanceResult)).toBe(pyroxeneMaintenanceResult.message);
-    expect(pyroxeneMaintenanceMessage({ error: "database connection failed" })).toBeNull();
+    expect(d1MaintenanceMessage(d1MaintenanceResult)).toBe(d1MaintenanceResult.message);
+    expect(d1MaintenanceMessage({ error: "database connection failed" })).toBeNull();
   });
 
-  it("allows Pyroxene writes when maintenance is absent", async () => {
-    await expect(pyroxeneMaintenanceActionResult(createEnv(async () => null))).resolves.toBeNull();
+  it("allows guarded writes when maintenance is absent", async () => {
+    await expect(d1MaintenanceActionResult(createEnv(async () => null))).resolves.toBeNull();
   });
 
   it("returns a typed 503 with retry and no-store headers when enabled", async () => {
-    const response = await pyroxeneMaintenanceActionResult(
+    const response = await d1MaintenanceActionResult(
       createEnv(async (key) => {
-        expect(key).toBe(PYROXENE_CUTOVER_MAINTENANCE_KEY);
+        expect(key).toBe(D1_CUTOVER_MAINTENANCE_KEY);
         return "enabled";
       }),
     );
@@ -51,26 +51,32 @@ describe("Pyroxene maintenance guard", () => {
     expect(response?.init?.status).toBe(503);
     expect(response?.init?.headers).toMatchObject({
       "Content-Type": "application/json; charset=utf-8",
-      "Retry-After": String(PYROXENE_MAINTENANCE_RETRY_AFTER_SECONDS),
+      "Retry-After": String(D1_MAINTENANCE_RETRY_AFTER_SECONDS),
       "Cache-Control": "no-store",
     });
-    expect(isPyroxeneMaintenanceResult(response?.data)).toBe(true);
+    expect(isD1MaintenanceResult(response?.data)).toBe(true);
     expect((response?.data as { message: string }).message).toContain("잠시");
   });
 
+  it("treats explicit false values as unfrozen", async () => {
+    await expect(d1MaintenanceActionResult(createEnv(async () => "false"))).resolves.toBeNull();
+    await expect(d1MaintenanceActionResult(createEnv(async () => "0"))).resolves.toBeNull();
+    await expect(d1MaintenanceActionResult(createEnv(async () => "  "))).resolves.toBeNull();
+  });
+
   it("bounds the KV read with the standard operation timeout", async () => {
-    await pyroxeneMaintenanceActionResult(createEnv(async () => null));
+    await d1MaintenanceActionResult(createEnv(async () => null));
     expect(mockedWithTimeout).toHaveBeenCalledWith(
       expect.any(Promise),
       RUNTIME_TIMEOUTS.kv.operation,
-      "pyroxene-cutover.kv.get",
+      "d1-cutover.kv.get",
     );
   });
 
   it("fails closed and logs a KV error", async () => {
     const logger = { error: jest.fn() };
     mockedGetLogger.mockReturnValue(logger as unknown as ReturnType<typeof getLogger>);
-    const response = await pyroxeneMaintenanceActionResult(
+    const response = await d1MaintenanceActionResult(
       createEnv(async () => {
         throw new Error("KV unavailable");
       }),
@@ -79,9 +85,9 @@ describe("Pyroxene maintenance guard", () => {
 
     expect(response?.init?.status).toBe(503);
     expect(logger.error).toHaveBeenCalledWith(
-      "Pyroxene maintenance KV read failed; failing closed",
+      "D1 maintenance KV read failed; failing closed",
       expect.any(Error),
-      expect.objectContaining({ key: PYROXENE_CUTOVER_MAINTENANCE_KEY, operation: "utils.pyroxene.action" }),
+      expect.objectContaining({ key: D1_CUTOVER_MAINTENANCE_KEY, operation: "utils.pyroxene.action" }),
     );
   });
 
@@ -89,7 +95,7 @@ describe("Pyroxene maintenance guard", () => {
     mockedWithTimeout.mockRejectedValueOnce(new Error("timeout"));
     const logger = { error: jest.fn() };
     mockedGetLogger.mockReturnValue(logger as unknown as ReturnType<typeof getLogger>);
-    const response = await pyroxeneMaintenanceActionResult(
+    const response = await d1MaintenanceActionResult(
       createEnv(async () => new Promise<string | null>(() => {})),
       { operation: "utils.pyroxene.timeout" },
     );

@@ -1,0 +1,76 @@
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { d1MaintenanceResult } from "~/domain/pyroxene-cutover";
+
+const mockGetActiveSensei = jest.fn();
+const mockD1MaintenanceActionResult = jest.fn();
+const mockGetEventMetadata = jest.fn();
+const mockUpsertEventShopState = jest.fn();
+
+jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: mockGetActiveSensei }));
+jest.mock("~/lib/d1-session", () => ({ withD1Session: (env: unknown) => env }));
+jest.mock("~/lib/pyroxene-cutover.server", () => ({
+  d1MaintenanceActionResult: mockD1MaintenanceActionResult,
+}));
+jest.mock("~/models/event-content", () => ({ getEventMetadata: mockGetEventMetadata }));
+jest.mock("~/models/event-shop-state", () => ({ upsertEventShopState: mockUpsertEventShopState }));
+
+import { action } from "~/routes/api.events.$eventUid.shop-state";
+
+const env = { DB: "db" } as unknown as Env;
+const ctx = {} as ExecutionContext;
+
+function actionArgs(request: Request) {
+  return {
+    context: { cloudflare: { env, ctx } },
+    params: { eventUid: "event-1" },
+    request,
+  } as never;
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockGetActiveSensei.mockResolvedValue({ id: 1 });
+  mockD1MaintenanceActionResult.mockResolvedValue(null);
+  mockGetEventMetadata.mockResolvedValue(null);
+  mockUpsertEventShopState.mockResolvedValue(undefined);
+});
+
+describe("event shop state maintenance", () => {
+  it("returns the typed maintenance response before parsing or writing", async () => {
+    const maintenanceResponse = { data: d1MaintenanceResult, init: { status: 503 } };
+    mockD1MaintenanceActionResult.mockResolvedValue(maintenanceResponse);
+
+    const response = await action(
+      actionArgs(
+        new Request("https://mollulog.test/api/events/event-1/shop-state", {
+          method: "POST",
+          body: "not-json",
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    expect(response).toBe(maintenanceResponse);
+    expect(mockD1MaintenanceActionResult).toHaveBeenCalledWith(env, {
+      ctx,
+      operation: "api.events.shop-state.action",
+    });
+    expect(mockGetEventMetadata).not.toHaveBeenCalled();
+    expect(mockUpsertEventShopState).not.toHaveBeenCalled();
+  });
+
+  it("continues to the action when maintenance is absent", async () => {
+    await expect(
+      action(
+        actionArgs(
+          new Request("https://mollulog.test/api/events/event-1/shop-state", {
+            method: "POST",
+            body: JSON.stringify({}),
+            headers: { "Content-Type": "application/json" },
+          }),
+        ),
+      ),
+    ).resolves.toEqual({ success: false });
+    expect(mockGetEventMetadata).toHaveBeenCalled();
+  });
+});

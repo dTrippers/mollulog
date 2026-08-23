@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { createEmptyGuestPyroxenePlanner } from "~/domain/guest-pyroxene-planner";
-import { pyroxeneMaintenanceResult } from "~/domain/pyroxene-cutover";
+import { d1MaintenanceResult } from "~/domain/pyroxene-cutover";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
-const mockPyroxeneMaintenanceActionResult = jest.fn<AsyncMock>();
+const mockD1MaintenanceActionResult = jest.fn<AsyncMock>();
 const mockImportGuestPyroxeneSelection = jest.fn<AsyncMock>();
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: mockGetActiveSensei }));
 jest.mock("~/components/features/futures", () => ({ useGuestPyroxenePlanner: jest.fn() }));
 jest.mock("~/lib/d1-session", () => ({ withD1Session: jest.fn() }));
 jest.mock("~/lib/pyroxene-cutover.server", () => ({
-  pyroxeneMaintenanceActionResult: mockPyroxeneMaintenanceActionResult,
+  d1MaintenanceActionResult: mockD1MaintenanceActionResult,
 }));
 jest.mock("~/models/favorite-students", () => ({
   favoriteStudent: jest.fn(),
@@ -52,17 +52,17 @@ function actionArgs(request: Request) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetActiveSensei.mockResolvedValue({ id: 1 });
-  mockPyroxeneMaintenanceActionResult.mockResolvedValue(null);
+  mockD1MaintenanceActionResult.mockResolvedValue(null);
   mockImportGuestPyroxeneSelection.mockResolvedValue({ verified: [], failed: [] });
 });
 
 describe("Pyroxene import maintenance", () => {
   it("returns maintenance before parsing the import envelope", async () => {
     const maintenanceResponse = {
-      data: pyroxeneMaintenanceResult,
+      data: d1MaintenanceResult,
       init: { status: 503 },
     };
-    mockPyroxeneMaintenanceActionResult.mockResolvedValue(maintenanceResponse);
+    mockD1MaintenanceActionResult.mockResolvedValue(maintenanceResponse);
 
     const response = await action(
       actionArgs(
@@ -75,7 +75,7 @@ describe("Pyroxene import maintenance", () => {
     );
 
     expect(response).toBe(maintenanceResponse);
-    expect(mockPyroxeneMaintenanceActionResult).toHaveBeenCalledWith(env, {
+    expect(mockD1MaintenanceActionResult).toHaveBeenCalledWith(env, {
       ctx,
       operation: "utils.pyroxene.import.action",
     });
@@ -98,7 +98,7 @@ describe("Pyroxene import maintenance", () => {
       data: { success: false, failedLabels: ["로그인이 필요해요"] },
       init: { status: 401 },
     });
-    expect(mockPyroxeneMaintenanceActionResult).not.toHaveBeenCalled();
+    expect(mockD1MaintenanceActionResult).not.toHaveBeenCalled();
   });
 
   it("passes selected favorites to the shared import operation", async () => {

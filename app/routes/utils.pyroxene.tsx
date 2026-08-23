@@ -27,7 +27,7 @@ import {
   guestPyroxeneTimelineItems,
   hasGuestPyroxenePlannerData,
 } from "~/domain/guest-pyroxene-planner";
-import { pyroxeneMaintenanceMessage } from "~/domain/pyroxene-cutover";
+import { d1MaintenanceMessage } from "~/domain/pyroxene-cutover";
 import { defaultPyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import {
   createOptimisticApPackageTimelineItems,
@@ -40,7 +40,7 @@ import {
 } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { getLogger } from "~/lib/observability.server";
-import { pyroxeneMaintenanceActionResult } from "~/lib/pyroxene-cutover.server";
+import { d1MaintenanceActionResult } from "~/lib/pyroxene-cutover.server";
 import { canonicalLink } from "~/lib/seo";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { PyroxeneEventData, PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
@@ -146,7 +146,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     return { success: false };
   }
 
-  const maintenance = await pyroxeneMaintenanceActionResult(env, {
+  const maintenance = await d1MaintenanceActionResult(env, {
     ctx,
     operation: "utils.pyroxene.action",
   });
@@ -453,7 +453,7 @@ export default function PyroxenePlanner() {
 
     pendingOwnedResourceSave.current = null;
     if (!ownedResourcesFetcher.data?.success) {
-      const maintenanceMessage = pyroxeneMaintenanceMessage(ownedResourcesFetcher.data);
+      const maintenanceMessage = d1MaintenanceMessage(ownedResourcesFetcher.data);
       setOwnedResourceSaveError(maintenanceMessage ?? "보유 재화를 저장하지 못했어요");
       return;
     }
@@ -823,7 +823,7 @@ export default function PyroxenePlanner() {
   const guestDataStatus = guestPlanner.snapshot?.status;
   const hasGuestData = guestPlanner.snapshot ? hasGuestPyroxenePlannerData(guestPlanner.snapshot.envelope.data) : false;
   const maintenanceMessage =
-    pyroxeneMaintenanceMessage(fetcher.data) ?? pyroxeneMaintenanceMessage(ownedResourcesFetcher.data);
+    d1MaintenanceMessage(fetcher.data) ?? d1MaintenanceMessage(ownedResourcesFetcher.data);
 
   return (
     <>

@@ -1,58 +1,64 @@
 import { data } from "react-router";
 import {
-  PYROXENE_CUTOVER_MAINTENANCE_KEY,
-  PYROXENE_MAINTENANCE_RETRY_AFTER_SECONDS,
-  pyroxeneMaintenanceResult,
+  D1_CUTOVER_MAINTENANCE_KEY,
+  D1_MAINTENANCE_RETRY_AFTER_SECONDS,
+  d1MaintenanceResult,
 } from "~/domain/pyroxene-cutover";
 import { getLogger } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { withTimeout } from "~/lib/with-timeout";
 
-export type { PyroxeneMaintenanceResult } from "~/domain/pyroxene-cutover";
+export type { D1MaintenanceResult } from "~/domain/pyroxene-cutover";
 export {
-  isPyroxeneMaintenanceResult,
-  pyroxeneMaintenanceMessage,
-  pyroxeneMaintenanceResult,
+  d1MaintenanceMessage,
+  d1MaintenanceResult,
+  isD1MaintenanceResult,
 } from "~/domain/pyroxene-cutover";
 
-type PyroxeneMaintenanceLogger = Pick<ReturnType<typeof getLogger>, "error">;
+type D1MaintenanceLogger = Pick<ReturnType<typeof getLogger>, "error">;
 
-export type PyroxeneMaintenanceOptions = {
+export type D1MaintenanceOptions = {
   ctx?: ExecutionContext;
-  logger?: PyroxeneMaintenanceLogger;
+  logger?: D1MaintenanceLogger;
   operation?: string;
 };
 
-async function isPyroxeneWriteFrozen(
+function isMaintenanceValueActive(value: string | null): boolean {
+  if (value === null) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized !== "" && normalized !== "0" && normalized !== "false";
+}
+
+async function isD1WriteFrozen(
   env: Pick<Env, "KV_CACHE">,
-  options: PyroxeneMaintenanceOptions = {},
+  options: D1MaintenanceOptions = {},
 ): Promise<boolean> {
   try {
     const value = await withTimeout(
-      env.KV_CACHE.get(PYROXENE_CUTOVER_MAINTENANCE_KEY),
+      env.KV_CACHE.get(D1_CUTOVER_MAINTENANCE_KEY),
       RUNTIME_TIMEOUTS.kv.operation,
-      "pyroxene-cutover.kv.get",
+      "d1-cutover.kv.get",
     );
-    return value !== null;
+    return isMaintenanceValueActive(value);
   } catch (error) {
-    const operation = options.operation ?? "pyroxene-cutover";
+    const operation = options.operation ?? "d1-cutover";
     const logger = options.logger ?? getLogger(env as Env, options.ctx, { operation });
-    logger.error("Pyroxene maintenance KV read failed; failing closed", error, {
-      key: PYROXENE_CUTOVER_MAINTENANCE_KEY,
+    logger.error("D1 maintenance KV read failed; failing closed", error, {
+      key: D1_CUTOVER_MAINTENANCE_KEY,
       operation,
     });
     return true;
   }
 }
 
-/** Returns a typed 503 response only for Pyroxene mutations during maintenance. */
-export async function pyroxeneMaintenanceActionResult(env: Env, options: PyroxeneMaintenanceOptions = {}) {
-  if (!(await isPyroxeneWriteFrozen(env, options))) return null;
-  return data(pyroxeneMaintenanceResult, {
+/** Returns a typed 503 response for guarded D1 mutations during maintenance. */
+export async function d1MaintenanceActionResult(env: Env, options: D1MaintenanceOptions = {}) {
+  if (!(await isD1WriteFrozen(env, options))) return null;
+  return data(d1MaintenanceResult, {
     status: 503,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Retry-After": String(PYROXENE_MAINTENANCE_RETRY_AFTER_SECONDS),
+      "Retry-After": String(D1_MAINTENANCE_RETRY_AFTER_SECONDS),
       "Cache-Control": "no-store",
     },
   });

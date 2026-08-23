@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { pyroxeneMaintenanceResult } from "~/domain/pyroxene-cutover";
+import { d1MaintenanceResult } from "~/domain/pyroxene-cutover";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
@@ -19,7 +19,7 @@ const mockGetPyroxenePlannerContents = jest.fn<AsyncMock>();
 const mockSetRecruitmentResultCompletion = jest.fn<AsyncMock>();
 const mockGetRecruitmentResultsByRecruitmentGroupUids = jest.fn<AsyncMock>();
 const mockDeleteRecruitmentResult = jest.fn<AsyncMock>();
-const mockPyroxeneMaintenanceActionResult = jest.fn<AsyncMock>();
+const mockD1MaintenanceActionResult = jest.fn<AsyncMock>();
 const mockLoggerError = jest.fn();
 const mockGetLogger = jest.fn(() => ({ error: mockLoggerError }));
 
@@ -49,7 +49,7 @@ jest.mock("~/models/recruitment-result.server", () => ({
 }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: mockGetLogger }));
 jest.mock("~/lib/pyroxene-cutover.server", () => ({
-  pyroxeneMaintenanceActionResult: mockPyroxeneMaintenanceActionResult,
+  d1MaintenanceActionResult: mockD1MaintenanceActionResult,
 }));
 
 import { action } from "~/routes/utils.pyroxene";
@@ -129,7 +129,7 @@ function rawActionArgs(request: Request) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetActiveSensei.mockResolvedValue({ id: 1 });
-  mockPyroxeneMaintenanceActionResult.mockResolvedValue(null);
+  mockD1MaintenanceActionResult.mockResolvedValue(null);
   mockCreatePyroxeneOwnedResource.mockResolvedValue(undefined);
   mockCreateBuyPyroxene.mockResolvedValue(undefined);
   mockCreatePyroxeneMonthlyPackage.mockResolvedValue(undefined);
@@ -564,10 +564,10 @@ describe("Pyroxene action dispatch", () => {
 
   it("returns maintenance before parsing the request body or executing a write", async () => {
     const maintenanceResponse = {
-      data: pyroxeneMaintenanceResult,
+      data: d1MaintenanceResult,
       init: { status: 503 },
     };
-    mockPyroxeneMaintenanceActionResult.mockResolvedValue(maintenanceResponse);
+    mockD1MaintenanceActionResult.mockResolvedValue(maintenanceResponse);
 
     const response = await action(
       rawActionArgs(
@@ -580,7 +580,7 @@ describe("Pyroxene action dispatch", () => {
     );
 
     expect(response).toBe(maintenanceResponse);
-    expect(mockPyroxeneMaintenanceActionResult).toHaveBeenCalledWith(env, {
+    expect(mockD1MaintenanceActionResult).toHaveBeenCalledWith(env, {
       ctx,
       operation: "utils.pyroxene.action",
     });

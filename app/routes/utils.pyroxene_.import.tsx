@@ -25,16 +25,16 @@ import {
   type VerifiedGuestPyroxeneImport,
 } from "~/domain/guest-pyroxene-planner";
 import {
-  isPyroxeneMaintenanceResult,
-  type PyroxeneMaintenanceResult,
-  pyroxeneMaintenanceMessage,
+  isD1MaintenanceResult,
+  type D1MaintenanceResult,
+  d1MaintenanceMessage,
 } from "~/domain/pyroxene-cutover";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { extractPyroxeneTimelineBaseUid, PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { withD1Session } from "~/lib/d1-session";
-import { pyroxeneMaintenanceActionResult } from "~/lib/pyroxene-cutover.server";
+import { d1MaintenanceActionResult } from "~/lib/pyroxene-cutover.server";
 import { cn } from "~/lib/utils";
 import { favoriteStudent, getUserFavoritedStudents } from "~/models/favorite-students";
 import { type GuestPyroxeneImportPlan, importGuestPyroxeneSelection } from "~/models/guest-pyroxene-import";
@@ -134,7 +134,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       { status: 401 },
     );
 
-  const maintenance = await pyroxeneMaintenanceActionResult(env, {
+const maintenance = await d1MaintenanceActionResult(env, {
     ctx,
     operation: "utils.pyroxene.import.action",
   });
@@ -300,7 +300,7 @@ function recordDate(record: GuestPyroxeneRecord): string {
 export default function GuestPyroxeneImportPage() {
   const account = useLoaderData<typeof loader>();
   const guestPlanner = useGuestPyroxenePlanner();
-  const fetcher = useFetcher<ImportActionResult | PyroxeneMaintenanceResult>();
+  const fetcher = useFetcher<ImportActionResult | D1MaintenanceResult>();
   const [selection, setSelection] = useState<ImportSelection | null>(null);
   const initializedDatasetId = useRef<string | null>(null);
   const processedResult = useRef<ImportActionResult | null>(null);
@@ -378,7 +378,7 @@ export default function GuestPyroxeneImportPage() {
 
   useEffect(() => {
     const result = fetcher.data;
-    if (!result || isPyroxeneMaintenanceResult(result) || result === processedResult.current) return;
+    if (!result || isD1MaintenanceResult(result) || result === processedResult.current) return;
     processedResult.current = result;
     const submitted = submittedEnvelope.current;
     if (!submitted) return;
@@ -417,8 +417,8 @@ export default function GuestPyroxeneImportPage() {
   const discardedItems = envelope && selection ? getDiscardedItems(envelope.data, selection) : emptyVerified();
   const discardedCount = verifiedItemCount(discardedItems);
   const submittedDiscardedCount = verifiedItemCount(submittedDiscardedItems.current);
-  const maintenanceMessage = pyroxeneMaintenanceMessage(fetcher.data);
-  const importResult = fetcher.data && !isPyroxeneMaintenanceResult(fetcher.data) ? fetcher.data : null;
+  const maintenanceMessage = d1MaintenanceMessage(fetcher.data);
+  const importResult = fetcher.data && !isD1MaintenanceResult(fetcher.data) ? fetcher.data : null;
   const importedCount = importResult ? verifiedItemCount(importResult.verified) : 0;
 
   return (
