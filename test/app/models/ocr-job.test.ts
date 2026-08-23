@@ -448,9 +448,9 @@ describe("PostgreSQL OCR control plane", () => {
     );
 
     await expect(getOcrUploadQuota(createEnv(), 7, { createClient: () => client })).resolves.toEqual({
-      limit: 50,
+      limit: 200,
       used: 23,
-      remaining: 27,
+      remaining: 177,
       nextAvailableAt: "2026-07-25T00:00:00.000Z",
     });
     expect(query.mock.calls[0][1]).toEqual([7, "item_inventory_images_v1", "2026-07-14T00:00:00.000Z"]);
@@ -468,7 +468,7 @@ describe("PostgreSQL OCR control plane", () => {
         createClient: () => client,
         jobKind: "student_detail_images_v1",
       }),
-    ).resolves.toMatchObject({ limit: 50, used: 3, remaining: 47 });
+    ).resolves.toMatchObject({ limit: 200, used: 3, remaining: 197 });
     expect(queryText(query.mock.calls[0][0])).toContain("student_detail_images_v1");
     jest.useRealTimers();
   });
@@ -499,7 +499,7 @@ describe("PostgreSQL OCR control plane", () => {
   it("rejects a job that would exceed the rolling image quota before issuing upload URLs", async () => {
     jest.useFakeTimers().setSystemTime(new Date("2026-07-21T00:00:00Z"));
     const { client, query } = createClient((sql) =>
-      sql.includes('select "total_images", "submitted_at"') ? [[49, new Date("2026-07-18T00:00:00Z")]] : [],
+      sql.includes('select "total_images", "submitted_at"') ? [[199, new Date("2026-07-18T00:00:00Z")]] : [],
     );
 
     await expect(
@@ -515,7 +515,7 @@ describe("PostgreSQL OCR control plane", () => {
         },
         { createClient: () => client },
       ),
-    ).rejects.toMatchObject({ quota: expect.objectContaining({ remaining: 1 }) });
+    ).rejects.toMatchObject({ quota: expect.objectContaining({ limit: 200, used: 199, remaining: 1 }) });
     expect(query.mock.calls.some(([queryConfig]) => queryText(queryConfig).includes('insert into "ocr_jobs"'))).toBe(
       false,
     );
@@ -542,7 +542,7 @@ describe("PostgreSQL OCR control plane", () => {
         },
         { createClient: () => client },
       ),
-    ).resolves.toMatchObject({ quota: { used: 1, remaining: 49 } });
+    ).resolves.toMatchObject({ quota: { used: 1, remaining: 199 } });
 
     const sql = query.mock.calls.map(([queryConfig]) => queryText(queryConfig)).join("\n");
     expect(
