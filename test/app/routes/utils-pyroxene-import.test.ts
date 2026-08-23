@@ -1,17 +1,12 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { d1MaintenanceResult } from "~/domain/d1-cutover";
 import { createEmptyGuestPyroxenePlanner } from "~/domain/guest-pyroxene-planner";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
-const mockD1MaintenanceActionResult = jest.fn<AsyncMock>();
 const mockImportGuestPyroxeneSelection = jest.fn<AsyncMock>();
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: mockGetActiveSensei }));
 jest.mock("~/components/features/futures", () => ({ useGuestPyroxenePlanner: jest.fn() }));
-jest.mock("~/lib/d1-cutover.server", () => ({
-  d1MaintenanceActionResult: mockD1MaintenanceActionResult,
-}));
 jest.mock("~/models/favorite-students", () => ({
   favoriteStudent: jest.fn(),
   getUserFavoritedStudents: jest.fn(),
@@ -51,36 +46,11 @@ function actionArgs(request: Request) {
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetActiveSensei.mockResolvedValue({ id: 1 });
-  mockD1MaintenanceActionResult.mockResolvedValue(null);
   mockImportGuestPyroxeneSelection.mockResolvedValue({ verified: [], failed: [] });
 });
 
-describe("Pyroxene import maintenance", () => {
-  it("returns maintenance before parsing the import envelope", async () => {
-    const maintenanceResponse = {
-      data: d1MaintenanceResult,
-      init: { status: 503 },
-    };
-    mockD1MaintenanceActionResult.mockResolvedValue(maintenanceResponse);
-
-    const response = await action(
-      actionArgs(
-        new Request("https://mollulog.test/utils/pyroxene/import", {
-          method: "POST",
-          body: "not-json",
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
-    );
-
-    expect(response).toBe(maintenanceResponse);
-    expect(mockD1MaintenanceActionResult).toHaveBeenCalledWith(env, {
-      ctx,
-      operation: "utils.pyroxene.import.action",
-    });
-  });
-
-  it("keeps the guard after authentication for signed-out requests", async () => {
+describe("Pyroxene import action", () => {
+  it("rejects signed-out requests before parsing the import envelope", async () => {
     mockGetActiveSensei.mockResolvedValue(null);
 
     const response = await action(
@@ -97,7 +67,6 @@ describe("Pyroxene import maintenance", () => {
       data: { success: false, failedLabels: ["로그인이 필요해요"] },
       init: { status: 401 },
     });
-    expect(mockD1MaintenanceActionResult).not.toHaveBeenCalled();
   });
 
   it("passes selected favorites to the shared import operation", async () => {

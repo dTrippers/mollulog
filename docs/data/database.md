@@ -9,7 +9,6 @@ MolluLog의 runtime persistence는 PostgreSQL을 canonical store로 사용하며
 - ORM: Drizzle ORM with `drizzle-orm/node-postgres`
 - PostgreSQL schemas: `app/db/postgres/schema.ts`
 - PostgreSQL schema migrations: `db/postgres/migrations/*.sql`
-- Cutover snapshot/import tooling: `db/postgres/scripts/d1-cutover-*.mjs`
 - Historical source/archive migrations: `db/migrations/*.sql`
 
 ## Where models are defined
@@ -34,14 +33,12 @@ Database access uses `withPostgresClient` from `app/lib/postgres.server.ts`. A r
 
 ## PostgreSQL migration procedure
 
-Migration files use `yyyymmddhhmmss_{name}.sql` and are applied through the repository's approved PostgreSQL migration process. The ten-table D1 transfer is an all-at-once operation; use [the cutover runbook](../migrations/d1-cutover.md) for freeze, protected snapshot, one-transaction import, parity, sequence repair, rollback, and archive gates.
+Migration files use `yyyymmddhhmmss_{name}.sql` and are applied through the repository's approved PostgreSQL migration process. Apply and verify every required migration before deploying code that depends on the new schema. Runtime deploy commands never apply schema migrations automatically.
 
-The final cutover artifact does not provide D1 migration package commands, D1 bindings, or a live D1 fallback. `db/migrations` remains only as historical source/archive material until the separately authorized D1 cleanup operation is complete.
+The runtime does not provide D1 migration commands, D1 bindings, or a live D1 fallback. `db/migrations` remains historical source/archive material and must not be used for new runtime persistence.
 
 ## Operational safety
 
 - Do not print or persist database credentials. Read the approved 1Password fields individually and unset the variables after the operation.
-- Keep snapshots outside the repository with mode `0600`; collector output is exclusive and never overwrites an existing file.
-- Snapshot/import allowlists are exact. `cache_refresh_jobs` is imported directly to PostgreSQL in the pre-cutover deployment and is excluded from the ten-table D1 snapshot.
-- Import count and both typed parity directions must pass before commit. Any row, transform, timeout, or sequence failure rolls back the entire transaction.
-- Production cutover, KV mutation, deploy, and production database operations require an explicitly approved operator window; this implementation does not execute them.
+- Run production schema changes in an explicitly approved operator window and verify the exact migration state before deploying dependent code.
+- Keep credentials out of command arguments, logs, and repository files.

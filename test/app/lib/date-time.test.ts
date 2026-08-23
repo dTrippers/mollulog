@@ -9,7 +9,7 @@ import {
 } from "../../../app/lib/date-time";
 
 describe("parseUtcTimestamp", () => {
-  it("treats D1 current_timestamp values as UTC", () => {
+  it("treats legacy timezone-less database timestamps as UTC", () => {
     expect(parseUtcTimestamp("2026-05-01 15:30:00").toISOString()).toBe("2026-05-01T15:30:00.000Z");
   });
 

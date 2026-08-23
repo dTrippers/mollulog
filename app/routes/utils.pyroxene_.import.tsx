@@ -24,16 +24,10 @@ import {
   pyroxeneTimelineItemFingerprint,
   type VerifiedGuestPyroxeneImport,
 } from "~/domain/guest-pyroxene-planner";
-import {
-  isD1MaintenanceResult,
-  type D1MaintenanceResult,
-  d1MaintenanceMessage,
-} from "~/domain/d1-cutover";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { extractPyroxeneTimelineBaseUid, PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { d1MaintenanceActionResult } from "~/lib/d1-cutover.server";
 import { cn } from "~/lib/utils";
 import { favoriteStudent, getUserFavoritedStudents } from "~/models/favorite-students";
 import { type GuestPyroxeneImportPlan, importGuestPyroxeneSelection } from "~/models/guest-pyroxene-import";
@@ -132,12 +126,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       { success: false, verified: emptyVerified(), failedLabels: ["로그인이 필요해요"] },
       { status: 401 },
     );
-
-const maintenance = await d1MaintenanceActionResult(env, {
-    ctx,
-    operation: "utils.pyroxene.import.action",
-  });
-  if (maintenance) return maintenance;
 
   const body = await request.json<{ envelope?: unknown; selection?: ImportSelection }>();
   const envelope = body.envelope ? parseGuestPyroxenePlanner(JSON.stringify(body.envelope)) : null;
@@ -299,7 +287,7 @@ function recordDate(record: GuestPyroxeneRecord): string {
 export default function GuestPyroxeneImportPage() {
   const account = useLoaderData<typeof loader>();
   const guestPlanner = useGuestPyroxenePlanner();
-  const fetcher = useFetcher<ImportActionResult | D1MaintenanceResult>();
+  const fetcher = useFetcher<ImportActionResult>();
   const [selection, setSelection] = useState<ImportSelection | null>(null);
   const initializedDatasetId = useRef<string | null>(null);
   const processedResult = useRef<ImportActionResult | null>(null);
@@ -377,7 +365,7 @@ export default function GuestPyroxeneImportPage() {
 
   useEffect(() => {
     const result = fetcher.data;
-    if (!result || isD1MaintenanceResult(result) || result === processedResult.current) return;
+    if (!result || result === processedResult.current) return;
     processedResult.current = result;
     const submitted = submittedEnvelope.current;
     if (!submitted) return;
@@ -416,9 +404,7 @@ export default function GuestPyroxeneImportPage() {
   const discardedItems = envelope && selection ? getDiscardedItems(envelope.data, selection) : emptyVerified();
   const discardedCount = verifiedItemCount(discardedItems);
   const submittedDiscardedCount = verifiedItemCount(submittedDiscardedItems.current);
-  const maintenanceMessage = d1MaintenanceMessage(fetcher.data);
-  const importResult = fetcher.data && !isD1MaintenanceResult(fetcher.data) ? fetcher.data : null;
-  const importedCount = importResult ? verifiedItemCount(importResult.verified) : 0;
+  const importedCount = fetcher.data ? verifiedItemCount(fetcher.data.verified) : 0;
 
   return (
     <Page
@@ -588,22 +574,20 @@ export default function GuestPyroxeneImportPage() {
               </SectionCard>
             )}
 
-            {maintenanceMessage ? (
-              <Callout tone="warning" title={maintenanceMessage} />
-            ) : importResult ? (
+            {fetcher.data ? (
               <Callout
-                tone={importResult.failedLabels.length ? "warning" : "success"}
+                tone={fetcher.data.failedLabels.length ? "warning" : "success"}
                 Icon={CheckCircleIcon}
                 title={
-                  importResult.failedLabels.length
+                  fetcher.data.failedLabels.length
                     ? "일부 항목을 가져오지 못했어요"
                     : submittedDiscardedCount > 0
                       ? "선택한 내용을 저장했어요"
                       : "선택한 항목을 가져왔어요"
                 }
                 description={
-                  importResult.failedLabels.length
-                    ? `${importResult.failedLabels.join(", ")}은 이 브라우저에 남겨뒀어요. 다시 시도할 수 있어요.${submittedDiscardedCount > 0 ? ` 선택하지 않은 항목 ${submittedDiscardedCount}개는 삭제했어요.` : ""}`
+                  fetcher.data.failedLabels.length
+                    ? `${fetcher.data.failedLabels.join(", ")}은 이 브라우저에 남겨뒀어요. 다시 시도할 수 있어요.${submittedDiscardedCount > 0 ? ` 선택하지 않은 항목 ${submittedDiscardedCount}개는 삭제했어요.` : ""}`
                     : submittedDiscardedCount > 0
                       ? importedCount > 0
                         ? `선택한 항목은 계정에 가져오고, 선택하지 않은 항목 ${submittedDiscardedCount}개는 이 브라우저에서 삭제했어요.`

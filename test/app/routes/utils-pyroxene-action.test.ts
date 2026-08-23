@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { d1MaintenanceResult } from "~/domain/d1-cutover";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
@@ -19,7 +18,6 @@ const mockGetPyroxenePlannerContents = jest.fn<AsyncMock>();
 const mockSetRecruitmentResultCompletion = jest.fn<AsyncMock>();
 const mockGetRecruitmentResultsByRecruitmentGroupUids = jest.fn<AsyncMock>();
 const mockDeleteRecruitmentResult = jest.fn<AsyncMock>();
-const mockD1MaintenanceActionResult = jest.fn<AsyncMock>();
 const mockLoggerError = jest.fn();
 const mockGetLogger = jest.fn(() => ({ error: mockLoggerError }));
 
@@ -48,9 +46,6 @@ jest.mock("~/models/recruitment-result.server", () => ({
   setRecruitmentResultCompletion: mockSetRecruitmentResultCompletion,
 }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: mockGetLogger }));
-jest.mock("~/lib/d1-cutover.server", () => ({
-  d1MaintenanceActionResult: mockD1MaintenanceActionResult,
-}));
 
 import { action } from "~/routes/utils.pyroxene";
 import { decodePyroxeneActionPayload } from "~/routes/utils.pyroxene._components/action-data";
@@ -119,17 +114,9 @@ function actionArgs(intent: string, payload: unknown, method: string) {
   } as never;
 }
 
-function rawActionArgs(request: Request) {
-  return {
-    context: { cloudflare: { env, ctx } },
-    request,
-  } as never;
-}
-
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetActiveSensei.mockResolvedValue({ id: 1 });
-  mockD1MaintenanceActionResult.mockResolvedValue(null);
   mockCreatePyroxeneOwnedResource.mockResolvedValue(undefined);
   mockCreateBuyPyroxene.mockResolvedValue(undefined);
   mockCreatePyroxeneMonthlyPackage.mockResolvedValue(undefined);
@@ -546,7 +533,7 @@ describe("Pyroxene action dispatch", () => {
   });
 
   it("returns a meaningful error and hides internal owned-resource failures", async () => {
-    mockCreatePyroxeneOwnedResource.mockRejectedValue(new Error("D1 connection details"));
+    mockCreatePyroxeneOwnedResource.mockRejectedValue(new Error("PostgreSQL connection details"));
 
     const response = await action(
       actionArgs("save-owned-resources", { resources: { pyroxene: 1, oneTimeTicket: 0, tenTimeTicket: 0 } }, "POST"),
@@ -560,31 +547,6 @@ describe("Pyroxene action dispatch", () => {
       operation: "save-owned-resources",
       userId: 1,
     });
-  });
-
-  it("returns maintenance before parsing the request body or executing a write", async () => {
-    const maintenanceResponse = {
-      data: d1MaintenanceResult,
-      init: { status: 503 },
-    };
-    mockD1MaintenanceActionResult.mockResolvedValue(maintenanceResponse);
-
-    const response = await action(
-      rawActionArgs(
-        new Request("https://mollulog.test/utils/pyroxene", {
-          method: "POST",
-          body: "not-json",
-          headers: { "Content-Type": "application/json" },
-        }),
-      ),
-    );
-
-    expect(response).toBe(maintenanceResponse);
-    expect(mockD1MaintenanceActionResult).toHaveBeenCalledWith(env, {
-      ctx,
-      operation: "utils.pyroxene.action",
-    });
-    expect(mockCreatePyroxeneOwnedResource).not.toHaveBeenCalled();
   });
 
   it("returns HTTP 400 before executing a write for malformed payloads", async () => {

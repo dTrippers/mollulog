@@ -55,19 +55,6 @@ short_commit_sha="$(git rev-parse --short=12 HEAD)"
 
 assert_deployable_git_state "$commit_sha"
 
-echo "Checking production D1 migrations..."
-if ! migration_output="$(pnpm exec wrangler d1 migrations list DB --remote --env production 2>&1)"; then
-  printf '%s\n' "$migration_output" >&2
-  exit 1
-fi
-printf '%s\n' "$migration_output"
-
-if [[ "$migration_output" != *"No migrations to apply"* ]]; then
-  echo "Production deploy blocked: apply and verify the pending D1 migrations first." >&2
-  echo "Review them, then run: pnpm prod:db:migrate" >&2
-  exit 1
-fi
-
 echo "Production preflight passed for main@${short_commit_sha}."
 if [[ "$preflight_only" == true ]]; then
   exit 0

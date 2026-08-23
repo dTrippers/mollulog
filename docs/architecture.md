@@ -76,12 +76,11 @@ Detailed UI structure rules live in the frontend documents:
 
 ### Production deploy safety
 
-Run production deployments only through `pnpm prod:deploy`. The command blocks the deploy unless all of the following
-conditions are satisfied:
+Apply and verify every required PostgreSQL migration before running a deployment. `pnpm prod:deploy` then blocks the
+deploy unless all of the following repository conditions are satisfied:
 
 - the current branch is `main`;
 - the working tree, including untracked files, is clean before and after the build;
-- all required PostgreSQL migrations are applied and verified for the release;
 - `HEAD` remains on the same commit throughout the build.
 
 The app Worker and Cron Worker versions record the full Git commit SHA in their deployment message. To run the checks

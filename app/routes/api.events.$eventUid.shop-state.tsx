@@ -1,7 +1,6 @@
 import { type ActionFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
-import { d1MaintenanceActionResult } from "~/lib/d1-cutover.server";
 import { getEventMetadata } from "~/models/event-content";
 import { type EventShopState, upsertEventShopState } from "~/models/event-shop-state";
 
@@ -16,12 +15,6 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
   if (!currentUser) {
     return redirect("/unauthorized");
   }
-
-  const maintenance = await d1MaintenanceActionResult(env, {
-    ctx,
-    operation: "api.events.shop-state.action",
-  });
-  if (maintenance) return maintenance;
 
   const submittedEventUid = params.eventUid as string;
   const metadata = await getEventMetadata(publicReadEnv, submittedEventUid, ctx);
