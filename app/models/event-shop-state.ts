@@ -1,31 +1,5 @@
-import { and, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { nanoid } from "nanoid/non-secure";
 import type { BonusStudentSelectionMode, MinigamePaymentQuantityMode } from "~/domain/event-shop";
-
-export const eventShopStatesTable = sqliteTable("event_shop_states", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  eventUid: text().notNull(),
-  itemQuantities: text().notNull().default("{}"),
-  itemPurchaseDays: text().notNull().default("{}"),
-  selectedBonusStudentUids: text().notNull().default("[]"),
-  bonusStudentSelectionMode: text().notNull().default("shared"),
-  selectedBonusStudentUidsByItem: text().notNull().default("{}"),
-  enabledStages: text().notNull().default("{}"),
-  includeRecruitedStudents: int().notNull().default(0),
-  existingPaymentItemQuantities: text().notNull().default("{}"),
-  includeFirstClear: int().notNull().default(0),
-  extraStageRuns: text().notNull().default("{}"),
-  minigameStartRound: int().notNull().default(1),
-  minigamePlayCount: int().notNull().default(0),
-  minigamePaymentQuantityMode: text().notNull().default("expected"),
-  overriddenRequiredQuantities: text().notNull().default("{}"),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-});
+import { getPostgresEventShopState, upsertPostgresEventShopState } from "~/db/postgres/event-shop-state";
 
 export type EventShopState = {
   itemQuantities: Record<string, number>;
@@ -44,45 +18,8 @@ export type EventShopState = {
   overriddenRequiredQuantities: Record<string, number>;
 };
 
-function parseMinigamePaymentQuantityMode(mode: string | null): MinigamePaymentQuantityMode {
-  if (mode === "min" || mode === "max") {
-    return mode;
-  }
-  return "expected";
-}
-
-function parseBonusStudentSelectionMode(mode: string | null): BonusStudentSelectionMode {
-  return mode === "perItem" ? "perItem" : "shared";
-}
-
-function toModel(state: typeof eventShopStatesTable.$inferSelect): EventShopState {
-  return {
-    itemQuantities: JSON.parse(state.itemQuantities),
-    itemPurchaseDays: JSON.parse(state.itemPurchaseDays || "{}"),
-    selectedBonusStudentUids: JSON.parse(state.selectedBonusStudentUids),
-    bonusStudentSelectionMode: parseBonusStudentSelectionMode(state.bonusStudentSelectionMode),
-    selectedBonusStudentUidsByItem: JSON.parse(state.selectedBonusStudentUidsByItem || "{}"),
-    enabledStages: JSON.parse(state.enabledStages),
-    includeRecruitedStudents: state.includeRecruitedStudents === 1,
-    existingPaymentItemQuantities: JSON.parse(state.existingPaymentItemQuantities || "{}"),
-    includeFirstClear: state.includeFirstClear === 1,
-    extraStageRuns: JSON.parse(state.extraStageRuns || "{}"),
-    minigameStartRound: Math.max(1, state.minigameStartRound ?? 1),
-    minigamePlayCount: state.minigamePlayCount ?? 0,
-    minigamePaymentQuantityMode: parseMinigamePaymentQuantityMode(state.minigamePaymentQuantityMode),
-    overriddenRequiredQuantities: JSON.parse(state.overriddenRequiredQuantities || "{}"),
-  };
-}
-
 export async function getEventShopState(env: Env, userId: number, eventUid: string): Promise<EventShopState | null> {
-  const db = drizzle(env.DB);
-  const states = await db
-    .select()
-    .from(eventShopStatesTable)
-    .where(and(eq(eventShopStatesTable.userId, userId), eq(eventShopStatesTable.eventUid, eventUid)))
-    .limit(1);
-
-  return states.length > 0 ? toModel(states[0]) : null;
+  return getPostgresEventShopState(env, userId, eventUid);
 }
 
 export async function upsertEventShopState(
@@ -91,56 +28,5 @@ export async function upsertEventShopState(
   eventUid: string,
   state: EventShopState,
 ): Promise<void> {
-  const db = drizzle(env.DB);
-  const uid = nanoid(8);
-  const itemQuantitiesJson = JSON.stringify(state.itemQuantities);
-  const itemPurchaseDaysJson = JSON.stringify(state.itemPurchaseDays || {});
-  const selectedBonusStudentUidsJson = JSON.stringify(state.selectedBonusStudentUids);
-  const selectedBonusStudentUidsByItemJson = JSON.stringify(state.selectedBonusStudentUidsByItem || {});
-  const enabledStagesJson = JSON.stringify(state.enabledStages);
-  const existingPaymentItemQuantitiesJson = JSON.stringify(state.existingPaymentItemQuantities || {});
-  const extraStageRunsJson = JSON.stringify(state.extraStageRuns || {});
-  const overriddenRequiredQuantitiesJson = JSON.stringify(state.overriddenRequiredQuantities || {});
-
-  await db
-    .insert(eventShopStatesTable)
-    .values({
-      uid,
-      userId,
-      eventUid,
-      itemQuantities: itemQuantitiesJson,
-      itemPurchaseDays: itemPurchaseDaysJson,
-      selectedBonusStudentUids: selectedBonusStudentUidsJson,
-      bonusStudentSelectionMode: state.bonusStudentSelectionMode ?? "shared",
-      selectedBonusStudentUidsByItem: selectedBonusStudentUidsByItemJson,
-      enabledStages: enabledStagesJson,
-      includeRecruitedStudents: state.includeRecruitedStudents ? 1 : 0,
-      existingPaymentItemQuantities: existingPaymentItemQuantitiesJson,
-      includeFirstClear: state.includeFirstClear ? 1 : 0,
-      extraStageRuns: extraStageRunsJson,
-      minigameStartRound: Math.max(1, state.minigameStartRound ?? 1),
-      minigamePlayCount: state.minigamePlayCount ?? 0,
-      minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
-      overriddenRequiredQuantities: overriddenRequiredQuantitiesJson,
-    })
-    .onConflictDoUpdate({
-      target: [eventShopStatesTable.userId, eventShopStatesTable.eventUid],
-      set: {
-        itemQuantities: itemQuantitiesJson,
-        itemPurchaseDays: itemPurchaseDaysJson,
-        selectedBonusStudentUids: selectedBonusStudentUidsJson,
-        bonusStudentSelectionMode: state.bonusStudentSelectionMode ?? "shared",
-        selectedBonusStudentUidsByItem: selectedBonusStudentUidsByItemJson,
-        enabledStages: enabledStagesJson,
-        includeRecruitedStudents: state.includeRecruitedStudents ? 1 : 0,
-        existingPaymentItemQuantities: existingPaymentItemQuantitiesJson,
-        includeFirstClear: state.includeFirstClear ? 1 : 0,
-        extraStageRuns: extraStageRunsJson,
-        minigameStartRound: Math.max(1, state.minigameStartRound ?? 1),
-        minigamePlayCount: state.minigamePlayCount ?? 0,
-        minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
-        overriddenRequiredQuantities: overriddenRequiredQuantitiesJson,
-        updatedAt: sql`current_timestamp`,
-      },
-    });
+  await upsertPostgresEventShopState(env, userId, eventUid, state);
 }
