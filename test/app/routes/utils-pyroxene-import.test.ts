@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { createEmptyGuestPyroxenePlanner } from "~/domain/guest-pyroxene-planner";
 import { pyroxeneMaintenanceResult } from "~/domain/pyroxene-cutover";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 const mockPyroxeneMaintenanceActionResult = jest.fn<AsyncMock>();
+const mockImportGuestPyroxeneSelection = jest.fn<AsyncMock>();
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: mockGetActiveSensei }));
 jest.mock("~/components/features/futures", () => ({ useGuestPyroxenePlanner: jest.fn() }));
@@ -16,6 +18,7 @@ jest.mock("~/models/favorite-students", () => ({
   getUserFavoritedStudents: jest.fn(),
 }));
 jest.mock("~/models/guest-pyroxene-import", () => ({
+  importGuestPyroxeneSelection: mockImportGuestPyroxeneSelection,
   hasGuestImportReceipt: jest.fn(),
   importGuestRecord: jest.fn(),
   importGuestResources: jest.fn(),
@@ -28,6 +31,7 @@ jest.mock("~/models/pyroxene-planner", () => ({
   getLatestPyroxeneOwnedResource: jest.fn(),
   getPyroxenePlannerOptions: jest.fn(),
   getPyroxeneTimelineItems: jest.fn(),
+  getPyroxeneUserState: jest.fn(),
   upsertPyroxeneEventData: jest.fn(),
   upsertPyroxenePlannerOptions: jest.fn(),
 }));
@@ -49,6 +53,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockGetActiveSensei.mockResolvedValue({ id: 1 });
   mockPyroxeneMaintenanceActionResult.mockResolvedValue(null);
+  mockImportGuestPyroxeneSelection.mockResolvedValue({ verified: [], failed: [] });
 });
 
 describe("Pyroxene import maintenance", () => {
@@ -94,5 +99,60 @@ describe("Pyroxene import maintenance", () => {
       init: { status: 401 },
     });
     expect(mockPyroxeneMaintenanceActionResult).not.toHaveBeenCalled();
+  });
+
+  it("passes selected favorites to the shared import operation", async () => {
+    const envelope = createEmptyGuestPyroxenePlanner();
+    envelope.data.favoriteStudents = [{ contentUid: "content-1", studentUid: "student-1" }];
+    mockImportGuestPyroxeneSelection.mockImplementationOnce(async (...args: unknown[]) => {
+      const plan = args[3] as { favorites: { run: () => Promise<void> }[] };
+      await plan.favorites[0].run();
+      return {
+        verified: [{ type: "favorite", key: "content-1\u0000student-1" }],
+        failed: [],
+      };
+    });
+
+    const response = await action(
+      actionArgs(
+        new Request("https://mollulog.test/utils/pyroxene/import", {
+          method: "POST",
+          body: JSON.stringify({
+            envelope,
+            selection: {
+              resources: false,
+              options: false,
+              recordIds: [],
+              sourceKeys: [],
+              eventUids: [],
+              favorites: [{ contentUid: "content-1", studentUid: "student-1" }],
+            },
+          }),
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    expect(response).toEqual({
+      success: true,
+      verified: {
+        resources: false,
+        options: false,
+        recordIds: [],
+        sourceKeys: [],
+        eventUids: [],
+        favorites: [{ contentUid: "content-1", studentUid: "student-1" }],
+      },
+      failedLabels: [],
+    });
+    expect(mockImportGuestPyroxeneSelection).toHaveBeenCalledWith(
+      env,
+      1,
+      envelope.datasetId,
+      expect.objectContaining({
+        favorites: [expect.objectContaining({ itemKey: "content-1\u0000student-1" })],
+      }),
+      { ctx },
+    );
   });
 });

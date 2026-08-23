@@ -253,6 +253,116 @@ export const pgFavoriteStudentsTable = pgTable(
   ],
 );
 
+export const pgPyroxeneOwnedResourcesTable = pgTable(
+  "pyroxene_owned_resources",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    inputAt: timestamptz("input_at").notNull(),
+    pyroxene: integer().notNull(),
+    oneTimeTicket: integer("one_time_ticket").notNull(),
+    tenTimeTicket: integer("ten_time_ticket").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_owned_resources_uid_uidx").on(table.uid),
+    index("pyroxene_owned_resources_user_input_at_idx").on(table.userId, table.inputAt),
+  ],
+);
+
+export const pgPyroxeneCollectedSourcesTable = pgTable(
+  "pyroxene_collected_sources",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    sourceKey: text("source_key").notNull(),
+    collectedAt: timestamptz("collected_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_collected_sources_uid_uidx").on(table.uid),
+    uniqueIndex("pyroxene_collected_sources_user_source_key_uidx").on(table.userId, table.sourceKey),
+  ],
+);
+
+export const pgPyroxeneTimelineItemsTable = pgTable(
+  "pyroxene_timeline_items",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    eventAt: timestamptz("event_at").notNull(),
+    source: text().notNull(),
+    repeatType: text("repeat_type"),
+    repeatIntervalDays: integer("repeat_interval_days"),
+    repeatCount: integer("repeat_count"),
+    autoRepurchase: boolean("auto_repurchase").notNull().default(false),
+    description: text().notNull(),
+    pyroxeneDelta: integer("pyroxene_delta").notNull(),
+    oneTimeTicketDelta: integer("one_time_ticket_delta").notNull(),
+    tenTimeTicketDelta: integer("ten_time_ticket_delta").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_timeline_items_uid_uidx").on(table.uid),
+    index("pyroxene_timeline_items_user_event_at_idx").on(table.userId, table.eventAt),
+  ],
+);
+
+export const pgPyroxenePlannerOptionsTable = pgTable(
+  "pyroxene_planner_options",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    options: text().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("pyroxene_planner_options_user_id_uidx").on(table.userId)],
+);
+
+export const pgPyroxeneEventDataTable = pgTable(
+  "pyroxene_event_data",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    eventUid: text("event_uid").notNull(),
+    completed: boolean().notNull().default(false),
+    expectedTrials: integer("expected_trials"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_event_data_uid_uidx").on(table.uid),
+    uniqueIndex("pyroxene_event_data_user_event_uid_uidx").on(table.userId, table.eventUid),
+  ],
+);
+
+export const pgPyroxeneGuestImportItemsTable = pgTable(
+  "pyroxene_guest_import_items",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    datasetId: text("dataset_id").notNull(),
+    itemType: text("item_type").notNull(),
+    itemKey: text("item_key").notNull(),
+    importedAt: timestamptz("imported_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_guest_import_items_user_dataset_item_uidx").on(
+      table.userId,
+      table.datasetId,
+      table.itemType,
+      table.itemKey,
+    ),
+  ],
+);
+
 export const pgCouponsTable = pgTable(
   "coupons",
   {
