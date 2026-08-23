@@ -1,16 +1,9 @@
-import { and, count, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import type { Sensei } from "./sensei";
-import { getVisibleSenseisById } from "./sensei";
+import { and, count, eq } from "drizzle-orm";
+import { type IdentityRepositoryOptions, withIdentityDatabase } from "~/db/postgres/identity";
+import { pgFollowershipsTable, pgSenseisTable } from "~/db/postgres/schema";
+import { type Sensei, senseiProfileVisibilityFilter, toSenseiModel } from "./sensei";
 
-const followershipsTable = sqliteTable("followerships", {
-  id: int().primaryKey({ autoIncrement: true }),
-  followerId: int().notNull(),
-  followeeId: int().notNull(),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  updatedAt: text().notNull().default(sql`current_timestamp`),
-});
+export const followershipsTable = pgFollowershipsTable;
 
 export type Followership = {
   followerId: number;
@@ -27,89 +20,216 @@ export type FollowershipSummary = Relationship & {
   followingCount: number;
 };
 
-export async function follow(env: Env, followerId: number, followeeId: number) {
-  const db = drizzle(env.DB);
-  await db.insert(followershipsTable).values({ followerId, followeeId }).run();
+export async function follow(
+  env: Env,
+  followerId: number,
+  followeeId: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await withIdentityDatabase(
+    env,
+    "follow",
+    async (db) => {
+      await db
+        .insert(pgFollowershipsTable)
+        .values({ followerId, followeeId })
+        .onConflictDoNothing({
+          target: [pgFollowershipsTable.followerId, pgFollowershipsTable.followeeId],
+        });
+    },
+    options,
+  );
 }
 
-export async function unfollow(env: Env, followerId: number, followeeId: number) {
-  const db = drizzle(env.DB);
-  await db
-    .delete(followershipsTable)
-    .where(and(eq(followershipsTable.followerId, followerId), eq(followershipsTable.followeeId, followeeId)))
-    .run();
+export async function unfollow(
+  env: Env,
+  followerId: number,
+  followeeId: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await withIdentityDatabase(
+    env,
+    "unfollow",
+    async (db) => {
+      await db
+        .delete(pgFollowershipsTable)
+        .where(and(eq(pgFollowershipsTable.followerId, followerId), eq(pgFollowershipsTable.followeeId, followeeId)));
+    },
+    options,
+  );
 }
 
 export async function getFollowershipSummary(
   env: Env,
   userId: number,
   viewerId?: number,
+  options: IdentityRepositoryOptions = {},
 ): Promise<FollowershipSummary> {
-  const db = drizzle(env.DB);
-  const followerCountQuery = db
-    .select({ count: count() })
-    .from(followershipsTable)
-    .where(eq(followershipsTable.followeeId, userId));
-  const followingCountQuery = db
-    .select({ count: count() })
-    .from(followershipsTable)
-    .where(eq(followershipsTable.followerId, userId));
+  return withIdentityDatabase(
+    env,
+    "followership_summary",
+    async (db) => {
+      const followerCountQuery = db
+        .select({ count: count() })
+        .from(pgFollowershipsTable)
+        .where(eq(pgFollowershipsTable.followeeId, userId));
+      const followingCountQuery = db
+        .select({ count: count() })
+        .from(pgFollowershipsTable)
+        .where(eq(pgFollowershipsTable.followerId, userId));
 
-  if (viewerId === undefined) {
-    const [followerRows, followingRows] = await db.batch([followerCountQuery, followingCountQuery]);
-    return {
-      followerCount: followerRows[0].count,
-      followingCount: followingRows[0].count,
-      followed: false,
-      following: false,
-    };
-  }
+      const [followerRows, followingRows] = await Promise.all([followerCountQuery, followingCountQuery]);
+      if (viewerId === undefined) {
+        return {
+          followerCount: Number(followerRows[0]?.count ?? 0),
+          followingCount: Number(followingRows[0]?.count ?? 0),
+          followed: false,
+          following: false,
+        };
+      }
 
-  const [followerRows, followingRows, followedRows, followingRelationshipRows] = await db.batch([
-    followerCountQuery,
-    followingCountQuery,
-    db
-      .select({ id: followershipsTable.id })
-      .from(followershipsTable)
-      .where(and(eq(followershipsTable.followerId, userId), eq(followershipsTable.followeeId, viewerId)))
-      .limit(1),
-    db
-      .select({ id: followershipsTable.id })
-      .from(followershipsTable)
-      .where(and(eq(followershipsTable.followerId, viewerId), eq(followershipsTable.followeeId, userId)))
-      .limit(1),
-  ]);
+      const [followedRows, followingRelationshipRows] = await Promise.all([
+        db
+          .select({ id: pgFollowershipsTable.id })
+          .from(pgFollowershipsTable)
+          .where(and(eq(pgFollowershipsTable.followerId, userId), eq(pgFollowershipsTable.followeeId, viewerId)))
+          .limit(1),
+        db
+          .select({ id: pgFollowershipsTable.id })
+          .from(pgFollowershipsTable)
+          .where(and(eq(pgFollowershipsTable.followerId, viewerId), eq(pgFollowershipsTable.followeeId, userId)))
+          .limit(1),
+      ]);
 
-  return {
-    followerCount: followerRows[0].count,
-    followingCount: followingRows[0].count,
-    followed: followedRows.length > 0,
-    following: followingRelationshipRows.length > 0,
-  };
+      return {
+        followerCount: Number(followerRows[0]?.count ?? 0),
+        followingCount: Number(followingRows[0]?.count ?? 0),
+        followed: followedRows.length > 0,
+        following: followingRelationshipRows.length > 0,
+      };
+    },
+    options,
+  );
 }
 
-export async function getFollowerIds(env: Env, followeeId: number): Promise<number[]> {
-  const db = drizzle(env.DB);
-  const result = await db
-    .select({ followerId: followershipsTable.followerId })
-    .from(followershipsTable)
-    .where(eq(followershipsTable.followeeId, followeeId));
-  return result.map((each) => each.followerId);
+export async function getFollowerIds(
+  env: Env,
+  followeeId: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<number[]> {
+  return withIdentityDatabase(
+    env,
+    "follower_ids",
+    async (db) => {
+      const rows = await db
+        .select({ followerId: pgFollowershipsTable.followerId })
+        .from(pgFollowershipsTable)
+        .where(eq(pgFollowershipsTable.followeeId, followeeId));
+      return rows.map((row) => row.followerId);
+    },
+    options,
+  );
 }
 
-export async function getFollowers(env: Env, followeeId: number, viewerId?: number): Promise<Sensei[]> {
-  return getVisibleSenseisById(env, await getFollowerIds(env, followeeId), viewerId);
+export async function getFollowers(
+  env: Env,
+  followeeId: number,
+  viewerId?: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<Sensei[]> {
+  return getSenseisForRelationship(env, "followers", followeeId, viewerId, options);
 }
 
-export async function getFollowingIds(env: Env, followerId: number): Promise<number[]> {
-  const db = drizzle(env.DB);
-  const result = await db
-    .select({ followeeId: followershipsTable.followeeId })
-    .from(followershipsTable)
-    .where(eq(followershipsTable.followerId, followerId));
-  return result.map((each) => each.followeeId);
+export async function getFollowingIds(
+  env: Env,
+  followerId: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<number[]> {
+  return withIdentityDatabase(
+    env,
+    "following_ids",
+    async (db) => {
+      const rows = await db
+        .select({ followeeId: pgFollowershipsTable.followeeId })
+        .from(pgFollowershipsTable)
+        .where(eq(pgFollowershipsTable.followerId, followerId));
+      return rows.map((row) => row.followeeId);
+    },
+    options,
+  );
 }
 
-export async function getFollowings(env: Env, followerId: number, viewerId?: number): Promise<Sensei[]> {
-  return getVisibleSenseisById(env, await getFollowingIds(env, followerId), viewerId);
+export async function getFollowings(
+  env: Env,
+  followerId: number,
+  viewerId?: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<Sensei[]> {
+  return getSenseisForRelationship(env, "following", followerId, viewerId, options);
+}
+
+type FollowershipLists = {
+  following: Sensei[];
+  followers: Sensei[];
+};
+
+/** Loads both visible relationship lists on one operation-scoped connection. */
+export async function getFollowershipLists(
+  env: Env,
+  userId: number,
+  viewerId?: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<FollowershipLists> {
+  return withIdentityDatabase(
+    env,
+    "followership_lists",
+    async (db) => {
+      const followingQuery = db
+        .select({ sensei: pgSenseisTable })
+        .from(pgFollowershipsTable)
+        .innerJoin(pgSenseisTable, eq(pgFollowershipsTable.followeeId, pgSenseisTable.id))
+        .where(
+          and(eq(pgFollowershipsTable.followerId, userId), senseiProfileVisibilityFilter(viewerId, pgSenseisTable.id)),
+        );
+      const followersQuery = db
+        .select({ sensei: pgSenseisTable })
+        .from(pgFollowershipsTable)
+        .innerJoin(pgSenseisTable, eq(pgFollowershipsTable.followerId, pgSenseisTable.id))
+        .where(
+          and(eq(pgFollowershipsTable.followeeId, userId), senseiProfileVisibilityFilter(viewerId, pgSenseisTable.id)),
+        );
+      const [followingRows, followerRows] = await Promise.all([followingQuery, followersQuery]);
+      return {
+        following: followingRows.map(({ sensei }) => toSenseiModel(sensei)),
+        followers: followerRows.map(({ sensei }) => toSenseiModel(sensei)),
+      };
+    },
+    options,
+  );
+}
+
+async function getSenseisForRelationship(
+  env: Env,
+  relationship: "followers" | "following",
+  userId: number,
+  viewerId: number | undefined,
+  options: IdentityRepositoryOptions,
+): Promise<Sensei[]> {
+  return withIdentityDatabase(
+    env,
+    relationship === "followers" ? "followers" : "followings",
+    async (db) => {
+      const senseiIdColumn =
+        relationship === "followers" ? pgFollowershipsTable.followerId : pgFollowershipsTable.followeeId;
+      const relationshipColumn =
+        relationship === "followers" ? pgFollowershipsTable.followeeId : pgFollowershipsTable.followerId;
+      const rows = await db
+        .select({ sensei: pgSenseisTable })
+        .from(pgFollowershipsTable)
+        .innerJoin(pgSenseisTable, eq(senseiIdColumn, pgSenseisTable.id))
+        .where(and(eq(relationshipColumn, userId), senseiProfileVisibilityFilter(viewerId, pgSenseisTable.id)));
+      return rows.map(({ sensei }) => toSenseiModel(sensei));
+    },
+    options,
+  );
 }

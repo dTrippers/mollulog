@@ -13,13 +13,13 @@ import {
 import { Button, SubTitle, Toggle } from "~/components/primitives";
 import { getRecruitedStudents, removeRecruitedStudent, upsertRecruitedStudent } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
-import { getRouteSensei } from "./$username";
+import { getRouteSensei } from "./$username._components/route-sensei.server";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const currentUser = await getActiveSensei(env, request);
+  const { env, ctx } = context.cloudflare;
+  const currentUser = await getActiveSensei(env, request, ctx);
 
-  const sensei = await getRouteSensei(env, params, currentUser?.id);
+  const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
   const recruitedStudents = await getRecruitedStudents(env, sensei.id);
   const recruitedStudentTiers = recruitedStudents.reduce(
     (acc, { studentUid, tier }) => {
@@ -58,13 +58,13 @@ export const meta: MetaFunction = ({ params }) => {
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const { env } = context.cloudflare;
-  const currentUser = await getActiveSensei(env, request);
+  const { env, ctx } = context.cloudflare;
+  const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) {
     return data({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const sensei = await getRouteSensei(env, params, currentUser.id);
+  const sensei = await getRouteSensei(env, params, currentUser.id, { ctx });
   if (currentUser.username !== sensei.username) {
     return data({ error: "Forbidden" }, { status: 403 });
   }

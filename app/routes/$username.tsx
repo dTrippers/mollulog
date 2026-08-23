@@ -8,30 +8,10 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
-import { Outlet, type Params, useLocation, useParams, useRouteError } from "react-router";
+import { Outlet, useLocation, useParams, useRouteError } from "react-router";
 import { ErrorPage, Page, ServerErrorPage } from "~/components/features/layout";
 import { Title } from "~/components/primitives";
-import { routeError } from "~/lib/http-errors";
 import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
-import { getSenseiByUsername, isSenseiProfileVisibleTo, type Sensei } from "~/models/sensei";
-
-export async function getRouteSensei(env: Env, params: Params<string>, viewerUserId?: number): Promise<Sensei> {
-  const usernameParam = params.username;
-  if (!usernameParam?.startsWith("@")) {
-    throw routeError(404, "sensei.not_found", "선생님을 찾을 수 없어요");
-  }
-
-  const username = usernameParam.replace("@", "");
-  const sensei = await getSenseiByUsername(env, username);
-  if (!sensei) {
-    throw routeError(404, "sensei.not_found", "선생님을 찾을 수 없어요", { username });
-  }
-  if (!isSenseiProfileVisibleTo(sensei, viewerUserId)) {
-    throw routeError(403, "sensei.profile_private", "이 프로필은 비공개예요", { username });
-  }
-
-  return sensei;
-}
 
 export const ErrorBoundary = () => {
   const error = useRouteError();

@@ -6,6 +6,17 @@ const ROUTES_DIRECTORY = join(process.cwd(), "app", "routes");
 const MODELS_DIRECTORY = join(process.cwd(), "app", "models");
 
 describe("profile route privacy guard", () => {
+  it("keeps PostgreSQL profile lookup out of the client-visible layout module", () => {
+    const layoutSource = readFileSync(join(ROUTES_DIRECTORY, "$username.tsx"), "utf8");
+    const serverSource = readFileSync(
+      join(ROUTES_DIRECTORY, "$username._components", "route-sensei.server.ts"),
+      "utf8",
+    );
+    expect(layoutSource).not.toContain("~/models/sensei");
+    expect(layoutSource).not.toContain("getRouteSensei");
+    expect(serverSource).toContain("getSenseiByUsername");
+  });
+
   it("keeps every public @username data route behind getRouteSensei as a coarse architecture backstop", () => {
     const unguardedRoutes = readdirSync(ROUTES_DIRECTORY)
       .filter((file) => file.startsWith("$username") && file.endsWith(".tsx"))
@@ -30,7 +41,7 @@ describe("profile route privacy guard", () => {
     expect(unguardedModels).toEqual([]);
   });
 
-  it("guards public Postgres timeline routes with D1 profile visibility", () => {
+  it("guards public Postgres timeline routes with shared profile visibility", () => {
     const unguardedRoutes = readdirSync(ROUTES_DIRECTORY)
       .filter((file) => file.endsWith(".tsx") && !file.includes(".edit."))
       .filter((file) => {

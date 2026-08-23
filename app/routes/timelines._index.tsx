@@ -50,7 +50,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const [raids, rawStudents, sensei] = await Promise.all([
     getAllRaidSchedules(env),
     getAllStudentsMap(env, true),
-    getActiveSensei(env, request),
+    getActiveSensei(env, request, ctx),
   ]);
   const bosses = [
     ...new Map(
@@ -85,6 +85,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     env,
     timelines.map((timeline) => timeline.userId),
     sensei?.id,
+    { ctx },
   );
   const visibleAuthorIds = new Set(authors.map((author) => author.id));
   const visibleTimelines = timelines.filter((timeline) => visibleAuthorIds.has(timeline.userId));

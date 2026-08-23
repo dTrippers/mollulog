@@ -1,10 +1,10 @@
-import type { SessionStorage } from "react-router";
 import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
+import type { SessionStorage } from "react-router";
 import { type AuthenticateOptions, Strategy } from "remix-auth";
 
 export interface PasskeyStrategyOptions {
   authenticationResponse: AuthenticationResponseJSON;
-};
+}
 
 export class PasskeyStrategy<User> extends Strategy<User, PasskeyStrategyOptions> {
   name = "passkey";

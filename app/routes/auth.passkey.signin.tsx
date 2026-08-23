@@ -5,7 +5,7 @@ import { getLogger } from "~/lib/observability.server";
 import { createPasskeyAuthenticationOptions } from "~/models/passkey";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env } = context.cloudflare;
   return await createPasskeyAuthenticationOptions(env);
 };
 

@@ -1,4 +1,4 @@
-import { redirect, type ActionFunctionArgs } from "react-router";
+import { type ActionFunctionArgs, redirect } from "react-router";
 import { getLinkAuthenticator } from "~/auth/authenticator.server";
 
 function strategyName(provider: string | undefined) {
@@ -9,5 +9,6 @@ function strategyName(provider: string | undefined) {
 }
 
 export const action = async ({ context, params, request }: ActionFunctionArgs) => {
-  return getLinkAuthenticator(context.cloudflare.env).authenticate(strategyName(params.provider), request);
+  const { env, ctx } = context.cloudflare;
+  return getLinkAuthenticator(env, ctx).authenticate(strategyName(params.provider), request);
 };

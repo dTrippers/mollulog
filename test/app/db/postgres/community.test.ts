@@ -1,10 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
 
-jest.mock("~/db/postgres/community-authors", () => ({
-  getCommunityAuthorsByIds: jest.fn(),
-  getCommunityAuthorIdByUsername: jest.fn(),
-}));
 jest.mock("~/lib/postgres.server", () => {
   const actual = jest.requireActual<typeof import("~/lib/postgres.server")>("~/lib/postgres.server");
   return { ...actual, createPostgresClient: jest.fn() };
@@ -28,19 +24,64 @@ import {
   unpinPostgresContentComment,
   updatePostgresCommunityComment,
 } from "~/db/postgres/community";
-import { getCommunityAuthorIdByUsername, getCommunityAuthorsByIds } from "~/db/postgres/community-authors";
 import { createPostgresClient } from "~/lib/postgres.server";
 
-const getAuthors = getCommunityAuthorsByIds as jest.MockedFunction<typeof getCommunityAuthorsByIds>;
-const getAuthorIdByUsername = getCommunityAuthorIdByUsername as jest.MockedFunction<
-  typeof getCommunityAuthorIdByUsername
->;
 const createPgClient = createPostgresClient as jest.MockedFunction<typeof createPostgresClient>;
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as unknown as Env;
+type ConfiguredAuthor = {
+  id: number;
+  username: string;
+  profileStudentId: string | null;
+  profileVisibility: string;
+};
+let configuredAuthors = new Map<number, ConfiguredAuthor>();
 
-function createClient(rowsFor: (text: string, values: unknown[]) => unknown[][] | { rows: unknown[] }) {
+function createClient(
+  rowsFor: (text: string, values: unknown[]) => unknown[][] | { rows: unknown[] },
+  feedOptions: { feedPost?: unknown[]; feedAuthor?: ConfiguredAuthor | null; feedCount?: number } = {},
+) {
   const query = jest.fn(async (config: { text: string }, values: unknown[] = []) => {
-    const result = rowsFor(config.text, values);
+    const lowerText = config.text.toLowerCase();
+    const isAuthorJoin = lowerText.includes('inner join "senseis"') && lowerText.includes("select distinct");
+    const isAuthorLookup = !lowerText.includes('inner join "senseis"') && lowerText.includes('from "senseis"');
+    const isFeedJoin = lowerText.includes('left join "senseis"') && lowerText.includes('from "community_posts"');
+    const result = isFeedJoin
+      ? lowerText.includes("count(*)")
+        ? [[feedOptions.feedCount ?? 2]]
+        : (() => {
+            const author = feedOptions.feedAuthor === undefined ? configuredAuthors.get(3) : feedOptions.feedAuthor;
+            return [
+              [
+                ...(feedOptions.feedPost ??
+                  communityPostRow({ id: 3, uid: "curated-3", userId: 3, origin: "curated" })),
+                ...(author
+                  ? [
+                      author.id,
+                      `sensei-${author.id}`,
+                      author.username,
+                      null,
+                      author.profileStudentId,
+                      null,
+                      null,
+                      true,
+                      null,
+                      "guest",
+                      author.profileVisibility,
+                      new Date("2026-08-01T00:00:00.000Z"),
+                      new Date("2026-08-01T00:00:00.000Z"),
+                      new Date("2026-08-01T00:00:00.000Z"),
+                    ]
+                  : Array.from({ length: 13 }, () => null)),
+              ],
+            ];
+          })()
+      : isAuthorJoin || isAuthorLookup
+        ? [...configuredAuthors.values()].map((author) =>
+            isAuthorJoin
+              ? [author.id, author.id, author.username, author.profileStudentId, author.profileVisibility]
+              : [author.id, author.username, author.profileStudentId, author.profileVisibility],
+          )
+        : rowsFor(config.text, values);
     return Array.isArray(result)
       ? { rows: result, rowCount: result.length }
       : { ...result, rowCount: result.rows.length };
@@ -135,6 +176,47 @@ function communityPostRow({
   ];
 }
 
+function communityPostObject({
+  id = 1,
+  uid = `post-${id}`,
+  userId = 1,
+  postType = "guide",
+  origin = "user",
+  visibility = "public",
+  blocks = [{ type: "party_info", units: [["student-1"]], title: "party" }],
+}: {
+  id?: number;
+  uid?: string;
+  userId?: number;
+  postType?: string;
+  origin?: string;
+  visibility?: string;
+  blocks?: unknown[];
+} = {}) {
+  const now = new Date("2026-08-01T00:00:00.000Z");
+  return {
+    id,
+    uid,
+    userId,
+    postType,
+    origin,
+    title: null,
+    visibility,
+    pinned: false,
+    subjectStudentUid: null,
+    subjectContentUid: null,
+    subjectRaidType: null,
+    subjectSeasonIndex: null,
+    blocks,
+    sourceName: null,
+    sourceUrl: null,
+    sourceMetadata: {},
+    displayAt: now,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 function authors(...values: Array<[number, "public" | "private"]>) {
   return new Map(
     values.map(([id, profileVisibility]) => [
@@ -144,9 +226,13 @@ function authors(...values: Array<[number, "public" | "private"]>) {
   );
 }
 
+function setAuthors(...values: Array<[number, "public" | "private"]>) {
+  configuredAuthors = authors(...values);
+}
+
 describe("PostgreSQL community repository", () => {
   it("returns every visible direct subcomment in stable query order", async () => {
-    getAuthors.mockResolvedValue(authors([2, "public"], [3, "public"], [4, "public"]));
+    setAuthors([2, "public"], [3, "public"], [4, "public"]);
     const { client, query } = createClient((text) => {
       if (text.includes('from "community_comments"')) {
         return [
@@ -196,7 +282,7 @@ describe("PostgreSQL community repository", () => {
   });
 
   it("applies post and author visibility to comments and likes while allowing the owner", async () => {
-    getAuthors.mockResolvedValue(authors([1, "private"]));
+    setAuthors([1, "private"]);
     const blocked = createClient((text) =>
       text.includes('from "community_posts"') ? [postVisibilityRow({ userId: 1 })] : [],
     );
@@ -246,7 +332,7 @@ describe("PostgreSQL community repository", () => {
   });
 
   it("rejects invisible or nested parents without changing the error contracts", async () => {
-    getAuthors.mockResolvedValue(authors([1, "public"], [2, "private"]));
+    setAuthors([1, "public"], [2, "private"]);
     const invisibleParent = createClient((text) => {
       if (text.includes('from "community_posts"')) return [postVisibilityRow({ userId: 1 })];
       if (text.includes('from "community_comments"')) return [parentCommentRow({ uid: "parent", userId: 2 })];
@@ -258,7 +344,7 @@ describe("PostgreSQL community repository", () => {
       }),
     ).rejects.toThrow("Parent comment not found");
 
-    getAuthors.mockResolvedValue(authors([1, "public"], [2, "public"]));
+    setAuthors([1, "public"], [2, "public"]);
     const nestedParent = createClient((text) => {
       if (text.includes('from "community_posts"')) return [postVisibilityRow({ userId: 1 })];
       if (text.includes('from "community_comments"')) {
@@ -300,7 +386,7 @@ describe("PostgreSQL community repository", () => {
   });
 
   it("creates content subcomments only for a parent in the requested content", async () => {
-    getAuthors.mockResolvedValue(authors([1, "public"]));
+    setAuthors([1, "public"]);
     const valid = createClient((text) => {
       if (text.includes('from "community_posts"') && text.includes('"subject_content_uid"')) {
         return [["parent-1", "content-1"]];
@@ -430,17 +516,9 @@ describe("PostgreSQL community repository", () => {
     expect(query.mock.calls[1][0].text).not.toContain("WITH visible_posts");
   });
 
-  it("resolves feed authors before PostgreSQL count/page queries and preserves curated rows", async () => {
-    getAuthors.mockReset();
-    getAuthors.mockResolvedValue(authors([1, "public"], [2, "private"]));
-    const { client, query } = createClient((text) => {
-      if (text.includes("select distinct")) return [[1], [2], [3]];
-      if (text.includes("count(*)")) return [[2]];
-      if (text.includes('from "community_posts"')) {
-        return [communityPostRow({ id: 3, uid: "curated-3", userId: 3, origin: "curated" })];
-      }
-      return [];
-    });
+  it("joins feed authors in count/page queries and preserves curated rows", async () => {
+    setAuthors([1, "public"], [2, "private"], [3, "public"]);
+    const { client, query } = createClient(() => []);
     createPgClient.mockReturnValue(client);
 
     await expect(
@@ -454,29 +532,50 @@ describe("PostgreSQL community repository", () => {
     });
 
     const calls = query.mock.calls.map(([config, values]) => ({ text: config.text, values }));
-    const candidateIndex = calls.findIndex(({ text }) => text.includes("select distinct"));
     const countIndex = calls.findIndex(({ text }) => text.includes("count(*)"));
     const rowsIndex = calls.findIndex(
       ({ text }) => text.includes('from "community_posts"') && text.toLowerCase().includes("limit"),
     );
-    expect(candidateIndex).toBeGreaterThanOrEqual(0);
-    expect(countIndex).toBeGreaterThan(candidateIndex);
+    expect(calls.some(({ text }) => text.includes("feed_author_ids"))).toBe(false);
+    expect(calls.some(({ text }) => text.includes("select distinct"))).toBe(false);
+    expect(countIndex).toBeGreaterThanOrEqual(0);
     expect(rowsIndex).toBeGreaterThan(countIndex);
-    expect(calls[candidateIndex].text).toContain('"user_id"');
-    expect(calls[candidateIndex].text).not.toContain('"blocks"');
-    expect(calls[candidateIndex].text).toContain("community_author_mutes");
-    expect(calls[candidateIndex].text).toContain("NOT EXISTS");
+    expect(calls[countIndex].text).toContain('left join "senseis"');
+    expect(calls[rowsIndex].text).toContain('left join "senseis"');
+    expect(calls[countIndex].text).toContain('"profile_visibility"');
+    expect(calls[rowsIndex].text).toContain('"profile_visibility"');
     expect(calls[countIndex].text).toContain('"origin"');
-    expect(calls[countIndex].values).toContain(1);
-    expect(calls[countIndex].values).not.toContain(2);
-    expect(calls[countIndex].values).not.toContain(3);
+    expect(calls[rowsIndex].text).toContain('"origin"');
+    expect(calls[countIndex].text).toContain("community_author_mutes");
+    expect(calls[countIndex].text).toContain("NOT EXISTS");
+    expect(calls[countIndex].text).toContain('"origin"');
     expect(calls[rowsIndex].text.toLowerCase()).toContain("limit");
     expect(calls[rowsIndex].text.toLowerCase()).toContain("offset");
-    expect(getAuthors).toHaveBeenCalledWith(env, [1, 2, 3]);
+  });
+
+  it("keeps a private author's own feed row visible through the JOIN", async () => {
+    const privateAuthor = { id: 2, username: "user-2", profileStudentId: null, profileVisibility: "private" };
+    const { client, query } = createClient(() => [], {
+      feedCount: 1,
+      feedPost: communityPostRow({ id: 2, uid: "private-2", userId: 2, visibility: "private" }),
+      feedAuthor: privateAuthor,
+    });
+    createPgClient.mockReturnValue(client);
+
+    await expect(
+      getPostgresCommunityFeedPage(env, { currentUserId: 2, includeEngagement: false, pageSize: 1 }),
+    ).resolves.toMatchObject({ items: [{ uid: "private-2", author: { username: "user-2" } }] });
+
+    const feedCalls = query.mock.calls
+      .map(([config, values]) => ({ text: config.text, values }))
+      .filter(({ text }) => text.includes('left join "senseis"'));
+    expect(feedCalls).toHaveLength(2);
+    expect(feedCalls.every(({ text }) => text.includes('"profile_visibility"'))).toBe(true);
+    expect(feedCalls.some(({ values }) => values?.includes(2))).toBe(true);
   });
 
   it("loads recent grading tags only after the PostgreSQL page query", async () => {
-    getAuthors.mockResolvedValue(authors([1, "public"], [2, "public"], [3, "public"]));
+    setAuthors([1, "public"], [2, "public"], [3, "public"]);
     const { client, query } = createClient((text) => {
       if (text.includes("select distinct")) return [[1], [2], [3]];
       if (text.includes("count(*)")) return [[3]];
@@ -509,9 +608,16 @@ describe("PostgreSQL community repository", () => {
   });
 
   it("resolves a party username before querying PostgreSQL guides", async () => {
-    getAuthors.mockClear();
-    getAuthorIdByUsername.mockResolvedValue(42);
+    setAuthors([42, "public"]);
     const { client, query } = createClient((text) => {
+      if (text.includes('inner join "senseis"')) {
+        return [
+          {
+            community_posts: communityPostObject({ id: 1, uid: "party-1", userId: 42 }),
+            senseis: { id: 42, username: "sensei", profileStudentId: null, profileVisibility: "public" },
+          },
+        ] as unknown as unknown[][];
+      }
       if (text.includes('from "community_posts"')) {
         return [
           communityPostRow({
@@ -526,10 +632,11 @@ describe("PostgreSQL community repository", () => {
       return [];
     });
 
-    await expect(getPostgresUserParties(env, "sensei", false, { createClient: () => client })).resolves.toHaveLength(1);
-    expect(getAuthorIdByUsername).toHaveBeenCalledWith(env, "sensei");
+    const parties = await getPostgresUserParties(env, "sensei", false, { createClient: () => client });
+    expect(parties).toHaveLength(1);
+    expect(parties[0]).not.toHaveProperty("sensei");
     const postQuery = query.mock.calls.find(([config]) => config.text.includes('from "community_posts"'))?.[0];
     expect(postQuery?.text).toContain('"user_id"');
-    expect(getAuthors).not.toHaveBeenCalled();
+    expect(query.mock.calls.some(([config]) => config.text.includes('inner join "senseis"'))).toBe(true);
   });
 });

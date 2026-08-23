@@ -1,15 +1,17 @@
-import type {
-  AuthenticationResponseJSON,
-  PublicKeyCredentialRequestOptionsJSON,
-  PublicKeyCredentialCreationOptionsJSON,
-  RegistrationResponseJSON,
+import {
+  type AuthenticationResponseJSON,
+  type PublicKeyCredentialCreationOptionsJSON,
+  type PublicKeyCredentialRequestOptionsJSON,
+  type RegistrationResponseJSON,
+  verifyAuthenticationResponse,
+  verifyRegistrationResponse,
 } from "@simplewebauthn/server";
-import { eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid/non-secure";
-import { verifyAuthenticationResponse, verifyRegistrationResponse } from "@simplewebauthn/server";
-import { senseisTable, type Sensei, toSenseiModel } from "./sensei";
+import { type IdentityRepositoryOptions, utcIsoString, withIdentityDatabase } from "~/db/postgres/identity";
+import { pgPasskeysTable, pgSenseisTable } from "~/db/postgres/schema";
+import { postgresUniqueConstraintName } from "~/lib/db";
+import { type Sensei, toSenseiModel } from "./sensei";
 
 export const PASSKEY_CHALLENGE_TTL_SECONDS = 120;
 export const PASSKEY_CHALLENGE_TIMEOUT_MS = PASSKEY_CHALLENGE_TTL_SECONDS * 1000;
@@ -28,50 +30,56 @@ export type DBPasskey = {
   rawRequest: string;
 } & Passkey;
 
-const passkeysTable = sqliteTable("passkeys", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  memo: text().notNull(),
-  keyId: text().notNull(),
-  publicKey: text().notNull(),
-  rawRequest: text().notNull(),
-  counter: int().notNull(),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-});
+export const passkeysTable = pgPasskeysTable;
 
 function uint8ArrayToBase64Url(uint8Array: Uint8Array) {
   const base64String = btoa(String.fromCodePoint(...uint8Array));
-  return base64String
-    .replaceAll('+', '-')
-    .replaceAll('/', '_')
-    .replaceAll('=', '');
+  return base64String.replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
 function base64UrlToUint8Array(string: string) {
-  const base64 = string.replaceAll('-', '+').replaceAll('_', '/');
+  const base64 = string.replaceAll("-", "+").replaceAll("_", "/");
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
+  for (let i = 0; i < binaryString.length; i += 1) {
     bytes[i] = binaryString.codePointAt(i) ?? 0;
   }
   return bytes;
 }
 
+function toPasskey(row: typeof pgPasskeysTable.$inferSelect): DBPasskey {
+  return {
+    uid: row.uid,
+    userId: row.userId,
+    memo: row.memo,
+    keyId: row.keyId,
+    publicKey: row.publicKey,
+    rawRequest: row.rawRequest,
+    counter: row.counter,
+    createdAt: utcIsoString(row.createdAt),
+  };
+}
+
+function toPublicPasskey(row: typeof pgPasskeysTable.$inferSelect): Passkey {
+  return { uid: row.uid, memo: row.memo, createdAt: utcIsoString(row.createdAt) };
+}
+
 // Meta information for passkeys
-export function passkeyRelyingParty(env: Env): { name: string, id: string } {
+export function passkeyRelyingParty(env: Env): { name: string; id: string } {
   return {
     name: "MolluLog | 몰루로그",
     id: env.HOST.replace(/^https?:\/\//, "").split(":")[0],
   };
 }
 
-// Passkey registration challenges
 function passkeyCreationOptionKey(sensei: Sensei): string {
   return `passkey:creationOptions:${sensei.id}`;
 }
 
-export async function createPasskeyCreationOptions(env: Env, sensei: Sensei): Promise<PublicKeyCredentialCreationOptionsJSON> {
+export async function createPasskeyCreationOptions(
+  env: Env,
+  sensei: Sensei,
+): Promise<PublicKeyCredentialCreationOptionsJSON> {
   const creationOptions: PublicKeyCredentialCreationOptionsJSON = {
     challenge: nanoid(64),
     rp: passkeyRelyingParty(env),
@@ -94,17 +102,14 @@ export async function createPasskeyCreationOptions(env: Env, sensei: Sensei): Pr
   return creationOptions;
 }
 
-// Passkey registration
-const CREATE_PASSKEY_QUERY = `
-  insert into passkeys (uid, userId, memo, keyId, publicKey, rawRequest, counter)
-  values (?1, ?2, ?3, ?4, ?5, ?6, ?7)
-`;
-
-export async function verifyAndCreatePasskey(env: Env, sensei: Sensei, response: RegistrationResponseJSON): Promise<Passkey | null> {
+export async function verifyAndCreatePasskey(
+  env: Env,
+  sensei: Sensei,
+  response: RegistrationResponseJSON,
+  options: IdentityRepositoryOptions = {},
+): Promise<Passkey | null> {
   const creationOptionsRaw = await env.KV_SESSION.get(passkeyCreationOptionKey(sensei));
-  if (!creationOptionsRaw) {
-    return null;
-  }
+  if (!creationOptionsRaw) return null;
 
   const creationOptions: PublicKeyCredentialCreationOptionsJSON = JSON.parse(creationOptionsRaw);
   const verificationResult = await verifyRegistrationResponse({
@@ -119,26 +124,38 @@ export async function verifyAndCreatePasskey(env: Env, sensei: Sensei, response:
   }
 
   const { credential } = verificationResult.registrationInfo;
-  const passkey: DBPasskey = {
-    uid: nanoid(8),
-    userId: sensei.id,
-    memo: `Passkey #${nanoid(6)}`,
-    keyId: credential.id,
-    publicKey: uint8ArrayToBase64Url(credential.publicKey),
-    rawRequest: JSON.stringify(response),
-    counter: 0,
-    createdAt: new Date().toISOString(),
-  };
+  const uid = nanoid(8);
+  const memo = `Passkey #${nanoid(6)}`;
+  const rawRequest = JSON.stringify(response);
 
-  await env.DB.prepare(CREATE_PASSKEY_QUERY).bind(
-    passkey.uid, passkey.userId, passkey.memo, passkey.keyId,
-    passkey.publicKey, passkey.rawRequest, passkey.counter,
-  ).run();
-  return { uid: passkey.uid, memo: passkey.memo, createdAt: new Date().toISOString() };
+  try {
+    return await withIdentityDatabase(
+      env,
+      "create_passkey",
+      async (db) => {
+        const [row] = await db
+          .insert(pgPasskeysTable)
+          .values({
+            uid,
+            userId: sensei.id,
+            memo,
+            keyId: credential.id,
+            publicKey: uint8ArrayToBase64Url(credential.publicKey),
+            rawRequest,
+            counter: 0,
+          })
+          .returning();
+        return row ? toPublicPasskey(row) : null;
+      },
+      options,
+    );
+  } catch (error) {
+    const constraint = postgresUniqueConstraintName(error);
+    if (constraint === "passkeys_key_id_uidx" || constraint === "passkeys_uid_uidx") return null;
+    throw error;
+  }
 }
 
-
-// Passkey authentication
 function passkeyAuthenticationOptionKey(challenge: string): string {
   return `passkey:authenticationOptions:${challenge}`;
 }
@@ -156,13 +173,23 @@ export async function createPasskeyAuthenticationOptions(env: Env): Promise<Publ
   });
 
   return authenticationOptions;
-};
+}
 
-export async function verifyPasskeyAuthentication(env: Env, response: AuthenticationResponseJSON): Promise<Sensei | null> {
-  const passkey = await env.DB.prepare("select * from passkeys where keyId = ?1").bind(response.id).first<DBPasskey>();
-  if (!passkey) {
-    return null;
-  }
+export async function verifyPasskeyAuthentication(
+  env: Env,
+  response: AuthenticationResponseJSON,
+  options: IdentityRepositoryOptions = {},
+): Promise<Sensei | null> {
+  const passkey = await withIdentityDatabase(
+    env,
+    "passkey_by_key_id",
+    async (db) => {
+      const [row] = await db.select().from(pgPasskeysTable).where(eq(pgPasskeysTable.keyId, response.id)).limit(1);
+      return row ? toPasskey(row) : null;
+    },
+    options,
+  );
+  if (!passkey) return null;
 
   const verificationResult = await verifyAuthenticationResponse({
     response,
@@ -178,53 +205,87 @@ export async function verifyPasskeyAuthentication(env: Env, response: Authentica
       counter: passkey.counter,
     },
   });
-  if (!verificationResult.verified) {
-    return null;
-  }
+  if (!verificationResult.verified) return null;
 
   const { newCounter } = verificationResult.authenticationInfo;
-
-  return advancePasskeyCounterAndGetSensei(env, passkey, newCounter);
+  return advancePasskeyCounterAndGetSensei(env, passkey, newCounter, options);
 }
 
 export async function advancePasskeyCounterAndGetSensei(
   env: Env,
   passkey: Pick<DBPasskey, "keyId" | "userId">,
   newCounter: number,
+  options: IdentityRepositoryOptions = {},
 ): Promise<Sensei | null> {
-  const db = drizzle(env.DB);
-  const [, senseiRows] = await db.batch([
-    db
-      .update(passkeysTable)
-      .set({ counter: sql`max(${passkeysTable.counter}, ${newCounter})` })
-      .where(eq(passkeysTable.keyId, passkey.keyId)),
-    db.select().from(senseisTable).where(eq(senseisTable.id, passkey.userId)).limit(1),
-  ]);
-
-  return senseiRows.length > 0 ? toSenseiModel(senseiRows[0]) : null;
+  return withIdentityDatabase(
+    env,
+    "advance_passkey_counter",
+    async (db) => {
+      const senseiRows = await db.transaction(async (tx) => {
+        await tx
+          .update(pgPasskeysTable)
+          .set({ counter: sql`GREATEST(${pgPasskeysTable.counter}, ${newCounter})`, updatedAt: new Date() })
+          .where(eq(pgPasskeysTable.keyId, passkey.keyId));
+        return tx.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, passkey.userId)).limit(1);
+      });
+      return senseiRows[0] ? toSenseiModel(senseiRows[0]) : null;
+    },
+    options,
+  );
 }
 
-// Get stored passkeys
-export async function getPasskeysBySensei(env: Env, sensei: Sensei): Promise<Passkey[]> {
-  const passkeys = await env.DB.prepare("select * from passkeys where userId = ?1").bind(sensei.id).all<DBPasskey>();
-  return passkeys.results.map((row) => ({ uid: row.uid, memo: row.memo, createdAt: row.createdAt }));
+export async function getPasskeysBySensei(
+  env: Env,
+  sensei: Sensei,
+  options: IdentityRepositoryOptions = {},
+): Promise<Passkey[]> {
+  return withIdentityDatabase(
+    env,
+    "passkeys_by_sensei",
+    async (db) => {
+      const rows = await db
+        .select()
+        .from(pgPasskeysTable)
+        .where(eq(pgPasskeysTable.userId, sensei.id))
+        .orderBy(asc(pgPasskeysTable.id));
+      return rows.map(toPublicPasskey);
+    },
+    options,
+  );
 }
 
-
-// Update passkey memo
-const UPDATE_PASSKEY_MEMO_QUERY = `
-  update passkeys set memo = ?1 where userId = ?2 and uid = ?3
-`;
-
-export async function updatePasskeyMemo(env: Env, sensei: Sensei, uid: string, memo: string): Promise<void> {
-  await env.DB.prepare(UPDATE_PASSKEY_MEMO_QUERY).bind(memo, sensei.id, uid).run();
+export async function updatePasskeyMemo(
+  env: Env,
+  sensei: Sensei,
+  uid: string,
+  memo: string,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await withIdentityDatabase(
+    env,
+    "update_passkey_memo",
+    async (db) => {
+      await db
+        .update(pgPasskeysTable)
+        .set({ memo, updatedAt: new Date() })
+        .where(and(eq(pgPasskeysTable.userId, sensei.id), eq(pgPasskeysTable.uid, uid)));
+    },
+    options,
+  );
 }
 
-// Delete passkey
-const DELETE_PASSKEY_QUERY = `
-  delete from passkeys where userId = ?1 and uid = ?2
-`;
-
-export async function deletePasskey(env: Env, sensei: Sensei, uid: string): Promise<void> {
-  await env.DB.prepare(DELETE_PASSKEY_QUERY).bind(sensei.id, uid).run();
+export async function deletePasskey(
+  env: Env,
+  sensei: Sensei,
+  uid: string,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await withIdentityDatabase(
+    env,
+    "delete_passkey",
+    async (db) => {
+      await db.delete(pgPasskeysTable).where(and(eq(pgPasskeysTable.userId, sensei.id), eq(pgPasskeysTable.uid, uid)));
+    },
+    options,
+  );
 }

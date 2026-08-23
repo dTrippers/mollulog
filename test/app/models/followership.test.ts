@@ -1,116 +1,121 @@
-import { describe, expect, it } from "@jest/globals";
-import { getFollowerIds, getFollowershipSummary, getFollowingIds } from "~/models/followership";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
-class FakeD1Statement {
-  private params: unknown[] = [];
+const mockWithIdentityDatabase = jest.fn();
+const mockIdentityDb = {
+  select: jest.fn(),
+  insert: jest.fn(),
+};
 
-  constructor(
-    private readonly db: FakeD1Database,
-    private readonly sql: string,
-  ) {}
+jest.mock("~/db/postgres/identity", () => ({
+  withIdentityDatabase: (...args: unknown[]) => mockWithIdentityDatabase(...args),
+}));
 
-  bind(...params: unknown[]): FakeD1Statement {
-    this.params = params;
-    return this;
-  }
+import {
+  follow,
+  getFollowerIds,
+  getFollowershipLists,
+  getFollowershipSummary,
+  getFollowingIds,
+} from "~/models/followership";
 
-  async all(): Promise<{ results: Record<string, unknown>[] }> {
-    return { results: this.db.selectRows(this.sql, this.params) };
-  }
+beforeEach(() => {
+  jest.clearAllMocks();
+  let countCall = 0;
+  let relationshipCall = 0;
+  mockIdentityDb.select.mockImplementation((selection: unknown) => {
+    const selectionRecord = selection as Record<string, unknown>;
+    const keys = Object.keys(selectionRecord);
+    if (keys.includes("count")) {
+      const value = countCall++ === 0 ? [{ count: 2 }] : [{ count: 2 }];
+      return createBuilder(value);
+    }
+    if (keys.includes("followerId")) return createBuilder([{ followerId: 2 }, { followerId: 4 }]);
+    if (keys.includes("followeeId")) return createBuilder([{ followeeId: 2 }, { followeeId: 3 }]);
+    if (keys.includes("sensei")) {
+      return createBuilder([
+        {
+          sensei: {
+            id: 2,
+            uid: "sensei-2",
+            username: "sensei2",
+            friendCode: null,
+            profileStudentId: null,
+            bio: null,
+            active: true,
+            role: "guest",
+            profileVisibility: "public",
+          },
+        },
+      ]);
+    }
+    if (keys.includes("id")) {
+      const value = relationshipCall++ === 0 ? [{ id: 1 }] : [{ id: 1 }];
+      return createBuilder(value);
+    }
+    throw new Error(`Unexpected select: ${keys.join(",")}`);
+  });
+  const onConflictDoNothing = jest.fn(async () => undefined);
+  const values = jest.fn(() => ({ onConflictDoNothing }));
+  mockIdentityDb.insert.mockReturnValue({ values });
+  mockWithIdentityDatabase.mockImplementation(async (_env, _name, operation: unknown) =>
+    (operation as (db: typeof mockIdentityDb) => unknown)(mockIdentityDb),
+  );
+});
 
-  async raw(): Promise<unknown[][]> {
-    return this.db.selectRows(this.sql, this.params).map((row) => Object.values(row));
-  }
-
-  async get(): Promise<Record<string, unknown> | undefined> {
-    return this.db.selectRows(this.sql, this.params)[0];
-  }
-
-  async first(): Promise<Record<string, unknown> | undefined> {
-    return this.get();
-  }
-
-  execute(): { success: true; results: Record<string, unknown>[]; meta: { changes: 0 } } {
-    return { success: true, results: this.db.selectRows(this.sql, this.params), meta: { changes: 0 } };
-  }
+function createBuilder(value: unknown) {
+  const builder = Promise.resolve(value) as Promise<unknown> & Record<string, (...args: unknown[]) => unknown>;
+  builder.from = () => builder;
+  builder.innerJoin = () => builder;
+  builder.where = () => builder;
+  builder.limit = async () => value;
+  return builder;
 }
 
-class FakeD1Database {
-  readonly followerships = [
-    { followerId: 1, followeeId: 2 },
-    { followerId: 1, followeeId: 3 },
-    { followerId: 2, followeeId: 1 },
-    { followerId: 4, followeeId: 1 },
-  ];
-  readonly executedSql: string[] = [];
-  batchCalls = 0;
+const env = { HYPERDRIVE: { connectionString: "postgres://unused" } } as unknown as Env;
 
-  async batch(statements: FakeD1Statement[]) {
-    this.batchCalls += 1;
-    return statements.map((statement) => statement.execute());
-  }
-
-  prepare(sql: string): FakeD1Statement {
-    this.executedSql.push(sql);
-    return new FakeD1Statement(this, sql);
-  }
-
-  selectRows(sql: string, params: unknown[]): Record<string, unknown>[] {
-    const normalizedSql = sql.replaceAll('"', "").replace(/\s+/g, " ").trim().toLowerCase();
-
-    const userId = Number(params[0]);
-    if (normalizedSql.includes("select count(*)") && normalizedSql.includes(".followeeid =")) {
-      return [{ count: this.followerships.filter((row) => row.followeeId === userId).length }];
-    }
-    if (normalizedSql.includes("select count(*)") && normalizedSql.includes(".followerid =")) {
-      return [{ count: this.followerships.filter((row) => row.followerId === userId).length }];
-    }
-    if (normalizedSql.includes("select id from followerships")) {
-      const otherId = Number(params[1]);
-      return this.followerships.some((row) => row.followerId === userId && row.followeeId === otherId)
-        ? [{ id: 1 }]
-        : [];
-    }
-    if (normalizedSql.includes("select followerid from followerships")) {
-      return this.followerships
-        .filter((row) => row.followeeId === userId)
-        .map((row) => ({ followerId: row.followerId }));
-    }
-    if (normalizedSql.includes("select followeeid from followerships")) {
-      return this.followerships
-        .filter((row) => row.followerId === userId)
-        .map((row) => ({ followeeId: row.followeeId }));
-    }
-
-    throw new Error(`Unexpected SQL: ${sql}\nparams: ${JSON.stringify(params)}`);
-  }
-}
-
-function createEnv() {
-  const db = new FakeD1Database();
-  return { db, env: { DB: db } as unknown as Env };
-}
-
-describe("followership query shape", () => {
-  it("returns counts and viewer relationships in one ORM batch", async () => {
-    const { db, env } = createEnv();
-
+describe("PostgreSQL followership model", () => {
+  it("returns counts and viewer relationships from PostgreSQL", async () => {
     await expect(getFollowershipSummary(env, 1, 2)).resolves.toEqual({
       followerCount: 2,
       followingCount: 2,
       followed: true,
       following: true,
     });
-    expect(db.batchCalls).toBe(1);
-    expect(db.executedSql).toHaveLength(4);
+    expect(mockWithIdentityDatabase).toHaveBeenCalledWith(
+      env,
+      "followership_summary",
+      expect.any(Function),
+      expect.any(Object),
+    );
   });
 
-  it("selects only the required id column for list callers", async () => {
-    const { db, env } = createEnv();
+  it("loads following and follower profiles through one identity operation", async () => {
+    await expect(getFollowershipLists(env, 1, 9, { ctx: {} as ExecutionContext })).resolves.toEqual({
+      following: [expect.objectContaining({ id: 2 })],
+      followers: [expect.objectContaining({ id: 2 })],
+    });
+    expect(mockWithIdentityDatabase).toHaveBeenCalledTimes(1);
+    expect(mockWithIdentityDatabase).toHaveBeenCalledWith(
+      env,
+      "followership_lists",
+      expect.any(Function),
+      expect.objectContaining({ ctx: expect.anything() }),
+    );
+  });
 
+  it("selects only the required relationship IDs", async () => {
     await expect(getFollowerIds(env, 1)).resolves.toEqual([2, 4]);
     await expect(getFollowingIds(env, 1)).resolves.toEqual([2, 3]);
-    expect(db.executedSql[0]).toMatch(/select "followerId" from "followerships"/i);
-    expect(db.executedSql[1]).toMatch(/select "followeeId" from "followerships"/i);
+    expect(mockIdentityDb.select).toHaveBeenCalledWith(expect.objectContaining({ followerId: expect.anything() }));
+    expect(mockIdentityDb.select).toHaveBeenCalledWith(expect.objectContaining({ followeeId: expect.anything() }));
+  });
+
+  it("uses a conflict-safe insert for repeated follows", async () => {
+    await follow(env, 1, 2);
+    expect(mockIdentityDb.insert).toHaveBeenCalled();
+    const insertBuilder = mockIdentityDb.insert.mock.results[0]?.value as { values: jest.Mock };
+    expect(insertBuilder.values).toBeDefined();
+    const valuesBuilder = insertBuilder.values.mock.results[0]?.value as { onConflictDoNothing: jest.Mock };
+    expect(valuesBuilder.onConflictDoNothing).toHaveBeenCalledWith({ target: expect.any(Array) });
   });
 });

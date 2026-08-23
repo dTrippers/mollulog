@@ -1,24 +1,10 @@
-import { and, eq, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { and, eq } from "drizzle-orm";
 import { nanoid } from "nanoid/non-secure";
+import { type IdentityRepositoryOptions, withIdentityDatabase } from "~/db/postgres/identity";
+import { pgPendingSenseiRegistrationsTable } from "~/db/postgres/schema";
 import type { AuthProvider } from "./auth-identity";
 
-export const pendingSenseiRegistrationsTable = sqliteTable(
-  "pending_sensei_registrations",
-  {
-    id: int().primaryKey({ autoIncrement: true }),
-    uid: text().notNull(),
-    provider: text().notNull().$type<AuthProvider>(),
-    providerUserId: text().notNull(),
-    createdAt: text().notNull().default(sql`current_timestamp`),
-    updatedAt: text().notNull().default(sql`current_timestamp`),
-  },
-  (table) => [
-    uniqueIndex("pending_sensei_registrations_uid").on(table.uid),
-    uniqueIndex("pending_sensei_registrations_provider_user").on(table.provider, table.providerUserId),
-  ],
-);
+export const pendingSenseiRegistrationsTable = pgPendingSenseiRegistrationsTable;
 
 export type PendingSenseiRegistration = {
   uid: string;
@@ -26,57 +12,93 @@ export type PendingSenseiRegistration = {
   providerUserId: string;
 };
 
+function toModel(row: typeof pgPendingSenseiRegistrationsTable.$inferSelect): PendingSenseiRegistration {
+  return {
+    uid: row.uid,
+    provider: row.provider,
+    providerUserId: row.providerUserId,
+  };
+}
+
 export async function createPendingSenseiRegistration(
   env: Env,
   provider: AuthProvider,
   providerUserId: string,
+  options: IdentityRepositoryOptions = {},
 ): Promise<PendingSenseiRegistration> {
-  const db = drizzle(env.DB);
-  const existing = await db
-    .select()
-    .from(pendingSenseiRegistrationsTable)
-    .where(
-      and(
-        eq(pendingSenseiRegistrationsTable.provider, provider),
-        eq(pendingSenseiRegistrationsTable.providerUserId, providerUserId),
-      ),
-    )
-    .limit(1);
+  return withIdentityDatabase(
+    env,
+    "create_pending_registration",
+    async (db) => {
+      const [existing] = await db
+        .select()
+        .from(pgPendingSenseiRegistrationsTable)
+        .where(
+          and(
+            eq(pgPendingSenseiRegistrationsTable.provider, provider),
+            eq(pgPendingSenseiRegistrationsTable.providerUserId, providerUserId),
+          ),
+        )
+        .limit(1);
+      if (existing) return toModel(existing);
 
-  if (existing.length > 0) {
-    return {
-      uid: existing[0].uid,
-      provider: existing[0].provider,
-      providerUserId: existing[0].providerUserId,
-    };
-  }
+      const [inserted] = await db
+        .insert(pgPendingSenseiRegistrationsTable)
+        .values({ uid: nanoid(24), provider, providerUserId })
+        .onConflictDoNothing({
+          target: [pgPendingSenseiRegistrationsTable.provider, pgPendingSenseiRegistrationsTable.providerUserId],
+        })
+        .returning();
+      if (inserted) return toModel(inserted);
 
-  const uid = nanoid(24);
-  await db.insert(pendingSenseiRegistrationsTable).values({ uid, provider, providerUserId }).onConflictDoNothing();
-
-  return createPendingSenseiRegistration(env, provider, providerUserId);
+      const [raced] = await db
+        .select()
+        .from(pgPendingSenseiRegistrationsTable)
+        .where(
+          and(
+            eq(pgPendingSenseiRegistrationsTable.provider, provider),
+            eq(pgPendingSenseiRegistrationsTable.providerUserId, providerUserId),
+          ),
+        )
+        .limit(1);
+      if (!raced) throw new Error("Pending registration was not created");
+      return toModel(raced);
+    },
+    options,
+  );
 }
 
-export async function getPendingSenseiRegistration(env: Env, uid: string): Promise<PendingSenseiRegistration | null> {
-  const db = drizzle(env.DB);
-  const result = await db
-    .select()
-    .from(pendingSenseiRegistrationsTable)
-    .where(eq(pendingSenseiRegistrationsTable.uid, uid))
-    .limit(1);
-
-  if (result.length === 0) {
-    return null;
-  }
-
-  return {
-    uid: result[0].uid,
-    provider: result[0].provider,
-    providerUserId: result[0].providerUserId,
-  };
+export async function getPendingSenseiRegistration(
+  env: Env,
+  uid: string,
+  options: IdentityRepositoryOptions = {},
+): Promise<PendingSenseiRegistration | null> {
+  return withIdentityDatabase(
+    env,
+    "pending_registration_by_uid",
+    async (db) => {
+      const [row] = await db
+        .select()
+        .from(pgPendingSenseiRegistrationsTable)
+        .where(eq(pgPendingSenseiRegistrationsTable.uid, uid))
+        .limit(1);
+      return row ? toModel(row) : null;
+    },
+    options,
+  );
 }
 
-export async function deletePendingSenseiRegistration(env: Env, uid: string): Promise<void> {
-  const db = drizzle(env.DB);
-  await db.delete(pendingSenseiRegistrationsTable).where(eq(pendingSenseiRegistrationsTable.uid, uid));
+export async function deletePendingSenseiRegistration(
+  env: Env,
+  uid: string,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await withIdentityDatabase(
+    env,
+    "delete_pending_registration",
+    async (db) => {
+      await db.delete(pgPendingSenseiRegistrationsTable).where(eq(pgPendingSenseiRegistrationsTable.uid, uid));
+    },
+    options,
+  );
 }

@@ -18,7 +18,7 @@ import {
   getTimelineContentsByRecruitmentGroupUids,
   groupTimelineContentsByRecruitmentGroupUid,
 } from "~/models/timeline-content.server";
-import { getRouteSensei } from "./$username";
+import { getRouteSensei } from "./$username._components/route-sensei.server";
 import PickupHistoryView from "./$username.pickups._components/PickupHistoryView";
 
 export const meta: MetaFunction = ({ params }) => {
@@ -31,13 +31,13 @@ export const meta: MetaFunction = ({ params }) => {
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const sensei = await getActiveSensei(env, request);
+  const { env, ctx } = context.cloudflare;
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }
 
-  const routeSensei = await getRouteSensei(env, params, sensei.id);
+  const routeSensei = await getRouteSensei(env, params, sensei.id, { ctx });
   if (routeSensei.username !== sensei.username) {
     return data({ error: "Forbidden" }, { status: 403 });
   }
@@ -55,8 +55,8 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const currentUser = await getActiveSensei(env, request);
-  const sensei = await getRouteSensei(env, params, currentUser?.id);
+  const currentUser = await getActiveSensei(env, request, ctx);
+  const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
 
   const [recruitmentResults, allStudentsMap] = await Promise.all([
     getRecruitmentResults(env, sensei.id),

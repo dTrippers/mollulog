@@ -12,7 +12,7 @@ jest.mock("~/models/sensei", () => ({
   getSenseiByUsername: jest.fn(),
 }));
 
-import { getRouteSensei } from "../../../app/routes/$username";
+import { getRouteSensei } from "../../../app/routes/$username._components/route-sensei.server";
 
 const mockedGetSenseiByUsername = getSenseiByUsername as jest.MockedFunction<typeof getSenseiByUsername>;
 

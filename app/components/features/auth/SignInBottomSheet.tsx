@@ -57,8 +57,12 @@ export default function SignInBottomSheet() {
     let authenticationResponse: Awaited<ReturnType<typeof startAuthentication>>;
     try {
       const res = await fetch("/auth/passkey/signin");
-      if (!res.ok) throw new Error(`status=${res.status}`);
-      const authenticationOptions = await res.json<PublicKeyCredentialRequestOptionsJSON>();
+      const responseBody = await res.json<unknown>();
+      if (!res.ok) {
+        setClientError("Passkey 조회에 실패했어요. 다른 방법으로 로그인해주세요.");
+        return;
+      }
+      const authenticationOptions = responseBody as PublicKeyCredentialRequestOptionsJSON;
       authenticationResponse = await startAuthentication({ optionsJSON: authenticationOptions });
     } catch {
       setClientError("Passkey 조회에 실패했어요. 다른 방법으로 로그인해주세요.");

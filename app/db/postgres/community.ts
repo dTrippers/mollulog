@@ -1,17 +1,13 @@
 import { and, asc, count, desc, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import {
-  type CommunityAuthor,
-  getCommunityAuthorIdByUsername,
-  getCommunityAuthorsByIds,
-} from "~/db/postgres/community-authors";
 import { communityAuthorVisiblePredicate } from "~/db/postgres/community-moderation";
 import {
   pgCommunityCommentsTable,
   pgCommunityPostLikesTable,
   pgCommunityPostsTable,
   pgCommunityPostTagsTable,
+  pgSenseisTable,
 } from "~/db/postgres/schema";
 import type { WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
 import { normalizeInstant, type UtcIsoString } from "~/lib/date-time";
@@ -41,6 +37,13 @@ export type PostgresCommunityOptions = {
 type CommunityDb = NodePgDatabase;
 type CommunityPostRow = typeof pgCommunityPostsTable.$inferSelect;
 type CommunityCommentRow = typeof pgCommunityCommentsTable.$inferSelect;
+
+type CommunityAuthor = {
+  id: number;
+  username: string;
+  profileStudentId: string | null;
+  profileVisibility: "public" | "private";
+};
 
 function toUtc(value: Date | string | null | undefined): UtcIsoString | null {
   if (value == null) return null;
@@ -155,10 +158,38 @@ async function withCommunityDatabase<T>(
   );
 }
 
-async function loadAuthors(env: Env, rows: readonly { userId: number }[]): Promise<Map<number, CommunityAuthor>> {
-  return getCommunityAuthorsByIds(
+async function loadAuthors(
+  env: Env,
+  rows: readonly { userId: number }[],
+  options: PostgresCommunityOptions = {},
+): Promise<Map<number, CommunityAuthor>> {
+  const uniqueIds = [...new Set(rows.map((row) => row.userId).filter((id) => Number.isInteger(id)))];
+  if (uniqueIds.length === 0) return new Map();
+  const authors = await withCommunityDatabase(
     env,
-    rows.map((row) => row.userId),
+    "authors_by_id",
+    (db) =>
+      db
+        .select({
+          id: pgSenseisTable.id,
+          username: pgSenseisTable.username,
+          profileStudentId: pgSenseisTable.profileStudentId,
+          profileVisibility: pgSenseisTable.profileVisibility,
+        })
+        .from(pgSenseisTable)
+        .where(inArray(pgSenseisTable.id, uniqueIds)),
+    options,
+  );
+  return new Map(
+    authors.map((author) => [
+      author.id,
+      {
+        id: author.id,
+        username: author.username,
+        profileStudentId: author.profileStudentId ?? null,
+        profileVisibility: author.profileVisibility ?? "public",
+      },
+    ]),
   );
 }
 
@@ -174,14 +205,35 @@ async function loadAllowedAuthorIds(
     queryName,
     (db) =>
       db
-        .selectDistinct({ userId: pgCommunityPostsTable.userId })
+        .selectDistinct({
+          userId: pgCommunityPostsTable.userId,
+          id: pgSenseisTable.id,
+          username: pgSenseisTable.username,
+          profileStudentId: pgSenseisTable.profileStudentId,
+          profileVisibility: pgSenseisTable.profileVisibility,
+        })
         .from(pgCommunityPostsTable)
-        .where(and(...filters)),
+        .innerJoin(pgSenseisTable, eq(pgCommunityPostsTable.userId, pgSenseisTable.id))
+        .where(
+          and(
+            ...filters,
+            viewerUserId == null
+              ? eq(pgSenseisTable.profileVisibility, "public")
+              : or(eq(pgSenseisTable.profileVisibility, "public"), eq(pgSenseisTable.id, viewerUserId)),
+          ),
+        ),
     options,
   );
-  const authors = await getCommunityAuthorsByIds(
-    env,
-    candidateRows.map((row) => row.userId),
+  const authors = new Map<number, CommunityAuthor>(
+    candidateRows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        username: row.username,
+        profileStudentId: row.profileStudentId ?? null,
+        profileVisibility: row.profileVisibility ?? "public",
+      },
+    ]),
   );
   return {
     authors,
@@ -199,6 +251,13 @@ function allowedAuthorFilter(allowedAuthorIds: readonly number[], includeCurated
   return or(eq(pgCommunityPostsTable.origin, "curated"), allowedAuthorCondition) ?? allowedAuthorCondition;
 }
 
+function communityFeedAuthorVisiblePredicate(viewerUserId?: number | null): SQL {
+  const publicAuthor = eq(pgSenseisTable.profileVisibility, "public");
+  const curatedPost = eq(pgCommunityPostsTable.origin, "curated");
+  if (viewerUserId == null) return or(curatedPost, publicAuthor) ?? curatedPost;
+  return or(curatedPost, publicAuthor, eq(pgSenseisTable.id, viewerUserId)) ?? curatedPost;
+}
+
 function communityPostEngagementVisiblePredicate(postUid: SQLWrapper, viewerUserId?: number | null): SQL {
   const authorVisibility = communityAuthorVisiblePredicate(sql.raw("visible_post.user_id"), viewerUserId);
   const postVisibility =
@@ -208,8 +267,14 @@ function communityPostEngagementVisiblePredicate(postUid: SQLWrapper, viewerUser
   return sql`EXISTS (
     SELECT 1
     FROM community_posts AS visible_post
+    LEFT JOIN senseis AS visible_author ON visible_author.id = visible_post.user_id
     WHERE visible_post.uid = ${postUid}
       AND ${postVisibility}
+      AND (
+        visible_post.origin = 'curated'
+        OR visible_author.profile_visibility = 'public'
+        OR visible_author.id = ${viewerUserId ?? null}
+      )
       AND ${authorVisibility}
   )`;
 }
@@ -235,9 +300,10 @@ export async function getPostgresCommunityFeedPage(
   const page = Math.max(1, options.page ?? 1);
   const pageSize = Math.max(1, options.pageSize ?? 20);
   const filters: SQL[] = [];
-  const visible = options.currentUserId
-    ? or(eq(pgCommunityPostsTable.visibility, "public"), eq(pgCommunityPostsTable.userId, options.currentUserId))
-    : eq(pgCommunityPostsTable.visibility, "public");
+  const visible =
+    options.currentUserId != null
+      ? or(eq(pgCommunityPostsTable.visibility, "public"), eq(pgCommunityPostsTable.userId, options.currentUserId))
+      : eq(pgCommunityPostsTable.visibility, "public");
   filters.push(visible ?? eq(pgCommunityPostsTable.visibility, "public"));
   filters.push(communityAuthorVisiblePredicate(pgCommunityPostsTable.userId, options.currentUserId));
   filters.push(
@@ -255,14 +321,7 @@ export async function getPostgresCommunityFeedPage(
     );
   }
 
-  const { authors, allowedAuthorIds } = await loadAllowedAuthorIds(
-    env,
-    filters,
-    options.currentUserId,
-    "feed_author_ids",
-    options,
-  );
-  const visibleFilters = [...filters, allowedAuthorFilter(allowedAuthorIds, true)];
+  const visibleFilters = [...filters, communityFeedAuthorVisiblePredicate(options.currentUserId)];
   const [{ totalCount: rawTotalCount }] = await withCommunityDatabase(
     env,
     "feed_count",
@@ -270,6 +329,7 @@ export async function getPostgresCommunityFeedPage(
       db
         .select({ totalCount: count() })
         .from(pgCommunityPostsTable)
+        .leftJoin(pgSenseisTable, eq(pgCommunityPostsTable.userId, pgSenseisTable.id))
         .where(and(...visibleFilters)),
     options,
   );
@@ -284,6 +344,7 @@ export async function getPostgresCommunityFeedPage(
       db
         .select()
         .from(pgCommunityPostsTable)
+        .leftJoin(pgSenseisTable, eq(pgCommunityPostsTable.userId, pgSenseisTable.id))
         .where(and(...visibleFilters))
         .orderBy(
           desc(sql`coalesce(${pgCommunityPostsTable.displayAt}, ${pgCommunityPostsTable.createdAt})`),
@@ -298,16 +359,24 @@ export async function getPostgresCommunityFeedPage(
       ? { comments: {}, likes: {}, liked: new Set<string>() }
       : await loadEngagement(
           env,
-          pageRows.map((row) => row.uid),
+          pageRows.map((row) => row.community_posts.uid),
           options.currentUserId,
           options,
         );
   return {
     items: pageRows.map((row) => {
-      const post = mapPost(row, authors.get(row.userId), options.currentUserId);
-      post.comments = engagement.comments[row.uid] ?? [];
-      post.likeCount = engagement.likes[row.uid] ?? 0;
-      post.liked = engagement.liked.has(row.uid);
+      const author = row.senseis
+        ? {
+            id: row.senseis.id,
+            username: row.senseis.username,
+            profileStudentId: row.senseis.profileStudentId ?? null,
+            profileVisibility: row.senseis.profileVisibility ?? "public",
+          }
+        : undefined;
+      const post = mapPost(row.community_posts, author, options.currentUserId);
+      post.comments = engagement.comments[row.community_posts.uid] ?? [];
+      post.likeCount = engagement.likes[row.community_posts.uid] ?? 0;
+      post.liked = engagement.liked.has(row.community_posts.uid);
       return post;
     }),
     page: currentPage,
@@ -340,7 +409,7 @@ export async function getPostgresCommunityPostByUid(
     options,
   );
   if (!row) return null;
-  const authors = await loadAuthors(env, [row]);
+  const authors = await loadAuthors(env, [row], options);
   if (row.origin !== "curated" && !authorVisible(authors.get(row.userId), currentUserId)) return null;
   if (row.visibility !== "public" && row.userId !== currentUserId) return null;
   const engagement = await loadEngagement(env, [postUid], currentUserId, options);
@@ -434,7 +503,7 @@ export async function getPostgresNestedCommunityCommentsByPostUids(
         .orderBy(asc(pgCommunityCommentsTable.createdAt), asc(pgCommunityCommentsTable.id)),
     options,
   );
-  const authors = await loadAuthors(env, rows);
+  const authors = await loadAuthors(env, rows, options);
   const visibleRows = rows.filter((row) => authorVisible(authors.get(row.userId), currentUserId));
   const byPost = new Map<string, CommunityCommentRow[]>();
   for (const row of visibleRows) byPost.set(row.postUid, [...(byPost.get(row.postUid) ?? []), row]);
@@ -494,7 +563,7 @@ export async function setPostgresCommunityPostLike(
         )
         .limit(1);
       if (!post || post.postType === "walkthrough_timeline") return;
-      const authors = await getCommunityAuthorsByIds(env, [post.userId]);
+      const authors = await loadAuthors(env, [post], options);
       if (
         !communityPostVisibleTo(post, userId) ||
         !communityPostAuthorVisibleTo(post, authors.get(post.userId), userId)
@@ -565,7 +634,7 @@ export async function createPostgresCommunityComment(
           )
           .limit(1);
       }
-      const authors = await getCommunityAuthorsByIds(env, [post?.userId ?? -1, ...(parent ? [parent.userId] : [])]);
+      const authors = await loadAuthors(env, [...(post ? [post] : []), ...(parent ? [parent] : [])], options);
       if (
         !post ||
         !communityPostVisibleTo(post, userId) ||
@@ -860,7 +929,7 @@ export async function getPostgresContentComments(
         ),
     options,
   );
-  const authors = await loadAuthors(env, posts);
+  const authors = await loadAuthors(env, posts, options);
   const visiblePosts = posts.filter((post) => authorVisible(authors.get(post.userId), userId));
   const postMap = new Map(visiblePosts.map((post) => [post.uid, post]));
   const comments = visiblePosts.length
@@ -886,7 +955,7 @@ export async function getPostgresContentComments(
         options,
       )
     : [];
-  const commentAuthors = await loadAuthors(env, comments);
+  const commentAuthors = await loadAuthors(env, comments, options);
   for (const post of visiblePosts) {
     const author = authors.get(post.userId);
     if (!author) continue;
@@ -1218,7 +1287,7 @@ export async function getPostgresPartiesByRaidReference(
         ),
     options,
   );
-  const authors = await loadAuthors(env, rows);
+  const authors = await loadAuthors(env, rows, options);
   return rows
     .filter((row) => authorVisible(authors.get(row.userId)))
     .map((row) => toParty(row, includeSensei ? authors.get(row.userId) : undefined));
@@ -1230,9 +1299,6 @@ export async function getPostgresUserParties(
   includePrivate = false,
   options: PostgresCommunityOptions = {},
 ): Promise<Party[]> {
-  const userId = await getCommunityAuthorIdByUsername(env, username);
-  if (userId === null) return [];
-
   const rows = await withCommunityDatabase(
     env,
     "user_parties",
@@ -1240,11 +1306,13 @@ export async function getPostgresUserParties(
       db
         .select()
         .from(pgCommunityPostsTable)
+        .innerJoin(pgSenseisTable, eq(pgCommunityPostsTable.userId, pgSenseisTable.id))
         .where(
           and(
             eq(pgCommunityPostsTable.postType, "guide"),
-            eq(pgCommunityPostsTable.userId, userId),
+            eq(pgSenseisTable.username, username),
             includePrivate ? undefined : communityAuthorVisiblePredicate(pgCommunityPostsTable.userId),
+            includePrivate ? undefined : eq(pgSenseisTable.profileVisibility, "public"),
             includePrivate
               ? undefined
               : inArray(pgCommunityPostsTable.visibility, ["public", "unlisted"] as CommunityVisibility[]),
@@ -1252,7 +1320,9 @@ export async function getPostgresUserParties(
         ),
     options,
   );
-  return rows.map((row) => toParty(row));
+  // The JOIN is intentionally retained for username and visibility filtering,
+  // but this legacy endpoint must keep returning the original Party shape.
+  return rows.map((row) => toParty(row.community_posts));
 }
 
 function toParty(row: CommunityPostRow, author?: CommunityAuthor): Party {
@@ -1264,7 +1334,7 @@ function toParty(row: CommunityPostRow, author?: CommunityAuthor): Party {
     info?.memo?.trim() || blocks.find((block) => block.type === "plaintext" || block.type === "markdown")?.text || null;
   return {
     uid: row.uid,
-    sensei: author ? { username: author.username, profileStudentId: author.profileStudentId } : undefined,
+    ...(author ? { sensei: { username: author.username, profileStudentId: author.profileStudentId } } : {}),
     name: row.title ?? info?.title ?? "이름 없는 공략",
     studentIds: info?.units ?? [],
     raidType: row.subjectRaidType ?? info?.raidType ?? null,
@@ -1397,7 +1467,7 @@ export async function getPostgresStudentGradingsByStudent(
         ),
     options,
   );
-  const authors = await loadAuthors(env, rows);
+  const authors = await loadAuthors(env, rows, options);
   const tags = includeTags
     ? await getPostgresGradingTagsByUids(
         env,

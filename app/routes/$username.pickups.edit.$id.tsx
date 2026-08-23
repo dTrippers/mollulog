@@ -145,7 +145,7 @@ export function shouldSkipTier3StudentListInitially(tier3Count?: number, tier3St
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const sensei = await getActiveSensei(env, request);
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -265,7 +265,7 @@ type ActionData = {
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const sensei = await getActiveSensei(env, request);
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }

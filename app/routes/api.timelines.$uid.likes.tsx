@@ -10,7 +10,7 @@ import { getSenseiById, isSenseiProfileVisibleTo } from "~/models/sensei";
 
 async function requireVisibleTimeline(env: Env, ctx: ExecutionContext, walkthroughUid: string, viewerUserId?: number) {
   const timeline = await getPostgresWalkthroughTimeline(env, walkthroughUid, { ctx });
-  const author = timeline ? await getSenseiById(env, timeline.userId) : null;
+  const author = timeline ? await getSenseiById(env, timeline.userId, { ctx }) : null;
   if (
     !timeline ||
     !author ||
@@ -26,7 +26,7 @@ export const loader = async ({ request, params, context }: LoaderFunctionArgs) =
   if (!walkthroughUid) throw new Response("Walkthrough UID is required", { status: 400 });
 
   const { env, ctx } = context.cloudflare;
-  const currentUser = await getActiveSensei(env, request);
+  const currentUser = await getActiveSensei(env, request, ctx);
   await requireVisibleTimeline(env, ctx, walkthroughUid, currentUser?.id);
   const summaries = await getPostgresWalkthroughTimelineLikeSummaries(env, [walkthroughUid], currentUser?.id, { ctx });
   return summaries[walkthroughUid] ?? { liked: false, likeCount: 0 };
@@ -41,7 +41,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   if (!walkthroughUid) throw new Response("Walkthrough UID is required", { status: 400 });
 
   const { env, ctx } = context.cloudflare;
-  const currentUser = await getActiveSensei(env, request);
+  const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) return redirect("/unauthorized");
   await requireVisibleTimeline(env, ctx, walkthroughUid, currentUser.id);
 

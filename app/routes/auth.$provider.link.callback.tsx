@@ -1,4 +1,4 @@
-import { redirect, type LoaderFunctionArgs } from "react-router";
+import { type LoaderFunctionArgs, redirect } from "react-router";
 import { getLinkAuthenticator } from "~/auth/authenticator.server";
 
 function strategyName(provider: string | undefined) {
@@ -9,7 +9,8 @@ function strategyName(provider: string | undefined) {
 }
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
-  return getLinkAuthenticator(context.cloudflare.env).authenticate(strategyName(params.provider), request, {
+  const { env, ctx } = context.cloudflare;
+  return getLinkAuthenticator(env, ctx).authenticate(strategyName(params.provider), request, {
     successRedirect: "/edit?auth=linked",
     failureRedirect: "/edit?auth_error=failed",
   });

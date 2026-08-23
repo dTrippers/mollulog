@@ -36,7 +36,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const currentUserData = sensei
     ? {
         registeredCouponIds: await getCouponRegistrations(env, sensei.id, { ctx }),
-        memberCode: (await getSenseiPrivacyByUserId(env, sensei.id))?.memberCode ?? null,
+        memberCode: (await getSenseiPrivacyByUserId(env, sensei.id, { ctx }))?.memberCode ?? null,
       }
     : null;
 

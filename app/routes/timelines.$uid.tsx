@@ -58,7 +58,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const demo = isDemoWalkthroughTimelineUid(params.uid);
   const [storedTimeline, currentUser] = await Promise.all([
     params.uid && !demo ? getPostgresWalkthroughTimeline(env, params.uid, { ctx }) : null,
-    getActiveSensei(env, request),
+    getActiveSensei(env, request, ctx),
   ]);
   const timeline = demo ? DEMO_WALKTHROUGH_TIMELINE : storedTimeline;
   if (!timeline) throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
@@ -66,7 +66,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   if (timeline.visibility === "private" && !owner) {
     throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
   }
-  const author = storedTimeline ? await getSenseiById(env, storedTimeline.userId) : null;
+  const author = storedTimeline ? await getSenseiById(env, storedTimeline.userId, { ctx }) : null;
   if (storedTimeline && (!author || !isSenseiProfileVisibleTo(author, currentUser?.id))) {
     throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
   }
@@ -117,7 +117,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const logger = getLogger(env, ctx, { route: "timelines.detail.action" });
-  const currentUser = await getActiveSensei(env, request);
+  const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) return redirect("/unauthorized");
   if (!params.uid) throw routeError(404, "timeline.not_found", "공략 타임라인을 찾을 수 없어요.");
   if (isDemoWalkthroughTimelineUid(params.uid)) {
@@ -127,7 +127,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const intent = String(formData.get("intent") ?? "");
   if (intent === "clone") {
     const source = await getPostgresWalkthroughTimeline(env, params.uid, { ctx });
-    const sourceAuthor = source ? await getSenseiById(env, source.userId) : null;
+    const sourceAuthor = source ? await getSenseiById(env, source.userId, { ctx }) : null;
     if (
       !source ||
       !sourceAuthor ||
