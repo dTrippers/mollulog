@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { d1MaintenanceResult } from "~/domain/pyroxene-cutover";
 
-const mockGetActiveSensei = jest.fn();
-const mockD1MaintenanceActionResult = jest.fn();
-const mockGetEventMetadata = jest.fn();
-const mockUpsertEventShopState = jest.fn();
+const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
+type AsyncMock = (...args: unknown[]) => Promise<unknown>;
+const mockD1MaintenanceActionResult = jest.fn<AsyncMock>();
+const mockGetEventMetadata = jest.fn<AsyncMock>();
+const mockUpsertEventShopState = jest.fn<AsyncMock>();
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: mockGetActiveSensei }));
 jest.mock("~/lib/d1-session", () => ({ withD1Session: (env: unknown) => env }));

@@ -33,6 +33,8 @@ import type {
   CommunityPostType,
   CommunityVisibility,
 } from "~/models/community";
+import type { EventShopState } from "~/models/event-shop-state";
+import type { PickupHistory } from "~/models/pickup-history";
 import type { RecruitmentResultStudent } from "~/models/recruitment-result";
 import type { ProfileVisibility, SenseiRole } from "~/models/sensei";
 
@@ -360,6 +362,73 @@ export const pgPyroxeneGuestImportItemsTable = pgTable(
       table.itemType,
       table.itemKey,
     ),
+  ],
+);
+
+export const pgPickupHistoriesTable = pgTable(
+  "pickup_histories",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    eventId: text("event_id").notNull(),
+    result: jsonb().$type<PickupHistory["result"]>().notNull(),
+    rawResult: text("raw_result"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pickup_histories_uid_uidx").on(table.uid),
+    index("pickup_histories_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgEventShopStatesTable = pgTable(
+  "event_shop_states",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    eventUid: text("event_uid").notNull(),
+    itemQuantities: jsonb("item_quantities").$type<EventShopState["itemQuantities"]>().notNull().default({}),
+    itemPurchaseDays: jsonb("item_purchase_days").$type<EventShopState["itemPurchaseDays"]>().notNull().default({}),
+    selectedBonusStudentUids: jsonb("selected_bonus_student_uids")
+      .$type<EventShopState["selectedBonusStudentUids"]>()
+      .notNull()
+      .default([]),
+    bonusStudentSelectionMode: text("bonus_student_selection_mode")
+      .$type<EventShopState["bonusStudentSelectionMode"]>()
+      .notNull()
+      .default("shared"),
+    selectedBonusStudentUidsByItem: jsonb("selected_bonus_student_uids_by_item")
+      .$type<EventShopState["selectedBonusStudentUidsByItem"]>()
+      .notNull()
+      .default({}),
+    enabledStages: jsonb("enabled_stages").$type<EventShopState["enabledStages"]>().notNull().default({}),
+    includeRecruitedStudents: boolean("include_recruited_students").notNull().default(false),
+    existingPaymentItemQuantities: jsonb("existing_payment_item_quantities")
+      .$type<EventShopState["existingPaymentItemQuantities"]>()
+      .notNull()
+      .default({}),
+    includeFirstClear: boolean("include_first_clear").notNull().default(false),
+    extraStageRuns: jsonb("extra_stage_runs").$type<EventShopState["extraStageRuns"]>().notNull().default({}),
+    minigameStartRound: integer("minigame_start_round").notNull().default(1),
+    minigamePlayCount: integer("minigame_play_count").notNull().default(0),
+    minigamePaymentQuantityMode: text("minigame_payment_quantity_mode")
+      .$type<EventShopState["minigamePaymentQuantityMode"]>()
+      .notNull()
+      .default("expected"),
+    overriddenRequiredQuantities: jsonb("overridden_required_quantities")
+      .$type<EventShopState["overriddenRequiredQuantities"]>()
+      .notNull()
+      .default({}),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("event_shop_states_uid_uidx").on(table.uid),
+    uniqueIndex("event_shop_states_user_event_uidx").on(table.userId, table.eventUid),
+    index("event_shop_states_user_id_idx").on(table.userId),
   ],
 );
 
