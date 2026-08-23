@@ -27,6 +27,9 @@ import type {
 } from "~/domain/walkthrough-timeline";
 import type { AuthProvider } from "~/models/auth-identity";
 import type {
+  ConnectApiKeyScope,
+} from "~/models/connect-api-key";
+import type {
   CommunityCommentVisibility,
   CommunityPostBlock,
   CommunityPostOrigin,
@@ -429,6 +432,44 @@ export const pgEventShopStatesTable = pgTable(
     uniqueIndex("event_shop_states_uid_uidx").on(table.uid),
     uniqueIndex("event_shop_states_user_event_uidx").on(table.userId, table.eventUid),
     index("event_shop_states_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgConnectApiKeysTable = pgTable(
+  "connect_api_keys",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    name: text().notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull(),
+    scopes: jsonb().$type<ConnectApiKeyScope[]>().notNull().default(["catalog:read", "draft:write"]),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    expiresAt: timestamptz("expires_at"),
+    lastUsedAt: timestamptz("last_used_at"),
+    revokedAt: timestamptz("revoked_at"),
+  },
+  (table) => [
+    uniqueIndex("connect_api_keys_uid_uidx").on(table.uid),
+    index("connect_api_keys_key_prefix_idx").on(table.keyPrefix),
+    index("connect_api_keys_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgConnectRequestLogsTable = pgTable(
+  "connect_request_logs",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    apiKeyUid: text("api_key_uid"),
+    endpoint: text().notNull(),
+    status: integer().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("connect_request_logs_uid_uidx").on(table.uid),
+    index("connect_request_logs_api_key_created_at_idx").on(table.apiKeyUid, table.createdAt),
   ],
 );
 

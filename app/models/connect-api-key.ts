@@ -1,8 +1,10 @@
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/d1";
-import { int, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { nanoid } from "nanoid";
 import { nanoid as nonSecureNanoid } from "nanoid/non-secure";
+import {
+  createPostgresConnectApiKey,
+  listPostgresConnectApiKeys,
+  revokePostgresConnectApiKey,
+} from "~/db/postgres/connect-api-key";
 
 const CONNECT_API_KEY_PREFIX = "mlc_";
 const CONNECT_API_KEY_RANDOM_LENGTH = 32;
@@ -13,22 +15,6 @@ export const defaultConnectApiKeyScopes = [
   "catalog:read",
   "draft:write",
 ] as const satisfies readonly ConnectApiKeyScope[];
-
-const defaultConnectApiKeyScopesJson = JSON.stringify(defaultConnectApiKeyScopes);
-
-export const connectApiKeysTable = sqliteTable("connect_api_keys", {
-  id: int().primaryKey({ autoIncrement: true }),
-  uid: text().notNull(),
-  userId: int().notNull(),
-  name: text().notNull(),
-  keyPrefix: text().notNull(),
-  keyHash: text().notNull(),
-  scopes: text().notNull().default(defaultConnectApiKeyScopesJson),
-  createdAt: text().notNull().default(sql`current_timestamp`),
-  expiresAt: text(),
-  lastUsedAt: text(),
-  revokedAt: text(),
-});
 
 export type ConnectApiKeyScope = "catalog:read" | "draft:write";
 
@@ -93,7 +79,12 @@ export async function generateConnectApiKey(
   };
 }
 
-export function toConnectApiKeyScopes(scopes: string): ConnectApiKeyScope[] {
+export function toConnectApiKeyScopes(scopes: unknown): ConnectApiKeyScope[] {
+  if (Array.isArray(scopes)) {
+    return scopes.filter((scope): scope is ConnectApiKeyScope => scope === "catalog:read" || scope === "draft:write");
+  }
+  if (typeof scopes !== "string") return [];
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(scopes);
@@ -108,17 +99,39 @@ export function toConnectApiKeyScopes(scopes: string): ConnectApiKeyScope[] {
   return parsed.filter((scope): scope is ConnectApiKeyScope => scope === "catalog:read" || scope === "draft:write");
 }
 
-export function toConnectApiKeyModel(apiKey: typeof connectApiKeysTable.$inferSelect): ConnectApiKey {
+function toIso(value: Date | string | null): string | null {
+  return value == null ? null : value instanceof Date ? value.toISOString() : value;
+}
+
+function requireIso(value: Date | string, field: string): string {
+  const iso = toIso(value);
+  if (!iso) throw new Error(`Missing required PostgreSQL timestamp: ${field}`);
+  return iso;
+}
+
+export function toConnectApiKeyModel(apiKey: {
+  id?: number;
+  uid: string;
+  userId: number;
+  name: string;
+  keyPrefix: string;
+  keyHash?: string;
+  scopes: unknown;
+  createdAt: Date | string;
+  expiresAt: Date | string | null;
+  lastUsedAt: Date | string | null;
+  revokedAt: Date | string | null;
+}): ConnectApiKey {
   return {
     uid: apiKey.uid,
     userId: apiKey.userId,
     name: apiKey.name,
     keyPrefix: apiKey.keyPrefix,
     scopes: toConnectApiKeyScopes(apiKey.scopes),
-    createdAt: apiKey.createdAt,
-    expiresAt: apiKey.expiresAt,
-    lastUsedAt: apiKey.lastUsedAt,
-    revokedAt: apiKey.revokedAt,
+    createdAt: requireIso(apiKey.createdAt, "connect_api_keys.created_at"),
+    expiresAt: toIso(apiKey.expiresAt),
+    lastUsedAt: toIso(apiKey.lastUsedAt),
+    revokedAt: toIso(apiKey.revokedAt),
   };
 }
 
@@ -126,21 +139,14 @@ export async function createConnectApiKey(env: Env, userId: number, name: string
   const normalizedName = normalizeConnectApiKeyName(name);
   const generatedKey = await generateConnectApiKey();
   const uid = nonSecureNanoid(12);
-  const db = drizzle(env.DB);
-
-  await db.insert(connectApiKeysTable).values({
+  const createdApiKey = await createPostgresConnectApiKey(env, {
     uid,
     userId,
     name: normalizedName,
     keyPrefix: generatedKey.keyPrefix,
     keyHash: generatedKey.keyHash,
-    scopes: defaultConnectApiKeyScopesJson,
+    scopes: [...defaultConnectApiKeyScopes],
   });
-
-  const [createdApiKey] = await db.select().from(connectApiKeysTable).where(eq(connectApiKeysTable.uid, uid)).limit(1);
-  if (!createdApiKey) {
-    throw new Error("API 키 생성에 실패했어요.");
-  }
 
   return {
     ...toConnectApiKeyModel(createdApiKey),
@@ -149,26 +155,10 @@ export async function createConnectApiKey(env: Env, userId: number, name: string
 }
 
 export async function listConnectApiKeys(env: Env, userId: number): Promise<ConnectApiKey[]> {
-  const db = drizzle(env.DB);
-  const apiKeys = await db
-    .select()
-    .from(connectApiKeysTable)
-    .where(and(eq(connectApiKeysTable.userId, userId), isNull(connectApiKeysTable.revokedAt)))
-    .orderBy(desc(connectApiKeysTable.createdAt));
-
+  const apiKeys = await listPostgresConnectApiKeys(env, userId);
   return apiKeys.map(toConnectApiKeyModel);
 }
 
 export async function revokeConnectApiKey(env: Env, userId: number, uid: string): Promise<void> {
-  const db = drizzle(env.DB);
-  await db
-    .update(connectApiKeysTable)
-    .set({ revokedAt: sql`current_timestamp` })
-    .where(
-      and(
-        eq(connectApiKeysTable.userId, userId),
-        eq(connectApiKeysTable.uid, uid),
-        isNull(connectApiKeysTable.revokedAt),
-      ),
-    );
+  await revokePostgresConnectApiKey(env, userId, uid);
 }
