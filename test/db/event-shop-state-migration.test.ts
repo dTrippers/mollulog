@@ -28,6 +28,8 @@ describe("event shop state PostgreSQL migration contract", () => {
     ]) {
       expect(migration).toContain(column);
     }
+    expect(migration).toContain("selected_payment_resource_uid text,");
+    expect(migration).not.toContain("selected_payment_resource_uid text NOT NULL");
   });
 
   test("preserves UID and user/event uniqueness", () => {

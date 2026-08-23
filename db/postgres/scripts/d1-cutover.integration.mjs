@@ -60,6 +60,7 @@ function rowFor(table, id) {
         enabledStages: JSON.stringify({ stage: true }),
         includeRecruitedStudents: 1,
         existingPaymentItemQuantities: JSON.stringify({ payment: 3 }),
+        selectedPaymentResourceUid: id % 2 === 0 ? null : `resource-${id}`,
         includeFirstClear: 0,
         extraStageRuns: JSON.stringify({ stage: 1 }),
         minigameStartRound: 2,
@@ -140,7 +141,12 @@ function rowFor(table, id) {
 function buildSnapshot({ pickupId = 100, includeEventShop = true } = {}) {
   const rowsByTable = Object.fromEntries(
     tables.map((table) => {
-      const rows = table === "event_shop_states" && !includeEventShop ? [] : [rowFor(table, table === "pickup_histories" ? pickupId : 1)];
+      const rows =
+        table === "event_shop_states"
+          ? includeEventShop
+            ? [rowFor(table, 1), { ...rowFor(table, 2), userId: 2, eventUid: "event-2" }]
+            : []
+          : [rowFor(table, table === "pickup_histories" ? pickupId : 1)];
       return [table, { rows, rowCount: rows.length, lastId: rows.at(-1)?.id ?? 0 }];
     }),
   );
@@ -207,6 +213,13 @@ integrationTest("imports all ten tables against disposable PostgreSQL and rolls 
     await client.query(`CREATE SCHEMA ${quoteIdentifier(schema)}`);
     await client.query(`SET search_path TO ${quoteIdentifier(schema)}`);
     await migrate(client);
+    const legacyColumn = await client.query(
+      `SELECT data_type, is_nullable FROM information_schema.columns
+       WHERE table_schema = current_schema()
+         AND table_name = 'event_shop_states'
+         AND column_name = 'selected_payment_resource_uid'`,
+    );
+    assert.deepEqual(legacyColumn.rows, [{ data_type: "text", is_nullable: "YES" }]);
 
     const source = buildSnapshot({ pickupId: 2_000_000_000, includeEventShop: false });
     await transferD1CutoverSnapshot(source, { client, closeClient: false });
@@ -218,6 +231,16 @@ integrationTest("imports all ten tables against disposable PostgreSQL and rolls 
     assert.equal(afterImport.pyroxene_guest_import_items.rows[0].item_key, "v1:dHlwZQBrZXk");
     assert.deepEqual(afterImport.connect_api_keys.rows[0].scopes, ["catalog:read", "draft:write"]);
     assert.equal(afterImport.event_shop_states.sequence.is_called, false);
+
+    await transferD1CutoverSnapshot(buildSnapshot({ pickupId: 2_000_000_000, includeEventShop: true }), {
+      client,
+      closeClient: false,
+    });
+    const afterEventShopImport = await state(client);
+    assert.deepEqual(
+      afterEventShopImport.event_shop_states.rows.map(({ selected_payment_resource_uid: value }) => value),
+      ["resource-1", null],
+    );
 
     await client.query(`CREATE OR REPLACE FUNCTION ${quoteIdentifier("d1_cutover_test_parity")}() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN

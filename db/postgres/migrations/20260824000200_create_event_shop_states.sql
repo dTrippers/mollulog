@@ -11,6 +11,7 @@ CREATE TABLE event_shop_states (
   enabled_stages jsonb NOT NULL DEFAULT '{}'::jsonb,
   include_recruited_students boolean NOT NULL DEFAULT false,
   existing_payment_item_quantities jsonb NOT NULL DEFAULT '{}'::jsonb,
+  selected_payment_resource_uid text,
   include_first_clear boolean NOT NULL DEFAULT false,
   extra_stage_runs jsonb NOT NULL DEFAULT '{}'::jsonb,
   minigame_start_round integer NOT NULL DEFAULT 1,

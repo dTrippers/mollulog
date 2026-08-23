@@ -41,6 +41,7 @@ function rowFor(table, id) {
         enabledStages: JSON.stringify({ stage: true }),
         includeRecruitedStudents: id % 2,
         existingPaymentItemQuantities: JSON.stringify({ payment: 1 }),
+        selectedPaymentResourceUid: id % 2 === 0 ? null : `resource-${id}`,
         includeFirstClear: (id + 1) % 2,
         extraStageRuns: JSON.stringify({ stage: id }),
         minigameStartRound: 1,
@@ -211,6 +212,8 @@ if (!runningUnderJest) {
     assert.equal(snapshot.tables.pyroxene_guest_import_items.rows[0].itemKey, "type\u0000key");
     assert.equal(snapshot.tables.pickup_histories.rows[0].result, JSON.stringify([{ trial: 10, tier3Count: 1, tier3StudentIds: ["student-1"] }]));
     assert.equal(snapshot.tables.connect_api_keys.rows[0].scopes, "[\"catalog:read\"]");
+    assert.equal(snapshot.tables.event_shop_states.rows[0].selectedPaymentResourceUid, "resource-1");
+    assert.equal(snapshot.tables.event_shop_states.rows[1].selectedPaymentResourceUid, null);
   });
 
   test("rejects duplicate physical uniqueness keys and disallowed tables", async () => {
@@ -232,6 +235,12 @@ if (!runningUnderJest) {
     assert.throws(() => validateRawRow("pyroxene_guest_import_items", { ...row, userId: 0 }), /userId/);
     assert.throws(() => validateRawRow("pyroxene_guest_import_items", { ...row, importedAt: "not-a-timestamp" }), /timestamp/);
     assert.throws(() => validateRawRow("pickup_histories", { ...rowFor("pickup_histories", 1), result: "not-json" }), /JSON/);
+    assert.equal(validateRawRow("event_shop_states", rowFor("event_shop_states", 1)).selectedPaymentResourceUid, "resource-1");
+    assert.equal(validateRawRow("event_shop_states", rowFor("event_shop_states", 2)).selectedPaymentResourceUid, null);
+    assert.throws(
+      () => validateRawRow("event_shop_states", { ...rowFor("event_shop_states", 1), selectedPaymentResourceUid: 1 }),
+      /text/,
+    );
     assert.equal(validateRawRow("connect_api_keys", {
       ...rowFor("connect_api_keys", 1),
       expiresAt: null,

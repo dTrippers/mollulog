@@ -28,6 +28,7 @@ export const D1_CUTOVER_TABLE_COLUMNS = {
     "enabledStages",
     "includeRecruitedStudents",
     "existingPaymentItemQuantities",
+    "selectedPaymentResourceUid",
     "includeFirstClear",
     "extraStageRuns",
     "minigameStartRound",
@@ -157,4 +158,5 @@ export const D1_CUTOVER_NULLABLE_COLUMNS = new Set([
   "lastUsedAt",
   "revokedAt",
   "apiKeyUid",
+  "selectedPaymentResourceUid",
 ]);

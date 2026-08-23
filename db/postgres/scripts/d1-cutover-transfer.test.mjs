@@ -64,6 +64,7 @@ function rowFor(table, id, overrides = {}) {
       enabledStages: JSON.stringify({ stage: true }),
       includeRecruitedStudents: id % 2,
       existingPaymentItemQuantities: JSON.stringify({ payment: 1 }),
+      selectedPaymentResourceUid: id % 2 === 0 ? null : `resource-${id}`,
       includeFirstClear: (id + 1) % 2,
       extraStageRuns: JSON.stringify({ stage: id }),
       minigameStartRound: 1,
@@ -348,8 +349,13 @@ if (!runningUnderJest) {
   });
 
   test("imports all ten tables in one transaction, repairs sequences, and proves bidirectional parity", async () => {
+    const { D1_CUTOVER_TABLE_COLUMNS } = await import("./d1-cutover-tables.mjs");
     const { parityDifferenceStatement, transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
-    const source = snapshot();
+    const source = snapshot({
+      event_shop_states: {
+        rows: [rowFor("event_shop_states", 1), rowFor("event_shop_states", 2, { userId: 2, eventUid: "event-2" })],
+      },
+    });
     const client = fakeClient(targetRowsFor(source));
     const result = await transferD1CutoverSnapshot(source, { client, statementTimeoutMs: 12345 });
 
@@ -370,6 +376,13 @@ if (!runningUnderJest) {
     assert.equal(client.calls.filter(({ text }) => text.startsWith("DELETE FROM ")).length, tables.length);
     assert.equal(client.calls.filter(({ text }) => text.includes(" EXCEPT ")).length, tables.length * 2);
     assert.ok(client.calls.some(({ text }) => text.includes('INSERT INTO "pyroxene_guest_import_items"') && text.includes('"item_key"')));
+    const eventShopInsert = client.calls.find(({ text }) => text.startsWith('INSERT INTO "d1_cutover_stage_event_shop_states"'));
+    const legacyColumnIndex = D1_CUTOVER_TABLE_COLUMNS.event_shop_states.indexOf("selectedPaymentResourceUid");
+    assert.equal(eventShopInsert?.values[legacyColumnIndex], "resource-1");
+    assert.equal(
+      eventShopInsert?.values[legacyColumnIndex + D1_CUTOVER_TABLE_COLUMNS.event_shop_states.length],
+      null,
+    );
     assert.match(parityDifferenceStatement("pyroxene_owned_resources", "source_minus_target"), /EXCEPT/);
     assert.match(parityDifferenceStatement("pyroxene_owned_resources", "target_minus_source"), /EXCEPT/);
   });
