@@ -1,6 +1,6 @@
 import { and, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import { nanoid } from "nanoid/non-secure";
-import { withIdentityDatabase } from "~/db/postgres/identity";
+import { type IdentityRepositoryOptions, withIdentityDatabase } from "~/db/postgres/identity";
 import { pgSenseisTable } from "~/db/postgres/schema";
 import { postgresUniqueConstraintName } from "~/lib/db";
 
@@ -37,39 +37,76 @@ export type SenseiCreateFields = {
 
 type SenseiRow = typeof pgSenseisTable.$inferSelect;
 
-export async function getSenseiById(env: Env, id: number): Promise<Sensei | null> {
-  return withIdentityDatabase(env, "sensei_by_id", async (db) => {
-    const [row] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, id)).limit(1);
-    return row ? toSenseiModel(row) : null;
-  });
+export async function getSenseiById(
+  env: Env,
+  id: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<Sensei | null> {
+  return withIdentityDatabase(
+    env,
+    "sensei_by_id",
+    async (db) => {
+      const [row] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, id)).limit(1);
+      return row ? toSenseiModel(row) : null;
+    },
+    options,
+  );
 }
 
-export async function getSenseiByUsername(env: Env, username: string): Promise<Sensei | null> {
-  return withIdentityDatabase(env, "sensei_by_username", async (db) => {
-    const [row] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.username, username)).limit(1);
-    return row ? toSenseiModel(row) : null;
-  });
+export async function getSenseiByUsername(
+  env: Env,
+  username: string,
+  options: IdentityRepositoryOptions = {},
+): Promise<Sensei | null> {
+  return withIdentityDatabase(
+    env,
+    "sensei_by_username",
+    async (db) => {
+      const [row] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.username, username)).limit(1);
+      return row ? toSenseiModel(row) : null;
+    },
+    options,
+  );
 }
 
-export async function getSenseisById(env: Env, ids: number[]): Promise<Sensei[]> {
+export async function getSenseisById(
+  env: Env,
+  ids: number[],
+  options: IdentityRepositoryOptions = {},
+): Promise<Sensei[]> {
   const uniqueIds = [...new Set(ids)];
   if (uniqueIds.length === 0) return [];
-  return withIdentityDatabase(env, "senseis_by_id", async (db) => {
-    const rows = await db.select().from(pgSenseisTable).where(inArray(pgSenseisTable.id, uniqueIds));
-    return rows.map(toSenseiModel);
-  });
+  return withIdentityDatabase(
+    env,
+    "senseis_by_id",
+    async (db) => {
+      const rows = await db.select().from(pgSenseisTable).where(inArray(pgSenseisTable.id, uniqueIds));
+      return rows.map(toSenseiModel);
+    },
+    options,
+  );
 }
 
-export async function getVisibleSenseisById(env: Env, ids: number[], viewerUserId?: number): Promise<Sensei[]> {
+export async function getVisibleSenseisById(
+  env: Env,
+  ids: number[],
+  viewerUserId?: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<Sensei[]> {
   const uniqueIds = [...new Set(ids)];
   if (uniqueIds.length === 0) return [];
-  return withIdentityDatabase(env, "visible_senseis_by_id", async (db) => {
-    const rows = await db
-      .select()
-      .from(pgSenseisTable)
-      .where(and(inArray(pgSenseisTable.id, uniqueIds), senseiProfileVisibilityFilter(viewerUserId)));
-    return rows.map(toSenseiModel);
-  });
+  return withIdentityDatabase(
+    env,
+    "visible_senseis_by_id",
+    async (db) => {
+      const rows = await db
+        .select()
+        .from(pgSenseisTable)
+        .where(and(inArray(pgSenseisTable.id, uniqueIds), senseiProfileVisibilityFilter(viewerUserId)));
+      return rows.map(toSenseiModel);
+    },
+    options,
+  );
 }
 
 export function isSenseiProfileVisibleTo(sensei: Sensei, viewerUserId?: number): boolean {
@@ -88,27 +125,33 @@ export function senseiProfileVisibilityFilter(
 export async function createSensei(
   env: Env,
   fields: SenseiCreateFields,
+  options: IdentityRepositoryOptions = {},
 ): Promise<{ sensei?: Sensei; error?: { form?: string; username?: string } }> {
   const uid = nanoid(8);
 
   try {
-    return await withIdentityDatabase(env, "create_sensei", async (db) => {
-      const [row] = await db
-        .insert(pgSenseisTable)
-        .values({
-          uid,
-          username: fields.username,
-          friendCode: fields.friendCode,
-          profileStudentId: fields.profileStudentId,
-          bio: fields.bio,
-          googleId: fields.googleId,
-          githubId: fields.githubId,
-          role: "guest",
-          active: true,
-        })
-        .returning();
-      return row ? { sensei: toSenseiModel(row) } : {};
-    });
+    return await withIdentityDatabase(
+      env,
+      "create_sensei",
+      async (db) => {
+        const [row] = await db
+          .insert(pgSenseisTable)
+          .values({
+            uid,
+            username: fields.username,
+            friendCode: fields.friendCode,
+            profileStudentId: fields.profileStudentId,
+            bio: fields.bio,
+            googleId: fields.googleId,
+            githubId: fields.githubId,
+            role: "guest",
+            active: true,
+          })
+          .returning();
+        return row ? { sensei: toSenseiModel(row) } : {};
+      },
+      options,
+    );
   } catch (error) {
     const constraint = postgresUniqueConstraintName(error);
     if (constraint === "senseis_username_uidx") {
@@ -134,27 +177,33 @@ export async function updateSensei(
   env: Env,
   id: number,
   fields: SenseiUpdateFields,
+  options: IdentityRepositoryOptions = {},
 ): Promise<{ error?: { username?: string } }> {
   try {
-    return await withIdentityDatabase(env, "update_sensei", async (db) => {
-      const [existingRow] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, id)).limit(1);
-      if (!existingRow) return {};
-      const existingSensei = toSenseiModel(existingRow);
+    return await withIdentityDatabase(
+      env,
+      "update_sensei",
+      async (db) => {
+        const [existingRow] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, id)).limit(1);
+        if (!existingRow) return {};
+        const existingSensei = toSenseiModel(existingRow);
 
-      await db
-        .update(pgSenseisTable)
-        .set({
-          username: fields.username ?? existingSensei.username,
-          friendCode: nullableFieldToUpdate(fields.friendCode, existingSensei.friendCode),
-          profileStudentId: nullableFieldToUpdate(fields.profileStudentId, existingSensei.profileStudentId),
-          bio: nullableFieldToUpdate(fields.bio, existingSensei.bio),
-          active: fields.active ?? existingSensei.active,
-          profileVisibility: fields.profileVisibility ?? existingSensei.profileVisibility,
-          updatedAt: new Date(),
-        })
-        .where(eq(pgSenseisTable.id, id));
-      return {};
-    });
+        await db
+          .update(pgSenseisTable)
+          .set({
+            username: fields.username ?? existingSensei.username,
+            friendCode: nullableFieldToUpdate(fields.friendCode, existingSensei.friendCode),
+            profileStudentId: nullableFieldToUpdate(fields.profileStudentId, existingSensei.profileStudentId),
+            bio: nullableFieldToUpdate(fields.bio, existingSensei.bio),
+            active: fields.active ?? existingSensei.active,
+            profileVisibility: fields.profileVisibility ?? existingSensei.profileVisibility,
+            updatedAt: new Date(),
+          })
+          .where(eq(pgSenseisTable.id, id));
+        return {};
+      },
+      options,
+    );
   } catch (error) {
     const constraint = postgresUniqueConstraintName(error);
     if (constraint === "senseis_username_uidx") {

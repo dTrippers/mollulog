@@ -68,27 +68,91 @@ function sourceValue(table, row, column) {
   return null;
 }
 
+const TIMESTAMP_PATTERN = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})[ T](?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?:\.(?<fraction>\d{1,9}))?(?<timezone>Z|[+-]\d{2}(?::?\d{2})?)?(?![\s\S])/i;
+
+function isLeapYear(year) {
+  return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+}
+
+function daysInMonth(year, month) {
+  if (month === 2) return isLeapYear(year) ? 29 : 28;
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
 function normalizeTimestamp(value, key) {
-  if (value instanceof Date) return value.toISOString();
-  if (typeof value !== "string" || !(key.endsWith("At") || key.endsWith("_at"))) return value;
-  const normalized = value.includes("T") ? value : value.replace(" ", "T");
-  const hasExplicitTimezone = /(?:Z|[+-]\d{2}(?::?\d{2})?)$/i.test(value);
-  const candidate = hasExplicitTimezone ? normalized : `${normalized}Z`;
-  const date = new Date(candidate);
-  return Number.isNaN(date.valueOf()) ? value : date.toISOString();
+  const isTimestamp = key.endsWith("At") || key.endsWith("_at");
+  if (!isTimestamp) return value;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.valueOf())) throw new Error(`Invalid timestamp for ${key}`);
+    return value.toISOString();
+  }
+  if (typeof value !== "string" || value.trim() === "") throw new Error(`Invalid timestamp for ${key}`);
+
+  const match = TIMESTAMP_PATTERN.exec(value);
+  if (!match?.groups) throw new Error(`Invalid timestamp for ${key}: ${value}`);
+
+  const year = Number(match.groups.year);
+  const month = Number(match.groups.month);
+  const day = Number(match.groups.day);
+  const hour = Number(match.groups.hour);
+  const minute = Number(match.groups.minute);
+  const second = Number(match.groups.second);
+  if (
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > daysInMonth(year, month) ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59
+  ) {
+    throw new Error(`Invalid timestamp for ${key}: ${value}`);
+  }
+
+  const fraction = match.groups.fraction ?? "";
+  const milliseconds = Number(fraction.padEnd(3, "0").slice(0, 3));
+  const timezone = match.groups.timezone;
+  let timezoneOffsetMinutes = 0;
+  if (timezone && timezone.toUpperCase() !== "Z") {
+    const offsetMatch = /^(?<sign>[+-])(?<hours>\d{2})(?::?(?<minutes>\d{2}))?$/.exec(timezone);
+    if (!offsetMatch?.groups) throw new Error(`Invalid timestamp for ${key}: ${value}`);
+    const offsetHours = Number(offsetMatch.groups.hours);
+    const offsetMinutes = Number(offsetMatch.groups.minutes ?? "0");
+    if (offsetHours > 23 || offsetMinutes > 59) throw new Error(`Invalid timestamp for ${key}: ${value}`);
+    timezoneOffsetMinutes = (offsetHours * 60 + offsetMinutes) * (offsetMatch.groups.sign === "+" ? 1 : -1);
+  }
+
+  const date = new Date(0);
+  date.setUTCFullYear(year, month - 1, day);
+  date.setUTCHours(hour, minute, second, milliseconds);
+  date.setTime(date.getTime() - timezoneOffsetMinutes * 60 * 1000);
+  if (Number.isNaN(date.valueOf())) throw new Error(`Invalid timestamp for ${key}: ${value}`);
+  return date.toISOString();
 }
 
 function normalizeValue(table, column, value) {
-  if (value == null) return null;
+  const integerColumns = ["id", "senseiId", "userId", "followerId", "followeeId", "counter"];
+  if (value == null) {
+    if (column === "active" || integerColumns.includes(column) || column.endsWith("At") || column.endsWith("_at")) {
+      throw new Error(`Invalid null value for ${table}.${column}`);
+    }
+    return null;
+  }
   if (table === "senseis" && column === "active") {
     if (typeof value === "boolean") return value;
-    if (typeof value === "number") return value !== 0;
+    if (typeof value === "number" && (value === 0 || value === 1)) return value === 1;
     if (typeof value === "string" && (value === "0" || value.toLowerCase() === "false")) return false;
     if (typeof value === "string" && (value === "1" || value.toLowerCase() === "true")) return true;
+    throw new Error(`Invalid boolean for ${table}.${column}`);
   }
-  if (["id", "senseiId", "userId", "followerId", "followeeId", "counter"].includes(column)) {
+  if (integerColumns.includes(column)) {
+    if (typeof value === "boolean" || (typeof value === "string" && !/^-?\d+$/.test(value))) {
+      throw new Error(`Invalid integer for ${table}.${column}`);
+    }
     const number = Number(value);
-    if (Number.isSafeInteger(number)) return number;
+    const minimum = column === "counter" ? 0 : 1;
+    if (Number.isSafeInteger(number) && number >= minimum) return number;
+    throw new Error(`Invalid integer for ${table}.${column}`);
   }
   if (typeof value === "object" && Buffer.isBuffer(value)) return value.toString("utf8");
   return normalizeTimestamp(value, column);
@@ -105,12 +169,12 @@ export function canonicalRow(row, table) {
 
 export function canonicalIdentity(row, table) {
   assertTable(table);
-  const id = sourceValue(table, row, "id");
-  if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) throw new Error(`Snapshot rows must have an id for ${table}`);
-  return String(Number(id));
+  const id = normalizeValue(table, "id", sourceValue(table, row, "id"));
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error(`Snapshot rows must have an id for ${table}`);
+  return String(id);
 }
 
-function parseSnapshotTable(snapshot, table) {
+export function parseSnapshotTable(snapshot, table) {
   assertTable(table);
   const value = snapshot?.tables?.[table];
   if (!value || !Array.isArray(value.rows)) throw new Error(`Snapshot is missing ${table}`);
@@ -119,6 +183,7 @@ function parseSnapshotTable(snapshot, table) {
     const identity = canonicalIdentity(row, table);
     if (identities.has(identity)) throw new Error(`Duplicate id in ${table}: ${identity}`);
     identities.add(identity);
+    canonicalRow(row, table);
   }
   return value.rows;
 }
@@ -181,6 +246,11 @@ async function assertSqlParity(client, table, sourceCount) {
   }
 }
 
+async function assertRoundTripParity(client, table, sourceRows) {
+  const result = await client.query(`SELECT * FROM ${quoteIdentifier(table)}`);
+  compareTableParity(table, sourceRows, result.rows ?? []);
+}
+
 export function buildInsertStatement(table, rows, start = 0, end = rows.length, targetTable = table) {
   assertTable(table);
   const quotedTargetTable = quoteIdentifier(targetTable);
@@ -238,6 +308,7 @@ export async function transferIdentitySnapshot(
   const snapshotTables = Object.keys(snapshot.tables ?? {});
   const disallowed = snapshotTables.filter((table) => !IDENTITY_TABLES.includes(table));
   if (disallowed.length > 0) throw new Error(`Snapshot contains non-allowlisted tables: ${disallowed.join(",")}`);
+  const rowsByTable = Object.fromEntries(IDENTITY_TABLES.map((table) => [table, parseSnapshotTable(snapshot, table)]));
   const pgClient =
     client ?? (clientFactory ? await clientFactory(targetUrl) : new (await import("pg")).Client({ connectionString: targetUrl }));
   if (!pgClient) throw new Error("A PostgreSQL client or TARGET_PG_URL is required");
@@ -246,7 +317,7 @@ export async function transferIdentitySnapshot(
     await pgClient.query("BEGIN");
     await setImportTimeout(pgClient, statementTimeoutMs);
     for (const table of IDENTITY_TABLES) {
-      const rows = parseSnapshotTable(snapshot, table);
+      const rows = rowsByTable[table];
       await pgClient.query(createTypedStageStatement(table));
       for (let offset = 0; offset < rows.length; offset += INSERT_CHUNK_SIZE) {
         const statement = buildInsertStatement(table, rows, offset, offset + INSERT_CHUNK_SIZE, stageTableName(table));
@@ -261,11 +332,12 @@ export async function transferIdentitySnapshot(
     }
 
     for (const table of IDENTITY_TABLES) {
-      const sourceRows = parseSnapshotTable(snapshot, table);
+      const sourceRows = rowsByTable[table];
+      await assertRoundTripParity(pgClient, table, sourceRows);
       await assertSqlParity(pgClient, table, sourceRows.length);
     }
     await pgClient.query("COMMIT");
-    return { tables: IDENTITY_TABLES.map((table) => ({ table, rows: parseSnapshotTable(snapshot, table).length })) };
+    return { tables: IDENTITY_TABLES.map((table) => ({ table, rows: rowsByTable[table].length })) };
   } catch (error) {
     try {
       await pgClient.query("ROLLBACK");
@@ -286,9 +358,26 @@ async function main() {
   };
   const snapshotPath = value("--snapshot");
   const targetUrl = process.env.TARGET_PG_URL;
-  if (!snapshotPath || !targetUrl) throw new Error("Usage: TARGET_PG_URL=... identity-transfer.mjs --snapshot FILE");
+  const pgConfig = targetUrl
+    ? { connectionString: targetUrl }
+    : {
+        host: process.env.PGHOST,
+        port: process.env.PGPORT ? Number(process.env.PGPORT) : undefined,
+        database: process.env.PGDATABASE,
+        user: process.env.PGUSER,
+        password: process.env.PGPASSWORD,
+      };
+  const hasSeparatePgConfig =
+    Boolean(process.env.PGHOST && process.env.PGDATABASE && process.env.PGUSER && process.env.PGPASSWORD);
+  if (!snapshotPath || (!targetUrl && !hasSeparatePgConfig)) {
+    throw new Error(
+      "Usage: TARGET_PG_URL=... identity-transfer.mjs --snapshot FILE or PGHOST/PGPORT/PGDATABASE/PGUSER/PGPASSWORD with --snapshot FILE",
+    );
+  }
   const snapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
-  await transferIdentitySnapshot(snapshot, { targetUrl });
+  await transferIdentitySnapshot(snapshot, {
+    clientFactory: async () => new (await import("pg")).Client(pgConfig),
+  });
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

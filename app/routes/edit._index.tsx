@@ -20,18 +20,18 @@ import { getAllStudents } from "~/models/student";
 export const meta: MetaFunction = () => [{ title: "프로필 관리 | 몰루로그" }];
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
   const url = new URL(request.url);
-  const sensei = await getActiveSensei(env, request);
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }
 
-  const senseiData = await getSenseiById(env, sensei.id);
+  const senseiData = await getSenseiById(env, sensei.id, { ctx });
   if (!senseiData) {
     return redirect("/unauthorized");
   }
-  const senseiPrivacy = await getSenseiPrivacyByUserId(env, sensei.id);
+  const senseiPrivacy = await getSenseiPrivacyByUserId(env, sensei.id, { ctx });
   return {
     sensei: {
       username: senseiData.username,
@@ -48,8 +48,8 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
         order: student.order,
       }))
       .sort((a, b) => a.order - b.order),
-    passkeyCount: (await getPasskeysBySensei(env, sensei)).length,
-    authIdentities: await getAuthIdentityStatuses(env, sensei.id),
+    passkeyCount: (await getPasskeysBySensei(env, sensei, { ctx })).length,
+    authIdentities: await getAuthIdentityStatuses(env, sensei.id, { ctx }),
     authMessage: authMessageFromSearchParams(url.searchParams),
   };
 };
@@ -85,11 +85,11 @@ type ActionData = {
 };
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const maintenance = await identityMaintenanceActionResult(env, { operation: "edit.identity.action" });
+  const { env, ctx } = context.cloudflare;
+  const maintenance = await identityMaintenanceActionResult(env, { ctx, operation: "edit.identity.action" });
   if (maintenance) return maintenance;
-  const authenticator = getAuthenticator(env);
-  const sensei = await getActiveSensei(env, request);
+  const authenticator = getAuthenticator(env, ctx);
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -139,13 +139,18 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       return data<ActionData>({ intent, error: { friendCode: "친구 코드는 알파벳 8글자에요." } }, { status: 400 });
     }
 
-    const result = await updateSensei(env, sensei.id, {
-      username,
-      bio,
-      profileStudentId,
-      friendCode,
-      profileVisibility,
-    });
+    const result = await updateSensei(
+      env,
+      sensei.id,
+      {
+        username,
+        bio,
+        profileStudentId,
+        friendCode,
+        profileVisibility,
+      },
+      { ctx },
+    );
     if (result.error) {
       return data<ActionData>({ intent, error: result.error }, { status: 400 });
     }
@@ -166,7 +171,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 
   const memberCode = toNullable(getOptionalString("memberCode"));
-  await upsertSenseiPrivacy(env, sensei.id, memberCode ?? null);
+  await upsertSenseiPrivacy(env, sensei.id, memberCode ?? null, { ctx });
   return data<ActionData>({ intent, success: true, savedAt: nowUtcIso() });
 };
 

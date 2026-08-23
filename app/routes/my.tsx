@@ -4,11 +4,11 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { getSenseiById } from "~/models/sensei";
 
 export const loader: LoaderFunction = async ({ request, context }) => {
-  const env = context.cloudflare.env;
-  const sensei = await getActiveSensei(env, request);
+  const { env, ctx } = context.cloudflare;
+  const sensei = await getActiveSensei(env, request, ctx);
   if (sensei) {
     const url = new URL(request.url);
-    const latestSensei = await getSenseiById(env, sensei.id);
+    const latestSensei = await getSenseiById(env, sensei.id, { ctx });
     if (!latestSensei) {
       return redirect("/unauthorized");
     }
@@ -18,4 +18,4 @@ export const loader: LoaderFunction = async ({ request, context }) => {
   }
 
   return redirect("/unauthorized");
-}
+};

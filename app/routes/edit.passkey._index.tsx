@@ -9,12 +9,12 @@ import { identityMaintenanceMessage } from "~/domain/identity-cutover";
 import { getPasskeysBySensei } from "~/models/passkey";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const sensei = await getActiveSensei(env, request);
+  const { env, ctx } = context.cloudflare;
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }
-  return { passkeys: await getPasskeysBySensei(env, sensei) };
+  return { passkeys: await getPasskeysBySensei(env, sensei, { ctx }) };
 };
 
 export default function EditPasskeyIndex() {

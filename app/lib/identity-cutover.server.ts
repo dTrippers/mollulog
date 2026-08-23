@@ -57,3 +57,19 @@ export async function identityMaintenanceActionResult(env: Env, options: Identit
     },
   });
 }
+
+/** Returns a browser document for OAuth callbacks, where a JSON body is not useful UX. */
+export async function identityMaintenancePageResult(env: Env, options: IdentityMaintenanceOptions = {}) {
+  if (!(await isIdentityWriteFrozen(env, options))) return null;
+  return new Response(
+    `<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>잠시 점검 중이에요 | 몰루로그</title></head><body><main><h1>잠시 점검 중이에요</h1><p>${identityMaintenanceResult.message}</p><p>잠시 후 다시 시도해주세요.</p></main></body></html>`,
+    {
+      status: 503,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Retry-After": String(IDENTITY_MAINTENANCE_RETRY_AFTER_SECONDS),
+        "Cache-Control": "no-store",
+      },
+    },
+  );
+}

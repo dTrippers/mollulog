@@ -3,10 +3,12 @@ import { getAuthenticator } from "~/auth/authenticator.server";
 import { identityMaintenanceActionResult } from "~/lib/identity-cutover.server";
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const maintenance = await identityMaintenanceActionResult(context.cloudflare.env, {
+  const { env, ctx } = context.cloudflare;
+  const maintenance = await identityMaintenanceActionResult(env, {
+    ctx,
     operation: "auth.google.signin",
   });
   if (maintenance) return maintenance;
-  return getAuthenticator(context.cloudflare.env).authenticate("google", request);
+  return getAuthenticator(env, ctx).authenticate("google", request);
   // Redirected to /auth/google/callback
 };

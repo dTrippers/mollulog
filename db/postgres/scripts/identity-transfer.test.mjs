@@ -163,6 +163,7 @@ if (!runningUnderJest) {
     );
     const exceptCalls = client.calls.filter(({ text }) => text.includes(" EXCEPT "));
     assert.equal(exceptCalls.length, tables.length * 2);
+    assert.equal(client.calls.filter(({ text }) => text.startsWith("SELECT * FROM ")).length, tables.length);
     assert.ok(exceptCalls.every(({ text }) => text.includes("identity_stage_")));
     assert.ok(exceptCalls.every(({ text }) => text.includes('"created_at"')));
     assert.ok(exceptCalls.every(({ text }) => text.includes('"updated_at"')));
@@ -191,6 +192,26 @@ if (!runningUnderJest) {
     const { compareTableParity } = await import("./identity-transfer.mjs");
     const rows = snapshot().tables.senseis.rows;
     assert.throws(() => compareTableParity("senseis", [...rows, rows[0]], rows), /Duplicate id/);
+  });
+
+  test("rejects invalid snapshot values before beginning or mutating the target", async () => {
+    const { transferIdentitySnapshot } = await import("./identity-transfer.mjs");
+    for (const [label, mutate, message] of [
+      ["timestamp", (value) => ({ ...value, createdAt: "not-a-timestamp" }), /Invalid timestamp/],
+      ["impossible calendar date", (value) => ({ ...value, createdAt: "2026-02-30 10:00:00" }), /Invalid timestamp/],
+      ["timestamp trailing junk", (value) => ({ ...value, createdAt: "2026-01-01junk" }), /Invalid timestamp/],
+      ["timestamp trailing newline", (value) => ({ ...value, createdAt: "2026-01-01 00:00:00\n" }), /Invalid timestamp/],
+      ["invalid clock time", (value) => ({ ...value, createdAt: "2026-01-01 24:00:00" }), /Invalid timestamp/],
+      ["invalid timezone offset", (value) => ({ ...value, createdAt: "2026-01-01T00:00:00+24:00" }), /Invalid timestamp/],
+      ["integer", (value) => ({ ...value, id: "not-an-integer" }), /Invalid integer/],
+      ["boolean", (value) => ({ ...value, active: "maybe" }), /Invalid boolean/],
+    ]) {
+      const source = snapshot();
+      source.tables.senseis.rows[0] = mutate(source.tables.senseis.rows[0]);
+      const client = fakeClient(targetRows(source));
+      await assert.rejects(transferIdentitySnapshot(source, { client }), message, label);
+      assert.equal(client.calls.length, 0, `${label} validation must precede target mutation`);
+    }
   });
 } else {
   test("identity transfer contracts run with node:test", () => {});

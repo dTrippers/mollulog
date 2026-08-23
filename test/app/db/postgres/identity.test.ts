@@ -72,7 +72,12 @@ describe("identity PostgreSQL repository contract", () => {
       return (operation as (database: typeof db) => unknown)(db);
     });
     await expect(getSenseiById(env, 7)).resolves.toMatchObject({ id: 7, active: true });
-    expect(mockWithIdentityDatabase).toHaveBeenCalledWith(env, "sensei_by_id", expect.any(Function));
+    expect(mockWithIdentityDatabase).toHaveBeenCalledWith(
+      env,
+      "sensei_by_id",
+      expect.any(Function),
+      expect.any(Object),
+    );
   });
 
   it("maps PostgreSQL 23505 constraint names to the existing username error contract", async () => {

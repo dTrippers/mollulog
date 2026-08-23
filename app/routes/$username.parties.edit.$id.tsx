@@ -5,8 +5,8 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 export const meta: MetaFunction = () => [{ title: "편성/공략 관리 | 몰루로그" }];
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const sensei = await getActiveSensei(env, request);
+  const { env, ctx } = context.cloudflare;
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -14,8 +14,8 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const env = context.cloudflare.env;
-  const sensei = await getActiveSensei(env, request);
+  const { env, ctx } = context.cloudflare;
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }

@@ -15,13 +15,14 @@ import { identityMaintenanceActionResult } from "~/lib/identity-cutover.server";
 import { deletePasskey, getPasskeysBySensei, updatePasskeyMemo } from "~/models/passkey";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
-  const sensei = await getActiveSensei(context.cloudflare.env, request);
+  const { env, ctx } = context.cloudflare;
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }
 
   const { uid } = params;
-  const passkeys = await getPasskeysBySensei(context.cloudflare.env, sensei);
+  const passkeys = await getPasskeysBySensei(env, sensei, { ctx });
   const passkey = passkeys.find((passkey) => passkey.uid === uid);
   if (!passkey) {
     return redirect("/edit/passkey");
@@ -30,10 +31,10 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const { env } = context.cloudflare;
-  const maintenance = await identityMaintenanceActionResult(env, { operation: "edit.passkey.action" });
+  const { env, ctx } = context.cloudflare;
+  const maintenance = await identityMaintenanceActionResult(env, { ctx, operation: "edit.passkey.action" });
   if (maintenance) return maintenance;
-  const sensei = await getActiveSensei(env, request);
+  const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
   }
@@ -46,14 +47,14 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       return redirect("/edit/passkey");
     }
 
-    await updatePasskeyMemo(env, sensei, uid, memo);
+    await updatePasskeyMemo(env, sensei, uid, memo, { ctx });
     return { success: true };
   }
   if (request.method === "DELETE") {
     if (!uid) {
       return redirect("/edit/passkey");
     }
-    await deletePasskey(env, sensei, uid);
+    await deletePasskey(env, sensei, uid, { ctx });
     return redirect("/edit/passkey");
   }
   return new Response(null, { status: 405 });

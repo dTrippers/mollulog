@@ -16,7 +16,11 @@ import {
   identityMaintenanceMessage,
   identityMaintenanceResult,
 } from "~/domain/identity-cutover";
-import { identityMaintenanceActionResult, isIdentityMaintenanceResult } from "~/lib/identity-cutover.server";
+import {
+  identityMaintenanceActionResult,
+  identityMaintenancePageResult,
+  isIdentityMaintenanceResult,
+} from "~/lib/identity-cutover.server";
 
 const mockedGetLogger = getLogger as jest.MockedFunction<typeof getLogger>;
 const mockedWithTimeout = withTimeout as jest.MockedFunction<typeof withTimeout>;
@@ -56,6 +60,22 @@ describe("identity maintenance guard", () => {
     });
     expect(isIdentityMaintenanceResult(response?.data)).toBe(true);
     expect((response?.data as { message: string }).message).toContain("잠시");
+  });
+
+  it("returns Korean HTML instead of raw JSON for OAuth callback maintenance", async () => {
+    const response = await identityMaintenancePageResult(
+      createEnv(async () => "enabled"),
+      { operation: "auth.google.callback" },
+    );
+
+    expect(response?.status).toBe(503);
+    expect(response?.headers.get("Content-Type")).toContain("text/html");
+    expect(response?.headers.get("Retry-After")).toBe(String(IDENTITY_MAINTENANCE_RETRY_AFTER_SECONDS));
+    expect(response?.headers.get("Cache-Control")).toBe("no-store");
+    const body = await response?.text();
+    expect(body).toContain("잠시 점검 중이에요");
+    expect(body).toContain(identityMaintenanceResult.message);
+    expect(body).not.toContain('"kind":"identityMaintenance"');
   });
 
   it("bounds the KV read with the standard operation timeout", async () => {

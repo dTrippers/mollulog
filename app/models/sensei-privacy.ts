@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { utcIsoString, withIdentityDatabase } from "~/db/postgres/identity";
+import { type IdentityRepositoryOptions, utcIsoString, withIdentityDatabase } from "~/db/postgres/identity";
 import { pgSenseiPrivaciesTable } from "~/db/postgres/schema";
 
 export const senseiPrivaciesTable = pgSenseiPrivaciesTable;
@@ -22,25 +22,44 @@ function toModel(row: typeof pgSenseiPrivaciesTable.$inferSelect): SenseiPrivacy
   };
 }
 
-export async function getSenseiPrivacyByUserId(env: Env, userId: number): Promise<SenseiPrivacy | null> {
-  return withIdentityDatabase(env, "sensei_privacy_by_user", async (db) => {
-    const [row] = await db
-      .select()
-      .from(pgSenseiPrivaciesTable)
-      .where(eq(pgSenseiPrivaciesTable.userId, userId))
-      .limit(1);
-    return row ? toModel(row) : null;
-  });
+export async function getSenseiPrivacyByUserId(
+  env: Env,
+  userId: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<SenseiPrivacy | null> {
+  return withIdentityDatabase(
+    env,
+    "sensei_privacy_by_user",
+    async (db) => {
+      const [row] = await db
+        .select()
+        .from(pgSenseiPrivaciesTable)
+        .where(eq(pgSenseiPrivaciesTable.userId, userId))
+        .limit(1);
+      return row ? toModel(row) : null;
+    },
+    options,
+  );
 }
 
-export async function upsertSenseiPrivacy(env: Env, userId: number, memberCode: string | null): Promise<void> {
-  await withIdentityDatabase(env, "upsert_sensei_privacy", async (db) => {
-    await db
-      .insert(pgSenseiPrivaciesTable)
-      .values({ userId, memberCode })
-      .onConflictDoUpdate({
-        target: [pgSenseiPrivaciesTable.userId],
-        set: { memberCode, updatedAt: new Date() },
-      });
-  });
+export async function upsertSenseiPrivacy(
+  env: Env,
+  userId: number,
+  memberCode: string | null,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await withIdentityDatabase(
+    env,
+    "upsert_sensei_privacy",
+    async (db) => {
+      await db
+        .insert(pgSenseiPrivaciesTable)
+        .values({ userId, memberCode })
+        .onConflictDoUpdate({
+          target: [pgSenseiPrivaciesTable.userId],
+          set: { memberCode, updatedAt: new Date() },
+        });
+    },
+    options,
+  );
 }

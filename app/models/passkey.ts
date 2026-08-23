@@ -8,7 +8,7 @@ import {
 } from "@simplewebauthn/server";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { nanoid } from "nanoid/non-secure";
-import { utcIsoString, withIdentityDatabase } from "~/db/postgres/identity";
+import { type IdentityRepositoryOptions, utcIsoString, withIdentityDatabase } from "~/db/postgres/identity";
 import { pgPasskeysTable, pgSenseisTable } from "~/db/postgres/schema";
 import { postgresUniqueConstraintName } from "~/lib/db";
 import { type Sensei, toSenseiModel } from "./sensei";
@@ -106,6 +106,7 @@ export async function verifyAndCreatePasskey(
   env: Env,
   sensei: Sensei,
   response: RegistrationResponseJSON,
+  options: IdentityRepositoryOptions = {},
 ): Promise<Passkey | null> {
   const creationOptionsRaw = await env.KV_SESSION.get(passkeyCreationOptionKey(sensei));
   if (!creationOptionsRaw) return null;
@@ -128,21 +129,26 @@ export async function verifyAndCreatePasskey(
   const rawRequest = JSON.stringify(response);
 
   try {
-    return await withIdentityDatabase(env, "create_passkey", async (db) => {
-      const [row] = await db
-        .insert(pgPasskeysTable)
-        .values({
-          uid,
-          userId: sensei.id,
-          memo,
-          keyId: credential.id,
-          publicKey: uint8ArrayToBase64Url(credential.publicKey),
-          rawRequest,
-          counter: 0,
-        })
-        .returning();
-      return row ? toPublicPasskey(row) : null;
-    });
+    return await withIdentityDatabase(
+      env,
+      "create_passkey",
+      async (db) => {
+        const [row] = await db
+          .insert(pgPasskeysTable)
+          .values({
+            uid,
+            userId: sensei.id,
+            memo,
+            keyId: credential.id,
+            publicKey: uint8ArrayToBase64Url(credential.publicKey),
+            rawRequest,
+            counter: 0,
+          })
+          .returning();
+        return row ? toPublicPasskey(row) : null;
+      },
+      options,
+    );
   } catch (error) {
     const constraint = postgresUniqueConstraintName(error);
     if (constraint === "passkeys_key_id_uidx" || constraint === "passkeys_uid_uidx") return null;
@@ -172,11 +178,17 @@ export async function createPasskeyAuthenticationOptions(env: Env): Promise<Publ
 export async function verifyPasskeyAuthentication(
   env: Env,
   response: AuthenticationResponseJSON,
+  options: IdentityRepositoryOptions = {},
 ): Promise<Sensei | null> {
-  const passkey = await withIdentityDatabase(env, "passkey_by_key_id", async (db) => {
-    const [row] = await db.select().from(pgPasskeysTable).where(eq(pgPasskeysTable.keyId, response.id)).limit(1);
-    return row ? toPasskey(row) : null;
-  });
+  const passkey = await withIdentityDatabase(
+    env,
+    "passkey_by_key_id",
+    async (db) => {
+      const [row] = await db.select().from(pgPasskeysTable).where(eq(pgPasskeysTable.keyId, response.id)).limit(1);
+      return row ? toPasskey(row) : null;
+    },
+    options,
+  );
   if (!passkey) return null;
 
   const verificationResult = await verifyAuthenticationResponse({
@@ -196,48 +208,84 @@ export async function verifyPasskeyAuthentication(
   if (!verificationResult.verified) return null;
 
   const { newCounter } = verificationResult.authenticationInfo;
-  return advancePasskeyCounterAndGetSensei(env, passkey, newCounter);
+  return advancePasskeyCounterAndGetSensei(env, passkey, newCounter, options);
 }
 
 export async function advancePasskeyCounterAndGetSensei(
   env: Env,
   passkey: Pick<DBPasskey, "keyId" | "userId">,
   newCounter: number,
+  options: IdentityRepositoryOptions = {},
 ): Promise<Sensei | null> {
-  return withIdentityDatabase(env, "advance_passkey_counter", async (db) => {
-    const senseiRows = await db.transaction(async (tx) => {
-      await tx
+  return withIdentityDatabase(
+    env,
+    "advance_passkey_counter",
+    async (db) => {
+      const senseiRows = await db.transaction(async (tx) => {
+        await tx
+          .update(pgPasskeysTable)
+          .set({ counter: sql`GREATEST(${pgPasskeysTable.counter}, ${newCounter})`, updatedAt: new Date() })
+          .where(eq(pgPasskeysTable.keyId, passkey.keyId));
+        return tx.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, passkey.userId)).limit(1);
+      });
+      return senseiRows[0] ? toSenseiModel(senseiRows[0]) : null;
+    },
+    options,
+  );
+}
+
+export async function getPasskeysBySensei(
+  env: Env,
+  sensei: Sensei,
+  options: IdentityRepositoryOptions = {},
+): Promise<Passkey[]> {
+  return withIdentityDatabase(
+    env,
+    "passkeys_by_sensei",
+    async (db) => {
+      const rows = await db
+        .select()
+        .from(pgPasskeysTable)
+        .where(eq(pgPasskeysTable.userId, sensei.id))
+        .orderBy(asc(pgPasskeysTable.id));
+      return rows.map(toPublicPasskey);
+    },
+    options,
+  );
+}
+
+export async function updatePasskeyMemo(
+  env: Env,
+  sensei: Sensei,
+  uid: string,
+  memo: string,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await withIdentityDatabase(
+    env,
+    "update_passkey_memo",
+    async (db) => {
+      await db
         .update(pgPasskeysTable)
-        .set({ counter: sql`GREATEST(${pgPasskeysTable.counter}, ${newCounter})`, updatedAt: new Date() })
-        .where(eq(pgPasskeysTable.keyId, passkey.keyId));
-      return tx.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, passkey.userId)).limit(1);
-    });
-    return senseiRows[0] ? toSenseiModel(senseiRows[0]) : null;
-  });
+        .set({ memo, updatedAt: new Date() })
+        .where(and(eq(pgPasskeysTable.userId, sensei.id), eq(pgPasskeysTable.uid, uid)));
+    },
+    options,
+  );
 }
 
-export async function getPasskeysBySensei(env: Env, sensei: Sensei): Promise<Passkey[]> {
-  return withIdentityDatabase(env, "passkeys_by_sensei", async (db) => {
-    const rows = await db
-      .select()
-      .from(pgPasskeysTable)
-      .where(eq(pgPasskeysTable.userId, sensei.id))
-      .orderBy(asc(pgPasskeysTable.id));
-    return rows.map(toPublicPasskey);
-  });
-}
-
-export async function updatePasskeyMemo(env: Env, sensei: Sensei, uid: string, memo: string): Promise<void> {
-  await withIdentityDatabase(env, "update_passkey_memo", async (db) => {
-    await db
-      .update(pgPasskeysTable)
-      .set({ memo, updatedAt: new Date() })
-      .where(and(eq(pgPasskeysTable.userId, sensei.id), eq(pgPasskeysTable.uid, uid)));
-  });
-}
-
-export async function deletePasskey(env: Env, sensei: Sensei, uid: string): Promise<void> {
-  await withIdentityDatabase(env, "delete_passkey", async (db) => {
-    await db.delete(pgPasskeysTable).where(and(eq(pgPasskeysTable.userId, sensei.id), eq(pgPasskeysTable.uid, uid)));
-  });
+export async function deletePasskey(
+  env: Env,
+  sensei: Sensei,
+  uid: string,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await withIdentityDatabase(
+    env,
+    "delete_passkey",
+    async (db) => {
+      await db.delete(pgPasskeysTable).where(and(eq(pgPasskeysTable.userId, sensei.id), eq(pgPasskeysTable.uid, uid)));
+    },
+    options,
+  );
 }

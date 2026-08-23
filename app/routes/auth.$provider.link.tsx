@@ -10,7 +10,8 @@ function strategyName(provider: string | undefined) {
 }
 
 export const action = async ({ context, params, request }: ActionFunctionArgs) => {
-  const maintenance = await identityMaintenanceActionResult(context.cloudflare.env, { operation: "auth.link.signin" });
+  const { env, ctx } = context.cloudflare;
+  const maintenance = await identityMaintenanceActionResult(env, { ctx, operation: "auth.link.signin" });
   if (maintenance) return maintenance;
-  return getLinkAuthenticator(context.cloudflare.env).authenticate(strategyName(params.provider), request);
+  return getLinkAuthenticator(env, ctx).authenticate(strategyName(params.provider), request);
 };

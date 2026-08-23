@@ -1,6 +1,6 @@
 import { type LoaderFunctionArgs, redirect } from "react-router";
 import { getLinkAuthenticator } from "~/auth/authenticator.server";
-import { identityMaintenanceActionResult } from "~/lib/identity-cutover.server";
+import { identityMaintenancePageResult } from "~/lib/identity-cutover.server";
 
 function strategyName(provider: string | undefined) {
   if (provider === "google" || provider === "github") {
@@ -10,11 +10,13 @@ function strategyName(provider: string | undefined) {
 }
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
-  const maintenance = await identityMaintenanceActionResult(context.cloudflare.env, {
+  const { env, ctx } = context.cloudflare;
+  const maintenance = await identityMaintenancePageResult(env, {
+    ctx,
     operation: "auth.link.callback",
   });
   if (maintenance) return maintenance;
-  return getLinkAuthenticator(context.cloudflare.env).authenticate(strategyName(params.provider), request, {
+  return getLinkAuthenticator(env, ctx).authenticate(strategyName(params.provider), request, {
     successRedirect: "/edit?auth=linked",
     failureRedirect: "/edit?auth_error=failed",
   });

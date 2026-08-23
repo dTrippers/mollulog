@@ -58,7 +58,7 @@ export function getAuthenticator(env: Env, ctx?: ExecutionContext): Authenticato
       async ({ extraParams, request }) => {
         try {
           const googleUserId = await fetchGoogleUserId(extraParams.id_token);
-          return await authenticateProvider(env, request, "google", googleUserId);
+          return await authenticateProvider(env, request, "google", googleUserId, ctx);
         } catch (e) {
           if (e instanceof Response) {
             throw e;
@@ -81,7 +81,7 @@ export function getAuthenticator(env: Env, ctx?: ExecutionContext): Authenticato
       },
       async ({ profile, request }) => {
         try {
-          return await authenticateProvider(env, request, "github", profile.id);
+          return await authenticateProvider(env, request, "github", profile.id, ctx);
         } catch (e) {
           if (e instanceof Response) {
             throw e;
@@ -96,7 +96,7 @@ export function getAuthenticator(env: Env, ctx?: ExecutionContext): Authenticato
 
   authenticator.use(
     new PasskeyStrategy<Sensei>(async ({ authenticationResponse }) => {
-      const sensei = await verifyPasskeyAuthentication(env, authenticationResponse);
+      const sensei = await verifyPasskeyAuthentication(env, authenticationResponse, { ctx });
       if (!sensei) {
         logger.error("Passkey not matched");
         throw new AuthorizationError("Passkey not matched");
@@ -128,7 +128,7 @@ export function getLinkAuthenticator(env: Env, ctx?: ExecutionContext): Authenti
       async ({ extraParams, request }) => {
         try {
           const googleUserId = await fetchGoogleUserId(extraParams.id_token);
-          return await linkProvider(env, request, "google", googleUserId);
+          return await linkProvider(env, request, "google", googleUserId, ctx);
         } catch (e) {
           if (e instanceof Response) {
             throw e;
@@ -151,7 +151,7 @@ export function getLinkAuthenticator(env: Env, ctx?: ExecutionContext): Authenti
       },
       async ({ profile, request }) => {
         try {
-          return await linkProvider(env, request, "github", profile.id);
+          return await linkProvider(env, request, "github", profile.id, ctx);
         } catch (e) {
           if (e instanceof Response) {
             throw e;
@@ -198,14 +198,16 @@ async function authenticateProvider(
   request: Request,
   provider: AuthProvider,
   providerUserId: string,
+  ctx?: ExecutionContext,
 ): Promise<Sensei> {
-  const sensei = await getSenseiByAuthIdentity(env, provider, providerUserId);
+  const options = { ctx };
+  const sensei = await getSenseiByAuthIdentity(env, provider, providerUserId, options);
   if (sensei) {
     return sensei;
   }
 
-  const pendingRegistration = await createPendingSenseiRegistration(env, provider, providerUserId);
-  const authenticator = getAuthenticator(env);
+  const pendingRegistration = await createPendingSenseiRegistration(env, provider, providerUserId, options);
+  const authenticator = getAuthenticator(env, ctx);
   const storage = sessionStorage(env);
   const session = await storage.getSession(request.headers.get("Cookie"));
   session.unset(authenticator.sessionKey);
@@ -220,8 +222,9 @@ async function linkProvider(
   request: Request,
   provider: AuthProvider,
   providerUserId: string,
+  ctx?: ExecutionContext,
 ): Promise<Sensei> {
-  const authenticator = getAuthenticator(env);
+  const authenticator = getAuthenticator(env, ctx);
   const storage = sessionStorage(env);
   const session = await storage.getSession(request.headers.get("Cookie"));
   const sessionSensei = session.get(authenticator.sessionKey) as Sensei | undefined;
@@ -229,12 +232,12 @@ async function linkProvider(
     throw redirect("/edit?auth_error=signin_required");
   }
 
-  const sensei = await getSenseiById(env, sessionSensei.id);
+  const sensei = await getSenseiById(env, sessionSensei.id, { ctx });
   if (!sensei?.active) {
     throw redirect("/edit?auth_error=signin_required");
   }
 
-  const result = await linkAuthIdentity(env, sensei.id, provider, providerUserId);
+  const result = await linkAuthIdentity(env, sensei.id, provider, providerUserId, { ctx });
   if (!result.ok) {
     throw redirect("/edit?auth_error=identity_in_use");
   }

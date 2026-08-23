@@ -11,7 +11,7 @@ import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { Role } from "~/models/student";
 import { getAllStudentsMap, getStudentSkillItemsBatch } from "~/models/student";
 import { getFutureContents } from "~/views/futures";
-import { getRouteSensei } from "./$username";
+import { getRouteSensei } from "./$username._components/route-sensei.server";
 import FuturePlan from "./$username.futures._components/FuturePlan";
 
 export const meta: MetaFunction = ({ params }) => {
@@ -26,8 +26,8 @@ export const meta: MetaFunction = ({ params }) => {
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const currentUser = await getActiveSensei(env, request);
-  const sensei = await getRouteSensei(env, params, currentUser?.id);
+  const currentUser = await getActiveSensei(env, request, ctx);
+  const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
 
   const [favoritedStudents, futureContents, studentsMap] = await Promise.all([
     getUserFavoritedStudents(env, sensei.id, undefined, { ctx }),

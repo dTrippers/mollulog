@@ -4,7 +4,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { WalkthroughTimelineList } from "~/components/features/walkthrough-timeline";
 import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
 import { listPostgresWalkthroughTimelinesByUser } from "~/db/postgres/walkthrough-timelines";
-import { getRouteSensei } from "./$username";
+import { getRouteSensei } from "./$username._components/route-sensei.server";
 
 export const meta: MetaFunction = ({ params }) => [
   { title: `${params.username ?? ""} - 공략 타임라인 | 몰루로그`.trim() },
@@ -12,8 +12,8 @@ export const meta: MetaFunction = ({ params }) => [
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const currentUser = await getActiveSensei(env, request);
-  const sensei = await getRouteSensei(env, params, currentUser?.id);
+  const currentUser = await getActiveSensei(env, request, ctx);
+  const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
   const me = sensei.id === currentUser?.id;
   const timelines = await listPostgresWalkthroughTimelinesByUser(env, sensei.id, me, { ctx });
   const timelineUids = timelines.map((timeline) => timeline.uid);

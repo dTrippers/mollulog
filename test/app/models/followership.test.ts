@@ -10,7 +10,13 @@ jest.mock("~/db/postgres/identity", () => ({
   withIdentityDatabase: (...args: unknown[]) => mockWithIdentityDatabase(...args),
 }));
 
-import { follow, getFollowerIds, getFollowershipSummary, getFollowingIds } from "~/models/followership";
+import {
+  follow,
+  getFollowerIds,
+  getFollowershipLists,
+  getFollowershipSummary,
+  getFollowingIds,
+} from "~/models/followership";
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -25,6 +31,23 @@ beforeEach(() => {
     }
     if (keys.includes("followerId")) return createBuilder([{ followerId: 2 }, { followerId: 4 }]);
     if (keys.includes("followeeId")) return createBuilder([{ followeeId: 2 }, { followeeId: 3 }]);
+    if (keys.includes("sensei")) {
+      return createBuilder([
+        {
+          sensei: {
+            id: 2,
+            uid: "sensei-2",
+            username: "sensei2",
+            friendCode: null,
+            profileStudentId: null,
+            bio: null,
+            active: true,
+            role: "guest",
+            profileVisibility: "public",
+          },
+        },
+      ]);
+    }
     if (keys.includes("id")) {
       const value = relationshipCall++ === 0 ? [{ id: 1 }] : [{ id: 1 }];
       return createBuilder(value);
@@ -42,6 +65,7 @@ beforeEach(() => {
 function createBuilder(value: unknown) {
   const builder = Promise.resolve(value) as Promise<unknown> & Record<string, (...args: unknown[]) => unknown>;
   builder.from = () => builder;
+  builder.innerJoin = () => builder;
   builder.where = () => builder;
   builder.limit = async () => value;
   return builder;
@@ -57,7 +81,26 @@ describe("PostgreSQL followership model", () => {
       followed: true,
       following: true,
     });
-    expect(mockWithIdentityDatabase).toHaveBeenCalledWith(env, "followership_summary", expect.any(Function));
+    expect(mockWithIdentityDatabase).toHaveBeenCalledWith(
+      env,
+      "followership_summary",
+      expect.any(Function),
+      expect.any(Object),
+    );
+  });
+
+  it("loads following and follower profiles through one identity operation", async () => {
+    await expect(getFollowershipLists(env, 1, 9, { ctx: {} as ExecutionContext })).resolves.toEqual({
+      following: [expect.objectContaining({ id: 2 })],
+      followers: [expect.objectContaining({ id: 2 })],
+    });
+    expect(mockWithIdentityDatabase).toHaveBeenCalledTimes(1);
+    expect(mockWithIdentityDatabase).toHaveBeenCalledWith(
+      env,
+      "followership_lists",
+      expect.any(Function),
+      expect.objectContaining({ ctx: expect.anything() }),
+    );
   });
 
   it("selects only the required relationship IDs", async () => {

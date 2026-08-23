@@ -16,7 +16,7 @@ import { getRecruitedStudents } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
 import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES } from "~/views/community";
 import { enrichCommunityFeedPosts } from "~/views/community.server";
-import { getRouteSensei } from "./$username";
+import { getRouteSensei } from "./$username._components/route-sensei.server";
 import type { ActionData } from "./api.followerships";
 
 function parsePage(request: Request) {
@@ -28,12 +28,12 @@ function parsePage(request: Request) {
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const currentUser = await getActiveSensei(env, request);
-  const sensei = await getRouteSensei(env, params, currentUser?.id);
+  const currentUser = await getActiveSensei(env, request, ctx);
+  const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
   const page = parsePage(request);
 
   const [followership, recruitedStudents, allReleasedStudents, feedPage] = await Promise.all([
-    getFollowershipSummary(env, sensei.id, currentUser?.id),
+    getFollowershipSummary(env, sensei.id, currentUser?.id, { ctx }),
     getRecruitedStudents(env, sensei.id),
     getAllStudents(env),
     getCommunityFeedPage(env, {
