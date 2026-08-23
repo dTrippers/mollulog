@@ -5,7 +5,6 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, EventInfoCard, Recruitments } from "~/components/features/events";
 import { MarkdownText, SectionCard } from "~/components/primitives";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
-import { withD1Session } from "~/lib/d1-session";
 import { toUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
 import { getNestedContentComments } from "~/models/content.server";
@@ -26,7 +25,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const content = await getTimelineContent(publicReadEnv, timelineUid, { ctx });
   if (!content) {
     throw new Response("Not Found", { status: 404 });

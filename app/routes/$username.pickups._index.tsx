@@ -4,7 +4,6 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { AddContentButton } from "~/components/features/editor";
 import { SubTitle } from "~/components/primitives";
 import { getRecruitmentResultCountStats, resolveRecruitmentResultStudents } from "~/domain/recruitment-result";
-import { withD1Session } from "~/lib/d1-session";
 import { compareInstantAsc, compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
@@ -54,7 +53,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const currentUser = await getActiveSensei(env, request, ctx);
   const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
 

@@ -533,7 +533,7 @@ describe("Pyroxene action dispatch", () => {
   });
 
   it("returns a meaningful error and hides internal owned-resource failures", async () => {
-    mockCreatePyroxeneOwnedResource.mockRejectedValue(new Error("D1 connection details"));
+    mockCreatePyroxeneOwnedResource.mockRejectedValue(new Error("PostgreSQL connection details"));
 
     const response = await action(
       actionArgs("save-owned-resources", { resources: { pyroxene: 1, oneTimeTicket: 0, tenTimeTicket: 0 } }, "POST"),

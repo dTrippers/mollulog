@@ -6,7 +6,6 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { RecruitmentHistories } from "~/components/features/students";
 import { Button, Callout, EmptyView, LoadingSkeleton, SubTitle } from "~/components/primitives";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
-import { withD1Session } from "~/lib/d1-session";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
@@ -84,7 +83,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   }
 
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const logger = getLogger(env, ctx, {
     route: "students.$id._index.loader",
     studentUid: uid,

@@ -28,26 +28,10 @@ import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { extractPyroxeneTimelineBaseUid, PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { withD1Session } from "~/lib/d1-session";
 import { cn } from "~/lib/utils";
 import { favoriteStudent, getUserFavoritedStudents } from "~/models/favorite-students";
-import {
-  type GuestImportItemType,
-  hasGuestImportReceipt,
-  importGuestRecord,
-  importGuestResources,
-  markGuestImportReceipt,
-} from "~/models/guest-pyroxene-import";
-import {
-  ensureCollectedSource,
-  getAllPyroxeneEventData,
-  getCollectedSourceKeys,
-  getLatestPyroxeneOwnedResource,
-  getPyroxenePlannerOptions,
-  getPyroxeneTimelineItems,
-  upsertPyroxeneEventData,
-  upsertPyroxenePlannerOptions,
-} from "~/models/pyroxene-planner";
+import { type GuestPyroxeneImportPlan, importGuestPyroxeneSelection } from "~/models/guest-pyroxene-import";
+import { getPyroxeneUserState } from "~/models/pyroxene-planner";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
 type ImportSelection = {
@@ -112,24 +96,20 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const user = await getActiveSensei(env, request);
   if (!user) return redirect("/unauthorized");
 
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
-  const [contents, resources, options, records, eventData, sources, favorites] = await Promise.all([
+  const publicReadEnv = env;
+  const [contents, pyroxeneState, favorites] = await Promise.all([
     getPyroxenePlannerContents(publicReadEnv, false, ctx),
-    getLatestPyroxeneOwnedResource(env, user.id),
-    getPyroxenePlannerOptions(env, user.id),
-    getPyroxeneTimelineItems(env, user.id),
-    getAllPyroxeneEventData(env, user.id),
-    getCollectedSourceKeys(env, user.id),
+    getPyroxeneUserState(env, user.id, { ctx }),
     getUserFavoritedStudents(env, user.id, undefined, { ctx }),
   ]);
 
   return {
     contents,
-    resources,
-    options,
-    records,
-    eventData,
-    sourceKeys: [...sources],
+    resources: pyroxeneState.latestResources,
+    options: pyroxeneState.options,
+    records: pyroxeneState.timelineItems,
+    eventData: pyroxeneState.eventData,
+    sourceKeys: [...pyroxeneState.collectedSourceKeys],
     favorites: favorites.map(({ contentId, studentId }) => ({ contentUid: contentId, studentUid: studentId })),
   };
 };
@@ -194,96 +174,81 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     );
   }
 
-  const verified = emptyVerified();
-  const failedLabels: string[] = [];
-  const importItem = async (
-    type: GuestImportItemType,
-    key: string,
-    label: string,
-    operation: () => Promise<void>,
-    onVerified: () => void,
-  ) => {
-    try {
-      if (!(await hasGuestImportReceipt(env, user.id, datasetId, type, key))) {
-        await operation();
-        await markGuestImportReceipt(env, user.id, datasetId, type, key);
-      }
-      if (await hasGuestImportReceipt(env, user.id, datasetId, type, key)) onVerified();
-      else failedLabels.push(label);
-    } catch {
-      failedLabels.push(label);
-    }
+  const selectedRecords = guest.records.filter((item) => selectedRecordIds.has(item.recordId));
+  const selectedSourceKeysInOrder = guest.collectedSourceKeys.filter((key) => selectedSourceKeys.has(key));
+  const selectedEventTrials = Object.entries(guest.eventTrials)
+    .filter(([uid]) => selectedEventUids.has(uid))
+    .map(([eventUid, expectedTrials]) => ({ eventUid, expectedTrials }));
+  const selectedFavorites = guest.favoriteStudents.filter((item) => selectedFavoriteKeys.has(favoriteKey(item)));
+  const plan: GuestPyroxeneImportPlan = {
+    resources: selection.resources && guest.resources ? guest.resources : undefined,
+    options: selection.options && guest.optionsChanged ? guest.options : undefined,
+    records: selectedRecords,
+    sourceKeys: selectedSourceKeysInOrder,
+    eventTrials: selectedEventTrials,
+    favorites: selectedFavorites.map((favorite) => ({
+      itemKey: favoriteKey(favorite),
+      run: () => favoriteStudent(env, user.id, favorite.studentUid, favorite.contentUid, { ctx }),
+    })),
   };
+  const selectedItems = [
+    ...(plan.resources ? [{ type: "resources" as const, key: "current", label: "보유 재화" }] : []),
+    ...(plan.options ? [{ type: "options" as const, key: "current", label: "플래너 설정" }] : []),
+    ...selectedRecords.map((record) => ({
+      type: "record" as const,
+      key: record.recordId,
+      label: describeRecord(record),
+    })),
+    ...selectedSourceKeysInOrder.map((key) => ({ type: "source" as const, key, label: "수령한 보상" })),
+    ...selectedEventTrials.map(({ eventUid }) => ({ type: "event" as const, key: eventUid, label: "모집 목표" })),
+    ...selectedFavorites.map((favorite) => ({
+      type: "favorite" as const,
+      key: favoriteKey(favorite),
+      label: "관심 학생",
+    })),
+  ];
 
-  if (selection.resources && guest.resources) {
-    const guestResources = guest.resources;
-    await importItem(
-      "resources",
-      "current",
-      "보유 재화",
-      () => importGuestResources(env, user.id, datasetId, guestResources),
-      () => {
+  let importResult: Awaited<ReturnType<typeof importGuestPyroxeneSelection>>;
+  try {
+    importResult = await importGuestPyroxeneSelection(env, user.id, datasetId, plan, { ctx });
+  } catch {
+    return {
+      success: false,
+      verified: emptyVerified(),
+      failedLabels: selectedItems.map(({ label }) => label),
+    } satisfies ImportActionResult;
+  }
+
+  const verified = emptyVerified();
+  for (const item of importResult.verified) {
+    switch (item.type) {
+      case "resources":
         verified.resources = true;
-      },
-    );
-  }
-  if (selection.options && guest.optionsChanged) {
-    await importItem(
-      "options",
-      "current",
-      "플래너 설정",
-      () => upsertPyroxenePlannerOptions(env, user.id, guest.options),
-      () => {
+        break;
+      case "options":
         verified.options = true;
-      },
-    );
+        break;
+      case "record":
+        verified.recordIds.push(item.key);
+        break;
+      case "source":
+        verified.sourceKeys.push(item.key);
+        break;
+      case "event":
+        verified.eventUids.push(item.key);
+        break;
+      case "favorite": {
+        const favorite = selectedFavorites.find((candidate) => favoriteKey(candidate) === item.key);
+        if (favorite) verified.favorites.push(favorite);
+        break;
+      }
+    }
   }
-  for (const record of guest.records.filter((item) => selectedRecordIds.has(item.recordId))) {
-    await importItem(
-      "record",
-      record.recordId,
-      describeRecord(record),
-      () => importGuestRecord(env, user.id, datasetId, record),
-      () => {
-        verified.recordIds.push(record.recordId);
-      },
-    );
-  }
-  for (const sourceKey of guest.collectedSourceKeys.filter((key) => selectedSourceKeys.has(key))) {
-    await importItem(
-      "source",
-      sourceKey,
-      "수령한 보상",
-      () => ensureCollectedSource(env, user.id, sourceKey),
-      () => {
-        verified.sourceKeys.push(sourceKey);
-      },
-    );
-  }
-  for (const [eventUid, expectedTrials] of Object.entries(guest.eventTrials).filter(([uid]) =>
-    selectedEventUids.has(uid),
-  )) {
-    await importItem(
-      "event",
-      eventUid,
-      "모집 목표",
-      () => upsertPyroxeneEventData(env, user.id, eventUid, { expectedTrials }),
-      () => {
-        verified.eventUids.push(eventUid);
-      },
-    );
-  }
-  for (const favorite of guest.favoriteStudents.filter((item) => selectedFavoriteKeys.has(favoriteKey(item)))) {
-    await importItem(
-      "favorite",
-      favoriteKey(favorite),
-      "관심 학생",
-      () => favoriteStudent(env, user.id, favorite.studentUid, favorite.contentUid, { ctx }),
-      () => {
-        verified.favorites.push(favorite);
-      },
-    );
-  }
+  const labels = new Map(selectedItems.map((item) => [`${item.type}\u0000${item.key}`, item.label]));
+  const failedLabels = importResult.failed.flatMap((item) => {
+    const label = labels.get(`${item.type}\u0000${item.key}`);
+    return label ? [label] : [];
+  });
 
   return { success: failedLabels.length === 0, verified, failedLabels } satisfies ImportActionResult;
 };
@@ -609,7 +574,7 @@ export default function GuestPyroxeneImportPage() {
               </SectionCard>
             )}
 
-            {fetcher.data && (
+            {fetcher.data ? (
               <Callout
                 tone={fetcher.data.failedLabels.length ? "warning" : "success"}
                 Icon={CheckCircleIcon}
@@ -630,7 +595,7 @@ export default function GuestPyroxeneImportPage() {
                       : "가져온 항목만 이 브라우저에서 정리했어요."
                 }
               />
-            )}
+            ) : null}
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">

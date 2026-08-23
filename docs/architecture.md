@@ -9,19 +9,18 @@ Browser
   ↕ SSR request / response
 Cloudflare Workers
   ├→ BAQL GraphQL API
-  ├→ Hyperdrive (connection pooling, query cache disabled)
-  ├→ Cloudflare D1
+  ├→ Hyperdrive → PostgreSQL (connection pooling, query cache disabled)
   ├→ Cloudflare KV
   └→ Cloudflare Queues
 ```
 
 - The web app is a React Router v7 SSR app running on Cloudflare Workers.
 - Game source data is read primarily from the BAQL GraphQL API.
-- PostgreSQL is the canonical store for migrated domains. Workers connect through Hyperdrive, which provides connection pooling without query caching.
-- D1 remains the canonical store for domains that have not yet migrated to PostgreSQL.
+- PostgreSQL is the canonical persistence store. Workers connect through Hyperdrive, which provides connection pooling without query caching.
+- D1 is not an active runtime store. Historical source tables are retained only through the approved `zzz_` archive operation.
 - KV is used for response caching and for precomputed work driven by cron.
 
-The migration boundary is domain-based. A migrated domain reads and writes PostgreSQL directly without a D1 fallback, comparison mode, or long-term dual-write path. Other domains continue to use D1 until they are migrated as complete read/write slices.
+The migration boundary is repository-based. Every persistence domain reads and writes PostgreSQL directly without a D1 fallback, comparison mode, or dual-write path. External BAQL data, KV cache/session state, and queues remain separate infrastructure concerns.
 
 ## Layers
 
@@ -31,17 +30,17 @@ Data flows in one direction, top to bottom.
 Routes  (loader / action · thin)
   → Views   (composition + route cache, SWR)
       → Domain  (pure calculation · no I/O)
-      → Models  (PostgreSQL/D1 CRUD · BAQL reads · source cache · normalization)
+      → Models  (PostgreSQL CRUD · BAQL reads · source cache · normalization)
           → lib/cache · lib/baql · lib/postgres.server · db
 ```
 
 - `app/routes` — Route files with `loader` / `action`, meta, parameter parsing, access control, and top-level screen assembly. A simple single-source read or mutation may call one model directly when no route-cache or composition policy is needed; direct cache / BAQL / database infrastructure calls do not belong here.
 - `app/views` — The composition layer for route presentation. A view is required when a route needs multi-source screen composition or route-cache/SWR policy; it combines model and domain results into the shape a screen needs and owns that cache policy.
 - `app/domain` — Pure calculation and transformation only. With no I/O or env dependency, it is easy to unit test. Logic such as raid scoring or the recruitment simulator lives here.
-- `app/models` — The data access layer. It owns PostgreSQL/D1 CRUD, BAQL reads, source caching, and normalization of upstream data into domain types.
+- `app/models` — The data access layer. It owns PostgreSQL CRUD, BAQL reads, source caching, and normalization of upstream data into domain types.
 - `app/db/postgres` — PostgreSQL schemas and repositories implemented with Drizzle `pg-core` and `drizzle-orm/node-postgres`.
 - `app/lib/postgres.server.ts` — Hyperdrive connection lifecycle. It creates and releases a PostgreSQL client for each model operation.
-- `app/lib/cache`, `app/lib/baql`, and D1 helpers — Cache primitives, GraphQL execution, and infrastructure for domains that remain on D1.
+- `app/lib/cache` and `app/lib/baql` — Cache primitives and GraphQL execution.
 - `app/components/primitives` — Low-level shared UI built on semantic tokens, plus thin app-wide presentation.
 - `app/components/features/<domain>` — Domain UI reused across multiple screens.
 - `app/routes/*._components`, `app/routes/*/_components` — Route-local UI and hooks used within a single route family.
@@ -71,28 +70,25 @@ Detailed UI structure rules live in the frontend documents:
 - Static assets: `build/client`
 - Bindings:
   - `HYPERDRIVE`: managed PostgreSQL connection pooling
-  - `DB`: Cloudflare D1 for domains that have not migrated
   - `KV_CACHE`: cache store
   - `KV_SESSION`: session and auth-related transient data
   - `EVENTS`: queue binding
 
 ### Production deploy safety
 
-Run production deployments only through `pnpm prod:deploy`. The command blocks the deploy unless all of the following
-conditions are satisfied:
+Apply and verify every required PostgreSQL migration before running a deployment. `pnpm prod:deploy` then blocks the
+deploy unless all of the following repository conditions are satisfied:
 
 - the current branch is `main`;
 - the working tree, including untracked files, is clean before and after the build;
-- no production D1 migrations are pending;
 - `HEAD` remains on the same commit throughout the build.
 
 The app Worker and Cron Worker versions record the full Git commit SHA in their deployment message. To run the checks
 without building or deploying, use `pnpm prod:deploy:preflight`.
 
-If the preflight reports pending D1 migrations, review every pending file before running `pnpm prod:db:migrate`. The
-deploy command intentionally does not apply migrations automatically because a migration may require a separate
-maintenance or cutover decision. For additive schema changes, apply and verify the migration before deploying code that
-uses the new schema.
+The deploy command intentionally does not apply PostgreSQL migrations automatically because a migration may require a
+separate maintenance or cutover decision. Apply and verify the required migration before deploying code that uses the
+new schema.
 
 Cron runs on a single schedule:
 
@@ -105,14 +101,14 @@ Cron runs on a single schedule:
 1. The browser requests a route.
 2. The route `loader` runs and either calls one model for a simple single-source read or delegates to a view when composition or route-cache/SWR policy is needed.
 3. A view calls the models and domain it needs, composes the screen shape, and applies a route cache when appropriate.
-4. Models check the source cache when applicable and query BAQL, PostgreSQL through Hyperdrive, or D1 according to domain ownership.
+4. Models check the source cache when applicable and query BAQL or PostgreSQL through Hyperdrive.
 5. The screen renders from `useLoaderData()`.
 
 ### Write
 
 1. The user submits through a `Form` or a fetcher.
 2. The route `action` runs.
-3. The owning store is updated: PostgreSQL for migrated domains, D1 for remaining domains, or KV/cookies for auth and session state.
+3. The owning store is updated: PostgreSQL through Hyperdrive, or KV/cookies for auth and session state.
 4. Caches are invalidated when needed.
 5. A response or redirect is returned.
 
@@ -121,9 +117,9 @@ Cron runs on a single schedule:
 - Hyperdrive is a connection-pooling data path, not an application cache. Query caching is disabled; explicit cache policy remains in the existing KV cache layer.
 - PostgreSQL clients are operation-scoped. Create and release them through `app/lib/postgres.server.ts` inside each model operation; never keep a client in module or request-global state, and never share one client across independent operations. A transaction may span the statements of one operation only.
 - `withPostgresClient` connects once, runs the repository operation, and releases the client in `finally`. Repositories may attach query spans through the current `ExecutionContext`.
-- PostgreSQL schemas use Drizzle `pg-core` and live in `app/db/postgres/schema.ts`. SQL migrations live separately under `db/postgres/migrations` so they are not mixed with D1 migrations under `db/migrations`.
+- PostgreSQL schemas use Drizzle `pg-core` and live in `app/db/postgres/schema.ts`. SQL migrations live under `db/postgres/migrations`; `db/migrations` is historical source/archive material only.
 - PostgreSQL uses native types such as `timestamptz`, `boolean`, arrays, JSONB, and identity columns. Domain types normalize database values at the repository boundary.
-- A PostgreSQL-owned domain must not silently fall back to D1. Database failures surface through the normal route error or explicit degraded-state handling instead of returning stale D1 data as if it were current.
+- PostgreSQL failures surface through the normal route error or explicit degraded-state handling instead of returning fake empty values, stale data, or internal errors as user-facing content.
 
 ### Server-only modules
 

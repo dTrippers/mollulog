@@ -4,10 +4,6 @@ export const RUNTIME_TIMEOUTS = {
     request: 10000,
     scheduled: 10000,
   },
-  d1: {
-    query: 5000,
-    slowWarn: 1000,
-  },
   postgres: {
     connect: 5000,
     query: 5000,

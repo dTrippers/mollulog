@@ -28,7 +28,6 @@ import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { type MobileNavigationPair, normalizeMobileNavigationIds } from "./domain/mobile-navigation";
-import { withD1Session } from "./lib/d1-session";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "./lib/google-analytics.client";
 import { captureClientError } from "./lib/observability.client";
@@ -68,7 +67,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   return ctx.tracing.enterSpan("root.loader", async (span) => {
     const sensei = await ctx.tracing.enterSpan("root_auth", () => getActiveSensei(env, request));
     const preference = await ctx.tracing.enterSpan("root_preference", () => getPreference(env, request));
-    const publicReadEnv = withD1Session(env, "first-unconstrained");
+    const publicReadEnv = env;
     const [navigationBarContents, siteBanner] = await Promise.all([
       ctx.tracing.enterSpan("root_nav", () => getNavigationBarContents(env, false, sensei?.id, ctx, publicReadEnv)),
       ctx.tracing.enterSpan("root_site_banner", () => getSiteBanner(publicReadEnv, new Date(), ctx)),

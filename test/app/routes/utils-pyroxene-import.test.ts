@@ -1,0 +1,126 @@
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { createEmptyGuestPyroxenePlanner } from "~/domain/guest-pyroxene-planner";
+
+const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
+type AsyncMock = (...args: unknown[]) => Promise<unknown>;
+const mockImportGuestPyroxeneSelection = jest.fn<AsyncMock>();
+
+jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: mockGetActiveSensei }));
+jest.mock("~/components/features/futures", () => ({ useGuestPyroxenePlanner: jest.fn() }));
+jest.mock("~/models/favorite-students", () => ({
+  favoriteStudent: jest.fn(),
+  getUserFavoritedStudents: jest.fn(),
+}));
+jest.mock("~/models/guest-pyroxene-import", () => ({
+  importGuestPyroxeneSelection: mockImportGuestPyroxeneSelection,
+  hasGuestImportReceipt: jest.fn(),
+  importGuestRecord: jest.fn(),
+  importGuestResources: jest.fn(),
+  markGuestImportReceipt: jest.fn(),
+}));
+jest.mock("~/models/pyroxene-planner", () => ({
+  ensureCollectedSource: jest.fn(),
+  getAllPyroxeneEventData: jest.fn(),
+  getCollectedSourceKeys: jest.fn(),
+  getLatestPyroxeneOwnedResource: jest.fn(),
+  getPyroxenePlannerOptions: jest.fn(),
+  getPyroxeneTimelineItems: jest.fn(),
+  getPyroxeneUserState: jest.fn(),
+  upsertPyroxeneEventData: jest.fn(),
+  upsertPyroxenePlannerOptions: jest.fn(),
+}));
+jest.mock("~/views/pyroxene", () => ({ getPyroxenePlannerContents: jest.fn() }));
+
+import { action } from "~/routes/utils.pyroxene_.import";
+
+const env = {} as Env;
+const ctx = {} as ExecutionContext;
+
+function actionArgs(request: Request) {
+  return {
+    context: { cloudflare: { env, ctx } },
+    request,
+  } as never;
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockGetActiveSensei.mockResolvedValue({ id: 1 });
+  mockImportGuestPyroxeneSelection.mockResolvedValue({ verified: [], failed: [] });
+});
+
+describe("Pyroxene import action", () => {
+  it("rejects signed-out requests before parsing the import envelope", async () => {
+    mockGetActiveSensei.mockResolvedValue(null);
+
+    const response = await action(
+      actionArgs(
+        new Request("https://mollulog.test/utils/pyroxene/import", {
+          method: "POST",
+          body: "not-json",
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    expect(response).toMatchObject({
+      data: { success: false, failedLabels: ["로그인이 필요해요"] },
+      init: { status: 401 },
+    });
+  });
+
+  it("passes selected favorites to the shared import operation", async () => {
+    const envelope = createEmptyGuestPyroxenePlanner();
+    envelope.data.favoriteStudents = [{ contentUid: "content-1", studentUid: "student-1" }];
+    mockImportGuestPyroxeneSelection.mockImplementationOnce(async (...args: unknown[]) => {
+      const plan = args[3] as { favorites: { run: () => Promise<void> }[] };
+      await plan.favorites[0].run();
+      return {
+        verified: [{ type: "favorite", key: "content-1\u0000student-1" }],
+        failed: [],
+      };
+    });
+
+    const response = await action(
+      actionArgs(
+        new Request("https://mollulog.test/utils/pyroxene/import", {
+          method: "POST",
+          body: JSON.stringify({
+            envelope,
+            selection: {
+              resources: false,
+              options: false,
+              recordIds: [],
+              sourceKeys: [],
+              eventUids: [],
+              favorites: [{ contentUid: "content-1", studentUid: "student-1" }],
+            },
+          }),
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    expect(response).toEqual({
+      success: true,
+      verified: {
+        resources: false,
+        options: false,
+        recordIds: [],
+        sourceKeys: [],
+        eventUids: [],
+        favorites: [{ contentUid: "content-1", studentUid: "student-1" }],
+      },
+      failedLabels: [],
+    });
+    expect(mockImportGuestPyroxeneSelection).toHaveBeenCalledWith(
+      env,
+      1,
+      envelope.datasetId,
+      expect.objectContaining({
+        favorites: [expect.objectContaining({ itemKey: "content-1\u0000student-1" })],
+      }),
+      { ctx },
+    );
+  });
+});

@@ -10,8 +10,8 @@ export type IdentityRepositoryOptions = {
 
 /**
  * Runs one identity operation on one operation-scoped PostgreSQL client.
- * Identity writes intentionally do not fall back to D1 when PostgreSQL is
- * unavailable: after cutover PostgreSQL is the canonical store.
+ * Identity writes intentionally do not fall back to another store when
+ * PostgreSQL is unavailable: PostgreSQL is the canonical store.
  */
 export function withIdentityDatabase<T>(
   env: Pick<Env, "HYPERDRIVE">,

@@ -1,7 +1,6 @@
 import { type ActionFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
-import { withD1Session } from "~/lib/d1-session";
 import { getEventMetadata } from "~/models/event-content";
 import { type EventShopState, upsertEventShopState } from "~/models/event-shop-state";
 
@@ -11,7 +10,7 @@ export type ActionData = {
 
 export const action = async ({ params, context, request }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");

@@ -7,7 +7,7 @@ This document defines the shared rules MolluLog follows when storing, caching, p
 - A timestamp instant is handled as a `UTC ISO string`. Example: `2026-05-01T15:30:00.000Z`
 - A date-only value is handled as a `YYYY-MM-DD` string. Example: `2026-05-02`
 - The `Date` object is not used as the contract of a loader, cache, or model return value.
-- A legacy value without a timezone, such as D1 `current_timestamp`, is normalized to a UTC instant at the model read boundary.
+- A legacy database value without a timezone is normalized to a UTC instant at the model read boundary.
 - The user's display timezone is not fixed to KST; it uses the browser timezone stored in a preference cookie.
 
 ## Implementation
@@ -25,8 +25,8 @@ This document defines the shared rules MolluLog follows when storing, caching, p
 - Display components explicitly use the display timezone provided from root.
 - This stabilizes the first SSR and initial hydration, then updates the display with the detected browser timezone.
 
-## D1 sorting
+## Database sorting
 
-- A query that may mix legacy timestamps and ISO timestamps does not rely on string sorting.
-- In D1, sort by `unixepoch(...)`.
-- A table where all data is already canonical ISO UTC may use ISO string sorting.
+- A query that may mix legacy timestamps and canonical timestamps does not rely on string sorting.
+- Normalize legacy values before sorting, or sort by the PostgreSQL `timestamptz` column after migration.
+- A table where all data is already canonical UTC may use database timestamp ordering.

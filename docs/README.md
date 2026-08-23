@@ -16,7 +16,7 @@ These documents describe the project's durable structure and conventions — whe
 
 ### Data
 
-- [data/database.md](./data/database.md) — D1 / Drizzle modeling, canonical stores, and migrations.
+- [data/database.md](./data/database.md) — PostgreSQL / Drizzle modeling, canonical stores, and migrations.
 - [data/baql.md](./data/baql.md) — BAQL GraphQL queries, codegen, and read placement.
 - [data/date-time.md](./data/date-time.md) — date and time conventions.
 
@@ -30,7 +30,7 @@ These documents describe the project's durable structure and conventions — whe
 Routes  (loader / action · thin)
   → Views   (composition + route cache, SWR)
       → Domain  (pure calculation · no I/O)
-      → Models  (D1 CRUD · BAQL reads · source cache · normalization)
+      → Models  (PostgreSQL CRUD · BAQL reads · source cache · normalization)
           → lib/cache · lib/baql · db
 ```
 

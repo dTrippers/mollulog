@@ -1,7 +1,6 @@
 interface Env {
   KV_CACHE: KVNamespace;
   KV_SESSION: KVNamespace;
-  DB: D1Database;
   HYPERDRIVE: Hyperdrive;
   CACHE_REFRESH_WORKFLOW: Workflow<{ requestedBy: number }>;
   EVENTS?: Queue;

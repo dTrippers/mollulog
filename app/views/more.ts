@@ -1,18 +1,10 @@
 import { buildPyroxeneScheduleItems } from "~/domain/pyroxene-schedule";
 import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
-import { withD1Session } from "~/lib/d1-session";
 import { getInstantTime, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { countUnregisteredActiveCoupons } from "~/models/coupon";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { getPickupHistories } from "~/models/pickup-history";
-import {
-  getAllPyroxeneEventData,
-  getCollectedSourceKeys,
-  getLatestPyroxeneOwnedResource,
-  getPyroxenePlannerOptions,
-  getPyroxeneTimelineItems,
-  type PyroxeneEventData,
-} from "~/models/pyroxene-planner";
+import { getPickupHistories } from "~/models/pickup-history.server";
+import { getPyroxeneUserState, type PyroxeneEventData } from "~/models/pyroxene-planner";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
 import { getRelationshipLevels } from "~/models/relationship-level";
@@ -47,7 +39,7 @@ export type MoreCurrentUser = {
 };
 
 export async function getMoreViewData(env: Env, ctx: ExecutionContext, sensei: Sensei | null) {
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const [navigationBarContents, personalSummary] = await Promise.all([
     getNavigationBarContents(env, false, undefined, ctx, publicReadEnv),
     sensei ? getMorePersonalSummary(env, sensei.id, ctx, publicReadEnv) : Promise.resolve(null),
@@ -80,13 +72,9 @@ function getMorePersonalSummary(env: Env, senseiId: number, ctx?: ExecutionConte
   return Promise.all([
     getRecruitedStudents(env, senseiId),
     getPickupHistories(env, senseiId),
-    getLatestPyroxeneOwnedResource(env, senseiId),
+    getPyroxeneUserState(env, senseiId, { ctx }),
     pyroxeneContentsPromise,
     getUserFavoritedStudents(env, senseiId, undefined, { ctx }),
-    getPyroxenePlannerOptions(env, senseiId),
-    getAllPyroxeneEventData(env, senseiId),
-    getPyroxeneTimelineItems(env, senseiId),
-    getCollectedSourceKeys(env, senseiId),
     getRelationshipLevels(env, senseiId),
     countUnregisteredActiveCoupons(env, senseiId, { ctx }),
     recruitmentResultsPromise,
@@ -98,17 +86,18 @@ function buildCurrentUserSummary(sensei: Sensei, personalSummary: MorePersonalSu
   const [
     recruitedStudents,
     pickupHistories,
-    latestPyroxeneResources,
+    pyroxeneState,
     pyroxeneContents,
     favoritedStudents,
-    pyroxeneOptions,
-    pyroxeneEventData,
-    pyroxeneTimelineItems,
-    collectedSourceKeys,
     relationshipLevels,
     availableCouponCount,
     recruitmentResults,
   ] = personalSummary;
+  const latestPyroxeneResources = pyroxeneState.latestResources;
+  const pyroxeneOptions = pyroxeneState.options;
+  const pyroxeneEventData = pyroxeneState.eventData;
+  const pyroxeneTimelineItems = pyroxeneState.timelineItems;
+  const collectedSourceKeys = pyroxeneState.collectedSourceKeys;
   const completedRecruitmentGroupUids = new Set(
     recruitmentResults.flatMap((result) => (result.completedAt ? [result.recruitmentGroupUid] : [])),
   );
@@ -202,7 +191,7 @@ function getTicketTrialCountBeforeTimelineEntry(entry: {
 
 type MorePyroxeneContent = Awaited<ReturnType<typeof getPyroxenePlannerContents>>[number];
 type MoreFavoritedStudent = Awaited<ReturnType<typeof getUserFavoritedStudents>>[number];
-type MorePyroxeneTimelineItem = Awaited<ReturnType<typeof getPyroxeneTimelineItems>>[number];
+type MorePyroxeneTimelineItem = Awaited<ReturnType<typeof getPyroxeneUserState>>["timelineItems"][number];
 type MoreFavoritedRecruitment = {
   uid: string;
   since: string;

@@ -11,16 +11,12 @@ jest.mock("~/lib/date-time", () => ({
   nowUtcIso: () => "2026-08-18T00:00:00.000Z",
 }));
 
-jest.mock("~/lib/d1-session", () => ({
-  withD1Session: (env: unknown) => env,
-}));
-
 const mockedGetShopAvailableEvents = getShopAvailableEvents as jest.MockedFunction<typeof getShopAvailableEvents>;
 
 const args = {
   context: {
     cloudflare: {
-      env: { DB: "db" },
+      env: { HYPERDRIVE: { connectionString: "postgres://test" } },
       ctx: {},
     },
   },

@@ -1,6 +1,7 @@
+import { CACHE_REFRESH_ACTIVE_SLOT_INDEX_NAME } from "~/db/postgres/schema";
 import type { CacheRefreshJob, CacheRefreshWorkflowOutput, CacheRefreshWorkflowParams } from "~/domain/cache-refresh";
 import { isCacheRefreshJobActive } from "~/domain/cache-refresh";
-import { isUniqueConstraintError } from "~/lib/db";
+import { postgresUniqueConstraintName } from "~/lib/db";
 import { getLogger } from "~/lib/observability.server";
 import {
   completeCacheRefreshJob,
@@ -105,8 +106,7 @@ export async function startCacheRefresh(
   try {
     job = await createCacheRefreshJob(env, { uid, requestedBy });
   } catch (error) {
-    const unique = error instanceof Error ? isUniqueConstraintError(error) : null;
-    if (unique?.table === "cache_refresh_jobs" && unique.column === "activeSlot") {
+    if (postgresUniqueConstraintName(error) === CACHE_REFRESH_ACTIVE_SLOT_INDEX_NAME) {
       const racedJob = await getActiveCacheRefreshJob(env);
       if (racedJob) {
         return { job: racedJob, created: false };

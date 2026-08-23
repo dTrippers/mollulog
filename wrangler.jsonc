@@ -39,14 +39,6 @@
     { "binding": "KV_CACHE", "id": "local_KV_CACHE" },
     { "binding": "KV_SESSION", "id": "local_kv_session" }
   ],
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "local_mollulog_db",
-      "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
-      "migrations_dir": "db/migrations"
-    }
-  ],
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
   ],
@@ -112,14 +104,6 @@
         { "binding": "KV_CACHE", "id": "b957557c116a41168c42136666ef5808" },
         { "binding": "KV_SESSION", "id": "757ca5d838364689af06edc372cd4c56" }
       ],
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "mollulog",
-          "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
-          "migrations_dir": "db/migrations"
-        }
-      ],
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
       ],
@@ -163,14 +147,6 @@
       "kv_namespaces": [
         { "binding": "KV_CACHE", "id": "a613bc84ffeb4362b3deaa05c617a7b3"},
         { "binding": "KV_SESSION", "id": "757ca5d838364689af06edc372cd4c56" }
-      ],
-      "d1_databases": [
-        {
-          "binding": "DB",
-          "database_name": "mollulog",
-          "database_id": "7a71335f-8622-43c2-8b63-d842b6ef7761",
-          "migrations_dir": "db/migrations"
-        }
       ],
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }

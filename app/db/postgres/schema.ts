@@ -11,6 +11,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { CacheRefreshJobStatus, CacheRefreshTaskName, CacheRefreshTaskResults } from "~/domain/cache-refresh";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
 import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
@@ -26,12 +27,17 @@ import type {
 } from "~/domain/walkthrough-timeline";
 import type { AuthProvider } from "~/models/auth-identity";
 import type {
+  ConnectApiKeyScope,
+} from "~/models/connect-api-key";
+import type {
   CommunityCommentVisibility,
   CommunityPostBlock,
   CommunityPostOrigin,
   CommunityPostType,
   CommunityVisibility,
 } from "~/models/community";
+import type { EventShopState } from "~/models/event-shop-state";
+import type { PickupHistory } from "~/models/pickup-history";
 import type { RecruitmentResultStudent } from "~/models/recruitment-result";
 import type { ProfileVisibility, SenseiRole } from "~/models/sensei";
 
@@ -60,6 +66,32 @@ export const pgSenseisTable = pgTable(
     uniqueIndex("senseis_username_uidx").on(table.username),
     uniqueIndex("senseis_google_id_uidx").on(table.googleId),
     uniqueIndex("senseis_github_id_uidx").on(table.githubId),
+  ],
+);
+
+export const CACHE_REFRESH_ACTIVE_SLOT_INDEX_NAME = "cache_refresh_jobs_active_slot_uidx";
+
+export const pgCacheRefreshJobsTable = pgTable(
+  "cache_refresh_jobs",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    requestedBy: integer("requested_by").notNull(),
+    status: text().$type<CacheRefreshJobStatus>().notNull(),
+    activeSlot: integer("active_slot"),
+    currentTask: text("current_task").$type<CacheRefreshTaskName>(),
+    completedCount: integer("completed_count").notNull().default(0),
+    totalCount: integer("total_count").notNull(),
+    taskResults: jsonb("task_results").$type<CacheRefreshTaskResults>().notNull(),
+    startedAt: timestamptz("started_at"),
+    finishedAt: timestamptz("finished_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("cache_refresh_jobs_uid_uidx").on(table.uid),
+    uniqueIndex(CACHE_REFRESH_ACTIVE_SLOT_INDEX_NAME).on(table.activeSlot).where(sql`${table.activeSlot} is not null`),
+    index("cache_refresh_jobs_created_at_idx").on(table.createdAt.desc()),
   ],
 );
 
@@ -223,6 +255,221 @@ export const pgFavoriteStudentsTable = pgTable(
     ),
     index("content_favorite_students_student_timeline_content_idx").on(table.studentUid, table.timelineContentUid),
     index("content_favorite_students_user_timeline_content_idx").on(table.userId, table.timelineContentUid),
+  ],
+);
+
+export const pgPyroxeneOwnedResourcesTable = pgTable(
+  "pyroxene_owned_resources",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    inputAt: timestamptz("input_at").notNull(),
+    pyroxene: integer().notNull(),
+    oneTimeTicket: integer("one_time_ticket").notNull(),
+    tenTimeTicket: integer("ten_time_ticket").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_owned_resources_uid_uidx").on(table.uid),
+    index("pyroxene_owned_resources_user_input_at_idx").on(table.userId, table.inputAt),
+  ],
+);
+
+export const pgPyroxeneCollectedSourcesTable = pgTable(
+  "pyroxene_collected_sources",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    sourceKey: text("source_key").notNull(),
+    collectedAt: timestamptz("collected_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_collected_sources_uid_uidx").on(table.uid),
+    uniqueIndex("pyroxene_collected_sources_user_source_key_uidx").on(table.userId, table.sourceKey),
+  ],
+);
+
+export const pgPyroxeneTimelineItemsTable = pgTable(
+  "pyroxene_timeline_items",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    eventAt: timestamptz("event_at").notNull(),
+    source: text().notNull(),
+    repeatType: text("repeat_type"),
+    repeatIntervalDays: integer("repeat_interval_days"),
+    repeatCount: integer("repeat_count"),
+    autoRepurchase: boolean("auto_repurchase").notNull().default(false),
+    description: text().notNull(),
+    pyroxeneDelta: integer("pyroxene_delta").notNull(),
+    oneTimeTicketDelta: integer("one_time_ticket_delta").notNull(),
+    tenTimeTicketDelta: integer("ten_time_ticket_delta").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_timeline_items_uid_uidx").on(table.uid),
+    index("pyroxene_timeline_items_user_event_at_idx").on(table.userId, table.eventAt),
+  ],
+);
+
+export const pgPyroxenePlannerOptionsTable = pgTable(
+  "pyroxene_planner_options",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    options: text().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("pyroxene_planner_options_user_id_uidx").on(table.userId)],
+);
+
+export const pgPyroxeneEventDataTable = pgTable(
+  "pyroxene_event_data",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    eventUid: text("event_uid").notNull(),
+    completed: boolean().notNull().default(false),
+    expectedTrials: integer("expected_trials"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_event_data_uid_uidx").on(table.uid),
+    uniqueIndex("pyroxene_event_data_user_event_uid_uidx").on(table.userId, table.eventUid),
+  ],
+);
+
+export const pgPyroxeneGuestImportItemsTable = pgTable(
+  "pyroxene_guest_import_items",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    datasetId: text("dataset_id").notNull(),
+    itemType: text("item_type").notNull(),
+    itemKey: text("item_key").notNull(),
+    importedAt: timestamptz("imported_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pyroxene_guest_import_items_user_dataset_item_uidx").on(
+      table.userId,
+      table.datasetId,
+      table.itemType,
+      table.itemKey,
+    ),
+  ],
+);
+
+export const pgPickupHistoriesTable = pgTable(
+  "pickup_histories",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    eventId: text("event_id").notNull(),
+    result: jsonb().$type<PickupHistory["result"]>().notNull(),
+    rawResult: text("raw_result"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("pickup_histories_uid_uidx").on(table.uid),
+    index("pickup_histories_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgEventShopStatesTable = pgTable(
+  "event_shop_states",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    eventUid: text("event_uid").notNull(),
+    itemQuantities: jsonb("item_quantities").$type<EventShopState["itemQuantities"]>().notNull().default({}),
+    itemPurchaseDays: jsonb("item_purchase_days").$type<EventShopState["itemPurchaseDays"]>().notNull().default({}),
+    selectedBonusStudentUids: jsonb("selected_bonus_student_uids")
+      .$type<EventShopState["selectedBonusStudentUids"]>()
+      .notNull()
+      .default([]),
+    bonusStudentSelectionMode: text("bonus_student_selection_mode")
+      .$type<EventShopState["bonusStudentSelectionMode"]>()
+      .notNull()
+      .default("shared"),
+    selectedBonusStudentUidsByItem: jsonb("selected_bonus_student_uids_by_item")
+      .$type<EventShopState["selectedBonusStudentUidsByItem"]>()
+      .notNull()
+      .default({}),
+    enabledStages: jsonb("enabled_stages").$type<EventShopState["enabledStages"]>().notNull().default({}),
+    includeRecruitedStudents: boolean("include_recruited_students").notNull().default(false),
+    existingPaymentItemQuantities: jsonb("existing_payment_item_quantities")
+      .$type<EventShopState["existingPaymentItemQuantities"]>()
+      .notNull()
+      .default({}),
+    includeFirstClear: boolean("include_first_clear").notNull().default(false),
+    extraStageRuns: jsonb("extra_stage_runs").$type<EventShopState["extraStageRuns"]>().notNull().default({}),
+    minigameStartRound: integer("minigame_start_round").notNull().default(1),
+    minigamePlayCount: integer("minigame_play_count").notNull().default(0),
+    minigamePaymentQuantityMode: text("minigame_payment_quantity_mode")
+      .$type<EventShopState["minigamePaymentQuantityMode"]>()
+      .notNull()
+      .default("expected"),
+    overriddenRequiredQuantities: jsonb("overridden_required_quantities")
+      .$type<EventShopState["overriddenRequiredQuantities"]>()
+      .notNull()
+      .default({}),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("event_shop_states_uid_uidx").on(table.uid),
+    uniqueIndex("event_shop_states_user_event_uidx").on(table.userId, table.eventUid),
+    index("event_shop_states_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgConnectApiKeysTable = pgTable(
+  "connect_api_keys",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    name: text().notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    keyHash: text("key_hash").notNull(),
+    scopes: jsonb().$type<ConnectApiKeyScope[]>().notNull().default(["catalog:read", "draft:write"]),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    expiresAt: timestamptz("expires_at"),
+    lastUsedAt: timestamptz("last_used_at"),
+    revokedAt: timestamptz("revoked_at"),
+  },
+  (table) => [
+    uniqueIndex("connect_api_keys_uid_uidx").on(table.uid),
+    index("connect_api_keys_key_prefix_idx").on(table.keyPrefix),
+    index("connect_api_keys_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgConnectRequestLogsTable = pgTable(
+  "connect_request_logs",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    apiKeyUid: text("api_key_uid"),
+    endpoint: text().notNull(),
+    status: integer().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("connect_request_logs_uid_uidx").on(table.uid),
+    index("connect_request_logs_api_key_created_at_idx").on(table.apiKeyUid, table.createdAt),
   ],
 );
 

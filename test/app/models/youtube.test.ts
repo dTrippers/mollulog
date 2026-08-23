@@ -136,7 +136,7 @@ describe("syncYoutubeCommunityPosts", () => {
     );
   });
 
-  it("limits concurrent D1-backed upserts to four videos", async () => {
+  it("limits concurrent PostgreSQL-backed upserts to four videos", async () => {
     jest.spyOn(global, "fetch").mockImplementation(
       async () =>
         ({

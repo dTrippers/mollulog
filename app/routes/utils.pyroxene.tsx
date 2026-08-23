@@ -51,11 +51,7 @@ import {
   createPyroxeneOwnedResource,
   deleteCollectedSource,
   deletePyroxeneTimelineItem,
-  getAllPyroxeneEventData,
-  getCollectedSourceKeys,
-  getLatestPyroxeneOwnedResource,
-  getPyroxenePlannerOptions,
-  getPyroxeneTimelineItems,
+  getPyroxeneUserState,
   upsertCollectedSources,
   upsertPyroxeneEventData,
   upsertPyroxenePlannerOptions,
@@ -97,29 +93,16 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     };
   }
 
-  // 사용자 데이터 쿼리 5개는 모두 독립적이므로 병렬 실행
+  // User state reads share one PostgreSQL client; unrelated repositories remain parallel.
   const recruitmentGroupUids = contents.flatMap((content) =>
     content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
   );
 
-  const [
-    favoritedStudents,
-    latestResources,
-    savedOptions,
-    eventData,
-    timelineItems,
-    recruitmentResults,
-    recruitedStudents,
-    collectedSources,
-  ] = await Promise.all([
+  const [favoritedStudents, pyroxeneState, recruitmentResults, recruitedStudents] = await Promise.all([
     getUserFavoritedStudents(env, currentUser.id, undefined, { ctx }),
-    getLatestPyroxeneOwnedResource(env, currentUser.id),
-    getPyroxenePlannerOptions(env, currentUser.id),
-    getAllPyroxeneEventData(env, currentUser.id),
-    getPyroxeneTimelineItems(env, currentUser.id),
+    getPyroxeneUserState(env, currentUser.id, { ctx }),
     getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
     getRecruitedStudents(env, currentUser.id),
-    getCollectedSourceKeys(env, currentUser.id),
   ]);
 
   return {
@@ -130,14 +113,14 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       studentUid: studentId,
     })),
     latestResources: {
-      pyroxene: latestResources?.pyroxene ?? 0,
-      oneTimeTicket: latestResources?.oneTimeTicket ?? 0,
-      tenTimeTicket: latestResources?.tenTimeTicket ?? 0,
-      inputAt: latestResources?.inputAt ?? null,
+      pyroxene: pyroxeneState.latestResources?.pyroxene ?? 0,
+      oneTimeTicket: pyroxeneState.latestResources?.oneTimeTicket ?? 0,
+      tenTimeTicket: pyroxeneState.latestResources?.tenTimeTicket ?? 0,
+      inputAt: pyroxeneState.latestResources?.inputAt ?? null,
     },
-    timelineItems,
-    calcOptions: savedOptions,
-    eventData,
+    timelineItems: pyroxeneState.timelineItems,
+    calcOptions: pyroxeneState.options,
+    eventData: pyroxeneState.eventData,
     recruitmentResultCompletions: recruitmentResults.flatMap((result) => {
       if (!result.completedAt) {
         return [];
@@ -149,7 +132,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       return content ? [{ eventUid: content.uid, recruitmentGroupUid: result.recruitmentGroupUid }] : [];
     }),
     recruitedStudentUids: recruitedStudents.map(({ studentUid }) => studentUid),
-    collectedSourceKeys: [...collectedSources],
+    collectedSourceKeys: [...pyroxeneState.collectedSourceKeys],
   };
 };
 
@@ -830,7 +813,6 @@ export default function PyroxenePlanner() {
       ownedResourcesFetcher.state === "loading");
   const guestDataStatus = guestPlanner.snapshot?.status;
   const hasGuestData = guestPlanner.snapshot ? hasGuestPyroxenePlannerData(guestPlanner.snapshot.envelope.data) : false;
-
   return (
     <>
       {/* Saving indicator */}

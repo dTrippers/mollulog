@@ -67,9 +67,7 @@ const env = {
   KV_CACHE: {
     get: jest.fn(async () => null),
   },
-  DB: {
-    withSession: jest.fn(() => ({})),
-  },
+  HYPERDRIVE: { connectionString: "postgres://test" },
 } as unknown as Env;
 
 function createLoaderArgs() {
@@ -98,7 +96,7 @@ afterEach(() => {
 });
 
 describe("pickup history index loader", () => {
-  it("uses timeline content names from D1", async () => {
+  it("uses timeline content names from PostgreSQL-backed models", async () => {
     mockedGetSenseiByUsername.mockResolvedValue({
       id: 1,
       uid: "sensei-1",

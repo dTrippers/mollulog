@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { mergeEditableRecruitmentResultStudents } from "~/domain/recruitment-result";
 import { Attack, Defense } from "~/graphql/graphql";
-import { getPickupHistory } from "~/models/pickup-history";
+import { getPickupHistory } from "~/models/pickup-history.server";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import {
   getRecruitmentResult,
@@ -22,7 +22,7 @@ jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
 }));
 
-jest.mock("~/models/pickup-history", () => ({
+jest.mock("~/models/pickup-history.server", () => ({
   getPickupHistory: jest.fn(),
 }));
 
@@ -112,9 +112,7 @@ const mockedGetRecruitmentGroupByUid = getRecruitmentGroupByUid as unknown as je
 >;
 
 const env = {
-  DB: {
-    withSession: jest.fn(() => ({})),
-  },
+  HYPERDRIVE: { connectionString: "postgres://test" },
 } as unknown as Env;
 
 function createGroup(uid: string, startAt: string) {
