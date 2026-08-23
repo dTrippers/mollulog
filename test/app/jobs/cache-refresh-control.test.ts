@@ -53,11 +53,11 @@ function makeJob(status: CacheRefreshJob["status"], uid = "job-uid"): CacheRefre
     completedCount: 0,
     totalCount: CACHE_REFRESH_TASK_NAMES.length,
     taskResults: createPendingCacheRefreshTaskResults(),
-    startedAt: status === "queued" ? null : "2026-07-23 00:00:00",
+    startedAt: status === "queued" ? null : "2026-07-23T00:00:00.000Z",
     finishedAt:
-      status === "completed" || status === "partial_failure" || status === "failed" ? "2026-07-23 01:00:00" : null,
-    createdAt: "2026-07-23 00:00:00",
-    updatedAt: "2026-07-23 00:30:00",
+      status === "completed" || status === "partial_failure" || status === "failed" ? "2026-07-23T01:00:00.000Z" : null,
+    createdAt: "2026-07-23T00:00:00.000Z",
+    updatedAt: "2026-07-23T00:30:00.000Z",
   };
 }
 
@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe("cache refresh control", () => {
-  it("creates a D1 job and starts a workflow instance", async () => {
+  it("creates a cache refresh job and starts a workflow instance", async () => {
     const { env, create } = createEnv();
 
     const result = await startCacheRefresh(env, {} as ExecutionContext, 7);
@@ -194,7 +194,12 @@ describe("cache refresh control", () => {
   it("returns the raced active job after a unique constraint conflict", async () => {
     const raced = makeJob("queued", "raced-job");
     mockedGetActiveCacheRefreshJob.mockResolvedValueOnce(null).mockResolvedValueOnce(raced);
-    mockedCreateCacheRefreshJob.mockRejectedValue(new Error("UNIQUE constraint failed: cache_refresh_jobs.activeSlot"));
+    mockedCreateCacheRefreshJob.mockRejectedValue(
+      Object.assign(new Error("duplicate key value violates unique constraint"), {
+        code: "23505",
+        constraint: "cache_refresh_jobs_active_slot_uidx",
+      }),
+    );
     const { env, create } = createEnv();
 
     await expect(startCacheRefresh(env, {} as ExecutionContext, 7)).resolves.toEqual({
@@ -204,7 +209,7 @@ describe("cache refresh control", () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it("fails the D1 job when workflow creation fails", async () => {
+  it("fails the cache refresh job when workflow creation fails", async () => {
     const { env, create } = createEnv();
     create.mockRejectedValue(new Error("workflow create failed"));
 

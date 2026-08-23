@@ -109,8 +109,8 @@ describe("cache refresh workflow", () => {
     expect(output.status).toBe("partial_failure");
   });
 
-  it("continues cache work when a D1 progress update fails", async () => {
-    mockedMarkCacheRefreshTaskRunning.mockRejectedValue(new Error("D1 unavailable"));
+  it("continues cache work when a progress update fails", async () => {
+    mockedMarkCacheRefreshTaskRunning.mockRejectedValue(new Error("PostgreSQL unavailable"));
 
     const output = await runCacheRefreshWorkflow({} as Env, {} as ExecutionContext, createEvent(), createStep());
 

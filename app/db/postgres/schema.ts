@@ -11,6 +11,7 @@ import {
   timestamp,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { CacheRefreshJobStatus, CacheRefreshTaskName, CacheRefreshTaskResults } from "~/domain/cache-refresh";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
 import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
@@ -60,6 +61,32 @@ export const pgSenseisTable = pgTable(
     uniqueIndex("senseis_username_uidx").on(table.username),
     uniqueIndex("senseis_google_id_uidx").on(table.googleId),
     uniqueIndex("senseis_github_id_uidx").on(table.githubId),
+  ],
+);
+
+export const CACHE_REFRESH_ACTIVE_SLOT_INDEX_NAME = "cache_refresh_jobs_active_slot_uidx";
+
+export const pgCacheRefreshJobsTable = pgTable(
+  "cache_refresh_jobs",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    requestedBy: integer("requested_by").notNull(),
+    status: text().$type<CacheRefreshJobStatus>().notNull(),
+    activeSlot: integer("active_slot"),
+    currentTask: text("current_task").$type<CacheRefreshTaskName>(),
+    completedCount: integer("completed_count").notNull().default(0),
+    totalCount: integer("total_count").notNull(),
+    taskResults: jsonb("task_results").$type<CacheRefreshTaskResults>().notNull(),
+    startedAt: timestamptz("started_at"),
+    finishedAt: timestamptz("finished_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("cache_refresh_jobs_uid_uidx").on(table.uid),
+    uniqueIndex(CACHE_REFRESH_ACTIVE_SLOT_INDEX_NAME).on(table.activeSlot).where(sql`${table.activeSlot} is not null`),
+    index("cache_refresh_jobs_created_at_idx").on(table.createdAt.desc()),
   ],
 );
 
