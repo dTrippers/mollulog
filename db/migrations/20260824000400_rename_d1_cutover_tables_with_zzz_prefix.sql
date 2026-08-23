@@ -1,0 +1,11 @@
+ALTER TABLE pickup_histories RENAME TO zzz_pickup_histories;
+ALTER TABLE event_shop_states RENAME TO zzz_event_shop_states;
+ALTER TABLE pyroxene_owned_resources RENAME TO zzz_pyroxene_owned_resources;
+ALTER TABLE pyroxene_collected_sources RENAME TO zzz_pyroxene_collected_sources;
+ALTER TABLE pyroxene_timeline_items RENAME TO zzz_pyroxene_timeline_items;
+ALTER TABLE pyroxene_planner_options RENAME TO zzz_pyroxene_planner_options;
+ALTER TABLE pyroxene_event_data RENAME TO zzz_pyroxene_event_data;
+ALTER TABLE pyroxene_guest_import_items RENAME TO zzz_pyroxene_guest_import_items;
+ALTER TABLE connect_api_keys RENAME TO zzz_connect_api_keys;
+ALTER TABLE connect_request_logs RENAME TO zzz_connect_request_logs;
+ALTER TABLE cache_refresh_jobs RENAME TO zzz_cache_refresh_jobs;

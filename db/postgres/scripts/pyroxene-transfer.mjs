@@ -1,16 +1,18 @@
 #!/usr/bin/env node
 
 import { readFile } from "node:fs/promises";
+import {
+  D1_CUTOVER_BOOLEAN_COLUMNS,
+  D1_CUTOVER_INTEGER_COLUMNS,
+  D1_CUTOVER_JSON_COLUMNS,
+  D1_CUTOVER_NULLABLE_COLUMNS,
+  D1_CUTOVER_TABLE_COLUMNS,
+  D1_CUTOVER_TABLES,
+  D1_CUTOVER_TIMESTAMP_COLUMNS,
+  D1_CUTOVER_UNIQUE_KEYS,
+  D1_CUTOVER_SNAPSHOT_FORMAT,
+} from "./d1-cutover-tables.mjs";
 
-export const PYROXENE_TABLES = [
-  "pyroxene_owned_resources",
-  "pyroxene_collected_sources",
-  "pyroxene_timeline_items",
-  "pyroxene_planner_options",
-  "pyroxene_event_data",
-  "pyroxene_guest_import_items",
-];
-export const PYROXENE_SNAPSHOT_FORMAT = "mollulog.pyroxene.snapshot.v1";
 export const INSERT_CHUNK_SIZE = 500;
 export const DEFAULT_STATEMENT_TIMEOUT_MS = 10 * 60 * 1000;
 export const MAX_STATEMENT_TIMEOUT_MS = DEFAULT_STATEMENT_TIMEOUT_MS;
@@ -19,78 +21,10 @@ export const PYROXENE_RECEIPT_KEY_VERSION = "v1";
 export const PYROXENE_RECEIPT_KEY_PREFIX = `${PYROXENE_RECEIPT_KEY_VERSION}:`;
 const SNAPSHOT_ENVELOPE_FIELDS = ["format", "pageSize", "generatedAt", "tables"];
 const SNAPSHOT_TABLE_FIELDS = ["rows", "rowCount", "lastId"];
-
-export const PYROXENE_TABLE_COLUMNS = {
-  pyroxene_owned_resources: [
-    "id",
-    "uid",
-    "userId",
-    "inputAt",
-    "pyroxene",
-    "oneTimeTicket",
-    "tenTimeTicket",
-    "createdAt",
-    "updatedAt",
-  ],
-  pyroxene_collected_sources: ["id", "uid", "userId", "sourceKey", "collectedAt", "createdAt"],
-  pyroxene_timeline_items: [
-    "id",
-    "uid",
-    "userId",
-    "eventAt",
-    "source",
-    "repeatType",
-    "repeatIntervalDays",
-    "repeatCount",
-    "autoRepurchase",
-    "description",
-    "pyroxeneDelta",
-    "oneTimeTicketDelta",
-    "tenTimeTicketDelta",
-    "createdAt",
-    "updatedAt",
-  ],
-  pyroxene_planner_options: ["id", "userId", "options", "createdAt", "updatedAt"],
-  pyroxene_event_data: ["id", "uid", "userId", "eventUid", "completed", "expectedTrials", "createdAt", "updatedAt"],
-  pyroxene_guest_import_items: ["id", "userId", "datasetId", "itemType", "itemKey", "importedAt"],
-};
-
-export const PYROXENE_UNIQUE_KEYS = {
-  pyroxene_owned_resources: [["uid"]],
-  pyroxene_collected_sources: [["uid"], ["userId", "sourceKey"]],
-  pyroxene_timeline_items: [["uid"]],
-  pyroxene_planner_options: [["userId"]],
-  pyroxene_event_data: [["uid"], ["userId", "eventUid"]],
-  pyroxene_guest_import_items: [["userId", "datasetId", "itemType", "itemKey"]],
-};
-
-const INTEGER_COLUMNS = new Set([
-  "id",
-  "userId",
-  "pyroxene",
-  "oneTimeTicket",
-  "tenTimeTicket",
-  "repeatIntervalDays",
-  "repeatCount",
-  "pyroxeneDelta",
-  "oneTimeTicketDelta",
-  "tenTimeTicketDelta",
-  "expectedTrials",
-]);
-const BOOLEAN_COLUMNS = new Set(["autoRepurchase", "completed"]);
-const TIMESTAMP_COLUMNS = new Set([
-  "inputAt",
-  "collectedAt",
-  "eventAt",
-  "createdAt",
-  "updatedAt",
-  "importedAt",
-]);
-const NULLABLE_COLUMNS = new Set(["repeatType", "repeatIntervalDays", "repeatCount", "expectedTrials"]);
 const TIMESTAMP_PATTERN = /^(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})[ T](?<hour>\d{2}):(?<minute>\d{2}):(?<second>\d{2})(?:\.(?<fraction>\d{1,9}))?(?<timezone>Z|[+-]\d{2}(?::?\d{2})?)?$/i;
 
 function assertTable(table) {
-  if (!PYROXENE_TABLES.includes(table)) throw new Error(`Table is not allowlisted: ${table}`);
+  if (!D1_CUTOVER_TABLES.includes(table)) throw new Error(`Table is not allowlisted: ${table}`);
 }
 
 function quoteIdentifier(identifier) {
@@ -195,9 +129,32 @@ function normalizeBoolean(table, column, value, source) {
   return value;
 }
 
+function parseJsonValue(table, column, value) {
+  const parsed = typeof value === "string" ? (() => {
+    try {
+      return JSON.parse(value);
+    } catch {
+      throw new Error(`Invalid JSON value for ${table}.${column}`);
+    }
+  })() : value;
+  if (parsed === null || typeof parsed !== "object") {
+    throw new Error(`Invalid JSON value for ${table}.${column}`);
+  }
+  return parsed;
+}
+
+function canonicalizeValue(value) {
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonicalizeValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalizeValue(value[key])]));
+  }
+  return value;
+}
+
 function assertSourceColumns(table, row) {
   if (!isPlainObject(row)) throw new Error(`Malformed row in ${table}`);
-  const expected = PYROXENE_TABLE_COLUMNS[table];
+  const expected = D1_CUTOVER_TABLE_COLUMNS[table];
   const unknown = Object.keys(row).filter((column) => !expected.includes(column));
   if (unknown.length > 0) throw new Error(`Unknown columns in ${table}: ${unknown.join(",")}`);
   const missing = expected.filter((column) => !Object.hasOwn(row, column));
@@ -206,7 +163,7 @@ function assertSourceColumns(table, row) {
 
 function assertTargetColumns(table, row) {
   if (!isPlainObject(row)) throw new Error(`Malformed PostgreSQL row in ${table}`);
-  const expected = PYROXENE_TABLE_COLUMNS[table].map(camelToSnake);
+  const expected = D1_CUTOVER_TABLE_COLUMNS[table].map(camelToSnake);
   const unknown = Object.keys(row).filter((column) => !expected.includes(column));
   if (unknown.length > 0) throw new Error(`Unknown PostgreSQL columns in ${table}: ${unknown.join(",")}`);
   const missing = expected.filter((column) => !Object.hasOwn(row, column));
@@ -225,24 +182,26 @@ function targetValue(table, row, column) {
 
 function normalizeSourceValue(table, column, value) {
   if (value === null) {
-    if (!NULLABLE_COLUMNS.has(column)) throw new Error(`Invalid null value for ${table}.${column}`);
+    if (!D1_CUTOVER_NULLABLE_COLUMNS.has(column)) throw new Error(`Invalid null value for ${table}.${column}`);
     return null;
   }
-  if (INTEGER_COLUMNS.has(column)) return normalizeInteger(table, column, value);
-  if (BOOLEAN_COLUMNS.has(column)) return normalizeBoolean(table, column, value, true);
-  if (TIMESTAMP_COLUMNS.has(column)) return normalizeTimestamp(value, `${table}.${column}`);
+  if (D1_CUTOVER_INTEGER_COLUMNS.has(column)) return normalizeInteger(table, column, value);
+  if (D1_CUTOVER_BOOLEAN_COLUMNS.has(column)) return normalizeBoolean(table, column, value, true);
+  if (D1_CUTOVER_TIMESTAMP_COLUMNS.has(column)) return normalizeTimestamp(value, `${table}.${column}`);
+  if (D1_CUTOVER_JSON_COLUMNS.has(column)) return parseJsonValue(table, column, value);
   if (typeof value !== "string") throw new Error(`Invalid text for ${table}.${column}`);
   return value;
 }
 
 function normalizeTargetValue(table, column, value) {
   if (value === null) {
-    if (!NULLABLE_COLUMNS.has(column)) throw new Error(`Invalid null value for ${table}.${column}`);
+    if (!D1_CUTOVER_NULLABLE_COLUMNS.has(column)) throw new Error(`Invalid null value for ${table}.${column}`);
     return null;
   }
-  if (INTEGER_COLUMNS.has(column)) return normalizeInteger(table, column, value);
-  if (BOOLEAN_COLUMNS.has(column)) return normalizeBoolean(table, column, value, false);
-  if (TIMESTAMP_COLUMNS.has(column)) return normalizeTimestamp(value, `${table}.${column}`);
+  if (D1_CUTOVER_INTEGER_COLUMNS.has(column)) return normalizeInteger(table, column, value);
+  if (D1_CUTOVER_BOOLEAN_COLUMNS.has(column)) return normalizeBoolean(table, column, value, false);
+  if (D1_CUTOVER_TIMESTAMP_COLUMNS.has(column)) return normalizeTimestamp(value, `${table}.${column}`);
+  if (D1_CUTOVER_JSON_COLUMNS.has(column)) return parseJsonValue(table, column, value);
   if (typeof value !== "string") throw new Error(`Invalid text for ${table}.${column}`);
   if (table === "pyroxene_guest_import_items" && column === "itemKey") {
     return decodePostgresPyroxeneReceiptItemKey(value);
@@ -253,27 +212,25 @@ function normalizeTargetValue(table, column, value) {
 function normalizedSourceRow(table, row) {
   assertSourceColumns(table, row);
   return Object.fromEntries(
-    PYROXENE_TABLE_COLUMNS[table].map((column) => [column, normalizeSourceValue(table, column, sourceValue(table, row, column))]),
+    D1_CUTOVER_TABLE_COLUMNS[table].map((column) => [column, normalizeSourceValue(table, column, sourceValue(table, row, column))]),
   );
 }
 
 function normalizedTargetRow(table, row) {
   assertTargetColumns(table, row);
   return Object.fromEntries(
-    PYROXENE_TABLE_COLUMNS[table].map((column) => [column, normalizeTargetValue(table, column, targetValue(table, row, column))]),
+    D1_CUTOVER_TABLE_COLUMNS[table].map((column) => [column, normalizeTargetValue(table, column, targetValue(table, row, column))]),
   );
 }
 
 export function canonicalRow(row, table) {
   assertTable(table);
-  const isTarget = PYROXENE_TABLE_COLUMNS[table].some(
+  const isTarget = D1_CUTOVER_TABLE_COLUMNS[table].some(
     (column) => column !== camelToSnake(column) && Object.hasOwn(row ?? {}, camelToSnake(column)),
   );
   const normalized = isTarget ? normalizedTargetRow(table, row) : normalizedSourceRow(table, row);
   return JSON.stringify(
-    Object.fromEntries(
-      Object.entries(normalized).map(([column, value]) => [column, value instanceof Date ? value.toISOString() : value]),
-    ),
+    canonicalizeValue(normalized),
   );
 }
 
@@ -289,7 +246,7 @@ function tupleKey(row, columns) {
 }
 
 function validateUniqueKeys(table, rows) {
-  for (const columns of PYROXENE_UNIQUE_KEYS[table]) {
+  for (const columns of D1_CUTOVER_UNIQUE_KEYS[table]) {
     const keys = new Set();
     for (const row of rows) {
       const key = tupleKey(row, columns);
@@ -330,20 +287,20 @@ export function parseSnapshotTable(snapshot, table) {
 export function validateSnapshot(snapshot) {
   if (!isPlainObject(snapshot)) throw new Error("Unsupported snapshot format");
   assertExactKeys(snapshot, SNAPSHOT_ENVELOPE_FIELDS, "Snapshot envelope");
-  if (snapshot.format !== PYROXENE_SNAPSHOT_FORMAT) throw new Error("Unsupported snapshot format");
+  if (snapshot.format !== D1_CUTOVER_SNAPSHOT_FORMAT) throw new Error("Unsupported snapshot format");
   if (!Number.isSafeInteger(snapshot.pageSize) || snapshot.pageSize < 1 || snapshot.pageSize > INSERT_CHUNK_SIZE) {
     throw new Error(`Snapshot pageSize must be between 1 and ${INSERT_CHUNK_SIZE}`);
   }
   const tables = snapshot.tables;
   if (!isPlainObject(tables)) throw new Error("Snapshot tables must be an object");
   const actual = Object.keys(tables);
-  const unexpected = actual.filter((table) => !PYROXENE_TABLES.includes(table));
-  const missing = PYROXENE_TABLES.filter((table) => !actual.includes(table));
+  const unexpected = actual.filter((table) => !D1_CUTOVER_TABLES.includes(table));
+  const missing = D1_CUTOVER_TABLES.filter((table) => !actual.includes(table));
   if (unexpected.length > 0) throw new Error(`Snapshot contains non-allowlisted tables: ${unexpected.join(",")}`);
   if (missing.length > 0) throw new Error(`Snapshot is missing tables: ${missing.join(",")}`);
   if (typeof snapshot.generatedAt !== "string") throw new Error("Snapshot generatedAt must be a timestamp string");
   normalizeTimestamp(snapshot.generatedAt, "generatedAt");
-  return Object.fromEntries(PYROXENE_TABLES.map((table) => [table, parseSnapshotTable(snapshot, table)]));
+  return Object.fromEntries(D1_CUTOVER_TABLES.map((table) => [table, parseSnapshotTable(snapshot, table)]));
 }
 
 function encodeBase64Url(bytes) {
@@ -400,7 +357,7 @@ export function buildInsertStatement(table, rows, start = 0, end = rows.length, 
   }
   const chunk = rows.slice(start, end);
   if (chunk.length === 0) return null;
-  const columns = PYROXENE_TABLE_COLUMNS[table];
+  const columns = D1_CUTOVER_TABLE_COLUMNS[table];
   const values = [];
   const placeholders = chunk.map((row, rowIndex) => {
     const rowValues = columns.map((column) => toPgValue(table, column, row[column]));
@@ -441,12 +398,12 @@ export function compareTableParity(table, sourceRows, targetRows) {
 
 function stageTableName(table) {
   assertTable(table);
-  return `pyroxene_stage_${table}`;
+  return `d1_cutover_stage_${table}`;
 }
 
 function typedColumnList(table) {
   assertTable(table);
-  return PYROXENE_TABLE_COLUMNS[table].map((column) => quoteIdentifier(camelToSnake(column))).join(", ");
+  return D1_CUTOVER_TABLE_COLUMNS[table].map((column) => quoteIdentifier(camelToSnake(column))).join(", ");
 }
 
 export function createTypedStageStatement(table) {
@@ -575,27 +532,27 @@ export async function transferPyroxeneSnapshot(
     await pgClient.query("BEGIN");
     await setImportTimeout(pgClient, statementTimeoutMs);
 
-    for (const table of PYROXENE_TABLES) await pgClient.query(createTypedStageStatement(table));
-    for (const table of PYROXENE_TABLES) {
+    for (const table of D1_CUTOVER_TABLES) await pgClient.query(createTypedStageStatement(table));
+    for (const table of D1_CUTOVER_TABLES) {
       const rows = rowsByTable[table];
       for (let offset = 0; offset < rows.length; offset += INSERT_CHUNK_SIZE) {
         const statement = buildInsertStatement(table, rows, offset, offset + INSERT_CHUNK_SIZE, stageTableName(table));
         if (statement) await pgClient.query(statement.text, statement.values);
       }
     }
-    for (const table of PYROXENE_TABLES) {
+    for (const table of D1_CUTOVER_TABLES) {
       await pgClient.query(`DELETE FROM ${quoteIdentifier(table)}`);
       await pgClient.query(insertTargetFromStageStatement(table));
     }
-    for (const table of PYROXENE_TABLES) {
+    for (const table of D1_CUTOVER_TABLES) {
       await repairIdentitySequence(pgClient, table);
     }
-    for (const table of PYROXENE_TABLES) {
+    for (const table of D1_CUTOVER_TABLES) {
       await assertRoundTripParity(pgClient, table, rowsByTable[table]);
       await assertSqlParity(pgClient, table, rowsByTable[table].length);
     }
     await pgClient.query("COMMIT");
-    return { tables: PYROXENE_TABLES.map((table) => ({ table, rows: rowsByTable[table].length })) };
+    return { tables: D1_CUTOVER_TABLES.map((table) => ({ table, rows: rowsByTable[table].length })) };
   } catch (error) {
     operationError = error;
     try {
@@ -627,7 +584,7 @@ async function main() {
   const args = process.argv.slice(2);
   const snapshotPath = optionValue(args, "--snapshot");
   const timeoutValue = optionValue(args, "--statement-timeout-ms");
-  if (!snapshotPath) throw new Error("Usage: PGHOST=... PGDATABASE=... PGUSER=... PGPASSWORD=... pyroxene-transfer.mjs --snapshot FILE");
+  if (!snapshotPath) throw new Error("Usage: PGHOST=... PGDATABASE=... PGUSER=... PGPASSWORD=... d1-cutover-transfer.mjs --snapshot FILE");
   const snapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
   const result = await transferPyroxeneSnapshot(snapshot, {
     statementTimeoutMs: timeoutValue === undefined ? DEFAULT_STATEMENT_TIMEOUT_MS : Number(timeoutValue),

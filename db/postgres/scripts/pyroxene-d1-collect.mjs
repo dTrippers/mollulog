@@ -4,89 +4,23 @@ import { execFile as execFileCallback } from "node:child_process";
 import { mkdir, open } from "node:fs/promises";
 import { dirname } from "node:path";
 import { promisify } from "node:util";
+import {
+  D1_CUTOVER_BOOLEAN_COLUMNS,
+  D1_CUTOVER_INTEGER_COLUMNS,
+  D1_CUTOVER_JSON_COLUMNS,
+  D1_CUTOVER_NULLABLE_COLUMNS,
+  D1_CUTOVER_TABLE_COLUMNS,
+  D1_CUTOVER_TABLES,
+  D1_CUTOVER_TIMESTAMP_COLUMNS,
+  D1_CUTOVER_UNIQUE_KEYS,
+  D1_CUTOVER_SNAPSHOT_FORMAT,
+} from "./d1-cutover-tables.mjs";
 
-export const PYROXENE_TABLES = [
-  "pyroxene_owned_resources",
-  "pyroxene_collected_sources",
-  "pyroxene_timeline_items",
-  "pyroxene_planner_options",
-  "pyroxene_event_data",
-  "pyroxene_guest_import_items",
-];
 export const DEFAULT_PAGE_SIZE = 500;
-export const PYROXENE_SNAPSHOT_FORMAT = "mollulog.pyroxene.snapshot.v1";
-
-export const PYROXENE_TABLE_COLUMNS = {
-  pyroxene_owned_resources: [
-    "id",
-    "uid",
-    "userId",
-    "inputAt",
-    "pyroxene",
-    "oneTimeTicket",
-    "tenTimeTicket",
-    "createdAt",
-    "updatedAt",
-  ],
-  pyroxene_collected_sources: ["id", "uid", "userId", "sourceKey", "collectedAt", "createdAt"],
-  pyroxene_timeline_items: [
-    "id",
-    "uid",
-    "userId",
-    "eventAt",
-    "source",
-    "repeatType",
-    "repeatIntervalDays",
-    "repeatCount",
-    "autoRepurchase",
-    "description",
-    "pyroxeneDelta",
-    "oneTimeTicketDelta",
-    "tenTimeTicketDelta",
-    "createdAt",
-    "updatedAt",
-  ],
-  pyroxene_planner_options: ["id", "userId", "options", "createdAt", "updatedAt"],
-  pyroxene_event_data: ["id", "uid", "userId", "eventUid", "completed", "expectedTrials", "createdAt", "updatedAt"],
-  pyroxene_guest_import_items: ["id", "userId", "datasetId", "itemType", "itemKey", "importedAt"],
-};
-
-export const PYROXENE_UNIQUE_KEYS = {
-  pyroxene_owned_resources: [["uid"]],
-  pyroxene_collected_sources: [["uid"], ["userId", "sourceKey"]],
-  pyroxene_timeline_items: [["uid"]],
-  pyroxene_planner_options: [["userId"]],
-  pyroxene_event_data: [["uid"], ["userId", "eventUid"]],
-  pyroxene_guest_import_items: [["userId", "datasetId", "itemType", "itemKey"]],
-};
-
-const INTEGER_COLUMNS = new Set([
-  "id",
-  "userId",
-  "pyroxene",
-  "oneTimeTicket",
-  "tenTimeTicket",
-  "repeatIntervalDays",
-  "repeatCount",
-  "pyroxeneDelta",
-  "oneTimeTicketDelta",
-  "tenTimeTicketDelta",
-  "expectedTrials",
-]);
-const BOOLEAN_COLUMNS = new Set(["autoRepurchase", "completed"]);
-const TIMESTAMP_COLUMNS = new Set([
-  "inputAt",
-  "collectedAt",
-  "eventAt",
-  "createdAt",
-  "updatedAt",
-  "importedAt",
-]);
-const NULLABLE_COLUMNS = new Set(["repeatType", "repeatIntervalDays", "repeatCount", "expectedTrials"]);
 const execFile = promisify(execFileCallback);
 
 function assertTable(table) {
-  if (!PYROXENE_TABLES.includes(table)) throw new Error(`Table is not allowlisted: ${table}`);
+  if (!D1_CUTOVER_TABLES.includes(table)) throw new Error(`Table is not allowlisted: ${table}`);
 }
 
 function isPlainObject(value) {
@@ -171,7 +105,7 @@ function assertTimestamp(value, key) {
 
 function assertRowColumns(table, row) {
   if (!isPlainObject(row)) throw new Error(`Malformed row in ${table}`);
-  const expected = PYROXENE_TABLE_COLUMNS[table];
+  const expected = D1_CUTOVER_TABLE_COLUMNS[table];
   const unknown = Object.keys(row).filter((column) => !expected.includes(column));
   if (unknown.length > 0) throw new Error(`Unknown columns in ${table}: ${unknown.join(",")}`);
   const missing = expected.filter((column) => !Object.hasOwn(row, column));
@@ -180,21 +114,30 @@ function assertRowColumns(table, row) {
 
 function assertRawValue(table, column, value) {
   if (value === null) {
-    if (!NULLABLE_COLUMNS.has(column)) throw new Error(`Invalid null value for ${table}.${column}`);
+    if (!D1_CUTOVER_NULLABLE_COLUMNS.has(column)) throw new Error(`Invalid null value for ${table}.${column}`);
     return;
   }
-  if (INTEGER_COLUMNS.has(column)) {
+  if (D1_CUTOVER_INTEGER_COLUMNS.has(column)) {
     if (!Number.isSafeInteger(value)) throw new Error(`Invalid integer for ${table}.${column}`);
     if (column === "id" && value <= 0) throw new Error(`Invalid id for ${table}`);
     if (column === "userId" && value <= 0) throw new Error(`Invalid userId for ${table}`);
     return;
   }
-  if (BOOLEAN_COLUMNS.has(column)) {
+  if (D1_CUTOVER_BOOLEAN_COLUMNS.has(column)) {
     if (value !== 0 && value !== 1) throw new Error(`Invalid boolean for ${table}.${column}`);
     return;
   }
-  if (TIMESTAMP_COLUMNS.has(column)) {
+  if (D1_CUTOVER_TIMESTAMP_COLUMNS.has(column)) {
     assertTimestamp(value, `${table}.${column}`);
+    return;
+  }
+  if (D1_CUTOVER_JSON_COLUMNS.has(column)) {
+    if (typeof value !== "string") throw new Error(`Invalid JSON text for ${table}.${column}`);
+    try {
+      JSON.parse(value);
+    } catch {
+      throw new Error(`Invalid JSON text for ${table}.${column}`);
+    }
     return;
   }
   if (typeof value !== "string") throw new Error(`Invalid text for ${table}.${column}`);
@@ -203,7 +146,7 @@ function assertRawValue(table, column, value) {
 export function validateRawRow(table, row) {
   assertTable(table);
   assertRowColumns(table, row);
-  for (const column of PYROXENE_TABLE_COLUMNS[table]) assertRawValue(table, column, row[column]);
+  for (const column of D1_CUTOVER_TABLE_COLUMNS[table]) assertRawValue(table, column, row[column]);
   return row;
 }
 
@@ -224,7 +167,7 @@ export function validateTableRows(table, rows) {
     previousId = row.id;
   }
 
-  for (const columns of PYROXENE_UNIQUE_KEYS[table]) {
+  for (const columns of D1_CUTOVER_UNIQUE_KEYS[table]) {
     const keys = new Set();
     for (const row of rows) {
       const key = tupleKey(row, columns);
@@ -281,8 +224,8 @@ export async function collectTable({ table, database, pageSize = DEFAULT_PAGE_SI
 export function validateSnapshotTables(tables) {
   if (!isPlainObject(tables)) throw new Error("Snapshot tables must be an object");
   const actual = Object.keys(tables);
-  const unexpected = actual.filter((table) => !PYROXENE_TABLES.includes(table));
-  const missing = PYROXENE_TABLES.filter((table) => !actual.includes(table));
+  const unexpected = actual.filter((table) => !D1_CUTOVER_TABLES.includes(table));
+  const missing = D1_CUTOVER_TABLES.filter((table) => !actual.includes(table));
   if (unexpected.length > 0) throw new Error(`Snapshot contains non-allowlisted tables: ${unexpected.join(",")}`);
   if (missing.length > 0) throw new Error(`Snapshot is missing tables: ${missing.join(",")}`);
   return tables;
@@ -295,7 +238,7 @@ export async function collectPyroxeneSnapshot({ database, pageSize = DEFAULT_PAG
   }
 
   const tables = {};
-  for (const table of PYROXENE_TABLES) {
+  for (const table of D1_CUTOVER_TABLES) {
     const collected = await collectTable({ table, database, pageSize, accountId, env, execute });
     validateTableRows(table, collected.rows);
     tables[table] = {
@@ -305,7 +248,7 @@ export async function collectPyroxeneSnapshot({ database, pageSize = DEFAULT_PAG
     };
   }
   return {
-    format: PYROXENE_SNAPSHOT_FORMAT,
+    format: D1_CUTOVER_SNAPSHOT_FORMAT,
     pageSize,
     generatedAt: new Date().toISOString(),
     tables,
@@ -340,7 +283,7 @@ async function main() {
   const accountId = optionValue(args, "--account-id");
   const env = optionValue(args, "--env");
   if (!database || !output) {
-    throw new Error("Usage: pyroxene-d1-collect.mjs --database NAME --output FILE [--env ENV] [--page-size N]");
+    throw new Error("Usage: d1-cutover-collect.mjs --database NAME --output FILE [--env ENV] [--page-size N]");
   }
   const snapshot = await collectPyroxeneSnapshot({ database, pageSize, accountId, env });
   await writePyroxeneSnapshot(output, snapshot);

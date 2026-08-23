@@ -1,20 +1,78 @@
 const runningUnderJest = Boolean(process.env.JEST_WORKER_ID);
 
 const tables = [
+  "pickup_histories",
+  "event_shop_states",
   "pyroxene_owned_resources",
   "pyroxene_collected_sources",
   "pyroxene_timeline_items",
   "pyroxene_planner_options",
   "pyroxene_event_data",
   "pyroxene_guest_import_items",
+  "connect_api_keys",
+  "connect_request_logs",
 ];
 
-const booleanColumns = new Set(["autoRepurchase", "completed"]);
-const timestampColumns = new Set(["inputAt", "collectedAt", "eventAt", "createdAt", "updatedAt", "importedAt"]);
+const booleanColumns = new Set(["autoRepurchase", "completed", "includeRecruitedStudents", "includeFirstClear"]);
+const timestampColumns = new Set([
+  "inputAt",
+  "collectedAt",
+  "eventAt",
+  "createdAt",
+  "updatedAt",
+  "importedAt",
+  "expiresAt",
+  "lastUsedAt",
+  "revokedAt",
+]);
+const jsonColumns = new Set([
+  "result",
+  "itemQuantities",
+  "itemPurchaseDays",
+  "selectedBonusStudentUids",
+  "selectedBonusStudentUidsByItem",
+  "enabledStages",
+  "existingPaymentItemQuantities",
+  "extraStageRuns",
+  "overriddenRequiredQuantities",
+  "scopes",
+]);
 
 function rowFor(table, id, overrides = {}) {
   const timestamp = "2026-08-23 00:00:00";
   const rows = {
+    pickup_histories: {
+      id,
+      uid: `pickup-${id}`,
+      userId: id,
+      eventId: `event-${id}`,
+      result: JSON.stringify([{ trial: 10, tier3Count: 1, tier3StudentIds: [`student-${id}`] }]),
+      rawResult: id % 2 === 0 ? null : `raw-${id}`,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
+    event_shop_states: {
+      id,
+      uid: `shop-${id}`,
+      userId: id,
+      eventUid: `event-${id}`,
+      itemQuantities: JSON.stringify({ item: id }),
+      itemPurchaseDays: JSON.stringify({ item: id % 3 }),
+      selectedBonusStudentUids: JSON.stringify([`student-${id}`]),
+      bonusStudentSelectionMode: "shared",
+      selectedBonusStudentUidsByItem: JSON.stringify({ item: [`student-${id}`] }),
+      enabledStages: JSON.stringify({ stage: true }),
+      includeRecruitedStudents: id % 2,
+      existingPaymentItemQuantities: JSON.stringify({ payment: 1 }),
+      includeFirstClear: (id + 1) % 2,
+      extraStageRuns: JSON.stringify({ stage: id }),
+      minigameStartRound: 1,
+      minigamePlayCount: id,
+      minigamePaymentQuantityMode: "expected",
+      overriddenRequiredQuantities: JSON.stringify({ item: id }),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    },
     pyroxene_owned_resources: {
       id,
       uid: `owned-${id}`,
@@ -76,6 +134,27 @@ function rowFor(table, id, overrides = {}) {
       itemKey: id === 1 ? "type\u0000key" : `key-${id}`,
       importedAt: timestamp,
     },
+    connect_api_keys: {
+      id,
+      uid: `key-${id}`,
+      userId: id,
+      name: `Key ${id}`,
+      keyPrefix: `mlk_${id}`,
+      keyHash: `hash-${id}`,
+      scopes: "[\"catalog:read\"]",
+      createdAt: timestamp,
+      expiresAt: id % 2 === 0 ? null : timestamp,
+      lastUsedAt: null,
+      revokedAt: null,
+    },
+    connect_request_logs: {
+      id,
+      uid: `log-${id}`,
+      apiKeyUid: id % 2 === 0 ? null : `key-${id}`,
+      endpoint: "/api/v1/drafts",
+      status: 200,
+      createdAt: timestamp,
+    },
   };
   if (!rows[table]) throw new Error(`Unknown test table ${table}`);
   return { ...rows[table], ...overrides };
@@ -99,7 +178,7 @@ function snapshot(overrides = {}) {
     };
   }
   return {
-    format: "mollulog.pyroxene.snapshot.v1",
+    format: "mollulog.d1.snapshot.v1",
     pageSize: 500,
     generatedAt: "2026-08-23T00:00:00.000Z",
     tables: tablesByName,
@@ -114,8 +193,9 @@ function targetRow(sourceRow) {
   return Object.fromEntries(
     Object.entries(sourceRow).map(([column, value]) => {
       const snake = column.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
-      if (timestampColumns.has(column)) return [snake, new Date("2026-08-23T00:00:00.000Z")];
+      if (timestampColumns.has(column)) return [snake, value === null ? null : new Date("2026-08-23T00:00:00.000Z")];
       if (booleanColumns.has(column)) return [snake, value === 1];
+      if (jsonColumns.has(column)) return [snake, JSON.parse(value)];
       if (column === "itemKey") return [snake, encodeReceiptKey(value)];
       return [snake, value];
     }),
@@ -127,7 +207,7 @@ function targetRowsFor(source) {
 }
 
 function tableInQuery(text, { includeStage = true } = {}) {
-  return tables.find((table) => text.includes(`"${table}"`) && (includeStage || !text.includes(`"pyroxene_stage_${table}"`)));
+  return tables.find((table) => text.includes(`"${table}"`) && (includeStage || !text.includes(`"d1_cutover_stage_${table}"`)));
 }
 
 function fakeClient(rowsByTable, { sourceDifferenceTables = [], targetDifferenceTables = [], sequenceNames = {}, throwWhen } = {}) {
@@ -143,8 +223,8 @@ function fakeClient(rowsByTable, { sourceDifferenceTables = [], targetDifference
       calls.push({ text, values });
       if (throwWhen?.(text, values)) throw new Error("injected PostgreSQL failure");
       if (text.includes(" EXCEPT ")) {
-        const table = tables.find((candidate) => text.includes(`"pyroxene_stage_${candidate}"`));
-        const sourceDifference = text.includes(`FROM "pyroxene_stage_${table}" EXCEPT`);
+        const table = tables.find((candidate) => text.includes(`"d1_cutover_stage_${candidate}"`));
+        const sourceDifference = text.includes(`FROM "d1_cutover_stage_${table}" EXCEPT`);
         const differenceTables = sourceDifference ? sourceDifferenceTables : targetDifferenceTables;
         return { rows: [{ count: differenceTables.includes(table) ? "1" : "0" }] };
       }
@@ -187,7 +267,7 @@ if (!runningUnderJest) {
     for (const table of tables) {
       const statement = buildInsertStatement(table, source.tables[table].rows);
       assert.match(statement.text, new RegExp(`INSERT INTO "${table}"`));
-      assert.match(statement.text, /"user_id"/);
+      if (table !== "connect_request_logs") assert.match(statement.text, /"user_id"/);
       assert.ok(statement.values.every((value) => !(typeof value === "string" && /At$/.test(value))));
     }
 
@@ -247,7 +327,7 @@ if (!runningUnderJest) {
     assert.deepEqual(second.values.slice(0, 5), [INSERT_CHUNK_SIZE + 1, INSERT_CHUNK_SIZE + 1, `{"days":${INSERT_CHUNK_SIZE + 1}}`, new Date("2026-08-23T00:00:00.000Z"), new Date("2026-08-23T00:00:00.000Z")]);
   });
 
-  test("imports all six tables in one transaction, repairs sequences, and proves bidirectional parity", async () => {
+  test("imports all ten tables in one transaction, repairs sequences, and proves bidirectional parity", async () => {
     const { parityDifferenceStatement, transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
     const source = snapshot();
     const client = fakeClient(targetRowsFor(source));
@@ -265,7 +345,7 @@ if (!runningUnderJest) {
     assert.equal(sequenceRestartCalls.length, tables.length);
     assert.deepEqual(
       sequenceRestartCalls.map(({ text }) => text.match(/RESTART WITH (\d+)$/)?.[1]),
-      ["2", "3", "4", "5", "6", "7"],
+      ["2", "3", "4", "5", "6", "7", "8", "9", "10", "11"],
     );
     assert.equal(client.calls.filter(({ text }) => text.startsWith("DELETE FROM ")).length, tables.length);
     assert.equal(client.calls.filter(({ text }) => text.includes(" EXCEPT ")).length, tables.length * 2);
@@ -295,7 +375,7 @@ if (!runningUnderJest) {
     assert.equal(client.calls.filter(({ text }) => text === "COMMIT").length, 0);
     assert.equal(client.calls.filter(({ text }) => text === "ROLLBACK").length, 1);
     assert.equal(client.calls.some(({ text }) => text.includes("RESTART WITH 2147483648")), false);
-    assert.equal(client.calls.filter(({ text }) => text.startsWith("ALTER SEQUENCE ")).length, 0);
+    assert.equal(client.calls.some(({ text }) => text.includes('"pyroxene_owned_resources_id_seq"')), false);
   });
 
   test("rolls back the whole import when either typed parity direction fails", async () => {
@@ -313,7 +393,7 @@ if (!runningUnderJest) {
     const { transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
     const source = snapshot();
     const client = fakeClient(targetRowsFor(source), {
-      throwWhen: (text) => text.startsWith('INSERT INTO "pyroxene_stage_pyroxene_event_data"'),
+      throwWhen: (text) => text.startsWith('INSERT INTO "d1_cutover_stage_pyroxene_event_data"'),
     });
     await assert.rejects(transferPyroxeneSnapshot(source, { client }), /injected PostgreSQL failure/);
     assert.equal(client.calls.filter(({ text }) => text === "COMMIT").length, 0);
@@ -385,7 +465,7 @@ if (!runningUnderJest) {
   test("rejects unsupported versions, missing or extra tables, duplicate IDs, and duplicate physical keys", async () => {
     const { validateSnapshot } = await import("./pyroxene-transfer.mjs");
     const source = snapshot();
-    assert.throws(() => validateSnapshot({ ...source, format: "mollulog.pyroxene.snapshot.v2" }), /Unsupported snapshot format/);
+    assert.throws(() => validateSnapshot({ ...source, format: "mollulog.d1.snapshot.v2" }), /Unsupported snapshot format/);
     assert.throws(() => validateSnapshot({ ...source, unexpected: true }), /unknown=unexpected/);
     const missing = { ...source, tables: { ...source.tables } };
     delete missing.tables.pyroxene_event_data;
@@ -412,10 +492,10 @@ if (!runningUnderJest) {
         pyroxene_collected_sources: {
           rows: [
             source.tables.pyroxene_collected_sources.rows[0],
-            rowFor("pyroxene_collected_sources", 3, { uid: "other", userId: 2, sourceKey: "source-2" }),
+            rowFor("pyroxene_collected_sources", 5, { uid: "other", userId: 4, sourceKey: "source-4" }),
           ],
           rowCount: 2,
-          lastId: 3,
+          lastId: 5,
         },
       },
     };

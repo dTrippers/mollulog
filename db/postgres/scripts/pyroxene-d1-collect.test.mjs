@@ -1,17 +1,55 @@
 const runningUnderJest = Boolean(process.env.JEST_WORKER_ID);
 
 const tables = [
+  "pickup_histories",
+  "event_shop_states",
   "pyroxene_owned_resources",
   "pyroxene_collected_sources",
   "pyroxene_timeline_items",
   "pyroxene_planner_options",
   "pyroxene_event_data",
   "pyroxene_guest_import_items",
+  "connect_api_keys",
+  "connect_request_logs",
 ];
 
 function rowFor(table, id) {
   const timestamp = "2026-08-23 00:00:00";
   switch (table) {
+    case "pickup_histories":
+      return {
+        id,
+        uid: `pickup-${id}`,
+        userId: id,
+        eventId: `event-${id}`,
+        result: JSON.stringify([{ trial: 10, tier3Count: 1, tier3StudentIds: [`student-${id}`] }]),
+        rawResult: id % 2 === 0 ? null : `raw-${id}`,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
+    case "event_shop_states":
+      return {
+        id,
+        uid: `shop-${id}`,
+        userId: id,
+        eventUid: `event-${id}`,
+        itemQuantities: JSON.stringify({ item: id }),
+        itemPurchaseDays: JSON.stringify({ item: id % 3 }),
+        selectedBonusStudentUids: JSON.stringify([`student-${id}`]),
+        bonusStudentSelectionMode: "shared",
+        selectedBonusStudentUidsByItem: JSON.stringify({ item: [`student-${id}`] }),
+        enabledStages: JSON.stringify({ stage: true }),
+        includeRecruitedStudents: id % 2,
+        existingPaymentItemQuantities: JSON.stringify({ payment: 1 }),
+        includeFirstClear: (id + 1) % 2,
+        extraStageRuns: JSON.stringify({ stage: id }),
+        minigameStartRound: 1,
+        minigamePlayCount: id,
+        minigamePaymentQuantityMode: "expected",
+        overriddenRequiredQuantities: JSON.stringify({ item: id }),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
     case "pyroxene_owned_resources":
       return {
         id,
@@ -59,6 +97,29 @@ function rowFor(table, id) {
       };
     case "pyroxene_guest_import_items":
       return { id, userId: id, datasetId: `dataset-${id}`, itemType: "material", itemKey: id === 1 ? "type\u0000key" : `key-${id}`, importedAt: timestamp };
+    case "connect_api_keys":
+      return {
+        id,
+        uid: `key-${id}`,
+        userId: id,
+        name: `Key ${id}`,
+        keyPrefix: `mlk_${id}`,
+        keyHash: `hash-${id}`,
+        scopes: "[\"catalog:read\"]",
+        createdAt: timestamp,
+        expiresAt: id % 2 === 0 ? null : timestamp,
+        lastUsedAt: null,
+        revokedAt: null,
+      };
+    case "connect_request_logs":
+      return {
+        id,
+        uid: `log-${id}`,
+        apiKeyUid: id % 2 === 0 ? null : `key-${id}`,
+        endpoint: "/api/v1/drafts",
+        status: 200,
+        createdAt: timestamp,
+      };
     default:
       throw new Error(`Unknown test table ${table}`);
   }
@@ -106,7 +167,7 @@ if (!runningUnderJest) {
       },
     });
 
-    assert.equal(snapshot.format, "mollulog.pyroxene.snapshot.v1");
+    assert.equal(snapshot.format, "mollulog.d1.snapshot.v1");
     assert.equal(snapshot.pageSize, 2);
     assert.match(snapshot.generatedAt, /^\d{4}-\d{2}-\d{2}T/);
     assert.equal(calls.length, tables.length * 2);
@@ -117,6 +178,8 @@ if (!runningUnderJest) {
       assert.equal(snapshot.tables[table].rowCount, 3);
     }
     assert.equal(snapshot.tables.pyroxene_guest_import_items.rows[0].itemKey, "type\u0000key");
+    assert.equal(snapshot.tables.pickup_histories.rows[0].result, JSON.stringify([{ trial: 10, tier3Count: 1, tier3StudentIds: ["student-1"] }]));
+    assert.equal(snapshot.tables.connect_api_keys.rows[0].scopes, "[\"catalog:read\"]");
   });
 
   test("rejects duplicate physical uniqueness keys and disallowed tables", async () => {
@@ -137,6 +200,13 @@ if (!runningUnderJest) {
     assert.throws(() => validateRawRow("pyroxene_guest_import_items", { ...row, autoRepurchase: 0 }), /Unknown columns/);
     assert.throws(() => validateRawRow("pyroxene_guest_import_items", { ...row, userId: 0 }), /userId/);
     assert.throws(() => validateRawRow("pyroxene_guest_import_items", { ...row, importedAt: "not-a-timestamp" }), /timestamp/);
+    assert.throws(() => validateRawRow("pickup_histories", { ...rowFor("pickup_histories", 1), result: "not-json" }), /JSON/);
+    assert.equal(validateRawRow("connect_api_keys", {
+      ...rowFor("connect_api_keys", 1),
+      expiresAt: null,
+      lastUsedAt: null,
+      revokedAt: null,
+    }).scopes, "[\"catalog:read\"]");
   });
 
   test("writes snapshots with mode 0600 and refuses overwrite", async () => {
@@ -154,7 +224,7 @@ if (!runningUnderJest) {
       lastId: 1,
     };
     const snapshot = {
-      format: "mollulog.pyroxene.snapshot.v1",
+      format: "mollulog.d1.snapshot.v1",
       pageSize: 500,
       generatedAt: "2026-08-23T00:00:00.000Z",
       tables: snapshotTables,
