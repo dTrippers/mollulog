@@ -24,11 +24,17 @@ import {
   pyroxeneTimelineItemFingerprint,
   type VerifiedGuestPyroxeneImport,
 } from "~/domain/guest-pyroxene-planner";
+import {
+  isPyroxeneMaintenanceResult,
+  type PyroxeneMaintenanceResult,
+  pyroxeneMaintenanceMessage,
+} from "~/domain/pyroxene-cutover";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { extractPyroxeneTimelineBaseUid, PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { withD1Session } from "~/lib/d1-session";
+import { pyroxeneMaintenanceActionResult } from "~/lib/pyroxene-cutover.server";
 import { cn } from "~/lib/utils";
 import { favoriteStudent, getUserFavoritedStudents } from "~/models/favorite-students";
 import {
@@ -146,6 +152,12 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       { success: false, verified: emptyVerified(), failedLabels: ["로그인이 필요해요"] },
       { status: 401 },
     );
+
+  const maintenance = await pyroxeneMaintenanceActionResult(env, {
+    ctx,
+    operation: "utils.pyroxene.import.action",
+  });
+  if (maintenance) return maintenance;
 
   const body = await request.json<{ envelope?: unknown; selection?: ImportSelection }>();
   const envelope = body.envelope ? parseGuestPyroxenePlanner(JSON.stringify(body.envelope)) : null;
@@ -322,7 +334,7 @@ function recordDate(record: GuestPyroxeneRecord): string {
 export default function GuestPyroxeneImportPage() {
   const account = useLoaderData<typeof loader>();
   const guestPlanner = useGuestPyroxenePlanner();
-  const fetcher = useFetcher<ImportActionResult>();
+  const fetcher = useFetcher<ImportActionResult | PyroxeneMaintenanceResult>();
   const [selection, setSelection] = useState<ImportSelection | null>(null);
   const initializedDatasetId = useRef<string | null>(null);
   const processedResult = useRef<ImportActionResult | null>(null);
@@ -400,7 +412,7 @@ export default function GuestPyroxeneImportPage() {
 
   useEffect(() => {
     const result = fetcher.data;
-    if (!result || result === processedResult.current) return;
+    if (!result || isPyroxeneMaintenanceResult(result) || result === processedResult.current) return;
     processedResult.current = result;
     const submitted = submittedEnvelope.current;
     if (!submitted) return;
@@ -439,7 +451,9 @@ export default function GuestPyroxeneImportPage() {
   const discardedItems = envelope && selection ? getDiscardedItems(envelope.data, selection) : emptyVerified();
   const discardedCount = verifiedItemCount(discardedItems);
   const submittedDiscardedCount = verifiedItemCount(submittedDiscardedItems.current);
-  const importedCount = fetcher.data ? verifiedItemCount(fetcher.data.verified) : 0;
+  const maintenanceMessage = pyroxeneMaintenanceMessage(fetcher.data);
+  const importResult = fetcher.data && !isPyroxeneMaintenanceResult(fetcher.data) ? fetcher.data : null;
+  const importedCount = importResult ? verifiedItemCount(importResult.verified) : 0;
 
   return (
     <Page
@@ -609,20 +623,22 @@ export default function GuestPyroxeneImportPage() {
               </SectionCard>
             )}
 
-            {fetcher.data && (
+            {maintenanceMessage ? (
+              <Callout tone="warning" title={maintenanceMessage} />
+            ) : importResult ? (
               <Callout
-                tone={fetcher.data.failedLabels.length ? "warning" : "success"}
+                tone={importResult.failedLabels.length ? "warning" : "success"}
                 Icon={CheckCircleIcon}
                 title={
-                  fetcher.data.failedLabels.length
+                  importResult.failedLabels.length
                     ? "일부 항목을 가져오지 못했어요"
                     : submittedDiscardedCount > 0
                       ? "선택한 내용을 저장했어요"
                       : "선택한 항목을 가져왔어요"
                 }
                 description={
-                  fetcher.data.failedLabels.length
-                    ? `${fetcher.data.failedLabels.join(", ")}은 이 브라우저에 남겨뒀어요. 다시 시도할 수 있어요.${submittedDiscardedCount > 0 ? ` 선택하지 않은 항목 ${submittedDiscardedCount}개는 삭제했어요.` : ""}`
+                  importResult.failedLabels.length
+                    ? `${importResult.failedLabels.join(", ")}은 이 브라우저에 남겨뒀어요. 다시 시도할 수 있어요.${submittedDiscardedCount > 0 ? ` 선택하지 않은 항목 ${submittedDiscardedCount}개는 삭제했어요.` : ""}`
                     : submittedDiscardedCount > 0
                       ? importedCount > 0
                         ? `선택한 항목은 계정에 가져오고, 선택하지 않은 항목 ${submittedDiscardedCount}개는 이 브라우저에서 삭제했어요.`
@@ -630,7 +646,7 @@ export default function GuestPyroxeneImportPage() {
                       : "가져온 항목만 이 브라우저에서 정리했어요."
                 }
               />
-            )}
+            ) : null}
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-muted-foreground">

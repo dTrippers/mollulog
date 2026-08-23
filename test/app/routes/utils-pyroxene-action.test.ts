@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { pyroxeneMaintenanceResult } from "~/domain/pyroxene-cutover";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
@@ -18,6 +19,7 @@ const mockGetPyroxenePlannerContents = jest.fn<AsyncMock>();
 const mockSetRecruitmentResultCompletion = jest.fn<AsyncMock>();
 const mockGetRecruitmentResultsByRecruitmentGroupUids = jest.fn<AsyncMock>();
 const mockDeleteRecruitmentResult = jest.fn<AsyncMock>();
+const mockPyroxeneMaintenanceActionResult = jest.fn<AsyncMock>();
 const mockLoggerError = jest.fn();
 const mockGetLogger = jest.fn(() => ({ error: mockLoggerError }));
 
@@ -46,6 +48,9 @@ jest.mock("~/models/recruitment-result.server", () => ({
   setRecruitmentResultCompletion: mockSetRecruitmentResultCompletion,
 }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: mockGetLogger }));
+jest.mock("~/lib/pyroxene-cutover.server", () => ({
+  pyroxeneMaintenanceActionResult: mockPyroxeneMaintenanceActionResult,
+}));
 
 import { action } from "~/routes/utils.pyroxene";
 import { decodePyroxeneActionPayload } from "~/routes/utils.pyroxene._components/action-data";
@@ -114,9 +119,17 @@ function actionArgs(intent: string, payload: unknown, method: string) {
   } as never;
 }
 
+function rawActionArgs(request: Request) {
+  return {
+    context: { cloudflare: { env, ctx } },
+    request,
+  } as never;
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockGetActiveSensei.mockResolvedValue({ id: 1 });
+  mockPyroxeneMaintenanceActionResult.mockResolvedValue(null);
   mockCreatePyroxeneOwnedResource.mockResolvedValue(undefined);
   mockCreateBuyPyroxene.mockResolvedValue(undefined);
   mockCreatePyroxeneMonthlyPackage.mockResolvedValue(undefined);
@@ -547,6 +560,31 @@ describe("Pyroxene action dispatch", () => {
       operation: "save-owned-resources",
       userId: 1,
     });
+  });
+
+  it("returns maintenance before parsing the request body or executing a write", async () => {
+    const maintenanceResponse = {
+      data: pyroxeneMaintenanceResult,
+      init: { status: 503 },
+    };
+    mockPyroxeneMaintenanceActionResult.mockResolvedValue(maintenanceResponse);
+
+    const response = await action(
+      rawActionArgs(
+        new Request("https://mollulog.test/utils/pyroxene", {
+          method: "POST",
+          body: "not-json",
+          headers: { "Content-Type": "application/json" },
+        }),
+      ),
+    );
+
+    expect(response).toBe(maintenanceResponse);
+    expect(mockPyroxeneMaintenanceActionResult).toHaveBeenCalledWith(env, {
+      ctx,
+      operation: "utils.pyroxene.action",
+    });
+    expect(mockCreatePyroxeneOwnedResource).not.toHaveBeenCalled();
   });
 
   it("returns HTTP 400 before executing a write for malformed payloads", async () => {

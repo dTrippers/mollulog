@@ -27,6 +27,7 @@ import {
   guestPyroxeneTimelineItems,
   hasGuestPyroxenePlannerData,
 } from "~/domain/guest-pyroxene-planner";
+import { pyroxeneMaintenanceMessage } from "~/domain/pyroxene-cutover";
 import { defaultPyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import {
   createOptimisticApPackageTimelineItems,
@@ -39,6 +40,7 @@ import {
 } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { getLogger } from "~/lib/observability.server";
+import { pyroxeneMaintenanceActionResult } from "~/lib/pyroxene-cutover.server";
 import { canonicalLink } from "~/lib/seo";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { PyroxeneEventData, PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
@@ -160,6 +162,12 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   if (!currentUser) {
     return { success: false };
   }
+
+  const maintenance = await pyroxeneMaintenanceActionResult(env, {
+    ctx,
+    operation: "utils.pyroxene.action",
+  });
+  if (maintenance) return maintenance;
 
   let body: unknown;
   try {
@@ -462,7 +470,8 @@ export default function PyroxenePlanner() {
 
     pendingOwnedResourceSave.current = null;
     if (!ownedResourcesFetcher.data?.success) {
-      setOwnedResourceSaveError("보유 재화를 저장하지 못했어요");
+      const maintenanceMessage = pyroxeneMaintenanceMessage(ownedResourcesFetcher.data);
+      setOwnedResourceSaveError(maintenanceMessage ?? "보유 재화를 저장하지 못했어요");
       return;
     }
 
@@ -830,6 +839,8 @@ export default function PyroxenePlanner() {
       ownedResourcesFetcher.state === "loading");
   const guestDataStatus = guestPlanner.snapshot?.status;
   const hasGuestData = guestPlanner.snapshot ? hasGuestPyroxenePlannerData(guestPlanner.snapshot.envelope.data) : false;
+  const maintenanceMessage =
+    pyroxeneMaintenanceMessage(fetcher.data) ?? pyroxeneMaintenanceMessage(ownedResourcesFetcher.data);
 
   return (
     <>
@@ -883,7 +894,10 @@ export default function PyroxenePlanner() {
       >
         <div className="space-y-4">
           <div className="space-y-3">
-            {ownedResourceSaveError ? <Callout tone="destructive" title={ownedResourceSaveError} /> : null}
+            {maintenanceMessage ? <Callout tone="warning" title={maintenanceMessage} /> : null}
+            {!maintenanceMessage && ownedResourceSaveError ? (
+              <Callout tone="destructive" title={ownedResourceSaveError} />
+            ) : null}
             {signedIn && hasGuestData ? (
               <Callout
                 tone="info"
