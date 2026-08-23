@@ -13,7 +13,6 @@ import { useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { Page } from "~/components/features/layout";
-import { withD1Session } from "~/lib/d1-session";
 import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community.server";
@@ -78,7 +77,7 @@ function parsePage(request: Request) {
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const currentUser = await getActiveSensei(env, request);
   const postTypes = parseCommunityPostTypes(request);
   const page = parsePage(request);

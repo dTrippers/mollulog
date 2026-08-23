@@ -3,7 +3,6 @@ import { Link, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { SubTitle } from "~/components/primitives";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
-import { withD1Session } from "~/lib/d1-session";
 import type { NestedComment } from "~/models/content";
 import { nestComments } from "~/models/content";
 import { getContentsComments } from "~/models/content.server";
@@ -25,7 +24,7 @@ export const meta: MetaFunction = ({ params }) => {
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const currentUser = await getActiveSensei(env, request, ctx);
   const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
 

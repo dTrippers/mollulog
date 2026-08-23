@@ -1,10 +1,9 @@
 import { buildPyroxeneScheduleItems } from "~/domain/pyroxene-schedule";
 import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
-import { withD1Session } from "~/lib/d1-session";
 import { getInstantTime, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { countUnregisteredActiveCoupons } from "~/models/coupon";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { getPickupHistories } from "~/models/pickup-history";
+import { getPickupHistories } from "~/models/pickup-history.server";
 import { getPyroxeneUserState, type PyroxeneEventData } from "~/models/pyroxene-planner";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
@@ -40,7 +39,7 @@ export type MoreCurrentUser = {
 };
 
 export async function getMoreViewData(env: Env, ctx: ExecutionContext, sensei: Sensei | null) {
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const [navigationBarContents, personalSummary] = await Promise.all([
     getNavigationBarContents(env, false, undefined, ctx, publicReadEnv),
     sensei ? getMorePersonalSummary(env, sensei.id, ctx, publicReadEnv) : Promise.resolve(null),

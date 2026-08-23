@@ -5,7 +5,6 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { Page } from "~/components/features/layout";
 import { EmptyView, PanelBody, PanelIconToggleRow, PanelSearchField } from "~/components/primitives";
-import { withD1Session } from "~/lib/d1-session";
 import { formatInstant, nowUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
 import type { RunType } from "~/models/timeline-content";
@@ -43,7 +42,7 @@ export const meta: MetaFunction = ({ location }) => {
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const now = nowUtcIso();
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   return { events: await getEventList(publicReadEnv, now, false, ctx), now };
 };
 

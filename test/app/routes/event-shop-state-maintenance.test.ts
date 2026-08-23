@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { d1MaintenanceResult } from "~/domain/pyroxene-cutover";
+import { d1MaintenanceResult } from "~/domain/d1-cutover";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
@@ -8,8 +8,7 @@ const mockGetEventMetadata = jest.fn<AsyncMock>();
 const mockUpsertEventShopState = jest.fn<AsyncMock>();
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: mockGetActiveSensei }));
-jest.mock("~/lib/d1-session", () => ({ withD1Session: (env: unknown) => env }));
-jest.mock("~/lib/pyroxene-cutover.server", () => ({
+jest.mock("~/lib/d1-cutover.server", () => ({
   d1MaintenanceActionResult: mockD1MaintenanceActionResult,
 }));
 jest.mock("~/models/event-content", () => ({ getEventMetadata: mockGetEventMetadata }));
@@ -17,7 +16,7 @@ jest.mock("~/models/event-shop-state", () => ({ upsertEventShopState: mockUpsert
 
 import { action } from "~/routes/api.events.$eventUid.shop-state";
 
-const env = { DB: "db" } as unknown as Env;
+const env = { HYPERDRIVE: { connectionString: "postgres://test" } } as unknown as Env;
 const ctx = {} as ExecutionContext;
 
 function actionArgs(request: Request) {

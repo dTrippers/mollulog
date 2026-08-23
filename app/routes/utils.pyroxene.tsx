@@ -27,7 +27,7 @@ import {
   guestPyroxeneTimelineItems,
   hasGuestPyroxenePlannerData,
 } from "~/domain/guest-pyroxene-planner";
-import { d1MaintenanceMessage } from "~/domain/pyroxene-cutover";
+import { d1MaintenanceMessage } from "~/domain/d1-cutover";
 import { defaultPyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import {
   createOptimisticApPackageTimelineItems,
@@ -40,7 +40,7 @@ import {
 } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { getLogger } from "~/lib/observability.server";
-import { d1MaintenanceActionResult } from "~/lib/pyroxene-cutover.server";
+import { d1MaintenanceActionResult } from "~/lib/d1-cutover.server";
 import { canonicalLink } from "~/lib/seo";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { PyroxeneEventData, PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";

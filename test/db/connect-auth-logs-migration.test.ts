@@ -1,10 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, test } from "@jest/globals";
 
-const migration = readFileSync(
-  "db/postgres/migrations/20260824000300_create_mollu_connect_auth_logs.sql",
-  "utf8",
-);
+const migration = readFileSync("db/postgres/migrations/20260824000300_create_mollu_connect_auth_logs.sql", "utf8");
 const schema = readFileSync("app/db/postgres/schema.ts", "utf8");
 const apiKeyModel = readFileSync("app/models/connect-api-key.ts", "utf8");
 const requestLogModel = readFileSync("app/models/connect-request-log.ts", "utf8");

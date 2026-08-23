@@ -262,7 +262,7 @@ if (!runningUnderJest) {
   const assert = process.getBuiltinModule("node:assert/strict");
 
   test("maps every table to typed PostgreSQL parameters", async () => {
-    const { buildInsertStatement } = await import("./pyroxene-transfer.mjs");
+    const { buildInsertStatement } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     for (const table of tables) {
       const statement = buildInsertStatement(table, source.tables[table].rows);
@@ -280,8 +280,28 @@ if (!runningUnderJest) {
     assert.equal(guest.values[4], "v1:dHlwZQBrZXk");
   });
 
+  test("passes every D1 JSON value as valid JSON text for PostgreSQL jsonb", async () => {
+    const { buildInsertStatement } = await import("./d1-cutover-transfer.mjs");
+    const { D1_CUTOVER_TABLE_COLUMNS } = await import("./d1-cutover-tables.mjs");
+    const source = snapshot();
+
+    for (const table of tables) {
+      const row = source.tables[table].rows[0];
+      const statement = buildInsertStatement(table, [row]);
+      for (const [index, column] of D1_CUTOVER_TABLE_COLUMNS[table].entries()) {
+        if (!jsonColumns.has(column)) continue;
+        const parameter = statement.values[index];
+        assert.equal(typeof parameter, "string", `${table}.${column} must be JSON text`);
+        assert.deepEqual(JSON.parse(parameter), JSON.parse(row[column]), `${table}.${column}`);
+      }
+    }
+
+    const pickup = buildInsertStatement("pickup_histories", [source.tables.pickup_histories.rows[0]]);
+    assert.ok(Array.isArray(JSON.parse(pickup.values[4])));
+  });
+
   test("normalizes timezone-less timestamps as UTC and preserves explicit offsets", async () => {
-    const { buildInsertStatement } = await import("./pyroxene-transfer.mjs");
+    const { buildInsertStatement } = await import("./d1-cutover-transfer.mjs");
     const variants = [
       ["space", "2024-06-16 11:50:47", "2024-06-16T11:50:47.000Z"],
       ["timezone-less T", "2024-06-16T11:50:47", "2024-06-16T11:50:47.000Z"],
@@ -300,7 +320,7 @@ if (!runningUnderJest) {
   });
 
   test("uses the frozen v1 receipt-key vectors and rejects noncanonical keys", async () => {
-    const { decodePostgresPyroxeneReceiptItemKey, encodePostgresPyroxeneReceiptItemKey } = await import("./pyroxene-transfer.mjs");
+    const { decodePostgresPyroxeneReceiptItemKey, encodePostgresPyroxeneReceiptItemKey } = await import("./d1-cutover-transfer.mjs");
     const vectors = [
       ["", "v1:"],
       ["a\u0000b", "v1:YQBi"],
@@ -316,7 +336,7 @@ if (!runningUnderJest) {
   });
 
   test("keeps chunk parameter order and limits chunks to 500 rows", async () => {
-    const { INSERT_CHUNK_SIZE, buildInsertStatement } = await import("./pyroxene-transfer.mjs");
+    const { INSERT_CHUNK_SIZE, buildInsertStatement } = await import("./d1-cutover-transfer.mjs");
     const rows = Array.from({ length: INSERT_CHUNK_SIZE + 1 }, (_, index) => rowFor("pyroxene_planner_options", index + 1));
     const first = buildInsertStatement("pyroxene_planner_options", rows, 0, INSERT_CHUNK_SIZE);
     const second = buildInsertStatement("pyroxene_planner_options", rows, INSERT_CHUNK_SIZE, rows.length);
@@ -328,10 +348,10 @@ if (!runningUnderJest) {
   });
 
   test("imports all ten tables in one transaction, repairs sequences, and proves bidirectional parity", async () => {
-    const { parityDifferenceStatement, transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { parityDifferenceStatement, transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     const client = fakeClient(targetRowsFor(source));
-    const result = await transferPyroxeneSnapshot(source, { client, statementTimeoutMs: 12345 });
+    const result = await transferD1CutoverSnapshot(source, { client, statementTimeoutMs: 12345 });
 
     assert.deepEqual(result.tables.map(({ table }) => table), tables);
     assert.equal(client.calls.filter(({ text }) => text === "BEGIN").length, 1);
@@ -355,23 +375,23 @@ if (!runningUnderJest) {
   });
 
   test("restarts an empty table identity sequence at one", async () => {
-    const { transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot({ pyroxene_planner_options: { rows: [] } });
     const client = fakeClient(targetRowsFor(source));
-    await transferPyroxeneSnapshot(source, { client });
+    await transferD1CutoverSnapshot(source, { client });
     const restart = client.calls.find(({ text }) => text.includes('"pyroxene_planner_options_id_seq"'));
     assert.equal(restart?.text, 'ALTER SEQUENCE "public"."pyroxene_planner_options_id_seq" RESTART WITH 1');
   });
 
   test("rolls back a valid maximum integer ID before issuing an overflowing restart", async () => {
-    const { transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot({
       pyroxene_owned_resources: {
         rows: [rowFor("pyroxene_owned_resources", 2147483647, { pyroxene: 1 })],
       },
     });
     const client = fakeClient(targetRowsFor(source));
-    await assert.rejects(transferPyroxeneSnapshot(source, { client }), /expected 1-2147483647/);
+    await assert.rejects(transferD1CutoverSnapshot(source, { client }), /expected 1-2147483647/);
     assert.equal(client.calls.filter(({ text }) => text === "COMMIT").length, 0);
     assert.equal(client.calls.filter(({ text }) => text === "ROLLBACK").length, 1);
     assert.equal(client.calls.some(({ text }) => text.includes("RESTART WITH 2147483648")), false);
@@ -379,51 +399,51 @@ if (!runningUnderJest) {
   });
 
   test("rolls back the whole import when either typed parity direction fails", async () => {
-    const { transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     for (const option of [{ sourceDifferenceTables: [tables[0]] }, { targetDifferenceTables: [tables[0]] }]) {
       const client = fakeClient(targetRowsFor(source), option);
-      await assert.rejects(transferPyroxeneSnapshot(source, { client }), /Parity mismatch/);
+      await assert.rejects(transferD1CutoverSnapshot(source, { client }), /Parity mismatch/);
       assert.equal(client.calls.filter(({ text }) => text === "COMMIT").length, 0);
       assert.equal(client.calls.filter(({ text }) => text === "ROLLBACK").length, 1);
     }
   });
 
   test("rolls back on an import failure and preserves the original error", async () => {
-    const { transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     const client = fakeClient(targetRowsFor(source), {
       throwWhen: (text) => text.startsWith('INSERT INTO "d1_cutover_stage_pyroxene_event_data"'),
     });
-    await assert.rejects(transferPyroxeneSnapshot(source, { client }), /injected PostgreSQL failure/);
+    await assert.rejects(transferD1CutoverSnapshot(source, { client }), /injected PostgreSQL failure/);
     assert.equal(client.calls.filter(({ text }) => text === "COMMIT").length, 0);
     assert.equal(client.calls.filter(({ text }) => text === "ROLLBACK").length, 1);
   });
 
   test("fails closed for missing, malformed, or untrusted identity sequence results", async () => {
-    const { transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     for (const sequenceName of [undefined, null, "public.bad-name", "public.one.two", "public.seq;DROP TABLE users"]) {
       const client = fakeClient(targetRowsFor(source), { sequenceNames: { [tables[0]]: sequenceName } });
-      await assert.rejects(transferPyroxeneSnapshot(source, { client }), /identity sequence/);
+      await assert.rejects(transferD1CutoverSnapshot(source, { client }), /identity sequence/);
       assert.equal(client.calls.filter(({ text }) => text === "COMMIT").length, 0);
       assert.equal(client.calls.filter(({ text }) => text === "ROLLBACK").length, 1);
     }
   });
 
   test("accepts both unqualified and schema-qualified sequence identifiers", async () => {
-    const { transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     const client = fakeClient(targetRowsFor(source), {
       sequenceNames: { [tables[0]]: "pyroxene_owned_resources_id_seq", [tables[1]]: "custom.pyroxene_collected_sources_id_seq" },
     });
-    await transferPyroxeneSnapshot(source, { client });
+    await transferD1CutoverSnapshot(source, { client });
     assert.ok(client.calls.some(({ text }) => text === 'ALTER SEQUENCE "pyroxene_owned_resources_id_seq" RESTART WITH 2'));
     assert.ok(client.calls.some(({ text }) => text === 'ALTER SEQUENCE "custom"."pyroxene_collected_sources_id_seq" RESTART WITH 3'));
   });
 
   test("requires the exact snapshot envelope and per-table metadata before import", async () => {
-    const { transferPyroxeneSnapshot, validateSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { transferD1CutoverSnapshot, validateSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     for (const field of ["format", "pageSize", "generatedAt", "tables"]) {
       const missing = { ...source };
@@ -445,11 +465,11 @@ if (!runningUnderJest) {
     const invalid = { ...source };
     delete invalid.pageSize;
     const client = { query: async () => { throw new Error("PostgreSQL mutation must not start"); } };
-    await assert.rejects(transferPyroxeneSnapshot(invalid, { client }), /missing=.*pageSize/);
+    await assert.rejects(transferD1CutoverSnapshot(invalid, { client }), /missing=.*pageSize/);
   });
 
   test("rejects unique IDs that are out of order even when lastId is the maximum", async () => {
-    const { validateSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { validateSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     const rows = [rowFor("pyroxene_owned_resources", 2), rowFor("pyroxene_owned_resources", 1)];
     const outOfOrder = {
@@ -463,7 +483,7 @@ if (!runningUnderJest) {
   });
 
   test("rejects unsupported versions, missing or extra tables, duplicate IDs, and duplicate physical keys", async () => {
-    const { validateSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { validateSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     assert.throws(() => validateSnapshot({ ...source, format: "mollulog.d1.snapshot.v2" }), /Unsupported snapshot format/);
     assert.throws(() => validateSnapshot({ ...source, unexpected: true }), /unknown=unexpected/);
@@ -516,15 +536,15 @@ if (!runningUnderJest) {
       /Unknown columns/,
     );
 
-    const { buildInsertStatement } = await import("./pyroxene-transfer.mjs");
+    const { buildInsertStatement } = await import("./d1-cutover-transfer.mjs");
     assert.throws(() => buildInsertStatement("pyroxene_owned_resources", source.tables.pyroxene_owned_resources.rows, 0, 1, "users"), /Target table is not allowlisted/);
   });
 
   test("connects and closes a client created by the factory", async () => {
-    const { transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
+    const { transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
     const source = snapshot();
     const client = fakeClient(targetRowsFor(source));
-    const result = await transferPyroxeneSnapshot(source, { clientFactory: async () => client });
+    const result = await transferD1CutoverSnapshot(source, { clientFactory: async () => client });
     assert.equal(result.tables.length, tables.length);
     assert.equal(client.connected, true);
     assert.equal(client.ended, true);

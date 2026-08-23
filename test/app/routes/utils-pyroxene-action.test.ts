@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { d1MaintenanceResult } from "~/domain/pyroxene-cutover";
+import { d1MaintenanceResult } from "~/domain/d1-cutover";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
@@ -48,7 +48,7 @@ jest.mock("~/models/recruitment-result.server", () => ({
   setRecruitmentResultCompletion: mockSetRecruitmentResultCompletion,
 }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: mockGetLogger }));
-jest.mock("~/lib/pyroxene-cutover.server", () => ({
+jest.mock("~/lib/d1-cutover.server", () => ({
   d1MaintenanceActionResult: mockD1MaintenanceActionResult,
 }));
 

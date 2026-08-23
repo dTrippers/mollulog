@@ -130,7 +130,7 @@ if (!runningUnderJest) {
   const assert = process.getBuiltinModule("node:assert/strict");
 
   test("builds an allowlisted id keyset query capped at 500 rows", async () => {
-    const { buildKeysetQuery } = await import("./pyroxene-d1-collect.mjs");
+    const { buildKeysetQuery } = await import("./d1-cutover-collect.mjs");
     assert.equal(
       buildKeysetQuery("pyroxene_guest_import_items", 12, 500),
       'SELECT * FROM "pyroxene_guest_import_items" WHERE id > 12 ORDER BY id LIMIT 500',
@@ -141,19 +141,50 @@ if (!runningUnderJest) {
   });
 
   test("parses the supported wrangler JSON result shapes", async () => {
-    const { parseWranglerJson } = await import("./pyroxene-d1-collect.mjs");
+    const { parseWranglerJson } = await import("./d1-cutover-collect.mjs");
     const row = { id: 1, itemKey: "type\u0000key" };
     assert.deepEqual(parseWranglerJson(JSON.stringify({ results: [row] })), [row]);
     assert.deepEqual(parseWranglerJson({ result: [row] }), [row]);
     assert.deepEqual(parseWranglerJson({ result: { results: [row] } }), [row]);
     assert.deepEqual(parseWranglerJson([row]), [row]);
-    assert.throws(() => parseWranglerJson({ success: true }), /results array/);
+    assert.deepEqual(parseWranglerJson([{ result: [row] }]), [row]);
+    assert.throws(() => parseWranglerJson({ success: true }), /supported shapes/);
+  });
+
+  test("records bounded count and source-size preflight for exactly the allowlist", async () => {
+    const { preflightD1Cutover } = await import("./d1-cutover-collect.mjs");
+    const calls = [];
+    const preflight = await preflightD1Cutover({
+      database: "mollulog",
+      accountId: "account",
+      env: "production",
+      maxTotalRows: 100,
+      maxSourceBytes: 10_000,
+      execute: async ({ query }) => {
+        calls.push(query);
+        return { results: [{ rowCount: "2", lastId: "9", sourceBytes: "100" }] };
+      },
+    });
+
+    assert.equal(preflight.format, "mollulog.d1.preflight.v1");
+    assert.equal(preflight.totalRows, tables.length * 2);
+    assert.equal(preflight.totalSourceBytes, tables.length * 100);
+    assert.equal(Object.keys(preflight.tables).length, tables.length);
+    assert.ok(calls.every((query) => query.includes('COUNT(*) AS "rowCount"') && query.includes('"sourceBytes"')));
+    await assert.rejects(
+      preflightD1Cutover({
+        database: "mollulog",
+        maxTotalRows: 1,
+        execute: async () => ({ results: [{ rowCount: 2, lastId: 2, sourceBytes: 1 }] }),
+      }),
+      /maxTotalRows/,
+    );
   });
 
   test("collects successive keyset pages for every allowlisted table", async () => {
-    const { collectPyroxeneSnapshot } = await import("./pyroxene-d1-collect.mjs");
+    const { collectD1CutoverSnapshot } = await import("./d1-cutover-collect.mjs");
     const calls = [];
-    const snapshot = await collectPyroxeneSnapshot({
+    const snapshot = await collectD1CutoverSnapshot({
       database: "mollulog",
       pageSize: 2,
       accountId: "account",
@@ -183,7 +214,7 @@ if (!runningUnderJest) {
   });
 
   test("rejects duplicate physical uniqueness keys and disallowed tables", async () => {
-    const { validateTableRows, validateSnapshotTables } = await import("./pyroxene-d1-collect.mjs");
+    const { validateTableRows, validateSnapshotTables } = await import("./d1-cutover-collect.mjs");
     const duplicateUid = [rowFor("pyroxene_owned_resources", 1), { ...rowFor("pyroxene_owned_resources", 2), uid: "owned-1" }];
     assert.throws(() => validateTableRows("pyroxene_owned_resources", duplicateUid), /Duplicate unique key/);
 
@@ -194,7 +225,7 @@ if (!runningUnderJest) {
   });
 
   test("rejects malformed rows while preserving NUL-bearing values", async () => {
-    const { validateRawRow } = await import("./pyroxene-d1-collect.mjs");
+    const { validateRawRow } = await import("./d1-cutover-collect.mjs");
     const row = rowFor("pyroxene_guest_import_items", 1);
     assert.equal(validateRawRow("pyroxene_guest_import_items", row).itemKey, "type\u0000key");
     assert.throws(() => validateRawRow("pyroxene_guest_import_items", { ...row, autoRepurchase: 0 }), /Unknown columns/);
@@ -213,7 +244,7 @@ if (!runningUnderJest) {
     const { mkdtemp, open, rm, stat } = process.getBuiltinModule("node:fs/promises");
     const { join } = process.getBuiltinModule("node:path");
     const { tmpdir } = process.getBuiltinModule("node:os");
-    const { writePyroxeneSnapshot } = await import("./pyroxene-d1-collect.mjs");
+    const { writeD1CutoverSnapshot } = await import("./d1-cutover-collect.mjs");
     const directory = await mkdtemp(join(tmpdir(), "mollulog-pyroxene-"));
     const output = join(directory, "snapshot.json");
     const rawItemKey = "type\u0000key";
@@ -230,13 +261,41 @@ if (!runningUnderJest) {
       tables: snapshotTables,
     };
     try {
-      await writePyroxeneSnapshot(output, snapshot);
+      await writeD1CutoverSnapshot(output, snapshot);
       assert.equal((await stat(output)).mode & 0o777, 0o600);
       const handle = await open(output, "r");
       const parsed = JSON.parse(await handle.readFile("utf8"));
       assert.equal(parsed.tables.pyroxene_guest_import_items.rows[0].itemKey, rawItemKey);
       await handle.close();
-      await assert.rejects(writePyroxeneSnapshot(output, snapshot), { code: "EEXIST" });
+      await assert.rejects(writeD1CutoverSnapshot(output, snapshot), { code: "EEXIST" });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("writes preflight output with mode 0600 and refuses overwrite", async () => {
+    const { mkdtemp, open, rm, stat } = process.getBuiltinModule("node:fs/promises");
+    const { join } = process.getBuiltinModule("node:path");
+    const { tmpdir } = process.getBuiltinModule("node:os");
+    const { writeD1CutoverPreflight } = await import("./d1-cutover-collect.mjs");
+    const directory = await mkdtemp(join(tmpdir(), "mollulog-preflight-"));
+    const output = join(directory, "preflight.json");
+    const preflight = {
+      format: "mollulog.d1.preflight.v1",
+      generatedAt: "2026-08-23T00:00:00.000Z",
+      maxTotalRows: 100,
+      maxSourceBytes: 1000,
+      totalRows: 0,
+      totalSourceBytes: 0,
+      tables: {},
+    };
+    try {
+      await writeD1CutoverPreflight(output, preflight);
+      assert.equal((await stat(output)).mode & 0o777, 0o600);
+      const handle = await open(output, "r");
+      assert.equal(JSON.parse(await handle.readFile("utf8")).format, "mollulog.d1.preflight.v1");
+      await handle.close();
+      await assert.rejects(writeD1CutoverPreflight(output, preflight), { code: "EEXIST" });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

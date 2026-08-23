@@ -2,7 +2,6 @@ import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
 import type { LoaderFunctionArgs } from "react-router";
 import { raidTypeToParam } from "~/domain/raid";
-import { withD1Session } from "~/lib/d1-session";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getAllStudents } from "~/models/student";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
@@ -35,7 +34,7 @@ function applySeoReindexFloor(lastmod: Dayjs) {
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const items: SitemapItem[] = [
     { link: `${HOST}/futures`, lastmod: dayjs(), changefreq: "daily", priority: 1.0 },
     { link: `${HOST}/more`, lastmod: dayjs(), changefreq: "daily", priority: 0.9 },

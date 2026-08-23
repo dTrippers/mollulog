@@ -3,17 +3,17 @@ import {
   D1_CUTOVER_MAINTENANCE_KEY,
   D1_MAINTENANCE_RETRY_AFTER_SECONDS,
   d1MaintenanceResult,
-} from "~/domain/pyroxene-cutover";
+} from "~/domain/d1-cutover";
 import { getLogger } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { withTimeout } from "~/lib/with-timeout";
 
-export type { D1MaintenanceResult } from "~/domain/pyroxene-cutover";
+export type { D1MaintenanceResult } from "~/domain/d1-cutover";
 export {
   d1MaintenanceMessage,
   d1MaintenanceResult,
   isD1MaintenanceResult,
-} from "~/domain/pyroxene-cutover";
+} from "~/domain/d1-cutover";
 
 type D1MaintenanceLogger = Pick<ReturnType<typeof getLogger>, "error">;
 

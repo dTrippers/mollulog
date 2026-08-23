@@ -15,8 +15,8 @@ import {
   D1_MAINTENANCE_RETRY_AFTER_SECONDS,
   d1MaintenanceMessage,
   d1MaintenanceResult,
-} from "~/domain/pyroxene-cutover";
-import { d1MaintenanceActionResult, isD1MaintenanceResult } from "~/lib/pyroxene-cutover.server";
+} from "~/domain/d1-cutover";
+import { d1MaintenanceActionResult, isD1MaintenanceResult } from "~/lib/d1-cutover.server";
 
 const mockedGetLogger = getLogger as jest.MockedFunction<typeof getLogger>;
 const mockedWithTimeout = withTimeout as jest.MockedFunction<typeof withTimeout>;

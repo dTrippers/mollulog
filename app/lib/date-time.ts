@@ -34,7 +34,7 @@ export function normalizeTimeZone(value: string | null | undefined): TimeZoneId 
   return isValidTimeZone(value) ? value : DEFAULT_TIME_ZONE;
 }
 
-export function parseD1TimestampAsUtc(value: string): dayjs.Dayjs {
+function parseTimezoneLessTimestampAsUtc(value: string): dayjs.Dayjs {
   return dayjs.utc(value);
 }
 
@@ -47,7 +47,7 @@ export function parseUtcTimestamp(value: string | Date): dayjs.Dayjs {
     return dayjs(value).utc();
   }
 
-  return parseD1TimestampAsUtc(value);
+  return parseTimezoneLessTimestampAsUtc(value);
 }
 
 export function normalizeInstant(value: string): UtcIsoString {

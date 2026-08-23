@@ -20,7 +20,6 @@ import {
   mergeEditableRecruitmentResultStudents,
   resolveRecruitmentResultStudents,
 } from "~/domain/recruitment-result";
-import { withD1Session } from "~/lib/d1-session";
 import {
   compareInstantAsc,
   compareInstantDesc,
@@ -30,7 +29,8 @@ import {
   toUtcIso,
 } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import { getPickupHistory, type PickupHistory } from "~/models/pickup-history";
+import { type PickupHistory } from "~/models/pickup-history";
+import { getPickupHistory } from "~/models/pickup-history.server";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
 import {
   getRecruitmentResult,
@@ -144,7 +144,7 @@ export function shouldSkipTier3StudentListInitially(tier3Count?: number, tier3St
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");
@@ -264,7 +264,7 @@ type ActionData = {
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) {
     return redirect("/unauthorized");

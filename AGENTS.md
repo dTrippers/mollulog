@@ -20,7 +20,7 @@ This project uses the following stack:
 - TypeScript
 - Tailwind CSS for styling
 - PNPM for package manager
-- Drizzle ORM and Cloudflare D1 for database
+- Drizzle ORM and PostgreSQL through Cloudflare Hyperdrive for database
 
 This project has been deployed to Cloudflare Workers.
 

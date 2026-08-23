@@ -9,7 +9,6 @@ import {
   type RecruitmentDrawResult,
   type SimulationStudent,
 } from "~/domain/recruitment-simulator";
-import { withD1Session } from "~/lib/d1-session";
 import { cn } from "~/lib/utils";
 import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content.server";
@@ -37,7 +36,7 @@ export const loader = async ({ params, context }: LoaderFunctionArgs) => {
   }
 
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const content = await getTimelineContent(publicReadEnv, timelineUid, { ctx });
   if (!content || !content.recruitmentGroupUid) {
     throw new Response("Not Found", { status: 404 });

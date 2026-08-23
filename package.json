@@ -18,9 +18,6 @@
     "assets:deploy": "terraform -chdir=deploy/assets apply",
     "cdn:plan": "terraform -chdir=deploy/cdn plan",
     "cdn:deploy": "terraform -chdir=deploy/cdn apply",
-    "dev:db:migrate": "wrangler d1 migrations apply --local DB --persist-to ${WRANGLER_PERSIST_TO:-.wrangler/state}",
-    "prod:db:migrate": "wrangler d1 migrations apply --remote DB --env production",
-    "prod:db:pull": "mkdir -p tmp && wrangler d1 export mollulog --remote --env production --output=tmp/prod-remote-dump.sql && rm -rf ${WRANGLER_PERSIST_TO:-.wrangler/state}/v3/d1/miniflare-D1DatabaseObject && wrangler d1 execute DB --local --persist-to ${WRANGLER_PERSIST_TO:-.wrangler/state} --file=tmp/prod-remote-dump.sql --yes",
     "test": "jest",
     "typecheck": "react-router typegen && tsc",
     "lint": "biome lint app test && biome check test",
@@ -93,7 +90,7 @@
     "ts-jest": "^29.4.11",
     "typescript": "^5.9.3",
     "vite": "^8.1.3",
-    "wrangler": "^4.107.0"
+    "wrangler": "4.107.0"
   },
   "engines": {
     "node": ">=22.14.0"

@@ -52,7 +52,7 @@ const kvCircuitStates = new WeakMap<object, KvCircuitState>();
 /**
  * Deadline for regenerating a cached value.
  *
- * This is intentionally longer than KV/D1, but still well below CloudFront's
+ * This is intentionally longer than KV, but still well below CloudFront's
  * 30s origin timeout. When stale data exists, this turns a hung refresh into a
  * stale fallback instead of holding the SSR response open.
  */

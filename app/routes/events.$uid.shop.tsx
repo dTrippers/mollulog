@@ -3,7 +3,6 @@ import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { calculateShopPurchaseDays } from "~/components/features/events/shop/calculations";
 import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
-import { withD1Session } from "~/lib/d1-session";
 import { getEventContentSchedule, getEventMetadata, getEventShopContent } from "~/models/event-content";
 import { getEventShopState } from "~/models/event-shop-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
@@ -16,7 +15,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
 
   const metadata = await getEventMetadata(publicReadEnv, timelineUid, ctx);
   if (!metadata) {

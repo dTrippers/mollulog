@@ -28,13 +28,12 @@ import {
   isD1MaintenanceResult,
   type D1MaintenanceResult,
   d1MaintenanceMessage,
-} from "~/domain/pyroxene-cutover";
+} from "~/domain/d1-cutover";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { extractPyroxeneTimelineBaseUid, PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { withD1Session } from "~/lib/d1-session";
-import { d1MaintenanceActionResult } from "~/lib/pyroxene-cutover.server";
+import { d1MaintenanceActionResult } from "~/lib/d1-cutover.server";
 import { cn } from "~/lib/utils";
 import { favoriteStudent, getUserFavoritedStudents } from "~/models/favorite-students";
 import { type GuestPyroxeneImportPlan, importGuestPyroxeneSelection } from "~/models/guest-pyroxene-import";
@@ -103,7 +102,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const user = await getActiveSensei(env, request);
   if (!user) return redirect("/unauthorized");
 
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const [contents, pyroxeneState, favorites] = await Promise.all([
     getPyroxenePlannerContents(publicReadEnv, false, ctx),
     getPyroxeneUserState(env, user.id, { ctx }),

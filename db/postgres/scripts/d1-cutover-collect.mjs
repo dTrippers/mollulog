@@ -17,7 +17,23 @@ import {
 } from "./d1-cutover-tables.mjs";
 
 export const DEFAULT_PAGE_SIZE = 500;
+export const DEFAULT_MAX_TOTAL_ROWS = 100_000;
+export const DEFAULT_MAX_SOURCE_BYTES = 256 * 1024 * 1024;
+export const D1_CUTOVER_PREFLIGHT_FORMAT = "mollulog.d1.preflight.v1";
 const execFile = promisify(execFileCallback);
+
+/**
+ * Wrangler versions observed during the cutover rehearsal returned one of these
+ * JSON envelopes; keep the accepted shapes explicit so a future CLI change
+ * fails with an actionable error instead of silently collecting the wrong data.
+ */
+const SUPPORTED_WRANGLER_JSON_SHAPES = [
+  "a top-level raw row array: [{...}]",
+  "{ results: [{...}] }",
+  "{ result: [{...}] }",
+  "{ result: { results: [{...}] } }",
+  "a one-element wrapper array containing one of the object shapes",
+].join("; ");
 
 function assertTable(table) {
   if (!D1_CUTOVER_TABLES.includes(table)) throw new Error(`Table is not allowlisted: ${table}`);
@@ -51,12 +67,17 @@ export function parseWranglerJson(output) {
   if (Array.isArray(parsed)) {
     if (parsed.length === 0 || parsed.every(isRawRow)) return parsed;
     if (parsed.length === 1) return parseWranglerJson(parsed[0]);
-    throw new Error("wrangler d1 execute did not return a results array");
+    throw new Error(
+      `wrangler d1 execute returned an unsupported JSON shape (array length ${parsed.length}); supported shapes: ${SUPPORTED_WRANGLER_JSON_SHAPES}`,
+    );
   }
   if (Array.isArray(parsed?.results)) return parsed.results;
   if (Array.isArray(parsed?.result)) return parsed.result;
   if (parsed?.result && typeof parsed.result === "object") return parseWranglerJson(parsed.result);
-  throw new Error("wrangler d1 execute did not return a results array");
+  const observed = isPlainObject(parsed) ? `object keys=${Object.keys(parsed).join(",") || "<none>"}` : typeof parsed;
+  throw new Error(
+    `wrangler d1 execute returned an unsupported JSON shape (${observed}); expected a results array; supported shapes: ${SUPPORTED_WRANGLER_JSON_SHAPES}`,
+  );
 }
 
 function isLeapYear(year) {
@@ -178,7 +199,7 @@ export function validateTableRows(table, rows) {
   return rows;
 }
 
-async function executeD1Select({ database, query, accountId, env, command = "wrangler", execute }) {
+export async function executeD1Select({ database, query, accountId, env, command = "wrangler", execute }) {
   if (execute) return parseWranglerJson(await execute({ database, query, accountId, env }));
   const args = ["d1", "execute", database, "--remote", "--command", query, "--json"];
   if (env) args.push("--env", env);
@@ -187,7 +208,15 @@ async function executeD1Select({ database, query, accountId, env, command = "wra
   return parseWranglerJson(result.stdout);
 }
 
-export async function collectTable({ table, database, pageSize = DEFAULT_PAGE_SIZE, accountId, env, execute }) {
+function assertPositiveLimit(value, name) {
+  if (!Number.isSafeInteger(value) || value < 1) throw new Error(`${name} must be a positive safe integer`);
+}
+
+function snapshotRowBytes(row) {
+  return Buffer.byteLength(JSON.stringify(row), "utf8");
+}
+
+export async function collectTable({ table, database, pageSize = DEFAULT_PAGE_SIZE, accountId, env, execute, onRow }) {
   assertTable(table);
   if (!database) throw new Error("A D1 database name is required");
   if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > DEFAULT_PAGE_SIZE) {
@@ -213,6 +242,7 @@ export async function collectTable({ table, database, pageSize = DEFAULT_PAGE_SI
         throw new Error(`D1 keyset order is invalid for ${table}`);
       }
       rows.push(row);
+      onRow?.(row);
       previousId = row.id;
     }
     lastId = previousId;
@@ -231,15 +261,46 @@ export function validateSnapshotTables(tables) {
   return tables;
 }
 
-export async function collectPyroxeneSnapshot({ database, pageSize = DEFAULT_PAGE_SIZE, accountId, env, execute }) {
+export async function collectD1CutoverSnapshot({
+  database,
+  pageSize = DEFAULT_PAGE_SIZE,
+  accountId,
+  env,
+  execute,
+  maxTotalRows = DEFAULT_MAX_TOTAL_ROWS,
+  maxSnapshotBytes = DEFAULT_MAX_SOURCE_BYTES,
+}) {
   if (!database) throw new Error("A D1 database name is required");
   if (!Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > DEFAULT_PAGE_SIZE) {
     throw new Error(`pageSize must be between 1 and ${DEFAULT_PAGE_SIZE}`);
   }
+  assertPositiveLimit(maxTotalRows, "maxTotalRows");
+  assertPositiveLimit(maxSnapshotBytes, "maxSnapshotBytes");
 
   const tables = {};
+  let totalRows = 0;
+  let totalSnapshotBytes = 0;
   for (const table of D1_CUTOVER_TABLES) {
-    const collected = await collectTable({ table, database, pageSize, accountId, env, execute });
+    const collected = await collectTable({
+      table,
+      database,
+      pageSize,
+      accountId,
+      env,
+      execute,
+      onRow: (row) => {
+        totalRows += 1;
+        totalSnapshotBytes += snapshotRowBytes(row);
+        if (totalRows > maxTotalRows) {
+          throw new Error(`D1 cutover snapshot exceeded maxTotalRows=${maxTotalRows}; abort and reassess source size`);
+        }
+        if (totalSnapshotBytes > maxSnapshotBytes) {
+          throw new Error(
+            `D1 cutover snapshot exceeded maxSnapshotBytes=${maxSnapshotBytes}; abort and reassess source size`,
+          );
+        }
+      },
+    });
     validateTableRows(table, collected.rows);
     tables[table] = {
       rows: collected.rows,
@@ -255,16 +316,90 @@ export async function collectPyroxeneSnapshot({ database, pageSize = DEFAULT_PAG
   };
 }
 
-/** Writes a snapshot using exclusive mode 0600 and never overwrites an existing file. */
-export async function writePyroxeneSnapshot(output, snapshot) {
-  if (!output) throw new Error("A snapshot output path is required");
+function buildPreflightQuery(table) {
+  assertTable(table);
+  const sourceBytesExpression = D1_CUTOVER_TABLE_COLUMNS[table]
+    .map((column) => `COALESCE(length(CAST(${quoteIdentifier(column)} AS BLOB)), 0)`)
+    .join(" + ");
+  return `SELECT COUNT(*) AS "rowCount", COALESCE(MAX(${quoteIdentifier("id")}), 0) AS "lastId", COALESCE(SUM(${sourceBytesExpression}), 0) AS "sourceBytes" FROM ${quoteIdentifier(table)}`;
+}
+
+function parseNonNegativeInteger(value, label) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" && /^[0-9]+$/.test(value) ? Number(value) : Number.NaN;
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`${label} must be a non-negative safe integer`);
+  return parsed;
+}
+
+export async function preflightD1Cutover({
+  database,
+  accountId,
+  env,
+  execute,
+  maxTotalRows = DEFAULT_MAX_TOTAL_ROWS,
+  maxSourceBytes = DEFAULT_MAX_SOURCE_BYTES,
+}) {
+  if (!database) throw new Error("A D1 database name is required");
+  assertPositiveLimit(maxTotalRows, "maxTotalRows");
+  assertPositiveLimit(maxSourceBytes, "maxSourceBytes");
+
+  const tables = {};
+  let totalRows = 0;
+  let totalSourceBytes = 0;
+  for (const table of D1_CUTOVER_TABLES) {
+    const result = await executeD1Select({
+      database,
+      query: buildPreflightQuery(table),
+      accountId,
+      env,
+      execute,
+    });
+    if (result.length !== 1 || !isPlainObject(result[0])) {
+      throw new Error(`D1 preflight returned an unexpected result for ${table}`);
+    }
+    const rowCount = parseNonNegativeInteger(result[0].rowCount, `${table}.rowCount`);
+    const lastId = parseNonNegativeInteger(result[0].lastId, `${table}.lastId`);
+    const sourceBytes = parseNonNegativeInteger(result[0].sourceBytes, `${table}.sourceBytes`);
+    totalRows += rowCount;
+    totalSourceBytes += sourceBytes;
+    if (totalRows > maxTotalRows) {
+      throw new Error(`D1 cutover preflight exceeded maxTotalRows=${maxTotalRows}; abort and reassess source size`);
+    }
+    if (totalSourceBytes > maxSourceBytes) {
+      throw new Error(`D1 cutover preflight exceeded maxSourceBytes=${maxSourceBytes}; abort and reassess source size`);
+    }
+    tables[table] = { rowCount, lastId, sourceBytes };
+  }
+
+  return {
+    format: D1_CUTOVER_PREFLIGHT_FORMAT,
+    generatedAt: new Date().toISOString(),
+    maxTotalRows,
+    maxSourceBytes,
+    totalRows,
+    totalSourceBytes,
+    tables,
+  };
+}
+
+/** Writes protected JSON using exclusive mode 0600 and never overwrites an existing file. */
+async function writeProtectedJson(output, value, label) {
+  if (!output) throw new Error(`A ${label} output path is required`);
   await mkdir(dirname(output), { recursive: true });
   const file = await open(output, "wx", 0o600);
   try {
-    await file.writeFile(`${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+    await file.writeFile(`${JSON.stringify(value, null, 2)}\n`, "utf8");
   } finally {
     await file.close();
   }
+}
+
+/** Writes a snapshot using exclusive mode 0600 and never overwrites an existing file. */
+export async function writeD1CutoverSnapshot(output, snapshot) {
+  await writeProtectedJson(output, snapshot, "snapshot");
+}
+
+export async function writeD1CutoverPreflight(output, preflight) {
+  await writeProtectedJson(output, preflight, "preflight");
 }
 
 function optionValue(args, name) {
@@ -282,11 +417,27 @@ async function main() {
   const pageSize = Number(optionValue(args, "--page-size") ?? DEFAULT_PAGE_SIZE);
   const accountId = optionValue(args, "--account-id");
   const env = optionValue(args, "--env");
+  const maxTotalRows = Number(optionValue(args, "--max-total-rows") ?? DEFAULT_MAX_TOTAL_ROWS);
+  const maxSourceBytes = Number(optionValue(args, "--max-source-bytes") ?? DEFAULT_MAX_SOURCE_BYTES);
   if (!database || !output) {
-    throw new Error("Usage: d1-cutover-collect.mjs --database NAME --output FILE [--env ENV] [--page-size N]");
+    throw new Error(
+      "Usage: d1-cutover-collect.mjs [--preflight] --database NAME --output FILE [--env ENV] [--page-size N] [--max-total-rows N] [--max-source-bytes N]",
+    );
   }
-  const snapshot = await collectPyroxeneSnapshot({ database, pageSize, accountId, env });
-  await writePyroxeneSnapshot(output, snapshot);
+  if (args.includes("--preflight")) {
+    const preflight = await preflightD1Cutover({ database, accountId, env, maxTotalRows, maxSourceBytes });
+    await writeD1CutoverPreflight(output, preflight);
+    return;
+  }
+  const snapshot = await collectD1CutoverSnapshot({
+    database,
+    pageSize,
+    accountId,
+    env,
+    maxTotalRows,
+    maxSnapshotBytes: maxSourceBytes,
+  });
+  await writeD1CutoverSnapshot(output, snapshot);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

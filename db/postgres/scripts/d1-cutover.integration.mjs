@@ -192,7 +192,7 @@ integrationTest("imports all ten tables against disposable PostgreSQL and rolls 
   }
 
   const { Client } = await import("pg");
-  const { transferPyroxeneSnapshot } = await import("./pyroxene-transfer.mjs");
+  const { transferD1CutoverSnapshot } = await import("./d1-cutover-transfer.mjs");
   const client = new Client({
     host,
     port: Number(process.env.D1_CUTOVER_TEST_PGPORT),
@@ -209,9 +209,10 @@ integrationTest("imports all ten tables against disposable PostgreSQL and rolls 
     await migrate(client);
 
     const source = buildSnapshot({ pickupId: 2_000_000_000, includeEventShop: false });
-    await transferPyroxeneSnapshot(source, { client, closeClient: false });
+    await transferD1CutoverSnapshot(source, { client, closeClient: false });
     const afterImport = await state(client);
     assert.equal(afterImport.pickup_histories.rows[0].id, 2_000_000_000);
+    assert.deepEqual(afterImport.pickup_histories.rows[0].result, [{ trial: 10, tier3Count: 1, tier3StudentIds: ["student-1"] }]);
     assert.equal(afterImport.event_shop_states.rows.length, 0);
     assert.equal(afterImport.event_shop_states.sequence.last_value, "1");
     assert.equal(afterImport.pyroxene_guest_import_items.rows[0].item_key, "v1:dHlwZQBrZXk");
@@ -230,7 +231,7 @@ integrationTest("imports all ten tables against disposable PostgreSQL and rolls 
     const beforeFailure = await state(client);
     await client.query("SET d1_test.parity = 'on'");
     await assert.rejects(
-      transferPyroxeneSnapshot(buildSnapshot({ pickupId: 2_000_000_001, includeEventShop: true }), { client, closeClient: false }),
+      transferD1CutoverSnapshot(buildSnapshot({ pickupId: 2_000_000_001, includeEventShop: true }), { client, closeClient: false }),
       /Parity mismatch/,
     );
     await client.query("SET d1_test.parity = 'off'");

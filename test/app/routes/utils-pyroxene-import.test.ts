@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { d1MaintenanceResult } from "~/domain/d1-cutover";
 import { createEmptyGuestPyroxenePlanner } from "~/domain/guest-pyroxene-planner";
-import { d1MaintenanceResult } from "~/domain/pyroxene-cutover";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
@@ -9,8 +9,7 @@ const mockImportGuestPyroxeneSelection = jest.fn<AsyncMock>();
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: mockGetActiveSensei }));
 jest.mock("~/components/features/futures", () => ({ useGuestPyroxenePlanner: jest.fn() }));
-jest.mock("~/lib/d1-session", () => ({ withD1Session: jest.fn() }));
-jest.mock("~/lib/pyroxene-cutover.server", () => ({
+jest.mock("~/lib/d1-cutover.server", () => ({
   d1MaintenanceActionResult: mockD1MaintenanceActionResult,
 }));
 jest.mock("~/models/favorite-students", () => ({

@@ -2,13 +2,12 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect } from "react-router";
 import { EmptyView } from "~/components/primitives";
 import { getEventShopDestinationPath, selectEventShopDestination } from "~/domain/event-shop-destination";
-import { withD1Session } from "~/lib/d1-session";
 import { nowUtcIso } from "~/lib/date-time";
 import { getShopAvailableEvents } from "~/models/event-content";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const publicReadEnv = withD1Session(env, "first-unconstrained");
+  const publicReadEnv = env;
   const destination = selectEventShopDestination(await getShopAvailableEvents(publicReadEnv, ctx), nowUtcIso());
   if (destination) {
     return redirect(getEventShopDestinationPath(destination.uid));

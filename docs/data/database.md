@@ -1,116 +1,47 @@
 # Database
 
-This document does not list every table. Instead it captures the D1 / Drizzle modeling rules, canonical-store principles, and migration procedure.
+MolluLog의 runtime persistence는 PostgreSQL을 canonical store로 사용하며 Workers SSR/BFF에서 Hyperdrive를 거쳐 operation-scoped client로 접근합니다. D1은 final runtime binding이나 fallback store가 아니며, 기존 source table은 승인된 cutover 뒤 `zzz_` archive로만 보존합니다.
 
 ## Stack
 
-- DB: Cloudflare D1
-- ORM: Drizzle ORM
-- Migrations: `db/migrations/*.sql`
-- Operational queries: `db/operations/*.sql`
+- Database: PostgreSQL
+- Connection path: Workers → uncached Hyperdrive → PostgreSQL
+- ORM: Drizzle ORM with `drizzle-orm/node-postgres`
+- PostgreSQL schemas: `app/db/postgres/schema.ts`
+- PostgreSQL schema migrations: `db/postgres/migrations/*.sql`
+- Cutover snapshot/import tooling: `db/postgres/scripts/d1-cutover-*.mjs`
+- Historical source/archive migrations: `db/migrations/*.sql`
 
 ## Where models are defined
 
-Rather than a single central `schema.ts`, table definitions and domain logic are distributed across `app/models/*.ts`.
+Domain models and PostgreSQL repositories are separated by responsibility.
 
-For example:
+- `app/models/*.ts` preserves domain-facing API and user-visible behavior.
+- `app/db/postgres/*.ts` owns PostgreSQL queries, transforms, and operation spans.
+- `app/db/postgres/schema.ts` is the typed PostgreSQL schema source.
+- `app/domain` contains pure calculations and validation without database I/O.
 
-- `sqliteTable(...)` definitions
-- D1 query / insert / update functions
-- read logic combined with caching
+Database access uses `withPostgresClient` from `app/lib/postgres.server.ts`. A repository creates and releases its client inside one operation; clients are never kept in module or request-global state. A transaction may span only the statements owned by that operation.
 
-A new DB task usually flows as:
+## Schema and type rules
 
-1. Add SQL to `db/migrations`.
-2. Add the table / functions to the relevant `app/models/*.ts`.
-3. Use that model from routes, features, and views.
+- Every table has a generated `id` identity, `created_at`, and `updated_at` where the domain requires modification timestamps.
+- Use PostgreSQL-native `timestamptz`, `boolean`, `jsonb`, identity columns, indexes, and unique indexes.
+- Keep user-visible JSON/domain types at the repository boundary. Malformed required data is an explicit failure, not a fake empty value.
+- Keep natural-key uniqueness and ordering in the schema and query. Add an index for every repeated lookup/order path.
+- Domain validation belongs in application code and tests. Structural constraints such as `PRIMARY KEY`, `NOT NULL`, and unique indexes belong in the migration.
+- The approved Pyroxene receipt `v1:` UTF-8 base64url representation is stable and must not be changed by unrelated work.
 
-SQL that is not a schema change but a one-off correction, validation, or re-aggregation a person must run explicitly belongs in `db/operations`, not `db/migrations`.
+## PostgreSQL migration procedure
 
-## Naming and responsibility
+Migration files use `yyyymmddhhmmss_{name}.sql` and are applied through the repository's approved PostgreSQL migration process. The ten-table D1 transfer is an all-at-once operation; use [the cutover runbook](../migrations/d1-cutover.md) for freeze, protected snapshot, one-transaction import, parity, sequence repair, rollback, and archive gates.
 
-- Table variables generally use a `*Table` suffix.
-- DB access functions use names that express domain intent.
-- Push SQL-flavored branching down to `models` rather than growing it in routes.
-- Models handle data access only (CRUD, BAQL reads, source cache, normalization). Pure logic such as scoring or simulation belongs in `app/domain`, and screen composition belongs in `app/views`.
-- Do not extend legacy tables in an area where a new canonical store is already defined.
+The final cutover artifact does not provide D1 migration package commands, D1 bindings, or a live D1 fallback. `db/migrations` remains only as historical source/archive material until the separately authorized D1 cleanup operation is complete.
 
-## Common columns
+## Operational safety
 
-Every D1 and PostgreSQL table must define the complete common column set below. Do not create a table with only some of these columns.
-
-- `id`: generated, non-null row identity. New tables normally use it as the primary key. When an existing natural-key primary key must remain for compatibility, keep `id` generated and uniquely indexed.
-- `created_at`: non-null creation timestamp, populated when the row is inserted.
-- `updated_at`: non-null last-modified timestamp, populated on insert and advanced by every application update.
-
-Domain timestamps such as `muted_at`, `started_at`, or `completed_at` do not replace `created_at` or `updated_at`.
-
-## Validation boundary
-
-- Do not add database `CHECK` constraints for domain or application validation in D1 or PostgreSQL migrations and Drizzle schemas.
-- Validate allowed values, required combinations, ranges, and other domain rules in the application layer and cover them with tests.
-- Structural declarations such as primary keys, `NOT NULL`, and indexes are not part of this restriction.
-
-## Drizzle usage
-
-```ts
-import { drizzle } from "drizzle-orm/d1";
-
-export async function getSomething(env: Env) {
-  const db = drizzle(env.DB);
-  return db.select();
-}
-```
-
-- Split long DB logic into model functions rather than writing it directly in `loader` / `action`.
-- Sort and filter at the DB level where possible.
-- Given D1's characteristics, avoid a single oversized query or an excessive `IN` clause.
-
-## Operational queries
-
-`db/operations` holds operational SQL kept out of the schema migration chain.
-
-For example:
-
-- copy-only data corrections run once after a specific deploy order
-- operational data validation or aggregation queries
-- manual recovery queries hard to fold into automatic migration
-
-Operational queries are not run with `pnpm dev:db:migrate` or `pnpm prod:db:migrate`. When one must run, execute it directly with a command that makes its purpose and target environment explicit, such as `wrangler d1 execute`. At the top of the file, note the run conditions, whether it is re-runnable, and that it is not a migration.
-
-## Migration procedure
-
-### Migration file name
-
-New migration files use the `yyyymmddhhmmss_{name}.sql` format.
-
-- Example: `20260429003526_rename_unused_tables_with_zzz_prefix.sql`
-- Use a four-digit year.
-- A second-precision timestamp reduces ordering conflicts when several people contribute at once.
-
-### Apply locally
-
-```bash
-pnpm dev:db:migrate
-```
-
-### Apply to production
-
-```bash
-pnpm prod:db:migrate
-```
-
-### Pull production D1 to local
-
-```bash
-pnpm prod:db:pull
-```
-
-This command exports the remote D1 and overwrites the local state. Back up first if you need to keep local data.
-
-## Notes
-
-- D1 is SQLite-based, so account for data type and SQL feature differences.
-- Migrations are managed one-directionally by default.
-- Verify large structural changes on staging or a local replica first.
-- The documentation does not keep a full table list. For the exact current state, read `db/migrations/` and `app/models/`.
+- Do not print or persist database credentials. Read the approved 1Password fields individually and unset the variables after the operation.
+- Keep snapshots outside the repository with mode `0600`; collector output is exclusive and never overwrites an existing file.
+- Snapshot/import allowlists are exact. `cache_refresh_jobs` is imported directly to PostgreSQL in the pre-cutover deployment and is excluded from the ten-table D1 snapshot.
+- Import count and both typed parity directions must pass before commit. Any row, transform, timeout, or sequence failure rolls back the entire transaction.
+- Production cutover, KV mutation, deploy, and production database operations require an explicitly approved operator window; this implementation does not execute them.

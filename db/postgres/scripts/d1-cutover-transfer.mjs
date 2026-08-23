@@ -341,6 +341,12 @@ export function decodePostgresPyroxeneReceiptItemKey(storedKey) {
 
 function toPgValue(table, column, value) {
   const normalized = normalizeSourceValue(table, column, value);
+  if (D1_CUTOVER_JSON_COLUMNS.has(column)) {
+    // node-postgres treats JavaScript arrays as PostgreSQL array parameters.
+    // Send every D1 JSON text value as JSON text so jsonb receives the exact
+    // parsed value, including top-level arrays.
+    return JSON.stringify(normalized);
+  }
   if (table === "pyroxene_guest_import_items" && column === "itemKey") {
     return encodePostgresPyroxeneReceiptItemKey(normalized);
   }
@@ -514,7 +520,7 @@ function pgConfigFromEnvironment() {
   };
 }
 
-export async function transferPyroxeneSnapshot(
+export async function transferD1CutoverSnapshot(
   snapshot,
   { client, clientFactory, statementTimeoutMs = DEFAULT_STATEMENT_TIMEOUT_MS, closeClient = true } = {},
 ) {
@@ -586,7 +592,7 @@ async function main() {
   const timeoutValue = optionValue(args, "--statement-timeout-ms");
   if (!snapshotPath) throw new Error("Usage: PGHOST=... PGDATABASE=... PGUSER=... PGPASSWORD=... d1-cutover-transfer.mjs --snapshot FILE");
   const snapshot = JSON.parse(await readFile(snapshotPath, "utf8"));
-  const result = await transferPyroxeneSnapshot(snapshot, {
+  const result = await transferD1CutoverSnapshot(snapshot, {
     statementTimeoutMs: timeoutValue === undefined ? DEFAULT_STATEMENT_TIMEOUT_MS : Number(timeoutValue),
   });
   console.log(JSON.stringify(result));

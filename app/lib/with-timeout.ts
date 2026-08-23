@@ -8,8 +8,8 @@
  * fast rejection that callers can recover from (treat as a cache miss, serve
  * stale, skip the write, etc.).
  *
- * Note: like the D1 wrapper, this only stops awaiting — there is no cancellation,
- * so the underlying operation may still complete in the background.
+ * Note: this only stops awaiting — there is no cancellation, so the underlying
+ * operation may still complete in the background.
  */
 
 export class TimeoutError extends Error {
