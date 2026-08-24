@@ -20,6 +20,7 @@ const row: typeof pgSenseisTable.$inferSelect = {
   googleId: null,
   githubId: null,
   active: true,
+  sessionVersion: 0,
   bio: "bio",
   role: "guest",
   profileVisibility: "private",

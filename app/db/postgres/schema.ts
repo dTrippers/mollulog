@@ -55,6 +55,7 @@ export const pgSenseisTable = pgTable(
     googleId: text("google_id"),
     githubId: text("github_id"),
     active: boolean().notNull().default(false),
+    sessionVersion: integer("session_version").notNull().default(0),
     bio: text(),
     role: text().$type<SenseiRole>().notNull().default("guest"),
     profileVisibility: text("profile_visibility").$type<ProfileVisibility>().notNull().default("public"),
