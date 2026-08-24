@@ -1,6 +1,6 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
-import { ArrowRightStartOnRectangleIcon, KeyIcon, LinkIcon } from "@heroicons/react/24/outline";
+import { ArrowRightStartOnRectangleIcon, KeyIcon, LinkIcon, UserMinusIcon } from "@heroicons/react/24/outline";
 import { type ElementType, useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
@@ -393,6 +393,7 @@ export default function EditProfile() {
             Icon={KeyIcon}
           />
           <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} tone="destructive" />
+          <SettingsLink to="/edit/leave" title="회원 탈퇴" Icon={UserMinusIcon} tone="destructive" />
         </div>
       </SectionCard>
     </div>

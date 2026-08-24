@@ -13,6 +13,9 @@ import { PasskeyStrategy } from "./passkey-strategy.server";
 
 const googleClientId = "129736193789-sqgen372tfq53l483j1v9br36uo4iuua.apps.googleusercontent.com";
 export const pendingSenseiRegistrationSessionKey = "pendingSenseiRegistrationUid";
+export const authenticatorSessionKey = "user";
+export const sessionValidationSessionKey = "auth:sessionValidation";
+export const sessionValidationCookieName = "__session_validation";
 
 export function redirectTo(request: Request): string | null {
   const cookieHeader = request.headers.get("Cookie");
@@ -30,7 +33,7 @@ export function redirectTo(request: Request): string | null {
   return null;
 }
 
-export function sessionStorage(env: Env): SessionStorage {
+export function sessionStorage(env: Pick<Env, "SESSION_SECRET">): SessionStorage {
   return createCookieSessionStorage({
     cookie: {
       name: "__session",
@@ -44,9 +47,25 @@ export function sessionStorage(env: Env): SessionStorage {
   });
 }
 
+export function sessionValidationStorage(env: Pick<Env, "SESSION_SECRET">): SessionStorage {
+  return createCookieSessionStorage({
+    cookie: {
+      name: sessionValidationCookieName,
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      secrets: [env.SESSION_SECRET],
+      sameSite: "lax",
+      maxAge: 15 * 60,
+    },
+  });
+}
+
 export function getAuthenticator(env: Env, ctx?: ExecutionContext): Authenticator<Sensei> {
   const logger = getLogger(env, ctx, { scope: "authenticator" });
-  const authenticator = new Authenticator<Sensei>(sessionStorage(env));
+  const authenticator = new Authenticator<Sensei>(sessionStorage(env), {
+    sessionKey: authenticatorSessionKey,
+  });
   authenticator.use(
     new GoogleStrategy(
       {

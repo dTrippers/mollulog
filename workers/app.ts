@@ -1,6 +1,10 @@
 import * as Sentry from "@sentry/cloudflare";
 import { createRequestHandler } from "react-router";
 import * as serverBuild from "virtual:react-router/server-build";
+import {
+  applySessionValidationResponse,
+  validateSessionRequest,
+} from "~/auth/session-validation.server";
 import { watchIo } from "~/lib/io-watchdog";
 import { createRequestDiagnostics, type RequestDiagnostics } from "~/lib/request-diagnostics";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
@@ -29,7 +33,12 @@ const requestHandler = createRequestHandler(serverBuild, import.meta.env.MODE);
 const handler: ExportedHandler<ObservabilityEnv> = {
   async fetch(request, env, ctx) {
     const requestDiagnostics = createRequestDiagnostics(request, serverBuild.assets.version);
-    return watchIo(
+    const sessionValidation = await validateSessionRequest(env, request, ctx);
+    if (sessionValidation.kind === "response") {
+      return sessionValidation.response;
+    }
+
+    const response = await watchIo(
       "request",
       requestHandler(request, {
         cloudflare: { env, ctx, colo: request.cf?.colo, requestDiagnostics },
@@ -37,6 +46,7 @@ const handler: ExportedHandler<ObservabilityEnv> = {
       { method: request.method, path: new URL(request.url).pathname },
       RUNTIME_TIMEOUTS.watchdogWarnMs.request,
     );
+    return applySessionValidationResponse(response, sessionValidation);
   },
   async queue(batch, env, ctx) {
     for (const message of batch.messages) {
