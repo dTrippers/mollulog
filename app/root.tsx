@@ -58,7 +58,7 @@ export type RootOutletContext = {
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env as Env & {
-    FRONT_BETTER_STACK_SENTRY_DSN?: string;
+    FRONT_SENTRY_DSN?: string;
   };
   const ctx: ExecutionContext = context.cloudflare.ctx;
   const colo = context.cloudflare.colo;
@@ -89,7 +89,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       siteBanner,
       publicEnv: {
         STAGE: env.STAGE ?? "local",
-        FRONT_BETTER_STACK_SENTRY_DSN: env.FRONT_BETTER_STACK_SENTRY_DSN ?? "",
+        FRONT_SENTRY_DSN: env.FRONT_SENTRY_DSN ?? "",
       },
       staticCrawlerResponse: isGoogleSearchCrawler(request.headers.get("user-agent")),
       requestDiagnostics: {
@@ -160,8 +160,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="mollulog:build-id" content={loaderData?.requestDiagnostics?.buildId ?? ""} />
         {isSenseiProfilePath(location.pathname) ? <meta name="robots" content="noindex" /> : null}
         <meta
-          name="mollulog:front-better-stack-sentry-dsn"
-          content={loaderData?.publicEnv?.FRONT_BETTER_STACK_SENTRY_DSN ?? ""}
+          name="mollulog:front-sentry-dsn"
+          content={loaderData?.publicEnv?.FRONT_SENTRY_DSN ?? ""}
         />
         <Meta />
         <Links />
