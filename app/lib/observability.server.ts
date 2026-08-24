@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/cloudflare";
 
 type ObservabilityEnv = Env & {
   SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
-  SERVER_BETTER_STACK_SENTRY_DSN?: string;
+  SERVER_SENTRY_DSN?: string;
 };
 
 type LogContext = Record<string, unknown>;

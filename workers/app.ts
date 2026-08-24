@@ -14,7 +14,7 @@ export { CacheRefreshWorkflow } from "./cache-refresh-workflow";
 
 type ObservabilityEnv = Env & {
   SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
-  SERVER_BETTER_STACK_SENTRY_DSN?: string;
+  SERVER_SENTRY_DSN?: string;
 };
 
 declare module "react-router" {
@@ -63,10 +63,10 @@ const handler: ExportedHandler<ObservabilityEnv> = {
 
 export default Sentry.withSentry<ObservabilityEnv>(
   (env) => ({
-    dsn: env.SERVER_BETTER_STACK_SENTRY_DSN,
-    enabled: Boolean(env.SERVER_BETTER_STACK_SENTRY_DSN),
+    dsn: env.SERVER_SENTRY_DSN,
+    enabled: Boolean(env.SERVER_SENTRY_DSN),
     environment: env.STAGE ?? "local",
-    tracesSampleRate: 0.05,
+    tracesSampleRate: 0,
   }),
   handler,
 );

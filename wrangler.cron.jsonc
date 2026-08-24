@@ -45,7 +45,7 @@
 
   // Secrets configuration
   // - SERVER_BETTER_STACK_SOURCE_TOKEN
-  // - SERVER_BETTER_STACK_SENTRY_DSN
+  // - SERVER_SENTRY_DSN
   "env": {
     "staging": {
       // Do not duplicate the production cache warm and YouTube sync load on
