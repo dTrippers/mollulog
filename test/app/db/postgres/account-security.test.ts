@@ -81,11 +81,11 @@ beforeEach(() => {
 });
 
 describe("account-security PostgreSQL repository", () => {
-  it("reads the active flag and session version from the canonical row", async () => {
+  it("reads the active flag from the canonical row", async () => {
     const builder = {
       from: () => builder,
       where: () => builder,
-      limit: async () => [{ active: true, sessionVersion: 4 }],
+      limit: async () => [{ active: true }],
     };
     const db = { select: jest.fn(() => builder) };
     mockWithIdentityDatabase.mockImplementationOnce(async (_env, queryName, operation) => {
@@ -93,7 +93,7 @@ describe("account-security PostgreSQL repository", () => {
       return (operation as (database: typeof db) => unknown)(db);
     });
 
-    await expect(getAccountSessionState(env, 7)).resolves.toEqual({ active: true, sessionVersion: 4 });
+    await expect(getAccountSessionState(env, 7)).resolves.toEqual({ active: true });
   });
 
   it("does not mutate any table when the submitted username does not match", async () => {
@@ -104,7 +104,6 @@ describe("account-security PostgreSQL repository", () => {
       googleId: "google-1",
       githubId: null,
       active: true,
-      sessionVersion: 2,
     });
     mockWithIdentityTransaction.mockImplementationOnce(async (_env, queryName, operation) => {
       expect(queryName).toBe("leave_account");
@@ -127,7 +126,6 @@ describe("account-security PostgreSQL repository", () => {
         googleId: "google-legacy",
         githubId: null,
         active: true,
-        sessionVersion: 2,
       },
       [{ provider: "github", providerUserId: "github-1" }],
     );
@@ -138,7 +136,6 @@ describe("account-security PostgreSQL repository", () => {
 
     await expect(leaveAccount(env, { userId: 7, username: "teacher" })).resolves.toEqual({
       status: "left",
-      sessionVersion: 3,
     });
     expect(deletes).toHaveLength(6);
     expect(updates).toHaveLength(2);
@@ -202,7 +199,6 @@ describe("account-security PostgreSQL repository", () => {
       googleId: null,
       githubId: null,
       active: true,
-      sessionVersion: 0,
     });
     db.delete.mockImplementationOnce(() => ({
       where: jest.fn(async () => {

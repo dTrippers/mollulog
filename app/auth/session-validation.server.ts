@@ -7,11 +7,10 @@ import {
 } from "~/auth/authenticator.server";
 import { type AccountSessionState, getAccountSessionState } from "~/models/account-security";
 
-export const SESSION_VALIDATION_LEASE_MS = 5 * 60 * 1000;
+export const SESSION_VALIDATION_LEASE_MS = 15 * 60 * 1000;
 
 type SessionLease = {
   userId: number;
-  sessionVersion: number;
   validatedAt: number;
 };
 
@@ -22,40 +21,21 @@ export type SessionValidationDecision =
 
 const inFlightValidations = new Map<string, Promise<AccountSessionState | null>>();
 
-function isMutationMethod(method: string): boolean {
-  return method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
-}
-
-function isFeedbackReadRequest(request: Request): boolean {
-  const method = request.method.toUpperCase();
-  if (method !== "GET" && method !== "HEAD") return false;
-  return /^\/contact\/[^/]+\/?$/.test(new URL(request.url).pathname);
-}
-
-export function isSessionValidationRequired(request: Request): boolean {
-  const method = request.method.toUpperCase();
-  return isMutationMethod(method) || isFeedbackReadRequest(request);
-}
-
 function readSessionLease(value: unknown): SessionLease | null {
   if (!value || typeof value !== "object") return null;
   const lease = value as Partial<SessionLease>;
   const userId = lease.userId;
-  const sessionVersion = lease.sessionVersion;
   const validatedAt = lease.validatedAt;
   if (
     typeof userId !== "number" ||
-    typeof sessionVersion !== "number" ||
     typeof validatedAt !== "number" ||
     !Number.isSafeInteger(userId) ||
-    !Number.isSafeInteger(sessionVersion) ||
     !Number.isSafeInteger(validatedAt)
   ) {
     return null;
   }
   return {
     userId,
-    sessionVersion,
     validatedAt,
   };
 }
@@ -141,8 +121,7 @@ export async function validateSessionRequest(
     }
   }
   const userId = user.id as number;
-  const required = isSessionValidationRequired(request);
-  if (!required && isLeaseFresh(lease, userId, now)) {
+  if (isLeaseFresh(lease, userId, now)) {
     return { kind: "validated" };
   }
 
@@ -154,7 +133,7 @@ export async function validateSessionRequest(
     return { kind: "response", response: sessionValidationFailureResponse() };
   }
 
-  if (!state?.active || (lease?.userId === userId && lease.sessionVersion !== state.sessionVersion)) {
+  if (!state?.active) {
     try {
       return { kind: "response", response: await expiredSessionResponse(env, request, session, leaseSession) };
     } catch {
@@ -165,7 +144,6 @@ export async function validateSessionRequest(
   try {
     leaseSession.set(sessionValidationSessionKey, {
       userId,
-      sessionVersion: state.sessionVersion,
       validatedAt: now,
     } satisfies SessionLease);
     return { kind: "validated", refreshCookie: await sessionValidationStorage(env).commitSession(leaseSession) };

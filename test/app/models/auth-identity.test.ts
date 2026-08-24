@@ -21,7 +21,6 @@ const senseiRow: typeof pgSenseisTable.$inferSelect = {
   googleId: "google-1",
   githubId: null,
   active: true,
-  sessionVersion: 0,
   bio: null,
   role: "guest",
   profileVisibility: "public",

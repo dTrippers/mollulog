@@ -56,7 +56,7 @@ export function sessionValidationStorage(env: Pick<Env, "SESSION_SECRET">): Sess
       secure: true,
       secrets: [env.SESSION_SECRET],
       sameSite: "lax",
-      maxAge: 5 * 60,
+      maxAge: 15 * 60,
     },
   });
 }

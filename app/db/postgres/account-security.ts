@@ -1,4 +1,4 @@
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import {
   type IdentityDatabase,
   type IdentityRepositoryOptions,
@@ -19,12 +19,9 @@ import type { AuthProvider } from "~/models/auth-identity";
 
 export type AccountSessionState = {
   active: boolean;
-  sessionVersion: number;
 };
 
-export type AccountLeaveResult =
-  | { status: "left"; sessionVersion: number }
-  | { status: "not_found" | "inactive" | "username_mismatch" };
+export type AccountLeaveResult = { status: "left" } | { status: "not_found" | "inactive" | "username_mismatch" };
 
 export type AccountSecurityRepositoryOptions = IdentityRepositoryOptions;
 
@@ -40,7 +37,6 @@ export async function getAccountSessionState(
       const [row] = await db
         .select({
           active: pgSenseisTable.active,
-          sessionVersion: pgSenseisTable.sessionVersion,
         })
         .from(pgSenseisTable)
         .where(eq(pgSenseisTable.id, userId))
@@ -82,7 +78,6 @@ export async function leaveAccount(
           googleId: pgSenseisTable.googleId,
           githubId: pgSenseisTable.githubId,
           active: pgSenseisTable.active,
-          sessionVersion: pgSenseisTable.sessionVersion,
         })
         .from(pgSenseisTable)
         .where(eq(pgSenseisTable.id, input.userId))
@@ -126,7 +121,6 @@ export async function leaveAccount(
         await db.delete(pgPendingSenseiRegistrationsTable).where(or(...pendingRegistrationConditions));
       }
 
-      const sessionVersion = sensei.sessionVersion + 1;
       await db
         .update(pgSenseisTable)
         .set({
@@ -139,12 +133,11 @@ export async function leaveAccount(
           googleId: null,
           githubId: null,
           role: "guest",
-          sessionVersion: sql`${pgSenseisTable.sessionVersion} + 1`,
           updatedAt: new Date(),
         })
         .where(eq(pgSenseisTable.id, sensei.id));
 
-      return { status: "left", sessionVersion };
+      return { status: "left" };
     },
     options,
   );

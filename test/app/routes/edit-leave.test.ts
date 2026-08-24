@@ -33,7 +33,7 @@ jest.mock("~/auth/authenticator.server", () => ({
         secure: true,
         secrets: [storageEnv.SESSION_SECRET],
         sameSite: "lax",
-        maxAge: 5 * 60,
+        maxAge: 15 * 60,
       },
     });
   },
@@ -107,7 +107,7 @@ describe("edit.leave", () => {
   });
 
   it("logs out the current device after a successful account leave", async () => {
-    mockLeaveAccount.mockResolvedValue({ status: "left", sessionVersion: 1 });
+    mockLeaveAccount.mockResolvedValue({ status: "left" });
     const logout = jest.fn(async (_request: Request, options: { redirectTo: string; headers?: HeadersInit }) => {
       const headers = new Headers(options.headers);
       headers.append("Set-Cookie", "__session=; Max-Age=0; Path=/");
@@ -130,7 +130,7 @@ describe("edit.leave", () => {
   });
 
   it("expires the current session when logout fails after account leave commits", async () => {
-    mockLeaveAccount.mockResolvedValue({ status: "left", sessionVersion: 1 });
+    mockLeaveAccount.mockResolvedValue({ status: "left" });
     mockGetAuthenticator.mockReturnValue({
       logout: jest.fn(async (..._args: unknown[]) => {
         throw new Error("logout failure");

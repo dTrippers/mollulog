@@ -33,7 +33,7 @@ jest.mock("~/auth/authenticator.server", () => ({
         secure: true,
         secrets: [env.SESSION_SECRET],
         sameSite: "lax",
-        maxAge: 5 * 60,
+        maxAge: 15 * 60,
       },
     });
   },
@@ -70,8 +70,8 @@ async function createAuthCookie(options: { validatedAt?: number; sessionVersion?
     const leaseSession = await leaseStorage.getSession();
     leaseSession.set(sessionValidationSessionKey, {
       userId: 7,
-      sessionVersion: options.sessionVersion ?? 0,
       validatedAt: options.validatedAt,
+      ...(options.sessionVersion === undefined ? {} : { sessionVersion: options.sessionVersion }),
     });
     cookies.push(cookieValue(await leaseStorage.commitSession(leaseSession)));
   }
@@ -90,8 +90,8 @@ describe("session validation", () => {
     expect(mockGetAccountSessionState).not.toHaveBeenCalled();
   });
 
-  it("validates an authenticated GET and issues a five-minute lease cookie", async () => {
-    mockGetAccountSessionState.mockResolvedValue({ active: true, sessionVersion: 4 });
+  it("validates an authenticated GET and issues a fifteen-minute lease cookie", async () => {
+    mockGetAccountSessionState.mockResolvedValue({ active: true });
     const authCookie = await createAuthCookie();
     const result = await validateSessionRequest(
       env,
@@ -104,6 +104,7 @@ describe("session validation", () => {
     expect(result).toHaveProperty("refreshCookie");
     expect((result as { refreshCookie: string }).refreshCookie).toMatch(/^__session_validation=/);
     expect((result as { refreshCookie: string }).refreshCookie).not.toMatch(/^__session=/);
+    expect((result as { refreshCookie: string }).refreshCookie).toContain("Max-Age=900");
     expect(mockGetAccountSessionState).toHaveBeenCalledWith(env, 7, { ctx: undefined });
 
     const refreshedCookie = cookieValue((result as { refreshCookie: string }).refreshCookie);
@@ -119,8 +120,7 @@ describe("session validation", () => {
     expect(mockGetAccountSessionState).toHaveBeenCalledTimes(1);
   });
 
-  it("always validates a mutation even while the read lease is fresh", async () => {
-    mockGetAccountSessionState.mockResolvedValue({ active: true, sessionVersion: 4 });
+  it("does not query PostgreSQL for a mutation while a legacy lease is fresh", async () => {
     const cookie = await createAuthCookie({ validatedAt: 10_000, sessionVersion: 4 });
     const result = await validateSessionRequest(
       env,
@@ -133,32 +133,23 @@ describe("session validation", () => {
     );
 
     expect(result.kind).toBe("validated");
-    expect(mockGetAccountSessionState).toHaveBeenCalledTimes(1);
+    expect(mockGetAccountSessionState).not.toHaveBeenCalled();
   });
 
-  it("expires a lease when the account session version has changed", async () => {
-    mockGetAccountSessionState.mockResolvedValue({ active: true, sessionVersion: 5 });
+  it.each(["GET", "POST"])("expires the cookie when the account is inactive for %s requests", async (method) => {
+    mockGetAccountSessionState.mockResolvedValue({ active: false });
     const result = await validateSessionRequest(
       env,
       new Request("https://mollulog.net/edit/leave", {
-        headers: { Cookie: await createAuthCookie({ validatedAt: 0, sessionVersion: 4 }) },
+        method,
+        headers: { Cookie: await createAuthCookie({ validatedAt: 10_000 }) },
       }),
       undefined,
-      SESSION_VALIDATION_LEASE_MS,
+      10_000 + SESSION_VALIDATION_LEASE_MS,
     );
 
     expect(result.kind).toBe("response");
-    expect((result as { response: Response }).response.status).toBe(302);
-  });
-
-  it("expires the cookie when the account is inactive", async () => {
-    mockGetAccountSessionState.mockResolvedValue({ active: false, sessionVersion: 5 });
-    const result = await validateSessionRequest(
-      env,
-      new Request("https://mollulog.net/edit/leave", { headers: { Cookie: await createAuthCookie() } }),
-    );
-
-    expect(result.kind).toBe("response");
+    expect(mockGetAccountSessionState).toHaveBeenCalledWith(env, 7, { ctx: undefined });
     const response = (result as { response: Response }).response;
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/unauthorized");
@@ -167,7 +158,7 @@ describe("session validation", () => {
   });
 
   it("returns a React Router single-fetch redirect for an inactive account data request", async () => {
-    mockGetAccountSessionState.mockResolvedValue({ active: false, sessionVersion: 5 });
+    mockGetAccountSessionState.mockResolvedValue({ active: false });
     const result = await validateSessionRequest(
       env,
       new Request("https://mollulog.net/edit/leave.data", { headers: { Cookie: await createAuthCookie() } }),
@@ -182,11 +173,17 @@ describe("session validation", () => {
     expect(response.headers.getSetCookie()).toHaveLength(2);
   });
 
-  it("returns a retryable response when PostgreSQL validation fails", async () => {
+  it.each([
+    "GET",
+    "POST",
+  ])("returns a retryable response when PostgreSQL validation fails for %s requests", async (method) => {
     mockGetAccountSessionState.mockRejectedValue(new Error("connection refused"));
     const result = await validateSessionRequest(
       env,
-      new Request("https://mollulog.net/edit/leave", { headers: { Cookie: await createAuthCookie() } }),
+      new Request("https://mollulog.net/edit/leave", {
+        method,
+        headers: { Cookie: await createAuthCookie() },
+      }),
     );
 
     expect(result.kind).toBe("response");
@@ -197,7 +194,7 @@ describe("session validation", () => {
   });
 
   it("single-flights concurrent validation for the same session without retaining a cache", async () => {
-    let resolveState!: (state: { active: boolean; sessionVersion: number }) => void;
+    let resolveState!: (state: { active: boolean }) => void;
     mockGetAccountSessionState.mockReturnValue(
       new Promise((resolve) => {
         resolveState = resolve;
@@ -220,10 +217,10 @@ describe("session validation", () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
     expect(mockGetAccountSessionState).toHaveBeenCalledTimes(1);
-    resolveState({ active: true, sessionVersion: 0 });
+    resolveState({ active: true });
     await expect(Promise.all([first, second])).resolves.toHaveLength(2);
 
-    mockGetAccountSessionState.mockResolvedValue({ active: true, sessionVersion: 0 });
+    mockGetAccountSessionState.mockResolvedValue({ active: true });
     await validateSessionRequest(
       env,
       new Request("https://mollulog.net/edit/leave", { headers: { Cookie: cookie } }),
@@ -276,7 +273,6 @@ describe("session validation", () => {
     const leaseSession = await leaseStorage.getSession();
     leaseSession.set(sessionValidationSessionKey, {
       userId: 7,
-      sessionVersion: 0,
       validatedAt: 10_000,
     });
     const leaseCookie = cookieValue(await leaseStorage.commitSession(leaseSession));
