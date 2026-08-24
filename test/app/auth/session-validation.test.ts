@@ -166,6 +166,22 @@ describe("session validation", () => {
     expect(response.headers.get("Set-Cookie")).toContain("__session_validation=;");
   });
 
+  it("returns a React Router single-fetch redirect for an inactive account data request", async () => {
+    mockGetAccountSessionState.mockResolvedValue({ active: false, sessionVersion: 5 });
+    const result = await validateSessionRequest(
+      env,
+      new Request("https://mollulog.net/edit/leave.data", { headers: { Cookie: await createAuthCookie() } }),
+    );
+
+    expect(result.kind).toBe("response");
+    const response = (result as { response: Response }).response;
+    expect(response.status).toBe(204);
+    expect(response.headers.get("Location")).toBeNull();
+    expect(response.headers.get("X-Remix-Redirect")).toBe("/unauthorized");
+    expect(response.headers.get("X-Remix-Status")).toBe("302");
+    expect(response.headers.getSetCookie()).toHaveLength(2);
+  });
+
   it("returns a retryable response when PostgreSQL validation fails", async () => {
     mockGetAccountSessionState.mockRejectedValue(new Error("connection refused"));
     const result = await validateSessionRequest(
@@ -237,6 +253,22 @@ describe("session validation", () => {
     );
 
     expect(response.headers.get("Set-Cookie")).toBe("__session=; Max-Age=0");
+  });
+
+  it("detects downstream session cookies without splitting an Expires attribute on commas", () => {
+    const headers = new Headers();
+    headers.append("Set-Cookie", "__session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+    headers.append("Set-Cookie", "another=value; Path=/");
+
+    const response = applySessionValidationResponse(new Response(null, { headers }), {
+      kind: "validated",
+      refreshCookie: "__session_validation=refreshed",
+    });
+
+    expect(response.headers.getSetCookie()).toEqual([
+      "__session=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+      "another=value; Path=/",
+    ]);
   });
 
   it("clears a stale lease cookie when the auth session is already gone", async () => {

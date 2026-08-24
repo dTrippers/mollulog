@@ -4,7 +4,7 @@ import { Await, Link, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, RecruitmentCard } from "~/components/features/events";
 import { RaidCard } from "~/components/features/raids";
-import { HorizontalScroll, SubTitle, Title } from "~/components/primitives";
+import { Callout, HorizontalScroll, SubTitle, Title } from "~/components/primitives";
 import { raidTypeToParam } from "~/domain/raid";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
@@ -31,6 +31,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const ctx: ExecutionContext = context.cloudflare.ctx;
   const logger = getLogger(env, ctx, { route: "_index.loader" });
+  const accountLeft = new URL(request.url).searchParams.get("account") === "left";
 
   return ctx.tracing.enterSpan("_index.loader", async (span) => {
     const currentUser = await ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
@@ -111,6 +112,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       currentUnlimit,
       rightRail: rightRailPromise,
       signedIn: currentUser !== null,
+      accountLeft,
     };
   });
 };
@@ -125,10 +127,12 @@ export default function Index() {
     currentUnlimit,
     rightRail,
     signedIn,
+    accountLeft,
   } = useLoaderData<typeof loader>();
 
   return (
     <div className="w-full">
+      {accountLeft ? <Callout tone="success" description="회원 탈퇴가 완료됐어요." className="mb-6" /> : null}
       <Title text="진행중인 컨텐츠" />
 
       <div className="mt-4 flex flex-col gap-8 lg:mt-6 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">

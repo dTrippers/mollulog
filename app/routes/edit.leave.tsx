@@ -2,7 +2,12 @@ import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
-import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
+import {
+  getActiveSensei,
+  getAuthenticator,
+  sessionStorage,
+  sessionValidationStorage,
+} from "~/auth/authenticator.server";
 import { Button, Callout, Input, SectionCard, Title } from "~/components/primitives";
 import { getLogger } from "~/lib/observability.server";
 import { leaveAccount } from "~/models/account-security";
@@ -56,22 +61,37 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   }
 
   try {
-    return await getAuthenticator(env, ctx).logout(request, { redirectTo: "/" });
+    const leaseStorage = sessionValidationStorage(env);
+    const leaseSession = await leaseStorage.getSession(request.headers.get("Cookie"));
+    const headers = new Headers();
+    headers.append("Set-Cookie", await leaseStorage.destroySession(leaseSession));
+    return await getAuthenticator(env, ctx).logout(request, { redirectTo: "/?account=left", headers });
   } catch (error) {
+    if (error instanceof Response) return error;
     logger.error("Account leave logout failed", error, { userId: sensei.id });
     try {
-      const storage = sessionStorage(env);
-      const session = await storage.getSession(request.headers.get("Cookie"));
-      return redirect("/", { headers: { "Set-Cookie": await storage.destroySession(session) } });
+      const authStorage = sessionStorage(env);
+      const leaseStorage = sessionValidationStorage(env);
+      const cookie = request.headers.get("Cookie");
+      const [session, leaseSession] = await Promise.all([
+        authStorage.getSession(cookie),
+        leaseStorage.getSession(cookie),
+      ]);
+      const headers = new Headers();
+      headers.append("Set-Cookie", await authStorage.destroySession(session));
+      headers.append("Set-Cookie", await leaseStorage.destroySession(leaseSession));
+      return redirect("/?account=left", { headers });
     } catch (cleanupError) {
       logger.error("Account leave session cleanup failed", cleanupError, { userId: sensei.id });
+      const headers = new Headers({
+        "Cache-Control": "no-store",
+        Location: "/?account=left",
+      });
+      headers.append("Set-Cookie", "__session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax");
+      headers.append("Set-Cookie", "__session_validation=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax");
       return new Response(null, {
         status: 302,
-        headers: {
-          "Cache-Control": "no-store",
-          Location: "/",
-          "Set-Cookie": "__session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax",
-        },
+        headers,
       });
     }
   }

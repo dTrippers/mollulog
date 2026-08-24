@@ -78,15 +78,21 @@ function sessionValidationFailureResponse(): Response {
 
 async function expiredSessionResponse(
   env: Env,
+  request: Request,
   session: Parameters<Awaited<ReturnType<typeof sessionStorage>>["destroySession"]>[0],
   leaseSession: Parameters<Awaited<ReturnType<typeof sessionValidationStorage>>["destroySession"]>[0],
 ): Promise<Response> {
-  const headers = new Headers({
-    "Cache-Control": "no-store",
-    Location: "/unauthorized",
-  });
+  const headers = new Headers({ "Cache-Control": "no-store" });
   headers.append("Set-Cookie", await sessionStorage(env).destroySession(session));
   headers.append("Set-Cookie", await sessionValidationStorage(env).destroySession(leaseSession));
+
+  if (new URL(request.url).pathname.endsWith(".data")) {
+    headers.set("X-Remix-Redirect", "/unauthorized");
+    headers.set("X-Remix-Status", "302");
+    return new Response(null, { status: 204, headers });
+  }
+
+  headers.set("Location", "/unauthorized");
   return new Response(null, { status: 302, headers });
 }
 
@@ -150,7 +156,7 @@ export async function validateSessionRequest(
 
   if (!state?.active || (lease?.userId === userId && lease.sessionVersion !== state.sessionVersion)) {
     try {
-      return { kind: "response", response: await expiredSessionResponse(env, session, leaseSession) };
+      return { kind: "response", response: await expiredSessionResponse(env, request, session, leaseSession) };
     } catch {
       return { kind: "response", response: sessionValidationFailureResponse() };
     }
@@ -169,14 +175,12 @@ export async function validateSessionRequest(
 }
 
 export function applySessionValidationResponse(response: Response, decision: SessionValidationDecision): Response {
-  const downstreamSetCookie = response.headers.get("Set-Cookie");
-  const hasDownstreamCookie = downstreamSetCookie !== null;
-  const hasDownstreamSessionCookie =
-    downstreamSetCookie?.split(",").some((cookie) => cookie.trimStart().startsWith("__session=")) ?? false;
-  const hasDownstreamLeaseCookie =
-    downstreamSetCookie
-      ?.split(",")
-      .some((cookie) => cookie.trimStart().startsWith(`${sessionValidationCookieName}=`)) ?? false;
+  const downstreamSetCookies = response.headers.getSetCookie();
+  const hasDownstreamCookie = downstreamSetCookies.length > 0;
+  const hasDownstreamSessionCookie = downstreamSetCookies.some((cookie) => cookie.startsWith("__session="));
+  const hasDownstreamLeaseCookie = downstreamSetCookies.some((cookie) =>
+    cookie.startsWith(`${sessionValidationCookieName}=`),
+  );
   const refreshCookie =
     decision.kind === "validated" || decision.kind === "anonymous" ? decision.refreshCookie : undefined;
   const shouldPreventCaching = hasDownstreamCookie || refreshCookie != null;
