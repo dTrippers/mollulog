@@ -1,4 +1,5 @@
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
+import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import {
   compareInstantAsc,
   compareInstantDesc,
@@ -10,6 +11,8 @@ import {
 import { getEventContentSchedule, getEventContentsList, getEventShopContent } from "~/models/event-content";
 import type { RunType } from "~/models/timeline-content";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
+
+const EVENT_CONTENT_WARM_CONCURRENCY = 2;
 
 type EventContentListSource = Awaited<ReturnType<typeof getEventContentsList>>[number];
 type EventContentListSourceSchedule = EventContentListSource["schedules"][number];
@@ -193,7 +196,7 @@ export async function warmActiveUpcomingEventContent(
   ctx?: ExecutionContext,
 ): Promise<void> {
   const events = await getEventList(env, undefined, forceRefresh, ctx);
-  const scheduleTasks: Array<Promise<unknown>> = [];
+  const warmTasks: Array<() => Promise<unknown>> = [];
   const shopTimelineUids = new Set<string>();
 
   for (const event of events) {
@@ -206,12 +209,13 @@ export async function warmActiveUpcomingEventContent(
 
     shopTimelineUids.add(event.latestTimelineUid);
     for (const schedule of activeUpcomingSchedules) {
-      scheduleTasks.push(getEventContentSchedule(env, event.uid, schedule.runType, forceRefresh));
+      warmTasks.push(() => getEventContentSchedule(env, event.uid, schedule.runType, forceRefresh));
     }
   }
 
-  await Promise.all([
-    ...scheduleTasks,
-    ...[...shopTimelineUids].map((timelineUid) => getEventShopContent(env, timelineUid, forceRefresh, ctx)),
-  ]);
+  for (const timelineUid of shopTimelineUids) {
+    warmTasks.push(() => getEventShopContent(env, timelineUid, forceRefresh, ctx));
+  }
+
+  await mapWithConcurrencyLimit(warmTasks, EVENT_CONTENT_WARM_CONCURRENCY, (task) => task());
 }
