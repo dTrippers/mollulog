@@ -21,7 +21,7 @@ export type AccountSessionState = {
   active: boolean;
 };
 
-export type AccountLeaveResult = { status: "left" } | { status: "not_found" | "inactive" | "username_mismatch" };
+export type AccountLeaveResult = { status: "left" } | { status: "not_found" | "inactive" };
 
 export type AccountSecurityRepositoryOptions = IdentityRepositoryOptions;
 
@@ -58,12 +58,11 @@ function addOAuthIdentifier(
 
 /**
  * Deactivates an account while preserving all user-authored records that use
- * its internal numeric ID. The row lock and username check make a stale form
- * submission harmless even when another request changed the account first.
+ * its internal numeric ID. The row lock keeps concurrent leave requests safe.
  */
 export async function leaveAccount(
   env: Pick<Env, "HYPERDRIVE">,
-  input: { userId: number; username: string },
+  input: { userId: number },
   options: AccountSecurityRepositoryOptions = {},
 ): Promise<AccountLeaveResult> {
   return withIdentityTransaction(
@@ -74,7 +73,6 @@ export async function leaveAccount(
         .select({
           id: pgSenseisTable.id,
           uid: pgSenseisTable.uid,
-          username: pgSenseisTable.username,
           googleId: pgSenseisTable.googleId,
           githubId: pgSenseisTable.githubId,
           active: pgSenseisTable.active,
@@ -86,8 +84,6 @@ export async function leaveAccount(
 
       if (!sensei) return { status: "not_found" };
       if (!sensei.active) return { status: "inactive" };
-      if (sensei.username !== input.username) return { status: "username_mismatch" };
-
       const identities = await db
         .select({ provider: pgAuthIdentitiesTable.provider, providerUserId: pgAuthIdentitiesTable.providerUserId })
         .from(pgAuthIdentitiesTable)

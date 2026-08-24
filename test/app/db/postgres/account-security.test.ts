@@ -96,27 +96,6 @@ describe("account-security PostgreSQL repository", () => {
     await expect(getAccountSessionState(env, 7)).resolves.toEqual({ active: true });
   });
 
-  it("does not mutate any table when the submitted username does not match", async () => {
-    const { db, deletes, updates } = createLeaveDb({
-      id: 7,
-      uid: "sensei-7",
-      username: "teacher",
-      googleId: "google-1",
-      githubId: null,
-      active: true,
-    });
-    mockWithIdentityTransaction.mockImplementationOnce(async (_env, queryName, operation) => {
-      expect(queryName).toBe("leave_account");
-      return (operation as (database: typeof db) => unknown)(db);
-    });
-
-    await expect(leaveAccount(env, { userId: 7, username: "other" })).resolves.toEqual({
-      status: "username_mismatch",
-    });
-    expect(deletes).toHaveLength(0);
-    expect(updates).toHaveLength(0);
-  });
-
   it("clears only account credentials and deactivates the identity in one transaction", async () => {
     const { db, deletes, updates } = createLeaveDb(
       {
@@ -134,7 +113,7 @@ describe("account-security PostgreSQL repository", () => {
       return (operation as (database: typeof db) => unknown)(db);
     });
 
-    await expect(leaveAccount(env, { userId: 7, username: "teacher" })).resolves.toEqual({
+    await expect(leaveAccount(env, { userId: 7 })).resolves.toEqual({
       status: "left",
     });
     expect(deletes).toHaveLength(6);
@@ -209,7 +188,7 @@ describe("account-security PostgreSQL repository", () => {
       (operation as (database: typeof db) => unknown)(db),
     );
 
-    await expect(leaveAccount(env, { userId: 7, username: "teacher" })).rejects.toThrow("database failure");
+    await expect(leaveAccount(env, { userId: 7 })).rejects.toThrow("database failure");
     expect(updates).toHaveLength(0);
   });
 });

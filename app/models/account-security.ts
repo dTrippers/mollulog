@@ -18,7 +18,7 @@ export async function getAccountSessionState(
 
 export async function leaveAccount(
   env: Env,
-  input: { userId: number; username: string },
+  input: { userId: number },
   options: AccountSecurityRepositoryOptions = {},
 ): Promise<AccountLeaveResult> {
   return leavePostgresAccount(env, input, options);

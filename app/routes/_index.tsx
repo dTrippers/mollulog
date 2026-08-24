@@ -132,7 +132,14 @@ export default function Index() {
 
   return (
     <div className="w-full">
-      {accountLeft ? <Callout tone="success" description="회원 탈퇴가 완료됐어요." className="mb-6" /> : null}
+      {accountLeft ? (
+        <Callout
+          tone="success"
+          title="탈퇴가 완료됐어요"
+          description="그동안 이용해주셔서 감사드려요. 언제든지 다시 찾아와주세요!"
+          className="mb-6"
+        />
+      ) : null}
       <Title text="진행중인 컨텐츠" />
 
       <div className="mt-4 flex flex-col gap-8 lg:mt-6 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">

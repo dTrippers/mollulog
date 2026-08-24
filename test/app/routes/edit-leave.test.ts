@@ -61,10 +61,9 @@ function args(request: Request) {
   } as never;
 }
 
-function formRequest(username: string) {
+function formRequest() {
   return new Request("https://mollulog.net/edit/leave", {
     method: "POST",
-    body: new URLSearchParams({ username }),
   });
 }
 
@@ -82,28 +81,19 @@ describe("edit.leave", () => {
     expect(loaderResponse).toMatchObject({ status: 302, headers: expect.any(Headers) });
     expect((loaderResponse as Response).headers.get("Location")).toBe("/unauthorized");
 
-    const actionResponse = await action(args(formRequest("teacher")));
+    const actionResponse = await action(args(formRequest()));
     expect(actionResponse).toMatchObject({ status: 302, headers: expect.any(Headers) });
     expect((actionResponse as Response).headers.get("Location")).toBe("/unauthorized");
     expect(mockLeaveAccount).not.toHaveBeenCalled();
   });
 
-  it("loads the canonical current username", async () => {
-    mockGetSenseiById.mockResolvedValue({ ...sensei, username: "renamed-teacher" });
+  it("keeps inactive accounts out of the screen", async () => {
+    mockGetSenseiById.mockResolvedValue({ ...sensei, active: false });
 
-    await expect(loader(args(new Request("https://mollulog.net/edit/leave")))).resolves.toEqual({
-      username: "renamed-teacher",
-    });
-  });
+    const response = await loader(args(new Request("https://mollulog.net/edit/leave")));
 
-  it("does not log out or mutate when username confirmation is wrong", async () => {
-    mockLeaveAccount.mockResolvedValue({ status: "username_mismatch" });
-
-    const result = await action(args(formRequest("wrong")));
-
-    expect(result).toMatchObject({ init: { status: 400 } });
-    expect(mockLeaveAccount).toHaveBeenCalledWith(env, { userId: 7, username: "wrong" }, { ctx: undefined });
-    expect(mockGetAuthenticator).not.toHaveBeenCalled();
+    expect(response).toMatchObject({ status: 302, headers: expect.any(Headers) });
+    expect((response as Response).headers.get("Location")).toBe("/unauthorized");
   });
 
   it("logs out the current device after a successful account leave", async () => {
@@ -116,9 +106,9 @@ describe("edit.leave", () => {
     });
     mockGetAuthenticator.mockReturnValue({ logout });
 
-    const result = await action(args(formRequest("teacher")));
+    const result = await action(args(formRequest()));
 
-    expect(mockLeaveAccount).toHaveBeenCalledWith(env, { userId: 7, username: "teacher" }, { ctx: undefined });
+    expect(mockLeaveAccount).toHaveBeenCalledWith(env, { userId: 7 }, { ctx: undefined });
     expect(logout).toHaveBeenCalledWith(expect.any(Request), {
       redirectTo: "/?account=left",
       headers: expect.any(Headers),
@@ -137,7 +127,7 @@ describe("edit.leave", () => {
       }),
     });
 
-    const result = await action(args(formRequest("teacher")));
+    const result = await action(args(formRequest()));
 
     expect(result).toMatchObject({ status: 302 });
     expect((result as Response).headers.get("Location")).toBe("/?account=left");
@@ -149,20 +139,24 @@ describe("edit.leave", () => {
   it("returns a retryable safe error and keeps the session on transaction failure", async () => {
     mockLeaveAccount.mockRejectedValue(new Error("database failure"));
 
-    const result = await action(args(formRequest("teacher")));
+    const result = await action(args(formRequest()));
 
     expect(result).toMatchObject({ init: { status: 500 } });
     expect(mockGetAuthenticator).not.toHaveBeenCalled();
   });
 
-  it("keeps the destructive link and exact warning copy in the existing settings style", () => {
+  it("keeps the destructive link and a simple account-leave graphic in the existing settings style", () => {
     const settingsSource = readFileSync("app/routes/edit._index.tsx", "utf8");
     const routeSource = readFileSync("app/routes/edit.leave.tsx", "utf8");
+    const leaveNoticeSource = readFileSync("app/routes/edit.leave._components/AccountLeaveNotice.tsx", "utf8");
     const homeSource = readFileSync("app/routes/_index.tsx", "utf8");
     expect(settingsSource).toContain('to="/edit/leave"');
     expect(settingsSource).toContain('title="회원 탈퇴"');
     expect(routeSource).toContain('variant="danger"');
-    expect(routeSource).toContain("탈퇴하면 모든 데이터에 접근할 수 없고 복구할 수 없어요. 정말 진행할까요?");
+    expect(routeSource).toContain("AccountLeaveNotice");
+    expect(routeSource).not.toContain('name="username"');
+    expect(leaveNoticeSource).toContain("UserMinusIcon");
+    expect(leaveNoticeSource).toContain("탈퇴하면 모든 데이터에 접근할 수 없고 복구할 수 없어요. 정말 진행할까요?");
     expect(homeSource).toContain('description="회원 탈퇴가 완료됐어요."');
   });
 });
