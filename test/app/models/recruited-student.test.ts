@@ -1,6 +1,8 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import {
+  addRecruitedStudents,
   getRecruitedStudents,
+  RecruitedStudentValidationError,
   updateRecruitedStudentCurrentState,
   upsertRecruitedStudent,
   upsertRecruitedStudentState,
@@ -301,5 +303,72 @@ describe("recruited-student current state", () => {
 
     await expect(getRecruitedStudents(env, 1, [...studentUids, studentUids[0]])).resolves.toHaveLength(181);
     expect(db.selectParameterCounts).toEqual([182]);
+  });
+
+  it("normalizes duplicate UIDs and writes a batch in one multi-row insert", async () => {
+    const { db, env } = createEnv();
+
+    await addRecruitedStudents(env, 1, [
+      { studentUid: "student-a", tier: 3 },
+      { studentUid: "student-a", tier: 9 },
+      { studentUid: "student-b", tier: 5 },
+    ]);
+
+    expect(db.rows).toHaveLength(2);
+    expect(db.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ userId: 1, studentUid: "student-a", tier: 3 }),
+        expect.objectContaining({ userId: 1, studentUid: "student-b", tier: 5 }),
+      ]),
+    );
+    const insertStatements = db.statements.filter((statement) => statement.toLowerCase().startsWith("insert"));
+    expect(insertStatements).toHaveLength(1);
+    expect(insertStatements[0]?.toLowerCase()).toContain("on conflict");
+    expect(insertStatements[0]?.toLowerCase()).toContain("do nothing");
+    expect(db.statements.some((statement) => statement.toLowerCase() === "begin")).toBe(false);
+  });
+
+  it("does not open a PostgreSQL client for an empty batch", async () => {
+    const { db, env } = createEnv();
+
+    await addRecruitedStudents(env, 1, []);
+
+    expect(db.statements).toEqual([]);
+  });
+
+  it("rejects invalid tiers and batches over 500 unique students before writing", async () => {
+    const { db, env } = createEnv();
+
+    await expect(addRecruitedStudents(env, 1, [{ studentUid: "student-a", tier: 10 }])).rejects.toThrow(
+      "학생 일괄 등록 요청이 올바르지 않아요",
+    );
+    expect(db.statements).toEqual([]);
+
+    const oversizedBatch = Array.from({ length: 501 }, (_, index) => ({
+      studentUid: `student-${index}`,
+      tier: 3,
+    }));
+    await expect(addRecruitedStudents(env, 1, oversizedBatch)).rejects.toThrow(
+      "학생은 최대 500명까지 한 번에 등록할 수 있어요",
+    );
+    expect(db.statements).toEqual([]);
+  });
+
+  it("keeps the defensive array guard as a typed validation failure", async () => {
+    const { db, env } = createEnv();
+
+    await expect(addRecruitedStudents(env, 1, undefined as never)).rejects.toBeInstanceOf(
+      RecruitedStudentValidationError,
+    );
+    expect(db.statements).toEqual([]);
+  });
+
+  it("emits conflict-safe SQL for the recruited-student business key", async () => {
+    const { db, env } = createEnv();
+
+    await addRecruitedStudents(env, 1, [{ studentUid: "student-a", tier: 3 }]);
+
+    const insertStatement = db.statements.find((statement) => statement.toLowerCase().startsWith("insert"));
+    expect(insertStatement).toMatch(/on conflict\s*\(\s*"user_id"\s*,\s*"student_uid"\s*\)\s*do nothing/i);
   });
 });

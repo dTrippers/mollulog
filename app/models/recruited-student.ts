@@ -12,6 +12,7 @@ import {
 import { withPostgresClient } from "~/lib/postgres.server";
 
 const PG_IN_QUERY_CHUNK_SIZE = 500;
+export const MAX_RECRUITED_STUDENT_BATCH_SIZE = 500;
 type RecruitedStudentsDb = NodePgDatabase;
 export type RecruitedStudentsTransaction = Pick<RecruitedStudentsDb, "insert">;
 
@@ -40,6 +41,18 @@ export type RecruitedStudent = RecruitedStudentCurrentState & {
   studentUid: string;
   tier: number;
 };
+
+export type RecruitedStudentBatchInput = {
+  studentUid: string;
+  tier: number;
+};
+
+export class RecruitedStudentValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RecruitedStudentValidationError";
+  }
+}
 
 const currentStateRanges = {
   level: { label: "레벨", min: 1, max: 90 },
@@ -150,8 +163,8 @@ export async function getRecruitedStudentTiers(env: Env, senseiId: number): Prom
 }
 
 export async function upsertRecruitedStudent(env: Env, senseiId: number, studentUid: string, tier: number) {
-  if (tier < 1 || tier > 9) {
-    throw new Error(`Invalid tier: ${tier}`);
+  if (!Number.isInteger(tier) || tier < 1 || tier > 9) {
+    throw new RecruitedStudentValidationError("성급 범위가 올바르지 않아요");
   }
   await withDb(env, async (db) => {
     await db.transaction(async (tx) => {
@@ -184,6 +197,53 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
           set: { tier, updatedAt: new Date() },
         });
     });
+  });
+}
+
+function normalizeRecruitedStudentBatch(items: readonly RecruitedStudentBatchInput[]): RecruitedStudentBatchInput[] {
+  if (!Array.isArray(items)) {
+    throw new RecruitedStudentValidationError("학생 일괄 등록 요청이 올바르지 않아요");
+  }
+
+  const normalized = new Map<string, RecruitedStudentBatchInput>();
+  for (const item of items) {
+    if (
+      item == null ||
+      typeof item !== "object" ||
+      typeof item.studentUid !== "string" ||
+      item.studentUid.trim() === "" ||
+      !Number.isInteger(item.tier) ||
+      item.tier < 1 ||
+      item.tier > 9
+    ) {
+      throw new RecruitedStudentValidationError("학생 일괄 등록 요청이 올바르지 않아요");
+    }
+
+    const studentUid = item.studentUid.trim();
+    if (!normalized.has(studentUid)) {
+      normalized.set(studentUid, { studentUid, tier: item.tier });
+    }
+  }
+
+  if (normalized.size > MAX_RECRUITED_STUDENT_BATCH_SIZE) {
+    throw new RecruitedStudentValidationError(
+      `학생은 최대 ${MAX_RECRUITED_STUDENT_BATCH_SIZE}명까지 한 번에 등록할 수 있어요`,
+    );
+  }
+  return [...normalized.values()];
+}
+
+export async function addRecruitedStudents(env: Env, senseiId: number, items: readonly RecruitedStudentBatchInput[]) {
+  const normalizedItems = normalizeRecruitedStudentBatch(items);
+  if (normalizedItems.length === 0) return;
+
+  await withDb(env, async (db) => {
+    await db
+      .insert(pgRecruitedStudentsTable)
+      .values(normalizedItems.map(({ studentUid, tier }) => ({ uid: nanoid(8), userId: senseiId, studentUid, tier })))
+      .onConflictDoNothing({
+        target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
+      });
   });
 }
 
