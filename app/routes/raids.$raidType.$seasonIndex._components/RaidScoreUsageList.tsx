@@ -36,6 +36,7 @@ type RaidScoreUsageListProps = {
 };
 
 const MIN_USAGE_RATIO = 0.01;
+const TIER_USAGE_BAR_MAX_COUNT = 20_000;
 const TIER_BUCKETS: TierBucket[] = [
   { key: "weapon4", tiers: [9], colorClassName: "bg-pink-500/80 dark:bg-pink-400/75" },
   { key: "weapon3", tiers: [8], colorClassName: "bg-violet-500/80 dark:bg-violet-400/75" },
@@ -239,12 +240,11 @@ function getTierCounts(row: UsageRow, usageMode: UsageMode): TierCount[] {
 
 function TierUsageRows({ tierCounts, recruitedTier }: { tierCounts: TierCount[]; recruitedTier?: number }) {
   const bucketCounts = buildTierBucketCounts(tierCounts);
-  const maxCount = Math.max(...bucketCounts.map(({ count }) => count), 1);
 
   return (
     <div role="img" className="mt-1.5 space-y-0.5" aria-label="성장도별 출전 횟수">
       {bucketCounts.map(({ bucket, count }) => {
-        const ratio = count / maxCount;
+        const ratio = getTierUsageBarRatio(count);
         const isRecruitedTier = recruitedTier != null && bucket.tiers.includes(recruitedTier);
 
         return (
@@ -276,6 +276,10 @@ function TierUsageRows({ tierCounts, recruitedTier }: { tierCounts: TierCount[];
       })}
     </div>
   );
+}
+
+export function getTierUsageBarRatio(count: number): number {
+  return Math.min(count / TIER_USAGE_BAR_MAX_COUNT, 1);
 }
 
 function MyTierLegend() {
