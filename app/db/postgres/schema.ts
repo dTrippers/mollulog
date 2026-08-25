@@ -183,6 +183,7 @@ export const pgTimelineContentsTable = pgTable(
     uid: text().primaryKey(),
     startAt: timestamptz("start_at").notNull(),
     endAt: timestamptz("end_at"),
+    rewardExchangeEndAt: timestamptz("reward_exchange_end_at"),
     endless: boolean().notNull().default(false),
     imageUrl: text("image_url"),
     videos: jsonb().$type<TimelineContentVideo[]>().notNull().default([]),
@@ -206,6 +207,7 @@ export const pgTimelineContentsTable = pgTable(
     uniqueIndex("timeline_contents_id_uidx").on(table.id),
     index("timeline_contents_start_at_uid_idx").on(table.startAt, table.uid),
     index("timeline_contents_end_at_idx").on(table.endAt),
+    index("timeline_contents_reward_exchange_end_at_idx").on(table.rewardExchangeEndAt),
     index("timeline_contents_recruitment_group_uid_idx")
       .on(table.recruitmentGroupUid)
       .where(sql`${table.recruitmentGroupUid} is not null`),
@@ -213,6 +215,149 @@ export const pgTimelineContentsTable = pgTable(
     check("timeline_contents_tags_array", sql`jsonb_typeof(${table.tags}) = 'array'`),
     check("timeline_contents_name_i18n_object", sql`jsonb_typeof(${table.nameI18n}) = 'object'`),
     check("timeline_contents_occurrence_positive", sql`${table.occurrence} is null or ${table.occurrence} > 0`),
+  ],
+);
+
+export type DiscordConnectionStatus = "unlinked" | "pending" | "active" | "failed";
+export type DiscordNotificationTimingMode = "day-before" | "same-day";
+export type DiscordNotificationTrigger =
+  | "event-start"
+  | "event-end"
+  | "reward-exchange-end"
+  | "recruitment-start";
+export type DiscordNotificationJobTrigger = DiscordNotificationTrigger | "connection-verification";
+
+export const pgDiscordConnectionsTable = pgTable(
+  "discord_connections",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    discordUserId: text("discord_user_id").notNull(),
+    status: text().$type<DiscordConnectionStatus>().notNull().default("unlinked"),
+    failureReason: text("failure_reason"),
+    verifiedAt: timestamptz("verified_at"),
+    lastVerificationAt: timestamptz("last_verification_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("discord_connections_uid_uidx").on(table.uid),
+    uniqueIndex("discord_connections_user_id_uidx").on(table.userId),
+    uniqueIndex("discord_connections_discord_user_id_uidx").on(table.discordUserId),
+    index("discord_connections_status_idx").on(table.status),
+  ],
+);
+
+export const pgDiscordNotificationSettingsTable = pgTable(
+  "discord_notification_settings",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    eventStartEnabled: boolean("event_start_enabled").notNull().default(false),
+    eventEndEnabled: boolean("event_end_enabled").notNull().default(false),
+    rewardExchangeEndEnabled: boolean("reward_exchange_end_enabled").notNull().default(false),
+    recruitmentStartEnabled: boolean("recruitment_start_enabled").notNull().default(false),
+    timingMode: text("timing_mode").$type<DiscordNotificationTimingMode>().notNull().default("day-before"),
+    kstHour: integer("kst_hour").notNull().default(11),
+    effectiveAt: timestamptz("effective_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("discord_notification_settings_user_id_uidx").on(table.userId),
+    check("discord_notification_settings_kst_hour", sql`${table.kstHour} between 0 and 23`),
+    check(
+      "discord_notification_settings_timing_mode",
+      sql`${table.timingMode} in ('day-before', 'same-day')`,
+    ),
+  ],
+);
+
+export const pgDiscordRecruitmentSchedulesTable = pgTable(
+  "discord_recruitment_schedules",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    timelineContentUid: text("timeline_content_uid").notNull(),
+    studentUid: text("student_uid").notNull(),
+    recruitmentUid: text("recruitment_uid").notNull(),
+    recruitmentGroupUid: text("recruitment_group_uid").notNull(),
+    studentName: text("student_name"),
+    since: timestamptz("since"),
+    until: timestamptz("until"),
+    effectiveAt: timestamptz("effective_at").notNull().defaultNow(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("discord_recruitment_schedules_uid_uidx").on(table.uid),
+    uniqueIndex("discord_recruitment_schedules_user_content_student_recruitment_uidx").on(
+      table.userId,
+      table.timelineContentUid,
+      table.studentUid,
+      table.recruitmentUid,
+    ),
+    index("discord_recruitment_schedules_user_id_idx").on(table.userId),
+    index("discord_recruitment_schedules_since_idx").on(table.since, table.userId),
+  ],
+);
+
+export const pgDiscordNotificationJobsTable = pgTable(
+  "discord_notification_jobs",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    trigger: text().$type<DiscordNotificationJobTrigger>().notNull(),
+    sourceUid: text("source_uid").notNull(),
+    sourceAnchor: timestamptz("source_anchor").notNull(),
+    plannedSendAt: timestamptz("planned_send_at").notNull(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    payload: jsonb().$type<Record<string, unknown>>().notNull(),
+    generation: integer().notNull().default(1),
+    status: text().notNull().default("pending"),
+    attempts: integer().notNull().default(0),
+    publishedAt: timestamptz("published_at"),
+    deliveredAt: timestamptz("delivered_at"),
+    lastError: text("last_error"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("discord_notification_jobs_uid_uidx").on(table.uid),
+    uniqueIndex("discord_notification_jobs_dedup_uidx").on(
+      table.userId,
+      table.trigger,
+      table.sourceUid,
+      table.generation,
+      table.plannedSendAt,
+    ),
+    index("discord_notification_jobs_due_idx").on(table.status, table.plannedSendAt),
+    index("discord_notification_jobs_user_id_idx").on(table.userId),
+  ],
+);
+
+export const pgDiscordNotificationOutboxTable = pgTable(
+  "discord_notification_outbox",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    jobUid: text("job_uid").notNull(),
+    status: text().notNull().default("pending"),
+    attempts: integer().notNull().default(0),
+    availableAt: timestamptz("available_at").notNull().defaultNow(),
+    publishingAt: timestamptz("publishing_at"),
+    publishedAt: timestamptz("published_at"),
+    lastError: text("last_error"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("discord_notification_outbox_uid_uidx").on(table.uid),
+    uniqueIndex("discord_notification_outbox_job_uid_uidx").on(table.jobUid),
+    index("discord_notification_outbox_claim_idx").on(table.status, table.availableAt),
   ],
 );
 
