@@ -34,18 +34,21 @@ type PageProps = {
 type TabItemState = {
   active?: boolean;
   disabled?: boolean;
+  compact?: boolean;
 };
 
-function getTabItemClassName({ active, disabled }: TabItemState) {
+function getTabItemClassName({ active, disabled, compact = false }: TabItemState) {
+  const sizeClass = compact ? "gap-1.5 h-9 px-3 rounded-md" : "gap-2 h-10 px-4 rounded-full";
+
   if (active) {
     return cn(`
-      flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
+      flex items-center ${sizeClass} shrink-0 transition-all duration-200
       ${disabled ? "bg-muted text-muted-foreground opacity-50" : "bg-primary text-primary-foreground"}
     `);
   }
 
   return cn(`
-    flex items-center gap-2 h-10 px-4 rounded-full shrink-0 transition-all duration-200
+    flex items-center ${sizeClass} shrink-0 transition-all duration-200
     ${
       disabled
         ? "bg-muted/40 text-muted-foreground opacity-50"
@@ -219,18 +222,19 @@ function MobileTabBar({ screens, isSticky }: { screens: PageScreenSelectorProps[
   }, [activeScreenKey]);
 
   return (
-    <div
+    <nav
+      aria-label="화면 탐색"
       className={cn(`
-      lg:hidden sticky top-0 z-10 -mx-4 md:-mx-8 px-4 md:px-8 pt-3 bg-background/90 backdrop-blur-sm
+      lg:hidden sticky top-0 z-10 -mx-4 md:-mx-8 mt-2 bg-background/95 px-4 py-2 backdrop-blur-sm
       ${isSticky ? "shadow-sm" : ""}
     `)}
     >
-      <div ref={scrollContainerRef} className="flex items-center gap-2 py-2 overflow-x-auto no-scrollbar">
+      <div ref={scrollContainerRef} className="flex items-center gap-2 overflow-x-auto no-scrollbar">
         {screens.map((screen) => (
-          <ResponsiveTabItem key={screen.link ?? screen.text} {...screen} />
+          <ResponsiveTabItem key={screen.link ?? screen.text} {...screen} compact />
         ))}
       </div>
-    </div>
+    </nav>
   );
 }
 
@@ -317,14 +321,28 @@ function VerticalDesktopTabBar({
   );
 }
 
-function ResponsiveTabItem({ text, label, Icon, active, disabled, link, onClick }: PageScreenSelectorItemProps) {
-  const className = getTabItemClassName({ active, disabled });
+function ResponsiveTabItem({
+  text,
+  label,
+  Icon,
+  active,
+  disabled,
+  link,
+  onClick,
+  compact = false,
+}: PageScreenSelectorItemProps & { compact?: boolean }) {
+  const className = getTabItemClassName({ active, disabled, compact });
   const inner = (
     <>
-      <Icon className="size-5 shrink-0" strokeWidth={2} />
+      <Icon className={cn("shrink-0", compact ? "size-4" : "size-5")} strokeWidth={2} />
       <span className={`text-sm whitespace-nowrap ${active ? "font-semibold" : "font-medium"}`}>{text}</span>
       {label ? (
-        <span className="flex min-w-5 items-center justify-center rounded-full bg-rose-500 px-1.5 py-0.5 text-xs font-bold leading-none text-white dark:bg-rose-400 dark:text-rose-950">
+        <span
+          className={cn(
+            "flex items-center justify-center rounded-full bg-rose-500 font-bold leading-none text-white dark:bg-rose-400 dark:text-rose-950",
+            compact ? "min-w-4 px-1 py-0.5 text-[10px]" : "min-w-5 px-1.5 py-0.5 text-xs",
+          )}
+        >
           {label}
         </span>
       ) : null}
