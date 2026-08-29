@@ -121,22 +121,17 @@ export async function getDiscordNotificationState(
   return withPostgresClient(
     env,
     async (client) => {
-      const [connectionResult, settingsResult] = await Promise.all([
-        client.query(
-          `select uid, discord_user_id, status, failure_reason, verified_at, last_verification_at
-             from discord_connections where user_id = $1 limit 1`,
-          [userId],
-        ),
-        client.query(
-          `select event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-                  recruitment_start_enabled, timing_mode, kst_hour, effective_at
-             from discord_notification_settings where user_id = $1 limit 1`,
-          [userId],
-        ),
-      ]);
+      const connectionResult = await client.query(
+        `select uid, discord_user_id, status, failure_reason, verified_at, last_verification_at,
+                event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
+                recruitment_start_enabled, timing_mode, kst_hour, effective_at
+           from discord_notification_subscriptions where user_id = $1 limit 1`,
+        [userId],
+      );
+      const row = connectionResult.rows[0];
       return {
-        connection: mapConnection(connectionResult.rows[0]),
-        settings: mapSettings(settingsResult.rows[0], now),
+        connection: mapConnection(row),
+        settings: mapSettings(row, now),
       };
     },
     options.createClient,
@@ -171,36 +166,30 @@ export async function saveDiscordNotificationSettings(
     "save_discord_notification_settings",
     userId,
     async (_db, client) => {
-      const connection = await client.query(`select status from discord_connections where user_id = $1 for update`, [
-        userId,
-      ]);
-      if (connection.rows[0]?.status !== "active") {
+      const subscription = await client.query(
+        `select status, event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
+                recruitment_start_enabled, timing_mode, kst_hour, effective_at
+           from discord_notification_subscriptions where user_id = $1 for update`,
+        [userId],
+      );
+      if (subscription.rows[0]?.status !== "active") {
         throw new DiscordSettingsUnavailableError();
       }
 
-      const existingResult = await client.query(
-        `select event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-                  recruitment_start_enabled, timing_mode, kst_hour, effective_at
-             from discord_notification_settings where user_id = $1 for update`,
-        [userId],
-      );
-      const existing = mapSettings(existingResult.rows[0], now);
+      const existing = mapSettings(subscription.rows[0], now);
       const effectiveAt = isSameSettings(existing, validated) ? new Date(existing.effectiveAt) : now;
 
       await client.query(
-        `insert into discord_notification_settings
-             (user_id, event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-              recruitment_start_enabled, timing_mode, kst_hour, effective_at, created_at, updated_at)
-           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
-           on conflict (user_id) do update set
-             event_start_enabled = excluded.event_start_enabled,
-             event_end_enabled = excluded.event_end_enabled,
-             reward_exchange_end_enabled = excluded.reward_exchange_end_enabled,
-             recruitment_start_enabled = excluded.recruitment_start_enabled,
-             timing_mode = excluded.timing_mode,
-             kst_hour = excluded.kst_hour,
-             effective_at = excluded.effective_at,
-             updated_at = excluded.updated_at`,
+        `update discord_notification_subscriptions
+            set event_start_enabled = $2,
+                event_end_enabled = $3,
+                reward_exchange_end_enabled = $4,
+                recruitment_start_enabled = $5,
+                timing_mode = $6,
+                kst_hour = $7,
+                effective_at = $8,
+                updated_at = $9
+          where user_id = $1`,
         [
           userId,
           validated.eventStartEnabled,
@@ -230,36 +219,14 @@ export async function unlinkDiscordConnection(
     "unlink_discord_connection",
     userId,
     async (_db, client) => {
-      await client.query(`select id from discord_connections where user_id = $1 for update`, [userId]);
-      await client.query(
-        `insert into discord_notification_settings
-           (user_id, event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-            recruitment_start_enabled, timing_mode, kst_hour, effective_at, created_at, updated_at)
-         values ($1, false, false, false, false, 'day-before', 11, $2, $2, $2)
-         on conflict (user_id) do update set
-           event_start_enabled = false, event_end_enabled = false,
-           reward_exchange_end_enabled = false, recruitment_start_enabled = false,
-           effective_at = excluded.effective_at, updated_at = excluded.updated_at`,
-        [userId, now],
-      );
+      await client.query(`select id from discord_notification_subscriptions where user_id = $1 for update`, [userId]);
       await client.query(
         `update discord_notification_jobs
             set status = 'cancelled', last_error = 'Discord connection unlinked', updated_at = $2
-          where user_id = $1 and status in ('pending', 'materialized', 'publishing', 'queued', 'sending', 'blocked')`,
+          where user_id = $1 and status in ('materialized', 'publishing', 'queued', 'sending', 'blocked')`,
         [userId, now],
       );
-      await client.query(
-        `update discord_notification_outbox outbox
-            set status = 'cancelled', last_error = 'Discord connection unlinked', updated_at = $2
-          where outbox.status in ('pending', 'publishing')
-            and exists (
-              select 1 from discord_notification_jobs job
-               where job.uid = outbox.job_uid and job.user_id = $1
-                 and job.status = 'cancelled'
-            )`,
-        [userId, now],
-      );
-      await client.query(`delete from discord_connections where user_id = $1`, [userId]);
+      await client.query(`delete from discord_notification_subscriptions where user_id = $1`, [userId]);
     },
     options,
   );
@@ -289,14 +256,19 @@ export async function upsertPendingDiscordConnection(
         ) {
           throw new DiscordNotificationValidationError("Discord 로그인 계정을 먼저 연결해주세요.");
         }
-        const existingUser = await client.query(`select uid from discord_connections where user_id = $1 for update`, [
-          userId,
-        ]);
+        const existingUser = await client.query(
+          `select uid from discord_notification_subscriptions where user_id = $1 for update`,
+          [
+            userId,
+          ],
+        );
         const uid = String(existingUser.rows[0]?.uid ?? nanoid(16));
         await client.query(
-          `insert into discord_connections
-           (uid, user_id, discord_user_id, status, failure_reason, verified_at, last_verification_at, created_at, updated_at)
-         values ($1, $2, $3, 'pending', null, null, null, $4, $4)
+          `insert into discord_notification_subscriptions
+           (uid, user_id, discord_user_id, status, failure_reason, verified_at, last_verification_at,
+            event_start_enabled, event_end_enabled, reward_exchange_end_enabled, recruitment_start_enabled,
+            timing_mode, kst_hour, effective_at, created_at, updated_at)
+         values ($1, $2, $3, 'pending', null, null, null, false, false, false, false, 'day-before', 11, $4, $4, $4)
          on conflict (user_id) do update set
            uid = excluded.uid, discord_user_id = excluded.discord_user_id, status = 'pending',
            failure_reason = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,
@@ -334,7 +306,7 @@ export async function markDiscordConnectionFailed(
     userId,
     async (_db, client) => {
       await client.query(
-        `update discord_connections set status = 'failed', failure_reason = $2, last_verification_at = $3, updated_at = $3
+        `update discord_notification_subscriptions set status = 'failed', failure_reason = $2, last_verification_at = $3, updated_at = $3
          where user_id = $1 and status = 'pending'`,
         [userId, reason.slice(0, 500), now],
       );

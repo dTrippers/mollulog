@@ -1,21 +1,23 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  pgDiscordConnectionsTable,
   pgDiscordNotificationJobsTable,
-  pgDiscordNotificationOutboxTable,
-  pgDiscordNotificationSettingsTable,
-  pgDiscordRecruitmentSchedulesTable,
+  pgDiscordNotificationSubscriptionsTable,
   pgTimelineContentsTable,
 } from "~/db/postgres/schema";
 
 describe("Discord notification PostgreSQL schema", () => {
-  it("keeps the manual reward exchange end and immutable job fields in the canonical schema", () => {
+  it("keeps subscription settings and immutable job fields in the canonical schema", () => {
     expect(pgTimelineContentsTable.rewardExchangeEndAt).toBeDefined();
-    expect(pgDiscordConnectionsTable.discordUserId).toBeDefined();
-    expect(pgDiscordNotificationSettingsTable.effectiveAt).toBeDefined();
-    expect(pgDiscordRecruitmentSchedulesTable.recruitmentUid).toBeDefined();
+    expect(pgDiscordNotificationSubscriptionsTable.discordUserId).toBeDefined();
+    expect(pgDiscordNotificationSubscriptionsTable.status).toBeDefined();
+    expect(pgDiscordNotificationSubscriptionsTable.effectiveAt).toBeDefined();
+    expect(pgDiscordNotificationSubscriptionsTable.eventStartEnabled).toBeDefined();
+    expect(pgDiscordNotificationSubscriptionsTable.recruitmentStartEnabled).toBeDefined();
     expect(pgDiscordNotificationJobsTable.plannedSendAt).toBeDefined();
     expect(pgDiscordNotificationJobsTable.payload).toBeDefined();
-    expect(pgDiscordNotificationOutboxTable.jobUid).toBeDefined();
+    expect(pgDiscordNotificationJobsTable.publishAttempts).toBeDefined();
+    expect(pgDiscordNotificationJobsTable.deliveryAttempts).toBeDefined();
+    expect(pgDiscordNotificationJobsTable.availableAt).toBeDefined();
+    expect(pgDiscordNotificationJobsTable.publishingAt).toBeDefined();
   });
 });

@@ -14,7 +14,7 @@ const env = { HYPERDRIVE: { connectionString: "postgres://unused" } } as unknown
 
 type OwnershipRows = {
   identities?: Array<{ sensei_id: number; provider_user_id: string }>;
-  connections?: Array<{ user_id: number; discord_user_id: string; status: string }>;
+  subscriptions?: Array<{ user_id: number; discord_user_id: string; status: string }>;
 };
 
 function setupClient(rows: OwnershipRows = {}) {
@@ -23,7 +23,9 @@ function setupClient(rows: OwnershipRows = {}) {
     query: jest.fn(async (sql: string, params?: unknown[]) => {
       statements.push({ sql: sql.replace(/\s+/g, " ").trim(), params });
       if (sql.includes("from auth_identities")) return { rows: rows.identities ?? [], rowCount: 0 };
-      if (sql.includes("from discord_connections")) return { rows: rows.connections ?? [], rowCount: 0 };
+      if (sql.includes("from discord_notification_subscriptions")) {
+        return { rows: rows.subscriptions ?? [], rowCount: 0 };
+      }
       return { rows: [], rowCount: 0 };
     }),
   } as unknown as Client;
@@ -37,7 +39,7 @@ describe("Discord ownership transaction", () => {
   it("serializes the Discord and user keys in deterministic order and allows the same owner", async () => {
     const { statements } = setupClient({
       identities: [{ sensei_id: 7, provider_user_id: "1234567890" }],
-      connections: [{ user_id: 7, discord_user_id: "1234567890", status: "active" }],
+      subscriptions: [{ user_id: 7, discord_user_id: "1234567890", status: "active" }],
     });
 
     await expect(
@@ -58,7 +60,7 @@ describe("Discord ownership transaction", () => {
 
   it("rejects a Discord ID owned by another user before the callback can write", async () => {
     const { statements } = setupClient({
-      connections: [{ user_id: 8, discord_user_id: "1234567890", status: "pending" }],
+      subscriptions: [{ user_id: 8, discord_user_id: "1234567890", status: "pending" }],
     });
     const operation = jest.fn(async () => undefined);
 

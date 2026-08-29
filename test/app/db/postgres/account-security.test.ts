@@ -14,7 +14,8 @@ import { getAccountSessionState, leaveAccount } from "~/db/postgres/account-secu
 import {
   pgAuthIdentitiesTable,
   pgConnectApiKeysTable,
-  pgDiscordConnectionsTable,
+  pgDiscordNotificationJobsTable,
+  pgDiscordNotificationSubscriptionsTable,
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
   pgPasskeysTable,
@@ -120,11 +121,11 @@ describe("account-security PostgreSQL repository", () => {
     });
     expect(mockWithDiscordUserTransaction).toHaveBeenCalledWith(env, "leave_account", 7, expect.any(Function), {});
     expect(deletes).toHaveLength(7);
-    expect(updates).toHaveLength(2);
+    expect(updates).toHaveLength(3);
     expect(deletes.map(({ table }) => table)).toEqual(
       expect.arrayContaining([
         pgAuthIdentitiesTable,
-        pgDiscordConnectionsTable,
+        pgDiscordNotificationSubscriptionsTable,
         pgPasskeysTable,
         pgSenseiPrivaciesTable,
         pgFollowershipsTable,
@@ -134,7 +135,7 @@ describe("account-security PostgreSQL repository", () => {
     );
     for (const table of [
       pgAuthIdentitiesTable,
-      pgDiscordConnectionsTable,
+      pgDiscordNotificationSubscriptionsTable,
       pgPasskeysTable,
       pgSenseiPrivaciesTable,
       pgConnectApiKeysTable,
@@ -158,10 +159,22 @@ describe("account-security PostgreSQL repository", () => {
       "github-1",
     ]);
 
-    expect(updates[0]).toMatchObject({ values: { replyEmail: null } });
-    expect(updates[0]?.table).toBe(pgFeedbackTicketsTable);
-    expect(whereQuery(updates[0]?.where).params).toEqual([7]);
-    expect(updates[1]).toMatchObject({
+    expect(updates[0]).toMatchObject({
+      table: pgDiscordNotificationJobsTable,
+      values: { status: "cancelled", lastError: "Discord connection unlinked" },
+    });
+    expect(whereQuery(updates[0]?.where).params).toEqual([
+      7,
+      "materialized",
+      "publishing",
+      "queued",
+      "sending",
+      "blocked",
+    ]);
+    expect(updates[1]).toMatchObject({ values: { replyEmail: null } });
+    expect(updates[1]?.table).toBe(pgFeedbackTicketsTable);
+    expect(whereQuery(updates[1]?.where).params).toEqual([7]);
+    expect(updates[2]).toMatchObject({
       table: pgSenseisTable,
       values: {
         active: false,
@@ -175,8 +188,8 @@ describe("account-security PostgreSQL repository", () => {
         role: "guest",
       },
     });
-    expect(whereQuery(updates[1]?.where).params).toEqual([7]);
-    const leftUsername = (updates[1] as { values: { username: string } }).values.username;
+    expect(whereQuery(updates[2]?.where).params).toEqual([7]);
+    const leftUsername = (updates[2] as { values: { username: string } }).values.username;
     expect(leftUsername).not.toMatch(/^[a-zA-Z0-9_]{4,20}$/);
   });
 

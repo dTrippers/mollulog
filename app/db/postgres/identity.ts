@@ -96,7 +96,7 @@ async function readDiscordOwnership(client: Client, claim: DiscordOwnershipClaim
     ),
     client.query<DiscordOwnershipRow>(
       `select user_id, discord_user_id, status
-         from discord_connections
+         from discord_notification_subscriptions
         where (discord_user_id = $1${connectionUserPredicate})
         for update`,
       connectionParams,

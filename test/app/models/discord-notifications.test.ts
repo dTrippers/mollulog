@@ -44,7 +44,7 @@ describe("Discord notification settings boundary", () => {
     expect(() => parseDiscordNotificationSettingsForm(form)).toThrow(DiscordNotificationValidationError);
   });
 
-  it("frees the Discord identity while cancelling jobs and outbox rows in one transaction", async () => {
+  it("frees the Discord identity while cancelling jobs in one transaction", async () => {
     const statements: string[] = [];
     const client = {
       async query(text: string) {
@@ -58,15 +58,16 @@ describe("Discord notification settings boundary", () => {
 
     expect(statements[0]).toBe("BEGIN");
     expect(statements.at(-1)).toBe("COMMIT");
-    expect(statements.some((statement) => statement.startsWith("delete from discord_connections"))).toBe(true);
-    expect(statements.some((statement) => statement.startsWith("update discord_notification_outbox"))).toBe(true);
+    expect(statements.some((statement) => statement.startsWith("delete from discord_notification_subscriptions"))).toBe(
+      true,
+    );
     expect(
       statements.some(
         (statement) => statement.startsWith("update discord_notification_jobs") && statement.includes("'blocked'"),
       ),
     ).toBe(true);
     expect(
-      statements.findIndex((statement) => statement.startsWith("delete from discord_connections")),
+      statements.findIndex((statement) => statement.startsWith("delete from discord_notification_subscriptions")),
     ).toBeGreaterThan(statements.findIndex((statement) => statement.startsWith("update discord_notification_jobs")));
   });
 
@@ -77,13 +78,11 @@ describe("Discord notification settings boundary", () => {
       async query(text: string) {
         const normalized = text.replace(/\s+/g, " ").trim();
         statements.push(normalized);
-        if (normalized.startsWith("select status from discord_connections")) {
-          return { rows: [{ status: "active" }], rowCount: 1 };
-        }
-        if (normalized.startsWith("select event_start_enabled")) {
+        if (normalized.startsWith("select status, event_start_enabled")) {
           return {
             rows: [
               {
+                status: "active",
                 event_start_enabled: true,
                 event_end_enabled: false,
                 reward_exchange_end_enabled: false,
@@ -141,7 +140,7 @@ describe("Discord notification settings boundary", () => {
         if (normalized.startsWith("select sensei_id, provider_user_id")) {
           return { rows: [{ sensei_id: 7, provider_user_id: "1234567890" }], rowCount: 1 };
         }
-        if (normalized.startsWith("select uid from discord_connections")) {
+        if (normalized.startsWith("select uid from discord_notification_subscriptions")) {
           return { rows: [], rowCount: 0 };
         }
         return { rows: [], rowCount: 0 };
@@ -152,7 +151,9 @@ describe("Discord notification settings boundary", () => {
     await expect(
       upsertPendingDiscordConnection(env, 7, "1234567890", { now: () => new Date("2026-09-01T00:00:00.000Z") }),
     ).resolves.toMatchObject({ status: "pending", discordUserId: "1234567890" });
-    expect(statements.some((statement) => statement.startsWith("insert into discord_connections"))).toBe(true);
+    expect(statements.some((statement) => statement.startsWith("insert into discord_notification_subscriptions"))).toBe(
+      true,
+    );
   });
 
   it("does not create a notification claim for a notification-only account", async () => {
@@ -172,7 +173,9 @@ describe("Discord notification settings boundary", () => {
     await expect(upsertPendingDiscordConnection(env, 7, "1234567890")).rejects.toThrow(
       "Discord 로그인 계정을 먼저 연결해주세요.",
     );
-    expect(statements.some((statement) => statement.startsWith("insert into discord_connections"))).toBe(false);
+    expect(statements.some((statement) => statement.startsWith("insert into discord_notification_subscriptions"))).toBe(
+      false,
+    );
     expect(statements.at(-1)).toBe("ROLLBACK");
   });
 
