@@ -4,9 +4,14 @@ import { Authenticator, AuthorizationError } from "remix-auth";
 import { GitHubStrategy } from "remix-auth-github";
 import { GoogleStrategy } from "remix-auth-google";
 import { getLogger } from "~/lib/observability.server";
-import { type AuthProvider, getSenseiByAuthIdentity, linkAuthIdentity } from "~/models/auth-identity";
+import {
+  type AuthProvider,
+  assertDiscordIdentityOwnership,
+  getSenseiByAuthIdentity,
+  linkAuthIdentity,
+} from "~/models/auth-identity";
 import { verifyPasskeyAuthentication } from "~/models/passkey";
-import { createPendingSenseiRegistration } from "~/models/pending-sensei-registration";
+import { createPendingSenseiRegistration, type PendingSenseiRegistration } from "~/models/pending-sensei-registration";
 import type { Sensei } from "~/models/sensei";
 import { getSenseiById } from "~/models/sensei";
 import { PasskeyStrategy } from "./passkey-strategy.server";
@@ -212,6 +217,42 @@ export async function getPendingSenseiRegistrationUid(env: Env, request: Request
   return session.get(pendingSenseiRegistrationSessionKey) ?? null;
 }
 
+export type ProviderAuthenticationResolution =
+  | { kind: "authenticated"; sensei: Sensei }
+  | { kind: "pending"; registration: PendingSenseiRegistration };
+
+/**
+ * Resolves an OAuth provider identity without mutating the browser session.
+ * Discord additionally performs the cross-table ownership check before a
+ * pending registration can be created.
+ */
+export async function resolveProviderAuthentication(
+  env: Env,
+  provider: AuthProvider,
+  providerUserId: string,
+  ctx?: ExecutionContext,
+): Promise<ProviderAuthenticationResolution> {
+  const options = { ctx };
+  const sensei = await getSenseiByAuthIdentity(env, provider, providerUserId, options);
+  if (sensei) {
+    if (provider === "discord") {
+      await assertDiscordIdentityOwnership(env, sensei.id, providerUserId, options);
+    }
+    return { kind: "authenticated", sensei };
+  }
+
+  if (provider === "discord") {
+    // A notification-only connection is an ownership conflict, not a login
+    // identity. Never turn it into a session or a pending registration.
+    await assertDiscordIdentityOwnership(env, undefined, providerUserId, options);
+  }
+
+  return {
+    kind: "pending",
+    registration: await createPendingSenseiRegistration(env, provider, providerUserId, options),
+  };
+}
+
 async function authenticateProvider(
   env: Env,
   request: Request,
@@ -219,18 +260,14 @@ async function authenticateProvider(
   providerUserId: string,
   ctx?: ExecutionContext,
 ): Promise<Sensei> {
-  const options = { ctx };
-  const sensei = await getSenseiByAuthIdentity(env, provider, providerUserId, options);
-  if (sensei) {
-    return sensei;
-  }
+  const result = await resolveProviderAuthentication(env, provider, providerUserId, ctx);
+  if (result.kind === "authenticated") return result.sensei;
 
-  const pendingRegistration = await createPendingSenseiRegistration(env, provider, providerUserId, options);
   const authenticator = getAuthenticator(env, ctx);
   const storage = sessionStorage(env);
   const session = await storage.getSession(request.headers.get("Cookie"));
   session.unset(authenticator.sessionKey);
-  session.set(pendingSenseiRegistrationSessionKey, pendingRegistration.uid);
+  session.set(pendingSenseiRegistrationSessionKey, result.registration.uid);
   throw redirect("/register", {
     headers: { "Set-Cookie": await storage.commitSession(session) },
   });

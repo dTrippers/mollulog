@@ -6,15 +6,20 @@ import { Button } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 
 type RootLoaderData = { currentUsername: string | null };
+type SignInBottomSheetProps = { initialError?: string | null };
 
-export default function SignInBottomSheet() {
+export default function SignInBottomSheet({ initialError = null }: SignInBottomSheetProps) {
   const location = useLocation();
   const fetcher = useFetcher<{ error?: string }>();
   const rootData = useRouteLoaderData("root") as RootLoaderData | undefined;
   const currentUsername = rootData?.currentUsername ?? null;
 
   const { isSignInVisible, hideSignIn } = useSignIn();
-  const [clientError, setClientError] = useState<string | null>(null);
+  const [clientError, setClientError] = useState<string | null>(initialError);
+
+  useEffect(() => {
+    setClientError(initialError);
+  }, [initialError]);
 
   const prevUsernameRef = useRef(currentUsername);
   useEffect(() => {
@@ -33,7 +38,9 @@ export default function SignInBottomSheet() {
   const serverError = fetcher.data?.error ?? null;
   const displayError = clientError ?? serverError;
 
-  const redirectToCookie = `redirectTo=${encodeURIComponent(location.pathname + location.search)}; path=/; max-age=300;`;
+  const redirectTarget = new URL(location.pathname + location.search, "https://mollulog.invalid");
+  redirectTarget.searchParams.delete("auth_error");
+  const redirectToCookie = `redirectTo=${encodeURIComponent(redirectTarget.pathname + redirectTarget.search)}; path=/; max-age=300;`;
 
   const signInWithGoogle = () => {
     setClientError(null);
@@ -45,6 +52,12 @@ export default function SignInBottomSheet() {
     setClientError(null);
     document.cookie = redirectToCookie;
     fetcher.submit({}, { action: "/auth/github/signin", method: "post", encType: "application/json" });
+  };
+
+  const signInWithDiscord = () => {
+    setClientError(null);
+    document.cookie = redirectToCookie;
+    fetcher.submit({}, { action: "/auth/discord/signin", method: "post", encType: "application/json" });
   };
 
   const signInWithPasskey = async () => {
@@ -98,6 +111,16 @@ export default function SignInBottomSheet() {
             fullWidth
           >
             <p>Google 계정으로 로그인</p>
+          </Button>
+          <Button
+            className="py-2"
+            type="button"
+            variant="inverse"
+            onClick={signInWithDiscord}
+            disabled={buttonDisabled}
+            fullWidth
+          >
+            <p>Discord 계정으로 로그인</p>
           </Button>
           <Button
             className="py-2"

@@ -5,11 +5,22 @@ import { type ElementType, useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
+import {
+  type DiscordProfileFeedback,
+  getDiscordProfileFeedback,
+} from "~/components/features/auth/discord-profile-feedback";
 import { ProfileEditor } from "~/components/features/profile";
 import { Button, Input, SectionCard, Title, Toggle } from "~/components/primitives";
 import { nowUtcIso } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
-import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
+import { type AuthProvider, getAuthIdentityProviderUserId, getAuthIdentityStatuses } from "~/models/auth-identity";
+import {
+  DiscordIdentityAlreadyLinkedError,
+  DiscordNotificationValidationError,
+  getDiscordNotificationState,
+  unlinkDiscordConnection,
+  upsertPendingDiscordConnection,
+} from "~/models/discord-notifications.server";
 import { getPasskeysBySensei } from "~/models/passkey";
 import { getSenseiById, updateSensei } from "~/models/sensei";
 import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
@@ -48,7 +59,9 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       .sort((a, b) => a.order - b.order),
     passkeyCount: (await getPasskeysBySensei(env, sensei, { ctx })).length,
     authIdentities: await getAuthIdentityStatuses(env, sensei.id, { ctx }),
+    discordState: await getDiscordNotificationState(env, sensei.id, { ctx }),
     authMessage: authMessageFromSearchParams(url.searchParams),
+    discordMessage: getDiscordProfileFeedback(url.searchParams),
   };
 };
 
@@ -69,7 +82,7 @@ function authMessageFromSearchParams(params: URLSearchParams): { tone: "success"
 }
 
 type ActionData = {
-  intent?: "profile" | "account";
+  intent?: "profile" | "account" | "discord-connect" | "discord-unlink";
   success?: boolean;
   savedAt?: string;
   error?: {
@@ -102,8 +115,39 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   };
 
   const intent = formData.get("intent");
-  if (intent !== "profile" && intent !== "account") {
+  if (intent !== "profile" && intent !== "account" && intent !== "discord-connect" && intent !== "discord-unlink") {
     return data<ActionData>({ error: { form: "잘못된 요청이에요. 다시 시도해주세요." } }, { status: 400 });
+  }
+
+  if (intent === "discord-unlink") {
+    try {
+      await unlinkDiscordConnection(env, sensei.id, { ctx });
+      return redirect("/edit?discord_notice=unlinked#discord");
+    } catch (error) {
+      console.error("[edit] failed to unlink Discord notification connection", error);
+      return data<ActionData>({ intent, error: { form: "Discord 알림 연결을 해제하지 못했어요." } }, { status: 500 });
+    }
+  }
+
+  if (intent === "discord-connect") {
+    const discordUserId = await getAuthIdentityProviderUserId(env, sensei.id, "discord", { ctx });
+    if (!discordUserId) {
+      return data<ActionData>({ intent, error: { form: "Discord 로그인 계정을 먼저 연결해주세요." } }, { status: 400 });
+    }
+    try {
+      await upsertPendingDiscordConnection(env, sensei.id, discordUserId, { ctx });
+      return redirect("/edit?discord_notice=pending#discord");
+    } catch (error) {
+      const expectedError =
+        error instanceof DiscordIdentityAlreadyLinkedError || error instanceof DiscordNotificationValidationError;
+      if (!expectedError) {
+        console.error("[edit] failed to connect Discord notifications", error);
+      }
+      return data<ActionData>(
+        { intent, error: { form: expectedError ? error.message : "Discord 알림 연결에 실패했어요." } },
+        { status: expectedError ? 400 : 500 },
+      );
+    }
   }
 
   if (intent === "profile") {
@@ -273,15 +317,110 @@ function AuthIdentityLinkForm({ provider, label, linked }: { provider: AuthProvi
   );
 }
 
+function DiscordConnectionSection({
+  connection,
+  identityLinked,
+  notice,
+  error,
+  isSubmitting,
+}: {
+  connection: Awaited<ReturnType<typeof getDiscordNotificationState>>["connection"];
+  identityLinked: boolean;
+  notice?: DiscordProfileFeedback | null;
+  error?: string;
+  isSubmitting: boolean;
+}) {
+  const status = connection?.status ?? "none";
+  const isConnectSubmitting = isSubmitting;
+  const isUnlinkSubmitting = isSubmitting;
+
+  return (
+    <div id="discord" className="scroll-mt-4">
+      <SectionCard title="Discord" description="로그인 계정과 DM 알림 연결을 각각 관리할 수 있어요.">
+        <div className="space-y-3">
+          {notice ? (
+            <p
+              className={cn(
+                "rounded-md px-3 py-2 text-sm",
+                notice.tone === "success"
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                  : "bg-red-500/10 text-red-700 dark:text-red-300",
+              )}
+            >
+              {notice.text}
+            </p>
+          ) : null}
+          {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
+          <AuthIdentityLinkForm provider="discord" label="Discord 로그인" linked={identityLinked} />
+          <div className="flex flex-col gap-3 rounded-md bg-background px-4 py-3 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-start gap-3">
+              {status === "pending" ? (
+                <ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-amber-600 dark:text-amber-300" />
+              ) : status === "active" ? (
+                <CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              ) : status === "failed" ? (
+                <span className="mt-0.5 size-4 shrink-0 rounded-full bg-destructive/20" />
+              ) : (
+                <LinkIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+              )}
+              <div className="min-w-0">
+                <p className="font-medium">DM 알림 연결</p>
+                <p className="text-sm text-muted-foreground">
+                  {status === "pending"
+                    ? "확인 중"
+                    : status === "active"
+                      ? "활성"
+                      : status === "failed"
+                        ? "실패"
+                        : "미연결"}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 gap-2 sm:justify-end">
+              {status !== "active" && identityLinked ? (
+                <Form method="post">
+                  <input type="hidden" name="intent" value="discord-connect" />
+                  <Button type="submit" size="sm" variant="primary" disabled={isConnectSubmitting}>
+                    {status === "failed" ? "다시 시도" : status === "pending" ? "다시 확인" : "알림 연결"}
+                  </Button>
+                </Form>
+              ) : null}
+              {status === "active" || status === "pending" || status === "failed" ? (
+                <Form method="post">
+                  <input type="hidden" name="intent" value="discord-unlink" />
+                  <Button type="submit" size="sm" variant="danger-subtle" disabled={isUnlinkSubmitting}>
+                    연결 해제
+                  </Button>
+                </Form>
+              ) : null}
+            </div>
+          </div>
+          {!identityLinked ? (
+            <p className="text-sm text-muted-foreground">
+              알림 연결이 남아 있어도 Discord 로그인 계정은 자동으로 연결되지 않아요. 위에서 별도로 연결해주세요.
+            </p>
+          ) : null}
+        </div>
+      </SectionCard>
+    </div>
+  );
+}
+
 export default function EditProfile() {
-  const { sensei, allStudents, passkeyCount, authIdentities, authMessage } = useLoaderData<typeof loader>();
+  const { sensei, allStudents, passkeyCount, authIdentities, discordState, authMessage, discordMessage } =
+    useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const submittingIntent = navigation.formData?.get("intent");
   const isProfileSubmitting = navigation.state === "submitting" && submittingIntent === "profile";
   const isAccountSubmitting = navigation.state === "submitting" && submittingIntent === "account";
+  const isDiscordSubmitting =
+    navigation.state === "submitting" &&
+    (submittingIntent === "discord-connect" || submittingIntent === "discord-unlink");
   const profileActionData = actionData?.intent === "profile" ? actionData : undefined;
   const accountActionData = actionData?.intent === "account" ? actionData : undefined;
+  const discordActionData =
+    actionData?.intent === "discord-connect" || actionData?.intent === "discord-unlink" ? actionData : undefined;
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [isAccountDirty, setIsAccountDirty] = useState(false);
   const [isProfileSaved, setIsProfileSaved] = useState(false);
@@ -369,6 +508,14 @@ export default function EditProfile() {
           </div>
         </Form>
       </SectionCard>
+
+      <DiscordConnectionSection
+        connection={discordState.connection}
+        identityLinked={authIdentities.discord}
+        notice={discordMessage}
+        error={discordActionData?.error?.form}
+        isSubmitting={isDiscordSubmitting}
+      />
 
       <SectionCard title="인증 및 보안">
         <div className="space-y-3">

@@ -106,24 +106,26 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     } satisfies ActionData;
   }
 
-  const linkedSensei = await getSenseiByAuthIdentity(
-    env,
-    pendingRegistration.provider,
-    pendingRegistration.providerUserId,
-    { ctx },
-  );
-  if (linkedSensei) {
-    await deletePendingSenseiRegistration(env, pendingRegistration.uid, { ctx });
+  if (pendingRegistration.provider !== "discord") {
+    const linkedSensei = await getSenseiByAuthIdentity(
+      env,
+      pendingRegistration.provider,
+      pendingRegistration.providerUserId,
+      { ctx },
+    );
+    if (linkedSensei) {
+      await deletePendingSenseiRegistration(env, pendingRegistration.uid, { ctx });
 
-    const { getSession, commitSession } = sessionStorage(env);
-    const session = await getSession(request.headers.get("cookie"));
-    session.set(authenticator.sessionKey, linkedSensei);
-    session.unset(pendingSenseiRegistrationSessionKey);
-    return redirect(redirectTo(request) ?? `/@${linkedSensei.username}`, {
-      headers: {
-        "Set-Cookie": await commitSession(session),
-      },
-    });
+      const { getSession, commitSession } = sessionStorage(env);
+      const session = await getSession(request.headers.get("cookie"));
+      session.set(authenticator.sessionKey, linkedSensei);
+      session.unset(pendingSenseiRegistrationSessionKey);
+      return redirect(redirectTo(request) ?? `/@${linkedSensei.username}`, {
+        headers: {
+          "Set-Cookie": await commitSession(session),
+        },
+      });
+    }
   }
 
   const createResult = await createSenseiWithAuthIdentity(

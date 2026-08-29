@@ -2,9 +2,11 @@ import { describe, expect, it, jest } from "@jest/globals";
 import {
   DiscordIdentityAlreadyLinkedError,
   DiscordNotificationValidationError,
+  getDiscordNotificationState,
   parseDiscordNotificationSettingsForm,
   saveDiscordNotificationSettings,
   unlinkDiscordConnection,
+  upsertPendingDiscordConnection,
 } from "~/models/discord-notifications.server";
 
 jest.mock("~/lib/postgres.server", () => ({
@@ -128,5 +130,75 @@ describe("Discord notification settings boundary", () => {
     );
     expect(changed.effectiveAt).toBe("2026-09-02T00:00:00.000Z");
     expect(statements.some((statement) => statement.includes("discord_recruitment_schedules"))).toBe(false);
+  });
+
+  it("requires the matching Discord login identity before creating a notification claim", async () => {
+    const statements: string[] = [];
+    const client = {
+      async query(text: string) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        statements.push(normalized);
+        if (normalized.startsWith("select sensei_id, provider_user_id")) {
+          return { rows: [{ sensei_id: 7, provider_user_id: "1234567890" }], rowCount: 1 };
+        }
+        if (normalized.startsWith("select uid from discord_connections")) {
+          return { rows: [], rowCount: 0 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+    const env = { __pgClient: client } as unknown as Env;
+
+    await expect(
+      upsertPendingDiscordConnection(env, 7, "1234567890", { now: () => new Date("2026-09-01T00:00:00.000Z") }),
+    ).resolves.toMatchObject({ status: "pending", discordUserId: "1234567890" });
+    expect(statements.some((statement) => statement.startsWith("insert into discord_connections"))).toBe(true);
+  });
+
+  it("does not create a notification claim for a notification-only account", async () => {
+    const statements: string[] = [];
+    const client = {
+      async query(text: string) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        statements.push(normalized);
+        if (normalized.startsWith("select sensei_id, provider_user_id")) return { rows: [], rowCount: 0 };
+        if (normalized.startsWith("select user_id, discord_user_id")) {
+          return { rows: [{ user_id: 7, discord_user_id: "1234567890", status: "active" }], rowCount: 1 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+    const env = { __pgClient: client } as unknown as Env;
+    await expect(upsertPendingDiscordConnection(env, 7, "1234567890")).rejects.toThrow(
+      "Discord 로그인 계정을 먼저 연결해주세요.",
+    );
+    expect(statements.some((statement) => statement.startsWith("insert into discord_connections"))).toBe(false);
+    expect(statements.at(-1)).toBe("ROLLBACK");
+  });
+
+  it("presents an unsupported legacy connection status as unlinked without persisting it", async () => {
+    const client = {
+      async query(text: string) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        if (normalized.startsWith("select uid, discord_user_id")) {
+          return {
+            rows: [
+              {
+                uid: "connection-1",
+                discord_user_id: "1234567890",
+                status: "unlinked",
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+    const env = { __pgClient: client } as unknown as Env;
+    const { connection } = await getDiscordNotificationState(env, 7, {
+      now: () => new Date("2026-09-01T00:00:00.000Z"),
+    });
+    expect(connection).toBeNull();
   });
 });

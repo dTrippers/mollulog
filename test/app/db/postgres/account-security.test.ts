@@ -3,17 +3,18 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 const mockWithIdentityDatabase = jest.fn();
-const mockWithIdentityTransaction = jest.fn();
+const mockWithDiscordUserTransaction = jest.fn();
 
 jest.mock("~/db/postgres/identity", () => ({
   withIdentityDatabase: (...args: unknown[]) => mockWithIdentityDatabase(...args),
-  withIdentityTransaction: (...args: unknown[]) => mockWithIdentityTransaction(...args),
+  withDiscordUserTransaction: (...args: unknown[]) => mockWithDiscordUserTransaction(...args),
 }));
 
 import { getAccountSessionState, leaveAccount } from "~/db/postgres/account-security";
 import {
   pgAuthIdentitiesTable,
   pgConnectApiKeysTable,
+  pgDiscordConnectionsTable,
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
   pgPasskeysTable,
@@ -108,19 +109,22 @@ describe("account-security PostgreSQL repository", () => {
       },
       [{ provider: "github", providerUserId: "github-1" }],
     );
-    mockWithIdentityTransaction.mockImplementationOnce(async (_env, queryName, operation) => {
+    mockWithDiscordUserTransaction.mockImplementationOnce(async (_env, queryName, userId, operation) => {
       expect(queryName).toBe("leave_account");
+      expect(userId).toBe(7);
       return (operation as (database: typeof db) => unknown)(db);
     });
 
     await expect(leaveAccount(env, { userId: 7 })).resolves.toEqual({
       status: "left",
     });
-    expect(deletes).toHaveLength(6);
+    expect(mockWithDiscordUserTransaction).toHaveBeenCalledWith(env, "leave_account", 7, expect.any(Function), {});
+    expect(deletes).toHaveLength(7);
     expect(updates).toHaveLength(2);
     expect(deletes.map(({ table }) => table)).toEqual(
       expect.arrayContaining([
         pgAuthIdentitiesTable,
+        pgDiscordConnectionsTable,
         pgPasskeysTable,
         pgSenseiPrivaciesTable,
         pgFollowershipsTable,
@@ -128,7 +132,13 @@ describe("account-security PostgreSQL repository", () => {
         pgPendingSenseiRegistrationsTable,
       ]),
     );
-    for (const table of [pgAuthIdentitiesTable, pgPasskeysTable, pgSenseiPrivaciesTable, pgConnectApiKeysTable]) {
+    for (const table of [
+      pgAuthIdentitiesTable,
+      pgDiscordConnectionsTable,
+      pgPasskeysTable,
+      pgSenseiPrivaciesTable,
+      pgConnectApiKeysTable,
+    ]) {
       const deletion = deletes.find((call) => call.table === table);
       expect(deletion).toBeDefined();
       expect(whereQuery(deletion?.where).params).toEqual([7]);
@@ -184,7 +194,7 @@ describe("account-security PostgreSQL repository", () => {
         throw new Error("database failure");
       }),
     }));
-    mockWithIdentityTransaction.mockImplementationOnce(async (_env, _queryName, operation) =>
+    mockWithDiscordUserTransaction.mockImplementationOnce(async (_env, _queryName, _userId, operation) =>
       (operation as (database: typeof db) => unknown)(db),
     );
 

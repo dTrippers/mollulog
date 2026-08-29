@@ -1,5 +1,9 @@
 import { nanoid } from "nanoid/non-secure";
-import type { Client } from "pg";
+import {
+  DiscordOwnershipConflictError,
+  withDiscordOwnershipTransaction,
+  withDiscordUserTransaction,
+} from "~/db/postgres/identity";
 import type { DiscordConnectionStatus, DiscordNotificationTimingMode } from "~/db/postgres/schema";
 import {
   DISCORD_NOTIFICATION_DEFAULTS,
@@ -7,7 +11,7 @@ import {
   DiscordNotificationValidationError,
   validateDiscordNotificationSettings,
 } from "~/domain/discord-notifications";
-import { withPostgresClient } from "~/lib/postgres.server";
+import { type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 
 export { DiscordNotificationValidationError };
 
@@ -32,6 +36,7 @@ export type DiscordNotificationState = {
 export type DiscordNotificationRepositoryOptions = {
   ctx?: ExecutionContext;
   now?: () => Date;
+  createClient?: PostgresClientFactory;
 };
 
 type QueryRow = Record<string, unknown>;
@@ -51,10 +56,12 @@ function isUniqueViolation(error: unknown): boolean {
 
 function mapConnection(row: QueryRow | undefined): DiscordConnection | null {
   if (!row || row.uid === null || row.uid === undefined) return null;
+  const status = String(row.status);
+  if (status !== "pending" && status !== "active" && status !== "failed") return null;
   return {
     uid: String(row.uid),
     discordUserId: String(row.discord_user_id),
-    status: String(row.status) as DiscordConnectionStatus,
+    status: status as DiscordConnectionStatus,
     failureReason: row.failure_reason ? String(row.failure_reason) : null,
     verifiedAt: asDate(row.verified_at),
     lastVerificationAt: asDate(row.last_verification_at),
@@ -74,18 +81,6 @@ function mapSettings(row: QueryRow | undefined, now: Date): DiscordNotificationS
     kstHour: Number(row.kst_hour),
     effectiveAt: asDate(row.effective_at) ?? now.toISOString(),
   };
-}
-
-async function withTransaction<T>(client: Client, operation: () => Promise<T>): Promise<T> {
-  await client.query("BEGIN");
-  try {
-    const result = await operation();
-    await client.query("COMMIT");
-    return result;
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  }
 }
 
 function isSameSettings(a: DiscordNotificationSettings, b: DiscordNotificationSettingsInput): boolean {
@@ -144,7 +139,7 @@ export async function getDiscordNotificationState(
         settings: mapSettings(settingsResult.rows[0], now),
       };
     },
-    undefined,
+    options.createClient,
     options.ctx,
   );
 }
@@ -171,28 +166,29 @@ export async function saveDiscordNotificationSettings(
 ): Promise<DiscordNotificationSettings> {
   const validated = validateDiscordNotificationSettings(input);
   const now = options.now?.() ?? new Date();
-  return withPostgresClient(
+  return withDiscordUserTransaction(
     env,
-    async (client) =>
-      withTransaction(client, async () => {
-        const connection = await client.query(`select status from discord_connections where user_id = $1 for update`, [
-          userId,
-        ]);
-        if (connection.rows[0]?.status !== "active") {
-          throw new DiscordSettingsUnavailableError();
-        }
+    "save_discord_notification_settings",
+    userId,
+    async (_db, client) => {
+      const connection = await client.query(`select status from discord_connections where user_id = $1 for update`, [
+        userId,
+      ]);
+      if (connection.rows[0]?.status !== "active") {
+        throw new DiscordSettingsUnavailableError();
+      }
 
-        const existingResult = await client.query(
-          `select event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
+      const existingResult = await client.query(
+        `select event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
                   recruitment_start_enabled, timing_mode, kst_hour, effective_at
              from discord_notification_settings where user_id = $1 for update`,
-          [userId],
-        );
-        const existing = mapSettings(existingResult.rows[0], now);
-        const effectiveAt = isSameSettings(existing, validated) ? new Date(existing.effectiveAt) : now;
+        [userId],
+      );
+      const existing = mapSettings(existingResult.rows[0], now);
+      const effectiveAt = isSameSettings(existing, validated) ? new Date(existing.effectiveAt) : now;
 
-        await client.query(
-          `insert into discord_notification_settings
+      await client.query(
+        `insert into discord_notification_settings
              (user_id, event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
               recruitment_start_enabled, timing_mode, kst_hour, effective_at, created_at, updated_at)
            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $9)
@@ -205,22 +201,21 @@ export async function saveDiscordNotificationSettings(
              kst_hour = excluded.kst_hour,
              effective_at = excluded.effective_at,
              updated_at = excluded.updated_at`,
-          [
-            userId,
-            validated.eventStartEnabled,
-            validated.eventEndEnabled,
-            validated.rewardExchangeEndEnabled,
-            validated.recruitmentStartEnabled,
-            validated.timingMode,
-            validated.kstHour,
-            effectiveAt,
-            now,
-          ],
-        );
-        return { ...validated, effectiveAt: effectiveAt.toISOString() };
-      }),
-    undefined,
-    options.ctx,
+        [
+          userId,
+          validated.eventStartEnabled,
+          validated.eventEndEnabled,
+          validated.rewardExchangeEndEnabled,
+          validated.recruitmentStartEnabled,
+          validated.timingMode,
+          validated.kstHour,
+          effectiveAt,
+          now,
+        ],
+      );
+      return { ...validated, effectiveAt: effectiveAt.toISOString() };
+    },
+    options,
   );
 }
 
@@ -230,50 +225,43 @@ export async function unlinkDiscordConnection(
   options: DiscordNotificationRepositoryOptions = {},
 ): Promise<void> {
   const now = options.now?.() ?? new Date();
-  await withPostgresClient(
+  await withDiscordUserTransaction(
     env,
-    (client) =>
-      withTransaction(client, async () => {
-        await client.query(`select id from discord_connections where user_id = $1 for update`, [userId]);
-        await client.query(
-          `update discord_connections
-              set status = 'unlinked', failure_reason = null, verified_at = null,
-                  last_verification_at = $2, updated_at = $2
-            where user_id = $1`,
-          [userId, now],
-        );
-        await client.query(
-          `insert into discord_notification_settings
-             (user_id, event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-              recruitment_start_enabled, timing_mode, kst_hour, effective_at, created_at, updated_at)
-           values ($1, false, false, false, false, 'day-before', 11, $2, $2, $2)
-           on conflict (user_id) do update set
-             event_start_enabled = false, event_end_enabled = false,
-             reward_exchange_end_enabled = false, recruitment_start_enabled = false,
-             effective_at = excluded.effective_at, updated_at = excluded.updated_at`,
-          [userId, now],
-        );
-        await client.query(
-          `update discord_notification_jobs
-              set status = 'cancelled', last_error = 'Discord connection unlinked', updated_at = $2
-            where user_id = $1 and status in ('pending', 'materialized', 'publishing', 'queued', 'sending', 'blocked')`,
-          [userId, now],
-        );
-        await client.query(
-          `update discord_notification_outbox outbox
-              set status = 'cancelled', last_error = 'Discord connection unlinked', updated_at = $2
-            where outbox.status in ('pending', 'publishing')
-              and exists (
-                select 1 from discord_notification_jobs job
-                 where job.uid = outbox.job_uid and job.user_id = $1
-                   and job.status = 'cancelled'
-              )`,
-          [userId, now],
-        );
-        await client.query(`delete from discord_connections where user_id = $1`, [userId]);
-      }),
-    undefined,
-    options.ctx,
+    "unlink_discord_connection",
+    userId,
+    async (_db, client) => {
+      await client.query(`select id from discord_connections where user_id = $1 for update`, [userId]);
+      await client.query(
+        `insert into discord_notification_settings
+           (user_id, event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
+            recruitment_start_enabled, timing_mode, kst_hour, effective_at, created_at, updated_at)
+         values ($1, false, false, false, false, 'day-before', 11, $2, $2, $2)
+         on conflict (user_id) do update set
+           event_start_enabled = false, event_end_enabled = false,
+           reward_exchange_end_enabled = false, recruitment_start_enabled = false,
+           effective_at = excluded.effective_at, updated_at = excluded.updated_at`,
+        [userId, now],
+      );
+      await client.query(
+        `update discord_notification_jobs
+            set status = 'cancelled', last_error = 'Discord connection unlinked', updated_at = $2
+          where user_id = $1 and status in ('pending', 'materialized', 'publishing', 'queued', 'sending', 'blocked')`,
+        [userId, now],
+      );
+      await client.query(
+        `update discord_notification_outbox outbox
+            set status = 'cancelled', last_error = 'Discord connection unlinked', updated_at = $2
+          where outbox.status in ('pending', 'publishing')
+            and exists (
+              select 1 from discord_notification_jobs job
+               where job.uid = outbox.job_uid and job.user_id = $1
+                 and job.status = 'cancelled'
+            )`,
+        [userId, now],
+      );
+      await client.query(`delete from discord_connections where user_id = $1`, [userId]);
+    },
+    options,
   );
 }
 
@@ -289,45 +277,46 @@ export async function upsertPendingDiscordConnection(
   }
   const now = options.now?.() ?? new Date();
   try {
-    return await withPostgresClient(
+    return await withDiscordOwnershipTransaction(
       env,
-      async (client) =>
-        withTransaction(client, async () => {
-          const existingIdentity = await client.query(
-            `select user_id from discord_connections where discord_user_id = $1 for update`,
-            [normalizedDiscordUserId],
-          );
-          if (existingIdentity.rows[0] && Number(existingIdentity.rows[0].user_id) !== userId) {
-            throw new DiscordIdentityAlreadyLinkedError();
-          }
-
-          const existingUser = await client.query(`select uid from discord_connections where user_id = $1 for update`, [
-            userId,
-          ]);
-          const uid = String(existingUser.rows[0]?.uid ?? nanoid(16));
-          await client.query(
-            `insert into discord_connections
-             (uid, user_id, discord_user_id, status, failure_reason, verified_at, last_verification_at, created_at, updated_at)
-           values ($1, $2, $3, 'pending', null, null, null, $4, $4)
-           on conflict (user_id) do update set
-             uid = excluded.uid, discord_user_id = excluded.discord_user_id, status = 'pending',
-             failure_reason = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,
-            [uid, userId, normalizedDiscordUserId, now],
-          );
-          return {
-            uid,
-            discordUserId: normalizedDiscordUserId,
-            status: "pending" as const,
-            failureReason: null,
-            verifiedAt: null,
-            lastVerificationAt: null,
-          };
-        }),
-      undefined,
-      options.ctx,
+      "upsert_pending_discord_connection",
+      { userId, discordUserId: normalizedDiscordUserId },
+      async (_db, client, ownership) => {
+        if (
+          !ownership.identities.some(
+            (identity) => identity.userId === userId && identity.discordUserId === normalizedDiscordUserId,
+          )
+        ) {
+          throw new DiscordNotificationValidationError("Discord 로그인 계정을 먼저 연결해주세요.");
+        }
+        const existingUser = await client.query(`select uid from discord_connections where user_id = $1 for update`, [
+          userId,
+        ]);
+        const uid = String(existingUser.rows[0]?.uid ?? nanoid(16));
+        await client.query(
+          `insert into discord_connections
+           (uid, user_id, discord_user_id, status, failure_reason, verified_at, last_verification_at, created_at, updated_at)
+         values ($1, $2, $3, 'pending', null, null, null, $4, $4)
+         on conflict (user_id) do update set
+           uid = excluded.uid, discord_user_id = excluded.discord_user_id, status = 'pending',
+           failure_reason = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,
+          [uid, userId, normalizedDiscordUserId, now],
+        );
+        return {
+          uid,
+          discordUserId: normalizedDiscordUserId,
+          status: "pending" as const,
+          failureReason: null,
+          verifiedAt: null,
+          lastVerificationAt: null,
+        };
+      },
+      options,
     );
   } catch (error) {
-    if (isUniqueViolation(error)) throw new DiscordIdentityAlreadyLinkedError();
+    if (error instanceof DiscordOwnershipConflictError || isUniqueViolation(error)) {
+      throw new DiscordIdentityAlreadyLinkedError();
+    }
     throw error;
   }
 }
@@ -339,21 +328,17 @@ export async function markDiscordConnectionFailed(
   options: DiscordNotificationRepositoryOptions = {},
 ): Promise<void> {
   const now = options.now?.() ?? new Date();
-  await withPostgresClient(
+  await withDiscordUserTransaction(
     env,
-    (client) =>
-      client
-        .query(
-          `update discord_connections set status = 'failed', failure_reason = $2, last_verification_at = $3, updated_at = $3
-           where user_id = $1 and status = 'pending'`,
-          [userId, reason.slice(0, 500), now],
-        )
-        .then(() => undefined),
-    undefined,
-    options.ctx,
+    "mark_discord_connection_failed",
+    userId,
+    async (_db, client) => {
+      await client.query(
+        `update discord_connections set status = 'failed', failure_reason = $2, last_verification_at = $3, updated_at = $3
+         where user_id = $1 and status = 'pending'`,
+        [userId, reason.slice(0, 500), now],
+      );
+    },
+    options,
   );
-}
-
-export function getDiscordOAuthCallbackUrl(host: string): string {
-  return new URL("/notifications/discord/callback", host).toString();
 }
