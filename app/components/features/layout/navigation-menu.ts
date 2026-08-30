@@ -1,6 +1,7 @@
 import {
   ArchiveBoxIcon as ArchiveBoxIconOutline,
   ArrowsRightLeftIcon as ArrowsRightLeftIconOutline,
+  BellAlertIcon as BellAlertIconOutline,
   BoltIcon as BoltIconOutline,
   BookOpenIcon as BookOpenIconOutline,
   CalendarIcon as CalendarIconOutline,
@@ -26,6 +27,7 @@ import {
 import {
   ArchiveBoxIcon as ArchiveBoxIconSolid,
   ArrowsRightLeftIcon as ArrowsRightLeftIconSolid,
+  BellAlertIcon as BellAlertIconSolid,
   BoltIcon as BoltIconSolid,
   BookOpenIcon as BookOpenIconSolid,
   CalendarIcon as CalendarIconSolid,
@@ -175,7 +177,8 @@ export function getNavigationSectionStates(
       pathname.startsWith("/edit") ||
       pathname.startsWith("/my") ||
       pathname.startsWith("/connect") ||
-      pathname.startsWith("/scanner"),
+      pathname.startsWith("/scanner") ||
+      pathname.startsWith("/notifications"),
   };
 }
 
@@ -418,6 +421,18 @@ export function getNavigationCatalog({
       OutlineIcon: ArrowsRightLeftIconOutline,
       SolidIcon: ArrowsRightLeftIconSolid,
       isActive: pathname.startsWith("/connect"),
+    },
+    {
+      group: "profile",
+      surfaces: ["desktop", "more", "search"],
+      to: "/notifications",
+      name: "알림 설정",
+      favoriteId: "notifications",
+      description: "Discord 알림과 알림 시점을 설정해보세요",
+      requiresSignIn: true,
+      OutlineIcon: BellAlertIconOutline,
+      SolidIcon: BellAlertIconSolid,
+      isActive: pathname.startsWith("/notifications"),
     },
     {
       group: "service",

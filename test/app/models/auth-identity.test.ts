@@ -2,14 +2,24 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockWithIdentityDatabase = jest.fn();
 const mockWithIdentityTransaction = jest.fn();
+const mockWithDiscordOwnershipTransaction = jest.fn();
 
 jest.mock("~/db/postgres/identity", () => ({
+  DiscordOwnershipConflictError: class DiscordOwnershipConflictError extends Error {},
+  assertDiscordOwnership: jest.fn(),
   withIdentityDatabase: (...args: unknown[]) => mockWithIdentityDatabase(...args),
   withIdentityTransaction: (...args: unknown[]) => mockWithIdentityTransaction(...args),
+  withDiscordOwnershipTransaction: (...args: unknown[]) => mockWithDiscordOwnershipTransaction(...args),
+  lockDiscordOwnershipUser: jest.fn(),
 }));
 
 import type { pgSenseisTable } from "~/db/postgres/schema";
-import { createSenseiWithAuthIdentity, getSenseiByAuthIdentity, linkAuthIdentity } from "~/models/auth-identity";
+import {
+  createAuthIdentity,
+  createSenseiWithAuthIdentity,
+  getSenseiByAuthIdentity,
+  linkAuthIdentity,
+} from "~/models/auth-identity";
 
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } } as unknown as Env;
 const senseiRow: typeof pgSenseisTable.$inferSelect = {
@@ -157,5 +167,55 @@ describe("OAuth identity contracts", () => {
 
     await expect(getSenseiByAuthIdentity(env, provider, providerUserId)).resolves.toMatchObject({ id: 12 });
     expect(db.select).toHaveBeenCalled();
+  });
+
+  it("stores Discord identity without touching the legacy profile columns", async () => {
+    const values = jest.fn((_value: unknown) => ({ onConflictDoNothing: jest.fn() }));
+    const db = { insert: jest.fn(() => ({ values })) };
+    mockWithDiscordOwnershipTransaction.mockImplementationOnce(async (_env, queryName, claim, operation) => {
+      expect(queryName).toBe("create_discord_auth_identity");
+      expect(claim).toEqual({ userId: 12, discordUserId: "discord-1" });
+      return (operation as (database: typeof db) => unknown)(db);
+    });
+
+    await createAuthIdentity(env, 12, "discord", " discord-1 ");
+
+    expect(values).toHaveBeenCalledWith({ senseiId: 12, provider: "discord", providerUserId: "discord-1" });
+  });
+
+  it("creates a Discord profile with no Google or GitHub legacy values", async () => {
+    const profileRow = { ...senseiRow, googleId: null, githubId: null };
+    let insertCount = 0;
+    const values = jest.fn((_value: unknown) => {
+      insertCount += 1;
+      return insertCount === 1 ? { returning: jest.fn(async () => [profileRow]) } : Promise.resolve(undefined);
+    });
+    const db = { insert: jest.fn(() => ({ values })) };
+    const client = { query: jest.fn(async () => ({ rows: [], rowCount: 1 })) };
+    mockWithDiscordOwnershipTransaction.mockImplementationOnce(async (_env, queryName, claim, operation) => {
+      expect(queryName).toBe("create_sensei_with_discord_auth_identity");
+      expect(claim).toEqual({ discordUserId: "discord-1" });
+      return (operation as (database: typeof db, databaseClient: typeof client) => unknown)(db, client);
+    });
+
+    await expect(
+      createSenseiWithAuthIdentity(
+        env,
+        {
+          username: "teacher",
+          friendCode: null,
+          profileStudentId: null,
+          bio: null,
+          googleId: "legacy-google",
+          githubId: "legacy-github",
+        },
+        "discord",
+        "discord-1",
+      ),
+    ).resolves.toMatchObject({ sensei: { id: 12 } });
+
+    expect(values.mock.calls[0][0]).not.toHaveProperty("googleId");
+    expect(values.mock.calls[0][0]).not.toHaveProperty("githubId");
+    expect(values.mock.calls[1][0]).toEqual({ senseiId: 12, provider: "discord", providerUserId: "discord-1" });
   });
 });

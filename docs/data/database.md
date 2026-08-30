@@ -29,6 +29,7 @@ Database access uses `withPostgresClient` from `app/lib/postgres.server.ts`. A r
 - Keep user-visible JSON/domain types at the repository boundary. Malformed required data is an explicit failure, not a fake empty value.
 - Keep natural-key uniqueness and ordering in the schema and query. Add an index for every repeated lookup/order path.
 - Domain validation belongs in application code and tests. Structural constraints such as `PRIMARY KEY`, `NOT NULL`, and unique indexes belong in the migration.
+- Do not add PostgreSQL `CHECK` constraints. Validate value ranges and domain rules in application code instead; `pnpm run lint:postgres-migrations` rejects `CHECK` constraints in both migrations and the Drizzle schema.
 - The approved Pyroxene receipt `v1:` UTF-8 base64url representation is stable and must not be changed by unrelated work.
 
 ## PostgreSQL migration procedure

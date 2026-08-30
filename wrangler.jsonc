@@ -55,7 +55,8 @@
   "queues": {
     "producers": [
       { "binding": "EVENTS", "queue": "mollulog-events" },
-      { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-dev" }
+      { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-dev" },
+      { "binding": "DISCORD_NOTIFICATIONS_QUEUE", "queue": "mollulog-discord-notifications-local" }
     ],
     "consumers": [
       {
@@ -120,7 +121,8 @@
       "queues": {
         "producers": [
           { "binding": "EVENTS", "queue": "mollulog-events" },
-          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-prod" }
+          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-prod" },
+          { "binding": "DISCORD_NOTIFICATIONS_QUEUE", "queue": "mollulog-discord-notifications-staging" }
         ]
       }
     },
@@ -164,7 +166,8 @@
       "queues": {
         "producers": [
           { "binding": "EVENTS", "queue": "mollulog-events" },
-          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-prod" }
+          { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-prod" },
+          { "binding": "DISCORD_NOTIFICATIONS_QUEUE", "queue": "mollulog-discord-notifications" }
         ],
         "consumers": [
           {

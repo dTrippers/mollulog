@@ -3,17 +3,19 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 const mockWithIdentityDatabase = jest.fn();
-const mockWithIdentityTransaction = jest.fn();
+const mockWithDiscordUserTransaction = jest.fn();
 
 jest.mock("~/db/postgres/identity", () => ({
   withIdentityDatabase: (...args: unknown[]) => mockWithIdentityDatabase(...args),
-  withIdentityTransaction: (...args: unknown[]) => mockWithIdentityTransaction(...args),
+  withDiscordUserTransaction: (...args: unknown[]) => mockWithDiscordUserTransaction(...args),
 }));
 
 import { getAccountSessionState, leaveAccount } from "~/db/postgres/account-security";
 import {
   pgAuthIdentitiesTable,
   pgConnectApiKeysTable,
+  pgDiscordNotificationJobsTable,
+  pgDiscordNotificationSubscriptionsTable,
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
   pgPasskeysTable,
@@ -108,19 +110,22 @@ describe("account-security PostgreSQL repository", () => {
       },
       [{ provider: "github", providerUserId: "github-1" }],
     );
-    mockWithIdentityTransaction.mockImplementationOnce(async (_env, queryName, operation) => {
+    mockWithDiscordUserTransaction.mockImplementationOnce(async (_env, queryName, userId, operation) => {
       expect(queryName).toBe("leave_account");
+      expect(userId).toBe(7);
       return (operation as (database: typeof db) => unknown)(db);
     });
 
     await expect(leaveAccount(env, { userId: 7 })).resolves.toEqual({
       status: "left",
     });
-    expect(deletes).toHaveLength(6);
-    expect(updates).toHaveLength(2);
+    expect(mockWithDiscordUserTransaction).toHaveBeenCalledWith(env, "leave_account", 7, expect.any(Function), {});
+    expect(deletes).toHaveLength(7);
+    expect(updates).toHaveLength(3);
     expect(deletes.map(({ table }) => table)).toEqual(
       expect.arrayContaining([
         pgAuthIdentitiesTable,
+        pgDiscordNotificationSubscriptionsTable,
         pgPasskeysTable,
         pgSenseiPrivaciesTable,
         pgFollowershipsTable,
@@ -128,7 +133,13 @@ describe("account-security PostgreSQL repository", () => {
         pgPendingSenseiRegistrationsTable,
       ]),
     );
-    for (const table of [pgAuthIdentitiesTable, pgPasskeysTable, pgSenseiPrivaciesTable, pgConnectApiKeysTable]) {
+    for (const table of [
+      pgAuthIdentitiesTable,
+      pgDiscordNotificationSubscriptionsTable,
+      pgPasskeysTable,
+      pgSenseiPrivaciesTable,
+      pgConnectApiKeysTable,
+    ]) {
       const deletion = deletes.find((call) => call.table === table);
       expect(deletion).toBeDefined();
       expect(whereQuery(deletion?.where).params).toEqual([7]);
@@ -148,10 +159,22 @@ describe("account-security PostgreSQL repository", () => {
       "github-1",
     ]);
 
-    expect(updates[0]).toMatchObject({ values: { replyEmail: null } });
-    expect(updates[0]?.table).toBe(pgFeedbackTicketsTable);
-    expect(whereQuery(updates[0]?.where).params).toEqual([7]);
-    expect(updates[1]).toMatchObject({
+    expect(updates[0]).toMatchObject({
+      table: pgDiscordNotificationJobsTable,
+      values: { status: "cancelled", lastError: "Discord connection unlinked" },
+    });
+    expect(whereQuery(updates[0]?.where).params).toEqual([
+      7,
+      "materialized",
+      "publishing",
+      "queued",
+      "sending",
+      "blocked",
+    ]);
+    expect(updates[1]).toMatchObject({ values: { replyEmail: null } });
+    expect(updates[1]?.table).toBe(pgFeedbackTicketsTable);
+    expect(whereQuery(updates[1]?.where).params).toEqual([7]);
+    expect(updates[2]).toMatchObject({
       table: pgSenseisTable,
       values: {
         active: false,
@@ -165,8 +188,8 @@ describe("account-security PostgreSQL repository", () => {
         role: "guest",
       },
     });
-    expect(whereQuery(updates[1]?.where).params).toEqual([7]);
-    const leftUsername = (updates[1] as { values: { username: string } }).values.username;
+    expect(whereQuery(updates[2]?.where).params).toEqual([7]);
+    const leftUsername = (updates[2] as { values: { username: string } }).values.username;
     expect(leftUsername).not.toMatch(/^[a-zA-Z0-9_]{4,20}$/);
   });
 
@@ -184,7 +207,7 @@ describe("account-security PostgreSQL repository", () => {
         throw new Error("database failure");
       }),
     }));
-    mockWithIdentityTransaction.mockImplementationOnce(async (_env, _queryName, operation) =>
+    mockWithDiscordUserTransaction.mockImplementationOnce(async (_env, _queryName, _userId, operation) =>
       (operation as (database: typeof db) => unknown)(db),
     );
 

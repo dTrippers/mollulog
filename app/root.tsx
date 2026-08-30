@@ -15,6 +15,7 @@ import LoadingBar, { type LoadingBarRef } from "react-top-loading-bar";
 import type { Route } from "./+types/root";
 import { getActiveSensei } from "./auth/authenticator.server";
 import { getPreference } from "./auth/preference.server";
+import { getDiscordSignInFeedback } from "./components/features/auth/discord-signin-feedback";
 import {
   ErrorPage,
   Footer,
@@ -316,7 +317,17 @@ export default function App() {
 }
 
 function SignInBottomSheetHost() {
-  const { isSignInVisible } = useSignIn();
+  const { isSignInVisible, showSignIn } = useSignIn();
+  const location = useLocation();
+  const discordSignInFeedback =
+    location.pathname === "/" ? getDiscordSignInFeedback(new URLSearchParams(location.search)) : null;
+  const discordSignInError = discordSignInFeedback?.text ?? null;
+
+  useEffect(() => {
+    if (discordSignInError) {
+      showSignIn();
+    }
+  }, [discordSignInError, showSignIn]);
 
   if (!isSignInVisible) {
     return null;
@@ -324,7 +335,7 @@ function SignInBottomSheetHost() {
 
   return (
     <Suspense fallback={null}>
-      <SignInBottomSheet />
+      <SignInBottomSheet initialError={discordSignInError} />
     </Suspense>
   );
 }

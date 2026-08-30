@@ -1,8 +1,12 @@
 import { and, eq, or } from "drizzle-orm";
 import { nanoid } from "nanoid/non-secure";
 import {
+  assertDiscordOwnership,
+  DiscordOwnershipConflictError,
   type IdentityDatabase,
   type IdentityRepositoryOptions,
+  lockDiscordOwnershipUser,
+  withDiscordOwnershipTransaction,
   withIdentityDatabase,
   withIdentityTransaction,
 } from "~/db/postgres/identity";
@@ -10,15 +14,36 @@ import { pgAuthIdentitiesTable, pgSenseisTable } from "~/db/postgres/schema";
 import { postgresUniqueConstraintName } from "~/lib/db";
 import { type Sensei, type SenseiCreateFields, toSenseiModel } from "./sensei";
 
-export type AuthProvider = "google" | "github";
+export type AuthProvider = "google" | "github" | "discord";
 
 export const authIdentitiesTable = pgAuthIdentitiesTable;
 
-function legacyProviderColumn(provider: AuthProvider) {
+type LegacyAuthProvider = Exclude<AuthProvider, "discord">;
+
+type DiscordSenseiProjection = Pick<
+  typeof pgSenseisTable.$inferSelect,
+  "id" | "uid" | "username" | "friendCode" | "profileStudentId" | "active" | "bio" | "role" | "profileVisibility"
+>;
+
+function toDiscordSenseiModel(row: DiscordSenseiProjection): Sensei {
+  return {
+    id: row.id,
+    uid: row.uid,
+    username: row.username,
+    friendCode: row.friendCode,
+    profileStudentId: row.profileStudentId,
+    bio: row.bio,
+    active: row.active,
+    role: row.role,
+    profileVisibility: row.profileVisibility ?? "public",
+  };
+}
+
+function legacyProviderColumn(provider: LegacyAuthProvider) {
   return provider === "google" ? pgSenseisTable.googleId : pgSenseisTable.githubId;
 }
 
-function providerMatch(provider: AuthProvider, providerUserId: string) {
+function providerMatch(provider: LegacyAuthProvider, providerUserId: string) {
   const column = legacyProviderColumn(provider);
   return provider === "google"
     ? or(eq(column, providerUserId), eq(column, `zzz_${providerUserId}`))
@@ -31,10 +56,37 @@ export async function getSenseiByAuthIdentity(
   providerUserId: string,
   options: IdentityRepositoryOptions = {},
 ): Promise<Sensei | null> {
+  const normalizedProviderUserId = provider === "discord" ? providerUserId.trim() : providerUserId;
   return withIdentityDatabase(
     env,
     "sensei_by_auth_identity",
     async (db) => {
+      if (provider === "discord") {
+        const [identityResult] = await db
+          .select({
+            id: pgSenseisTable.id,
+            uid: pgSenseisTable.uid,
+            username: pgSenseisTable.username,
+            friendCode: pgSenseisTable.friendCode,
+            profileStudentId: pgSenseisTable.profileStudentId,
+            active: pgSenseisTable.active,
+            bio: pgSenseisTable.bio,
+            role: pgSenseisTable.role,
+            profileVisibility: pgSenseisTable.profileVisibility,
+          })
+          .from(pgAuthIdentitiesTable)
+          .innerJoin(pgSenseisTable, eq(pgAuthIdentitiesTable.senseiId, pgSenseisTable.id))
+          .where(
+            and(
+              eq(pgAuthIdentitiesTable.provider, provider),
+              eq(pgAuthIdentitiesTable.providerUserId, normalizedProviderUserId),
+              eq(pgSenseisTable.active, true),
+            ),
+          )
+          .limit(1);
+        return identityResult ? toDiscordSenseiModel(identityResult) : null;
+      }
+
       const [identityResult] = await db
         .select({ sensei: pgSenseisTable })
         .from(pgAuthIdentitiesTable)
@@ -70,7 +122,7 @@ export async function getSenseiByAuthIdentity(
 
 async function reviveInactiveLegacySensei(
   db: IdentityDatabase,
-  provider: AuthProvider,
+  provider: LegacyAuthProvider,
   providerUserId: string,
 ): Promise<Sensei | null> {
   const [row] = await db
@@ -109,6 +161,7 @@ export async function getAuthIdentityStatuses(
       return {
         google: identities.some((identity) => identity.provider === "google") || Boolean(sensei?.googleId),
         github: identities.some((identity) => identity.provider === "github") || Boolean(sensei?.githubId),
+        discord: identities.some((identity) => identity.provider === "discord"),
       };
     },
     options,
@@ -122,6 +175,23 @@ export async function createAuthIdentity(
   providerUserId: string,
   options: IdentityRepositoryOptions = {},
 ): Promise<void> {
+  if (provider === "discord") {
+    const normalizedProviderUserId = providerUserId.trim();
+    await withDiscordOwnershipTransaction(
+      env,
+      "create_discord_auth_identity",
+      { userId: senseiId, discordUserId: normalizedProviderUserId },
+      async (db) => {
+        await db
+          .insert(pgAuthIdentitiesTable)
+          .values({ senseiId, provider, providerUserId: normalizedProviderUserId })
+          .onConflictDoNothing();
+      },
+      options,
+    );
+    return;
+  }
+
   await withIdentityDatabase(
     env,
     "create_auth_identity",
@@ -142,6 +212,41 @@ export async function createSenseiWithAuthIdentity(
 ): Promise<{ sensei?: Sensei; error?: { form?: string; username?: string } }> {
   const uid = nanoid(8);
   try {
+    if (provider === "discord") {
+      const normalizedProviderUserId = providerUserId.trim();
+      return await withDiscordOwnershipTransaction(
+        env,
+        "create_sensei_with_discord_auth_identity",
+        { discordUserId: normalizedProviderUserId },
+        async (db, client) => {
+          const [row] = await db
+            .insert(pgSenseisTable)
+            .values({
+              uid,
+              username: fields.username,
+              friendCode: fields.friendCode,
+              profileStudentId: fields.profileStudentId,
+              bio: fields.bio,
+              role: "guest",
+              active: true,
+            })
+            .returning();
+          if (!row) return {};
+
+          // New profiles do not have a numeric user id until the insert above.
+          // Acquire the same user lock before claiming the identity row.
+          await lockDiscordOwnershipUser(client, row.id);
+          await db.insert(pgAuthIdentitiesTable).values({
+            senseiId: row.id,
+            provider,
+            providerUserId: normalizedProviderUserId,
+          });
+          return { sensei: toSenseiModel(row) };
+        },
+        options,
+      );
+    }
+
     return await withIdentityTransaction(
       env,
       "create_sensei_with_auth_identity",
@@ -179,6 +284,9 @@ export async function createSenseiWithAuthIdentity(
     ) {
       return { error: { form: "이미 다른 계정에 연결된 로그인 계정이에요." } };
     }
+    if (error instanceof DiscordOwnershipConflictError) {
+      return { error: { form: "이미 연결된 Discord 계정이 있거나 사용할 수 없는 Discord 계정이에요." } };
+    }
     console.error(error);
     throw error;
   }
@@ -191,6 +299,30 @@ export async function linkAuthIdentity(
   providerUserId: string,
   options: IdentityRepositoryOptions = {},
 ): Promise<{ ok: true } | { ok: false; reason: "conflict" }> {
+  if (provider === "discord") {
+    const normalizedProviderUserId = providerUserId.trim();
+    try {
+      await withDiscordOwnershipTransaction(
+        env,
+        "link_discord_auth_identity",
+        { userId: senseiId, discordUserId: normalizedProviderUserId },
+        async (db) => {
+          await db
+            .insert(pgAuthIdentitiesTable)
+            .values({ senseiId, provider, providerUserId: normalizedProviderUserId })
+            .onConflictDoNothing();
+        },
+        options,
+      );
+      return { ok: true };
+    } catch (error) {
+      if (error instanceof DiscordOwnershipConflictError) return { ok: false, reason: "conflict" };
+      const constraint = postgresUniqueConstraintName(error);
+      if (constraint === "auth_identities_provider_user_uidx") return { ok: false, reason: "conflict" };
+      throw error;
+    }
+  }
+
   try {
     return await withIdentityDatabase(
       env,
@@ -245,4 +377,13 @@ export async function linkAuthIdentity(
     }
     throw error;
   }
+}
+
+export async function assertDiscordIdentityOwnership(
+  env: Env,
+  userId: number | undefined,
+  discordUserId: string,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await assertDiscordOwnership(env, { userId, discordUserId }, options);
 }

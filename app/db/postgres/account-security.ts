@@ -1,13 +1,15 @@
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import {
   type IdentityDatabase,
   type IdentityRepositoryOptions,
+  withDiscordUserTransaction,
   withIdentityDatabase,
-  withIdentityTransaction,
 } from "~/db/postgres/identity";
 import {
   pgAuthIdentitiesTable,
   pgConnectApiKeysTable,
+  pgDiscordNotificationJobsTable,
+  pgDiscordNotificationSubscriptionsTable,
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
   pgPasskeysTable,
@@ -58,16 +60,19 @@ function addOAuthIdentifier(
 
 /**
  * Deactivates an account while preserving all user-authored records that use
- * its internal numeric ID. The row lock keeps concurrent leave requests safe.
+ * its internal numeric ID. The shared per-user advisory lock serializes this
+ * cleanup with Discord ownership operations, and the row lock keeps concurrent
+ * leave requests safe.
  */
 export async function leaveAccount(
   env: Pick<Env, "HYPERDRIVE">,
   input: { userId: number },
   options: AccountSecurityRepositoryOptions = {},
 ): Promise<AccountLeaveResult> {
-  return withIdentityTransaction(
+  return withDiscordUserTransaction(
     env,
     "leave_account",
+    input.userId,
     async (db: IdentityDatabase): Promise<AccountLeaveResult> => {
       const [sensei] = await db
         .select({
@@ -96,6 +101,29 @@ export async function leaveAccount(
       }
 
       await db.delete(pgAuthIdentitiesTable).where(eq(pgAuthIdentitiesTable.senseiId, sensei.id));
+      const cleanupAt = new Date();
+      await db
+        .update(pgDiscordNotificationJobsTable)
+        .set({
+          status: "cancelled",
+          lastError: "Discord connection unlinked",
+          updatedAt: cleanupAt,
+        })
+        .where(
+          and(
+            eq(pgDiscordNotificationJobsTable.userId, sensei.id),
+            inArray(pgDiscordNotificationJobsTable.status, [
+              "materialized",
+              "publishing",
+              "queued",
+              "sending",
+              "blocked",
+            ]),
+          ),
+        );
+      await db
+        .delete(pgDiscordNotificationSubscriptionsTable)
+        .where(eq(pgDiscordNotificationSubscriptionsTable.userId, sensei.id));
       await db.delete(pgPasskeysTable).where(eq(pgPasskeysTable.userId, sensei.id));
       await db.delete(pgSenseiPrivaciesTable).where(eq(pgSenseiPrivaciesTable.userId, sensei.id));
       await db

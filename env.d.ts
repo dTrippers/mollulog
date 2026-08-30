@@ -5,6 +5,7 @@ interface Env {
   CACHE_REFRESH_WORKFLOW: Workflow<{ requestedBy: number }>;
   EVENTS?: Queue;
   OCR_TASKS?: Queue<OcrTaskMessage>;
+  DISCORD_NOTIFICATIONS_QUEUE?: Queue<DiscordConnectionRequestQueueMessage>;
   OCR_UPLOADS: R2Bucket;
   HOST: string;
   CONNECT_API_URL?: string;
@@ -20,9 +21,16 @@ interface Env {
   GOOGLE_CLIENT_SECRET: string;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
+  DISCORD_OAUTH_CLIENT_ID: string;
+  DISCORD_OAUTH_CLIENT_SECRET: string;
   FRONT_SENTRY_DSN?: string;
   SERVER_SENTRY_DSN?: string;
   SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
 }
 
 type OcrTaskMessage = import("~/domain/ocr").OcrTaskMessage;
+type DiscordConnectionRequestQueueMessage = {
+  type: "connection-request";
+  connectionUid: string;
+  connectionVersion: number;
+};

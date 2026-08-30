@@ -118,7 +118,12 @@ describe("navigation surface projections", () => {
     const signedIn = getDesktopNavigation({ ...navigationOptions, isSignedIn: true, currentUsername: "sensei" });
 
     expect(guest.profileItems).toEqual([]);
-    expect(signedIn.profileItems.map((item) => item.to)).toEqual(["/@sensei", "/scanner/resource", "/connect/import"]);
+    expect(signedIn.profileItems.map((item) => item.to)).toEqual([
+      "/@sensei",
+      "/scanner/resource",
+      "/connect/import",
+      "/notifications",
+    ]);
   });
 
   it("uses explicit surface membership for the more screen", () => {
@@ -159,6 +164,7 @@ describe("navigation surface projections", () => {
       ...guestItems.map((item) => item.name),
       "스크린샷/영상 인식기",
       "외부 데이터 연동",
+      "알림 설정",
     ]);
   });
 
@@ -176,6 +182,7 @@ describe("navigation surface projections", () => {
       expect.arrayContaining([
         expect.objectContaining({ name: "스크린샷/영상 인식기", to: "/scanner/resource" }),
         expect.objectContaining({ name: "외부 데이터 연동", to: "/connect/import" }),
+        expect.objectContaining({ name: "알림 설정", to: "/notifications" }),
         expect.objectContaining({ name: "이벤트 상점 계산기", to: "/utils/event-shop" }),
       ]),
     );

@@ -21,9 +21,7 @@ CREATE TABLE community_posts (
   migrated_at timestamptz,
   display_at timestamptz,
   created_at timestamptz NOT NULL,
-  updated_at timestamptz NOT NULL,
-  CONSTRAINT community_posts_blocks_array CHECK (jsonb_typeof(blocks) = 'array'),
-  CONSTRAINT community_posts_source_metadata_object CHECK (jsonb_typeof(source_metadata) = 'object')
+  updated_at timestamptz NOT NULL
 );
 
 CREATE UNIQUE INDEX community_posts_uid_uidx ON community_posts (uid);
@@ -101,9 +99,7 @@ CREATE TABLE recruitment_results (
   raw_result text,
   comment_post_uid text,
   created_at timestamptz NOT NULL,
-  updated_at timestamptz NOT NULL,
-  CONSTRAINT recruitment_results_recruited_students_array CHECK (jsonb_typeof(recruited_students) = 'array'),
-  CONSTRAINT recruitment_results_exchanged_students_array CHECK (jsonb_typeof(exchanged_students) = 'array')
+  updated_at timestamptz NOT NULL
 );
 
 CREATE UNIQUE INDEX recruitment_results_uid_uidx ON recruitment_results (uid);

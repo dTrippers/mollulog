@@ -9,7 +9,7 @@
     "cf-typegen": "wrangler types",
     "start": "wrangler dev --persist-to ${WRANGLER_PERSIST_TO:-.wrangler/state}",
     "staging:build": "CLOUDFLARE_ENV=staging react-router build --mode staging",
-    "staging:deploy": "pnpm run staging:build && wrangler deploy && wrangler deploy --config dist/cron/wrangler.json",
+    "staging:deploy": "pnpm run staging:build && wrangler deploy --config build/server/wrangler.json && wrangler deploy --config dist/cron/wrangler.json",
     "prod:build": "CLOUDFLARE_ENV=production react-router build --mode production",
     "prod:deploy": "bash scripts/production-deploy.sh",
     "prod:deploy:preflight": "bash scripts/production-deploy.sh --preflight-only",
@@ -20,8 +20,9 @@
     "cdn:deploy": "terraform -chdir=deploy/cdn apply",
     "test": "jest",
     "typecheck": "react-router typegen && tsc",
-    "lint": "biome lint app test && biome check test",
-    "lint:fix": "biome lint --write app test && biome check --write test"
+    "lint": "pnpm run lint:postgres-migrations && biome lint app test && biome check test",
+    "lint:fix": "pnpm run lint:postgres-migrations && biome lint --write app test && biome check --write test",
+    "lint:postgres-migrations": "node scripts/lint-postgres-migrations.mjs"
   },
   "dependencies": {
     "@cloudflare/kv-asset-handler": "^0.5.0",
@@ -53,6 +54,7 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "react-icons": "^5.7.0",
     "react-loading-skeleton": "^3.5.0",
     "react-router": "^7.18.2",
     "react-top-loading-bar": "^3.0.2",

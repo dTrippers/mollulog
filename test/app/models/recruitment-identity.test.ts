@@ -25,6 +25,10 @@ describe("recruitment identity", () => {
       getProvisionalRecruitmentStudentKey("리오(무장)"),
     );
   });
+
+  it("pins the provisional key shared with the Ayumu projection", () => {
+    expect(getProvisionalRecruitmentStudentKey("리오(무장)")).toBe("provisional:beiwu7");
+  });
 });
 
 describe("filterRecruitmentsByStudentUids", () => {
