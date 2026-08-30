@@ -137,6 +137,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const reserveMobileSiteBanner = Boolean(
     loaderData?.siteBanner && shouldRenderGlobalSiteBanner(loaderData.siteBanner, "mobile_header", location.pathname),
   );
+  const omitDefaultOpenGraphImage =
+    location.pathname === "/security-campaign" || location.pathname.startsWith("/letter/");
   return (
     <html
       lang="ko"
@@ -161,13 +163,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="mollulog:render-path" content={location.pathname} />
         <meta name="mollulog:build-id" content={loaderData?.requestDiagnostics?.buildId ?? ""} />
         {isSenseiProfilePath(location.pathname) ? <meta name="robots" content="noindex" /> : null}
-        <meta
-          name="mollulog:front-sentry-dsn"
-          content={loaderData?.publicEnv?.FRONT_SENTRY_DSN ?? ""}
-        />
+        <meta name="mollulog:front-sentry-dsn" content={loaderData?.publicEnv?.FRONT_SENTRY_DSN ?? ""} />
         <Meta />
         {/* Keep this after route metadata so a page-specific image is preferred. */}
-        <meta property="og:image" content={DEFAULT_OPEN_GRAPH_IMAGE_URL} />
+        {!omitDefaultOpenGraphImage ? <meta property="og:image" content={DEFAULT_OPEN_GRAPH_IMAGE_URL} /> : null}
         <Links />
       </head>
       <body>

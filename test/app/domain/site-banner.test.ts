@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   getSiteBannerPageScreen,
   isSiteBannerActive,
+  isSiteBannerPreset,
   isValidSiteBannerLink,
   type SiteBanner,
   shouldRenderGlobalSiteBanner,
@@ -22,6 +23,10 @@ function banner(uid: string, startsAt: string, endsAt: string, screens = ["deskt
 }
 
 describe("site banner domain", () => {
+  it("recognizes the pink preset", () => {
+    expect(isSiteBannerPreset("pink")).toBe(true);
+  });
+
   it("uses a half-open active period", () => {
     const item = banner("banner", "2026-08-01T00:00:00.000Z", "2026-08-01T01:00:00.000Z");
 
