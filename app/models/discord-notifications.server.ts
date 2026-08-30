@@ -1,10 +1,11 @@
 import { nanoid } from "nanoid/non-secure";
+import type { Client } from "pg";
 import {
   DiscordOwnershipConflictError,
   withDiscordOwnershipTransaction,
   withDiscordUserTransaction,
 } from "~/db/postgres/identity";
-import type { DiscordConnectionStatus } from "~/db/postgres/schema";
+import type { DiscordConnectionStatus, DiscordNotificationTrigger } from "~/db/postgres/schema";
 import {
   DISCORD_NOTIFICATION_DEFAULTS,
   type DiscordNotificationSettingsInput,
@@ -14,6 +15,22 @@ import {
 import { type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 
 export { DiscordNotificationValidationError };
+
+type DiscordNotificationSettingsKey =
+  | "eventStartEnabled"
+  | "eventEndEnabled"
+  | "rewardExchangeEndEnabled"
+  | "recruitmentStartEnabled";
+
+const PREFERENCE_KEYS: ReadonlyArray<{
+  type: DiscordNotificationTrigger;
+  key: DiscordNotificationSettingsKey;
+}> = [
+  { type: "event-start", key: "eventStartEnabled" },
+  { type: "event-end", key: "eventEndEnabled" },
+  { type: "reward-exchange-end", key: "rewardExchangeEndEnabled" },
+  { type: "recruitment-start", key: "recruitmentStartEnabled" },
+];
 
 export type DiscordConnection = {
   status: DiscordConnectionStatus;
@@ -42,11 +59,14 @@ export type DiscordNotificationRepositoryOptions = {
 
 type QueryRow = Record<string, unknown>;
 
-type DiscordNotificationEffectiveTimes = {
-  eventStartEffectiveAt: Date;
-  eventEndEffectiveAt: Date;
-  rewardExchangeEndEffectiveAt: Date;
-  recruitmentStartEffectiveAt: Date;
+type StoredPreference = {
+  enabled: boolean;
+  effectiveAt: Date;
+};
+
+type MappedPreferences = {
+  settings: DiscordNotificationSettings;
+  byType: Map<DiscordNotificationTrigger, StoredPreference>;
 };
 
 function requiredDate(row: QueryRow, key: string): Date {
@@ -72,28 +92,50 @@ function mapConnection(row: QueryRow | undefined): DiscordConnection | null {
   return { status: status as DiscordConnectionStatus };
 }
 
-function mapSettings(row: QueryRow | undefined, now: Date): DiscordNotificationSettings {
-  if (!row) {
-    return { ...DISCORD_NOTIFICATION_DEFAULTS, effectiveAt: now.toISOString() };
+export class DiscordNotificationSettingsInconsistentError extends Error {
+  constructor() {
+    super("알림 설정의 공통 알림 시점을 확인할 수 없어요.");
+    this.name = "DiscordNotificationSettingsInconsistentError";
   }
-  const effectiveTimes = mapEffectiveTimes(row);
-  return {
-    eventStartEnabled: asBoolean(row.event_start_enabled),
-    eventEndEnabled: asBoolean(row.event_end_enabled),
-    rewardExchangeEndEnabled: asBoolean(row.reward_exchange_end_enabled),
-    recruitmentStartEnabled: asBoolean(row.recruitment_start_enabled),
-    leadHours: Number(row.lead_hours),
-    effectiveAt: new Date(Math.max(...Object.values(effectiveTimes).map((value) => value.getTime()))).toISOString(),
-  };
 }
 
-function mapEffectiveTimes(row: QueryRow): DiscordNotificationEffectiveTimes {
-  return {
-    eventStartEffectiveAt: requiredDate(row, "event_start_effective_at"),
-    eventEndEffectiveAt: requiredDate(row, "event_end_effective_at"),
-    rewardExchangeEndEffectiveAt: requiredDate(row, "reward_exchange_end_effective_at"),
-    recruitmentStartEffectiveAt: requiredDate(row, "recruitment_start_effective_at"),
+function isNotificationType(value: unknown): value is DiscordNotificationTrigger {
+  return typeof value === "string" && PREFERENCE_KEYS.some(({ type }) => type === value);
+}
+
+function mapPreferences(rows: readonly QueryRow[], now: Date): MappedPreferences {
+  const byType = new Map<DiscordNotificationTrigger, StoredPreference>();
+  let leadHours: number | undefined;
+  let effectiveAt: Date | undefined;
+
+  for (const row of rows) {
+    if (!isNotificationType(row.notification_type)) continue;
+    const rowLeadHours = Number(row.lead_hours);
+    if (!Number.isInteger(rowLeadHours) || rowLeadHours < 1 || rowLeadHours > 24) {
+      throw new DiscordNotificationSettingsInconsistentError();
+    }
+    if (leadHours !== undefined && leadHours !== rowLeadHours) {
+      throw new DiscordNotificationSettingsInconsistentError();
+    }
+    leadHours = rowLeadHours;
+    const rowEffectiveAt = requiredDate(row, "effective_at");
+    effectiveAt = effectiveAt ? new Date(Math.max(effectiveAt.getTime(), rowEffectiveAt.getTime())) : rowEffectiveAt;
+    byType.set(row.notification_type, {
+      enabled: asBoolean(row.enabled),
+      effectiveAt: rowEffectiveAt,
+    });
+  }
+
+  const resolvedLeadHours = leadHours ?? DISCORD_NOTIFICATION_DEFAULTS.leadHours;
+  const settings = {
+    eventStartEnabled: byType.get("event-start")?.enabled ?? false,
+    eventEndEnabled: byType.get("event-end")?.enabled ?? false,
+    rewardExchangeEndEnabled: byType.get("reward-exchange-end")?.enabled ?? false,
+    recruitmentStartEnabled: byType.get("recruitment-start")?.enabled ?? false,
+    leadHours: resolvedLeadHours,
+    effectiveAt: (effectiveAt ?? now).toISOString(),
   };
+  return { settings, byType };
 }
 
 export function parseDiscordNotificationSettingsForm(formData: FormData): DiscordNotificationSettingsInput {
@@ -112,6 +154,21 @@ export function parseDiscordNotificationSettingsForm(formData: FormData): Discor
   return validateDiscordNotificationSettings(input);
 }
 
+function preferenceTypeListSql(): string {
+  return PREFERENCE_KEYS.map(({ type }) => `'${type}'`).join(", ");
+}
+
+async function readPreferences(client: Pick<Client, "query">, userId: number): Promise<QueryRow[]> {
+  const result = await client.query(
+    `select notification_type, enabled, lead_hours, effective_at
+       from notification_preferences
+      where user_id = $1 and notification_type in (${preferenceTypeListSql()})
+      order by notification_type`,
+    [userId],
+  );
+  return result.rows;
+}
+
 export async function getDiscordNotificationState(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
@@ -121,19 +178,17 @@ export async function getDiscordNotificationState(
   return withPostgresClient(
     env,
     async (client) => {
-      const connectionResult = await client.query(
-        `select status,
-                event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-                recruitment_start_enabled, lead_hours,
-                event_start_effective_at, event_end_effective_at,
-                reward_exchange_end_effective_at, recruitment_start_effective_at
-           from discord_notification_subscriptions where user_id = $1 limit 1`,
+      const channelResult = await client.query(
+        `select status
+           from notification_channels
+          where user_id = $1 and channel_type = 'discord'
+          limit 1`,
         [userId],
       );
-      const row = connectionResult.rows[0];
+      const preferences = await readPreferences(client, userId);
       return {
-        connection: mapConnection(row),
-        settings: mapSettings(row, now),
+        connection: mapConnection(channelResult.rows[0]),
+        settings: mapPreferences(preferences, now).settings,
       };
     },
     options.createClient,
@@ -168,69 +223,48 @@ export async function saveDiscordNotificationSettings(
     "save_discord_notification_settings",
     userId,
     async (_db, client) => {
-      const subscription = await client.query(
-        `select status, event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-                recruitment_start_enabled, lead_hours,
-                event_start_effective_at, event_end_effective_at,
-                reward_exchange_end_effective_at, recruitment_start_effective_at
-           from discord_notification_subscriptions where user_id = $1 for update`,
+      const channel = await client.query(
+        `select status
+           from notification_channels
+          where user_id = $1 and channel_type = 'discord'
+          for update`,
         [userId],
       );
-      if (subscription.rows[0]?.status !== "active") {
+      if (channel.rows[0]?.status !== "active") {
         throw new DiscordSettingsUnavailableError();
       }
 
-      const existing = mapSettings(subscription.rows[0], now);
-      const existingEffectiveTimes = mapEffectiveTimes(subscription.rows[0]);
-      const leadHoursChanged = existing.leadHours !== validated.leadHours;
-      const effectiveAtWhenChanged = (changed: boolean, current: Date) => (changed || leadHoursChanged ? now : current);
-      const effectiveTimes: DiscordNotificationEffectiveTimes = {
-        eventStartEffectiveAt: effectiveAtWhenChanged(
-          existing.eventStartEnabled !== validated.eventStartEnabled,
-          existingEffectiveTimes.eventStartEffectiveAt,
-        ),
-        eventEndEffectiveAt: effectiveAtWhenChanged(
-          existing.eventEndEnabled !== validated.eventEndEnabled,
-          existingEffectiveTimes.eventEndEffectiveAt,
-        ),
-        rewardExchangeEndEffectiveAt: effectiveAtWhenChanged(
-          existing.rewardExchangeEndEnabled !== validated.rewardExchangeEndEnabled,
-          existingEffectiveTimes.rewardExchangeEndEffectiveAt,
-        ),
-        recruitmentStartEffectiveAt: effectiveAtWhenChanged(
-          existing.recruitmentStartEnabled !== validated.recruitmentStartEnabled,
-          existingEffectiveTimes.recruitmentStartEffectiveAt,
-        ),
-      };
+      const preferences = await readPreferences(client, userId);
+      const existing = mapPreferences(preferences, now);
+      const leadHoursChanged = existing.settings.leadHours !== validated.leadHours;
+      const effectiveTimes = PREFERENCE_KEYS.map(({ type, key }) => {
+        const stored = existing.byType.get(type);
+        const enabled = validated[key];
+        return {
+          type,
+          enabled,
+          effectiveAt: stored && !leadHoursChanged && stored.enabled === enabled ? stored.effectiveAt : now,
+        };
+      });
 
+      const values: unknown[] = [];
+      const rowsSql = effectiveTimes.map(({ type, enabled, effectiveAt }, index) => {
+        const offset = index * 5 + 2;
+        values.push(type, enabled, validated.leadHours, effectiveAt, now);
+        return `($1, $${offset}, $${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 4})`;
+      });
       await client.query(
-        `update discord_notification_subscriptions
-            set event_start_enabled = $2,
-                event_end_enabled = $3,
-                reward_exchange_end_enabled = $4,
-                recruitment_start_enabled = $5,
-                lead_hours = $6,
-                event_start_effective_at = $7,
-                event_end_effective_at = $8,
-                reward_exchange_end_effective_at = $9,
-                recruitment_start_effective_at = $10,
-                updated_at = $11
-          where user_id = $1`,
-        [
-          userId,
-          validated.eventStartEnabled,
-          validated.eventEndEnabled,
-          validated.rewardExchangeEndEnabled,
-          validated.recruitmentStartEnabled,
-          validated.leadHours,
-          effectiveTimes.eventStartEffectiveAt,
-          effectiveTimes.eventEndEffectiveAt,
-          effectiveTimes.rewardExchangeEndEffectiveAt,
-          effectiveTimes.recruitmentStartEffectiveAt,
-          now,
-        ],
+        `insert into notification_preferences
+           (user_id, notification_type, enabled, lead_hours, effective_at, created_at, updated_at)
+         values ${rowsSql.join(", ")}
+         on conflict (user_id, notification_type) do update set
+           enabled = excluded.enabled,
+           lead_hours = excluded.lead_hours,
+           effective_at = excluded.effective_at,
+           updated_at = excluded.updated_at`,
+        [userId, ...values],
       );
-      const effectiveAt = new Date(Math.max(...Object.values(effectiveTimes).map((value) => value.getTime())));
+      const effectiveAt = new Date(Math.max(...effectiveTimes.map(({ effectiveAt: value }) => value.getTime())));
       return { ...validated, effectiveAt: effectiveAt.toISOString() };
     },
     options,
@@ -248,23 +282,35 @@ export async function unlinkDiscordConnection(
     "unlink_discord_connection",
     userId,
     async (_db, client) => {
-      await client.query(`select id from discord_notification_subscriptions where user_id = $1 for update`, [userId]);
-      await client.query(
-        `update discord_notification_jobs
-            set status = 'cancelled', last_error = 'Discord connection unlinked', updated_at = $2
-          where user_id = $1 and status in ('materialized', 'publishing', 'queued', 'sending', 'blocked')`,
-        [userId, now],
+      const channelResult = await client.query(
+        `select uid
+           from notification_channels
+          where user_id = $1 and channel_type = 'discord'
+          for update`,
+        [userId],
       );
-      await client.query(`delete from discord_notification_subscriptions where user_id = $1`, [userId]);
+      const channelUid = channelResult.rows[0]?.uid;
+      if (channelUid === undefined) return;
+      await client.query(
+        `update notification_jobs
+            set status = 'cancelled', last_error = 'Discord connection unlinked', updated_at = $2
+          where channel_uid = $1 and status in ('materialized', 'publishing', 'queued', 'sending', 'blocked')`,
+        [channelUid, now],
+      );
+      await client.query(
+        `delete from notification_channels
+          where uid = $1 and user_id = $2 and channel_type = 'discord'`,
+        [channelUid, userId],
+      );
     },
     options,
   );
 }
 
 /**
- * Creates the Discord login identity and pending notification subscription
- * together, or resets the existing subscription in the same ownership
- * transaction. The Discord ID remains server-side throughout this operation.
+ * Creates the Discord login identity and pending notification channel
+ * together, or resets the existing channel in the same ownership transaction.
+ * The Discord ID remains server-side throughout this operation.
  */
 export async function upsertPendingDiscordConnection(
   env: Pick<Env, "HYPERDRIVE">,
@@ -283,11 +329,14 @@ export async function upsertPendingDiscordConnection(
       "upsert_pending_discord_connection",
       { userId, discordUserId: normalizedDiscordUserId },
       async (_db, client) => {
-        const existingUser = await client.query(
-          `select uid from discord_notification_subscriptions where user_id = $1 for update`,
+        const existingChannel = await client.query(
+          `select uid
+             from notification_channels
+            where user_id = $1 and channel_type = 'discord'
+            for update`,
           [userId],
         );
-        const uid = String(existingUser.rows[0]?.uid ?? nanoid(16));
+        const uid = String(existingChannel.rows[0]?.uid ?? nanoid(16));
         await client.query(
           `insert into auth_identities (sensei_id, provider, provider_user_id)
            values ($1, 'discord', $2)
@@ -295,15 +344,12 @@ export async function upsertPendingDiscordConnection(
           [userId, normalizedDiscordUserId],
         );
         await client.query(
-          `insert into discord_notification_subscriptions
-           (uid, user_id, discord_user_id, status, failure_reason, verified_at, last_verification_at,
-            event_start_enabled, event_end_enabled, reward_exchange_end_enabled, recruitment_start_enabled,
-            lead_hours, event_start_effective_at, event_end_effective_at,
-            reward_exchange_end_effective_at, recruitment_start_effective_at, created_at, updated_at)
-         values ($1, $2, $3, 'pending', null, null, null, false, false, false, false, 24,
-                 $4, $4, $4, $4, $4, $4)
-         on conflict (user_id) do update set
-           uid = excluded.uid, discord_user_id = excluded.discord_user_id, status = 'pending',
+          `insert into notification_channels
+           (uid, user_id, channel_type, recipient_key, status, failure_reason, verified_at, last_verification_at,
+            created_at, updated_at)
+         values ($1, $2, 'discord', $3, 'pending', null, null, null, $4, $4)
+         on conflict (user_id, channel_type) do update set
+           uid = excluded.uid, recipient_key = excluded.recipient_key, status = 'pending',
            failure_reason = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,
           [uid, userId, normalizedDiscordUserId, now],
         );
@@ -336,8 +382,9 @@ export async function markDiscordConnectionFailed(
     userId,
     async (_db, client) => {
       await client.query(
-        `update discord_notification_subscriptions set status = 'failed', failure_reason = $2, last_verification_at = $3, updated_at = $3
-         where user_id = $1 and status = 'pending'`,
+        `update notification_channels
+            set status = 'failed', failure_reason = $2, last_verification_at = $3, updated_at = $3
+          where user_id = $1 and channel_type = 'discord' and status = 'pending'`,
         [userId, reason.slice(0, 500), now],
       );
     },

@@ -1,6 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import {
   DiscordIdentityAlreadyLinkedError,
+  DiscordNotificationSettingsInconsistentError,
   DiscordNotificationValidationError,
   getDiscordNotificationState,
   parseDiscordNotificationSettingsForm,
@@ -13,6 +14,18 @@ jest.mock("~/lib/postgres.server", () => ({
   withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
     operation(env.__pgClient),
 }));
+
+const existingEffectiveAt = new Date("2026-08-01T00:00:00.000Z");
+const laterEffectiveAt = new Date("2026-09-02T00:00:00.000Z");
+
+function preferenceRows(leadHours = 24, effectiveAt = existingEffectiveAt) {
+  return [
+    { notification_type: "event-start", enabled: true, lead_hours: leadHours, effective_at: effectiveAt },
+    { notification_type: "event-end", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
+    { notification_type: "reward-exchange-end", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
+    { notification_type: "recruitment-start", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
+  ];
+}
 
 describe("Discord notification settings boundary", () => {
   it("validates explicit settings and all four independent trigger values", () => {
@@ -41,11 +54,15 @@ describe("Discord notification settings boundary", () => {
     expect(() => parseDiscordNotificationSettingsForm(form)).toThrow(DiscordNotificationValidationError);
   });
 
-  it("frees the Discord identity while cancelling jobs in one transaction", async () => {
+  it("frees only the Discord channel while cancelling that channel's unfinished jobs", async () => {
     const statements: string[] = [];
     const client = {
       async query(text: string) {
-        statements.push(text.replace(/\s+/g, " ").trim());
+        const normalized = text.replace(/\s+/g, " ").trim();
+        statements.push(normalized);
+        if (normalized.startsWith("select uid from notification_channels")) {
+          return { rows: [{ uid: "channel-1" }], rowCount: 1 };
+        }
         return { rows: [], rowCount: 1 };
       },
     };
@@ -55,86 +72,37 @@ describe("Discord notification settings boundary", () => {
 
     expect(statements[0]).toBe("BEGIN");
     expect(statements.at(-1)).toBe("COMMIT");
-    expect(statements.some((statement) => statement.startsWith("delete from discord_notification_subscriptions"))).toBe(
-      true,
-    );
+    expect(statements.some((statement) => statement.startsWith("delete from notification_channels"))).toBe(true);
     expect(
       statements.some(
-        (statement) => statement.startsWith("update discord_notification_jobs") && statement.includes("'blocked'"),
+        (statement) => statement.startsWith("update notification_jobs") && statement.includes("'blocked'"),
       ),
     ).toBe(true);
-    expect(
-      statements.findIndex((statement) => statement.startsWith("delete from discord_notification_subscriptions")),
-    ).toBeGreaterThan(statements.findIndex((statement) => statement.startsWith("update discord_notification_jobs")));
+    expect(statements.some((statement) => statement.startsWith("delete from notification_preferences"))).toBe(false);
   });
 
-  it("advances only affected trigger times, or all trigger times when lead hours change", async () => {
-    const existingEffectiveAt = new Date("2026-08-01T00:00:00.000Z");
+  it("writes the shared lead time to all four preference rows transactionally", async () => {
     const statements: string[] = [];
-    const updateValues: (readonly unknown[])[] = [];
+    const insertValues: unknown[][] = [];
     const client = {
       async query(text: string, values: readonly unknown[] = []) {
         const normalized = text.replace(/\s+/g, " ").trim();
         statements.push(normalized);
-        if (normalized.startsWith("update discord_notification_subscriptions")) updateValues.push(values);
-        if (normalized.startsWith("select status, event_start_enabled")) {
-          return {
-            rows: [
-              {
-                status: "active",
-                event_start_enabled: true,
-                event_end_enabled: false,
-                reward_exchange_end_enabled: false,
-                recruitment_start_enabled: false,
-                lead_hours: 24,
-                event_start_effective_at: existingEffectiveAt,
-                event_end_effective_at: existingEffectiveAt,
-                reward_exchange_end_effective_at: existingEffectiveAt,
-                recruitment_start_effective_at: existingEffectiveAt,
-              },
-            ],
-            rowCount: 1,
-          };
+        if (normalized.startsWith("select status from notification_channels")) {
+          return { rows: [{ status: "active" }], rowCount: 1 };
+        }
+        if (normalized.startsWith("select notification_type")) {
+          return { rows: preferenceRows(), rowCount: 4 };
+        }
+        if (normalized.startsWith("insert into notification_preferences")) {
+          insertValues.push([...values]);
         }
         return { rows: [], rowCount: 1 };
       },
     };
     const env = { __pgClient: client } as unknown as Env;
-    const unchanged = await saveDiscordNotificationSettings(
-      env,
-      7,
-      {
-        eventStartEnabled: true,
-        eventEndEnabled: false,
-        rewardExchangeEndEnabled: false,
-        recruitmentStartEnabled: false,
-        leadHours: 24,
-      },
-      { now: () => new Date("2026-09-01T00:00:00.000Z") },
-    );
-    expect(unchanged.effectiveAt).toBe(existingEffectiveAt.toISOString());
 
-    const changed = await saveDiscordNotificationSettings(
-      env,
-      7,
-      {
-        eventStartEnabled: true,
-        eventEndEnabled: false,
-        rewardExchangeEndEnabled: false,
-        recruitmentStartEnabled: false,
-        leadHours: 12,
-      },
-      { now: () => new Date("2026-09-02T00:00:00.000Z") },
-    );
-    expect(changed.effectiveAt).toBe("2026-09-02T00:00:00.000Z");
-    expect(updateValues[1]?.slice(6, 10)).toEqual([
-      new Date("2026-09-02T00:00:00.000Z"),
-      new Date("2026-09-02T00:00:00.000Z"),
-      new Date("2026-09-02T00:00:00.000Z"),
-      new Date("2026-09-02T00:00:00.000Z"),
-    ]);
-
-    await saveDiscordNotificationSettings(
+    const saved = await saveDiscordNotificationSettings(
       env,
       7,
       {
@@ -142,26 +110,54 @@ describe("Discord notification settings boundary", () => {
         eventEndEnabled: true,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
-        leadHours: 24,
+        leadHours: 12,
       },
-      { now: () => new Date("2026-09-03T00:00:00.000Z") },
+      { now: () => laterEffectiveAt },
     );
-    expect(updateValues[2]?.slice(6, 10)).toEqual([
-      existingEffectiveAt,
-      new Date("2026-09-03T00:00:00.000Z"),
-      existingEffectiveAt,
-      existingEffectiveAt,
-    ]);
-    expect(statements.some((statement) => statement.includes("discord_recruitment_schedules"))).toBe(false);
+
+    expect(saved.effectiveAt).toBe(laterEffectiveAt.toISOString());
+    expect(insertValues).toHaveLength(1);
+    expect(statements.filter((statement) => statement.startsWith("insert into notification_preferences"))).toHaveLength(
+      1,
+    );
+    expect(insertValues[0]).toEqual(
+      expect.arrayContaining(["event-start", "event-end", "reward-exchange-end", "recruitment-start", 12]),
+    );
   });
 
-  it("creates the Discord login identity and pending claim in one ownership transaction", async () => {
+  it("fails explicitly when stored preference lead times disagree", async () => {
+    const client = {
+      async query(text: string) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        if (normalized.startsWith("select status from notification_channels")) {
+          return { rows: [{ status: "active" }], rowCount: 1 };
+        }
+        if (normalized.startsWith("select notification_type")) {
+          return { rows: [preferenceRows(24)[0], { ...preferenceRows(24)[1], lead_hours: 12 }], rowCount: 2 };
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    };
+    const env = { __pgClient: client } as unknown as Env;
+
+    await expect(
+      saveDiscordNotificationSettings(env, 7, {
+        eventStartEnabled: true,
+        eventEndEnabled: false,
+        rewardExchangeEndEnabled: false,
+        recruitmentStartEnabled: false,
+        leadHours: 24,
+      }),
+    ).rejects.toThrow(DiscordNotificationSettingsInconsistentError);
+  });
+
+  it("creates the Discord login identity and pending channel in one ownership transaction", async () => {
     const statements: string[] = [];
     const client = {
       async query(text: string) {
         const normalized = text.replace(/\s+/g, " ").trim();
         statements.push(normalized);
-        if (normalized.startsWith("select uid from discord_notification_subscriptions")) {
+        if (normalized.startsWith("select uid from notification_channels")) {
           return { rows: [], rowCount: 0 };
         }
         return { rows: [], rowCount: 0 };
@@ -179,14 +175,11 @@ describe("Discord notification settings boundary", () => {
     const identityInsertIndex = statements.findIndex((statement) =>
       statement.startsWith("insert into auth_identities"),
     );
-    const subscriptionInsertIndex = statements.findIndex((statement) =>
-      statement.startsWith("insert into discord_notification_subscriptions"),
+    const channelInsertIndex = statements.findIndex((statement) =>
+      statement.startsWith("insert into notification_channels"),
     );
     expect(identityInsertIndex).toBeGreaterThan(-1);
-    expect(subscriptionInsertIndex).toBeGreaterThan(identityInsertIndex);
-    expect(statements.some((statement) => statement.startsWith("insert into discord_notification_subscriptions"))).toBe(
-      true,
-    );
+    expect(channelInsertIndex).toBeGreaterThan(identityInsertIndex);
   });
 
   it("rejects a Discord identity owned by another user before either write", async () => {
@@ -198,7 +191,7 @@ describe("Discord notification settings boundary", () => {
         if (normalized.startsWith("select sensei_id, provider_user_id")) {
           return { rows: [{ sensei_id: 8, provider_user_id: "1234567890" }], rowCount: 1 };
         }
-        if (normalized.startsWith("select user_id, discord_user_id")) {
+        if (normalized.startsWith("select user_id, channel_type")) {
           return { rows: [], rowCount: 0 };
         }
         return { rows: [], rowCount: 0 };
@@ -209,57 +202,34 @@ describe("Discord notification settings boundary", () => {
       DiscordIdentityAlreadyLinkedError,
     );
     expect(statements.some((statement) => statement.startsWith("insert into auth_identities"))).toBe(false);
-    expect(statements.some((statement) => statement.startsWith("insert into discord_notification_subscriptions"))).toBe(
-      false,
-    );
+    expect(statements.some((statement) => statement.startsWith("insert into notification_channels"))).toBe(false);
     expect(statements.at(-1)).toBe("ROLLBACK");
   });
 
-  it("rolls back the identity when pending subscription creation fails", async () => {
+  it("rolls back the identity when pending channel creation fails", async () => {
     const statements: string[] = [];
     const client = {
       async query(text: string) {
         const normalized = text.replace(/\s+/g, " ").trim();
         statements.push(normalized);
-        if (normalized.startsWith("select uid from discord_notification_subscriptions")) {
-          return { rows: [], rowCount: 0 };
-        }
-        if (normalized.startsWith("insert into discord_notification_subscriptions")) {
-          throw new Error("subscription insert failed");
-        }
+        if (normalized.startsWith("insert into notification_channels")) throw new Error("channel insert failed");
         return { rows: [], rowCount: 0 };
       },
     };
     const env = { __pgClient: client } as unknown as Env;
 
-    await expect(upsertPendingDiscordConnection(env, 7, "1234567890")).rejects.toThrow("subscription insert failed");
+    await expect(upsertPendingDiscordConnection(env, 7, "1234567890")).rejects.toThrow("channel insert failed");
     expect(statements.some((statement) => statement.startsWith("insert into auth_identities"))).toBe(true);
     expect(statements.at(-1)).toBe("ROLLBACK");
     expect(statements.includes("COMMIT")).toBe(false);
   });
 
-  it("presents an unsupported legacy connection status as unlinked without persisting it", async () => {
+  it("treats an unsupported channel status as unlinked without persisting it", async () => {
     const client = {
       async query(text: string) {
         const normalized = text.replace(/\s+/g, " ").trim();
-        if (normalized.startsWith("select status")) {
-          return {
-            rows: [
-              {
-                status: "unlinked",
-                event_start_enabled: false,
-                event_end_enabled: false,
-                reward_exchange_end_enabled: false,
-                recruitment_start_enabled: false,
-                lead_hours: 24,
-                event_start_effective_at: new Date("2026-09-01T00:00:00.000Z"),
-                event_end_effective_at: new Date("2026-09-01T00:00:00.000Z"),
-                reward_exchange_end_effective_at: new Date("2026-09-01T00:00:00.000Z"),
-                recruitment_start_effective_at: new Date("2026-09-01T00:00:00.000Z"),
-              },
-            ],
-            rowCount: 1,
-          };
+        if (normalized.startsWith("select status from notification_channels")) {
+          return { rows: [{ status: "unlinked" }], rowCount: 1 };
         }
         return { rows: [], rowCount: 0 };
       },
@@ -271,36 +241,22 @@ describe("Discord notification settings boundary", () => {
     expect(connection).toBeNull();
   });
 
-  it("does not expose the Discord user ID in notification state", async () => {
+  it("does not expose the Discord recipient key in notification state", async () => {
     const client = {
       async query(text: string) {
         const normalized = text.replace(/\s+/g, " ").trim();
-        if (normalized.startsWith("select status")) {
-          return {
-            rows: [
-              {
-                uid: "connection-1",
-                discord_user_id: "1234567890",
-                status: "active",
-                event_start_enabled: false,
-                event_end_enabled: false,
-                reward_exchange_end_enabled: false,
-                recruitment_start_enabled: false,
-                lead_hours: 24,
-                event_start_effective_at: new Date("2026-09-01T00:00:00.000Z"),
-                event_end_effective_at: new Date("2026-09-01T00:00:00.000Z"),
-                reward_exchange_end_effective_at: new Date("2026-09-01T00:00:00.000Z"),
-                recruitment_start_effective_at: new Date("2026-09-01T00:00:00.000Z"),
-              },
-            ],
-            rowCount: 1,
-          };
+        if (normalized.startsWith("select status from notification_channels")) {
+          return { rows: [{ status: "active", recipient_key: "1234567890" }], rowCount: 1 };
+        }
+        if (normalized.startsWith("select notification_type")) {
+          return { rows: preferenceRows(), rowCount: 4 };
         }
         return { rows: [], rowCount: 0 };
       },
     };
     const env = { __pgClient: client } as unknown as Env;
-    const { connection } = await getDiscordNotificationState(env, 7);
-    expect(connection).toEqual({ status: "active" });
+    const state = await getDiscordNotificationState(env, 7);
+    expect(state.connection).toEqual({ status: "active" });
+    expect(state).not.toHaveProperty("recipientKey");
   });
 });

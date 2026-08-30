@@ -88,7 +88,7 @@ export default function DiscordNotificationConnection({
 }: DiscordNotificationConnectionProps) {
   return (
     <div id="discord-notifications" className="scroll-mt-[var(--mobile-header-height)] lg:scroll-mt-4">
-      <SectionCard title="알림 수단" description="Discord 로그인 계정도 함께 연결돼요">
+      <SectionCard title="알림 수단">
         <div className="space-y-3">
           {notice?.area === "notification" ? (
             <p
@@ -103,7 +103,7 @@ export default function DiscordNotificationConnection({
             </p>
           ) : null}
           {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
-          <div className="flex flex-col gap-3 rounded-md bg-background px-4 py-3 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-3 rounded-md bg-background px-4 py-3">
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <FaDiscord className="size-5" color="#5865F2" aria-hidden="true" />
               <div className="min-w-0">

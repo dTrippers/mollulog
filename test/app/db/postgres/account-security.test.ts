@@ -14,10 +14,11 @@ import { getAccountSessionState, leaveAccount } from "~/db/postgres/account-secu
 import {
   pgAuthIdentitiesTable,
   pgConnectApiKeysTable,
-  pgDiscordNotificationJobsTable,
-  pgDiscordNotificationSubscriptionsTable,
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
+  pgNotificationChannelsTable,
+  pgNotificationJobsTable,
+  pgNotificationPreferencesTable,
   pgPasskeysTable,
   pgPendingSenseiRegistrationsTable,
   pgSenseiPrivaciesTable,
@@ -120,12 +121,13 @@ describe("account-security PostgreSQL repository", () => {
       status: "left",
     });
     expect(mockWithDiscordUserTransaction).toHaveBeenCalledWith(env, "leave_account", 7, expect.any(Function), {});
-    expect(deletes).toHaveLength(7);
+    expect(deletes).toHaveLength(8);
     expect(updates).toHaveLength(3);
     expect(deletes.map(({ table }) => table)).toEqual(
       expect.arrayContaining([
         pgAuthIdentitiesTable,
-        pgDiscordNotificationSubscriptionsTable,
+        pgNotificationChannelsTable,
+        pgNotificationPreferencesTable,
         pgPasskeysTable,
         pgSenseiPrivaciesTable,
         pgFollowershipsTable,
@@ -135,7 +137,8 @@ describe("account-security PostgreSQL repository", () => {
     );
     for (const table of [
       pgAuthIdentitiesTable,
-      pgDiscordNotificationSubscriptionsTable,
+      pgNotificationChannelsTable,
+      pgNotificationPreferencesTable,
       pgPasskeysTable,
       pgSenseiPrivaciesTable,
       pgConnectApiKeysTable,
@@ -160,7 +163,7 @@ describe("account-security PostgreSQL repository", () => {
     ]);
 
     expect(updates[0]).toMatchObject({
-      table: pgDiscordNotificationJobsTable,
+      table: pgNotificationJobsTable,
       values: { status: "cancelled", lastError: "Discord connection unlinked" },
     });
     expect(whereQuery(updates[0]?.where).params).toEqual([
