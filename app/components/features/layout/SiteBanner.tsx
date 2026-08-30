@@ -37,6 +37,10 @@ const presetClassNames: Record<SiteBannerPreset, { container: string; text: stri
     container: "bg-gradient-to-r from-sky-50 to-blue-50 dark:from-sky-900/20 dark:to-blue-900/20",
     text: "text-sky-700 dark:text-sky-300",
   },
+  pink: {
+    container: "bg-gradient-to-r from-pink-50 to-fuchsia-50 dark:from-pink-900/20 dark:to-fuchsia-900/20",
+    text: "text-pink-700 dark:text-pink-300",
+  },
   black: {
     container: "bg-neutral-100 dark:bg-neutral-700/70",
     text: "text-neutral-700 dark:text-neutral-200",
@@ -65,7 +69,11 @@ export function SiteBanner({ banner, slot, className }: SiteBannerProps) {
     );
   }
 
-  return <Link to={banner.link} className={linkClassName}>{banner.message}</Link>;
+  return (
+    <Link to={banner.link} className={linkClassName}>
+      {banner.message}
+    </Link>
+  );
 }
 
 export function getPageSiteBannerSlot(pathname: string, banner: Pick<SiteBannerData, "screens"> | null | undefined) {

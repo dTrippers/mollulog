@@ -1,4 +1,4 @@
-export const SITE_BANNER_PRESETS = ["red", "green", "blue", "black"] as const;
+export const SITE_BANNER_PRESETS = ["red", "green", "blue", "pink", "black"] as const;
 export type SiteBannerPreset = (typeof SITE_BANNER_PRESETS)[number];
 
 export const SITE_BANNER_SCREENS = ["desktop_navigation", "mobile_header", "futures_top", "community_top"] as const;
