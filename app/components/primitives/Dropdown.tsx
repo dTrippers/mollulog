@@ -82,7 +82,7 @@ export default function Dropdown<T extends string>({
         <ChevronDownIcon className={cn("size-4 text-muted-foreground transition-transform", isOpen && "rotate-180")} />
       </button>
       {isOpen && (
-        <div className="absolute left-0 z-20 mt-1 min-w-full overflow-hidden rounded-md bg-popover py-1 text-popover-foreground shadow-lg">
+        <div className="absolute left-0 z-20 mt-1 max-h-72 min-w-full overflow-y-auto rounded-md bg-popover py-1 text-popover-foreground shadow-lg">
           {options.map((option) => {
             const selected = option.value === value;
             return (

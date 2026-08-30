@@ -1,6 +1,9 @@
+import { KeyIcon } from "@heroicons/react/24/outline";
 import { startAuthentication } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/server";
 import { useEffect, useRef, useState } from "react";
+import { FaDiscord, FaGithub } from "react-icons/fa6";
+import { FcGoogle } from "react-icons/fc";
 import { useFetcher, useLocation, useRouteLoaderData } from "react-router";
 import { Button } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
@@ -101,46 +104,58 @@ export default function SignInBottomSheet({ initialError = null }: SignInBottomS
       <div className="fixed bottom-0 left-1/2 z-layer-modal mx-auto w-full -translate-x-1/2 rounded-t-lg bg-popover p-4 text-popover-foreground shadow-t-xl md:max-w-3xl md:p-8">
         <h2 className="mt-4 mb-4 text-2xl font-bold md:mb-8 md:text-3xl">로그인</h2>
         {displayError && <p className="my-4 text-sm text-destructive md:text-base">{displayError}</p>}
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
           <Button
             className="py-2"
             type="submit"
-            variant="primary"
+            variant="default"
             onClick={signInWithGoogle}
             disabled={buttonDisabled}
             fullWidth
           >
-            <p>Google 계정으로 로그인</p>
+            <span className="flex w-full items-center">
+              <FcGoogle className="size-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-center">Google 계정으로 로그인</span>
+            </span>
           </Button>
           <Button
             className="py-2"
             type="button"
-            variant="inverse"
+            variant="default"
             onClick={signInWithDiscord}
             disabled={buttonDisabled}
             fullWidth
           >
-            <p>Discord 계정으로 로그인</p>
+            <span className="flex w-full items-center">
+              <FaDiscord className="size-5 shrink-0" color="#5865F2" aria-hidden="true" />
+              <span className="flex-1 text-center">Discord 계정으로 로그인</span>
+            </span>
           </Button>
           <Button
             className="py-2"
             type="button"
-            variant="inverse"
+            variant="default"
             onClick={signInWithGithub}
             disabled={buttonDisabled}
             fullWidth
           >
-            <p>GitHub 계정으로 로그인</p>
+            <span className="flex w-full items-center">
+              <FaGithub className="size-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-center">GitHub 계정으로 로그인</span>
+            </span>
           </Button>
           <Button
             className="py-2"
             type="button"
-            variant="inverse"
+            variant="default"
             onClick={signInWithPasskey}
             disabled={buttonDisabled}
             fullWidth
           >
-            <p>Passkey로 로그인</p>
+            <span className="flex w-full items-center">
+              <KeyIcon className="size-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1 text-center">Passkey로 로그인</span>
+            </span>
           </Button>
         </div>
         <p className="my-4 text-center text-sm text-muted-foreground">

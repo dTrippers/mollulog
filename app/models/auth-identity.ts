@@ -379,27 +379,6 @@ export async function linkAuthIdentity(
   }
 }
 
-export async function getAuthIdentityProviderUserId(
-  env: Env,
-  senseiId: number,
-  provider: AuthProvider,
-  options: IdentityRepositoryOptions = {},
-): Promise<string | null> {
-  return withIdentityDatabase(
-    env,
-    "auth_identity_provider_user_id",
-    async (db) => {
-      const [identity] = await db
-        .select({ providerUserId: pgAuthIdentitiesTable.providerUserId })
-        .from(pgAuthIdentitiesTable)
-        .where(and(eq(pgAuthIdentitiesTable.senseiId, senseiId), eq(pgAuthIdentitiesTable.provider, provider)))
-        .limit(1);
-      return identity?.providerUserId ?? null;
-    },
-    options,
-  );
-}
-
 export async function assertDiscordIdentityOwnership(
   env: Env,
   userId: number | undefined,

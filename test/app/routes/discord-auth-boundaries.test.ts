@@ -3,31 +3,61 @@ import { describe, expect, it } from "@jest/globals";
 import { getDiscordProfileFeedback } from "~/components/features/auth/discord-profile-feedback";
 
 describe("Discord page responsibility", () => {
-  it("keeps Discord management feedback in the profile section", () => {
+  it("keeps Discord identity feedback in the profile section", () => {
     expect(getDiscordProfileFeedback(new URLSearchParams("discord_auth=linked"))).toEqual({
+      area: "identity",
       tone: "success",
-      text: "Discord 로그인 계정이 연동됐어요.",
+      text: "Discord 로그인 계정이 연결됐어요.",
     });
     expect(getDiscordProfileFeedback(new URLSearchParams("discord_error=identity_in_use"))).toMatchObject({
       tone: "error",
     });
     expect(getDiscordProfileFeedback(new URLSearchParams("discord_error=cancelled"))).toEqual({
+      area: "identity",
       tone: "error",
       text: "Discord 로그인을 취소했어요. 다시 시도해주세요.",
     });
-    expect(getDiscordProfileFeedback(new URLSearchParams("discord_notice=unlinked"))).toMatchObject({
-      tone: "success",
-    });
-    expect(getDiscordProfileFeedback(new URLSearchParams("discord_notice=failed"))).toBeNull();
+  });
 
+  it("maps notification failures to the notification section", () => {
+    expect(getDiscordProfileFeedback(new URLSearchParams("discord_notice=failed"))).toMatchObject({
+      area: "notification",
+      tone: "error",
+    });
+    expect(getDiscordProfileFeedback(new URLSearchParams("discord_notice=cancelled"))).toMatchObject({
+      area: "notification",
+      tone: "error",
+    });
+  });
+
+  it("keeps notification connection management in Profile Management", () => {
     const editSource = readFileSync("app/routes/edit._index.tsx", "utf8");
     const notificationsSource = readFileSync("app/routes/notifications.tsx", "utf8");
-    expect(editSource).toContain('id="discord"');
-    expect(editSource).toContain('value="discord-connect"');
-    expect(editSource).toContain('value="discord-unlink"');
+    const profileConnectionSource = readFileSync(
+      "app/routes/edit._components/DiscordNotificationConnection.tsx",
+      "utf8",
+    );
+    const notificationChannelSource = readFileSync(
+      "app/routes/notifications._components/NotificationChannelCard.tsx",
+      "utf8",
+    );
+    expect(editSource).toContain('title="연결된 서비스"');
+    expect(editSource).toContain('id="connected-services"');
+    expect(editSource).toContain("DiscordNotificationConnection");
+    expect(profileConnectionSource).toContain('id="discord-notifications"');
+    expect(profileConnectionSource).toContain('action="/auth/discord/notifications/connect"');
+    expect(profileConnectionSource).toContain('value="discord-unlink"');
+    expect(profileConnectionSource).toContain("Discord 로그인 계정도 함께 연결돼요");
     expect(editSource).toContain("discordMessage");
-    expect(notificationsSource).toContain('to="/edit#discord"');
-    expect(notificationsSource).toContain('intent !== "save"');
+    expect(notificationsSource).not.toContain('intent !== "discord-connect"');
+    expect(notificationsSource).not.toContain('intent !== "discord-unlink"');
+    expect(notificationsSource).not.toContain("upsertPendingDiscordConnection");
+    expect(notificationsSource).not.toContain("unlinkDiscordConnection");
+    expect(notificationsSource).toContain("NotificationChannelCard");
+    expect(notificationsSource).toContain('connectionStatus === "active"');
+    expect(editSource).toContain('status !== "pending"');
+    expect(notificationChannelSource).toContain("/edit#discord-notifications");
+    expect(notificationChannelSource).not.toContain("<Form");
     expect(notificationsSource).not.toContain("/notifications/discord");
   });
 
@@ -41,5 +71,23 @@ describe("Discord page responsibility", () => {
     const notificationModelSource = readFileSync("app/models/discord-notifications.server.ts", "utf8");
     expect(oauthSource).toContain('new URL("/auth/discord/callback", host)');
     expect(notificationModelSource).not.toContain("getDiscordOAuthCallbackUrl");
+  });
+
+  it("uses the live Profile Management anchor for ordinary Discord linking", () => {
+    const oauthSource = readFileSync("app/auth/discord-oauth.server.ts", "utf8");
+    const linkSource = readFileSync("app/routes/auth.discord.link.tsx", "utf8");
+    expect(oauthSource).toContain("#connected-services");
+    expect(oauthSource).not.toMatch(/#discord(?=["'`])/);
+    expect(linkSource).toContain("#connected-services");
+    expect(linkSource).not.toContain("#discord");
+  });
+
+  it("keeps User Install OAuth isolated to the notification intent", () => {
+    const oauthSource = readFileSync("app/auth/discord-oauth.server.ts", "utf8");
+    const notificationStartSource = readFileSync("app/routes/auth.discord.notifications.connect.tsx", "utf8");
+    expect(notificationStartSource).toContain('"notification-connect"');
+    expect(oauthSource).toContain('"identify applications.commands"');
+    expect(oauthSource).toContain('"integration_type", "1"');
+    expect(oauthSource).toContain('intent === "notification-connect"');
   });
 });

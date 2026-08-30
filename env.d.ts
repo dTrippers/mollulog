@@ -5,6 +5,7 @@ interface Env {
   CACHE_REFRESH_WORKFLOW: Workflow<{ requestedBy: number }>;
   EVENTS?: Queue;
   OCR_TASKS?: Queue<OcrTaskMessage>;
+  DISCORD_NOTIFICATIONS_QUEUE?: Queue<DiscordConnectionRequestQueueMessage>;
   OCR_UPLOADS: R2Bucket;
   HOST: string;
   CONNECT_API_URL?: string;
@@ -28,3 +29,8 @@ interface Env {
 }
 
 type OcrTaskMessage = import("~/domain/ocr").OcrTaskMessage;
+type DiscordConnectionRequestQueueMessage = {
+  type: "connection-request";
+  connectionUid: string;
+  connectionVersion: number;
+};

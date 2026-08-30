@@ -8,11 +8,16 @@ import {
   sessionStorage,
 } from "~/auth/authenticator.server";
 import { linkAuthIdentity } from "~/models/auth-identity";
+import {
+  DiscordIdentityAlreadyLinkedError,
+  type PendingDiscordConnection,
+  upsertPendingDiscordConnection,
+} from "~/models/discord-notifications.server";
 
 export const DISCORD_OAUTH_STATE_SESSION_KEY = "discord:oauthState";
 export const DISCORD_OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 
-export type DiscordOAuthIntent = "signin" | "link";
+export type DiscordOAuthIntent = "signin" | "link" | "notification-connect";
 
 export type DiscordOAuthState = {
   state: string;
@@ -40,8 +45,25 @@ class DiscordOAuthProviderError extends Error {
   }
 }
 
+function queueDiscordConnectionVerification(
+  env: Env,
+  connection: PendingDiscordConnection,
+  ctx?: ExecutionContext,
+): void {
+  if (!env.DISCORD_NOTIFICATIONS_QUEUE || !ctx) return;
+  ctx.waitUntil(
+    env.DISCORD_NOTIFICATIONS_QUEUE.send({
+      type: "connection-request",
+      connectionUid: connection.connectionUid,
+      connectionVersion: connection.connectionVersion,
+    }).catch((error) => {
+      console.error("[discord-oauth] failed to queue immediate connection verification", error);
+    }),
+  );
+}
+
 function isOAuthIntent(value: unknown): value is DiscordOAuthIntent {
-  return value === "signin" || value === "link";
+  return value === "signin" || value === "link" || value === "notification-connect";
 }
 
 export function isDiscordOAuthStateValid(
@@ -89,7 +111,8 @@ function errorLocation(
   intent: DiscordOAuthIntent | undefined,
   code: "cancelled" | "failed" | "identity_in_use" | "signin_required",
 ) {
-  if (intent === "link") return `/edit?discord_error=${code}#discord`;
+  if (intent === "link") return `/edit?discord_error=${code}#connected-services`;
+  if (intent === "notification-connect") return `/edit?discord_notice=${code}#discord-notifications`;
   return `/?auth_error=${code}`;
 }
 
@@ -137,14 +160,14 @@ export async function startDiscordOAuth(
   intent: DiscordOAuthIntent,
   userId?: number,
 ): Promise<Response> {
-  if (intent === "link" && (!Number.isSafeInteger(userId) || (userId as number) <= 0)) {
-    return redirect("/edit?discord_error=signin_required#discord");
+  if (intent !== "signin" && (!Number.isSafeInteger(userId) || (userId as number) <= 0)) {
+    return redirect(errorLocation(intent, "signin_required"));
   }
 
   const state: DiscordOAuthState = {
     state: crypto.randomUUID().replaceAll("-", ""),
     intent,
-    ...(intent === "link" ? { userId } : {}),
+    ...(intent !== "signin" ? { userId } : {}),
     createdAt: Date.now(),
   };
   const storage = sessionStorage(env);
@@ -155,7 +178,11 @@ export async function startDiscordOAuth(
   authorizeUrl.searchParams.set("client_id", env.DISCORD_OAUTH_CLIENT_ID);
   authorizeUrl.searchParams.set("response_type", "code");
   authorizeUrl.searchParams.set("redirect_uri", getDiscordOAuthCallbackUrl(env.HOST));
-  authorizeUrl.searchParams.set("scope", "identify");
+  authorizeUrl.searchParams.set(
+    "scope",
+    intent === "notification-connect" ? "identify applications.commands" : "identify",
+  );
+  if (intent === "notification-connect") authorizeUrl.searchParams.set("integration_type", "1");
   authorizeUrl.searchParams.set("state", state.state);
 
   return redirect(authorizeUrl.toString(), {
@@ -188,8 +215,9 @@ function setPendingRegistrationSession(session: DiscordOAuthSession, registratio
 }
 
 /**
- * Handles both Discord sign-in and profile-link callbacks. Provider tokens
- * stay local to this request and are never placed in cookies or PostgreSQL.
+ * Handles Discord sign-in, profile-link, and notification-connect callbacks.
+ * Provider tokens stay local to this request and are never placed in cookies
+ * or PostgreSQL.
  */
 export async function handleDiscordOAuthCallback(
   env: Env,
@@ -223,10 +251,12 @@ export async function handleDiscordOAuthCallback(
   }
 
   try {
-    if (value.intent === "link") {
+    if (value.intent === "link" || value.intent === "notification-connect") {
       const sensei = await getActiveSensei(env, request, ctx);
       if (!sensei || sensei.id !== value.userId) {
-        return redirectWithCookies(errorLocation("link", "signin_required"), [await storage.commitSession(session)]);
+        return redirectWithCookies(errorLocation(value.intent, "signin_required"), [
+          await storage.commitSession(session),
+        ]);
       }
     }
 
@@ -237,7 +267,17 @@ export async function handleDiscordOAuthCallback(
       if (!result.ok) {
         return redirectWithCookies(errorLocation("link", "identity_in_use"), [await storage.commitSession(session)]);
       }
-      return redirectWithCookies("/edit?discord_auth=linked#discord", [await storage.commitSession(session)]);
+      return redirectWithCookies("/edit?discord_auth=linked#connected-services", [
+        await storage.commitSession(session),
+      ]);
+    }
+
+    if (value.intent === "notification-connect") {
+      const connection = await upsertPendingDiscordConnection(env, value.userId as number, discordUserId, { ctx });
+      queueDiscordConnectionVerification(env, connection, ctx);
+      return redirectWithCookies("/edit?discord_notice=pending#discord-notifications", [
+        await storage.commitSession(session),
+      ]);
     }
 
     const resolution = await resolveProviderAuthentication(env, "discord", discordUserId, ctx);
@@ -251,7 +291,10 @@ export async function handleDiscordOAuthCallback(
     setPendingRegistrationSession(session, resolution.registration.uid);
     return redirectWithCookies("/register", [await storage.commitSession(session)]);
   } catch (error) {
-    if (error instanceof Error && error.name === "DiscordOwnershipConflictError") {
+    if (
+      error instanceof DiscordIdentityAlreadyLinkedError ||
+      (error instanceof Error && error.name === "DiscordOwnershipConflictError")
+    ) {
       return redirectWithCookies(errorLocation(value.intent, "identity_in_use"), [
         await storage.commitSession(session),
       ]);

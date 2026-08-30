@@ -1,30 +1,33 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
-import { ArrowRightStartOnRectangleIcon, KeyIcon, LinkIcon, UserMinusIcon } from "@heroicons/react/24/outline";
+import { ArrowRightStartOnRectangleIcon, KeyIcon } from "@heroicons/react/24/outline";
 import { type ElementType, useEffect, useState } from "react";
+import { FaDiscord, FaGithub } from "react-icons/fa6";
+import { FcGoogle } from "react-icons/fc";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
-import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
 import {
-  type DiscordProfileFeedback,
-  getDiscordProfileFeedback,
-} from "~/components/features/auth/discord-profile-feedback";
+  data,
+  Form,
+  Link,
+  redirect,
+  useActionData,
+  useLoaderData,
+  useNavigation,
+  useRevalidator,
+} from "react-router";
+import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authenticator.server";
+import { getDiscordProfileFeedback } from "~/components/features/auth/discord-profile-feedback";
 import { ProfileEditor } from "~/components/features/profile";
 import { Button, Input, SectionCard, Title, Toggle } from "~/components/primitives";
 import { nowUtcIso } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
-import { type AuthProvider, getAuthIdentityProviderUserId, getAuthIdentityStatuses } from "~/models/auth-identity";
-import {
-  DiscordIdentityAlreadyLinkedError,
-  DiscordNotificationValidationError,
-  getDiscordNotificationState,
-  unlinkDiscordConnection,
-  upsertPendingDiscordConnection,
-} from "~/models/discord-notifications.server";
+import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
+import { getDiscordNotificationState, unlinkDiscordConnection } from "~/models/discord-notifications.server";
 import { getPasskeysBySensei } from "~/models/passkey";
 import { getSenseiById, updateSensei } from "~/models/sensei";
 import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
 import { getAllStudents } from "~/models/student";
+import DiscordNotificationConnection from "./edit._components/DiscordNotificationConnection";
 
 export const meta: MetaFunction = () => [{ title: "프로필 관리 | 몰루로그" }];
 
@@ -67,7 +70,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 function authMessageFromSearchParams(params: URLSearchParams): { tone: "success" | "error"; text: string } | null {
   if (params.get("auth") === "linked") {
-    return { tone: "success", text: "로그인 계정이 연동됐어요." };
+    return { tone: "success", text: "로그인 계정이 연결됐어요." };
   }
   if (params.get("auth_error") === "identity_in_use") {
     return { tone: "error", text: "이미 다른 선생님 계정에 연결된 로그인 계정이에요." };
@@ -76,13 +79,13 @@ function authMessageFromSearchParams(params: URLSearchParams): { tone: "success"
     return { tone: "error", text: "로그인 후 다시 시도해주세요." };
   }
   if (params.get("auth_error") === "failed") {
-    return { tone: "error", text: "로그인 계정 연동에 실패했어요. 다시 시도해주세요." };
+    return { tone: "error", text: "로그인 계정 연결에 실패했어요. 다시 시도해주세요." };
   }
   return null;
 }
 
 type ActionData = {
-  intent?: "profile" | "account" | "discord-connect" | "discord-unlink";
+  intent?: "profile" | "account" | "discord-unlink";
   success?: boolean;
   savedAt?: string;
   error?: {
@@ -115,37 +118,19 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   };
 
   const intent = formData.get("intent");
-  if (intent !== "profile" && intent !== "account" && intent !== "discord-connect" && intent !== "discord-unlink") {
+  if (intent !== "profile" && intent !== "account" && intent !== "discord-unlink") {
     return data<ActionData>({ error: { form: "잘못된 요청이에요. 다시 시도해주세요." } }, { status: 400 });
   }
 
   if (intent === "discord-unlink") {
     try {
       await unlinkDiscordConnection(env, sensei.id, { ctx });
-      return redirect("/edit?discord_notice=unlinked#discord");
+      return redirect("/edit?discord_notice=unlinked#discord-notifications");
     } catch (error) {
       console.error("[edit] failed to unlink Discord notification connection", error);
-      return data<ActionData>({ intent, error: { form: "Discord 알림 연결을 해제하지 못했어요." } }, { status: 500 });
-    }
-  }
-
-  if (intent === "discord-connect") {
-    const discordUserId = await getAuthIdentityProviderUserId(env, sensei.id, "discord", { ctx });
-    if (!discordUserId) {
-      return data<ActionData>({ intent, error: { form: "Discord 로그인 계정을 먼저 연결해주세요." } }, { status: 400 });
-    }
-    try {
-      await upsertPendingDiscordConnection(env, sensei.id, discordUserId, { ctx });
-      return redirect("/edit?discord_notice=pending#discord");
-    } catch (error) {
-      const expectedError =
-        error instanceof DiscordIdentityAlreadyLinkedError || error instanceof DiscordNotificationValidationError;
-      if (!expectedError) {
-        console.error("[edit] failed to connect Discord notifications", error);
-      }
       return data<ActionData>(
-        { intent, error: { form: expectedError ? error.message : "Discord 알림 연결에 실패했어요." } },
-        { status: expectedError ? 400 : 500 },
+        { intent, error: { form: "Discord 알림 연결을 해제하지 못했어요." } },
+        { status: 500 },
       );
     }
   }
@@ -266,142 +251,55 @@ function SettingsLink({
   title,
   description,
   Icon,
-  tone = "default",
 }: {
   to: string;
   title: string;
   description?: string;
   Icon: ElementType;
-  tone?: "default" | "destructive";
 }) {
-  const destructive = tone === "destructive";
-
   return (
     <Link
       to={to}
-      className={cn(
-        "flex items-center gap-3 rounded-md bg-background px-4 py-3 text-foreground transition-colors hover:bg-muted/60",
-        destructive && "text-destructive",
-      )}
+      className="flex items-center gap-3 rounded-md bg-background px-4 py-3 text-foreground transition-colors hover:bg-muted/60"
     >
-      <Icon className={cn("size-4 shrink-0", destructive ? "text-destructive" : "text-muted-foreground")} />
+      <Icon className="size-4 shrink-0 text-muted-foreground" />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{title}</p>
         {description ? <p className="text-sm text-muted-foreground">{description}</p> : null}
       </div>
-      <ChevronRightIcon className={cn("size-4 shrink-0", destructive ? "text-destructive" : "text-muted-foreground")} />
+      <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
     </Link>
   );
 }
 
-function AuthIdentityLinkForm({ provider, label, linked }: { provider: AuthProvider; label: string; linked: boolean }) {
+function AuthIdentityLinkForm({
+  provider,
+  label,
+  Icon,
+  linked,
+}: {
+  provider: AuthProvider;
+  label: string;
+  Icon: ElementType;
+  linked: boolean;
+}) {
   return (
     <div className="flex items-center gap-3 rounded-md bg-background px-4 py-3">
-      <LinkIcon className="size-4 shrink-0 text-muted-foreground" />
+      <Icon className="size-5 shrink-0" color={provider === "discord" ? "#5865F2" : undefined} aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{label}</p>
-        <p className="text-sm text-muted-foreground">{linked ? "로그인에 사용할 수 있어요" : "연동되지 않음"}</p>
       </div>
       {linked ? (
         <span className="inline-flex w-fit items-center justify-center gap-2 whitespace-nowrap rounded-md bg-muted px-3 py-1.5 text-center text-sm font-medium text-muted-foreground">
-          연동됨
+          연결됨
         </span>
       ) : (
         <Form method="post" action={`/auth/${provider}/link`}>
           <Button type="submit" size="sm" variant="primary">
-            연동하기
+            연결하기
           </Button>
         </Form>
       )}
-    </div>
-  );
-}
-
-function DiscordConnectionSection({
-  connection,
-  identityLinked,
-  notice,
-  error,
-  isSubmitting,
-}: {
-  connection: Awaited<ReturnType<typeof getDiscordNotificationState>>["connection"];
-  identityLinked: boolean;
-  notice?: DiscordProfileFeedback | null;
-  error?: string;
-  isSubmitting: boolean;
-}) {
-  const status = connection?.status ?? "none";
-  const isConnectSubmitting = isSubmitting;
-  const isUnlinkSubmitting = isSubmitting;
-
-  return (
-    <div id="discord" className="scroll-mt-4">
-      <SectionCard title="Discord" description="로그인 계정과 DM 알림 연결을 각각 관리할 수 있어요.">
-        <div className="space-y-3">
-          {notice ? (
-            <p
-              className={cn(
-                "rounded-md px-3 py-2 text-sm",
-                notice.tone === "success"
-                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                  : "bg-red-500/10 text-red-700 dark:text-red-300",
-              )}
-            >
-              {notice.text}
-            </p>
-          ) : null}
-          {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
-          <AuthIdentityLinkForm provider="discord" label="Discord 로그인" linked={identityLinked} />
-          <div className="flex flex-col gap-3 rounded-md bg-background px-4 py-3 sm:flex-row sm:items-center">
-            <div className="flex min-w-0 flex-1 items-start gap-3">
-              {status === "pending" ? (
-                <ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-amber-600 dark:text-amber-300" />
-              ) : status === "active" ? (
-                <CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              ) : status === "failed" ? (
-                <span className="mt-0.5 size-4 shrink-0 rounded-full bg-destructive/20" />
-              ) : (
-                <LinkIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-              )}
-              <div className="min-w-0">
-                <p className="font-medium">DM 알림 연결</p>
-                <p className="text-sm text-muted-foreground">
-                  {status === "pending"
-                    ? "확인 중"
-                    : status === "active"
-                      ? "활성"
-                      : status === "failed"
-                        ? "실패"
-                        : "미연결"}
-                </p>
-              </div>
-            </div>
-            <div className="flex shrink-0 gap-2 sm:justify-end">
-              {status !== "active" && identityLinked ? (
-                <Form method="post">
-                  <input type="hidden" name="intent" value="discord-connect" />
-                  <Button type="submit" size="sm" variant="primary" disabled={isConnectSubmitting}>
-                    {status === "failed" ? "다시 시도" : status === "pending" ? "다시 확인" : "알림 연결"}
-                  </Button>
-                </Form>
-              ) : null}
-              {status === "active" || status === "pending" || status === "failed" ? (
-                <Form method="post">
-                  <input type="hidden" name="intent" value="discord-unlink" />
-                  <Button type="submit" size="sm" variant="danger-subtle" disabled={isUnlinkSubmitting}>
-                    연결 해제
-                  </Button>
-                </Form>
-              ) : null}
-            </div>
-          </div>
-          {!identityLinked ? (
-            <p className="text-sm text-muted-foreground">
-              알림 연결이 남아 있어도 Discord 로그인 계정은 자동으로 연결되지 않아요. 위에서 별도로 연결해주세요.
-            </p>
-          ) : null}
-        </div>
-      </SectionCard>
     </div>
   );
 }
@@ -411,16 +309,16 @@ export default function EditProfile() {
     useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
+  const revalidator = useRevalidator();
   const submittingIntent = navigation.formData?.get("intent");
   const isProfileSubmitting = navigation.state === "submitting" && submittingIntent === "profile";
   const isAccountSubmitting = navigation.state === "submitting" && submittingIntent === "account";
   const isDiscordSubmitting =
     navigation.state === "submitting" &&
-    (submittingIntent === "discord-connect" || submittingIntent === "discord-unlink");
+    (submittingIntent === "notification-connect" || submittingIntent === "discord-unlink");
   const profileActionData = actionData?.intent === "profile" ? actionData : undefined;
   const accountActionData = actionData?.intent === "account" ? actionData : undefined;
-  const discordActionData =
-    actionData?.intent === "discord-connect" || actionData?.intent === "discord-unlink" ? actionData : undefined;
+  const discordActionData = actionData?.intent === "discord-unlink" ? actionData : undefined;
   const [isProfileDirty, setIsProfileDirty] = useState(false);
   const [isAccountDirty, setIsAccountDirty] = useState(false);
   const [isProfileSaved, setIsProfileSaved] = useState(false);
@@ -447,6 +345,14 @@ export default function EditProfile() {
     const timeoutId = window.setTimeout(() => setIsAccountSaved(false), 1800);
     return () => window.clearTimeout(timeoutId);
   }, [accountActionData]);
+
+  useEffect(() => {
+    if (discordState.connection?.status !== "pending") return;
+    const intervalId = window.setInterval(() => {
+      if (revalidator.state === "idle") revalidator.revalidate();
+    }, 3000);
+    return () => window.clearInterval(intervalId);
+  }, [discordState.connection?.status, revalidator]);
 
   return (
     <div className="space-y-8">
@@ -509,9 +415,42 @@ export default function EditProfile() {
         </Form>
       </SectionCard>
 
-      <DiscordConnectionSection
+      <div id="connected-services" className="scroll-mt-4">
+        <SectionCard title="연결된 서비스" description="로그인 수단으로 사용할 수 있어요">
+          <div className="space-y-3">
+            {authMessage ? (
+              <p
+                className={cn(
+                  "rounded-md px-3 py-2 text-sm",
+                  authMessage.tone === "success"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "bg-red-500/10 text-red-700 dark:text-red-300",
+                )}
+              >
+                {authMessage.text}
+              </p>
+            ) : null}
+            {discordMessage?.area === "identity" ? (
+              <p
+                className={cn(
+                  "rounded-md px-3 py-2 text-sm",
+                  discordMessage.tone === "success"
+                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                    : "bg-red-500/10 text-red-700 dark:text-red-300",
+                )}
+              >
+                {discordMessage.text}
+              </p>
+            ) : null}
+            <AuthIdentityLinkForm provider="google" label="Google" Icon={FcGoogle} linked={authIdentities.google} />
+            <AuthIdentityLinkForm provider="github" label="GitHub" Icon={FaGithub} linked={authIdentities.github} />
+            <AuthIdentityLinkForm provider="discord" label="Discord" Icon={FaDiscord} linked={authIdentities.discord} />
+          </div>
+        </SectionCard>
+      </div>
+
+      <DiscordNotificationConnection
         connection={discordState.connection}
-        identityLinked={authIdentities.discord}
         notice={discordMessage}
         error={discordActionData?.error?.form}
         isSubmitting={isDiscordSubmitting}
@@ -519,30 +458,19 @@ export default function EditProfile() {
 
       <SectionCard title="인증 및 보안">
         <div className="space-y-3">
-          {authMessage ? (
-            <p
-              className={cn(
-                "rounded-md px-3 py-2 text-sm",
-                authMessage.tone === "success"
-                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                  : "bg-red-500/10 text-red-700 dark:text-red-300",
-              )}
-            >
-              {authMessage.text}
-            </p>
-          ) : null}
-          <AuthIdentityLinkForm provider="google" label="Google" linked={authIdentities.google} />
-          <AuthIdentityLinkForm provider="github" label="GitHub" linked={authIdentities.github} />
           <SettingsLink
             to="/edit/passkey"
             title="Passkey 관리"
             description={`${passkeyCount}개 등록됨`}
             Icon={KeyIcon}
           />
-          <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} tone="destructive" />
-          <SettingsLink to="/edit/leave" title="회원 탈퇴" Icon={UserMinusIcon} tone="destructive" />
+          <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} />
         </div>
       </SectionCard>
+
+      <Link to="/edit/leave" className="block w-fit text-sm text-muted-foreground hover:text-foreground">
+        회원 탈퇴
+      </Link>
     </div>
   );
 }

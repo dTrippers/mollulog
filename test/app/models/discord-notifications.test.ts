@@ -131,15 +131,12 @@ describe("Discord notification settings boundary", () => {
     expect(statements.some((statement) => statement.includes("discord_recruitment_schedules"))).toBe(false);
   });
 
-  it("requires the matching Discord login identity before creating a notification claim", async () => {
+  it("creates the Discord login identity and pending claim in one ownership transaction", async () => {
     const statements: string[] = [];
     const client = {
       async query(text: string) {
         const normalized = text.replace(/\s+/g, " ").trim();
         statements.push(normalized);
-        if (normalized.startsWith("select sensei_id, provider_user_id")) {
-          return { rows: [{ sensei_id: 7, provider_user_id: "1234567890" }], rowCount: 1 };
-        }
         if (normalized.startsWith("select uid from discord_notification_subscriptions")) {
           return { rows: [], rowCount: 0 };
         }
@@ -150,45 +147,81 @@ describe("Discord notification settings boundary", () => {
 
     await expect(
       upsertPendingDiscordConnection(env, 7, "1234567890", { now: () => new Date("2026-09-01T00:00:00.000Z") }),
-    ).resolves.toMatchObject({ status: "pending", discordUserId: "1234567890" });
+    ).resolves.toEqual({
+      status: "pending",
+      connectionUid: expect.any(String),
+      connectionVersion: Date.parse("2026-09-01T00:00:00.000Z"),
+    });
+    const identityInsertIndex = statements.findIndex((statement) =>
+      statement.startsWith("insert into auth_identities"),
+    );
+    const subscriptionInsertIndex = statements.findIndex((statement) =>
+      statement.startsWith("insert into discord_notification_subscriptions"),
+    );
+    expect(identityInsertIndex).toBeGreaterThan(-1);
+    expect(subscriptionInsertIndex).toBeGreaterThan(identityInsertIndex);
     expect(statements.some((statement) => statement.startsWith("insert into discord_notification_subscriptions"))).toBe(
       true,
     );
   });
 
-  it("does not create a notification claim for a notification-only account", async () => {
+  it("rejects a Discord identity owned by another user before either write", async () => {
     const statements: string[] = [];
     const client = {
       async query(text: string) {
         const normalized = text.replace(/\s+/g, " ").trim();
         statements.push(normalized);
-        if (normalized.startsWith("select sensei_id, provider_user_id")) return { rows: [], rowCount: 0 };
+        if (normalized.startsWith("select sensei_id, provider_user_id")) {
+          return { rows: [{ sensei_id: 8, provider_user_id: "1234567890" }], rowCount: 1 };
+        }
         if (normalized.startsWith("select user_id, discord_user_id")) {
-          return { rows: [{ user_id: 7, discord_user_id: "1234567890", status: "active" }], rowCount: 1 };
+          return { rows: [], rowCount: 0 };
         }
         return { rows: [], rowCount: 0 };
       },
     };
     const env = { __pgClient: client } as unknown as Env;
     await expect(upsertPendingDiscordConnection(env, 7, "1234567890")).rejects.toThrow(
-      "Discord 로그인 계정을 먼저 연결해주세요.",
+      DiscordIdentityAlreadyLinkedError,
     );
+    expect(statements.some((statement) => statement.startsWith("insert into auth_identities"))).toBe(false);
     expect(statements.some((statement) => statement.startsWith("insert into discord_notification_subscriptions"))).toBe(
       false,
     );
     expect(statements.at(-1)).toBe("ROLLBACK");
   });
 
+  it("rolls back the identity when pending subscription creation fails", async () => {
+    const statements: string[] = [];
+    const client = {
+      async query(text: string) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        statements.push(normalized);
+        if (normalized.startsWith("select uid from discord_notification_subscriptions")) {
+          return { rows: [], rowCount: 0 };
+        }
+        if (normalized.startsWith("insert into discord_notification_subscriptions")) {
+          throw new Error("subscription insert failed");
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+    const env = { __pgClient: client } as unknown as Env;
+
+    await expect(upsertPendingDiscordConnection(env, 7, "1234567890")).rejects.toThrow("subscription insert failed");
+    expect(statements.some((statement) => statement.startsWith("insert into auth_identities"))).toBe(true);
+    expect(statements.at(-1)).toBe("ROLLBACK");
+    expect(statements.includes("COMMIT")).toBe(false);
+  });
+
   it("presents an unsupported legacy connection status as unlinked without persisting it", async () => {
     const client = {
       async query(text: string) {
         const normalized = text.replace(/\s+/g, " ").trim();
-        if (normalized.startsWith("select uid, discord_user_id")) {
+        if (normalized.startsWith("select status")) {
           return {
             rows: [
               {
-                uid: "connection-1",
-                discord_user_id: "1234567890",
                 status: "unlinked",
               },
             ],
@@ -203,5 +236,36 @@ describe("Discord notification settings boundary", () => {
       now: () => new Date("2026-09-01T00:00:00.000Z"),
     });
     expect(connection).toBeNull();
+  });
+
+  it("does not expose the Discord user ID in notification state", async () => {
+    const client = {
+      async query(text: string) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        if (normalized.startsWith("select status")) {
+          return {
+            rows: [
+              {
+                uid: "connection-1",
+                discord_user_id: "1234567890",
+                status: "active",
+                event_start_enabled: false,
+                event_end_enabled: false,
+                reward_exchange_end_enabled: false,
+                recruitment_start_enabled: false,
+                timing_mode: "day-before",
+                kst_hour: 11,
+                effective_at: new Date("2026-09-01T00:00:00.000Z"),
+              },
+            ],
+            rowCount: 1,
+          };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+    const env = { __pgClient: client } as unknown as Env;
+    const { connection } = await getDiscordNotificationState(env, 7);
+    expect(connection).toEqual({ status: "active" });
   });
 });

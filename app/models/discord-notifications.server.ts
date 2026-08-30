@@ -16,12 +16,13 @@ import { type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.s
 export { DiscordNotificationValidationError };
 
 export type DiscordConnection = {
-  uid: string;
-  discordUserId: string;
   status: DiscordConnectionStatus;
-  failureReason: string | null;
-  verifiedAt: string | null;
-  lastVerificationAt: string | null;
+};
+
+export type PendingDiscordConnection = {
+  status: "pending";
+  connectionUid: string;
+  connectionVersion: number;
 };
 
 export type DiscordNotificationSettings = DiscordNotificationSettingsInput & {
@@ -55,17 +56,10 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 function mapConnection(row: QueryRow | undefined): DiscordConnection | null {
-  if (!row || row.uid === null || row.uid === undefined) return null;
+  if (!row || row.status === null || row.status === undefined) return null;
   const status = String(row.status);
   if (status !== "pending" && status !== "active" && status !== "failed") return null;
-  return {
-    uid: String(row.uid),
-    discordUserId: String(row.discord_user_id),
-    status: status as DiscordConnectionStatus,
-    failureReason: row.failure_reason ? String(row.failure_reason) : null,
-    verifiedAt: asDate(row.verified_at),
-    lastVerificationAt: asDate(row.last_verification_at),
-  };
+  return { status: status as DiscordConnectionStatus };
 }
 
 function mapSettings(row: QueryRow | undefined, now: Date): DiscordNotificationSettings {
@@ -122,7 +116,7 @@ export async function getDiscordNotificationState(
     env,
     async (client) => {
       const connectionResult = await client.query(
-        `select uid, discord_user_id, status, failure_reason, verified_at, last_verification_at,
+        `select status,
                 event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
                 recruitment_start_enabled, timing_mode, kst_hour, effective_at
            from discord_notification_subscriptions where user_id = $1 limit 1`,
@@ -148,7 +142,7 @@ export class DiscordIdentityAlreadyLinkedError extends Error {
 
 export class DiscordSettingsUnavailableError extends Error {
   constructor() {
-    super("Discord 연동을 완료한 뒤 알림 설정을 저장해주세요.");
+    super("Discord 연결을 완료한 뒤 알림 설정을 저장해주세요.");
     this.name = "DiscordSettingsUnavailableError";
   }
 }
@@ -232,12 +226,17 @@ export async function unlinkDiscordConnection(
   );
 }
 
+/**
+ * Creates the Discord login identity and pending notification subscription
+ * together, or resets the existing subscription in the same ownership
+ * transaction. The Discord ID remains server-side throughout this operation.
+ */
 export async function upsertPendingDiscordConnection(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
   discordUserId: string,
   options: DiscordNotificationRepositoryOptions = {},
-): Promise<DiscordConnection> {
+): Promise<PendingDiscordConnection> {
   const normalizedDiscordUserId = discordUserId.trim();
   if (!/^\d{2,32}$/.test(normalizedDiscordUserId)) {
     throw new DiscordNotificationValidationError("Discord 사용자 정보를 확인할 수 없어요.");
@@ -248,21 +247,18 @@ export async function upsertPendingDiscordConnection(
       env,
       "upsert_pending_discord_connection",
       { userId, discordUserId: normalizedDiscordUserId },
-      async (_db, client, ownership) => {
-        if (
-          !ownership.identities.some(
-            (identity) => identity.userId === userId && identity.discordUserId === normalizedDiscordUserId,
-          )
-        ) {
-          throw new DiscordNotificationValidationError("Discord 로그인 계정을 먼저 연결해주세요.");
-        }
+      async (_db, client) => {
         const existingUser = await client.query(
           `select uid from discord_notification_subscriptions where user_id = $1 for update`,
-          [
-            userId,
-          ],
+          [userId],
         );
         const uid = String(existingUser.rows[0]?.uid ?? nanoid(16));
+        await client.query(
+          `insert into auth_identities (sensei_id, provider, provider_user_id)
+           values ($1, 'discord', $2)
+           on conflict (provider, provider_user_id) do nothing`,
+          [userId, normalizedDiscordUserId],
+        );
         await client.query(
           `insert into discord_notification_subscriptions
            (uid, user_id, discord_user_id, status, failure_reason, verified_at, last_verification_at,
@@ -275,12 +271,9 @@ export async function upsertPendingDiscordConnection(
           [uid, userId, normalizedDiscordUserId, now],
         );
         return {
-          uid,
-          discordUserId: normalizedDiscordUserId,
           status: "pending" as const,
-          failureReason: null,
-          verifiedAt: null,
-          lastVerificationAt: null,
+          connectionUid: uid,
+          connectionVersion: now.getTime(),
         };
       },
       options,

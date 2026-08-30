@@ -1,6 +1,6 @@
 import type { DiscordNotificationTimingMode, DiscordNotificationTrigger } from "~/db/postgres/schema";
 
-export const DISCORD_NOTIFICATION_COMPLETION_MESSAGE = "몰루로그 Discord 알림 연동이 완료되었습니다.";
+export const DISCORD_NOTIFICATION_COMPLETION_MESSAGE = "몰루로그 Discord 알림 연결이 완료되었습니다.";
 
 export const DISCORD_NOTIFICATION_DEFAULTS = {
   eventStartEnabled: false,
