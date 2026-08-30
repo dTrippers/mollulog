@@ -34,6 +34,7 @@ import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
 import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
 import ScannerProgressCard from "../scanner._components/ScannerProgressCard";
 import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
+import ScannerUploadTargetGuide from "../scanner._components/ScannerUploadTargetGuide";
 import {
   formatScannerBytes,
   requestScannerJson,
@@ -703,6 +704,7 @@ export default function StudentScanner() {
       selectionDisabled={phase !== "idle" || (imageUploadQuota?.remaining === 0 && uploadQuota?.remaining === 0)}
       onFiles={selectFiles}
       icon={<PhotoIcon className="size-6" aria-hidden="true" />}
+      targetGuide={selectedFiles.length === 0 ? <ScannerUploadTargetGuide target="student" /> : undefined}
       helpText="1회당 최대 이미지 30장 또는 영상 1개"
       dropDetail={
         selectedFiles.length > 0 ? (

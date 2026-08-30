@@ -12,6 +12,7 @@ type ScannerUploadSectionProps = {
   selectionDisabled: boolean;
   onFiles: (files: File[]) => void;
   icon: ReactNode;
+  targetGuide?: ReactNode;
   helpText: string;
   dropDetail?: ReactNode;
   children?: ReactNode;
@@ -33,6 +34,7 @@ export default function ScannerUploadSection({
   selectionDisabled,
   onFiles,
   icon,
+  targetGuide,
   helpText,
   dropDetail,
   children,
@@ -111,10 +113,15 @@ export default function ScannerUploadSection({
               selectionDisabled && "cursor-not-allowed opacity-60",
             )}
           >
-            <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-              {icon}
+            {targetGuide}
+            {targetGuide ? null : (
+              <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                {icon}
+              </span>
+            )}
+            <span className={cn(targetGuide ? "mt-4" : "mt-3", "font-medium text-foreground")}>
+              파일을 선택하거나 이 곳에 끌어다 놓아주세요
             </span>
-            <span className="mt-3 font-medium text-foreground">파일을 선택하거나 이 곳에 끌어다 놓아주세요</span>
             <span id={helpId} className="mt-1 text-sm text-muted-foreground">
               {helpText}
             </span>

@@ -14,6 +14,7 @@ import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
 import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
 import ScannerProgressCard from "../scanner._components/ScannerProgressCard";
 import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
+import ScannerUploadTargetGuide from "../scanner._components/ScannerUploadTargetGuide";
 import {
   formatScannerBytes,
   requestScannerJson,
@@ -392,6 +393,7 @@ export default function ResourceScanner() {
       selectionDisabled={isFileSelectionDisabled}
       onFiles={addFiles}
       icon={<PhotoIcon className="size-6" aria-hidden="true" />}
+      targetGuide={files.length === 0 ? <ScannerUploadTargetGuide target="item" /> : undefined}
       helpText="1회당 최대 이미지 30장"
       dropDetail={
         files.length > 0 ? (
