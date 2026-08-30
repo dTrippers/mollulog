@@ -104,7 +104,7 @@ export default function SignInBottomSheet({ initialError = null }: SignInBottomS
       <div className="fixed bottom-0 left-1/2 z-layer-modal mx-auto w-full -translate-x-1/2 rounded-t-lg bg-popover p-4 text-popover-foreground shadow-t-xl md:max-w-3xl md:p-8">
         <h2 className="mt-4 mb-4 text-2xl font-bold md:mb-8 md:text-3xl">로그인</h2>
         {displayError && <p className="my-4 text-sm text-destructive md:text-base">{displayError}</p>}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Button
             className="py-2"
             type="submit"
