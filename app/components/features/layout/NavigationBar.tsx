@@ -318,16 +318,16 @@ export default function NavigationBar({
       >
         <Link
           to="/"
-          className="flex h-16 items-center px-5 transition-opacity duration-150 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 motion-reduce:transition-none"
+          className="flex h-16 items-center px-4 transition-opacity duration-150 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 motion-reduce:transition-none"
           aria-label="몰루로그 홈으로 이동"
         >
           <img
-            src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
+            src={darkMode ? "/mollulog-full-dark.png" : "/mollulog-full-light.png"}
             alt="몰루로그 로고"
-            className="mr-2 h-8 xl:h-9 aspect-4/3 object-cover"
+            className="h-10 object-cover"
           />
-          <h1 className="font-ingame text-xl text-foreground xl:text-2xl">
-            <span className="font-semibold">몰루</span>로그
+          <h1 className="pt-2 font-ingame font-light text-sm text-foreground">
+            몰루로그
           </h1>
         </Link>
 
@@ -596,13 +596,10 @@ function MobileBrandHeader({
           className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         >
           <img
-            src={darkMode ? "/logo-dark.png" : "/logo-light.png"}
+            src={darkMode ? "/mollulog-full-dark.png" : "/mollulog-full-light.png"}
             alt="몰루로그 로고"
-            className="mr-2 h-7 aspect-4/3 object-cover"
+            className="mr-1 h-7"
           />
-          <span className="text-lg font-ingame">
-            <span className="font-bold">몰루</span>로그
-          </span>
         </Link>
 
         <div className="-mr-1 flex items-center gap-1">

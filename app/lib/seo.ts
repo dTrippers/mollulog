@@ -2,6 +2,8 @@ import type { MetaDescriptor } from "react-router";
 
 const SITE_URL = "https://mollulog.net";
 
+export const DEFAULT_OPEN_GRAPH_IMAGE_URL = `${SITE_URL}/mollulog-og.png`;
+
 /**
  * Returns a self-referencing canonical `<link>` meta descriptor for the given pathname.
  *
