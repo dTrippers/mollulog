@@ -1,3 +1,4 @@
+import { ExclamationTriangleIcon as ExclamationTriangleSolidIcon } from "@heroicons/react/20/solid";
 import {
   ArrowPathIcon,
   ArrowRightIcon,
@@ -16,6 +17,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
+import { FaXTwitter } from "react-icons/fa6";
 import { data, type LoaderFunctionArgs, type MetaFunction, useLoaderData } from "react-router";
 import {
   getSecurityCampaignIdentity,
@@ -148,12 +150,12 @@ const QUIZ_SCENARIOS = [
         text: "당첨금 수령을 위해 제가 관리해 드리던 계좌의 비밀번호와 OTP를 보내주시겠어요?",
       },
     ] satisfies QuizMessage[],
-    question: "유우카에게 무엇이라고 답변할까요?",
+    question: "뭐라고 답변할까요?",
     choices: [
       { id: "send-code", label: "청휘석은 못 참지! (당장 알려준다)", correct: false },
-      { id: "check-notice", label: "공식 공지부터 확인할게.", correct: true },
+      { id: "check-notice", label: "먼저 공지를 확인해볼게.", correct: true },
     ],
-    explanation: "비밀번호와 OTP는 누구에게도 알려주면 안 돼요. 상대가 믿을 만해 보여도 마찬가지예요.",
+    explanation: "비밀번호, OTP 등은 메신저를 통해 누구에게도 알려주면 안 돼요. 상대방이 가족 등 믿을만한 사람을 사칭하고 있을 수 있어요.",
   },
   {
     category: "파일 다운로드",
@@ -179,10 +181,10 @@ const QUIZ_SCENARIOS = [
       { kind: "text", text: "선생님! 이번에 오디세이아 학원 이벤트가 공개된대요! 니하하!" },
       { kind: "link", text: "https://m\u043Ellulog.net/futures" },
     ] satisfies QuizMessage[],
-    question: "이 링크를 바로 열어도 될까요?",
+    question: "이 링크를 열어볼까요?",
     choices: [
-      { id: "open-link", label: "열어본다", correct: false },
-      { id: "do-not-open", label: "열지 않는다", correct: true },
+      { id: "open-link", label: "(주소에 문제가 없어보이니 열어본다)", correct: false },
+      { id: "do-not-open", label: "코유키 너 또 설마...? (열지 않는다)", correct: true },
     ],
     explanation:
       "주소에서 mollulog의 첫 번째 o는 알파벳이 아닌 키릴 문자 о였어요. 비슷하게 생긴 글자를 이용해 피싱 사이트로 유도하는 경우가 있으니 조심해야 해요.",
@@ -190,18 +192,17 @@ const QUIZ_SCENARIOS = [
 ] as const;
 
 export const meta: MetaFunction = ({ location }) => {
-  const openGraphTitle = "이 편지는 트리니티에서 최초로 시작되어...";
-  const description = "2025년 8월 31일 블루 아카이브 글로벌 서버 사건 요약 및 보안 점검";
-  const previewDescription = "선생님께 도착한 메시지가 있어요.";
+  const campaignTitle = '"코유키의 난"으로부터 1년';
+  const description = "1년 전 오늘 있었던 사건을 돌아보고, 간단한 보안 수칙을 살펴봐요.";
 
   return [
-    { title: "2025년 8월 31일 | 몰루로그" },
+    { title: `${campaignTitle} | 몰루로그` },
     { name: "description", content: description },
-    { property: "og:title", content: openGraphTitle },
-    { property: "og:description", content: previewDescription },
+    { property: "og:title", content: campaignTitle },
+    { property: "og:description", content: description },
     { name: "twitter:card", content: "summary" },
-    { name: "twitter:title", content: openGraphTitle },
-    { name: "twitter:description", content: previewDescription },
+    { name: "twitter:title", content: campaignTitle },
+    { name: "twitter:description", content: description },
     canonicalLink(location.pathname),
   ];
 };
@@ -363,44 +364,40 @@ export default function SecurityCampaign() {
         <div className="absolute -top-24 right-16 size-72 rounded-full bg-pink-500/10 blur-3xl" />
         <div className="absolute bottom-0 left-20 size-64 rounded-full bg-primary/10 blur-3xl" />
 
-        <div className="relative grid min-h-72 grid-cols-[minmax(0,1.15fr)_minmax(140px,0.85fr)] items-center sm:grid-cols-[minmax(0,1.25fr)_minmax(200px,0.75fr)] md:min-h-96 md:grid-cols-[minmax(0,1.3fr)_minmax(240px,0.7fr)]">
-          <div className="relative z-10 p-5 pr-2 sm:p-8 sm:pr-4 md:p-10 lg:p-14">
+        <div className="relative flex min-h-64 items-center sm:grid sm:min-h-72 sm:grid-cols-[minmax(0,1.25fr)_minmax(200px,0.75fr)] md:min-h-96 md:grid-cols-[minmax(0,1.3fr)_minmax(240px,0.7fr)]">
+          <div className="absolute inset-0 sm:hidden" aria-hidden="true">
+            <img
+              src={KOYUKI_IMAGE_URL}
+              alt=""
+              className="absolute right-0 -bottom-[30%] h-[130%] w-auto max-w-none opacity-45 drop-shadow-2xl"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-card via-card/85 to-card/25" />
+          </div>
+
+          <div className="relative z-10 w-full p-5 sm:p-8 sm:pr-4 md:p-10 lg:p-14">
             <p className="font-mono text-sm tracking-widest text-primary">2025.08.31</p>
-            <h1 className="mt-3 break-keep text-2xl leading-tight font-bold tracking-tight sm:mt-5 sm:text-3xl md:whitespace-nowrap md:text-[clamp(1.15rem,5.5vw,2.75rem)]">
+            <h1 className="mt-3 whitespace-nowrap text-[clamp(1.05rem,5.7vw,1.5rem)] leading-tight font-bold tracking-tight sm:mt-5 sm:text-3xl md:text-[clamp(1.15rem,5.5vw,2.75rem)]">
               &quot;코유키의 난&quot;으로부터 1년
             </h1>
             <p className="mt-3 break-keep text-sm leading-5 font-medium text-muted-foreground sm:mt-4 sm:text-base sm:leading-6 md:mt-5">
-              1년 전 오늘, 블루 아카이브에는 자그마한(?) 소동이 있었어요
+              <span className="mb-3 flex items-center gap-1.5 text-amber-400">
+                <ExclamationTriangleSolidIcon className="size-4 shrink-0" aria-hidden="true" />
+                <span>방금 수상한 링크를 누르지 않으셨나요?</span>
+              </span>
+              <span className="block">1년 전 오늘, 블루 아카이브에는 자그마한(?) 소동이 있었어요.</span>
+              <span className="block">당시의 사건을 돌아보고, 간단한 보안 수칙도 함께 살펴봐요.</span>
             </p>
           </div>
-          <div className="relative h-full self-stretch">
+          <div className="relative hidden h-full self-stretch sm:block">
             <img
               src={KOYUKI_IMAGE_URL}
               alt="코유키"
-              className="absolute top-4 -right-[20%] h-[130%] w-[130%] max-w-none object-contain object-top drop-shadow-2xl md:inset-auto md:right-0 md:bottom-0 md:h-full md:w-auto md:max-w-none"
+              className="absolute right-0 bottom-0 h-full w-auto max-w-none object-contain object-bottom drop-shadow-2xl"
               loading="eager"
             />
           </div>
         </div>
       </header>
-
-      {loaderData.showLinkNotice ? (
-        <div className="relative overflow-hidden rounded-lg bg-card px-5 py-5 shadow-lg shadow-black/5 md:px-7 md:py-6 dark:shadow-md dark:shadow-black/20">
-          <div
-            className="pointer-events-none absolute -top-20 right-8 size-48 rounded-full bg-pink-500/10 blur-3xl"
-            aria-hidden="true"
-          />
-          <div className="relative max-w-4xl">
-            <h2 className="text-xl font-bold tracking-tight md:text-2xl">방금 클릭한 링크 주소를 확인해 보셨나요?</h2>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground md:text-base">
-              <span className="block">낯선 링크를 클릭하면 보안 문제가 생길 수 있어요.</span>
-              <span className="mt-1 block">
-                1년 전 블루 아카이브에서 있었던 사건을 알아보고, 간단한 보안 수칙을 살펴봐요.
-              </span>
-            </p>
-          </div>
-        </div>
-      ) : null}
 
       <section aria-labelledby="incident-summary-title">
         <SectionHeading
@@ -445,7 +442,7 @@ export default function SecurityCampaign() {
                 </figcaption>
               </figure>
 
-              <fieldset className="mt-3 grid grid-cols-2 gap-2">
+              <fieldset className="relative mt-3 grid grid-cols-2 gap-2">
                 <legend className="sr-only">사건 기록 영상 선택</legend>
                 {INCIDENT_VIDEOS.map((video, index) => {
                   const selected = video.id === selectedVideo.id;
@@ -507,7 +504,7 @@ export default function SecurityCampaign() {
           id="security-check-title"
         />
 
-        <div className="mt-5 overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
+        <div className="mt-5 overflow-hidden rounded-lg border border-border bg-muted/25 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
           {quizComplete ? (
             <QuizResult score={quizResults.filter(Boolean).length} onReset={resetQuiz} />
           ) : (
@@ -530,7 +527,6 @@ export default function SecurityCampaign() {
               <div className="p-5 md:p-8">
                 <MomoTalk
                   messages={currentScenario.messages}
-                  category={currentScenario.category}
                   speaker={currentScenario.speaker}
                   avatarUrl={currentScenario.avatarUrl}
                   question={currentScenario.question}
@@ -562,7 +558,7 @@ export default function SecurityCampaign() {
                         <p className="text-sm font-semibold">
                           {selectedChoice.correct ? "올바른 선택이에요" : "잘못된 선택이에요"}
                         </p>
-                        <p className="mt-1 text-sm leading-5 text-muted-foreground">{currentScenario.explanation}</p>
+                        <p className="mt-1 text-sm leading-5">{currentScenario.explanation}</p>
                       </div>
                     </div>
                     <button
@@ -584,76 +580,117 @@ export default function SecurityCampaign() {
       <section aria-labelledby="share-section-title">
         <SectionHeading
           number="03"
-          title="페이지 공유"
-          description="주변에 이 페이지를 공유해 보세요."
+          title="페이지 공유하기"
+          description="미리보기에는 캠페인 이름 대신 아래 문구가 표시돼요. 몇 명의 선생님이 링크를 열어볼까요?"
           id="share-section-title"
         />
 
-        <div className="mt-5 grid gap-6 rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center md:p-6">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">내 링크로 들어온 방문</p>
-            {shareInfo.countError ? (
-              <p className="mt-2 font-medium text-red-600 dark:text-red-300">방문 수를 불러오지 못했어요.</p>
-            ) : (
-              <p className="mt-1 text-4xl font-bold tabular-nums">
-                {shareInfo.visitCount.toLocaleString()}
-                {shareInfo.countCapped ? "+" : ""}
-                <span className="ml-1 text-base font-medium text-muted-foreground">회</span>
-              </p>
-            )}
-            <p className="mt-2 text-xs text-muted-foreground">반영까지 시간이 걸릴 수 있어요.</p>
+        <div className="mt-5 overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
+          <div className="p-5 md:p-6">
+            <div className="mt-4">
+              <p className="text-xs font-medium text-muted-foreground">공유 링크 미리보기</p>
+              <div className="mt-2 rounded-md border border-border bg-card p-4">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="grid size-5 place-items-center rounded-sm bg-pink-500 text-white">
+                    <LinkIcon className="size-3" aria-hidden="true" />
+                  </span>
+                  mollulog.net
+                </div>
+                <p className="mt-3 text-sm font-semibold text-foreground">이 편지는 트리니티에서 시작되어...</p>
+                <p className="mt-1 text-xs text-muted-foreground">선생님께 도착한 링크가 있어요.</p>
+              </div>
+            </div>
+
+            <div className="mt-5">
+              {shareUrl ? (
+                <label
+                  htmlFor="security-campaign-share-url"
+                  className="mb-1.5 block text-xs font-medium text-muted-foreground"
+                >
+                  공유 링크
+                </label>
+              ) : null}
+
+              <div className={cn("flex flex-col gap-2 sm:flex-row sm:items-center", !shareUrl && "sm:justify-end")}>
+                {shareUrl ? (
+                  <input
+                    id="security-campaign-share-url"
+                    type="text"
+                    value={shareUrl}
+                    readOnly
+                    onFocus={(event) => event.currentTarget.select()}
+                    className="h-11 min-w-0 flex-1 rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                  />
+                ) : null}
+                <button
+                  type="button"
+                  onClick={copyPageUrl}
+                  disabled={shareStatus === "loading"}
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  {shareStatus === "copied" ? (
+                    <CheckCircleIcon className="size-4" aria-hidden="true" />
+                  ) : (
+                    <ClipboardDocumentIcon className="size-4" aria-hidden="true" />
+                  )}
+                  {shareStatus === "loading" ? "링크 만드는 중" : shareStatus === "copied" ? "복사했어요" : "링크 복사"}
+                </button>
+              </div>
+              {shareStatus === "error" ? (
+                <p className="mt-2 text-xs text-red-600 sm:text-right dark:text-red-300">
+                  자동 복사에 실패했어요. 아래 주소를 직접 복사해 주세요.
+                </p>
+              ) : null}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <div className="flex flex-col gap-3 border-t border-border px-5 py-4 sm:flex-row sm:items-center sm:justify-between md:px-6">
+            <div>
+              {shareInfo.countError ? (
+                <p className="text-sm font-medium text-red-600 dark:text-red-300">방문 수를 불러오지 못했어요.</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  내 링크로 들어온 방문
+                  <strong className="ml-2 text-lg font-bold tabular-nums text-foreground">
+                    {shareInfo.visitCount.toLocaleString()}
+                    {shareInfo.countCapped ? "+" : ""}회
+                  </strong>
+                </p>
+              )}
+              <p className="mt-1 text-xs text-muted-foreground">반영까지 시간이 걸릴 수 있어요.</p>
+            </div>
+
             {shareInfo.token ? (
               <button
                 type="button"
                 onClick={refreshShareCount}
                 disabled={countRefreshing}
-                className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-50"
+                className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border bg-background px-3 text-xs font-medium transition-colors hover:bg-muted disabled:opacity-50"
               >
                 <ArrowPathIcon className={cn("size-4", countRefreshing && "animate-spin")} aria-hidden="true" />
                 새로고침
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={copyPageUrl}
-              disabled={shareStatus === "loading"}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {shareStatus === "copied" ? (
-                <CheckCircleIcon className="size-4" aria-hidden="true" />
-              ) : (
-                <ClipboardDocumentIcon className="size-4" aria-hidden="true" />
-              )}
-              {shareStatus === "loading" ? "링크 만드는 중" : shareStatus === "copied" ? "복사했어요" : "링크 복사"}
-            </button>
-            {shareStatus === "error" ? (
-              <p className="w-full text-xs text-red-600 sm:text-right dark:text-red-300">
-                자동 복사에 실패했어요. 아래 주소를 직접 복사해 주세요.
-              </p>
-            ) : null}
           </div>
+        </div>
 
-          {shareUrl ? (
-            <div className="sm:col-span-2">
-              <label
-                htmlFor="security-campaign-share-url"
-                className="mb-1.5 block text-xs font-medium text-muted-foreground"
-              >
-                공유 링크
-              </label>
-              <input
-                id="security-campaign-share-url"
-                type="text"
-                value={shareUrl}
-                readOnly
-                onFocus={(event) => event.currentTarget.select()}
-                className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
-              />
-            </div>
-          ) : null}
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs leading-5 text-muted-foreground">
+            이 페이지는 과거 사건을 돌아보고 일반적인 보안 수칙을 알리기 위한 비공식 캠페인입니다.
+            <br /> 특정인을 비방하거나 공격을 유도할 목적이 없으며, 퀴즈 속 상황은 설명을 위해 구성한
+            가상의 사례입니다.
+          </p>
+
+          <a
+            href="https://x.com/mollulog"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
+          >
+            <FaXTwitter className="size-4" aria-hidden="true" />
+            트위터(X)에서 몰루로그 최신 정보 확인하기
+            <ArrowTopRightOnSquareIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+          </a>
         </div>
       </section>
     </div>
@@ -662,7 +699,6 @@ export default function SecurityCampaign() {
 
 function MomoTalk({
   messages,
-  category,
   speaker,
   avatarUrl,
   question,
@@ -671,7 +707,6 @@ function MomoTalk({
   onSelect,
 }: {
   messages: readonly QuizMessage[];
-  category: string;
   speaker: string;
   avatarUrl: string;
   question: string;
@@ -738,7 +773,6 @@ function MomoTalk({
         <div className="flex flex-col bg-white">
           <div className="flex h-12 items-center border-b border-slate-100 px-4">
             <span className="font-bold">{speaker}</span>
-            <span className="ml-2 text-xs text-slate-400">{category}</span>
           </div>
           <div className="flex flex-1 flex-col p-4 md:p-5">
             <div className="space-y-3">
@@ -781,7 +815,7 @@ function MomoTalk({
               })}
             </div>
 
-            <fieldset className="mt-8 rounded-tl-lg bg-sky-50 p-2 sm:ml-auto sm:w-[88%]">
+            <fieldset className="relative mt-8 rounded-tl-lg bg-sky-50 p-2 sm:ml-auto sm:w-[88%]">
               <legend className="sr-only">{question}</legend>
               <p className="border-l-2 border-sky-500 px-2 py-1 text-xs font-bold text-slate-600">{question}</p>
               <div className="mt-2 space-y-2">
