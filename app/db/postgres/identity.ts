@@ -40,7 +40,8 @@ export class DiscordOwnershipConflictError extends Error {
 
 type DiscordOwnershipRow = {
   user_id: number;
-  discord_user_id: string;
+  channel_type: string;
+  recipient_key: string;
   status?: string;
 };
 
@@ -95,9 +96,10 @@ async function readDiscordOwnership(client: Client, claim: DiscordOwnershipClaim
       identityParams,
     ),
     client.query<DiscordOwnershipRow>(
-      `select user_id, discord_user_id, status
-         from discord_notification_subscriptions
-        where (discord_user_id = $1${connectionUserPredicate})
+      `select user_id, channel_type, recipient_key, status
+         from notification_channels
+        where channel_type = 'discord'
+          and (recipient_key = $1${connectionUserPredicate})
         for update`,
       connectionParams,
     ),
@@ -110,7 +112,7 @@ async function readDiscordOwnership(client: Client, claim: DiscordOwnershipClaim
     })),
     connections: connectionResult.rows.map((row) => ({
       userId: Number(row.user_id),
-      discordUserId: String(row.discord_user_id),
+      discordUserId: String(row.recipient_key),
       status: String(row.status ?? ""),
     })),
   };

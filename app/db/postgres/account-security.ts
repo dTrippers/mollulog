@@ -8,10 +8,11 @@ import {
 import {
   pgAuthIdentitiesTable,
   pgConnectApiKeysTable,
-  pgDiscordNotificationJobsTable,
-  pgDiscordNotificationSubscriptionsTable,
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
+  pgNotificationChannelsTable,
+  pgNotificationJobsTable,
+  pgNotificationPreferencesTable,
   pgPasskeysTable,
   pgPendingSenseiRegistrationsTable,
   pgSenseiPrivaciesTable,
@@ -103,7 +104,7 @@ export async function leaveAccount(
       await db.delete(pgAuthIdentitiesTable).where(eq(pgAuthIdentitiesTable.senseiId, sensei.id));
       const cleanupAt = new Date();
       await db
-        .update(pgDiscordNotificationJobsTable)
+        .update(pgNotificationJobsTable)
         .set({
           status: "cancelled",
           lastError: "Discord connection unlinked",
@@ -111,19 +112,12 @@ export async function leaveAccount(
         })
         .where(
           and(
-            eq(pgDiscordNotificationJobsTable.userId, sensei.id),
-            inArray(pgDiscordNotificationJobsTable.status, [
-              "materialized",
-              "publishing",
-              "queued",
-              "sending",
-              "blocked",
-            ]),
+            eq(pgNotificationJobsTable.userId, sensei.id),
+            inArray(pgNotificationJobsTable.status, ["materialized", "publishing", "queued", "sending", "blocked"]),
           ),
         );
-      await db
-        .delete(pgDiscordNotificationSubscriptionsTable)
-        .where(eq(pgDiscordNotificationSubscriptionsTable.userId, sensei.id));
+      await db.delete(pgNotificationChannelsTable).where(eq(pgNotificationChannelsTable.userId, sensei.id));
+      await db.delete(pgNotificationPreferencesTable).where(eq(pgNotificationPreferencesTable.userId, sensei.id));
       await db.delete(pgPasskeysTable).where(eq(pgPasskeysTable.userId, sensei.id));
       await db.delete(pgSenseiPrivaciesTable).where(eq(pgSenseiPrivaciesTable.userId, sensei.id));
       await db

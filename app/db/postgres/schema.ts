@@ -205,43 +205,55 @@ export type DiscordConnectionStatus = "pending" | "active" | "failed";
 export type DiscordNotificationTrigger = "event-start" | "event-end" | "reward-exchange-end" | "recruitment-start";
 export type DiscordNotificationJobTrigger = DiscordNotificationTrigger | "connection-verification";
 
-export const pgDiscordNotificationSubscriptionsTable = pgTable(
-  "discord_notification_subscriptions",
+export type NotificationChannelType = "discord";
+
+export const pgNotificationChannelsTable = pgTable(
+  "notification_channels",
   {
     id: integer().primaryKey().generatedByDefaultAsIdentity(),
     uid: text().notNull(),
     userId: integer("user_id").notNull(),
-    discordUserId: text("discord_user_id").notNull(),
+    channelType: text("channel_type").$type<NotificationChannelType>().notNull(),
+    recipientKey: text("recipient_key").notNull(),
     status: text().$type<DiscordConnectionStatus>().notNull(),
     failureReason: text("failure_reason"),
     verifiedAt: timestamptz("verified_at"),
     lastVerificationAt: timestamptz("last_verification_at"),
-    eventStartEnabled: boolean("event_start_enabled").notNull(),
-    eventEndEnabled: boolean("event_end_enabled").notNull(),
-    rewardExchangeEndEnabled: boolean("reward_exchange_end_enabled").notNull(),
-    recruitmentStartEnabled: boolean("recruitment_start_enabled").notNull(),
-    leadHours: integer("lead_hours").notNull(),
-    eventStartEffectiveAt: timestamptz("event_start_effective_at").notNull(),
-    eventEndEffectiveAt: timestamptz("event_end_effective_at").notNull(),
-    rewardExchangeEndEffectiveAt: timestamptz("reward_exchange_end_effective_at").notNull(),
-    recruitmentStartEffectiveAt: timestamptz("recruitment_start_effective_at").notNull(),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (table) => [
-    uniqueIndex("discord_notification_subscriptions_uid_uidx").on(table.uid),
-    uniqueIndex("discord_notification_subscriptions_user_id_uidx").on(table.userId),
-    uniqueIndex("discord_notification_subscriptions_discord_user_id_uidx").on(table.discordUserId),
-    index("discord_notification_subscriptions_status_idx").on(table.status),
+    uniqueIndex("notification_channels_uid_uidx").on(table.uid),
+    uniqueIndex("notification_channels_user_channel_type_uidx").on(table.userId, table.channelType),
+    uniqueIndex("notification_channels_channel_type_recipient_key_uidx").on(table.channelType, table.recipientKey),
+    index("notification_channels_status_idx").on(table.status),
   ],
 );
 
-export const pgDiscordNotificationJobsTable = pgTable(
-  "discord_notification_jobs",
+export const pgNotificationPreferencesTable = pgTable(
+  "notification_preferences",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    notificationType: text("notification_type").$type<DiscordNotificationTrigger>().notNull(),
+    enabled: boolean().notNull(),
+    leadHours: integer("lead_hours").notNull(),
+    effectiveAt: timestamptz("effective_at").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("notification_preferences_user_notification_type_uidx").on(table.userId, table.notificationType),
+  ],
+);
+
+export const pgNotificationJobsTable = pgTable(
+  "notification_jobs",
   {
     id: integer().primaryKey().generatedByDefaultAsIdentity(),
     uid: text().notNull(),
     userId: integer("user_id").notNull(),
+    channelUid: text("channel_uid").notNull(),
     trigger: text().$type<DiscordNotificationJobTrigger>().notNull(),
     sourceUid: text("source_uid").notNull(),
     sourceAnchor: timestamptz("source_anchor").notNull(),
@@ -261,16 +273,12 @@ export const pgDiscordNotificationJobsTable = pgTable(
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (table) => [
-    uniqueIndex("discord_notification_jobs_uid_uidx").on(table.uid),
-    uniqueIndex("discord_notification_jobs_dedup_uidx").on(
-      table.userId,
-      table.trigger,
-      table.sourceUid,
-      table.generation,
-    ),
-    index("discord_notification_jobs_due_idx").on(table.status, table.plannedSendAt),
-    index("discord_notification_jobs_publish_idx").on(table.status, table.availableAt),
-    index("discord_notification_jobs_user_id_idx").on(table.userId),
+    uniqueIndex("notification_jobs_uid_uidx").on(table.uid),
+    uniqueIndex("notification_jobs_dedup_uidx").on(table.channelUid, table.trigger, table.sourceUid, table.generation),
+    index("notification_jobs_due_idx").on(table.status, table.plannedSendAt),
+    index("notification_jobs_publish_idx").on(table.status, table.availableAt),
+    index("notification_jobs_channel_uid_idx").on(table.channelUid),
+    index("notification_jobs_user_id_idx").on(table.userId),
   ],
 );
 
