@@ -81,7 +81,10 @@ export default function Notifications() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Title text="알림 설정" />
+      <Title
+        text="알림 설정"
+        description="컨텐츠 일정을 잊지 않도록 알림으로 받아보세요"
+      />
       {globalError ? (
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{globalError}</p>
       ) : null}

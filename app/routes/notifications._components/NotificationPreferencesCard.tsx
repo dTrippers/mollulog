@@ -47,7 +47,10 @@ export default function NotificationPreferencesCard({
   };
 
   return (
-    <SectionCard title="받을 알림">
+    <SectionCard
+      title="받을 알림"
+      description="알림은 수 분 정도 지연이 발생할 수 있어요"
+    >
       {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
       <Form method="post" onChange={markDirty}>
         <input type="hidden" name="intent" value="save" />
