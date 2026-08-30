@@ -102,4 +102,14 @@ describe("Discord page responsibility", () => {
     expect(oauthSource).toContain('"integration_type", "1"');
     expect(oauthSource).toContain('intent === "notification-connect"');
   });
+
+  it("binds immediate verification queues in staging and production deploys", () => {
+    const wranglerSource = readFileSync("wrangler.jsonc", "utf8");
+    const packageSource = readFileSync("package.json", "utf8");
+    const productionDeploySource = readFileSync("scripts/production-deploy.sh", "utf8");
+    expect(wranglerSource).toContain('"mollulog-discord-notifications-staging"');
+    expect(wranglerSource).toContain('"mollulog-discord-notifications"');
+    expect(packageSource).toContain("wrangler deploy --config build/server/wrangler.json");
+    expect(productionDeploySource).toContain("--config build/server/wrangler.json");
+  });
 });

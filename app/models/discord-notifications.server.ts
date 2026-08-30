@@ -42,9 +42,19 @@ export type DiscordNotificationRepositoryOptions = {
 
 type QueryRow = Record<string, unknown>;
 
-function asDate(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  return value instanceof Date ? value.toISOString() : new Date(String(value)).toISOString();
+type DiscordNotificationEffectiveTimes = {
+  eventStartEffectiveAt: Date;
+  eventEndEffectiveAt: Date;
+  rewardExchangeEndEffectiveAt: Date;
+  recruitmentStartEffectiveAt: Date;
+};
+
+function requiredDate(row: QueryRow, key: string): Date {
+  const value = row[key];
+  if (value === null || value === undefined) throw new Error(`Missing Discord notification setting: ${key}`);
+  const date = value instanceof Date ? value : new Date(String(value));
+  if (Number.isNaN(date.getTime())) throw new Error(`Invalid Discord notification setting: ${key}`);
+  return date;
 }
 
 function asBoolean(value: unknown): boolean {
@@ -66,24 +76,24 @@ function mapSettings(row: QueryRow | undefined, now: Date): DiscordNotificationS
   if (!row) {
     return { ...DISCORD_NOTIFICATION_DEFAULTS, effectiveAt: now.toISOString() };
   }
+  const effectiveTimes = mapEffectiveTimes(row);
   return {
     eventStartEnabled: asBoolean(row.event_start_enabled),
     eventEndEnabled: asBoolean(row.event_end_enabled),
     rewardExchangeEndEnabled: asBoolean(row.reward_exchange_end_enabled),
     recruitmentStartEnabled: asBoolean(row.recruitment_start_enabled),
     leadHours: Number(row.lead_hours),
-    effectiveAt: asDate(row.effective_at) ?? now.toISOString(),
+    effectiveAt: new Date(Math.max(...Object.values(effectiveTimes).map((value) => value.getTime()))).toISOString(),
   };
 }
 
-function isSameSettings(a: DiscordNotificationSettings, b: DiscordNotificationSettingsInput): boolean {
-  return (
-    a.eventStartEnabled === b.eventStartEnabled &&
-    a.eventEndEnabled === b.eventEndEnabled &&
-    a.rewardExchangeEndEnabled === b.rewardExchangeEndEnabled &&
-    a.recruitmentStartEnabled === b.recruitmentStartEnabled &&
-    a.leadHours === b.leadHours
-  );
+function mapEffectiveTimes(row: QueryRow): DiscordNotificationEffectiveTimes {
+  return {
+    eventStartEffectiveAt: requiredDate(row, "event_start_effective_at"),
+    eventEndEffectiveAt: requiredDate(row, "event_end_effective_at"),
+    rewardExchangeEndEffectiveAt: requiredDate(row, "reward_exchange_end_effective_at"),
+    recruitmentStartEffectiveAt: requiredDate(row, "recruitment_start_effective_at"),
+  };
 }
 
 export function parseDiscordNotificationSettingsForm(formData: FormData): DiscordNotificationSettingsInput {
@@ -114,7 +124,9 @@ export async function getDiscordNotificationState(
       const connectionResult = await client.query(
         `select status,
                 event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-                recruitment_start_enabled, lead_hours, effective_at
+                recruitment_start_enabled, lead_hours,
+                event_start_effective_at, event_end_effective_at,
+                reward_exchange_end_effective_at, recruitment_start_effective_at
            from discord_notification_subscriptions where user_id = $1 limit 1`,
         [userId],
       );
@@ -158,7 +170,9 @@ export async function saveDiscordNotificationSettings(
     async (_db, client) => {
       const subscription = await client.query(
         `select status, event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-                recruitment_start_enabled, lead_hours, effective_at
+                recruitment_start_enabled, lead_hours,
+                event_start_effective_at, event_end_effective_at,
+                reward_exchange_end_effective_at, recruitment_start_effective_at
            from discord_notification_subscriptions where user_id = $1 for update`,
         [userId],
       );
@@ -167,7 +181,27 @@ export async function saveDiscordNotificationSettings(
       }
 
       const existing = mapSettings(subscription.rows[0], now);
-      const effectiveAt = isSameSettings(existing, validated) ? new Date(existing.effectiveAt) : now;
+      const existingEffectiveTimes = mapEffectiveTimes(subscription.rows[0]);
+      const leadHoursChanged = existing.leadHours !== validated.leadHours;
+      const effectiveAtWhenChanged = (changed: boolean, current: Date) => (changed || leadHoursChanged ? now : current);
+      const effectiveTimes: DiscordNotificationEffectiveTimes = {
+        eventStartEffectiveAt: effectiveAtWhenChanged(
+          existing.eventStartEnabled !== validated.eventStartEnabled,
+          existingEffectiveTimes.eventStartEffectiveAt,
+        ),
+        eventEndEffectiveAt: effectiveAtWhenChanged(
+          existing.eventEndEnabled !== validated.eventEndEnabled,
+          existingEffectiveTimes.eventEndEffectiveAt,
+        ),
+        rewardExchangeEndEffectiveAt: effectiveAtWhenChanged(
+          existing.rewardExchangeEndEnabled !== validated.rewardExchangeEndEnabled,
+          existingEffectiveTimes.rewardExchangeEndEffectiveAt,
+        ),
+        recruitmentStartEffectiveAt: effectiveAtWhenChanged(
+          existing.recruitmentStartEnabled !== validated.recruitmentStartEnabled,
+          existingEffectiveTimes.recruitmentStartEffectiveAt,
+        ),
+      };
 
       await client.query(
         `update discord_notification_subscriptions
@@ -176,8 +210,11 @@ export async function saveDiscordNotificationSettings(
                 reward_exchange_end_enabled = $4,
                 recruitment_start_enabled = $5,
                 lead_hours = $6,
-                effective_at = $7,
-                updated_at = $8
+                event_start_effective_at = $7,
+                event_end_effective_at = $8,
+                reward_exchange_end_effective_at = $9,
+                recruitment_start_effective_at = $10,
+                updated_at = $11
           where user_id = $1`,
         [
           userId,
@@ -186,10 +223,14 @@ export async function saveDiscordNotificationSettings(
           validated.rewardExchangeEndEnabled,
           validated.recruitmentStartEnabled,
           validated.leadHours,
-          effectiveAt,
+          effectiveTimes.eventStartEffectiveAt,
+          effectiveTimes.eventEndEffectiveAt,
+          effectiveTimes.rewardExchangeEndEffectiveAt,
+          effectiveTimes.recruitmentStartEffectiveAt,
           now,
         ],
       );
+      const effectiveAt = new Date(Math.max(...Object.values(effectiveTimes).map((value) => value.getTime())));
       return { ...validated, effectiveAt: effectiveAt.toISOString() };
     },
     options,
@@ -257,8 +298,10 @@ export async function upsertPendingDiscordConnection(
           `insert into discord_notification_subscriptions
            (uid, user_id, discord_user_id, status, failure_reason, verified_at, last_verification_at,
             event_start_enabled, event_end_enabled, reward_exchange_end_enabled, recruitment_start_enabled,
-            lead_hours, effective_at, created_at, updated_at)
-         values ($1, $2, $3, 'pending', null, null, null, false, false, false, false, 24, $4, $4, $4)
+            lead_hours, event_start_effective_at, event_end_effective_at,
+            reward_exchange_end_effective_at, recruitment_start_effective_at, created_at, updated_at)
+         values ($1, $2, $3, 'pending', null, null, null, false, false, false, false, 24,
+                 $4, $4, $4, $4, $4, $4)
          on conflict (user_id) do update set
            uid = excluded.uid, discord_user_id = excluded.discord_user_id, status = 'pending',
            failure_reason = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,

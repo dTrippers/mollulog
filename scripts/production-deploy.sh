@@ -67,5 +67,5 @@ pnpm run prod:build
 assert_deployable_git_state "$commit_sha"
 
 deployment_message="git:${commit_sha}"
-pnpm exec wrangler deploy --message "$deployment_message"
+pnpm exec wrangler deploy --config build/server/wrangler.json --message "$deployment_message"
 pnpm exec wrangler deploy --config dist/cron/wrangler.json --message "$deployment_message"

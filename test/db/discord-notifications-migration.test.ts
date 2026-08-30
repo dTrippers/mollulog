@@ -26,6 +26,8 @@ describe("Discord notification migration contract", () => {
     expect(migration).toContain("reward_exchange_end_at timestamptz");
     expect(migration).toContain("discord_notification_subscriptions_discord_user_id_uidx");
     expect(timingMigration).toContain("lead_hours integer NOT NULL");
+    expect(timingMigration).toContain("event_start_effective_at timestamptz NOT NULL");
+    expect(timingMigration).toContain("DROP COLUMN IF EXISTS effective_at");
     expect(timingMigration).not.toContain("DEFAULT 24");
     expect(timingMigration).toContain("source_uid, generation);");
     expect(timingMigration).toContain("DROP COLUMN IF EXISTS timing_mode");

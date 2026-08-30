@@ -10,7 +10,10 @@ describe("Discord notification PostgreSQL schema", () => {
     expect(pgTimelineContentsTable.rewardExchangeEndAt).toBeDefined();
     expect(pgDiscordNotificationSubscriptionsTable.discordUserId).toBeDefined();
     expect(pgDiscordNotificationSubscriptionsTable.status).toBeDefined();
-    expect(pgDiscordNotificationSubscriptionsTable.effectiveAt).toBeDefined();
+    expect(pgDiscordNotificationSubscriptionsTable.eventStartEffectiveAt).toBeDefined();
+    expect(pgDiscordNotificationSubscriptionsTable.eventEndEffectiveAt).toBeDefined();
+    expect(pgDiscordNotificationSubscriptionsTable.rewardExchangeEndEffectiveAt).toBeDefined();
+    expect(pgDiscordNotificationSubscriptionsTable.recruitmentStartEffectiveAt).toBeDefined();
     expect(pgDiscordNotificationSubscriptionsTable.eventStartEnabled).toBeDefined();
     expect(pgDiscordNotificationSubscriptionsTable.recruitmentStartEnabled).toBeDefined();
     expect(pgDiscordNotificationJobsTable.plannedSendAt).toBeDefined();

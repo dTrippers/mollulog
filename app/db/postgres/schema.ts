@@ -15,7 +15,6 @@ import type {
   WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
 import type { AuthProvider } from "~/models/auth-identity";
-import type { ConnectApiKeyScope } from "~/models/connect-api-key";
 import type {
   CommunityCommentVisibility,
   CommunityPostBlock,
@@ -23,6 +22,7 @@ import type {
   CommunityPostType,
   CommunityVisibility,
 } from "~/models/community";
+import type { ConnectApiKeyScope } from "~/models/connect-api-key";
 import type { EventShopState } from "~/models/event-shop-state";
 import type { PickupHistory } from "~/models/pickup-history";
 import type { RecruitmentResultStudent } from "~/models/recruitment-result";
@@ -221,7 +221,10 @@ export const pgDiscordNotificationSubscriptionsTable = pgTable(
     rewardExchangeEndEnabled: boolean("reward_exchange_end_enabled").notNull(),
     recruitmentStartEnabled: boolean("recruitment_start_enabled").notNull(),
     leadHours: integer("lead_hours").notNull(),
-    effectiveAt: timestamptz("effective_at").notNull(),
+    eventStartEffectiveAt: timestamptz("event_start_effective_at").notNull(),
+    eventEndEffectiveAt: timestamptz("event_end_effective_at").notNull(),
+    rewardExchangeEndEffectiveAt: timestamptz("reward_exchange_end_effective_at").notNull(),
+    recruitmentStartEffectiveAt: timestamptz("recruitment_start_effective_at").notNull(),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },

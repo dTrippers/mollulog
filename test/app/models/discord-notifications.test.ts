@@ -68,13 +68,15 @@ describe("Discord notification settings boundary", () => {
     ).toBeGreaterThan(statements.findIndex((statement) => statement.startsWith("update discord_notification_jobs")));
   });
 
-  it("preserves effective_at for unchanged settings and advances it for changes", async () => {
+  it("advances only affected trigger times, or all trigger times when lead hours change", async () => {
     const existingEffectiveAt = new Date("2026-08-01T00:00:00.000Z");
     const statements: string[] = [];
+    const updateValues: (readonly unknown[])[] = [];
     const client = {
-      async query(text: string) {
+      async query(text: string, values: readonly unknown[] = []) {
         const normalized = text.replace(/\s+/g, " ").trim();
         statements.push(normalized);
+        if (normalized.startsWith("update discord_notification_subscriptions")) updateValues.push(values);
         if (normalized.startsWith("select status, event_start_enabled")) {
           return {
             rows: [
@@ -85,7 +87,10 @@ describe("Discord notification settings boundary", () => {
                 reward_exchange_end_enabled: false,
                 recruitment_start_enabled: false,
                 lead_hours: 24,
-                effective_at: existingEffectiveAt,
+                event_start_effective_at: existingEffectiveAt,
+                event_end_effective_at: existingEffectiveAt,
+                reward_exchange_end_effective_at: existingEffectiveAt,
+                recruitment_start_effective_at: existingEffectiveAt,
               },
             ],
             rowCount: 1,
@@ -122,6 +127,31 @@ describe("Discord notification settings boundary", () => {
       { now: () => new Date("2026-09-02T00:00:00.000Z") },
     );
     expect(changed.effectiveAt).toBe("2026-09-02T00:00:00.000Z");
+    expect(updateValues[1]?.slice(6, 10)).toEqual([
+      new Date("2026-09-02T00:00:00.000Z"),
+      new Date("2026-09-02T00:00:00.000Z"),
+      new Date("2026-09-02T00:00:00.000Z"),
+      new Date("2026-09-02T00:00:00.000Z"),
+    ]);
+
+    await saveDiscordNotificationSettings(
+      env,
+      7,
+      {
+        eventStartEnabled: true,
+        eventEndEnabled: true,
+        rewardExchangeEndEnabled: false,
+        recruitmentStartEnabled: false,
+        leadHours: 24,
+      },
+      { now: () => new Date("2026-09-03T00:00:00.000Z") },
+    );
+    expect(updateValues[2]?.slice(6, 10)).toEqual([
+      existingEffectiveAt,
+      new Date("2026-09-03T00:00:00.000Z"),
+      existingEffectiveAt,
+      existingEffectiveAt,
+    ]);
     expect(statements.some((statement) => statement.includes("discord_recruitment_schedules"))).toBe(false);
   });
 
@@ -217,6 +247,15 @@ describe("Discord notification settings boundary", () => {
             rows: [
               {
                 status: "unlinked",
+                event_start_enabled: false,
+                event_end_enabled: false,
+                reward_exchange_end_enabled: false,
+                recruitment_start_enabled: false,
+                lead_hours: 24,
+                event_start_effective_at: new Date("2026-09-01T00:00:00.000Z"),
+                event_end_effective_at: new Date("2026-09-01T00:00:00.000Z"),
+                reward_exchange_end_effective_at: new Date("2026-09-01T00:00:00.000Z"),
+                recruitment_start_effective_at: new Date("2026-09-01T00:00:00.000Z"),
               },
             ],
             rowCount: 1,
@@ -248,7 +287,10 @@ describe("Discord notification settings boundary", () => {
                 reward_exchange_end_enabled: false,
                 recruitment_start_enabled: false,
                 lead_hours: 24,
-                effective_at: new Date("2026-09-01T00:00:00.000Z"),
+                event_start_effective_at: new Date("2026-09-01T00:00:00.000Z"),
+                event_end_effective_at: new Date("2026-09-01T00:00:00.000Z"),
+                reward_exchange_end_effective_at: new Date("2026-09-01T00:00:00.000Z"),
+                recruitment_start_effective_at: new Date("2026-09-01T00:00:00.000Z"),
               },
             ],
             rowCount: 1,
