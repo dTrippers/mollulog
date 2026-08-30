@@ -7,7 +7,14 @@ import { RaidCard } from "~/components/features/raids";
 import { Callout, HorizontalScroll, SubTitle, Title } from "~/components/primitives";
 import { raidTypeToParam } from "~/domain/raid";
 import { getLogger } from "~/lib/observability.server";
-import { canonicalLink } from "~/lib/seo";
+import {
+  canonicalLink,
+  canonicalUrl,
+  DEFAULT_OPEN_GRAPH_IMAGE_URL,
+  HOME_DESCRIPTION,
+  HOME_TITLE,
+  SITE_NAME,
+} from "~/lib/seo";
 import { getCommunityFeedPage } from "~/models/community.server";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { TimelineContent } from "~/models/timeline-content";
@@ -18,11 +25,18 @@ import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeR
 
 export const meta: MetaFunction = ({ location }) => {
   return [
-    { title: "몰루로그 - 블루 아카이브 미래시/통계 정보 모음" },
-    {
-      name: "description",
-      content: "게임 <블루 아카이브>의 컨텐츠, 통계 정보 등을 확인하고 미래시 계획을 관리해보세요.",
-    },
+    { title: HOME_TITLE },
+    { name: "description", content: HOME_DESCRIPTION },
+    { property: "og:type", content: "website" },
+    { property: "og:site_name", content: SITE_NAME },
+    { property: "og:locale", content: "ko_KR" },
+    { property: "og:title", content: HOME_TITLE },
+    { property: "og:description", content: HOME_DESCRIPTION },
+    { property: "og:url", content: canonicalUrl(location.pathname) },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:title", content: HOME_TITLE },
+    { name: "twitter:description", content: HOME_DESCRIPTION },
+    { name: "twitter:image", content: DEFAULT_OPEN_GRAPH_IMAGE_URL },
     canonicalLink(location.pathname),
   ];
 };
