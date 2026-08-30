@@ -34,6 +34,7 @@ import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "
 import { captureClientError } from "./lib/observability.client";
 import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
+import { DEFAULT_OPEN_GRAPH_IMAGE_URL } from "./lib/seo";
 import { isGoogleSearchCrawler, isSenseiProfilePath } from "./lib/seo-crawler";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
@@ -165,6 +166,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
           content={loaderData?.publicEnv?.FRONT_SENTRY_DSN ?? ""}
         />
         <Meta />
+        {/* Keep this after route metadata so a page-specific image is preferred. */}
+        <meta property="og:image" content={DEFAULT_OPEN_GRAPH_IMAGE_URL} />
         <Links />
       </head>
       <body>
