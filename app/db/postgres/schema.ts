@@ -1,16 +1,5 @@
 import { sql } from "drizzle-orm";
-import {
-  bigint,
-  boolean,
-  check,
-  index,
-  integer,
-  jsonb,
-  pgTable,
-  text,
-  timestamp,
-  uniqueIndex,
-} from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import type { CacheRefreshJobStatus, CacheRefreshTaskName, CacheRefreshTaskResults } from "~/domain/cache-refresh";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
@@ -26,9 +15,7 @@ import type {
   WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
 import type { AuthProvider } from "~/models/auth-identity";
-import type {
-  ConnectApiKeyScope,
-} from "~/models/connect-api-key";
+import type { ConnectApiKeyScope } from "~/models/connect-api-key";
 import type {
   CommunityCommentVisibility,
   CommunityPostBlock,
@@ -211,20 +198,11 @@ export const pgTimelineContentsTable = pgTable(
     index("timeline_contents_recruitment_group_uid_idx")
       .on(table.recruitmentGroupUid)
       .where(sql`${table.recruitmentGroupUid} is not null`),
-    check("timeline_contents_videos_array", sql`jsonb_typeof(${table.videos}) = 'array'`),
-    check("timeline_contents_tags_array", sql`jsonb_typeof(${table.tags}) = 'array'`),
-    check("timeline_contents_name_i18n_object", sql`jsonb_typeof(${table.nameI18n}) = 'object'`),
-    check("timeline_contents_occurrence_positive", sql`${table.occurrence} is null or ${table.occurrence} > 0`),
   ],
 );
 
 export type DiscordConnectionStatus = "pending" | "active" | "failed";
-export type DiscordNotificationTimingMode = "day-before" | "same-day";
-export type DiscordNotificationTrigger =
-  | "event-start"
-  | "event-end"
-  | "reward-exchange-end"
-  | "recruitment-start";
+export type DiscordNotificationTrigger = "event-start" | "event-end" | "reward-exchange-end" | "recruitment-start";
 export type DiscordNotificationJobTrigger = DiscordNotificationTrigger | "connection-verification";
 
 export const pgDiscordNotificationSubscriptionsTable = pgTable(
@@ -242,8 +220,7 @@ export const pgDiscordNotificationSubscriptionsTable = pgTable(
     eventEndEnabled: boolean("event_end_enabled").notNull(),
     rewardExchangeEndEnabled: boolean("reward_exchange_end_enabled").notNull(),
     recruitmentStartEnabled: boolean("recruitment_start_enabled").notNull(),
-    timingMode: text("timing_mode").$type<DiscordNotificationTimingMode>().notNull(),
-    kstHour: integer("kst_hour").notNull(),
+    leadHours: integer("lead_hours").notNull(),
     effectiveAt: timestamptz("effective_at").notNull(),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
@@ -287,7 +264,6 @@ export const pgDiscordNotificationJobsTable = pgTable(
       table.trigger,
       table.sourceUid,
       table.generation,
-      table.plannedSendAt,
     ),
     index("discord_notification_jobs_due_idx").on(table.status, table.plannedSendAt),
     index("discord_notification_jobs_publish_idx").on(table.status, table.availableAt),
@@ -680,7 +656,6 @@ export const pgWalkthroughTimelinesTable = pgTable(
       table.visibility,
       table.updatedAt.desc(),
     ),
-    check("raid_walkthroughs_document_object", sql`jsonb_typeof(${table.document}) = 'object'`),
   ],
 );
 
@@ -756,8 +731,6 @@ export const pgCommunityPostsTable = pgTable(
     uniqueIndex("community_posts_student_review_per_user_uidx")
       .on(table.userId, table.subjectStudentUid)
       .where(sql`${table.postType} = 'student_review'`),
-    check("community_posts_blocks_array", sql`jsonb_typeof(${table.blocks}) = 'array'`),
-    check("community_posts_source_metadata_object", sql`jsonb_typeof(${table.sourceMetadata}) = 'object'`),
   ],
 );
 
@@ -847,8 +820,6 @@ export const pgRecruitmentResultsTable = pgTable(
     index("recruitment_results_user_id_idx").on(table.userId),
     index("recruitment_results_content_uid_idx").on(table.contentUid),
     index("recruitment_results_comment_post_uid_idx").on(table.commentPostUid),
-    check("recruitment_results_recruited_students_array", sql`jsonb_typeof(${table.recruitedStudents}) = 'array'`),
-    check("recruitment_results_exchanged_students_array", sql`jsonb_typeof(${table.exchangedStudents}) = 'array'`),
   ],
 );
 

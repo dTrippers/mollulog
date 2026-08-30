@@ -18,7 +18,7 @@ export default function NotificationChannelCard({ connection }: NotificationChan
         ? "연결됨"
         : connection?.status === "failed"
           ? "연결 실패"
-          : "미연결";
+          : "연결되지 않음";
 
   return (
     <SectionCard title="등록된 알림 수단" description="프로필 관리 페이지에서 알림 수단을 연결/해제할 수 있어요">

@@ -12,6 +12,7 @@ import {
   redirect,
   useActionData,
   useLoaderData,
+  useLocation,
   useNavigation,
   useRevalidator,
 } from "react-router";
@@ -128,10 +129,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       return redirect("/edit?discord_notice=unlinked#discord-notifications");
     } catch (error) {
       console.error("[edit] failed to unlink Discord notification connection", error);
-      return data<ActionData>(
-        { intent, error: { form: "Discord 알림 연결을 해제하지 못했어요." } },
-        { status: 500 },
-      );
+      return data<ActionData>({ intent, error: { form: "Discord 알림 연결을 해제하지 못했어요." } }, { status: 500 });
     }
   }
 
@@ -308,6 +306,7 @@ export default function EditProfile() {
   const { sensei, allStudents, passkeyCount, authIdentities, discordState, authMessage, discordMessage } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
+  const location = useLocation();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const submittingIntent = navigation.formData?.get("intent");
@@ -323,6 +322,14 @@ export default function EditProfile() {
   const [isAccountDirty, setIsAccountDirty] = useState(false);
   const [isProfileSaved, setIsProfileSaved] = useState(false);
   const [isAccountSaved, setIsAccountSaved] = useState(false);
+
+  useEffect(() => {
+    if (location.hash !== "#discord-notifications") return;
+    const frameId = window.requestAnimationFrame(() => {
+      document.getElementById("discord-notifications")?.scrollIntoView({ block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [location.hash]);
 
   useEffect(() => {
     if (!profileActionData?.success) {

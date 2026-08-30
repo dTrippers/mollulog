@@ -2,6 +2,10 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "@jest/globals";
 
 const migration = readFileSync("db/postgres/migrations/20260826000100_create_discord_notifications.sql", "utf8");
+const timingMigration = readFileSync(
+  "db/postgres/migrations/20260830000100_replace_discord_notification_timing.sql",
+  "utf8",
+);
 const schema = readFileSync("app/db/postgres/schema.ts", "utf8");
 
 describe("Discord notification migration contract", () => {
@@ -21,7 +25,11 @@ describe("Discord notification migration contract", () => {
     }
     expect(migration).toContain("reward_exchange_end_at timestamptz");
     expect(migration).toContain("discord_notification_subscriptions_discord_user_id_uidx");
-    expect(migration).toContain("planned_send_at);");
+    expect(timingMigration).toContain("lead_hours integer NOT NULL");
+    expect(timingMigration).not.toContain("DEFAULT 24");
+    expect(timingMigration).toContain("source_uid, generation);");
+    expect(timingMigration).toContain("DROP COLUMN IF EXISTS timing_mode");
+    expect(timingMigration).toContain("DROP COLUMN IF EXISTS kst_hour");
     expect(migration).toContain("publish_attempts integer");
     expect(migration).toContain("delivery_attempts integer");
   });

@@ -1,4 +1,4 @@
-import type { DiscordNotificationTimingMode, DiscordNotificationTrigger } from "~/db/postgres/schema";
+import type { DiscordNotificationTrigger } from "~/db/postgres/schema";
 
 export const DISCORD_NOTIFICATION_COMPLETION_MESSAGE = "몰루로그 Discord 알림 연결이 완료되었습니다.";
 
@@ -7,8 +7,7 @@ export const DISCORD_NOTIFICATION_DEFAULTS = {
   eventEndEnabled: false,
   rewardExchangeEndEnabled: false,
   recruitmentStartEnabled: false,
-  timingMode: "day-before" as const,
-  kstHour: 11,
+  leadHours: 24,
 };
 
 export type DiscordOAuthStateValue = {
@@ -41,8 +40,7 @@ export type DiscordNotificationSettingsInput = {
   eventEndEnabled: boolean;
   rewardExchangeEndEnabled: boolean;
   recruitmentStartEnabled: boolean;
-  timingMode: DiscordNotificationTimingMode;
-  kstHour: number;
+  leadHours: number;
 };
 
 export class DiscordNotificationValidationError extends Error {
@@ -62,13 +60,10 @@ export class MissingNotificationNameError extends Error {
 export function validateDiscordNotificationSettings(
   input: DiscordNotificationSettingsInput,
 ): DiscordNotificationSettingsInput {
-  if (input.timingMode !== "day-before" && input.timingMode !== "same-day") {
-    throw new DiscordNotificationValidationError("알림 시점을 선택해주세요.");
+  if (!Number.isInteger(input.leadHours) || input.leadHours < 1 || input.leadHours > 24) {
+    throw new DiscordNotificationValidationError("알림 시점은 1시간 전부터 24시간 전까지 선택할 수 있어요.");
   }
-  if (!Number.isInteger(input.kstHour) || input.kstHour < 0 || input.kstHour > 23) {
-    throw new DiscordNotificationValidationError("알림 시간은 0시부터 23시까지 선택할 수 있어요.");
-  }
-  return { ...input, kstHour: input.kstHour };
+  return { ...input, leadHours: input.leadHours };
 }
 
 export type KstDateParts = {
@@ -108,40 +103,13 @@ export function getKstDateParts(value: Date | string): KstDateParts {
   };
 }
 
-function kstDateAt(parts: Pick<KstDateParts, "year" | "month" | "day">, hour: number): Date {
-  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day, hour, 0, 0, 0) - 9 * 60 * 60 * 1000);
-}
-
-export function plannedSendAtForAnchor(
-  sourceAnchor: Date | string,
-  timingMode: DiscordNotificationTimingMode,
-  kstHour: number,
-): Date {
-  validateDiscordNotificationSettings({ ...DISCORD_NOTIFICATION_DEFAULTS, timingMode, kstHour });
-  const parts = getKstDateParts(sourceAnchor);
-  if (timingMode === "same-day") {
-    return kstDateAt(parts, kstHour);
+export function plannedSendAtForAnchor(sourceAnchor: Date | string, leadHours: number): Date {
+  validateDiscordNotificationSettings({ ...DISCORD_NOTIFICATION_DEFAULTS, leadHours });
+  const anchor = sourceAnchor instanceof Date ? sourceAnchor : new Date(sourceAnchor);
+  if (Number.isNaN(anchor.getTime())) {
+    throw new DiscordNotificationValidationError("알림 기준 시간이 올바르지 않아요.");
   }
-
-  const previousDay = new Date(Date.UTC(parts.year, parts.month - 1, parts.day - 1, 12, 0, 0));
-  return kstDateAt(
-    {
-      year: previousDay.getUTCFullYear(),
-      month: previousDay.getUTCMonth() + 1,
-      day: previousDay.getUTCDate(),
-    },
-    kstHour,
-  );
-}
-
-/** Same-day alerts are omitted when their configured time is after the source anchor. */
-export function isNotificationScheduleEligible(
-  sourceAnchor: Date | string,
-  timingMode: DiscordNotificationTimingMode,
-  kstHour: number,
-): boolean {
-  if (timingMode !== "same-day") return true;
-  return plannedSendAtForAnchor(sourceAnchor, timingMode, kstHour).getTime() <= new Date(sourceAnchor).getTime();
+  return new Date(anchor.getTime() - leadHours * 60 * 60 * 1000);
 }
 
 export function isPastEffectiveAt(plannedSendAt: Date | string, effectiveAt: Date | string): boolean {

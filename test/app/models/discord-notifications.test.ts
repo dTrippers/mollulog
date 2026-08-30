@@ -21,15 +21,13 @@ describe("Discord notification settings boundary", () => {
     form.set("eventEndEnabled", "false");
     form.set("rewardExchangeEndEnabled", "true");
     form.set("recruitmentStartEnabled", "false");
-    form.set("timingMode", "same-day");
-    form.set("kstHour", "23");
+    form.set("leadHours", "23");
     expect(parseDiscordNotificationSettingsForm(form)).toEqual({
       eventStartEnabled: true,
       eventEndEnabled: false,
       rewardExchangeEndEnabled: true,
       recruitmentStartEnabled: false,
-      timingMode: "same-day",
-      kstHour: 23,
+      leadHours: 23,
     });
   });
 
@@ -37,10 +35,9 @@ describe("Discord notification settings boundary", () => {
     expect(new DiscordIdentityAlreadyLinkedError().message).toContain("다른 선생님");
   });
 
-  it("rejects tampered timing values instead of silently selecting day-before", () => {
+  it("rejects a lead time outside the supported range", () => {
     const form = new FormData();
-    form.set("timingMode", "tomorrow");
-    form.set("kstHour", "11");
+    form.set("leadHours", "25");
     expect(() => parseDiscordNotificationSettingsForm(form)).toThrow(DiscordNotificationValidationError);
   });
 
@@ -87,8 +84,7 @@ describe("Discord notification settings boundary", () => {
                 event_end_enabled: false,
                 reward_exchange_end_enabled: false,
                 recruitment_start_enabled: false,
-                timing_mode: "day-before",
-                kst_hour: 11,
+                lead_hours: 24,
                 effective_at: existingEffectiveAt,
               },
             ],
@@ -107,8 +103,7 @@ describe("Discord notification settings boundary", () => {
         eventEndEnabled: false,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
-        timingMode: "day-before",
-        kstHour: 11,
+        leadHours: 24,
       },
       { now: () => new Date("2026-09-01T00:00:00.000Z") },
     );
@@ -122,8 +117,7 @@ describe("Discord notification settings boundary", () => {
         eventEndEnabled: false,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
-        timingMode: "same-day",
-        kstHour: 11,
+        leadHours: 12,
       },
       { now: () => new Date("2026-09-02T00:00:00.000Z") },
     );
@@ -253,8 +247,7 @@ describe("Discord notification settings boundary", () => {
                 event_end_enabled: false,
                 reward_exchange_end_enabled: false,
                 recruitment_start_enabled: false,
-                timing_mode: "day-before",
-                kst_hour: 11,
+                lead_hours: 24,
                 effective_at: new Date("2026-09-01T00:00:00.000Z"),
               },
             ],

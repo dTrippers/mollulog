@@ -20,8 +20,9 @@
     "cdn:deploy": "terraform -chdir=deploy/cdn apply",
     "test": "jest",
     "typecheck": "react-router typegen && tsc",
-    "lint": "biome lint app test && biome check test",
-    "lint:fix": "biome lint --write app test && biome check --write test"
+    "lint": "pnpm run lint:postgres-migrations && biome lint app test && biome check test",
+    "lint:fix": "pnpm run lint:postgres-migrations && biome lint --write app test && biome check --write test",
+    "lint:postgres-migrations": "node scripts/lint-postgres-migrations.mjs"
   },
   "dependencies": {
     "@cloudflare/kv-asset-handler": "^0.5.0",

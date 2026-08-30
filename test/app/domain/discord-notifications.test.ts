@@ -3,7 +3,6 @@ import {
   formatDiscordNotificationMessage,
   getKstDateParts,
   isDiscordOAuthStateValid,
-  isNotificationScheduleEligible,
   isPastEffectiveAt,
   plannedSendAtForAnchor,
 } from "~/domain/discord-notifications";
@@ -17,15 +16,13 @@ describe("Discord notification timing and copy", () => {
     );
   });
 
-  it("uses day-before 11:00 KST by default", () => {
-    expect(plannedSendAtForAnchor("2026-09-02T03:00:00.000Z", "day-before", 11).toISOString()).toBe(
-      "2026-09-01T02:00:00.000Z",
-    );
+  it("schedules the default alert exactly 24 hours before the source anchor", () => {
+    expect(plannedSendAtForAnchor("2026-09-02T03:00:00.000Z", 24).toISOString()).toBe("2026-09-01T03:00:00.000Z");
   });
 
-  it("omits same-day times later than the source anchor", () => {
-    expect(isNotificationScheduleEligible("2026-09-01T03:00:00.000Z", "same-day", 13)).toBe(false);
-    expect(isNotificationScheduleEligible("2026-09-01T03:00:00.000Z", "same-day", 11)).toBe(true);
+  it("rejects lead times outside 1 to 24 hours", () => {
+    expect(() => plannedSendAtForAnchor("2026-09-02T03:00:00.000Z", 0)).toThrow("1시간 전부터 24시간 전");
+    expect(() => plannedSendAtForAnchor("2026-09-02T03:00:00.000Z", 25)).toThrow("1시간 전부터 24시간 전");
   });
 
   it("never schedules a job whose planned time predates a settings change", () => {

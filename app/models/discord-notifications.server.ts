@@ -4,7 +4,7 @@ import {
   withDiscordOwnershipTransaction,
   withDiscordUserTransaction,
 } from "~/db/postgres/identity";
-import type { DiscordConnectionStatus, DiscordNotificationTimingMode } from "~/db/postgres/schema";
+import type { DiscordConnectionStatus } from "~/db/postgres/schema";
 import {
   DISCORD_NOTIFICATION_DEFAULTS,
   type DiscordNotificationSettingsInput,
@@ -71,8 +71,7 @@ function mapSettings(row: QueryRow | undefined, now: Date): DiscordNotificationS
     eventEndEnabled: asBoolean(row.event_end_enabled),
     rewardExchangeEndEnabled: asBoolean(row.reward_exchange_end_enabled),
     recruitmentStartEnabled: asBoolean(row.recruitment_start_enabled),
-    timingMode: String(row.timing_mode) as DiscordNotificationTimingMode,
-    kstHour: Number(row.kst_hour),
+    leadHours: Number(row.lead_hours),
     effectiveAt: asDate(row.effective_at) ?? now.toISOString(),
   };
 }
@@ -83,8 +82,7 @@ function isSameSettings(a: DiscordNotificationSettings, b: DiscordNotificationSe
     a.eventEndEnabled === b.eventEndEnabled &&
     a.rewardExchangeEndEnabled === b.rewardExchangeEndEnabled &&
     a.recruitmentStartEnabled === b.recruitmentStartEnabled &&
-    a.timingMode === b.timingMode &&
-    a.kstHour === b.kstHour
+    a.leadHours === b.leadHours
   );
 }
 
@@ -93,15 +91,13 @@ export function parseDiscordNotificationSettingsForm(formData: FormData): Discor
     const value = formData.get(name);
     return value === "true" || value === "on" || value === "1";
   };
-  const timingModeValue = formData.get("timingMode");
-  const kstHourValue = formData.get("kstHour");
+  const leadHoursValue = formData.get("leadHours");
   const input: DiscordNotificationSettingsInput = {
     eventStartEnabled: booleanValue("eventStartEnabled"),
     eventEndEnabled: booleanValue("eventEndEnabled"),
     rewardExchangeEndEnabled: booleanValue("rewardExchangeEndEnabled"),
     recruitmentStartEnabled: booleanValue("recruitmentStartEnabled"),
-    timingMode: (typeof timingModeValue === "string" ? timingModeValue : "") as DiscordNotificationTimingMode,
-    kstHour: Number(kstHourValue ?? Number.NaN),
+    leadHours: Number(leadHoursValue ?? Number.NaN),
   };
   return validateDiscordNotificationSettings(input);
 }
@@ -118,7 +114,7 @@ export async function getDiscordNotificationState(
       const connectionResult = await client.query(
         `select status,
                 event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-                recruitment_start_enabled, timing_mode, kst_hour, effective_at
+                recruitment_start_enabled, lead_hours, effective_at
            from discord_notification_subscriptions where user_id = $1 limit 1`,
         [userId],
       );
@@ -162,7 +158,7 @@ export async function saveDiscordNotificationSettings(
     async (_db, client) => {
       const subscription = await client.query(
         `select status, event_start_enabled, event_end_enabled, reward_exchange_end_enabled,
-                recruitment_start_enabled, timing_mode, kst_hour, effective_at
+                recruitment_start_enabled, lead_hours, effective_at
            from discord_notification_subscriptions where user_id = $1 for update`,
         [userId],
       );
@@ -179,10 +175,9 @@ export async function saveDiscordNotificationSettings(
                 event_end_enabled = $3,
                 reward_exchange_end_enabled = $4,
                 recruitment_start_enabled = $5,
-                timing_mode = $6,
-                kst_hour = $7,
-                effective_at = $8,
-                updated_at = $9
+                lead_hours = $6,
+                effective_at = $7,
+                updated_at = $8
           where user_id = $1`,
         [
           userId,
@@ -190,8 +185,7 @@ export async function saveDiscordNotificationSettings(
           validated.eventEndEnabled,
           validated.rewardExchangeEndEnabled,
           validated.recruitmentStartEnabled,
-          validated.timingMode,
-          validated.kstHour,
+          validated.leadHours,
           effectiveAt,
           now,
         ],
@@ -263,8 +257,8 @@ export async function upsertPendingDiscordConnection(
           `insert into discord_notification_subscriptions
            (uid, user_id, discord_user_id, status, failure_reason, verified_at, last_verification_at,
             event_start_enabled, event_end_enabled, reward_exchange_end_enabled, recruitment_start_enabled,
-            timing_mode, kst_hour, effective_at, created_at, updated_at)
-         values ($1, $2, $3, 'pending', null, null, null, false, false, false, false, 'day-before', 11, $4, $4, $4)
+            lead_hours, effective_at, created_at, updated_at)
+         values ($1, $2, $3, 'pending', null, null, null, false, false, false, false, 24, $4, $4, $4)
          on conflict (user_id) do update set
            uid = excluded.uid, discord_user_id = excluded.discord_user_id, status = 'pending',
            failure_reason = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,

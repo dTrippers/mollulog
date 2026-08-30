@@ -16,7 +16,13 @@ type DiscordNotificationConnectionProps = {
 function ConnectionStatus({ connection }: { connection: DiscordConnection | null }) {
   const status = connection?.status ?? "none";
   const label =
-    status === "pending" ? "연결 확인 중" : status === "active" ? "연결됨" : status === "failed" ? "연결 실패" : "미연결";
+    status === "pending"
+      ? "연결 확인 중"
+      : status === "active"
+        ? "연결됨"
+        : status === "failed"
+          ? "연결 실패"
+          : "연결되지 않음";
 
   return (
     <p
@@ -40,7 +46,17 @@ function ConnectionAction({
 }: Pick<DiscordNotificationConnectionProps, "connection" | "isSubmitting">) {
   if (connection?.status === "pending" || connection?.status === "active") {
     return (
-      <Form method="post">
+      <Form
+        method="post"
+        onSubmit={(event) => {
+          if (
+            connection.status === "active" &&
+            !window.confirm("연결을 끊으면 모든 알림을 받을 수 없어요. 정말 연결을 끊을까요?")
+          ) {
+            event.preventDefault();
+          }
+        }}
+      >
         <input type="hidden" name="intent" value="discord-unlink" />
         <Button
           type="submit"
@@ -58,7 +74,7 @@ function ConnectionAction({
     <Form method="post" action="/auth/discord/notifications/connect">
       <input type="hidden" name="intent" value="notification-connect" />
       <Button type="submit" size="sm" variant="primary" disabled={isSubmitting}>
-        {connection?.status === "failed" ? "다시 시도" : "알림 연결"}
+        {connection?.status === "failed" ? "다시 시도" : "연결"}
       </Button>
     </Form>
   );
@@ -71,8 +87,8 @@ export default function DiscordNotificationConnection({
   isSubmitting,
 }: DiscordNotificationConnectionProps) {
   return (
-    <div id="discord-notifications" className="scroll-mt-4">
-      <SectionCard title="알림 수단">
+    <div id="discord-notifications" className="scroll-mt-[var(--mobile-header-height)] lg:scroll-mt-4">
+      <SectionCard title="알림 수단" description="Discord 로그인 계정도 함께 연결돼요">
         <div className="space-y-3">
           {notice?.area === "notification" ? (
             <p

@@ -10,8 +10,7 @@ CREATE TABLE raid_walkthroughs (
   max_difficulty text NOT NULL,
   document jsonb NOT NULL,
   created_at timestamptz NOT NULL,
-  updated_at timestamptz NOT NULL,
-  CONSTRAINT raid_walkthroughs_document_object CHECK (jsonb_typeof(document) = 'object')
+  updated_at timestamptz NOT NULL
 );
 
 CREATE INDEX raid_walkthroughs_user_updated_at_idx

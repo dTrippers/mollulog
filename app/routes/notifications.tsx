@@ -86,14 +86,13 @@ export default function Notifications() {
         <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{globalError}</p>
       ) : null}
       <NotificationChannelCard connection={state.connection} />
-      {connectionStatus === "active" ? (
-        <NotificationPreferencesCard
-          settings={state.settings}
-          error={settingsActionData?.error}
-          isSaving={isSaving}
-          savedAt={settingsActionData?.savedAt}
-        />
-      ) : null}
+      <NotificationPreferencesCard
+        settings={state.settings}
+        error={settingsActionData?.error}
+        isSaving={isSaving}
+        isAvailable={connectionStatus === "active"}
+        savedAt={settingsActionData?.savedAt}
+      />
     </div>
   );
 }
