@@ -40,6 +40,15 @@ describe("Discord notification timing and copy", () => {
     ).toBe('9/7(월) 11:00, "XXX", "YYY" 학생의 모집이 시작됩니다.');
   });
 
+  it("formats the monthly shop reset message from its KST source anchor", () => {
+    expect(
+      formatDiscordNotificationMessage({
+        trigger: "shop-reset",
+        sourceAnchor: "2026-08-31T19:00:00.000Z",
+      }),
+    ).toBe("9/1(화) 04:00, 상점이 초기화됩니다.");
+  });
+
   it("blocks missing names rather than using an internal uid", () => {
     expect(() =>
       formatDiscordNotificationMessage({ trigger: "event-end", sourceAnchor: new Date(), contentName: null }),

@@ -202,7 +202,12 @@ export const pgTimelineContentsTable = pgTable(
 );
 
 export type DiscordConnectionStatus = "pending" | "active" | "failed";
-export type DiscordNotificationTrigger = "event-start" | "event-end" | "reward-exchange-end" | "recruitment-start";
+export type DiscordNotificationTrigger =
+  | "event-start"
+  | "event-end"
+  | "reward-exchange-end"
+  | "recruitment-start"
+  | "shop-reset";
 export type DiscordNotificationJobTrigger = DiscordNotificationTrigger | "connection-verification";
 
 export type NotificationChannelType = "discord";

@@ -24,22 +24,25 @@ function preferenceRows(leadHours = 24, effectiveAt = existingEffectiveAt) {
     { notification_type: "event-end", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
     { notification_type: "reward-exchange-end", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
     { notification_type: "recruitment-start", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
+    { notification_type: "shop-reset", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
   ];
 }
 
 describe("Discord notification settings boundary", () => {
-  it("validates explicit settings and all four independent trigger values", () => {
+  it("validates explicit settings and all five independent trigger values", () => {
     const form = new FormData();
     form.set("eventStartEnabled", "true");
     form.set("eventEndEnabled", "false");
     form.set("rewardExchangeEndEnabled", "true");
     form.set("recruitmentStartEnabled", "false");
+    form.set("shopResetEnabled", "true");
     form.set("leadHours", "23");
     expect(parseDiscordNotificationSettingsForm(form)).toEqual({
       eventStartEnabled: true,
       eventEndEnabled: false,
       rewardExchangeEndEnabled: true,
       recruitmentStartEnabled: false,
+      shopResetEnabled: true,
       leadHours: 23,
     });
   });
@@ -81,7 +84,7 @@ describe("Discord notification settings boundary", () => {
     expect(statements.some((statement) => statement.startsWith("delete from notification_preferences"))).toBe(false);
   });
 
-  it("writes the shared lead time to all four preference rows transactionally", async () => {
+  it("writes the shared lead time to all five preference rows transactionally", async () => {
     const statements: string[] = [];
     const insertValues: unknown[][] = [];
     const client = {
@@ -92,7 +95,7 @@ describe("Discord notification settings boundary", () => {
           return { rows: [{ status: "active" }], rowCount: 1 };
         }
         if (normalized.startsWith("select notification_type")) {
-          return { rows: preferenceRows(), rowCount: 4 };
+          return { rows: preferenceRows(), rowCount: 5 };
         }
         if (normalized.startsWith("insert into notification_preferences")) {
           insertValues.push([...values]);
@@ -110,6 +113,7 @@ describe("Discord notification settings boundary", () => {
         eventEndEnabled: true,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
+        shopResetEnabled: false,
         leadHours: 12,
       },
       { now: () => laterEffectiveAt },
@@ -121,7 +125,14 @@ describe("Discord notification settings boundary", () => {
       1,
     );
     expect(insertValues[0]).toEqual(
-      expect.arrayContaining(["event-start", "event-end", "reward-exchange-end", "recruitment-start", 12]),
+      expect.arrayContaining([
+        "event-start",
+        "event-end",
+        "reward-exchange-end",
+        "recruitment-start",
+        "shop-reset",
+        12,
+      ]),
     );
   });
 
@@ -146,9 +157,47 @@ describe("Discord notification settings boundary", () => {
         eventEndEnabled: false,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
+        shopResetEnabled: false,
         leadHours: 24,
       }),
     ).rejects.toThrow(DiscordNotificationSettingsInconsistentError);
+  });
+
+  it("creates a missing shop reset row on the next explicit save", async () => {
+    const insertValues: unknown[][] = [];
+    const client = {
+      async query(text: string, values: readonly unknown[] = []) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        if (normalized.startsWith("select status from notification_channels")) {
+          return { rows: [{ status: "active" }], rowCount: 1 };
+        }
+        if (normalized.startsWith("select notification_type")) {
+          return { rows: preferenceRows().slice(0, 4), rowCount: 4 };
+        }
+        if (normalized.startsWith("insert into notification_preferences")) {
+          insertValues.push([...values]);
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    };
+    const env = { __pgClient: client } as unknown as Env;
+
+    await saveDiscordNotificationSettings(
+      env,
+      7,
+      {
+        eventStartEnabled: true,
+        eventEndEnabled: false,
+        rewardExchangeEndEnabled: false,
+        recruitmentStartEnabled: false,
+        shopResetEnabled: true,
+        leadHours: 24,
+      },
+      { now: () => laterEffectiveAt },
+    );
+
+    expect(insertValues).toHaveLength(1);
+    expect(insertValues[0]).toEqual(expect.arrayContaining(["shop-reset", true, 24, laterEffectiveAt]));
   });
 
   it("creates the Discord login identity and pending channel in one ownership transaction", async () => {
@@ -241,6 +290,29 @@ describe("Discord notification settings boundary", () => {
     expect(connection).toBeNull();
   });
 
+  it("defaults a missing shop reset preference to disabled", async () => {
+    const client = {
+      async query(text: string) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        if (normalized.startsWith("select status from notification_channels")) {
+          return { rows: [{ status: "active" }], rowCount: 1 };
+        }
+        if (normalized.startsWith("select notification_type")) {
+          return { rows: preferenceRows().slice(0, 4), rowCount: 4 };
+        }
+        return { rows: [], rowCount: 0 };
+      },
+    };
+    const env = { __pgClient: client } as unknown as Env;
+
+    const state = await getDiscordNotificationState(env, 7, {
+      now: () => new Date("2026-09-01T00:00:00.000Z"),
+    });
+
+    expect(state.settings.shopResetEnabled).toBe(false);
+    expect(state.settings.leadHours).toBe(24);
+  });
+
   it("does not expose the Discord recipient key in notification state", async () => {
     const client = {
       async query(text: string) {
@@ -249,7 +321,7 @@ describe("Discord notification settings boundary", () => {
           return { rows: [{ status: "active", recipient_key: "1234567890" }], rowCount: 1 };
         }
         if (normalized.startsWith("select notification_type")) {
-          return { rows: preferenceRows(), rowCount: 4 };
+          return { rows: preferenceRows(), rowCount: 5 };
         }
         return { rows: [], rowCount: 0 };
       },
